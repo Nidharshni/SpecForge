@@ -71,7 +71,8 @@ has one coverage-row presenter (`tools::coverage::row_json`) and one gap present
 - **D4. "Unverified" has one definition**: counts toward coverage and is not proven
   (`ProjectCoverage::is_unverified`, `CoverageRow::unverified`). Rejected: "declares no `verify`"
   (ignores proof, flags non-testable kinds) and "testable kind and not covered" (flags exempt unions).
-  The trace prompt adopts it with plan 07.
+  The trace prompt adopts it with plan 07, through `trace::reach` (round 9, plan 12: the prompt computed
+  the reach itself, against P1).
 - **D5. The gap vocabulary.** A **missing link** is an expected edge (from the registries) a traced
   entity lacks: `missing` in every trace document, the only gap a trace reports. A **plan gap** is
   how an agent plan falls short (`unresolved_entity`, `missing_plan_entry`, `ordering`). A dangling
@@ -457,3 +458,10 @@ file from a compile that had reported the E069.
 
 M11 is amended: `config_invalid` is also format's, migrate's and rename's refusal, decided by `blocks_rewrites`
 (a superset of `blocks_edits`).
+
+*(Amended, architecture round 9, plan 06, ADR 0076.)* `plan::check(&ProjectView, &AgentPlan) -> PlanOutcome` reads
+the graph and the entity snapshot, never the recorded report, and cannot fail. I1: `EntityFacts` no longer carries the
+coverage; `inspect::coverage(view, entity_id) -> Result<EntityCoverage, OpError>` is asked for by the surfaces that
+show it (MCP inspect, the hover), so the context prompt reads no report. I3 holds unchanged: the standing does not
+depend on the report, the coverage carries its error, MCP fails inspect on it, the hover shows it. `ProjectCoverage`
+holds what the recorded tests prove; standings are read through `ProjectView::entities`.

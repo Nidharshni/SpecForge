@@ -108,28 +108,14 @@ pub struct ProjectConfig {
 }
 
 impl ProjectConfig {
-    /// Where this project's `.spec` files are discovered: `spec_root`, relative
-    /// to `root`, or `root` itself when unset.
-    pub fn spec_root_in(&self, root: &Path) -> PathBuf {
-        match &self.spec_root {
+    /// Where the sources of the project at `root` are: `spec_root` relative
+    /// to `root` (the root itself when unset), with this config's `exclude`.
+    pub fn sources(&self, root: &Path) -> crate::SourceRoot {
+        let dir = match &self.spec_root {
             Some(spec_root) => root.join(spec_root),
             None => root.to_path_buf(),
-        }
-    }
-
-    /// The project's sources: every `.spec` file under the spec root that
-    /// discovery keeps (no skipped directory, no `exclude` entry), sorted —
-    /// the files a compile reads, and what format and migrate rewrite (see
-    /// [`crate::walk_spec_files`]).
-    pub fn spec_files(&self, root: &Path) -> Vec<PathBuf> {
-        crate::discover_spec_files(&self.spec_root_in(root), &self.exclude)
-    }
-
-    /// Whether `path`, a `.spec` file under `spec_root`, is left out by an
-    /// `exclude` entry or a skipped directory (false outside `spec_root`).
-    pub fn excludes(&self, spec_root: &Path, path: &Path) -> bool {
-        path.strip_prefix(spec_root)
-            .is_ok_and(|relative| !crate::is_discovered(&relative.to_string_lossy(), &self.exclude))
+        };
+        crate::SourceRoot::new(dir, self.exclude.clone())
     }
 }
 
@@ -574,7 +560,7 @@ mod tests {
     }
 
     #[test]
-    fn spec_root_in_defaults_to_the_root() {
+    fn sources_are_at_the_spec_root_or_the_root() {
         let root = Path::new("/p");
         let unset = ProjectConfig::default();
         let set = ProjectConfig {
@@ -582,12 +568,12 @@ mod tests {
             ..ProjectConfig::default()
         };
 
-        assert_eq!(unset.spec_root_in(root), root);
-        assert_eq!(set.spec_root_in(root), root.join("specs"));
+        assert_eq!(unset.sources(root).dir(), root);
+        assert_eq!(set.sources(root).dir(), root.join("specs"));
     }
 
     #[test]
-    fn spec_files_keep_only_the_sources() {
+    fn sources_keep_only_the_sources() {
         let dir = tempfile::TempDir::new().unwrap();
         let root = dir.path();
         for file in [
@@ -606,17 +592,16 @@ mod tests {
             exclude: Exclude::parse(["drafts"]).unwrap(),
             ..ProjectConfig::default()
         };
-        let spec_root = config.spec_root_in(root);
+        let sources = config.sources(root);
 
         assert_eq!(
-            config.spec_files(root),
+            sources.files(),
             [root.join("specs/a.spec"), root.join("specs/sub/b.spec")]
         );
-        assert!(config.excludes(&spec_root, &root.join("specs/drafts/d.spec")));
-        assert!(config.excludes(&spec_root, &root.join("specs/target/t.spec")));
-        assert!(!config.excludes(&spec_root, &root.join("specs/a.spec")));
-        // Outside the spec root nothing is excluded: it is no source at all.
-        assert!(!config.excludes(&spec_root, &root.join("fixtures/fx.spec")));
+        assert!(!sources.holds("drafts/d.spec"));
+        assert!(!sources.holds("target/t.spec"));
+        assert!(sources.holds("a.spec"));
+        assert!(!sources.holds("../fixtures/fx.spec"));
     }
 
     #[test]
@@ -942,7 +927,7 @@ mod tests {
                 ),
             ]
         );
-        assert_eq!(read.config.spec_files(root), [root.join("a.spec")]);
+        assert_eq!(read.config.sources(root).files(), [root.join("a.spec")]);
     }
 
     #[test]

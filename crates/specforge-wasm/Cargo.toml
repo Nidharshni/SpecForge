@@ -28,7 +28,6 @@ testing = ["dep:specforge-extension-sdk"]
 specforge-registry = { workspace = true }
 # Its own tests use the in-process runtime.
 specforge-wasm = { path = ".", features = ["testing"] }
-tempfile = { workspace = true }
 specforge-test = { workspace = true }
 specforge-test-macros = { workspace = true }
 specforge-extension-sdk = { path = "../specforge-extension-sdk" }

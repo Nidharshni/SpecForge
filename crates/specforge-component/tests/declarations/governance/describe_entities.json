@@ -9,9 +9,15 @@
       "fields": [
         {
           "default_value": null,
-          "description": "Current lifecycle status of the decision (e.g. proposed, accepted, deprecated)",
+          "description": "Current lifecycle status of the decision",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "proposed",
+            "accepted",
+            "deprecated",
+            "superseded"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "headline": true,
           "inverse_of": null,
@@ -188,7 +194,7 @@
       ],
       "has_body_parser": false,
       "incremental": null,
-      "inference_guide": "Look for Architecture Decision Records (ADRs), design documents, RFC files, and significant comments explaining WHY something was built a certain way. Signals: docs/adr/ or docs/decisions/ directories; files named ADR-*, DECISION-*, RFC-*; PR descriptions with 'decided to', 'chosen approach', 'trade-off'; comments starting with 'Decision:', 'Rationale:', 'Why:'. Extract status (proposed/accepted/deprecated), context (what prompted it), decision (what was chosen), and consequences (trade-offs). Link to invariants the decision protects and constraints it imposes. Skip: trivial implementation choices, style preferences, auto-generated config.",
+      "inference_guide": "Look for Architecture Decision Records (ADRs), design documents, RFC files, and significant comments explaining WHY something was built a certain way. Signals: docs/adr/ or docs/decisions/ directories; files named ADR-*, DECISION-*, RFC-*; PR descriptions with 'decided to', 'chosen approach', 'trade-off'; comments starting with 'Decision:', 'Rationale:', 'Why:'. Extract status, context (what prompted it), decision (what was chosen), and consequences (trade-offs). Link to invariants the decision protects and constraints it imposes. Skip: trivial implementation choices, style preferences, auto-generated config.",
       "keyword": "decision",
       "lsp_icon": "Text",
       "name": "Decision",
@@ -220,7 +226,13 @@
           "default_value": null,
           "description": "Relative importance of this constraint",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "critical",
+            "high",
+            "medium",
+            "low"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "inverse_of": null,
           "name": "priority",
@@ -351,9 +363,15 @@
       "fields": [
         {
           "default_value": null,
-          "description": "Impact severity rating before mitigation (e.g. critical, high, medium, low)",
+          "description": "Impact severity rating before mitigation",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "critical",
+            "high",
+            "medium",
+            "low"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "inverse_of": null,
           "name": "severity",
@@ -364,7 +382,14 @@
           "default_value": null,
           "description": "Likelihood of this failure occurring before mitigation",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "certain",
+            "likely",
+            "occasional",
+            "unlikely",
+            "rare"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "inverse_of": null,
           "name": "occurrence",
@@ -375,7 +400,14 @@
           "default_value": null,
           "description": "Likelihood of detecting this failure before it causes harm",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "certain",
+            "likely",
+            "moderate",
+            "unlikely",
+            "undetectable"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "inverse_of": null,
           "name": "detection",
@@ -420,7 +452,13 @@
           "default_value": null,
           "description": "Impact severity rating after mitigation is applied",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "critical",
+            "high",
+            "medium",
+            "low"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "inverse_of": null,
           "name": "post_severity",
@@ -431,7 +469,14 @@
           "default_value": null,
           "description": "Likelihood of occurrence after mitigation is applied",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "certain",
+            "likely",
+            "occasional",
+            "unlikely",
+            "rare"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "inverse_of": null,
           "name": "post_occurrence",
@@ -442,7 +487,14 @@
           "default_value": null,
           "description": "Likelihood of detection after mitigation is applied",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "certain",
+            "likely",
+            "moderate",
+            "unlikely",
+            "undetectable"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "inverse_of": null,
           "name": "post_detection",

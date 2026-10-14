@@ -497,7 +497,7 @@ fn contract_trace() {
     let plan = tool(
         &mut server,
         "specforge.trace",
-        json!({"plan": {"entries": [{"entity_id": "alpha"}, {"entity_id": "ghost"}]}}),
+        json!({"plan": agent_plan(&["alpha", "ghost"])}),
     );
     assert_eq!(plan["affected_entities"], json!(["alpha"]));
     let gaps = plan["gaps"].as_array().unwrap();
@@ -792,7 +792,7 @@ fn contract_outline() {
     let mut server = contracts_project()
         .file(
             "test.spec",
-            &format!(
+            format!(
                 "{ALPHA_SPEC}\nport gamma \"GAMMA\" {{\n    method check(x: Int) -> Bool\n    // a\n    // b\n    // c\n}}\n"
             ),
         )
@@ -993,7 +993,7 @@ fn contract_review_prompt() {
     let mut server = contracts_project()
         .file(
             "test.spec",
-            &format!(
+            format!(
                 "{ALPHA_SPEC}\nbehavior gamma \"GAMMA\" {{\n    depends_on [delta]\n}}\n\nbehavior delta \"DELTA\" {{\n\n}}\n"
             ),
         )
@@ -1055,7 +1055,7 @@ fn contract_trace_prompt() {
     let trace = prompt_payload(&get_prompt(
         &mut server,
         "specforge://prompts/trace",
-        json!({"plan": {"entries": [{"entity_id": "alpha"}, {"entity_id": "ghost"}]}}),
+        json!({"plan": agent_plan(&["alpha", "ghost"])}),
     ));
     assert_eq!(trace["affected_entities"], json!(["alpha", "beta"]));
     // alpha counts toward coverage and is not proven; beta, a feature, is
@@ -1076,7 +1076,7 @@ fn contract_trace_prompt() {
     let again = prompt_payload(&get_prompt(
         &mut server,
         "specforge://prompts/trace",
-        json!({"plan": {"entries": [{"entity_id": "alpha"}, {"entity_id": "ghost"}]}}),
+        json!({"plan": agent_plan(&["alpha", "ghost"])}),
     ));
     assert_eq!(again, trace);
 
@@ -1093,7 +1093,7 @@ fn contract_explore_prompt() {
     let mut server = contracts_project()
         .file(
             "test.spec",
-            &format!("{ALPHA_SPEC}\n\n\n\n\nbehavior delta \"DELTA\" {{\n\n}}\n"),
+            format!("{ALPHA_SPEC}\n\n\n\n\nbehavior delta \"DELTA\" {{\n\n}}\n"),
         )
         .file("feat.spec", BETA_WITH_GAMMA)
         .file("inv.spec", "invariant gamma \"GAMMA\" {\n}\n")
@@ -2595,10 +2595,11 @@ fn field_only_edits_are_modified_nodes() {
 
 #[specforge_test(
     behavior = "notify_graph_delta_via_mcp",
-    verify = "moving an entity is not a modification"
+    verify = "moving an entity is not a modification: no graphChanged is sent"
 )]
 fn moving_an_entity_is_not_a_modification() {
     let (mut server, spec) = subscribed_graph_server();
+    let moved_graph = vec![updated("specforge://graph")];
 
     // Blank lines above alpha shift every span.
     std::fs::write(
@@ -2607,7 +2608,7 @@ fn moving_an_entity_is_not_a_modification() {
     )
     .unwrap();
     rebuild(&mut server);
-    assert!(server.take_notifications().is_empty());
+    assert_eq!(server.take_notifications(), moved_graph);
 
     // Swapping the two entities moves both.
     std::fs::write(
@@ -2616,7 +2617,7 @@ fn moving_an_entity_is_not_a_modification() {
     )
     .unwrap();
     rebuild(&mut server);
-    assert!(server.take_notifications().is_empty());
+    assert_eq!(server.take_notifications(), moved_graph);
 
     // Moving alpha to another file.
     std::fs::write(
@@ -2626,7 +2627,46 @@ fn moving_an_entity_is_not_a_modification() {
     .unwrap();
     std::fs::write(&spec, "feature beta \"Beta\" {\n    behaviors [alpha]\n}\n").unwrap();
     rebuild(&mut server);
+    assert_eq!(server.take_notifications(), moved_graph);
+    assert!(events(&server, "mcp_delta_notified").is_empty());
+}
+
+#[specforge_test(
+    behavior = "notify_graph_delta_via_mcp",
+    verify = "a moved entity updates the resources that write its place, and no graphChanged is sent"
+)]
+fn a_moved_entity_updates_the_graph_documents() {
+    let (mut server, spec) = project_server();
+    rebuild(&mut server);
+    subscribe(&mut server, "specforge://graph");
+    subscribe(&mut server, "specforge://context");
     assert!(server.take_notifications().is_empty());
+
+    // Three blank lines above alpha: the graph writes its line, the context does not.
+    std::fs::write(
+        &spec,
+        "\n\n\nbehavior alpha \"Alpha\" {\n}\nfeature beta \"Beta\" {\n    behaviors [alpha]\n}\n",
+    )
+    .unwrap();
+    rebuild(&mut server);
+    assert_eq!(
+        server.take_notifications(),
+        vec![updated("specforge://graph")]
+    );
+    assert!(events(&server, "mcp_delta_notified").is_empty());
+
+    // Alpha to another file.
+    std::fs::write(
+        spec.with_file_name("moved.spec"),
+        "behavior alpha \"Alpha\" {\n}\n",
+    )
+    .unwrap();
+    std::fs::write(&spec, "feature beta \"Beta\" {\n    behaviors [alpha]\n}\n").unwrap();
+    rebuild(&mut server);
+    assert_eq!(
+        server.take_notifications(),
+        vec![updated("specforge://graph")]
+    );
     assert!(events(&server, "mcp_delta_notified").is_empty());
 }
 
@@ -2719,6 +2759,78 @@ fn contract_diagnostics_notification() {
     rebuild(&mut server);
     assert!(server.take_notifications().is_empty());
     assert_eq!(events(&server, "mcp_delta_notified").len(), 2);
+}
+
+/// Serve `before` as test.spec, subscribe to the diagnostics, rewrite the
+/// file to `after` and rebuild: the `(removed, added)` of the one
+/// `specforge/diagnosticsChanged` the subscriber hears, after the
+/// `resources/updated` that precedes it.
+fn diagnostics_heard_after(before: &str, after: &str) -> (Vec<Value>, Vec<Value>) {
+    let (mut server, spec) = project_server();
+    std::fs::write(&spec, before).unwrap();
+    rebuild(&mut server);
+    subscribe(&mut server, "specforge://diagnostics");
+    server.take_notifications();
+    std::fs::write(&spec, after).unwrap();
+    rebuild(&mut server);
+    let notifications = server.take_notifications();
+    assert_eq!(notifications.len(), 2, "{notifications:?}");
+    assert_eq!(notifications[0], updated("specforge://diagnostics"));
+    assert_eq!(notifications[1]["method"], "specforge/diagnosticsChanged");
+    let side = |name: &str| notifications[1]["params"][name].as_array().unwrap().clone();
+    (side("removed"), side("added"))
+}
+
+/// `(code, line)` of each diagnostic.
+fn located(diagnostics: &[Value]) -> Vec<(String, i64)> {
+    diagnostics
+        .iter()
+        .map(|d| {
+            (
+                d["code"].as_str().unwrap().to_string(),
+                d["line"].as_i64().unwrap(),
+            )
+        })
+        .collect()
+}
+
+#[specforge_test(
+    behavior = "notify_diagnostics_delta_via_mcp",
+    verify = "a diagnostic that moved is removed where it was and added where it is"
+)]
+fn a_moved_diagnostic_is_notified() {
+    let text = "behavior alpha \"Alpha\" {\n}\nbogus thing\n";
+    let (removed, added) = diagnostics_heard_after(text, &format!("\n\n\n{text}"));
+    assert_eq!(located(&removed), [("E001".to_string(), 3)]);
+    assert_eq!(located(&added), [("E001".to_string(), 6)]);
+}
+
+#[specforge_test(
+    behavior = "notify_diagnostics_delta_via_mcp",
+    verify = "a diagnostic whose span changed is removed and added"
+)]
+fn a_diagnostic_whose_span_changed_is_notified() {
+    let alpha = "behavior alpha \"Alpha\" {\n}\n";
+    let (removed, added) = diagnostics_heard_after(
+        &format!("{alpha}bogus thing\n\nbogus thing\n"),
+        &format!("{alpha}bogus thing\n"),
+    );
+    assert_eq!(located(&removed), [("E001".to_string(), 3)]);
+    assert_eq!(located(&added), [("E001".to_string(), 3)]);
+    assert_eq!(removed[0]["span"]["end_line"], 5);
+    assert_eq!(added[0]["span"]["end_line"], 3);
+}
+
+#[specforge_test(
+    behavior = "notify_diagnostics_delta_via_mcp",
+    verify = "removing one of two identical diagnostics is notified"
+)]
+fn removing_one_of_two_identical_diagnostics_is_notified() {
+    let two = "behavior alpha \"Alpha\" {\n}\nbehavior alpha \"Again\" {\n}\n";
+    let (removed, added) =
+        diagnostics_heard_after(&format!("{two}behavior alpha \"Third\" {{\n}}\n"), two);
+    assert_eq!(located(&removed), [("E002".to_string(), 5)]);
+    assert!(added.is_empty(), "{added:?}");
 }
 
 #[specforge_test(

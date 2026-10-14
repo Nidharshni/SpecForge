@@ -1,22 +1,4 @@
-use assert_cmd::Command;
-use std::fs;
-use tempfile::TempDir;
-
-fn setup_project(files: &[(&str, &str)]) -> TempDir {
-    let dir = TempDir::new().unwrap();
-    for (path, content) in files {
-        let full = dir.path().join(path);
-        if let Some(parent) = full.parent() {
-            fs::create_dir_all(parent).unwrap();
-        }
-        fs::write(&full, content).unwrap();
-    }
-    dir
-}
-
-fn specforge_cmd() -> Command {
-    assert_cmd::cargo_bin_cmd!("specforge")
-}
+use crate::support::{Cli, TestProject};
 
 const SPEC_CONTENT: &str = r#"
 behavior alpha "Alpha" { contract "first" }
@@ -27,12 +9,12 @@ invariant delta "Delta" { guarantee "always" }
 
 #[test]
 fn query_depth_0_returns_single_entity() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
-    let output = specforge_cmd()
-        .args(["query", "alpha", "--depth=0"])
-        .arg("--path")
-        .arg(dir.path())
+    let output = Cli::on(&dir)
+        .command(&["query", "alpha", "--depth=0"])
         .output()
         .unwrap();
 
@@ -46,12 +28,12 @@ fn query_depth_0_returns_single_entity() {
 
 #[test]
 fn query_depth_1_returns_neighbors() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
-    let output = specforge_cmd()
-        .args(["query", "gamma", "--depth=1"])
-        .arg("--path")
-        .arg(dir.path())
+    let output = Cli::on(&dir)
+        .command(&["query", "gamma", "--depth=1"])
         .output()
         .unwrap();
 
@@ -67,12 +49,12 @@ fn query_depth_1_returns_neighbors() {
 
 #[test]
 fn query_with_kind_filter() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
-    let output = specforge_cmd()
-        .args(["query", "gamma", "--depth=1", "--kind=behavior"])
-        .arg("--path")
-        .arg(dir.path())
+    let output = Cli::on(&dir)
+        .command(&["query", "gamma", "--depth=1", "--kind=behavior"])
         .output()
         .unwrap();
 
@@ -96,21 +78,18 @@ fn query_with_kind_filter() {
     verify = "a non-existent entity is E003 naming the closest entity"
 )]
 fn query_nonexistent_entity_exits_one() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
-    specforge_cmd()
-        .args(["query", "nonexistent", "--depth=1"])
-        .arg("--path")
-        .arg(dir.path())
+    Cli::on(&dir)
+        .command(&["query", "nonexistent", "--depth=1"])
         .assert()
         .code(1)
         .stderr("error[E003]: unresolved entity 'nonexistent' — not found in graph\n");
 
     // A close id is named.
-    specforge_cmd()
-        .args(["query", "alph"])
-        .arg("--path")
-        .arg(dir.path())
+    Cli::on(&dir).command(&["query", "alph"])
         .assert()
         .code(1)
         .stderr(

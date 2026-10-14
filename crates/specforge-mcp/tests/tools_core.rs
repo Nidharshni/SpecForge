@@ -794,7 +794,7 @@ fn server_with_report(tests: &[(&str, &str)]) -> Served {
         )
         .file(
             "specforge-report.json",
-            &json!({"results": {"two": {"tests": tests}}}).to_string(),
+            json!({"results": {"two": {"tests": tests}}}).to_string(),
         )
         .serve(&[extension()])
 }
@@ -1527,12 +1527,12 @@ fn validate_verdict_in_meta_counts_everything_reported() {
     assert_eq!(verdict["errors"], 0, "{resp}");
 }
 
-// B:provide_mcp_validate_tool — verify unit "use_cached=false triggers fresh compilation"
+// B:provide_mcp_validate_tool — verify unit "validate reports files changed on disk since the last call"
 #[specforge_test(
     behavior = "provide_mcp_validate_tool",
-    verify = "validate with use_cached=false triggers fresh compilation"
+    verify = "validate reports files changed on disk since the last call"
 )]
-fn validate_use_cached_false() {
+fn validate_reports_files_changed_since_the_last_call() {
     let project = project_with_errors_and_warnings();
     let mut server = serving_nothing();
     // The first call serves the project its path names.
@@ -1545,14 +1545,10 @@ fn validate_use_cached_false() {
 
     // Fix the unresolved reference on disk.
     fix_unresolved_reference(project.path());
-    let second = codes_of(&call_tool(
-        &mut server,
-        "specforge.validate",
-        json!({"use_cached": false}),
-    ));
+    let second = codes_of(&call_tool(&mut server, "specforge.validate", json!({})));
     assert!(
         !second.contains(&"E003".to_string()),
-        "use_cached=false must recompile: {second:?}"
+        "validate must report the files on disk: {second:?}"
     );
     assert!(server.state().graph().node("fixed").is_some());
 }
@@ -1578,11 +1574,9 @@ fn fix_unresolved_reference(root: &std::path::Path) {
     .unwrap();
 }
 
-#[specforge_test(
-    behavior = "provide_mcp_trace_tool",
-    verify = "plan parameter triggers gap analysis"
-)]
-fn trace_plan_gap_analysis() {
+/// A project of two testable behaviors and an invariant they lean on, served
+/// after one `specforge.validate`: the plan tests' graph.
+fn plan_project() -> (tempfile::TempDir, McpServer) {
     let project = tempfile::tempdir().unwrap();
     std::fs::write(
         project.path().join("specforge.json"),
@@ -1602,12 +1596,19 @@ fn trace_plan_gap_analysis() {
         "specforge.validate",
         json!({"path": project.path().to_str().unwrap()}),
     );
+    (project, server)
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_trace_tool",
+    verify = "plan parameter triggers gap analysis"
+)]
+fn trace_plan_gap_analysis() {
+    let (_project, mut server) = plan_project();
 
     // act_one depends on inv_a but comes first; ghost doesn't exist;
     // act_two is testable and missing.
-    let plan = json!({"entries": [
-        {"entity_id": "act_one"}, {"entity_id": "inv_a"}, {"entity_id": "ghost"}
-    ]});
+    let plan = agent_plan(&["act_one", "inv_a", "ghost"]);
     let resp = call_tool(&mut server, "specforge.trace", json!({"plan": plan}));
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
     assert_eq!(parsed["affected_entities"], json!(["act_one", "inv_a"]));
@@ -1633,31 +1634,14 @@ fn trace_plan_gap_analysis() {
     );
     assert!(gaps.contains(&("act_one", "inv_a", "ordering")), "{gaps:?}");
     assert_eq!(gaps.len(), 3, "{gaps:?}");
+    assert_eq!(parsed["ok"], false, "{parsed}");
 }
 
 #[specforge_test(behavior = "validate_agent_plan", verify = "output is structured JSON")]
 fn trace_plan_reports_its_gaps_as_structured_json() {
-    let project = tempfile::tempdir().unwrap();
-    std::fs::write(
-        project.path().join("specforge.json"),
-        r#"{"name":"t","version":"0.1.0","extensions":["@specforge/software","@specforge/testing"]}"#,
-    )
-    .unwrap();
-    std::fs::write(
-        project.path().join("app.spec"),
-        "invariant inv_a \"A\" {\n  guarantee \"g\"\n  verify unit \"z\"\n}\n\n\
-         behavior act_one \"One\" {\n  invariants [inv_a]\n  verify unit \"x\"\n}\n\n\
-         behavior act_two \"Two\" {\n  verify unit \"y\"\n}\n",
-    )
-    .unwrap();
-    let mut server = serving_nothing();
-    call_tool(
-        &mut server,
-        "specforge.validate",
-        json!({"path": project.path().to_str().unwrap()}),
-    );
+    let (_project, mut server) = plan_project();
 
-    let plan = json!({"entries": [{"entity_id": "act_one"}, {"entity_id": "ghost"}]});
+    let plan = agent_plan(&["act_one", "ghost"]);
     let resp = call_tool(&mut server, "specforge.trace", json!({"plan": plan}));
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
 
@@ -1669,7 +1653,8 @@ fn trace_plan_reports_its_gaps_as_structured_json() {
         .map(String::as_str)
         .collect();
     keys.sort();
-    assert_eq!(keys, ["affected_entities", "gaps"], "{parsed}");
+    assert_eq!(keys, ["affected_entities", "gaps", "ok"], "{parsed}");
+    assert_eq!(parsed["ok"], false, "{parsed}");
     assert_eq!(parsed["affected_entities"], json!(["act_one"]));
     for gap in parsed["gaps"].as_array().unwrap() {
         let mut keys: Vec<&str> = gap
@@ -1704,6 +1689,76 @@ fn trace_plan_reports_its_gaps_as_structured_json() {
         ghost["gap_context"].as_str().unwrap().starts_with("E003"),
         "{ghost}"
     );
+}
+
+#[specforge_test(
+    behavior = "validate_agent_plan",
+    verify = "the plan check reads no recorded test report"
+)]
+fn a_report_the_plan_check_does_not_read_fails_no_plan() {
+    let (project, mut server) = plan_project();
+    std::fs::write(
+        project.path().join("specforge-report.json"),
+        r#"{"results":{"act_one":{"tests":[{"name":"t","status":"pass","verify":"x"}]}}}"#,
+    )
+    .unwrap();
+    let plan = agent_plan(&["act_one", "inv_a", "ghost"]);
+    let resp = call_tool(&mut server, "specforge.trace", json!({"plan": plan}));
+    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
+    assert_eq!(parsed["affected_entities"], json!(["act_one", "inv_a"]));
+    assert_eq!(parsed["gaps"].as_array().unwrap().len(), 3, "{parsed}");
+    // Stats still reads the report: it needs what the report decides.
+    let error = mcp_error(&call_tool(&mut server, "specforge.stats", json!({})));
+    assert_eq!(error["diagnostic"]["code"], "E045", "{error}");
+}
+
+#[specforge_test(
+    behavior = "validate_agent_plan",
+    verify = "a plan that is not an AgentPlan is refused, naming every place it departs from the type"
+)]
+fn trace_refuses_a_plan_that_is_not_an_agent_plan() {
+    let (_project, mut server) = plan_project();
+    let mut refused = |plan: Value| {
+        let error = mcp_error(&call_tool(
+            &mut server,
+            "specforge.trace",
+            json!({"plan": plan}),
+        ));
+        assert_eq!(error["code"], "invalid_input", "{error}");
+        assert_eq!(error["argument"], "plan", "{error}");
+        error["message"].as_str().unwrap().to_string()
+    };
+    assert_eq!(
+        refused(json!({"entries": [{"entity_id": "act_one"}]})),
+        "plan must be an AgentPlan: plan: missing required plan_id; plan.entries[0]: missing required action"
+    );
+    assert_eq!(
+        refused(json!([1, 2])),
+        "plan must be an AgentPlan: plan: expected object, got array"
+    );
+    assert_eq!(
+        refused(
+            json!({"plan_id": "p", "entries": [{"entity_id": "Task", "action": "implement", "dependencies": ["a"]}], "bogus": 1})
+        ),
+        "plan must be an AgentPlan: plan.entries[0].dependencies: undeclared key; plan.bogus: undeclared key"
+    );
+    assert_eq!(
+        refused(json!({"entries": [{"entity_id": "act_one", "action": 7, "weird": true}]})),
+        "plan must be an AgentPlan: plan: missing required plan_id; plan.entries[0].action: expected string, got integer; plan.entries[0].weird: undeclared key"
+    );
+    assert_eq!(
+        refused(json!({"plan_id": "p", "entries": [["act_one", "implement"]]})),
+        "plan must be an AgentPlan: plan.entries[0]: expected object, got array"
+    );
+    // The JSON text of a plan is read as the plan.
+    let resp = call_tool(
+        &mut server,
+        "specforge.trace",
+        json!({"plan": "{\"plan_id\":\"p\",\"entries\":[]}"}),
+    );
+    let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
+    assert_eq!(parsed["affected_entities"], json!([]), "{parsed}");
 }
 
 #[specforge_test(
@@ -2175,38 +2230,6 @@ fn trace_flags_the_missing_links() {
     assert!(parsed.get("gaps").is_none(), "{parsed}");
 }
 
-// B:provide_mcp_validate_tool — verify unit "use_cached returns existing diagnostics"
-#[specforge_test(
-    behavior = "provide_mcp_validate_tool",
-    verify = "validate with use_cached=true returns existing diagnostics without recompilation"
-)]
-fn validate_use_cached_true() {
-    let project = project_with_errors_and_warnings();
-    let mut server = serving_nothing();
-    // The first call serves the project its path names.
-    let first = codes_of(&call_tool(
-        &mut server,
-        "specforge.validate",
-        json!({"path": project.path().to_str().unwrap()}),
-    ));
-    assert!(first.contains(&"E003".to_string()), "{first:?}");
-
-    // The spec changes on disk, but a cached validate does not recompile:
-    // the old diagnostics come back and the graph is the old one.
-    fix_unresolved_reference(project.path());
-    let cached = codes_of(&call_tool(
-        &mut server,
-        "specforge.validate",
-        json!({"use_cached": true}),
-    ));
-    assert_eq!(cached, first);
-    assert!(server.state().graph().node("fixed").is_none());
-
-    // Proof the change on disk is visible to a fresh compile.
-    let fresh = codes_of(&call_tool(&mut server, "specforge.validate", json!({})));
-    assert!(!fresh.contains(&"E003".to_string()), "{fresh:?}");
-}
-
 // B:provide_mcp_validate_tool — verify unit "validate recompiles and updates graph"
 #[specforge_test(
     behavior = "provide_mcp_validate_tool",
@@ -2241,23 +2264,6 @@ fn validate_updates_graph() {
         assert!(d["file"].as_str().unwrap().ends_with("app.spec"), "{d}");
         assert!(d["line"].as_u64().unwrap() >= 1, "{d}");
     }
-}
-
-#[test]
-fn validate_use_cached_false_triggers_fresh() {
-    let mut server = test_server();
-    // First compile
-    let _resp1 = call_tool(&mut server, "specforge.validate", json!({}));
-    // Second call with use_cached=false should recompile
-    let resp2 = call_tool(
-        &mut server,
-        "specforge.validate",
-        json!({"use_cached": false}),
-    );
-    assert!(
-        resp2["result"].is_object() || resp2["error"].is_object(),
-        "use_cached=false should trigger fresh compilation"
-    );
 }
 
 #[test]
@@ -2559,4 +2565,65 @@ fn analyze_gates_on_min() {
     );
     let error = mcp_error(&resp);
     assert_eq!(error["diagnostic"]["code"], "E068", "{error}");
+}
+
+// --- specforge.validate never writes the build cache ---
+
+/// Product declares `status` the lifecycle field of feature and milestone; software's behavior has a `status` too,
+/// but no lifecycle field.
+fn build_cache_project() -> TestProject {
+    TestProject::new()
+        .enabling(&["@specforge/software", "@specforge/product"])
+        .files(&[
+            (
+                "b.spec",
+                "feature zeta \"Z\" {\n  problem \"p\"\n  status in_progress\n}\n\nbehavior beta \"B\" {\n  contract \"a status, but no lifecycle\"\n  status draft\n}\n",
+            ),
+            (
+                "a.spec",
+                "feature alpha \"A\" {\n  problem \"p\"\n  status done\n}\n\nmilestone mid \"M\" {\n  status \"planned\"\n}\n",
+            ),
+        ])
+}
+
+#[specforge_test(
+    behavior = "write_build_cache",
+    verify = "MCP validate never writes the build cache"
+)]
+fn mcp_validate_never_writes_the_build_cache() {
+    const CACHE: &str = "specforge-cache.json";
+    let mut served = Served::rooted(build_cache_project());
+    // Without strict the project passes the check, which is when `check
+    // --cache` writes; under strict its warnings fail it. validate takes no
+    // cache argument, and an unknown one is refused (ADR 0033).
+    let runs = [json!({}), json!({"strict": true})];
+    let validate = |served: &mut Served, arguments: &Value| {
+        let resp = served.call_tool("specforge.validate", arguments.clone());
+        assert_eq!(resp["result"]["isError"], false, "{resp}");
+        let passes = arguments["strict"] != true;
+        assert_eq!(
+            resp["result"]["_meta"]["specforge/check"]["ok"], passes,
+            "{arguments}: {resp}"
+        );
+    };
+    for arguments in &runs {
+        validate(&mut served, arguments);
+        assert!(!served.root().join(CACHE).exists(), "{arguments}");
+    }
+    let refused = served.call_tool("specforge.validate", json!({"cache": true}));
+    assert_eq!(refused["result"]["isError"], true, "{refused}");
+    assert_eq!(refused["result"]["structuredContent"]["argument"], "cache");
+    assert!(!served.root().join(CACHE).exists());
+
+    // An existing cache is read, never rewritten.
+    let previous = "{\"format\": 1, \"statuses\": {}}\n";
+    served.write(CACHE, previous);
+    for arguments in &runs {
+        validate(&mut served, arguments);
+        assert_eq!(
+            std::fs::read_to_string(served.root().join(CACHE)).unwrap(),
+            previous,
+            "{arguments}"
+        );
+    }
 }

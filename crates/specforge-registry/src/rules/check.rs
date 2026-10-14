@@ -271,7 +271,11 @@ fn report(rule: &Rule, record: &EntityRecord, violation: Violation) -> Diagnosti
     let field = violation.field.as_deref().or(default_field);
     let value = violation.value.as_deref().or(default_value);
     let allowed = match &rule.check {
-        Check::VerifyKindAllowlist { allowed } => Some(allowed.join(", ")),
+        Check::VerifyKindAllowlist { allowed }
+        | Check::FieldValue {
+            constraint: ValueConstraint::OneOf(allowed),
+            ..
+        } => Some(allowed.join(", ")),
         _ => None,
     };
     let message = interpolate(
@@ -299,7 +303,8 @@ fn diagnostic(rule: &Rule, message: String, record: &EntityRecord) -> Diagnostic
 }
 
 /// `template` with `{id}`, `{kind}`, and `{field}`, `{value}`, `{allowed}`
-/// when given; a placeholder with nothing to put in stays as written.
+/// when given (`{allowed}`: the values of a `one_of` constraint, on a
+/// field-value or a verify-kind check); a placeholder with nothing to put in stays as written.
 fn interpolate(
     template: &str,
     id: &str,

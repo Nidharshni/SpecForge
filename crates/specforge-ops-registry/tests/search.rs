@@ -3,16 +3,17 @@
 
 use specforge_ops::registry::Registry;
 use specforge_ops_registry::{ConfiguredRegistry, User};
+use specforge_project::testing::TestProject;
 use specforge_protocol_types::DeclaredCategory;
 use specforge_registry_client::testing::{CallKind, MemoryClient, package};
 use specforge_registry_client::{RegistryConfig, RegistryError};
+use specforge_registry_wire::RegistryRoot;
 use specforge_test_macros::test as specforge_test;
-use tempfile::TempDir;
 
 fn registry_named(alias: &str) -> RegistryConfig {
     RegistryConfig {
         alias: alias.to_string(),
-        url: format!("memory://{alias}"),
+        url: RegistryRoot::parse(&format!("https://{alias}.invalid")).unwrap(),
         scope_filter: None,
         default_registry: false,
     }
@@ -20,42 +21,35 @@ fn registry_named(alias: &str) -> RegistryConfig {
 
 /// A project configuring `aliases` (the first is the default), and a user whose home is empty.
 struct World {
-    project: TempDir,
-    home: TempDir,
+    project: TestProject,
     client: MemoryClient,
 }
 
 impl World {
     fn with(aliases: &[&str]) -> Self {
-        let project = TempDir::new().unwrap();
         let registries: Vec<serde_json::Value> = aliases
             .iter()
             .enumerate()
             .map(|(i, alias)| {
                 serde_json::json!({
                     "alias": alias,
-                    "url": format!("memory://{alias}"),
+                    "url": format!("https://{alias}.invalid"),
                     "default_registry": i == 0,
                 })
             })
             .collect();
         let config =
             serde_json::json!({ "name": "p", "version": "0.1.0", "registries": registries });
-        std::fs::write(project.path().join("specforge.json"), config.to_string()).unwrap();
         World {
-            project,
-            home: TempDir::new().unwrap(),
+            project: TestProject::new().raw_config(config.to_string()),
             client: MemoryClient::new(),
         }
     }
 
     fn registry(&self) -> ConfiguredRegistry {
-        ConfiguredRegistry::for_project(
-            &specforge_common::ProjectRoot::of(self.project.path()).unwrap(),
-            "search",
-        )
-        .as_user(User::at(self.home.path(), None))
-        .with_client(self.client.clone())
+        ConfiguredRegistry::for_project(&self.project.project_root(), "search")
+            .as_user(User::at(self.project.home(), None))
+            .with_client(self.client.clone())
     }
 
     /// `alias` holds `name@version`, declaring one entity kind when `entities`.
@@ -136,7 +130,7 @@ fn a_failed_registry_is_reported_and_the_others_asked() {
         CallKind::Search,
         Some(&registry_named("failing")),
         RegistryError::Timeout {
-            url: "memory://failing".into(),
+            url: "https://failing.invalid".into(),
         },
     );
     world.store("working", "@work/ext", "1.0.0", "Works", false);
@@ -222,7 +216,7 @@ fn a_search_lists_the_version_add_installs() {
 fn each_registry_is_asked_with_its_own_credential() {
     let world = World::with(&["a", "b"]);
     std::fs::write(
-        world.home.path().join("credentials.json"),
+        world.project.home().join("credentials.json"),
         r#"{"registries":{"a":{"token":"ta"},"b":{"token":"tb"}}}"#,
     )
     .unwrap();

@@ -62,7 +62,7 @@ impl Plan {
     /// - `Closed`: the session releases the buffer (a project source is read
     ///   from disk again; any other file, and every file of a session with no
     ///   project, leaves the project);
-    /// - `Watched`: the paths as the session classifies them
+    /// - `Watched`: what the paths reach that changed on disk
     ///   (`ProjectSession::changes`, which leaves out every held buffer; a
     ///   reload keeps them);
     /// - `CatchUp`: what the session finds changed on disk since it last

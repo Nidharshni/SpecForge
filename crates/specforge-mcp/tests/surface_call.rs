@@ -10,9 +10,7 @@ use serde_json::{Value, json};
 use specforge_mcp::McpServer;
 use specforge_ops::export::{Format, Request};
 use specforge_ops::view::ProjectView;
-use specforge_project::CompiledProject;
 use specforge_test::prelude::*;
-use std::sync::Arc;
 
 use crate::support::*;
 
@@ -275,11 +273,8 @@ fn export_takes_a_schema_version() {
     // --schema-version` refuses it: the operation's one error.
     let root = server.root().to_path_buf();
     let expected = {
-        let runtime = specforge_component::ComponentRuntime::with_user_cache();
-        let project = CompiledProject::compile(
-            &specforge_common::ProjectRoot::of(&root).unwrap(),
-            Some(Arc::new(runtime)),
-        );
+        let runtime = specforge_project::testing::component_runtime();
+        let project = specforge_project::testing::compile_at(&root, Some(runtime));
         specforge_ops::export::export(
             &ProjectView::of(&project),
             &Request {
@@ -298,9 +293,9 @@ fn export_takes_a_schema_version() {
     let error = tool_error(&reply);
     // An operation's own code (a slug) does not ride in the tool error: the
     // kind picks `code`, the message names the refusal.
-    assert_eq!(expected.code.as_ref(), "incompatible_schema_version");
+    assert_eq!(expected.error.code.as_ref(), "incompatible_schema_version");
     assert_eq!(error["code"], "conflict", "{error}");
-    assert_eq!(error["message"], expected.message.as_str(), "{error}");
+    assert_eq!(error["message"], expected.error.message.as_str(), "{error}");
 
     // A version of this major is served at that version.
     let reply = call_tool(
@@ -579,11 +574,8 @@ fn a_read_names_the_uri_the_client_read() {
 
 /// What `specforge export` writes for `request`, over the project at `root`.
 fn exported(root: &std::path::Path, request: &Request) -> String {
-    let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let project = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(root).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let runtime = specforge_project::testing::component_runtime();
+    let project = specforge_project::testing::compile_at(root, Some(runtime));
     specforge_ops::export::export(&ProjectView::of(&project), request).unwrap()
 }
 
@@ -826,25 +818,8 @@ fn target_argument_descriptions() {
             .collect()
     };
 
-    // One description, declared by the target.
-    let use_cached: Vec<(String, String)> = described("use_cached");
-    let names: Vec<&str> = use_cached.iter().map(|(name, _)| name.as_str()).collect();
-    assert_eq!(
-        names,
-        [
-            "specforge.validate",
-            "specforge.analyze",
-            "specforge.doctor"
-        ],
-        "{use_cached:?}"
-    );
-    for (name, text) in &use_cached {
-        assert_eq!(
-            text,
-            "Use the last compile instead of bringing the project up to date with disk; with no project served, the path is compiled anyway",
-            "{name}"
-        );
-    }
+    // The target declares `path` only: no tool lists use_cached.
+    assert!(described("use_cached").is_empty());
 
     let paths = described("path");
     let (init, others): (Vec<_>, Vec<_>) =
@@ -852,7 +827,7 @@ fn target_argument_descriptions() {
     assert_eq!(others.len(), 8, "{paths:?}");
     for (name, text) in &others {
         assert_eq!(
-            text, "Project root path (uses initialized root if omitted)",
+            text, "Project root path (the served project if omitted)",
             "{name}"
         );
     }

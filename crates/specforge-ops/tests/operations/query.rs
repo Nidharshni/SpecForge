@@ -204,12 +204,15 @@ fn query_of_a_missing_entity_is_e003() {
         },
     )
     .unwrap_err();
-    assert!(error.is(specforge_common::codes::E003));
+    assert!(error.error.is(specforge_common::codes::E003));
     assert_eq!(
-        error.message,
+        error.error.message,
         "unresolved entity 'logn' — not found in graph"
     );
-    assert_eq!(error.suggestion.as_deref(), Some("did you mean 'login'?"));
+    assert_eq!(
+        error.error.suggestion.as_deref(),
+        Some("did you mean 'login'?")
+    );
     // Nothing close: no suggestion.
     let error = query(
         &project.view(),
@@ -219,7 +222,7 @@ fn query_of_a_missing_entity_is_e003() {
         },
     )
     .unwrap_err();
-    assert_eq!(error.suggestion, None);
+    assert_eq!(error.error.suggestion, None);
 }
 
 #[specforge_test(
@@ -285,6 +288,98 @@ fn query_with_coverage_marks_each_node() {
     assert_eq!(status("login", false), Value::Null);
 }
 
+const COVERED_SOURCE: &str = "behavior login \"Login\" {\n  verify unit \"logs in\"\n}\n\nbehavior logout \"Logout\" {\n  verify unit \"logs out\"\n}\n";
+
+/// The `login`/`logout` project with `login`'s obligation proven.
+fn covered() -> Project {
+    let project = Project::new(COVERED_SOURCE, registries(&["behavior"], &[]));
+    project.record_passing(&[("login", "logs in")]);
+    project
+}
+
+/// The document `query` answers for `entity` at depth 0 in `format`.
+fn queried(project: &Project, entity: &str, format: Format, include_coverage: bool) -> String {
+    query(
+        &project.view(),
+        &QueryRequest {
+            entity_id: entity,
+            depth: Some(0),
+            format: Some(format),
+            include_coverage,
+            ..QueryRequest::default()
+        },
+    )
+    .unwrap()
+    .document
+}
+
+#[specforge_test(
+    behavior = "query_graph_multi_resolution",
+    verify = "a query with --include-coverage validates against the published schema of its format"
+)]
+fn a_query_with_coverage_conforms_to_the_published_schema() {
+    use specforge_common::shape::{unchecked_keywords, violations};
+    let project = covered();
+    for format in [Format::Graph, Format::Context, Format::Brief] {
+        let published = specforge_ops::schema::json_schema(&project.view(), format).unwrap();
+        assert!(unchecked_keywords(&published).is_empty(), "{format:?}");
+        let document: Value =
+            serde_json::from_str(&queried(&project, "login", format, true)).unwrap();
+        assert_eq!(
+            violations(&published, &document),
+            Vec::<String>::new(),
+            "{format:?}"
+        );
+        assert_eq!(
+            document["nodes"][0]["coverage_status"], "covered",
+            "{format:?}"
+        );
+    }
+}
+
+#[specforge_test(
+    behavior = "query_graph_multi_resolution",
+    verify = "--include-coverage gives each entity its coverage status"
+)]
+fn a_query_with_coverage_is_the_export_with_one_key_per_node() {
+    let project = covered();
+    for format in [Format::Graph, Format::Context, Format::Brief] {
+        for (entity, status) in [("login", "covered"), ("logout", "uncovered")] {
+            let without = queried(&project, entity, format, false);
+            let with = queried(&project, entity, format, true)
+                .replace(&format!(",\"coverage_status\":\"{status}\""), "");
+            assert_eq!(with, without, "{format:?} {entity}");
+        }
+    }
+}
+
+#[specforge_test(
+    behavior = "query_graph_multi_resolution",
+    verify = "a non-existent entity is E003 naming the closest entity"
+)]
+fn an_unknown_entity_is_refused_before_the_report_is_read() {
+    let project = Project::new(COVERED_SOURCE, registries(&["behavior"], &[]));
+    std::fs::write(project.dir.path().join("specforge-report.json"), "{").unwrap();
+    let ask = |entity_id| {
+        query(
+            &project.view(),
+            &QueryRequest {
+                entity_id,
+                include_coverage: true,
+                ..QueryRequest::default()
+            },
+        )
+        .unwrap_err()
+    };
+    let unknown = ask("logn");
+    assert_eq!(unknown.error.code, "E003");
+    assert_eq!(
+        unknown.error.suggestion.as_deref(),
+        Some("did you mean 'login'?")
+    );
+    assert_eq!(ask("login").error.code, "E045");
+}
+
 #[specforge_test(
     behavior = "provide_mcp_query_tool",
     verify = "an unknown format is an invalid-input error naming the expected formats"
@@ -299,9 +394,9 @@ fn query_refuses_dot() {
         },
     )
     .unwrap_err();
-    assert_eq!(error.code, "invalid_input");
+    assert_eq!(error.error.code, "invalid_input");
     assert_eq!(
-        error.message,
+        error.error.message,
         "Unknown format: dot. Expected: graph, context, brief"
     );
 }
@@ -507,4 +602,309 @@ fn query_contract_valid_entity_returns_subgraph() {
             { "source": "b", "target": "c", "label": "depends_on" },
         ])
     );
+}
+
+#[specforge_test(
+    invariant = "mcp_structured_error_responses",
+    verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+)]
+fn query_states_which_field_a_refusal_is_about() {
+    use specforge_ops::query::QueryField;
+    let project = linear();
+    let missing = query(
+        &project.view(),
+        &QueryRequest {
+            entity_id: "zzzzzzzz",
+            ..QueryRequest::default()
+        },
+    )
+    .unwrap_err();
+    assert_eq!(missing.subject, Some(QueryField::EntityId));
+    let dot = query(
+        &project.view(),
+        &QueryRequest {
+            entity_id: "b",
+            format: Some(Format::Dot),
+            ..QueryRequest::default()
+        },
+    )
+    .unwrap_err();
+    assert_eq!(dot.subject, Some(QueryField::Format));
+}
+
+/// The end-to-end query tests, which `specforge-cli` ran through the binary: the same requests, over a compiled
+/// project.
+mod compiled {
+    use crate::compiled_support::{built, published, queried, query_document, specs};
+    use specforge_ops::export::Format;
+    use specforge_ops::query::QueryRequest;
+    use specforge_test_macros::test as specforge_test;
+    // --- Query depth tests, over a compiled project ---
+
+    #[specforge_test(
+        behavior = "query_graph_multi_resolution",
+        verify = "depth 0 returns only the target entity"
+    )]
+    fn query_depth_0_returns_only_root() {
+        let (_project, compiled) = built(&[("main.spec", specs::DEEP_CHAIN)]);
+
+        let parsed = query_document(&compiled, "beh_middle", Some(0), &[]);
+        let nodes = parsed["nodes"].as_array().unwrap();
+        assert_eq!(nodes.len(), 1, "depth 0 should return only the root entity");
+        assert_eq!(nodes[0]["id"], "beh_middle");
+    }
+
+    #[specforge_test(
+        behavior = "query_graph_multi_resolution",
+        verify = "depth 0 returns only the target entity"
+    )]
+    fn query_depth_0_edges_behavior() {
+        let (_project, compiled) = built(&[("main.spec", specs::DEEP_CHAIN)]);
+
+        let parsed = query_document(&compiled, "beh_middle", Some(0), &[]);
+        let edges = parsed["edges"].as_array().unwrap();
+        // With only one node, no edges can survive (both endpoints must be present)
+        assert_eq!(edges.len(), 0, "depth 0 single node should have no edges");
+    }
+
+    #[specforge_test(
+        behavior = "query_graph_multi_resolution",
+        verify = "multiple kind filters combine as union"
+    )]
+    fn query_multiple_kind_filters() {
+        let (_project, compiled) = built(&[("main.spec", specs::DEEP_CHAIN)]);
+
+        let parsed = query_document(&compiled, "beh_middle", Some(2), &["behavior", "invariant"]);
+        let nodes = parsed["nodes"].as_array().unwrap();
+
+        let kinds: Vec<&str> = nodes.iter().map(|n| n["kind"].as_str().unwrap()).collect();
+        for kind in &kinds {
+            assert!(
+                *kind == "behavior" || *kind == "invariant",
+                "all nodes should be behavior or invariant, got '{}'",
+                kind
+            );
+        }
+        assert!(nodes.len() >= 2, "should include at least root + inv_deep");
+    }
+
+    #[specforge_test(
+        behavior = "query_graph_multi_resolution",
+        verify = "kind filter restricts results to specified entity kinds"
+    )]
+    fn query_kind_filter_no_match_returns_root_only() {
+        let (_project, compiled) = built(&[("main.spec", specs::DEEP_CHAIN)]);
+
+        let parsed = query_document(&compiled, "beh_middle", Some(2), &["nonexistent_kind"]);
+        let nodes = parsed["nodes"].as_array().unwrap();
+        assert_eq!(
+            nodes.len(),
+            1,
+            "only root should survive when kind filter matches nothing"
+        );
+        assert_eq!(nodes[0]["id"], "beh_middle");
+    }
+
+    #[specforge_test(
+        behavior = "query_graph_multi_resolution",
+        verify = "kind filter restricts results to specified entity kinds"
+    )]
+    fn query_kind_filter_prunes_edges() {
+        let (_project, compiled) = built(&[("main.spec", specs::DEEP_CHAIN)]);
+
+        // Query with kind=behavior should prune edges to non-behavior nodes
+        let parsed = query_document(&compiled, "beh_middle", Some(3), &["behavior"]);
+        let nodes = parsed["nodes"].as_array().unwrap();
+        let edges = parsed["edges"].as_array().unwrap();
+
+        let node_ids: Vec<&str> = nodes.iter().map(|n| n["id"].as_str().unwrap()).collect();
+
+        // Unfiltered, depth 3 reaches feat_root and inv_deep; --kind=behavior
+        // keeps only behaviors.
+        assert_eq!(node_ids, ["beh_middle"], "{parsed}");
+        for node in nodes {
+            assert_eq!(node["kind"], "behavior", "{node}");
+        }
+        assert!(edges.is_empty(), "edges to filtered-out nodes are pruned");
+        let unfiltered = query_document(&compiled, "beh_middle", Some(3), &[]);
+        assert_eq!(unfiltered["nodes"].as_array().unwrap().len(), 3);
+        assert_eq!(unfiltered["edges"].as_array().unwrap().len(), 3);
+
+        // Every edge endpoint must reference an existing node
+        for edge in edges {
+            let source = edge["source"].as_str().unwrap();
+            let target = edge["target"].as_str().unwrap();
+            assert!(
+                node_ids.contains(&source),
+                "edge source '{}' not in filtered nodes {:?}",
+                source,
+                node_ids
+            );
+            assert!(
+                node_ids.contains(&target),
+                "edge target '{}' not in filtered nodes {:?}",
+                target,
+                node_ids
+            );
+        }
+    }
+
+    #[specforge_test(
+        behavior = "query_graph_multi_resolution",
+        verify = "an unknown --kind is reported with I020 and the closest kind"
+    )]
+    fn query_reports_an_unknown_kind() {
+        let (_project, compiled) = built(&[("main.spec", specs::DEEP_CHAIN)]);
+
+        // The notice is the command's stderr; the document is the behavior-only
+        // query, unchanged by it.
+        let outcome = queried(
+            &compiled,
+            &QueryRequest {
+                entity_id: "beh_middle",
+                depth: None,
+                kinds: vec!["behaviour", "behavior"],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let stderr: String = outcome
+            .notices
+            .iter()
+            .map(|notice| format!("{}\n", specforge_common::render_plain(notice)))
+            .collect();
+        assert_eq!(
+            stderr,
+            "info[I020]: unknown entity kind 'behaviour'\n  = help: did you mean 'behavior'?\n"
+        );
+        let parsed: serde_json::Value = serde_json::from_str(&outcome.document).unwrap();
+        let ids: Vec<&str> = parsed["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|n| n["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, ["beh_middle"], "{parsed}");
+    }
+
+    #[specforge_test(
+        behavior = "query_graph_multi_resolution",
+        verify = "depth 1 returns direct neighbors"
+    )]
+    fn query_isolated_entity_depth_1() {
+        let spec = format!("{}\n{}", specs::DEEP_CHAIN, specs::ISOLATED);
+        let (_project, compiled) = built(&[("main.spec", &spec)]);
+        let query = |id: &str| {
+            let parsed = query_document(&compiled, id, Some(1), &[]);
+            let mut ids: Vec<String> = parsed["nodes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|n| n["id"].as_str().unwrap().to_string())
+                .collect();
+            ids.sort();
+            ids
+        };
+
+        // inv_deep's one neighbor is beh_middle; feat_root is two hops away.
+        assert_eq!(query("inv_deep"), ["beh_middle", "inv_deep"]);
+        // beh_middle neighbors both feat_root and inv_deep.
+        assert_eq!(query("beh_middle"), ["beh_middle", "feat_root", "inv_deep"]);
+        // An isolated node has no neighbors.
+        assert_eq!(query("isolated_node"), ["isolated_node"]);
+    }
+
+    #[specforge_test(
+        invariant = "graph_traversal_integrity",
+        verify = "traversal from any node visits every reachable node exactly once"
+    )]
+    fn query_handles_cycles() {
+        let (_project, compiled) = built(&[("main.spec", specs::CYCLE)]);
+
+        let parsed = query_document(&compiled, "cycle_a", Some(10), &[]);
+        let nodes = parsed["nodes"].as_array().unwrap();
+
+        // Should contain all cycle nodes without duplicates
+        let ids: Vec<&str> = nodes.iter().map(|n| n["id"].as_str().unwrap()).collect();
+        let unique: std::collections::BTreeSet<&str> = ids.iter().copied().collect();
+        assert_eq!(
+            ids.len(),
+            unique.len(),
+            "no duplicate nodes in query results"
+        );
+        assert_eq!(
+            unique,
+            std::collections::BTreeSet::from(["cycle_a", "cycle_b", "cycle_c"]),
+            "every node reachable around the cycle is visited"
+        );
+    }
+
+    #[specforge_test(
+        behavior = "query_graph_multi_resolution",
+        verify = "depth N returns all entities within N hops"
+    )]
+    fn query_large_depth_on_small_graph() {
+        let (_project, compiled) = built(&[("main.spec", specs::DEEP_CHAIN)]);
+
+        let parsed = query_document(&compiled, "beh_middle", Some(100), &[]);
+        let nodes = parsed["nodes"].as_array().unwrap();
+        // Should get all connected nodes (beh_middle + feat_root + inv_deep, maybe typ_leaf if connected)
+        assert!(
+            nodes.len() >= 3,
+            "depth 100 on 4-node graph should return all connected nodes, got {}",
+            nodes.len()
+        );
+    }
+
+    #[specforge_test(
+        behavior = "query_graph_multi_resolution",
+        verify = "output includes schema_version field"
+    )]
+    fn query_output_has_schema_version() {
+        let (_project, compiled) = built(&[("main.spec", specs::ISOLATED)]);
+
+        let parsed = query_document(&compiled, "isolated_node", Some(0), &[]);
+        assert!(
+            parsed["schema_version"].is_string(),
+            "query output must include schema_version field"
+        );
+    }
+
+    #[specforge_test(
+        behavior = "query_graph_multi_resolution",
+        verify = "output conforms to Graph Protocol schema"
+    )]
+    fn query_nodes_have_required_fields() {
+        let (_project, compiled) = built(&[("main.spec", specs::DEEP_CHAIN)]);
+
+        let parsed = query_document(&compiled, "beh_middle", Some(2), &[]);
+
+        // The Graph Protocol shape, as the published schema declares it for a
+        // node and an edge (`specforge schema --publish`).
+        let published = published(&compiled, Format::Graph);
+        let props = &published["properties"];
+        for key in ["format_version", "schema_version", "nodes", "edges"] {
+            assert!(parsed.get(key).is_some(), "missing top-level '{key}'");
+        }
+        assert!(parsed["schema_version"].is_string());
+        for key in parsed.as_object().unwrap().keys() {
+            assert!(
+                props.get(key).is_some(),
+                "top-level '{key}' is not in the Graph Protocol"
+            );
+        }
+        // The reply is a document the published schema admits.
+        assert_eq!(
+            specforge_common::shape::violations(&published, &parsed),
+            Vec::<String>::new()
+        );
+        let nodes = parsed["nodes"].as_array().unwrap();
+        let edges = parsed["edges"].as_array().unwrap();
+        assert_eq!(nodes.len(), 3, "{parsed}");
+        assert_eq!(edges.len(), 3, "{parsed}");
+        let beh = nodes.iter().find(|n| n["id"] == "beh_middle").unwrap();
+        assert_eq!(beh["kind"], "behavior");
+        assert_eq!(beh["title"], "Behavior Middle");
+        assert_eq!(beh["fields"]["contract"], "The system MUST validate");
+    }
 }

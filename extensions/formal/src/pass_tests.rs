@@ -100,8 +100,8 @@ fn declared_validation_rules_are_complete_and_well_formed() {
 
     let codes: Vec<&str> = rules.iter().map(|r| r.code.as_str()).collect();
     for expected in [
-        "W125", "W123", "W126", "W128", "W131", "W134", "W124", "W127", "W129", "W132", "W135",
-        "W136", "W133",
+        "W123", "W126", "W128", "W131", "W134", "W124", "W127", "W129", "W132", "W135", "W136",
+        "W133",
     ] {
         assert!(
             codes.contains(&expected),
@@ -354,5 +354,32 @@ fn event_graph_flags_only_unconsumed_producers() {
     assert!(
         !findings[0].message.contains("done"),
         "consumed event spared"
+    );
+}
+
+/// A property's type is a required enum of
+/// its three values, so another value is the core's E061 and no rule of the
+/// extension (W125) says so.
+#[specforge_test::prelude::specforge_test(
+    behavior = "fa_validate_property_type",
+    verify = "property_type is a declared enum of safety, liveness, fairness"
+)]
+fn a_propertys_type_is_a_declared_vocabulary() {
+    let declaration = specforge_extension_build().declaration();
+    let field = declaration
+        .entities
+        .iter()
+        .find(|k| k.keyword.as_deref() == Some("property"))
+        .and_then(|k| k.fields.iter().find(|f| f.name == "property_type"))
+        .expect("property.property_type is declared");
+    assert_eq!(field.field_type, "enum");
+    assert_eq!(field.enum_values, ["safety", "liveness", "fairness"]);
+    assert!(field.required);
+    assert!(
+        declaration
+            .validation_rules
+            .iter()
+            .all(|r| r.code != "W125"),
+        "no rule has code W125"
     );
 }

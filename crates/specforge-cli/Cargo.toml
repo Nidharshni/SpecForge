@@ -31,12 +31,10 @@ serde_json = { workspace = true }
 specforge-common = { workspace = true }
 specforge-diagnostics = { path = "../specforge-diagnostics" }
 specforge-formatter = { workspace = true }
-specforge-graph = { path = "../specforge-graph" }
 specforge-package = { path = "../specforge-package" }
 specforge-protocol-types = { path = "../specforge-protocol-types" }
 specforge-watch = { path = "../specforge-watch" }
 chrono = "0.4.41"
-specforge-wasm = { workspace = true }
 specforge-component = { workspace = true }
 specforge-mcp = { workspace = true }
 specforge-ops = { workspace = true }
@@ -45,12 +43,12 @@ specforge-project = { workspace = true }
 specforge-registry-client = { path = "../specforge-registry-client" }
 
 [dev-dependencies]
-sha2 = { workspace = true }
-hex = "0.4.3"
-specforge-parser = { workspace = true }
+# The test project and the MCP driver over it (`tests/support`).
+specforge-project = { workspace = true, features = ["testing"] }
+specforge-mcp = { workspace = true, features = ["testing"] }
+specforge-ops = { workspace = true, features = ["testing"] }
 specforge-registry = { workspace = true }
 specforge-emitter = { path = "../specforge-emitter" }
-semver = { workspace = true }
 # Extensions declared with the SDK, served in process (`specforge_wasm::testing`).
 specforge-extension-sdk = { path = "../specforge-extension-sdk" }
 specforge-wasm = { workspace = true, features = ["testing"] }
@@ -66,5 +64,5 @@ specforge-lsp = { path = "../specforge-lsp" }
 tokio = { workspace = true }
 specforge-registry-server = { path = "../specforge-registry-server", features = ["testing"] }
 specforge-registry-client = { path = "../specforge-registry-client", features = ["testing"] }
-axum = "0.8.4"
 tower-lsp = { workspace = true }
+specforge-graph = { path = "../specforge-graph" }

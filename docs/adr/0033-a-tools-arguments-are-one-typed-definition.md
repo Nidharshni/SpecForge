@@ -38,7 +38,7 @@ ignored, though extension command tools (ADR 0017 D4) and resources (ADR 0024 D4
   `invalid_input` on it, with the close declared name as a suggestion. The call target's names are
   its own (`TargetSpec::accepted`: `path` for every reach but `Unscoped`, including a `Served`
   entry's unlisted own-root `path`; `use_cached` for `FreshUnlessCached`), and the target reads them
-  by D2.
+  by D2. *(ADR 0077: `use_cached` is gone; the target's only name is `path`.)*
 - **D4. A default is spelled once.** A field's `#[arg(default)]` reads an ops constant when another
   surface states the same default, and the CLI's `default_value` reads the same constant
   (`init::DEFAULT_VERSION`, `query::{DEPTH, SEARCH_LIMIT}`, `analyze::EVERY_PASS`,
@@ -82,17 +82,20 @@ Amended by plan 15 (round 5): a number argument reads as above (its wording is
 `<name> must be a number, got <value>`, not `normalize_arg`'s, which has no number type), and a graph
 resource reads a count in its query by the same rule and wording.
 
-Amended by plan 11 (round 8): an operation's refusal names its argument through the tool spec. Each core tool
-declares which argument each refusal code of its operations is about (`CoreTool::REFUSAL_ARGUMENTS`), and the
-dispatcher names it on the refusal its handler returns; a debug build fails an `invalid_input` refusal that
-names none. The five per-tool mechanisms (by code, by a `data` key, by kind, by variant, every refusal) are
-gone, and an operation writes no argument name in its refusal's `data` (the spelling is the surface's, ADR 0029
-D2). Refusals that shared a code have their own (`unknown_severity`, `unknown_lint_profile`,
-`source_root_outside_root`). A surface that parses its own argument through an ops helper (`render`'s `format`,
-`infer_session`'s `action`) still names it where it reads it, as D2's argument reading does.
+Amended by plan 11 (round 8), superseded by ADR 0072 (round 9): an operation's refusal names its argument through
+the field of its request the operation states (`Refusal<F>`), which each tool, prompt and resource maps to its
+argument once, exhaustively (`ArgumentOf<F>`); the per-tool code table `REFUSAL_ARGUMENTS` and its debug guard are
+gone. What the round-8 amendment settled stays: refusals that shared a code have their own (`unknown_severity`,
+`unknown_lint_profile`, `source_root_outside_root`), and an operation writes no argument name in its refusal's
+`data`. A surface that reads its own argument through an ops helper (`render`'s `format`, `infer_session`'s
+`action`, every option table) names it where it reads it, as D2's argument reading does.
 
 ## What would reopen it
 
 A second crate that needs the derive (it moves out of `specforge-mcp`'s namespace), an MCP revision
 whose argument model JSON Schema basics cannot state, or typed result structs for tools (then output
 schemas could be derived the same way).
+
+Amended by round 9 plan 06 (ADR 0076): the `AgentPlan` argument is `specforge_ops::plan::AgentPlan`, listed as its
+derived schema (the spec type `AgentPlan`), read from an object or a string holding its JSON, checked against that
+schema before it is decoded; its refusal names the argument and every place the value departs from the type.

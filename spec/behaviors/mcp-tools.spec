@@ -102,17 +102,12 @@ behavior provide_mcp_validate_tool "Provide MCP Validate Tool" {
     severity_filter? (optional: error, warning or info, matched ignoring
     case; any other value is invalid input), strict? (optional boolean,
     treat warnings as errors), lint? (optional list of inferred and
-    pedantic; any other name is invalid input), and use_cached? (optional
-    boolean, default false).
+    pedantic; any other name is invalid input).
     The response MUST include all diagnostics matching the filter with their
     severity, message, file path, and line number, and each diagnostic whose
     code is catalogued MUST carry the catalogue's title for it (null for any
     other code). When strict is true,
     warnings MUST be promoted to errors in the response.
-
-    Cache semantics: use_cached=true reports the served project as last
-    brought up to date, even when files changed since; with no project
-    served there is nothing cached, so the call compiles.
 
     A run that finds errors is a successful call (isError false, ADR 0004
     D4-a); whether the check passed is in _meta["specforge/check"].ok,
@@ -125,8 +120,7 @@ behavior provide_mcp_validate_tool "Provide MCP Validate Tool" {
   verify unit "severity_filter restricts returned diagnostics"
   verify unit "strict mode promotes warnings to errors"
   verify integration "validate with lint profiles reports what specforge check reports with the same profiles"
-  verify unit "validate with use_cached=false triggers fresh compilation"
-  verify unit "validate with use_cached=true returns existing diagnostics without recompilation"
+  verify unit "validate reports files changed on disk since the last call"
   verify unit "an unknown severity_filter or lint profile is invalid input"
   verify unit "the verdict on every reported diagnostic rides in _meta, whatever severity_filter shows"
   verify contract "Provide MCP Validate Tool: MCP validate tool holds — compiler_api_available, diagnostics_returned, strict_promotion_enforced, tool_invoked_emitted, verdict_in_meta"
@@ -216,14 +210,14 @@ behavior provide_mcp_trace_tool "Provide MCP Trace Tool" {
   }
   contract   """
     In MCP server mode, the system MUST register a specforge.trace tool that
-    accepts entityId? (optional) and plan? (optional inline JSON). When entityId
+    accepts entityId? (optional) and plan? (optional: an AgentPlan, or its JSON text). When entityId
     is provided, the tool MUST delegate to compute_traceability_chain to traverse
     the graph upstream and downstream from the entity and return the document
     `specforge trace <entity> --format json` writes: the TraceChain with its
     TraceLink entries and its missing links, the expected edges the entity
     lacks. It carries no other gap list. When plan is provided, the tool
-    MUST perform gap analysis against the graph and return a McpTracePlanResult
-    containing affected entities, gaps, and suggestions. At least one of entityId
+    MUST perform the plan check (validate_agent_plan) and return its document,
+    a McpTracePlanResult: ok, the affected entities and the gaps. At least one of entityId
     or plan MUST be provided; otherwise the tool MUST return an error.
   """
   verify unit "specforge.trace tool returns traceability chain for valid entityId"
@@ -740,8 +734,7 @@ behavior provide_mcp_analyze_tool "Provide MCP Analyze Tool" {
     accepts `strict` (warnings become errors), `min` (a proof-coverage
     minimum in percent: below it the analysis is not ok, E048; it needs
     test results and the coverage pass, as `specforge analyze --min`),
-    `test_results` (a specforge-report.json path), `use_cached` (analyze the served project
-    as last brought up to date instead of bringing it up to date with disk)
+    `test_results` (a specforge-report.json path)
     and `path` (another project, opened for the call only, its extension
     passes run in the one runtime it was opened with). With no project
     served and no `path` there is nothing to analyze: the call MUST be an

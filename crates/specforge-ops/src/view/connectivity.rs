@@ -9,7 +9,8 @@ use specforge_common::Sym;
 use specforge_graph::{Graph, Reached};
 
 use super::ProjectView;
-use crate::OpError;
+use crate::Refusal;
+use crate::navigate::EntityField;
 
 /// An entity's edges to and from *other* entities. An edge from the entity
 /// to itself is in neither count; the graph holds no edge to a reference
@@ -105,9 +106,9 @@ impl<'a> ProjectView<'a> {
         &self,
         entity_id: &str,
         depth: Option<usize>,
-    ) -> Result<Vec<Reached>, OpError> {
-        self.graph()
-            .reach(entity_id, depth)
-            .ok_or_else(|| crate::navigate::not_found(self.graph(), entity_id))
+    ) -> Result<Vec<Reached>, Refusal<EntityField>> {
+        self.graph().reach(entity_id, depth).ok_or_else(|| {
+            crate::navigate::not_found(self.graph(), entity_id).about(EntityField::EntityId)
+        })
     }
 }

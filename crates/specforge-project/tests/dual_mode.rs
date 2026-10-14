@@ -2,26 +2,20 @@
 //! (__handshake / __describe) through a WasmRuntime implementation.
 
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta, no_other_exports};
+use specforge_project::testing::TestProject;
 use specforge_protocol_types::HandshakeResponse;
 use specforge_test::prelude::*;
 use specforge_wasm::testing::InProcessRuntime;
 use specforge_wasm::{WasmCallResult, WasmTrapInfo};
-use std::fs;
 use std::sync::Arc;
-use tempfile::TempDir;
 
 /// Helper: create a temp project dir with specforge.json and optional extensions.
-fn setup_project(extensions: &[&str], spec_content: &str) -> TempDir {
-    let dir = TempDir::new().unwrap();
-    let ext_json: Vec<String> = extensions.iter().map(|e| format!("\"{}\"", e)).collect();
-    let config = format!(
-        r#"{{"name":"test","version":"0.1.0","extensions":[{}]}}"#,
-        ext_json.join(",")
-    );
-    fs::write(dir.path().join("specforge.json"), config).unwrap();
-    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
-    fs::write(dir.path().join("core.spec"), spec_content).unwrap();
-    dir
+fn project(extensions: &[&str], spec_content: &str) -> TestProject {
+    TestProject::new()
+        .config(|c| c["name"] = "test".into())
+        .enabling(extensions)
+        .installing_enabled()
+        .file("core.spec", spec_content)
 }
 
 // --- Step 6: Protocol extension loaded through a runtime ---
@@ -33,7 +27,7 @@ fn setup_project(extensions: &[&str], spec_content: &str) -> TempDir {
 // install.
 #[test]
 fn protocol_extension_loaded_with_runtime() {
-    let dir = setup_project(
+    let dir = project(
         &["@test/proto"],
         "behavior hello \"Hello\" {\n    status planned\n}\n",
     );
@@ -51,10 +45,7 @@ fn protocol_extension_loaded_with_runtime() {
         no_other_exports,
     );
 
-    let ctx = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let ctx = dir.compile_in(Arc::new(runtime));
 
     let diagnostics = ctx.diagnostics();
 
@@ -100,7 +91,7 @@ fn protocol_extension_loaded_with_runtime() {
     verify = "unloadable extension binary produces diagnostic instead of crash"
 )]
 fn protocol_handshake_trap_produces_e028() {
-    let dir = setup_project(
+    let dir = project(
         &["@test/broken"],
         "behavior hello \"Hello\" {\n    status planned\n}\n",
     );
@@ -115,10 +106,7 @@ fn protocol_handshake_trap_produces_e028() {
         }),
     );
 
-    let ctx = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let ctx = dir.compile_in(Arc::new(runtime));
 
     let diagnostics = ctx.diagnostics();
 
@@ -152,7 +140,7 @@ fn protocol_handshake_trap_produces_e028() {
     verify = "unloadable extension binary produces diagnostic instead of crash"
 )]
 fn protocol_version_mismatch_produces_e028() {
-    let dir = setup_project(
+    let dir = project(
         &["@test/badver"],
         "behavior hello \"Hello\" {\n    status planned\n}\n",
     );
@@ -175,10 +163,7 @@ fn protocol_version_mismatch_produces_e028() {
         WasmCallResult::Ok(serde_json::to_vec(&bad_handshake).unwrap()),
     );
 
-    let ctx = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let ctx = dir.compile_in(Arc::new(runtime));
 
     let diagnostics = ctx.diagnostics();
 

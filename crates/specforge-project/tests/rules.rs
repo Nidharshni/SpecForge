@@ -11,10 +11,10 @@ use serde_json::{Value, json};
 use specforge_common::Diagnostic;
 use specforge_extension_sdk::prelude::*;
 use specforge_project::CompiledProject;
+use specforge_project::testing::TestProject;
 use specforge_test_macros::test as spec;
 use specforge_wasm::testing::InProcessRuntime;
 use std::sync::Arc;
-use tempfile::TempDir;
 
 const EXT: &str = "@pin/rules";
 
@@ -102,35 +102,30 @@ node gamma "Gamma" {
 
 /// A project (`spec_root: "spec"`) whose `spec/nodes.spec` is `source`,
 /// with `spec/pin-only-under-spec-root.md` present.
-fn project(source: &str) -> TempDir {
-    let dir = TempDir::new().unwrap();
-    let config =
-        json!({ "name": "pins", "version": "0.1.0", "spec_root": "spec", "extensions": [EXT] });
-    fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
-    fs::create_dir(dir.path().join("spec")).unwrap();
-    fs::write(dir.path().join("spec/nodes.spec"), source).unwrap();
-    fs::write(
-        dir.path().join("spec/pin-only-under-spec-root.md"),
-        "# pin\n",
-    )
-    .unwrap();
-    dir
+fn project(source: &str) -> TestProject {
+    TestProject::new()
+        .config(|c| {
+            c["name"] = "pins".into();
+            c["spec_root"] = "spec".into();
+        })
+        .enabling(&[EXT])
+        .installing_enabled()
+        .files(&[
+            ("spec/nodes.spec", source),
+            ("spec/pin-only-under-spec-root.md", "# pin\n"),
+        ])
 }
 
-/// The compile of `root` with the extension declaring `rules`.
-fn compile_with(root: &Path, rules: Value, required_owner: bool) -> CompiledProject {
+/// The compile of the project with the extension declaring `rules`.
+fn compile_with(dir: &TestProject, rules: Value, required_owner: bool) -> CompiledProject {
     let runtime = InProcessRuntime::new().with_handler(extension(rules, required_owner), x007);
-    CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(root).unwrap(),
-        Some(Arc::new(runtime)),
-    )
+    dir.compile_in(Arc::new(runtime))
 }
 
 /// The diagnostics of compiling `source` with the extension declaring `rules`.
 fn check(source: &str, rules: Value) -> Vec<Diagnostic> {
     let dir = project(source);
-    compile_with(dir.path(), rules, false).diagnostics()
+    compile_with(&dir, rules, false).diagnostics()
 }
 
 /// The messages of the diagnostics with `code`.
@@ -262,11 +257,11 @@ fn file_exists_reads_the_spec_root_whatever_the_working_directory() {
     // The test's working directory does not hold the file.
     assert!(!Path::new("pin-only-under-spec-root.md").exists());
 
-    let diagnostics = compile_with(dir.path(), rules.clone(), false).diagnostics();
+    let diagnostics = compile_with(&dir, rules.clone(), false).diagnostics();
     assert!(messages(&diagnostics, "X004").is_empty(), "{diagnostics:?}");
 
-    fs::remove_file(dir.path().join("spec/pin-only-under-spec-root.md")).unwrap();
-    let diagnostics = compile_with(dir.path(), rules, false).diagnostics();
+    fs::remove_file(dir.root().join("spec/pin-only-under-spec-root.md")).unwrap();
+    let diagnostics = compile_with(&dir, rules, false).diagnostics();
     assert_eq!(
         messages(&diagnostics, "X004"),
         ["X004 'gamma': missing file 'pin-only-under-spec-root.md'"]
@@ -342,7 +337,7 @@ fn rule_diagnostics_come_in_rule_order_then_entity_id_order() {
         }
     ]);
 
-    let diagnostics = compile_with(dir.path(), rules, true).diagnostics();
+    let diagnostics = compile_with(&dir, rules, true).diagnostics();
 
     let order: Vec<String> = diagnostics
         .iter()
@@ -375,7 +370,7 @@ fn an_untargeted_obligation_rule_obliges_every_kind_after_the_move() {
         "message_template": "{kind} '{id}' declares no verify obligations"
     }]);
 
-    let compiled = compile_with(dir.path(), rules, false);
+    let compiled = compile_with(&dir, rules, false);
 
     assert_eq!(
         messages(&compiled.diagnostics(), "W904"),

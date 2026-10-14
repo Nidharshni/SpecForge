@@ -277,11 +277,11 @@ fn an_undeclared_argument_is_refused_naming_it() {
     assert_eq!(error["message"], "unknown argument 'scop'");
     assert_eq!(error["data"]["suggestion"], "did you mean 'scope'?");
 
-    // The target's names are its own: use_cached only where the target reads it.
-    let reply = call_tool(&mut served, "specforge.stats", json!({"use_cached": true}));
-    assert_eq!(mcp_error(&reply)["argument"], "use_cached");
-    let reply = call_tool(&mut served, "specforge.doctor", json!({"use_cached": true}));
-    assert_eq!(reply["result"]["isError"], false, "{reply}");
+    // No tool reads use_cached: it is an unknown argument.
+    for tool in ["specforge.stats", "specforge.doctor", "specforge.validate"] {
+        let reply = call_tool(&mut served, tool, json!({"use_cached": true}));
+        assert_eq!(mcp_error(&reply)["argument"], "use_cached", "{tool}");
+    }
     // A Served entry accepts its own project's root, though it lists no path.
     let own = root.to_str().expect("a UTF-8 root");
     let reply = call_tool(&mut served, "specforge.stats", json!({"path": own}));
@@ -495,46 +495,11 @@ fn a_prompt_reads_its_arguments_by_the_listed_rule() {
     verify = "a boolean or count sent as a string is read as one, as an extension command reads it; any other value of the wrong type is refused naming the argument"
 )]
 fn a_target_argument_is_read_by_its_type() {
-    // use_cached "true" is the last compile: an extension enabled since,
-    // which is not installed, is not reported until a fresh call.
-    let mut served = served();
-    served.write(
-        "specforge.json",
-        r#"{"name":"t","version":"0.1.0","extensions":["@specforge/software","@acme/missing"]}"#,
-    );
-    let load_failures = |served: &mut Served, arguments: Value| -> Vec<Value> {
-        tool("specforge.doctor", served, arguments)["findings"]
-            .as_array()
-            .map(|findings| {
-                findings
-                    .iter()
-                    .filter(|f| f["about"] == "load")
-                    .cloned()
-                    .collect()
-            })
-            .unwrap_or_default()
-    };
-    let cached = load_failures(&mut served, json!({"use_cached": "true"}));
-    assert!(cached.is_empty(), "{cached:?}");
-    let fresh = load_failures(&mut served, json!({}));
-    assert!(fresh.iter().any(|f| f["code"] == "E028"), "{fresh:?}");
-
     // A path that is not a string is refused, not ignored.
     let error = refused("specforge.validate", json!({"path": 42}));
     assert_eq!(error["code"], "invalid_input");
     assert_eq!(error["argument"], "path");
     assert_eq!(error["message"], "path must be a string, got 42");
-    let error = refused("specforge.doctor", json!({"use_cached": "yes"}));
-    assert_eq!(error["argument"], "use_cached");
-    assert_eq!(
-        error["message"],
-        "use_cached must be true or false, got 'yes'"
-    );
-}
-
-/// `tools/call` of `name`, the reply's JSON.
-fn tool(name: &str, served: &mut Served, arguments: Value) -> Value {
-    crate::support::tool(served, name, arguments)
 }
 
 #[specforge_test(
@@ -575,7 +540,11 @@ fn every_core_tool_lists_its_typed_arguments() {
         for listed in properties.keys() {
             assert!(
                 declared.contains(&listed.as_str())
-                    || tool.target().fields().contains(&listed.as_str()),
+                    || tool
+                        .target()
+                        .fields()
+                        .iter()
+                        .any(|argument| argument.name() == listed),
                 "{}: lists {listed}",
                 tool.name()
             );
@@ -588,10 +557,11 @@ fn every_core_tool_lists_its_typed_arguments() {
 mod derived {
     use super::*;
     use specforge_mcp::args::{
-        AgentPlan, Arg, Argument, Arguments, EntityIds, choice_schema, input_schema, read,
+        Arg, Argument, Arguments, EntityIds, choice_schema, input_schema, read,
     };
     use specforge_mcp::target::TargetSpec;
     use specforge_ops::model::ModelFormat;
+    use specforge_ops::plan::AgentPlan;
     use specforge_project::coverage::Status;
     use specforge_protocol_types::command_args::normalize_arg;
     use specforge_protocol_types::{CommandArgDescriptor, CommandArgType};
@@ -854,6 +824,34 @@ mod derived {
         /// A required renderer
         #[arg(choice = specforge_ops::export::FORMAT)]
         renderer: String,
+    }
+
+    #[specforge_test(
+        behavior = "read_mcp_arguments_as_declared",
+        verify = "an agent plan is read as the AgentPlan type, from an object or a string holding its JSON"
+    )]
+    fn an_agent_plan_argument_is_read_from_an_object_or_its_text() {
+        let plan = AgentPlan {
+            plan_id: "p".into(),
+            entries: Vec::new(),
+        };
+        let object = json!({"plan": {"plan_id": "p", "entries": []}, "renderer": "markdown"});
+        let text = json!({"plan": "{\"plan_id\":\"p\",\"entries\":[]}", "renderer": "markdown"});
+        for given in [object, text] {
+            let raw: Raw = read(&given).expect("a read");
+            assert_eq!(raw.plan, Some(plan.clone()));
+        }
+        let refused = read::<Raw>(&json!({"plan": {"entries": []}, "renderer": "markdown"}))
+            .expect_err("a refusal");
+        assert_eq!(refused.argument.as_deref(), Some("plan"));
+        assert_eq!(
+            refused.message,
+            "plan must be an AgentPlan: plan: missing required plan_id"
+        );
+        let declared = Raw::declared();
+        let mut listed = specforge_common::shape::build::<AgentPlan>();
+        listed["description"] = json!("A plan");
+        assert_eq!(declared[1].schema, listed);
     }
 
     #[test]

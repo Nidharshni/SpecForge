@@ -28,6 +28,7 @@ disagreed on an empty placeholder and on a query.
   `View<R>`, `Project<R>` or `NewProject`, `R` one of `Served`, `ServedUnlessCached`, `AnyProject`,
   `AnyUnlessCached`. A project handler takes `ProjectRef` by value; init takes `NewProjectDir` (the
   directory and the runtime its extensions' declarations are read in).
+  *(ADR 0077: `R` is `Served` or `AnyProject`; the `UnlessCached` markers are gone.)*
 - **D3. What the handler returns is the reply kind** (`Handled`): `Answered<Text>`, `Answered<R>` or
   `Mutation<R>` (`R: MutationReply`). It gives the outputSchema (the one place a core tool's schema is
   built), whether the tool is typed, the refusal before the handler ran, and the rest of the call (a

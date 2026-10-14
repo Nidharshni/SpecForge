@@ -54,7 +54,8 @@ fn the_short_name_reaches_the_handshake() {
 
     // Without them, the handshake carries none of the three keys.
     let plain = ContributionsBuilder::new(ExtensionMeta::new("@acme/plain", "1.0.0"));
-    let handshake: serde_json::Value = serde_json::from_str(&plain.handshake_json()).unwrap();
+    let handshake: serde_json::Value =
+        serde_json::from_str(&plain.declaration().handshake_json()).unwrap();
     for key in ["ext_short", "description", "keywords"] {
         assert!(handshake.get(key).is_none(), "{key}: {handshake}");
     }
@@ -69,7 +70,8 @@ fn peers_reach_the_handshake_in_call_order() {
     let mut b = ContributionsBuilder::new(ExtensionMeta::new("@acme/peers", "1.0.0"));
     b.peer("@a/x", "^1.0").optional_peer("@a/y", "^2");
 
-    let handshake: serde_json::Value = serde_json::from_str(&b.handshake_json()).unwrap();
+    let handshake: serde_json::Value =
+        serde_json::from_str(&b.declaration().handshake_json()).unwrap();
 
     assert_eq!(
         handshake["peer_dependencies"],
@@ -97,7 +99,7 @@ fn a_raw_category_that_does_not_parse_panics() {
     assert!(message.contains("missing field `name`"), "{message}");
     // Serving any category builds the declaration, so the guest fails too.
     let served = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        b.describe_response_json("entities")
+        MockHost::new(b).describe_json("entities")
     }));
     assert!(served.is_err());
 }
@@ -106,14 +108,14 @@ fn a_raw_category_that_does_not_parse_panics() {
 /// every category, the derived `fields` and flags included.
 #[test]
 fn the_guest_serves_its_declaration() {
-    let b = reports();
-    let declared = b.declaration();
-    let handshake: HandshakeResponse = serde_json::from_str(&b.handshake_json()).unwrap();
+    let host = MockHost::new(reports());
+    let declared = host.declaration();
+    let handshake: HandshakeResponse = serde_json::from_str(&host.handshake_json()).unwrap();
     let loaded = ExtensionDeclaration::from_wire(
         handshake,
         |category| {
             Ok(serde_json::from_str::<DescribeResponse>(
-                &b.describe_response_json(category.name()).unwrap(),
+                &host.describe_json(category.name()).unwrap(),
             )
             .unwrap())
         },
@@ -126,13 +128,13 @@ fn the_guest_serves_its_declaration() {
     assert!(declared.declares(DeclaredCategory::Entities));
     for category in DeclaredCategory::ALL {
         assert_eq!(
-            b.describe_response_json(category.name()),
+            host.describe_json(category.name()),
             Some(declared.describe_json(category)),
             "{category:?}"
         );
     }
     // `fields` is no category: nothing serves it.
-    assert_eq!(b.describe_response_json("fields"), None);
+    assert_eq!(host.describe_json("fields"), None);
 }
 
 fn dispatch(export: &str, _input: &[u8]) -> Option<Result<Vec<u8>, String>> {
@@ -147,10 +149,10 @@ fn dispatch(export: &str, _input: &[u8]) -> Option<Result<Vec<u8>, String>> {
     verify = "a guest answers the handshake and every describe from one declaration it builds once"
 )]
 fn a_served_guest_routes_every_export() {
-    let b = reports();
-    let handshake_json = b.handshake_json().into_bytes();
-    let describe_entities = b.describe_response_json("entities").unwrap().into_bytes();
-    let served = Served::new(b);
+    let host = MockHost::new(reports());
+    let handshake_json = host.handshake_json().into_bytes();
+    let describe_entities = host.describe_json("entities").unwrap().into_bytes();
+    let served = Served::new(host.0);
     let handshake = served.call(dispatch, "__handshake", b"{}").unwrap();
     assert_eq!(handshake, handshake_json);
     let describe = served
@@ -185,18 +187,13 @@ fn a_served_guest_routes_every_export() {
     verify = "a guest answers the handshake and every describe from one declaration it builds once"
 )]
 fn served_answers_what_the_builder_declares() {
-    let builder = reports();
+    let host = MockHost::new(reports());
     let expected: Vec<(&str, Option<String>)> = DeclaredCategory::ALL
         .iter()
-        .map(|category| {
-            (
-                category.name(),
-                builder.describe_response_json(category.name()),
-            )
-        })
+        .map(|category| (category.name(), host.describe_json(category.name())))
         .collect();
-    let handshake = builder.handshake_json();
-    let served = Served::new(builder);
+    let handshake = host.handshake_json();
+    let served = Served::new(host.0);
     for (category, answer) in expected {
         let request = serde_json::to_vec(&serde_json::json!({ "category": category })).unwrap();
         assert_eq!(
@@ -234,6 +231,7 @@ fn a_raw_category_and_a_loaded_one_parse_alike() {
         })
         .feature_flag("beta", false, "a flag");
     let declared = built.declaration();
+    let built = MockHost::new(built);
 
     for category in DeclaredCategory::ALL {
         let items = declared.describe_items(category);
@@ -253,7 +251,7 @@ fn a_raw_category_and_a_loaded_one_parse_alike() {
         handshake,
         |category| {
             Ok(serde_json::from_str::<DescribeResponse>(
-                &built.describe_response_json(category.name()).unwrap(),
+                &built.describe_json(category.name()).unwrap(),
             )
             .unwrap())
         },

@@ -22,7 +22,7 @@ use std::collections::BTreeMap;
 
 /// Link `unlinked` tests to entities by naming convention. A name that
 /// splits into more than one known entity is ambiguous (W137) and left out.
-pub fn resolve(
+pub(super) fn resolve(
     unlinked: &[CollectUnlinkedTest],
     known: &KnownEntities,
 ) -> (Vec<CollectEntityResult>, Vec<Diagnostic>) {

@@ -1,36 +1,26 @@
 //! C6-02 acceptance: `--schema-version` negotiates a real same-major range.
 
-use assert_cmd::Command;
-use tempfile::TempDir;
+use crate::support::{Cli, TestProject};
 
-fn specforge() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_specforge"))
-}
-
-fn seed(path: &std::path::Path) {
-    std::fs::create_dir_all(path.join("src")).unwrap();
-    std::fs::write(
-        path.join("specforge.json"),
-        r#"{"name":"v","spec_root":"src","extensions":["@specforge/product"]}"#,
-    )
-    .unwrap();
-    std::fs::write(
-        path.join("src/a.spec"),
-        "type Widget {\n  id string @unique\n  verify unit \"widget valid\"\n}\n",
-    )
-    .unwrap();
+/// A project whose sources are under `src/`.
+fn seeded() -> TestProject {
+    TestProject::new()
+        .raw_config(r#"{"name":"v","spec_root":"src","extensions":["@specforge/product"]}"#)
+        .file(
+            "src/a.spec",
+            "type Widget {\n  id string @unique\n  verify unit \"widget valid\"\n}\n",
+        )
 }
 
 #[test]
 fn schema_version_within_same_major_is_accepted() {
-    let tmp = TempDir::new().unwrap();
-    seed(tmp.path());
+    let tmp = seeded();
     // Same major as the produced schema (1.x): accepted by the negotiated range.
-    let out = specforge()
-        .args([
+    let out = Cli::on(&tmp)
+        .bare_command(&[
             "export",
             "--path",
-            tmp.path().join("src").to_str().unwrap(),
+            tmp.root().join("src").to_str().unwrap(),
             "--format",
             "graph",
             "--schema-version",
@@ -52,13 +42,12 @@ fn schema_version_within_same_major_is_accepted() {
 
 #[test]
 fn schema_version_other_major_is_rejected_with_range() {
-    let tmp = TempDir::new().unwrap();
-    seed(tmp.path());
-    let out = specforge()
-        .args([
+    let tmp = seeded();
+    let out = Cli::on(&tmp)
+        .bare_command(&[
             "export",
             "--path",
-            tmp.path().join("src").to_str().unwrap(),
+            tmp.root().join("src").to_str().unwrap(),
             "--format",
             "graph",
             "--schema-version",
@@ -87,13 +76,12 @@ fn schema_version_other_major_is_rejected_with_range() {
     verify = "a requested version of another major, or a newer one, is refused as incompatible_schema_version naming the readable range"
 )]
 fn a_refused_schema_version_is_not_a_peer_error() {
-    let tmp = TempDir::new().unwrap();
-    seed(tmp.path());
-    let root = tmp.path().join("src");
+    let tmp = seeded();
+    let root = tmp.root().join("src");
     let root = root.to_str().unwrap();
 
-    let graph = specforge()
-        .args([
+    let graph = Cli::on(&tmp)
+        .bare_command(&[
             "export",
             "--path",
             root,
@@ -112,8 +100,8 @@ fn a_refused_schema_version_is_not_a_peer_error() {
     );
 
     // The request is checked whatever the format.
-    let brief = specforge()
-        .args([
+    let brief = Cli::on(&tmp)
+        .bare_command(&[
             "export",
             "--path",
             root,

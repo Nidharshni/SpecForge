@@ -3,7 +3,6 @@ use serde_json::{Value, json};
 use specforge_mcp::McpServer;
 use specforge_test::prelude::*;
 use std::path::Path;
-use std::sync::Arc;
 
 /// test.spec: the behavior `alpha` on lines 1–2, the feature `beta` that
 /// has it on lines 10–12.
@@ -55,7 +54,7 @@ fn server_with_unformatted() -> (Served, std::path::PathBuf) {
     let server = project()
         .file("test.spec", "")
         .file("a.spec", UNFORMATTED)
-        .file("b.spec", &UNFORMATTED.replace("messy", "other"))
+        .file("b.spec", UNFORMATTED.replace("messy", "other"))
         .serve(&[TestExtension::software()]);
     let root = server.root().to_path_buf();
     (server, root)
@@ -531,15 +530,12 @@ fn rename_recompiles_files_it_did_not_edit() {
         codes.sort();
         codes
     };
-    let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let fresh: Vec<Value> = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(&root).unwrap(),
-        Some(Arc::new(runtime)),
-    )
-    .diagnostics()
-    .iter()
-    .map(|d| serde_json::to_value(d).unwrap())
-    .collect();
+    let runtime = specforge_project::testing::component_runtime();
+    let fresh: Vec<Value> = specforge_project::testing::compile_at(&root, Some(runtime))
+        .diagnostics()
+        .iter()
+        .map(|d| serde_json::to_value(d).unwrap())
+        .collect();
     let returned = parsed["diagnostics"].as_array().unwrap();
     assert_eq!(codes(returned), codes(&fresh), "{parsed}");
     let e003 = returned
@@ -1190,6 +1186,32 @@ fn a_repeated_rename_changes_nothing() {
     assert_eq!(
         listed_hint(&mut server, "specforge.rename", "idempotentHint"),
         true
+    );
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_rename_tool",
+    verify = "rename never edits a nested project's files"
+)]
+fn rename_leaves_a_nested_projects_files_alone() {
+    let (mut server, dir) = served_project(&[], &[("a.spec", "term outer_one \"O\" {\n}\n")]);
+    std::fs::create_dir_all(dir.path().join("sub")).unwrap();
+    std::fs::write(dir.path().join("sub/specforge.json"), "{}").unwrap();
+    let nested = "term sub_only \"S\" {\n}\n";
+    std::fs::write(dir.path().join("sub/c.spec"), nested).unwrap();
+
+    let resp = call_tool(
+        &mut server,
+        "specforge.rename",
+        json!({"entity_id": "sub_only", "new_name": "renamed"}),
+    );
+
+    let error = crate::tool_errors::mcp_error(&resp);
+    assert_eq!(error["code"], "entity_not_found", "{error}");
+    assert_eq!(error["data"]["files_written"], json!([]), "{error}");
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("sub/c.spec")).unwrap(),
+        nested
     );
 }
 
@@ -2021,7 +2043,7 @@ fn migrate_reports_hooks_structure_and_rollback() {
 /// at their URL, so a registry install fails at once.
 fn project_with_duplicate_registry_alias() -> tempfile::TempDir {
     let dir = tempfile::TempDir::new().unwrap();
-    let url = "http://127.0.0.1:9/v1";
+    let url = "http://127.0.0.1:9";
     let config = json!({
         "name": "t", "version": "0.1.0", "extensions": [],
         "registries": [

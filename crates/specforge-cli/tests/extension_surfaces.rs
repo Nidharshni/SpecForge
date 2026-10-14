@@ -3,19 +3,22 @@
 //! the command line of the same name. The help the host renders from a
 //! declaration is pinned once, over a fake, in `src/extension_command.rs`.
 
-use crate::e2e_fixtures::{find_response, mcp_request};
-use crate::product_commands::{setup_product_project, structured_session};
-use assert_cmd::cargo_bin_cmd;
+use crate::product_commands::setup_product_project;
+use crate::support::mcp_process::{self, find_response, request as mcp_request};
+use crate::support::{Cli, TestProject};
 use serde_json::Value;
+use specforge_mcp::testing::{Served, rpc};
 use specforge_test_macros::test as specforge_test;
-use tempfile::TempDir;
+
+/// The MCP revision with structured content (2025-06-18).
+const STRUCTURED: &str = "2025-06-18";
 
 const PRODUCT: &str = "@specforge/product";
 
 /// Every tool `specforge mcp` lists for the product project, in order.
-fn listed_tools(dir: &TempDir) -> Vec<Value> {
-    let responses = structured_session(dir, &[mcp_request(1, "tools/list", serde_json::json!({}))]);
-    find_response(&responses, 1).unwrap()["result"]["tools"]
+fn listed_tools() -> Vec<Value> {
+    let mut served = Served::rooted_at(setup_product_project(), STRUCTURED);
+    rpc::call(&mut served, "tools/list", serde_json::json!({}))["result"]["tools"]
         .as_array()
         .unwrap()
         .clone()
@@ -32,14 +35,13 @@ fn cli_name(tool: &Value) -> String {
 
 /// `specforge product <args>`'s stdout, at a fixed width and without
 /// colour.
-fn product_help(dir: &TempDir, args: &[&str]) -> String {
-    let output = cargo_bin_cmd!("specforge")
+fn product_help(dir: &TestProject, args: &[&str]) -> String {
+    let mut argv = vec!["product"];
+    argv.extend(args);
+    let output = Cli::on(dir)
         .env("COLUMNS", "100")
         .env("NO_COLOR", "1")
-        .arg("product")
-        .args(args)
-        .arg("--path")
-        .arg(dir.path())
+        .command(&argv)
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(0), "{args:?}: {output:?}");
@@ -48,8 +50,7 @@ fn product_help(dir: &TempDir, args: &[&str]) -> String {
 
 #[test]
 fn pinned_product_tools_listing() {
-    let dir = setup_product_project();
-    let tools = listed_tools(&dir);
+    let tools = listed_tools();
     // The listed order, core first: pinned apart from the schemas.
     let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
     insta::assert_json_snapshot!("product_tool_names", names);
@@ -76,7 +77,7 @@ fn listed_commands(help: &str) -> Vec<String> {
 )]
 fn every_product_tool_is_a_product_command_line() {
     let dir = setup_product_project();
-    let tools = listed_tools(&dir);
+    let tools = listed_tools();
     let product: Vec<&Value> = tools.iter().filter(|t| t["source"] == PRODUCT).collect();
     assert!(!product.is_empty());
     let commands: Vec<String> = product.iter().map(|t| cli_name(t)).collect();
@@ -114,14 +115,11 @@ fn every_product_tool_is_a_product_command_line() {
 }
 
 /// `specforge product <args> --format json`'s stdout, as JSON.
-fn product_json(dir: &TempDir, args: &[&str]) -> Value {
-    let output = cargo_bin_cmd!("specforge")
-        .arg("product")
-        .args(args)
-        .args(["--format", "json", "--path"])
-        .arg(dir.path())
-        .output()
-        .unwrap();
+fn product_json(dir: &TestProject, args: &[&str]) -> Value {
+    let mut argv = vec!["product"];
+    argv.extend(args);
+    argv.extend(["--format", "json"]);
+    let output = Cli::on(dir).command(&argv).output().unwrap();
     assert_eq!(output.status.code(), Some(0), "{args:?}: {output:?}");
     serde_json::from_slice(&output.stdout).unwrap()
 }
@@ -143,25 +141,14 @@ fn the_cli_and_mcp_answer_one_command_alike() {
             serde_json::json!({"milestone": "m1"}),
         ),
     ];
-    let requests: Vec<String> = calls
-        .iter()
-        .enumerate()
-        .map(|(i, (argv, arguments))| {
-            let name = format!("specforge.product.{}", argv[0].replace('-', "_"));
-            mcp_request(
-                i as u64 + 1,
-                "tools/call",
-                serde_json::json!({"name": name, "arguments": arguments}),
-            )
-        })
-        .collect();
-    let responses = structured_session(&dir, &requests);
-    for (i, (argv, _)) in calls.iter().enumerate() {
-        let response = find_response(&responses, i as u64 + 1).unwrap();
+    let mut served = Served::rooted_at(dir, STRUCTURED);
+    for (argv, arguments) in &calls {
+        let name = format!("specforge.product.{}", argv[0].replace('-', "_"));
+        let response = served.call_tool(&name, arguments.clone());
         assert_eq!(response["result"]["isError"], false, "{argv:?}: {response}");
         assert_eq!(
             response["result"]["structuredContent"],
-            product_json(&dir, argv),
+            product_json(served.project(), argv),
             "{argv:?}"
         );
     }
@@ -184,31 +171,17 @@ fn one_mistake_is_one_error_object_on_both_surfaces() {
             serde_json::json!({"status": "bogus"}),
         ),
     ];
-    let requests: Vec<String> = mistakes
-        .iter()
-        .enumerate()
-        .map(|(i, (argv, arguments))| {
-            let name = format!("specforge.product.{}", argv[0].replace('-', "_"));
-            mcp_request(
-                i as u64 + 1,
-                "tools/call",
-                serde_json::json!({"name": name, "arguments": arguments}),
-            )
-        })
-        .collect();
-    let responses = structured_session(&dir, &requests);
-    for (i, (argv, _)) in mistakes.iter().enumerate() {
-        let output = cargo_bin_cmd!("specforge")
-            .arg("product")
-            .args(argv)
-            .args(["--format", "json", "--path"])
-            .arg(dir.path())
-            .output()
-            .unwrap();
+    let mut served = Served::rooted_at(dir, STRUCTURED);
+    for (argv, arguments) in &mistakes {
+        let name = format!("specforge.product.{}", argv[0].replace('-', "_"));
+        let response = served.call_tool(&name, arguments.clone());
+        let mut args = vec!["product"];
+        args.extend(argv.iter().copied());
+        args.extend(["--format", "json"]);
+        let output = Cli::on(served.project()).command(&args).output().unwrap();
         assert_eq!(output.status.code(), Some(2), "{argv:?}: {output:?}");
         let cli: Value = serde_json::from_slice(&output.stderr).unwrap();
         assert_eq!(cli["code"], "INVALID_INPUT", "{argv:?}: {cli}");
-        let response = find_response(&responses, i as u64 + 1).unwrap();
         assert_eq!(response["result"]["isError"], true, "{argv:?}: {response}");
         assert_eq!(response["result"]["structuredContent"], cli, "{argv:?}");
     }
@@ -217,35 +190,26 @@ fn one_mistake_is_one_error_object_on_both_surfaces() {
 /// A project enabling the vendored sandbox probe (`fixtures/sandbox-probe`),
 /// whose `probe` command prints its whole input and whose `trap` command
 /// traps.
-fn probe_project() -> TempDir {
-    let dir = TempDir::new().unwrap();
-    let probe = specforge_component::committed::PROBE.path();
-    std::fs::copy(probe, dir.path().join("probe.wasm")).unwrap();
-    std::fs::write(
-        dir.path().join("specforge.json"),
-        r#"{"name":"p","version":"0.1.0","extensions":["./probe.wasm"]}"#,
-    )
-    .unwrap();
-    std::fs::write(
-        dir.path().join("t.spec"),
-        "probe_target t1 \"Target\" {\n}\n",
-    )
-    .unwrap();
-    dir
+fn probe_project() -> TestProject {
+    TestProject::new()
+        .raw_config(r#"{"name":"p","version":"0.1.0","extensions":["./probe.wasm"]}"#)
+        .file(
+            "probe.wasm",
+            std::fs::read(specforge_component::committed::PROBE.path()).unwrap(),
+        )
+        .file("t.spec", "probe_target t1 \"Target\" {\n}\n")
 }
 
 /// The product project of the evidence pins: two features, a completed
 /// milestone, two behaviors and a recorded report proving one of them.
-fn evidence_project() -> TempDir {
-    let dir = TempDir::new().unwrap();
-    std::fs::write(
-        dir.path().join("specforge.json"),
-        r#"{"name":"p","version":"0.1.0","extensions":["@specforge/product","@specforge/software","@specforge/testing"]}"#,
-    )
-    .unwrap();
-    std::fs::write(
-        dir.path().join("main.spec"),
-        r#"feature f_proven "Proven" {
+fn evidence_project() -> TestProject {
+    TestProject::new()
+        .raw_config(
+            r#"{"name":"p","version":"0.1.0","extensions":["@specforge/product","@specforge/software","@specforge/testing"]}"#,
+        )
+        .file(
+            "main.spec",
+            r#"feature f_proven "Proven" {
   status done
 }
 
@@ -269,50 +233,28 @@ behavior b_half "Half" {
   verify unit "still works"
 }
 "#,
-    )
-    .unwrap();
-    std::fs::write(
-        dir.path().join("specforge-report.json"),
-        r#"{"runner":"fixture","results":{"b_proven":{"tests":[{"name":"t1","status":"passed","verify":"works"}]},"b_half":{"tests":[{"name":"t2","status":"passed","verify":"works"}]}}}"#,
-    )
-    .unwrap();
-    dir
+        )
+        .file(
+            "specforge-report.json",
+            r#"{"runner":"fixture","results":{"b_proven":{"tests":[{"name":"t1","status":"passed","verify":"works"}]},"b_half":{"tests":[{"name":"t2","status":"passed","verify":"works"}]}}}"#,
+        )
 }
 
-/// `specforge mcp .` run in `dir` (the project served by a relative path),
-/// fed an `initialize` and `requests`, and every line it wrote, parsed.
-fn mcp_served_at_dot(dir: &TempDir, requests: &[String]) -> Vec<Value> {
-    use std::io::Write;
+/// `specforge mcp .` run in `dir` (the project served by a relative path), fed an `initialize` and `requests`, and
+/// every line it wrote, parsed: the one process session of these tests, since the binary resolves the `[ROOT]`
+/// argument from the working directory.
+fn mcp_served_at_dot(dir: &TestProject, requests: &[String]) -> Vec<Value> {
     let mut all = vec![mcp_request(
         0,
         "initialize",
         serde_json::json!({
-            "protocolVersion": "2025-06-18",
+            "protocolVersion": STRUCTURED,
             "capabilities": {},
             "clientInfo": {"name": "e2e", "version": "0"}
         }),
     )];
     all.extend_from_slice(requests);
-    let mut child = std::process::Command::new(assert_cmd::cargo_bin!("specforge"))
-        .args(["mcp", "."])
-        .current_dir(dir.path())
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .expect("failed to start specforge mcp");
-    let stdin = child.stdin.as_mut().unwrap();
-    for request in &all {
-        writeln!(stdin, "{request}").unwrap();
-    }
-    stdin.flush().unwrap();
-    drop(child.stdin.take());
-    let output = child.wait_with_output().unwrap();
-    String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .filter_map(|l| serde_json::from_str(l).ok())
-        .collect()
+    mcp_process::session(dir, dir.root(), ".", &all, &[])
 }
 
 fn tool_call(id: u64, name: &str, arguments: Value) -> String {
@@ -329,14 +271,13 @@ fn tool_call(id: u64, name: &str, arguments: Value) -> String {
 )]
 fn a_command_is_told_the_project_root_on_each_surface() {
     let dir = probe_project();
-    let output = cargo_bin_cmd!("specforge")
-        .current_dir(dir.path())
-        .args(["probe", "probe", "--path", ".", "--format", "json"])
+    let output = Cli::on(&dir)
+        .bare_command(&["probe", "probe", "--path", ".", "--format", "json"])
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(3), "{output:?}");
     let cli: Value = serde_json::from_slice(&output.stdout).unwrap();
-    let canonical = std::fs::canonicalize(dir.path()).unwrap();
+    let canonical = std::fs::canonicalize(dir.root()).unwrap();
     assert_eq!(cli["cwd"], canonical.display().to_string());
 
     let responses = mcp_served_at_dot(
@@ -356,9 +297,8 @@ fn a_command_is_told_the_project_root_on_each_surface() {
 fn a_trapped_command_fails_in_each_surfaces_shape() {
     let dir = probe_project();
     let prefix = "command cmd__trap() of '@test/probe' trapped: ";
-    let output = cargo_bin_cmd!("specforge")
-        .args(["probe", "trap", "--format", "json", "--path"])
-        .arg(dir.path())
+    let output = Cli::on(&dir)
+        .command(&["probe", "trap", "--format", "json"])
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(1), "{output:?}");
@@ -373,11 +313,8 @@ fn a_trapped_command_fails_in_each_surfaces_shape() {
     );
     assert!(cli["suggestion"].is_string(), "{cli}");
 
-    let responses = structured_session(
-        &dir,
-        &[tool_call(1, "specforge.probe.trap", serde_json::json!({}))],
-    );
-    let response = find_response(&responses, 1).unwrap();
+    let response =
+        Served::rooted_at(dir, STRUCTURED).call_tool("specforge.probe.trap", serde_json::json!({}));
     assert_eq!(response["result"]["isError"], true, "{response}");
     let mcp: Value =
         serde_json::from_str(response["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
@@ -395,29 +332,16 @@ fn a_trapped_command_fails_in_each_surfaces_shape() {
 )]
 fn the_cli_and_mcp_send_a_command_the_same_evidence() {
     let dir = evidence_project();
-    let output = cargo_bin_cmd!("specforge")
-        .args([
-            "product",
-            "milestone-completion",
-            "m1",
-            "--format",
-            "json",
-            "--path",
-        ])
-        .arg(dir.path())
+    let output = Cli::on(&dir)
+        .command(&["product", "milestone-completion", "m1", "--format", "json"])
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(0), "{output:?}");
     let cli: Value = serde_json::from_slice(&output.stdout).unwrap();
-    let responses = structured_session(
-        &dir,
-        &[tool_call(
-            1,
-            "specforge.product.milestone_completion",
-            serde_json::json!({"milestone": "m1"}),
-        )],
+    let response = Served::rooted_at(dir, STRUCTURED).call_tool(
+        "specforge.product.milestone_completion",
+        serde_json::json!({"milestone": "m1"}),
     );
-    let response = find_response(&responses, 1).unwrap();
     assert_eq!(response["result"]["isError"], false, "{response}");
     assert_eq!(response["result"]["structuredContent"], cli);
     assert_eq!(cli["evidence"]["state"], "recorded", "{cli}");

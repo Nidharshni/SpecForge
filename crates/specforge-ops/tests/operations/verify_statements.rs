@@ -1,4 +1,5 @@
-use crate::e2e_fixtures::*;
+use super::compiled_support::{built, exported, exported_as, stats_of};
+use specforge_ops::export::Format;
 use specforge_test_macros::test as specforge_test;
 
 // --- Phase 2b: Verify declarations through pipeline ---
@@ -8,7 +9,7 @@ use specforge_test_macros::test as specforge_test;
     verify = "parse verify statement in any entity block"
 )]
 fn verify_unit_in_behavior() {
-    let dir = setup_project(&[(
+    let (_project, compiled) = built(&[(
         "main.spec",
         r#"
 behavior parse_input "Parse Input" {
@@ -18,15 +19,7 @@ behavior parse_input "Parse Input" {
 "#,
     )]);
 
-    let output = specforge_cmd()
-        .args(["export", "--format=graph"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let parsed = parse_json_stdout(&output);
+    let parsed = exported(&compiled);
     let nodes = parsed["nodes"].as_array().unwrap();
     let parse_input = nodes.iter().find(|n| n["id"] == "parse_input").unwrap();
 
@@ -43,7 +36,7 @@ behavior parse_input "Parse Input" {
     verify = "verify kind and description extracted correctly"
 )]
 fn verify_integration_in_behavior() {
-    let dir = setup_project(&[(
+    let (_project, compiled) = built(&[(
         "main.spec",
         r#"
 behavior emit_output "Emit Output" {
@@ -53,15 +46,7 @@ behavior emit_output "Emit Output" {
 "#,
     )]);
 
-    let output = specforge_cmd()
-        .args(["export", "--format=graph"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let parsed = parse_json_stdout(&output);
+    let parsed = exported(&compiled);
     let nodes = parsed["nodes"].as_array().unwrap();
     let node = nodes.iter().find(|n| n["id"] == "emit_output").unwrap();
     assert_eq!(
@@ -77,7 +62,7 @@ behavior emit_output "Emit Output" {
     verify = "parse verify statement in any entity block"
 )]
 fn verify_property_in_behavior() {
-    let dir = setup_project(&[(
+    let (_project, compiled) = built(&[(
         "main.spec",
         r#"
 behavior graph_build "Graph Build" {
@@ -87,15 +72,7 @@ behavior graph_build "Graph Build" {
 "#,
     )]);
 
-    let output = specforge_cmd()
-        .args(["export", "--format=graph"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let parsed = parse_json_stdout(&output);
+    let parsed = exported(&compiled);
     let nodes = parsed["nodes"].as_array().unwrap();
     let node = nodes.iter().find(|n| n["id"] == "graph_build").unwrap();
     assert!(node["fields"].get("verify").is_some());
@@ -106,7 +83,7 @@ behavior graph_build "Graph Build" {
     verify = "parse multiple verify statements in same entity"
 )]
 fn verify_multiple_statements() {
-    let dir = setup_project(&[(
+    let (_project, compiled) = built(&[(
         "main.spec",
         r#"
 behavior parse_input "Parse Input" {
@@ -118,15 +95,7 @@ behavior parse_input "Parse Input" {
 "#,
     )]);
 
-    let output = specforge_cmd()
-        .args(["export", "--format=graph"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let parsed = parse_json_stdout(&output);
+    let parsed = exported(&compiled);
     let nodes = parsed["nodes"].as_array().unwrap();
     let node = nodes.iter().find(|n| n["id"] == "parse_input").unwrap();
 
@@ -143,7 +112,7 @@ behavior parse_input "Parse Input" {
 
 #[test]
 fn context_export_includes_verify() {
-    let dir = setup_project(&[(
+    let (_project, compiled) = built(&[(
         "main.spec",
         r#"
 behavior parse_input "Parse Input" {
@@ -153,15 +122,8 @@ behavior parse_input "Parse Input" {
 "#,
     )]);
 
-    let output = specforge_cmd()
-        .args(["export", "--format=context"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let parsed = parse_json_stdout(&output);
+    let parsed: serde_json::Value =
+        serde_json::from_str(&exported_as(&compiled, Format::Context)).unwrap();
     let nodes = parsed["nodes"].as_array().unwrap();
     let node = nodes.iter().find(|n| n["id"] == "parse_input").unwrap();
     assert!(
@@ -173,7 +135,7 @@ behavior parse_input "Parse Input" {
 
 #[test]
 fn stats_verified_count_matches() {
-    let dir = setup_project(&[(
+    let (_project, compiled) = built(&[(
         "main.spec",
         r#"
 behavior alpha "A" {
@@ -189,15 +151,7 @@ feature gamma "G" { behaviors [alpha, beta] }
 "#,
     )]);
 
-    let output = specforge_cmd()
-        .args(["stats", "--format=json"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let parsed = parse_json_stdout(&output);
+    let parsed = serde_json::to_value(stats_of(&compiled)).unwrap();
 
     let verified = parsed["verified_count"].as_u64().unwrap();
     // alpha has 2 verify, beta has 1 = 3 total verify declarations
@@ -215,7 +169,7 @@ feature gamma "G" { behaviors [alpha, beta] }
     verify = "parse verify statement in any entity block"
 )]
 fn verify_on_non_behavior_entity() {
-    let dir = setup_project(&[(
+    let (_project, compiled) = built(&[(
         "main.spec",
         r#"
 invariant graph_acyclic "Graph Acyclicity" {
@@ -225,15 +179,7 @@ invariant graph_acyclic "Graph Acyclicity" {
 "#,
     )]);
 
-    let output = specforge_cmd()
-        .args(["export", "--format=graph"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let parsed = parse_json_stdout(&output);
+    let parsed = exported(&compiled);
     let nodes = parsed["nodes"].as_array().unwrap();
     let node = nodes.iter().find(|n| n["id"] == "graph_acyclic").unwrap();
     assert!(
@@ -247,7 +193,7 @@ invariant graph_acyclic "Graph Acyclicity" {
     verify = "graph format includes all fields and metadata"
 )]
 fn graph_export_includes_verify_in_fields() {
-    let dir = setup_project(&[(
+    let (_project, compiled) = built(&[(
         "main.spec",
         r#"
 behavior parse_input "Parse Input" {
@@ -263,15 +209,7 @@ feature fast_parsing "Fast Parsing" {
 "#,
     )]);
 
-    let output = specforge_cmd()
-        .args(["export", "--format=graph"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let parsed = parse_json_stdout(&output);
+    let parsed = exported(&compiled);
     let nodes = parsed["nodes"].as_array().unwrap();
     let node = nodes.iter().find(|n| n["id"] == "parse_input").unwrap();
     // Every declared field and the node's metadata, with their values.

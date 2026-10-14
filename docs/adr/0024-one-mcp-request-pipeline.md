@@ -1,6 +1,6 @@
 # One MCP request pipeline; resources read through the view
 
-**Status:** accepted (2026-10-06); D6 amended and D8 added (2026-10-08, architecture plan 12); a tool spec declares what it does once (2026-10-09, architecture plan 10, last section); A1's tool spec is one module implementing `CoreTool` (ADR 0049). D1's "record its events" step is a handler recording through the call's event sink; `Ran` is gone (ADR 0057). D6 amended by ADR 0058 (the deltas are sent whole). Amends
+**Status:** accepted (2026-10-06); D6 amended and D8 added (2026-10-08, architecture plan 12); a tool spec declares what it does once (2026-10-09, architecture plan 10, last section); A1's tool spec is one module implementing `CoreTool` (ADR 0049). D1's "record its events" step is a handler recording through the call's event sink; `Ran` is gone (ADR 0057). D6 amended by ADR 0058 (the deltas are sent whole); D6's diagnostics delta is the session update's (ADR 0074), MCP adds its I017 and keeps no snapshot. Amends
 ADR 0004 "MCP tool table" (D4-e) and ADR 0017 D6 and D14's resource code.
 
 `tools/call`, `resources/read` and `prompts/get` ran the same steps in three functions: read the
@@ -69,6 +69,7 @@ are percent-decoded, and a count is read by ADR 0033 D2's rule. *(Amended, round
 **D5. The call target declares its arguments.** `TargetSpec` contributes `path` (by reach) and
 `use_cached` (by freshness) to the listed schema and to the field set the drift test reads; handlers
 no longer carry them; `init`'s missing `path` is refused by the target.
+*(ADR 0077: `use_cached` is gone; the target contributes `path` only.)*
 
 **D6. One subscription module, one rule.** *(Amended 2026-10-08.)* `specforge_mcp::subscriptions::Subscriptions`
 holds who hears about what: the resources the client subscribed to (`resources/subscribe`), its

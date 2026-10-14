@@ -334,7 +334,7 @@ fn a_format_that_fails_on_one_file_reports_what_it_wrote() {
     use std::os::unix::fs::PermissionsExt;
     let mut server = TestProject::new()
         .file("a.spec", UNFORMATTED)
-        .file("b.spec", &UNFORMATTED.replace("messy", "other"))
+        .file("b.spec", UNFORMATTED.replace("messy", "other"))
         .serve(&[TestExtension::software()]);
     let root = server.root().to_path_buf();
     let locked = root.join("a.spec");
@@ -933,7 +933,7 @@ fn every_mutation_reply_lists_what_it_wrote() {
         use std::os::unix::fs::PermissionsExt;
         let mut formatting = TestProject::new()
             .file("a.spec", UNFORMATTED)
-            .file("b.spec", &UNFORMATTED.replace("messy", "other"))
+            .file("b.spec", UNFORMATTED.replace("messy", "other"))
             .serve(&[TestExtension::software()]);
         let root = formatting.root().to_path_buf();
         let locked = root.join("a.spec");

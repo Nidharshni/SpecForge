@@ -17,7 +17,7 @@ use tower_lsp::lsp_types::Position;
 
 use crate::registries::{kind, obligating, registries};
 use crate::served::Served;
-use specforge_extension_sdk::prelude::{ContributionsBuilder, FieldType};
+use specforge_extension_sdk::prelude::{ContributionsBuilder, FieldType, Vocabulary};
 
 /// A graph node for the tests of the renderer, which hand it facts.
 fn node(id: &str, kind: &str, title: Option<&str>) -> Node {
@@ -234,7 +234,7 @@ fn hover_shows_field_values() {
     .extension("@t/fields", |c| {
         c.kind("behavior", |k| {
             k.field("status", |f| {
-                f.field_type(FieldType::Enum).enum_values(&["draft", "final"]);
+                f.vocabulary(&Vocabulary::new(&["draft", "final"]));
             });
             references(k, "invariants");
             k.field("contract", |f| {
@@ -367,8 +367,11 @@ fn hover_shows_each_coverage_case() {
         if let Some(expected) = expected
             && !facts.standing.exempt()
         {
-            let status =
-                specforge_ops::coverage::STATUS.name_of(facts.coverage.as_ref().unwrap().status());
+            let status = specforge_ops::coverage::STATUS.name_of(
+                specforge_ops::inspect::coverage(&state.view(), id)
+                    .unwrap()
+                    .status(),
+            );
             assert!(expected.contains(&format!("`{status}`")), "{id}");
         }
     }
@@ -500,7 +503,8 @@ fn hover_lists_the_diagnostics_not_already_shown() {
     let view = ProjectView::new(&g, &env, None, &recorded).reporting(&reported);
     let facts = specforge_ops::inspect::inspect(&view, "beta").unwrap();
 
-    let text = specforge_lsp::hover::entity(&facts, &[], false);
+    let coverage = specforge_ops::inspect::coverage(&view, "beta");
+    let text = specforge_lsp::hover::entity(&facts, &coverage, &[], false);
     assert!(
         text.ends_with(
             "**Diagnostics** *(2)*\n\
@@ -512,13 +516,13 @@ fn hover_lists_the_diagnostics_not_already_shown() {
     );
 
     // What the cursor already shows is not listed again.
-    let text = specforge_lsp::hover::entity(&facts, &[&cycle], false);
+    let text = specforge_lsp::hover::entity(&facts, &coverage, &[&cycle], false);
     assert!(
         text.ends_with("**Diagnostics** *(1)*\n- **X900** acme says no"),
         "{text}"
     );
     let all = [&reported[0], &reported[1]];
-    let text = specforge_lsp::hover::entity(&facts, &all, false);
+    let text = specforge_lsp::hover::entity(&facts, &coverage, &all, false);
     assert!(!text.contains("**Diagnostics**"), "{text}");
 }
 
@@ -609,6 +613,34 @@ fn field_hover_unknown_kind_returns_none() {
 
 #[spec(
     behavior = "hover_information",
+    verify = "field help says what an absent value counts as"
+)]
+fn field_hover_says_what_an_absent_value_counts_as() {
+    let declaration = crate::registries::declaration("@t/x", |c| {
+        c.kind("ticket", |k| {
+            k.field("status", |f| {
+                f.vocabulary(&Vocabulary::new(&["draft", "final"]).absent_as("draft"))
+                    .description("Where it stands");
+            });
+            k.field("owner", |f| {
+                f.field_type(FieldType::String).description("Who has it");
+            });
+        });
+    });
+    let build = crate::registries::registries_of(vec![declaration]);
+    let reg = build.fields();
+
+    let status = specforge_lsp::hover_field_info("status", "ticket", reg).unwrap();
+    assert!(
+        status.contains("Where it stands  \nAbsent, it counts as `draft`."),
+        "{status}"
+    );
+    let owner = specforge_lsp::hover_field_info("owner", "ticket", reg).unwrap();
+    assert!(!owner.contains("Absent"), "{owner}");
+}
+
+#[spec(
+    behavior = "hover_information",
     verify = "field help names a field's type as E061 does, an enum's declared values included"
 )]
 fn field_hover_names_a_type_as_e061_does() {
@@ -618,7 +650,7 @@ fn field_hover_names_a_type_as_e061_does() {
                 f.field_type(FieldType::Bool);
             });
             k.field("priority", |f| {
-                f.field_type(FieldType::Enum).enum_values(&["low", "high"]);
+                f.vocabulary(&Vocabulary::new(&["low", "high"]));
             });
         });
     });

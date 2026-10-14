@@ -24,7 +24,7 @@ expression: product
           "type": "integer"
         },
         "priority": {
-          "description": "Only features with this priority: critical, high, medium, low",
+          "description": "Only features with this priority",
           "enum": [
             "critical",
             "high",
@@ -46,7 +46,7 @@ expression: product
           "type": "string"
         },
         "status": {
-          "description": "Only features with this status: proposed (also a feature without one), accepted, in_progress, done, deferred or deprecated",
+          "description": "Only features with this status; a feature without one counts as proposed",
           "enum": [
             "proposed",
             "accepted",
@@ -92,7 +92,7 @@ expression: product
           "type": "string"
         },
         "priority": {
-          "description": "Only journeys with this priority: critical, high, medium, low",
+          "description": "Only journeys with this priority",
           "enum": [
             "critical",
             "high",
@@ -134,7 +134,7 @@ expression: product
       "additionalProperties": false,
       "properties": {
         "artifact_type": {
-          "description": "Only deliverables of this artifact type: cli, service, library, web_app, mobile_app, api, extension, documentation or package",
+          "description": "Only deliverables with this artifact type",
           "enum": [
             "cli",
             "service",
@@ -171,7 +171,7 @@ expression: product
           "type": "string"
         },
         "status": {
-          "description": "Only deliverables with this status: draft (also a deliverable without one), in_progress, shipped or deprecated",
+          "description": "Only deliverables with this status; a deliverable without one counts as draft",
           "enum": [
             "draft",
             "in_progress",
@@ -211,7 +211,7 @@ expression: product
           "type": "integer"
         },
         "priority": {
-          "description": "Only milestones with this priority: critical, high, medium, low",
+          "description": "Only milestones with this priority",
           "enum": [
             "critical",
             "high",
@@ -233,7 +233,7 @@ expression: product
           "type": "string"
         },
         "status": {
-          "description": "Only milestones with this status: planned (also a milestone without one), in_progress, completed or blocked",
+          "description": "Only milestones with this status; a milestone without one counts as planned",
           "enum": [
             "planned",
             "in_progress",
@@ -263,7 +263,7 @@ expression: product
       "additionalProperties": false,
       "properties": {
         "family": {
-          "description": "Only modules of this family (core, platform, extension, integration, advisory, or another)",
+          "description": "Only modules of this family, standard or not",
           "type": "string"
         },
         "limit": {
@@ -373,7 +373,7 @@ expression: product
           "type": "string"
         },
         "status": {
-          "description": "Only personas with this status: active (also a persona without one) or deprecated",
+          "description": "Only personas with this status; a persona without one counts as active",
           "enum": [
             "active",
             "deprecated"
@@ -385,7 +385,7 @@ expression: product
           "type": "string"
         },
         "technical_level": {
-          "description": "Only personas with this technical level: expert, advanced, intermediate, beginner or non_technical",
+          "description": "Only personas with this technical level",
           "enum": [
             "expert",
             "advanced",
@@ -412,7 +412,7 @@ expression: product
       "additionalProperties": false,
       "properties": {
         "interaction_model": {
-          "description": "Only channels with this interaction model: request_response, event_driven, batch, streaming, bidirectional or manual",
+          "description": "Only channels with this interaction model",
           "enum": [
             "request_response",
             "event_driven",
@@ -446,7 +446,7 @@ expression: product
           "type": "string"
         },
         "status": {
-          "description": "Only channels with this status: active (also a channel without one) or deprecated",
+          "description": "Only channels with this status; a channel without one counts as active",
           "enum": [
             "active",
             "deprecated"
@@ -496,7 +496,7 @@ expression: product
           "type": "string"
         },
         "status": {
-          "description": "Only releases with this status: planned (also a release without one), in_progress, released or recalled",
+          "description": "Only releases with this status; a release without one counts as planned",
           "enum": [
             "planned",
             "in_progress",

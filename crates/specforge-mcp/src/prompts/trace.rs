@@ -1,21 +1,29 @@
 //! `specforge://prompts/trace`: the dependency chain of a plan or of one
 //! entity, and what in it is unverified.
 
-use std::collections::BTreeSet;
-
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_ops::plan::PlanError;
+use specforge_ops::plan::AgentPlan;
 use specforge_ops::trace::{Target, trace};
 
-use crate::args::{AgentPlan, Arguments};
+use crate::args::Arguments;
 use crate::prompt::{CorePrompt, Prompted};
+use crate::refusal::ArgumentOf;
 use crate::tool::{ErrorCode, McpError};
-use crate::tools::trace::{Gap, analyze_plan};
+use crate::tools::trace::Gap;
+use specforge_ops::navigate::EntityField;
 use specforge_ops::view::ProjectView;
 
 /// The trace prompt (`McpTracePromptResult`).
 pub struct Prompt;
+
+impl ArgumentOf<EntityField> for Prompt {
+    fn argument(field: EntityField) -> Option<&'static str> {
+        match field {
+            EntityField::EntityId => Some("entity_id"),
+        }
+    }
+}
 
 impl CorePrompt for Prompt {
     const NAME: &'static str = "specforge://prompts/trace";
@@ -41,7 +49,7 @@ pub struct Payload {
 /// `specforge://prompts/trace`'s arguments.
 #[derive(Debug, Arguments)]
 pub struct Args {
-    /// AgentPlan JSON ({"entries": [{"entity_id", "action"}]}) to check against the graph
+    /// AgentPlan JSON ({"plan_id", "entries": [{"entity_id", "action"}]}) to check against the graph
     plan: Option<AgentPlan>,
     /// Entity ID to trace when no plan is given
     entity_id: Option<String>,
@@ -52,18 +60,18 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
     // plan's, or the entity's chain's missing links.
     let (seeds, coverage_gaps, subject) = match (&args.plan, args.entity_id.as_deref()) {
         (Some(plan), _) => {
-            let analysis = analyze_plan(&view, &plan.0).map_err(|error| match error {
-                PlanError::NotAPlan(why) => {
-                    McpError::new(ErrorCode::InvalidInput, why).with_argument("plan")
-                }
-                PlanError::Report(e) => McpError::from(e),
-            })?;
-            (analysis.entries, analysis.gaps, "the plan".to_string())
+            let outcome = specforge_ops::plan::check(&view, plan);
+            let gaps = outcome
+                .gaps
+                .iter()
+                .map(|gap| Gap::of(&specforge_ops::trace::Gap::Plan(gap.clone())))
+                .collect();
+            (outcome.entries, gaps, "the plan".to_string())
         }
         (None, Some(entity_id)) => {
             // As the trace tool traces it: its chain and missing links.
             let outcome = trace(&view, Target::Entity(entity_id))
-                .map_err(|error| McpError::from(specforge_ops::OpError::from(error)))?;
+                .map_err(|error| Prompt::refused(specforge_ops::Refusal::from(error)))?;
             let gaps = outcome.gaps().iter().map(Gap::of).collect();
             (
                 vec![entity_id.to_string()],
@@ -83,27 +91,13 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
         }
     };
 
-    // Everything the seeds' trace chains reach, the seeds included.
-    let mut affected: BTreeSet<String> = seeds.iter().cloned().collect();
-    for seed in &seeds {
-        if let Ok(outcome) = trace(&view, Target::Entity(seed)) {
-            affected.extend(outcome.reached().into_iter().map(str::to_string));
-        }
-    }
-
-    // The affected entities that count toward coverage and are not proven
-    // (the coverage view's one definition of unverified).
-    let coverage = view.coverage().map_err(McpError::from)?;
-    let unverified: Vec<String> = affected
-        .iter()
-        .filter(|id| coverage.is_unverified(id))
-        .cloned()
-        .collect();
-
+    // What the seeds' chains reach, and which of it is unverified.
+    let reach = specforge_ops::trace::reach(&view, seeds.iter().map(String::as_str))
+        .map_err(|error| Box::new(McpError::from(error)))?;
     let payload = Payload {
         coverage_gaps,
-        unverified_entities: unverified,
-        affected_entities: affected.into_iter().collect(),
+        unverified_entities: reach.unverified,
+        affected_entities: reach.affected,
     };
 
     let instruction = format!(

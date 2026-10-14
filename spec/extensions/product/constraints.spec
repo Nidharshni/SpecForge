@@ -17,7 +17,7 @@ constraint product_validation_latency "Product Validation Latency" {
   priority    critical
   metric      """
     Product-specific validation rules (E007, E015, E052, W041-W046, W049,
-    W057, W077-W080, W083-W085, W092, W093, W095, I010, I046-I048, I050,
+    W057, W092, W093, I010, I046-I048, I050,
     I053-I055, I057, I059-I062, I066-I070, I080-I083, I086, I087, I089)
     MUST complete in under
     50ms for a project with up to 500 product entities across all 9 kinds.
@@ -48,22 +48,14 @@ constraint product_validation_latency "Product Validation Latency" {
     detect_journey_deprecated_channels,
     validate_persona_references,
     validate_channel_references,
-    validate_feature_status_field,
-    validate_feature_priority_field,
+    validate_product_vocabularies,
     validate_journey_flow_non_empty,
     validate_milestone_target_date_format,
-    validate_journey_priority_field,
-    validate_milestone_priority_field,
-    validate_milestone_status_field,
-    validate_deliverable_artifact_type_field,
-    validate_persona_status_field,
-    validate_channel_status_field,
     pe_validate_persona_fields,
     pe_validate_channel_fields,
     pe_validate_deliverable_completeness,
     pe_validate_milestone_status,
     detect_deliverable_cycles,
-    validate_deliverable_status_field,
     detect_shipped_deliverable_incomplete_milestones,
     detect_deprecated_deliverable_without_reason,
     detect_deferred_feature_without_reason,
@@ -240,7 +232,7 @@ constraint product_diagnostic_severity_correctness "Product Diagnostic Severity 
   metric      """
     All product diagnostics MUST fire at their declared severity level:
     E-codes (E007, E015, E052) are errors, W-codes (W041-W046, W049, W057,
-    W077-W080, W083-W085, W092, W093, W095) are warnings, I-codes (I010,
+    W092, W093) are warnings, I-codes (I010,
     I046-I048, I050, I053-I055, I057, I059-I062, I066-I070, I080-I083,
     I086, I087, I089) are info. No
     diagnostic may fire at a different severity than its code prefix declares.
@@ -339,20 +331,20 @@ constraint product_deliverable_lifecycle_correctness "Product Deliverable Lifecy
   category    reliability
   priority    critical
   metric      """
-    Deliverable status validation (W085) MUST fire if and only if the
-    status value is not a valid DeliverableStatus enum member. Shipped
+    Deliverable status validation MUST refuse (E061) exactly the status
+    values outside DeliverableStatus. Shipped
     deliverable incomplete milestone detection (I065) MUST fire for each
     non-completed milestone in a shipped deliverable. Deprecated deliverable
     reason detection (I066) MUST fire for deprecated deliverables with
     empty or missing reason fields.
   """
   constrains  [
-    validate_deliverable_status_field,
+    validate_product_vocabularies,
     detect_shipped_deliverable_incomplete_milestones,
     detect_deprecated_deliverable_without_reason,
   ]
   protects    [deliverable_lifecycle_consistency]
-  verify unit "W085 fires iff status is not a valid DeliverableStatus"
+  verify unit "E061 fires iff a deliverable status is not a DeliverableStatus value"
   verify unit "I065 fires per incomplete milestone in shipped deliverable"
   verify unit "I066 fires for deprecated deliverable without reason"
 }

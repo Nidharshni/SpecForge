@@ -1,5 +1,6 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
+use specforge_coverage::Status;
 use specforge_graph::field_form::{FieldJson, Obligation, write};
 use specforge_graph::{FieldValue, Node};
 use specforge_registry::FieldRegistry;
@@ -19,10 +20,15 @@ pub(crate) struct ContextNode {
     verify: Option<Vec<Obligation>>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     fields: BTreeMap<String, FieldJson>,
+    /// The entity's coverage status, when the export was given verdicts
+    /// (`EmitOptions::coverage`): what `specforge query --include-coverage`
+    /// shows.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    coverage_status: Option<Status>,
 }
 
 /// Keys a context node has of its own, which no headline field may take.
-const NODE_KEYS: [&str; 5] = ["id", "kind", "title", "verify", "fields"];
+const NODE_KEYS: [&str; 6] = ["id", "kind", "title", "verify", "fields", "coverage_status"];
 
 /// The fields of `node` its extension declares `headline`, as text, for the
 /// context node's top level. Empty without a registry.
@@ -96,7 +102,11 @@ pub(crate) fn normative_fields(
 
 /// `n` as the context export writes an entity: its title and obligations, the
 /// headline and normative fields `registry` declares.
-pub(crate) fn context_node(n: &Node, registry: Option<&FieldRegistry>) -> ContextNode {
+pub(crate) fn context_node(
+    n: &Node,
+    registry: Option<&FieldRegistry>,
+    coverage_status: Option<Status>,
+) -> ContextNode {
     ContextNode {
         id: n.id.raw.to_string(),
         kind: n.kind.raw.to_string(),
@@ -107,5 +117,6 @@ pub(crate) fn context_node(n: &Node, registry: Option<&FieldRegistry>) -> Contex
             (!statements.is_empty()).then(|| statements.iter().map(Obligation::of).collect())
         },
         fields: normative_fields(n, registry),
+        coverage_status,
     }
 }

@@ -49,8 +49,8 @@ All fields are optional at the type level. Features are intentionally lightweigh
 | `title` | string | Human-readable name (the string after the identifier). Auto-derived from identifier if omitted. |
 | `problem` | string | What user need or pain point this feature addresses. Written from the user's perspective. |
 | `solution` | string | How the system addresses the problem. Written from the system's perspective. |
-| `priority` | Priority | Importance level: `critical`, `high`, `medium`, `low`. Validated by W078. |
-| `status` | FeatureStatus | Lifecycle state: `proposed`, `accepted`, `in_progress`, `done`, `deferred`. Validated by W077. Used in completion calculations. |
+| `priority` | Priority | Importance level: `critical`, `high`, `medium`, `low`. Another value is E061. |
+| `status` | FeatureStatus | Lifecycle state: `proposed`, `accepted`, `in_progress`, `done`, `deferred`, `deprecated`. Absent: `proposed`. Another value is E061. Used in completion calculations. |
 | `acceptance` | string[] | Free-form acceptance criteria. Deliberately prose (ADR pe_acceptance_free_form, C12-16): acceptance strings are wishes with formatting, not compiled references — checkable criteria belong in a behavior's `verify` blocks, which the coverage diff tracks. |
 | `depends_on` | EntityId[] | Other features this one depends on. Creates `FeatureDependsOn` edges. Cycles detected by W045. |
 | `reason` | string | Rationale for current status (expected when `deferred`, checked by I059). |
@@ -63,17 +63,23 @@ All fields are optional at the type level. Features are intentionally lightweigh
 
 | To | Edge Type | Meaning |
 |----|-----------|---------|
-| `feature` | `FeatureDependsOn` | "This feature depends on that feature" |
-| `ref` | `links_to` | "This feature links to these external references" |
+| `feature` | `FeatureDependsOn` | "This feature depends on these features" (via `depends_on` field) |
+| `feature` | `FeatureRelatesTo` | "This feature relates to these features" (via `features` field) |
 
 ### Incoming edges
 
 | From | Edge Type | Meaning |
 |------|-----------|---------|
-| `behavior` | `Implements` | "A behavior implements this feature" (requires `@specforge/software`) |
-| `journey` | `JourneyFeature` | "This UX journey delivers this feature" |
-| `module` | `ModuleFeature` | "A module provides the code for this feature" |
-| `milestone` | `MilestoneFeature` | "A milestone schedules this feature" |
+| `behavior` | `BehaviorImplementsFeature` | "Behaviors that implement this feature" (via `features` field) |
+| `constraint` | `ConstraintGovernsFeature` | "Constraints that govern this feature" (via `governs_features` field) |
+| `decision` | `DecisionAffectsFeature` | "Decisions that affect this feature" (via `affects_features` field) |
+| `failure_mode` | `FailureModeThreatensFeature` | "Failure modes that threaten this feature" (via `threatens_features` field) |
+| `feature` | `FeatureDependsOn` | "Features that depend on this feature" (via `depends_on` field) |
+| `feature` | `FeatureRelatesTo` | "Features that relate to this feature" (via `features` field) |
+| `journey` | `JourneyExercisesFeature` | "Journeys that exercise this feature" (via `features` field) |
+| `milestone` | `MilestoneDeliversFeature` | "Milestones that schedule this feature" (via `features` field) |
+| `module` | `ModuleContainsFeature` | "Modules that implement this feature" (via `features` field) |
+| `persona` | `PersonaPrioritizesFeature` | "Personas that prioritize this feature" (via `key_features` field) |
 
 ## Validation Rules
 
@@ -81,8 +87,7 @@ All fields are optional at the type level. Features are intentionally lightweigh
 |------|-------|------|
 | W041 | warning | Feature not referenced by any journey, module, or milestone (unreferenced feature). |
 | W045 | warning | Circular feature dependency — `depends_on` edges form a cycle. |
-| W077 | warning | Invalid `status` value (not in FeatureStatus enum). |
-| W078 | warning | Invalid `priority` value (not in Priority enum). |
+| E061 | error | A value outside the field's vocabulary. |
 | I048 | info | No acceptance criteria (no `acceptance`, or an empty list). |
 | I059 | info | Deferred feature without a `reason`. |
 | I080 | info | No `owner`. |
@@ -143,11 +148,17 @@ The `status` field drives milestone completion calculations. A feature counts as
 | Direction | Entity | Edge | Meaning |
 |-----------|--------|------|---------|
 | outgoing | [feature](feature.md) | `FeatureDependsOn` | Features this feature depends on |
-| outgoing | [ref](ref.md) | `links_to` | External references linked to this feature |
-| incoming | [behavior](behavior.md) | `Implements` | Behaviors that implement this feature |
-| incoming | [journey](journey.md) | `JourneyFeature` | Journeys that deliver this feature |
-| incoming | [module](module.md) | `ModuleFeature` | Modules that implement this feature |
-| incoming | [milestone](milestone.md) | `MilestoneFeature` | Milestones that schedule this feature |
+| outgoing | [feature](feature.md) | `FeatureRelatesTo` | Features this feature relates to |
+| incoming | [behavior](behavior.md) | `BehaviorImplementsFeature` | Behaviors that implement this feature |
+| incoming | [constraint](constraint.md) | `ConstraintGovernsFeature` | Constraints that govern this feature |
+| incoming | [decision](decision.md) | `DecisionAffectsFeature` | Decisions that affect this feature |
+| incoming | [failure_mode](failure-mode.md) | `FailureModeThreatensFeature` | Failure modes that threaten this feature |
+| incoming | [feature](feature.md) | `FeatureDependsOn` | Features that depend on this feature |
+| incoming | [feature](feature.md) | `FeatureRelatesTo` | Features that relate to this feature |
+| incoming | [journey](journey.md) | `JourneyExercisesFeature` | Journeys that exercise this feature |
+| incoming | [milestone](milestone.md) | `MilestoneDeliversFeature` | Milestones that schedule this feature |
+| incoming | [module](module.md) | `ModuleContainsFeature` | Modules that implement this feature |
+| incoming | [persona](persona.md) | `PersonaPrioritizesFeature` | Personas that prioritize this feature |
 
 ## Examples
 

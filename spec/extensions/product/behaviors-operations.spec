@@ -256,14 +256,16 @@ behavior pe_field_defaults_in_schema "Field Defaults in Graph Protocol Schema" {
   category query
   types    [FieldDescriptor]
   contract """
-    The @specforge/product extension declares no default_value on any field,
-    status fields included, so Graph Protocol JSON Schema metadata carries
-    no defaults for product fields. An absent status is interpreted by each
-    consumer.
+    Each @specforge/product status field declares, as its default_value,
+    the value an absent status counts as (feature proposed, deliverable
+    draft, milestone and release planned, persona and channel active), so
+    the Graph Protocol schema, the guide and the hover say it once. No other
+    product field declares a default. The core never writes a default into
+    the graph: an export shows a status only where one is written.
   """
   ensures {
-    no_status_defaults "every product field's default_value is null"
+    status_defaults "every product status field's default_value is the value an absent status counts as; every other field's is null"
   }
   features [pe_graph_rendering]
-  verify unit "no product field declares a default_value"
+  verify unit "every product status field declares its absent value as default_value"
 }

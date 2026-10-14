@@ -348,7 +348,7 @@ fn a_misused_code_declared_for_several_kinds_is_reported_once_per_severity() {
 fn a_first_party_rule_is_checked_against_the_catalog() {
     let own = build_registries(vec![one_rule(
         "@specforge/product",
-        "W077",
+        "W041",
         ValidationSeverity::Warning,
     )]);
     assert!(
@@ -359,7 +359,7 @@ fn a_first_party_rule_is_checked_against_the_catalog() {
 
     let wrong_level = build_registries(vec![one_rule(
         "@specforge/product",
-        "W077",
+        "W041",
         ValidationSeverity::Error,
     )]);
     let all = diagnostics(&wrong_level);

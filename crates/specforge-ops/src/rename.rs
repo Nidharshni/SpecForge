@@ -6,10 +6,19 @@
 //! comments and verify statements that mentions the ID is not a reference,
 //! and is left alone (ADR 0016).
 
-use crate::navigate::{Direction, Navigator, Precision, ReferenceQuery};
-use crate::{OpError, OpErrorKind};
+use crate::navigate::{Direction, EntityField, Navigator, Precision, ReferenceQuery};
+use crate::{OpError, OpErrorKind, Refusal};
 use std::collections::BTreeSet;
 use std::path::Path;
+
+/// The field of a rename's request a refusal can be about (ADR 0072).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenameField {
+    /// The entity to rename.
+    OldId,
+    /// The ID to rename it to.
+    NewId,
+}
 
 /// The new ID is not a legal entity ID.
 pub const INVALID_ID: &str = "invalid_name";
@@ -109,7 +118,7 @@ pub fn plan<F: Fn(&str) -> Option<String>>(
     nav: &Navigator<'_, F>,
     old_id: &str,
     new_id: &str,
-) -> Result<RenamePlan, OpError> {
+) -> Result<RenamePlan, Refusal<RenameField>> {
     // A rename rewrites the project's sources: a config that does not say
     // which files they are refuses it, from the compile's problems (as
     // `remove` refuses from them, ADR 0015 M5), before anything is planned.
@@ -120,12 +129,12 @@ pub fn plan<F: Fn(&str) -> Option<String>>(
         .iter()
         .find(|problem| problem.blocks_rewrites())
     {
-        return Err(crate::config::refusal(problem));
+        return Err(crate::config::refusal(problem).into());
     }
-    validate_id(new_id)?;
+    validate_id(new_id).map_err(|error| error.about(RenameField::NewId))?;
     let graph = nav.view().graph();
     if graph.node(old_id).is_none() {
-        return Err(crate::navigate::not_found(graph, old_id));
+        return Err(crate::navigate::not_found(graph, old_id).about(RenameField::OldId));
     }
     if graph.node(new_id).is_some() {
         return Err(OpError::new(
@@ -133,13 +142,16 @@ pub fn plan<F: Fn(&str) -> Option<String>>(
             TAKEN,
             format!("cannot rename '{old_id}': '{new_id}' exists"),
         )
-        .with_entity(old_id));
+        .with_entity(old_id)
+        .about(RenameField::NewId));
     }
     let query = ReferenceQuery {
         direction: Direction::Incoming,
         include_declaration: true,
     };
-    let occurrences = nav.references(old_id, query)?;
+    let occurrences = nav
+        .references(old_id, query)
+        .map_err(|refusal| refusal.map_subject(|EntityField::EntityId| Some(RenameField::OldId)))?;
     let unreadable: BTreeSet<&str> = occurrences
         .iter()
         .filter(|o| o.precision == Precision::Entity)
@@ -151,7 +163,8 @@ pub fn plan<F: Fn(&str) -> Option<String>>(
             OpErrorKind::Internal,
             UNREADABLE,
             format!("cannot rename '{old_id}': cannot read {}", files.join(", ")),
-        ));
+        )
+        .into());
     }
     // A token is one line; RenameEdit columns are 0-based bytes.
     let edits = occurrences
@@ -309,16 +322,16 @@ mod tests {
         let (dir, project) = project_with_config(hiding, &[("limit.spec", LIMIT)]);
         let read = |f: &str| std::fs::read_to_string(dir.path().join(f)).ok();
         let refused = plan(&nav(&project, read), "session_limit", "session_cap").unwrap_err();
-        assert_eq!(refused.code, "config_invalid");
+        assert_eq!(refused.error.code, "config_invalid");
         assert!(
-            refused.message.contains("\"spec_root\""),
+            refused.error.message.contains("\"spec_root\""),
             "{}",
-            refused.message
+            refused.error.message
         );
         // The refusal wins over a bad name.
         let read = |f: &str| std::fs::read_to_string(dir.path().join(f)).ok();
         let refused = plan(&nav(&project, read), "session_limit", "1 bad").unwrap_err();
-        assert_eq!(refused.code, "config_invalid");
+        assert_eq!(refused.error.code, "config_invalid");
 
         // A problem the plan goes around plans as usual.
         let around = r#"{"name":7,"extensions":["@specforge/software"]}"#;
@@ -393,13 +406,16 @@ mod tests {
     fn a_plan_refuses_what_it_cannot_do_whole() {
         let (dir, project) = project(&[("limit.spec", LIMIT), ("login.spec", LOGIN)]);
         let read = |f: &str| std::fs::read_to_string(dir.path().join(f)).ok();
-        let code = |r: Result<RenamePlan, OpError>| r.unwrap_err().code;
+        let code = |r: Result<RenamePlan, Refusal<RenameField>>| r.unwrap_err().error.code;
         let navigator = nav(&project, read);
 
         assert_eq!(code(plan(&navigator, "session_limit", "x")), INVALID_ID);
         assert_eq!(code(plan(&navigator, "nope", "fine_name")), "E003");
         assert_eq!(
-            plan(&navigator, "nope", "fine_name").unwrap_err().kind,
+            plan(&navigator, "nope", "fine_name")
+                .unwrap_err()
+                .error
+                .kind,
             OpErrorKind::EntityNotFound
         );
         assert_eq!(code(plan(&navigator, "session_limit", "login")), TAKEN);
@@ -412,11 +428,11 @@ mod tests {
             "session_cap",
         )
         .unwrap_err();
-        assert_eq!(refused.code, UNREADABLE);
+        assert_eq!(refused.error.code, UNREADABLE);
         assert!(
-            refused.message.contains("limit.spec"),
+            refused.error.message.contains("limit.spec"),
             "{}",
-            refused.message
+            refused.error.message
         );
         // A file whose text no longer spells the ID where the graph says
         // (it changed since the compile) is refused the same way.
@@ -429,11 +445,36 @@ mod tests {
             })
         };
         let refused = plan(&nav(&project, stale), "session_limit", "session_cap").unwrap_err();
-        assert_eq!(refused.code, UNREADABLE);
+        assert_eq!(refused.error.code, UNREADABLE);
         assert!(
-            refused.message.contains("login.spec"),
+            refused.error.message.contains("login.spec"),
             "{}",
-            refused.message
+            refused.error.message
         );
+    }
+
+    #[specforge_test(
+        invariant = "mcp_structured_error_responses",
+        verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+    )]
+    fn rename_states_which_field_a_refusal_is_about() {
+        let (dir, project) = project(&[("limit.spec", LIMIT), ("login.spec", LOGIN)]);
+        let read = |f: &str| std::fs::read_to_string(dir.path().join(f)).ok();
+        let navigator = nav(&project, read);
+        let subject = |old: &str, new: &str| plan(&navigator, old, new).unwrap_err().subject;
+
+        assert_eq!(subject("session_limit", "x"), Some(RenameField::NewId));
+        assert_eq!(subject("session_limit", "login"), Some(RenameField::NewId));
+        assert_eq!(subject("nope", "fine_name"), Some(RenameField::OldId));
+        // A file the rename cannot read is a refusal of the environment: about no field.
+        let without_limit = |f: &str| {
+            (f != "limit.spec").then(|| std::fs::read_to_string(dir.path().join(f)).unwrap())
+        };
+        let refused = plan(
+            &nav(&project, without_limit),
+            "session_limit",
+            "session_cap",
+        );
+        assert_eq!(refused.unwrap_err().subject, None);
     }
 }

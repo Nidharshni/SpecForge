@@ -322,6 +322,7 @@ dependencies = [
  "lasso",
  "serde",
  "serde_json",
+ "specforge-coverage",
  "specforge-diagnostics",
  "specforge-package",
  "specforge-protocol-types",
@@ -418,7 +419,6 @@ dependencies = [
 name = "specforge-test-macros"
 version = "0.1.0"
 dependencies = [
- "proc-macro2",
  "quote",
  "syn",
 ]

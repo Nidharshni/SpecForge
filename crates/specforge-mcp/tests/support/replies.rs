@@ -5,7 +5,7 @@
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
-use super::{Served, TestProject, call_tool};
+use super::{Serve, Served, TestProject, call_tool};
 
 /// A project holding `alpha`, `beta`, an untitled entity that refers to a
 /// ghost, a Rust source file and an inference manifest, served with the
@@ -20,7 +20,7 @@ pub fn reading() -> Served {
         .file("src/lib.rs", "pub fn f() {}\n")
         .file(
             "specforge-infer.json",
-            &json!({"version": 1, "source_roots": ["src"]}).to_string(),
+            json!({"version": 1, "source_roots": ["src"]}).to_string(),
         )
         .serve_components()
 }
@@ -51,7 +51,7 @@ pub fn collected() -> TempDir {
         .file("Cargo.toml", "")
         .file(
             "target/specforge/t.json",
-            &json!({"entries": [{"entity_id": "alpha", "test_name": "works", "status": "passed"}]})
+            json!({"entries": [{"entity_id": "alpha", "test_name": "works", "status": "passed"}]})
                 .to_string(),
         )
         .into_dir()
@@ -78,7 +78,7 @@ pub const READS: &[(&str, &str)] = &[
     ("specforge.trace", r#"{"entity_id":"alpha"}"#),
     (
         "specforge.trace",
-        r#"{"plan":{"entries":[{"entity_id":"alpha"},{"entity_id":"nope"}]}}"#,
+        r#"{"plan":{"plan_id":"p","entries":[{"entity_id":"alpha","action":"implement"},{"entity_id":"nope","action":"implement"}]}}"#,
     ),
     ("specforge.search", r#"{"query":"a"}"#),
     ("specforge.search", r#"{"query":""}"#),

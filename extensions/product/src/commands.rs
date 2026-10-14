@@ -29,11 +29,6 @@ pub fn declare(c: &mut ContributionsBuilder) {
             problem and tags, filtered (every filter set must match), sorted \
             (by id unless --sort-by says otherwise) and paged, with the \
             total before paging.",
-        &[
-            "Only features with this status: proposed (also a feature without \
-            one), accepted, in_progress, done, deferred or deprecated",
-            "Only features with this priority: critical, high, medium, low",
-        ],
     );
     list_command::<queries::JourneyListEntry>(
         c,
@@ -41,10 +36,6 @@ pub fn declare(c: &mut ContributionsBuilder) {
             feature counts, priority and tags, filtered (every filter set \
             must match), sorted (by id unless --sort-by says otherwise) and \
             paged, with the total before paging.",
-        &[
-            "Only journeys with this priority: critical, high, medium, low",
-            "Only journeys of this persona (its id)",
-        ],
     );
     list_command::<queries::DeliverableListEntry>(
         c,
@@ -52,12 +43,6 @@ pub fn declare(c: &mut ContributionsBuilder) {
             status, journey and module counts and tags, filtered (every \
             filter set must match), sorted (by id unless --sort-by says \
             otherwise) and paged, with the total before paging.",
-        &[
-            "Only deliverables with this status: draft (also a deliverable \
-            without one), in_progress, shipped or deprecated",
-            "Only deliverables of this artifact type: cli, service, library, \
-            web_app, mobile_app, api, extension, documentation or package",
-        ],
     );
     list_command::<queries::MilestoneListEntry>(
         c,
@@ -65,11 +50,6 @@ pub fn declare(c: &mut ContributionsBuilder) {
             date, feature count, priority and tags, filtered (every filter \
             set must match), sorted (by id unless --sort-by says otherwise) \
             and paged, with the total before paging.",
-        &[
-            "Only milestones with this status: planned (also a milestone \
-            without one), in_progress, completed or blocked",
-            "Only milestones with this priority: critical, high, medium, low",
-        ],
     );
     list_command::<queries::ModuleListEntry>(
         c,
@@ -77,8 +57,6 @@ pub fn declare(c: &mut ContributionsBuilder) {
             the modules it depends on and tags, filtered (every filter set \
             must match), sorted (by id unless --sort-by says otherwise) and \
             paged, with the total before paging.",
-        &["Only modules of this family (core, platform, extension, \
-            integration, advisory, or another)"],
     );
     list_command::<queries::TermListEntry>(
         c,
@@ -86,7 +64,6 @@ pub fn declare(c: &mut ContributionsBuilder) {
             tags, filtered (every filter set must match), sorted (by id \
             unless --sort-by says otherwise) and paged, with the total \
             before paging.",
-        &[],
     );
     list_command::<queries::PersonaListEntry>(
         c,
@@ -94,12 +71,6 @@ pub fn declare(c: &mut ContributionsBuilder) {
             status, journey count and tags, filtered (every filter set must \
             match), sorted (by id unless --sort-by says otherwise) and \
             paged, with the total before paging.",
-        &[
-            "Only personas with this status: active (also a persona without \
-            one) or deprecated",
-            "Only personas with this technical level: expert, advanced, \
-            intermediate, beginner or non_technical",
-        ],
     );
     list_command::<queries::ChannelListEntry>(
         c,
@@ -107,12 +78,6 @@ pub fn declare(c: &mut ContributionsBuilder) {
             status, journey count and tags, filtered (every filter set must \
             match), sorted (by id unless --sort-by says otherwise) and \
             paged, with the total before paging.",
-        &[
-            "Only channels with this status: active (also a channel without \
-            one) or deprecated",
-            "Only channels with this interaction model: request_response, \
-            event_driven, batch, streaming, bidirectional or manual",
-        ],
     );
     list_command::<queries::ReleaseListEntry>(
         c,
@@ -120,10 +85,6 @@ pub fn declare(c: &mut ContributionsBuilder) {
             deliverable count, release date and tags, filtered (every filter \
             set must match), sorted (by id unless --sort-by says otherwise) \
             and paged, with the total before paging.",
-        &[
-            "Only releases with this status: planned (also a release without \
-            one), in_progress, released or recalled",
-        ],
     );
     c.command("milestone_completion", |cmd| {
         cmd.title("Show milestone completion progress")
@@ -1139,31 +1100,21 @@ pub fn declare(c: &mut ContributionsBuilder) {
 /// The list command over `T`'s kind, `specforge product <plural>`: its
 /// filter args are the kind's [`ListKind::filters`], in order, each with its
 /// help in `filter_help`, then the tags, sort and page args every list takes.
-fn list_command<T: ListEntry + 'static>(
-    c: &mut ContributionsBuilder,
-    description: &str,
-    filter_help: &[&str],
-) {
+fn list_command<T: ListEntry + 'static>(c: &mut ContributionsBuilder, description: &str) {
     let kind = T::KIND;
-    assert_eq!(
-        kind.filters.len(),
-        filter_help.len(),
-        "the {} list declares a help for each of its filters",
-        kind.plural
-    );
     c.command(kind.plural, |cmd| {
         cmd.title(&format!("List {}", kind.plural))
             .description(description)
             .category("query");
-        // A closed filter is `one_of` its enum (the one its validation rule
-        // checks): the SDK refuses any other value, and the CLI help and the
-        // MCP tool's schema list them.
-        for (filter, help) in kind.filters.iter().zip(filter_help) {
-            cmd.arg(filter.arg, |a| {
-                if let Some(values) = filter.values {
-                    a.one_of(values);
+        // A closed filter is `one_of` its field's vocabulary (the one the
+        // field is declared an enum of): the SDK refuses any other value, and
+        // the CLI help and the MCP tool's schema list them.
+        for filter in kind.filters {
+            cmd.arg(filter.field(), |a| {
+                if let Some(vocabulary) = kind.vocabulary(filter.field()) {
+                    a.one_of(vocabulary.values());
                 }
-                a.description(help);
+                a.description(&filter.help(kind));
             });
         }
         cmd.arg("tags", |a| {
@@ -1221,8 +1172,8 @@ fn list_filter<'a>(
     let mut filter = ListFilter::all(kind);
     (filter.offset, filter.limit) = page(call);
     for arg in kind.filters {
-        if let Some(value) = call.str(arg.arg) {
-            filter.equals.push((arg.arg, value));
+        if let Some(value) = call.str(arg.field()) {
+            filter.equals.push((arg.field(), value));
         }
     }
     if let Some(tags) = call.str("tags") {

@@ -64,7 +64,10 @@ port RegistryClient {
   direction outbound
   category  "io/registry"
   // The transport to a package registry (ADR 0044): it chooses no registry
-  // and checks no reply. Its adapters are the HTTP client (production) and
+  // and checks no reply. Each call goes to the registry's root, the protocol's
+  // version prefix and the call's path (specforge_registry_wire::address); an
+  // answer no registry gives (a 404 without the protocol's NOT_FOUND error) is
+  // R009, not a missing package. Its adapters are the HTTP client (production) and
   // the in-memory client (tests); both keep one contract suite.
   // A read carries the credential the user keeps for the registry, when
   // there is one; a download carries it only to the registry's own origin.
@@ -115,4 +118,17 @@ port Editor {
   method progress(done: boolean, title: string @optional) -> Result<void, never>
   method refreshTokens() -> Result<void, never>
   verify integration "Editor contract is satisfied"
+}
+
+port SmtSolver {
+  direction outbound
+  category  "analysis/solver"
+  // What the prove pass and doctor ask the SMT solver (ADR 0079):
+  // whether it runs here (its version banner, or the W098 that says why not,
+  // worded by the adapter) and its answer to one SMT-LIB2 script within the
+  // adapter's timeout. Its adapters are z3 from PATH (production) and a
+  // scripted solver (tests).
+  method availability() -> Result<string, Diagnostic>
+  method solve(script: string) -> Result<string, SolveFailure>
+  verify integration "SmtSolver contract is satisfied"
 }

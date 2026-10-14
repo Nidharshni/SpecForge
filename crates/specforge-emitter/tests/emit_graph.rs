@@ -43,7 +43,7 @@ fn emit_graph_includes_all_fields_and_metadata() {
         methods: Vec::new(),
     });
 
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
 
     let node = &parsed["nodes"].as_array().unwrap()[0];
@@ -94,7 +94,7 @@ fn emit_graph_equals_emit_json() {
     }
 
     // The graph format is what `specforge export --format graph` emits.
-    let graph_output = specforge_emitter::json::emit_json(&graph);
+    let graph_output = crate::support::emit_json(&graph);
     assert_eq!(
         graph_output,
         specforge_emitter::emit(&graph, &specforge_emitter::EmitOptions::default()).unwrap()
@@ -155,7 +155,7 @@ fn graph_format_conforms_to_graph_protocol_schema() {
         label: Sym::new("behaviors"),
     });
 
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
 
     // Graph Protocol requires: schema_version, nodes array, edges array
@@ -193,7 +193,7 @@ fn graph_format_includes_schema_version() {
         methods: Vec::new(),
     });
 
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
 
     let version = parsed["schema_version"]
@@ -279,7 +279,7 @@ fn structural_only_graph_exports_raw_keywords() {
         methods: Vec::new(),
     });
 
-    let json = specforge_emitter::json::emit_json(&graph);
+    let json = crate::support::emit_json(&graph);
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
 
     let nodes = parsed["nodes"].as_array().unwrap();
@@ -288,4 +288,52 @@ fn structural_only_graph_exports_raw_keywords() {
     assert!(kinds.contains(&"widget"), "raw keyword 'widget' preserved");
     assert!(kinds.contains(&"gadget"), "raw keyword 'gadget' preserved");
     assert!(parsed["schema_version"].is_string());
+}
+
+#[test]
+fn without_verdicts_no_node_carries_a_coverage_status() {
+    use specforge_emitter::{EmitFormat, EmitOptions};
+    use std::collections::BTreeMap;
+
+    let mut graph = Graph::new();
+    for id in ["alpha", "beta"] {
+        graph.add_node(Node {
+            id: EntityId { raw: Sym::new(id) },
+            kind: EntityKind {
+                raw: Sym::new("behavior"),
+            },
+            title: Some(id.to_string()),
+            fields: FieldMap::new(),
+            source_span: span(),
+            methods: Vec::new(),
+        });
+    }
+    let verdicts = BTreeMap::from([(
+        "alpha".to_string(),
+        specforge_coverage::Verdict {
+            obligations: 1,
+            proven: 1,
+            ..Default::default()
+        },
+    )]);
+    for format in [EmitFormat::Json, EmitFormat::Context, EmitFormat::Brief] {
+        let emit = |coverage| {
+            specforge_emitter::emit(
+                &graph,
+                &EmitOptions {
+                    format,
+                    coverage,
+                    ..EmitOptions::default()
+                },
+            )
+            .unwrap()
+        };
+        assert!(!emit(None).contains("coverage_status"), "{format:?}");
+        let parsed: serde_json::Value = serde_json::from_str(&emit(Some(&verdicts))).unwrap();
+        let nodes = parsed["nodes"].as_array().unwrap();
+        let status =
+            |id: &str| nodes.iter().find(|n| n["id"] == id).unwrap()["coverage_status"].clone();
+        assert_eq!(status("alpha"), "covered", "{format:?}");
+        assert_eq!(status("beta"), serde_json::Value::Null, "{format:?}");
+    }
 }

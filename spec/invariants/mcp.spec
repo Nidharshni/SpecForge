@@ -20,7 +20,9 @@ invariant mcp_structured_error_responses "MCP Structured Error Responses" {
     An operation's failure kind decides the McpError code. An operation
     states the kind where it raises the failure; no table maps a code to a
     kind, and a package the registry or its trust check refuses is never
-    internal_error.
+    internal_error. An operation states which field of its request a
+    refusal is about; a refusal of the project or the environment is about
+    none.
   """
   risk      medium
   verify unit "error response includes error code and message fields"
@@ -36,6 +38,7 @@ invariant mcp_structured_error_responses "MCP Structured Error Responses" {
   verify unit "a no-project refusal names path only for an entry that takes one"
   verify unit "a path that does not exist is a file_not_found error on path"
   verify unit "an operation's failure kind decides its McpError code, never its code text"
+  verify unit "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
 }
 
 invariant mcp_subscription_cleanup "MCP Subscription Cleanup" {
@@ -70,7 +73,7 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
     The project an MCP server serves is replaced whole or not at all, and
     every request that reads it (tools/call, resources/read, prompts/get and
     the list methods) first brings it up to date with the files on disk
-    (bring_session_up_to_date), unless the tool's use_cached says otherwise:
+    (bring_session_up_to_date):
     an update for changed sources, an environment reload with its extension
     tools and resources for a changed specforge.json, specforge.lock or
     extension module. Subscribed clients learn what changed. A call whose
@@ -84,9 +87,14 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
     project (a directory holding specforge.json) is ever
     served: the server serves the nearest one at or above its root (the
     client's projectRoot, else the path it was started with), and nothing
-    when there is none. A call whose path names a project while none is
-    served serves that project; a path to a directory that is no project is
-    read for that call only and never served.
+    when there is none; while none is served, every request looks there
+    again first, so a project created there since is served by the next
+    request. In a handshake session, a call whose path names a project
+    while none is served serves that project, and init serves the project
+    it creates; a stateless request (MCP 2026-07-28) never changes what is
+    served: its path is read for that call only and init serves nothing. A
+    path to a directory that is no project is read for that call only and
+    never served.
     With no project served and none named, what a call gets is declared by
     the entry's target: an entry that reads only the project view (the read
     views, export and render, the navigation reads of the graph, every core
@@ -107,10 +115,11 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
   verify unit "a subscription to an extension resource enabled on disk since the last request is accepted"
   verify unit "a mutation on another project does not reload the served one"
   verify unit "a mutation on another project brings it up to date with what it wrote and reports what a fresh compile reports"
-  verify unit "a path while no project is served serves that project, for every tool that takes a path"
+  verify unit "in a handshake session, a path while no project is served serves that project, for every tool that takes a path"
   verify unit "a path inside the served project names the served project"
-  verify unit "a server whose root lies in no project serves nothing, and init then serves the project it creates"
+  verify unit "a server whose root lies in no project serves nothing, and a handshake init then serves the project it creates"
   verify unit "a server started inside a project serves that project"
+  verify unit "while nothing is served, a project created at or above the server's root is served by the next request, in either revision"
   verify unit "a path to a directory that is no project is read for that call and never served"
   verify unit "rename with a path to another project edits that project only and keeps serving this one"
   verify unit "remove_extension with a path to another project checks that project's dependents and entities"

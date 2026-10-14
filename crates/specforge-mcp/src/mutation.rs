@@ -132,8 +132,8 @@ impl<R> Mutated<R> {
 /// entity and produces no domain event.
 #[derive(Debug)]
 pub struct Failed {
-    error: Box<McpError>,
-    files: Writes,
+    pub(crate) error: Box<McpError>,
+    pub(crate) files: Writes,
 }
 
 impl Failed {
@@ -143,18 +143,6 @@ impl Failed {
             error: error.into(),
             files,
         }
-    }
-
-    /// The failure's McpError, to name its argument.
-    pub(crate) fn error_mut(&mut self) -> &mut McpError {
-        &mut self.error
-    }
-
-    /// The same failure, its McpError mapped (naming the argument it is
-    /// about).
-    pub fn map_error(mut self, map: impl FnOnce(McpError) -> McpError) -> Self {
-        self.error = Box::new(map(*self.error));
-        self
     }
 
     /// The same failure, `extra` added to the diagnostics its reply carries
@@ -365,12 +353,19 @@ pub(crate) fn refused(
 /// A preview's reply, checked against `schema`.
 fn previewed<R: MutationReply>(tool: &str, schema: &Value, mutation: Mutation<R>) -> ToolOutcome {
     match mutation {
-        Ok(Mutated { answer, .. }) => crate::reply::conforming(
-            tool,
-            crate::reply::Source::Core,
-            schema,
-            sent(answer, None, <R::After as AfterWrite>::of(None)),
-        ),
+        Ok(Mutated { answer, written }) => {
+            debug_assert!(
+                written.files.is_empty(),
+                "{tool}: a preview wrote {:?}",
+                written.files
+            );
+            crate::reply::conforming(
+                tool,
+                crate::reply::Source::Core,
+                schema,
+                sent(answer, None, <R::After as AfterWrite>::of(None)),
+            )
+        }
         Err(Failed { error, .. }) => ToolOutcome::Refused(error),
     }
 }
@@ -479,7 +474,7 @@ fn named(root: Option<&Path>, files: &Writes) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::events::testing::EventLog;
+    use crate::testing::EventLog;
     use crate::tool::ErrorCode;
     use serde_json::json;
     use specforge_common::{Diagnostic, Severity};

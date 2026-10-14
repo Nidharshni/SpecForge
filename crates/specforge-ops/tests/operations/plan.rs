@@ -1,10 +1,10 @@
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
-use specforge_ops::plan::PlanGapKind;
+use specforge_ops::plan::{AgentPlan, PlanGapKind};
 use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue, VerifyStatement};
 use specforge_test::prelude::*;
 
-use crate::view_support::gap_texts;
+use crate::view_support::{Project, gap_texts, registries};
 
 fn span() -> SourceSpan {
     SourceSpan {
@@ -77,6 +77,7 @@ fn build_graph() -> Graph {
 fn plan_with_all_valid_entity_ids_passes() {
     let graph = build_graph();
     let plan = serde_json::json!({
+        "plan_id": "p",
         "entries": [
             { "entity_id": "b", "action": "implement" },
             { "entity_id": "c", "action": "implement" },
@@ -96,6 +97,7 @@ fn plan_with_all_valid_entity_ids_passes() {
 fn plan_referencing_nonexistent_entity_produces_error() {
     let graph = build_graph();
     let plan = serde_json::json!({
+        "plan_id": "p",
         "entries": [
             { "entity_id": "b", "action": "implement" },
             { "entity_id": "nonexistent", "action": "implement" },
@@ -121,6 +123,7 @@ fn testable_entity_missing_from_plan_produces_warning() {
     let graph = build_graph();
     // Plan only covers "b", missing "c"
     let plan = serde_json::json!({
+        "plan_id": "p",
         "entries": [
             { "entity_id": "b", "action": "implement" },
         ]
@@ -140,6 +143,7 @@ fn testable_entity_missing_from_plan_produces_warning() {
     assert_eq!(result.gaps[0].target, "c");
     // A plan covering both behaviors warns about nothing.
     let full = serde_json::json!({
+        "plan_id": "p",
         "entries": [
             { "entity_id": "c", "action": "implement" },
             { "entity_id": "b", "action": "implement" },
@@ -159,6 +163,7 @@ fn plan_dependency_order_contradicting_graph_produces_diagnostic() {
     // Graph has edge b -> c (b references c, so c should be implemented before b).
     // Plan lists b before c — wrong order.
     let plan = serde_json::json!({
+        "plan_id": "p",
         "entries": [
             { "entity_id": "b", "action": "implement" },
             { "entity_id": "c", "action": "implement" },
@@ -183,6 +188,7 @@ fn plan_validation_contract_consistency() {
     // Ensures: unresolvable IDs diagnosed, missing entries warned, ordering validated, structured report
     let graph = build_graph();
     let plan = serde_json::json!({
+        "plan_id": "p",
         "entries": [
             { "entity_id": "nonexistent", "action": "implement" },
             { "entity_id": "b", "action": "implement" },
@@ -206,6 +212,7 @@ fn plan_validation_contract_consistency() {
 
     // ordering_validated: b references c, so c must come first.
     let misordered = serde_json::json!({
+        "plan_id": "p",
         "entries": [
             { "entity_id": "b", "action": "implement" },
             { "entity_id": "c", "action": "implement" },
@@ -217,6 +224,7 @@ fn plan_validation_contract_consistency() {
         ["'b' depends on 'c' (via depends_on), but 'c' appears later in the plan"]
     );
     let fixed = serde_json::json!({
+        "plan_id": "p",
         "entries": [
             { "entity_id": "c", "action": "implement" },
             { "entity_id": "b", "action": "implement" },
@@ -228,6 +236,9 @@ fn plan_validation_contract_consistency() {
         "{:?}",
         fine.gaps
     );
+
+    assert!(!result.ok, "an unresolved entry fails the plan");
+    assert!(fine.ok, "{:?}", fine.gaps);
 
     // structured_report_produced: every gap is a record of its source, target,
     // kind and context.
@@ -242,8 +253,203 @@ fn plan_validation_contract_consistency() {
             .map(String::as_str)
             .collect();
         keys.sort();
-        assert_eq!(keys, ["context", "kind", "source", "target"], "{record}");
+        assert_eq!(
+            keys,
+            [
+                "gap_context",
+                "missing_link_type",
+                "source_entity",
+                "target_entity"
+            ],
+            "{record}"
+        );
     }
-    assert_eq!(records[0]["kind"], "unresolved_entity", "{report}");
-    assert_eq!(records[1]["kind"], "missing_plan_entry", "{report}");
+    assert_eq!(
+        records[0]["missing_link_type"], "unresolved_entity",
+        "{report}"
+    );
+    assert_eq!(
+        records[1]["missing_link_type"], "missing_plan_entry",
+        "{report}"
+    );
+}
+
+// B:validate_agent_plan — verify unit "the plan check reads no recorded test report"
+#[specforge_test(
+    behavior = "validate_agent_plan",
+    verify = "the plan check reads no recorded test report"
+)]
+fn the_plan_check_reads_no_recorded_report() {
+    let project = Project::new(
+        "behavior a \"A\" {\n  verify unit \"a works\"\n}\n\nbehavior b \"B\" {\n  verify unit \"b works\"\n}\n",
+        registries(&["behavior"], &[]),
+    );
+    let plan = AgentPlan::read(
+        &serde_json::json!({"plan_id": "p", "entries": [{"entity_id": "a", "action": "implement"}]}),
+    )
+    .unwrap();
+    let unreported = specforge_ops::plan::check(&project.view(), &plan);
+    assert_eq!(
+        gap_texts(&unreported, PlanGapKind::MissingPlanEntry),
+        ["testable entity 'b' (behavior) is not covered by the plan"]
+    );
+    for report in [
+        "{",
+        r#"{"results":{"a":{"tests":[{"name":"t","status":"pass","verify":"a works"}]}}}"#,
+    ] {
+        std::fs::write(project.dir.path().join("specforge-report.json"), report).unwrap();
+        assert_eq!(
+            specforge_ops::plan::check(&project.view(), &plan),
+            unreported,
+            "{report}"
+        );
+    }
+}
+
+// B:validate_agent_plan — verify unit "a plan that is not an AgentPlan is refused, naming every place it departs from the type"
+#[specforge_test(
+    behavior = "validate_agent_plan",
+    verify = "a plan that is not an AgentPlan is refused, naming every place it departs from the type"
+)]
+fn an_agent_plan_is_read_against_its_schema() {
+    use serde_json::json;
+    let refused = |value: serde_json::Value| AgentPlan::read(&value).unwrap_err().message("plan");
+    assert_eq!(
+        refused(json!({"entries": [{"entity_id": "complete_task"}]})),
+        "plan must be an AgentPlan: plan: missing required plan_id; plan.entries[0]: missing required action"
+    );
+    assert_eq!(
+        refused(json!({})),
+        "plan must be an AgentPlan: plan: missing required plan_id; plan: missing required entries"
+    );
+    assert_eq!(
+        refused(json!([1, 2])),
+        "plan must be an AgentPlan: plan: expected object, got array"
+    );
+    assert_eq!(
+        refused(
+            json!({"plan_id": "p", "entries": [{"entity_id": "Task", "action": "implement", "dependencies": ["x"]}], "bogus": 1})
+        ),
+        "plan must be an AgentPlan: plan.entries[0].dependencies: undeclared key; plan.bogus: undeclared key"
+    );
+    assert_eq!(
+        refused(json!({"entries": [{"entity_id": "complete_task", "action": 7, "weird": true}]})),
+        "plan must be an AgentPlan: plan: missing required plan_id; plan.entries[0].action: expected string, got integer; plan.entries[0].weird: undeclared key"
+    );
+    assert_eq!(
+        refused(json!(42)),
+        "plan must be an AgentPlan: plan: expected object, got integer"
+    );
+    assert_eq!(
+        refused(json!({"plan_id": "p", "entries": [["a", "x"]]})),
+        "plan must be an AgentPlan: plan.entries[0]: expected object, got array"
+    );
+    assert!(
+        AgentPlan::parse("{not json")
+            .unwrap_err()
+            .message("plan")
+            .starts_with("plan is not valid JSON: ")
+    );
+    let plan =
+        AgentPlan::parse(r#"{"plan_id":"p","entries":[{"entity_id":"a","action":"x"}]}"#).unwrap();
+    assert_eq!(
+        plan,
+        AgentPlan {
+            plan_id: "p".into(),
+            entries: vec![specforge_ops::plan::AgentPlanEntry {
+                entity_id: "a".into(),
+                action: "x".into()
+            }],
+        }
+    );
+}
+
+// B:validate_agent_plan — verify unit "a plan passes when every entry names an entity and none comes before what it depends on; a missing entry is a warning"
+#[specforge_test(
+    behavior = "validate_agent_plan",
+    verify = "a plan passes when every entry names an entity and none comes before what it depends on; a missing entry is a warning"
+)]
+fn a_missing_entry_warns_and_an_unresolved_or_misordered_entry_fails() {
+    let graph = build_graph();
+    let check = |ids: &[&str]| {
+        let plan = serde_json::json!({
+            "plan_id": "p",
+            "entries": ids
+                .iter()
+                .map(|id| serde_json::json!({"entity_id": id, "action": "implement"}))
+                .collect::<Vec<_>>(),
+        });
+        crate::view_support::plan_check(&graph, &["behavior"], &plan)
+    };
+    // c is missing: a warning.
+    assert!(check(&["b"]).ok);
+    // An entry that names no entity fails the plan.
+    assert!(!check(&["nonexistent", "b", "c"]).ok);
+    // b before c, which it depends on, fails it.
+    assert!(!check(&["b", "c"]).ok);
+    let fine = check(&["c", "b"]);
+    assert!(fine.ok && fine.gaps.is_empty(), "{:?}", fine.gaps);
+}
+
+// B:validate_agent_plan — verify unit "output is structured JSON"
+#[specforge_test(behavior = "validate_agent_plan", verify = "output is structured JSON")]
+fn the_plan_outcome_is_one_document() {
+    let graph = build_graph();
+    let plan = serde_json::json!({"plan_id": "p", "entries": [
+        {"entity_id": "b", "action": "implement"},
+        {"entity_id": "nonexistent", "action": "implement"},
+    ]});
+    let outcome = crate::view_support::plan_check(&graph, &["behavior"], &plan);
+    let value = serde_json::to_value(&outcome).unwrap();
+    let mut keys: Vec<&str> = value
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort();
+    assert_eq!(keys, ["affected_entities", "gaps", "ok"]);
+    let schema = specforge_common::shape::build::<specforge_ops::plan::PlanOutcome>();
+    assert_eq!(
+        specforge_common::shape::violations(&schema, &value),
+        Vec::<String>::new()
+    );
+}
+
+// B:validate_agent_plan — verify unit "output is structured JSON"
+#[specforge_test(behavior = "validate_agent_plan", verify = "output is structured JSON")]
+fn the_plan_outcome_reads_as_human_text() {
+    let graph = build_graph();
+    let plan = serde_json::json!({"plan_id": "p", "entries": [
+        {"entity_id": "b", "action": "implement"},
+        {"entity_id": "ghost", "action": "implement"},
+        {"entity_id": "c", "action": "implement"},
+    ]});
+    let outcome = crate::view_support::plan_check(&graph, &["behavior"], &plan);
+    assert_eq!(
+        outcome.to_human(),
+        "affected: b, c\n\
+         gaps (2):\n  \
+         - unresolved_entity: E003: unresolved entity 'ghost' in plan — not found in graph\n  \
+         - ordering: 'b' depends on 'c' (via depends_on), but 'c' appears later in the plan\n\
+         plan check: failed\n"
+    );
+    let ok = crate::view_support::plan_check(
+        &graph,
+        &["behavior"],
+        &serde_json::json!({"plan_id": "p", "entries": [
+            {"entity_id": "c", "action": "implement"},
+            {"entity_id": "b", "action": "implement"},
+        ]}),
+    );
+    assert_eq!(
+        ok.to_human(),
+        "affected: c, b\ngaps: none\nplan check: passed\n"
+    );
+    let none = crate::view_support::plan_check(
+        &graph,
+        &["behavior"],
+        &serde_json::json!({"plan_id": "p", "entries": []}),
+    );
+    assert!(none.to_human().starts_with("affected: none\ngaps (2):"));
 }

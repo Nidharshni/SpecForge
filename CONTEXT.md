@@ -39,8 +39,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the environment load and every operation that reads a project from disk take a project root, never a raw
   path; only `init` takes its directory as given. On the command line a project is named by `--path` (any
   path inside it, `.` by default) on every command that reads one, extension commands included. Distinct from the **spec root**, where the project's
-  `.spec` files are discovered (`spec_root` in its `specforge.json`, else the project root): a path inside
-  the spec root names the project, never a project of its own.
+  `.spec` files are discovered (`spec_root` in its `specforge.json`, else the project root): the spec root is
+  never a project of its own, but a directory below it that holds `specforge.json` is a **nested project**,
+  and a path inside it names that project, whose files are none of the outer project's sources (ADR 0080).
 - **Format version**: the `.spec` file format a file was written against, `MAJOR.MINOR`, declared by
   the `// specforge-format:` header on its first non-blank line; a file with no header is at the
   current version and reports nothing. The parser reads it with the file
@@ -64,9 +65,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   text; an automatic rollback restores the texts its own run read. Backups are never removed.
 - **Project session**: a compiled project kept current, plus what it is built from: its **session
   inputs**, the stamps of what it last read, and where each environment load gets its extension runtime
-  (ADR 0047). It classifies any changed path through them, applies changes as an
-  update, an environment reload or a re-check, and can bring itself up to date with disk without a
-  watcher (`ensure_fresh`). A session is opened from disk or detached (no project: what the LSP
+  (ADR 0047). It turns any batch of changed paths into **changes**
+  (`ProjectSession::changes`): the comparison with what it last read that bringing it up to date
+  makes (`stale`), narrowed to what the paths reach (a directory reaches every source and input
+  under it, a symlinked source's target reaches that source, and a reached file is a change only
+  when it differs from its stamp). It applies changes as an update, an environment reload or a
+  re-check, and can bring itself up to date with disk without a watcher (`ensure_fresh`, ADR 0073). A session is opened from disk or detached (no project: what the LSP
   holds with no workspace folder and MCP while nothing is served). Watch, the LSP and MCP each hold
   one (`specforge_project::ProjectSession`; MCP's served one is always opened from disk, ADR 0025);
   watch and the LSP feed it watcher events and follow every update that changes its inputs
@@ -82,9 +86,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   sources are discovered (the spec root and `exclude`), its **environment inputs**
   (`specforge.json`, `specforge.lock`, the extension modules it loaded) and its **check inputs**
   (`specforge-cache.json` when check-phase passes read it, each file a `file_reference` field or a
-  `file_exists` rule names, and the directory of each such file that is missing). One value per
+  `file_exists` rule names, and the directory of each such file that is missing, and where each symlinked source's text
+  lies (its target)). One value per
   environment load, renewed each time the checks run (`specforge_project::SessionInputs`,
-  `ProjectSession::inputs`). What a changed path is, which directories watch watches, which files
+  `ProjectSession::inputs`). What a changed path reaches, which directories watch watches, which files
   the LSP asks its client to report and what the session stamps for freshness are all read from it;
   a detached session's inputs are empty (ADR 0030). Nothing else: an import names one of the sources,
   never a file on disk (ADR 0055).
@@ -105,21 +110,26 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   sends the file's whole list, the compile layer plus the formatter layer of the same version, under the one URI
   the client names the file by. Hover and code actions read the layers; one module writes them (ADR 0056).
 - **Call target**: the project one MCP call acts on, resolved from the call's optional `path` and its
-  entry's target before the handler runs: the served session (brought up to date unless `use_cached`),
-  another project opened as a session for that call only and brought up to date after the call writes, as the served one is, the directory `init` creates, or, with nothing served and
-  no project named, the empty session for an entry that reads only the project view
-  (`specforge_mcp::target::CallTarget`).
-  Only a project (a directory holding `specforge.json`) is ever served: the server
-  serves the nearest one at or above its root, else nothing, and a `path` to a directory that is no
-  project is read for its call only (ADR 0014 D6 as amended).
-  An entry's target is derived from what its handler is given
-  (nothing, the project view, the project, the new directory), never declared beside it: an entry
-  whose handler acts on the project is refused as no project before it runs (ADR 0014, ADR 0024).
+  entry's target before the handler runs: the served session (brought up to date), another project opened as a
+  session for that call only and brought up to date after the call writes, as the served one is, the directory
+  `init` creates, or, with nothing served and no project named, the empty session for an entry that reads only the
+  project view (`specforge_mcp::target::CallTarget`). The revision of the request decides whether the call may
+  change what is served (`target::Serving`): in a handshake session a `path` naming a project while none is served
+  is adopted and the project `init` creates is served (ADR 0014 D5); a stateless request serves nothing it names
+  (ADR 0077). An entry's target is derived from what its handler is given (nothing, the project view, the
+  project, the new directory), never declared beside it: an entry whose handler acts on the project is refused as
+  no project before it runs (ADR 0014, ADR 0024).
+- **Served project**: the project an MCP server serves to every call that names none: the nearest project (a
+  directory holding `specforge.json`) at or above the server's root (the path `specforge mcp` was started with, or
+  a handshake client's `projectRoot`), else nothing; while none is served, every request looks there again first
+  (`McpState::follow_root`). In a handshake session a call may also serve one (Call target). It is replaced whole or
+  not at all, and brought up to date with disk before a request reads it (ADR 0014, ADR 0077).
 - **Update**: one change applied to a project session. It re-reads and re-parses exactly the changed files (an
   importer parses the same, since references resolve without `use`), applies them to the session's graph
   build, resolves every file's imports again and re-runs the checks (`specforge_project::Update`, ADR 0006,
-  ADR 0032). An update says whether the session's inputs changed (`inputs_changed`) and, when it was
-  verified, how it differs from a cold rebuild (`divergence`). An update that changes no file (a held buffer
+  ADR 0032). An update says whether the session's inputs changed (`inputs_changed`), what the session
+  reported before it and reports after (its diagnostics delta), and, when it was verified, how it differs
+  from a cold rebuild (`divergence`). An update that changes no file (a held buffer
   whose text is already its file's) runs no check.
 - **Graph delta**: what an update or a reload changed in the graph: added and removed nodes (each with its
   kind, file and line), modified nodes (the fields whose values differ, and apart from them which of its
@@ -127,7 +137,21 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   positions ignored (`specforge_graph::GraphDelta`, re-exported as `specforge_project::GraphDelta`). A graph
   build computes it. `specforge watch --format json` prints it and MCP sends it whole as
   `specforge/graphChanged` (ADR 0058). `specforge migrate` keeps a migration only when the delta from the graph
-  before it to the graph after is empty, and reports each change as W054.
+  before it to the graph after is empty, and reports each change as W054. A node that only moved is no change; the
+  update lists it apart (**moved node**, `Update::moved`), so what writes positions (MCP's `specforge://graph`) is
+  notified.
+- **Moved node**: a node in both graphs declared at another file or start line, where it is now
+  (`specforge_graph::NodeChange` in `Applied::moved` / `Update::moved`). Not part of the graph delta; MCP notifies
+  the resources that write positions (`Watched::Graph`, what a resource declares with
+  `ResourceSpec::changes_with`).
+- **Diagnostics delta**: what an update or a reload changed in what a session reports: the diagnostics added and
+  removed, each compared and presented whole, as every JSON surface presents one (code, severity, message, span,
+  suggestion, data, origin). A diagnostic that moved or changed in any part is removed and added; identical ones
+  count one by one; order is not part of it (`specforge_project::DiagnosticsDelta`). An update holds what the
+  session reported before and reports after, shared with its compiled project, and compares them only when asked
+  (`Update::diagnostics_delta`). `specforge watch --format json` prints it; MCP sends it, with the I017 its
+  extension surfaces add and remove, as `specforge/diagnosticsChanged` (ADR 0074). The LSP does not read it: it
+  publishes every file's diagnostics as the editor shows them.
 - **Debounce rule**: changes that arrive less than 50 ms apart are one batch, due 50 ms after the last
   of them, each change once. Watch batches the file changes under every directory it watches as one
   stream, and the LSP batches edited documents, by the same rule (`specforge_watch::Coalescer`,
@@ -288,7 +312,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   variant lists and type unions by `" | "`; expressions by `", "`; verify statements by `"; "`; a
   block's keys by `", "`. An empty value is `""`. Every written field has one, and none is null.
 - **Field type**: how the host reads a field's value, one of eight names an extension declares:
-  `string`, `integer`, `bool`, `enum` (its values are the declaration's `enum_values`), `string_list`,
+  `string`, `integer`, `bool`, `enum` (its values are the declaration's `enum_values`, its absent value its `default_value`: a field
+  vocabulary; an enum without values, or a default outside them, is W021), `string_list`,
   `reference`, `reference_list`, `block` (`specforge_protocol_types::FieldType`). The registry build
   reads a declared type once, into the field's registry entry (`FieldRegistryEntry::new`, the only way
   to make one); every output names it by that one name — the schema and exports, the published JSON
@@ -296,6 +321,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   are read, never written; any other name is W019. What a field's type takes, how a written value is
   stored as it, the JSON every output writes for it and that JSON's schema are its field form
   (ADR 0064).
+- **Field vocabulary**: the closed set of values an enum field takes, in their order, and the value an absent one
+  counts as (its declared `default_value`), declared once by the extension that declares the field, as a `const`
+  (`specforge_extension_sdk::Vocabulary`, through `FieldBuilder::vocabulary`, the only way to declare an enum).
+  The host reads it from the field's declaration: a written value outside it is E061, the editor completes it, the
+  schema and the published JSON Schema list it, the guide and the hover show it and its default; the host never
+  writes the default into the graph. The extension's own readers (a list filter and its help, a sort, a lifecycle
+  pass, a rollup, a conditional rule's value) read the same constant. An open set of standard values (a module's
+  family) is not one: its field is a string, and an info rule names the standard values (`{allowed}`) (ADR 0071).
 - **Field form**: a field's declared type with an enum's values, read once
   (`specforge_graph::FieldForm`, from `FieldRegistryEntry::form`): which
   stored values the field takes (E061 reads it), how the graph build stores a
@@ -312,7 +345,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   - what exempts it (a union body, an exempting flag, a kind that accepts no `verify` statements);
   - how many obligations it declares.
 
-  It **owes** obligations when a rule applies and nothing exempts it. It **counts** toward coverage
+  It **declares** obligations when it has at least one (`Standing::declares_obligations`). It **owes** obligations when a rule applies and nothing exempts it. It **counts** toward coverage
   when testable and owing or declaring, and is **exempt** when testable and neither: the coverage
   rule's one counting rule (`specforge_coverage::Counting`), read with the standing's facts
   (`Standing::counting`). W004, stats, plan validation and the verify-stub fix read it. The pass
@@ -359,18 +392,25 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   registry refuses an upload whose signature isn't one or doesn't verify over it (INVALID_SIGNATURE), before storing
   anything, so the version stays publishable; `add` verifies what it downloads again, because the registry is not the
   trust anchor: which keys to trust is the user's pins (ADR 0061).
-- **Package registry contract**: what a package registry and its client exchange over HTTP: the paths, the JSON
-  bodies (the package signature among them), the publish form and the error codes, each defined once in
+- **Package registry contract**: what a package registry and its client exchange over HTTP: each call's address under a registry
+  root, the JSON bodies (the package signature among them), the publish form and the error codes, each defined once in
   `specforge-registry-wire`, which `specforge-registry-server` and `specforge-registry-client` both compile against
   (ADR 0044, ADR 0061). A registry's refusal (HTTP 400) carries a typed code and reaches the user as R008; an
-  answer that isn't the call's wire type is R009. A test reaches a registry through the real server in process or
+  answer that isn't the call's wire type is R009. So is a 404 without the protocol's NOT_FOUND error: an address
+  no registry serves, not a missing package. A test reaches a registry through the real server in process or
   an in-memory client, never through JSON written by hand. A search matches by one rule, an ASCII
   case-insensitive substring of a package's name, description or one keyword
   (`specforge_package::search::matches`), on the server and in both in-memory registries.
+- **Registry root**: the URL a `registries` entry names: where a package registry is, an `http` or `https` URL
+  without the protocol's version prefix (`https://registry.example`, or `https://example.com/registry` for one served
+  under a path) (`specforge_registry_wire::RegistryRoot`). Every call goes to the root, then `/v1`, then the call's
+  path (`RegistryRoot::address`); the server mounts the same routes (`Endpoint::route`). A url ending in `/v1`, or
+  one that isn't an http(s) URL, is E067 (ADR 0075).
 - **Registry for a package**: the one configured registry that serves a package name: the first
   `registries` entry whose `scope_filter` is the name's scope, else the first marked
   `default_registry`; with neither, none does, and the operation refuses with R-OPS-001 before any
-  request (`specforge_ops_registry::Configured::registry_for`, ADR 0045). `add`, `update` and
+  request (`specforge_ops_registry::Configured::registry_for`, ADR 0045); a `registries` entry that can't be
+  read refuses every registry operation with E067 first, so a scope it claims never falls to the default. `add`, `update` and
   `publish` ask that one registry; `search` asks every entry. A registry credential is kept under
   the registry's alias (`login --registry`, else the default registry's).
 - **Package name**: what an extension package is called, `@scope/name` (a registry holds only
@@ -423,13 +463,15 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Read view**: an operation that only reads the project view: stats, trace, the coverage view, the
   model and outline diagrams, the versioned schema, inspect, query, list and search (the entities a
   selection over the view returns, `specforge_ops::query`), the exploration and the review
-  (`specforge_ops::{explore, review}`), and the inference guide and plan
+  (`specforge_ops::{explore, review}`), the reach of a trace (`specforge_ops::trace::reach`, the trace prompt's
+  affected and unverified entities), the plan check (`specforge_ops::plan::check`), and the inference guide and plan
   (`specforge_ops::infer::{guide, kind_guide, inference_plan}`). Each returns a typed outcome; the CLI,
   MCP (its tools and its prompts) and the LSP only render it.
 - **Entity facts**: what inspect returns for one entity: its node and kind entry, headline
   statement, standing and obligations (the snapshot's own, borrowed), references in both directions,
-  coverage, and the reported diagnostics about it (`specforge_ops::inspect::EntityFacts`). MCP
-  `specforge.inspect` renders it as JSON and the LSP hover as markdown, so the two cannot disagree.
+  and the reported diagnostics about it (`specforge_ops::inspect::EntityFacts`); its coverage is asked
+  for apart (`specforge_ops::inspect::coverage`) by the surfaces that show it. MCP `specforge.inspect`
+  renders both as JSON and the LSP hover as markdown, so the two cannot disagree.
 - **Known kind**: a kind a loaded extension declares, or that an entity is written with (an
   undeclared one is E024's). A kind filter (over entities, or the model's `kinds`) knows both and
   reports any other kind as I020; an argument that needs a kind's declaration (a schema entry, an
@@ -455,7 +497,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   render it.
 - **Inference guide**: what an agent is told to look for to infer a kind's entities from code
   (`specforge_ops::infer::KindGuide`): the kind's description and extension, every field the registry build
-  registered on it, the extension's `inference_guide` followed by the project's own guide for the kind
+  registered on it (with, for an enum, its values and its default), the extension's `inference_guide` followed by the project's own guide for the kind
   (`inference.<kind>` in `specforge.json`, under **Project-specific:**), an example entity writing each field
   the way its type is written, and the kind's entities. A project's guide is every declared kind's, its
   global conventions (`inference.global`) and its spec directory. The infer prompt, `specforge infer-guide`
@@ -533,9 +575,17 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (I065). Its declarative rules check one entity at a time (ADR 0039).
 - **Missing link**: an expected edge, from the registries, that a traced entity lacks
   (`MissingLink`). The only gap a trace reports.
+- **Agent plan**: what an agent intends to do, entity by entity, in the order it will do it
+  (`specforge_ops::plan::AgentPlan`, spec type `AgentPlan`: a `plan_id` and entries of `entity_id` and `action`).
+  Its entry order is its dependency order; the graph's edges are the dependencies. Read from a JSON object or its
+  text, checked against the type's schema first (`AgentPlan::read`): a value that departs is refused naming every
+  place. The **plan check** (`specforge_ops::plan::check`) reads the graph and the entity snapshot, never the
+  recorded test report; it passes (`ok`) when no entry is unresolved and none comes before what it depends on.
 - **Plan gap**: how an agent plan falls short of the graph: an unresolved entry, a missing entry for
   a testable entity with obligations, or an entry ordered before what it depends on (`PlanGap`). An
-  edge to an entity that does not exist is neither: it is E003.
+  edge to an entity that does not exist is neither: it is E003. Written as an `McpTraceGap`
+  (`source_entity`, `target_entity`, `missing_link_type`, `gap_context`). A missing entry is a warning; an
+  unresolved or misordered entry fails the plan.
 - **Verdict**: an entity's obligations, the proven ones, and the tests that bear on them. It gives
   both "proven" (the gate) and the covered/partial/uncovered status (the MCP view)
   (`specforge_coverage::Verdict`).
@@ -545,11 +595,19 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`OpErrorKind`: invalid input, not found, conflict, schema mismatch, compilation failed, …) is
   stated where it is raised — at the operation's own raise site (`OpError::coded`), or where a lower
   crate's diagnostic crosses into ops (`OpError::of`), a recorded test report that cannot be used included
-  (`specforge_ops::report`) — never by a table of codes and never by a surface; its code is what the CLI prints. Its outcome prints as one outcome document on
+  (`specforge_ops::report`) — never by a table of codes and never by a surface; a refusal that rejects a value
+  the caller gave also says which field of the request it is about (its **subject**: a `specforge_ops::Refusal<F>`,
+  `F` the operation's field enum), stated where the operation reads the field and never by a table of codes; its
+  code is what the CLI prints. Its outcome prints as one outcome document on
   every surface (ADR 0052). The CLI and MCP
   are adapters over it (`specforge-ops`); the CLI ends every core command through one renderer
   (`specforge_cli::outcome`: the refusal, the exit code) and writes it through its **Terminal**
   (ADR 0029).
+- **Refusal subject**: the field of an operation's request a refusal is about, typed by the operation
+  (`Refusal<F>`, `F` one variant per field a refusal of it can be about: `AddField::Extensions`,
+  `InitField::Dir`). Only a refusal that rejects a value the caller gave has one (invalid input, an entity, file or
+  extension not there, a conflict); a refusal of the project or the environment has none. Each surface spells it:
+  MCP names the argument (`specifiers`, `path`), the CLI and the LSP print the error (ADR 0072).
 - **Mutation outcome**: what one MCP mutation call produced, typed: a run (`specforge_mcp::mutation::Mutated`:
   its reply and what it wrote — the files its operation changed, the entities it changed and the domain
   event it produces, `Written`) or a failure (`mutation::Failed`: its McpError and the files it left
@@ -568,16 +626,26 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   what it alone knows, typed and flattened beside it (MCP's `note` on an add, a mutation's
   `files_written`, the CLI's credential health on doctor), and never renames, drops or re-derives a
   key. It carries no `null`. Its spec type is the tool's `Mcp*` reply type (ADR 0052).
+- **Graph export**: the project's graph, or the subgraph of a scope, written in one export format by
+  `specforge_emitter::emit` through `specforge_ops::export::export`: graph (the Graph Protocol), context and brief (JSON
+  documents whose schema the emitter derives from the types that write them, published by `specforge schema
+  --publish`), or DOT. It is text: the CLI prints it, MCP sends it as text or a file, an extension command receives it
+  spliced in its input; only `specforge.query` reads it back, into its structured result. A node carries its coverage
+  status (`coverage_status`) when the export is given the verdicts, as a query with coverage is (ADR 0007).
 - **Project sources**: the `.spec` files under the spec root (`spec_root`, else the project root) that
   discovery keeps — no skipped directory, no `exclude` entry. What a compile reads, what format and migrate
-  rewrite (`specforge_common::ProjectConfig::spec_files`, read through `config::rewritable`, never past a
-  problem that hides them), and the only files a `use` import names: a
+  rewrite (`specforge_common::SourceRoot`, built by `ProjectConfig::sources` from a config read through
+  `config::rewritable`, never past a problem that hides them), and the only files a `use` import names: a
   compile holds each by its **key**, its path relative to the spec root, and resolves imports against the
   keys alone (`specforge_resolver`, ADR 0055). An editor buffer the session holds for such a path is a
   source, saved or not.
-  The walk is `specforge_common::walk_spec_files`: the spec root is read whatever its own name, no
-  skipped directory below it is entered, no symlink is followed, and only files are sources. Format's
-  directory walk is the same walk, stopping at nested projects.
+  `SourceRoot::files` lists them and `SourceRoot::holds` answers for one path, by one policy: the spec root is
+  read whatever its own name and whatever it holds, no skipped directory below it is entered, no symlink is
+  followed into a directory, only files are sources (a symlink is one when it resolves to a file, read through
+  the link and keyed by its own path, ADR 0073), and the walk ends at every directory below the spec root that
+  holds `specforge.json`: a nested project, whose files are its own project's sources, on every surface
+  (ADR 0080). Format's walk of a named directory that is no project is the same walk, taking the sources of
+  each project it reaches.
   An **exclude entry** is a gitignore-style pattern over a source's path (`specforge_common::Exclude`): no
   `/` but a trailing one matches a name at any depth, a `/` at the start or in the middle anchors it at the
   spec root, a trailing `/` matches directories only, and a file is left out when an entry matches it or
@@ -685,8 +753,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   implementing `CoreTool` once: its name, description and effect, the spec type its reply is, the tool
   arguments it reads, what its handler is given (nothing, the project view, the project, or the
   directory init creates, with how it reaches its project), the tool reply it answers (typed, text,
-  or a mutation's) and which argument each of its operation's refusal codes is about
-  (`REFUSAL_ARGUMENTS`; the dispatcher names it on the refusal, ADR 0033). Its category, annotations, call target, descriptor (input and output schemas
+  or a mutation's) and, for each operation it calls that can refuse about a field of its request, the argument
+  that sends each field (`ArgumentOf<F>`, one exhaustive map, ADR 0072). Its category, annotations, call target, descriptor (input and output schemas
   included) and dispatch derive from it; the core tool table lists each once (`CORE_TOOLS`, each seen
   as a `ToolSpec`), and a declaration that contradicts its handler does not build. A prompt names a
   tool by its typed name (ADR 0024, ADR 0049).
@@ -750,7 +818,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   answered on its own without `initialize`; every other request follows the revision `initialize`
   negotiated (`specforge_mcp::modern`). Every request is served under its revision, which travels
   with it from the router to the reply (`specforge_mcp::lifecycle::Revision`); the server state
-  keeps only the negotiated one.
+  keeps only the negotiated one. A stateless request never changes what the server serves (its `path` is read
+  for that call only, `init` serves nothing); on a connection that sent `initialize` it reads what that session
+  serves (ADR 0077).
 - **Stdio transport**: how one MCP client and the server talk over a pair of byte streams (`specforge mcp`:
   its standard input and output). Each line of input is one JSON-RPC message; a line of only JSON whitespace is
   skipped, and one that is not UTF-8 is answered as a parse error. A message's response, then each notification it
@@ -764,7 +834,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`specforge://diagnostics`). After an update that changed it, each subscription hears
   `notifications/resources/updated` once, and a handshake subscriber of a graph view or of the
   diagnostics then hears the delta, whole (`specforge/graphChanged`: the graph delta;
-  `specforge/diagnosticsChanged`: the diagnostics added and removed, each as every surface presents one).
+  `specforge/diagnosticsChanged`: the update's diagnostics delta, then the I017 the server's extension
+  surfaces added and removed).
   Subscriptions belong to the connection and end with it or at shutdown
   (`specforge_mcp::subscriptions::Subscriptions`, ADR 0024 D6).
 - **MCP event**: what an MCP server records it did — a tool, prompt or listing invoked, a resource
@@ -856,6 +927,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`proof_role`): a **bound** the solver assumes (bounds must be consistent, E046) or a **claim**
   that must follow from the bounds (W139 when not; an entailed claim is a proved claim). A field
   with no role is not read by the prove pass (ADR 0009).
+- **Solver**: the SMT solver the prove pass asks (`specforge_ops::solver::Solver`, port `SmtSolver`):
+  whether it runs here (its version, or the W098 that says why not) and its answer to one SMT-LIB2 script.
+  Its adapters are z3 from PATH (`Z3`, which owns its timeouts and that W098) and a scripted solver
+  (tests). `specforge analyze --prove` and doctor take it as an argument; doctor's toolchain finding is
+  the W098 the prove pass reports. A test chooses the solver it sees (ADR 0079).
 - **Risk grading**: the coverage owner's policy for one kind: its entities' risk is tallied, and
   one with no obligations is A002, an error at the grading's error level
   (`specforge_coverage::RiskGrading`, supplied by `@specforge/testing`; ADR 0009).

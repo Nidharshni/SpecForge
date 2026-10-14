@@ -3,8 +3,10 @@
 //! opened with `subscriptions/listen` (MCP 2026-07-28), and the
 //! notifications queued for it until the host sends them. One rule says what
 //! a resource's content changes with ([`Watched::of`]); one update's changes
-//! are computed once ([`Changes`]), in `McpState::applied`, the one place
-//! every update of the served project passes (ADR 0035 D3), and every
+//! are computed once ([`Changes`]: the graph delta, and, for a listener, the
+//! diagnostics delta, the session update's plus the I017 of the extension
+//! surfaces), in `McpState::applied`, the one place every update of the
+//! served project passes (ADR 0035 D3, ADR 0074), and every
 //! subscription they touched hears about them ([`Subscriptions::updated`]).
 //! Subscriptions belong to the connection: they end with it, or at shutdown.
 //! The requests that change them are in [`requests`]; the notifications,
@@ -13,13 +15,8 @@
 pub(crate) mod requests;
 mod wire;
 
-use std::collections::HashSet;
-
-use serde::Serialize;
 use serde_json::Value;
-use specforge_common::shape::Shape;
-use specforge_common::{Diagnostic, DiagnosticList};
-use specforge_project::{GraphDelta, Update, UpdateKind};
+use specforge_project::{DiagnosticsDelta, GraphDelta, Update, UpdateKind};
 
 pub use wire::{Acknowledged, Honoured, Notification, ResourceUpdated, StreamMeta};
 
@@ -28,11 +25,13 @@ use crate::events::{EventSink, McpEvent};
 /// What a resource's content changes with: the one rule both eras read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Watched {
-    /// The graph or the environment: every graph view (`graph`, `context`,
-    /// `brief`, an entity's subgraph, a kind's entities), whose export is
-    /// shaped by the schema, and every extension resource, which its module
-    /// computes.
+    /// The graph as the graph documents write it, each node's place
+    /// included: `specforge://graph` and `specforge://graph/{entity_id}`.
     Graph,
+    /// The graph's content, no position written: `context`, `brief`,
+    /// `context/{entity_id}`, `entities/{kind}`, and every extension
+    /// resource (its module reads a graph that carries no position).
+    Content,
     /// The environment alone: `specforge://schema`.
     Schema,
     /// What the server reports: `specforge://diagnostics`.
@@ -40,62 +39,15 @@ pub enum Watched {
 }
 
 impl Watched {
-    /// What `uri`'s content changes with. `uri` is one the server serves
-    /// (the requests check it first).
+    /// What `uri`'s content changes with: the core resource that names it
+    /// says ([`crate::resources::ResourceSpec::changes_with`]); an extension resource changes
+    /// with the graph's content. `uri` is one the server serves (the
+    /// requests check it first).
     pub fn of(uri: &str) -> Self {
-        match uri {
-            "specforge://diagnostics" => Watched::Diagnostics,
-            "specforge://schema" => Watched::Schema,
-            _ => Watched::Graph,
-        }
-    }
-}
-
-/// The diagnostics added and removed by one update, each presented as every
-/// surface presents a diagnostic (`DiagnosticsDelta` in
-/// spec/types/graph.spec).
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Shape)]
-pub struct DiagnosticsDelta {
-    pub added: DiagnosticList,
-    pub removed: DiagnosticList,
-}
-
-impl DiagnosticsDelta {
-    /// What names a diagnostic in a delta: its code, its message and its
-    /// file.
-    fn identity(diagnostic: &Diagnostic) -> (&str, &str, &str) {
-        (
-            diagnostic.code.as_str(),
-            diagnostic.message.as_str(),
-            diagnostic
-                .span
-                .as_ref()
-                .map_or("", |span| span.file.as_str()),
-        )
-    }
-
-    /// The diagnostics in `after` and not in `before`, and the reverse.
-    fn between(before: &[Diagnostic], after: &[Diagnostic]) -> Self {
-        let before_keys: HashSet<_> = before.iter().map(Self::identity).collect();
-        let after_keys: HashSet<_> = after.iter().map(Self::identity).collect();
-        DiagnosticsDelta {
-            added: after
-                .iter()
-                .filter(|d| !before_keys.contains(&Self::identity(d)))
-                .cloned()
-                .collect::<Vec<_>>()
-                .into(),
-            removed: before
-                .iter()
-                .filter(|d| !after_keys.contains(&Self::identity(d)))
-                .cloned()
-                .collect::<Vec<_>>()
-                .into(),
-        }
-    }
-
-    fn is_empty(&self) -> bool {
-        self.added.0.is_empty() && self.removed.0.is_empty()
+        crate::resources::CORE_RESOURCES
+            .iter()
+            .find(|spec| spec.names(uri))
+            .map_or(Watched::Content, |spec| spec.changes_with)
     }
 }
 
@@ -103,46 +55,52 @@ impl DiagnosticsDelta {
 /// both eras.
 pub struct Changes<'u> {
     graph: &'u GraphDelta,
+    /// Some node changed place (`Update::moved` is not empty).
+    moved: bool,
     environment: bool,
     diagnostics: Option<DiagnosticsDelta>,
 }
 
 impl<'u> Changes<'u> {
-    /// What `update` changed. `diagnostics` is what the server reported
-    /// before the update and reports after it, read only when someone hears
-    /// about the diagnostics ([`Subscriptions::hears_diagnostics`]); `None`
-    /// reads as "unchanged".
-    pub fn of(update: &'u Update, diagnostics: Option<(&[Diagnostic], &[Diagnostic])>) -> Self {
+    /// What `update` changed. `diagnostics` is the delta of what the server
+    /// reports (the update's, then the I017 its extension surfaces added and
+    /// removed), computed only when someone hears about the diagnostics
+    /// ([`Subscriptions::hears_diagnostics`]); `None` reads as "unchanged".
+    pub fn of(update: &'u Update, diagnostics: Option<DiagnosticsDelta>) -> Self {
         Self::new(
             &update.delta,
+            !update.moved.is_empty(),
             update.kind == UpdateKind::Environment,
             diagnostics,
         )
     }
 
-    /// The same from its parts: the graph delta, whether the environment
-    /// loaded again (or another project was served), and the diagnostics
-    /// before and after.
+    /// The same from its parts: the graph delta, whether a node only moved,
+    /// whether the environment loaded again (or another project was
+    /// served), and the diagnostics delta.
     pub fn new(
         graph: &'u GraphDelta,
+        moved: bool,
         environment: bool,
-        diagnostics: Option<(&[Diagnostic], &[Diagnostic])>,
+        diagnostics: Option<DiagnosticsDelta>,
     ) -> Self {
         Changes {
             graph,
+            moved,
             environment,
-            diagnostics: diagnostics
-                .map(|(before, after)| DiagnosticsDelta::between(before, after)),
+            diagnostics,
         }
     }
 
-    /// Whether what `watched` names changed: the graph delta is not empty
-    /// or the environment loaded again (`Graph`); the environment loaded
-    /// again (`Schema`); a diagnostic was added or removed, named by its
-    /// code, message and file (`Diagnostics`).
+    /// Whether what `watched` names changed: the graph delta is not empty,
+    /// a node moved or the environment loaded again (`Graph`); the delta is
+    /// not empty or the environment loaded again (`Content`); the
+    /// environment loaded again (`Schema`); a diagnostic was added or removed, compared
+    /// whole (`Diagnostics`, [`DiagnosticsDelta`]).
     pub fn touched(&self, watched: Watched) -> bool {
         match watched {
-            Watched::Graph => !self.graph.is_empty() || self.environment,
+            Watched::Graph => !self.graph.is_empty() || self.moved || self.environment,
+            Watched::Content => !self.graph.is_empty() || self.environment,
             Watched::Schema => self.environment,
             Watched::Diagnostics => self
                 .diagnostics
@@ -255,8 +213,8 @@ impl Subscriptions {
         ended
     }
 
-    /// Whether anyone hears about the diagnostics: only then does an update
-    /// read them before and after it applies.
+    /// Whether anyone hears about the diagnostics: only then is an update's
+    /// diagnostics delta computed.
     pub fn hears_diagnostics(&self) -> bool {
         self.resources
             .iter()
@@ -288,7 +246,8 @@ impl Subscriptions {
         }
         let subscribed =
             |watched: Watched| self.resources.iter().any(|uri| Watched::of(uri) == watched);
-        if !changes.graph.is_empty() && subscribed(Watched::Graph) {
+        if !changes.graph.is_empty() && (subscribed(Watched::Graph) || subscribed(Watched::Content))
+        {
             self.outbox
                 .push(Notification::GraphChanged(changes.graph.clone()));
             events.record(McpEvent::graph_delta(changes.graph));
@@ -335,15 +294,50 @@ mod tests {
         verify = "both eras decide what a change touches by one rule"
     )]
     fn watched_follows_the_uri() {
-        assert_eq!(Watched::of("specforge://diagnostics"), Watched::Diagnostics);
-        assert_eq!(Watched::of("specforge://schema"), Watched::Schema);
-        for uri in [
-            "specforge://graph",
-            "specforge://graph/alpha",
-            "specforge://context?scope=alpha",
-            "acme://doc/1",
-        ] {
-            assert_eq!(Watched::of(uri), Watched::Graph, "{uri}");
+        let expected = [
+            ("specforge://graph", Watched::Graph),
+            ("specforge://graph/alpha", Watched::Graph),
+            ("specforge://graph?depth=1", Watched::Graph),
+            ("specforge://schema", Watched::Schema),
+            ("specforge://context", Watched::Content),
+            ("specforge://context/alpha", Watched::Content),
+            ("specforge://brief", Watched::Content),
+            ("specforge://entities/behavior", Watched::Content),
+            ("specforge://diagnostics", Watched::Diagnostics),
+            ("specforge://context?scope=alpha", Watched::Content),
+            ("acme://doc/1", Watched::Content),
+        ];
+        for (uri, watched) in expected {
+            assert_eq!(Watched::of(uri), watched, "{uri}");
+        }
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "listen_for_mcp_resource_updates",
+        verify = "both eras decide what a change touches by one rule"
+    )]
+    fn a_move_touches_what_writes_a_place_and_a_delta_touches_both() {
+        use specforge_project::NodeChange;
+        let none = GraphDelta::default();
+        let some = GraphDelta {
+            added_nodes: vec![NodeChange {
+                id: "a".into(),
+                kind: "behavior".into(),
+                file: "a.spec".into(),
+                line: 1,
+            }],
+            ..GraphDelta::default()
+        };
+        for (delta, moved) in [(&none, false), (&none, true), (&some, false), (&some, true)] {
+            let changes = Changes::new(delta, moved, false, None);
+            let graph = !delta.is_empty() || moved;
+            let content = !delta.is_empty();
+            assert_eq!(changes.touched(Watched::Graph), graph, "{moved} {delta:?}");
+            assert_eq!(
+                changes.touched(Watched::Content),
+                content,
+                "{moved} {delta:?}"
+            );
         }
     }
 }

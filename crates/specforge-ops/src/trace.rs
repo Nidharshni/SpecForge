@@ -9,9 +9,10 @@ use specforge_graph::Graph;
 use specforge_registry::RegistryBuild;
 use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 
-use crate::OpError;
+use crate::navigate::EntityField;
 use crate::plan::PlanGap;
 use crate::view::ProjectView;
+use crate::{OpError, Refusal};
 
 #[derive(Debug, Serialize, Shape)]
 pub struct TraceChain {
@@ -24,6 +25,18 @@ pub struct TraceChain {
     /// every entity lists each gap once, and a trace of one entity is not
     /// buried under the gaps of everything below it.
     pub missing: Vec<MissingLink>,
+}
+
+impl TraceChain {
+    /// The traced entity and every entity its chain links.
+    fn reached(&self) -> impl Iterator<Item = &str> {
+        std::iter::once(self.entity_id.as_str()).chain(
+            self.upstream
+                .iter()
+                .chain(&self.downstream)
+                .map(|link| link.entity_id.as_str()),
+        )
+    }
 }
 
 /// Whether a link of a chain exists in the graph (`TraceLinkStatus`).
@@ -237,22 +250,6 @@ impl TraceOutcome {
             .join("\n")
     }
 
-    /// Every entity the chains reach, the traced ones included.
-    pub fn reached(&self) -> BTreeSet<&str> {
-        self.chains
-            .iter()
-            .flat_map(|chain| {
-                std::iter::once(chain.entity_id.as_str()).chain(
-                    chain
-                        .upstream
-                        .iter()
-                        .chain(&chain.downstream)
-                        .map(|link| link.entity_id.as_str()),
-                )
-            })
-            .collect()
-    }
-
     /// The missing links of every chain, as gaps.
     pub fn gaps(&self) -> Vec<Gap> {
         self.chains
@@ -288,9 +285,17 @@ impl std::error::Error for TraceError {}
 /// entity is close.
 impl From<TraceError> for OpError {
     fn from(error: TraceError) -> Self {
+        Refusal::<EntityField>::from(error).into_error()
+    }
+}
+
+/// [`OpError::from`], about the entity traced.
+impl From<TraceError> for Refusal<EntityField> {
+    fn from(error: TraceError) -> Self {
         match error {
             TraceError::EntityNotFound { entity_id, near } => {
                 crate::navigate::unresolved(&entity_id, near.as_deref())
+                    .about(EntityField::EntityId)
             }
         }
     }
@@ -305,16 +310,8 @@ pub fn trace(view: &ProjectView, target: Target) -> Result<TraceOutcome, TraceEr
     let schema_version = view.versioned_schema().version().to_string();
     match target {
         Target::Entity(entity_id) => {
-            let chain = chain(graph, entity_id, &expectations).ok_or_else(|| {
-                TraceError::EntityNotFound {
-                    entity_id: entity_id.to_string(),
-                    near: specforge_common::suggest::find_close_match(
-                        entity_id,
-                        graph.nodes().iter().map(|n| n.id.raw.as_str()),
-                    )
-                    .map(str::to_string),
-                }
-            })?;
+            let chain = chain(graph, entity_id, &expectations)
+                .ok_or_else(|| entity_not_found(graph, entity_id))?;
             Ok(TraceOutcome {
                 chains: vec![chain],
                 schema_version,
@@ -335,6 +332,58 @@ pub fn trace(view: &ProjectView, target: Target) -> Result<TraceOutcome, TraceEr
             })
         }
     }
+}
+
+/// The refusal for an entity the graph lacks, with its did-you-mean.
+fn entity_not_found(graph: &Graph, entity_id: &str) -> TraceError {
+    TraceError::EntityNotFound {
+        entity_id: entity_id.to_string(),
+        near: specforge_common::suggest::find_close_match(
+            entity_id,
+            graph.nodes().iter().map(|n| n.id.raw.as_str()),
+        )
+        .map(str::to_string),
+    }
+}
+
+/// What the trace chains of some entities reach, and which of it is
+/// unverified: the trace prompt's read view (ADR 0015 D4, P1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reach {
+    /// The seeds and every entity their chains reach, sorted by ID.
+    pub affected: Vec<String>,
+    /// The affected entities that count toward coverage and are not
+    /// proven (`ProjectCoverage::is_unverified`), sorted by ID.
+    pub unverified: Vec<String>,
+}
+
+/// The reach of `seeds` over `view`: each seed's chain as
+/// `trace(view, Target::Entity(seed))` computes it. A seed the graph lacks
+/// is the trace's refusal (`TraceError::EntityNotFound`, with its
+/// did-you-mean); a recorded report that cannot be used is the coverage
+/// view's (E045).
+pub fn reach<'s>(
+    view: &ProjectView,
+    seeds: impl IntoIterator<Item = &'s str>,
+) -> Result<Reach, OpError> {
+    let expectations = TraceExpectations::of(view.registries());
+    let graph = view.graph();
+    let mut affected = BTreeSet::new();
+    for seed in seeds {
+        let chain = chain(graph, seed, &expectations)
+            .ok_or_else(|| OpError::from(entity_not_found(graph, seed)))?;
+        affected.extend(chain.reached().map(str::to_string));
+    }
+    let coverage = view.coverage()?;
+    let unverified = affected
+        .iter()
+        .filter(|id| coverage.is_unverified(id))
+        .cloned()
+        .collect();
+    Ok(Reach {
+        affected: affected.into_iter().collect(),
+        unverified,
+    })
 }
 
 /// The chain of `entity_id` both ways, with every expected edge it lacks

@@ -2,7 +2,7 @@
 
 **Status:** accepted (2026-10-12, architecture round 7, plan 07). Extends ADR 0048 D8 (the reflection test)
 from tool replies to every document MCP sends; applies ADR 0049 D1 to prompts; amends ADR 0024 D6 (what
-the deltas carry) and the `initialize` result ADR 0004 left; extends ADR 0052 D5 to watch's lines.
+the deltas carry) and the `initialize` result ADR 0004 left; extends ADR 0052 D5 to watch's lines. D3's diagnostics delta compares each diagnostic whole and D7 extends to it (ADR 0074).
 
 ADR 0048 typed every core tool's reply and held it to `spec/types/mcp.spec`. Everything else MCP sent was
 built with `json!`, and the reflection test skipped 22 spec types by name. Four of those documents had

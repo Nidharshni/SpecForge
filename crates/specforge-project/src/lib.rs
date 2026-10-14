@@ -13,7 +13,8 @@
 //!   check` reports, in the one report order;
 //! - a [`ProjectSession`] is a compiled project kept current
 //!   ([`ProjectSession::project`]) plus what it is built from: its inputs
-//!   ([`SessionInputs`]) say what a changed path is ([`InputRole`]), and it
+//!   ([`SessionInputs`]) say what it depends on, and [`ProjectSession::changes`]
+//!   turns a batch of changed paths into what differs from what it read; it
 //!   applies changes as an update, an environment reload or a re-check
 //!   (watch, the LSP and MCP each hold one). After every update that runs
 //!   the checks it reports what a fresh compile reports, in the same order.
@@ -23,6 +24,7 @@ mod build_cache;
 mod check_passes;
 mod compiled;
 pub mod coverage;
+mod diagnostics_delta;
 mod freshness;
 mod inputs;
 pub mod passes;
@@ -32,6 +34,8 @@ mod session;
 mod setup;
 pub mod snapshot;
 mod sources;
+#[cfg(feature = "testing")]
+pub mod testing;
 mod verdicts;
 
 use std::collections::BTreeMap;
@@ -42,7 +46,7 @@ use sources::SourceCache;
 
 use snapshot::EntitySnapshot;
 use specforge_common::{
-    ConfigProblem, ConfigRead, Diagnostic, ProjectConfig, ProjectRoot, codes, discover_spec_files,
+    ConfigProblem, ConfigRead, Diagnostic, ProjectConfig, ProjectRoot, SourceRoot, codes,
     read_project_config,
 };
 use specforge_graph::{Graph, GraphBuild, GraphConfig};
@@ -57,7 +61,8 @@ use verdicts::WasmVerdicts;
 pub use buffers::Buffer;
 pub use build_cache::{BUILD_CACHE_FILE, BUILD_CACHE_FORMAT, BuildCache, CachedStatus};
 pub use compiled::CompiledProject;
-pub use inputs::{Changes, InputRole, SessionInputs, UpdateKind, WatchRoot, Watched, source_key};
+pub use diagnostics_delta::DiagnosticsDelta;
+pub use inputs::{Changes, SessionInputs, UpdateKind, WatchRoot, Watched, source_key};
 pub use policy::{DiagnosticPolicy, LINT_PROFILE_NAMES, LintProfile, UnknownLintProfile};
 pub use providers::Providers;
 pub use session::{CheckMode, OpeningProject, ProjectSession, RuntimeSource, SourceChange, Update};
@@ -111,9 +116,10 @@ pub struct Environment {
     /// the runtime loaded it (a `.wasm` file entry by the name its
     /// component declares).
     enabled: Vec<EnabledExtension>,
-    /// Where `.spec` files are discovered: `spec_root` from the config,
-    /// relative to the project root, or the project root itself.
-    spec_root: PathBuf,
+    /// Where the project's sources are: `spec_root` from the config,
+    /// relative to the project root (or the project root itself), and
+    /// what `exclude` leaves out.
+    sources: SourceRoot,
     /// The registries, rules, passes and graph inputs built from the loaded
     /// declarations.
     registries: RegistryBuild,
@@ -146,7 +152,7 @@ impl Environment {
             read: ConfigRead::default(),
             installed: Installed::none(),
             enabled: Vec::new(),
-            spec_root: PathBuf::new(),
+            sources: SourceRoot::default(),
             registries: RegistryBuild::default(),
             providers: Providers::default(),
             config_diagnostics: Vec::new(),
@@ -216,12 +222,12 @@ impl Environment {
                 &read.problems,
             )
         });
-        let spec_root = read.config.spec_root_in(installed.root());
+        let sources = read.config.sources(installed.root());
         Environment {
             read,
             installed,
             enabled,
-            spec_root,
+            sources,
             registries,
             providers,
             config_diagnostics,
@@ -296,7 +302,7 @@ impl Environment {
 
     /// Where `.spec` files are discovered.
     pub fn spec_root(&self) -> &Path {
-        &self.spec_root
+        self.sources.dir()
     }
 
     /// The registries, rules, passes and surfaces built from the loaded
@@ -333,7 +339,7 @@ impl Environment {
     /// the relative paths the rules read. The one place a snapshot is
     /// taken from an environment.
     pub fn entity_snapshot(&self, graph: &Graph) -> EntitySnapshot {
-        EntitySnapshot::of(graph, &self.registries, &self.spec_root)
+        EntitySnapshot::of(graph, &self.registries, self.sources.dir())
     }
 
     /// Every check a compile runs on a built graph, over its entity
@@ -412,7 +418,7 @@ impl Environment {
     /// The project sources discovery finds now (`exclude` and the skipped
     /// directories applied).
     pub fn discover(&self) -> Vec<PathBuf> {
-        discover_spec_files(&self.spec_root, &self.read.config.exclude)
+        self.sources.files()
     }
 
     /// Read and parse `discovered`, build their graph and resolve their
@@ -427,7 +433,7 @@ impl Environment {
         discovered: &[PathBuf],
         held: &BTreeMap<String, &str>,
     ) -> SourceBuild {
-        let (sources, files) = SourceCache::read_all(&self.spec_root, discovered, held);
+        let (sources, files) = SourceCache::read_all(self.sources.dir(), discovered, held);
         let graph = GraphBuild::of(files, self.graph_config());
         let imports = sources.import_diagnostics(&graph);
         SourceBuild {

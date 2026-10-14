@@ -10,6 +10,7 @@ pub mod mutation;
 pub mod prompt;
 pub mod prompts;
 pub mod protocol;
+mod refusal;
 pub mod registry;
 pub mod reply;
 pub mod resources;
@@ -19,6 +20,8 @@ pub mod subscriptions;
 mod surface_call;
 pub mod surface_table;
 pub mod target;
+#[cfg(feature = "testing")]
+pub mod testing;
 pub mod tool;
 pub mod tools;
 mod uri_template;
@@ -46,16 +49,17 @@ impl McpServer {
         }
     }
 
-    /// A server that compiles `root` when the client's `initialize` does not
-    /// name a `projectRoot` — standard MCP clients never send one.
+    /// A server whose root is `root`: the project at or above it is served
+    /// by `initialize` (unless the client names a `projectRoot`), or by the
+    /// first request that finds one there.
     pub fn with_project_root(root: std::path::PathBuf) -> Self {
         let mut server = Self::new();
-        server.state.default_project_root = Some(root);
+        server.state.root = Some(root);
         server
     }
 
     /// The same server, its events recorded into `sink` instead of
-    /// discarded (a test's `events::testing::EventLog`). Every server
+    /// discarded (a test's `testing::EventLog`). Every server
     /// records into [`events::Discard`] until given another sink.
     pub fn with_events(mut self, sink: impl EventSink + 'static) -> Self {
         self.state.events = Box::new(sink);
@@ -215,6 +219,16 @@ impl McpServer {
     /// test serves extensions in process (`specforge_wasm::testing::InProcessRuntime`).
     pub fn with_extension_runtime(mut self, runtime: specforge_project::SharedRuntime) -> Self {
         self.state.extension_runtime = Some(runtime);
+        self
+    }
+
+    /// The same server, doctor checking `solver` instead of z3 from PATH: how a test fixes what
+    /// doctor's toolchain finding says (`specforge_ops::testing::ScriptedSolver`).
+    pub fn with_solver(
+        mut self,
+        solver: std::sync::Arc<dyn specforge_ops::solver::Solver>,
+    ) -> Self {
+        self.state.solver = solver;
         self
     }
 }

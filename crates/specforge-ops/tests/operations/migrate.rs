@@ -2,6 +2,7 @@
 //! by: the hooks they declare run in it, in dependency order, and a failing
 //! hook or a changed graph structure restores the migrated files.
 
+use specforge_project::testing::compile_at;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -138,7 +139,7 @@ fn a_header_only_migration_of_the_dogfood_spec_keeps_its_graph() {
     let files = copy_at_old_format(&repo.join("spec"), &dir.path().join("spec"));
     assert!(files > 100, "the corpus is the dogfood spec: {files}");
     specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
-    let runtime = Arc::new(specforge_component::ComponentRuntime::with_user_cache());
+    let runtime = specforge_project::testing::component_runtime();
 
     let outcome = run(
         &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
@@ -482,8 +483,8 @@ fn a_problem_the_migration_goes_around_fails_it_after_it_ran() {
 
 #[test]
 fn a_target_newer_than_supported_or_malformed_is_e019() {
-    assert_eq!(parse_target(Some("99.0")).unwrap_err().code, "E019");
-    assert_eq!(parse_target(Some("latest")).unwrap_err().code, "E019");
+    assert_eq!(parse_target(Some("99.0")).unwrap_err().error.code, "E019");
+    assert_eq!(parse_target(Some("latest")).unwrap_err().error.code, "E019");
     assert_eq!(parse_target(None).unwrap(), CURRENT_FORMAT_VERSION);
 }
 
@@ -862,10 +863,7 @@ fn a_diagnostic_the_migration_introduces_is_reported() {
         )
         .map_err(|e| e.to_string())
     }));
-    let before = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(runtime.clone()),
-    );
+    let before = compile_at(dir.path(), Some(runtime.clone()));
     assert!(
         !before.diagnostics().iter().any(|d| d.code == "E003"),
         "{:?}",
@@ -1245,4 +1243,19 @@ fn a_migration_without_backups_removes_the_record() {
             .unwrap()
             .is_none()
     );
+}
+
+#[specforge_test(
+    invariant = "mcp_structured_error_responses",
+    verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+)]
+fn migrate_states_which_field_a_refusal_is_about() {
+    use specforge_ops::migrate::MigrateField;
+    for target in ["99.0", "latest"] {
+        assert_eq!(
+            parse_target(Some(target)).unwrap_err().subject,
+            Some(MigrateField::Target),
+            "{target}"
+        );
+    }
 }

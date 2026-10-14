@@ -147,7 +147,7 @@ catalog! {
         "An entity block uses a kind keyword that neither the core grammar nor any installed extension declares. Install the extension that provides the keyword, or fix a typo in the kind name.";
     E025: Error core,
         "Import resolution failed",
-        "Either a `.spec` file discovery found can't be read (not UTF-8, no permission): it is named, left out of the graph, and an import of it reports nothing more; or a `use` import names no source of the project: no `.spec` file by that path under the spec root that discovery keeps. A file an `exclude` entry leaves out, one under a skipped directory (`target`, `build`, ...), one above the spec root and one whose name differs only in case are no source. Fix the import path or the `exclude` entry; a `did you mean` suggestion is included when a close match exists.";
+        "Either a `.spec` file discovery found can't be read (not UTF-8, no permission): it is named, left out of the graph, and an import of it reports nothing more; or a `use` import names no source of the project: no `.spec` file by that path under the spec root that discovery keeps. A file an `exclude` entry leaves out, one under a skipped directory (`target`, `build`, ...), one inside a nested project (a directory below the spec root holding its own `specforge.json`), one above the spec root and one whose name differs only in case are no source. Fix the import path or the `exclude` entry; a `did you mean` suggestion is included when a close match exists.";
     E026: Error core,
         "Entity kind registration conflict",
         "Two extensions register the same entity kind keyword; the first registration wins and the later one is rejected. Rename the conflicting kind keyword.";
@@ -213,13 +213,13 @@ catalog! {
         "Two extensions both register a `ref` provider for the same scheme. Configure distinct schemes for each provider extension.";
     E058: Error core,
         "No test collector",
-        "`specforge collect` found no collector to use: no enabled extension provides one, none of the enabled collectors' detection files (such as `Cargo.toml`) are present at the project root, the `--runner` name matches no collector, a collector declares a report path outside the project, or `--report` was passed while several collectors apply. Enable a runner extension (e.g. `specforge add @specforge/cargo-test`) or pick one with `--runner`.";
+        "`specforge collect` found no collector to use: no enabled extension provides one, none of the enabled collectors' detection files (such as `Cargo.toml`) are present at the project root, the `--runner` name matches no collector, a collector declares a report path outside the project, or `--report` was passed while several collectors apply. Enable a runner extension (e.g. `specforge add @specforge/cargo-test`) or pick one with `--runner`. Over MCP an unknown `runner` is `invalid_input` naming `runner`; the other cases are `precondition_failed`.";
     E059: Error core,
         "Test command not approved",
         "A runner extension declares the command that runs its tests, and `specforge collect` only runs it after you approve it for the project. The approval is asked at an interactive prompt and remembered per project, extension and command, in your user-level `~/.specforge/collector-consent.json`, never in the project. Without a terminal (CI, `--format json`) nothing is asked: pass `--yes` to run the command, or `--no-run` to parse a report the runner already wrote.";
     E061: Error core,
         "Field value is not the declared type",
-        "The extension that registers a field declares its type, and the value given can't be that type. A string field takes text, a bare word, a date, a type union or an `expr { }` group; an enum one of its declared values (the suggestion names the closest one); an integer field an integer; a bool field true or false; a reference field one id; a string_list or reference_list field a list; a block field a block. Values that can be read as the declared type are converted without a diagnostic: a single string, id, integer, boolean or date on a list field becomes a one-item list, a mixed list the list of its items' text, a quoted integer or boolean the number or boolean. Fix the value, or check the field's type with `specforge schema --kind <kind>`.";
+        "The extension that registers a field declares its type, and the value given can't be that type. A string field takes text, a bare word, a date, a type union or an `expr { }` group; an enum one of its declared values (the suggestion names the closest one; the closed vocabularies the builtins declare, a feature's `status`, a failure mode's `severity`, a property's `property_type`, and the like, are enum fields); an integer field an integer; a bool field true or false; a reference field one id; a string_list or reference_list field a list; a block field a block. Values that can be read as the declared type are converted without a diagnostic: a single string, id, integer, boolean or date on a list field becomes a one-item list, a mixed list the list of its items' text, a quoted integer or boolean the number or boolean. Fix the value, or check the field's type with `specforge schema --kind <kind>`.";
     E062: Error core,
         "Token budget too small for the export",
         "`specforge export --max-tokens` (or the MCP `export` tool's `max_tokens`) keeps the most central entities that fit the budget, but some of the export never shrinks: the envelope (`format_version`, `schema_version`), the `token_budget` block listing the dropped entity IDs, and, with `--with-schema`, the embedded schema, which is never cut short. The budget is below that fixed part, so no export fits. Raise the budget, or drop `--with-schema` when the schema alone is over it.";
@@ -237,7 +237,7 @@ catalog! {
         "`specforge new --extension` couldn't write the project: creating a directory or writing one of the generated files failed. Check permissions and free space at the destination, remove the partial project, and retry.";
     E067: Error core,
         "Invalid registry configuration",
-        "The registry configuration in `specforge.json` can't be read: the file isn't valid JSON, `registries` isn't an array, or an entry at the reported index is missing a required field or has the wrong type. That part of the configuration is ignored. Fix the reported entry.";
+        "The registry configuration in `specforge.json` can't be read: the file isn't valid JSON, `registries` isn't an array, or an entry at the reported index is missing a required field, has the wrong type, or has a `url` that isn't a registry's root (an `http` or `https` URL with no query, fragment or user name; write `https://registry.example`, not `https://registry.example/v1`: SpecForge adds the protocol's `/v1`). No registry is asked while an entry can't be read, so a package whose scope that entry serves never goes to another registry. Fix the reported entry.";
     E068: Error core,
         "Coverage gate without a coverage figure",
         "`specforge analyze --min N` (and `specforge.analyze`'s `min`) gates on proof coverage, which the `coverage` pass of `@specforge/testing` computes. Either that pass will not run (the extension isn't enabled, or the run selects a different pass), and the analysis is refused before any pass runs; or it ran and gave no figure this specforge reads (it failed, or `@specforge/testing` is a different version), and the run is unjudged. Enable it with `specforge add @specforge/testing`, run the `coverage` (or `all`) pass, and keep the extension at the version this specforge ships. The run exits 2.";
@@ -474,7 +474,7 @@ catalog! {
         "A request to the registry failed at the network level. Check the network connection and the registry URL.";
     R006: Error core,
         "Package version not found",
-        "The registry answered 404 for the package or version. Check the package name and version.";
+        "The registry answered that it has no such package or version (HTTP 404 with the registry protocol's NOT_FOUND error). Check the package name and version.";
     R007: Error core,
         "Version already published",
         "`specforge publish` tried to publish a version that already exists for the package, and published versions are immutable. Bump the version in the manifest and publish again.";
@@ -483,7 +483,7 @@ catalog! {
         "The registry read the request and refused it (HTTP 400), naming its reason and code: for a publish, a package that isn't signed or whose signature isn't one or doesn't verify over the uploaded binary and manifest (INVALID_SIGNATURE), a binary that isn't a Wasm module, or a manifest that isn't an extension declaration or names another package. Nothing was stored, and the version can still be published. Fix what the message names and try again; sending the same request again is refused the same way.";
     R009: Error core,
         "Registry reply unreadable",
-        "The registry answered with a body that isn't the JSON the registry protocol defines for that request, such as a publisher signature that isn't an Ed25519 signature object, or a publish receipt that describes another upload than the one sent. The registry is broken, or the URL isn't a SpecForge registry. Nothing is installed and no key is pinned, and `--allow-unsigned` doesn't accept such a package. Check the registry.";
+        "The registry's answer isn't one the registry protocol defines for that request: a body that isn't the request's JSON (such as a publisher signature that isn't an Ed25519 signature object, or a publish receipt that describes another upload than the one sent), a 404 without the protocol's NOT_FOUND error (no registry serves that address: the configured `url` isn't a SpecForge registry's root), or a download URL that is neither an `http`/`https` URL nor a path at the registry's root. The registry is broken, or the URL isn't a SpecForge registry's root. Nothing is installed and no key is pinned, and `--allow-unsigned` doesn't accept such a package. Check the registry and its `url` in `specforge.json`.";
     R010: Error core,
         "Registry token variable not set",
         "The registry's credential is a reference to an environment variable (`specforge login --token-env`, or a `token_env` entry in `~/.specforge/credentials.json`) that isn't set, or is blank, where the command runs. Set it, or log in again with another source.";
@@ -543,7 +543,7 @@ catalog! {
         "An entity sets a field that isn't declared for its kind by any installed extension. Remove the field, fix a typo in its name, or install the extension that declares it.";
     W021: Warning core,
         "Undeclared target kind or edge label",
-        "A field, edge type or validation rule references a `target_kind` or edge label that isn't declared — either in the extension's own manifest when it declares no peer dependencies, or in the compiler's global kind/edge registry once all extensions are loaded. Declare the missing kind or edge label, or add the appropriate peer dependency (a validation rule on another extension's kind that this one works without names that extension as its `target_extension` instead). The same code reports a declaration the registry refuses: a `derived_from` that derives nothing, a `proof_role` other than `bound` or `claim`, or a `lifecycle_field` that is not one of the kind's fields. A field that writes a declared edge type from a kind outside its declared `source_kind`, or to a kind outside its declared `target_kind`, is W021 too, and its edges are of no edge type.";
+        "A field, edge type or validation rule references a `target_kind` or edge label that isn't declared — either in the extension's own manifest when it declares no peer dependencies, or in the compiler's global kind/edge registry once all extensions are loaded. Declare the missing kind or edge label, or add the appropriate peer dependency (a validation rule on another extension's kind that this one works without names that extension as its `target_extension` instead). The same code reports a declaration the registry refuses: a `derived_from` that derives nothing, a `proof_role` other than `bound` or `claim`, or a `lifecycle_field` that is not one of the kind's fields, an `enum` field that declares no values, or a `default_value` an enum field does not take. A field that writes a declared edge type from a kind outside its declared `source_kind`, or to a kind outside its declared `target_kind`, is W021 too, and its edges are of no edge type.";
     W023: Warning core,
         "Duplicate validation rule code",
         "Two extensions register a validation rule using the same diagnostic code. Change one extension's rule to use a unique code.";
@@ -598,15 +598,6 @@ catalog! {
     W049: Warning product,
         "Milestone without features",
         "A `milestone` entity has no `features` field, so it may be empty. Modules listed in `modules` don't count: the check reads only `features`. List the features the milestone delivers, or remove the milestone.";
-    W050: Warning governance,
-        "Invalid decision status",
-        "A `decision` entity's `status` field is not one of the recognized values (`proposed`, `accepted`, `deprecated`, `superseded`). Set `status` to one of these values.";
-    W051: Warning governance,
-        "Invalid failure mode severity",
-        "A `failure_mode` entity's `severity` or `post_severity` field is not one of the recognized values (`critical`, `high`, `medium`, `low`). Set the field to one of these values.";
-    W052: Warning governance,
-        "Invalid failure mode occurrence",
-        "A `failure_mode` entity's `occurrence` or `post_occurrence` field is not one of the recognized values (`certain`, `likely`, `occasional`, `unlikely`, `rare`). Set the field to one of these values.";
     W053: Warning core,
         "Breaking schema change",
         "A graph protocol schema change classified as breaking since the last export: something a reader of the recorded schema relies on was removed or reshaped — a removed entity kind, edge type or field, a field added as required, a field whose type, required flag, edge type or target kind changed, an enum value lost, or an edge type that lost a source or target kind. `specforge export` compares every attribute of the schema against the one the previous export recorded in `.specforge/schema-cache.json`, bumps the major version, and names the versions in the warning; the export is still written and the cache updated. Update the agents and tools that read the export, or keep the extension versions that produced the old schema.";
@@ -622,36 +613,12 @@ catalog! {
     W061: Warning core,
         "Reference cycle detected",
         "The resolved reference graph contains a cycle among entity references. Break the cycle by removing or inverting one of the references in the reported path.";
-    W077: Warning product,
-        "Invalid feature status",
-        "A `feature` entity's `status` field is not one of the recognized values (`proposed`, `accepted`, `in_progress`, `done`, `deferred`, `deprecated`). Set `status` to one of these values.";
-    W078: Warning product,
-        "Invalid priority value",
-        "A `feature`, `journey`, `milestone`, or `constraint` entity's `priority` field is not one of the recognized values (`critical`, `high`, `medium`, `low`). Set `priority` to one of these values.";
-    W079: Warning product,
-        "Invalid milestone status",
-        "A `milestone` entity's `status` field is not one of the recognized values (`planned`, `in_progress`, `completed`, `blocked`). Set `status` to one of these values.";
-    W080: Warning product,
-        "Invalid deliverable artifact type",
-        "A `deliverable` entity's `artifact_type` field is not one of the recognized values (e.g. `cli`, `service`, `library`, `web_app`, `mobile_app`, `api`, `extension`, `documentation`, `package`). Set `artifact_type` to one of these values.";
-    W083: Warning product,
-        "Invalid persona status",
-        "A `persona` entity's `status` field is not one of the recognized values (`active`, `deprecated`). Set `status` to one of these values.";
-    W084: Warning product,
-        "Invalid channel status",
-        "A `channel` entity's `status` field is not one of the recognized values (`active`, `deprecated`). Set `status` to one of these values.";
-    W085: Warning product,
-        "Invalid deliverable status",
-        "A `deliverable` entity's `status` field is not one of the recognized values (`draft`, `in_progress`, `shipped`, `deprecated`). Set `status` to one of these values.";
     W092: Warning product,
         "Release dependency cycle",
         "Two or more `release` entities form a cycle through their `depends_on` edges. Break the cycle by removing or restructuring one of the dependency references.";
     W093: Warning product,
         "Invalid release version format",
         "A `release` entity's `version` field does not match semver format (e.g. `1.0.0`). Set `version` to a valid semver string.";
-    W095: Warning product,
-        "Invalid feature effort",
-        "A `feature` entity's `effort` field is not one of the recognized values (`xs`, `s`, `m`, `l`, `xl`). Set `effort` to one of these values.";
     W096: Warning formal,
         "Behavior requires without ensures",
         "A `behavior` entity declares a `requires` clause (an obligation on callers) but no `ensures` clause (a guarantee in return). Add an `ensures` clause describing what the behavior guarantees when its `requires` is satisfied.";
@@ -660,7 +627,7 @@ catalog! {
         "`specforge analyze` read a recorded test result (in `specforge-report.json`) for an entity ID that no spec declares, so the result counts toward nothing; a `did you mean` hint names a close match when there is one. Fix the entity ID the test names, or declare the entity.";
     W098: Warning core,
         "SMT solver unavailable",
-        "The `z3` SMT solver could not be found on `PATH`, or failed to execute, so formal entailment and consistency checks during `--prove` were skipped. Install z3 (https://github.com/Z3Prover/z3) and ensure it is executable to enable these checks.";
+        "`specforge analyze --prove` could not ask the SMT solver z3 everything it had to: z3 is not on `PATH` or does not run (`specforge doctor` states the same warning as a toolchain finding), a solve ran past the timeout (`--prove-timeout`, 30 seconds by default), or z3 failed mid-run. The checks it could not answer were skipped: no bound was found contradictory and no claim was proved by them. Install z3 (https://github.com/Z3Prover/z3) and make sure `z3 --version` runs.";
     W110: Warning formal,
         "Refines non-abstract behavior",
         "A behavior's `refines` field names a target behavior that is not marked `abstract true`. Add `abstract true` to the target behavior, or point `refines` at a behavior that is actually abstract.";
@@ -676,18 +643,12 @@ catalog! {
     W118: Warning core,
         "Invalid provider configuration",
         "A `providers` entry in `specforge.json` is missing its `alias`/`name` or `scheme` field, or no installed extension contributes providers to back a configured provider. Add the missing field, or install an extension that contributes the provider.";
-    W121: Warning governance,
-        "Invalid failure mode detection",
-        "A `failure_mode` entity's `detection` or `post_detection` field is not one of the recognized values (`certain`, `likely`, `moderate`, `unlikely`, `undetectable`). Set the field to one of these values.";
     W123: Warning formal,
         "Unreferenced property",
         "A `property` entity is not referenced by any `behavior`, so it may be unused. Reference the property from a behavior's `verify` block, or remove it if it is no longer needed.";
     W124: Warning formal,
         "Empty property description",
         "A `property` entity writes a `description` that is empty or only whitespace, which makes the temporal assertion opaque to readers and agents. Write the description, or remove the field. A property that writes no description is not reported.";
-    W125: Warning formal,
-        "Invalid property type",
-        "A `property` entity's `property_type` field is not one of the recognized values (`safety`, `liveness`, `fairness`). Set `property_type` to one of these values.";
     W126: Warning formal,
         "Unreferenced axiom",
         "An `axiom` entity is not referenced by any other entity, so it may be unused. Reference the axiom from a relevant entity, or remove it if it is no longer needed.";

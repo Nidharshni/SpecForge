@@ -1,6 +1,6 @@
 # The project session keeps itself current; MCP calls name their target
 
-**Status:** accepted (2026-10-05)
+**Status:** accepted (2026-10-05). D5 applies to handshake sessions, D6's root is looked at again while nothing is served, D11 is superseded (ADR 0077).
 
 Amended by ADR 0024 (round-5 amendment): the reaches are Served and AnyProject; Unscoped and NewProject are targets of their own, and WritesAnyProject is gone.
 
@@ -58,11 +58,15 @@ before each read) with disk, and `ensure_fresh` applies exactly that.
   `specforge.json` nor `specforge.spec` is read for that call as another project, and nothing becomes served.)*
   *(Round 7 plan 01: a project is a directory holding `specforge.json`; `specforge.spec` marks nothing,
   ADR 0053 D2.)*
+  *(Round 9 plan 07, ADR 0077: in a handshake session only; a stateless request opens its `path` for that call
+  and `init` serves nothing.)*
 - **D6. Path normalization.** Canonical, then the nearest enclosing project (`specforge.json` or
   `specforge.spec`), else the directory itself; one that does not exist is `file_not_found` on
   `path`. A path inside the served project is the served project. `init`'s path is used as given and
   may not lie inside the served project. *(Round 7 plan 01: the rule is `ProjectRoot::of`, made canonical for
   MCP (`canonicalized`); it is the one every surface uses, ADR 0053.)*
+  *(Round 9 plan 07: while nothing is served, every request looks for the root's project again; one created
+  there since is served by the next request.)*
   *(Round 6 plan 12: the server's own root (`projectRoot`, else the path `specforge mcp` was started
   with) is read by the first step of this rule only: the nearest enclosing project, the root included;
   with none, nothing is served. It used to be served as given, so a directory with no project, or a
@@ -84,6 +88,8 @@ before each read) with disk, and `ensure_fresh` applies exactly that.
   again after any update that changed them (amended by ADR 0030). *(ADR 0035: each then catches up on
   what changed while its watchers moved, and the LSP's follow is one reaction every change goes
   through.)*
+  *(ADR 0073: there is no classifier; a batch of paths narrows the session's stale comparison, and a
+  directory reaches every source and input under it.)*
 - **D10. No public root.** `McpState::project_root()` is the session's root. MCP serves only a
   project opened from disk (amended by ADR 0025). An `initialize` root that does not exist serves
   nothing.
@@ -91,9 +97,11 @@ before each read) with disk, and `ensure_fresh` applies exactly that.
   whatever its diagnostics. With nothing served there is nothing cached, so a call with a `path`
   adopts and compiles it. ADR 0004 D3-d's "compiles fresh" now reads "brought up to date with disk,
   with a fresh compile's diagnostics" (ADR 0006 guarantees the equality).
+  *(Superseded by ADR 0077 D4: `use_cached` is gone.)*
 - **D12. Which methods refresh**: `tools/call` (per its tool's target), `resources/read`,
   `prompts/get` and the three list methods, since an environment change changes the extension tools
   listed. `resources/templates/list`, `ping` and subscriptions do not.
+  *(ADR 0077: while nothing is served, every request first looks for the root's project.)*
 
 ## The MCP call target
 
@@ -106,6 +114,8 @@ entry declares a `TargetSpec`: its reach (`Unscoped`, `Served`, `AnyProject`, `W
 tell the served session from a project compiled for the call *(ADR 0047: from another project's session)*. A mutation's handler returns what it
 wrote (ADR 0022); `mutation::refresh`, called by the dispatcher alone, brings the target up to date
 after any call that wrote files, succeeded or not, with exactly what changed.
+*(ADR 0077: freshness is no longer a target property; the revision decides whether a call may serve a
+project.)*
 
 ## Consequences
 

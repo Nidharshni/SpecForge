@@ -1,7 +1,7 @@
 mod buffers;
 mod builtins;
+mod changes;
 mod check_passes;
-mod classify;
 mod compile;
 mod custom_rules;
 mod delta;
@@ -13,7 +13,9 @@ mod entity_snapshot;
 mod environment;
 mod extension_calls;
 mod field_types;
+mod fixture;
 mod policy;
+mod product_rules;
 mod providers;
 mod registered_fields;
 mod registry_build_snapshot;

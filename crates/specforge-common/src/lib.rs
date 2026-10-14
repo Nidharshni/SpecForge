@@ -18,7 +18,7 @@ pub mod structural;
 pub mod suggest;
 
 pub use diagnostic::{CustomRuleFailure, Diagnostic, DiagnosticData, DiagnosticsExt, Severity};
-pub use discovery::{Walked, discover_spec_files, is_discovered, walk_spec_files};
+pub use discovery::{SourceRoot, Walked, walk_spec_files};
 pub use exclude::{Exclude, ExcludeEntry, ExcludeError};
 pub use interner::Sym;
 pub use present::{

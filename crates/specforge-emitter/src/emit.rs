@@ -1,6 +1,8 @@
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 
-use specforge_graph::Graph;
+use specforge_coverage::{Status, Verdict};
+use specforge_graph::{Graph, Node};
 use specforge_registry::{FieldRegistry, KindRegistry};
 
 use crate::budget::TokenBudget;
@@ -55,6 +57,11 @@ pub struct EmitOptions<'a> {
     /// Field registry, so the context format keeps each entity's normative
     /// and headline fields. Default: None — context carries only title/verify.
     pub field_registry: Option<&'a FieldRegistry>,
+    /// Each entity's coverage verdict, by id (`ProjectCoverage::verdicts`).
+    /// With it, every node whose entity has a verdict carries its status as
+    /// `coverage_status` (graph, context and brief; DOT draws none), and a
+    /// token budget counts the key. Default: None — no node carries one.
+    pub coverage: Option<&'a BTreeMap<String, Verdict>>,
 }
 
 /// Default: graph format 1.0 of the whole graph against the unversioned
@@ -71,6 +78,7 @@ impl Default for EmitOptions<'_> {
             kind_filter: Vec::new(),
             kind_registry: None,
             field_registry: None,
+            coverage: None,
         }
     }
 }
@@ -88,7 +96,8 @@ fn unversioned() -> &'static GraphProtocolSchema {
 /// `scope` (with `depth`) and `kind_filter` select the subgraph; a scoped
 /// export references the schema instead of embedding it. `format` and `schema`
 /// choose the shape (graph 1.0, or 2.0 with the schema; context and brief, 2.0
-/// when a schema is given). Under `token_budget` every format but DOT is fitted
+/// when a schema is given); `coverage` gives each node whose entity has a
+/// verdict its `coverage_status`. Under `token_budget` every format but DOT is fitted
 /// by `budget::fit`: the whole export when it fits; otherwise the least
 /// central entities are dropped, with their edges, until it fits, and the
 /// export says which in its `token_budget` block. An embedded schema counts
@@ -121,6 +130,7 @@ pub fn emit(graph: &Graph, options: &EmitOptions<'_>) -> Result<String, EmitterE
         schema: options.schema,
         attach: options.attach_schema.then_some(attach),
         fields: options.field_registry,
+        coverage: options.coverage,
     };
     match options.token_budget {
         None => shape.render(&selected, None),
@@ -193,6 +203,7 @@ struct Shape<'a> {
     /// How the schema is carried; `None`: not at all.
     attach: Option<SchemaAttachment>,
     fields: Option<&'a FieldRegistry>,
+    coverage: Option<&'a BTreeMap<String, Verdict>>,
 }
 
 impl Shape<'_> {
@@ -201,13 +212,23 @@ impl Shape<'_> {
     fn render(&self, graph: &Graph, budget: Option<&TokenBudget>) -> Result<String, EmitterError> {
         match self.format {
             EmitFormat::Json => self
-                .envelope(graph, Some(ExportVersion::V1), graph_nodes(graph), budget)
+                .envelope(
+                    graph,
+                    Some(ExportVersion::V1),
+                    graph_nodes(graph, self.coverage),
+                    budget,
+                )
                 .to_json(),
             EmitFormat::Context => self
-                .envelope(graph, None, context_nodes(graph, self.fields), budget)
+                .envelope(
+                    graph,
+                    None,
+                    context_nodes(graph, self.fields, self.coverage),
+                    budget,
+                )
                 .to_json(),
             EmitFormat::Brief => self
-                .envelope(graph, None, brief_nodes(graph), budget)
+                .envelope(graph, None, brief_nodes(graph, self.coverage), budget)
                 .to_json(),
             EmitFormat::Dot => unreachable!("DOT is rendered before a Shape exists"),
         }
@@ -248,29 +269,41 @@ impl Shape<'_> {
     }
 }
 
-fn graph_nodes(graph: &Graph) -> Vec<crate::json::JsonNode> {
+/// `node`'s coverage status, when `coverage` holds a verdict for it.
+fn status_of(node: &Node, coverage: Option<&BTreeMap<String, Verdict>>) -> Option<Status> {
+    coverage?.get(node.id.raw.as_str()).map(Verdict::status)
+}
+
+fn graph_nodes(
+    graph: &Graph,
+    coverage: Option<&BTreeMap<String, Verdict>>,
+) -> Vec<crate::json::JsonNode> {
     graph
         .nodes()
         .into_iter()
-        .map(crate::json::graph_node)
+        .map(|n| crate::json::graph_node(n, status_of(n, coverage)))
         .collect()
 }
 
 fn context_nodes(
     graph: &Graph,
     fields: Option<&FieldRegistry>,
+    coverage: Option<&BTreeMap<String, Verdict>>,
 ) -> Vec<crate::context::ContextNode> {
     graph
         .nodes()
         .into_iter()
-        .map(|n| crate::context::context_node(n, fields))
+        .map(|n| crate::context::context_node(n, fields, status_of(n, coverage)))
         .collect()
 }
 
-fn brief_nodes(graph: &Graph) -> Vec<crate::brief::BriefNode> {
+fn brief_nodes(
+    graph: &Graph,
+    coverage: Option<&BTreeMap<String, Verdict>>,
+) -> Vec<crate::brief::BriefNode> {
     graph
         .nodes()
         .into_iter()
-        .map(crate::brief::brief_node)
+        .map(|n| crate::brief::brief_node(n, status_of(n, coverage)))
         .collect()
 }

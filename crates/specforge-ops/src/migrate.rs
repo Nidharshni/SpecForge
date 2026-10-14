@@ -24,12 +24,19 @@ use specforge_registry::RegistryBuild;
 use specforge_wasm::WasmRuntime;
 use std::path::Path;
 
-use crate::{OpError, OpErrorKind, Writes};
+use crate::{OpError, OpErrorKind, Refusal, Writes};
+
+/// The field of a migration request a refusal can be about (ADR 0072).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MigrateField {
+    /// The format version to migrate to.
+    Target,
+}
 
 /// The format version to migrate to: `raw`, checked, else the current one.
 /// A version that doesn't parse, or one newer than this build supports, is
-/// E019.
-pub fn parse_target(raw: Option<&str>) -> Result<FormatVersion, OpError> {
+/// E019, about the target.
+pub fn parse_target(raw: Option<&str>) -> Result<FormatVersion, Refusal<MigrateField>> {
     let Some(raw) = raw else {
         return Ok(CURRENT_FORMAT_VERSION);
     };
@@ -42,14 +49,16 @@ pub fn parse_target(raw: Option<&str>) -> Result<FormatVersion, OpError> {
             codes::E019,
             format!("unsupported target version {raw} (max supported: {MAX_SUPPORTED_VERSION})"),
         )
-        .with_suggestion(supported)),
+        .with_suggestion(supported)
+        .about(MigrateField::Target)),
         Ok(version) => Ok(version),
         Err(e) => Err(OpError::coded(
             crate::OpErrorKind::InvalidInput,
             codes::E019,
             format!("invalid target version '{raw}': {e}"),
         )
-        .with_suggestion(supported)),
+        .with_suggestion(supported)
+        .about(MigrateField::Target)),
     }
 }
 
@@ -314,7 +323,7 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
     let project = request.root;
     let target = &request.target;
     let read = crate::config::rewritable(project.dir())?;
-    let sources = read.config.spec_files(project.dir());
+    let sources = read.config.sources(project.dir()).files();
     let preview = migrate_project(project, &sources, target, true, true);
     let from = preview
         .results

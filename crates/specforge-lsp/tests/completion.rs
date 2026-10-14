@@ -4,7 +4,7 @@
 
 use crate::registries::registries;
 use specforge_common::{SourceSpan, Sym};
-use specforge_extension_sdk::prelude::FieldType;
+use specforge_extension_sdk::prelude::{FieldType, Vocabulary};
 use specforge_graph::{Graph, Node};
 use specforge_lsp::completion::items;
 use specforge_lsp::{CompletionSite, Document};
@@ -12,6 +12,7 @@ use specforge_ops::view::ProjectView;
 use specforge_parser::{EntityId, EntityKind, FieldMap};
 use specforge_project::CompiledProject;
 use specforge_project::coverage::RecordedCoverage;
+use specforge_project::testing::TestProject;
 use specforge_registry::RegistryBuild;
 use specforge_test_macros::test as spec;
 use std::sync::Arc;
@@ -21,26 +22,12 @@ use tower_lsp::lsp_types::{
 
 /// A project of `files` with `@specforge/software`, compiled with its
 /// extension loaded (and the directory that holds it).
-pub fn compiled(files: &[(&str, &str)]) -> (tempfile::TempDir, CompiledProject) {
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::write(
-        dir.path().join("specforge.json"),
-        serde_json::json!({"name": "completion", "extensions": ["@specforge/software"]})
-            .to_string(),
-    )
-    .unwrap();
-    for (name, text) in files {
-        std::fs::write(dir.path().join(name), text).unwrap();
-    }
-    let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let project = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
-    assert!(
-        project.diagnostics().iter().all(|d| d.code != "I002"),
-        "the extension did not load"
-    );
+pub fn compiled(files: &[(&str, &str)]) -> (TestProject, CompiledProject) {
+    let dir = TestProject::new()
+        .config(|c| c["name"] = "completion".into())
+        .enabling(&["@specforge/software"])
+        .files(files);
+    let project = dir.loaded();
     (dir, project)
 }
 
@@ -277,18 +264,22 @@ impl Fixture {
                 k.testable(true)
                     .supports_verify(true)
                     .verify_kinds(&["unit", "contract"]);
-                let mut field =
-                    |name: &str, field_type: FieldType, target: Option<&str>, values: &[&str]| {
-                        k.field(name, |f| {
-                            f.field_type(field_type).description(&format!("the {name}"));
-                            if let Some(target) = target {
-                                f.target_kind(target);
-                            }
-                            if !values.is_empty() {
-                                f.enum_values(values);
-                            }
-                        });
-                    };
+                let mut field = |name: &str,
+                                 field_type: FieldType,
+                                 target: Option<&str>,
+                                 values: &'static [&'static str]| {
+                    k.field(name, |f| {
+                        if values.is_empty() {
+                            f.field_type(field_type);
+                        } else {
+                            f.vocabulary(&Vocabulary::new(values));
+                        }
+                        f.description(&format!("the {name}"));
+                        if let Some(target) = target {
+                            f.target_kind(target);
+                        }
+                    });
+                };
                 field("state", FieldType::Enum, None, &["draft", "active", "done"]);
                 field("done", FieldType::Bool, None, &[]);
                 field("tags", FieldType::StringList, None, &[]);
@@ -345,6 +336,35 @@ fn an_enum_value_suggests_its_declared_values() {
     assert_eq!(found[0].detail.as_deref(), Some("the state"));
     let found = complete(text, 2, 9, &fixture.view()).1;
     assert_eq!(labels(&found), ["draft", "done"]);
+}
+
+#[spec(
+    behavior = "complete_field_names",
+    verify = "a builtin vocabulary's field completes its values"
+)]
+fn a_builtin_vocabulary_completes_its_values() {
+    let text = "feature f \"F\" {\n  status \n}\n";
+    let dir = TestProject::new()
+        .config(|c| c["name"] = "vocab".into())
+        .enabling(&["@specforge/product"])
+        .file("test.spec", text);
+    let runtime = specforge_component::ComponentRuntime::new();
+    specforge_component::builtins::load_builtins_for(&runtime, &["@specforge/product".to_string()])
+        .unwrap();
+    let project = dir.compile_in(Arc::new(runtime));
+    let found = complete(text, 1, 9, &ProjectView::of(&project)).1;
+    assert_eq!(
+        labels(&found),
+        [
+            "proposed",
+            "accepted",
+            "in_progress",
+            "done",
+            "deferred",
+            "deprecated"
+        ]
+    );
+    assert!(all_of_kind(&found, CompletionItemKind::ENUM_MEMBER));
 }
 
 #[spec(

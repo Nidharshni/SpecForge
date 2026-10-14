@@ -2,13 +2,15 @@
 //! their code: one finding per environment diagnostic, so doctor fails
 //! whenever `check` fails on the project's setup.
 
+use specforge_ops::testing::ScriptedSolver;
+use specforge_project::testing::compile_at;
 use std::sync::Arc;
 
-use specforge_common::{ProjectRoot, Severity};
+use specforge_common::Severity;
 use specforge_extension_sdk::prelude::{CheckKind, ValidationSeverity};
 use specforge_extension_sdk::{CommandOutput, ContributionsBuilder, ExtensionMeta};
 use specforge_ops::check::{CheckOptions, check};
-use specforge_ops::doctor::{DoctorReport, diagnose_with};
+use specforge_ops::doctor::{DoctorReport, diagnose};
 use specforge_ops::view::ProjectView;
 use specforge_project::CompiledProject;
 use specforge_protocol_types::PeerDependency;
@@ -104,10 +106,7 @@ fn compiled(
         }
         std::fs::write(&path, lock.to_string()).unwrap();
     }
-    let project = CompiledProject::compile(
-        &ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let project = compile_at(dir.path(), Some(Arc::new(runtime)));
     (dir, project)
 }
 
@@ -163,12 +162,11 @@ fn scenarios() -> Vec<(&'static str, (tempfile::TempDir, CompiledProject))> {
     ]
 }
 
-/// (code, message, status) of the findings, z3 aside.
+/// (code, message, status) of the findings.
 fn findings(report: &DoctorReport) -> Vec<(String, String, String)> {
     let mut all: Vec<_> = report
         .findings
         .iter()
-        .filter(|f| f.code != "z3_missing")
         .map(|f| {
             let status = serde_json::to_value(f.status).unwrap();
             (
@@ -189,7 +187,7 @@ fn findings(report: &DoctorReport) -> Vec<(String, String, String)> {
 fn doctor_reports_every_setup_diagnostic_the_environment_reports() {
     for (name, (_dir, project)) in scenarios() {
         let view = ProjectView::of(&project);
-        let report = diagnose_with(&view, true);
+        let report = diagnose(&view, &ScriptedSolver::ready());
         let mut expected: Vec<_> = view
             .env()
             .diagnostics()
@@ -215,7 +213,7 @@ fn doctor_fails_whenever_check_fails_on_a_setup_diagnostic() {
     for (name, (_dir, project)) in scenarios() {
         let view = ProjectView::of(&project);
         let checked = check(&view, &CheckOptions::default()).unwrap();
-        let report = diagnose_with(&view, true);
+        let report = diagnose(&view, &ScriptedSolver::ready());
         let setup_failed = view
             .env()
             .diagnostics()

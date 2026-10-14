@@ -1,5 +1,5 @@
 use specforge_common::{SourceSpan, Sym};
-use specforge_extension_sdk::prelude::{ContributionsBuilder, FieldType};
+use specforge_extension_sdk::prelude::{ContributionsBuilder, FieldType, Vocabulary};
 use specforge_graph::{Graph, Node};
 use specforge_lsp::{Document, MOD_DECLARATION, MOD_REFERENCE, SemanticToken};
 use specforge_ops::view::ProjectView;
@@ -10,7 +10,6 @@ use specforge_test_macros::test as spec;
 use tree_sitter_specforge::{field, kind};
 
 use crate::registries::registries;
-use std::sync::Arc;
 
 /// The semantic tokens of `text` over `registries` and `graph`.
 fn tokens_over(text: &str, registries: RegistryBuild, graph: &Graph) -> Vec<SemanticToken> {
@@ -658,8 +657,7 @@ fn enum_and_bool_values_are_classified() {
         c.kind("task", |k| {
             k.testable(true).supports_verify(true);
             k.field("state", |f| {
-                f.field_type(FieldType::Enum)
-                    .enum_values(&["draft", "done"]);
+                f.vocabulary(&Vocabulary::new(&["draft", "done"]));
             });
             k.field("done", |f| {
                 f.field_type(FieldType::Bool);
@@ -714,10 +712,9 @@ fn walk<'t>(node: tree_sitter::Node<'t>, out: &mut Vec<tree_sitter::Node<'t>>) {
 )]
 fn tokens_agree_with_the_grammar() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let project = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(&root).unwrap(),
-        Some(Arc::new(runtime)),
+    let project = specforge_project::testing::compile_at(
+        &root,
+        Some(specforge_project::testing::component_runtime()),
     );
     let view = ProjectView::of(&project);
     let declared: Vec<&str> = view

@@ -50,7 +50,7 @@ impl Args {
                 }
                 Exit::Passed
             }
-            Err(error) if error.kind == OpErrorKind::EntityNotFound => {
+            Err(error) if error.error.kind == OpErrorKind::EntityNotFound => {
                 Refusal::of(format).report(terminal, &error)
             }
             Err(error) => Refusal::measuring(format).report(terminal, &error),

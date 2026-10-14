@@ -1,7 +1,10 @@
 //! `specforge.init`: create a project (`specforge_ops::init`).
 
+use crate::refusal::ArgumentOf;
+use crate::target::TargetArgument;
 use crate::target::{NewProject, NewProjectDir};
-use crate::tool::{CoreTool, Effect, RefusalArgument, ReplySpec, WriteHints};
+use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
+use specforge_ops::init::InitField;
 
 use crate::args::Arguments;
 use crate::events::ProjectInitialized;
@@ -37,6 +40,16 @@ type Reply = specforge_ops::init::InitDocument;
 
 pub(crate) struct Tool;
 
+impl ArgumentOf<InitField> for Tool {
+    fn argument(field: InitField) -> Option<&'static str> {
+        match field {
+            InitField::Dir => Some(TargetArgument::Path.name()),
+            InitField::Name => Some("name"),
+            InitField::Extensions => Some("extensions"),
+        }
+    }
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.init";
     const DESCRIPTION: &'static str = "Initialize a new SpecForge project";
@@ -51,16 +64,6 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = NewProject;
     type Returns = Mutation<Reply>;
-    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[
-        RefusalArgument {
-            code: specforge_ops::init::INVALID_NAME,
-            argument: "name",
-        },
-        RefusalArgument {
-            code: specforge_common::codes::E054.id(),
-            argument: "extensions",
-        },
-    ];
 
     fn call(new: NewProjectDir<'_>, args: Args) -> Mutation<Reply> {
         let (path, runtime) = (new.dir, &new.runtime);
@@ -77,10 +80,11 @@ impl CoreTool for Tool {
             version: &args.version,
             extensions,
         };
-        let outcome = init::init(&request, runtime.as_ref())?;
+        let outcome = init::init(&request, runtime.as_ref()).map_err(Self::failed)?;
         let reply = outcome.document();
-        // With no project served, the server serves the one it created (ADR
-        // 0014 D5): `mutation::complete` does, once it wrote.
+        // In a handshake session with no project served, the server serves
+        // the one it created (ADR 0014 D5): `mutation::complete` does, once
+        // it wrote; a stateless request serves nothing it names.
         let event = MutationEvent::ProjectInitialized(ProjectInitialized {
             project_name: outcome.name.clone(),
             extension_count: outcome.extensions.len(),

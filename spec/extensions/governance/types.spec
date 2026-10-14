@@ -5,18 +5,18 @@ use "types/core"
 // ── Entity Kind Shapes ───────────────────────────────────────
 
 type GovernanceDecision {
-  status       string     @optional
-  date         string     @optional
+  status       DecisionStatus @optional
+  date         string         @optional
   context      string
   decision     string
-  consequences string[]   @optional
-  invariants   EntityId[] @optional
+  consequences string[]       @optional
+  invariants   EntityId[]     @optional
   verify property "GovernanceDecision"
 }
 
 type GovernanceConstraint {
   category   string     @optional
-  priority   string
+  priority   ConstraintPriority
   // proof_role bound: the prove pass assumes its comparisons (ADR 0009)
   metric     string
   constrains EntityId[] @optional
@@ -26,14 +26,17 @@ type GovernanceConstraint {
 
 type GovernanceFailureMode {
   invariant       EntityId
-  severity        integer
-  occurrence      integer
-  detection       integer
+  severity        FailureSeverity
+  occurrence      FailureOccurrence @optional
+  detection       FailureDetection  @optional
   rpn             integer
   cause           string
   effect          string
   mitigation      string
-  post_mitigation PostMitigation @optional
+  post_mitigation PostMitigation    @optional
+  post_severity   FailureSeverity   @optional
+  post_occurrence FailureOccurrence @optional
+  post_detection  FailureDetection  @optional
   verify property "GovernanceFailureMode"
 }
 
@@ -47,7 +50,13 @@ type PostMitigation {
 
 // ── Enums ────────────────────────────────────────────────────
 
-type ConstraintPriority = must | should | may
+type ConstraintPriority = critical | high | medium | low
+
+type FailureSeverity = critical | high | medium | low
+
+type FailureOccurrence = certain | likely | occasional | unlikely | rare
+
+type FailureDetection = certain | likely | moderate | unlikely | undetectable
 
 type ConstraintCategory = performance
   | security

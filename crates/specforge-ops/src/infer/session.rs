@@ -12,7 +12,7 @@ use super::manifest::{
 };
 use crate::options::{Choice, OptionTable};
 use crate::view::ProjectView;
-use crate::{OpError, OpErrorKind, Writes};
+use crate::{OpError, OpErrorKind, Refusal, Writes};
 
 /// A start while a session is active (`Conflict`).
 pub const SESSION_ACTIVE: &str = "session_active";
@@ -153,13 +153,27 @@ pub struct SessionOutcome {
 /// cannot be used; then the step's own refusal
 /// ([`SESSION_ACTIVE`], [`UNKNOWN_SESSION`], [`SESSION_NOT_ACTIVE`],
 /// [`SOURCE_UNREADABLE`]). Marking a file does not need an active session.
-pub fn session(view: &ProjectView<'_>, step: SessionStep<'_>) -> Result<SessionOutcome, OpError> {
+pub fn session(
+    view: &ProjectView<'_>,
+    step: SessionStep<'_>,
+) -> Result<SessionOutcome, Refusal<SessionField>> {
     let root = view.project_root()?;
     let step = Normalized::of(step)?;
     let mut manifest = InferenceManifest::at(root)?;
     let recorded = apply(&mut manifest, root, step, &now(), new_session_id)?;
     let writes = manifest.write(root)?;
     Ok(SessionOutcome { recorded, writes })
+}
+
+/// The field of a session step a refusal can be about (ADR 0072).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionField {
+    /// A start's `source_roots`.
+    SourceRoots,
+    /// A mark's `source_file`.
+    SourceFile,
+    /// An end's `session_id`.
+    SessionId,
 }
 
 /// A [`SessionStep`] whose paths follow the source path rule.
@@ -183,7 +197,7 @@ enum Normalized<'a> {
 
 impl<'a> Normalized<'a> {
     /// `step`, or the refusal of a path outside the root.
-    fn of(step: SessionStep<'a>) -> Result<Self, OpError> {
+    fn of(step: SessionStep<'a>) -> Result<Self, Refusal<SessionField>> {
         Ok(match step {
             SessionStep::Start {
                 agent,
@@ -201,6 +215,7 @@ impl<'a> Normalized<'a> {
                                         "source_roots entry",
                                         root,
                                     )
+                                    .about(SessionField::SourceRoots)
                                 })
                             })
                             .collect::<Result<Vec<_>, _>>()
@@ -212,8 +227,10 @@ impl<'a> Normalized<'a> {
                 entities,
             } => Normalized::Mark {
                 given: source_file,
-                path: source_path(source_file)
-                    .map_err(|_| outside_root(SOURCE_OUTSIDE_ROOT, "source_file", source_file))?,
+                path: source_path(source_file).map_err(|_| {
+                    outside_root(SOURCE_OUTSIDE_ROOT, "source_file", source_file)
+                        .about(SessionField::SourceFile)
+                })?,
                 entities,
             },
             SessionStep::End { session_id, status } => Normalized::End { session_id, status },
@@ -239,7 +256,7 @@ fn apply(
     step: Normalized<'_>,
     now: &str,
     new_id: impl FnOnce() -> String,
-) -> Result<Recorded, OpError> {
+) -> Result<Recorded, Refusal<SessionField>> {
     match step {
         Normalized::Start {
             agent,
@@ -250,7 +267,8 @@ fn apply(
                     OpErrorKind::Conflict,
                     SESSION_ACTIVE,
                     "Another inference session is already active. End it first.",
-                ));
+                )
+                .into());
             }
             if let Some(roots) = source_roots {
                 manifest.source_roots = roots;
@@ -279,6 +297,7 @@ fn apply(
                     SOURCE_UNREADABLE,
                     format!("failed to read {given}"),
                 )
+                .about(SessionField::SourceFile)
             })?;
             manifest.upsert_source_entry(SourceFileEntry::new(
                 path.clone(),
@@ -301,14 +320,16 @@ fn apply(
                     OpErrorKind::InvalidInput,
                     UNKNOWN_SESSION,
                     format!("Unknown session_id: '{session_id}'"),
-                ));
+                )
+                .about(SessionField::SessionId));
             };
             if session.status != SessionStatus::Active {
                 return Err(OpError::new(
                     OpErrorKind::Conflict,
                     SESSION_NOT_ACTIVE,
                     format!("Session '{session_id}' is not active"),
-                ));
+                )
+                .about(SessionField::SessionId));
             }
             session.status = status.status();
             session.ended_at = Some(now.to_string());

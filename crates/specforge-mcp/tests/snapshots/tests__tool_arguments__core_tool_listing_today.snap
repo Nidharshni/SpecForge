@@ -597,7 +597,7 @@ expression: listing
           "type": "array"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         },
         "severity_filter": {
@@ -612,11 +612,6 @@ expression: listing
         "strict": {
           "default": false,
           "description": "Promote warnings to errors, before severity_filter applies",
-          "type": "boolean"
-        },
-        "use_cached": {
-          "default": false,
-          "description": "Use the last compile instead of bringing the project up to date with disk; with no project served, the path is compiled anyway",
           "type": "boolean"
         }
       },
@@ -645,7 +640,7 @@ expression: listing
           "type": "string"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         },
         "strict": {
@@ -656,11 +651,6 @@ expression: listing
         "test_results": {
           "description": "Path to a specforge-report.json for proof-level verdicts",
           "type": "string"
-        },
-        "use_cached": {
-          "default": false,
-          "description": "Use the last compile instead of bringing the project up to date with disk; with no project served, the path is compiled anyway",
-          "type": "boolean"
         }
       },
       "type": "object"
@@ -1164,7 +1154,36 @@ expression: listing
           "type": "string"
         },
         "plan": {
-          "description": "An agent plan, {\"entries\": [{\"entity_id\": ...}]}, to check for gaps against the graph instead of tracing one entity",
+          "additionalProperties": false,
+          "description": "An AgentPlan ({\"plan_id\", \"entries\": [{\"entity_id\", \"action\"}]}), or its JSON text, to check for gaps against the graph instead of tracing one entity",
+          "properties": {
+            "entries": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "type": "string"
+                  },
+                  "entity_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "entity_id",
+                  "action"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "plan_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "plan_id",
+            "entries"
+          ],
           "type": "object"
         }
       },
@@ -1306,6 +1325,11 @@ expression: listing
                     "type": "string"
                   },
                   "missing_link_type": {
+                    "enum": [
+                      "unresolved_entity",
+                      "missing_plan_entry",
+                      "ordering"
+                    ],
                     "type": "string"
                   },
                   "source_entity": {
@@ -1324,9 +1348,13 @@ expression: listing
                 "type": "object"
               },
               "type": "array"
+            },
+            "ok": {
+              "type": "boolean"
             }
           },
           "required": [
+            "ok",
             "affected_entities",
             "gaps"
           ],
@@ -2396,6 +2424,44 @@ expression: listing
           ],
           "type": "object"
         },
+        "FieldJson": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "$ref": "#/$defs/VerifyStatement"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/FieldJson"
+              },
+              "type": "object"
+            }
+          ]
+        },
         "SourceSpan": {
           "additionalProperties": false,
           "properties": {
@@ -2425,6 +2491,22 @@ expression: listing
             "start_col",
             "end_line",
             "end_col"
+          ],
+          "type": "object"
+        },
+        "VerifyStatement": {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "description"
           ],
           "type": "object"
         }
@@ -2457,7 +2539,12 @@ expression: listing
         "exempt": {
           "type": "boolean"
         },
-        "fields": {},
+        "fields": {
+          "additionalProperties": {
+            "$ref": "#/$defs/FieldJson"
+          },
+          "type": "object"
+        },
         "kind": {
           "type": "string"
         },
@@ -3024,7 +3111,7 @@ expression: listing
           "type": "boolean"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         },
         "paths": {
@@ -3454,7 +3541,7 @@ expression: listing
           "type": "string"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         }
       },
@@ -3915,7 +4002,7 @@ expression: listing
           "type": "boolean"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         },
         "specifiers": {
@@ -4174,7 +4261,7 @@ expression: listing
           "type": "string"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         }
       },
@@ -4262,7 +4349,7 @@ expression: listing
           "type": "boolean"
         },
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         },
         "target_version": {
@@ -5242,13 +5329,7 @@ expression: listing
     "description": "Run health checks",
     "inputSchema": {
       "additionalProperties": false,
-      "properties": {
-        "use_cached": {
-          "default": false,
-          "description": "Use the last compile instead of bringing the project up to date with disk; with no project served, the path is compiled anyway",
-          "type": "boolean"
-        }
-      },
+      "properties": {},
       "type": "object"
     },
     "outputSchema": {
@@ -5953,7 +6034,7 @@ expression: listing
       "additionalProperties": false,
       "properties": {
         "path": {
-          "description": "Project root path (uses initialized root if omitted)",
+          "description": "Project root path (the served project if omitted)",
           "type": "string"
         },
         "run": {

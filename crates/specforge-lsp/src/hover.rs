@@ -5,7 +5,8 @@
 
 use crate::document::LineIndex;
 use specforge_common::Diagnostic;
-use specforge_ops::inspect::EntityFacts;
+use specforge_ops::OpError;
+use specforge_ops::inspect::{EntityCoverage, EntityFacts};
 use specforge_parser::FieldValue;
 use specforge_registry::FieldRegistry;
 use std::collections::BTreeMap;
@@ -82,7 +83,12 @@ pub fn diagnostics(shown: &[&Diagnostic]) -> Option<String> {
 /// - **Fields**: its field values but the headline;
 /// - **Diagnostics**: the diagnostics about it that are not among those
 ///   `shown` for the cursor, each code linked to its catalogue entry.
-pub fn entity(facts: &EntityFacts, shown: &[&Diagnostic], rebuilding: bool) -> String {
+pub fn entity(
+    facts: &EntityFacts,
+    coverage: &Result<EntityCoverage, OpError>,
+    shown: &[&Diagnostic],
+    rebuilding: bool,
+) -> String {
     let node = facts.node;
     let title = node
         .title
@@ -118,7 +124,7 @@ pub fn entity(facts: &EntityFacts, shown: &[&Diagnostic], rebuilding: bool) -> S
     let mut sections: Vec<String> = vec![header_section];
 
     // Section 2: its coverage
-    if let Some(line) = coverage_line(facts, rebuilding) {
+    if let Some(line) = coverage_line(facts, coverage, rebuilding) {
         sections.push(format!("**Coverage** · {line}"));
     }
 
@@ -243,12 +249,13 @@ fn quoted(text: &str) -> String {
 /// The Coverage line after `**Coverage** · `: as `specforge.inspect`
 /// reports the entity's coverage. `None` for an entity whose kind is not
 /// testable and that declares no obligations.
-fn coverage_line(facts: &EntityFacts, rebuilding: bool) -> Option<String> {
+fn coverage_line(
+    facts: &EntityFacts,
+    coverage: &Result<EntityCoverage, OpError>,
+    rebuilding: bool,
+) -> Option<String> {
     let standing = facts.standing;
-    let declares = match &facts.coverage {
-        Ok(coverage) => coverage.declared(),
-        Err(_) => !facts.obligations.is_empty(),
-    };
+    let declares = standing.declares_obligations();
     if !standing.testable && !declares {
         return None;
     }
@@ -264,7 +271,7 @@ fn coverage_line(facts: &EntityFacts, rebuilding: bool) -> Option<String> {
             "exempt: its kind need not declare obligations".to_string()
         });
     }
-    let coverage = match &facts.coverage {
+    let coverage = match coverage {
         Ok(coverage) => coverage,
         Err(error) => {
             return Some(format!(
@@ -316,6 +323,9 @@ pub fn hover_field_info(
 
     if let Some(ref desc) = entry.declared().description {
         parts.push(desc.clone());
+    }
+    if let Some(ref default) = entry.declared().default_value {
+        parts.push(format!("Absent, it counts as `{default}`."));
     }
 
     // Edge and required on same line

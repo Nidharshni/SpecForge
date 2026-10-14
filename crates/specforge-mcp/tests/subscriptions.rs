@@ -2,9 +2,9 @@ use crate::support::*;
 use serde_json::json;
 use specforge_common::{Diagnostic, Severity, SourceSpan};
 use specforge_mcp::McpServer;
-use specforge_mcp::events::testing::EventLog;
 use specforge_mcp::subscriptions::{Changes, Subscriptions, Watched};
-use specforge_project::{GraphDelta, NodeChange};
+use specforge_mcp::testing::EventLog;
+use specforge_project::{DiagnosticsDelta, GraphDelta, NodeChange};
 use specforge_test::prelude::*;
 use std::fs;
 use tempfile::TempDir;
@@ -752,7 +752,7 @@ fn graph_changed_sends_the_whole_delta() {
         }],
         affected_files: vec!["test.spec".to_string()],
     };
-    subscriptions.updated(&Changes::new(&delta, false, None), &mut events);
+    subscriptions.updated(&Changes::new(&delta, false, false, None), &mut events);
     let sent = drained(&mut subscriptions);
     assert_eq!(
         sent[1],
@@ -784,7 +784,15 @@ fn diagnostics_changed_sends_whole_diagnostics() {
     subscriptions.subscribe("specforge://diagnostics", &mut events);
 
     subscriptions.updated(
-        &Changes::new(&delta, false, Some((&[], std::slice::from_ref(&warning)))),
+        &Changes::new(
+            &delta,
+            false,
+            false,
+            Some(DiagnosticsDelta::between(
+                &[],
+                std::slice::from_ref(&warning),
+            )),
+        ),
         &mut events,
     );
     assert_eq!(
@@ -836,7 +844,12 @@ fn a_notified_diagnostic_is_presented_as_check_presents_it() {
         (std::slice::from_ref(&unresolved), &[][..], "removed"),
     ] {
         subscriptions.updated(
-            &Changes::new(&delta, false, Some((before, after))),
+            &Changes::new(
+                &delta,
+                false,
+                false,
+                Some(DiagnosticsDelta::between(before, after)),
+            ),
             &mut events,
         );
         let sent = drained(&mut subscriptions);
@@ -851,41 +864,33 @@ fn a_notified_diagnostic_is_presented_as_check_presents_it() {
 }
 
 #[test]
-fn a_diagnostic_is_named_by_code_message_and_file() {
+fn a_diagnostics_change_is_a_delta_that_is_not_empty() {
     let graph = GraphDelta::default();
     let error = Diagnostic::new(specforge_common::codes::E001, "test error");
-    let at = |line: usize| {
-        let span = SourceSpan {
-            file: "a.spec".into(),
-            start_line: line,
-            start_col: 0,
-            end_line: line,
-            end_col: 0,
-        };
-        Diagnostic::new(specforge_common::codes::E001, "test error").with_span(span)
-    };
-    let touched = |before: &[Diagnostic], after: &[Diagnostic]| {
-        Changes::new(&graph, false, Some((before, after))).touched(Watched::Diagnostics)
+    let touched = |delta: Option<DiagnosticsDelta>| {
+        Changes::new(&graph, false, false, delta).touched(Watched::Diagnostics)
     };
 
-    assert!(touched(&[], std::slice::from_ref(&error)), "added");
-    assert!(touched(std::slice::from_ref(&error), &[]), "removed");
+    assert!(!touched(None), "not read");
+    assert!(!touched(Some(DiagnosticsDelta::default())), "empty");
     assert!(
-        !touched(std::slice::from_ref(&error), std::slice::from_ref(&error)),
-        "the same pair"
+        touched(Some(DiagnosticsDelta::between(
+            &[],
+            std::slice::from_ref(&error)
+        ))),
+        "added"
     );
     assert!(
-        !touched(&[at(1)], &[at(9)]),
-        "the same code, message and file on another line"
-    );
-    assert!(
-        !Changes::new(&graph, false, None).touched(Watched::Diagnostics),
-        "not read"
+        touched(Some(DiagnosticsDelta::between(
+            std::slice::from_ref(&error),
+            &[]
+        ))),
+        "removed"
     );
 }
 
 #[test]
-fn diagnostics_are_read_only_when_someone_hears_them() {
+fn the_delta_is_computed_only_when_someone_hears_the_diagnostics() {
     let mut events = EventLog::new();
     let mut subscriptions = Subscriptions::new();
     assert!(!subscriptions.hears_diagnostics());
@@ -935,7 +940,7 @@ fn reopening_a_listen_id_ends_the_old_stream() {
         added_nodes: vec![node_change("alpha")],
         ..GraphDelta::default()
     };
-    subscriptions.updated(&Changes::new(&delta, false, None), &mut events);
+    subscriptions.updated(&Changes::new(&delta, false, false, None), &mut events);
     assert!(drained(&mut subscriptions).is_empty());
 }
 
@@ -961,7 +966,12 @@ fn one_update_is_heard_in_one_order() {
     };
     let added = Diagnostic::untyped("W001", Severity::Warning, "test warning");
     subscriptions.updated(
-        &Changes::new(&delta, false, Some((&[], std::slice::from_ref(&added)))),
+        &Changes::new(
+            &delta,
+            false,
+            false,
+            Some(DiagnosticsDelta::between(&[], std::slice::from_ref(&added))),
+        ),
         &mut events,
     );
 
@@ -1004,8 +1014,9 @@ fn one_update_is_heard_in_one_order() {
 #[test]
 fn an_environment_reload_touches_the_graph_views_and_the_schema() {
     let none = GraphDelta::default();
-    let reload = Changes::new(&none, true, None);
+    let reload = Changes::new(&none, false, true, None);
     assert!(reload.touched(Watched::Graph));
+    assert!(reload.touched(Watched::Content));
     assert!(reload.touched(Watched::Schema));
     assert!(!reload.touched(Watched::Diagnostics));
 
@@ -1028,6 +1039,6 @@ fn a_schema_subscriber_hears_no_graph_delta() {
         added_nodes: vec![node_change("alpha")],
         ..GraphDelta::default()
     };
-    subscriptions.updated(&Changes::new(&delta, false, None), &mut events);
+    subscriptions.updated(&Changes::new(&delta, false, false, None), &mut events);
     assert!(drained(&mut subscriptions).is_empty());
 }

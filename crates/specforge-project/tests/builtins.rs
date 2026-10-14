@@ -1,8 +1,8 @@
 use specforge_common::Diagnostic;
+use specforge_project::testing::TestProject;
 use specforge_protocol_types::{DeclaredCategory, EntityKindDescriptor, ExtensionDeclaration};
 use specforge_wasm::WasmRuntime;
 use specforge_wasm::protocol::load_declaration;
-use std::sync::Arc;
 
 /// A Wasm runtime holding the builtin extensions `ext_names` — the only way
 /// extensions exist now (WASM-only migration, Phase 7: the native mirror
@@ -44,7 +44,7 @@ fn product_extension_loads_via_protocol() {
     assert_eq!(manifest.version(), "1.0.0");
     assert_eq!(manifest.entities.len(), 9);
     assert_eq!(manifest.edges.len(), 20);
-    assert_eq!(manifest.validation_rules.len(), 61);
+    assert_eq!(manifest.validation_rules.len(), 50);
     assert_eq!(manifest.shared_fields.len(), 1, "shared fields (tags)");
     assert!(manifest.declares(DeclaredCategory::Entities));
     assert!(manifest.declares(DeclaredCategory::ValidationRules));
@@ -81,7 +81,7 @@ fn governance_extension_loads_via_protocol() {
     assert_eq!(manifest.version(), "1.0.0");
     assert_eq!(manifest.entities.len(), 3);
     assert_eq!(manifest.edges.len(), 11);
-    assert_eq!(manifest.validation_rules.len(), 7);
+    assert_eq!(manifest.validation_rules.len(), 0);
     assert_eq!(
         manifest.peers().len(),
         2,
@@ -97,7 +97,7 @@ fn governance_extension_loads_via_protocol() {
         "must depend on product (declares edges to feature)"
     );
     assert!(manifest.declares(DeclaredCategory::Entities));
-    assert!(manifest.declares(DeclaredCategory::ValidationRules));
+    assert!(!manifest.declares(DeclaredCategory::ValidationRules));
 
     let diags = declaration_diagnostics(&manifest);
     assert!(diags.is_empty(), "declaration errors: {:?}", diags);
@@ -418,7 +418,7 @@ fn formal_expressions_declare_their_proof_roles() {
 
 #[specforge_test_macros::test(
     behavior = "fa_declare_manifest",
-    verify = "manifest declares the 13 formal validation rules"
+    verify = "manifest declares the 12 formal validation rules"
 )]
 fn formal_declares_its_validation_rules() {
     let manifest = load_via_protocol("@specforge/formal");
@@ -431,8 +431,8 @@ fn formal_declares_its_validation_rules() {
     assert_eq!(
         codes,
         [
-            "W123", "W124", "W125", "W126", "W127", "W128", "W129", "W131", "W132", "W133", "W134",
-            "W135", "W136"
+            "W123", "W124", "W126", "W127", "W128", "W129", "W131", "W132", "W133", "W134", "W135",
+            "W136"
         ]
     );
 }
@@ -491,20 +491,16 @@ fn product_lifecycle_kinds_declare_status() {
     verify = "the builtin extensions' rules register with no W112, W147 or W021"
 )]
 fn the_builtin_extensions_rules_register_cleanly() {
-    let dir = tempfile::TempDir::new().unwrap();
     let names: Vec<&str> = specforge_component::builtins::BUILTIN_EXTENSIONS
         .iter()
         .map(|(name, _)| *name)
         .collect();
     assert_eq!(names.len(), 9, "{names:?}");
-    let config = serde_json::json!({ "name": "all", "version": "0.1.0", "extensions": names });
-    std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    let runtime = specforge_component::ComponentRuntime::with_user_cache();
+    let dir = TestProject::new()
+        .config(|c| c["name"] = "all".into())
+        .enabling(&names);
 
-    let env = specforge_project::Environment::load(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let env = specforge_project::Environment::load(&dir.project_root(), Some(dir.runtime()));
 
     assert_eq!(env.registries().declarations().len(), 9);
     assert!(
@@ -519,27 +515,24 @@ fn the_builtin_extensions_rules_register_cleanly() {
     assert!(unworkable.is_empty(), "{unworkable:?}");
 }
 
-#[specforge_test_macros::test(
-    behavior = "registry_build_declaration_consistency",
-    verify = "a rule's target_extension, loaded, must declare its target kind and edge type; not loaded, the rule is inert and costs no W021"
-)]
-fn product_alone_is_clean_and_names_governance_for_w078() {
+#[test]
+fn product_and_governance_build_clean_alone_and_together() {
     let product = load_via_protocol("@specforge/product");
-    // W078 on `constraint` names governance; product has no peers.
-    assert!(product.peers().is_empty());
-    let w078: Vec<_> = product
-        .validation_rules
-        .iter()
-        .filter(|r| r.code == "W078" && r.target_kind.as_deref() == Some("constraint"))
-        .collect();
-    assert_eq!(w078.len(), 1);
-    assert_eq!(
-        w078[0].target_extension.as_deref(),
-        Some("@specforge/governance")
-    );
+    let governance = load_via_protocol("@specforge/governance");
+    // No builtin rule names a peer extension any more: the closed values are
+    // enum vocabularies the host checks (E061), not cross-extension rules.
+    for m in [&product, &governance] {
+        assert!(
+            m.validation_rules
+                .iter()
+                .all(|r| r.target_extension.is_none()),
+            "{}: a rule names a target_extension",
+            m.name()
+        );
+    }
 
-    // Alone: no W021 (governance absent: that rule is inert), and the field
-    // checks still run, so a typo'd kind in product would still be W021.
+    // Alone: no W021, and the field checks still run, so a typo'd kind in
+    // product would still be W021.
     let alone = specforge_registry::build_registries(vec![product.clone()]);
     assert!(
         alone.diagnostics().all(|d| d.code != "W021"),
@@ -551,11 +544,8 @@ fn product_alone_is_clean_and_names_governance_for_w078() {
     let broken = specforge_registry::build_registries(vec![typo]);
     assert_eq!(broken.diagnostics().filter(|d| d.code == "W021").count(), 1);
 
-    // With governance: it declares `constraint`, so nothing is wrong either.
-    let both = specforge_registry::build_registries(vec![
-        load_via_protocol("@specforge/governance"),
-        product,
-    ]);
+    // Together: governance declares `constraint`, so nothing is wrong either.
+    let both = specforge_registry::build_registries(vec![governance, product]);
     assert!(
         both.diagnostics().all(|d| d.code != "W021"),
         "{:?}",
@@ -581,4 +571,34 @@ fn product_declares_its_lifecycle_passes() {
             ("delivery_evidence", Some("resolve"), None),
         ]
     );
+}
+
+#[specforge_test_macros::test(
+    behavior = "se_validate_unused_invariants",
+    verify = "invariant nothing references produces W003"
+)]
+#[specforge_test_macros::test(
+    behavior = "se_validate_unused_invariants",
+    verify = "invariant with incoming reference edge passes"
+)]
+fn check_reports_an_unreferenced_invariant_as_w003() {
+    let compiled = TestProject::new()
+        .enabling(&["@specforge/software"])
+        .file(
+            "main.spec",
+            concat!(
+                "invariant held \"Held\" {\n  guarantee \"g\"\n}\n",
+                "invariant orphan \"Orphan\" {\n  guarantee \"g\"\n}\n",
+                "behavior keeper \"Keeper\" {\n  contract \"c\"\n  invariants [held]\n}\n",
+            ),
+        )
+        .compile();
+    let diagnostics = compiled.diagnostics();
+    let w003: Vec<&str> = diagnostics
+        .iter()
+        .filter(|d| d.code == "W003")
+        .map(|d| d.message.as_str())
+        .collect();
+    assert_eq!(w003.len(), 1, "{diagnostics:?}");
+    assert!(w003[0].contains("'orphan'"), "{w003:?}");
 }

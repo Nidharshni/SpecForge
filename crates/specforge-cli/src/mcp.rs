@@ -7,8 +7,8 @@ use std::path::PathBuf;
 #[derive(clap::Args)]
 pub(crate) struct Args {
     /// Where to find the project to serve: the nearest directory at or above it holding
-    /// specforge.json (none: nothing is served until a call names a
-    /// project or init creates one)
+    /// specforge.json (none yet: served once one exists there; in a handshake session a call
+    /// may also serve the project its path names or init creates)
     #[arg(default_value = ".")]
     root: PathBuf,
 }
@@ -17,7 +17,7 @@ impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         // The client drives the handshake; its `initialize` serves the
         // project at or above `root` unless it names a `projectRoot` of its
-        // own. However the connection ends, the client has left and the
+        // own; a stateless request is served it without one. However the connection ends, the client has left and the
         // command passed: a closed stdout ends the output quietly, as for
         // every command (ADR 0029 D4b), and a broken input is the client's
         // end (ADR 0062 D4).

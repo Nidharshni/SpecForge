@@ -21,6 +21,9 @@
 //! 5. a named type no spec file declares is a violation.
 //!
 //! A mutation's `files_written` is the pipeline's and is removed first.
+//!
+//! An argument whose type is a spec type (`ARGUMENT_TYPES`) is compared the
+//! same way: its listed schema against the type.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
@@ -494,6 +497,50 @@ fn report() -> &'static Report {
     })
 }
 
+/// A core tool's argument whose type is a spec type: `(tool, argument, type)`.
+const ARGUMENT_TYPES: &[(&str, &str, &str)] = &[("specforge.trace", "plan", "AgentPlan")];
+
+/// One walk over [`ARGUMENT_TYPES`]: each argument's listed schema, compared
+/// with the spec type it names.
+fn argument_report() -> &'static Report {
+    static REPORT: OnceLock<Report> = OnceLock::new();
+    REPORT.get_or_init(|| {
+        let mut report = Report::default();
+        for (tool, argument, spec) in ARGUMENT_TYPES {
+            let tool = specforge_mcp::tools::CORE_TOOLS
+                .iter()
+                .find(|candidate| candidate.name() == *tool)
+                .unwrap_or_else(|| panic!("no core tool {tool}"));
+            let listed = tool
+                .arguments()
+                .into_iter()
+                .find(|candidate| candidate.name == *argument)
+                .unwrap_or_else(|| panic!("{} lists no argument {argument}", tool.name()));
+            let mut schema = listed.schema;
+            if let Some(object) = schema.as_object_mut() {
+                object.remove("description");
+            }
+            check_type(spec, &schema, &schema, &mut report);
+        }
+        report
+    })
+}
+
+/// `name` was reached from a tool's argument and has no violation.
+fn assert_argument_type(name: &str) {
+    let report = argument_report();
+    assert!(
+        report.reached.contains(name),
+        "{name} is reached from no tool argument"
+    );
+    let violations = report.violations.get(name).cloned().unwrap_or_default();
+    assert!(
+        violations.is_empty(),
+        "{name}:\n  {}",
+        violations.join("\n  ")
+    );
+}
+
 /// `name` was reached from a core tool's reply or a message and has no
 /// violation.
 fn assert_reply_type(name: &str) {
@@ -723,4 +770,16 @@ fn mcp_trace_chain_result() {
 )]
 fn mcp_trace_plan_result() {
     assert_reply_type("McpTracePlanResult")
+}
+
+#[specforge_test(type = "AgentPlan", verify = "AgentPlan schema is valid")]
+#[ignore = "fixed by T5"]
+fn agent_plan() {
+    assert_argument_type("AgentPlan")
+}
+
+#[specforge_test(type = "AgentPlanEntry", verify = "AgentPlanEntry schema is valid")]
+#[ignore = "fixed by T5"]
+fn agent_plan_entry() {
+    assert_argument_type("AgentPlanEntry")
 }

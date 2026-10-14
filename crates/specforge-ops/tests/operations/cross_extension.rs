@@ -1,4 +1,6 @@
-use crate::e2e_fixtures::*;
+use super::compiled_support::{built, check_document, checked, exported, specs, trace_document};
+use specforge_ops::check::CheckOptions;
+use specforge_project::testing::TestProject;
 use specforge_test_macros::test as specforge_test;
 use std::collections::BTreeSet;
 
@@ -6,21 +8,9 @@ type EdgeSet = BTreeSet<(String, String, String)>;
 
 /// Check `spec` (it must pass), then export its graph's edges.
 fn checked_edges(spec: &str) -> EdgeSet {
-    let dir = setup_project(&[("main.spec", spec)]);
-    specforge_cmd()
-        .args(["check"])
-        .arg("--path")
-        .arg(dir.path())
-        .assert()
-        .success();
-    let output = specforge_cmd()
-        .args(["export", "--format=graph"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-    assert!(output.status.success());
-    let parsed = parse_json_stdout(&output);
+    let (_project, compiled) = built(&[("main.spec", spec)]);
+    assert!(checked(&compiled, CheckOptions::default()).ok());
+    let parsed = exported(&compiled);
     let edges: Vec<(String, String, String)> = parsed["edges"]
         .as_array()
         .unwrap()
@@ -44,7 +34,7 @@ fn edges(list: &[(&str, &str, &str)]) -> EdgeSet {
         .collect()
 }
 
-/// One edge per reference-list entry of CROSS_REF_SPEC (trigger is a plain
+/// One edge per reference-list entry of specs::CROSS_REF (trigger is a plain
 /// field, not a reference list, so it makes no edge).
 fn cross_ref_spec_edges() -> EdgeSet {
     edges(&[
@@ -64,7 +54,7 @@ fn cross_ref_spec_edges() -> EdgeSet {
     verify = "reference list IDs create graph edges"
 )]
 fn cross_kind_references_resolve() {
-    assert_eq!(checked_edges(CROSS_REF_SPEC), cross_ref_spec_edges());
+    assert_eq!(checked_edges(specs::CROSS_REF), cross_ref_spec_edges());
 }
 
 #[specforge_test(
@@ -72,7 +62,7 @@ fn cross_kind_references_resolve() {
     verify = "unresolvable reference produces E003"
 )]
 fn unresolved_cross_ref_produces_e003() {
-    let dir = setup_project(&[(
+    let (_project, compiled) = built(&[(
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" }
@@ -80,16 +70,9 @@ feature gamma "G" { behaviors [alpha, nonexistent_behavior] }
 "#,
     )]);
 
-    let output = specforge_cmd()
-        .args(["check", "--format=json"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-
-    assert_eq!(output.status.code(), Some(1));
-    let parsed = parse_json_stdout(&output);
-    let diagnostics = parsed.as_array().unwrap();
+    let outcome = checked(&compiled, CheckOptions::default());
+    assert!(!outcome.ok());
+    let diagnostics = check_document(&compiled, CheckOptions::default());
     assert!(
         diagnostics.iter().any(|d| d["code"] == "E003"),
         "should have E003 for unresolved reference: {:?}",
@@ -143,45 +126,12 @@ feature fast_parsing "F" {
 }
 
 #[specforge_test(
-    behavior = "export_diagnostics_as_json",
-    verify = "diagnostics serialized as JSON array to stdout"
-)]
-fn check_json_shows_cross_extension_errors() {
-    let dir = setup_project(&[(
-        "main.spec",
-        r#"
-feature gamma "G" { behaviors [nonexistent] }
-decision use_rust "D" {
-    status accepted
-    context "need performance"
-    decision_text "use Rust"
-    consequences "fast"
-}
-"#,
-    )]);
-
-    let output = specforge_cmd()
-        .args(["check", "--format=json"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-
-    let parsed = parse_json_stdout(&output);
-    let diagnostics = parsed.as_array().unwrap();
-    assert!(
-        diagnostics.iter().any(|d| d["code"] == "E003"),
-        "should produce E003 for nonexistent ref in cross-kind context"
-    );
-}
-
-#[specforge_test(
     behavior = "serialize_json_graph",
     verify = "JSON output contains all edges"
 )]
 fn export_includes_cross_kind_edges() {
     // Every reference-list entry of the spec, and nothing else.
-    assert_eq!(checked_edges(CROSS_REF_SPEC), cross_ref_spec_edges());
+    assert_eq!(checked_edges(specs::CROSS_REF), cross_ref_spec_edges());
 }
 
 #[specforge_test(
@@ -189,17 +139,10 @@ fn export_includes_cross_kind_edges() {
     verify = "trace from entity shows upstream and downstream connections"
 )]
 fn trace_crosses_extension_boundaries() {
-    let dir = setup_project(&[("main.spec", CROSS_REF_SPEC)]);
+    let (_project, compiled) = built(&[("main.spec", specs::CROSS_REF)]);
 
     let trace = |id: &str| {
-        let output = specforge_cmd()
-            .args(["trace", id])
-            .arg("--path")
-            .arg(dir.path())
-            .output()
-            .unwrap();
-        assert!(output.status.success());
-        let parsed = parse_json_stdout(&output);
+        let parsed = trace_document(&compiled, id);
         assert_eq!(parsed["entity_id"], id);
         let ids = |direction: &str| -> BTreeSet<(String, u64)> {
             parsed[direction]
@@ -256,7 +199,7 @@ fn trace_crosses_extension_boundaries() {
     verify = "close match triggers did-you-mean suggestion"
 )]
 fn did_you_mean_works_across_entity_kinds() {
-    let dir = setup_project(&[(
+    let (_project, compiled) = built(&[(
         "main.spec",
         r#"
 behavior validate_graph "V" { contract "must validate" }
@@ -268,18 +211,14 @@ feature graph_validation "G" {
 "#,
     )]);
 
-    let output = specforge_cmd()
-        .args(["check"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let rendered: String = check_document(&compiled, CheckOptions::default())
+        .iter()
+        .map(|d| format!("{} {}", d["message"], d["suggestion"]))
+        .collect();
     assert!(
-        stderr.contains("did you mean") && stderr.contains("validate_graph"),
+        rendered.contains("did you mean") && rendered.contains("validate_graph"),
         "should suggest correct entity across kinds: {}",
-        stderr,
+        rendered,
     );
 }
 
@@ -302,35 +241,25 @@ behavior user_login "Log in" {
   features [user_authentication]
 }
 "#;
-    let dir = setup_project_with_config(
-        r#"{"name":"t","version":"0.1.0","spec_root":"spec","extensions":["@specforge/software"]}"#,
-        &[("main.spec", spec)],
-    );
-    let output = specforge_cmd()
-        .args(["check", "--format=json"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-    assert_eq!(
-        output.status.code(),
-        Some(0),
+    let project = TestProject::new()
+        .enabling(&["@specforge/software"])
+        .config(|c| c["spec_root"] = "spec".into())
+        .file("spec/main.spec", spec);
+    let compiled = project.compile();
+    assert!(
+        checked(&compiled, CheckOptions::default()).ok(),
         "a soft reference is not an error"
     );
-    let diagnostics = parse_json_stdout(&output);
+    let diagnostics = check_document(&compiled, CheckOptions::default());
     let codes: Vec<&str> = diagnostics
-        .as_array()
-        .unwrap()
         .iter()
         .map(|d| d["code"].as_str().unwrap())
         .collect();
-    assert!(!codes.contains(&"E003"), "{diagnostics}");
+    assert!(!codes.contains(&"E003"), "{diagnostics:?}");
     let i004 = diagnostics
-        .as_array()
-        .unwrap()
         .iter()
         .find(|d| d["code"] == "I004")
-        .unwrap_or_else(|| panic!("I004 expected: {diagnostics}"));
+        .unwrap_or_else(|| panic!("I004 expected: {diagnostics:?}"));
     assert!(
         i004["message"]
             .as_str()
@@ -340,23 +269,17 @@ behavior user_login "Log in" {
     );
 
     // With product enabled and the feature declared, the same file resolves.
-    let dir = setup_project_with_config(
-        r#"{"name":"t","version":"0.1.0","spec_root":"spec","extensions":["@specforge/software","@specforge/product"]}"#,
-        &[
-            ("main.spec", spec),
+    let project = TestProject::new()
+        .enabling(&["@specforge/software", "@specforge/product"])
+        .config(|c| c["spec_root"] = "spec".into())
+        .files(&[
+            ("spec/main.spec", spec),
             (
-                "product.spec",
+                "spec/product.spec",
                 "feature user_authentication \"Auth\" {\n  problem \"p\"\n}\n",
             ),
-        ],
-    );
-    let output = specforge_cmd()
-        .args(["export", "--format", "graph"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-    let graph = parse_json_stdout(&output);
+        ]);
+    let graph = exported(&project.compile());
     assert!(
         graph["edges"]
             .as_array()

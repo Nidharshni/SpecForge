@@ -1,9 +1,8 @@
-//! Component-model runtime (wasmtime 49 direct) — hardening-plan Phase W2.
-//!
-//! Implements the same [`WasmRuntime`] trait as `ExtismRuntime`, so every
-//! consumer (ProtocolHost, scanner dispatch, analyze pass dispatch, custom
-//! rules) keeps working unchanged while the engine underneath moves to the
-//! Component Model.
+//! The component-model runtime (wasmtime): the production adapter of
+//! [`WasmRuntime`]. Every extension call (the declaration, commands, passes,
+//! collectors, custom rules, scanners, migration hooks) reaches a guest
+//! through that trait, here or in the in-process test adapter
+//! (`specforge_wasm::testing::InProcessRuntime`).
 //!
 //! The guest contract is the `specforge:bridge/bridge` world: one `call`
 //! export dispatching the JSON wire protocol by export name. Guests are
@@ -497,8 +496,9 @@ impl WasmRuntime for ComponentRuntime {
 ///
 /// `$SPECFORGE_WASMTIME_CACHE` overrides; setting it to `off` disables the
 /// cache. Default: `$HOME/.cache/specforge/wasmtime` (no cache when `HOME`
-/// is unset).
-fn user_compile_cache_dir() -> Option<PathBuf> {
+/// is unset). The test drivers read it, so a child running under another `HOME` shares the cache of the test process
+/// (a cache of its own would compile every builtin again).
+pub fn user_compile_cache_dir() -> Option<PathBuf> {
     match std::env::var_os("SPECFORGE_WASMTIME_CACHE") {
         Some(v) if v == "off" => None,
         Some(v) => Some(PathBuf::from(v)),

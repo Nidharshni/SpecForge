@@ -5,14 +5,17 @@
 use crate::target::View;
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
-use serde_json::Value;
 use specforge_common::shape::Shape;
 use specforge_common::{DiagnosticList, SourceSpan};
+use specforge_graph::FieldJson;
 use specforge_ops::inspect::{EntityCoverage, EntityFacts, obligation_text};
+use std::collections::BTreeMap;
 
 use crate::args::Arguments;
+use crate::refusal::ArgumentOf;
 use crate::reply::Answered;
 use crate::tool::McpError;
+use specforge_ops::navigate::EntityField;
 use specforge_ops::view::ProjectView;
 
 /// `specforge.inspect`'s arguments.
@@ -47,20 +50,28 @@ pub struct Reply {
     /// behavior's `contract`.
     #[serde(skip_serializing_if = "Option::is_none")]
     contract: Option<String>,
-    /// Every field, whatever the kind names its text: an open value.
-    fields: Value,
+    /// Every field, whatever the kind names its text, as every output
+    /// writes it (`FieldJson`).
+    fields: BTreeMap<String, FieldJson>,
     #[serde(skip_serializing_if = "Option::is_none")]
     verify_declarations: Option<Vec<String>>,
     referenced_by: Vec<String>,
     refers_to: Vec<String>,
-    #[shape(names = specforge_ops::coverage::STATUS)]
-    coverage_status: String,
+    coverage_status: specforge_project::coverage::Status,
     /// The diagnostics about the entity, in the shape `specforge.validate`
     /// reports them.
     diagnostics: DiagnosticList,
 }
 
 pub(crate) struct Tool;
+
+impl ArgumentOf<EntityField> for Tool {
+    fn argument(field: EntityField) -> Option<&'static str> {
+        match field {
+            EntityField::EntityId => Some("entity_id"),
+        }
+    }
+}
 
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.inspect";
@@ -76,13 +87,11 @@ impl CoreTool for Tool {
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
         let facts =
-            specforge_ops::inspect::inspect(&view, &args.entity_id).map_err(McpError::from)?;
+            specforge_ops::inspect::inspect(&view, &args.entity_id).map_err(Self::refused)?;
         // A recorded report that cannot be read fails the call (ADR 0004 D2-e).
-        let coverage = facts
-            .coverage
-            .as_ref()
-            .map_err(|e| McpError::from(e.clone()))?;
-        Ok(Reply::of(&facts, coverage).into())
+        let coverage =
+            specforge_ops::inspect::coverage(&view, &args.entity_id).map_err(McpError::from)?;
+        Ok(Reply::of(&facts, &coverage).into())
     }
 }
 
@@ -90,7 +99,7 @@ impl Reply {
     fn of(facts: &EntityFacts, coverage: &EntityCoverage) -> Self {
         let node = facts.node;
         let refs = &facts.references;
-        let declared = coverage.declared();
+        let declared = facts.standing.declares_obligations();
         Reply {
             entity_id: node.id.raw.to_string(),
             kind: node.kind.raw.to_string(),
@@ -102,19 +111,12 @@ impl Reply {
             source_extension: facts.kind.map(|kind| kind.source_extension.to_string()),
             source_span: node.source_span.clone(),
             contract: facts.headline.as_ref().map(ToString::to_string),
-            fields: Value::Object(
-                specforge_graph::field_form::write_fields(&node.fields)
-                    .into_iter()
-                    .map(|(key, written)| (key, Value::from(written)))
-                    .collect(),
-            ),
+            fields: specforge_graph::field_form::write_fields(&node.fields),
             verify_declarations: declared
                 .then(|| facts.obligations.iter().map(obligation_text).collect()),
             referenced_by: refs.referenced_by().into_iter().map(String::from).collect(),
             refers_to: refs.refers_to().into_iter().map(String::from).collect(),
-            coverage_status: specforge_ops::coverage::STATUS
-                .name_of(coverage.status())
-                .to_string(),
+            coverage_status: coverage.status(),
             // The diagnostics about the entity: those its data names it in,
             // else those inside its block (ADR 0016); never by its message.
             diagnostics: DiagnosticList(facts.diagnostics.iter().map(|d| (*d).clone()).collect()),

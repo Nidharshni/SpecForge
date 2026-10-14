@@ -3,7 +3,7 @@
 // W058 (feature coverage mismatch, downgraded from E033): trimmed, no
 // sound algorithm (ADR 0040).
 // W059-W060: removed (were condition entity validation, condition entity kind removed)
-// W123-W125: property entity validation
+// W123-W124: property entity validation
 // W126-W127: axiom entity validation
 // W128-W129: protocol entity validation (W130, ordering conflict, trimmed: ADR 0040)
 // W131-W133: refinement entity validation
@@ -18,7 +18,7 @@ use "types/zero-entity-core"
 // W059-W060 removed: condition entity kind no longer exists.
 // Conditions are inline fields, not standalone entities.
 
-// ── Property Validation (W123-W125) ──────────────────────────
+// ── Property Validation (W123-W124) ──────────────────────────
 
 behavior fa_validate_unreferenced_property "W123: Unreferenced Property" {
   category   query
@@ -64,24 +64,19 @@ behavior fa_validate_empty_property_description "W124: Empty Property Descriptio
   verify unit "property with non-empty description passes"
 }
 
-behavior fa_validate_property_without_kind "W125: Property Without Kind" {
+behavior fa_validate_property_type "Property Type Vocabulary" {
   category query
-  types    [FormalProperty, PropertyKind]
+  types    [FormalProperty, PropertyType]
   contract """
-    Detect property entities with no kind field. The kind field
-    (safety/liveness/fairness) classifies the temporal assertion and
-    is required for meaningful graph queries and agent consumption.
+    A property's property_type (safety, liveness or fairness) classifies
+    the temporal assertion; it is required (E006 when missing) and declared
+    an enum of PropertyType, so another value is the core's E061.
   """
   ensures {
-    missing_warned   "property with no kind field produces W125 warning"
-    present_passes   "property with kind field produces no diagnostic"
-    correct_template "message template is: property '{id}' has no kind (safety/liveness/fairness)"
+    declared_enum "property_type is a required enum of safety, liveness, fairness"
   }
   features [fa_temporal_properties]
-  verify unit "property with no kind produces W125"
-  verify unit "property with kind=safety passes"
-  verify unit "property with kind=liveness passes"
-  verify unit "property with kind=fairness passes"
+  verify unit "property_type is a declared enum of safety, liveness, fairness"
 }
 
 // ── Axiom Validation (W126-W127) ─────────────────────────────

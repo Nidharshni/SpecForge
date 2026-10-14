@@ -116,7 +116,7 @@ pub struct HandshakeRequest {
 /// means the plugin declares no limits and the host holds it to its ceiling
 /// (`Limits::CEILING` in `specforge_wasm::sandbox`).
 /// All builtin fixtures and every SDK-built extension serialize all six
-/// fields (`ContributionsBuilder::handshake_json` never elides them).
+/// fields (`ExtensionDeclaration::handshake_json` never elides them).
 ///
 /// `starter_template` is optional metadata: the text of the starter `.spec`
 /// file `specforge init` writes for a project that enables this extension.
@@ -296,8 +296,12 @@ pub struct FieldDescriptor {
     pub target_kind: Option<String>,
     #[serde(default)]
     pub file_reference: bool,
+    /// What an absent value counts as: for an enum, one of its `enum_values`
+    /// (W021 otherwise). The host never writes it into the graph; the schema,
+    /// the model, the guide and the hover show it.
     #[serde(default)]
     pub default_value: Option<String>,
+    /// An enum's values, in order (W021 when an enum declares none).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub enum_values: Vec<String>,
     #[serde(default)]
@@ -727,10 +731,10 @@ pub struct ValidatorRef {
     pub kind: Option<String>,
 }
 
-/// Verdict of a `validate__*` wasm export; the wire mirror of the host's
-/// `CustomVerdict`. Serializes as `{"verdict":"pass"}` or
-/// `{"verdict":"fail","field":...,"value":...}` (`field`/`value` omitted
-/// when `None`).
+/// Verdict of a `validate__*` wasm export; the wire form of the host's
+/// `Verdict` (`specforge_registry::rules::Verdict`). Serializes as
+/// `{"verdict":"pass"}` or `{"verdict":"fail","field":...,"value":...}`
+/// (`field`/`value` omitted when `None`).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "verdict", rename_all = "lowercase")]
 pub enum ValidatorVerdict {

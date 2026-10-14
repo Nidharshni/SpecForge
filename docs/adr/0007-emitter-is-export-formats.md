@@ -20,8 +20,7 @@ the compiler must not know (principle 2): union `variants`, `abstract`, the `inv
   names, Markdown cells, DBML names and strings, and the bare identifier an extension name becomes.
   A DBML reference is one named `Ref`, written only between columns the output writes. The legacy
   flat re-exports are gone: callers use `emit`; a format module keeps an entry point of its own
-  only where a caller needs what `emit` does not take (`json::emit_json`'s plain graph for an
-  extension command, `dot::emit_dot` with `DotOptions`). `emit_brief` and `emit_context` are gone
+  only where a caller needs what `emit` does not take (`dot::emit_dot` with `DotOptions`). `emit_brief` and `emit_context` are gone
   (round 5, plan 15).
 - **specforge-project**: `compile` (graph checks, `load_extensions`, Wasm custom rules),
   `field_types`, `passes` (extension compiler passes), `coverage` (the host's coverage view and
@@ -160,3 +159,25 @@ inference above (both sides of an undeclared edge type are open); each of those 
 
 How a field value is written is the graph's field form (ADR 0064); the emitter writes the envelopes and nodes
 around it, and derives the published schema from the export document.
+
+## Amendment (architecture round 9, plan 10): a node's coverage status is an export input; the export stays text
+
+A query with coverage wrote its document in three steps: the emitter wrote the export as text, ops parsed it, wrote
+`coverage_status` into each node and printed it again (in alphabetical key order), and MCP's outputSchema had the key
+patched in by JSON path. The published schema never had it: `specforge query --include-coverage` documents
+referenced `graph-protocol-v<version>.json` and failed it on every node (brief documents failed theirs too).
+
+- The emitter writes the status. `EmitOptions::coverage` carries each entity's verdict
+  (`ProjectCoverage::verdicts`); every node of the graph, context and brief formats whose entity has one carries
+  `coverage_status` (`specforge_coverage::Status`, last in the node), and a token budget counts it. The derived
+  document schema, MCP query's outputSchema and every published schema admit it as an optional key, with no patch.
+  The emitter depends on `specforge-coverage` (pure); `Status`'s shape is `specforge-common`'s, beside `FieldType`'s.
+- `specforge_ops::query` asks for it (`export::Request::coverage`) after looking the entity up, so an unknown entity
+  is E003 before an unreadable report is E045.
+- `emit` keeps returning text. A typed document was considered and rejected: five of six consumers want text and DOT
+  is text; MCP's structured result is a `serde_json::Value` checked by `shape::violations`, built from a typed document
+  exactly as from the text; the token budget measures text. It would have widened the emitter's interface by the
+  envelope and node types to remove one `expect`.
+
+What would reopen it: a consumer that edits an export before it is written (a second per-node key an operation adds),
+or an MCP reply that can be sent without building a `Value`.

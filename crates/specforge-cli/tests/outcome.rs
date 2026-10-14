@@ -7,24 +7,24 @@
 //! each user-visible change. `verdicts` pins the exit codes of the
 //! commands that judge.
 
-use std::io::Write;
 use std::path::Path;
-use std::process::{Command, Stdio};
-use tempfile::TempDir;
 
-use crate::coverage_corpus::copy_tree;
+use crate::support::{Cli, TestProject};
+
+/// An empty directory.
+fn scratch() -> TestProject {
+    TestProject::new().without_config()
+}
 
 /// A scratch copy of `fixtures/read_views/rv1`, optionally with a report.
-fn rv1(report: Option<&str>) -> TempDir {
-    let tmp = TempDir::new().unwrap();
-    copy_tree(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/read_views/rv1"),
-        tmp.path(),
+fn rv1(report: Option<&str>) -> TestProject {
+    let project = TestProject::copy_of(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/read_views/rv1"),
     );
-    if let Some(report) = report {
-        std::fs::write(tmp.path().join("specforge-report.json"), report).unwrap();
+    match report {
+        Some(report) => project.file("specforge-report.json", report),
+        None => project,
     }
-    tmp
 }
 
 /// What one command printed.
@@ -34,34 +34,20 @@ struct Run {
     stderr: String,
 }
 
-fn run_in(dir: &Path, args: &[&str], stdin: Option<&str>) -> Run {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_specforge"))
-        .args(args)
-        .current_dir(dir)
-        .env("HOME", std::env::temp_dir().join("specforge-outcome-home"))
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    if let Some(text) = stdin {
-        child
-            .stdin
-            .take()
-            .unwrap()
-            .write_all(text.as_bytes())
-            .unwrap();
-    }
-    drop(child.stdin.take());
-    let out = child.wait_with_output().unwrap();
+fn run_in(project: &TestProject, args: &[&str], stdin: Option<&str>) -> Run {
+    let dir = project.root();
+    let cli = match stdin {
+        Some(text) => Cli::on(project).stdin(text),
+        None => Cli::on(project),
+    };
+    let out = cli.bare(args);
     let canonical = dir.canonicalize().unwrap();
-    let clean = |bytes: &[u8]| {
-        String::from_utf8_lossy(bytes)
-            .replace(canonical.to_str().unwrap(), "[ROOT]")
+    let clean = |text: &str| {
+        text.replace(canonical.to_str().unwrap(), "[ROOT]")
             .replace(dir.to_str().unwrap(), "[ROOT]")
     };
     Run {
-        code: out.status.code().unwrap_or(-1),
+        code: out.code,
         stdout: clean(&out.stdout),
         stderr: clean(&out.stderr),
     }
@@ -84,45 +70,37 @@ fn row(label: &str, args: &[&str], run: &Run) -> String {
 )]
 fn refusals_after() {
     let mut table = String::new();
-    let mut add = |label: &str, dir: &Path, args: &[&str]| {
+    let mut add = |label: &str, dir: &TestProject, args: &[&str]| {
         let run = run_in(dir, args, None);
         table.push_str(&row(label, args, &run));
     };
 
     let broken = rv1(Some("{"));
-    add("C1", broken.path(), &["stats"]);
-    add("C2", broken.path(), &["stats", "--format", "json"]);
-    add("C3", broken.path(), &["analyze", "--format", "json"]);
+    add("C1", &broken, &["stats"]);
+    add("C2", &broken, &["stats", "--format", "json"]);
+    add("C3", &broken, &["analyze", "--format", "json"]);
     let project = rv1(None);
-    add("C4", project.path(), &["analyze", "nope"]);
-    add("C5", project.path(), &["trace", "nope", "--format", "json"]);
-    add(
-        "C6",
-        project.path(),
-        &["migrate", "--target-version", "9.9"],
-    );
+    add("C4", &project, &["analyze", "nope"]);
+    add("C5", &project, &["trace", "nope", "--format", "json"]);
+    add("C6", &project, &["migrate", "--target-version", "9.9"]);
     add(
         "C7",
-        project.path(),
+        &project,
         &["migrate", "--target-version", "9.9", "--format", "json"],
     );
-    add("C8", project.path(), &["schema", "--kind", "behavor"]);
-    add("C9", project.path(), &["export", "--scope", "nope"]);
-    let empty = TempDir::new().unwrap();
-    add(
-        "C10",
-        empty.path(),
-        &["init", "--name", "a", "--format", "json"],
-    );
-    let loose = TempDir::new().unwrap();
+    add("C8", &project, &["schema", "--kind", "behavor"]);
+    add("C9", &project, &["export", "--scope", "nope"]);
+    let empty = scratch();
+    add("C10", &empty, &["init", "--name", "a", "--format", "json"]);
+    let loose = scratch();
     add(
         "C11",
-        loose.path(),
+        &loose,
         &["collect", "--path", ".", "--format", "json"],
     );
     add(
         "C12",
-        project.path(),
+        &project,
         &["add", "@specforge/nope", "--format", "json"],
     );
 
@@ -136,56 +114,50 @@ const REGION: &str = "behavior broken \"Broken\" {\n  @@@ ]]\n}\n";
 
 #[test]
 fn verdicts() {
-    let exit = |dir: &Path, args: &[&str]| run_in(dir, args, None).code;
+    let exit = |dir: &TestProject, args: &[&str]| run_in(dir, args, None).code;
 
     let messy = rv1(None);
-    std::fs::write(messy.path().join("spec/messy.spec"), MESSY).unwrap();
-    let check = exit(messy.path(), &["format", "--check"]);
-    let diff = exit(messy.path(), &["format", "--diff"]);
-    let write = exit(messy.path(), &["format"]);
+    messy.write("spec/messy.spec", MESSY);
+    let check = exit(&messy, &["format", "--check"]);
+    let diff = exit(&messy, &["format", "--diff"]);
+    let write = exit(&messy, &["format"]);
 
     let region = rv1(None);
-    std::fs::write(region.path().join("spec/region.spec"), REGION).unwrap();
-    let region_write = exit(region.path(), &["format"]);
-    let region_stdin = run_in(region.path(), &["format", "--stdin"], Some(REGION)).code;
+    region.write("spec/region.spec", REGION);
+    let region_write = exit(&region, &["format"]);
+    let region_stdin = run_in(&region, &["format", "--stdin"], Some(REGION)).code;
 
     let bad_header = rv1(None);
-    std::fs::write(
-        bad_header.path().join("spec/bad.spec"),
+    bad_header.write(
+        "spec/bad.spec",
         "// specforge-format: 99.0\nbehavior bad \"Bad\" {\n}\n",
-    )
-    .unwrap();
-    let migrate_fails = exit(bad_header.path(), &["migrate"]);
+    );
+    let migrate_fails = exit(&bad_header, &["migrate"]);
 
     let old = rv1(None);
-    std::fs::write(
-        old.path().join("spec/old.spec"),
+    old.write("spec/old.spec",
         "// specforge-format: 0.1\nbehavior old_one \"Old\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n",
-    )
-    .unwrap();
-    let migrate_dry_run = exit(old.path(), &["migrate", "--dry-run"]);
+    );
+    let migrate_dry_run = exit(&old, &["migrate", "--dry-run"]);
 
     let dangling = rv1(None);
-    std::fs::write(
-        dangling.path().join("spec/dangling.spec"),
+    dangling.write("spec/dangling.spec",
         "behavior dangling \"D\" {\n  category \"core\"\n  contract \"The system MUST work\"\n  invariants [missing]\n}\n",
-    )
-    .unwrap();
-    let check_fails = exit(dangling.path(), &["check"]);
+    );
+    let check_fails = exit(&dangling, &["check"]);
 
     let doctor_fails = rv1(None);
-    std::fs::write(
-        doctor_fails.path().join("specforge.json"),
+    doctor_fails.write(
+        "specforge.json",
         r#"{"name":"d","version":"0.1.0","extensions":["@acme/missing"]}"#,
-    )
-    .unwrap();
-    let doctor_exit = exit(doctor_fails.path(), &["doctor"]);
-    let explain_unknown = exit(old.path(), &["explain", "ZZZ9"]);
-    let none = TempDir::new().unwrap();
-    let wasm = none.path().join("none.wasm");
+    );
+    let doctor_exit = exit(&doctor_fails, &["doctor"]);
+    let explain_unknown = exit(&old, &["explain", "ZZZ9"]);
+    let none = scratch();
+    let wasm = none.root().join("none.wasm");
     std::fs::write(&wasm, b"nope").unwrap();
     let validate_none = exit(
-        none.path(),
+        &none,
         &["extension", "validate", "--dir", wasm.to_str().unwrap()],
     );
 
@@ -219,22 +191,18 @@ fn verdicts() {
 fn json_refusals_are_the_error_document() {
     let broken = rv1(Some("{"));
     let project = rv1(None);
-    let empty = TempDir::new().unwrap();
-    let rows: [(&Path, &[&str], &str); 5] = [
-        (broken.path(), &["stats", "--format", "json"], "E045"),
+    let empty = scratch();
+    let rows: [(&TestProject, &[&str], &str); 5] = [
+        (&broken, &["stats", "--format", "json"], "E045"),
+        (&project, &["trace", "nope", "--format", "json"], "E003"),
+        (&broken, &["analyze", "--format", "json"], "E045"),
         (
-            project.path(),
-            &["trace", "nope", "--format", "json"],
-            "E003",
-        ),
-        (broken.path(), &["analyze", "--format", "json"], "E045"),
-        (
-            project.path(),
+            &project,
             &["migrate", "--target-version", "9.9", "--format", "json"],
             "E019",
         ),
         (
-            empty.path(),
+            &empty,
             &["init", "--name", "a", "--format", "json"],
             "invalid_name",
         ),
@@ -265,12 +233,12 @@ fn measuring_commands_exit_two_on_refusal() {
         } else {
             &broken
         };
-        assert_eq!(run_in(dir.path(), args, None).code, 2, "{args:?}");
+        assert_eq!(run_in(dir, args, None).code, 2, "{args:?}");
     }
     for args in [&["trace", "nope"][..], &["schema", "--kind", "behavor"]] {
-        assert_eq!(run_in(project.path(), args, None).code, 1, "{args:?}");
+        assert_eq!(run_in(&project, args, None).code, 1, "{args:?}");
     }
-    assert_eq!(run_in(project.path(), &["stats"], None).code, 0);
+    assert_eq!(run_in(&project, &["stats"], None).code, 0);
 }
 
 #[specforge_test_macros::test(
@@ -278,10 +246,10 @@ fn measuring_commands_exit_two_on_refusal() {
     verify = "a command run outside any project refuses with no_project"
 )]
 fn collect_outside_a_project_is_no_project() {
-    let loose = TempDir::new().unwrap();
+    let loose = scratch();
 
     let run = run_in(
-        loose.path(),
+        &loose,
         &["collect", "--path", ".", "--format", "json"],
         None,
     );
@@ -289,7 +257,7 @@ fn collect_outside_a_project_is_no_project() {
     assert_eq!(run.code, 1);
     let document: serde_json::Value = serde_json::from_str(&run.stdout).unwrap();
     assert_eq!(document["code"], "no_project", "{document}");
-    let human = run_in(loose.path(), &["collect", "--path", "."], None);
+    let human = run_in(&loose, &["collect", "--path", "."], None);
     assert!(
         human.stderr.starts_with("error[no_project]:"),
         "{}",
@@ -302,9 +270,9 @@ fn collect_outside_a_project_is_no_project() {
     verify = "an operation's refusal is error[CODE]: message, its hint and the files it left written, on stderr"
 )]
 fn an_unknown_explain_code_is_a_refusal() {
-    let dir = TempDir::new().unwrap();
+    let dir = scratch();
 
-    let run = run_in(dir.path(), &["explain", "ZZZ9"], None);
+    let run = run_in(&dir, &["explain", "ZZZ9"], None);
 
     assert_eq!(run.code, 1);
     assert!(
@@ -325,20 +293,16 @@ fn a_build_cache_that_cannot_be_written_is_a_refusal() {
     use std::os::unix::fs::PermissionsExt;
     let project = rv1(None);
     let mode = |m| std::fs::Permissions::from_mode(m);
-    std::fs::set_permissions(project.path(), mode(0o555)).unwrap();
-    if std::fs::write(project.path().join("probe"), b"").is_ok() {
+    std::fs::set_permissions(project.root(), mode(0o555)).unwrap();
+    if std::fs::write(project.root().join("probe"), b"").is_ok() {
         // Permissions do not bind this user (root): nothing to test.
-        std::fs::set_permissions(project.path(), mode(0o755)).unwrap();
+        std::fs::set_permissions(project.root(), mode(0o755)).unwrap();
         return;
     }
 
-    let human = run_in(project.path(), &["check", "--cache"], None);
-    let json = run_in(
-        project.path(),
-        &["check", "--cache", "--format", "json"],
-        None,
-    );
-    std::fs::set_permissions(project.path(), mode(0o755)).unwrap();
+    let human = run_in(&project, &["check", "--cache"], None);
+    let json = run_in(&project, &["check", "--cache", "--format", "json"], None);
+    std::fs::set_permissions(project.root(), mode(0o755)).unwrap();
 
     assert_eq!(human.code, 1, "{}", human.stderr);
     assert!(
@@ -364,10 +328,10 @@ fn collect_from_a_sub_path_finds_its_project() {
     // A project without a collector: `collect` finds it from a sub-path and
     // fails for want of a collector (E058), not for want of a project.
     let project = rv1(None);
-    let sub = project.path().join("spec");
+    let sub = project.root().join("spec");
 
     let run = run_in(
-        project.path(),
+        &project,
         &["collect", "--no-run", "--path", sub.to_str().unwrap()],
         None,
     );

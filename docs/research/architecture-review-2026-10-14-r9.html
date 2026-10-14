@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SpecForge round 9 review</title>
+<script src="https://cdn.tailwindcss.com/3.4.16"></script>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose", flowchart: { curve: "basis" } });
+</script>
+<style>
+  .seam { border-style: dashed !important; }
+  .deep { background: linear-gradient(135deg, #0f172a, #1e293b); color: #e2e8f0; }
+  .leak { color: #dc2626; }
+  .lbl { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; }
+  .mermaid { display: flex; justify-content: center; }
+  pre.code { font-size: .72rem; line-height: 1.35; white-space: pre-wrap; }
+</style>
+</head>
+<body class="bg-stone-50 text-slate-900 font-sans">
+<main class="max-w-6xl mx-auto px-4 sm:px-6 py-12 space-y-12">
+
+<header class="space-y-4">
+  <p class="lbl text-slate-500">leaderiop/SpecForge · main 2d9df4aa · 2026-10-13 · round 9</p>
+  <h1 class="font-serif text-4xl">Architecture review: deepening opportunities</h1>
+  <p class="text-slate-600 text-sm">Four explorers: MCP · ops read operations · CLI/LSP/watch/project · extension lifecycle, runtime and registry. Seven of eleven candidates carry a reproduced live bug.</p>
+  <div class="flex flex-wrap gap-4 text-xs text-slate-600 items-center">
+    <span class="flex items-center gap-2"><span class="inline-block w-5 h-4 border border-slate-500 bg-white"></span>module</span>
+    <span class="flex items-center gap-2"><span class="inline-block w-6 border-t-2 border-dashed border-slate-500"></span>seam</span>
+    <span class="flex items-center gap-2"><span class="inline-block w-6 border-t-2 border-red-600"></span><span class="leak">leakage / drift</span></span>
+    <span class="flex items-center gap-2"><span class="inline-block w-5 h-4 deep border-2 border-slate-900"></span>deep module</span>
+    <span class="flex items-center gap-2"><span class="px-1.5 py-0.5 rounded bg-red-100 text-red-700">live bug</span>reproduced at base</span>
+  </div>
+  <nav class="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 text-sm pt-2">
+    <a href="#c1" class="hover:underline">1 · One vocabulary declaration</a>
+    <a href="#c2" class="hover:underline">2 · Refusals name their argument via the request</a>
+    <a href="#c3" class="hover:underline">3 · The session turns a batch into changes</a>
+    <a href="#c4" class="hover:underline">4 · The session update carries the diagnostics delta</a>
+    <a href="#c5" class="hover:underline">5 · The registry wire owns the whole address</a>
+    <a href="#c6" class="hover:underline">6 · Plan check reads the snapshot</a>
+    <a href="#c7" class="hover:underline">7 · The call target owns adoption</a>
+    <a href="#c8" class="hover:underline">8 · One test project fixture, three drivers</a>
+    <a href="#c9" class="hover:underline">9 · One solver seam</a>
+    <a href="#c10" class="hover:underline">10 · Export hands over a document</a>
+    <a href="#c11" class="hover:underline">11 · Sources end at a nested project</a>
+  </nav>
+</header>
+
+<section id="candidates" class="space-y-10">
+
+<!-- ============ 1 ============ -->
+<article id="c1" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+  <div class="flex flex-wrap items-center gap-2">
+    <h2 class="font-serif text-2xl mr-2">1 · A closed field vocabulary is declared once</h2>
+    <span class="px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-800">Strong</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">live bug</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-indigo-100 text-indigo-700">re-vendor</span>
+  </div>
+  <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
+    <li>extensions/product/src/declaration.rs:47, :399-401, :627-681</li>
+    <li>extensions/product/src/queries.rs:42-83, :116, :183-200</li>
+    <li>extensions/product/src/commands.rs:31-35, 101, 125</li>
+    <li>extensions/product/src/lifecycle.rs:64-74</li>
+    <li>crates/specforge-registry/src/rules/check.rs:272-275</li>
+    <li>graph/field_form.rs:192 · lsp/completion.rs:194 · emitter/schema.rs:145</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 p-4">
+      <p class="lbl text-slate-500 mb-3">Before: five hand-typed copies per vocabulary</p>
+      <div class="flex flex-col items-center gap-2">
+        <div class="border border-slate-400 px-3 py-1 text-xs">lifecycle: proposed · accepted · in_progress · done …</div>
+        <div class="grid grid-cols-5 gap-1 w-full text-[10px] text-center">
+          <div class="border border-red-400 p-1">field description</div>
+          <div class="border border-red-400 p-1">OneOf rule + message</div>
+          <div class="border border-red-400 p-1">list filter one_of</div>
+          <div class="border border-red-400 p-1">CLI help</div>
+          <div class="border border-red-400 p-1">pass defaults</div>
+        </div>
+        <div class="text-[11px] leak text-center">technical_level: filter closed, rule absent<br/>guide suggests <span class="font-mono">sync</span>, filter refuses it</div>
+        <div class="border border-dashed border-slate-300 px-3 py-1 text-[10px] text-slate-400 w-full text-center">FieldType::Enum → E061 · LSP completion · schema enum · guide example — used by no builtin</div>
+      </div>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4">
+      <p class="lbl text-slate-500 mb-3">After: one declaration, everything derives</p>
+      <div class="flex flex-col items-center gap-2">
+        <div class="deep border-2 border-slate-900 rounded px-4 py-3 text-center w-4/5">
+          <p class="lbl text-slate-300">vocabulary declaration</p>
+          <p class="text-xs mt-1">values · absent counts as · off-vocabulary report</p>
+        </div>
+        <div class="w-px h-4 bg-slate-400"></div>
+        <div class="grid grid-cols-3 gap-1 w-full text-[10px] text-center text-slate-500">
+          <div class="border border-slate-300 p-1">rule + {allowed}</div>
+          <div class="border border-slate-300 p-1">filter + help</div>
+          <div class="border border-slate-300 p-1">pass default</div>
+          <div class="border border-slate-300 p-1">description</div>
+          <div class="border border-slate-300 p-1">LSP completion</div>
+          <div class="border border-slate-300 p-1">schema enum</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="text-sm"><b>Problem.</b> Each closed vocabulary is copied by hand into up to five places, and the copies have already drifted. <code>check</code> accepts values that the list filters then refuse.</p>
+  <p class="text-sm"><b>Solution.</b> One declaration per vocabulary. The rule, its message, the field description, the filter, the CLI help and the pass defaults all derive from it. The deep form lives in the SDK, so the host's enum features reach the builtins too.</p>
+  <pre class="code bg-slate-900 text-slate-100 rounded p-3">$ specforge check                                    → 0 errors, 0 warnings
+$ specforge product personas --technical-level novice → INVALID_INPUT … got 'novice'  (exit 2)
+$ specforge product channels --interaction-model sync → INVALID_INPUT … got 'sync'    (exit 2)
+$ specforge product releases --status shipped         → INVALID_INPUT … got 'shipped' (exit 2)</pre>
+  <ul class="text-sm list-disc pl-5 grid sm:grid-cols-2 gap-x-6">
+    <li>Locality: one edit per status</li>
+    <li>Leverage: product, governance and formal get completion</li>
+    <li>One test: filter and rule agree</li>
+    <li>Delete four copies per vocabulary</li>
+  </ul>
+  <div class="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">No ADR conflict. Two decisions are yours: is an off-vocabulary value a warning or E061, and are technical_level, interaction_model and release status closed? The spec contradicts itself on the last one (behaviors-registration.spec:192 against types.spec:19-27).</div>
+</article>
+
+<!-- ============ 2 ============ -->
+<article id="c2" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+  <div class="flex flex-wrap items-center gap-2">
+    <h2 class="font-serif text-2xl mr-2">2 · A refusal names its argument through the request, not a per-tool code table</h2>
+    <span class="px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-800">Strong</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">live bug</span>
+  </div>
+  <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
+    <li>crates/specforge-mcp/src/tool.rs:229, :519-526, :712-722</li>
+    <li>crates/specforge-mcp/src/tools/add_extension.rs:74-83</li>
+    <li>tools/{trace,render,search,model,infer_session}.rs · prompts/*</li>
+    <li>ops/extension/{add,candidate,remove,lock_plan,resolve}.rs</li>
+    <li>crates/specforge-mcp/tests/refusal_arguments.rs:23-128</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 p-4">
+      <p class="lbl text-slate-500 mb-2">Before: the tool guesses which codes its call graph raises</p>
+      <pre class="mermaid">
+flowchart TB
+  T[add_extension tool] -->|calls| A[ops add]
+  A --> C[candidate] & L[lock_plan] & R[resolve]
+  C -. E028 E072 .-> X{{REFUSAL_ARGUMENTS<br/>E054 · R-RES-003}}
+  L -. E028 E072 .-> X
+  R -. R-RES-004 .-> X
+  A -. E064 .-> X
+  X -->|miss| P[debug_assert panic<br/>→ -32603]
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#dc2626;
+  class X,P leak
+      </pre>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4">
+      <p class="lbl text-slate-500 mb-2">After: the refusal says which request field it is about</p>
+      <pre class="mermaid">
+flowchart TB
+  A[ops add] -->|"Refusal { subject: Request::specifiers }"| T
+  T[add_extension tool] --> M[[exhaustive field → argument map<br/>compiler-checked, one per request]]
+  M --> O[argument: specifiers]
+  classDef deep fill:#0f172a,color:#e2e8f0,stroke:#0f172a;
+  class M deep
+      </pre>
+    </div>
+  </div>
+  <p class="text-sm"><b>Problem.</b> Four mechanisms try to name a refusal's argument: the table, a string match on the code, call-site <code>with_argument</code> calls, and <code>TargetError</code>. None of them sees every code. In a debug build a missed code panics; in a release build the reply has no argument.</p>
+  <p class="text-sm"><b>Solution.</b> The operation's refusal carries a typed request field as its subject. Each tool maps its request's fields to its argument names once, exhaustively.</p>
+  <pre class="code bg-slate-900 text-slate-100 rounded p-3">add_extension {"specifiers":["git+https://example.com/x"]} → -32603 Internal error   (E064, panic tool.rs:521)
+remove_extension {"name":"@@bad"}                          → -32603                  (E072)
+add_extension {"specifiers":["./notwasm.txt"]}             → -32603                  (E028)</pre>
+  <ul class="text-sm list-disc pl-5 grid sm:grid-cols-2 gap-x-6">
+    <li>Locality: a new ops refusal needs no MCP edit</li>
+    <li>Leverage: prompts and trace use the same rule</li>
+    <li>Delete the table, the match and the panic</li>
+    <li>One test per request type</li>
+  </ul>
+  <div class="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">⚠ Contradicts ADR 0033's round-8 amendment, which chose the table and merged today. It is worth reopening because the table already misses five codes on the add, remove and plan paths. The ADR's "an operation writes no argument name" still holds, since the subject is a request field, not a surface's spelling.</div>
+</article>
+
+<!-- ============ 3 ============ -->
+<article id="c3" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+  <div class="flex flex-wrap items-center gap-2">
+    <h2 class="font-serif text-2xl mr-2">3 · The project session turns a batch of paths into changes</h2>
+    <span class="px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-800">Strong</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">local-substitutable</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">live bug</span>
+  </div>
+  <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
+    <li>crates/specforge-project/src/inputs.rs:228-254</li>
+    <li>crates/specforge-project/src/session.rs:506 (stale)</li>
+    <li>crates/specforge-project/src/freshness.rs:170-185</li>
+    <li>crates/specforge-watch/src/session.rs:153-186 · watcher.rs:76-78</li>
+    <li>crates/specforge-lsp/src/changes.rs:128 · watchers.rs:50</li>
+    <li>crates/specforge-common/src/discovery.rs:87</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 p-4">
+      <p class="lbl text-slate-500 mb-3">Before: two "what changed" answers that disagree</p>
+      <div class="space-y-2 text-xs">
+        <div class="flex items-center gap-2"><div class="border border-slate-400 px-2 py-1 w-28 text-center">watch / LSP</div><span>→ notify paths →</span><div class="border border-red-500 px-2 py-1 leak">classify(path) one at a time</div></div>
+        <div class="pl-32 text-[11px] leak">dir → Unrelated · symlink → Unrelated</div>
+        <div class="flex items-center gap-2 pt-2"><div class="border border-slate-400 px-2 py-1 w-28 text-center">MCP catch-up</div><span>→</span><div class="border border-slate-400 px-2 py-1">stale(): snapshot compare ✓</div></div>
+        <div class="border-t border-dashed border-slate-400 mt-3 pt-2 text-[11px] text-slate-500">ProjectSession seam: two adapters, two rules</div>
+      </div>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4">
+      <p class="lbl text-slate-500 mb-3">After: a batch narrows the one snapshot comparison</p>
+      <div class="flex flex-col items-center gap-2 text-xs">
+        <div class="flex gap-2"><div class="border border-slate-400 px-2 py-1">watch</div><div class="border border-slate-400 px-2 py-1">LSP</div><div class="border border-slate-400 px-2 py-1">MCP</div></div>
+        <div class="w-full border-t-2 border-dashed border-slate-500"></div>
+        <div class="deep border-2 border-slate-900 rounded px-4 py-3 text-center w-4/5">
+          <p class="lbl text-slate-300">session.changes(batch)</p>
+          <p class="text-[11px] mt-1 text-slate-400">dir = every source under it · stamp compare · symlink targets watched</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="text-sm"><b>Problem.</b> The per-path classifier was extracted and tested in isolation. The bug is in its callers, which hand it the event shapes notify actually sends: a directory, or a symlink. Watch keeps a graph that <code>check</code> disagrees with.</p>
+  <p class="text-sm"><b>Solution.</b> The session is the one place a batch becomes changes: the stamped-snapshot comparison <code>stale()</code> already does, narrowed by the paths. The watch roots and LSP globs come from what the session read.</p>
+  <pre class="code bg-slate-900 text-slate-100 rounded p-3">mv old new; rm new/a.spec; write r2.spec   → watch: E002 duplicate 'alpha_one' (first at old/a.spec)   check: []
+mv ../src2/pkg ./pkg                       → no event; stats 2 entities, watch graph 1
+link.spec → ../outside/real.spec, edit     → 0 watch events; stats picks up the new entity</pre>
+  <ul class="text-sm list-disc pl-5 grid sm:grid-cols-2 gap-x-6">
+    <li>Locality: one rule for watch, LSP and MCP</li>
+    <li>Fixes directory moves, checkouts and symlinks at once</li>
+    <li>Tests: SessionWatch fed a directory event</li>
+    <li>The classifier's source branch goes</li>
+  </ul>
+  <div class="rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">No ADR conflict. This completes ADR 0030/0035 ("what a path is … is the session's") and ADR 0055.</div>
+</article>
+
+<!-- ============ 4 ============ -->
+<article id="c4" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+  <div class="flex flex-wrap items-center gap-2">
+    <h2 class="font-serif text-2xl mr-2">4 · A diagnostics change is the session update's</h2>
+    <span class="px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-800">Strong</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">live bug</span>
+  </div>
+  <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
+    <li>crates/specforge-mcp/src/subscriptions/mod.rs:64-95, :143-155</li>
+    <li>crates/specforge-mcp/src/state.rs:216-258</li>
+    <li>crates/specforge-project/src/session.rs:80-97 (Update)</li>
+    <li>crates/specforge-graph/src/build.rs:499-516</li>
+    <li>crates/specforge-cli/src/watch.rs:278</li>
+    <li>spec/behaviors/mcp-server.spec:604-614</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 p-4">
+      <p class="lbl text-slate-500 mb-2">Before: two identities for one diagnostic</p>
+      <pre class="mermaid">
+flowchart LR
+  S[ProjectSession] -->|Update: current set only| M[MCP state<br/>heard_diagnostics]
+  M --> D{{identity = code · message · file}}
+  D -->|line moved = unchanged| N[no resources/updated]
+  S --> G[graph build<br/>compares whole diagnostic]
+  G --> W[watch prints delta]
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#dc2626;
+  class D,N leak
+      </pre>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4">
+      <p class="lbl text-slate-500 mb-2">After: the update carries added and removed</p>
+      <pre class="mermaid">
+flowchart LR
+  S[[ProjectSession<br/>Update: added · removed<br/>as presented]] --> M[MCP forwards + I017]
+  S --> W[watch]
+  S --> L[LSP?]
+  classDef deep fill:#0f172a,color:#e2e8f0,stroke:#0f172a;
+  class S deep
+      </pre>
+    </div>
+  </div>
+  <p class="text-sm"><b>Problem.</b> MCP keeps its own before/after snapshot and compares diagnostics without their line. A diagnostic that moved never notifies, so a subscriber holds a stale location, which the spec forbids.</p>
+  <p class="text-sm"><b>Solution.</b> The session's update states the delta, comparing diagnostics as every surface presents them. MCP forwards it; <code>identity</code>, <code>between</code> and <code>heard_diagnostics</code> go.</p>
+  <pre class="code bg-slate-900 text-slate-100 rounded p-3">subscribe specforge://diagnostics; insert 3 blank lines above E001
+read → E001 at line 8 (was 5)            ← the resource changed
+(no notifications/resources/updated, no specforge/diagnosticsChanged)</pre>
+  <ul class="text-sm list-disc pl-5 grid sm:grid-cols-2 gap-x-6">
+    <li>Locality: one "changed" rule</li>
+    <li>Leverage: MCP, watch and the LSP share it</li>
+    <li>Tested in specforge-project, no server</li>
+    <li>Delete MCP's private snapshot</li>
+  </ul>
+  <div class="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">ADR 0024 D6 (diagnostics read lazily) and ADR 0058 D3 (delta sent whole) still stand; the identity rule itself is undecided. This pairs naturally with candidate 3: both deepen the session's <code>Update</code>.</div>
+</article>
+
+<!-- ============ 5 ============ -->
+<article id="c5" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+  <div class="flex flex-wrap items-center gap-2">
+    <h2 class="font-serif text-2xl mr-2">5 · The registry wire owns a call's whole address</h2>
+    <span class="px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-800">Strong</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">ports &amp; adapters</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">live bug</span>
+  </div>
+  <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
+    <li>crates/specforge-registry-wire/src/path.rs:1-7, :36-45</li>
+    <li>crates/specforge-registry-client/src/http_client.rs:42-43, :75, :100-103, :303-337</li>
+    <li>crates/specforge-registry-server/src/testing.rs:72</li>
+    <li>crates/specforge-registry-client/tests/contract.rs:34 · docs/registry-trust.md:15</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 p-4 text-xs">
+      <p class="lbl text-slate-500 mb-3">Before: the prefix leaks into the user's config</p>
+      <div class="space-y-2">
+        <div class="border border-red-500 px-2 py-1 font-mono leak">specforge.json url: "http://host<b>/v1</b>"</div>
+        <div class="flex gap-2 items-center"><div class="border border-slate-400 px-2 py-1">client: base + path::package</div><span class="text-slate-400">PREFIX unused</span></div>
+        <div class="flex gap-2 items-center"><div class="border border-slate-400 px-2 py-1">server: route "/v1/packages/{name}"</div><span class="text-slate-400">retyped</span></div>
+        <div class="border border-red-500 px-2 py-1 leak">any 404 → NotFound(package)</div>
+      </div>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4 text-xs">
+      <p class="lbl text-slate-500 mb-3">After: one module knows the address shape</p>
+      <div class="flex flex-col items-center gap-2">
+        <div class="border border-slate-400 px-2 py-1 font-mono">url: "http://host"</div>
+        <div class="deep border-2 border-slate-900 rounded px-4 py-3 text-center w-4/5">
+          <p class="lbl text-slate-300">registry-wire address</p>
+          <p class="text-[11px] mt-1 text-slate-400">root → prefix + path · reply = protocol answer | not a registry (R009)</p>
+        </div>
+        <div class="flex gap-2 w-full border-t-2 border-dashed border-slate-500 pt-2 justify-center"><div class="border border-slate-400 px-2 py-1">HTTP adapter</div><div class="border border-slate-400 px-2 py-1">server routes</div><div class="border border-slate-400 px-2 py-1">MemoryClient</div></div>
+      </div>
+    </div>
+  </div>
+  <p class="text-sm"><b>Problem.</b> The protocol's version prefix sits in every user's <code>specforge.json</code>, and the client never uses <code>PREFIX</code>. A registry URL without <code>/v1</code> makes every package look missing.</p>
+  <p class="text-sm"><b>Solution.</b> The wire module turns a registry root into each call's full address and reads a reply as either a protocol answer or "not a registry". The server's routes derive from the same functions.</p>
+  <pre class="code bg-slate-900 text-slate-100 rounded p-3">url without /v1:  specforge update → error[R-RES-001]: @sdk/greet: package not found in registry 'main'
+                  specforge search greet → error[R006]: Package not found: greet
+curl /packages/@x%2Fy → 404 empty body     curl /v1/packages/@x%2Fy → 404 {"error":{"code":"NOT_FOUND"}}</pre>
+  <ul class="text-sm list-disc pl-5 grid sm:grid-cols-2 gap-x-6">
+    <li>Locality: the address shape in one module</li>
+    <li>Misconfiguration becomes its own error</li>
+    <li>Contract tests stop appending /v1</li>
+    <li>Delete the retyped route constants</li>
+  </ul>
+  <div class="rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">No ADR conflict. This completes ADR 0044 (the contract is one crate).</div>
+</article>
+
+<!-- ============ 6 ============ -->
+<article id="c6" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+  <div class="flex flex-wrap items-center gap-2">
+    <h2 class="font-serif text-2xl mr-2">6 · Plan check reads standings from the snapshot, and takes a typed AgentPlan</h2>
+    <span class="px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-800">Strong</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">live bug</span>
+  </div>
+  <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
+    <li>crates/specforge-ops/src/plan.rs:29, :101-120, :155-159</li>
+    <li>crates/specforge-project/src/coverage.rs:189</li>
+    <li>crates/specforge-coverage/src/lib.rs:214</li>
+    <li>crates/specforge-mcp/src/args.rs:310-324</li>
+    <li>spec/types/graph.spec:227-237 · mcp-prompts.spec:170</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 p-4">
+      <p class="lbl text-slate-500 mb-2">Before: a needless dependency on the report</p>
+      <pre class="mermaid">
+flowchart LR
+  P[plan check] -->|"Value, hand-checked<br/>entries[].entity_id only"| V[(plan JSON)]
+  P --> C[view.coverage]
+  C -->|needs usable| R[(specforge-report.json)]
+  C --> E[coverage.entities = snapshot]
+  R -. stale report .-> X[E045 refusal]
+  classDef leak stroke:#dc2626,stroke-width:2px,color:#dc2626;
+  class R,X,V leak
+      </pre>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4">
+      <p class="lbl text-slate-500 mb-2">After: the read shows the dependency</p>
+      <pre class="mermaid">
+flowchart LR
+  A[AgentPlan<br/>serde-typed] --> P[plan check]
+  P --> S[[view.entities<br/>standing + declared obligations]]
+  classDef deep fill:#0f172a,color:#e2e8f0,stroke:#0f172a;
+  class S deep
+      </pre>
+    </div>
+  </div>
+  <p class="text-sm"><b>Problem.</b> Plan check refuses with E045 when the test report is unusable, though it reads nothing the report decides. It also accepts plans its spec type rejects, because the plan has no <code>plan_id</code> or <code>action</code> check.</p>
+  <p class="text-sm"><b>Solution.</b> Standings and declared obligations are reached only through the snapshot; <code>ProjectCoverage</code> keeps only the report-dependent facts. The plan is decoded once as a typed <code>AgentPlan</code>.</p>
+  <pre class="code bg-slate-900 text-slate-100 rounded p-3">trace {"plan":{"entries":[{"entity_id":"CompleteTaskCommand"}]}} → accepted (no plan_id, no action)
+after the report says "pass" instead of "passed"                → E045 schema_mismatch</pre>
+  <ul class="text-sm list-disc pl-5 grid sm:grid-cols-2 gap-x-6">
+    <li>PlanError::Report disappears</li>
+    <li>Tested with no report on disk</li>
+    <li>Each operation's report dependence is visible from its calls</li>
+    <li>The spec type is the input contract</li>
+  </ul>
+  <div class="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">Consistent with ADR 0015 I3. Typing <code>AgentPlan</code> amends ADR 0033, which lists it as a <code>Value</code> argument.</div>
+</article>
+
+<!-- ============ 7 ============ -->
+<article id="c7" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+  <div class="flex flex-wrap items-center gap-2">
+    <h2 class="font-serif text-2xl mr-2">7 · The call target decides, from the request's revision, whether a call may change what is served</h2>
+    <span class="px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-800">Worth exploring</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">live bug</span>
+  </div>
+  <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
+    <li>crates/specforge-mcp/src/target.rs:579-584, :605, :653-658</li>
+    <li>crates/specforge-mcp/src/surface_call.rs:174</li>
+    <li>crates/specforge-mcp/src/modern.rs:4-6 · mcp-server.spec:758-760</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 p-4">
+      <p class="lbl text-slate-500 mb-2">Before: a stateless call adopts a project</p>
+      <pre class="mermaid">
+sequenceDiagram
+  participant C as client (2026-07-28)
+  participant S as server
+  C->>S: read diagnostics
+  S-->>C: []
+  C->>S: validate {path: p2}
+  Note over S: resolve() serves p2
+  C->>S: read diagnostics
+  S-->>C: [I002]  ← changed by request 2
+      </pre>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4">
+      <p class="lbl text-slate-500 mb-2">After: one owner of the adoption decision</p>
+      <pre class="mermaid">
+flowchart TB
+  R[request revision] --> T[[call target]]
+  T -->|stateless| O[open path for this call only]
+  T -->|handshake| A[adopt — ADR 0014 D5]
+  classDef deep fill:#0f172a,color:#e2e8f0,stroke:#0f172a;
+  class T deep
+      </pre>
+    </div>
+  </div>
+  <p class="text-sm"><b>Problem.</b> Under the stateless revision a <code>path</code> argument still changes what later requests read, breaking "nothing a prior request said changes its answer".</p>
+  <p class="text-sm"><b>Solution.</b> <code>resolve</code> is told the revision and owns the decision: stateless calls open the path for themselves only, and init serves nothing.</p>
+  <ul class="text-sm list-disc pl-5 grid sm:grid-cols-2 gap-x-6">
+    <li>Locality: one decision, one module</li>
+    <li>Stateless contract testable per revision</li>
+  </ul>
+  <div class="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">⚠ ADR 0014 D5 (adopt a path) predates the stateless revision and conflicts with ADR 0004 D4-c. You decide which one wins.</div>
+</article>
+
+<!-- ============ 8 ============ -->
+<article id="c8" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+  <div class="flex flex-wrap items-center gap-2">
+    <h2 class="font-serif text-2xl mr-2">8 · One test project fixture with CLI, MCP and in-process drivers</h2>
+    <span class="px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-800">Worth exploring</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process · local-substitutable</span>
+  </div>
+  <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
+    <li>crates/specforge-cli/tests/*.rs (24 local command helpers)</li>
+    <li>cli/tests/{e2e_edges,product_rules,navigation_parity,read_views,pipeline}.rs</li>
+    <li>106 CompiledProject::compile( sites · ≥9 compile helpers</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 p-4 text-xs">
+      <p class="lbl text-slate-500 mb-3">Before: each test knows argv, envelope, layout and wiring</p>
+      <div class="grid grid-cols-6 gap-1">
+        <div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div><div class="border border-red-300 h-6 text-[9px] flex items-center justify-center text-red-600">cmd()</div>
+      </div>
+      <p class="mt-3 text-[11px] leak">ddf20d8c (--path): 32 test files edited · 0d050c4f: 14</p>
+      <p class="text-[11px] text-slate-500">≈584 binary spawns · only parity.rs isolates HOME</p>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4 text-xs">
+      <p class="lbl text-slate-500 mb-3">After: argv spelled once</p>
+      <div class="flex flex-col items-center gap-2">
+        <div class="deep border-2 border-slate-900 rounded px-4 py-3 text-center w-4/5">
+          <p class="lbl text-slate-300">test project fixture</p>
+          <p class="text-[11px] mt-1 text-slate-400">config · files · builtins runtime · isolated HOME</p>
+        </div>
+        <div class="w-full border-t-2 border-dashed border-slate-500"></div>
+        <div class="flex gap-2"><div class="border border-slate-400 px-2 py-1">in-process compile</div><div class="border border-slate-400 px-2 py-1">CLI driver</div><div class="border border-slate-400 px-2 py-1">MCP call</div></div>
+      </div>
+    </div>
+  </div>
+  <p class="text-sm"><b>Problem.</b> 1,096 test-file changes since 10-01. One flag rename ripples through dozens of files, and behavior that has nothing to do with the CLI is tested by spawning the binary and parsing its stdout.</p>
+  <p class="text-sm"><b>Solution.</b> One test-support module: a project fixture plus three drivers. Tests that only need a compile move to the crate that owns the behavior.</p>
+  <ul class="text-sm list-disc pl-5 grid sm:grid-cols-2 gap-x-6">
+    <li>Locality: the command-line contract in one file</li>
+    <li>Leverage across about 50 test files</li>
+    <li>Faster in-process tests</li>
+    <li>Delete about 33 local helpers</li>
+  </ul>
+</article>
+
+<!-- ============ 9 ============ -->
+<article id="c9" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+  <div class="flex flex-wrap items-center gap-2">
+    <h2 class="font-serif text-2xl mr-2">9 · The z3 solver is one adapter behind one seam</h2>
+    <span class="px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-800">Worth exploring</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">ports &amp; adapters (mock at port)</span>
+  </div>
+  <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
+    <li>crates/specforge-ops/src/analyze.rs:423-433, :1269-1301</li>
+    <li>crates/specforge-ops/src/prove.rs:172-223</li>
+    <li>crates/specforge-ops/src/doctor.rs:334-339, :539-545</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4">
+    <div class="rounded-lg border border-slate-200 p-4 text-xs">
+      <p class="lbl text-slate-500 mb-3">Before: three seams, two probes, one binary</p>
+      <div class="space-y-1">
+        <div class="border-l-4 border-slate-400 pl-2 py-1">analyze_via(view, opts, <b>ProveFn</b>)</div>
+        <div class="border-l-4 border-slate-400 pl-2 py-1 ml-4">prove::analyze_with(ctx, &amp;dyn <b>Solver</b>)</div>
+        <div class="border-l-4 border-slate-400 pl-2 py-1 ml-8">Z3: probe <code>z3 --version</code> → W098</div>
+        <div class="border-l-4 border-red-500 pl-2 py-1 leak">doctor: diagnose_with(view, <b>bool</b>) · z3_on_path() → "z3_missing"</div>
+        <div class="border-l-4 border-red-500 pl-2 py-1 leak">ProveOptions.z3_timeout threaded through AnalyzeOptions</div>
+      </div>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4 text-xs">
+      <p class="lbl text-slate-500 mb-3">After</p>
+      <div class="flex flex-col items-center gap-2">
+        <div class="flex gap-2"><div class="border border-slate-400 px-2 py-1">analyze</div><div class="border border-slate-400 px-2 py-1">doctor</div></div>
+        <div class="w-full border-t-2 border-dashed border-slate-500"></div>
+        <div class="deep border-2 border-slate-900 rounded px-4 py-3 text-center w-4/5"><p class="lbl text-slate-300">Solver port</p><p class="text-[11px] mt-1 text-slate-400">Z3 adapter: timeout · availability · one message</p></div>
+        <div class="text-[11px] text-slate-500">tests: scripted solver through the real interfaces</div>
+      </div>
+    </div>
+  </div>
+  <p class="text-sm"><b>Problem.</b> The outer seam exists only to inject the inner one, and doctor probes z3 a second time with its own wording.</p>
+  <p class="text-sm"><b>Solution.</b> One <code>Solver</code> port. The Z3 adapter owns its timeout and its availability check, and analyze and doctor both take the port.</p>
+  <ul class="text-sm list-disc pl-5 grid sm:grid-cols-2 gap-x-6">
+    <li>One probe, one "missing z3" message</li>
+    <li>Delete ProveFn, analyze_via, the bool</li>
+  </ul>
+</article>
+
+<!-- ============ 10 ============ -->
+<article id="c10" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+  <div class="flex flex-wrap items-center gap-2">
+    <h2 class="font-serif text-2xl mr-2">10 · A graph export hands its consumers a document, not text</h2>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-200 text-slate-700">Speculative</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process</span>
+  </div>
+  <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
+    <li>crates/specforge-emitter/src/emit.rs:100</li>
+    <li>crates/specforge-ops/src/query.rs:72-131 · command.rs:452-463</li>
+    <li>crates/specforge-mcp/src/tools/query.rs:74</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4 text-xs">
+    <div class="rounded-lg border border-slate-200 p-4">
+      <p class="lbl text-slate-500 mb-3">Before</p>
+      <div class="flex flex-wrap items-center gap-1">
+        <div class="border border-slate-400 px-2 py-1">emit → String</div>→
+        <div class="border border-red-400 px-2 py-1 leak">parse</div>→
+        <div class="border border-red-400 px-2 py-1 leak">patch coverage_status</div>→
+        <div class="border border-red-400 px-2 py-1 leak">stringify</div>→
+        <div class="border border-red-400 px-2 py-1 leak">MCP parse again</div>
+      </div>
+      <p class="mt-2 text-[11px] text-slate-500">schema patched by JSON path</p>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4">
+      <p class="lbl text-slate-500 mb-3">After</p>
+      <div class="flex items-center gap-1">
+        <div class="deep border-2 border-slate-900 px-2 py-1 rounded">Export&lt;Node&gt;</div>→
+        <div class="border border-slate-400 px-2 py-1">+ coverage (typed)</div>→
+        <div class="border border-slate-400 px-2 py-1">serialize once</div>
+      </div>
+    </div>
+  </div>
+  <p class="text-sm"><b>Problem.</b> The text interface costs two parses per query, and <code>coverage_status</code> lives outside the types the schema is derived from. <b>Solution.</b> The emitter returns its typed document.</p>
+  <div class="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">ADR 0007 (the emitter is export formats) would need a note.</div>
+</article>
+
+<!-- ============ 11 ============ -->
+<article id="c11" class="rounded-xl border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
+  <div class="flex flex-wrap items-center gap-2">
+    <h2 class="font-serif text-2xl mr-2">11 · A project's sources end at a nested project's root</h2>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-200 text-slate-700">Speculative</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">local-substitutable</span>
+    <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">live bug</span>
+  </div>
+  <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
+    <li>crates/specforge-common/src/discovery.rs:73-80</li>
+    <li>crates/specforge-ops/src/format.rs:692</li>
+  </ul>
+  <div class="grid md:grid-cols-2 gap-4 text-xs">
+    <div class="rounded-lg border border-slate-200 p-4">
+      <p class="lbl text-slate-500 mb-3">Before: one file, two projects</p>
+      <div class="border border-slate-400 p-2">outer/ (spec_root ".", product)
+        <div class="border border-red-400 p-2 mt-2 leak">sub/specforge.json (software)<br/>b.spec → outer check: E024 · check --path sub: clean</div>
+      </div>
+      <p class="mt-2 text-[11px] text-slate-500">compile walks into sub/, format stops at sub/</p>
+    </div>
+    <div class="rounded-lg border border-slate-200 p-4">
+      <p class="lbl text-slate-500 mb-3">After: one discovery rule</p>
+      <div class="deep border-2 border-slate-900 p-2 rounded">outer/
+        <div class="border border-dashed border-slate-400 p-2 mt-2 text-slate-400">sub/ — another project's sources, not walked</div>
+      </div>
+    </div>
+  </div>
+  <p class="text-sm"><b>Problem.</b> Discovery and format disagree on where a project ends, so the LSP and <code>check --path</code> disagree about the same file. It only bites with spec_root "." or a project nested inside <code>spec/</code>.</p>
+  <div class="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">Needs your decision. CONTEXT "Project sources" states the asymmetry as intended; ADR 0021 D3 claims fixtures are never reached, which fails here.</div>
+</article>
+
+</section>
+
+<section id="outcome" class="rounded-xl border border-emerald-300 bg-emerald-50 p-8 space-y-4">
+  <p class="lbl text-emerald-700">Outcome</p>
+  <h2 class="font-serif text-3xl">All 12 plans implemented in one PR</h2>
+  <p class="text-sm text-slate-700">111 tickets plus the re-vendor, one commit per ticket, each with boxed before/after diagrams in its message. 10 new ADRs (0071–0080), 13 W-codes retired into E061, 13 of 13 blobs fresh.</p>
+  <pre class="mermaid">
+flowchart LR
+  W0[wave 0: 02 03 09 01a] --> W1[wave 1: 04 05 06 07]
+  W1 --> W2[wave 2: 10 11 12]
+  W2 --> R[re-vendor R]
+  R --> W3[01 T9 + host tests]
+  W3 --> W4[wave 4: 08 test fixture]
+  W4 --> G[gate full + PR]
+  </pre>
+  <table class="text-sm"><tr class="text-left"><th class="pr-4">plan</th><th class="pr-4">topic</th><th class="pr-4">ADR</th><th>tickets</th></tr><tr class='border-t'><td class='py-1 pr-4'>01</td><td class='pr-4'>field vocabulary</td><td class='pr-4'>0071</td><td>11</td></tr><tr class='border-t'><td class='py-1 pr-4'>02</td><td class='pr-4'>refusal subject</td><td class='pr-4'>0072</td><td>8</td></tr><tr class='border-t'><td class='py-1 pr-4'>03</td><td class='pr-4'>session changes</td><td class='pr-4'>0073</td><td>7</td></tr><tr class='border-t'><td class='py-1 pr-4'>04</td><td class='pr-4'>diagnostics delta</td><td class='pr-4'>0074</td><td>6</td></tr><tr class='border-t'><td class='py-1 pr-4'>05</td><td class='pr-4'>registry address</td><td class='pr-4'>0075</td><td>7</td></tr><tr class='border-t'><td class='py-1 pr-4'>06</td><td class='pr-4'>plan check</td><td class='pr-4'>0076</td><td>9</td></tr><tr class='border-t'><td class='py-1 pr-4'>07</td><td class='pr-4'>stateless target</td><td class='pr-4'>0077</td><td>6</td></tr><tr class='border-t'><td class='py-1 pr-4'>08</td><td class='pr-4'>test fixture</td><td class='pr-4'>0078</td><td>19</td></tr><tr class='border-t'><td class='py-1 pr-4'>09</td><td class='pr-4'>solver seam</td><td class='pr-4'>0079</td><td>9</td></tr><tr class='border-t'><td class='py-1 pr-4'>10</td><td class='pr-4'>export document</td><td class='pr-4'>—</td><td>4</td></tr><tr class='border-t'><td class='py-1 pr-4'>11</td><td class='pr-4'>nested project</td><td class='pr-4'>0080</td><td>6</td></tr><tr class='border-t'><td class='py-1 pr-4'>12</td><td class='pr-4'>residues</td><td class='pr-4'>—</td><td>19</td></tr></table>
+</section>
+
+<section id="top-recommendation" class="rounded-xl deep p-8 space-y-3">
+  <p class="lbl text-slate-400">Top recommendation</p>
+  <h2 class="font-serif text-3xl"><a href="#c1" class="hover:underline">1 · A closed field vocabulary is declared once</a></h2>
+  <p class="text-slate-300 text-sm">It has the most leverage. The drift is visible to agents: the inference guide they read suggests values the filters refuse, and in a product where nobody hand-writes <code>.spec</code> that guide is the authoring interface. The SDK form also gives every builtin the LSP completion, schema enums and E061 the host already has but no builtin uses.</p>
+  <p class="text-slate-400 text-sm">Runner-up: <a href="#c3" class="underline">3</a> and <a href="#c4" class="underline">4</a> together. Both deepen the project session's <code>Update</code>, both are live bugs, and neither needs a re-vendor or an ADR reversal.</p>
+</section>
+
+<footer class="text-xs text-slate-500">Considered and dropped: lock-plan and extension lifecycle (round 8, verified end to end) · CoreTool/ToolSpec pipeline (ADRs 0024/0049/0051) · two follow loops (ADR 0035) · Outcome/document twins (ADR 0052) · coverage gate against stats (agree, 12.5 = 12.5) · blob churn (ADR 0070) · silent registries in check (extensions.spec:1071). Nits: unused MCP deps (formatter, diagnostics), a stale ExtismRuntime doc, the Gate/GateDocument mirror. Findings: .planning/architecture-2026-10-13-r9/FINDINGS.md</footer>
+</main>
+</body>
+</html>

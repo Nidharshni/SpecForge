@@ -15,11 +15,9 @@ specforge-protocol-types = { path = "../specforge-protocol-types" }
 specforge-registry-wire = { path = "../specforge-registry-wire" }
 axum = { version = "0.8.4", features = ["multipart"] }
 tokio = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 rusqlite = { version = "0.35.0", features = ["bundled"] }
-tower-http = { version = "0.6.6", features = ["cors", "trace"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 clap = { workspace = true }
@@ -41,3 +39,4 @@ reqwest = { workspace = true }
 tempfile = { workspace = true }
 specforge-registry-client = { path = "../specforge-registry-client" }
 specforge-registry-server = { path = ".", features = ["testing"] }
+serde = { workspace = true }

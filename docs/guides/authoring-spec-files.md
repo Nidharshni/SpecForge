@@ -479,7 +479,7 @@ feature task_management "Task Management" {
 ```
 
 ✅ `problem` framed from the user's perspective; `solution` from the system's.
-❌ Inventing a status like `wip` — only the enum values above are valid (else `W077`).
+❌ Inventing a status like `wip` — only the enum values above are valid (else `E061`).
 
 **Links to:** behaviors implement it; journeys/modules/milestones/personas reference it.
 
@@ -597,7 +597,7 @@ failure_mode lost_task "Task acknowledged but not persisted" {
 }
 ```
 
-> ⚠️ FMEA scores are **enum words**, not 1–10 numbers (`W051`/`W052`/`W121` flag bad values).
+> ⚠️ FMEA scores are **enum words**, not 1–10 numbers (another value is `E061`).
 
 ## `@specforge/formal`
 

@@ -16,7 +16,7 @@ use specforge_common::{Diagnostic, Severity};
 use specforge_project::{BuildCache, DiagnosticPolicy, LINT_PROFILE_NAMES, LintProfile};
 
 use crate::view::ProjectView;
-use crate::{OpError, OpErrorKind};
+use crate::{OpError, OpErrorKind, Refusal};
 
 /// What to report and record. `Default` is a plain `specforge check`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -143,19 +143,41 @@ impl std::error::Error for CheckError {}
 /// as its suggestion; a missing root is `no_project`.
 impl From<CheckError> for OpError {
     fn from(error: CheckError) -> Self {
+        Refusal::<CheckField>::from(error).into_error()
+    }
+}
+
+/// The field of a check request a refusal can be about (ADR 0072).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckField {
+    /// The severity filter.
+    Severity,
+    /// The lint profiles.
+    LintProfiles,
+}
+
+/// [`OpError::from`], about the field the variant names; a missing root is about none.
+impl From<CheckError> for Refusal<CheckField> {
+    fn from(error: CheckError) -> Self {
         let message = error.to_string();
-        let op_error = match error {
-            CheckError::NoProjectRoot => OpError::no_project(message),
-            CheckError::UnknownSeverity { .. } => {
-                OpError::new(OpErrorKind::InvalidInput, UNKNOWN_SEVERITY, message)
-            }
-            CheckError::UnknownLintProfile { .. } => {
-                OpError::new(OpErrorKind::InvalidInput, UNKNOWN_LINT_PROFILE, message)
-            }
+        let (op_error, field) = match error {
+            CheckError::NoProjectRoot => (OpError::no_project(message), None),
+            CheckError::UnknownSeverity { .. } => (
+                OpError::new(OpErrorKind::InvalidInput, UNKNOWN_SEVERITY, message),
+                Some(CheckField::Severity),
+            ),
+            CheckError::UnknownLintProfile { .. } => (
+                OpError::new(OpErrorKind::InvalidInput, UNKNOWN_LINT_PROFILE, message),
+                Some(CheckField::LintProfiles),
+            ),
         };
-        match error.suggestion() {
+        let op_error = match error.suggestion() {
             Some(suggestion) => op_error.with_suggestion(suggestion),
             None => op_error,
+        };
+        match field {
+            Some(field) => op_error.about(field),
+            None => op_error.into(),
         }
     }
 }
@@ -584,5 +606,22 @@ mod tests {
             }
         );
         assert_eq!(Counts::of(&[]), Counts::default());
+    }
+
+    #[specforge_test(
+        invariant = "mcp_structured_error_responses",
+        verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+    )]
+    fn check_states_which_field_a_refusal_is_about() {
+        let subject = |error: CheckError| Refusal::<CheckField>::from(error).subject;
+        assert_eq!(
+            subject(parse_severity("errors").unwrap_err()),
+            Some(CheckField::Severity)
+        );
+        assert_eq!(
+            subject(parse_lint_profiles(&["pedantik"]).unwrap_err()),
+            Some(CheckField::LintProfiles)
+        );
+        assert_eq!(subject(CheckError::NoProjectRoot), None);
     }
 }

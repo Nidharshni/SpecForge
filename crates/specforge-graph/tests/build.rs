@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use specforge_graph::{FileChange, Graph, GraphBuild, GraphConfig};
+use specforge_graph::{FileChange, Graph, GraphBuild, GraphConfig, NodeChange};
 use specforge_parser::parse;
 use specforge_test_macros::test as specforge_test;
 
@@ -172,15 +172,19 @@ fn removing_a_file_takes_its_entities_and_their_edges() {
     assert_eq!(removed, ["alpha"]);
     // beta lost its edge, and the reference no longer resolves.
     assert_eq!(applied.delta.removed_edges.len(), 1);
-    assert_eq!(build.diagnostic_files(), ["b.spec"]);
-    assert_eq!(applied.changed_diagnostic_files, ["b.spec"]);
+    assert!(!build.file_diagnostics("b.spec").is_empty());
+    assert!(build.file_diagnostics("a.spec").is_empty());
 }
 
 #[specforge_test(behavior = "rebuild_affected_subgraph", verify = "new nodes are added")]
 fn a_new_file_adds_its_entities() {
     let mut build = GraphBuild::of([file("b.spec", BETA_ON_ALPHA)], GraphConfig::default());
     assert_eq!(build.graph().node_count(), 1);
-    assert_eq!(build.diagnostic_files(), ["b.spec"], "alpha is unresolved");
+    assert_eq!(
+        build.file_diagnostics("b.spec")[0].code,
+        "E003",
+        "alpha is unresolved"
+    );
 
     let applied = build.apply([parsed("a.spec", ALPHA)]);
 
@@ -193,7 +197,10 @@ fn a_new_file_adds_its_entities() {
         .collect();
     assert_eq!(added, ["alpha"]);
     assert!(build.diagnostics().is_empty());
-    assert_eq!(applied.changed_diagnostic_files, ["b.spec"]);
+    assert!(
+        build.file_diagnostics("b.spec").is_empty(),
+        "the reference resolves"
+    );
 }
 
 #[specforge_test(
@@ -242,7 +249,6 @@ fn removing_a_file_the_build_does_not_hold_changes_nothing() {
 
     assert!(applied.files.is_empty());
     assert!(applied.delta.is_empty());
-    assert!(applied.changed_diagnostic_files.is_empty());
     assert_eq!(applied.verification, Some(Ok(())));
     assert!(build.graph().node("alpha").is_some());
 }
@@ -276,7 +282,6 @@ fn a_format_version_header_is_a_diagnostic_of_its_file() {
     )]);
     assert_eq!(applied.verification, Some(Ok(())));
     assert_eq!(codes(&build), ["I007"]);
-    assert_eq!(applied.changed_diagnostic_files, ["a.spec"]);
     let diagnostic = &build.file_diagnostics("a.spec")[0];
     assert_eq!(diagnostic.span.as_ref().unwrap().start_line, 1);
 
@@ -287,7 +292,6 @@ fn a_format_version_header_is_a_diagnostic_of_its_file() {
     )]);
     assert_eq!(applied.verification, Some(Ok(())));
     assert!(codes(&build).is_empty());
-    assert_eq!(applied.changed_diagnostic_files, ["a.spec"]);
 
     // A newer one is E019; removing the file removes it.
     let applied = build.apply([parsed(
@@ -299,5 +303,63 @@ fn a_format_version_header_is_a_diagnostic_of_its_file() {
     let applied = build.apply([FileChange::Removed("a.spec".to_string())]);
     assert_eq!(applied.verification, Some(Ok(())));
     assert!(codes(&build).is_empty());
-    assert_eq!(applied.changed_diagnostic_files, ["a.spec"]);
+    assert!(build.file_diagnostics("a.spec").is_empty());
+}
+
+#[specforge_test(
+    behavior = "compute_graph_delta",
+    verify = "an entity that only moved is a moved node, not a modification"
+)]
+fn a_node_that_only_moved_is_listed_apart_from_the_delta() {
+    let mut build = GraphBuild::of([file("a.spec", ALPHA)], GraphConfig::default());
+
+    let applied = build.apply([parsed("a.spec", &format!("\n\n\n{ALPHA}"))]);
+
+    assert!(applied.delta.is_empty());
+    assert_eq!(
+        applied.moved,
+        [NodeChange {
+            id: "alpha".to_string(),
+            kind: "behavior".to_string(),
+            file: "a.spec".to_string(),
+            line: 4,
+        }]
+    );
+}
+
+#[specforge_test(
+    behavior = "compute_graph_delta",
+    verify = "an entity that only moved is a moved node, not a modification"
+)]
+fn a_node_moved_to_another_file_is_listed_where_it_is_now() {
+    let mut build = GraphBuild::of([file("a.spec", ALPHA)], GraphConfig::default());
+
+    let applied = build.apply([
+        FileChange::Removed("a.spec".to_string()),
+        parsed("b.spec", ALPHA),
+    ]);
+
+    assert!(applied.delta.is_empty());
+    assert_eq!(applied.moved.len(), 1);
+    assert_eq!(applied.moved[0].id, "alpha");
+    assert_eq!(applied.moved[0].file, "b.spec");
+}
+
+#[specforge_test(
+    behavior = "compute_graph_delta",
+    verify = "a change of column or content alone moves no node"
+)]
+fn a_column_or_content_change_is_no_move() {
+    let mut build = GraphBuild::of([file("a.spec", ALPHA)], GraphConfig::default());
+
+    let indented = build.apply([parsed("a.spec", &format!("  {ALPHA}"))]);
+    assert!(indented.moved.is_empty());
+
+    let edited = build.apply([parsed(
+        "a.spec",
+        "behavior alpha \"A\" { contract \"changed\" }\n",
+    )]);
+    assert!(edited.moved.is_empty());
+    assert_eq!(edited.delta.modified_nodes.len(), 1);
+    assert_eq!(edited.delta.modified_nodes[0].id, "alpha");
 }

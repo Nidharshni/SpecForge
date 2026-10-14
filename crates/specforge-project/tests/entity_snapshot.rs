@@ -12,8 +12,8 @@ use serde_json::{Value, json};
 use specforge_common::Diagnostic;
 use specforge_extension_sdk::prelude::*;
 use specforge_project::CompiledProject;
+use specforge_project::testing::TestProject;
 use specforge_wasm::testing::InProcessRuntime;
-use tempfile::TempDir;
 
 const EXT: &str = "@pin/snapshot";
 
@@ -125,31 +125,27 @@ memo epsilon "Epsilon" {
 "#;
 
 /// The §3 project: `spec_root: "spec"`, `spec/main.spec` and `spec/doc.md`.
-fn project() -> TempDir {
-    let dir = TempDir::new().unwrap();
-    let config =
-        json!({ "name": "repro", "version": "0.1.0", "spec_root": "spec", "extensions": [EXT] });
-    fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
-    fs::create_dir(dir.path().join("spec")).unwrap();
-    fs::write(dir.path().join("spec/main.spec"), SPEC).unwrap();
-    fs::write(dir.path().join("spec/doc.md"), "# doc\n").unwrap();
-    dir
+fn project() -> TestProject {
+    TestProject::new()
+        .config(|c| {
+            c["name"] = "repro".into();
+            c["spec_root"] = "spec".into();
+        })
+        .enabling(&[EXT])
+        .installing_enabled()
+        .files(&[("spec/main.spec", SPEC), ("spec/doc.md", "# doc\n")])
 }
 
 fn runtime() -> std::sync::Arc<InProcessRuntime> {
     std::sync::Arc::new(InProcessRuntime::new().with(extension))
 }
 
-/// A compile of `root` through `runtime`, and its diagnostics.
+/// A compile of the project through `runtime`, and its diagnostics.
 fn compile(
-    root: &Path,
+    dir: &TestProject,
     runtime: &std::sync::Arc<InProcessRuntime>,
 ) -> (CompiledProject, Vec<Diagnostic>) {
-    let compiled = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(root).unwrap(),
-        Some(runtime.clone()),
-    );
+    let compiled = dir.compile_in(runtime.clone());
     let diagnostics = compiled.diagnostics();
     (compiled, diagnostics)
 }
@@ -216,7 +212,7 @@ const ALPHA: &[(&str, &str)] = &[
 fn every_field_an_entity_writes_has_one_text() {
     let dir = project();
     let runtime = runtime();
-    let (_, diagnostics) = compile(dir.path(), &runtime);
+    let (_, diagnostics) = compile(&dir, &runtime);
 
     let expected: serde_json::Map<String, Value> = ALPHA
         .iter()
@@ -292,17 +288,16 @@ fn empty_values_extension() -> ContributionsBuilder {
     verify = "an empty list or block is written, with empty text, never left out or null"
 )]
 fn an_empty_list_or_block_is_written() {
-    let dir = TempDir::new().unwrap();
-    let config = json!({ "name": "empty", "version": "0.1.0", "extensions": ["@pin/empty"] });
-    fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
-    fs::write(
-        dir.path().join("a.spec"),
-        "item zeta \"Zeta\" {\n  values []\n  requires {\n  }\n}\n",
-    )
-    .unwrap();
+    let dir = TestProject::new()
+        .config(|c| c["name"] = "empty".into())
+        .enabling(&["@pin/empty"])
+        .installing_enabled()
+        .file(
+            "a.spec",
+            "item zeta \"Zeta\" {\n  values []\n  requires {\n  }\n}\n",
+        );
     let runtime = std::sync::Arc::new(InProcessRuntime::new().with(empty_values_extension));
-    let (_, diagnostics) = compile(dir.path(), &runtime);
+    let (_, diagnostics) = compile(&dir, &runtime);
 
     // Written, so present (no E102/E103), and empty (E100/E101 fire).
     assert_eq!(
@@ -341,7 +336,7 @@ fn testable_total(compiled: &CompiledProject, root: &Path) -> usize {
 fn an_untargeted_obligation_rule_obliges_every_kind() {
     let dir = project();
     let runtime = runtime();
-    let (compiled, diagnostics) = compile(dir.path(), &runtime);
+    let (compiled, diagnostics) = compile(&dir, &runtime);
 
     assert_eq!(
         reported(&diagnostics, "P3"),
@@ -362,7 +357,7 @@ fn an_untargeted_obligation_rule_obliges_every_kind() {
     }
     // And so does coverage: alpha and beta are testable and owe (gamma's
     // kind is not testable).
-    assert_eq!(testable_total(&compiled, dir.path()), 2);
+    assert_eq!(testable_total(&compiled, dir.root()), 2);
 }
 
 #[specforge_test_macros::test(
@@ -372,7 +367,7 @@ fn an_untargeted_obligation_rule_obliges_every_kind() {
 fn an_untargeted_obligation_rule_skips_kinds_that_accept_no_verify() {
     let dir = project();
     let runtime = runtime();
-    let (compiled, diagnostics) = compile(dir.path(), &runtime);
+    let (compiled, diagnostics) = compile(&dir, &runtime);
 
     // `memo` accepts no `verify`: P300 does not ask epsilon for one.
     assert!(
@@ -383,7 +378,7 @@ fn an_untargeted_obligation_rule_skips_kinds_that_accept_no_verify() {
     );
     assert_eq!(pass_entity(&runtime, "epsilon")["owes_none"], true);
     assert_eq!(pass_entity(&runtime, "epsilon")["testable"], false);
-    assert_eq!(testable_total(&compiled, dir.path()), 2);
+    assert_eq!(testable_total(&compiled, dir.root()), 2);
 }
 
 #[specforge_test_macros::test(
@@ -395,11 +390,11 @@ fn file_exists_resolves_against_the_spec_root() {
     // The test runs in the crate directory, where no `doc.md` is: only the
     // spec root holds one.
     assert!(!Path::new("doc.md").exists());
-    let (_, diagnostics) = compile(dir.path(), &runtime());
+    let (_, diagnostics) = compile(&dir, &runtime());
     assert!(reported(&diagnostics, "P4").is_empty(), "{diagnostics:?}");
 
-    fs::remove_file(dir.path().join("spec/doc.md")).unwrap();
-    let (_, diagnostics) = compile(dir.path(), &runtime());
+    fs::remove_file(dir.root().join("spec/doc.md")).unwrap();
+    let (_, diagnostics) = compile(&dir, &runtime());
     assert_eq!(
         reported(&diagnostics, "P4"),
         ["P400 alpha: file 'doc.md' does not exist"]
@@ -413,15 +408,22 @@ fn file_exists_resolves_against_the_spec_root() {
 fn the_checks_passes_and_coverage_of_one_compile_read_one_snapshot() {
     let dir = project();
     let runtime = runtime();
-    let (compiled, _) = compile(dir.path(), &runtime);
+    let (compiled, _) = compile(&dir, &runtime);
     let entities = compiled.entities();
 
     // The coverage memo holds the compile's snapshot, and the coverage is
     // computed from it: no second walk.
     let memo = compiled.recorded();
     assert!(std::ptr::eq(entities, &**memo.entities()));
-    let recorded = memo.at(Some(dir.path())).unwrap();
-    assert!(std::ptr::eq(entities, recorded.coverage.entities()));
+    let recorded = memo.at(Some(dir.root())).unwrap();
+    assert!(
+        recorded
+            .coverage
+            .verdicts
+            .keys()
+            .eq(entities.records().iter().map(|r| &r.id)),
+        "the coverage scores the compile's snapshot"
+    );
 
     // The check pass received the snapshot's adapter, entity by entity.
     let pass_input = runtime

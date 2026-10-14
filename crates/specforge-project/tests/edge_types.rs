@@ -4,16 +4,14 @@
 //! entities. A pin that still encodes a bug is written as the fixed
 //! behaviour and `#[ignore]`d with the ticket that fixes it.
 
-use std::fs;
 use std::sync::Arc;
 
-use serde_json::json;
 use specforge_common::Diagnostic;
 use specforge_extension_sdk::prelude::*;
 use specforge_project::CompiledProject;
+use specforge_project::testing::TestProject;
 use specforge_test_macros::test as spec;
 use specforge_wasm::testing::InProcessRuntime;
-use tempfile::TempDir;
 
 /// A kind `name` with one field `field` of type `field_type` writing the
 /// edge `edge`, to the kind `target`.
@@ -70,20 +68,17 @@ fn compiled(
     source: &str,
     build: impl Fn(&mut ContributionsBuilder) + Send + Sync + 'static,
 ) -> CompiledProject {
-    let dir = TempDir::new().unwrap();
-    let config = json!({ "name": "pins", "version": "0.1.0", "extensions": [name] });
-    fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
-    fs::write(dir.path().join("model.spec"), source).unwrap();
+    let dir = TestProject::new()
+        .config(|c| c["name"] = "pins".into())
+        .enabling(&[name])
+        .installing_enabled()
+        .file("model.spec", source);
     let runtime = InProcessRuntime::new().with(move || {
         let mut c = ContributionsBuilder::new(ExtensionMeta::new(name, "0.1.0"));
         build(&mut c);
         c
     });
-    CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    )
+    dir.compile_in(Arc::new(runtime))
 }
 
 /// The messages of the diagnostics with `code`.
@@ -434,11 +429,9 @@ fn the_builtins_edge_rules_keep_their_meaning() {
     .map(|name| name.to_string())
     .collect();
     specforge_component::builtins::load_builtins_for(&runtime, &names).unwrap();
-    let diagnostics = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(&root).unwrap(),
-        Some(Arc::new(runtime)),
-    )
-    .diagnostics();
+    let diagnostics = TestProject::copy_of(root)
+        .compile_in(Arc::new(runtime))
+        .diagnostics();
 
     let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
     assert_eq!(codes, ["I080", "I080", "I080"], "{diagnostics:?}");

@@ -167,7 +167,7 @@ fn the_example_writes_each_field_by_its_type() {
     let mut c = ContributionsBuilder::new(ExtensionMeta::new("@t/soft", "1.0.0"));
     c.kind("gadget", |k| {
         k.field("level", |f| {
-            f.field_type(FieldType::Enum).enum_values(&["low", "high"]);
+            f.vocabulary(&Vocabulary::new(&["low", "high"]));
         });
         k.field("note", |f| {
             f.field_type(FieldType::String);
@@ -262,15 +262,46 @@ fn the_guide_lists_extensions_kinds_and_entities() {
 }
 
 #[specforge_test(
+    behavior = "compute_inference_guide",
+    verify = "a guide field lists an enum's values and what an absent value counts as"
+)]
+fn a_guide_field_lists_an_enums_values_and_its_default() {
+    let mut c = ContributionsBuilder::new(ExtensionMeta::new("@t/soft", "1.0.0"));
+    c.kind("gadget", |k| {
+        k.field("level", |f| {
+            f.vocabulary(&Vocabulary::new(&["low", "high"]).absent_as("high"));
+        });
+        k.field("note", |f| {
+            f.field_type(FieldType::String);
+        });
+    });
+    let project = project_of("", vec![c.declaration()]);
+    let guide = kind_guide(&project.view(), "gadget").unwrap();
+
+    let document = serde_json::to_value(guide.document()).unwrap();
+    let fields = document["fields"].as_array().unwrap();
+    let field = |name: &str| fields.iter().find(|f| f["name"] == name).unwrap();
+    assert_eq!(field("level")["values"], json!(["low", "high"]));
+    assert_eq!(field("level")["default"], json!("high"));
+    assert!(field("note").get("values").is_none());
+    assert!(field("note").get("default").is_none());
+    assert!(
+        guide.example().contains("level high"),
+        "{}",
+        guide.example()
+    );
+}
+
+#[specforge_test(
     behavior = "read_views_over_the_project_view",
     verify = "an argument naming an undeclared kind is refused with unknown_kind naming the closest declared kind"
 )]
 fn kind_guide_refuses_an_undeclared_kind() {
     let project = project_of("", vec![extension("@t/soft", &[("behavior", None)])]);
     let error = kind_guide(&project.view(), "behaviour").unwrap_err();
-    assert_eq!(error.code, "unknown_kind");
+    assert_eq!(error.error.code, "unknown_kind");
     assert_eq!(
-        error.suggestion.as_deref(),
+        error.error.suggestion.as_deref(),
         Some("did you mean 'behavior'?")
     );
 }
@@ -436,4 +467,15 @@ fn the_plan_pages_its_file_lists() {
     assert_eq!(second.unanalyzed.files.len(), 10);
     assert_eq!(second.unanalyzed.files[0], "src/mod_50.rs");
     assert_eq!(second.next_cursor, None);
+}
+
+#[specforge_test(
+    invariant = "mcp_structured_error_responses",
+    verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+)]
+fn an_unknown_kind_guide_is_about_its_kind() {
+    use specforge_ops::infer::KindGuideField;
+    let project = project_of("", vec![extension("@t/soft", &[("behavior", None)])]);
+    let refusal = kind_guide(&project.view(), "behaviour").unwrap_err();
+    assert_eq!(refusal.subject, Some(KindGuideField::Kind));
 }

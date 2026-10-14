@@ -5,6 +5,7 @@ use specforge_common::SourceSpan;
 use specforge_extension_sdk::prelude::*;
 use specforge_ops::navigate::{Direction, Navigator, Occurrence, Precision, ReferenceQuery, Role};
 use specforge_ops::view::ProjectView;
+use specforge_project::testing::compile_at;
 use specforge_project::{CompiledProject, Environment};
 use specforge_test::prelude::*;
 use tempfile::TempDir;
@@ -28,11 +29,8 @@ pub fn compile(extensions: &[&str], files: &[(&str, &str)]) -> Compiled {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, text).unwrap();
     }
-    let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let project = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let runtime = specforge_project::testing::component_runtime();
+    let project = compile_at(dir.path(), Some(runtime));
     let unloaded: Vec<_> = project
         .diagnostics()
         .into_iter()
@@ -271,8 +269,8 @@ fn the_definition_is_the_declaration() {
 fn an_unknown_id_has_no_definition() {
     let p = nav();
     let error = p.navigator().definition("nope").unwrap_err();
-    assert!(error.is(specforge_common::codes::E003));
-    assert_eq!(error.kind, specforge_ops::OpErrorKind::EntityNotFound);
+    assert!(error.error.is(specforge_common::codes::E003));
+    assert_eq!(error.error.kind, specforge_ops::OpErrorKind::EntityNotFound);
     // A misspelled reference is not an entity either.
     assert!(p.navigator().definition("sesion_limit").is_err());
 }
@@ -939,10 +937,7 @@ fn an_untargeted_obligation_rule_stubs_every_kind_that_accepts_verify() {
     .unwrap();
     specforge_installed::testing::install(dir.path(), &["@pin/untargeted"]);
     let runtime = specforge_wasm::testing::InProcessRuntime::new().with(untargeted_rule);
-    let project = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let project = compile_at(dir.path(), Some(Arc::new(runtime)));
     let reported: Vec<String> = project
         .diagnostics()
         .into_iter()
@@ -1700,4 +1695,50 @@ fn an_outgoing_reference_to_a_missing_entity_has_no_peer_kind() {
     );
     assert!(references.incoming.is_empty());
     assert_eq!(References::of(&view, "ghost"), References::default());
+}
+
+#[specforge_test(
+    invariant = "mcp_structured_error_responses",
+    verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+)]
+fn a_read_view_about_one_entity_names_it() {
+    use specforge_ops::navigate::EntityField;
+    let p = nav();
+    let navigator = p.navigator();
+    let about = Some(EntityField::EntityId);
+    assert_eq!(navigator.definition("ghost").unwrap_err().subject, about);
+    let references = navigator.references("ghost", ReferenceQuery::default());
+    assert_eq!(references.unwrap_err().subject, about);
+    let view = ProjectView::of(&p.project);
+    assert_eq!(
+        view.neighbourhood("ghost", None).unwrap_err().subject,
+        about
+    );
+    assert_eq!(
+        specforge_ops::inspect::inspect(&view, "ghost")
+            .unwrap_err()
+            .subject,
+        about
+    );
+    let explored = specforge_ops::explore::explore(
+        &view,
+        &specforge_ops::explore::ExplorationRequest {
+            entity_id: Some("ghost"),
+            ..Default::default()
+        },
+    );
+    assert_eq!(explored.unwrap_err().subject, about);
+    let reviewed = specforge_ops::review::review(
+        &view,
+        &specforge_ops::review::ReviewRequest {
+            entity_id: Some("ghost"),
+            ..Default::default()
+        },
+    );
+    assert_eq!(reviewed.unwrap_err().subject, about);
+    let traced = specforge_ops::trace::trace(&view, specforge_ops::trace::Target::Entity("ghost"));
+    assert_eq!(
+        specforge_ops::Refusal::<EntityField>::from(traced.unwrap_err()).subject,
+        about
+    );
 }

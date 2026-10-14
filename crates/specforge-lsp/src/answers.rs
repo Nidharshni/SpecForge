@@ -128,9 +128,13 @@ pub fn hover(state: &LspState, uri: &Url, position: Position) -> Option<Hover> {
     let published: Vec<specforge_common::Diagnostic> = files.published().cloned().collect();
     let about = match compiled.target(&key, position) {
         Some(Target::Entity { id, .. }) => {
-            specforge_ops::inspect::inspect(&state.view().reporting(&published), id.as_str())
+            let view = state.view().reporting(&published);
+            specforge_ops::inspect::inspect(&view, id.as_str())
                 .ok()
-                .map(|facts| hover::entity(&facts, &shown, state.rebuilding()))
+                .map(|facts| {
+                    let coverage = specforge_ops::inspect::coverage(&view, id.as_str());
+                    hover::entity(&facts, &coverage, &shown, state.rebuilding())
+                })
         }
         Some(Target::Field { kind, field }) => {
             hover::hover_field_info(&field, &kind, state.field_registry())
@@ -296,8 +300,8 @@ pub fn rename(
     // with why.
     let edits = match specforge_ops::rename::plan(&compiled.navigator(), id.as_str(), new_name) {
         Ok(plan) => plan.edits,
-        Err(e) if e.kind == specforge_ops::OpErrorKind::EntityNotFound => return Ok(None),
-        Err(e) => return Err(Error::invalid_params(e.message)),
+        Err(e) if e.error.kind == specforge_ops::OpErrorKind::EntityNotFound => return Ok(None),
+        Err(e) => return Err(Error::invalid_params(e.error.message)),
     };
 
     let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();

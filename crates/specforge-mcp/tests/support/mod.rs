@@ -13,12 +13,55 @@ pub mod events;
 pub mod extension;
 pub mod project;
 pub mod replies;
-pub mod rpc;
 pub mod spec;
 
 pub use disk::{changed_files, files_under};
 pub use events::*;
 pub use extension::TestExtension;
-pub use project::{Served, TestProject};
-pub use rpc::*;
+pub use project::{Serve, TestProject};
 pub use spec::spec_files;
+pub use specforge_mcp::testing::Served;
+pub use specforge_mcp::testing::rpc::*;
+
+use serde_json::{Value, json};
+use std::sync::Arc;
+
+/// An `AgentPlan` of entries naming `ids`, each to implement.
+pub fn agent_plan(ids: &[&str]) -> serde_json::Value {
+    serde_json::json!({
+        "plan_id": "p",
+        "entries": ids
+            .iter()
+            .map(|id| serde_json::json!({"entity_id": id, "action": "implement"}))
+            .collect::<Vec<_>>(),
+    })
+}
+
+/// The solver every served test project's doctor sees: z3 runs (ADR 0079 D5).
+pub fn z3_ready() -> Arc<dyn specforge_ops::solver::Solver> {
+    Arc::new(specforge_ops::testing::ScriptedSolver::ready())
+}
+
+/// What each tool that takes a `path` is called with to act on a project
+/// with `behavior alpha` (its path added by the caller).
+pub fn path_tool_calls() -> Vec<(&'static str, Value)> {
+    vec![
+        ("specforge.validate", json!({})),
+        ("specforge.analyze", json!({"pass": "contracts"})),
+        ("specforge.collect", json!({})),
+        ("specforge.format", json!({"check": true})),
+        (
+            "specforge.rename",
+            json!({"entity_id": "alpha", "new_name": "gamma"}),
+        ),
+        (
+            "specforge.add_extension",
+            json!({"specifiers": ["@specforge/software"], "dry_run": true}),
+        ),
+        (
+            "specforge.remove_extension",
+            json!({"name": "@specforge/software", "dry_run": true}),
+        ),
+        ("specforge.migrate", json!({"dry_run": true})),
+    ]
+}

@@ -835,3 +835,41 @@ fn the_releases_list_is_json_when_asked() {
         human.stdout
     );
 }
+
+/// Pinned by plan 01: a lifecycle kind's list counts an entity without a
+/// status as the kind's absent status, and `bulk-status` still reports it
+/// as `(none)`; the declared default will say the same thing once.
+#[test]
+fn lists_count_an_absent_status_as_its_default() {
+    let g = G::default()
+        .n("f", "feature")
+        .n("d", "deliverable")
+        .n("m", "milestone")
+        .n("p", "persona")
+        .n("c", "channel")
+        .n("r", "release");
+    for (list, absent, id) in [
+        ("features", "proposed", "f"),
+        ("deliverables", "draft", "d"),
+        ("milestones", "planned", "m"),
+        ("personas", "active", "p"),
+        ("channels", "active", "c"),
+        ("releases", "planned", "r"),
+    ] {
+        assert_eq!(ids_of(list, json!({"status": absent}), &g), [id], "{list}");
+        // It sorts with them.
+        assert_eq!(
+            ids_of(list, json!({"sort_by": "status"}), &g),
+            [id],
+            "{list}"
+        );
+    }
+    let report = json_of("bulk_status", json!({}), &g);
+    for kind in report["kinds"].as_array().unwrap() {
+        assert_eq!(
+            kind["by_status"],
+            json!([{"status": "(none)", "count": 1}]),
+            "{kind}"
+        );
+    }
+}

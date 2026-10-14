@@ -1,223 +1,44 @@
-//! A project on disk, served by the real `initialize`.
+//! What MCP's tests serve a `TestProject` with.
 
-use std::ops::{Deref, DerefMut};
-use std::path::Path;
-use std::sync::Arc;
-
-use serde_json::{Value, json};
-use specforge_mcp::McpServer;
-use specforge_mcp::events::testing::EventLog;
+use serde_json::json;
+use specforge_mcp::testing::{Served, rpc};
 use specforge_project::SharedRuntime;
-use specforge_wasm::testing::{InProcessRuntime, RecordedCall};
-use tempfile::TempDir;
+pub use specforge_project::testing::TestProject;
 
-use super::events::{Logged, Logs};
 use super::extension::{EXT, TestExtension, runtime_of};
-use super::rpc;
 
-/// A project on disk: its `specforge.json` and the files a test writes.
-/// The directory lives as long as the value (no leaked temp dirs).
-pub struct TestProject {
-    dir: TempDir,
-    /// `specforge.json` without its `extensions`.
-    config: Value,
-    /// The extensions `specforge.json` enables, in load order, when a test
-    /// chose them ([`Self::enabling`]); else the ones served.
-    enabled: Option<Vec<String>>,
+/// What MCP's tests serve a `TestProject` with.
+pub trait Serve {
+    /// Serve `extensions` (SDK-declared, `TestExtension`) in one in-process runtime; enable them unless the test
+    /// chose ([`TestProject::enabling`]).
+    fn serve(self, extensions: &[TestExtension]) -> Served;
+    /// Serve `@test/ext` (unless the test chose) in `runtime`.
+    fn serve_in(self, runtime: SharedRuntime) -> Served;
+    /// Serve with the project's own component runtime (add, remove, doctor, the builtins).
+    fn serve_components(self) -> Served;
 }
 
-impl Default for TestProject {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl TestProject {
-    /// `{"name": "t", "version": "0.1.0"}` and no file. Unless a test
-    /// chooses ([`Self::enabling`]), it enables the extensions it is served
-    /// with ([`Self::serve`]), `@test/ext` under [`Self::serve_in`], and
-    /// none under [`Self::serve_components`].
-    pub fn new() -> Self {
-        TestProject {
-            dir: TempDir::new().expect("a temp dir"),
-            config: json!({"name": "t", "version": "0.1.0"}),
-            enabled: None,
-        }
-    }
-
-    /// Enable `extensions` (in load order) instead.
-    pub fn enabling(mut self, extensions: &[&str]) -> Self {
-        self.enabled = Some(extensions.iter().map(|e| e.to_string()).collect());
-        self
-    }
-
-    /// Apply `edit` to its `specforge.json` (`spec_root`, `inference`, …).
-    pub fn config(mut self, edit: impl FnOnce(&mut Value)) -> Self {
-        edit(&mut self.config);
-        self
-    }
-
-    /// Write `text` at `path`, relative to the root.
-    pub fn file(self, path: &str, text: &str) -> Self {
-        write(self.root(), path, text);
-        self
-    }
-
-    pub fn root(&self) -> &Path {
-        self.dir.path()
-    }
-
-    /// An initialized server over this project, its extensions running in
-    /// one in-process runtime serving `extensions`: `initialize` with this
-    /// root opens the session from disk and runs the registry build.
-    pub fn serve(mut self, extensions: &[TestExtension]) -> Served {
-        if self.enabled.is_none() {
-            self.enabled = Some(extensions.iter().map(|e| e.name().to_string()).collect());
-        }
-        let runtime = Arc::new(runtime_of(extensions));
-        let mut served = self.serve_in(Arc::clone(&runtime) as SharedRuntime);
-        served.runtime = Some(runtime);
-        served
-    }
-
-    /// As [`Self::serve`], the extensions running in `runtime` (the
-    /// surface tests' `FakeExtension`).
-    pub fn serve_in(mut self, runtime: SharedRuntime) -> Served {
-        self.enabled.get_or_insert_with(|| vec![EXT.to_string()]);
-        // What an in-process runtime serves, the project has installed: it
-        // loads through the production path.
-        specforge_installed::testing::install_enabled(
-            self.root(),
-            self.enabled.as_deref().unwrap_or_default(),
-            &specforge_installed::Builtins(specforge_component::builtins::BUILTIN_EXTENSIONS),
-        );
-        self.initialized(McpServer::new().with_extension_runtime(runtime))
-    }
-
-    /// An initialized server over this project with no host runtime: the
-    /// project's own component runtime loads its builtins and installed
-    /// extensions, as `specforge mcp <root>` does. For tests of add,
-    /// remove, doctor and the builtins.
-    pub fn serve_components(mut self) -> Served {
-        self.enabled.get_or_insert_with(Vec::new);
-        self.initialized(McpServer::new())
-    }
-
-    /// The project as files only, its `specforge.json` written (enabling
-    /// what [`Self::enabling`] chose, else nothing): for a test that drives
-    /// `initialize` itself.
-    pub fn into_dir(self) -> TempDir {
-        self.write_config();
-        self.dir
-    }
-
-    fn write_config(&self) {
-        let mut config = self.config.clone();
-        config["extensions"] = json!(self.enabled.clone().unwrap_or_default());
-        write(self.root(), "specforge.json", &config.to_string());
-    }
-
-    /// Write `specforge.json`, then initialize `server` over the root, its
-    /// events recorded into the log the returned value keeps.
-    fn initialized(self, server: McpServer) -> Served {
-        let log = EventLog::new();
-        let mut server = server.with_events(log.clone());
-        self.write_config();
-        let reply = rpc::call(
-            &mut server,
-            "initialize",
-            json!({"projectRoot": self.root().to_str().expect("a UTF-8 root")}),
-        );
-        assert!(reply["error"].is_null(), "initialize: {reply}");
-        assert!(server.state().session().project().root().is_some());
-        Served {
-            server,
-            log,
-            project: self,
-            runtime: None,
-        }
-    }
-}
-
-/// An initialized MCP server serving a [`TestProject`]: what a client of
-/// `specforge mcp <root>` talks to. Dereferences to the server.
-pub struct Served {
-    server: McpServer,
-    /// What the server recorded.
-    log: EventLog,
-    project: TestProject,
-    runtime: Option<Arc<InProcessRuntime>>,
-}
-
-impl Served {
-    pub fn root(&self) -> &Path {
-        self.project.root()
-    }
-
-    /// Write `text` at `path` under the root: the next request that reads
-    /// the project brings the served session up to date (ADR 0014), as an
-    /// edit in a client's editor would.
-    pub fn write(&self, path: &str, text: &str) {
-        write(self.root(), path, text);
-    }
-
-    /// The server (with its log) and the project's directory, apart: for a
-    /// helper that hands them out separately (`fake_extension::initialized`).
-    pub fn into_parts(self) -> (Logged, TempDir) {
-        let logged = Logged {
-            server: self.server,
-            log: self.log,
+impl Serve for TestProject {
+    fn serve(self, extensions: &[TestExtension]) -> Served {
+        let names: Vec<&str> = extensions.iter().map(|e| e.name()).collect();
+        let project = match self.enabled() {
+            Some(_) => self,
+            None => self.enabling(&names),
         };
-        (logged, self.project.dir)
+        Served::initialized(project.serving(runtime_of(extensions)))
     }
 
-    /// Remove `path` under the root.
-    pub fn remove(&self, path: &str) {
-        std::fs::remove_file(self.root().join(path))
-            .unwrap_or_else(|e| panic!("remove {path}: {e}"));
+    fn serve_in(self, runtime: SharedRuntime) -> Served {
+        let project = match self.enabled() {
+            Some(_) => self,
+            None => self.enabling(&[EXT]),
+        };
+        Served::initialized_in(project, runtime)
     }
 
-    /// The extension calls the in-process runtime answered, oldest first,
-    /// handshakes and describes left out (empty under
-    /// [`TestProject::serve_components`] and [`TestProject::serve_in`]).
-    pub fn extension_calls(&self) -> Vec<RecordedCall> {
-        self.runtime
-            .as_ref()
-            .map(|runtime| runtime.calls())
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|c| c.export != "__handshake" && c.export != "__describe")
-            .collect()
+    fn serve_components(self) -> Served {
+        Served::initialized(self)
     }
-}
-
-impl Logs for Served {
-    fn log(&self) -> &EventLog {
-        &self.log
-    }
-}
-
-impl Deref for Served {
-    type Target = McpServer;
-
-    fn deref(&self) -> &McpServer {
-        &self.server
-    }
-}
-
-impl DerefMut for Served {
-    fn deref_mut(&mut self) -> &mut McpServer {
-        &mut self.server
-    }
-}
-
-/// Write `text` at `path` under `root`, its directories created.
-fn write(root: &Path, path: &str, text: &str) {
-    let path = root.join(path);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).unwrap_or_else(|e| panic!("{}: {e}", parent.display()));
-    }
-    std::fs::write(&path, text).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
 }
 
 // What the fixture serves is what the real build makes of its sources and
@@ -225,43 +46,6 @@ fn write(root: &Path, path: &str, text: &str) {
 
 /// `alpha`, a behavior on lines 1–4 of `test.spec`.
 const ALPHA: &str = "behavior alpha \"Alpha\" {\n    contract \"The system MUST do alpha\"\n    verify unit \"does alpha\"\n}\n";
-
-#[test]
-fn the_fixture_serves_its_declaration_through_the_registry_build() {
-    let served = TestProject::new()
-        .file(
-            "test.spec",
-            "behavior alpha \"Alpha\" {\n}\ninvariant gamma \"Gamma\" {\n}\n",
-        )
-        .serve(&[TestExtension::software().obligating("behavior")]);
-
-    assert!(served.state().session().project().root().is_some());
-    let registries = served.state().registries();
-    let declared: Vec<&str> = registries.declarations().iter().map(|d| d.name()).collect();
-    assert_eq!(declared, [EXT]);
-    for kind in ["behavior", "invariant", "feature"] {
-        let entry = registries
-            .kinds()
-            .get(kind)
-            .unwrap_or_else(|| panic!("{kind} is not registered"));
-        assert_eq!(entry.source_extension, EXT, "{kind}");
-    }
-    // One W004 rule, targeting `behavior`: the behavior that declares no
-    // obligation is reported, the invariant (a testable kind no rule
-    // obligates) is not.
-    let w004: Vec<String> = served
-        .state()
-        .diagnostics()
-        .into_iter()
-        .filter(|d| d.code == "W004")
-        .map(|d| d.message)
-        .collect();
-    assert_eq!(
-        w004,
-        ["behavior 'alpha' is testable but declares no verify obligations"],
-        "{w004:?}"
-    );
-}
 
 #[test]
 fn the_declaration_is_what_the_builders_declare() {

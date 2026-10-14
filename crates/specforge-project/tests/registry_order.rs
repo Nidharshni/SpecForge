@@ -9,6 +9,7 @@
 
 use specforge_common::Diagnostic;
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta, PeerDependency};
+use specforge_project::testing::TestProject;
 use specforge_wasm::testing::InProcessRuntime;
 use std::sync::Arc;
 
@@ -81,31 +82,27 @@ fn colliding_extensions_with(peer: bool, custom: bool) -> InProcessRuntime {
         })
 }
 
-fn project() -> tempfile::TempDir {
+fn project() -> TestProject {
     project_with(false)
 }
 
 /// The project, optionally with a provider whose extension is not installed (W118).
-fn project_with(providers: bool) -> tempfile::TempDir {
-    let dir = tempfile::TempDir::new().unwrap();
-    let mut config = serde_json::json!({
-        "name": "order",
-        "version": "0.1.0",
-        "extensions": ["@test/alpha", "@test/beta"]
-    });
-    if providers {
-        config["providers"] =
-            serde_json::json!([{"scheme": "gh", "alias": "work", "extension": "@acme/github"}]);
-    }
-    std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
+fn project_with(providers: bool) -> TestProject {
+    let project = TestProject::new()
+        .config(|c| {
+            c["name"] = "order".into();
+            if providers {
+                c["providers"] =
+                    serde_json::json!([{"scheme": "gh", "alias": "work", "extension": "@acme/github"}]);
+            }
+        })
+        .enabling(&["@test/alpha", "@test/beta"])
+        .installing_enabled();
     // A duplicate ID: a graph diagnostic, between the registry ones and E039.
-    std::fs::write(
-        dir.path().join("main.spec"),
+    project.file(
+        "main.spec",
         "gadget widget \"Widget\" {\n}\ngadget widget \"Again\" {\n}\n",
     )
-    .unwrap();
-    dir
 }
 
 fn render(diagnostics: &[Diagnostic]) -> Vec<String> {
@@ -138,10 +135,7 @@ fn registry_diagnostics_keep_their_order() {
     // Compiled again and again, with fresh hash maps each time: the order
     // must not depend on them.
     for _ in 0..20 {
-        let ctx = specforge_project::CompiledProject::compile(
-            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-            Some(runtime.clone()),
-        );
+        let ctx = dir.compile_in(runtime.clone());
         let diagnostics = ctx.diagnostics();
         assert_eq!(render(&diagnostics), expected);
     }
@@ -158,10 +152,7 @@ fn the_environment_reports_before_the_sources() {
     let runtime = Arc::new(colliding_extensions_with(true, true));
 
     for _ in 0..20 {
-        let ctx = specforge_project::CompiledProject::compile(
-            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-            Some(runtime.clone()),
-        );
+        let ctx = dir.compile_in(runtime.clone());
         let diagnostics = ctx.diagnostics();
         let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
         // The environment's own first (provider registration), then the
@@ -189,10 +180,7 @@ fn the_environment_says_what_each_diagnostic_is_about() {
     let dir = project_with(true);
     let runtime = Arc::new(colliding_extensions_with(true, true));
 
-    let ctx = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(runtime),
-    );
+    let ctx = dir.compile_in(runtime);
     let setup = ctx.environment().setup_diagnostics();
 
     let reported: Vec<_> = setup

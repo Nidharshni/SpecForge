@@ -27,9 +27,11 @@
 
 use serde_json::{Map, Value, json};
 use specforge_mcp::McpServer;
+use specforge_mcp::testing::{rooted_server, rpc};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+
+use crate::support::{Cli, TestProject};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 enum Aspect {
@@ -93,6 +95,11 @@ const EXPECTED_DIVERGENCES: &[(&str, Aspect, &str)] = &[
     ),
 ];
 
+/// An empty directory with a HOME of its own: the project each surface starts from.
+fn scratch() -> TestProject {
+    TestProject::new().without_config()
+}
+
 // ── fixtures ────────────────────────────────────────────────────────────────
 
 /// The registry every fixture points at: nothing listens on port 9, so a
@@ -103,7 +110,7 @@ const CONFIG: &str = r#"{
   "spec_root": "spec",
   "extensions": ["@specforge/software"],
   "registries": [
-    { "alias": "offline", "url": "http://127.0.0.1:9/v1", "default_registry": true }
+    { "alias": "offline", "url": "http://127.0.0.1:9", "default_registry": true }
   ]
 }
 "#;
@@ -121,16 +128,18 @@ fn greet_blob() -> PathBuf {
 
 const GREET: &str = "@sdk/greet";
 
-fn project(root: &Path) {
+fn project(proj: &TestProject) {
+    let root = proj.root();
     std::fs::create_dir_all(root.join("spec")).unwrap();
     std::fs::write(root.join("specforge.json"), CONFIG).unwrap();
     std::fs::write(root.join("spec/main.spec"), MAIN_SPEC).unwrap();
 }
 
-fn empty(_root: &Path) {}
+fn empty(_proj: &TestProject) {}
 
-fn project_with_product_enabled(root: &Path) {
-    project(root);
+fn project_with_product_enabled(proj: &TestProject) {
+    let root = proj.root();
+    project(proj);
     let config = CONFIG.replace(
         r#"["@specforge/software"]"#,
         r#"["@specforge/software", "@specforge/product"]"#,
@@ -138,21 +147,22 @@ fn project_with_product_enabled(root: &Path) {
     std::fs::write(root.join("specforge.json"), config).unwrap();
 }
 
-fn project_with_greet_installed(root: &Path) {
-    project(root);
-    let out = cli()
-        .args(["add", greet_blob().to_str().unwrap(), "--path"])
-        .arg(root)
-        .args(["--format", "json"])
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "setup install failed: {out:?}");
+fn project_with_greet_installed(proj: &TestProject) {
+    let _root = proj.root();
+    project(proj);
+    let out = cli(proj).run(&["add", greet_blob().to_str().unwrap(), "--format", "json"]);
+    assert_eq!(
+        out.code, 0,
+        "setup install failed: {}{}",
+        out.stdout, out.stderr
+    );
 }
 
 /// The project with a reference to an invariant nobody declares: `check`
 /// reports E003.
-fn project_with_unresolved_reference(root: &Path) {
-    project(root);
+fn project_with_unresolved_reference(proj: &TestProject) {
+    let root = proj.root();
+    project(proj);
     std::fs::write(
         root.join("spec/main.spec"),
         "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n  invariants [missing]\n}\n",
@@ -160,8 +170,9 @@ fn project_with_unresolved_reference(root: &Path) {
     .unwrap();
 }
 
-fn project_unformatted(root: &Path) {
-    project(root);
+fn project_unformatted(proj: &TestProject) {
+    let root = proj.root();
+    project(proj);
     std::fs::write(
         root.join("spec/messy.spec"),
         "behavior messy \"Messy\" {\ncategory \"core\"\ncontract \"The system MUST work\"\n}\n",
@@ -169,8 +180,9 @@ fn project_unformatted(root: &Path) {
     .unwrap();
 }
 
-fn project_at_old_format(root: &Path) {
-    project(root);
+fn project_at_old_format(proj: &TestProject) {
+    let root = proj.root();
+    project(proj);
     std::fs::write(
         root.join("spec/old.spec"),
         "// specforge-format: 0.1\nbehavior old_one \"Old\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n",
@@ -179,8 +191,9 @@ fn project_at_old_format(root: &Path) {
 }
 
 /// A project with a file whose format version no migration reaches.
-fn project_with_failing_migration(root: &Path) {
-    project(root);
+fn project_with_failing_migration(proj: &TestProject) {
+    let root = proj.root();
+    project(proj);
     std::fs::write(
         root.join("spec/bad.spec"),
         "// specforge-format: 99.0\nbehavior bad_one \"Bad\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n",
@@ -192,7 +205,7 @@ fn project_with_failing_migration(root: &Path) {
 
 struct Scenario {
     name: &'static str,
-    setup: fn(&Path),
+    setup: fn(&TestProject),
     /// CLI arguments (after `specforge`); run with the project as cwd.
     cli: fn(&Path) -> Vec<String>,
     /// MCP tool name and arguments.
@@ -492,43 +505,35 @@ const CLI_EXTRAS: &[&str] = &["credentials", "credentials_failures"];
 /// MCP's own keys beside an outcome document.
 const MCP_EXTRAS: &[&str] = &["note"];
 
-fn cli() -> Command {
-    let mut cmd = Command::new(assert_cmd::cargo_bin!("specforge"));
-    // No user credentials or caches leak into the snapshots.
-    cmd.env("HOME", std::env::temp_dir().join("specforge-parity-home"));
-    cmd
+/// The CLI on `project`: its own HOME, so no user credentials or caches leak into the snapshots, and no machine
+/// toolchain: z3 runs, as the MCP side's solver says.
+fn cli(project: &TestProject) -> Cli<'_> {
+    Cli::on(project).env("PATH", crate::toolchain::z3_ready())
 }
 
 /// What a surface answered: whether the call succeeded, its payload and
 /// its verdict, where it has one.
 type Run = (bool, Value, Option<bool>);
 
-fn run_cli(scenario: &Scenario, root: &Path) -> Run {
-    let out = cli()
-        .args((scenario.cli)(root))
-        .current_dir(root)
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
-    let payload = serde_json::from_str(&stdout).unwrap_or(Value::String(stdout));
-    (out.status.success(), payload, Some(out.status.success()))
+fn run_cli(scenario: &Scenario, project: &TestProject) -> Run {
+    let argv = (scenario.cli)(project.root());
+    let argv: Vec<&str> = argv.iter().map(String::as_str).collect();
+    let out = cli(project).bare(&argv);
+    let payload = serde_json::from_str(&out.stdout).unwrap_or(Value::String(out.stdout));
+    (out.code == 0, payload, Some(out.code == 0))
 }
 
-fn run_mcp(scenario: &Scenario, root: &Path) -> Run {
+fn run_mcp(scenario: &Scenario, project: &TestProject) -> Run {
+    let root = project.root();
     let mut server = if scenario.mcp_rooted {
-        McpServer::with_project_root(root.to_path_buf())
+        mcp_on(root)
     } else {
-        McpServer::new()
+        let mut server = McpServer::new();
+        rpc::call(&mut server, "initialize", json!({}));
+        server
     };
-    let init = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}});
-    server.handle_message(&init.to_string());
     let (tool, arguments) = (scenario.mcp)(root);
-    let req = json!({
-        "jsonrpc": "2.0", "id": 2, "method": "tools/call",
-        "params": {"name": tool, "arguments": arguments}
-    });
-    let resp: Value = serde_json::from_str(&server.handle_message(&req.to_string()).unwrap())
-        .expect("the server answers JSON");
+    let resp = rpc::call_tool(&mut server, tool, arguments);
     if let Some(error) = resp.get("error") {
         return (false, json!({"error": error}), None);
     }
@@ -586,16 +591,9 @@ fn read_config(root: &Path) -> Value {
 }
 
 /// The codes a fresh `specforge check` reports, sorted, and its exit status.
-fn check(root: &Path) -> Value {
-    let out = cli()
-        .args(["check", "--format", "json"])
-        .arg("--path")
-        .arg(root)
-        .current_dir(root)
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    let mut codes: Vec<String> = serde_json::from_str::<Value>(&stdout)
+fn check(project: &TestProject) -> Value {
+    let out = cli(project).run(&["check", "--format", "json"]);
+    let mut codes: Vec<String> = serde_json::from_str::<Value>(&out.stdout)
         .ok()
         .and_then(|v| v.as_array().cloned())
         .unwrap_or_default()
@@ -609,7 +607,7 @@ fn check(root: &Path) -> Value {
         })
         .collect();
     codes.sort();
-    json!({"ok": out.status.success(), "diagnostics": codes})
+    json!({"ok": out.code == 0, "diagnostics": codes})
 }
 
 /// The outcome document of `payload` and what the surface printed beside
@@ -641,19 +639,20 @@ fn split_payload(payload: &Value, ok: bool, extras: &[&str]) -> (Value, Map<Stri
 
 fn observe(
     scenario: &Scenario,
-    root: &Path,
-    run: fn(&Scenario, &Path) -> Run,
+    project: &TestProject,
+    run: fn(&Scenario, &TestProject) -> Run,
     extras: &[&str],
 ) -> Observed {
-    (scenario.setup)(root);
-    let (ok, payload, verdict) = run(scenario, root);
+    let root = project.root();
+    (scenario.setup)(project);
+    let (ok, payload, verdict) = run(scenario, project);
     let (document, beside) = split_payload(&payload, ok, extras);
     Observed {
         ok,
         verdict,
         files: files_under(root),
         config: read_config(root),
-        check: check(root),
+        check: check(project),
         document: normalized(&document, root),
         beside,
     }
@@ -661,7 +660,7 @@ fn observe(
 
 /// `value` with the parts that churn for reasons outside this harness
 /// redacted: the embedded Graph Protocol schema (any extension change moves
-/// it), and whether z3 is installed on this machine.
+/// it).
 fn redacted(value: &Value) -> Value {
     match value {
         Value::Object(map) => Value::Object(
@@ -669,7 +668,6 @@ fn redacted(value: &Value) -> Value {
                 .map(|(k, v)| {
                     let v = match k.as_str() {
                         "schema" if v.is_object() => json!("[SCHEMA]"),
-                        "z3_available" => json!("[Z3]"),
                         _ => redacted(v),
                     };
                     (k.clone(), v)
@@ -801,12 +799,12 @@ fn parity(name: &str) {
         .iter()
         .find(|s| s.name == name)
         .unwrap_or_else(|| panic!("no scenario {name}"));
-    let cli_dir = tempfile::tempdir().unwrap();
-    let mcp_dir = tempfile::tempdir().unwrap();
-    let cli_obs = observe(scenario, cli_dir.path(), run_cli, CLI_EXTRAS);
-    let mcp_obs = observe(scenario, mcp_dir.path(), run_mcp, MCP_EXTRAS);
+    let cli_dir = scratch();
+    let mcp_dir = scratch();
+    let cli_obs = observe(scenario, &cli_dir, run_cli, CLI_EXTRAS);
+    let mcp_obs = observe(scenario, &mcp_dir, run_mcp, MCP_EXTRAS);
 
-    let snapshot = snapshot_of((&cli_obs, cli_dir.path()), (&mcp_obs, mcp_dir.path()));
+    let snapshot = snapshot_of((&cli_obs, cli_dir.root()), (&mcp_obs, mcp_dir.root()));
 
     let mut unexpected = Vec::new();
     for aspect in ASPECTS {
@@ -937,9 +935,9 @@ fn verdicts_agree() {
         "migrate_failing",
     ] {
         let scenario = SCENARIOS.iter().find(|s| s.name == name).unwrap();
-        let (cli_dir, mcp_dir) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
-        let cli_obs = observe(scenario, cli_dir.path(), run_cli, CLI_EXTRAS);
-        let mcp_obs = observe(scenario, mcp_dir.path(), run_mcp, MCP_EXTRAS);
+        let (cli_dir, mcp_dir) = (scratch(), scratch());
+        let cli_obs = observe(scenario, &cli_dir, run_cli, CLI_EXTRAS);
+        let mcp_obs = observe(scenario, &mcp_dir, run_mcp, MCP_EXTRAS);
         assert!(
             cli_obs.verdict.is_some() && mcp_obs.verdict.is_some(),
             "{name}: both surfaces say whether the run passed (cli {:?}, mcp {:?})",
@@ -1013,9 +1011,8 @@ fn parity_check_cache() {
 
 /// An initialized MCP server on `root`.
 fn mcp_on(root: &Path) -> McpServer {
-    let mut server = McpServer::with_project_root(root.to_path_buf());
-    let init = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}});
-    server.handle_message(&init.to_string());
+    let mut server = rooted_server(root);
+    rpc::call(&mut server, "initialize", json!({}));
     server
 }
 
@@ -1040,17 +1037,12 @@ fn mcp_export(root: &Path, arguments: Value) -> Value {
     )
 }
 
-fn cli_export(root: &Path, flags: &[&str]) -> Value {
-    let out = cli()
-        .arg("export")
-        .arg("--path")
-        .arg(root)
-        .args(flags)
-        .current_dir(root)
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "{out:?}");
-    serde_json::from_slice(&out.stdout).unwrap()
+fn cli_export(project: &TestProject, flags: &[&str]) -> Value {
+    let mut argv = vec!["export"];
+    argv.extend(flags);
+    let out = cli(project).run(&argv);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    out.json()
 }
 
 #[specforge_test_macros::test(
@@ -1058,11 +1050,11 @@ fn cli_export(root: &Path, flags: &[&str]) -> Value {
     verify = "the graph export is the document specforge export --format graph writes, Graph Protocol 2.0 with the schema embedded"
 )]
 fn mcp_graph_export_is_the_cli_export() {
-    let dir = tempfile::tempdir().unwrap();
-    project(dir.path());
+    let dir = scratch();
+    project(&dir);
 
-    let mcp = mcp_export(dir.path(), json!({"format": "graph"}));
-    let cli = cli_export(dir.path(), &["--format", "graph"]);
+    let mcp = mcp_export(dir.root(), json!({"format": "graph"}));
+    let cli = cli_export(&dir, &["--format", "graph"]);
 
     assert_eq!(mcp["format_version"], "2.0", "{mcp}");
     assert!(mcp["schema"].is_object(), "{mcp}");
@@ -1074,12 +1066,12 @@ fn mcp_graph_export_is_the_cli_export() {
     verify = "the embedded schema carries the version specforge export computes against the schema cache, which the tool leaves as it is"
 )]
 fn mcp_export_carries_the_schema_version_the_cli_computes() {
-    let dir = tempfile::tempdir().unwrap();
-    project(dir.path());
+    let dir = scratch();
+    project(&dir);
     // A CLI export caches its schema. Make the cache an older 1.2.3 that
     // also had a kind the project no longer has: a breaking change since.
-    cli_export(dir.path(), &["--format", "graph"]);
-    let cache_path = dir.path().join(".specforge/schema-cache.json");
+    cli_export(&dir, &["--format", "graph"]);
+    let cache_path = dir.root().join(".specforge/schema-cache.json");
     let mut cache: Value =
         serde_json::from_str(&std::fs::read_to_string(&cache_path).unwrap()).unwrap();
     cache["schema"]["schema_version"] = json!({"major": 1, "minor": 2, "patch": 3});
@@ -1089,7 +1081,7 @@ fn mcp_export_carries_the_schema_version_the_cli_computes() {
         .push(json!({"name": "legacy", "source_extension": "x", "testable": false, "fields": []}));
     std::fs::write(&cache_path, cache.to_string()).unwrap();
 
-    let mcp = mcp_export(dir.path(), json!({"format": "graph"}));
+    let mcp = mcp_export(dir.root(), json!({"format": "graph"}));
     assert_eq!(
         mcp["schema"]["schema_version"],
         json!({"major": 2, "minor": 0, "patch": 0}),
@@ -1103,7 +1095,7 @@ fn mcp_export_carries_the_schema_version_the_cli_computes() {
         "the MCP export only reads the cache"
     );
     // The CLI export, which does write the cache, embeds the same version.
-    let cli = cli_export(dir.path(), &["--format", "graph"]);
+    let cli = cli_export(&dir, &["--format", "graph"]);
     assert_eq!(
         cli["schema"]["schema_version"],
         mcp["schema"]["schema_version"]
@@ -1115,32 +1107,32 @@ fn mcp_export_carries_the_schema_version_the_cli_computes() {
     verify = "with_schema embeds the schema in a context, brief or budgeted export, and no_schema leaves it out of a graph export"
 )]
 fn mcp_export_schema_flags_are_the_cli_flags() {
-    let dir = tempfile::tempdir().unwrap();
-    project(dir.path());
+    let dir = scratch();
+    project(&dir);
 
     for format in ["context", "brief"] {
-        let plain = mcp_export(dir.path(), json!({"format": format}));
+        let plain = mcp_export(dir.root(), json!({"format": format}));
         assert!(plain.get("schema").is_none(), "{format}: {plain}");
-        let with = mcp_export(dir.path(), json!({"format": format, "with_schema": true}));
+        let with = mcp_export(dir.root(), json!({"format": format, "with_schema": true}));
         assert!(with["schema"].is_object(), "{format}: {with}");
         assert_eq!(
             with,
-            cli_export(dir.path(), &["--format", format, "--with-schema"])
+            cli_export(&dir, &["--format", format, "--with-schema"])
         );
     }
 
     let budgeted = mcp_export(
-        dir.path(),
+        dir.root(),
         json!({"format": "graph", "max_tokens": 100000, "with_schema": true}),
     );
     assert!(budgeted["schema"].is_object(), "{budgeted}");
 
-    let without = mcp_export(dir.path(), json!({"format": "graph", "no_schema": true}));
+    let without = mcp_export(dir.root(), json!({"format": "graph", "no_schema": true}));
     assert_eq!(without["format_version"], "1.0", "{without}");
     assert!(without.get("schema").is_none(), "{without}");
     assert_eq!(
         without,
-        cli_export(dir.path(), &["--format", "graph", "--no-schema"])
+        cli_export(&dir, &["--format", "graph", "--no-schema"])
     );
 }
 
@@ -1149,12 +1141,12 @@ fn mcp_export_schema_flags_are_the_cli_flags() {
     verify = "specforge://graph under max_tokens stays within the budget, as the budgeted export does"
 )]
 fn graph_resource_under_a_budget_is_the_budgeted_export() {
-    let dir = tempfile::tempdir().unwrap();
-    project(dir.path());
+    let dir = scratch();
+    project(&dir);
     let budget = 300;
 
     let resource = mcp_document(
-        &mut mcp_on(dir.path()),
+        &mut mcp_on(dir.root()),
         "resources/read",
         json!({"uri": format!("specforge://graph?max_tokens={budget}")}),
     );
@@ -1168,7 +1160,7 @@ fn graph_resource_under_a_budget_is_the_budgeted_export() {
     );
     assert_eq!(
         resource,
-        cli_export(dir.path(), &["--format", "graph", "--max-tokens", "300"])
+        cli_export(&dir, &["--format", "graph", "--max-tokens", "300"])
     );
 }
 
@@ -1176,17 +1168,12 @@ fn graph_resource_under_a_budget_is_the_budgeted_export() {
 
 /// The CLI's `<command> --format json` and the MCP `tool`'s answer on the
 /// same project.
-fn both_listings(root: &Path, command: &str, tool: &str) -> (Value, Value) {
-    let out = cli()
-        .args([command, "--path"])
-        .arg(root)
-        .args(["--format", "json"])
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "{out:?}");
-    let cli: Value = serde_json::from_slice(&out.stdout).unwrap();
+fn both_listings(project: &TestProject, command: &str, tool: &str) -> (Value, Value) {
+    let out = cli(project).run(&[command, "--format", "json"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let cli: Value = out.json();
     let mcp = mcp_document(
-        &mut mcp_on(root),
+        &mut mcp_on(project.root()),
         "tools/call",
         json!({"name": tool, "arguments": {}}),
     );
@@ -1198,17 +1185,17 @@ fn both_listings(root: &Path, command: &str, tool: &str) -> (Value, Value) {
     verify = "the CLI and the MCP extensions tool answer the same document"
 )]
 fn extensions_listings_match() {
-    let dir = tempfile::tempdir().unwrap();
-    project_with_greet_installed(dir.path());
+    let dir = scratch();
+    project_with_greet_installed(&dir);
     std::fs::write(
-        dir.path().join("spec/hello.spec"),
+        dir.root().join("spec/hello.spec"),
         "greeting hello \"Hello\" {\n  style warm\n}\n",
     )
     .unwrap();
 
-    let (cli, mcp) = both_listings(dir.path(), "extensions", "specforge.extensions");
+    let (cli, mcp) = both_listings(&dir, "extensions", "specforge.extensions");
 
-    assert_eq!(normalized(&cli, dir.path()), normalized(&mcp, dir.path()));
+    assert_eq!(normalized(&cli, dir.root()), normalized(&mcp, dir.root()));
     let greet = &cli["extensions"][0];
     assert_eq!(greet["name"], GREET, "{cli}");
     assert_eq!(greet["status"], "loaded", "{cli}");
@@ -1221,16 +1208,16 @@ fn extensions_listings_match() {
     verify = "the CLI and the MCP providers tool list the same entries"
 )]
 fn providers_listings_match() {
-    let dir = tempfile::tempdir().unwrap();
-    project(dir.path());
+    let dir = scratch();
+    project(&dir);
     let mut config: Value = serde_json::from_str(CONFIG).unwrap();
     config["providers"] = json!([
         {"scheme": "gh", "alias": "work", "extension": "@acme/github"},
         {"scheme": "file", "alias": "local", "extension": "@specforge/software"},
     ]);
-    std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
+    std::fs::write(dir.root().join("specforge.json"), config.to_string()).unwrap();
 
-    let (cli, mcp) = both_listings(dir.path(), "providers", "specforge.providers");
+    let (cli, mcp) = both_listings(&dir, "providers", "specforge.providers");
 
     assert_eq!(cli, mcp);
     assert_eq!(
@@ -1249,24 +1236,19 @@ fn providers_listings_match() {
     verify = "specforge.init writes the files and config specforge init writes for the same inputs"
 )]
 fn mcp_init_writes_what_cli_init_writes() {
-    let cli_dir = tempfile::tempdir().unwrap();
-    let mcp_dir = tempfile::tempdir().unwrap();
-    let (cli_root, mcp_root) = (cli_dir.path().join("demo"), mcp_dir.path().join("demo"));
+    let cli_dir = scratch();
+    let mcp_dir = scratch();
+    let (cli_root, mcp_root) = (cli_dir.root().join("demo"), mcp_dir.root().join("demo"));
     std::fs::create_dir(&cli_root).unwrap();
 
-    let out = cli()
-        .args([
-            "init",
-            "--extensions",
-            "@specforge/software,@specforge/product",
-        ])
-        .current_dir(&cli_root)
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "{out:?}");
+    let out = cli(&cli_dir).in_dir(&cli_root).bare(&[
+        "init",
+        "--extensions",
+        "@specforge/software,@specforge/product",
+    ]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
     let mut server = McpServer::new();
-    let init = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}});
-    server.handle_message(&init.to_string());
+    rpc::call(&mut server, "initialize", json!({}));
     let reply = mcp_document(
         &mut server,
         "tools/call",
@@ -1284,15 +1266,23 @@ fn mcp_init_writes_what_cli_init_writes() {
     );
     assert_eq!(files, files_under(&mcp_root));
     assert_eq!(read_config(&cli_root), read_config(&mcp_root));
-    assert_eq!(check(&mcp_root)["ok"], true);
+    let checked = cli(&mcp_dir).bare(&[
+        "check",
+        "--format",
+        "json",
+        "--path",
+        mcp_root.to_str().unwrap(),
+    ]);
+    assert_eq!(checked.code, 0, "{}{}", checked.stdout, checked.stderr);
 }
 
 // ── analyze: one payload on both surfaces (wayfinder #41) ───────────────────
 
 /// The analyze project with a recorded report that proves nothing: a
 /// `coverage --min 50` gate lands below (0 of 1).
-fn project_with_a_coverage_gate(root: &Path) {
-    analyze_project(root);
+fn project_with_a_coverage_gate(proj: &TestProject) {
+    let root = proj.root();
+    analyze_project(proj);
     std::fs::write(
         root.join("specforge-report.json"),
         r#"{"runner":"r","results":{}}"#,
@@ -1301,7 +1291,8 @@ fn project_with_a_coverage_gate(root: &Path) {
 }
 
 /// A project with the testing extension and a `widget` the report can prove.
-fn analyze_project(root: &Path) {
+fn analyze_project(proj: &TestProject) {
+    let root = proj.root();
     std::fs::create_dir_all(root.join("spec")).unwrap();
     std::fs::write(
         root.join("specforge.json"),
@@ -1333,20 +1324,12 @@ fn analyze_report(root: &Path, orphan: Option<&str>) -> String {
 }
 
 /// What `specforge analyze --json` printed, its exit code and its stderr.
-fn cli_analyze(root: &Path, extra: &[&str]) -> (Option<i32>, Value, String) {
-    let out = cli()
-        .args(["analyze", "--path", &s(root), "--format", "json"])
-        .args(extra)
-        .current_dir(root)
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    let payload = serde_json::from_str(&stdout).unwrap_or(Value::Null);
-    (
-        out.status.code(),
-        payload,
-        String::from_utf8_lossy(&out.stderr).to_string(),
-    )
+fn cli_analyze(project: &TestProject, extra: &[&str]) -> (Option<i32>, Value, String) {
+    let mut argv = vec!["analyze", "--format", "json"];
+    argv.extend(extra);
+    let out = cli(project).run(&argv);
+    let payload = serde_json::from_str(&out.stdout).unwrap_or(Value::Null);
+    (Some(out.code), payload, out.stderr)
 }
 
 /// What `specforge.analyze` answered: whether it refused, and the document
@@ -1387,12 +1370,12 @@ fn assert_same_analyze_payload(cli_payload: &Value, mcp_payload: &Value) {
 
 #[test]
 fn analyze_payload_is_equal_on_both_surfaces_by_default() {
-    let dir = tempfile::tempdir().unwrap();
-    analyze_project(dir.path());
-    let report = analyze_report(dir.path(), None);
+    let dir = scratch();
+    analyze_project(&dir);
+    let report = analyze_report(dir.root(), None);
 
-    let (code, cli_payload, _) = cli_analyze(dir.path(), &["--test-results", &report]);
-    let (refused, mcp_payload) = mcp_analyze(dir.path(), json!({"test_results": report}));
+    let (code, cli_payload, _) = cli_analyze(&dir, &["--test-results", &report]);
+    let (refused, mcp_payload) = mcp_analyze(dir.root(), json!({"test_results": report}));
 
     assert_eq!(code, Some(0));
     assert!(!refused, "{mcp_payload}");
@@ -1403,12 +1386,12 @@ fn analyze_payload_is_equal_on_both_surfaces_by_default() {
 
 #[test]
 fn analyze_payload_is_equal_on_both_surfaces_under_strict() {
-    let dir = tempfile::tempdir().unwrap();
-    analyze_project(dir.path());
-    let report = analyze_report(dir.path(), None);
+    let dir = scratch();
+    analyze_project(&dir);
+    let report = analyze_report(dir.root(), None);
 
-    let (code, cli_payload, _) = cli_analyze(dir.path(), &["--strict", "--test-results", &report]);
-    let (_, mcp_payload) = mcp_analyze(dir.path(), json!({"strict": true, "test_results": report}));
+    let (code, cli_payload, _) = cli_analyze(&dir, &["--strict", "--test-results", &report]);
+    let (_, mcp_payload) = mcp_analyze(dir.root(), json!({"strict": true, "test_results": report}));
 
     assert_eq!(code, Some(1), "strict must promote the warning");
     assert_eq!(cli_payload["ok"], false);
@@ -1417,12 +1400,12 @@ fn analyze_payload_is_equal_on_both_surfaces_under_strict() {
 
 #[test]
 fn analyze_payload_is_equal_on_both_surfaces_with_stray_records() {
-    let dir = tempfile::tempdir().unwrap();
-    analyze_project(dir.path());
-    let report = analyze_report(dir.path(), Some("wodget"));
+    let dir = scratch();
+    analyze_project(&dir);
+    let report = analyze_report(dir.root(), Some("wodget"));
 
-    let (code, cli_payload, stderr) = cli_analyze(dir.path(), &["--test-results", &report]);
-    let (_, mcp_payload) = mcp_analyze(dir.path(), json!({"test_results": report}));
+    let (code, cli_payload, stderr) = cli_analyze(&dir, &["--test-results", &report]);
+    let (_, mcp_payload) = mcp_analyze(dir.root(), json!({"test_results": report}));
 
     assert_eq!(code, Some(0), "stray records never fail the run: {stderr}");
     assert!(
@@ -1436,12 +1419,12 @@ fn analyze_payload_is_equal_on_both_surfaces_with_stray_records() {
 
 #[test]
 fn analyze_bad_pass_uses_each_surfaces_channel() {
-    let dir = tempfile::tempdir().unwrap();
-    analyze_project(dir.path());
+    let dir = scratch();
+    analyze_project(&dir);
 
     // CLI: the operation refuses it, exit 2; under --json the error document
     // is on stdout and nothing is on stderr.
-    let (code, stdout, stderr) = cli_analyze(dir.path(), &["nonsense"]);
+    let (code, stdout, stderr) = cli_analyze(&dir, &["nonsense"]);
     assert_eq!(code, Some(2));
     assert_eq!(stdout["code"], "unknown_pass", "{stdout}");
     assert!(
@@ -1453,7 +1436,7 @@ fn analyze_bad_pass_uses_each_surfaces_channel() {
     assert_eq!(stderr, "", "nothing on stderr");
 
     // MCP: an invalid_input error naming the pass.
-    let (refused, error) = mcp_analyze(dir.path(), json!({"pass": "nonsense"}));
+    let (refused, error) = mcp_analyze(dir.root(), json!({"pass": "nonsense"}));
     assert!(refused, "{error}");
     let text = error.to_string();
     assert!(text.contains("invalid_input"), "{text}");
@@ -1464,8 +1447,9 @@ fn analyze_bad_pass_uses_each_surfaces_channel() {
 
 /// A project where `alpha` is in a feature and an invariant: three kinds,
 /// and entities one hop from `alpha`.
-fn export_project(root: &Path) {
-    project(root);
+fn export_project(proj: &TestProject) {
+    let root = proj.root();
+    project(proj);
     std::fs::write(
         root.join("spec/main.spec"),
         "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n  invariants [law]\n}\n\
@@ -1478,18 +1462,15 @@ fn export_project(root: &Path) {
 /// `specforge export --format brief` with `extra`, and `specforge.export`
 /// with `arguments` over the same project: the two payloads.
 fn export_both_ways(extra: &[&str], arguments: Value) -> (String, String) {
-    let dir = tempfile::tempdir().unwrap();
-    export_project(dir.path());
-    let out = cli()
-        .args(["export", "--path", &s(dir.path()), "--format", "brief"])
-        .args(extra)
-        .current_dir(dir.path())
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "{out:?}");
-    let cli_text = String::from_utf8_lossy(&out.stdout).trim_end().to_string();
+    let dir = scratch();
+    export_project(&dir);
+    let mut argv = vec!["export", "--format", "brief"];
+    argv.extend(extra);
+    let out = cli(&dir).run(&argv);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let cli_text = out.stdout.trim_end().to_string();
 
-    let mut server = mcp_on(dir.path());
+    let mut server = mcp_on(dir.root());
     let mut arguments = arguments;
     arguments["format"] = json!("brief");
     let req = json!({
@@ -1531,9 +1512,9 @@ fn export_scoped_depth_kinds() {
     assert!(all.contains("wide"), "{all}");
 
     // The graph resource reads the same options (ADR 0024 D4).
-    let dir = tempfile::tempdir().unwrap();
-    export_project(dir.path());
-    let mut server = mcp_on(dir.path());
+    let dir = scratch();
+    export_project(&dir);
+    let mut server = mcp_on(dir.root());
     let resource = mcp_document_text(
         &mut server,
         "specforge://brief?scope=alpha&depth=1&kinds=invariant",
@@ -1558,7 +1539,8 @@ fn mcp_document_text(server: &mut McpServer, uri: &str) -> String {
 
 /// A Rust project half-way through inference: `src/lib.rs` is indexed and
 /// its `alpha` has an entity, `src/net/wire.rs` is not.
-fn infer_project(root: &Path) {
+fn infer_project(proj: &TestProject) {
+    let root = proj.root();
     std::fs::create_dir_all(root.join("spec")).unwrap();
     std::fs::create_dir_all(root.join("src/net")).unwrap();
     std::fs::write(
@@ -1595,14 +1577,12 @@ fn infer_project(root: &Path) {
 }
 
 /// `specforge infer-status --format json` with `flags`.
-fn cli_infer_status(root: &Path, flags: &[&str]) -> Value {
-    let out = cli()
-        .args(["infer-status", "--format", "json", "--path", &s(root)])
-        .args(flags)
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "{out:?}");
-    serde_json::from_slice(&out.stdout).unwrap()
+fn cli_infer_status(project: &TestProject, flags: &[&str]) -> Value {
+    let mut argv = vec!["infer-status", "--format", "json"];
+    argv.extend(flags);
+    let out = cli(project).run(&argv);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    out.json()
 }
 
 /// What the tool `name` answered on a server rooted at `root`.
@@ -1621,11 +1601,11 @@ fn mcp_tool(root: &Path, name: &str) -> Value {
 
 #[test]
 fn infer_progress_is_equal_on_both_surfaces() {
-    let dir = tempfile::tempdir().unwrap();
-    infer_project(dir.path());
+    let dir = scratch();
+    infer_project(&dir);
 
-    let cli_doc = cli_infer_status(dir.path(), &[]);
-    let mcp_doc = mcp_tool(dir.path(), "specforge.infer_progress");
+    let cli_doc = cli_infer_status(&dir, &[]);
+    let mcp_doc = mcp_tool(dir.root(), "specforge.infer_progress");
 
     assert_eq!(
         cli_doc["unanalyzed"],
@@ -1651,21 +1631,21 @@ fn infer_progress_is_equal_on_both_surfaces() {
     verify = "--format json includes the gaps --gaps and --gaps-detail ask for"
 )]
 fn infer_status_json_carries_the_gaps_asked_for() {
-    let dir = tempfile::tempdir().unwrap();
-    infer_project(dir.path());
+    let dir = scratch();
+    infer_project(&dir);
 
-    let plain = cli_infer_status(dir.path(), &[]);
+    let plain = cli_infer_status(&dir, &[]);
     assert!(plain.get("unanalyzed_by_directory").is_none(), "{plain}");
     assert!(plain.get("gap_analysis").is_none(), "{plain}");
 
-    let doc = cli_infer_status(dir.path(), &["--gaps", "--gaps-detail"]);
+    let doc = cli_infer_status(&dir, &["--gaps", "--gaps-detail"]);
     assert_eq!(
         doc["unanalyzed_by_directory"],
         json!([{"directory": "src/net", "count": 1, "files": ["src/net/wire.rs"]}])
     );
     // The gap report is the one specforge.infer_gaps answers with.
     let gaps = &doc["gap_analysis"];
-    assert_eq!(gaps, &mcp_tool(dir.path(), "specforge.infer_gaps"));
+    assert_eq!(gaps, &mcp_tool(dir.root(), "specforge.infer_gaps"));
     let names: Vec<&str> = gaps["by_directory"]
         .as_array()
         .unwrap()
@@ -1681,10 +1661,10 @@ fn infer_status_json_carries_the_gaps_asked_for() {
 
 #[test]
 fn doctor_report_is_the_same_on_both_surfaces() {
-    let dir = tempfile::tempdir().unwrap();
-    project_with_greet_installed(dir.path());
+    let dir = scratch();
+    project_with_greet_installed(&dir);
     // A lock entry whose binary is gone: an issue both must report.
-    let lock_path = dir.path().join("specforge.lock");
+    let lock_path = dir.root().join("specforge.lock");
     let mut lock: Value =
         serde_json::from_str(&std::fs::read_to_string(&lock_path).unwrap()).unwrap();
     lock["entries"].as_array_mut().unwrap().push(json!({
@@ -1692,12 +1672,8 @@ fn doctor_report_is_the_same_on_both_surfaces() {
     }));
     std::fs::write(&lock_path, lock.to_string()).unwrap();
 
-    let out = cli()
-        .args(["doctor", "--format", "json", "--path", &s(dir.path())])
-        .output()
-        .unwrap();
-    let cli_doc: Value = serde_json::from_slice(&out.stdout).unwrap();
-    let mcp_doc = mcp_tool(dir.path(), "specforge.doctor");
+    let cli_doc = cli(&dir).run(&["doctor", "--format", "json"]).json();
+    let mcp_doc = mcp_tool(dir.root(), "specforge.doctor");
 
     // One report on both surfaces: the CLI adds the user's credentials.
     for key in [
@@ -1732,7 +1708,8 @@ fn doctor_report_is_the_same_on_both_surfaces() {
 
 /// A cargo-test project with a report already on disk: one test proves
 /// `alpha`, one names an entity the project lacks (W115).
-fn collect_project(root: &Path) {
+fn collect_project(proj: &TestProject) {
+    let root = proj.root();
     std::fs::create_dir_all(root.join("spec")).unwrap();
     std::fs::create_dir_all(root.join("target/specforge")).unwrap();
     std::fs::write(
@@ -1759,25 +1736,15 @@ fn collect_project(root: &Path) {
 
 #[test]
 fn collect_outcome_is_the_same_on_both_surfaces() {
-    let cli_dir = tempfile::tempdir().unwrap();
-    let mcp_dir = tempfile::tempdir().unwrap();
-    collect_project(cli_dir.path());
-    collect_project(mcp_dir.path());
+    let cli_dir = scratch();
+    let mcp_dir = scratch();
+    collect_project(&cli_dir);
+    collect_project(&mcp_dir);
 
-    let out = cli()
-        .args([
-            "collect",
-            "--no-run",
-            "--format",
-            "json",
-            "--path",
-            &s(cli_dir.path()),
-        ])
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "{out:?}");
-    let cli_doc: Value = serde_json::from_slice(&out.stdout).unwrap();
-    let mcp_doc = mcp_tool(mcp_dir.path(), "specforge.collect");
+    let out = cli(&cli_dir).run(&["collect", "--no-run", "--format", "json"]);
+    assert_eq!(out.code, 0, "{}{}", out.stdout, out.stderr);
+    let cli_doc: Value = out.json();
+    let mcp_doc = mcp_tool(mcp_dir.root(), "specforge.collect");
 
     assert_eq!(cli_doc["diagnostics"][0]["code"], "W115", "{cli_doc}");
     let without_report = |doc: &Value, root: &Path| {
@@ -1791,12 +1758,12 @@ fn collect_outcome_is_the_same_on_both_surfaces() {
         doc
     };
     assert_eq!(
-        without_report(&cli_doc, cli_dir.path()),
-        without_report(&mcp_doc, mcp_dir.path())
+        without_report(&cli_doc, cli_dir.root()),
+        without_report(&mcp_doc, mcp_dir.root())
     );
     assert_eq!(
-        std::fs::read_to_string(cli_dir.path().join("specforge-report.json")).unwrap(),
-        std::fs::read_to_string(mcp_dir.path().join("specforge-report.json")).unwrap(),
+        std::fs::read_to_string(cli_dir.root().join("specforge-report.json")).unwrap(),
+        std::fs::read_to_string(mcp_dir.root().join("specforge-report.json")).unwrap(),
     );
 }
 

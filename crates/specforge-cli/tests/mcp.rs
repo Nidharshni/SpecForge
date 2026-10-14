@@ -2,29 +2,30 @@
 //! argument, its standard streams, its exit. What it serves is proven in
 //! `specforge-mcp`, the transport in its `tests/stdio.rs`.
 
-use crate::e2e_fixtures::*;
+use crate::support::mcp_process::{
+    find_response, initialize as mcp_initialize, parse_tool_content, request as mcp_request,
+};
+use crate::support::{Cli, TestProject};
 use specforge_test_macros::test as specforge_test;
 use std::io::Write;
 use std::path::Path;
-use std::process::{ChildStdout, Command, Stdio};
+use std::process::ChildStdout;
 use std::sync::mpsc;
 use std::time::Duration;
 
-fn specforge_binary() -> Command {
-    Command::new(assert_cmd::cargo_bin!("specforge"))
+/// A project holding one `behavior alpha`, in `main.spec`.
+fn alpha_project() -> TestProject {
+    TestProject::new().file("main.spec", r#"behavior alpha "A" { contract "first" }"#)
 }
 
 /// `specforge mcp <path>` fed `input` and closed: every stdout line parsed
 /// as JSON, stderr, and the exit code.
-fn run(path: &Path, input: &[u8]) -> (Vec<serde_json::Value>, String, Option<i32>) {
-    let mut child = specforge_binary()
-        .args(["mcp"])
-        .arg(path)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("failed to start specforge mcp");
+fn run(
+    project: &TestProject,
+    path: &Path,
+    input: &[u8],
+) -> (Vec<serde_json::Value>, String, Option<i32>) {
+    let mut child = Cli::on(project).start(&["mcp", path.to_str().unwrap()]);
     let mut stdin = child.stdin.take().unwrap();
     stdin.write_all(input).unwrap();
     drop(stdin);
@@ -84,17 +85,16 @@ fn next_json(lines: &mpsc::Receiver<String>) -> serde_json::Value {
     verify = "a client that names no projectRoot is served the project at or above the path specforge mcp was started with"
 )]
 fn mcp_serves_the_project_at_or_above_its_path() {
-    let dir = setup_project_with_config(
-        r#"{"name":"t","version":"0.1.0","extensions":[],"spec_root":"spec"}"#,
-        &[("a.spec", r#"behavior alpha "A" { contract "first" }"#)],
-    );
-    for path in [dir.path().to_path_buf(), dir.path().join("spec")] {
+    let dir = TestProject::new()
+        .raw_config(r#"{"name":"t","version":"0.1.0","extensions":[],"spec_root":"spec"}"#)
+        .file("spec/a.spec", r#"behavior alpha "A" { contract "first" }"#);
+    for path in [dir.root().to_path_buf(), dir.root().join("spec")] {
         let list = mcp_request(
             1,
             "tools/call",
             serde_json::json!({"name": "specforge.list", "arguments": {}}),
         );
-        let (lines, stderr, code) = run(&path, &input(&[mcp_initialize(0), list]));
+        let (lines, stderr, code) = run(&dir, &path, &input(&[mcp_initialize(0), list]));
         let listed = find_response(&lines, 1).expect("the list reply");
         let content = parse_tool_content(listed);
         let ids: Vec<&str> = content["entities"]
@@ -114,7 +114,7 @@ fn mcp_serves_the_project_at_or_above_its_path() {
     verify = "specforge mcp serves its standard input and output and exits 0 when its input ends"
 )]
 fn mcp_answers_each_request_on_stdout_and_exits_0_at_the_end_of_its_input() {
-    let dir = setup_project(&[("main.spec", r#"behavior alpha "A" { contract "first" }"#)]);
+    let dir = alpha_project();
     let initialized = serde_json::json!({"jsonrpc": "2.0", "method": "notifications/initialized"});
     let requests = [
         mcp_initialize(0),
@@ -123,7 +123,7 @@ fn mcp_answers_each_request_on_stdout_and_exits_0_at_the_end_of_its_input() {
         mcp_request(2, "ping", serde_json::json!({})),
     ];
 
-    let (lines, stderr, code) = run(dir.path(), &input(&requests));
+    let (lines, stderr, code) = run(&dir, dir.root(), &input(&requests));
 
     let ids: Vec<&serde_json::Value> = lines.iter().map(|line| &line["id"]).collect();
     assert_eq!(ids, [0, 1, 2], "nothing unsolicited: {lines:?}");
@@ -150,15 +150,8 @@ fn mcp_answers_each_request_on_stdout_and_exits_0_at_the_end_of_its_input() {
     verify = "a client reading specforge mcp's output line by line gets each response before it sends its next request, the notifications it queued after it"
 )]
 fn mcp_writes_each_response_before_the_next_request_and_its_notifications_after_it() {
-    let dir = setup_project(&[("spec/base.spec", r#"behavior base "B" { contract "b" }"#)]);
-    let mut child = specforge_binary()
-        .args(["mcp"])
-        .arg(dir.path())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("failed to start specforge mcp");
+    let dir = TestProject::new().file("spec/base.spec", r#"behavior base "B" { contract "b" }"#);
+    let mut child = Cli::on(&dir).start(&["mcp", dir.root().to_str().unwrap()]);
     let mut stdin = child.stdin.take().unwrap();
     let lines = lines_on_a_channel(child.stdout.take().unwrap());
     let send = |stdin: &mut std::process::ChildStdin, request: String| {
@@ -181,7 +174,7 @@ fn mcp_writes_each_response_before_the_next_request_and_its_notifications_after_
     // A new entity on disk: the next read brings the project up to date,
     // with no watch running.
     std::fs::write(
-        dir.path().join("spec/added.spec"),
+        dir.root().join("spec/added.spec"),
         r#"behavior added "A" { contract "a" }"#,
     )
     .unwrap();
@@ -216,13 +209,13 @@ fn mcp_writes_each_response_before_the_next_request_and_its_notifications_after_
     verify = "specforge mcp answers a line that is not UTF-8 instead of ending the session"
 )]
 fn mcp_answers_a_line_that_is_not_utf8_and_keeps_serving() {
-    let dir = setup_project(&[("main.spec", r#"behavior alpha "A" { contract "first" }"#)]);
+    let dir = alpha_project();
     let ping = |id: u64| mcp_request(id, "ping", serde_json::json!({}));
     let mut bytes = format!("{}\n", ping(1)).into_bytes();
     bytes.extend_from_slice(b"\xff\xfe\n");
     bytes.extend_from_slice(format!("{}\n", ping(2)).as_bytes());
 
-    let (lines, stderr, code) = run(dir.path(), &bytes);
+    let (lines, stderr, code) = run(&dir, dir.root(), &bytes);
 
     assert_eq!(lines.len(), 3, "{lines:?}");
     assert_eq!(lines[0]["id"], 1);

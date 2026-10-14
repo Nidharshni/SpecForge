@@ -3,7 +3,7 @@
 //! as they were, keeps every comment, and is idempotent. This gates
 //! reformatting the corpus, and stays as a regression test.
 
-use assert_cmd::Command;
+use crate::support::{Cli, TestProject};
 use specforge_test_macros::test as specforge_test;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -22,28 +22,8 @@ fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-fn specforge(cwd: &Path, args: &[&str]) -> String {
-    let out = Command::new(env!("CARGO_BIN_EXE_specforge"))
-        .args(args)
-        .current_dir(cwd)
-        .output()
-        .unwrap();
-    String::from_utf8(out.stdout).unwrap()
-}
-
-fn copy_tree(from: &Path, to: &Path) {
-    std::fs::create_dir_all(to).unwrap();
-    for entry in std::fs::read_dir(from).unwrap().filter_map(Result::ok) {
-        let path = entry.path();
-        let target = to.join(entry.file_name());
-        if path.is_dir() {
-            if entry.file_name() != "target" && entry.file_name() != "tests" {
-                copy_tree(&path, &target);
-            }
-        } else {
-            std::fs::copy(&path, &target).unwrap();
-        }
-    }
+fn run_stdout(project: &TestProject, args: &[&str]) -> String {
+    Cli::on(project).bare(args).stdout
 }
 
 fn spec_files(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -216,24 +196,17 @@ fn mangle(source: &str) -> String {
 )]
 fn formatting_the_corpus_changes_nothing_but_layout() {
     let root = repo_root();
-    let copy = tempfile::tempdir().unwrap();
-    std::fs::copy(
-        root.join("specforge.json"),
-        copy.path().join("specforge.json"),
-    )
-    .unwrap();
     // The unformatted side runs on a copy too: `specforge export` writes
     // `.specforge/schema-cache.json`, which must not land in the repository.
-    let pristine = tempfile::tempdir().unwrap();
-    std::fs::copy(
-        root.join("specforge.json"),
-        pristine.path().join("specforge.json"),
-    )
-    .unwrap();
-    for corpus in CORPORA {
-        copy_tree(&root.join(corpus), &copy.path().join(corpus));
-        copy_tree(&root.join(corpus), &pristine.path().join(corpus));
-    }
+    let config = std::fs::read(root.join("specforge.json")).unwrap();
+    let assembled = || {
+        CORPORA
+            .iter()
+            .fold(TestProject::new().raw_config(&config), |project, corpus| {
+                project.copy_in(root.join(corpus), corpus)
+            })
+    };
+    let (copy, pristine) = (assembled(), assembled());
 
     for corpus in CORPORA {
         let mut originals = Vec::new();
@@ -244,44 +217,29 @@ fn formatting_the_corpus_changes_nothing_but_layout() {
             .map(|p| {
                 let relative = p.strip_prefix(&root).unwrap().to_path_buf();
                 let mangled = mangle(&std::fs::read_to_string(p).unwrap());
-                std::fs::write(copy.path().join(&relative), &mangled).unwrap();
+                copy.write(relative.to_str().unwrap(), &mangled);
                 (relative, mangled)
             })
             .collect();
 
-        let format = Command::new(env!("CARGO_BIN_EXE_specforge"))
-            .args(["format", corpus])
-            .current_dir(copy.path())
-            .output()
-            .unwrap();
+        let format = Cli::on(&copy).bare(&["format", corpus]);
+        assert_eq!(format.code, 0, "{}", format.stderr);
         assert!(
-            format.status.success(),
-            "{}",
-            String::from_utf8_lossy(&format.stderr)
-        );
-        assert!(
-            String::from_utf8_lossy(&format.stderr).contains(&format!("{} changed", before.len())),
+            format.stderr.contains(&format!("{} changed", before.len())),
             "every mangled file of {corpus} is rewritten: {}",
-            String::from_utf8_lossy(&format.stderr)
+            format.stderr
         );
 
         let mut problems = Vec::new();
         for (relative, mangled) in &before {
-            let formatted = std::fs::read_to_string(copy.path().join(relative)).unwrap();
+            let formatted = copy.read(relative.to_str().unwrap());
             if comments(mangled) != comments(&formatted) {
                 problems.push(format!("{}: comments changed", relative.display()));
             }
         }
-        let check = Command::new(env!("CARGO_BIN_EXE_specforge"))
-            .args(["format", "--check", corpus])
-            .current_dir(copy.path())
-            .output()
-            .unwrap();
-        if !check.status.success() {
-            problems.push(format!(
-                "{corpus}: not idempotent: {}",
-                String::from_utf8_lossy(&check.stdout)
-            ));
+        let check = Cli::on(&copy).bare(&["format", "--check", corpus]);
+        if check.code != 0 {
+            problems.push(format!("{corpus}: not idempotent: {}", check.stdout));
         }
         assert!(problems.is_empty(), "{problems:#?}");
 
@@ -290,9 +248,9 @@ fn formatting_the_corpus_changes_nothing_but_layout() {
             &["check", "--format", "json", "--path", corpus][..],
         ] {
             let mut original: serde_json::Value =
-                serde_json::from_str(&specforge(pristine.path(), args)).unwrap();
+                serde_json::from_str(&run_stdout(&pristine, args)).unwrap();
             let mut formatted: serde_json::Value =
-                serde_json::from_str(&specforge(copy.path(), args)).unwrap();
+                serde_json::from_str(&run_stdout(&copy, args)).unwrap();
             without_positions(&mut original);
             without_positions(&mut formatted);
             assert!(

@@ -110,7 +110,8 @@ behavior document_open_close "Document Open/Close" {
     its open document set. The buffer is no longer the truth for its
     file: a project source MUST be compiled from the file on disk again
     (unsaved edits are dropped), and any other file (outside the spec root,
-    excluded, or any file when no project is open) MUST leave the project.
+    excluded, inside a nested project, or any file when no project is
+    open) MUST leave the project.
     While a document is open its buffer is the truth for its file,
     whatever happens to the file on disk, its deletion included (the
     session holds it, hold_editor_buffers).
@@ -139,6 +140,7 @@ behavior document_open_close "Document Open/Close" {
   verify unit "an open document's entities stay when its file is deleted, until it is closed"
   verify unit "a document is one file whatever spelling of its URI the client sends"
   verify unit "an open document stays itself when an environment load moves its key"
+  verify integration "a document in a nested project is no source of the workspace project and gets none of its diagnostics"
   verify contract "Document Open/Close: document open/close holds — lsp_initialized_fired, document_tracked, file_changed_emitted, closed_file_published, closed_file_from_disk"
 }
 
@@ -290,6 +292,7 @@ behavior hover_information "Hover Information" {
   verify unit "hover returns markdown-formatted content"
   verify unit "field help answers only on a field's name"
   verify unit "field help names a field's type as E061 does, an enum's declared values included"
+  verify unit "field help says what an absent value counts as"
   verify contract "Hover Information: hover information holds — graph_available, kind_registry_available, hover_delegated, markdown_produced"
 }
 
@@ -510,6 +513,7 @@ behavior emit_live_diagnostics "Live Diagnostics" {
   verify unit "each file's diagnostics are published under the URI the client named it by"
   verify integration "diagnostics appear within 100ms"
   verify unit "a spanless diagnostic about entities is published at the first one's name"
+  verify unit "a spanless diagnostic is published at its entity's new name when only the entity moved"
   verify unit "a diagnostic is published on the file its span names"
   verify unit "a diagnostic about no entity is published on the edited document"
   verify unit "a define block's W143 is published as unnecessary code"
@@ -794,6 +798,7 @@ behavior complete_field_names "Complete Field Names" {
   verify unit "a bracket inside a string opens no reference list"
   verify unit "nothing is suggested inside a string, a comment or a nested block"
   verify unit "an enum field's value suggests its declared values"
+  verify unit "a builtin vocabulary's field completes its values"
   verify unit "a boolean field's value suggests true and false"
   verify contract "Complete Field Names: field name completion holds — field_registry_available, cursor_inside_entity, fields_suggested, snippets_informed"
 }

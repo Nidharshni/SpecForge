@@ -44,9 +44,15 @@
         },
         {
           "default_value": null,
-          "description": "Importance level: critical, high, medium, or low",
+          "description": "Importance level",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "critical",
+            "high",
+            "medium",
+            "low"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "inverse_of": null,
           "name": "priority",
@@ -54,10 +60,18 @@
           "target_kind": null
         },
         {
-          "default_value": null,
-          "description": "Lifecycle state: proposed, accepted, in_progress, done, deferred, or deprecated",
+          "default_value": "proposed",
+          "description": "Lifecycle state",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "proposed",
+            "accepted",
+            "in_progress",
+            "done",
+            "deferred",
+            "deprecated"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "headline": true,
           "inverse_of": null,
@@ -144,9 +158,16 @@
         },
         {
           "default_value": null,
-          "description": "T-shirt size estimate: xs, s, m, l, or xl",
+          "description": "T-shirt size estimate",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "xs",
+            "s",
+            "m",
+            "l",
+            "xl"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "inverse_of": null,
           "name": "effort",
@@ -242,9 +263,15 @@
         },
         {
           "default_value": null,
-          "description": "Importance level: critical, high, medium, or low",
+          "description": "Importance level",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "critical",
+            "high",
+            "medium",
+            "low"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "inverse_of": null,
           "name": "priority",
@@ -284,9 +311,20 @@
         },
         {
           "default_value": null,
-          "description": "Kind of artifact produced: cli, service, library, web_app, mobile_app, api, extension, documentation, or package",
+          "description": "Kind of artifact produced",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "cli",
+            "service",
+            "library",
+            "web_app",
+            "mobile_app",
+            "api",
+            "extension",
+            "documentation",
+            "package"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "inverse_of": null,
           "name": "artifact_type",
@@ -294,10 +332,16 @@
           "target_kind": null
         },
         {
-          "default_value": null,
-          "description": "Lifecycle state: draft, in_progress, shipped, or deprecated",
+          "default_value": "draft",
+          "description": "Lifecycle state",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "draft",
+            "in_progress",
+            "shipped",
+            "deprecated"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "headline": true,
           "inverse_of": null,
@@ -396,7 +440,7 @@
       ],
       "has_body_parser": false,
       "incremental": null,
-      "inference_guide": "Look for independently shippable artifacts: binaries, packages, services, libraries, or documentation bundles. Signals: Cargo.toml/package.json with distinct package names; Dockerfile definitions; CI/CD deployment targets; published npm/crate packages; separate apps in a monorepo (apps/ directory); versioned API specifications. Set artifact_type (cli, service, library, web_app, api, etc.). Link modules it contains and milestones it's tracked under. Link depends_on for build or runtime dependencies between deliverables. Skip: internal modules (those are modules), test utilities, development-only tooling.",
+      "inference_guide": "Look for independently shippable artifacts: binaries, packages, services, libraries, or documentation bundles. Signals: Cargo.toml/package.json with distinct package names; Dockerfile definitions; CI/CD deployment targets; published npm/crate packages; separate apps in a monorepo (apps/ directory); versioned API specifications. Set artifact_type to the kind of artifact. Link modules it contains and milestones it's tracked under. Link depends_on for build or runtime dependencies between deliverables. Skip: internal modules (those are modules), test utilities, development-only tooling.",
       "keyword": "deliverable",
       "lifecycle_field": "status",
       "lsp_icon": "Package",
@@ -426,10 +470,16 @@
           "target_kind": null
         },
         {
-          "default_value": null,
-          "description": "Lifecycle state: planned, in_progress, completed, or blocked",
+          "default_value": "planned",
+          "description": "Lifecycle state",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "planned",
+            "in_progress",
+            "completed",
+            "blocked"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "headline": true,
           "inverse_of": null,
@@ -516,9 +566,15 @@
         },
         {
           "default_value": null,
-          "description": "Importance level: critical, high, medium, or low",
+          "description": "Importance level",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "critical",
+            "high",
+            "medium",
+            "low"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "inverse_of": null,
           "name": "priority",
@@ -592,7 +648,7 @@
       "fields": [
         {
           "default_value": null,
-          "description": "Category or family this module belongs to",
+          "description": "Category or family this module belongs to; the standard ones are core, platform, extension, integration, advisory",
           "edge": null,
           "field_type": "string",
           "file_reference": false,
@@ -754,9 +810,16 @@
         },
         {
           "default_value": null,
-          "description": "Technical proficiency of this persona (e.g., beginner, intermediate, expert)",
+          "description": "Technical proficiency of this persona",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "expert",
+            "advanced",
+            "intermediate",
+            "beginner",
+            "non_technical"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "inverse_of": null,
           "name": "technical_level",
@@ -786,10 +849,14 @@
           "target_kind": null
         },
         {
-          "default_value": null,
-          "description": "Whether this persona is active or deprecated",
+          "default_value": "active",
+          "description": "Lifecycle state",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "active",
+            "deprecated"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "headline": true,
           "inverse_of": null,
@@ -853,9 +920,17 @@
         },
         {
           "default_value": null,
-          "description": "How users interact through this channel (e.g., sync, async, push, pull)",
+          "description": "How users interact through this channel",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "request_response",
+            "event_driven",
+            "batch",
+            "streaming",
+            "bidirectional",
+            "manual"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "inverse_of": null,
           "name": "interaction_model",
@@ -874,10 +949,14 @@
           "target_kind": null
         },
         {
-          "default_value": null,
-          "description": "Whether this channel is active or deprecated",
+          "default_value": "active",
+          "description": "Lifecycle state",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "active",
+            "deprecated"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "headline": true,
           "inverse_of": null,
@@ -899,7 +978,7 @@
       ],
       "has_body_parser": false,
       "incremental": null,
-      "inference_guide": "Look for distinct surfaces through which users interact with the product. Signals: separate frontend applications (web app, mobile app, CLI); API endpoints exposed to external consumers; notification channels (email, push, SMS); documentation sites; IDE extensions; webhook integrations; Slack/Discord bots. Set interaction_model (sync, async, push, pull). Set url if applicable. One channel per distinct interaction surface. Skip: internal communication between services (those are ports), monitoring/alerting channels, CI/CD pipelines.",
+      "inference_guide": "Look for distinct surfaces through which users interact with the product. Signals: separate frontend applications (web app, mobile app, CLI); API endpoints exposed to external consumers; notification channels (email, push, SMS); documentation sites; IDE extensions; webhook integrations; Slack/Discord bots. Set interaction_model to how users interact through it. Set url if applicable. One channel per distinct interaction surface. Skip: internal communication between services (those are ports), monitoring/alerting channels, CI/CD pipelines.",
       "keyword": "channel",
       "lifecycle_field": "status",
       "lsp_icon": "Interface",
@@ -940,10 +1019,16 @@
           "target_kind": null
         },
         {
-          "default_value": null,
+          "default_value": "planned",
           "description": "Lifecycle state of the release",
           "edge": null,
-          "field_type": "string",
+          "enum_values": [
+            "planned",
+            "in_progress",
+            "released",
+            "recalled"
+          ],
+          "field_type": "enum",
           "file_reference": false,
           "headline": true,
           "inverse_of": null,

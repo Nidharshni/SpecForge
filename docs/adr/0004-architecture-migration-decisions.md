@@ -65,6 +65,7 @@ Changed answers are marked *(amended)*.
   declared scheme wins (E057). Two instances of one provider use distinct schemes.
 - **D3-d** *(amended)* MCP doctor **compiles fresh by default**, like `validate`, with a `use_cached`
   option. Doctor reports extension load failures (E028, E070) on both surfaces.
+  *(ADR 0077: `use_cached` is gone.)*
 - **D3-e** *(amended)* `init` enables **builtins, and extensions it installs through the shared add
   operation**; it never writes an entry `check` cannot load. Until the shared add exists, builtins only.
 - **D3-f** MCP analyze passes **no proved claims unless prove ran**. An opt-in `prove` argument comes
@@ -89,6 +90,7 @@ Changed answers are marked *(amended)*.
   *(2026-10-01)* The stateless revision is served too, dual-era: a request whose `_meta` names
   `io.modelcontextprotocol/protocolVersion` is answered on its own, with or without `initialize`
   (`specforge_mcp::modern`); every other request follows the negotiated handshake revision.
+  *(ADR 0077: a stateless request never changes what the server serves.)*
   `server/discover` lists only `2026-07-28` (the handshake revisions are reached through
   `initialize`). Cacheable results carry `ttlMs: 0` and `cacheScope: "private"`: they describe the
   project on disk, which any request may recompile. `subscriptions/listen` honours resource

@@ -1,4 +1,4 @@
-//! The multipart form a publish uploads (`PUT` [`crate::path::version`]).
+//! The multipart form a publish uploads (`PUT` [`crate::address::Call::Version`]).
 
 /// The extension declaration, as JSON: the package's manifest (ADR 0012).
 pub const MANIFEST: &str = "manifest";

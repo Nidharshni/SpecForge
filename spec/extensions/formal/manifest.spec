@@ -30,7 +30,7 @@ behavior fa_declare_manifest "Declare @specforge/formal Manifest" {
 
     Entity kind declarations (all testable=false, supports_verify=false):
     - property: temporal/behavioral assertion (safety/liveness/fairness)
-      Shape: { description string, kind PropertyKind, references EntityId[] @optional }
+      Shape: { description string, property_type PropertyType, references EntityId[] @optional }
     - axiom: assumed-true foundation (no proof required, no coverage tracking item)
       Shape: { description string, justification string @optional, references EntityId[] @optional }
     - protocol: shared synchronization contract across events
@@ -89,8 +89,7 @@ behavior fa_declare_manifest "Declare @specforge/formal Manifest" {
     - coverage_tracking: W035, I008, I014
 
     Validation rules (declarative, run in every check): W123 unreferenced
-    property, W124 empty property description, W125 invalid
-    property_type, W126 unreferenced axiom, W127 empty axiom description, W128
+    property, W124 empty property description, W126 unreferenced axiom, W127 empty axiom description, W128
     unreferenced protocol, W129 empty protocol description, W131 unreferenced
     refinement, W132 empty refinement description, W133 refinement
     without invariant_deltas (a custom rule), W134 unreferenced process, W135
@@ -129,7 +128,7 @@ behavior fa_declare_manifest "Declare @specforge/formal Manifest" {
     process_composition_edge "ProcessComposesProcess: source=process, target=process"
     five_passes              "passes contains condition_check, layering_verify, event_graph_analyze, coverage_tracking, and the check-phase analysis_available"
     pass_ordering            "layering_verify depends_on condition_check; event_graph_analyze depends_on layering_verify; coverage_tracking depends_on event_graph_analyze"
-    validation_rules         "validation_rules contains W123, W124, W125, W126, W127, W128, W129, W131, W132, W133, W134, W135, W136"
+    validation_rules         "validation_rules contains W123, W124, W126, W127, W128, W129, W131, W132, W133, W134, W135, W136"
     three_feature_flags      "feature_flags contains conditions, layering, concurrency"
     flag_dependencies        "layering requires conditions"
     inline_condition_fields  "requires/ensures/maintains are block fields of named conditions (ConditionEntry)"
@@ -155,7 +154,7 @@ behavior fa_declare_manifest "Declare @specforge/formal Manifest" {
   verify unit "EventParticipatesInProcess edge: event -> process"
   verify unit "ProcessComposesProcess edge: process -> process"
   verify unit "manifest declares 5 passes in dependency order"
-  verify unit "manifest declares the 13 formal validation rules"
+  verify unit "manifest declares the 12 formal validation rules"
   verify unit "manifest declares 3 feature flags"
   verify unit "layering flag requires conditions flag"
   verify unit "requires/ensures/maintains are block fields of named conditions"

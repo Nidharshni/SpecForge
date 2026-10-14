@@ -512,3 +512,55 @@ fn last_e003_version(served: &Served, sent: &[Sent], file: &str) -> Option<i32> 
         _ => None,
     })?
 }
+
+#[spec(
+    behavior = "classify_project_changes",
+    verify = "a directory created, moved or deleted under the spec root changes every source under it"
+)]
+fn a_moved_directory_is_every_source_under_it() {
+    let mut served = Served::new(&[("a.spec", A_ALPHA), ("old/b.spec", B_PLAIN)]).open(&[]);
+    std::fs::rename(served.root().join("old"), served.root().join("new")).unwrap();
+
+    let applied = served
+        .apply(Change::Watched(vec![
+            changed(&served, "old", FileChangeType::DELETED),
+            changed(&served, "new", FileChangeType::CREATED),
+        ]))
+        .expect("the moved directory holds sources");
+    assert!(applied.changed);
+    let state = served.state();
+    let keys: Vec<&str> = state
+        .session()
+        .expect("held")
+        .project()
+        .source_keys()
+        .into_iter()
+        .collect();
+    assert_eq!(keys, ["a.spec", "new/b.spec"]);
+}
+
+#[spec(
+    behavior = "classify_project_changes",
+    verify = "the LSP drops a nested project's files when its specforge.json is created, and takes them back when it goes"
+)]
+fn a_nested_project_created_while_open_leaves_the_workspace_project() {
+    let mut served =
+        Served::new(&[("a.spec", A_ALPHA), ("sub/c.spec", "type sigma \"S\" {}\n")]).open(&[]);
+    assert!(served.state().graph().node("sigma").is_some());
+
+    served.write("sub/specforge.json", "{}");
+    served.apply(Change::Watched(vec![changed(
+        &served,
+        "sub/specforge.json",
+        FileChangeType::CREATED,
+    )]));
+    assert!(served.state().graph().node("sigma").is_none());
+
+    std::fs::remove_file(served.root().join("sub/specforge.json")).unwrap();
+    served.apply(Change::Watched(vec![changed(
+        &served,
+        "sub/specforge.json",
+        FileChangeType::DELETED,
+    )]));
+    assert!(served.state().graph().node("sigma").is_some());
+}

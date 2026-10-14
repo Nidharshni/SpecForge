@@ -6,14 +6,12 @@ use specforge_common::codes;
 use specforge_ops::registry::Registry;
 use specforge_ops_registry::{ConfiguredRegistry, configured};
 use specforge_package::PackageName;
+use specforge_project::testing::TestProject;
 use specforge_registry_client::testing::MemoryClient;
 use specforge_test_macros::test as specforge_test;
-use tempfile::TempDir;
 
-fn project(config: &str) -> TempDir {
-    let dir = TempDir::new().unwrap();
-    std::fs::write(dir.path().join("specforge.json"), config).unwrap();
-    dir
+fn project(config: &str) -> TestProject {
+    TestProject::new().raw_config(config)
 }
 
 #[specforge_test(
@@ -23,14 +21,10 @@ fn project(config: &str) -> TempDir {
 fn an_unusable_specforge_json_is_refused_as_add_refuses_it() {
     for config in ["{ \"extensions\": [", "[1, 2]", "{\"extensions\": 7}"] {
         let dir = project(config);
-        let refused = specforge_ops::config::required(dir.path()).unwrap_err();
+        let refused = specforge_ops::config::required(dir.root()).unwrap_err();
 
         for operation in ["search", "login", "publish", "add"] {
-            let error = configured(
-                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-                operation,
-            )
-            .unwrap_err();
+            let error = configured(&dir.project_root(), operation).unwrap_err();
 
             assert_eq!(error, refused, "{config}: {operation}");
             assert_eq!(error.code, "config_invalid");
@@ -42,46 +36,31 @@ fn an_unusable_specforge_json_is_refused_as_add_refuses_it() {
 fn a_usable_config_without_registries_is_e063_and_an_unreadable_entry_is_e067() {
     let none = project(r#"{"name": "p", "extensions": []}"#);
     assert_eq!(
-        configured(
-            &specforge_common::ProjectRoot::of(none.path()).unwrap(),
-            "search"
-        )
-        .unwrap_err()
-        .code,
+        configured(&none.project_root(), "search").unwrap_err().code,
         "E063"
     );
 
     // Not a project at all: no registry, as before.
-    let nothing = TempDir::new().unwrap();
+    let nothing = TestProject::new().without_config();
     assert_eq!(
-        configured(
-            &specforge_common::ProjectRoot::of(nothing.path()).unwrap(),
-            "search"
-        )
-        .unwrap_err()
-        .code,
+        configured(&nothing.project_root(), "search")
+            .unwrap_err()
+            .code,
         "E063"
     );
 
     let unreadable = project(r#"{"registries": [{"url": "https://r.example"}]}"#);
     assert_eq!(
-        configured(
-            &specforge_common::ProjectRoot::of(unreadable.path()).unwrap(),
-            "search"
-        )
-        .unwrap_err()
-        .code,
+        configured(&unreadable.project_root(), "search")
+            .unwrap_err()
+            .code,
         "E067"
     );
 
     let good = project(
         r#"{"registries": [{"alias": "main", "url": "https://r.example", "default": true}]}"#,
     );
-    let found = configured(
-        &specforge_common::ProjectRoot::of(good.path()).unwrap(),
-        "search",
-    )
-    .unwrap();
+    let found = configured(&good.project_root(), "search").unwrap();
     assert_eq!(found.registries.len(), 1);
     assert_eq!(found.registries[0].alias, "main");
 }
@@ -91,11 +70,7 @@ fn configured_with(registries: &str) -> specforge_ops_registry::Configured {
     let dir = project(&format!(
         r#"{{"name":"p","version":"0.1.0","extensions":[],"registries":{registries}}}"#
     ));
-    configured(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        "add",
-    )
-    .unwrap()
+    configured(&dir.project_root(), "add").unwrap()
 }
 
 fn name(text: &str) -> specforge_package::PackageName {
@@ -103,12 +78,11 @@ fn name(text: &str) -> specforge_package::PackageName {
 }
 
 const ACME_AND_MAIN: &str = r#"[
-    {"alias":"acme","url":"https://acme.example/v1","scope_filter":"@acme"},
-    {"alias":"main","url":"https://main.example/v1","default_registry":true}
+    {"alias":"acme","url":"https://acme.example","scope_filter":"@acme"},
+    {"alias":"main","url":"https://main.example","default_registry":true}
 ]"#;
 
-const ACME_ONLY: &str =
-    r#"[{"alias":"acme","url":"https://acme.example/v1","scope_filter":"@acme"}]"#;
+const ACME_ONLY: &str = r#"[{"alias":"acme","url":"https://acme.example","scope_filter":"@acme"}]"#;
 
 #[specforge_test(
     behavior = "resolve_registry_source",
@@ -136,7 +110,7 @@ fn a_name_no_scope_matches_goes_to_the_default_registry() {
 
     // A registry that is both scoped and the default serves the rest too.
     let both = configured_with(
-        r#"[{"alias":"all","url":"https://a.example/v1","scope_filter":"@acme","default_registry":true}]"#,
+        r#"[{"alias":"all","url":"https://a.example","scope_filter":"@acme","default_registry":true}]"#,
     );
     assert_eq!(
         both.registry_for(&name("@other/tool")).unwrap().alias,
@@ -170,8 +144,8 @@ fn a_name_no_registry_serves_is_refused_with_r_ops_001() {
 #[test]
 fn the_first_entry_of_a_scope_serves_it() {
     let found = configured_with(
-        r#"[{"alias":"one","url":"https://1.example/v1","scope_filter":"@acme"},
-            {"alias":"two","url":"https://2.example/v1","scope_filter":"@acme"}]"#,
+        r#"[{"alias":"one","url":"https://1.example","scope_filter":"@acme"},
+            {"alias":"two","url":"https://2.example","scope_filter":"@acme"}]"#,
     );
 
     assert_eq!(
@@ -225,15 +199,12 @@ fn named_is_the_alias_given_else_the_default() {
 fn the_configuration_is_reported_once_the_registry_is_asked() {
     let dir = project(
         r#"{"name": "p", "extensions": [], "registries": [
-            {"alias": "main", "url": "memory://local", "default_registry": true},
-            {"alias": "main", "url": "memory://other"}
+            {"alias": "main", "url": "https://local.invalid", "default_registry": true},
+            {"alias": "main", "url": "https://other.invalid"}
         ]}"#,
     );
-    let registry = ConfiguredRegistry::for_project(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        "add",
-    )
-    .with_client(MemoryClient::new());
+    let registry = ConfiguredRegistry::for_project(&dir.project_root(), "add")
+        .with_client(MemoryClient::new());
     assert!(registry.reported().is_empty(), "nothing asked yet");
 
     let tool = PackageName::parse("@acme/tool").unwrap();
@@ -243,4 +214,28 @@ fn the_configuration_is_reported_once_the_registry_is_asked() {
     let reported = registry.reported();
     let reported: Vec<&str> = reported.iter().map(|d| d.code.as_str()).collect();
     assert!(reported.contains(&"W140"), "{reported:?}");
+}
+
+#[specforge_test(
+    behavior = "configure_registries",
+    verify = "registries parsed from specforge.json"
+)]
+fn an_entry_that_cannot_be_read_serves_no_name() {
+    let dir = project(
+        r#"{"name":"p","version":"0.1.0","extensions":[],"registries":[
+            {"alias":"acme","url":5,"scope_filter":"@acme"},
+            {"alias":"main","url":"https://main.example","default_registry":true}
+        ]}"#,
+    );
+
+    let refused = configured(&dir.project_root(), "add")
+        .map(|found| {
+            found
+                .registry_for(&name("@acme/tool"))
+                .map(|r| r.alias.clone())
+        })
+        .unwrap_err();
+
+    assert_eq!(refused.code, "E067");
+    assert!(refused.message.contains("index 0"), "{}", refused.message);
 }

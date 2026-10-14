@@ -9,10 +9,11 @@ use serde_json::{Map, Value, json};
 use specforge_common::Diagnostic;
 use specforge_graph::Node;
 
-use crate::OpError;
-use crate::coverage::STATUS;
-use crate::export::{self, AGENT_FORMAT, FORMAT, Format, Schema};
-use crate::navigate::{EntityMatch, EntityQuery, MatchScope, MatchedOn, find_entities, snippet};
+use crate::Refusal;
+use crate::export::{self, AGENT_FORMAT, ExportField, FORMAT, Format, Schema};
+use crate::navigate::{
+    self, EntityMatch, EntityQuery, MatchScope, MatchedOn, find_entities, snippet,
+};
 use crate::view::ProjectView;
 
 /// Hops from the queried entity when a query names none: its direct
@@ -23,6 +24,15 @@ pub const DEFAULT_DEPTH: usize = 1;
 pub const DEFAULT_SEARCH_LIMIT: usize = 20;
 /// Characters of a matched field's text shown on each side of the match.
 pub const SNIPPET_WIDTH: usize = 40;
+
+/// The field of a query request a refusal can be about (ADR 0072).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueryField {
+    /// `QueryRequest::entity_id`.
+    EntityId,
+    /// `QueryRequest::format`.
+    Format,
+}
 
 /// The subgraph around one entity.
 #[derive(Debug, Clone, Default)]
@@ -49,16 +59,21 @@ pub struct QueryOutcome {
     /// The export of the entity's subgraph (`export::export` of the scoped
     /// request under the export schema policy: a graph-format query
     /// references the published schema, Graph Protocol 2.0); with
-    /// `include_coverage`, each node carrying `coverage_status`.
+    /// `include_coverage`, each node carrying its `coverage_status`, written
+    /// by the export.
     pub document: String,
     /// I020 for each kind of the filter the project does not know.
     pub notices: Vec<Diagnostic>,
 }
 
 /// The query `request` over the view. An entity the graph lacks is
-/// [`crate::navigate::not_found`] (E003, did-you-mean); a recorded report
-/// that cannot be read, when coverage is asked for, is its E045 failure.
-pub fn query(view: &ProjectView, request: &QueryRequest) -> Result<QueryOutcome, OpError> {
+/// [`crate::navigate::not_found`] (E003, did-you-mean), refused before the
+/// recorded report is read; a recorded report that cannot be read, when
+/// coverage is asked for, is its E045 failure.
+pub fn query(
+    view: &ProjectView,
+    request: &QueryRequest,
+) -> Result<QueryOutcome, Refusal<QueryField>> {
     let format = request
         .format
         .or(AGENT_FORMAT.default)
@@ -66,9 +81,19 @@ pub fn query(view: &ProjectView, request: &QueryRequest) -> Result<QueryOutcome,
     if !AGENT_FORMAT.admits(format) {
         return Err(AGENT_FORMAT
             .parse(FORMAT.name_of(format))
-            .expect_err("a format the agent table does not admit is refused"));
+            .expect_err("a format the agent table does not admit is refused")
+            .about(QueryField::Format));
     }
     let notices = view.kinds().unknown_in(&request.kinds);
+    let graph = view.graph();
+    graph
+        .node(request.entity_id)
+        .ok_or_else(|| navigate::not_found(graph, request.entity_id).about(QueryField::EntityId))?;
+    let coverage = request
+        .include_coverage
+        .then(|| view.coverage())
+        .transpose()
+        .map_err(Refusal::from)?;
     let document = export::export(
         view,
         &export::Request {
@@ -77,57 +102,31 @@ pub fn query(view: &ProjectView, request: &QueryRequest) -> Result<QueryOutcome,
             depth: Some(request.depth.unwrap_or(DEFAULT_DEPTH)),
             kinds: request.kinds.clone(),
             schema: Schema::Default,
+            coverage: coverage.as_deref(),
             ..export::Request::default()
         },
-    )?;
-    let document = if request.include_coverage {
-        with_coverage(view, document)?
-    } else {
-        document
-    };
+    )
+    .map_err(|refusal| {
+        refusal.map_subject(|field| match field {
+            ExportField::Scope => Some(QueryField::EntityId),
+            // A query always scopes and sends neither of these.
+            ExportField::Depth | ExportField::MaxTokens | ExportField::SchemaVersion => None,
+        })
+    })?;
     Ok(QueryOutcome { document, notices })
 }
 
 /// The JSON Schema of the document [`query`] answers: the export document of
-/// each agent format (derived by the emitter from the types that write it),
-/// its nodes given the `coverage_status` this operation adds
-/// ([`with_coverage`]). A brief document is also a valid context document, so
-/// the formats are alternatives, not exclusive.
+/// each agent format, derived by the emitter from the types that write it (a
+/// node's optional `coverage_status` included). A brief document is also a
+/// valid context document, so the formats are alternatives, not exclusive.
 pub fn document_schema(defs: &mut specforge_common::shape::Definitions) -> Value {
-    let status = specforge_common::shape::names(STATUS.names());
     let branches: Vec<Value> = [Format::Graph, Format::Context, Format::Brief]
         .into_iter()
         .filter(|format| AGENT_FORMAT.admits(*format))
         .filter_map(|format| specforge_emitter::document_schema(format.emit_format(), defs))
-        .map(|mut schema| {
-            schema["properties"]["nodes"]["items"]["properties"]["coverage_status"] =
-                status.clone();
-            schema
-        })
         .collect();
     json!({ "type": "object", "anyOf": branches })
-}
-
-/// `document` with each node that has a verdict carrying its
-/// `coverage_status`. A document without nodes is returned as it is, and
-/// the recorded report is not read for it.
-fn with_coverage(view: &ProjectView, document: String) -> Result<String, OpError> {
-    let mut value: Value = serde_json::from_str(&document).expect("an export is JSON");
-    let Some(nodes) = value.get_mut("nodes").and_then(Value::as_array_mut) else {
-        return Ok(document);
-    };
-    let coverage = view.coverage()?;
-    for node in nodes {
-        let Some(verdict) = node
-            .get("id")
-            .and_then(Value::as_str)
-            .and_then(|id| coverage.verdict(id))
-        else {
-            continue;
-        };
-        node["coverage_status"] = Value::from(STATUS.name_of(verdict.status()));
-    }
-    Ok(value.to_string())
 }
 
 /// Entities of one kind (or every kind) whose fields hold given values.

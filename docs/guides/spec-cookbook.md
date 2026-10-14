@@ -179,7 +179,7 @@ failure_mode lost_task "Task acknowledged but not persisted" {
 ```
 
 > ⚠️ `severity`, `occurrence`, and `detection` take **enum words**, not 1–10 numbers.
-> Invalid values raise `W051`/`W052`/`W121`.
+> Another value is `E061`.
 
 ---
 

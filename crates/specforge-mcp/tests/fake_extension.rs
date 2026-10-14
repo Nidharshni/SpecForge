@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use specforge_extension_sdk::{ContributionsBuilder, DeclaredCategory, ExtensionMeta};
 use specforge_mcp::McpServer;
 
-use crate::support::{Logged, TestProject, logged};
+use crate::support::{Logged, Serve, TestProject, logged};
 use specforge_wasm::runtime::{WasmCallResult, WasmRuntime};
 use specforge_wasm::testing::InProcessRuntime;
 use std::sync::{Arc, OnceLock};
@@ -237,8 +237,8 @@ pub fn server_with(ext: &Arc<FakeExtension>) -> Logged {
 /// A server initialized over [`project`] with `ext` as its runtime.
 pub fn initialized(ext: FakeExtension) -> (Logged, Arc<FakeExtension>, tempfile::TempDir) {
     let ext = Arc::new(ext);
-    let (server, dir) = cmds_project()
+    let (server, log, project) = cmds_project()
         .serve_in(ext.runtime() as Arc<dyn WasmRuntime>)
         .into_parts();
-    (server, ext, dir)
+    (Logged { server, log }, ext, project.into_dir())
 }

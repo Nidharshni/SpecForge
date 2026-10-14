@@ -75,6 +75,7 @@ impl Args {
                 _ => export::Schema::Default,
             },
             schema_version: self.schema_version.as_deref(),
+            coverage: None,
         }
     }
 
@@ -179,6 +180,7 @@ impl SchemaArgs {
         } else {
             specforge_ops::schema::schema(&view, &self.request())
                 .map(|outcome| serde_json::to_string_pretty(&outcome).expect("a schema serializes"))
+                .map_err(specforge_ops::Refusal::into_error)
         };
         match output {
             Ok(text) => {

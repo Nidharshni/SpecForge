@@ -2,7 +2,7 @@
 
 **Status:** accepted (2026-10-09); D8 extended by ADR 0058 to every sent document; D1's "inline", D3's checked keywords, "Rejected: schemars" and
 "What would reopen it" amended by ADR 0051 (2026-10-11). Supersedes ADR 0033's consequence "Output schemas stay
-hand-written". Amends ADR 0004 D2-c, ADR 0015 I5 and ADR 0016 (the inspect aliases). D2's tool table and D9 are refined by ADR 0049: a tool's module names its reply (`type Returns`).
+hand-written". Amends ADR 0004 D2-c, ADR 0015 I5 and ADR 0016 (the inspect aliases). D2's query sentence amended by ADR 0007 (round 9, plan 10). D2's tool table and D9 are refined by ADR 0049: a tool's module names its reply (`type Returns`).
 
 Every core MCP tool's reply was written three times: a spec type in `spec/types/mcp.spec`, a
 hand-written output schema in `tools/table.rs` (25 schemas, 199 lines) and a `json!` in the handler
@@ -29,7 +29,8 @@ structure. `operations/mod.rs`, the most-changed file of the workspace, held 11 
   derived field (sent as that type, with rename's fresh diagnostics a derived field beside it: ADR 0022,
   round-6 amendment). The documents both surfaces print (analyze, collect, providers, the extension
   entry, inference progress and gaps, trace, schema) are typed once in ops; query's schema is the
-  emitter's derived document schemas plus the `coverage_status` ops adds.
+  emitter's derived document schemas, whose nodes carry the optional `coverage_status` (ADR 0007, round-9
+  amendment).
 - **D3. A structured result its schema refuses is never sent.** Every core reply with an
   outputSchema is checked before it is sent, in every build; a violation is `schema_mismatch`, as
   for extension tools. The checker (`shape::violations`) reads `additionalProperties` and `minimum`.

@@ -1,5 +1,6 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
+use specforge_coverage::Status;
 use specforge_graph::field_form::{FieldJson, write_fields};
 use specforge_graph::{Graph, Node};
 use std::borrow::Cow;
@@ -74,10 +75,15 @@ pub(crate) struct JsonNode {
     file: String,
     line: usize,
     fields: BTreeMap<String, FieldJson>,
+    /// The entity's coverage status, when the export was given verdicts
+    /// (`EmitOptions::coverage`): what `specforge query --include-coverage`
+    /// shows.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    coverage_status: Option<Status>,
 }
 
 /// `n` as the graph export writes an entity.
-pub(crate) fn graph_node(n: &Node) -> JsonNode {
+pub(crate) fn graph_node(n: &Node, coverage_status: Option<Status>) -> JsonNode {
     JsonNode {
         id: n.id.raw.to_string(),
         kind: n.kind.raw.to_string(),
@@ -85,6 +91,7 @@ pub(crate) fn graph_node(n: &Node) -> JsonNode {
         file: n.source_span.file.to_string(),
         line: n.source_span.start_line,
         fields: write_fields(&n.fields),
+        coverage_status,
     }
 }
 
@@ -108,11 +115,4 @@ pub(crate) fn sorted_edges(graph: &Graph) -> Vec<JsonEdge> {
         .collect();
     edges.sort_by(|a, b| (&a.source, &a.target, &a.label).cmp(&(&b.source, &b.target, &b.label)));
     edges
-}
-
-/// The graph as a plain (format 1.0) export against the empty schema: the
-/// test helper for [`emit`] with the default options.
-pub fn emit_json(graph: &Graph) -> String {
-    crate::emit::emit(graph, &crate::emit::EmitOptions::default())
-        .expect("graph serialization cannot fail")
 }

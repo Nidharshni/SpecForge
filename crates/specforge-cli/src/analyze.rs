@@ -8,9 +8,8 @@ use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, err, errln, outln};
 use specforge_common::{codes, diagnostic_summary, render_diagnostics, truncate_diagnostics};
 use specforge_ops::OpError;
-use specforge_ops::analyze::{
-    AnalyzeOptions, AnalyzeOutcome, ProveOptions, ReportSource, StrayRecord, analyze,
-};
+use specforge_ops::analyze::{AnalyzeOptions, AnalyzeOutcome, ReportSource, StrayRecord, analyze};
+use specforge_ops::solver::{Solver, Z3};
 use specforge_ops::view::ProjectView;
 use specforge_project::CompiledProject;
 use std::path::PathBuf;
@@ -41,6 +40,16 @@ pub(crate) struct Args {
     #[arg(long, default_value_t = false)]
     prove: bool,
 
+    /// Seconds one solver call may take before it is stopped (with --prove)
+    #[arg(
+        long,
+        value_name = "SECONDS",
+        default_value_t = 30,
+        requires = "prove",
+        value_parser = clap::value_parser!(u64).range(1..)
+    )]
+    prove_timeout: u64,
+
     /// Fail with a non-zero exit when proof coverage falls below this
     /// percentage (needs test results)
     #[arg(long)]
@@ -48,11 +57,16 @@ pub(crate) struct Args {
 }
 
 impl Args {
+    /// The solver `--prove` asks.
+    fn solver(&self) -> Z3 {
+        Z3::with_timeout(std::time::Duration::from_secs(self.prove_timeout))
+    }
+
     /// The analysis the flags ask for: any pass name (the passes are the
     /// project's, so the operation refuses one it does not run, exit 2 as
     /// clap refuses a flag's value), the report named or the one
     /// `specforge collect` last recorded.
-    fn options(&self) -> AnalyzeOptions {
+    fn options<'s>(&self, solver: &'s dyn Solver) -> AnalyzeOptions<'s> {
         AnalyzeOptions {
             pass: self
                 .pass
@@ -64,7 +78,7 @@ impl Args {
                 None => ReportSource::Recorded,
             },
             min: self.min,
-            prove: self.prove.then(ProveOptions::default),
+            prove: self.prove.then_some(solver),
         }
     }
 
@@ -77,7 +91,8 @@ impl Args {
         // on stderr otherwise; analyze measures, so it cannot judge the
         // project either way.
         let format = self.output.format;
-        let outcome = match analyze(&ProjectView::of(&project), &self.options()) {
+        let z3 = self.solver();
+        let outcome = match analyze(&ProjectView::of(&project), &self.options(&z3)) {
             Ok(outcome) => outcome,
             Err(error) => {
                 return Refusal::measuring(format).report(terminal, &OpError::from(error));
@@ -190,7 +205,7 @@ fn summary_lines(value: &serde_json::Value, prefix: &str, out: &mut Vec<String>)
 
 #[cfg(test)]
 mod summary_tests {
-    use super::{Args, ReportSource, summary_lines};
+    use super::{Args, ReportSource, Z3, summary_lines};
     use clap::Parser;
 
     #[derive(Parser)]
@@ -199,21 +214,21 @@ mod summary_tests {
         args: Args,
     }
 
-    fn options(flags: &[&str]) -> specforge_ops::analyze::AnalyzeOptions {
+    fn args(flags: &[&str]) -> Args {
         Line::try_parse_from(std::iter::once("analyze").chain(flags.iter().copied()))
             .expect("the flags parse")
             .args
-            .options()
     }
 
     #[test]
     fn the_flags_build_the_analysis_options() {
-        let plain = options(&[]);
+        let (plain_args, z3) = (args(&[]), super::Z3::default());
+        let plain = plain_args.options(&z3);
         assert_eq!(plain.pass, specforge_ops::analyze::EVERY_PASS);
         assert!(matches!(plain.report, ReportSource::Recorded));
         assert!(plain.prove.is_none() && plain.min.is_none() && !plain.strict);
 
-        let asked = options(&[
+        let asked_args = args(&[
             "coverage",
             "--test-results",
             "r.json",
@@ -222,12 +237,31 @@ mod summary_tests {
             "80",
             "--strict",
         ]);
+        let asked = asked_args.options(&z3);
         assert_eq!(asked.pass, "coverage");
         assert!(
             matches!(&asked.report, ReportSource::File(p) if p == std::path::Path::new("r.json"))
         );
         assert!(asked.prove.is_some() && asked.strict);
         assert_eq!(asked.min, Some(80.0));
+    }
+
+    #[test]
+    fn the_prove_timeout_is_the_solvers_and_needs_prove() {
+        use std::time::Duration;
+        // One number: the flag's default is the adapter's.
+        assert_eq!(args(&["--prove"]).solver().timeout(), Z3::DEFAULT_TIMEOUT);
+        assert_eq!(Z3::DEFAULT_TIMEOUT, Duration::from_secs(30));
+        assert_eq!(
+            args(&["--prove", "--prove-timeout", "5"])
+                .solver()
+                .timeout(),
+            Duration::from_secs(5)
+        );
+        assert!(
+            Line::try_parse_from(["analyze", "--prove-timeout", "5"]).is_err(),
+            "--prove-timeout needs --prove"
+        );
     }
 
     #[test]

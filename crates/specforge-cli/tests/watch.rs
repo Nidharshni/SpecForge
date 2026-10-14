@@ -2,20 +2,14 @@
 
 use std::fs;
 use std::io::{BufRead, BufReader};
-use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use assert_cmd::cargo::CommandCargoExt;
 use specforge_test::prelude::*;
 use tempfile::TempDir;
 
-use crate::child_guard::{ChildGuard, guarded_command};
-
-#[allow(deprecated)]
-fn specforge_cmd() -> Command {
-    Command::cargo_bin("specforge").unwrap()
-}
+use crate::support::child::ChildGuard;
+use crate::support::{Cli, TestProject};
 
 /// The `delta` of a `rebuilt` or `rechecked` line: the graph delta MCP
 /// notifies.
@@ -27,27 +21,14 @@ fn delta_of(line: &str) -> serde_json::Value {
 
 /// Spawn `specforge watch --json` on a fresh project and return the line
 /// receiver plus the child handle.
-fn spawn_watch(project: &TempDir) -> (mpsc::Receiver<String>, ChildGuard) {
+fn spawn_watch(project: &TestProject) -> (mpsc::Receiver<String>, ChildGuard) {
     spawn_watch_with(project, &[])
 }
 
-fn spawn_watch_with(project: &TempDir, extra: &[&str]) -> (mpsc::Receiver<String>, ChildGuard) {
-    let mut watch = specforge_cmd();
-    watch
-        .args([
-            "watch",
-            "--path",
-            project.path().to_str().unwrap(),
-            "--format",
-            "json",
-        ])
-        .args(extra);
-    let mut child = ChildGuard::spawn(
-        guarded_command(&watch)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped()),
-    )
-    .expect("failed to spawn specforge watch");
+fn spawn_watch_with(project: &TestProject, extra: &[&str]) -> (mpsc::Receiver<String>, ChildGuard) {
+    let mut args = vec!["watch", "--format", "json"];
+    args.extend(extra);
+    let mut child = Cli::on(project).spawn(&args);
 
     let stdout = child.take_stdout().expect("stdout piped");
     let (tx, rx) = mpsc::channel();
@@ -80,13 +61,8 @@ fn wait_for_line(rx: &mpsc::Receiver<String>, needle: &str, timeout: Duration) -
 
 #[test]
 fn watch_rebuilds_on_file_change() {
-    let project = TempDir::new().unwrap();
-    fs::write(project.path().join("specforge.json"), "{}").unwrap();
-    fs::write(
-        project.path().join("main.spec"),
-        "entity one { title \"One\" }\n",
-    )
-    .unwrap();
+    let project = TestProject::new().raw_config("{}");
+    project.write("main.spec", "entity one { title \"One\" }\n");
 
     let (rx, child) = spawn_watch(&project);
 
@@ -95,11 +71,10 @@ fn watch_rebuilds_on_file_change() {
 
     // Give the watcher a moment to settle, then grow the spec file.
     std::thread::sleep(Duration::from_millis(300));
-    fs::write(
-        project.path().join("main.spec"),
+    project.write(
+        "main.spec",
         "entity one { title \"One\" }\nentity two { title \"Two\" }\n",
-    )
-    .unwrap();
+    );
 
     // A late event for the project's initial write can still arrive after
     // `ready` (macOS coalesces file events) and rebuild unchanged content;
@@ -131,13 +106,8 @@ fn watch_rebuilds_on_file_change() {
 
 #[test]
 fn watch_reports_diagnostics_on_broken_edit() {
-    let project = TempDir::new().unwrap();
-    fs::write(project.path().join("specforge.json"), "{}").unwrap();
-    fs::write(
-        project.path().join("main.spec"),
-        "entity one { title \"One\" }\n",
-    )
-    .unwrap();
+    let project = TestProject::new().raw_config("{}");
+    project.write("main.spec", "entity one { title \"One\" }\n");
 
     let (rx, child) = spawn_watch(&project);
     let ready = wait_for_line(&rx, "\"event\":\"ready\"", Duration::from_secs(60));
@@ -145,11 +115,10 @@ fn watch_reports_diagnostics_on_broken_edit() {
 
     std::thread::sleep(Duration::from_millis(300));
     // Reference a nonexistent entity -> E003 unresolved reference.
-    fs::write(
-        project.path().join("main.spec"),
+    project.write(
+        "main.spec",
         "entity one { title \"One\"\n  uses [ghost]\n}\n",
-    )
-    .unwrap();
+    );
 
     // As in watch_rebuilds_on_file_change: a late event for the initial
     // write can rebuild unchanged content first; the rebuild for this edit
@@ -179,13 +148,8 @@ fn watch_reports_diagnostics_on_broken_edit() {
 
 #[test]
 fn watch_verify_incremental_checks_each_rebuild_against_a_cold_one() {
-    let project = TempDir::new().unwrap();
-    fs::write(project.path().join("specforge.json"), "{}").unwrap();
-    fs::write(
-        project.path().join("main.spec"),
-        "entity one { title \"One\" }\n",
-    )
-    .unwrap();
+    let project = TestProject::new().raw_config("{}");
+    project.write("main.spec", "entity one { title \"One\" }\n");
 
     let (rx, child) = spawn_watch_with(&project, &["--verify-incremental"]);
     assert!(
@@ -193,11 +157,10 @@ fn watch_verify_incremental_checks_each_rebuild_against_a_cold_one() {
         "watch never reported ready"
     );
     std::thread::sleep(Duration::from_millis(300));
-    fs::write(
-        project.path().join("main.spec"),
+    project.write(
+        "main.spec",
         "entity one { title \"One\" }\nentity two { title \"Two\" }\n",
-    )
-    .unwrap();
+    );
 
     let rebuilt = wait_for_line(&rx, "\"event\":\"rebuilt\"", Duration::from_secs(60));
     drop(child);
@@ -216,13 +179,8 @@ fn watch_verify_incremental_checks_each_rebuild_against_a_cold_one() {
     verify = "a debug build checks each rebuild without the flag"
 )]
 fn watch_debug_build_verifies_without_the_flag() {
-    let project = TempDir::new().unwrap();
-    fs::write(project.path().join("specforge.json"), "{}").unwrap();
-    fs::write(
-        project.path().join("main.spec"),
-        "entity one { title \"One\" }\n",
-    )
-    .unwrap();
+    let project = TestProject::new().raw_config("{}");
+    project.write("main.spec", "entity one { title \"One\" }\n");
 
     let (rx, child) = spawn_watch(&project);
     assert!(
@@ -230,11 +188,10 @@ fn watch_debug_build_verifies_without_the_flag() {
         "watch never reported ready"
     );
     std::thread::sleep(Duration::from_millis(300));
-    fs::write(
-        project.path().join("main.spec"),
+    project.write(
+        "main.spec",
         "entity one { title \"One\" }\nentity two { title \"Two\" }\n",
-    )
-    .unwrap();
+    );
 
     let rebuilt = wait_for_line(&rx, "\"event\":\"rebuilt\"", Duration::from_secs(60));
     drop(child);
@@ -246,17 +203,11 @@ fn watch_debug_build_verifies_without_the_flag() {
 
 #[test]
 fn watch_rebuild_reports_what_check_reports() {
-    let project = TempDir::new().unwrap();
-    fs::write(
-        project.path().join("specforge.json"),
-        r#"{"name":"w","version":"0.1.0","extensions":["@specforge/software","@specforge/testing"]}"#,
-    )
-    .unwrap();
-    fs::write(
-        project.path().join("main.spec"),
+    let project = TestProject::new().raw_config(r#"{"name":"w","version":"0.1.0","extensions":["@specforge/software","@specforge/testing"]}"#);
+    project.write(
+        "main.spec",
         "behavior login \"L\" {\n  category command\n  contract \"c\"\n  verify unit \"v\"\n}\n",
-    )
-    .unwrap();
+    );
 
     let (rx, child) = spawn_watch(&project);
     assert!(
@@ -266,15 +217,13 @@ fn watch_rebuild_reports_what_check_reports() {
     std::thread::sleep(Duration::from_millis(300));
     // Drop the required contract: software's rule reports E006.
     let broken = "behavior login \"L\" {\n  category command\n  verify unit \"v\"\n}\n";
-    fs::write(project.path().join("main.spec"), broken).unwrap();
+    project.write("main.spec", broken);
 
     let rebuilt = wait_for_line(&rx, "\"event\":\"rebuilt\"", Duration::from_secs(60));
     drop(child);
 
-    let check = specforge_cmd()
-        .args(["check", "--format", "json"])
-        .arg("--path")
-        .arg(project.path())
+    let check = Cli::on(&project)
+        .command(&["check", "--format", "json"])
         .output()
         .unwrap();
     let check: serde_json::Value = serde_json::from_slice(&check.stdout).unwrap();
@@ -316,30 +265,28 @@ fn diagnostic_set(list: &serde_json::Value) -> std::collections::BTreeMap<String
 /// Copy a parity fixture, run watch on it until `ready`, rewrite `main.spec`
 /// unchanged plus a newline, and return (ready, rebuilt, check's list).
 fn watch_and_check(fixture: &str) -> (serde_json::Value, serde_json::Value, serde_json::Value) {
-    let project = TempDir::new().unwrap();
+    let project = TestProject::new().without_config();
     let from = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/parity")
         .join(fixture);
     for entry in fs::read_dir(&from).unwrap() {
         let entry = entry.unwrap();
-        fs::copy(entry.path(), project.path().join(entry.file_name())).unwrap();
+        fs::copy(entry.path(), project.root().join(entry.file_name())).unwrap();
     }
 
     let (rx, child) = spawn_watch(&project);
     let ready = wait_for_line(&rx, "\"event\":\"ready\"", Duration::from_secs(60))
         .expect("watch never reported ready");
     std::thread::sleep(Duration::from_millis(300));
-    let main = project.path().join("main.spec");
+    let main = project.root().join("main.spec");
     let text = fs::read_to_string(&main).unwrap();
     fs::write(&main, format!("{text}\n")).unwrap();
     let rebuilt = wait_for_line(&rx, "\"event\":\"rebuilt\"", Duration::from_secs(60))
         .expect("no rebuild event");
     drop(child);
 
-    let check = specforge_cmd()
-        .args(["check", "--format", "json"])
-        .arg("--path")
-        .arg(project.path())
+    let check = Cli::on(&project)
+        .command(&["check", "--format", "json"])
         .output()
         .unwrap();
     (
@@ -446,13 +393,9 @@ fn e028(event: &serde_json::Value) -> Vec<String> {
     verify = "a specforge.lock change reloads the environment"
 )]
 fn watch_reloads_on_a_lock_change() {
-    let project = TempDir::new().unwrap();
-    fs::write(
-        project.path().join("specforge.json"),
-        r#"{"name":"w","version":"0.1.0","extensions":["@acme/missing"]}"#,
-    )
-    .unwrap();
-    fs::write(project.path().join("main.spec"), "").unwrap();
+    let project = TestProject::new()
+        .raw_config(r#"{"name":"w","version":"0.1.0","extensions":["@acme/missing"]}"#);
+    project.write("main.spec", "");
 
     let (rx, child) = spawn_watch(&project);
     let ready = wait_for_line(&rx, "\"event\":\"ready\"", Duration::from_secs(60))
@@ -471,7 +414,7 @@ fn watch_reloads_on_a_lock_change() {
         "lockfile_version": 1,
         "entries": [{"name": "@acme/missing", "version": "1.0.0", "source": "local:missing.wasm", "wasm_hash": "sha256:00"}]
     });
-    fs::write(project.path().join("specforge.lock"), lock.to_string()).unwrap();
+    project.write("specforge.lock", lock.to_string());
 
     let event = next_event(&rx, Duration::from_secs(20));
     drop(child);
@@ -490,13 +433,8 @@ fn watch_reloads_on_a_lock_change() {
     verify = "a .wasm file no extension loads changes nothing"
 )]
 fn watch_ignores_a_wasm_no_extension_loads() {
-    let project = TempDir::new().unwrap();
-    fs::write(project.path().join("specforge.json"), "{}").unwrap();
-    fs::write(
-        project.path().join("main.spec"),
-        "entity one { title \"One\" }\n",
-    )
-    .unwrap();
+    let project = TestProject::new().raw_config("{}");
+    project.write("main.spec", "entity one { title \"One\" }\n");
 
     let (rx, child) = spawn_watch(&project);
     wait_for_line(&rx, "\"event\":\"ready\"", Duration::from_secs(60))
@@ -505,14 +443,13 @@ fn watch_ignores_a_wasm_no_extension_loads() {
 
     // Build output no extension loads, then a real edit: the first event
     // is the edit's rebuild, not a reload for the .wasm.
-    fs::create_dir_all(project.path().join("target")).unwrap();
-    fs::write(project.path().join("target/x.wasm"), b"\0asm\x01\0\0\0").unwrap();
+    fs::create_dir_all(project.root().join("target")).unwrap();
+    project.write("target/x.wasm", b"\0asm\x01\0\0\0");
     std::thread::sleep(Duration::from_millis(500));
-    fs::write(
-        project.path().join("main.spec"),
+    project.write(
+        "main.spec",
         "entity one { title \"One\" }\nentity two { title \"Two\" }\n",
-    )
-    .unwrap();
+    );
 
     let event = next_event(&rx, Duration::from_secs(20));
     drop(child);
@@ -535,8 +472,8 @@ fn watch_ignores_a_wasm_no_extension_loads() {
     verify = "after spec_root changes, files under the new spec root are watched"
 )]
 fn watch_follows_a_moved_spec_root() {
-    let project = TempDir::new().unwrap();
-    let root = project.path();
+    let project = TestProject::new().without_config();
+    let root = project.root();
     fs::write(
         root.join("specforge.json"),
         r#"{"name":"w","version":"0.1.0","spec_root":"a"}"#,
@@ -595,9 +532,9 @@ fn watch_follows_a_moved_spec_root() {
 /// A project whose `gadget` kind (the vendored docref extension) has a
 /// `docs` field naming files, with `spec/a.spec` holding `spec`. The
 /// extension is a `.wasm` entry copied into `ext/`.
-fn docref_project(spec: &str) -> TempDir {
-    let project = TempDir::new().unwrap();
-    let root = project.path();
+fn docref_project(spec: &str) -> TestProject {
+    let project = TestProject::new().without_config();
+    let root = project.root();
     fs::create_dir_all(root.join("spec")).unwrap();
     fs::create_dir_all(root.join("ext")).unwrap();
     fs::write(
@@ -686,7 +623,7 @@ fn watch_follows_a_file_an_edit_names_outside_its_roots() {
     settle(&rx);
 
     fs::write(
-        project.path().join("spec/a.spec"),
+        project.root().join("spec/a.spec"),
         gadget_naming(&outside_reference(&outside, "shared/guide.md")),
     )
     .unwrap();
@@ -759,29 +696,16 @@ fn watch_ends_when_its_reader_leaves() {
         }
     }
 
-    let project = TempDir::new().unwrap();
-    fs::write(project.path().join("specforge.json"), "{}").unwrap();
-    fs::write(
-        project.path().join("main.spec"),
-        "entity one { title \"One\" }\n",
-    )
-    .unwrap();
+    let project = TestProject::new().raw_config("{}");
+    project.write("main.spec", "entity one { title \"One\" }\n");
 
-    let mut child = Kill(
-        specforge_cmd()
-            .args([
-                "watch",
-                "--format",
-                "json",
-                "--path",
-                project.path().to_str().unwrap(),
-            ])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .stdin(Stdio::null())
-            .spawn()
-            .expect("failed to spawn specforge watch"),
-    );
+    let mut child = Kill(Cli::on(&project).start(&[
+        "watch",
+        "--format",
+        "json",
+        "--path",
+        project.root().to_str().unwrap(),
+    ]));
     let mut stdout = BufReader::new(child.0.stdout.take().unwrap());
     let mut line = String::new();
     loop {
@@ -810,7 +734,7 @@ fn watch_ends_when_its_reader_leaves() {
         for n in 0..edits {
             spec.push_str(&format!("entity extra{n} {{ title \"Extra\" }}\n"));
         }
-        fs::write(project.path().join("main.spec"), spec).unwrap();
+        project.write("main.spec", spec);
         edits += 1;
         std::thread::sleep(Duration::from_millis(500));
     };
@@ -825,23 +749,13 @@ fn watch_ends_when_its_reader_leaves() {
     verify = "a file discovery does not find changes nothing a compile or a session reports"
 )]
 fn watch_reports_what_check_reports_when_an_excluded_import_target_appears() {
-    let project = TempDir::new().unwrap();
-    fs::write(
-        project.path().join("specforge.json"),
-        r#"{"name":"w","version":"0.1.0","extensions":[],"exclude":["drafts/"]}"#,
-    )
-    .unwrap();
-    fs::write(
-        project.path().join("a.spec"),
-        "use \"drafts/x\"\n\nterm a \"A\" {\n}\n",
-    )
-    .unwrap();
-    fs::write(project.path().join("b.spec"), "term b \"B\" {\n}\n").unwrap();
-    let check = |project: &TempDir| -> serde_json::Value {
-        let out = specforge_cmd()
-            .args(["check", "--format", "json"])
-            .arg("--path")
-            .arg(project.path())
+    let project = TestProject::new()
+        .raw_config(r#"{"name":"w","version":"0.1.0","extensions":[],"exclude":["drafts/"]}"#);
+    project.write("a.spec", "use \"drafts/x\"\n\nterm a \"A\" {\n}\n");
+    project.write("b.spec", "term b \"B\" {\n}\n");
+    let check = |project: &TestProject| -> serde_json::Value {
+        let out = Cli::on(project)
+            .command(&["check", "--format", "json"])
             .output()
             .unwrap();
         serde_json::from_slice(&out.stdout).unwrap()
@@ -853,8 +767,8 @@ fn watch_reports_what_check_reports_when_an_excluded_import_target_appears() {
     settle(&rx);
     let mut last: serde_json::Value = serde_json::from_str(&ready).unwrap();
 
-    fs::create_dir_all(project.path().join("drafts")).unwrap();
-    fs::write(project.path().join("drafts/x.spec"), "term x \"X\" {\n}\n").unwrap();
+    fs::create_dir_all(project.root().join("drafts")).unwrap();
+    project.write("drafts/x.spec", "term x \"X\" {\n}\n");
     while let Some(event) = next_event(&rx, Duration::from_secs(2)) {
         last = event;
     }
@@ -870,7 +784,7 @@ fn watch_reports_what_check_reports_when_an_excluded_import_target_appears() {
         diagnostic_set(&checked)
     );
 
-    fs::write(project.path().join("b.spec"), "term b \"B2\" {\n}\n").unwrap();
+    project.write("b.spec", "term b \"B2\" {\n}\n");
     let rebuilt = wait_for_line(&rx, "\"event\":\"rebuilt\"", Duration::from_secs(60))
         .expect("no rebuild event");
     drop(child);
@@ -878,5 +792,169 @@ fn watch_reports_what_check_reports_when_an_excluded_import_target_appears() {
     assert_eq!(
         diagnostic_set(&rebuilt["diagnostics"]),
         diagnostic_set(&check(&project))
+    );
+}
+
+/// A directory moved inside the spec root, its file removed, another file
+/// declaring the same ID written: watch reports what `check` reports, and
+/// no E002 for the entity that left with the directory (plan 03, repro 1).
+#[specforge_test(
+    behavior = "watch_file_system_for_changes",
+    verify = "a directory moved inside the spec root leaves watch reporting what check reports"
+)]
+fn watch_reports_what_check_reports_after_a_directory_move() {
+    let project = TestProject::new().raw_config(r#"{"extensions":[]}"#);
+    project.write("r.spec", "thing root_one \"R\" {}\n");
+    fs::create_dir_all(project.root().join("old")).unwrap();
+    project.write("old/a.spec", "thing alpha_one \"A\" {\n}\n");
+
+    let (rx, child) = spawn_watch(&project);
+    wait_for_line(&rx, "\"event\":\"ready\"", Duration::from_secs(60))
+        .expect("watch never reported ready");
+    settle(&rx);
+
+    fs::rename(project.root().join("old"), project.root().join("new")).unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+    fs::remove_file(project.root().join("new/a.spec")).unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+    project.write("r2.spec", "thing alpha_one \"A again\" {\n}\n");
+
+    let mut last = None;
+    while let Some(event) = next_event(&rx, Duration::from_secs(3)) {
+        last = Some(event);
+    }
+    drop(child);
+    let last = last.expect("watch reported nothing");
+
+    let check = Cli::on(&project)
+        .command(&["check", "--format", "json"])
+        .output()
+        .unwrap();
+    let check: serde_json::Value = serde_json::from_slice(&check.stdout).unwrap();
+    assert_eq!(
+        diagnostic_set(&last["diagnostics"]),
+        diagnostic_set(&check),
+        "{last}"
+    );
+    assert!(
+        last["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|d| d["code"] != "E002"),
+        "{last}"
+    );
+}
+
+/// An edit to a symlinked source's target, in a directory outside the
+/// project, is seen as an edit to the link (plan 03, repro 4).
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "watch_file_system_for_changes",
+    verify = "an edit to a symlinked source's target is seen"
+)]
+fn watch_sees_an_edit_to_a_symlinked_sources_target() {
+    let outside = TempDir::new().unwrap();
+    let target = fs::canonicalize(outside.path()).unwrap().join("real.spec");
+    fs::write(&target, "thing real_one \"R\" {}\n").unwrap();
+    let project = TestProject::new().raw_config(r#"{"extensions":[]}"#);
+    project.write("r.spec", "thing root_one \"R\" {}\n");
+    std::os::unix::fs::symlink(&target, project.root().join("link.spec")).unwrap();
+
+    let (rx, child) = spawn_watch(&project);
+    wait_for_line(&rx, "\"event\":\"ready\"", Duration::from_secs(60))
+        .expect("watch never reported ready");
+    settle(&rx);
+
+    fs::write(
+        &target,
+        "thing real_one \"R\" {}\nthing real_two \"R\" {}\n",
+    )
+    .unwrap();
+    let event = next_event(&rx, Duration::from_secs(20));
+    drop(child);
+
+    let event = event.expect("no event after the target was edited");
+    assert_eq!(
+        event["changed"],
+        serde_json::json!(["link.spec"]),
+        "{event}"
+    );
+    assert!(
+        event["delta"]["added_nodes"]
+            .to_string()
+            .contains("real_two"),
+        "{event}"
+    );
+}
+
+/// The `(code, line)` of each diagnostic in `list` that has a line.
+fn located(list: &serde_json::Value) -> Vec<(String, i64)> {
+    list.as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|d| Some((d["code"].as_str()?.to_string(), d["line"].as_i64()?)))
+        .collect()
+}
+
+/// The next event whose `diagnostics` hold an E025 at `line`.
+fn event_with_e025_at(rx: &mpsc::Receiver<String>, line: i64) -> serde_json::Value {
+    // Not `next_event`: a change that only moves a diagnostic leaves the
+    // graph delta empty, and `next_event` skips such an update.
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while Instant::now() < deadline {
+        let Ok(text) = rx.recv_timeout(Duration::from_millis(200)) else {
+            continue;
+        };
+        let Ok(event) = serde_json::from_str::<serde_json::Value>(&text) else {
+            continue;
+        };
+        if event["event"] == "rebuilt"
+            && located(&event["diagnostics"]).contains(&("E025".to_string(), line))
+        {
+            return event;
+        }
+    }
+    panic!("no rebuilt event reported an E025 at line {line}");
+}
+
+#[specforge_test(
+    behavior = "notify_delta_subscribers",
+    verify = "watch --format json prints the diagnostics each update added and removed"
+)]
+fn watch_prints_the_diagnostics_each_update_added_and_removed() {
+    let project = TestProject::new().raw_config(r#"{"name":"w","version":"0.1.0"}"#);
+    let alpha = "behavior alpha \"Alpha\" {\n}\n";
+    project.write("main.spec", alpha);
+
+    let (rx, child) = spawn_watch(&project);
+    wait_for_line(&rx, "\"event\":\"ready\"", Duration::from_secs(60))
+        .expect("watch never reported ready");
+    std::thread::sleep(Duration::from_millis(300));
+
+    // An import that resolves to nothing adds an E025: a diagnostic the
+    // graph build does not report.
+    project.write("main.spec", format!("use \"missing\"\n{alpha}"));
+    let added = event_with_e025_at(&rx, 1);
+    assert_eq!(
+        located(&added["diagnostics_delta"]["added"]),
+        [("E025".to_string(), 1)],
+        "{added}"
+    );
+    assert_eq!(added["diagnostics_delta"]["removed"], serde_json::json!([]));
+
+    // Moving it two lines down removes it where it was and adds it where it is.
+    project.write("main.spec", format!("\n\nuse \"missing\"\n{alpha}"));
+    let moved = event_with_e025_at(&rx, 3);
+    drop(child);
+    assert_eq!(
+        located(&moved["diagnostics_delta"]["removed"]),
+        [("E025".to_string(), 1)],
+        "{moved}"
+    );
+    assert_eq!(
+        located(&moved["diagnostics_delta"]["added"]),
+        [("E025".to_string(), 3)],
+        "{moved}"
     );
 }

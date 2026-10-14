@@ -8,10 +8,12 @@ use specforge_ops::navigate::{anchors_of_file, source_anchors};
 
 use crate::args::Arguments;
 use crate::prompt::{CorePrompt, Prompted};
+use crate::refusal::ArgumentOf;
 use crate::tool::CoreTool;
 use crate::tool::{ErrorCode, McpError};
 use crate::tools::find_spec_for_source::{Anchored, MatchMode};
 use crate::tools::{analyze, infer_progress, infer_session, query, schema, search, validate};
+use specforge_ops::infer::KindGuideField;
 use specforge_ops::view::ProjectView;
 
 /// The core tools the workflow protocol names, in the order it lists them.
@@ -26,6 +28,14 @@ const WORKFLOW_TOOLS: [&str; 6] = [
 
 /// The infer prompt (`McpInferPromptResult`).
 pub struct Prompt;
+
+impl ArgumentOf<KindGuideField> for Prompt {
+    fn argument(field: KindGuideField) -> Option<&'static str> {
+        match field {
+            KindGuideField::Kind => Some("scope"),
+        }
+    }
+}
 
 impl CorePrompt for Prompt {
     const NAME: &'static str = "specforge://prompts/infer";
@@ -199,7 +209,7 @@ fn get_overview(project: &ProjectView) -> Prompted<Payload> {
 
 fn get_kind_scoped(project: &ProjectView, kind_name: &str) -> Outcome {
     let guide = infer::kind_guide(project, kind_name)
-        .map_err(|error| Box::new(McpError::from(error).with_argument("scope")))?;
+        .map_err(|refusal| Box::new(Prompt::refused(refusal)))?;
     let payload = Payload::Kind(KindScope {
         guide: guide.document(),
         validation: validation(),

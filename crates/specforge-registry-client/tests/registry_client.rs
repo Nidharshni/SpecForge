@@ -2,6 +2,7 @@ use specforge_common::Severity;
 use specforge_registry_client::registry_client::{RegistryClient, RegistryError};
 use specforge_registry_client::registry_config::{RegistryConfig, RegistryCredential};
 use specforge_registry_client::testing::{CallKind, MemoryClient};
+use specforge_registry_wire::RegistryRoot;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -10,7 +11,7 @@ use specforge_registry_client::testing::{CallKind, MemoryClient};
 fn test_registry() -> RegistryConfig {
     RegistryConfig {
         alias: "test".to_string(),
-        url: "https://registry.specforge.dev".to_string(),
+        url: RegistryRoot::parse("https://registry.specforge.dev").unwrap(),
         scope_filter: None,
         default_registry: true,
     }
@@ -133,7 +134,7 @@ fn a_network_error_suggests_a_retry() {
     assert!(network.suggestion.as_ref().unwrap().contains("retry"));
 
     let timeout = RegistryError::Timeout {
-        url: "http://registry.invalid/v1".into(),
+        url: "http://registry.invalid/v1/packages/@acme%2Ftool".into(),
     }
     .to_diagnostic();
     assert_eq!(timeout.code, "R004");

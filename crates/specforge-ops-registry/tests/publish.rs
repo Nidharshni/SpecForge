@@ -9,6 +9,7 @@ use specforge_ops::registry::{Registry, TrustPolicy, Upload};
 use specforge_ops_registry::{ConfiguredRegistry, User};
 use specforge_package::PackageName;
 use specforge_package::Version;
+use specforge_project::testing::TestProject;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry_client::credentials::{CredentialEntry, CredentialStore};
 use specforge_registry_client::testing::{CallKind, MemoryClient};
@@ -19,21 +20,19 @@ use tempfile::TempDir;
 
 /// A project, the user's home, and the registry both talk to.
 struct World {
-    project: TempDir,
-    home: TempDir,
+    project: TestProject,
     client: MemoryClient,
 }
 
 impl World {
     /// A project configuring `registries`; the client accepts the token `"t"`.
     fn with(registries: serde_json::Value) -> Self {
-        let project = TempDir::new().unwrap();
-        let config =
-            serde_json::json!({ "name": "p", "version": "0.1.0", "registries": registries });
-        std::fs::write(project.path().join("specforge.json"), config.to_string()).unwrap();
+        let project = TestProject::new().config(|c| {
+            c["name"] = "p".into();
+            c["registries"] = registries;
+        });
         World {
             project,
-            home: TempDir::new().unwrap(),
             client: MemoryClient::new().accepting("t"),
         }
     }
@@ -41,21 +40,18 @@ impl World {
     /// One registry, `acme`, serving `@acme`.
     fn acme() -> Self {
         Self::with(serde_json::json!([
-            { "alias": "acme", "url": "memory://acme", "scope_filter": "@acme" }
+            { "alias": "acme", "url": "https://acme.invalid", "scope_filter": "@acme" }
         ]))
     }
 
     fn registry(&self, token: Option<&str>) -> ConfiguredRegistry {
-        ConfiguredRegistry::for_project(
-            &specforge_common::ProjectRoot::of(self.project.path()).unwrap(),
-            "publish",
-        )
-        .as_user(User::at(self.home.path(), token.map(str::to_string)))
-        .with_client(self.client.clone())
+        ConfiguredRegistry::for_project(&self.project.project_root(), "publish")
+            .as_user(User::at(self.project.home(), token.map(str::to_string)))
+            .with_client(self.client.clone())
     }
 
     fn signing_key(&self) -> std::path::PathBuf {
-        self.home.path().join("signing-key.json")
+        self.project.home().join("signing-key.json")
     }
 
     fn store_credential(&self, alias: &str, token: &str, expires_at: Option<&str>) {
@@ -68,7 +64,7 @@ impl World {
                 in_keyring: false,
             },
         );
-        write_credentials(&self.home.path().join("credentials.json"), &store).unwrap();
+        write_credentials(&self.project.home().join("credentials.json"), &store).unwrap();
     }
 }
 
@@ -104,17 +100,14 @@ impl Pkg {
 )]
 fn the_adapter_refuses_before_any_request_in_this_order() {
     // 1. no specforge.json: E063.
-    let empty = TempDir::new().unwrap();
+    let empty = TestProject::new().without_config();
     let home = TempDir::new().unwrap();
     let client = MemoryClient::new().accepting("t");
-    let error = ConfiguredRegistry::for_project(
-        &specforge_common::ProjectRoot::of(empty.path()).unwrap(),
-        "publish",
-    )
-    .as_user(User::at(home.path(), Some("t".into())))
-    .with_client(client.clone())
-    .publish(&pkg("@acme/x", "1.0.0").upload())
-    .unwrap_err();
+    let error = ConfiguredRegistry::for_project(&empty.project_root(), "publish")
+        .as_user(User::at(home.path(), Some("t".into())))
+        .with_client(client.clone())
+        .publish(&pkg("@acme/x", "1.0.0").upload())
+        .unwrap_err();
     assert!(
         error.is(specforge_ops::registry::NO_REGISTRY),
         "1: {error:?}"
@@ -152,7 +145,7 @@ fn the_adapter_refuses_before_any_request_in_this_order() {
     assert!(!world.signing_key().exists());
 
     // 4. credentials.json is not JSON and there is no token: R012.
-    std::fs::write(world.home.path().join("credentials.json"), "{").unwrap();
+    std::fs::write(world.project.home().join("credentials.json"), "{").unwrap();
     let error = world
         .registry(None)
         .publish(&pkg("@acme/x", "1.0.0").upload())
@@ -292,8 +285,8 @@ fn a_corrupt_signing_key_is_refused_with_e074_before_any_request() {
 )]
 fn publish_asks_the_registry_fetch_asks() {
     let world = World::with(serde_json::json!([
-        { "alias": "acme", "url": "memory://acme", "scope_filter": "@acme" },
-        { "alias": "main", "url": "memory://main", "default_registry": true }
+        { "alias": "acme", "url": "https://acme.invalid", "scope_filter": "@acme" },
+        { "alias": "main", "url": "https://main.invalid", "default_registry": true }
     ]));
     let registry = world.registry(Some("t"));
     let acme = pkg("@acme/x", "1.0.0");
@@ -380,14 +373,11 @@ fn a_credential_the_registry_refuses_is_a_permission_error() {
 }
 
 /// A project on `server`, and the user's home, for a publish over HTTP.
-fn on_server(server: &specforge_registry_server::testing::LocalRegistry) -> (TempDir, TempDir) {
-    let project = TempDir::new().unwrap();
-    let config = serde_json::json!({
-        "name": "p",
-        "version": "0.1.0",
-        "registries": server.config_entry(),
+fn on_server(server: &specforge_registry_server::testing::LocalRegistry) -> (TestProject, TempDir) {
+    let project = TestProject::new().config(|c| {
+        c["name"] = "p".into();
+        c["registries"] = server.config_entry();
     });
-    std::fs::write(project.path().join("specforge.json"), config.to_string()).unwrap();
     (project, TempDir::new().unwrap())
 }
 
@@ -403,11 +393,8 @@ fn a_retry_after_beyond_the_longest_backoff_is_not_waited_for() {
         window: std::time::Duration::from_secs(60),
     });
     let (project, home) = on_server(&server);
-    let registry = ConfiguredRegistry::for_project(
-        &specforge_common::ProjectRoot::of(project.path()).unwrap(),
-        "publish",
-    )
-    .as_user(User::at(home.path(), Some(server.token().to_string())));
+    let registry = ConfiguredRegistry::for_project(&project.project_root(), "publish")
+        .as_user(User::at(home.path(), Some(server.token().to_string())));
 
     registry
         .publish(&pkg("@acme/x", "1.0.0").upload())
@@ -440,11 +427,8 @@ fn a_rate_limited_publish_is_sent_again_after_its_wait() {
         window: std::time::Duration::from_secs(1),
     });
     let (project, home) = on_server(&server);
-    let registry = ConfiguredRegistry::for_project(
-        &specforge_common::ProjectRoot::of(project.path()).unwrap(),
-        "publish",
-    )
-    .as_user(User::at(home.path(), Some(server.token().to_string())));
+    let registry = ConfiguredRegistry::for_project(&project.project_root(), "publish")
+        .as_user(User::at(home.path(), Some(server.token().to_string())));
 
     registry
         .publish(&pkg("@acme/x", "1.0.0").upload())
@@ -477,12 +461,9 @@ fn an_unset_token_variable_is_r010_before_any_request() {
     let home = home_with_credentials(
         r#"{"registries":{"acme":{"token_env":"P16_UNSET_TOKEN_VARIABLE"}}}"#,
     );
-    let registry = ConfiguredRegistry::for_project(
-        &specforge_common::ProjectRoot::of(world.project.path()).unwrap(),
-        "publish",
-    )
-    .as_user(User::at(home.path(), None))
-    .with_client(world.client.clone());
+    let registry = ConfiguredRegistry::for_project(&world.project.project_root(), "publish")
+        .as_user(User::at(home.path(), None))
+        .with_client(world.client.clone());
 
     let error = registry
         .publish(&pkg("@acme/x", "1.0.0").upload())
@@ -506,12 +487,9 @@ fn a_token_variable_is_sent_as_the_bearer_token() {
     let home = home_with_credentials(r#"{"registries":{"acme":{"token_env":"P16_TOKEN_A"}}}"#);
     // SAFETY: the variable is named by this test only.
     unsafe { std::env::set_var("P16_TOKEN_A", "t") };
-    let registry = ConfiguredRegistry::for_project(
-        &specforge_common::ProjectRoot::of(world.project.path()).unwrap(),
-        "publish",
-    )
-    .as_user(User::at(home.path(), None))
-    .with_client(world.client.clone());
+    let registry = ConfiguredRegistry::for_project(&world.project.project_root(), "publish")
+        .as_user(User::at(home.path(), None))
+        .with_client(world.client.clone());
 
     registry.publish(&pkg("@acme/x", "1.0.0").upload()).unwrap();
 
@@ -525,7 +503,7 @@ fn a_token_variable_is_sent_as_the_bearer_token() {
 )]
 fn a_token_file_is_sent_as_the_bearer_token() {
     let world = World::acme();
-    let file = world.home.path().join("tok");
+    let file = world.project.home().join("tok");
     std::fs::write(
         &file, "t
 ",
@@ -534,12 +512,9 @@ fn a_token_file_is_sent_as_the_bearer_token() {
     let home = home_with_credentials(
         &serde_json::json!({"registries": {"acme": {"token_file": file}}}).to_string(),
     );
-    let registry = ConfiguredRegistry::for_project(
-        &specforge_common::ProjectRoot::of(world.project.path()).unwrap(),
-        "publish",
-    )
-    .as_user(User::at(home.path(), None))
-    .with_client(world.client.clone());
+    let registry = ConfiguredRegistry::for_project(&world.project.project_root(), "publish")
+        .as_user(User::at(home.path(), None))
+        .with_client(world.client.clone());
 
     registry.publish(&pkg("@acme/x", "1.0.0").upload()).unwrap();
 
@@ -555,12 +530,9 @@ fn an_unreadable_token_file_is_r011_before_any_request() {
     let world = World::acme();
     let home =
         home_with_credentials(r#"{"registries":{"acme":{"token_file":"/nonexistent/p16-token"}}}"#);
-    let registry = ConfiguredRegistry::for_project(
-        &specforge_common::ProjectRoot::of(world.project.path()).unwrap(),
-        "publish",
-    )
-    .as_user(User::at(home.path(), None))
-    .with_client(world.client.clone());
+    let registry = ConfiguredRegistry::for_project(&world.project.project_root(), "publish")
+        .as_user(User::at(home.path(), None))
+        .with_client(world.client.clone());
 
     let error = registry
         .publish(&pkg("@acme/x", "1.0.0").upload())

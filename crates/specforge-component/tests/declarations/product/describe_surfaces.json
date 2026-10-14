@@ -18,7 +18,7 @@
                   ]
                 }
               },
-              "description": "Only features with this status: proposed (also a feature without one), accepted, in_progress, done, deferred or deprecated",
+              "description": "Only features with this status; a feature without one counts as proposed",
               "name": "status",
               "required": false
             },
@@ -33,7 +33,7 @@
                   ]
                 }
               },
-              "description": "Only features with this priority: critical, high, medium, low",
+              "description": "Only features with this priority",
               "name": "priority",
               "required": false
             },
@@ -96,7 +96,7 @@
                   ]
                 }
               },
-              "description": "Only journeys with this priority: critical, high, medium, low",
+              "description": "Only journeys with this priority",
               "name": "priority",
               "required": false
             },
@@ -165,7 +165,7 @@
                   ]
                 }
               },
-              "description": "Only deliverables with this status: draft (also a deliverable without one), in_progress, shipped or deprecated",
+              "description": "Only deliverables with this status; a deliverable without one counts as draft",
               "name": "status",
               "required": false
             },
@@ -185,7 +185,7 @@
                   ]
                 }
               },
-              "description": "Only deliverables of this artifact type: cli, service, library, web_app, mobile_app, api, extension, documentation or package",
+              "description": "Only deliverables with this artifact type",
               "name": "artifact_type",
               "required": false
             },
@@ -248,7 +248,7 @@
                   ]
                 }
               },
-              "description": "Only milestones with this status: planned (also a milestone without one), in_progress, completed or blocked",
+              "description": "Only milestones with this status; a milestone without one counts as planned",
               "name": "status",
               "required": false
             },
@@ -263,7 +263,7 @@
                   ]
                 }
               },
-              "description": "Only milestones with this priority: critical, high, medium, low",
+              "description": "Only milestones with this priority",
               "name": "priority",
               "required": false
             },
@@ -317,7 +317,7 @@
           "args": [
             {
               "arg_type": "string",
-              "description": "Only modules of this family (core, platform, extension, integration, advisory, or another)",
+              "description": "Only modules of this family, standard or not",
               "name": "family",
               "required": false
             },
@@ -426,7 +426,7 @@
                   ]
                 }
               },
-              "description": "Only personas with this status: active (also a persona without one) or deprecated",
+              "description": "Only personas with this status; a persona without one counts as active",
               "name": "status",
               "required": false
             },
@@ -442,7 +442,7 @@
                   ]
                 }
               },
-              "description": "Only personas with this technical level: expert, advanced, intermediate, beginner or non_technical",
+              "description": "Only personas with this technical level",
               "name": "technical_level",
               "required": false
             },
@@ -503,7 +503,7 @@
                   ]
                 }
               },
-              "description": "Only channels with this status: active (also a channel without one) or deprecated",
+              "description": "Only channels with this status; a channel without one counts as active",
               "name": "status",
               "required": false
             },
@@ -520,7 +520,7 @@
                   ]
                 }
               },
-              "description": "Only channels with this interaction model: request_response, event_driven, batch, streaming, bidirectional or manual",
+              "description": "Only channels with this interaction model",
               "name": "interaction_model",
               "required": false
             },
@@ -583,7 +583,7 @@
                   ]
                 }
               },
-              "description": "Only releases with this status: planned (also a release without one), in_progress, released or recalled",
+              "description": "Only releases with this status; a release without one counts as planned",
               "name": "status",
               "required": false
             },

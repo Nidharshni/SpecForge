@@ -1,5 +1,5 @@
+use crate::support::emit_json;
 use specforge_common::{SourceSpan, Sym};
-use specforge_emitter::json::emit_json;
 use specforge_emitter::{
     EmitFormat, EmitOptions, EmitterError, GraphProtocolSchema, SchemaEdgeType, SchemaEntityKind,
     SchemaExtensionInfo, SchemaField, SchemaVersion, generate_schema, publish,
@@ -13,7 +13,6 @@ use specforge_registry::{
     FieldRegistry, FieldRegistryEntry, FieldType, RegistryBuild, build_registries,
 };
 use specforge_test::prelude::*;
-use std::sync::Arc;
 
 /// `graph` exported as `format` with `schema` attached: embedded, or
 /// referenced when scoped (`emit`, ADR 0007).
@@ -546,7 +545,7 @@ fn published_kinds(document: &serde_json::Value) -> std::collections::BTreeSet<S
 }
 
 // Not linked: only a few top-level keys are checked here.
-// schema_publish_produces_json_schema_draft in specforge-cli's e2e_schema
+// schema_publish_produces_json_schema_draft in specforge-ops's schema::published
 // tests checks every keyword of the published schema against draft 2020-12.
 #[test]
 fn publish_json_schema_valid() {
@@ -816,20 +815,10 @@ fn schema_generated_deterministically_for_caching() {
 fn schema_reflects_current_state() {
     // The path `specforge schema` takes: compile the project, build the
     // schema from the compilation's registries, serialize it.
-    fn serve(dir: &std::path::Path) -> serde_json::Value {
-        let runtime = specforge_component::ComponentRuntime::with_user_cache();
-        let ctx = specforge_project::CompiledProject::compile(
-            &specforge_common::ProjectRoot::of(dir).unwrap(),
-            Some(Arc::new(runtime)),
-        );
+    fn serve(dir: &specforge_project::testing::TestProject) -> serde_json::Value {
+        let ctx = dir.compile();
         let schema = generate_schema(ctx.environment().registries());
         serde_json::to_value(&schema).unwrap()
-    }
-    fn configure(dir: &std::path::Path, extensions: &[&str]) {
-        let config = serde_json::json!({
-            "name": "t", "version": "0.1.0", "spec_root": "spec", "extensions": extensions,
-        });
-        std::fs::write(dir.join("specforge.json"), config.to_string()).unwrap();
     }
     fn names(list: &serde_json::Value, key: &str) -> Vec<String> {
         list.as_array()
@@ -839,19 +828,18 @@ fn schema_reflects_current_state() {
             .collect()
     }
 
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::create_dir_all(dir.path().join("spec")).unwrap();
-    std::fs::write(dir.path().join("spec/main.spec"), "").unwrap();
-
-    configure(dir.path(), &["@specforge/software"]);
-    let before = names(&serve(dir.path())["entity_kinds"], "name");
+    let dir = specforge_project::testing::TestProject::new()
+        .config(|c| c["spec_root"] = "spec".into())
+        .file("spec/main.spec", "")
+        .enabling(&["@specforge/software"]);
+    let before = names(&serve(&dir)["entity_kinds"], "name");
     assert!(before.contains(&"behavior".to_string()), "{before:?}");
     assert!(!before.contains(&"feature".to_string()), "{before:?}");
 
     // The project now also uses the product extension, which declares
     // `feature`: the next serve reports it.
-    configure(dir.path(), &["@specforge/software", "@specforge/product"]);
-    let after = serve(dir.path());
+    let dir = dir.enabling(&["@specforge/software", "@specforge/product"]);
+    let after = serve(&dir);
     let kinds = names(&after["entity_kinds"], "name");
     assert!(kinds.contains(&"feature".to_string()), "{kinds:?}");
     assert!(kinds.contains(&"behavior".to_string()), "{kinds:?}");
@@ -868,7 +856,7 @@ fn schema_reflects_current_state() {
 
 // Not linked: this checks required keys and the kind enum by hand, not the
 // whole export against the schema. schema_publish_validates_a_real_export in
-// specforge-cli's e2e_schema tests runs a validator over a real export.
+// specforge-ops's schema::published tests runs a validator over a real export.
 #[test]
 fn published_schema_validates_known_good_export() {
     let schema = sample_schema();
@@ -1633,4 +1621,57 @@ fn a_plain_export_carries_the_given_schemas_version() {
     .unwrap();
     let document: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert_eq!(document["format_version"], "1.0");
+}
+
+#[specforge_test(
+    behavior = "publish_schema_specification",
+    verify = "the published schema of every format admits a node's coverage_status"
+)]
+fn every_published_format_admits_a_nodes_coverage_status() {
+    use specforge_common::shape::violations;
+    use std::collections::BTreeMap;
+
+    let schema = sample_schema();
+    let mut graph = Graph::new();
+    graph.add_node(node("alpha", "behavior", Some("Alpha")));
+    let verdicts = BTreeMap::from([(
+        "alpha".to_string(),
+        specforge_coverage::Verdict {
+            obligations: 1,
+            proven: 1,
+            ..Default::default()
+        },
+    )]);
+    for format in [EmitFormat::Json, EmitFormat::Context, EmitFormat::Brief] {
+        let text = specforge_emitter::emit(
+            &graph,
+            &EmitOptions {
+                format,
+                schema: &schema,
+                attach_schema: true,
+                coverage: Some(&verdicts),
+                ..EmitOptions::default()
+            },
+        )
+        .unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let published = publish(&schema, format).unwrap();
+        assert_eq!(
+            violations(&published, &parsed),
+            Vec::<String>::new(),
+            "{format:?}"
+        );
+        assert_eq!(parsed["nodes"][0]["coverage_status"], "covered");
+        let node_schema = match format {
+            EmitFormat::Json => &published["$defs"]["node_behavior"],
+            _ => &published["properties"]["nodes"]["items"],
+        };
+        assert_eq!(
+            node_schema["properties"]["coverage_status"],
+            serde_json::json!({"type": "string", "enum": ["covered", "partial", "uncovered"]}),
+            "{format:?}"
+        );
+        let required = node_schema["required"].as_array().unwrap();
+        assert!(!required.contains(&serde_json::json!("coverage_status")));
+    }
 }

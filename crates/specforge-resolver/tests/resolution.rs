@@ -13,7 +13,7 @@ fn resolve(files: &[(&str, &str)], unreadable: &[&str]) -> Vec<Diagnostic> {
 }
 
 /// A project's sources, as (key, text).
-fn setup_project<'a>(files: &[(&'a str, &'a str)]) -> Vec<(&'a str, &'a str)> {
+fn source_files<'a>(files: &[(&'a str, &'a str)]) -> Vec<(&'a str, &'a str)> {
     files.to_vec()
 }
 
@@ -22,7 +22,7 @@ fn setup_project<'a>(files: &[(&'a str, &'a str)]) -> Vec<(&'a str, &'a str)> {
     verify = "a use path resolves to the project source it names"
 )]
 fn resolve_use_import_to_file() {
-    let dir = setup_project(&[
+    let dir = source_files(&[
         ("types.spec", r#"behavior alpha "A" { contract "first" }"#),
         (
             "main.spec",
@@ -44,7 +44,7 @@ fn resolve_use_import_to_file() {
     verify = "missing import file produces E025"
 )]
 fn missing_import_produces_e025() {
-    let dir = setup_project(&[("main.spec", "use \"nonexistent\"\nbehavior foo \"F\" { }")]);
+    let dir = source_files(&[("main.spec", "use \"nonexistent\"\nbehavior foo \"F\" { }")]);
 
     let diagnostics = resolve(&dir, &[]);
 
@@ -57,7 +57,7 @@ fn missing_import_produces_e025() {
     verify = "detect direct cycle between two files"
 )]
 fn detect_direct_import_cycle() {
-    let dir = setup_project(&[
+    let dir = source_files(&[
         ("a.spec", "use \"b\"\nbehavior alpha \"A\" { }"),
         ("b.spec", "use \"a\"\nbehavior beta \"B\" { }"),
     ]);
@@ -82,7 +82,7 @@ fn detect_direct_import_cycle() {
     verify = "detect transitive cycle across three files"
 )]
 fn detect_transitive_import_cycle() {
-    let dir = setup_project(&[
+    let dir = source_files(&[
         ("a.spec", "use \"b\"\nbehavior alpha \"A\" { }"),
         ("b.spec", "use \"c\"\nbehavior beta \"B\" { }"),
         ("c.spec", "use \"a\"\nbehavior gamma \"G\" { }"),
@@ -102,7 +102,7 @@ fn detect_transitive_import_cycle() {
     verify = "non-cyclic files still process when a cycle exists"
 )]
 fn non_cyclic_files_still_resolve_when_cycle_exists() {
-    let dir = setup_project(&[
+    let dir = source_files(&[
         ("a.spec", "use \"b\"\nbehavior alpha \"A\" { }"),
         ("b.spec", "use \"a\"\nbehavior beta \"B\" { }"),
         ("clean.spec", "behavior gamma \"G\" { status \"ok\" }"),
@@ -130,7 +130,7 @@ fn non_cyclic_files_still_resolve_when_cycle_exists() {
     verify = "imports across nested directories resolve correctly"
 )]
 fn imports_across_nested_directories_resolve_correctly() {
-    let dir = setup_project(&[
+    let dir = source_files(&[
         (
             "sub/types.spec",
             r#"behavior alpha "A" { contract "first" }"#,
@@ -159,7 +159,7 @@ fn imports_across_nested_directories_resolve_correctly() {
     verify = "a use path resolves to the project source it names"
 )]
 fn resolve_relative_dot_slash() {
-    let dir = setup_project(&[
+    let dir = source_files(&[
         (
             "sub/helper.spec",
             r#"behavior helper "H" { contract "help" }"#,
@@ -184,7 +184,7 @@ fn resolve_relative_dot_slash() {
     verify = "a use path resolves to the project source it names"
 )]
 fn resolve_relative_dot_dot_slash() {
-    let dir = setup_project(&[
+    let dir = source_files(&[
         (
             "shared.spec",
             r#"behavior shared "S" { contract "shared" }"#,
@@ -209,7 +209,7 @@ fn resolve_relative_dot_dot_slash() {
     verify = "relative import traversing above spec_root is rejected"
 )]
 fn resolve_relative_escaping_spec_root() {
-    let dir = setup_project(&[(
+    let dir = source_files(&[(
         "sub/main.spec",
         "use \"../../escape\"\nbehavior user \"U\" { }",
     )]);
@@ -229,7 +229,7 @@ fn resolve_relative_escaping_spec_root() {
     verify = "a use path resolves to the project source it names"
 )]
 fn resolve_directory_to_index_spec() {
-    let dir = setup_project(&[
+    let dir = source_files(&[
         (
             "models/index.spec",
             r#"behavior model "M" { contract "model" }"#,
@@ -255,7 +255,7 @@ fn resolve_directory_to_index_spec() {
     verify = "a use path resolves to the project source it names"
 )]
 fn bare_path_precedence_over_index() {
-    let dir = setup_project(&[
+    let dir = source_files(&[
         (
             "models.spec",
             r#"behavior direct_model "DM" { contract "direct" }"#,
@@ -293,7 +293,7 @@ fn bare_path_precedence_over_index() {
     verify = "resolve extension import path"
 )]
 fn extension_import_emits_i004() {
-    let dir = setup_project(&[(
+    let dir = source_files(&[(
         "main.spec",
         "use \"@specforge/software\"\nbehavior foo \"F\" { }",
     )]);
@@ -322,7 +322,7 @@ fn extension_import_emits_i004() {
     verify = "missing import file produces E025"
 )]
 fn missing_import_e025_with_suggestion() {
-    let dir = setup_project(&[
+    let dir = source_files(&[
         ("helpers.spec", r#"behavior helper "H" { contract "help" }"#),
         ("main.spec", "use \"helperz\"\nbehavior foo \"F\" { }"),
     ]);
@@ -346,7 +346,7 @@ fn missing_import_e025_with_suggestion() {
     verify = "missing import file produces E025"
 )]
 fn missing_import_e025_no_suggestion() {
-    let dir = setup_project(&[
+    let dir = source_files(&[
         ("types.spec", r#"behavior t "T" { contract "t" }"#),
         (
             "main.spec",
@@ -387,7 +387,7 @@ fn missing_import_e025_no_suggestion() {
     verify = "selective re-export of unknown entity produces W027"
 )]
 fn pub_use_unknown_entity_w027() {
-    let dir = setup_project(&[
+    let dir = source_files(&[
         ("foo.spec", r#"behavior Foo "F" { contract "foo" }"#),
         ("barrel.spec", "pub use { NonExistent } from \"./foo\"\n"),
     ]);
@@ -432,7 +432,7 @@ fn relative_import_path_traversal_rejected() {
     verify = "W113 carries actionable suggestion"
 )]
 fn w113_import_cycle_has_suggestion() {
-    let dir = setup_project(&[
+    let dir = source_files(&[
         ("a.spec", "use \"b\"\nbehavior alpha \"A\" { }"),
         ("b.spec", "use \"a\"\nbehavior beta \"B\" { }"),
     ]);
@@ -457,7 +457,7 @@ fn w113_import_cycle_has_suggestion() {
     verify = "an import path may spell out the .spec extension"
 )]
 fn use_import_may_spell_out_the_spec_extension() {
-    let dir = setup_project(&[
+    let dir = source_files(&[
         ("tokens.spec", r#"behavior token "T" { contract "t" }"#),
         ("main.spec", "use \"tokens.spec\"\nbehavior foo \"F\" { }"),
         ("other.spec", "use \"tokens\"\nbehavior bar \"B\" { }"),
@@ -479,7 +479,7 @@ fn use_import_may_spell_out_the_spec_extension() {
     verify = "a circular import produces W113 naming the cycle participants in a deterministic order"
 )]
 fn w113_names_each_cycle_the_same_way_on_every_run() {
-    let dir = setup_project(&[
+    let dir = source_files(&[
         ("c.spec", "use \"a\"\nbehavior gamma \"G\" { }"),
         ("a.spec", "use \"b\"\nbehavior alpha \"A\" { }"),
         ("b.spec", "use \"c\"\nbehavior beta \"B\" { }"),
@@ -687,7 +687,7 @@ fn pub_use_through_cycle_no_transitive_w027() {
     verify = "a dotted import path names the file with .spec appended"
 )]
 fn a_dotted_import_path_names_the_file_with_spec_appended() {
-    let dir = setup_project(&[
+    let dir = source_files(&[
         ("api.v2.spec", "term v \"V\" {\n}\n"),
         ("api.spec", "term w \"W\" {\n}\n"),
         (
@@ -711,7 +711,7 @@ fn a_dotted_import_path_names_the_file_with_spec_appended() {
     verify = "import paths match source paths exactly, whatever the file system's case rules"
 )]
 fn import_paths_match_source_paths_exactly() {
-    let dir = setup_project(&[
+    let dir = source_files(&[
         ("types.spec", "term t \"T\" {\n}\n"),
         ("main.spec", "use \"Types\"\n"),
     ]);

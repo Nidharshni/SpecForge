@@ -216,20 +216,16 @@ async fn field_help_answers_on_a_field_name_only() {
 /// client, the directory, and each file's URI and text.
 async fn open_project(
     files: &[(&str, &str)],
-) -> (Session, tempfile::TempDir, Vec<(String, String)>) {
-    let dir = tempfile::TempDir::new().unwrap();
-    let config = json!({
-        "name": "test",
-        "version": "0.1.0",
-        "extensions": ["@specforge/software"],
-    });
-    std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    for (name, text) in files {
-        let path = dir.path().join(name);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, text).unwrap();
-    }
-    let root = dir.path().to_str().unwrap();
+) -> (
+    Session,
+    specforge_project::testing::TestProject,
+    Vec<(String, String)>,
+) {
+    let dir = specforge_project::testing::TestProject::new()
+        .config(|c| c["name"] = "test".into())
+        .enabling(&["@specforge/software"])
+        .files(files);
+    let root = dir.root().to_str().unwrap();
     let (mut client, _) = Session::launch(Some(root), json!({})).await;
     client
         .wait_for_notification("window/logMessage", 5000)
@@ -239,7 +235,7 @@ async fn open_project(
         .await;
     let mut opened = Vec::new();
     for (name, text) in files {
-        let uri = tower_lsp::lsp_types::Url::from_file_path(dir.path().join(name))
+        let uri = tower_lsp::lsp_types::Url::from_file_path(dir.root().join(name))
             .unwrap()
             .to_string();
         client.did_open(&uri, "specforge", text).await;

@@ -1,17 +1,13 @@
-use assert_cmd::Command;
+use crate::support::{Cli, TestProject};
 use predicates::prelude::*;
 use specforge_test_macros::test as specforge_test;
 use std::fs;
-use tempfile::TempDir;
 
-fn setup_project(dir: &std::path::Path) {
-    fs::write(
-        dir.join("specforge.json"),
-        r#"{"name":"test","version":"0.1.0"}"#,
-    )
-    .unwrap();
-    let spec_dir = dir.join("spec");
-    fs::create_dir_all(&spec_dir).unwrap();
+/// The project `specforge init` leaves: a config and an empty `spec/`.
+fn project() -> TestProject {
+    let project = TestProject::new().raw_config(r#"{"name":"test","version":"0.1.0"}"#);
+    fs::create_dir_all(project.root().join("spec")).unwrap();
+    project
 }
 
 fn write_spec(dir: &std::path::Path, name: &str, content: &str) {
@@ -30,9 +26,8 @@ fn write_spec(dir: &std::path::Path, name: &str, content: &str) {
     verify = "files already at target version are skipped with skippedCount incremented"
 )]
 fn migrate_exits_zero_on_current_version_project() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
     // Files without a version header default to current version → skipped
     write_spec(
         root,
@@ -40,16 +35,14 @@ fn migrate_exits_zero_on_current_version_project() {
         "behavior foo \"Foo\" {\n  contract \"does stuff\"\n}\n",
     );
 
-    Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--path", root.to_str().unwrap()])
+    Cli::on(&tmp)
+        .command(&["migrate"])
         .assert()
         .success()
         .stderr(predicate::str::contains("0 migrated, 1 skipped, 0 failed"));
 
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--format=json", "--path", root.to_str().unwrap()])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--format=json"])
         .output()
         .unwrap();
     assert!(output.status.success());
@@ -71,9 +64,8 @@ fn migrate_exits_zero_on_current_version_project() {
     verify = "summary reports migrated, failed, and skipped counts"
 )]
 fn migrate_json_output_contains_summary_fields() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
     // One file per outcome: an old header migrates, a current one is
     // skipped, an unsupported one fails.
     write_spec(
@@ -92,9 +84,8 @@ fn migrate_json_output_contains_summary_fields() {
         "// specforge-format: 99.0\nbehavior future_one \"Future\" {\n  contract \"stuff\"\n}\n",
     );
 
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--format=json", "--path", root.to_str().unwrap()])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--format=json"])
         .output()
         .unwrap();
 
@@ -136,23 +127,16 @@ fn status_of(json: &serde_json::Value, file: &str) -> String {
     verify = "unsupported format version produces E019 with upgrade guidance"
 )]
 fn migrate_unknown_target_version_produces_error() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
     write_spec(
         root,
         "test.spec",
         "behavior foo \"Foo\" {\n  contract \"stuff\"\n}\n",
     );
 
-    Command::cargo_bin("specforge")
-        .unwrap()
-        .args([
-            "migrate",
-            "--target-version=99.0",
-            "--path",
-            root.to_str().unwrap(),
-        ])
+    Cli::on(&tmp)
+        .command(&["migrate", "--target-version=99.0"])
         .assert()
         .code(1)
         .stderr(predicate::str::contains(
@@ -172,17 +156,9 @@ fn migrate_unknown_target_version_produces_error() {
 // owner's code (it used to print E015, @specforge/product's milestone cycle).
 #[test]
 fn migrate_unparseable_target_version_reports_e019() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
-    Command::cargo_bin("specforge")
-        .unwrap()
-        .args([
-            "migrate",
-            "--target-version=not-a-version",
-            "--path",
-            root.to_str().unwrap(),
-        ])
+    let tmp = project();
+    Cli::on(&tmp)
+        .command(&["migrate", "--target-version=not-a-version"])
         .assert()
         .code(1)
         .stderr(predicate::str::contains(
@@ -200,9 +176,8 @@ fn migrate_unparseable_target_version_reports_e019() {
     verify = "header comment format version detected correctly"
 )]
 fn detect_format_version_from_header() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
     write_spec(
         root,
         "current.spec",
@@ -214,9 +189,8 @@ fn detect_format_version_from_header() {
         "// specforge-format: 0.1\nbehavior bar \"Bar\" {\n  contract \"stuff\"\n}\n",
     );
 
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--format=json", "--path", root.to_str().unwrap()])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--format=json"])
         .output()
         .unwrap();
     assert!(output.status.success());
@@ -243,9 +217,8 @@ fn detect_format_version_from_header() {
     verify = "missing format version treated as the current version"
 )]
 fn missing_version_header_defaults_to_current() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
     write_spec(
         root,
         "test.spec",
@@ -253,9 +226,8 @@ fn missing_version_header_defaults_to_current() {
     );
 
     // No header = current version → skipped
-    Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--format=json", "--path", root.to_str().unwrap()])
+    Cli::on(&tmp)
+        .command(&["migrate", "--format=json"])
         .output()
         .map(|o| {
             let stdout = String::from_utf8(o.stdout).unwrap();
@@ -274,15 +246,13 @@ fn missing_version_header_defaults_to_current() {
     verify = "unsupported format version produces E019 with upgrade guidance"
 )]
 fn unsupported_version_in_header() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
     let original = "// specforge-format: 99.0\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n";
     write_spec(root, "test.spec", original);
 
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--format=json", "--path", root.to_str().unwrap()])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--format=json"])
         .output()
         .unwrap();
 
@@ -309,18 +279,16 @@ fn unsupported_version_in_header() {
     verify = "files already at target version are skipped with skippedCount incremented"
 )]
 fn files_at_target_version_are_skipped() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
     write_spec(
         root,
         "test.spec",
         "// specforge-format: 1.0\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n",
     );
 
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--format=json", "--path", root.to_str().unwrap()])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--format=json"])
         .output()
         .unwrap();
 
@@ -336,6 +304,35 @@ fn files_at_target_version_are_skipped() {
     );
 }
 
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "migrate leaves a nested project's files alone"
+)]
+fn migrate_leaves_a_nested_projects_files_alone() {
+    let tmp = project();
+    let root = tmp.root();
+    fs::write(root.join("a.spec"), "term t \"T\" {\n}\n").unwrap();
+    fs::create_dir_all(root.join("sub")).unwrap();
+    fs::write(root.join("sub/specforge.json"), "{}").unwrap();
+    fs::write(root.join("sub/c.spec"), "term u \"U\" {\n}\n").unwrap();
+
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--dry-run", "--format=json"])
+        .output()
+        .unwrap();
+
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["files_skipped"], 1, "{json}");
+    let files: Vec<&str> = json["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["file_path"].as_str().unwrap())
+        .collect();
+    assert_eq!(files.len(), 1, "{json}");
+    assert!(files[0].ends_with("/a.spec"), "{json}");
+}
+
 // C2: Backup created before modification (simulated with version 0.1 if we had a transform)
 // Since v1 is current and no older versions exist yet, we test the backup mechanism
 // by using a file that requires header addition.
@@ -344,19 +341,14 @@ fn files_at_target_version_are_skipped() {
     verify = "backup created before modification"
 )]
 fn backup_created_before_modification() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
 
     // A file with version 0.1 (older than current) will need migration
     let original = "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n";
     write_spec(root, "test.spec", original);
 
-    Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--path", root.to_str().unwrap()])
-        .assert()
-        .success();
+    Cli::on(&tmp).command(&["migrate"]).assert().success();
 
     // Backup should exist with original content
     let bak_path = root.join("spec/test.spec.bak");
@@ -371,9 +363,8 @@ fn backup_created_before_modification() {
 // C3: Atomic write via temp+rename — no .spec.tmp remains
 #[test]
 fn no_tmp_file_remains_after_migration() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
 
     write_spec(
         root,
@@ -381,11 +372,7 @@ fn no_tmp_file_remains_after_migration() {
         "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n",
     );
 
-    Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--path", root.to_str().unwrap()])
-        .assert()
-        .success();
+    Cli::on(&tmp).command(&["migrate"]).assert().success();
 
     assert!(
         !root.join("spec/test.spec.tmp").exists(),
@@ -406,9 +393,8 @@ fn no_tmp_file_remains_after_migration() {
     verify = "--no-backup skips backup creation"
 )]
 fn no_backup_flag_skips_backup_creation() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
 
     write_spec(
         root,
@@ -416,9 +402,8 @@ fn no_backup_flag_skips_backup_creation() {
         "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n",
     );
 
-    Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--no-backup", "--path", root.to_str().unwrap()])
+    Cli::on(&tmp)
+        .command(&["migrate", "--no-backup"])
         .assert()
         .success();
 
@@ -443,16 +428,14 @@ fn no_backup_flag_skips_backup_creation() {
     verify = "dry-run shows unified diff without modifying files"
 )]
 fn dry_run_shows_diff_without_modifying_files() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
 
     let original = "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n";
     write_spec(root, "test.spec", original);
 
-    Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--dry-run", "--path", root.to_str().unwrap()])
+    Cli::on(&tmp)
+        .command(&["migrate", "--dry-run"])
         .assert()
         .success()
         .stdout(predicate::str::contains("---"))
@@ -476,9 +459,8 @@ fn dry_run_shows_diff_without_modifying_files() {
     verify = "each file diff labeled with file path"
 )]
 fn diff_uses_posix_prefix_convention() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
 
     write_spec(
         root,
@@ -486,9 +468,8 @@ fn diff_uses_posix_prefix_convention() {
         "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n",
     );
 
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--dry-run", "--path", root.to_str().unwrap()])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--dry-run"])
         .output()
         .unwrap();
 
@@ -523,9 +504,8 @@ fn diff_uses_posix_prefix_convention() {
     verify = "json format diff produces structured output with file-level entries"
 )]
 fn dry_run_json_produces_structured_diff() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
 
     write_spec(
         root,
@@ -533,15 +513,8 @@ fn dry_run_json_produces_structured_diff() {
         "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n",
     );
 
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args([
-            "migrate",
-            "--dry-run",
-            "--format=json",
-            "--path",
-            root.to_str().unwrap(),
-        ])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--dry-run", "--format=json"])
         .output()
         .unwrap();
 
@@ -568,28 +541,22 @@ fn dry_run_json_produces_structured_diff() {
     verify = "restores migrated files from .bak backups"
 )]
 fn rollback_restores_from_bak_files() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
 
     let original = "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n";
     write_spec(root, "test.spec", original);
 
     // Migrate first (creates .bak)
-    Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--path", root.to_str().unwrap()])
-        .assert()
-        .success();
+    Cli::on(&tmp).command(&["migrate"]).assert().success();
 
     // Verify migration happened
     let migrated = fs::read_to_string(root.join("spec/test.spec")).unwrap();
     assert!(migrated.contains("1.0"), "file should be migrated");
 
     // Now rollback
-    Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--rollback", "--path", root.to_str().unwrap()])
+    Cli::on(&tmp)
+        .command(&["migrate", "--rollback"])
         .assert()
         .success();
 
@@ -613,33 +580,21 @@ fn rollback_restores_from_bak_files() {
     verify = "missing .bak file produces warning and skips"
 )]
 fn rollback_missing_bak_skips() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
 
     write_spec(
         root,
         "test.spec",
         "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n",
     );
-    Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--path", root.to_str().unwrap()])
-        .assert()
-        .success();
+    Cli::on(&tmp).command(&["migrate"]).assert().success();
     let migrated = fs::read_to_string(root.join("spec/test.spec")).unwrap();
     // The backup the record names is gone.
     fs::remove_file(root.join("spec/test.spec.bak")).unwrap();
 
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args([
-            "migrate",
-            "--rollback",
-            "--format=json",
-            "--path",
-            root.to_str().unwrap(),
-        ])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--rollback", "--format=json"])
         .output()
         .unwrap();
 
@@ -656,9 +611,8 @@ fn rollback_missing_bak_skips() {
     );
 
     // The human output shows the same warning.
-    Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--rollback", "--path", root.to_str().unwrap()])
+    Cli::on(&tmp)
+        .command(&["migrate", "--rollback"])
         .assert()
         .success()
         .stderr(predicate::str::contains("warning:"))
@@ -679,9 +633,8 @@ fn rollback_missing_bak_skips() {
 )]
 fn rollback_failure_isolation() {
     use std::os::unix::fs::PermissionsExt;
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
 
     let original_a = "// specforge-format: 0.1\nbehavior a \"A\" {\n  contract \"a\"\n}\n";
     let original_b = "// specforge-format: 0.1\nbehavior b \"B\" {\n  contract \"b\"\n}\n";
@@ -689,11 +642,7 @@ fn rollback_failure_isolation() {
     write_spec(root, "b.spec", original_b);
 
     // Migrate both
-    Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--path", root.to_str().unwrap()])
-        .assert()
-        .success();
+    Cli::on(&tmp).command(&["migrate"]).assert().success();
 
     let migrated_a = fs::read_to_string(root.join("spec/a.spec")).unwrap();
     assert_ne!(migrated_a, original_a);
@@ -707,15 +656,8 @@ fn rollback_failure_isolation() {
     }
 
     // Rollback — a fails, b is still restored
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args([
-            "migrate",
-            "--rollback",
-            "--format=json",
-            "--path",
-            root.to_str().unwrap(),
-        ])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--rollback", "--format=json"])
         .output()
         .unwrap();
     fs::set_permissions(&bak_a, fs::Permissions::from_mode(0o644)).unwrap();
@@ -763,9 +705,8 @@ fn rollback_failure_isolation() {
     verify = "files migrated from source to target version"
 )]
 fn full_pipeline_migration() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
 
     let files = [
         (
@@ -786,9 +727,8 @@ fn full_pipeline_migration() {
         write_spec(root, name, content);
     }
 
-    Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--path", root.to_str().unwrap()])
+    Cli::on(&tmp)
+        .command(&["migrate"])
         .assert()
         .success()
         .stderr(predicate::str::contains("3 migrated"));
@@ -809,9 +749,8 @@ fn full_pipeline_migration() {
     verify = "files already at target version are skipped with skippedCount incremented"
 )]
 fn double_migrate_is_idempotent() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
 
     write_spec(
         root,
@@ -820,9 +759,8 @@ fn double_migrate_is_idempotent() {
     );
 
     // First migration
-    Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--path", root.to_str().unwrap()])
+    Cli::on(&tmp)
+        .command(&["migrate"])
         .assert()
         .success()
         .stderr(predicate::str::contains("1 migrated"));
@@ -830,9 +768,8 @@ fn double_migrate_is_idempotent() {
     let after_first = fs::read_to_string(root.join("spec/test.spec")).unwrap();
 
     // Second migration — should skip
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--format=json", "--path", root.to_str().unwrap()])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--format=json"])
         .output()
         .unwrap();
     assert!(output.status.success());
@@ -855,17 +792,15 @@ fn double_migrate_is_idempotent() {
     verify = "failure in one file does not block others"
 )]
 fn failure_in_one_file_does_not_block_others() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
     let good = "// specforge-format: 0.1\nbehavior good \"Good\" {\n  contract \"ok\"\n}\n";
     let bad = "// specforge-format: 9.0\nbehavior bad \"Bad\" {\n  contract \"ok\"\n}\n";
     write_spec(root, "good.spec", good);
     write_spec(root, "bad.spec", bad);
 
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--format=json", "--path", root.to_str().unwrap()])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--format=json"])
         .output()
         .unwrap();
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
@@ -900,9 +835,8 @@ fn failure_in_one_file_does_not_block_others() {
 // H3b: JSON summary output
 #[test]
 fn json_summary_contains_results_and_backups() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
 
     write_spec(
         root,
@@ -910,9 +844,8 @@ fn json_summary_contains_results_and_backups() {
         "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n",
     );
 
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--format=json", "--path", root.to_str().unwrap()])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--format=json"])
         .output()
         .unwrap();
 
@@ -933,18 +866,16 @@ fn json_summary_contains_results_and_backups() {
     verify = "migrate --format json prints the migration document specforge.migrate answers, with files_written"
 )]
 fn migrate_json_is_the_migration_document() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
     write_spec(
         root,
         "old.spec",
         "// specforge-format: 0.1\nbehavior old_one \"Old\" {\n  contract \"stuff\"\n}\n",
     );
 
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--format=json", "--path", root.to_str().unwrap()])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--format=json"])
         .output()
         .unwrap();
 
@@ -972,12 +903,9 @@ fn migrate_json_is_the_migration_document() {
 
 /// `specforge check --format json` over the project at `root`: the exit code
 /// and the diagnostics it reports.
-fn check_json(root: &std::path::Path) -> (Option<i32>, Vec<serde_json::Value>) {
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["check", "--format", "json"])
-        .arg("--path")
-        .arg(root)
+fn check_json(project: &TestProject) -> (Option<i32>, Vec<serde_json::Value>) {
+    let output = Cli::on(project)
+        .command(&["check", "--format", "json"])
         .output()
         .unwrap();
     let diagnostics = serde_json::from_slice(&output.stdout).unwrap_or_else(|e| {
@@ -999,9 +927,8 @@ fn reported<'a>(diagnostics: &'a [serde_json::Value], code: &str) -> Vec<&'a ser
     verify = "older format version detected and reported as I007"
 )]
 fn older_format_version_produces_i007() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
     write_spec(
         root,
         "old.spec",
@@ -1018,7 +945,7 @@ fn older_format_version_produces_i007() {
         "behavior baz \"Baz\" {\n  contract \"x\"\n}\n",
     );
 
-    let (code, diagnostics) = check_json(root);
+    let (code, diagnostics) = check_json(&tmp);
 
     // `check` reports the older file once, on its header line; the current
     // file and the one with no header report nothing. It is an info: the
@@ -1037,12 +964,8 @@ fn older_format_version_produces_i007() {
     assert!(reported(&diagnostics, "E019").is_empty(), "{diagnostics:?}");
 
     // Migrating the file clears it: the header is current.
-    Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--path", root.to_str().unwrap()])
-        .assert()
-        .success();
-    let (code, diagnostics) = check_json(root);
+    Cli::on(&tmp).command(&["migrate"]).assert().success();
+    let (code, diagnostics) = check_json(&tmp);
     assert_eq!(code, Some(0), "{diagnostics:?}");
     assert!(reported(&diagnostics, "I007").is_empty(), "{diagnostics:?}");
 }
@@ -1053,9 +976,8 @@ fn older_format_version_produces_i007() {
 )]
 fn detect_format_version_contract() {
     // Requires (spec_file_available): .spec files are being compiled.
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
     write_spec(
         root,
         "older.spec",
@@ -1072,7 +994,7 @@ fn detect_format_version_contract() {
         "// specforge-format: abc\nbehavior garbled_one \"Garbled\" {\n  contract \"x\"\n}\n",
     );
 
-    let (code, diagnostics) = check_json(root);
+    let (code, diagnostics) = check_json(&tmp);
 
     // version_mismatch_reported: I007 for the older file.
     let i007 = reported(&diagnostics, "I007");
@@ -1098,11 +1020,8 @@ fn detect_format_version_contract() {
     assert_eq!(code, Some(1), "an unsupported format version fails check");
 
     // parsing_continues: every file is still in the graph.
-    let export = Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["export", "--format", "graph", "--no-schema"])
-        .arg("--path")
-        .arg(root)
+    let export = Cli::on(&tmp)
+        .command(&["export", "--format", "graph", "--no-schema"])
         .output()
         .unwrap();
     let graph: serde_json::Value = serde_json::from_slice(&export.stdout).unwrap();
@@ -1120,16 +1039,15 @@ fn detect_format_version_contract() {
 fn a_file_with_no_header_reports_no_version_diagnostic() {
     // Almost every file has none (no file of this repository's own specs
     // carries a header): none is the current version, so nothing to report.
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
     write_spec(
         root,
         "bare.spec",
         "behavior baz \"Baz\" {\n  contract \"x\"\n}\n",
     );
 
-    let (code, diagnostics) = check_json(root);
+    let (code, diagnostics) = check_json(&tmp);
 
     assert_eq!(code, Some(0), "{diagnostics:?}");
     assert!(reported(&diagnostics, "I007").is_empty(), "{diagnostics:?}");
@@ -1145,9 +1063,8 @@ fn a_file_with_no_header_reports_no_version_diagnostic() {
     verify = "Migrate Spec Files In Place: in-place migration holds — semantic_preservation"
 )]
 fn migrate_in_place_contract() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
 
     // Requires: files exist, valid target version
     write_spec(
@@ -1157,9 +1074,8 @@ fn migrate_in_place_contract() {
     );
 
     // Ensures: files at target, summary emitted, complete event
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--format=json", "--path", root.to_str().unwrap()])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--format=json"])
         .output()
         .unwrap();
 
@@ -1186,9 +1102,8 @@ fn migrate_in_place_contract() {
     verify = "summary reports migrated, failed, and skipped counts"
 )]
 fn summary_reports_all_three_counts() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
 
     // One file to migrate, one already at current
     write_spec(
@@ -1202,9 +1117,8 @@ fn summary_reports_all_three_counts() {
         "// specforge-format: 1.0\nbehavior cur \"Cur\" {\n  contract \"cur\"\n}\n",
     );
 
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--format=json", "--path", root.to_str().unwrap()])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--format=json"])
         .output()
         .unwrap();
 
@@ -1225,9 +1139,8 @@ fn summary_reports_all_three_counts() {
     verify = "diff format is compatible with patch(1)"
 )]
 fn diff_format_compatible_with_patch() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
 
     write_spec(
         root,
@@ -1235,9 +1148,8 @@ fn diff_format_compatible_with_patch() {
         "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n",
     );
 
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--dry-run", "--path", root.to_str().unwrap()])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--dry-run"])
         .output()
         .unwrap();
 
@@ -1287,9 +1199,8 @@ fn diff_format_compatible_with_patch() {
     verify = "failure in one file does not block diff generation for others"
 )]
 fn dry_run_failure_isolation() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
     write_spec(
         root,
         "good.spec",
@@ -1300,17 +1211,10 @@ fn dry_run_failure_isolation() {
         "bad.spec",
         "// specforge-format: 9.0\nbehavior bad \"Bad\" {\n  contract \"ok\"\n}\n",
     );
-    let before = crate::written::files_under(root);
+    let before = crate::support::written::files_under(root);
 
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args([
-            "migrate",
-            "--dry-run",
-            "--format=json",
-            "--path",
-            root.to_str().unwrap(),
-        ])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--dry-run", "--format=json"])
         .output()
         .unwrap();
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
@@ -1326,7 +1230,7 @@ fn dry_run_failure_isolation() {
     );
     assert_eq!(json["files_failed"], 1, "{json}");
     assert_eq!(
-        crate::written::changed_since(root, &before),
+        crate::support::written::changed_since(root, &before),
         Vec::<String>::new(),
         "a dry run writes nothing"
     );
@@ -1337,9 +1241,8 @@ fn dry_run_failure_isolation() {
     verify = "Generate Migration Diff: migration diff generation holds — spec_files_available, dry_run_flag_set, diff_produced, no_files_modified, migration_diff_generated_emitted"
 )]
 fn migration_diff_contract() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
 
     let original = "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n";
     write_spec(root, "test.spec", original);
@@ -1347,15 +1250,8 @@ fn migration_diff_contract() {
     // Requires: files available, dry-run flag set
     // Ensures: diff produced, no files modified, event emitted
 
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args([
-            "migrate",
-            "--dry-run",
-            "--format=json",
-            "--path",
-            root.to_str().unwrap(),
-        ])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--dry-run", "--format=json"])
         .output()
         .unwrap();
 
@@ -1389,19 +1285,14 @@ fn migration_diff_contract() {
     verify = "restore is atomic per file"
 )]
 fn rollback_restore_is_atomic() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
 
     let original = "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n";
     write_spec(root, "test.spec", original);
 
     // Migrate
-    Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--path", root.to_str().unwrap()])
-        .assert()
-        .success();
+    Cli::on(&tmp).command(&["migrate"]).assert().success();
 
     let migrated = fs::read_to_string(root.join("spec/test.spec")).unwrap();
 
@@ -1410,15 +1301,8 @@ fn rollback_restore_is_atomic() {
     // touching the target; a direct write would overwrite it.
     let blocker = root.join("spec/test.spec.restore.tmp");
     fs::create_dir(&blocker).unwrap();
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args([
-            "migrate",
-            "--rollback",
-            "--format=json",
-            "--path",
-            root.to_str().unwrap(),
-        ])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--rollback", "--format=json"])
         .output()
         .unwrap();
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
@@ -1432,9 +1316,8 @@ fn rollback_restore_is_atomic() {
 
     // Unblocked, the restore completes and leaves no temp file behind.
     fs::remove_dir(&blocker).unwrap();
-    Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--rollback", "--path", root.to_str().unwrap()])
+    Cli::on(&tmp)
+        .command(&["migrate", "--rollback"])
         .assert()
         .success();
     assert!(
@@ -1450,9 +1333,8 @@ fn rollback_restore_is_atomic() {
     verify = "summary reports restored, skipped, and failed counts"
 )]
 fn rollback_summary_counts() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
 
     write_spec(
         root,
@@ -1465,25 +1347,14 @@ fn rollback_summary_counts() {
         "// specforge-format: 0.1\nbehavior c \"C\" {\n  contract \"c\"\n}\n",
     );
 
-    Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--path", root.to_str().unwrap()])
-        .assert()
-        .success();
+    Cli::on(&tmp).command(&["migrate"]).assert().success();
     // c.spec is edited after the migration: a rollback leaves it as it is.
     let c = root.join("spec/c.spec");
     let edited = format!("{}// edited\n", fs::read_to_string(&c).unwrap());
     fs::write(&c, &edited).unwrap();
 
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args([
-            "migrate",
-            "--rollback",
-            "--format=json",
-            "--path",
-            root.to_str().unwrap(),
-        ])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--rollback", "--format=json"])
         .output()
         .unwrap();
 
@@ -1509,19 +1380,14 @@ fn rollback_summary_counts() {
     verify = "Rollback Failed Migration: migration rollback holds — migration_recorded, files_restored, edited_files_kept, rollback_event_emitted, backup_file_preservation"
 )]
 fn rollback_contract() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
 
     let original = "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n";
     write_spec(root, "test.spec", original);
 
     // Requires: migration_started (backups exist)
-    Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--path", root.to_str().unwrap()])
-        .assert()
-        .success();
+    Cli::on(&tmp).command(&["migrate"]).assert().success();
 
     assert!(
         root.join("spec/test.spec.bak").exists(),
@@ -1529,15 +1395,8 @@ fn rollback_contract() {
     );
 
     // Ensures: files restored, event emitted
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args([
-            "migrate",
-            "--rollback",
-            "--format=json",
-            "--path",
-            root.to_str().unwrap(),
-        ])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--rollback", "--format=json"])
         .output()
         .unwrap();
 
@@ -1563,32 +1422,22 @@ fn rollback_contract() {
 // Phase Q: Remaining uncovered verify statements
 // ===================================================================
 
-use crate::written::{changed_since, files_under, files_written};
+use crate::support::written::{changed_since, files_under, files_written};
 
 #[specforge_test(
     behavior = "migrate_spec_files_in_place",
     verify = "migrate --format json lists each migrated file and its backup in files_written"
 )]
 fn migrate_json_lists_each_file_and_its_backup() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
     let old = "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n";
     write_spec(root, "a.spec", old);
     write_spec(root, "b.spec", &old.replace("foo", "bar"));
     let migrate = |extra: &[&str]| -> serde_json::Value {
-        let output = Command::cargo_bin("specforge")
-            .unwrap()
-            .args([
-                "migrate",
-                "--path",
-                root.to_str().unwrap(),
-                "--format",
-                "json",
-            ])
-            .args(extra)
-            .output()
-            .unwrap();
+        let mut args = vec!["migrate", "--format", "json"];
+        args.extend(extra);
+        let output = Cli::on(&tmp).command(&args).output().unwrap();
         serde_json::from_slice(&output.stdout)
             .unwrap_or_else(|e| panic!("not JSON ({e}): {output:?}"))
     };
@@ -1629,24 +1478,16 @@ fn migrate_json_lists_each_file_and_its_backup() {
 /// there (the summary's own list stays gone, plan 14 D4).
 #[test]
 fn migrate_json_diagnostics_are_the_configs_problems() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
     write_spec(
         root,
         "test.spec",
         "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n",
     );
 
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args([
-            "migrate",
-            "--dry-run",
-            "--format=json",
-            "--path",
-            root.to_str().unwrap(),
-        ])
+    let output = Cli::on(&tmp)
+        .command(&["migrate", "--dry-run", "--format=json"])
         .output()
         .unwrap();
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
@@ -1657,18 +1498,16 @@ fn migrate_json_diagnostics_are_the_configs_problems() {
 /// that `patch -p1` applies it there (plan 14 D14).
 #[test]
 fn dry_run_diff_labels_are_relative_to_the_project_root() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
     write_spec(
         root,
         "test.spec",
         "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n",
     );
 
-    let text = Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--dry-run", "--path", root.to_str().unwrap()])
+    let text = Cli::on(&tmp)
+        .command(&["migrate", "--dry-run"])
         .output()
         .unwrap();
     let stdout = String::from_utf8(text.stdout).unwrap();
@@ -1677,15 +1516,8 @@ fn dry_run_diff_labels_are_relative_to_the_project_root() {
     assert_eq!(lines.next(), Some("+++ b/spec/test.spec"), "{stdout}");
 
     // MCP and --format json carry the same text.
-    let json = Command::cargo_bin("specforge")
-        .unwrap()
-        .args([
-            "migrate",
-            "--dry-run",
-            "--format=json",
-            "--path",
-            root.to_str().unwrap(),
-        ])
+    let json = Cli::on(&tmp)
+        .command(&["migrate", "--dry-run", "--format=json"])
         .output()
         .unwrap();
     let json: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
@@ -1704,19 +1536,14 @@ fn dry_run_diff_labels_are_relative_to_the_project_root() {
     verify = "structural equivalence verified between pre and post graphs"
 )]
 fn a_migration_of_an_entity_bearing_project_prints_only_the_summary() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
-    setup_project(root);
+    let tmp = project();
+    let root = tmp.root();
     write_spec(
         root,
         "test.spec",
         "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n",
     );
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--path", root.to_str().unwrap()])
-        .output()
-        .unwrap();
+    let output = Cli::on(&tmp).command(&["migrate"]).output().unwrap();
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stderr}");
     assert_eq!(
@@ -1733,8 +1560,8 @@ fn a_migration_of_an_entity_bearing_project_prints_only_the_summary() {
     verify = "post-migration check runs automatically"
 )]
 fn a_format_only_migration_passes_silently() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
+    let tmp = TestProject::new().without_config();
+    let root = tmp.root();
     fs::write(
         root.join("specforge.json"),
         r#"{"name":"test","version":"0.1.0","extensions":["@specforge/software"]}"#,
@@ -1745,11 +1572,7 @@ fn a_format_only_migration_passes_silently() {
         "test.spec",
         "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n  invariants [bar]\n}\n\ninvariant bar \"Bar\" {\n  guarantee \"holds\"\n}\n",
     );
-    let output = Command::cargo_bin("specforge")
-        .unwrap()
-        .args(["migrate", "--path", root.to_str().unwrap()])
-        .output()
-        .unwrap();
+    let output = Cli::on(&tmp).command(&["migrate"]).output().unwrap();
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(output.status.code(), Some(0), "{stderr}");
     assert_eq!(stderr.trim(), "1 migrated, 0 skipped, 0 failed");
@@ -1772,19 +1595,19 @@ const OLD: &str = "// specforge-format: 0.9\nbehavior alpha \"Alpha\" {\n}\n";
 )]
 fn migrate_refuses_a_config_that_does_not_say_which_files_are_its_sources() {
     for config in crate::format::HIDES_SOURCES {
-        let tmp = TempDir::new().unwrap();
-        let root = tmp.path();
+        let tmp = TestProject::new().without_config();
+        let root = tmp.root();
         crate::format::project_with_config(root, config);
         fs::write(root.join("spec/a.spec"), OLD).unwrap();
         fs::write(root.join("vendor/v.spec"), OLD.replace("alpha", "vend")).unwrap();
-        let before = crate::written::files_under(root);
+        let before = crate::support::written::files_under(root);
 
         for args in [&["migrate"][..], &["migrate", "--dry-run"][..]] {
-            let (code, json) = crate::format::json_of(root, args);
+            let (code, json) = crate::format::json_of(&tmp, args);
             assert_eq!(code, Some(1), "{config} {args:?}: {json}");
             assert_eq!(json["code"], "config_invalid", "{config} {args:?}: {json}");
             assert_eq!(
-                crate::written::files_under(root),
+                crate::support::written::files_under(root),
                 before,
                 "{config} {args:?}: no rewrite, no .bak, no migration record"
             );
@@ -1797,12 +1620,12 @@ fn migrate_refuses_a_config_that_does_not_say_which_files_are_its_sources() {
     verify = "a problem in specforge.json the migration goes around is an E069 in its document and fails it"
 )]
 fn migrate_reports_a_config_problem_it_goes_around() {
-    let tmp = TempDir::new().unwrap();
-    let root = tmp.path();
+    let tmp = TestProject::new().without_config();
+    let root = tmp.root();
     crate::format::project_with_config(root, r#"{"spec_root":"spec","exclude":["["]}"#);
     fs::write(root.join("spec/a.spec"), "behavior alpha \"Alpha\" {\n}\n").unwrap();
 
-    let (code, json) = crate::format::json_of(root, &["migrate", "--dry-run"]);
+    let (code, json) = crate::format::json_of(&tmp, &["migrate", "--dry-run"]);
     assert_eq!(code, Some(1), "{json}");
     assert_eq!(json["ok"], false, "{json}");
     assert_eq!(json["pending"], false, "{json}");

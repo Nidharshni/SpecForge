@@ -5,8 +5,10 @@
 use specforge_common::Diagnostic;
 use specforge_ops::collect::{Consent, Mode, Request};
 use specforge_ops::extension::{self, RemoveRequest, Status};
+use specforge_ops::testing::ScriptedSolver;
 use specforge_ops::view::ProjectView;
 use specforge_project::coverage::RecordedCoverage;
+use specforge_project::testing::compile_at;
 use specforge_project::{EnabledExtension, Environment, ExtensionLoad, Loaded};
 use specforge_test::prelude::*;
 use specforge_wasm::testing::InProcessRuntime;
@@ -96,7 +98,7 @@ fn management_operations_read_the_project_from_their_view() {
     assert_eq!(providers.providers.len(), 1, "{providers:?}");
     assert_eq!(providers.providers[0].alias, "work");
 
-    let report = specforge_ops::doctor::diagnose_with(&view, true);
+    let report = specforge_ops::doctor::diagnose(&view, &ScriptedSolver::ready());
     let failures: Vec<&str> = report
         .about(specforge_ops::doctor::Part::Load)
         .map(|f| f.code.as_str())
@@ -115,7 +117,7 @@ fn management_operations_read_the_project_from_their_view() {
     assert!(listing.locked.is_empty());
     assert_eq!(listing.extensions.len(), 1);
     assert_eq!(
-        specforge_ops::doctor::diagnose_with(&rootless, true).installed_count,
+        specforge_ops::doctor::diagnose(&rootless, &ScriptedSolver::ready()).installed_count,
         0
     );
     let refused = |result: Result<(), specforge_ops::OpError>| {
@@ -130,7 +132,8 @@ fn management_operations_read_the_project_from_their_view() {
                 dry_run: true,
             },
         )
-        .map(drop),
+        .map(drop)
+        .map_err(specforge_ops::Refusal::into_error),
     );
     refused(specforge_ops::infer::progress(&rootless).map(drop));
     refused(specforge_ops::infer::gaps(&rootless).map(drop));
@@ -144,7 +147,8 @@ fn management_operations_read_the_project_from_their_view() {
                 announce: &mut |_, _| {},
             },
         )
-        .map(drop),
+        .map(drop)
+        .map_err(specforge_ops::Refusal::into_error),
     );
     assert!(
         !project.dir.path().join("specforge-report.json").exists(),
@@ -165,10 +169,7 @@ fn the_providers_listing_reports_what_the_environment_registered() {
         ],
     });
     std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    let compiled = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        None,
-    );
+    let compiled = compile_at(dir.path(), None);
 
     let listing = extension::providers(&ProjectView::of(&compiled));
 
@@ -220,10 +221,7 @@ fn the_providers_listing_reads_the_registration() {
         "providers": [{"scheme": "gh", "alias": "work", "extension": "@acme/issues"}],
     });
     std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    let compiled = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        None,
-    );
+    let compiled = compile_at(dir.path(), None);
 
     // specforge.json now says something else entirely.
     std::fs::write(
@@ -262,9 +260,9 @@ fn collect_at_a_root_that_is_no_project_is_no_project() {
     .map(drop)
     .unwrap_err();
 
-    assert_eq!(error.code, "no_project", "{error:?}");
+    assert_eq!(error.error.code, "no_project", "{error:?}");
     assert!(
-        error.message.contains("no specforge project at"),
+        error.error.message.contains("no specforge project at"),
         "{error:?}"
     );
     assert_eq!(
@@ -289,8 +287,8 @@ fn an_extensions_source_is_the_entry_that_loaded_it() {
     std::fs::write(dir.path().join("greet.wasm"), specforge_ops::testing::GREET).unwrap();
 
     // The named entry is not installed (no lock) and fails; the file entry loads it.
-    let compiled = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+    let compiled = compile_at(
+        dir.path(),
         Some(std::sync::Arc::new(specforge_ops::testing::candidates())),
     );
     let view = ProjectView::of(&compiled);

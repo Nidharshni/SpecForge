@@ -40,7 +40,12 @@ fn each_core_tool_schema_advertises_exactly_what_its_handler_reads() {
             .filter(|argument| argument.required)
             .map(|argument| argument.name)
             .collect();
-        required.extend(tool.target().required());
+        required.extend(
+            tool.target()
+                .required()
+                .iter()
+                .map(|argument| argument.name()),
+        );
         let listed: Vec<&str> = schema["required"]
             .as_array()
             .into_iter()
@@ -65,7 +70,10 @@ fn each_core_tool_schema_advertises_exactly_what_its_handler_reads() {
     verify = "each core prompt lists exactly the arguments its handler reads"
 )]
 fn each_core_prompt_lists_exactly_the_arguments_its_handler_reads() {
-    let mut served = crate::support::TestProject::new().serve_components();
+    let mut served = {
+        use crate::support::Serve;
+        crate::support::TestProject::new().serve_components()
+    };
     let mut drift = Vec::new();
     for prompt in specforge_mcp::prompts::CORE_PROMPTS {
         let declared = prompt.arguments();
@@ -195,17 +203,15 @@ fn query_advertises_format_and_coverage() {
 }
 
 #[test]
-fn validate_advertises_severity_filter_and_cache() {
+fn validate_advertises_severity_filter() {
     let tools = advertised_properties();
     let validate = tools
         .get("specforge.validate")
         .expect("validate advertised");
-    for expected in ["severity_filter", "use_cached"] {
-        assert!(
-            validate.iter().any(|p| p == expected),
-            "specforge.validate reads '{expected}' (validate.rs) but does not advertise it"
-        );
-    }
+    assert!(
+        validate.iter().any(|p| p == "severity_filter"),
+        "specforge.validate reads 'severity_filter' (validate.rs) but does not advertise it"
+    );
 }
 
 #[test]

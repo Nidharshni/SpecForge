@@ -706,7 +706,7 @@ fn installed_keyword_cross_file_missing_entity_emits_e003() {
 
 // === end-to-end pipeline: filesystem → resolve → build_graph ===
 
-fn setup_project(files: &[(&str, &str)]) -> tempfile::TempDir {
+fn project_dir(files: &[(&str, &str)]) -> tempfile::TempDir {
     let dir = tempfile::TempDir::new().unwrap();
     for (path, content) in files {
         let full = dir.path().join(path);
@@ -720,7 +720,8 @@ fn setup_project(files: &[(&str, &str)]) -> tempfile::TempDir {
 
 /// The `.spec` files under `dir`, read and parsed as a compile reads them.
 fn parse_dir(dir: &std::path::Path) -> Vec<specforge_graph::SpecFile> {
-    specforge_common::discover_spec_files(dir, &specforge_common::Exclude::default())
+    specforge_common::walk_spec_files(dir, |_| false)
+        .files
         .into_iter()
         .map(|path| {
             let key = path
@@ -746,7 +747,7 @@ fn resolve_and_build(dir: &std::path::Path) -> (Graph, Vec<specforge_common::Dia
     verify = "E003 span covers exactly the unresolved identifier token"
 )]
 fn e003_span_points_at_reference_token() {
-    let dir = setup_project(&[(
+    let dir = project_dir(&[(
         "main.spec",
         r#"
 behavior fulfillment "F" { contract "ships orders" }
@@ -777,7 +778,7 @@ entity order {
 )]
 fn link_entity_references_contract() {
     // all_files_parsed: the references cross files.
-    let dir = setup_project(&[
+    let dir = project_dir(&[
         (
             "a.spec",
             "behavior alpha \"A\" { contract \"first\" }\nbehavior beta \"B\" { contract \"second\" }\n",
@@ -810,7 +811,7 @@ fn link_entity_references_contract() {
     verify = "cross-file duplicate entity ID produces E002 naming the first declaration"
 )]
 fn cross_file_duplicate_entity_id_produces_e002() {
-    let dir = setup_project(&[
+    let dir = project_dir(&[
         (
             "a.spec",
             r#"behavior alpha "Alpha in file A" { contract "first" }"#,
@@ -845,7 +846,7 @@ fn cross_file_duplicate_entity_id_produces_e002() {
     verify = "same ID different kind across files warns W060 with both kinds named"
 )]
 fn same_id_different_kind_across_files_warns_w060() {
-    let dir = setup_project(&[
+    let dir = project_dir(&[
         (
             "a.spec",
             r#"behavior alpha "Alpha behavior" { contract "first" }"#,
@@ -871,7 +872,7 @@ fn same_id_different_kind_across_files_warns_w060() {
 fn end_to_end_resolve_and_build() {
     use specforge_graph::build_graph;
 
-    let dir = setup_project(&[
+    let dir = project_dir(&[
         ("types.spec", r#"behavior alpha "A" { contract "first" }"#),
         (
             "main.spec",
@@ -900,7 +901,7 @@ fn end_to_end_resolve_and_build() {
 fn end_to_end_with_errors() {
     use specforge_graph::build_graph;
 
-    let dir = setup_project(&[(
+    let dir = project_dir(&[(
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" }

@@ -109,7 +109,7 @@ Load order: `product` first (no dependencies), then `software` (optionally depen
 | Type | `type` | no | Data type definition (struct, union, error, command) |
 | Port | `port` | no | Interface contract (hexagonal architecture boundary) |
 
-### Edge Types (14)
+### Edge Types (15)
 
 | Edge Type | Source | Target | Semantics |
 |-----------|--------|--------|-----------|
@@ -123,6 +123,7 @@ Load order: `product` first (no dependencies), then `software` (optionally depen
 | `BehaviorUsesPort` | behavior | port | This behavior uses these port interfaces |
 | `BehaviorEnforcesInvariant` | behavior | invariant | This behavior enforces these invariants |
 | `TypeExtendsType` | type | type | This type extends that type (inheritance) |
+| `PortReferencesType` | port | type | This port names this type in a method parameter or return type |
 | `ExternalRef` | any | URI | This entity links to an external reference |
 | `MilestoneIncludesBehavior` | milestone (product) | behavior | This milestone delivers these behaviors |
 | `ModuleConsumesPort` | module (product) | port | This module consumes these ports |
@@ -172,7 +173,7 @@ Load order: `product` first (no dependencies), then `software` (optionally depen
 ### Notes
 
 - All cross-extension edges use soft references. If `@specforge/software` or `@specforge/product` is not installed, references to their entity kinds produce `I004` diagnostics.
-- The `failure_mode` kind validates `severity` (W051), `occurrence` (W052) and `detection` (W121); it doesn't check a declared RPN against their product.
+- The `failure_mode` kind declares `severity`, `occurrence` and `detection` (and their `post_` forms) as vocabularies (E061); it doesn't check a declared RPN against their product.
 
 ## @specforge/formal
 
@@ -285,13 +286,13 @@ The entity audit identified four redundant entity kinds and one DSL construct th
 | Extension | Entity Kinds | Edge Types | Enhancements | Dependencies |
 |-----------|-------------|------------|--------------|-------------|
 | @specforge/product | 9 | 20 | -- | none |
-| @specforge/software | 5 | 14 | module, milestone | product |
+| @specforge/software | 5 | 15 | module, milestone | product |
 | @specforge/governance | 3 | 11 | -- | software |
-| @specforge/formal | 5 | 12 | behavior, event | software |
+| @specforge/formal | 5 | 10 | behavior, event | software |
 | @specforge/testing | 0 | 0 | 7 entity kinds | software, governance (optional) |
 | @specforge/cargo-test | 0 | 0 | -- | testing |
 | @specforge/vitest | 0 | 0 | -- | testing |
-| **Total (shipped)** | **22** | **57** | -- | -- |
+| **Total (shipped)** | **22** | **56** | -- | -- |
 
 ## Related Documentation
 

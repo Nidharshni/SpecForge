@@ -15,14 +15,18 @@
 //! too, and compared whenever its stamp is unchanged, so such a rewrite is
 //! still seen, and an unchanged file is not reported.
 //!
+//! A batch of changed paths narrows the same comparison
+//! ([`ProjectSession::changes`]): only what the paths reach is compared.
+//!
 //! [`ProjectSession::stale`]: crate::ProjectSession::stale
+//! [`ProjectSession::changes`]: crate::ProjectSession::changes
 
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use crate::inputs::{Changes, SessionInputs};
+use crate::inputs::{Changes, Kind, Reach, SessionInputs};
 
 /// Coarse filesystems record modification times to the second (some to
 /// two); an entry modified this close to when it was stamped is racy.
@@ -146,6 +150,11 @@ impl DiskSnapshot {
             return;
         };
         for key in keys {
+            if inputs.excludes(key) {
+                // No source (any more): a stamp kept would hide its return.
+                self.sources.remove(key);
+                continue;
+            }
             match Entry::stamp(&spec_root.join(key)) {
                 Some(entry) => self.sources.insert(key.clone(), entry),
                 None => self.sources.remove(key),
@@ -161,41 +170,104 @@ impl DiskSnapshot {
             .collect();
     }
 
-    /// What changed on disk since: the sources `inputs` discovers now
-    /// against those recorded, and every recorded input.
-    pub(crate) fn changes(&self, inputs: &SessionInputs) -> Changes {
+    /// What differs from what was read, among `scope`: the sources `inputs`
+    /// discovers now (and those recorded) in each region, and the recorded
+    /// inputs.
+    pub(crate) fn changes(&self, inputs: &SessionInputs, scope: Scope<'_>) -> Changes {
         let Some(spec_root) = inputs.spec_root() else {
             return Changes::default();
         };
-        let discovered = inputs.discover();
+        let everything = [String::new()];
+        let regions: &[String] = match scope {
+            Scope::Everything => &everything,
+            Scope::Reached(reach) => &reach.regions,
+        };
         let mut changes = Changes::default();
         let mut seen = std::collections::BTreeSet::new();
-        for path in &discovered {
-            let key = key(spec_root, path);
-            if !unchanged(path, self.sources.get(&key)) {
-                changes.sources.push(key.clone());
+        for region in regions {
+            let discovered = inputs.discover_at(region);
+            for key in &discovered {
+                if seen.insert(key.clone())
+                    && !unchanged(&spec_root.join(key), self.sources.get(key))
+                {
+                    changes.sources.push(key.clone());
+                }
             }
-            seen.insert(key);
+            // Recorded, and no longer found: deleted (or excluded since).
+            for key in self.sources.keys() {
+                let inside = region.is_empty() || Path::new(key).starts_with(region);
+                if inside && !discovered.contains(key) && seen.insert(key.clone()) {
+                    changes.sources.push(key.clone());
+                }
+            }
         }
-        // Recorded, and no longer found: deleted (or excluded since).
-        changes.sources.extend(
-            self.sources
-                .keys()
-                .filter(|key| !seen.contains(*key))
-                .cloned(),
-        );
+        // A symlinked source a path reached through its target.
+        if let Scope::Reached(reach) = scope {
+            for key in &reach.linked {
+                if seen.insert(key.clone())
+                    && !unchanged(&spec_root.join(key), self.sources.get(key))
+                {
+                    changes.sources.push(key.clone());
+                }
+            }
+        }
         changes.sources.sort();
         changes.sources.dedup();
-        changes.environment = self
-            .environment
-            .iter()
-            .any(|(path, entry)| !unchanged(path, entry.as_ref()));
-        changes.check_inputs = self
-            .checks
-            .iter()
-            .any(|(path, entry)| !unchanged(path, entry.as_ref()));
+        match scope {
+            Scope::Everything => {
+                changes.environment = changed_paths(&self.environment);
+                changes.check_inputs = changed_paths(&self.checks);
+            }
+            Scope::Reached(reach) => {
+                let mut memo: BTreeMap<&Path, bool> = BTreeMap::new();
+                for (path, reached) in &reach.inputs {
+                    for (kind, recorded) in reached {
+                        let table = match kind {
+                            Kind::Environment => &self.environment,
+                            Kind::Check => &self.checks,
+                        };
+                        let moved = *memo.entry(recorded.as_path()).or_insert_with(|| {
+                            !unchanged(recorded, table.get(recorded).and_then(Option::as_ref))
+                        });
+                        if moved {
+                            match kind {
+                                Kind::Environment => changes.environment.push(path.clone()),
+                                Kind::Check => changes.check_inputs.push(path.clone()),
+                            }
+                        }
+                    }
+                }
+                for (path, kind) in &reach.pending {
+                    match kind {
+                        Kind::Environment => changes.environment.push(path.clone()),
+                        Kind::Check => changes.check_inputs.push(path.clone()),
+                    }
+                }
+                for list in [&mut changes.environment, &mut changes.check_inputs] {
+                    list.sort();
+                    list.dedup();
+                }
+            }
+        }
         changes
     }
+}
+
+/// How much of what a session read a comparison covers.
+pub(crate) enum Scope<'r> {
+    /// Every source, every environment and check input.
+    Everything,
+    /// What a batch of changed paths reaches.
+    Reached(&'r Reach),
+}
+
+/// The recorded paths of `table` whose file is not as recorded, sorted.
+fn changed_paths(table: &BTreeMap<PathBuf, Option<Entry>>) -> Vec<PathBuf> {
+    table
+        .iter()
+        .filter(|(path, entry)| !unchanged(path, entry.as_ref()))
+        .map(|(path, _)| path.clone())
+        .collect()
 }
 
 /// A discovered file's key, as the resolver names it.

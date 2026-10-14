@@ -239,7 +239,7 @@ behavior list_mcp_tools "List MCP Tools" {
   verify unit "an extension tool is annotated read-only and is never listed as a mutation"
   verify unit "an extension tool is listed once across recompiles"
   verify unit "an extension tool's declared output_schema is listed as its outputSchema"
-  verify unit "a tool's path and use_cached are declared once, by its target"
+  verify unit "a tool's path is declared once, by its target"
   verify unit "a core tool's spec is derived from its one module: its name, description, effect, arguments, target and reply"
   verify unit "every listed extension tool is the one dispatched under its name, listed once"
 }
@@ -260,13 +260,13 @@ behavior read_mcp_arguments_as_declared "Read MCP Arguments as Declared" {
     absent_is_the_default  "An absent or null argument reads as the default its listing states; a missing required one is refused naming it"
     value_read_by_type     "A value is read by its declared type, a boolean or count also from a string holding one, as extension command tools read them; any other value is invalid input naming the argument"
     undeclared_refused     "An argument neither the entry nor its call target declares is invalid input naming it, with the declared argument it is close to"
-    refusal_names_argument "A core tool's refusal that is about an argument names it: the tool states which argument each of its operation's refusal codes is about"
+    refusal_names_argument "A refusal about a value the caller sent names its argument, whatever its kind: the operation states which field of its request the refusal is about, and the entry maps each field to the argument that sends it"
   }
   contract   """
     Every core MCP tool and prompt MUST read its call's arguments into one
     typed definition from which its listing is derived: a tool's inputSchema
     (each property's type, description, default, enum, minimum and whether
-    it is required, then its target's path and use_cached, with no other
+    it is required, then its target's path, with no other
     property allowed) and a prompt's listed arguments (name, description,
     required). An absent or null argument MUST read as the default the
     listing states, an option as none, a list as empty; a required argument
@@ -274,22 +274,33 @@ behavior read_mcp_arguments_as_declared "Read MCP Arguments as Declared" {
     A value MUST be read by its declared type: a boolean is true or false or
     the string "true" or "false", a count a non-negative integer or a string
     holding one, a string a string, a list a list of strings; an enumerated
-    argument by its option table (name_enumerated_options_once). Any other
+    argument by its option table (name_enumerated_options_once). An agent plan
+    is read as the AgentPlan type, from an object or a string holding its JSON,
+    checked against the schema its listing states. Any other
     value MUST be refused as invalid input naming the argument, with the
     wording extension command tools use. An argument that neither the entry
     nor its call target declares MUST be refused as invalid input naming it,
     with the closest declared name as a suggestion. An argument whose
     default depends on others (specforge.format's write) MUST state no
     default; its description states the rule. An operation's refusal of a
-    core tool's call that is about an argument the caller sent MUST name
-    that argument; every invalid-input refusal names one.
+    core tool's, prompt's or resource's call that rejects a value the caller
+    sent (an invalid value, a name that finds no entity, file or extension,
+    a value that conflicts with what is there) MUST name the argument, or
+    the resource's query key, that sent it; the operation states which field
+    of its request a refusal is about, and no table maps a refusal's code to
+    an argument. A refusal of the project or the environment names none, and
+    neither does a refusal of the arguments as a whole (arguments that are
+    not an object).
   """
   verify unit "a listing is derived from the typed arguments: each argument's type, description, default, enumerated values and whether it is required"
   verify unit "an absent or null argument reads as the default the listing advertises, and a missing required one is refused naming it"
   verify unit "a boolean or count sent as a string is read as one, as an extension command reads it; any other value of the wrong type is refused naming the argument"
   verify unit "an argument neither the tool nor its target declares is refused naming it, with the declared one it is close to"
   verify unit "a prompt reads its arguments by the same rule its listing states"
+  verify unit "an agent plan is read as the AgentPlan type, from an object or a string holding its JSON"
   verify unit "an operation's refusal of a core tool's call names the argument it is about"
+  verify unit "a refusal a value the caller gave earns names that argument, whatever its kind"
+  verify unit "a prompt's or a resource read's refusal names the argument or query key it is about"
 }
 
 behavior list_mcp_prompts "List MCP Prompts" {
@@ -560,7 +571,11 @@ behavior notify_graph_delta_via_mcp "Notify Graph Delta via MCP" {
     the update's GraphDelta, whole: each added and removed node with its
     kind, file and line, each modified node with its changed fields and
     changed aspects, the added and removed edges and the affected files:
-    the delta watch --format json prints. A subscription is to one resource: unsubscribing one keeps the
+    the delta watch --format json prints. An entity that only moved
+    (another file or line) changes the resources that write its place
+    (specforge://graph and specforge://graph/{entity_id}), which are
+    notified, and no other; no specforge/graphChanged is sent for it: the
+    graph did not change. A subscription is to one resource: unsubscribing one keeps the
     others, and the client's subscriptions end with its connection.
     resources/subscribe to a URI the server does not serve is refused as
     resources/read refuses it (not found: -32002, Unknown resource URI);
@@ -570,7 +585,8 @@ behavior notify_graph_delta_via_mcp "Notify Graph Delta via MCP" {
   verify unit "graph_changed notification sent after incremental rebuild"
   verify unit "notification includes GraphDelta payload"
   verify unit "a field-only edit is reported as a modified node"
-  verify unit "moving an entity is not a modification"
+  verify unit "moving an entity is not a modification: no graphChanged is sent"
+  verify unit "a moved entity updates the resources that write its place, and no graphChanged is sent"
   verify unit "unsubscribed clients do not receive notifications"
   verify unit "no notification when no clients subscribed"
   verify unit "clients can subscribe and unsubscribe from delta notifications"
@@ -607,15 +623,24 @@ behavior notify_diagnostics_delta_via_mcp "Notify Diagnostics Delta via MCP" {
     notifications/resources/updated for it and then a
     specforge/diagnosticsChanged notification.
     The notification's params MUST be the DiagnosticsDelta since the
-    previous compilation: the diagnostics added and removed, each presented
-    as every surface presents a diagnostic (present_diagnostics_as_json), so
-    a client can locate it. Clients MUST be able to subscribe and unsubscribe. If
-    no clients are subscribed or the diagnostics are unchanged, the notification
-    MUST be suppressed.
+    previous compilation: the diagnostics the update added and removed, as
+    the project session states them (emit_incremental_diagnostics), then
+    the I017 the server's extension surfaces added and removed, each
+    presented as every surface presents a diagnostic
+    (present_diagnostics_as_json), so a client can locate it: a diagnostic
+    that moved, or changed in any presented part, is removed and added.
+    Clients MUST be able to subscribe and unsubscribe. If no clients are
+    subscribed or the diagnostics are unchanged, the notification MUST be
+    suppressed; while no client hears the diagnostics, no delta is
+    computed.
   """
   verify unit "diagnostics_changed notification sent after validation"
   verify unit "payload includes added and removed diagnostics"
   verify unit "each added or removed diagnostic is presented as every surface presents diagnostics"
+  verify unit "a diagnostic that moved is removed where it was and added where it is"
+  verify unit "a diagnostic whose span changed is removed and added"
+  verify unit "removing one of two identical diagnostics is notified"
+  verify unit "the I017 the extension surfaces add and remove is notified with the update's delta"
   verify unit "unsubscribed clients do not receive notifications"
   verify unit "no notification when diagnostics are unchanged"
   verify contract "Notify Diagnostics Delta via MCP: diagnostics delta MCP notification holds — validation_complete_fired, subscribers_notified, unchanged_suppressed, delta_notified_emitted"
@@ -758,7 +783,12 @@ behavior serve_stateless_mcp_requests "Serve Stateless MCP Requests" {
     the stateless revision. A request whose _meta names a protocol version
     is served on its own: no initialize before it, and nothing a prior
     request said changes its answer; a request without that _meta follows
-    the revision initialize negotiated. server/discover MUST be answered
+    the revision initialize negotiated. A stateless request MUST NOT change
+    what the server serves: a path it names is read for that call only, and
+    a project init creates is not served; what it reads is the project at
+    or above the server's root as it is on disk when it arrives. A
+    connection that sent initialize is a handshake session: its stateless
+    requests read what that session serves. server/discover MUST be answered
     with or without initialize, listing the stateless revisions the server
     speaks and its capabilities. A stateless request missing the version or
     the client capabilities is malformed (-32602); one naming a version the
@@ -778,6 +808,11 @@ behavior serve_stateless_mcp_requests "Serve Stateless MCP Requests" {
   verify unit "ping and resources/subscribe are not stateless methods"
   verify unit "a stateless request after initialize is served under its own revision"
   verify unit "a stateless request's revision ends with the request"
+  verify unit "a stateless request after initialize reads the project the handshake session serves"
+  verify unit "a stateless call's path is read for that call only, whatever tool takes it, and what the server serves is unchanged"
+  verify unit "a stateless init serves nothing it creates"
+  verify unit "a stateless no-project refusal names no call that would serve a project"
+  verify unit "a stateless request is answered as a fresh server answers it, whatever stateless requests came before"
 }
 
 behavior listen_for_mcp_resource_updates "Listen for MCP Resource Updates" {

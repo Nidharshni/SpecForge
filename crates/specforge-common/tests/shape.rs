@@ -751,3 +751,17 @@ fn unchecked_keywords_names_what_violations_ignores() {
             .is_empty()
     );
 }
+
+#[test]
+fn a_coverage_status_is_one_of_the_names_serde_writes() {
+    use specforge_coverage::Status;
+    let expected = json!({"type": "string", "enum": ["covered", "partial", "uncovered"]});
+    assert_eq!(
+        <Status as Shape>::schema(&mut Definitions::default()),
+        expected
+    );
+    for status in [Status::Covered, Status::Partial, Status::Uncovered] {
+        let written = serde_json::to_value(status).unwrap();
+        assert!(expected["enum"].as_array().unwrap().contains(&written));
+    }
+}

@@ -3,101 +3,21 @@
 //! extension declares (ADR 0008). Output, flags and names are the ones the
 //! built-in `product` subcommands had.
 
-use crate::e2e_fixtures::{
-    find_response, mcp_raw_session_in, mcp_request, mcp_session_in, parse_tool_content,
-};
-use assert_cmd::cargo_bin_cmd;
+use crate::support::{Cli, TestProject};
+use specforge_project::testing::specs;
 use specforge_test_macros::test as specforge_test;
-use std::fs;
-use tempfile::TempDir;
 
-pub fn setup_product_project() -> TempDir {
-    let dir = TempDir::new().unwrap();
-
-    let config = serde_json::json!({
-        "name": "test-project",
-        "version": "0.1.0",
-        "extensions": ["@specforge/product"]
-    });
-    fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-
-    fs::write(
-        dir.path().join("spec.spec"),
-        r#"persona dev "Developer" {
-    description "A software developer"
-    status active
-}
-
-channel cli "CLI" {
-    description "Command-line interface"
-    status active
-}
-
-feature f1 "Core Feature" {
-    status proposed
-    priority high
-}
-
-feature f2 "Secondary Feature" {
-    status done
-    priority medium
-    depends_on [f1]
-}
-
-journey j1 "Dev Flow" {
-    persona dev
-    channels [cli]
-    features [f1, f2]
-    description "Developer uses CLI"
-}
-
-module mod1 "Core Module" {
-    features [f1]
-}
-
-milestone m1 "Launch" {
-    status planned
-    features [f1, f2]
-    modules [mod1]
-}
-
-deliverable d1 "CLI App" {
-    artifact_type cli
-    status draft
-    journeys [j1]
-    modules [mod1]
-    milestones [m1]
-}
-
-term specification "Specification" {
-    definition "A formal description of system behavior"
-}
-
-release r1 "Initial Release" {
-    version "1.0.0"
-    status planned
-    deliverables [d1]
-    milestones [m1]
-}
-"#,
-    )
-    .unwrap();
-
-    dir
+pub fn setup_product_project() -> TestProject {
+    TestProject::new()
+        .config(|c| c["name"] = "test-project".into())
+        .enabling(&["@specforge/product"])
+        .file("spec.spec", specs::PRODUCT_COMMANDS)
 }
 
 #[test]
 fn test_product_features_json() {
     let dir = setup_product_project();
-    let mut cmd = cargo_bin_cmd!("specforge");
-    cmd.args([
-        "product",
-        "features",
-        "--path",
-        dir.path().to_str().unwrap(),
-        "--format",
-        "json",
-    ]);
+    let mut cmd = Cli::on(&dir).command(&["product", "features", "--format", "json"]);
     let output = cmd.output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let result: serde_json::Value = serde_json::from_str(&stdout).unwrap();
@@ -107,16 +27,8 @@ fn test_product_features_json() {
 #[test]
 fn test_product_features_filter_status() {
     let dir = setup_product_project();
-    let mut cmd = cargo_bin_cmd!("specforge");
-    cmd.args([
-        "product",
-        "features",
-        "--path",
-        dir.path().to_str().unwrap(),
-        "--status",
-        "proposed",
-        "--format",
-        "json",
+    let mut cmd = Cli::on(&dir).command(&[
+        "product", "features", "--status", "proposed", "--format", "json",
     ]);
     let output = cmd.output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -128,15 +40,7 @@ fn test_product_features_filter_status() {
 #[test]
 fn test_product_milestones_json() {
     let dir = setup_product_project();
-    let mut cmd = cargo_bin_cmd!("specforge");
-    cmd.args([
-        "product",
-        "milestones",
-        "--path",
-        dir.path().to_str().unwrap(),
-        "--format",
-        "json",
-    ]);
+    let mut cmd = Cli::on(&dir).command(&["product", "milestones", "--format", "json"]);
     let output = cmd.output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let result: serde_json::Value = serde_json::from_str(&stdout).unwrap();
@@ -146,16 +50,8 @@ fn test_product_milestones_json() {
 #[test]
 fn test_product_milestone_completion() {
     let dir = setup_product_project();
-    let mut cmd = cargo_bin_cmd!("specforge");
-    cmd.args([
-        "product",
-        "milestone-completion",
-        "m1",
-        "--path",
-        dir.path().to_str().unwrap(),
-        "--format",
-        "json",
-    ]);
+    let mut cmd =
+        Cli::on(&dir).command(&["product", "milestone-completion", "m1", "--format", "json"]);
     let output = cmd.output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let result: serde_json::Value = serde_json::from_str(&stdout).unwrap();
@@ -169,14 +65,11 @@ fn test_product_milestone_completion() {
 #[test]
 fn deliverable_completion_takes_details_as_a_flag() {
     let dir = setup_product_project();
-    let mut cmd = cargo_bin_cmd!("specforge");
-    cmd.args([
+    let mut cmd = Cli::on(&dir).command(&[
         "product",
         "deliverable-completion",
         "d1",
         "--details",
-        "--path",
-        dir.path().to_str().unwrap(),
         "--format",
         "json",
     ]);
@@ -198,16 +91,7 @@ fn deliverable_completion_takes_details_as_a_flag() {
 #[test]
 fn test_product_feature_impact() {
     let dir = setup_product_project();
-    let mut cmd = cargo_bin_cmd!("specforge");
-    cmd.args([
-        "product",
-        "feature-impact",
-        "f1",
-        "--path",
-        dir.path().to_str().unwrap(),
-        "--format",
-        "json",
-    ]);
+    let mut cmd = Cli::on(&dir).command(&["product", "feature-impact", "f1", "--format", "json"]);
     let output = cmd.output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let result: serde_json::Value = serde_json::from_str(&stdout).unwrap();
@@ -224,21 +108,12 @@ fn test_product_feature_impact() {
 fn a_related_feature_is_not_a_dependent_in_the_impact() {
     let dir = setup_product_project();
     // f3 relates to f1 (`features`); f2 depends on it (`depends_on`).
-    fs::write(
-        dir.path().join("related.spec"),
+    dir.write(
+        "related.spec",
         "feature f3 \"Related Feature\" {\n    status proposed\n    features [f1]\n}\n",
-    )
-    .unwrap();
-    let output = cargo_bin_cmd!("specforge")
-        .args([
-            "product",
-            "feature-impact",
-            "f1",
-            "--format",
-            "json",
-            "--path",
-        ])
-        .arg(dir.path())
+    );
+    let output = Cli::on(&dir)
+        .command(&["product", "feature-impact", "f1", "--format", "json"])
         .output()
         .unwrap();
     assert!(output.status.success(), "{output:?}");
@@ -253,16 +128,8 @@ fn a_related_feature_is_not_a_dependent_in_the_impact() {
 #[test]
 fn test_product_feature_dependents() {
     let dir = setup_product_project();
-    let mut cmd = cargo_bin_cmd!("specforge");
-    cmd.args([
-        "product",
-        "feature-dependents",
-        "f1",
-        "--path",
-        dir.path().to_str().unwrap(),
-        "--format",
-        "json",
-    ]);
+    let mut cmd =
+        Cli::on(&dir).command(&["product", "feature-dependents", "f1", "--format", "json"]);
     let output = cmd.output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let result: serde_json::Value = serde_json::from_str(&stdout).unwrap();
@@ -276,15 +143,7 @@ fn test_product_feature_dependents() {
 #[test]
 fn test_product_health() {
     let dir = setup_product_project();
-    let mut cmd = cargo_bin_cmd!("specforge");
-    cmd.args([
-        "product",
-        "health",
-        "--path",
-        dir.path().to_str().unwrap(),
-        "--format",
-        "json",
-    ]);
+    let mut cmd = Cli::on(&dir).command(&["product", "health", "--format", "json"]);
     let output = cmd.output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let result: serde_json::Value = serde_json::from_str(&stdout).unwrap();
@@ -295,15 +154,7 @@ fn test_product_health() {
 #[test]
 fn test_product_modules_json() {
     let dir = setup_product_project();
-    let mut cmd = cargo_bin_cmd!("specforge");
-    cmd.args([
-        "product",
-        "modules",
-        "--path",
-        dir.path().to_str().unwrap(),
-        "--format",
-        "json",
-    ]);
+    let mut cmd = Cli::on(&dir).command(&["product", "modules", "--format", "json"]);
     let output = cmd.output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let result: serde_json::Value = serde_json::from_str(&stdout).unwrap();
@@ -313,15 +164,7 @@ fn test_product_modules_json() {
 #[test]
 fn test_product_terms_json() {
     let dir = setup_product_project();
-    let mut cmd = cargo_bin_cmd!("specforge");
-    cmd.args([
-        "product",
-        "terms",
-        "--path",
-        dir.path().to_str().unwrap(),
-        "--format",
-        "json",
-    ]);
+    let mut cmd = Cli::on(&dir).command(&["product", "terms", "--format", "json"]);
     let output = cmd.output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let result: serde_json::Value = serde_json::from_str(&stdout).unwrap();
@@ -331,15 +174,7 @@ fn test_product_terms_json() {
 #[test]
 fn test_product_releases_json() {
     let dir = setup_product_project();
-    let mut cmd = cargo_bin_cmd!("specforge");
-    cmd.args([
-        "product",
-        "releases",
-        "--path",
-        dir.path().to_str().unwrap(),
-        "--format",
-        "json",
-    ]);
+    let mut cmd = Cli::on(&dir).command(&["product", "releases", "--format", "json"]);
     let output = cmd.output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let result: serde_json::Value = serde_json::from_str(&stdout).unwrap();
@@ -349,15 +184,7 @@ fn test_product_releases_json() {
 #[test]
 fn test_product_personas_json() {
     let dir = setup_product_project();
-    let mut cmd = cargo_bin_cmd!("specforge");
-    cmd.args([
-        "product",
-        "personas",
-        "--path",
-        dir.path().to_str().unwrap(),
-        "--format",
-        "json",
-    ]);
+    let mut cmd = Cli::on(&dir).command(&["product", "personas", "--format", "json"]);
     let output = cmd.output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let result: serde_json::Value = serde_json::from_str(&stdout).unwrap();
@@ -367,15 +194,7 @@ fn test_product_personas_json() {
 #[test]
 fn test_product_channels_json() {
     let dir = setup_product_project();
-    let mut cmd = cargo_bin_cmd!("specforge");
-    cmd.args([
-        "product",
-        "channels",
-        "--path",
-        dir.path().to_str().unwrap(),
-        "--format",
-        "json",
-    ]);
+    let mut cmd = Cli::on(&dir).command(&["product", "channels", "--format", "json"]);
     let output = cmd.output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let result: serde_json::Value = serde_json::from_str(&stdout).unwrap();
@@ -385,16 +204,7 @@ fn test_product_channels_json() {
 #[test]
 fn test_product_journey_coverage() {
     let dir = setup_product_project();
-    let mut cmd = cargo_bin_cmd!("specforge");
-    cmd.args([
-        "product",
-        "journey-coverage",
-        "j1",
-        "--path",
-        dir.path().to_str().unwrap(),
-        "--format",
-        "json",
-    ]);
+    let mut cmd = Cli::on(&dir).command(&["product", "journey-coverage", "j1", "--format", "json"]);
     let output = cmd.output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let result: serde_json::Value = serde_json::from_str(&stdout).unwrap();
@@ -407,16 +217,8 @@ fn test_product_journey_coverage() {
 #[test]
 fn test_product_persona_features() {
     let dir = setup_product_project();
-    let mut cmd = cargo_bin_cmd!("specforge");
-    cmd.args([
-        "product",
-        "persona-features",
-        "dev",
-        "--path",
-        dir.path().to_str().unwrap(),
-        "--format",
-        "json",
-    ]);
+    let mut cmd =
+        Cli::on(&dir).command(&["product", "persona-features", "dev", "--format", "json"]);
     let output = cmd.output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let result: serde_json::Value = serde_json::from_str(&stdout).unwrap();
@@ -429,16 +231,8 @@ fn test_product_persona_features() {
 #[test]
 fn test_product_channel_features() {
     let dir = setup_product_project();
-    let mut cmd = cargo_bin_cmd!("specforge");
-    cmd.args([
-        "product",
-        "channel-features",
-        "cli",
-        "--path",
-        dir.path().to_str().unwrap(),
-        "--format",
-        "json",
-    ]);
+    let mut cmd =
+        Cli::on(&dir).command(&["product", "channel-features", "cli", "--format", "json"]);
     let output = cmd.output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let result: serde_json::Value = serde_json::from_str(&stdout).unwrap();
@@ -451,15 +245,7 @@ fn test_product_channel_features() {
 #[test]
 fn test_product_bulk_status() {
     let dir = setup_product_project();
-    let mut cmd = cargo_bin_cmd!("specforge");
-    cmd.args([
-        "product",
-        "bulk-status",
-        "--path",
-        dir.path().to_str().unwrap(),
-        "--format",
-        "json",
-    ]);
+    let mut cmd = Cli::on(&dir).command(&["product", "bulk-status", "--format", "json"]);
     let output = cmd.output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let result: serde_json::Value = serde_json::from_str(&stdout).unwrap();
@@ -485,14 +271,7 @@ fn test_product_bulk_status() {
 #[test]
 fn test_product_nonexistent_milestone_exits_one() {
     let dir = setup_product_project();
-    let mut cmd = cargo_bin_cmd!("specforge");
-    cmd.args([
-        "product",
-        "milestone-completion",
-        "nonexistent",
-        "--path",
-        dir.path().to_str().unwrap(),
-    ]);
+    let mut cmd = Cli::on(&dir).command(&["product", "milestone-completion", "nonexistent"]);
     cmd.assert().failure();
 }
 
@@ -502,9 +281,8 @@ fn test_product_nonexistent_milestone_exits_one() {
 )]
 fn an_extension_command_prints_what_its_export_returns() {
     let dir = setup_product_project();
-    let path = dir.path().to_str().unwrap();
-    let output = cargo_bin_cmd!("specforge")
-        .args(["product", "milestone-completion", "m1", "--path", path])
+    let output = Cli::on(&dir)
+        .command(&["product", "milestone-completion", "m1"])
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(0));
@@ -515,8 +293,8 @@ fn an_extension_command_prints_what_its_export_returns() {
     );
     assert!(output.stderr.is_empty(), "{output:?}");
 
-    let output = cargo_bin_cmd!("specforge")
-        .args(["product", "milestone-completion", "nope", "--path", path])
+    let output = Cli::on(&dir)
+        .command(&["product", "milestone-completion", "nope"])
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(1));
@@ -530,10 +308,9 @@ fn an_extension_command_prints_what_its_export_returns() {
 #[test]
 fn an_extension_command_has_the_declared_command_line() {
     let dir = setup_product_project();
-    let path = dir.path().to_str().unwrap();
     // `ext:command` names the same command as `ext command`.
-    let output = cargo_bin_cmd!("specforge")
-        .args(["product:features", "--path", path, "--limit", "1"])
+    let output = Cli::on(&dir)
+        .command(&["product:features", "--limit", "1"])
         .output()
         .unwrap();
     assert_eq!(
@@ -545,16 +322,12 @@ fn an_extension_command_has_the_declared_command_line() {
         ["product", "features", "--format", "xml"],
         ["product", "journeys", "--status", "done"],
     ] {
-        let output = cargo_bin_cmd!("specforge")
-            .args(args)
-            .args(["--path", path])
-            .output()
-            .unwrap();
+        let output = Cli::on(&dir).command(&args).output().unwrap();
         assert_eq!(output.status.code(), Some(2), "{args:?}: {output:?}");
     }
     // A name no built-in command or extension has is refused.
-    let output = cargo_bin_cmd!("specforge")
-        .args(["nonesuch", "features", "--path", path])
+    let output = Cli::on(&dir)
+        .command(&["nonesuch", "features"])
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(2));
@@ -566,40 +339,14 @@ fn an_extension_command_has_the_declared_command_line() {
 
 #[specforge_test(
     behavior = "surface_list_features",
-    verify = "status filter reduces result set"
-)]
-fn the_features_command_is_an_mcp_tool_with_its_filters() {
-    let dir = setup_product_project();
-    let call = |id: u64, args: serde_json::Value| {
-        mcp_request(
-            id,
-            "tools/call",
-            serde_json::json!({"name": "specforge.product.features", "arguments": args}),
-        )
-    };
-    let responses = mcp_session_in(
-        &dir,
-        &[
-            call(1, serde_json::json!({})),
-            call(2, serde_json::json!({"status": "done"})),
-        ],
-    );
-    let all = parse_tool_content(find_response(&responses, 1).unwrap());
-    assert_eq!(all["total"], 2, "{all}");
-    let done = parse_tool_content(find_response(&responses, 2).unwrap());
-    assert_eq!(done["total"], 1, "{done}");
-    assert_eq!(done["features"][0]["id"], "f2");
-}
-
-#[specforge_test(
-    behavior = "surface_list_features",
     verify = "pagination offset and limit are respected"
 )]
 fn the_features_command_pages_after_counting() {
     let dir = setup_product_project();
-    let output = cargo_bin_cmd!("specforge")
-        .args(["product", "features", "--offset", "1", "--limit", "1"])
-        .args(["--format", "json", "--path", dir.path().to_str().unwrap()])
+    let output = Cli::on(&dir)
+        .command(&[
+            "product", "features", "--offset", "1", "--limit", "1", "--format", "json",
+        ])
         .output()
         .unwrap();
     let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
@@ -616,9 +363,8 @@ fn the_features_command_pages_after_counting() {
 #[test]
 fn completions_include_the_commands_of_the_project_here() {
     let dir = setup_product_project();
-    let output = cargo_bin_cmd!("specforge")
-        .current_dir(dir.path())
-        .args(["completions", "bash"])
+    let output = Cli::on(&dir)
+        .bare_command(&["completions", "bash"])
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(0), "{output:?}");
@@ -629,10 +375,9 @@ fn completions_include_the_commands_of_the_project_here() {
     );
 
     // Outside a project, the built-ins only.
-    let empty = TempDir::new().unwrap();
-    let output = cargo_bin_cmd!("specforge")
-        .current_dir(empty.path())
-        .args(["completions", "bash"])
+    let empty = TestProject::new().without_config();
+    let output = Cli::on(&empty)
+        .bare_command(&["completions", "bash"])
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(0), "{output:?}");
@@ -641,10 +386,9 @@ fn completions_include_the_commands_of_the_project_here() {
     assert!(!script.contains("specforge__subcmd__product"));
 
     // `--path` names the project from anywhere.
-    let output = cargo_bin_cmd!("specforge")
-        .current_dir(empty.path())
-        .args(["completions", "bash", "--path"])
-        .arg(dir.path())
+    let output = Cli::on(&dir)
+        .command(&["completions", "bash"])
+        .current_dir(empty.root())
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(0), "{output:?}");
@@ -660,10 +404,9 @@ fn completions_include_the_commands_of_the_project_here() {
     verify = "a command given a path that does not exist refuses it as file_not_found"
 )]
 fn completions_refuse_a_path_that_does_not_exist() {
-    let empty = TempDir::new().unwrap();
-    let output = cargo_bin_cmd!("specforge")
-        .current_dir(empty.path())
-        .args(["completions", "bash", "--path", "nope"])
+    let empty = TestProject::new().without_config();
+    let output = Cli::on(&empty)
+        .bare_command(&["completions", "bash", "--path", "nope"])
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(1), "{output:?}");
@@ -674,110 +417,16 @@ fn completions_refuse_a_path_that_does_not_exist() {
     );
 }
 
-/// `requests` after an `initialize` negotiating MCP 2025-06-18, the first
-/// revision with structured content.
-pub fn structured_session(dir: &TempDir, requests: &[String]) -> Vec<serde_json::Value> {
-    let initialize = mcp_request(
-        0,
-        "initialize",
-        serde_json::json!({
-            "protocolVersion": "2025-06-18",
-            "capabilities": {},
-            "clientInfo": {"name": "e2e", "version": "0"}
-        }),
-    );
-    let mut all = vec![initialize];
-    all.extend_from_slice(requests);
-    mcp_raw_session_in(dir, &all)
-}
-
-fn tool_call(id: u64, name: &str, args: serde_json::Value) -> String {
-    mcp_request(
-        id,
-        "tools/call",
-        serde_json::json!({"name": name, "arguments": args}),
-    )
-}
-
-#[specforge_test(
-    behavior = "dispatch_surface_command",
-    verify = "over MCP a command is asked for json and its JSON output is the tool's structured content"
-)]
-fn over_mcp_a_command_answers_json_as_structured_content() {
-    let dir = setup_product_project();
-    let responses = structured_session(
-        &dir,
-        &[
-            mcp_request(1, "tools/list", serde_json::json!({})),
-            tool_call(
-                2,
-                "specforge.product.milestone_completion",
-                serde_json::json!({"milestone": "m1"}),
-            ),
-        ],
-    );
-    // The tool has no format argument: the host always asks for json.
-    let tools = &find_response(&responses, 1).unwrap()["result"]["tools"];
-    let tool = tools
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|t| t["name"] == "specforge.product.milestone_completion")
-        .unwrap();
-    assert!(
-        tool["inputSchema"]["properties"].get("format").is_none(),
-        "{tool}"
-    );
-
-    let response = find_response(&responses, 2).unwrap();
-    let result = &response["result"];
-    assert_eq!(result["isError"], false, "{response}");
-    let structured = &result["structuredContent"];
-    assert_eq!(structured["milestone_id"], "m1", "{response}");
-    assert_eq!(parse_tool_content(response), *structured);
-}
-
-#[specforge_test(
-    behavior = "surface_format_conventions",
-    verify = "an MCP tool call returns the json payload"
-)]
-fn an_mcp_tool_call_returns_the_json_payload() {
-    let dir = setup_product_project();
-    let output = cargo_bin_cmd!("specforge")
-        .args(["product", "health", "--format", "json", "--path"])
-        .arg(dir.path())
-        .output()
-        .unwrap();
-    let cli: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    // Asked for nothing, the tool answers what --format json prints.
-    let responses = mcp_session_in(
-        &dir,
-        &[tool_call(
-            1,
-            "specforge.product.health",
-            serde_json::json!({}),
-        )],
-    );
-    assert_eq!(
-        parse_tool_content(find_response(&responses, 1).unwrap()),
-        cli
-    );
-}
-
 #[specforge_test(
     behavior = "surface_error_handling",
     verify = "CLI errors go to stderr"
 )]
 fn a_command_that_cannot_answer_writes_its_error_to_stderr() {
     let dir = setup_product_project();
-    let path = dir.path().to_str().unwrap();
     let run = |args: &[&str]| {
-        cargo_bin_cmd!("specforge")
-            .args(["product"])
-            .args(args)
-            .args(["--path", path])
-            .output()
-            .unwrap()
+        let mut argv = vec!["product"];
+        argv.extend(args);
+        Cli::on(&dir).command(&argv).output().unwrap()
     };
     // A typo of m1: the nearest milestone is suggested.
     let human = run(&["milestone-completion", "m2"]);
@@ -810,14 +459,10 @@ fn a_command_that_cannot_answer_writes_its_error_to_stderr() {
 )]
 fn under_json_a_usage_error_is_an_invalid_input_object() {
     let dir = setup_product_project();
-    let path = dir.path().to_str().unwrap();
     let run = |args: &[&str]| {
-        cargo_bin_cmd!("specforge")
-            .arg("product")
-            .args(args)
-            .args(["--path", path])
-            .output()
-            .unwrap()
+        let mut argv = vec!["product"];
+        argv.extend(args);
+        Cli::on(&dir).command(&argv).output().unwrap()
     };
     let cases: [(&[&str], serde_json::Value); 5] = [
         (
@@ -886,49 +531,23 @@ fn under_json_a_usage_error_is_an_invalid_input_object() {
     );
 }
 
-#[specforge_test(
-    behavior = "surface_error_handling",
-    verify = "MCP tool errors are isError results carrying the error object"
-)]
-fn over_mcp_an_error_is_an_is_error_result_with_the_object() {
-    let dir = setup_product_project();
-    let responses = structured_session(
-        &dir,
-        &[tool_call(
-            1,
-            "specforge.product.journey_coverage",
-            serde_json::json!({"journey": "j2"}),
-        )],
-    );
-    let response = find_response(&responses, 1).unwrap();
-    let result = &response["result"];
-    assert_eq!(result["isError"], true, "{response}");
-    let expected = serde_json::json!({"code": "ENTITY_NOT_FOUND",
-        "message": "journey 'j2' not found", "entity_id": "j2", "suggestion": "j1"});
-    assert_eq!(parse_tool_content(response), expected);
-    assert_eq!(result["structuredContent"], expected);
-}
-
 /// [`setup_product_project`] with `m1` due in 2000.
-fn setup_overdue_project() -> TempDir {
+fn setup_overdue_project() -> TestProject {
     let dir = setup_product_project();
-    let spec = fs::read_to_string(dir.path().join("spec.spec")).unwrap();
+    let spec = dir.read("spec.spec");
     let spec = spec.replace(
         "    status planned\n    features [f1, f2]",
         "    status planned\n    target_date \"2000-01-01\"\n    features [f1, f2]",
     );
     assert!(spec.contains("2000-01-01"));
-    fs::write(dir.path().join("spec.spec"), spec).unwrap();
+    dir.write("spec.spec", spec);
     dir
 }
 
-fn timeline(dir: &TempDir, extra: &[&str]) -> std::process::Output {
-    let mut cmd = cargo_bin_cmd!("specforge");
-    cmd.args(["product", "milestone-timeline", "--path"])
-        .arg(dir.path())
-        .args(["--format", "json"])
-        .args(extra);
-    cmd.output().unwrap()
+fn timeline(dir: &TestProject, extra: &[&str]) -> std::process::Output {
+    let mut args = vec!["product", "milestone-timeline", "--format", "json"];
+    args.extend(extra);
+    Cli::on(dir).command(&args).output().unwrap()
 }
 
 #[specforge_test(
@@ -953,39 +572,17 @@ fn the_timeline_compares_against_today_unless_as_of_says_otherwise() {
 }
 
 #[specforge_test(
-    behavior = "pe_query_milestone_timeline",
-    verify = "specforge check emits no I058 diagnostics (query-time only)"
-)]
-fn check_reports_no_overdue_milestone() {
-    let dir = setup_overdue_project();
-    let mut cmd = cargo_bin_cmd!("specforge");
-    cmd.current_dir(dir.path()).arg("check");
-    let output = cmd.output().unwrap();
-    let all = format!(
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    // Infos are always reported, so an I058 would be among them.
-    assert!(output.status.code().is_some_and(|c| c <= 1), "{all}");
-    assert!(!all.contains("I058"), "{all}");
-}
-
-#[specforge_test(
     behavior = "dispatch_surface_command",
     verify = "the CommandInput carries what the recorded tests prove, per entity that counts toward coverage"
 )]
 fn milestone_completion_reads_the_projects_recorded_tests() {
-    let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("specforge.json"),
+    let dir = TestProject::new().raw_config(
         serde_json::json!({"name": "p", "version": "0.1.0",
             "extensions": ["@specforge/product", "@specforge/software", "@specforge/testing"]})
         .to_string(),
-    )
-    .unwrap();
-    fs::write(
-        dir.path().join("main.spec"),
+    );
+    dir.write(
+        "main.spec",
         r#"feature f1 "One" {
   status done
 }
@@ -1011,28 +608,17 @@ behavior b2 "B2" {
   verify unit "b2 still works"
 }
 "#,
-    )
-    .unwrap();
-    fs::write(
-        dir.path().join("specforge-report.json"),
+    );
+    dir.write(
+        "specforge-report.json",
         serde_json::json!({"runner": "fixture", "results": {
             "b1": {"tests": [{"name": "t1", "status": "passed", "verify": "b1 works"}]},
             "b2": {"tests": [{"name": "t2", "status": "passed", "verify": "b2 works"}]},
         }})
         .to_string(),
-    )
-    .unwrap();
-    let path = dir.path().to_str().unwrap();
-    let output = cargo_bin_cmd!("specforge")
-        .args([
-            "product",
-            "milestone-completion",
-            "m1",
-            "--format",
-            "json",
-            "--path",
-            path,
-        ])
+    );
+    let output = Cli::on(&dir)
+        .command(&["product", "milestone-completion", "m1", "--format", "json"])
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(0), "{output:?}");
@@ -1045,17 +631,14 @@ behavior b2 "B2" {
 /// A project enabling product, software and testing, whose `f_proven` is
 /// implemented by a proven behavior, `f_half` by one with an unproven
 /// obligation and `f_alone` by none; all three are done.
-fn evidence_project(report: bool) -> TempDir {
-    let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("specforge.json"),
+fn evidence_project(report: bool) -> TestProject {
+    let dir = TestProject::new().raw_config(
         serde_json::json!({"name": "p", "version": "0.1.0",
             "extensions": ["@specforge/product", "@specforge/software", "@specforge/testing"]})
         .to_string(),
-    )
-    .unwrap();
-    fs::write(
-        dir.path().join("main.spec"),
+    );
+    dir.write(
+        "main.spec",
         r#"feature f_proven "Proven" {
   status done
 }
@@ -1079,31 +662,27 @@ behavior b_half "Half" {
   verify unit "still works"
 }
 "#,
-    )
-    .unwrap();
+    );
     if report {
-        fs::write(
-            dir.path().join("specforge-report.json"),
+        dir.write(
+            "specforge-report.json",
             serde_json::json!({"runner": "fixture", "results": {
                 "b_proven": {"tests": [{"name": "t1", "status": "passed", "verify": "works"}]},
                 "b_half": {"tests": [{"name": "t2", "status": "passed", "verify": "works"}]},
             }})
             .to_string(),
-        )
-        .unwrap();
+        );
     }
     dir
 }
 
-fn delivery_evidence(dir: &TempDir) -> serde_json::Value {
-    let output = cargo_bin_cmd!("specforge")
-        .args([
+fn delivery_evidence(dir: &TestProject) -> serde_json::Value {
+    let output = Cli::on(dir)
+        .command(&[
             "analyze",
             "@specforge/product:delivery_evidence",
             "--format",
             "json",
-            "--path",
-            dir.path().to_str().unwrap(),
         ])
         .output()
         .unwrap();

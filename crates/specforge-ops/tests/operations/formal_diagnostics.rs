@@ -1,43 +1,41 @@
-//! The @specforge/formal diagnostics ADR 0040 built, run end to end
-//! through the real binary and the vendored formal component: the
-//! declarative rules and the check-phase pass through `specforge check`,
-//! the analysis passes through `specforge analyze`.
+//! The @specforge/formal diagnostics ADR 0040 built, run end to end over the
+//! vendored formal component: the declarative rules and the check-phase pass
+//! through the check operation, the analysis passes through the analyze
+//! operation.
 
-use std::fs;
-
-use assert_cmd::Command;
+use super::compiled_support::{TestProject, analyzed, check_document};
+use serde_json::Value;
+use specforge_ops::analyze::{AnalyzeOptions, ReportSource};
+use specforge_ops::check::CheckOptions;
 use specforge_test_macros::test as specforge_test;
-use tempfile::TempDir;
-
-#[allow(deprecated)]
-fn specforge_cmd() -> Command {
-    Command::cargo_bin("specforge").unwrap()
-}
 
 /// A project enabling @specforge/formal and its peer @specforge/software,
 /// with `spec` as its one spec file.
-fn project(spec: &str) -> TempDir {
-    project_with(r#"["@specforge/formal", "@specforge/software"]"#, spec)
+fn project(spec: &str) -> TestProject {
+    project_with(&["@specforge/formal", "@specforge/software"], spec)
 }
 
 /// [`project`] with @specforge/testing too, which makes behaviors
 /// testable, so the coverage rule counts them.
-fn tested_project(spec: &str) -> TempDir {
+fn tested_project(spec: &str) -> TestProject {
     project_with(
-        r#"["@specforge/formal", "@specforge/software", "@specforge/testing"]"#,
+        &[
+            "@specforge/formal",
+            "@specforge/software",
+            "@specforge/testing",
+        ],
         spec,
     )
 }
 
-fn project_with(extensions: &str, spec: &str) -> TempDir {
-    let dir = TempDir::new().unwrap();
-    fs::write(
-        dir.path().join("specforge.json"),
-        format!(r#"{{"extensions": {extensions}}}"#),
-    )
-    .unwrap();
-    fs::write(dir.path().join("main.spec"), spec).unwrap();
-    dir
+fn project_with(extensions: &[&str], spec: &str) -> TestProject {
+    TestProject::new()
+        .without_config()
+        .raw_config(format!(
+            r#"{{"extensions": {}}}"#,
+            serde_json::json!(extensions)
+        ))
+        .file("main.spec", spec)
 }
 
 /// One reported diagnostic: its code, message and suggestion.
@@ -48,7 +46,7 @@ struct Finding {
     suggestion: String,
 }
 
-fn finding(d: &serde_json::Value) -> Finding {
+fn finding(d: &Value) -> Finding {
     Finding {
         code: d["code"].as_str().unwrap().to_string(),
         message: d["message"].as_str().unwrap().to_string(),
@@ -57,38 +55,27 @@ fn finding(d: &serde_json::Value) -> Finding {
 }
 
 /// What `specforge check` reports for the project.
-fn check(dir: &TempDir) -> Vec<Finding> {
-    let output = specforge_cmd()
-        .args(["check", "--format=json"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-    let diagnostics: serde_json::Value = serde_json::from_slice(&output.stdout)
-        .unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(&output.stdout)));
-    diagnostics
-        .as_array()
-        .unwrap()
+fn check(project: &TestProject) -> Vec<Finding> {
+    check_document(&project.compile(), CheckOptions::default())
         .iter()
         .map(finding)
         .collect()
 }
 
-/// What formal's analyze pass `pass` reports under `specforge analyze`.
-fn analyze(dir: &TempDir, pass: &str, extra: &[&str]) -> Vec<Finding> {
-    let output = specforge_cmd()
-        .args([
-            "analyze",
-            "--path",
-            dir.path().to_str().unwrap(),
-            "--format",
-            "json",
-        ])
-        .args(extra)
-        .output()
-        .unwrap();
-    let doc: serde_json::Value = serde_json::from_slice(&output.stdout)
-        .unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(&output.stdout)));
+/// What formal's analyze pass `pass` reports under `specforge analyze`, over the recorded test results.
+fn analyze(project: &TestProject, pass: &str) -> Vec<Finding> {
+    analyze_over(project, pass, ReportSource::Recorded)
+}
+
+/// [`analyze`] over `report`.
+fn analyze_over(project: &TestProject, pass: &str, report: ReportSource) -> Vec<Finding> {
+    let doc = analyzed(
+        &project.compile(),
+        &AnalyzeOptions {
+            report,
+            ..Default::default()
+        },
+    );
     let name = format!("@specforge/formal:{pass}");
     doc["passes"]
         .as_array()
@@ -353,7 +340,7 @@ fn conditioned_behaviors_are_noted_once_per_check_as_i015() {
 
 /// `a` produces `ping`, `b` consumes it and produces `pong`, `a` consumes
 /// `pong`; `sync` is written on `pong` when given.
-fn ping_pong(sync: Option<&str>) -> TempDir {
+fn ping_pong(sync: Option<&str>) -> TestProject {
     let pong_sync = sync
         .map(|s| format!("  sync {{\n    bound \"{s}\"\n  }}\n"))
         .unwrap_or_default();
@@ -393,7 +380,7 @@ fn ping_pong(sync: Option<&str>) -> TempDir {
     verify = "unmitigated cycle detection runs on SCC"
 )]
 fn an_unmitigated_event_cycle_is_e034() {
-    let findings = analyze(&ping_pong(None), "event_graph_analyze", &[]);
+    let findings = analyze(&ping_pong(None), "event_graph_analyze");
     assert_eq!(
         messages(&findings, "E034"),
         [
@@ -418,7 +405,7 @@ fn an_unmitigated_event_cycle_is_e034() {
     verify = "SCC with a sync on any member passes"
 )]
 fn a_cycle_with_a_sync_on_a_member_is_not_e034() {
-    let findings = analyze(&ping_pong(Some("timeout 5s")), "event_graph_analyze", &[]);
+    let findings = analyze(&ping_pong(Some("timeout 5s")), "event_graph_analyze");
     assert!(messages(&findings, "E034").is_empty(), "{findings:?}");
 }
 
@@ -436,7 +423,7 @@ fn a_cycle_free_event_graph_is_noted_as_i009() {
         "behavior enqueue \"Enqueue\" {\n  contract \"c\"\n  produces [job]\n}\n",
         "behavior work \"Work\" {\n  contract \"c\"\n  consumes [job]\n}\n",
     ));
-    let findings = analyze(&dir, "event_graph_analyze", &[]);
+    let findings = analyze(&dir, "event_graph_analyze");
     assert!(messages(&findings, "E034").is_empty(), "{findings:?}");
     assert_eq!(
         messages(&findings, "I009"),
@@ -465,7 +452,7 @@ fn a_behavior_re_producing_what_it_consumes_is_w032() {
             sync
         ))
     };
-    let findings = analyze(&retry(""), "event_graph_analyze", &[]);
+    let findings = analyze(&retry(""), "event_graph_analyze");
     assert_eq!(
         messages(&findings, "W032"),
         [
@@ -473,11 +460,7 @@ fn a_behavior_re_producing_what_it_consumes_is_w032() {
         ],
         "{findings:?}"
     );
-    let bounded = analyze(
-        &retry("  sync [\"backoff 2s\"]\n"),
-        "event_graph_analyze",
-        &[],
-    );
+    let bounded = analyze(&retry("  sync [\"backoff 2s\"]\n"), "event_graph_analyze");
     assert!(messages(&bounded, "W032").is_empty(), "{bounded:?}");
 }
 
@@ -495,7 +478,7 @@ fn a_produced_event_without_sync_is_w034() {
         "event bounded \"Bounded\" {\n  channel \"bounded\"\n  sync [\"timeout 5s\"]\n}\n",
         "behavior emit \"Emit\" {\n  contract \"c\"\n  produces [open, bounded]\n}\n",
     ));
-    let findings = analyze(&dir, "event_graph_analyze", &[]);
+    let findings = analyze(&dir, "event_graph_analyze");
     assert_eq!(
         messages(&findings, "W034"),
         ["event 'open' is produced but declares no sync, so nothing bounds its channel"],
@@ -526,7 +509,7 @@ fn a_port_with_unbalanced_users_is_w033() {
             "behavior impl{i} \"Impl {i}\" {{\n  contract \"c\"\n  refines hot\n}}\n"
         ));
     }
-    let findings = analyze(&project(&spec), "event_graph_analyze", &[]);
+    let findings = analyze(&project(&spec), "event_graph_analyze");
     assert_eq!(
         messages(&findings, "W033"),
         [
@@ -570,7 +553,7 @@ fn one_sided_conditions_are_i011_or_w096() {
         "  ensures {\n    done \"it is done\"\n  }\n",
         "}\n",
     ));
-    let findings = analyze(&dir, "condition_check", &[]);
+    let findings = analyze(&dir, "condition_check");
     assert_eq!(
         messages(&findings, "I011"),
         ["behavior 'promising' declares ensures but no requires"],
@@ -604,7 +587,7 @@ fn a_requires_naming_a_condition_twice_is_w039() {
         "  ensures {\n    done \"it is done\"\n  }\n",
         "}\n",
     ));
-    let findings = analyze(&dir, "condition_check", &[]);
+    let findings = analyze(&dir, "condition_check");
     assert_eq!(
         messages(&findings, "W039"),
         ["behavior 'twice' requires 'ready' more than once (the repeat is redundant)"],
@@ -628,7 +611,7 @@ fn a_prose_only_invariant_is_w040() {
         "  expression \"count >= 0\"\n",
         "}\n",
     ));
-    let findings = analyze(&dir, "condition_check", &[]);
+    let findings = analyze(&dir, "condition_check");
     assert_eq!(
         messages(&findings, "W040"),
         ["invariant 'prose' states its guarantee in prose only (no expression)"],
@@ -639,13 +622,12 @@ fn a_prose_only_invariant_is_w040() {
 // ── coverage_tracking ───────────────────────────────────────────
 
 /// `analyze` with `report` as the recorded test results.
-fn analyze_with_results(dir: &TempDir, report: serde_json::Value) -> Vec<Finding> {
-    let path = dir.path().join("report.json");
-    fs::write(&path, report.to_string()).unwrap();
-    analyze(
+fn analyze_with_results(dir: &TestProject, report: Value) -> Vec<Finding> {
+    dir.write("report.json", report.to_string());
+    analyze_over(
         dir,
         "coverage_tracking",
-        &["--test-results", path.to_str().unwrap()],
+        ReportSource::File(dir.root().join("report.json")),
     )
 }
 

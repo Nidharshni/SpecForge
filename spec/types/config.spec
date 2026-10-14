@@ -46,7 +46,9 @@ type ProviderConfig {
 
 // ── Registry Types ──────────────────────────────────────────
 
-// One entry of specforge.json's registries. The registry for a package name
+// One entry of specforge.json's registries. url is the registry's root (an
+// http or https URL without the protocol's /v1;
+// specforge_registry_wire::RegistryRoot). The registry for a package name
 // is the first entry whose scope_filter is its scope, else the first marked
 // default_registry; none is R-OPS-001 (ADR 0045). A credential is kept per
 // alias in ~/.specforge, never here.
@@ -63,16 +65,19 @@ type RegistryConfig {
 // (specforge_registry_wire): one definition each, compiled into both
 // specforge-registry-server and specforge-registry-client.
 
-// GET {base}/packages/{name}: every version not yanked, oldest first.
+// GET {root}/v1/packages/{name}: every version not yanked, oldest first.
 type VersionList "Version List" {
   name     string
   versions string[]
   verify unit "VersionList is the JSON a registry serves for a package's versions"
 }
 
-// GET {base}/packages/{name}/{version}: what a registry stores for one
+// GET {root}/v1/packages/{name}/{version}: what a registry stores for one
 // version. signature and manifest are absent when empty; a signature
-// that isn't a PackageSignature makes the reply unreadable (R009).
+// that isn't a PackageSignature makes the reply unreadable (R009). wasm_url
+// is an http or https URL or a path at the registry's root
+// (/v1/packages/{name}/{version}/download, what the reference server answers);
+// anything else makes the reply unreadable (R009).
 type PackageMetadata "Package Metadata" {
   name         string
   version      string
@@ -109,7 +114,7 @@ type SearchHit "Search Hit" {
   verify unit "SearchHit is the JSON of one search hit"
 }
 
-// GET {base}/search's query (specforge_registry_wire::SearchQuery): what to
+// GET {root}/v1/search's query (specforge_registry_wire::SearchQuery): what to
 // look for, at most how many (50 when absent), and a declared category a
 // package must declare.
 type SearchQuery "Search Query" {
@@ -119,7 +124,7 @@ type SearchQuery "Search Query" {
   verify unit "SearchQuery is the query string a registry search reads"
 }
 
-// GET {base}/search?q=&limit=&contributes=: each package one of whose
+// GET {root}/v1/search?q=&limit=&contributes=: each package one of whose
 // versions matches q, at the version latest picks (the highest release, a
 // pre-release only when it has none: what specforge add <name> installs);
 // contributes keeps those whose listed version's declaration declares that
@@ -129,7 +134,7 @@ type SearchResults "Search Results" {
   verify unit "SearchResults is the JSON a registry answers a search with"
 }
 
-// PUT {base}/packages/{name}/{version}, answered 201: what the registry
+// PUT {root}/v1/packages/{name}/{version}, answered 201: what the registry
 // stored, which the publishing client checks against what it sent.
 type PublishReceipt "Publish Receipt" {
   name       string
@@ -141,7 +146,7 @@ type PublishReceipt "Publish Receipt" {
   verify unit "PublishReceipt is the JSON a registry answers a publish with"
 }
 
-// POST {base}/auth/verify.
+// POST {root}/v1/auth/verify.
 type TokenVerified "Token Verified" {
   valid      boolean
   scope      string @optional

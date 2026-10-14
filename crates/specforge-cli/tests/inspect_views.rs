@@ -16,12 +16,13 @@
 //! (a reference cycle, W061, which names both in its data).
 
 use serde_json::{Value, json};
+use specforge_mcp::testing::Served;
 use std::path::Path;
-use tempfile::TempDir;
 
-use crate::coverage_corpus::{copy_tree, mcp_calls, project};
+use crate::coverage_corpus::{mcp_calls, project, served};
 use crate::parity::normalized;
-use crate::surface_parity::lsp::Client;
+use crate::support::TestProject;
+use crate::support::lsp::Client;
 
 /// The entities of fx1 the views are pinned on.
 const FX1: [&str; 6] = [
@@ -38,13 +39,10 @@ const CYC: [&str; 2] = ["alpha", "beta"];
 
 /// A scratch copy of `fixtures/navigation/cyc` (its spec root is the
 /// project root).
-fn cyc() -> TempDir {
-    let tmp = TempDir::new().unwrap();
-    copy_tree(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/navigation/cyc"),
-        tmp.path(),
-    );
-    tmp
+fn cyc() -> TestProject {
+    TestProject::copy_of(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/navigation/cyc"),
+    )
 }
 
 fn inspect(entity_id: &str) -> Value {
@@ -99,37 +97,41 @@ fn hovers(root: &Path, file: &str, positions: &[(u32, u32)]) -> Vec<String> {
 
 #[test]
 fn inspect_today() {
-    let fx1 = project("fx1");
-    let root = fx1.path();
+    let mut fx1 = served(project("fx1"));
+    let root_buf = fx1.root().to_path_buf();
+    let root = root_buf.as_path();
     let mut calls: Vec<Value> = FX1.iter().map(|id| inspect(id)).collect();
     calls.push(inspect("ghost"));
-    let results = mcp_calls(root, &calls);
+    let results = mcp_calls(&mut fx1, &calls);
     for (id, result) in FX1.iter().chain(["ghost"].iter()).zip(&results) {
         insta::assert_snapshot!(format!("inspect_fx1_{id}"), normalized(result, root));
     }
 
-    let cyc = cyc();
-    let root = cyc.path();
+    let mut cyc = served(cyc());
+    let root_buf = cyc.root().to_path_buf();
+    let root = root_buf.as_path();
     let calls: Vec<Value> = CYC.iter().map(|id| inspect(id)).collect();
-    for (id, result) in CYC.iter().zip(mcp_calls(root, &calls)) {
+    for (id, result) in CYC.iter().zip(mcp_calls(&mut cyc, &calls)) {
         insta::assert_snapshot!(format!("inspect_cyc_{id}"), normalized(&result, root));
     }
 }
 
 #[test]
 fn context_prompt_today() {
-    let fx1 = project("fx1");
-    let root = fx1.path();
+    let mut fx1 = served(project("fx1"));
+    let root_buf = fx1.root().to_path_buf();
+    let root = root_buf.as_path();
     let calls = [json!({"method": "prompts/get", "params": {
         "name": "specforge://prompts/context", "arguments": {"entity_id": "login"}}})];
-    let result = mcp_calls(root, &calls).pop().unwrap();
+    let result = mcp_calls(&mut fx1, &calls).pop().unwrap();
     insta::assert_snapshot!("context_fx1_login", normalized(&result, root));
 }
 
 #[test]
 fn hover_today() {
-    let fx1 = project("fx1");
-    let root = fx1.path();
+    let fx1 = served(project("fx1"));
+    let root_buf = fx1.root().to_path_buf();
+    let root = root_buf.as_path();
     let text = std::fs::read_to_string(root.join("spec/main.spec")).unwrap();
     let mut positions: Vec<(u32, u32)> = FX1.iter().map(|id| declaration(&text, id)).collect();
     // `signin` inside `login`'s `features [signin]`.
@@ -144,7 +146,7 @@ fn hover_today() {
     }
 
     let cyc = cyc();
-    let root = cyc.path();
+    let root = cyc.root();
     let markdown = hovers(root, "a.spec", &[(0, 10), (3, 10)]);
     for (id, markdown) in CYC.iter().zip(markdown) {
         insta::assert_snapshot!(format!("hover_cyc_{id}"), markdown);
@@ -201,10 +203,15 @@ fn strings(value: &Value) -> Vec<String> {
 
 /// Every entity of the project at `root` (its spec in `file`): its hover at
 /// its declaration name and `specforge.inspect` report the same facts.
-fn assert_hover_and_inspect_agree(root: &Path, file: &str) {
-    let listed = mcp_calls(root, &[json!({"name": "specforge.list", "arguments": {}})])
-        .pop()
-        .unwrap();
+fn assert_hover_and_inspect_agree(served: &mut Served, file: &str) {
+    let root_buf = served.root().to_path_buf();
+    let root = root_buf.as_path();
+    let listed = mcp_calls(
+        served,
+        &[json!({"name": "specforge.list", "arguments": {}})],
+    )
+    .pop()
+    .unwrap();
     let ids: Vec<String> = listed["entities"]
         .as_array()
         .unwrap_or_else(|| panic!("specforge.list: {listed}"))
@@ -213,7 +220,7 @@ fn assert_hover_and_inspect_agree(root: &Path, file: &str) {
         .collect();
     assert!(!ids.is_empty());
     let calls: Vec<Value> = ids.iter().map(|id| inspect(id)).collect();
-    let inspected = mcp_calls(root, &calls);
+    let inspected = mcp_calls(served, &calls);
     let text = std::fs::read_to_string(root.join(file)).unwrap();
     let positions: Vec<(u32, u32)> = ids.iter().map(|id| declaration(&text, id)).collect();
     let hovered = hovers(root, file, &positions);
@@ -299,8 +306,6 @@ fn assert_hover_and_inspect_agree(root: &Path, file: &str) {
     verify = "specforge.inspect and the LSP hover report the same facts for an entity"
 )]
 fn hover_and_inspect_agree_on_every_entity() {
-    let fx1 = project("fx1");
-    assert_hover_and_inspect_agree(fx1.path(), "spec/main.spec");
-    let cyc = cyc();
-    assert_hover_and_inspect_agree(cyc.path(), "a.spec");
+    assert_hover_and_inspect_agree(&mut served(project("fx1")), "spec/main.spec");
+    assert_hover_and_inspect_agree(&mut served(cyc()), "a.spec");
 }

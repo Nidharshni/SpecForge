@@ -1,10 +1,10 @@
 use crate::target::View;
-use crate::tool::{CoreTool, Effect, RefusalArgument, ToolGroup};
-use specforge_ops::export::{self, Format, Schema};
+use crate::tool::{CoreTool, Effect, ToolGroup};
+use specforge_ops::export::{self, ExportField, Format, Schema};
 
 use crate::args::Arguments;
+use crate::refusal::ArgumentOf;
 use crate::reply::{Answered, Text};
-use crate::tool::McpError;
 use specforge_ops::view::ProjectView;
 
 /// `specforge.export`'s arguments.
@@ -34,6 +34,17 @@ pub struct Args {
 /// `no_schema` are the CLI's `--with-schema` and `--no-schema`.
 pub(crate) struct Tool;
 
+impl ArgumentOf<ExportField> for Tool {
+    fn argument(field: ExportField) -> Option<&'static str> {
+        match field {
+            ExportField::Scope => Some("scope"),
+            ExportField::Depth => Some("depth"),
+            ExportField::MaxTokens => Some("max_tokens"),
+            ExportField::SchemaVersion => Some("schema_version"),
+        }
+    }
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.export";
     const DESCRIPTION: &'static str = "Export the graph in various formats";
@@ -43,24 +54,6 @@ impl CoreTool for Tool {
     type Args = Args;
     type Input = View;
     type Returns = Answered<Text>;
-    const REFUSAL_ARGUMENTS: &'static [RefusalArgument] = &[
-        RefusalArgument {
-            code: export::DEPTH_WITHOUT_SCOPE,
-            argument: "depth",
-        },
-        RefusalArgument {
-            code: specforge_common::codes::E062.id(),
-            argument: "max_tokens",
-        },
-        RefusalArgument {
-            code: export::INVALID_SCHEMA_VERSION,
-            argument: "schema_version",
-        },
-        RefusalArgument {
-            code: specforge_common::codes::E027.id(),
-            argument: "schema_version",
-        },
-    ];
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Text> {
         // The tool serves the agent formats; dot is `specforge.render`'s.
@@ -77,9 +70,10 @@ impl CoreTool for Tool {
             max_tokens: args.max_tokens,
             schema,
             schema_version: args.schema_version.as_deref(),
+            coverage: None,
         };
 
-        let document = export::export(&view, &request).map_err(McpError::from)?;
+        let document = export::export(&view, &request).map_err(Self::refused)?;
         Ok(Text(document).into())
     }
 }

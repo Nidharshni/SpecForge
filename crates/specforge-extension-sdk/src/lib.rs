@@ -58,7 +58,9 @@ pub mod surface;
 /// the migration hook) declared with their handlers.
 mod operations;
 
+mod vocabulary;
 pub use surface::{ArgBuilder, CommandBuilder, CommandCall, McpResourceBuilder, McpToolBuilder};
+pub use vocabulary::Vocabulary;
 
 /// Identity of the extension: what `__handshake` reports.
 #[derive(Debug, Clone, Default)]
@@ -490,22 +492,6 @@ impl ContributionsBuilder {
         };
         declaration
     }
-
-    /// The `__handshake` wire payload (pretty JSON, matching the format of the
-    /// existing builtin extensions).
-    pub fn handshake_json(&self) -> String {
-        self.declaration().handshake_json()
-    }
-
-    /// The `__describe` wire payload for `category`, or `None` when the
-    /// category is not one the protocol defines: a raw category as given,
-    /// else the declaration's items.
-    ///
-    /// For tests: a guest answers through [`Served`], which reads the
-    /// declaration once.
-    pub fn describe_response_json(&self, category: &str) -> Option<String> {
-        describe_answer(&self.raw, || Cow::Owned(self.declaration()), category)
-    }
 }
 
 /// The describe answer: a raw category as given, else `declaration`'s
@@ -692,7 +678,13 @@ impl FieldBuilder {
             ..Default::default()
         })
     }
+    /// The field's type. An enum is declared with [`Self::vocabulary`]:
+    /// `FieldType::Enum` here panics, so an enum always has its values.
     pub fn field_type(&mut self, t: FieldType) -> &mut Self {
+        assert!(
+            t != FieldType::Enum,
+            "an enum field is declared with FieldBuilder::vocabulary"
+        );
         self.0.field_type = t.as_str().to_string();
         self
     }
@@ -739,10 +731,6 @@ impl FieldBuilder {
         self.0.proof_role = Some(role.to_string());
         self
     }
-    pub fn default_value(&mut self, v: &str) -> &mut Self {
-        self.0.default_value = Some(v.to_string());
-        self
-    }
     /// The host fills this reference field's edges from type names the
     /// entity writes elsewhere: `"type_expressions"` (its field types) or
     /// `"method_signatures"` (its method parameter and return types).
@@ -754,8 +742,13 @@ impl FieldBuilder {
         self.0.file_reference = true;
         self
     }
-    pub fn enum_values(&mut self, values: &[&str]) -> &mut Self {
-        self.0.enum_values = values.iter().map(|s| s.to_string()).collect();
+    /// Declare the field an `enum` of `vocabulary`: its values are the
+    /// field's `enum_values`, in order, and its absent value, if any, the
+    /// field's `default_value`. The only way to declare an enum field.
+    pub fn vocabulary(&mut self, vocabulary: &Vocabulary) -> &mut Self {
+        self.0.field_type = FieldType::Enum.as_str().to_string();
+        self.0.enum_values = vocabulary.values().iter().map(|v| v.to_string()).collect();
+        self.0.default_value = vocabulary.absent().map(str::to_string);
         self
     }
 }
@@ -1139,7 +1132,7 @@ pub mod prelude {
         FieldType, KindBuilder, MigrationInput, PassAnswer, PassBuildCache, PassBuilder,
         PassCachedStatus, PassDiagnostic, PassEdge, PassEntity, PassInput, PassOutput,
         PassSeverity, PassSpan, RuleBuilder, ScanRequest, ScanResponse, ScannedItem, TestResult,
-        TestResults, TestStatus,
+        TestResults, TestStatus, Vocabulary,
     };
     pub use crate::{
         ArgBuilder, CommandBuilder, CommandCall, CommandError, CommandEvidence, CommandFormat,

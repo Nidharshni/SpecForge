@@ -5,6 +5,9 @@
 use specforge_extension_sdk::prelude::*;
 use specforge_extension_sdk::{ValidatorContext, ValidatorVerdict};
 
+/// `PropertyType`.
+const PROPERTY_TYPE: Vocabulary = Vocabulary::new(&["safety", "liveness", "fairness"]);
+
 /// Declare everything this module holds on `c`.
 pub(crate) fn declare(c: &mut ContributionsBuilder) {
     kinds(c);
@@ -23,7 +26,7 @@ fn kinds(c: &mut ContributionsBuilder) {
             .dot_shape("hexagon")
             .dot_color("#0D47A1")
             .dot_fillcolor("#E3F2FD")
-            .inference_guide("Look for system-wide temporal guarantees that must hold across all executions. Signals: safety properties ('X never happens'), liveness properties ('Y eventually happens'), fairness properties ('if X is requested, it is eventually granted'); invariants that span multiple behaviors; global ordering guarantees; eventual consistency promises; progress guarantees. Set property_type to 'safety', 'liveness', or 'fairness'. The expression field should state the property formally or semi-formally. Skip: local function postconditions (those are invariants), single-behavior contracts.")
+            .inference_guide("Look for system-wide temporal guarantees that must hold across all executions. Signals: safety properties ('X never happens'), liveness properties ('Y eventually happens'), fairness properties ('if X is requested, it is eventually granted'); invariants that span multiple behaviors; global ordering guarantees; eventual consistency promises; progress guarantees. Set property_type to the property's category. The expression field should state the property formally or semi-formally. Skip: local function postconditions (those are invariants), single-behavior contracts.")
             .contract_target();
         k.field("expression", |f| {
             f.field_type(FieldType::String)
@@ -33,9 +36,9 @@ fn kinds(c: &mut ContributionsBuilder) {
                 .proof_role("claim");
         });
         k.field("property_type", |f| {
-            f.field_type(FieldType::String)
+            f.vocabulary(&PROPERTY_TYPE)
                 .required()
-                .description("Category of temporal property (safety, liveness, or fairness)");
+                .description("Category of temporal property");
         });
         k.field("scope", |f| {
             f.field_type(FieldType::String)
@@ -348,17 +351,6 @@ fn enhancements(c: &mut ContributionsBuilder) {
 }
 
 fn rules(c: &mut ContributionsBuilder) {
-    c.rule("W125", |r| {
-        r.check(CheckKind::FieldValueConstraint)
-            .severity(ValidationSeverity::Warning)
-            .message_template("property '{id}' has invalid property_type '{value}' — expected one of: safety, liveness, fairness")
-            .target_kind("property")
-            .field("property_type");
-        r.constraint(|fc| {
-            fc.kind(ConstraintKind::OneOf)
-                .values(&["safety", "liveness", "fairness"]);
-        });
-    });
     c.rule("W123", |r| {
         r.check(CheckKind::NoIncomingEdges)
             .severity(ValidationSeverity::Warning)

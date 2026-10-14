@@ -102,7 +102,7 @@ fn two_extensions() -> Project {
 fn outcome_of(
     project: &Project,
     options: ModelOptions,
-) -> Result<ModelOutcome, specforge_ops::OpError> {
+) -> Result<ModelOutcome, specforge_ops::Refusal<specforge_ops::model::ModelField>> {
     model(
         &project.view(),
         &ModelOptions {
@@ -158,16 +158,16 @@ fn a_root_the_project_does_not_declare_is_refused() {
         ..ModelOptions::default()
     };
     let error = outcome_of(&project, root("behaviour")).unwrap_err();
-    assert_eq!(error.kind, OpErrorKind::InvalidInput);
-    assert_eq!(error.code, "unknown_kind");
-    assert_eq!(error.message, "unknown entity kind 'behaviour'");
+    assert_eq!(error.error.kind, OpErrorKind::InvalidInput);
+    assert_eq!(error.error.code, "unknown_kind");
+    assert_eq!(error.error.message, "unknown entity kind 'behaviour'");
     assert_eq!(
-        error.suggestion.as_deref(),
+        error.error.suggestion.as_deref(),
         Some("did you mean 'behavior'?")
     );
     let error = outcome_of(&project, root("zzzzzz")).unwrap_err();
-    assert_eq!(error.code, "unknown_kind");
-    assert_eq!(error.suggestion, None);
+    assert_eq!(error.error.code, "unknown_kind");
+    assert_eq!(error.error.suggestion, None);
 }
 
 #[specforge_test(
@@ -186,13 +186,17 @@ fn an_extension_the_project_does_not_load_is_refused() {
         ("@acme/none", "the project loads @t/soft, @t/test"),
     ] {
         let error = outcome_of(&project, extension(name)).unwrap_err();
-        assert_eq!(error.kind, OpErrorKind::ExtensionNotFound, "{name}");
-        assert_eq!(error.code, "extension_not_found", "{name}");
+        assert_eq!(error.error.kind, OpErrorKind::ExtensionNotFound, "{name}");
+        assert_eq!(error.error.code, "extension_not_found", "{name}");
         assert_eq!(
-            error.message,
+            error.error.message,
             format!("extension '{name}' is not loaded by this project")
         );
-        assert_eq!(error.suggestion.as_deref(), Some(suggestion), "{name}");
+        assert_eq!(
+            error.error.suggestion.as_deref(),
+            Some(suggestion),
+            "{name}"
+        );
     }
     // Loaded, and declares no kind: an empty model, not a refusal.
     assert!(kinds_of(&project, extension("@t/test")).is_empty());
@@ -399,5 +403,33 @@ fn an_extensions_counts_after_a_filter_are_what_the_selection_draws() {
             }
         ),
         [("@t/soft".into(), 0, 0), ("@t/test".into(), 0, 0)]
+    );
+}
+
+#[specforge_test(
+    invariant = "mcp_structured_error_responses",
+    verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
+)]
+fn model_states_which_field_a_refusal_is_about() {
+    use specforge_ops::model::ModelField;
+    let project = two_extensions();
+    let root = ModelOptions {
+        root: Some(ModelRoot {
+            kind: "zzzzzz".into(),
+            depth: None,
+        }),
+        ..ModelOptions::default()
+    };
+    assert_eq!(
+        outcome_of(&project, root).unwrap_err().subject,
+        Some(ModelField::Root)
+    );
+    let extension = ModelOptions {
+        extension: Some("@acme/none".into()),
+        ..ModelOptions::default()
+    };
+    assert_eq!(
+        outcome_of(&project, extension).unwrap_err().subject,
+        Some(ModelField::Extension)
     );
 }

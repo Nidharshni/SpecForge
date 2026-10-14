@@ -108,15 +108,18 @@ Each field in a struct type has:
 
 | From | Edge Type | Meaning |
 |------|-----------|---------|
-| `behavior` | `uses_type` | "This behavior uses this type definition" |
-| `event` | payload reference | "This event carries data shaped like this type" |
-| `port` | method signatures | "This port's methods use this type in their signatures" |
+| `behavior` | `BehaviorReferencesType` | "Behaviors that use this type" (via `types` field) |
+| `event` | `EventCarriesPayloadType` | "Events that have as their payload this type" (via `payload` field) |
+| `port` | `PortReferencesType` | "Ports that reference this type" (via `types` field) |
+| `type` | `TypeComposesType` | "Types that compose this type" (via `composed_types` field) |
+| `type` | `TypeExtendsType` | "Types that extend this type" (via `extends` field) |
 
 ### Outgoing edges
 
 | To | Edge Type | Meaning |
 |----|-----------|---------|
-| `ref` | `links_to` | "This type links to these external references" |
+| `type` | `TypeComposesType` | "This type composes these types" (via `composed_types` field) |
+| `type` | `TypeExtendsType` | "This type extends these types" (via `extends` field) |
 
 ## Validation Rules
 
@@ -169,10 +172,13 @@ This generates TypeScript discriminated unions, Python tagged classes, and Go er
 
 | Direction | Entity | Edge | Meaning |
 |-----------|--------|------|---------|
-| outgoing | [ref](ref.md) | `links_to` | External references linked to this type |
-| incoming | [behavior](behavior.md) | `uses_type` | Behaviors that use this type definition |
-| incoming | [event](event.md) | payload reference | Events that carry data shaped like this type |
-| incoming | [port](port.md) | method signatures | Ports that use this type in method signatures |
+| outgoing | [type](type.md) | `TypeComposesType` | Types this type composes |
+| outgoing | [type](type.md) | `TypeExtendsType` | Types this type extends |
+| incoming | [behavior](behavior.md) | `BehaviorReferencesType` | Behaviors that use this type |
+| incoming | [event](event.md) | `EventCarriesPayloadType` | Events that have as their payload this type |
+| incoming | [port](port.md) | `PortReferencesType` | Ports that reference this type |
+| incoming | [type](type.md) | `TypeComposesType` | Types that compose this type |
+| incoming | [type](type.md) | `TypeExtendsType` | Types that extend this type |
 
 ## Examples
 
