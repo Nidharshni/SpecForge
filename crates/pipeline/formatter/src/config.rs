@@ -247,6 +247,10 @@ mod tests {
         behavior = "load_format_config",
         verify = "invalid indent_width produces diagnostic and uses default"
     )]
+    #[specforge_test_macros::test(
+        invariant = "config_defaults_valid",
+        verify = "fallback from invalid config produces usable FormatConfig"
+    )]
     fn read_config_file_reports_an_invalid_value() {
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join(".specforgefmt.toml");

@@ -4,6 +4,10 @@ use super::*;
     behavior = "discover_format_targets",
     verify = "no arguments formats all .spec files under spec_root"
 )]
+#[specforge_test(
+    invariant = "discover_completeness",
+    verify = "all .spec files under spec_root are discovered"
+)]
 fn targets_are_the_files_under_spec_root() {
     let dir = project_with(
         r#"{"spec_root": "specs"}"#,
