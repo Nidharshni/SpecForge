@@ -44,6 +44,16 @@ A test or tool that reads a file outside its own crate finds it from `specforge_
 (`crates/leaf/repo-root`), never by counting `..` from `CARGO_MANIFEST_DIR`: crates sit at different depths
 under `crates/` ([ADR 0081](docs/adr/0081-the-repository-root-is-found-not-counted.md)).
 
+### Coverage
+
+`rustup component add llvm-tools-preview && cargo install cargo-llvm-cov`, then `cargo llvm-cov nextest
+--workspace --html` (open `target/llvm-cov/html/index.html`). CI runs the same on every push to `main` and uploads
+the per-file and per-crate report (`.github/workflows/coverage.yml`, `scripts/coverage-by-crate.py`). It is a
+measurement: no gate reads it
+([ADR 0090](docs/adr/0090-text-a-user-types-is-tested-by-properties-over-the-corpus.md)). The parser and formatter
+property tests run 256 cases per run; the deep run is `PROPTEST_CASES=20000 cargo test -p specforge-parser -p
+specforge-formatter --test tests` (about 4 minutes; nextest's 60 s timeout is too short for it).
+
 ## Where things are
 
 The repository tracks what ships and what builds, tests or documents it, and nothing else
