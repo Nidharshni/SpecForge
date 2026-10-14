@@ -1,3 +1,8 @@
+//! The `specforge` binary: each command's arguments, the terminal it writes to and asks from, and the exit code
+//! it ends with. A core command turns its arguments into a request to `specforge-ops` and presents the outcome
+//! (ADR 0029); `specforge mcp` serves `specforge-mcp` over stdio. Extension commands are read from the loaded
+//! extensions' declarations.
+
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 
 mod add;

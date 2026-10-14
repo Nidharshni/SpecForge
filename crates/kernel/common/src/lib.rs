@@ -1,3 +1,8 @@
+//! What every host crate shares: the diagnostic and its source span, the interned symbol, the project root and its
+//! `specforge.json`, `.spec` discovery, the JSON shape a type serializes to (ADR 0048) and the forms every surface
+//! prints diagnostics in. Its SpecForge dependencies are the leaf crates and the shape derive; each carries its
+//! reason in `Cargo.toml`.
+
 // The derive names this crate by its own name, inside it too.
 extern crate self as specforge_common;
 

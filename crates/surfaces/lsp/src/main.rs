@@ -1,3 +1,5 @@
+//! `specforge-lsp`: the language server on stdin and stdout.
+
 use specforge_lsp::backend::Backend;
 use tower_lsp::{LspService, Server};
 

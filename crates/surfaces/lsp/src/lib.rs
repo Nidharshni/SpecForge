@@ -1,3 +1,8 @@
+//! The language server. Its open documents are held in the project session (ADR 0046), each read through one
+//! module (ADR 0023); its one reaction to a change applies it, publishes what the project reports and talks to the
+//! editor through a port (ADR 0043). Navigation, completion, hover, code actions and formatting answer from the
+//! document and the session. It links no package-registry client (ADR 0010).
+
 pub mod answers;
 pub mod backend;
 mod capabilities;

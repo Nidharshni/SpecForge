@@ -1,3 +1,6 @@
+//! `specforge-registry`: the package registry server's command line, which serves the router of this crate's
+//! library.
+
 use specforge_registry_server::state::{AppState, PublishLimits, ReadAccess};
 use specforge_registry_server::{auth, db::Database, handlers};
 
