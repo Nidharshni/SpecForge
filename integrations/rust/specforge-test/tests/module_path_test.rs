@@ -1,6 +1,10 @@
 //! A recorded entry names its test the way libtest prints it, so a
 //! collector reading libtest's output can tell attribute-linked tests from
 //! plain ones. Its own binary: it drains the global registry.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use specforge_test::guard::TestGuard;
 use specforge_test::registry;

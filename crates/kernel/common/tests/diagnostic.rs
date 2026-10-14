@@ -1,6 +1,10 @@
 //! A diagnostic is built from its code: a core code's constant gives it
 //! the catalogued level, a graded code takes the pass's severity, and a
 //! code that arrives as text keeps the severity it came with.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use specforge_common::{Diagnostic, Severity, codes};
 use specforge_test::prelude::*;

@@ -71,7 +71,10 @@ impl TestGuard {
     /// Macro entry point carrying the `#[should_panic]` expectation
     /// (C11-04). An `#[ignore]`d test runs only when libtest is asked to
     /// (`--ignored`), and is then recorded like any other.
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the macro's whole expansion: entity, verify, module path, file, line and the three expectations"
+    )]
     pub fn with_expectations(
         entity_kind: &'static str,
         entity_id: &'static str,

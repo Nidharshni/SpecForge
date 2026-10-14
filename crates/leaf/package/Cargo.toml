@@ -16,3 +16,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 specforge-test = { workspace = true }
 specforge-test-macros = { workspace = true }
+
+[lints]
+workspace = true

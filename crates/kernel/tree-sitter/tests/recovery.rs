@@ -1,6 +1,10 @@
 //! An unclosed body ends where the next top-level form starts: the grammar
 //! resumes there, as the lexer's form-start rule reads it (ADR 0038 D6), so
 //! the blocks after a body being typed stay in the tree.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use std::path::{Path, PathBuf};
 use tree_sitter::{Node, Parser, Tree};

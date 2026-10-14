@@ -5,6 +5,10 @@
 //! const/enum/items/$ref) — the subset these schemas use. Drift in either
 //! direction (a new field, a renamed key) now fails a test instead of
 //! silently breaking every consumer.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 mod support;
 
