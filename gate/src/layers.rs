@@ -2,6 +2,8 @@
 //! points to a crate in a higher layer. Dev-dependencies are not judged: they link into no library or binary.
 //! A workspace member outside `crates/` (the gate, xtask, the Rust test integration) is in no layer: it may depend
 //! on any crate, and no crate in a layer may have a normal or build dependency on it.
+//!
+//! It also holds the pairs an ADR keeps apart ([`APART`]): the LSP links no package registry client (ADR 0010).
 
 use crate::repo::{Dependency, DependencyKind, Member};
 
@@ -27,6 +29,97 @@ pub struct Allowed {
 
 /// The accepted upward edges. Empty: every normal and build dependency points down or stays in its layer.
 pub const ALLOWED: &[Allowed] = &[];
+
+/// Two crates an ADR keeps apart: `from` must not reach `to` through any chain of normal or build dependencies.
+/// Dev-dependencies are not followed: they link into no library or binary.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Apart {
+    /// The package that must not link `to`.
+    pub from: &'static str,
+    /// The package it must not link.
+    pub to: &'static str,
+    /// The four-digit number of the ADR that keeps them apart (`docs/adr/<adr>-*.md`).
+    pub adr: &'static str,
+}
+
+/// ADR 0010: the LSP links no package registry client, neither the client, nor its HTTP shapes (ADR 0044), nor
+/// the adapter over it. A cargo feature cannot give this, because features unify across a workspace build. Only
+/// the dependency graph can.
+pub const APART: &[Apart] = &[
+    Apart {
+        from: "specforge-lsp",
+        to: "specforge-registry-client",
+        adr: "0010",
+    },
+    Apart {
+        from: "specforge-lsp",
+        to: "specforge-registry-wire",
+        adr: "0010",
+    },
+    Apart {
+        from: "specforge-lsp",
+        to: "specforge-ops-registry",
+        adr: "0010",
+    },
+];
+
+/// Each pair of `apart` that `members` link anyway, as the shortest chain that links them, and each entry naming a
+/// package that is no member (so the list cannot go stale). `cargo metadata` lists optional dependencies without
+/// resolving features, so a chain through an optional dependency is reported too: the rule over-approximates.
+pub fn linked_apart(members: &[Member], apart: &[Apart]) -> Vec<String> {
+    let known = |name: &str| members.iter().any(|m| m.name == name);
+    let mut violations = Vec::new();
+    for rule in apart {
+        if let Some(missing) = [rule.from, rule.to].into_iter().find(|name| !known(name)) {
+            violations.push(format!(
+                "{RULE} keeps {} apart from {} (ADR {}), but no workspace member is named {missing}: fix or delete the entry",
+                rule.from, rule.to, rule.adr
+            ));
+            continue;
+        }
+        if let Some(chain) = chain(members, rule.from, rule.to) {
+            violations.push(format!(
+                "{} links {} (ADR {} keeps them apart): {}",
+                rule.from,
+                rule.to,
+                rule.adr,
+                chain.join(" -> ")
+            ));
+        }
+    }
+    violations
+}
+
+/// The shortest chain of normal or build dependencies from `from` to `to`, both ends included.
+fn chain<'a>(members: &'a [Member], from: &'a str, to: &'a str) -> Option<Vec<&'a str>> {
+    use std::collections::{BTreeMap, VecDeque};
+    let mut parent: BTreeMap<&str, &str> = BTreeMap::from([(from, from)]);
+    let mut queue = VecDeque::from([from]);
+    while let Some(name) = queue.pop_front() {
+        if name == to {
+            let mut path = vec![to];
+            let mut at = to;
+            while at != from {
+                at = parent[at];
+                path.push(at);
+            }
+            path.reverse();
+            return Some(path);
+        }
+        let Some(member) = members.iter().find(|m| m.name == name) else {
+            continue;
+        };
+        for dependency in &member.dependencies {
+            if dependency.kind != DependencyKind::Dev
+                && !parent.contains_key(dependency.name.as_str())
+            {
+                parent.insert(dependency.name.as_str(), name);
+                queue.push_back(dependency.name.as_str());
+            }
+        }
+    }
+    None
+}
 
 /// Where a member's directory puts it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

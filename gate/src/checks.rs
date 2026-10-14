@@ -151,12 +151,12 @@ pub static CHECKS: &[Check] = &[
     },
     Check {
         name: "layers",
-        proves: "no crate has a normal or build dependency on a crate in a higher layer (its folder under crates/) or in none",
+        proves: "no crate has a normal or build dependency on a crate in a higher layer (its folder under crates/) or in none, and the LSP links no package registry client (ADR 0010)",
         reach: Reach::Hook,
         trigger: Trigger::Paths(&["Cargo.toml", "crates/**/Cargo.toml", layers::RULE]),
         compiles: false,
         after: &[],
-        fix: "make the dependency point down (move what it uses to a lower layer) and put each crate in crates/<layer>/<name>/; an upward edge an ADR accepts is an ALLOWED entry in gate/src/layers.rs",
+        fix: "make the dependency point down (move what it uses to a lower layer) and put each crate in crates/<layer>/<name>/; an upward edge an ADR accepts is an ALLOWED entry in gate/src/layers.rs; a crate the LSP must not link is reached through the chain the message names: cut that edge",
         run: steps::layers,
     },
     Check {

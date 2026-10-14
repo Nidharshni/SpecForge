@@ -51,3 +51,10 @@ presents it.
 **Amended by ADR 0059 (2026-10-12):** `fetch` takes a `TrustPolicy` (the caller's two choices and the key the
 lock records for the name) and writes nothing; the port gains `pin`, which saves the publisher keys a committed
 lock plan accepted. `check_and_pin` is split into `trust_flow::check` and `trust_flow::record`.
+
+**Amended by ADR 0088 (2026-10-14):** the guarantee is checked. Gate's `layers` check holds `APART`
+(`gate/src/layers.rs`): `specforge-lsp` must not reach `specforge-registry-client`, `specforge-registry-wire` or
+`specforge-ops-registry` through any chain of normal or build dependencies in `cargo metadata`, and the message
+names the chain that does. The rule judges workspace crates. The members that depend on reqwest, keyring or
+ed25519 today are the client and the wire crate; a new direct dependency on one of them from another member
+would escape the rule.
