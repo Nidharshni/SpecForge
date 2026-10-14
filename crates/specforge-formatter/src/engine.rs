@@ -236,7 +236,8 @@ impl<'a> Emitter<'a> {
 
     /// Emit one piece's top-level items. An item is kept verbatim when it
     /// overlaps an error region of the piece's tree or holds the piece's
-    /// unclosed string.
+    /// unclosed string. Items that share a source row form a run, and a run
+    /// holding a kept item is kept whole, so every source row is written once.
     fn piece(&mut self, piece: &Piece<'_>) {
         let text = piece.text();
         let base = piece.row();
@@ -246,12 +247,48 @@ impl<'a> Emitter<'a> {
         let mut cursor = root.walk();
         let items: Vec<Node> = root.children(&mut cursor).collect();
 
+        // Items sharing a row form a run; a run holding a broken item is
+        // kept whole, so every source row is written once.
+        let rows_of = |n: Node| (base + n.start_position().row, base + n.end_position().row);
+        let mut run_end = vec![0; items.len()]; // index one past the last item of i's run
+        let mut run_broken = vec![false; items.len()];
+        let mut run_start = 0;
+        while run_start < items.len() {
+            let mut end = run_start + 1;
+            let mut last_row = rows_of(items[run_start]).1;
+            while end < items.len() && rows_of(items[end]).0 <= last_row {
+                last_row = last_row.max(rows_of(items[end]).1);
+                end += 1;
+            }
+            let broken_run = items[run_start..end].iter().any(|&n| broken(n));
+            for k in run_start..end {
+                run_end[k] = end;
+                run_broken[k] = broken_run;
+            }
+            run_start = end;
+        }
+
         let mut i = 0;
         while i < items.len() {
             let node = items[i];
             let class = Item::of(node);
             let start = base + node.start_position().row;
             let end = base + node.end_position().row;
+
+            if run_broken[i] {
+                let (first, _) = self.rows(piece, node);
+                let (_, last) = self.rows(piece, items[run_end[i] - 1]);
+                if let Some((prev_class, prev_end)) = self.prev
+                    && needs_blank_line(prev_class, class, first.saturating_sub(prev_end + 1))
+                {
+                    self.out.push(String::new());
+                }
+                self.kept.push((first, last));
+                self.out.extend(self.lines(first, last));
+                self.prev = Some((Item::of(items[run_end[i] - 1]), last));
+                i = run_end[i];
+                continue;
+            }
 
             // A comment on the line where the previous item ends stays there.
             if class == Item::Comment
@@ -276,12 +313,10 @@ impl<'a> Emitter<'a> {
             if class == Item::Import {
                 let mut run = Vec::new();
                 let mut last_end = end;
-                while i < items.len() && Item::of(items[i]) == Item::Import {
+                while i < items.len() && Item::of(items[i]) == Item::Import && !run_broken[i] {
                     let import = items[i];
                     last_end = base + import.end_position().row;
-                    if broken(import) {
-                        run.push(self.keep(piece, import).join("\n"));
-                    } else if holds_comment(import) {
+                    if holds_comment(import) {
                         let (first, last) = self.rows(piece, import);
                         run.push(self.lines(first, last).join("\n"));
                     } else {
@@ -295,12 +330,7 @@ impl<'a> Emitter<'a> {
                 continue;
             }
 
-            let mut end = end;
-            if broken(node) {
-                let kept = self.keep(piece, node);
-                end = self.rows(piece, node).1;
-                self.out.extend(kept);
-            } else if class == Item::Comment {
+            if class == Item::Comment {
                 self.out.push(comment_text(node, text));
             } else {
                 self.out.extend(format_block(node, text, self.config));
@@ -335,13 +365,6 @@ impl<'a> Emitter<'a> {
         (first..=last)
             .filter_map(|row| self.source_lines.get(row).map(|l| l.trim_end().to_string()))
             .collect()
-    }
-
-    /// Keep `node` verbatim: its lines, with its rows noted for a W142.
-    fn keep(&mut self, piece: &Piece<'_>, node: Node<'_>) -> Vec<String> {
-        let (first, last) = self.rows(piece, node);
-        self.kept.push((first, last));
-        self.lines(first, last)
     }
 
     /// The text (`out` joined, final newline) and one W142 per kept range

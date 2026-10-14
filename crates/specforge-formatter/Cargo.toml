@@ -4,6 +4,11 @@ edition.workspace = true
 version.workspace = true
 license.workspace = true
 repository.workspace = true
+autotests = false
+
+[[test]]
+name = "tests"
+path = "tests/main.rs"
 
 [dependencies]
 tree-sitter = { workspace = true }
