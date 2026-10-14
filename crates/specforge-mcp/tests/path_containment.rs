@@ -347,7 +347,6 @@ fn infer_session_source_paths_outside_the_project_are_refused() {
     invariant = "mcp_served_project_consistency",
     verify = "a mutation reads and writes no file through a symlink that leaves the project"
 )]
-#[ignore = "fixed by T6"]
 fn format_does_not_write_through_a_symlink_that_leaves_the_project() {
     let scene = Scene::new();
     std::os::unix::fs::symlink(scene.outside(), scene.proj().join("spec/dir")).unwrap();
@@ -369,7 +368,6 @@ fn format_does_not_write_through_a_symlink_that_leaves_the_project() {
     invariant = "mcp_served_project_consistency",
     verify = "a mutation reads and writes no file through a symlink that leaves the project"
 )]
-#[ignore = "fixed by T6"]
 fn infer_session_marks_no_file_behind_a_symlink_that_leaves_the_project() {
     let scene = Scene::new();
     std::os::unix::fs::symlink(scene.outside(), scene.proj().join("src")).unwrap();
@@ -380,4 +378,38 @@ fn infer_session_marks_no_file_behind_a_symlink_that_leaves_the_project() {
         json!({"action": "mark_analyzed", "source_file": "src/x.spec"}),
     );
     assert_refused(&reply, "source_file");
+}
+
+/// `rename` and `migrate` edit the project's sources: one that is a symlink
+/// to a file outside the project is not written through.
+#[cfg(unix)]
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a mutation reads and writes no file through a symlink that leaves the project"
+)]
+fn rename_and_migrate_do_not_write_through_a_symlink_that_leaves_the_project() {
+    for (tool, arguments) in [
+        (
+            "specforge.rename",
+            json!({"entity_id": "ghost", "new_name": "spirit"}),
+        ),
+        ("specforge.migrate", json!({})),
+    ] {
+        let scene = Scene::new();
+        let target = "// specforge-format: 0.9\nbehavior ghost \"G\" {\n}\n";
+        fs::write(scene.outside().join("x.spec"), target).unwrap();
+        std::os::unix::fs::symlink(
+            scene.outside().join("x.spec"),
+            scene.proj().join("spec/ghost.spec"),
+        )
+        .unwrap();
+        let mut server = scene.serve();
+        let before = scene.outside_files();
+        let reply = call_tool(&mut server, tool, arguments);
+        assert_eq!(
+            scene.outside_files(),
+            before,
+            "{tool}: outside/ changed: {reply}"
+        );
+    }
 }

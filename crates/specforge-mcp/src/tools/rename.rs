@@ -6,10 +6,12 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 
 use crate::args::Arguments;
+use crate::containment::Containment;
 use crate::mutation::{FreshDiagnostics, Mutated, Mutation, MutationArgs, MutationReply, Written};
 use crate::refusal::ArgumentOf;
 use crate::target::ProjectRef;
 use specforge_ops::rename::RenameField;
+use std::path::Path;
 
 /// `specforge.rename`'s arguments.
 #[derive(Debug, Arguments)]
@@ -96,6 +98,15 @@ impl CoreTool for Tool {
             &args.new_name,
         )
         .map_err(Self::failed)?;
+
+        // Every file it edits is a file of the project: a source that is a
+        // symlink leaving it is not written through (ADR 0092 D8).
+        let bound = Containment::at(&spec_root);
+        for file in plan.affected_files() {
+            bound
+                .resolve(Path::new(file))
+                .map_err(|outside| Box::new(outside.refusal_of_file(file)))?;
+        }
 
         let mut reply = Reply {
             old_name: args.entity_id,

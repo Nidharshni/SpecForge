@@ -63,9 +63,11 @@ Every argument of a tool, prompt or resource that names a file or directory, and
   written, and its bytes are checked and run in the sandbox. Installing from a sibling directory is how
   extensions are developed. Whether MCP may install from outside the project, and from `git+`, is a separate
   decision (round README §9).
-- **D8. Symlinks.** A mutation neither reads nor writes through a symlink that leaves the project, and
-  `infer_session` does not hash one. `format` reports such a file as failed (`invalid_input`) and writes the
-  others. A symlink that stays inside the project is followed.
+- **D8. Symlinks.** A mutation neither reads nor writes through a symlink that leaves the project. `format`
+  reports such a source as failed (`invalid_input`) and formats the others; `rename` and `migrate` refuse the whole
+  call (`invalid_input`, nothing written); `infer_session` does not hash one (`source_outside_root`). The
+  operations take the bound as an argument (`format::run_within`, `migrate::run_within`,
+  `specforge_ops::resolves_outside`); the CLI passes none. A symlink that stays inside the project is followed.
 
 ## Consequences
 

@@ -103,6 +103,22 @@ impl Outside {
     }
 }
 
+impl Outside {
+    /// `invalid_input` on `file`, a file of the project (not an argument of
+    /// the call): a source that is a symlink leaving the project.
+    pub(crate) fn refusal_of_file(self, file: &str) -> McpError {
+        McpError::new(
+            ErrorCode::InvalidInput,
+            format!(
+                "{file} resolves to {}, outside {}: a symlink that leaves the project is not followed",
+                self.resolved.display(),
+                self.root.display()
+            ),
+        )
+        .with_file(file)
+    }
+}
+
 /// `path` made absolute and resolved component by component: `..` leaves
 /// the real directory reached so far (after its symlinks), so no name can
 /// pass through a symlink or a `..` unseen. Canonical as far as it exists.

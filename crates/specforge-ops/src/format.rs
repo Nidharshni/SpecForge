@@ -362,6 +362,19 @@ impl Failure {
         }
     }
 
+    /// `path` resolves to `real`, outside `within`: neither read nor written.
+    fn outside(path: PathBuf, real: &Path, within: &Path) -> Self {
+        Failure::Read {
+            path,
+            kind: OpErrorKind::InvalidInput,
+            error: format!(
+                "resolves to {}, outside {}: a symlink that leaves the project is not followed",
+                real.display(),
+                within.display()
+            ),
+        }
+    }
+
     /// A write of `path` failed with `error`.
     fn write(path: PathBuf, error: &std::io::Error) -> Self {
         Failure::Write {
@@ -738,6 +751,15 @@ impl Projects {
 /// outcome's diagnostics, and fails [`Outcome::ok`]. A named `.spec` file
 /// selects no config: it is formatted all the same (ADR 0021 D3).
 pub fn run(request: &Request) -> Result<Outcome, OpError> {
+    run_within(request, None)
+}
+
+/// [`run`], and with `within` (a directory) a target that resolves outside
+/// it, by a symlink in the project, is neither read nor written: it is a
+/// failure of kind [`OpErrorKind::InvalidInput`] and the other targets are
+/// formatted (ADR 0092 D8). MCP passes the project's root; the CLI's user is
+/// already at the file system and passes none.
+pub fn run_within(request: &Request, within: Option<&Path>) -> Result<Outcome, OpError> {
     let Targets { files, diagnostics } = targets(request.root.dir(), request.paths)?;
     // One set of configurations for the run: each file gets the one
     // `document(Place::File(file), ..)` gives it (no editor: the CLI and
@@ -749,6 +771,14 @@ pub fn run(request: &Request) -> Result<Outcome, OpError> {
         ..Outcome::default()
     };
     for target in files {
+        if let Some(within) = within
+            && let Some(real) = crate::resolves_outside(&target, within)
+        {
+            outcome
+                .failures
+                .push(Failure::outside(target, &real, within));
+            continue;
+        }
         let source = match std::fs::read_to_string(&target) {
             Ok(source) => source,
             Err(e) => {
@@ -2078,5 +2108,47 @@ mod tests {
         assert!(outcome.configured(), "{:?}", outcome.diagnostics);
         assert_eq!(outcome.changes.len(), 1);
         assert_ne!(std::fs::read_to_string(file).unwrap(), MESSY);
+    }
+
+    /// A source that is a symlink leaving the bound is neither read nor
+    /// written, and the others are formatted (ADR 0092 D8).
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_that_leaves_the_bound_is_a_failure_and_nothing_is_written() {
+        let dir = project_with("{}", &[("spec/a.spec", MESSY)]);
+        let outside = tempfile::TempDir::new().unwrap();
+        std::fs::write(outside.path().join("x.spec"), MESSY).unwrap();
+        std::os::unix::fs::symlink(
+            outside.path().join("x.spec"),
+            dir.path().join("spec/link.spec"),
+        )
+        .unwrap();
+        let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+        let request = Request {
+            root: &root,
+            paths: &[],
+            mode: Mode::Write,
+        };
+
+        let bound = super::run_within(&request, Some(dir.path())).unwrap();
+        assert_eq!(bound.failures.len(), 1, "{:?}", bound.failures);
+        assert_eq!(bound.failures[0].kind(), OpErrorKind::InvalidInput);
+        assert!(bound.failures[0].path().ends_with("spec/link.spec"));
+        assert_eq!(
+            std::fs::read_to_string(outside.path().join("x.spec")).unwrap(),
+            MESSY
+        );
+        assert_ne!(
+            std::fs::read_to_string(dir.path().join("spec/a.spec")).unwrap(),
+            MESSY
+        );
+
+        // Unbounded (the CLI): the user's own symlink is followed.
+        let unbounded = super::run(&request).unwrap();
+        assert!(unbounded.failures.is_empty());
+        assert_ne!(
+            std::fs::read_to_string(outside.path().join("x.spec")).unwrap(),
+            MESSY
+        );
     }
 }

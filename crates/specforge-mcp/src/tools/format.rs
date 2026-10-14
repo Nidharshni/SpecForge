@@ -92,11 +92,15 @@ impl CoreTool for Tool {
                     .map_err(|outside| Box::new(outside.refusal("paths")))
             })
             .collect::<Result<Vec<PathBuf>, Box<McpError>>>()?;
-        let outcome = format::run(&Request {
-            root: project_root,
-            paths: &explicit,
-            mode,
-        })?;
+        // A source that is a symlink leaving the project is not followed.
+        let outcome = format::run_within(
+            &Request {
+                root: project_root,
+                paths: &explicit,
+                mode,
+            },
+            Some(project_root.dir()),
+        )?;
 
         let reply = outcome.document(args.diff);
         if outcome.succeeded() {

@@ -62,6 +62,9 @@ pub fn parse_target(raw: Option<&str>) -> Result<FormatVersion, Refusal<MigrateF
     }
 }
 
+/// A source that resolves outside the project (`InvalidInput`).
+pub const SOURCE_OUTSIDE_ROOT: &str = "source_outside_root";
+
 pub struct Request<'a> {
     pub root: &'a specforge_common::ProjectRoot,
     pub target: FormatVersion,
@@ -319,11 +322,39 @@ pub use specforge_protocol_types::MigrationInput;
 /// other problem is one E069 in [`Outcome::diagnostics`] and fails
 /// [`Outcome::ok`]. The preview and the migration rewrite the same sources.
 pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome, OpError> {
+    run_within(request, runtime, None)
+}
+
+/// [`run`], and with `within` (a directory) refused (`invalid_input`, nothing
+/// read or written) when a source resolves outside it, by a symlink in the
+/// project (ADR 0092 D8). MCP passes the project's root; the CLI's user is
+/// already at the file system and passes none.
+pub fn run_within(
+    request: &Request,
+    runtime: Option<SharedRuntime>,
+    within: Option<&Path>,
+) -> Result<Outcome, OpError> {
     // The project the files are migrated in and the one the hooks and the checks compile.
     let project = request.root;
     let target = &request.target;
     let read = crate::config::rewritable(project.dir())?;
     let sources = read.config.sources(project.dir()).files();
+    if let Some(within) = within {
+        for source in &sources {
+            if let Some(real) = crate::resolves_outside(source, within) {
+                return Err(OpError::new(
+                    OpErrorKind::InvalidInput,
+                    SOURCE_OUTSIDE_ROOT,
+                    format!(
+                        "source {} resolves to {}, outside {}: a symlink that leaves the project is not migrated",
+                        source.display(),
+                        real.display(),
+                        within.display()
+                    ),
+                ));
+            }
+        }
+    }
     let preview = migrate_project(project, &sources, target, true, true);
     let from = preview
         .results
