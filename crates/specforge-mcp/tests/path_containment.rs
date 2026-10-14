@@ -236,7 +236,6 @@ fn a_path_inside_the_served_project_is_accepted() {
     invariant = "mcp_served_project_consistency",
     verify = "a file or directory an MCP tool argument names resolves inside the call's project"
 )]
-#[ignore = "fixed by T3"]
 fn render_out_dir_outside_the_served_project_is_refused() {
     let scene = Scene::new();
     let mut verdicts = Verdicts::default();

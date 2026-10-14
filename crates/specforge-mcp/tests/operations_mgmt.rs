@@ -669,8 +669,8 @@ fn render(server: &mut McpServer, args: Value) -> Value {
 )]
 fn render_writes_the_output_into_out_dir() {
     let mut server = test_server();
-    let out = tempfile::TempDir::new().unwrap();
-    let out_dir = out.path().join("rendered");
+    // Inside the served project: an out_dir may not leave it (ADR 0092).
+    let out_dir = server.root().join("rendered");
 
     let parsed = render(
         &mut server,
@@ -694,17 +694,16 @@ fn render_writes_the_output_into_out_dir() {
 )]
 fn render_uses_the_renderer_the_format_names() {
     let mut server = test_server();
-    let out = tempfile::TempDir::new().unwrap();
+    let out = server.root().join("rendered");
 
     let parsed = render(
         &mut server,
-        json!({"format": "json", "out_dir": out.path().to_str().unwrap()}),
+        json!({"format": "json", "out_dir": out.to_str().unwrap()}),
     );
     // `json` is the graph renderer's alias; the result names the renderer.
     assert_eq!(parsed["format"], "graph");
     let graph: Value =
-        serde_json::from_str(&std::fs::read_to_string(out.path().join("graph.json")).unwrap())
-            .unwrap();
+        serde_json::from_str(&std::fs::read_to_string(out.join("graph.json")).unwrap()).unwrap();
     assert_eq!(graph["nodes"][0]["id"], "alpha", "{graph}");
 
     // Without out_dir the rendering comes back inline and nothing is written.
@@ -758,17 +757,17 @@ fn render_unknown_format_lists_the_available_renderers() {
 )]
 fn render_contract() {
     let mut server = test_server();
-    let out = tempfile::TempDir::new().unwrap();
+    let out = server.root().join("rendered");
 
     let parsed = render(
         &mut server,
-        json!({"format": "context", "out_dir": out.path().to_str().unwrap()}),
+        json!({"format": "context", "out_dir": out.to_str().unwrap()}),
     );
 
     let files = parsed["output_files"].as_array().unwrap();
     assert_eq!(files.len(), 1, "{parsed}");
     let written = std::path::Path::new(files[0].as_str().unwrap());
-    assert!(written.starts_with(out.path()), "{parsed}");
+    assert!(written.starts_with(&out), "{parsed}");
     assert!(std::fs::read_to_string(written).unwrap().contains("alpha"));
     assert!(
         events(&server, "mcp_tool_invoked")
