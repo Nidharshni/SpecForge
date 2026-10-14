@@ -35,7 +35,9 @@ A dead agent (API error) resumes with `SendMessage`; its worktree survives.
 ## 4. Merge
 
 For each finished branch, in wave order: `git merge --no-ff`, `cargo clippy --workspace --all-targets -- -D warnings`
-and `cargo nextest run --workspace`, and `git status` shows no `*.snap.new`. Then `git worktree remove <path>`
+and `cargo nextest run --workspace`, and `git status` shows no `*.snap.new`. Then `cargo gate full --only file-size`; when it reports a listed file gone
+and a new one over the cap (the branch moved it), `cargo gate baseline --only file-size --since HEAD^1` and commit
+`chore(gate): carry file-size rows after merging <plan>`. Then `git worktree remove <path>`
 (`-f -f` only when the agent's final reply is in; a finished agent's worktree stays locked). Done when every plan is
 on the integration branch.
 
@@ -47,7 +49,7 @@ declaration diff, commit what it prints.
 ## 6. Gate
 
 `cargo gate full` is green, then the PR. A baseline that fell is lowered with `cargo gate baseline` in
-the same commit.
+the same commit (`--only specs` or `--only file-size` for one section).
 
 ## Pitfalls round 7 paid for
 
