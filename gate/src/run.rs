@@ -466,8 +466,13 @@ pub fn run(mode: Mode, repo: &Repo, only: Option<&str>) -> Result<Report, String
 }
 
 /// `cargo gate baseline [--only <check>]`: lower `gate/baseline.json`'s sections (`only`: that check's alone) to what
-/// the checks find today; never raises an entry. The `specs` section builds the CLI. Returns the lines to print.
-pub fn baseline(repo: &Repo, only: Option<&str>) -> Result<Vec<String>, String> {
+/// the checks find today; never raises an entry. The `specs` section builds the CLI; the `file-size` section reads the
+/// tracked files and git's renames since `since` (`HEAD`). Returns the lines to print.
+pub fn baseline(
+    repo: &Repo,
+    only: Option<&str>,
+    since: Option<&str>,
+) -> Result<Vec<String>, String> {
     if let Some(name) = only
         && !crate::baseline::SECTIONS.contains(&name)
     {
@@ -488,7 +493,7 @@ pub fn baseline(repo: &Repo, only: Option<&str>) -> Result<Vec<String>, String> 
         log,
         specforge: &specforge,
     };
-    crate::steps::write_baseline(&ctx, only)
+    crate::steps::write_baseline(&ctx, only, since)
 }
 
 fn run_one(

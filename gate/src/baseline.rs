@@ -1,5 +1,5 @@
 //! `gate/baseline.json`: what the checks tolerate today, one section per check that keeps one. `specs`: per project,
-//! the count of each warning code. A check fails when what it finds differs from its section in either direction;
+//! the count of each warning code; `file-size`: per tracked `.rs` file over the cap, its line count. A check fails when what it finds differs from its section in either direction;
 //! `cargo gate baseline` lowers a section and never raises an entry.
 
 use std::collections::BTreeMap;
@@ -11,14 +11,19 @@ use serde::{Deserialize, Serialize};
 pub const PATH: &str = "gate/baseline.json";
 
 /// The checks that keep a section, as `cargo gate baseline --only` names them.
-pub const SECTIONS: &[&str] = &["specs"];
+pub const SECTIONS: &[&str] = &[crate::size_cap::CHECK, "specs"];
 
 /// Per project root (`.`, `examples/shop`), per warning code (`W004`): the count the `specs` check tolerates.
 pub type WarningCounts = BTreeMap<String, BTreeMap<String, u64>>;
 
+/// Per repo-relative `.rs` path: the line count the `file-size` check tolerates. Every entry is over the cap.
+pub type FileSizes = BTreeMap<String, u64>;
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Baseline {
+    #[serde(default, rename = "file-size")]
+    pub file_size: FileSizes,
     #[serde(default)]
     pub specs: WarningCounts,
 }
@@ -50,13 +55,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join("gate")).unwrap();
         let baseline = Baseline {
+            file_size: FileSizes::from([("b.rs".into(), 900), ("a.rs".into(), 801)]),
             specs: WarningCounts::from([(".".into(), BTreeMap::from([("W003".into(), 1)]))]),
         };
         baseline.write(dir.path()).unwrap();
         let text = std::fs::read_to_string(dir.path().join(PATH)).unwrap();
         assert_eq!(
             text,
-            "{\n  \"specs\": {\n    \".\": {\n      \"W003\": 1\n    }\n  }\n}\n"
+            "{\n  \"file-size\": {\n    \"a.rs\": 801,\n    \"b.rs\": 900\n  },\n  \"specs\": {\n    \".\": {\n      \"W003\": 1\n    }\n  }\n}\n"
         );
         assert_eq!(Baseline::read(dir.path()).unwrap(), baseline);
 

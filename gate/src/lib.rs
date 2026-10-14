@@ -11,6 +11,7 @@ pub mod layers;
 mod repo;
 mod root_layout;
 mod run;
+mod size_cap;
 mod steps;
 
 pub use change_set::{ChangeSet, Pattern};

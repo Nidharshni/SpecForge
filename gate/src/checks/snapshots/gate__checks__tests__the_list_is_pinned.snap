@@ -15,6 +15,8 @@ zero-entity       hook       crates/**/src/**, scripts/check-zero-entity-core.sh
                              the core crates name no entity kind of an extension
 layers            hook       Cargo.toml, crates/**/Cargo.toml, gate/src/layers.rs
                              no crate has a normal or build dependency on a crate in a higher layer (its folder under crates/) or in none, and the LSP links no package registry client (ADR 0010)
+file-size         hook       **/*.rs, gate/baseline.json
+                             no tracked .rs file is over 800 lines but those gate/baseline.json lists, none past its listed size
 links             hook       computed: a .spec file; a test file or one with a `verify =` attribute
                              every test's verify text and entity is declared by the spec (A016, static)
 doc-links         hook       always

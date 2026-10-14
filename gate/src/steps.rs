@@ -5,7 +5,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use crate::baseline::{self, Baseline};
+use crate::baseline::{self, Baseline, FileSizes};
 use crate::checks::{self, Selection};
 use crate::doc_links;
 use crate::judge;
@@ -13,6 +13,7 @@ use crate::layers;
 use crate::repo::{OUTSIDE_WORKSPACE, Repo};
 use crate::root_layout;
 use crate::run::{CARGO_AUDIT, Ctx, Mode, TREE_SITTER};
+use crate::size_cap;
 
 /// Ok when nothing failed; else every failure, one per line.
 fn finish(failures: Vec<String>) -> Result<(), String> {
@@ -289,6 +290,19 @@ pub fn doctests(ctx: &Ctx, selection: &Selection) -> Result<(), String> {
     ctx.sh(&mut cmd)
 }
 
+pub fn file_size(ctx: &Ctx, _: &Selection) -> Result<(), String> {
+    let listed = Baseline::read(&ctx.repo.root)?.file_size;
+    let verdict = size_cap::verdict(&file_sizes(ctx)?, &listed);
+    for line in &verdict.lines {
+        ctx.log(line);
+    }
+    if verdict.problems.is_empty() {
+        Ok(())
+    } else {
+        Err(verdict.problems.join("; "))
+    }
+}
+
 pub fn specs(ctx: &Ctx, _: &Selection) -> Result<(), String> {
     let found = project_diagnostics(ctx)?;
     let verdict = judge::spec_verdict(&found, &Baseline::read(&ctx.repo.root)?.specs, false);
@@ -344,10 +358,24 @@ pub fn builtins_verify(ctx: &Ctx, _: &Selection) -> Result<(), String> {
 }
 
 /// `cargo gate baseline`: lower the section of `gate/baseline.json` that `only` names (every section when `None`) to
-/// what its check finds today; never raises an entry. Writes nothing when a section refuses.
-pub fn write_baseline(ctx: &Ctx, only: Option<&str>) -> Result<Vec<String>, String> {
+/// what its check finds today; never raises an entry. A moved file carries its `file-size` entry when git sees the
+/// move from `since` (`HEAD` when `None`) to the working tree. Writes nothing when a section refuses.
+pub fn write_baseline(
+    ctx: &Ctx,
+    only: Option<&str>,
+    since: Option<&str>,
+) -> Result<Vec<String>, String> {
     let mut baseline = Baseline::read(&ctx.repo.root)?;
     let (mut lines, mut refused) = (Vec::new(), false);
+    if only.is_none_or(|name| name == size_cap::CHECK) {
+        let renames = renames_since(ctx, since.unwrap_or("HEAD"))?;
+        let lowered = size_cap::lower(&file_sizes(ctx)?, &baseline.file_size, &renames);
+        lines.extend(lowered.lines);
+        match lowered.new_baseline {
+            Some(section) => baseline.file_size = section,
+            None => refused = true,
+        }
+    }
     if only.is_none_or(|name| name == "specs") {
         let found = project_diagnostics(ctx)?;
         let verdict = judge::spec_verdict(&found, &baseline.specs, true);
@@ -363,6 +391,33 @@ pub fn write_baseline(ctx: &Ctx, only: Option<&str>) -> Result<Vec<String>, Stri
     baseline.write(&ctx.repo.root)?;
     lines.push(format!("wrote {}", baseline::PATH));
     Ok(lines)
+}
+
+/// Every tracked `.rs` file (`git ls-files`) and its lines in the working tree.
+fn file_sizes(ctx: &Ctx) -> Result<FileSizes, String> {
+    let (listed, out) = ctx.capture(ctx.cmd("git").args(["ls-files", "-z", "--", "*.rs"]))?;
+    if !listed {
+        return Err("`git ls-files` failed".into());
+    }
+    Ok(size_cap::measure(
+        &ctx.repo.root,
+        out.split('\0').filter(|path| !path.is_empty()),
+    ))
+}
+
+/// The renames git sees from `since` to the working tree, staged ones included.
+fn renames_since(ctx: &Ctx, since: &str) -> Result<Vec<(String, String)>, String> {
+    let (ok, out) =
+        ctx.capture(
+            ctx.cmd("git")
+                .args(["diff", "-M", "--name-status", "-z", since, "--"]),
+        )?;
+    if !ok {
+        return Err(format!(
+            "`git diff -M {since}` failed: is `{since}` a revision?"
+        ));
+    }
+    Ok(size_cap::renames(&out))
 }
 
 fn first_problem(lines: &[String]) -> String {
