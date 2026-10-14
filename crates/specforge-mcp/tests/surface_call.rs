@@ -10,9 +10,7 @@ use serde_json::{Value, json};
 use specforge_mcp::McpServer;
 use specforge_ops::export::{Format, Request};
 use specforge_ops::view::ProjectView;
-use specforge_project::CompiledProject;
 use specforge_test::prelude::*;
-use std::sync::Arc;
 
 use crate::support::*;
 
@@ -275,11 +273,8 @@ fn export_takes_a_schema_version() {
     // --schema-version` refuses it: the operation's one error.
     let root = server.root().to_path_buf();
     let expected = {
-        let runtime = specforge_component::ComponentRuntime::with_user_cache();
-        let project = CompiledProject::compile(
-            &specforge_common::ProjectRoot::of(&root).unwrap(),
-            Some(Arc::new(runtime)),
-        );
+        let runtime = specforge_project::testing::component_runtime();
+        let project = specforge_project::testing::compile_at(&root, Some(runtime));
         specforge_ops::export::export(
             &ProjectView::of(&project),
             &Request {
@@ -579,11 +574,8 @@ fn a_read_names_the_uri_the_client_read() {
 
 /// What `specforge export` writes for `request`, over the project at `root`.
 fn exported(root: &std::path::Path, request: &Request) -> String {
-    let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let project = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(root).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let runtime = specforge_project::testing::component_runtime();
+    let project = specforge_project::testing::compile_at(root, Some(runtime));
     specforge_ops::export::export(&ProjectView::of(&project), request).unwrap()
 }
 

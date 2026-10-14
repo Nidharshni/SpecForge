@@ -180,12 +180,38 @@ fn the_support_module_alone_runs_the_binary() {
         &[SUPPORT],
     );
     let homes = uses(&[".env(\"HOME\"", "\"USERPROFILE\""], &[SUPPORT]);
-    let helpers = uses(&["fn specforge_cmd", "fn specforge(", "fn copy_tree"], &[]);
+    let helpers = uses(
+        &[
+            "fn specforge_cmd",
+            "fn specforge(",
+            "fn copy_tree",
+            "fn setup_project",
+            "specforge-parity-home",
+            "specforge-outcome-home",
+        ],
+        &[],
+    );
     let found: Vec<String> = spawners.into_iter().chain(homes).chain(helpers).collect();
     assert!(
         found.is_empty(),
         "use `support::Cli` (crates/specforge-cli/tests/support/cli.rs) to run the binary, and `TestProject` for the \
          project and its HOME:\n{}",
+        found.join("\n")
+    );
+}
+
+#[test]
+fn a_tests_project_is_compiled_by_the_fixture() {
+    let compiles = uses(&["CompiledProject::compile("], &[]);
+    let runtimes = uses(
+        &["ComponentRuntime::with_user_cache()"],
+        &["crates/specforge-component/tests/"],
+    );
+    let found: Vec<String> = compiles.into_iter().chain(runtimes).collect();
+    assert!(
+        found.is_empty(),
+        "build the project with `specforge_project::testing::TestProject` (`compile`, `compile_in`, `session`, or \
+         `compile_at` and `component_runtime` for a directory the test owns):\n{}",
         found.join("\n")
     );
 }

@@ -10,7 +10,7 @@ use specforge_wasm::{WasmCallResult, WasmTrapInfo};
 use std::sync::Arc;
 
 /// Helper: create a temp project dir with specforge.json and optional extensions.
-fn setup_project(extensions: &[&str], spec_content: &str) -> TestProject {
+fn project(extensions: &[&str], spec_content: &str) -> TestProject {
     TestProject::new()
         .config(|c| c["name"] = "test".into())
         .enabling(extensions)
@@ -27,7 +27,7 @@ fn setup_project(extensions: &[&str], spec_content: &str) -> TestProject {
 // install.
 #[test]
 fn protocol_extension_loaded_with_runtime() {
-    let dir = setup_project(
+    let dir = project(
         &["@test/proto"],
         "behavior hello \"Hello\" {\n    status planned\n}\n",
     );
@@ -91,7 +91,7 @@ fn protocol_extension_loaded_with_runtime() {
     verify = "unloadable extension binary produces diagnostic instead of crash"
 )]
 fn protocol_handshake_trap_produces_e028() {
-    let dir = setup_project(
+    let dir = project(
         &["@test/broken"],
         "behavior hello \"Hello\" {\n    status planned\n}\n",
     );
@@ -140,7 +140,7 @@ fn protocol_handshake_trap_produces_e028() {
     verify = "unloadable extension binary produces diagnostic instead of crash"
 )]
 fn protocol_version_mismatch_produces_e028() {
-    let dir = setup_project(
+    let dir = project(
         &["@test/badver"],
         "behavior hello \"Hello\" {\n    status planned\n}\n",
     );
