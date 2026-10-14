@@ -320,7 +320,12 @@ fn run(
                 .stderr(std::process::Stdio::null());
         }
     }
-    let started = SystemTime::now();
+    // File times come from the kernel's coarse clock, which can lag
+    // `now` by a few ticks: a report written at once would look older
+    // than the start. A grace of 100 ms keeps it.
+    let started = SystemTime::now()
+        .checked_sub(std::time::Duration::from_millis(100))
+        .unwrap_or(SystemTime::UNIX_EPOCH);
     let failed = |e: std::io::Error| format!("failed to run `{}`: {e}", argv.join(" "));
     let Some(capture) = capture else {
         let status = cmd.status().map_err(failed)?;
