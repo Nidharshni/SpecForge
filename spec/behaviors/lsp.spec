@@ -152,7 +152,7 @@ behavior handle_text_document_change "Handle Text Document Change" {
   category   command
   ports      [LspProtocol]
   produces   [file_changed]
-  invariants [incremental_correctness, lsp_response_latency]
+  invariants [incremental_correctness, lsp_response_latency, lsp_survives_its_faults]
   requires {
     document_open "the document has been opened via didOpen and is in the open document set"
   }
@@ -645,6 +645,7 @@ behavior shared_incremental_pipeline "Shared Incremental Pipeline" {
     zero_domain_knowledge_core,
     watch_mode_response_latency,
     lsp_extension_reload_consistency,
+    lsp_survives_its_faults,
   ]
   category   command
   types      [Graph]

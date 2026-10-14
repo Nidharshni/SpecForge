@@ -82,6 +82,21 @@ invariant lsp_utf16_positions "LSP UTF-16 Positions" {
   verify unit "a fix is offered whole or not at all: never over a buffer typed since, nor a file with no compiled text"
 }
 
+invariant lsp_survives_its_faults "The LSP Survives Its Faults" {
+  guarantee """
+    A panic in a request or notification handler is a fault of the server,
+    not the end of the editor's session: a request answers -32603
+    InternalError, a notification changes nothing more, the client is told
+    what failed in a window/logMessage error, and the server keeps serving.
+    A recompile's panic is reported the same way (ADR 0043). No input a
+    client can send ends the process: a position, a range or a buffer the
+    server cannot use is clamped or refused.
+  """
+  risk      high
+  verify unit "a panic is turned into its message"
+  verify integration "a request after a handler's panic is answered and the server keeps serving"
+}
+
 invariant cursor_names_one_entity "One Entity Under the Cursor" {
   guarantee """
     Every LSP request about the entity under a cursor (hover,

@@ -307,12 +307,15 @@ async fn e2e_extension_cycle_rule_reports_its_own_code() {
     assert!(codes.contains(&"E007".to_string()), "{codes:?}");
 }
 
+#[spec(
+    invariant = "lsp_survives_its_faults",
+    verify = "a request after a handler's panic is answered and the server keeps serving"
+)]
 #[tokio::test]
-#[ignore = "fixed by T1 (the server keeps serving) and T2 (the text)"]
 async fn e2e_an_edit_at_the_largest_column_keeps_the_server_serving() {
     let (mut client, uri) = Session::with_doc(None, "test.spec", "éé\n").await;
 
-    // A column no line has: the edit lands at the line's end.
+    // A column no line has: the edit used to panic the handler.
     client
         .did_change(
             &uri,
@@ -333,6 +336,26 @@ async fn e2e_an_edit_at_the_largest_column_keeps_the_server_serving() {
     assert!(hover["error"].is_null(), "{hover}");
     let shutdown = client.shutdown().await;
     assert!(shutdown["error"].is_null(), "{shutdown}");
+}
+
+#[tokio::test]
+#[ignore = "fixed by T2"]
+async fn e2e_an_edit_at_the_largest_column_applies_at_the_line_end_e2e() {
+    let (mut client, uri) = Session::with_doc(None, "test.spec", "éé\n").await;
+
+    client
+        .did_change(
+            &uri,
+            2,
+            vec![json!({
+                "range": {
+                    "start": { "line": 0, "character": u32::MAX },
+                    "end": { "line": 0, "character": u32::MAX },
+                },
+                "text": "x"
+            })],
+        )
+        .await;
 
     // The buffer is `ééx`: its syntax error quotes it.
     let published = client
