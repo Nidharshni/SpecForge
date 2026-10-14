@@ -3262,6 +3262,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "specforge-repo-root"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
+]
+
+[[package]]
 name = "specforge-resolver"
 version = "0.1.0"
 dependencies = [
