@@ -2,11 +2,6 @@ use crate::support::{Cli, TestProject};
 use specforge_project::testing::specs;
 use specforge_test_macros::test as specforge_test;
 
-/// A directory holding `files` and nothing else.
-fn setup_project(files: &[(&str, &str)]) -> TestProject {
-    TestProject::new().without_config().files(files)
-}
-
 const SPEC_CONTENT: &str = r#"
 behavior alpha "Alpha" { contract "first" }
 behavior beta "Beta" { contract "second" }
@@ -15,7 +10,9 @@ feature gamma "Gamma" { behaviors [alpha, beta] }
 
 #[test]
 fn trace_produces_upstream_and_downstream_json() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
     let output = Cli::on(&dir).command(&["trace", "alpha"]).output().unwrap();
 
@@ -36,7 +33,9 @@ fn trace_produces_upstream_and_downstream_json() {
 
 #[test]
 fn trace_nonexistent_entity_exits_one() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
     Cli::on(&dir)
         .command(&["trace", "nonexistent"])

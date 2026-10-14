@@ -22,7 +22,7 @@ fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-fn specforge(project: &TestProject, args: &[&str]) -> String {
+fn run_stdout(project: &TestProject, args: &[&str]) -> String {
     Cli::on(project).bare(args).stdout
 }
 
@@ -248,9 +248,9 @@ fn formatting_the_corpus_changes_nothing_but_layout() {
             &["check", "--format", "json", "--path", corpus][..],
         ] {
             let mut original: serde_json::Value =
-                serde_json::from_str(&specforge(&pristine, args)).unwrap();
+                serde_json::from_str(&run_stdout(&pristine, args)).unwrap();
             let mut formatted: serde_json::Value =
-                serde_json::from_str(&specforge(&copy, args)).unwrap();
+                serde_json::from_str(&run_stdout(&copy, args)).unwrap();
             without_positions(&mut original);
             without_positions(&mut formatted);
             assert!(

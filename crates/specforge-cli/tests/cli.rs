@@ -3,11 +3,6 @@ use specforge_project::testing::specs;
 use specforge_test_macros::test as specforge_test;
 use std::fs;
 
-/// A directory holding `files` and nothing else (a `specforge.json` among them, or none).
-fn setup_project(files: &[(&str, &str)]) -> TestProject {
-    TestProject::new().without_config().files(files)
-}
-
 // === check_mode_for_ci (self-check) ===
 
 #[specforge_test(
@@ -72,7 +67,7 @@ fn self_check_runs_without_crashing() {
     );
 
     // A broken project fails the CI step with exit 1 and says why on stderr.
-    let dir = setup_project(&[(
+    let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         "\nbehavior alpha \"A\" { contract \"first\" }\nfeature gamma \"G\" { behaviors [alpha, nonexistent] }\n",
     )]);
@@ -93,7 +88,7 @@ fn self_check_runs_without_crashing() {
     verify = "specforge check with zero extensions exits cleanly with I002"
 )]
 fn check_without_extensions_exits_cleanly_with_i002() {
-    let dir = setup_project(&[
+    let dir = TestProject::new().without_config().files(&[
         (
             "specforge.json",
             r#"{ "name": "p", "version": "0.1.0", "extensions": [] }"#,
@@ -122,7 +117,7 @@ fn check_without_extensions_exits_cleanly_with_i002() {
     verify = "specforge check with all extensions unavailable exits cleanly"
 )]
 fn check_with_every_extension_unavailable_exits_cleanly() {
-    let dir = setup_project(&[
+    let dir = TestProject::new().without_config().files(&[
         (
             "specforge.json",
             r#"{ "name": "p", "version": "0.1.0", "extensions": ["@specforge/no-such-a", "@specforge/no-such-b"] }"#,
@@ -156,7 +151,7 @@ fn check_with_every_extension_unavailable_exits_cleanly() {
 )]
 fn check_reports_a_missing_required_peer() {
     // @specforge/cargo-test requires @specforge/testing.
-    let dir = setup_project(&[
+    let dir = TestProject::new().without_config().files(&[
         (
             "specforge.json",
             r#"{ "name": "p", "version": "0.1.0", "extensions": ["@specforge/cargo-test"] }"#,
@@ -192,7 +187,9 @@ fn check_reports_a_missing_required_peer() {
     verify = "exit 0 with no errors"
 )]
 fn check_clean_project_exits_zero() {
-    let dir = setup_project(&[("main.spec", r#"behavior alpha "A" { contract "first" }"#)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", r#"behavior alpha "A" { contract "first" }"#)]);
 
     Cli::on(&dir).command(&["check"]).assert().success();
 }
@@ -204,7 +201,7 @@ fn check_clean_project_exits_zero() {
     verify = "exit 1 with errors"
 )]
 fn check_project_with_errors_exits_one() {
-    let dir = setup_project(&[(
+    let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" }
@@ -221,7 +218,7 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
 )]
 fn strict_mode_promotes_warnings_to_errors() {
     // Orphan ref produces W012 (warning) — with --strict it becomes an error → exit 1
-    let dir = setup_project(&[(
+    let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" }
@@ -246,7 +243,7 @@ ref gh.issue:42 "Orphan ref"
     verify = "JSON output is valid and parseable"
 )]
 fn json_format_outputs_valid_json() {
-    let dir = setup_project(&[(
+    let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" }
@@ -292,7 +289,7 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
     verify = "error diagnostic is formatted with file:line:col"
 )]
 fn structured_output_includes_file_line_col() {
-    let dir = setup_project(&[(
+    let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" }
@@ -316,7 +313,7 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
     verify = "diagnostic includes context snippet"
 )]
 fn structured_output_includes_context_snippet() {
-    let dir = setup_project(&[(
+    let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" }
@@ -358,7 +355,7 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
     verify = "suggestion is displayed when available"
 )]
 fn structured_output_includes_suggestion() {
-    let dir = setup_project(&[(
+    let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
 behavior alpha_parser "A" { contract "first" }
@@ -383,7 +380,9 @@ feature gamma "G" { behaviors [alpha_parsr] }
     verify = "check mode produces no output files"
 )]
 fn check_mode_produces_no_output_files() {
-    let dir = setup_project(&[("main.spec", r#"behavior alpha "A" { contract "first" }"#)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", r#"behavior alpha "A" { contract "first" }"#)]);
 
     let before: Vec<_> = fs::read_dir(dir.root())
         .unwrap()
@@ -407,7 +406,7 @@ fn check_mode_produces_no_output_files() {
     verify = "check mode prints diagnostics to stderr"
 )]
 fn check_mode_prints_to_stderr() {
-    let dir = setup_project(&[(
+    let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" }
@@ -439,7 +438,7 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
     verify = "each diagnostic includes code, severity, message, file, line, column"
 )]
 fn json_diagnostics_have_complete_fields() {
-    let dir = setup_project(&[(
+    let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" }
@@ -495,7 +494,7 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
 /// (W012) and one info (I004: `features` targets a kind only the absent
 /// product extension provides).
 fn one_of_each_severity() -> TestProject {
-    setup_project(&[
+    TestProject::new().without_config().files(&[
         (
             "specforge.json",
             r#"{"name":"t","version":"0.1.0","spec_root":"spec","extensions":["@specforge/software"]}"#,
@@ -662,10 +661,14 @@ fn no_color_disables_diagnostic_colour() {
 fn exit_code_contract_consistency() {
     // Requires: validation_complete fired
     // Ensures: exit 0 on clean, exit 1 on errors, strict promotes warnings
-    let clean_dir = setup_project(&[("main.spec", r#"behavior alpha "A" { contract "first" }"#)]);
+    let clean_dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", r#"behavior alpha "A" { contract "first" }"#)]);
     Cli::on(&clean_dir).command(&["check"]).assert().success();
 
-    let error_dir = setup_project(&[("main.spec", r#"feature g "G" { behaviors [nonexistent] }"#)]);
+    let error_dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", r#"feature g "G" { behaviors [nonexistent] }"#)]);
     Cli::on(&error_dir).command(&["check"]).assert().code(1);
 }
 
@@ -676,7 +679,7 @@ fn exit_code_contract_consistency() {
 fn check_mode_contract_consistency() {
     // Requires: validation_complete fired
     // Ensures: no output files, diagnostics to stderr, appropriate exit code
-    let dir = setup_project(&[(
+    let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" }
@@ -705,7 +708,7 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
     verify = "diagnostics serialized as JSON array to stdout"
 )]
 fn json_format_outputs_to_stdout() {
-    let dir = setup_project(&[(
+    let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" }
@@ -731,7 +734,7 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
 )]
 fn json_format_exit_code_matches_human_format() {
     // With errors: both human and json format should exit 1
-    let dir = setup_project(&[(
+    let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" }
@@ -763,7 +766,7 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
 fn json_diagnostics_contract_consistency() {
     // Requires: validation_complete (diagnostics collected)
     // Ensures: JSON array to stdout, complete fields, exit code unaffected
-    let dir = setup_project(&[(
+    let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" }
@@ -795,7 +798,7 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
 
 #[test]
 fn json_diagnostics_include_suggestion_when_available() {
-    let dir = setup_project(&[(
+    let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
 behavior alpha_parser "A" { contract "first" }
@@ -826,7 +829,7 @@ feature gamma "G" { behaviors [alpha_parsr] }
 /// warning (W061, the reference cycle) and two infos (I067, modules
 /// without features).
 fn project_with_every_severity() -> TestProject {
-    setup_project(&[
+    TestProject::new().without_config().files(&[
         (
             "specforge.json",
             r#"{"name":"p","version":"0.1.0","extensions":["@specforge/software","@specforge/product"]}"#,
@@ -956,7 +959,9 @@ fn lint_pedantic_is_accepted_and_changes_nothing() {
     verify = "a typo'd --format fails with a clap error (exit 2), not a bespoke runtime error"
 )]
 fn unknown_format_value_is_rejected_by_clap() {
-    let dir = setup_project(&[("main.spec", r#"behavior alpha "A" { contract "first" }"#)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", r#"behavior alpha "A" { contract "first" }"#)]);
 
     let output = Cli::on(&dir)
         .command(&["stats", "--format=yaml"])
@@ -983,7 +988,9 @@ fn unknown_format_value_is_rejected_by_clap() {
     verify = "an unusable manifest is refused with E071"
 )]
 fn infer_status_refuses_an_unusable_manifest_with_e071() {
-    let dir = setup_project(&[("specforge-infer.json", "{ nope")]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("specforge-infer.json", "{ nope")]);
 
     let output = Cli::on(&dir).command(&["infer-status"]).output().unwrap();
 
@@ -1009,7 +1016,7 @@ fn infer_status_refuses_an_unusable_manifest_with_e071() {
     verify = "prints the sessions the manifest records, with their timestamps"
 )]
 fn infer_status_prints_the_session_history() {
-    let dir = setup_project(&[(
+    let dir = TestProject::new().without_config().files(&[(
         "specforge-infer.json",
         r#"{"version": 1, "source_roots": [], "sessions": [
             {"session_id": "s-1", "agent": "claude", "status": "paused",
@@ -1041,7 +1048,7 @@ fn infer_status_prints_the_session_history() {
 fn a_closed_stdout_ends_the_output_quietly_in_the_binary() {
     use std::io::Read;
 
-    let dir = setup_project(&[
+    let dir = TestProject::new().without_config().files(&[
         (
             "specforge.json",
             r#"{"name":"t","version":"0.1.0","extensions":[]}"#,

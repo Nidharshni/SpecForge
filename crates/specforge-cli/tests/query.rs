@@ -1,10 +1,5 @@
 use crate::support::{Cli, TestProject};
 
-/// A directory holding `files` and nothing else.
-fn setup_project(files: &[(&str, &str)]) -> TestProject {
-    TestProject::new().without_config().files(files)
-}
-
 const SPEC_CONTENT: &str = r#"
 behavior alpha "Alpha" { contract "first" }
 behavior beta "Beta" { contract "second" }
@@ -14,7 +9,9 @@ invariant delta "Delta" { guarantee "always" }
 
 #[test]
 fn query_depth_0_returns_single_entity() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
     let output = Cli::on(&dir)
         .command(&["query", "alpha", "--depth=0"])
@@ -31,7 +28,9 @@ fn query_depth_0_returns_single_entity() {
 
 #[test]
 fn query_depth_1_returns_neighbors() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
     let output = Cli::on(&dir)
         .command(&["query", "gamma", "--depth=1"])
@@ -50,7 +49,9 @@ fn query_depth_1_returns_neighbors() {
 
 #[test]
 fn query_with_kind_filter() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
     let output = Cli::on(&dir)
         .command(&["query", "gamma", "--depth=1", "--kind=behavior"])
@@ -77,7 +78,9 @@ fn query_with_kind_filter() {
     verify = "a non-existent entity is E003 naming the closest entity"
 )]
 fn query_nonexistent_entity_exits_one() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
     Cli::on(&dir)
         .command(&["query", "nonexistent", "--depth=1"])

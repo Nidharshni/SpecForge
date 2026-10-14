@@ -3,14 +3,11 @@ use predicates::prelude::*;
 use specforge_test_macros::test as specforge_test;
 use std::fs;
 
-fn setup_project(dir: &std::path::Path) {
-    fs::write(
-        dir.join("specforge.json"),
-        r#"{"name":"test","version":"0.1.0"}"#,
-    )
-    .unwrap();
-    let spec_dir = dir.join("spec");
-    fs::create_dir_all(&spec_dir).unwrap();
+/// The project `specforge init` leaves: a config and an empty `spec/`.
+fn project() -> TestProject {
+    let project = TestProject::new().raw_config(r#"{"name":"test","version":"0.1.0"}"#);
+    fs::create_dir_all(project.root().join("spec")).unwrap();
+    project
 }
 
 fn write_spec(dir: &std::path::Path, name: &str, content: &str) {
@@ -29,9 +26,8 @@ fn write_spec(dir: &std::path::Path, name: &str, content: &str) {
     verify = "files already at target version are skipped with skippedCount incremented"
 )]
 fn migrate_exits_zero_on_current_version_project() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     // Files without a version header default to current version → skipped
     write_spec(
         root,
@@ -68,9 +64,8 @@ fn migrate_exits_zero_on_current_version_project() {
     verify = "summary reports migrated, failed, and skipped counts"
 )]
 fn migrate_json_output_contains_summary_fields() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     // One file per outcome: an old header migrates, a current one is
     // skipped, an unsupported one fails.
     write_spec(
@@ -132,9 +127,8 @@ fn status_of(json: &serde_json::Value, file: &str) -> String {
     verify = "unsupported format version produces E019 with upgrade guidance"
 )]
 fn migrate_unknown_target_version_produces_error() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(
         root,
         "test.spec",
@@ -162,9 +156,7 @@ fn migrate_unknown_target_version_produces_error() {
 // owner's code (it used to print E015, @specforge/product's milestone cycle).
 #[test]
 fn migrate_unparseable_target_version_reports_e019() {
-    let tmp = TestProject::new().without_config();
-    let root = tmp.root();
-    setup_project(root);
+    let tmp = project();
     Cli::on(&tmp)
         .command(&["migrate", "--target-version=not-a-version"])
         .assert()
@@ -184,9 +176,8 @@ fn migrate_unparseable_target_version_reports_e019() {
     verify = "header comment format version detected correctly"
 )]
 fn detect_format_version_from_header() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(
         root,
         "current.spec",
@@ -226,9 +217,8 @@ fn detect_format_version_from_header() {
     verify = "missing format version treated as the current version"
 )]
 fn missing_version_header_defaults_to_current() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(
         root,
         "test.spec",
@@ -256,9 +246,8 @@ fn missing_version_header_defaults_to_current() {
     verify = "unsupported format version produces E019 with upgrade guidance"
 )]
 fn unsupported_version_in_header() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     let original = "// specforge-format: 99.0\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n";
     write_spec(root, "test.spec", original);
 
@@ -290,9 +279,8 @@ fn unsupported_version_in_header() {
     verify = "files already at target version are skipped with skippedCount incremented"
 )]
 fn files_at_target_version_are_skipped() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(
         root,
         "test.spec",
@@ -321,9 +309,8 @@ fn files_at_target_version_are_skipped() {
     verify = "migrate leaves a nested project's files alone"
 )]
 fn migrate_leaves_a_nested_projects_files_alone() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     fs::write(root.join("a.spec"), "term t \"T\" {\n}\n").unwrap();
     fs::create_dir_all(root.join("sub")).unwrap();
     fs::write(root.join("sub/specforge.json"), "{}").unwrap();
@@ -354,9 +341,8 @@ fn migrate_leaves_a_nested_projects_files_alone() {
     verify = "backup created before modification"
 )]
 fn backup_created_before_modification() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     // A file with version 0.1 (older than current) will need migration
     let original = "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n";
@@ -377,9 +363,8 @@ fn backup_created_before_modification() {
 // C3: Atomic write via temp+rename — no .spec.tmp remains
 #[test]
 fn no_tmp_file_remains_after_migration() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     write_spec(
         root,
@@ -408,9 +393,8 @@ fn no_tmp_file_remains_after_migration() {
     verify = "--no-backup skips backup creation"
 )]
 fn no_backup_flag_skips_backup_creation() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     write_spec(
         root,
@@ -444,9 +428,8 @@ fn no_backup_flag_skips_backup_creation() {
     verify = "dry-run shows unified diff without modifying files"
 )]
 fn dry_run_shows_diff_without_modifying_files() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     let original = "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n";
     write_spec(root, "test.spec", original);
@@ -476,9 +459,8 @@ fn dry_run_shows_diff_without_modifying_files() {
     verify = "each file diff labeled with file path"
 )]
 fn diff_uses_posix_prefix_convention() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     write_spec(
         root,
@@ -522,9 +504,8 @@ fn diff_uses_posix_prefix_convention() {
     verify = "json format diff produces structured output with file-level entries"
 )]
 fn dry_run_json_produces_structured_diff() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     write_spec(
         root,
@@ -560,9 +541,8 @@ fn dry_run_json_produces_structured_diff() {
     verify = "restores migrated files from .bak backups"
 )]
 fn rollback_restores_from_bak_files() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     let original = "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n";
     write_spec(root, "test.spec", original);
@@ -600,9 +580,8 @@ fn rollback_restores_from_bak_files() {
     verify = "missing .bak file produces warning and skips"
 )]
 fn rollback_missing_bak_skips() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     write_spec(
         root,
@@ -654,9 +633,8 @@ fn rollback_missing_bak_skips() {
 )]
 fn rollback_failure_isolation() {
     use std::os::unix::fs::PermissionsExt;
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     let original_a = "// specforge-format: 0.1\nbehavior a \"A\" {\n  contract \"a\"\n}\n";
     let original_b = "// specforge-format: 0.1\nbehavior b \"B\" {\n  contract \"b\"\n}\n";
@@ -727,9 +705,8 @@ fn rollback_failure_isolation() {
     verify = "files migrated from source to target version"
 )]
 fn full_pipeline_migration() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     let files = [
         (
@@ -772,9 +749,8 @@ fn full_pipeline_migration() {
     verify = "files already at target version are skipped with skippedCount incremented"
 )]
 fn double_migrate_is_idempotent() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     write_spec(
         root,
@@ -816,9 +792,8 @@ fn double_migrate_is_idempotent() {
     verify = "failure in one file does not block others"
 )]
 fn failure_in_one_file_does_not_block_others() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     let good = "// specforge-format: 0.1\nbehavior good \"Good\" {\n  contract \"ok\"\n}\n";
     let bad = "// specforge-format: 9.0\nbehavior bad \"Bad\" {\n  contract \"ok\"\n}\n";
     write_spec(root, "good.spec", good);
@@ -860,9 +835,8 @@ fn failure_in_one_file_does_not_block_others() {
 // H3b: JSON summary output
 #[test]
 fn json_summary_contains_results_and_backups() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     write_spec(
         root,
@@ -892,9 +866,8 @@ fn json_summary_contains_results_and_backups() {
     verify = "migrate --format json prints the migration document specforge.migrate answers, with files_written"
 )]
 fn migrate_json_is_the_migration_document() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(
         root,
         "old.spec",
@@ -954,9 +927,8 @@ fn reported<'a>(diagnostics: &'a [serde_json::Value], code: &str) -> Vec<&'a ser
     verify = "older format version detected and reported as I007"
 )]
 fn older_format_version_produces_i007() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(
         root,
         "old.spec",
@@ -1004,9 +976,8 @@ fn older_format_version_produces_i007() {
 )]
 fn detect_format_version_contract() {
     // Requires (spec_file_available): .spec files are being compiled.
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(
         root,
         "older.spec",
@@ -1068,9 +1039,8 @@ fn detect_format_version_contract() {
 fn a_file_with_no_header_reports_no_version_diagnostic() {
     // Almost every file has none (no file of this repository's own specs
     // carries a header): none is the current version, so nothing to report.
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(
         root,
         "bare.spec",
@@ -1093,9 +1063,8 @@ fn a_file_with_no_header_reports_no_version_diagnostic() {
     verify = "Migrate Spec Files In Place: in-place migration holds — semantic_preservation"
 )]
 fn migrate_in_place_contract() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     // Requires: files exist, valid target version
     write_spec(
@@ -1133,9 +1102,8 @@ fn migrate_in_place_contract() {
     verify = "summary reports migrated, failed, and skipped counts"
 )]
 fn summary_reports_all_three_counts() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     // One file to migrate, one already at current
     write_spec(
@@ -1171,9 +1139,8 @@ fn summary_reports_all_three_counts() {
     verify = "diff format is compatible with patch(1)"
 )]
 fn diff_format_compatible_with_patch() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     write_spec(
         root,
@@ -1232,9 +1199,8 @@ fn diff_format_compatible_with_patch() {
     verify = "failure in one file does not block diff generation for others"
 )]
 fn dry_run_failure_isolation() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(
         root,
         "good.spec",
@@ -1275,9 +1241,8 @@ fn dry_run_failure_isolation() {
     verify = "Generate Migration Diff: migration diff generation holds — spec_files_available, dry_run_flag_set, diff_produced, no_files_modified, migration_diff_generated_emitted"
 )]
 fn migration_diff_contract() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     let original = "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n";
     write_spec(root, "test.spec", original);
@@ -1320,9 +1285,8 @@ fn migration_diff_contract() {
     verify = "restore is atomic per file"
 )]
 fn rollback_restore_is_atomic() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     let original = "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n";
     write_spec(root, "test.spec", original);
@@ -1369,9 +1333,8 @@ fn rollback_restore_is_atomic() {
     verify = "summary reports restored, skipped, and failed counts"
 )]
 fn rollback_summary_counts() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     write_spec(
         root,
@@ -1417,9 +1380,8 @@ fn rollback_summary_counts() {
     verify = "Rollback Failed Migration: migration rollback holds — migration_recorded, files_restored, edited_files_kept, rollback_event_emitted, backup_file_preservation"
 )]
 fn rollback_contract() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     let original = "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n";
     write_spec(root, "test.spec", original);
@@ -1467,9 +1429,8 @@ use crate::support::written::{changed_since, files_under, files_written};
     verify = "migrate --format json lists each migrated file and its backup in files_written"
 )]
 fn migrate_json_lists_each_file_and_its_backup() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     let old = "// specforge-format: 0.1\nbehavior foo \"Foo\" {\n  contract \"stuff\"\n}\n";
     write_spec(root, "a.spec", old);
     write_spec(root, "b.spec", &old.replace("foo", "bar"));
@@ -1517,9 +1478,8 @@ fn migrate_json_lists_each_file_and_its_backup() {
 /// there (the summary's own list stays gone, plan 14 D4).
 #[test]
 fn migrate_json_diagnostics_are_the_configs_problems() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(
         root,
         "test.spec",
@@ -1538,9 +1498,8 @@ fn migrate_json_diagnostics_are_the_configs_problems() {
 /// that `patch -p1` applies it there (plan 14 D14).
 #[test]
 fn dry_run_diff_labels_are_relative_to_the_project_root() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(
         root,
         "test.spec",
@@ -1577,9 +1536,8 @@ fn dry_run_diff_labels_are_relative_to_the_project_root() {
     verify = "structural equivalence verified between pre and post graphs"
 )]
 fn a_migration_of_an_entity_bearing_project_prints_only_the_summary() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(
         root,
         "test.spec",

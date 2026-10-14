@@ -8,14 +8,21 @@ fn scratch() -> TestProject {
     TestProject::new().without_config()
 }
 
-fn setup_project(dir: &std::path::Path) {
+/// The config and the empty `spec/` `specforge init` leaves, under `dir`.
+fn lay_out_project(dir: &std::path::Path) {
     fs::write(
         dir.join("specforge.json"),
         r#"{"name":"test","version":"0.1.0"}"#,
     )
     .unwrap();
-    let spec_dir = dir.join("spec");
-    fs::create_dir_all(&spec_dir).unwrap();
+    fs::create_dir_all(dir.join("spec")).unwrap();
+}
+
+/// A project of its own, laid out so.
+fn project() -> TestProject {
+    let project = TestProject::new().without_config();
+    lay_out_project(project.root());
+    project
 }
 
 fn write_spec(dir: &std::path::Path, name: &str, content: &str) {
@@ -31,9 +38,8 @@ fn write_spec(dir: &std::path::Path, name: &str, content: &str) {
     verify = "formatting all files in spec/ directory succeeds"
 )]
 fn format_command_formats_files() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(
         root,
         "test.spec",
@@ -88,7 +94,7 @@ fn snapshot_tree(dir: &std::path::Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
 /// A project whose spec/ holds an unformatted file and a malformed one,
 /// so any read or write of them would show in the output or on disk.
 fn project_with_spec_files(root: &std::path::Path) {
-    setup_project(root);
+    lay_out_project(root);
     write_spec(
         root,
         "unformatted.spec",
@@ -102,9 +108,8 @@ fn project_with_spec_files(root: &std::path::Path) {
     verify = "files matching the canonical format are not rewritten"
 )]
 fn format_does_not_rewrite_unchanged_files() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     // Already formatted content
     let content = "behavior foo \"Foo\" {\n  contract \"does stuff\"\n}\n";
     write_spec(root, "test.spec", content);
@@ -121,9 +126,8 @@ fn format_does_not_rewrite_unchanged_files() {
     verify = "changed files are printed to stdout"
 )]
 fn format_prints_changed_file_names() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(
         root,
         "bad.spec",
@@ -150,9 +154,8 @@ fn format_prints_changed_file_names() {
     verify = "already formatted files exit with code 0"
 )]
 fn check_already_formatted_exits_zero() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(
         root,
         "test.spec",
@@ -170,9 +173,8 @@ fn check_already_formatted_exits_zero() {
     verify = "unformatted files exit with code 1"
 )]
 fn check_unformatted_exits_one() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(
         root,
         "test.spec",
@@ -190,9 +192,8 @@ fn check_unformatted_exits_one() {
     verify = "check mode writes no files to disk"
 )]
 fn check_mode_writes_no_files() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     let original = "behavior foo \"Foo\" {\n      contract \"stuff\"\n}\n";
     write_spec(root, "test.spec", original);
 
@@ -212,9 +213,8 @@ fn check_mode_writes_no_files() {
     verify = "diff output uses unified format"
 )]
 fn diff_shows_unified_format() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(
         root,
         "test.spec",
@@ -235,9 +235,8 @@ fn diff_shows_unified_format() {
     verify = "diff mode writes no files to disk"
 )]
 fn diff_mode_writes_no_files() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     let original = "behavior foo \"Foo\" {\n      contract \"stuff\"\n}\n";
     write_spec(root, "test.spec", original);
 
@@ -255,9 +254,8 @@ fn diff_mode_writes_no_files() {
     verify = "unchanged files produce no diff output"
 )]
 fn diff_unchanged_produces_no_output() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(
         root,
         "test.spec",
@@ -321,9 +319,8 @@ fn stdin_mode_does_not_read_files() {
     verify = "formatting all files in spec/ directory succeeds"
 )]
 fn format_integration_all_spec_files_in_directory() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     // Create multiple spec files in subdirectories
     let behaviors_dir = root.join("spec").join("behaviors");
@@ -414,9 +411,8 @@ fn stdin_formatting_converges_to_canonical_form() {
     verify = "Format Spec Files: spec file formatting holds — spec_files_available, format_config_loaded, formatted_output_written, unchanged_files_preserved, format_complete_emitted, summary_printed"
 )]
 fn format_spec_files_contract_requires_ensures() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     // Requires: spec files available, format config loaded
     write_spec(
         root,
@@ -452,9 +448,8 @@ fn format_spec_files_contract_requires_ensures() {
     verify = "Check Formatting Without Modifying Files: formatting check holds — spec_files_available, format_config_loaded, no_files_written, exit_code_correct, unformatted_paths_printed"
 )]
 fn check_formatting_contract_requires_ensures() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
 
     // Unformatted file
     write_spec(
@@ -485,9 +480,8 @@ fn check_formatting_contract_requires_ensures() {
     verify = "Show Formatting Diff: formatting diff holds — spec_files_available, format_config_loaded, no_files_written, unified_diff_produced"
 )]
 fn show_formatting_diff_contract_requires_ensures() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     let original = "behavior foo \"Foo\" {\n      contract \"stuff\"\n}\n";
     write_spec(root, "test.spec", original);
 
@@ -535,9 +529,8 @@ fn format_from_stdin_contract_requires_ensures() {
     verify = "a file's configuration does not depend on where format runs"
 )]
 fn check_from_a_subdirectory_agrees_with_the_root() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     let sub = root.join("spec/sub");
     fs::create_dir_all(&sub).unwrap();
     fs::write(sub.join(".specforgefmt.toml"), "indent_width = 4\n").unwrap();
@@ -585,9 +578,8 @@ fn check_in(project: &TestProject) -> (Option<i32>, String) {
 )]
 fn check_exits_one_on_an_unreadable_file() {
     use std::os::unix::fs::PermissionsExt;
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(root, "ok.spec", CANONICAL_FOO);
     write_spec(root, "locked.spec", CANONICAL_FOO);
     let locked = root.join("spec/locked.spec");
@@ -606,7 +598,7 @@ fn check_exits_one_on_an_unreadable_file() {
 
 /// A project whose only file is canonical, then a stray `}}}`.
 fn project_with_a_kept_region(root: &std::path::Path) -> std::path::PathBuf {
-    setup_project(root);
+    lay_out_project(root);
     write_spec(root, "broken.spec", &format!("{CANONICAL_FOO}\n}}}}}}\n"));
     root.join("spec/broken.spec")
 }
@@ -668,7 +660,7 @@ fn write_exits_one_on_a_region_left_unformatted() {
 )]
 fn stdin_exits_one_on_a_region_left_unformatted() {
     let tmp = scratch();
-    setup_project(tmp.root());
+    lay_out_project(tmp.root());
     let misindented = CANONICAL_FOO.replace("  contract", "      contract");
 
     let output = Cli::on(&tmp)
@@ -704,7 +696,7 @@ fn format_json(project: &TestProject, flags: &[&str]) -> (Option<i32>, serde_jso
 
 /// A project with one canonical file and one that formatting changes.
 fn project_with_one_change(root: &std::path::Path) {
-    setup_project(root);
+    lay_out_project(root);
     write_spec(root, "good.spec", CANONICAL_FOO);
     write_spec(
         root,
@@ -763,7 +755,7 @@ fn json_carries_what_formatting_reported_instead_of_stderr() {
 )]
 fn json_with_nothing_to_format_is_an_empty_run() {
     let tmp = TestProject::new().without_config();
-    setup_project(tmp.root());
+    lay_out_project(tmp.root());
 
     let (code, document, stderr) = format_json(&tmp, &[]);
 
@@ -802,9 +794,8 @@ fn json_check_that_finds_a_change_exits_one() {
 )]
 fn json_names_a_file_that_cannot_be_read_in_the_document() {
     use std::os::unix::fs::PermissionsExt;
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(root, "locked.spec", CANONICAL_FOO);
     let locked = root.join("spec/locked.spec");
     fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
@@ -871,9 +862,8 @@ fn stdin_refuses_json_with_the_error_document() {
     verify = "summary count reflects actual changes"
 )]
 fn format_prints_how_many_files_it_formatted_and_changed() {
-    let tmp = TestProject::new().without_config();
+    let tmp = project();
     let root = tmp.root();
-    setup_project(root);
     write_spec(root, "a.spec", "behavior a \"A\" {\n  contract \"x\"\n}\n");
     write_spec(
         root,

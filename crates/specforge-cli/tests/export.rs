@@ -2,11 +2,6 @@ use crate::support::{Cli, TestProject};
 use specforge_project::testing::specs;
 use specforge_test_macros::test as specforge_test;
 
-/// A directory holding `files` and nothing else.
-fn setup_project(files: &[(&str, &str)]) -> TestProject {
-    TestProject::new().without_config().files(files)
-}
-
 const SPEC_CONTENT: &str = r#"
 behavior alpha "Alpha Behavior" {
     contract "The system MUST do alpha"
@@ -22,7 +17,9 @@ feature gamma "Gamma Feature" {
 
 #[test]
 fn export_graph_produces_valid_json_with_all_nodes() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
     let output = Cli::on(&dir)
         .command(&["export", "--format=graph"])
@@ -44,7 +41,9 @@ fn export_graph_produces_valid_json_with_all_nodes() {
 
 #[test]
 fn export_brief_produces_minimal_output() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
     let output = Cli::on(&dir)
         .command(&["export", "--format=brief"])
@@ -66,7 +65,7 @@ fn export_brief_produces_minimal_output() {
 
 #[test]
 fn export_context_includes_contracts() {
-    let dir = setup_project(&[
+    let dir = TestProject::new().without_config().files(&[
         (
             "specforge.json",
             r#"{"name":"t","version":"0.1.0","extensions":["@specforge/software"]}"#,
@@ -91,7 +90,9 @@ fn export_context_includes_contracts() {
 
 #[test]
 fn export_dot_produces_graphviz() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
     let output = Cli::on(&dir)
         .command(&["export", "--format=dot"])
@@ -108,7 +109,7 @@ fn export_dot_produces_graphviz() {
 
 #[test]
 fn export_with_errors_still_works() {
-    let dir = setup_project(&[(
+    let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" }
@@ -130,7 +131,9 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
 
 #[test]
 fn export_with_scope_returns_subgraph() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
     let output = Cli::on(&dir)
         .command(&["export", "--format=graph", "--scope=alpha"])
@@ -150,7 +153,9 @@ fn export_with_scope_returns_subgraph() {
 
 #[test]
 fn export_with_nonexistent_scope_exits_one() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
     Cli::on(&dir)
         .command(&["export", "--format=graph", "--scope=nonexistent"])
@@ -163,7 +168,9 @@ fn export_with_nonexistent_scope_exits_one() {
     verify = "non-existent scope entity produces E003 and exit code 1"
 )]
 fn a_context_export_of_a_missing_scope_is_e003() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
     let output = Cli::on(&dir)
         .command(&["export", "--format=context", "--scope=nope"])
@@ -182,7 +189,9 @@ fn a_context_export_of_a_missing_scope_is_e003() {
 // B:embed_schema_in_export — V2 format with embedded schema (default)
 #[test]
 fn export_default_produces_v2_with_schema() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
     let output = Cli::on(&dir)
         .command(&["export", "--format=graph"])
@@ -203,7 +212,9 @@ fn export_default_produces_v2_with_schema() {
     verify = "--no-schema suppresses schema and keeps format_version 1.0"
 )]
 fn export_no_schema_flag_produces_v1() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
     let output = Cli::on(&dir)
         .command(&["export", "--format=graph", "--no-schema"])
@@ -230,7 +241,9 @@ fn export_no_schema_flag_produces_v1() {
     verify = "the brief export leaves the schema out unless --with-schema is given"
 )]
 fn export_brief_omits_the_schema_unless_asked() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
     let export = |extra: &[&str]| {
         let mut argv = vec!["export", "--format=brief"];
         argv.extend(extra);
@@ -253,7 +266,9 @@ fn export_brief_omits_the_schema_unless_asked() {
     verify = "the context export leaves the schema out unless --with-schema is given"
 )]
 fn export_context_omits_the_schema_unless_asked() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
     let export = |extra: &[&str]| {
         let mut argv = vec!["export", "--format=context"];
         argv.extend(extra);
@@ -274,7 +289,9 @@ fn export_context_omits_the_schema_unless_asked() {
 // B:negotiate_schema_version — invalid --schema-version exits 1
 #[test]
 fn export_invalid_schema_version_exits_one() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
     let refused = Cli::on(&dir)
         .command(&["export", "--format=graph", "--schema-version=invalid"])
@@ -290,7 +307,9 @@ fn export_invalid_schema_version_exits_one() {
 // B:serve_schema_resource — specforge schema command outputs JSON
 #[test]
 fn schema_command_outputs_json() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
     let output = Cli::on(&dir).command(&["schema"]).output().unwrap();
 
@@ -306,7 +325,9 @@ fn schema_command_outputs_json() {
 // B:publish_schema_specification — specforge schema --publish outputs JSON Schema
 #[test]
 fn schema_publish_outputs_json_schema() {
-    let dir = setup_project(&[("main.spec", SPEC_CONTENT)]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", SPEC_CONTENT)]);
 
     let output = Cli::on(&dir)
         .command(&["schema", "--publish"])
@@ -370,7 +391,9 @@ fn budget_project() -> TestProject {
     spec.push_str(
         "feature f \"All behaviors\" {\n  behaviors [b0, b1, b2, b3, b4, b5, b6, b7]\n}\n",
     );
-    setup_project(&[("specforge.json", CONFIG), ("main.spec", &spec)])
+    TestProject::new()
+        .without_config()
+        .files(&[("specforge.json", CONFIG), ("main.spec", &spec)])
 }
 
 /// `specforge export <dir> --format=graph <args>`: the exit code, stdout and
