@@ -290,7 +290,10 @@ impl<'a> LockPlan<'a> {
         Ok(plan)
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the plan's whole input: the installed set, the entries, the runtime, the declarations, the verb, the registry, the operation and whether it installs"
+    )]
     fn open(
         installed: &'a Installed,
         entries: &[String],

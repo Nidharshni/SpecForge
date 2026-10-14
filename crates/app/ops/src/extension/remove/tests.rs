@@ -241,7 +241,7 @@ fn an_install_is_dropped_from_the_config_before_it_is_uninstalled() {
 
     let refused = remove(&fixture.view(), &removing("@acme/x"));
 
-    #[allow(
+    #[expect(
         clippy::permissions_set_readonly_false,
         reason = "restoring the test's file"
     )]

@@ -1,5 +1,9 @@
 //! A package registry in memory, behind the `RegistryClient` seam, and the contract every adapter of the
 //! seam keeps (ADR 0044).
+#![allow(
+    clippy::unwrap_used,
+    reason = "test support behind the `testing` feature: a failed unwrap fails the calling test"
+)]
 
 mod contract;
 mod memory;

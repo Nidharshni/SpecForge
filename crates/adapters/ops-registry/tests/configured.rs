@@ -1,6 +1,10 @@
 //! How the registries a command asks are read out of `specforge.json`: the
 //! way `add`, `update` and `remove` read it, so a project whose config is
 //! unusable is refused the same on every command.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use specforge_common::codes;
 use specforge_ops::registry::Registry;

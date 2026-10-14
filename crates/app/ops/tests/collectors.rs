@@ -1,5 +1,9 @@
 //! The runner extensions' collectors, read through the protocol from
 //! their real Wasm blobs and dispatched by the host's collect flow.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use specforge_ops::analysis::collect::{collectors, dispatch};
 use specforge_protocol_types::ExtensionDeclaration;

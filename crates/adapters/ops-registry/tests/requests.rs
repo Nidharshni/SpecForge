@@ -2,6 +2,10 @@
 //! registry server in process (ADR 0044).
 //!
 //! Plan 12 §3 R1, R4 and R6.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use sha2::{Digest, Sha256};
 use specforge_ops::extension::resolve;

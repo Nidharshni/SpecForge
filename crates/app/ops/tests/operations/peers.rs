@@ -498,7 +498,10 @@ fn remove_and_check_agree_on_the_project_peer_set() {
     );
     let dep_needs_base: Locked = ("@probe/dep", DEP_1, "1.0.0", &[("@probe/base", "^1.0")]);
     // name, config, files, locked, the argument, force, whether it is refused
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "one literal row per case: the columns are named in the comment above"
+    )]
     let cases: Vec<(
         &str,
         &[&str],

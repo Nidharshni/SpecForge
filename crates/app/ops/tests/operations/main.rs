@@ -1,5 +1,9 @@
 //! The graph views and project files operations compute: traces, plan
 //! validation, stats.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 mod compiled_support;
 mod connectivity;

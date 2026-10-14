@@ -1,5 +1,3 @@
-#![allow(clippy::result_large_err)]
-
 use specforge_common::{Diagnostic, codes};
 
 use super::registry_client::{RegistryClient, RegistryError};
