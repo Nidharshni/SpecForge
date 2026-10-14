@@ -77,9 +77,21 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
     an update for changed sources, an environment reload with its extension
     tools and resources for a changed specforge.json, specforge.lock or
     extension module. Subscribed clients learn what changed. A call whose
-    path names another project acts on that project only, opened for the
-    call and brought up to date after it writes as the served project is,
-    and the server keeps serving its own without reloading it. A call
+    path names another project, one nested in the served project, acts on
+    that project only, opened for the call and brought up to date after it
+    writes as the served project is, and the server keeps serving its own
+    without reloading it. A path an MCP request names resolves inside the
+    served project (while none is served, inside the server's root): a
+    relative path is read against that directory, never the process's, and
+    a path that leaves it, by .., by an absolute name or by a symlink, is
+    refused as invalid_input on its argument, whatever tool, prompt or
+    resource takes it and in either revision. A file or directory a tool
+    argument names (format's paths, render's out_dir, outline's file)
+    resolves inside the root of the project the call acts on, and no
+    mutation reads or writes through a symlink that leaves it. init creates
+    its project inside the server's root and never inside the served
+    project. The CLI is not bounded: its user is already at the file system.
+    A call
     that names a tool, a resource or a prompt looks it up in the project as
     it is on disk: an extension enabled since the last request is found by
     the next one, whether the request is a call, a read, a listing or a
@@ -117,6 +129,10 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
   verify unit "a mutation on another project brings it up to date with what it wrote and reports what a fresh compile reports"
   verify unit "in a handshake session, a path while no project is served serves that project, for every tool that takes a path"
   verify unit "a path inside the served project names the served project"
+  verify unit "a path an MCP request names resolves inside the served project, whatever its spelling"
+  verify unit "a file or directory an MCP tool argument names resolves inside the call's project"
+  verify unit "a mutation reads and writes no file through a symlink that leaves the project"
+  verify unit "init creates its project inside the server's root and never inside the served project"
   verify unit "a server whose root lies in no project serves nothing, and a handshake init then serves the project it creates"
   verify unit "a server started inside a project serves that project"
   verify unit "while nothing is served, a project created at or above the server's root is served by the next request, in either revision"

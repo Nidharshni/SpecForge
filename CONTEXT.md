@@ -118,7 +118,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   is adopted and the project `init` creates is served (ADR 0014 D5); a stateless request serves nothing it names
   (ADR 0077). An entry's target is derived from what its handler is given (nothing, the project view, the
   project, the new directory), never declared beside it: an entry whose handler acts on the project is refused as
-  no project before it runs (ADR 0014, ADR 0024).
+  no project before it runs (ADR 0014, ADR 0024). The `path`, and every path an argument names, resolves inside
+  the served project (while none is served, the server's root): one that leaves it is `invalid_input`, so
+  "another project" is one nested in the served one (`specforge_mcp::containment`, ADR 0092).
 - **Served project**: the project an MCP server serves to every call that names none: the nearest project (a
   directory holding `specforge.json`) at or above the server's root (the path `specforge mcp` was started with, or
   a handshake client's `projectRoot`), else nothing; while none is served, every request looks there again first

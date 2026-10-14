@@ -8,6 +8,7 @@
 use crate::support::*;
 use serde_json::{Value, json};
 use specforge_mcp::McpServer;
+use specforge_test::prelude::*;
 use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -131,7 +132,10 @@ fn assert_refused(reply: &Value, argument: &str) {
 }
 
 /// The coordinator's repro: `specforge.format {"path": "../outside"}`.
-#[test]
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a path an MCP request names resolves inside the served project, whatever its spelling"
+)]
 #[ignore = "fixed by T2"]
 fn format_path_outside_the_served_project_is_refused() {
     let scene = Scene::new();
@@ -147,7 +151,10 @@ fn format_path_outside_the_served_project_is_refused() {
 }
 
 /// The repro in the stateless revision (`specforge mcp .` serves per request).
-#[test]
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a path an MCP request names resolves inside the served project, whatever its spelling"
+)]
 #[ignore = "fixed by T2"]
 fn stateless_format_path_outside_the_served_project_is_refused() {
     let scene = Scene::new();
@@ -170,7 +177,10 @@ fn stateless_format_path_outside_the_served_project_is_refused() {
 
 /// The `paths` list joins each entry onto the project root: `..` and an
 /// absolute entry leave it.
-#[test]
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a file or directory an MCP tool argument names resolves inside the call's project"
+)]
 #[ignore = "fixed by T2"]
 fn format_paths_outside_the_served_project_are_refused() {
     let scene = Scene::new();
@@ -187,7 +197,10 @@ fn format_paths_outside_the_served_project_are_refused() {
 
 /// Every tool that takes a `path` to another project (`path_tool_calls`),
 /// named with `outside/`: refused, nothing read or written there.
-#[test]
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a path an MCP request names resolves inside the served project, whatever its spelling"
+)]
 #[ignore = "fixed by T2"]
 fn every_tool_with_a_path_refuses_one_outside_the_served_project() {
     let mut verdicts = Verdicts::default();
@@ -205,7 +218,10 @@ fn every_tool_with_a_path_refuses_one_outside_the_served_project() {
 /// A path inside the served project is still the served project. A relative
 /// one is read against its root, not the process's directory (today it is
 /// the latter, so `spec` is not found).
-#[test]
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a path an MCP request names resolves inside the served project, whatever its spelling"
+)]
 #[ignore = "fixed by T2"]
 fn a_path_inside_the_served_project_is_accepted() {
     let scene = Scene::new();
@@ -221,7 +237,10 @@ fn a_path_inside_the_served_project_is_accepted() {
 }
 
 /// `out_dir` is absolute as given or relative to the root: either leaves it.
-#[test]
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a file or directory an MCP tool argument names resolves inside the call's project"
+)]
 #[ignore = "fixed by T3"]
 fn render_out_dir_outside_the_served_project_is_refused() {
     let scene = Scene::new();
@@ -241,7 +260,10 @@ fn render_out_dir_outside_the_served_project_is_refused() {
 }
 
 /// `init` creates and writes a project at the `path` it is given.
-#[test]
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "init creates its project inside the server's root and never inside the served project"
+)]
 #[ignore = "fixed by T4"]
 fn init_outside_the_served_project_is_refused() {
     let scene = Scene::new();
@@ -258,7 +280,10 @@ fn init_outside_the_served_project_is_refused() {
 
 /// `outline`'s `file` is joined onto the spec root: whether a file outside
 /// it exists is answered (success against `file_not_found`).
-#[test]
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a file or directory an MCP tool argument names resolves inside the call's project"
+)]
 #[ignore = "fixed by T5"]
 fn outline_of_a_file_outside_the_spec_root_is_refused() {
     let scene = Scene::new();
@@ -272,7 +297,10 @@ fn outline_of_a_file_outside_the_spec_root_is_refused() {
 }
 
 /// The precedent: infer's source paths are lexically contained already.
-#[test]
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a path an MCP request names resolves inside the served project, whatever its spelling"
+)]
 fn infer_session_source_paths_outside_the_project_are_refused() {
     let scene = Scene::new();
     let mut server = scene.serve();
@@ -293,7 +321,10 @@ fn infer_session_source_paths_outside_the_project_are_refused() {
 /// A source file or directory inside the project that is a symlink to
 /// `outside/`: `format` with no paths walks the project's sources.
 #[cfg(unix)]
-#[test]
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a mutation reads and writes no file through a symlink that leaves the project"
+)]
 #[ignore = "fixed by T3"]
 fn format_does_not_write_through_a_symlink_that_leaves_the_project() {
     let scene = Scene::new();
@@ -312,7 +343,10 @@ fn format_does_not_write_through_a_symlink_that_leaves_the_project() {
 /// `mark_analyzed` reads the named file to hash it: through a symlink that
 /// leaves the project, a file outside it.
 #[cfg(unix)]
-#[test]
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a mutation reads and writes no file through a symlink that leaves the project"
+)]
 #[ignore = "fixed by T4"]
 fn infer_session_marks_no_file_behind_a_symlink_that_leaves_the_project() {
     let scene = Scene::new();
