@@ -1086,9 +1086,14 @@ mod tests {
         // wrote are read.
         let out = dir.path().join("out");
         std::fs::create_dir(&out).unwrap();
-        std::fs::write(out.join("old.json"), "{}").unwrap();
-        std::fs::write(out.join("graph.json"), "{}").unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(20));
+        // Backdate the old files: a sleep is shorter than some file systems'
+        // timestamp granularity.
+        let long_ago = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        for name in ["old.json", "graph.json"] {
+            let file = std::fs::File::create(out.join(name)).unwrap();
+            std::io::Write::write_all(&mut &file, b"{}").unwrap();
+            file.set_modified(long_ago).unwrap();
+        }
         c.run = vec![
             "sh".into(),
             "-c".into(),
