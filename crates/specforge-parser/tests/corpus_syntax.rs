@@ -104,7 +104,7 @@ fn spec_files(dir: &Path, out: &mut Vec<PathBuf>) {
     verify = "every spec in the repository parses without a syntax error"
 )]
 fn every_repository_spec_parses_cleanly() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = specforge_repo_root::repo_root();
     let mut files = Vec::new();
     for corpus in ["spec", "examples", "integrations/rust/spec"] {
         spec_files(&root.join(corpus), &mut files);
@@ -117,7 +117,7 @@ fn every_repository_spec_parses_cleanly() {
             let (_, tree) = parse_incremental(&source, &path.to_string_lossy(), None);
             let tree = tree?;
             tree.root_node().has_error().then(|| {
-                path.strip_prefix(&root)
+                path.strip_prefix(root)
                     .unwrap_or(path)
                     .display()
                     .to_string()

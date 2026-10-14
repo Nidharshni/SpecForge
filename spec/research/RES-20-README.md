@@ -52,19 +52,19 @@ This research proposes a comprehensive evolution of SpecForge's type system, add
 
 ### Supporting Research (Background)
 
-5. **[../research-design-by-contract.md](../../research-design-by-contract.md)** (60 KB)
+5. **[RES-25-sources/research-design-by-contract.md](RES-25-sources/research-design-by-contract.md)** (60 KB)
    - Comprehensive study of Design by Contract (DbC)
    - Eiffel, Dafny, F*, SPARK history and implementations
    - Precondition/postcondition semantics
    - Liskov Substitution Principle analysis
 
-6. **[../research-b-method.md](../../research-b-method.md)** (76 KB)
+6. **[RES-25-sources/research-b-method.md](RES-25-sources/research-b-method.md)** (76 KB)
    - B-Method and Event-B formal refinement
    - Set-theoretic types and invariants
    - Substitution rules and proof obligations
    - Industrial applications (Paris Métro Line 14)
 
-7. **[../research-csp.md](../../research-csp.md)** (68 KB)
+7. **[RES-25-sources/research-csp.md](RES-25-sources/research-csp.md)** (68 KB)
    - Communicating Sequential Processes (CSP)
    - Channel typing and process algebra
    - FDR model checker and refinement verification

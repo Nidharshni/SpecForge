@@ -128,7 +128,7 @@ fn copy_at_old_format(from: &Path, to: &Path) -> usize {
     verify = "migration that only changes formatting preserves graph structure"
 )]
 fn a_header_only_migration_of_the_dogfood_spec_keeps_its_graph() {
-    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let repo = specforge_repo_root::repo_root();
     let dir = tempfile::TempDir::new().unwrap();
     std::fs::copy(
         repo.join("specforge.json"),

@@ -402,3 +402,36 @@ fn published_schemas_run_when_a_writer_or_a_declaration_changes() {
         "a quick check is not a hook one"
     );
 }
+
+#[test]
+fn no_trigger_assumes_how_deep_a_crate_sits() {
+    for check in CHECKS {
+        if let Trigger::Paths(patterns) = &check.trigger {
+            for pattern in *patterns {
+                assert!(
+                    !pattern.starts_with("crates/*/"),
+                    "{}: `{pattern}` reaches only a crate directly under crates/; write `crates/**/`",
+                    check.name
+                );
+            }
+        }
+    }
+    for nested in [
+        "crates/kernel/parser/src/lib.rs",
+        "crates/kernel/parser/Cargo.toml",
+    ] {
+        assert_ne!(
+            selection("specs", Mode::Quick, &[nested]),
+            Selection::Skip,
+            "{nested}"
+        );
+    }
+    assert_eq!(
+        selection(
+            "zero-entity",
+            Mode::Hook,
+            &["crates/kernel/parser/src/lib.rs"]
+        ),
+        Selection::Everything
+    );
+}

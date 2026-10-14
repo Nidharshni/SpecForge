@@ -36,6 +36,7 @@ chrono = { version = "0.4.41", optional = true }
 testing = ["dep:chrono", "specforge-project/testing", "specforge-ops/testing", "specforge-wasm/testing"]
 
 [dev-dependencies]
+specforge-repo-root = { path = "../specforge-repo-root" }
 specforge-mcp = { path = ".", features = ["testing"] }
 # The committed blobs the tests load (`specforge_component::committed`).
 specforge-component = { path = "../specforge-component", features = ["testing"] }

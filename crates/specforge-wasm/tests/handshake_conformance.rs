@@ -8,7 +8,7 @@
 //! sandbox limits.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use specforge_protocol_types::{DescribeResponse, HandshakeResponse};
 
@@ -23,7 +23,7 @@ const REQUIRED_HANDSHAKE_KEYS: &[&str] = &[
 ];
 
 fn declarations_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../specforge-component/tests/declarations")
+    specforge_repo_root::repo_root().join("crates/specforge-component/tests/declarations")
 }
 
 /// Every pinned declaration (one directory per builtin, and greet).

@@ -83,6 +83,8 @@ EXIT_CODE=0
 
 for dir in "${CORE_DIRS[@]}"; do
   if [ ! -d "$dir" ]; then
+    echo "ERROR: $dir is not a directory: update CORE_DIRS when a core crate moves"
+    EXIT_CODE=1
     continue
   fi
 

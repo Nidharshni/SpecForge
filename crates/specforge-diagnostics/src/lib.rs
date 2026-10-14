@@ -240,13 +240,10 @@ pub fn retired(code: &str) -> Option<Option<&'static str>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use specforge_repo_root::repo_root;
     use specforge_test_macros::test as specforge_test;
     use std::collections::{BTreeMap, BTreeSet};
     use std::path::{Path, PathBuf};
-
-    fn workspace_root() -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-    }
 
     /// Third-party extensions own E900–E998 / W900–W998 / I900–I998.
     /// The registry client's code areas (`R-RES-005`), catalogued as they
@@ -280,7 +277,7 @@ mod tests {
     /// from LSP `codeDescription.href`. Set `SPECFORGE_BLESS=1` to rewrite it.
     #[test]
     fn explain_docs_sync() {
-        let path = workspace_root().join("docs/diagnostics.md");
+        let path = repo_root().join("docs/diagnostics.md");
         let rendered = render_docs();
         if std::env::var("SPECFORGE_BLESS").as_deref() == Ok("1") {
             std::fs::write(&path, &rendered).expect("write docs/diagnostics.md");
@@ -538,13 +535,13 @@ mod tests {
     /// the file's lines with test items blanked). Files named `tests.rs` or
     /// `*_tests.rs` are test modules and are left out.
     fn production_source(top: &str) -> Vec<(String, Vec<String>)> {
-        let root = workspace_root();
+        let root = repo_root();
         let mut files = Vec::new();
         walk(&root.join(top), &mut files);
         files.sort();
         let mut out = Vec::new();
         for path in files {
-            let rel = path.strip_prefix(&root).unwrap_or(&path);
+            let rel = path.strip_prefix(root).unwrap_or(&path);
             let rel = rel.to_string_lossy().replace('\\', "/");
             let name = rel.rsplit('/').next().unwrap_or("");
             if !name.ends_with(".rs")
@@ -611,7 +608,7 @@ mod tests {
             "crates/specforge-coverage/src".to_string(),
             "@specforge/testing".to_string(),
         )];
-        let mut extensions: Vec<String> = std::fs::read_dir(workspace_root().join("extensions"))
+        let mut extensions: Vec<String> = std::fs::read_dir(repo_root().join("extensions"))
             .expect("extensions/")
             .flatten()
             .filter(|entry| entry.path().join("src").is_dir())
@@ -780,7 +777,7 @@ mod tests {
     /// the codes of their time; the third-party ranges are never catalogued.
     #[test]
     fn hand_written_docs_cite_only_catalogued_codes() {
-        let docs = workspace_root().join("docs");
+        let docs = repo_root().join("docs");
         let mut files = Vec::new();
         walk(&docs, &mut files);
         files.sort();

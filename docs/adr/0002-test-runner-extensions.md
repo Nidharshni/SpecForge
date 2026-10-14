@@ -26,8 +26,8 @@ We move all test vocabulary out of core and out of `@specforge/software`:
   export that maps the runner's native report to entity results. Several runners can be enabled in
   one project without field conflicts, because none of them adds fields of its own.
 
-**Execution.** This supersedes "SpecForge never executes tests" (README, `vision/README.md`,
-`vision/north-star.md`). The compiler still never executes anything, and extensions stay pure
+**Execution.** This supersedes "SpecForge never executes tests" (README, `docs/vision/README.md`,
+`docs/vision/north-star.md`). The compiler still never executes anything, and extensions stay pure
 wasm with no process, file or network access. What changes is that a runner extension may
 *declare* one command in its manifest, and `specforge collect` runs it on the extension's behalf.
 The user sees the exact command and consents once per project; consent is keyed by extension and

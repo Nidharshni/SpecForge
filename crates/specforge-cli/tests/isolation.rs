@@ -111,7 +111,8 @@ fn bare_spells_no_path() {
 
 // --- the guard: nothing but the support module runs the binary or picks a HOME ---
 
-/// Every `.rs` file under `crates/*/tests/`, with its path relative to the repository.
+/// Every `.rs` file under the `tests/` directory of a crate under `crates/` (a directory holding a `Cargo.toml`, at
+/// any depth), with its path relative to the repository.
 fn test_sources() -> Vec<(String, String)> {
     fn walk(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
         for entry in std::fs::read_dir(dir).unwrap().filter_map(Result::ok) {
@@ -123,24 +124,40 @@ fn test_sources() -> Vec<(String, String)> {
             }
         }
     }
-    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    /// The crates at or under `dir`; a crate's `tests/` is not searched for more (its fixtures hold manifests).
+    fn crates(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
+        if dir.join("Cargo.toml").is_file() {
+            out.push(dir.to_path_buf());
+        }
+        for entry in std::fs::read_dir(dir).unwrap().filter_map(Result::ok) {
+            let path = entry.path();
+            if path.is_dir() && entry.file_name() != "tests" {
+                crates(&path, out);
+            }
+        }
+    }
+    let repo = specforge_repo_root::repo_root();
+    let mut krates = Vec::new();
+    crates(&repo.join("crates"), &mut krates);
     let mut files = Vec::new();
-    for krate in std::fs::read_dir(repo.join("crates"))
-        .unwrap()
-        .filter_map(Result::ok)
-    {
-        let tests = krate.path().join("tests");
+    for krate in krates {
+        let tests = krate.join("tests");
         if tests.is_dir() {
             walk(&tests, &mut files);
         }
     }
+    assert!(
+        files.len() > 300,
+        "found only {} test sources under crates/",
+        files.len()
+    );
     files.sort();
     files
         .into_iter()
         .map(|path| {
             let text = std::fs::read_to_string(&path).unwrap();
             let rel = path
-                .strip_prefix(&repo)
+                .strip_prefix(repo)
                 .unwrap()
                 .to_string_lossy()
                 .into_owned();

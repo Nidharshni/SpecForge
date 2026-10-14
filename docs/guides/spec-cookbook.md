@@ -313,7 +313,7 @@ specforge analyze coverage               # see which entities are proven
 
 > The compiler never runs anything: runner extensions declare their command,
 > and `collect` runs it on their behalf with your consent. See
-> [principles §5](../../vision/principles.md) on traceability as a feedback loop.
+> [principles §5](../vision/principles.md) on traceability as a feedback loop.
 
 ---
 

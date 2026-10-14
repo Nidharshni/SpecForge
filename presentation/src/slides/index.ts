@@ -1,9 +1,0 @@
-export { hookSlides } from './01-hook';
-export { theProblemSlides } from './02-the-problem';
-export { theInsightSlides } from './03-the-insight';
-export { threeLayerSlides } from './03b-three-layers';
-export { coreConceptSlides } from './04-core-concepts';
-export { extensionSlides } from './05-extensions';
-export { theCompilerSlides } from './06-the-compiler';
-export { integrationSlides } from './07-integration';
-export { closingSlides } from './08-closing';

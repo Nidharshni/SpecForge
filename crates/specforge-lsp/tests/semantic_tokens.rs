@@ -711,9 +711,9 @@ fn walk<'t>(node: tree_sitter::Node<'t>, out: &mut Vec<tree_sitter::Node<'t>>) {
     verify = "classification agrees with the grammar on every spec file of the repository"
 )]
 fn tokens_agree_with_the_grammar() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = specforge_repo_root::repo_root();
     let project = specforge_project::testing::compile_at(
-        &root,
+        root,
         Some(specforge_project::testing::component_runtime()),
     );
     let view = ProjectView::of(&project);

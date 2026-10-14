@@ -5,7 +5,6 @@ use specforge_protocol_types::{AnalyzerDescriptor, ExtensionDeclaration, Handsha
 use specforge_test_macros::test as specforge_test;
 use specforge_wasm::WasmCallResult;
 use specforge_wasm::testing::InProcessRuntime;
-use std::path::Path;
 use tempfile::TempDir;
 
 /// Build a Wasm runtime for a temp project listing `ext_names` — the only
@@ -278,7 +277,7 @@ fn a_scanner_that_fails_is_reported_not_dropped() {
 const EXT: &str = "@pin/ext";
 
 fn wire_dir() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../specforge-wasm/tests/wire")
+    specforge_repo_root::repo_root().join("crates/specforge-wasm/tests/wire")
 }
 
 fn sorted(value: &serde_json::Value) -> serde_json::Value {

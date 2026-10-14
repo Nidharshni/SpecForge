@@ -2,8 +2,6 @@
 //! one type the host and the SDK share, and the host's bytes, pinned in
 //! `crates/specforge-wasm/tests/wire/`, decode as it.
 
-use std::path::Path;
-
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -14,8 +12,8 @@ use specforge_protocol_types::{
 };
 
 fn wire(name: &str) -> Value {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../specforge-wasm/tests/wire")
+    let path = specforge_repo_root::repo_root()
+        .join("crates/specforge-wasm/tests/wire")
         .join(name);
     serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap()
 }

@@ -25,6 +25,7 @@ specforge-extension-sdk = { path = "../specforge-extension-sdk", optional = true
 testing = ["dep:specforge-extension-sdk"]
 
 [dev-dependencies]
+specforge-repo-root = { path = "../specforge-repo-root" }
 specforge-registry = { workspace = true }
 # Its own tests use the in-process runtime.
 specforge-wasm = { path = ".", features = ["testing"] }

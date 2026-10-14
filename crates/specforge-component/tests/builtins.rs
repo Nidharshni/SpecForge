@@ -257,10 +257,9 @@ fn product_declares_the_commands_its_cli_surface_specifies() {
         .collect();
     declared.sort();
     // Each surface behavior in surfaces-cli.spec names its export once.
-    let spec = std::fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../spec/extensions/product/surfaces-cli.spec"
-    ))
+    let spec = std::fs::read_to_string(
+        specforge_repo_root::repo_root().join("spec/extensions/product/surfaces-cli.spec"),
+    )
     .unwrap();
     let mut specified: Vec<String> = spec
         .lines()
