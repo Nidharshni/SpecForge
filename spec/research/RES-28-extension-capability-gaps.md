@@ -13,7 +13,7 @@ tags: [extensions, vision, gaps, mcp, agents, traceability, graph-protocol, regi
 
 ## Executive Summary
 
-A systematic audit of the vision (`vision/README.md`, `vision/principles.md`, `vision/north-star.md`) against the current extension architecture (RES-23, RES-24, RES-26) reveals **7 capability gaps** — features the vision commits to that the extension model cannot currently deliver.
+A systematic audit of the vision (`docs/vision/README.md`, `docs/vision/principles.md`, `docs/vision/north-star.md`) against the current extension architecture (RES-23, RES-24, RES-26) reveals **7 capability gaps** — features the vision commits to that the extension model cannot currently deliver.
 
 The gaps cluster around **Principle 3 (Agents are first-class consumers)**, which accounts for 3 of the 7. This is not a coincidence. RES-23 designed the extension model around the **compilation pipeline** (parse, register, build, resolve, validate, export). RES-24 began addressing **runtime surfaces** (CLI, MCP, LSP) but remains research. The vision puts agents at the center; the architecture puts the compiler at the center. The gaps are the delta between these two worldviews.
 

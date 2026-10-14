@@ -143,6 +143,10 @@ The industry has independently converged on structured context files (CLAUDE.md,
 | [RES-27](../spec/research/RES-27-software-eng-entity-redesign.md) | Software engineering entity redesign |
 | [Extension Model](extension-model.md) | Extensions, providers, and generators architecture |
 
+## Vision
+
+Why SpecForge exists: the [manifesto](vision/README.md), the [principles](vision/principles.md) a design decision is tested against, and the [north star](vision/north-star.md).
+
 ## Validation Codes
 
 Every diagnostic code, with its meaning, owner and fix, is listed in [Diagnostic Codes](diagnostics.md), generated from the catalog that `specforge explain <CODE>` prints.
