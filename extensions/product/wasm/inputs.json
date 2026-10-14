@@ -19,7 +19,7 @@
     "crates/specforge-protocol-types/src/declaration.rs": "efbb1fe12cb0a26b393113206ecc96daefa0abf8869e58ea72d06fe5a0d8455c",
     "crates/specforge-protocol-types/src/lib.rs": "76d27f97d91c6681130d6f89ad5d5f2f12ebf6e2efa850d4fa60aa282d91fe60",
     "crates/specforge-protocol-types/src/vocabulary.rs": "0d175d196adfc20eca38e2eaaed16c5d5d3912c26b0c99509ef2393f917e1c70",
-    "extensions/product/Cargo.lock": "5c53b076215bcef3ded6f86b5b923200190cb05733e32084a0f358833a25bff5",
+    "extensions/product/Cargo.lock": "325b80e4b4d2a408e97ca132d8160e93d0879f60a91d064149d51b1786fc9f5f",
     "extensions/product/Cargo.toml": "1fcd105cbea07cf07598bd884337935bfae31edbd398146051751bb114fdb370",
     "extensions/product/src/commands.rs": "3ada38798d246770ad2c583c171e830890be9239804c7dd4f0b45f9a9d4193c5",
     "extensions/product/src/declaration.rs": "5f8a5e02747009cfd29de4fdea260db34a6846593618a616429c89a20d036c9c",
