@@ -15,7 +15,7 @@ use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
 use crate::reply::Answered;
 use crate::tool::McpError;
-use specforge_ops::navigate::EntityField;
+use specforge_ops::view::EntityField;
 use specforge_ops::view::ProjectView;
 
 /// `specforge.inspect`'s arguments.

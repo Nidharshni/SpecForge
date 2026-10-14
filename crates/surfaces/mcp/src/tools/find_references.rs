@@ -8,7 +8,7 @@ use specforge_ops::navigate::{DIRECTION, Direction, Occurrence, Precision, Refer
 use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
 use crate::reply::Answered;
-use specforge_ops::navigate::EntityField;
+use specforge_ops::view::EntityField;
 use specforge_ops::view::ProjectView;
 
 /// `specforge.find_references`'s arguments.

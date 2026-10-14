@@ -10,7 +10,7 @@ use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
 use crate::reply::Answered;
 use crate::tool::{ErrorCode, McpError};
-use specforge_ops::navigate::EntityField;
+use specforge_ops::view::EntityField;
 
 /// `specforge.trace`'s arguments.
 #[derive(Debug, Arguments)]

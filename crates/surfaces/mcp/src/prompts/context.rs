@@ -11,7 +11,7 @@ use crate::args::{Arguments, EntityIds};
 use crate::prompt::{CorePrompt, Prompted};
 use crate::refusal::ArgumentOf;
 use crate::tool::{ErrorCode, McpError};
-use specforge_ops::navigate::EntityField;
+use specforge_ops::view::EntityField;
 use specforge_ops::view::ProjectView;
 
 /// The context prompt (`McpContextPromptResult`).

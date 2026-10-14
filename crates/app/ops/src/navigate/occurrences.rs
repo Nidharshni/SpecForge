@@ -10,9 +10,10 @@ use specforge_parser::FieldValue;
 
 use super::references::reference_edges;
 use super::text::SourceText;
-use super::{EntityField, Navigator, contains};
+use super::{Navigator, contains};
 use crate::Refusal;
 use crate::options::{Choice, OptionTable};
+use crate::view::EntityField;
 use specforge_parser::lex::Lexeme;
 
 /// Where an entity is declared: its whole block, and its name token.

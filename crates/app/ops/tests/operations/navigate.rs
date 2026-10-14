@@ -1702,7 +1702,7 @@ fn an_outgoing_reference_to_a_missing_entity_has_no_peer_kind() {
     verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
 )]
 fn a_read_view_about_one_entity_names_it() {
-    use specforge_ops::navigate::EntityField;
+    use specforge_ops::view::EntityField;
     let p = nav();
     let navigator = p.navigator();
     let about = Some(EntityField::EntityId);

@@ -8,9 +8,8 @@ use std::collections::BTreeMap;
 use specforge_common::Sym;
 use specforge_graph::{Graph, Reached};
 
-use super::ProjectView;
+use super::{EntityField, ProjectView, not_found};
 use crate::Refusal;
-use crate::navigate::EntityField;
 
 /// An entity's edges to and from *other* entities. An edge from the entity
 /// to itself is in neither count; the graph holds no edge to a reference
@@ -100,15 +99,15 @@ impl<'a> ProjectView<'a> {
     /// The entities [`Graph::reach`] reaches from `entity_id` within `depth`
     /// hops (unbounded when `None`; 0 is the entity alone), the entity first,
     /// nearest first: the one neighbourhood the exploration and the review
-    /// read. An entity the graph lacks is `navigate::not_found` (E003,
+    /// read. An entity the graph lacks is `view::not_found` (E003,
     /// did-you-mean).
     pub fn neighbourhood(
         &self,
         entity_id: &str,
         depth: Option<usize>,
     ) -> Result<Vec<Reached>, Refusal<EntityField>> {
-        self.graph().reach(entity_id, depth).ok_or_else(|| {
-            crate::navigate::not_found(self.graph(), entity_id).about(EntityField::EntityId)
-        })
+        self.graph()
+            .reach(entity_id, depth)
+            .ok_or_else(|| not_found(self.graph(), entity_id).about(EntityField::EntityId))
     }
 }
