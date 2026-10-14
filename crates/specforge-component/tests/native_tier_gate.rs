@@ -29,10 +29,7 @@ fn no_native_tier_symbols_in_workspace_source() {
             let path = entry.path();
             if path.is_dir() {
                 let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-                if matches!(
-                    name,
-                    "target" | ".git" | "node_modules" | ".plugin" | "docs" | "spec"
-                ) {
+                if matches!(name, "target" | ".git" | "node_modules" | "docs" | "spec") {
                     continue;
                 }
                 stack.push(path);

@@ -10,4 +10,4 @@ Paste this block at the top of each brief you send.
 - First command: merge the integration tip into your branch. Last action before the final reply: merge it again and
   re-run clippy and nextest for the crates you touched.
 - No backward compatibility: SpecForge is pre-release; delete the old name and update every caller.
-- `.agents/skills/`, `factory/`, `prototype/` and other untracked user files are not yours to add, edit or delete.
+- Untracked files in the checkout (`git status --short | grep '^??'`) are the user's: not yours to add, edit or delete.

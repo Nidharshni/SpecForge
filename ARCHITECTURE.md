@@ -43,4 +43,4 @@ The typed graph, exported as an open JSON schema (the Graph Protocol, `specforge
 - **MCP server** — `specforge mcp` exposes the graph and tools to agents over JSON-RPC.
 - **Plan validation** — trace tests and entities end to end (Intent → Linkage → Proof).
 
-See the [entity model](docs/entity-model.md) for the full design, and the [vision](vision/README.md) for the reasons behind it.
+See the [entity model](docs/entity-model.md) for the full design, and the [vision](docs/vision/README.md) for the reasons behind it.

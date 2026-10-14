@@ -579,7 +579,7 @@ behavior provide_mcp_render_tool "Provide MCP Render Tool" {
     produce source code, application configuration, user documentation, or any
     artifact consumed by end users or deployed to production. The distinction:
     if the artifact helps understand the graph, it belongs here; if it is
-    consumed beyond the spec workflow, it belongs to an agent (vision/README.md).
+    consumed beyond the spec workflow, it belongs to an agent (docs/vision/README.md).
     Unrecognized format strings MUST return an error listing available renderers.
     The response MUST list all files written.
   """

@@ -7,7 +7,7 @@
 //! The guest contract is the `specforge:bridge/bridge` world: one `call`
 //! export dispatching the JSON wire protocol by export name. Guests are
 //! `wasm32-wasip2` components (rustc emits the component encoding directly
-//! for that target — see `spike/w0-component/`).
+//! for that target).
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

@@ -6,8 +6,10 @@ use std::path::Path;
 use serde_json::Value;
 
 use crate::checks::{self, Selection};
+use crate::doc_links;
 use crate::judge;
 use crate::repo::{OUTSIDE_WORKSPACE, Repo};
+use crate::root_layout;
 use crate::run::{CARGO_AUDIT, Ctx, Mode, TREE_SITTER};
 
 /// Ok when nothing failed; else every failure, one per line.
@@ -108,6 +110,35 @@ pub fn links(ctx: &Ctx, _: &Selection) -> Result<(), String> {
     ctx.sh(ctx
         .cmd("cargo")
         .args(["run", "-q", "-p", "xtask", "--bin", "check-links"]))
+}
+
+pub fn doc_links(ctx: &Ctx, _: &Selection) -> Result<(), String> {
+    let tracked = tracked_paths(ctx)?;
+    let root = &ctx.repo.root;
+    let broken = doc_links::broken(&tracked, |path| {
+        std::fs::read_to_string(root.join(path)).ok()
+    });
+    finish(broken.iter().map(ToString::to_string).collect())
+}
+
+pub fn root_layout(ctx: &Ctx, _: &Selection) -> Result<(), String> {
+    finish(root_layout::disagreements(
+        root_layout::ROOT,
+        &tracked_paths(ctx)?,
+    ))
+}
+
+/// `git ls-files -z`: every tracked path, repo-relative.
+fn tracked_paths(ctx: &Ctx) -> Result<Vec<String>, String> {
+    let (ok, listed) = ctx.capture(ctx.cmd("git").args(["ls-files", "-z"]))?;
+    if !ok {
+        return Err("`git ls-files` failed".into());
+    }
+    Ok(listed
+        .split('\0')
+        .filter(|p| !p.is_empty())
+        .map(String::from)
+        .collect())
 }
 
 pub fn builtins(ctx: &Ctx, selection: &Selection) -> Result<(), String> {

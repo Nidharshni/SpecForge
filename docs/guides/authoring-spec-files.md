@@ -86,7 +86,7 @@ follows.
 > *enforces* an invariant). The compiler assembles these into a graph, validates it, and
 > exports it. **An agent's accuracy is proportional to how well-connected that graph is.**
 
-From the project's [principles](../../vision/principles.md):
+From the project's [principles](../vision/principles.md):
 
 > **Structure is a spectrum, not a binary.** "One entity in a `.spec` file is better than
 > zero. […] A single behavior with two verify declarations already gives an AI agent more
