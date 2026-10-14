@@ -1,0 +1,11 @@
+---
+source: crates/surfaces/cli/tests/read_views.rs
+expression: "format!(\"exit: {:?}\\nstdout:\\n{}stderr:\\n{}\", ghost.code, ghost.stdout,\nghost.stderr)"
+---
+exit: Some(1)
+stdout:
+{
+  "error": "unresolved entity 'ghost' — not found in graph",
+  "code": "E003"
+}
+stderr:

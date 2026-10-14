@@ -1,0 +1,43 @@
+---
+source: crates/surfaces/cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Run static analysis passes over the compiled project
+
+Usage: specforge analyze [OPTIONS] [PASS]
+
+Arguments:
+  [PASS]
+          Analysis pass to run: all (default), coverage, contracts, or a pass an extension declares (`<extension>:<pass>`)
+
+Options:
+      --path <PATH>
+          A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
+          
+          [default: .]
+
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
+      --strict
+          Fail (exit 1) on warnings as well as errors
+
+      --test-results <TEST_RESULTS>
+          Test-results report for proof-level verdicts (default: the project's specforge-report.json, written by `specforge collect`)
+
+      --prove
+          Verify declared bounds and claims with an SMT solver (z3)
+
+      --prove-timeout <SECONDS>
+          Seconds one solver call may take before it is stopped (with --prove)
+          
+          [default: 30]
+
+      --min <MIN>
+          Fail with a non-zero exit when proof coverage falls below this percentage (needs test results)
+
+  -h, --help
+          Print help

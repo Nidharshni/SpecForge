@@ -500,7 +500,7 @@ Host Grammar Registry
 ### Dependency Addition
 
 ```toml
-# In specforge-extism/Cargo.toml or specforge-wasm/Cargo.toml
+# In specforge-extism/Cargo.toml or crates/runtime/wasm/Cargo.toml
 [dependencies]
 tree-sitter = { version = "0.26.8", features = ["wasm"] }
 ```

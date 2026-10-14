@@ -23,7 +23,7 @@ and compiled it their own way.
   `CompiledProject::compile`, or builds the production runtime itself.
 - **D2. One driver per surface.** In process: the fixture's `compile`/`session`. MCP:
   `specforge_mcp::testing::Served` (`rooted`: as `specforge mcp <root>` serves it; `initialized`: an `initialize`
-  naming the project). CLI: `specforge-cli/tests/support::Cli`, the one place the suite spells the binary, a
+  naming the project). CLI: `crates/surfaces/cli/tests/support::Cli`, the one place the suite spells the binary, a
   project (`--path <root>`), a document (`--format json`) and the environment: the project's HOME, the shared
   compile cache (`SPECFORGE_WASMTIME_CACHE`), no colour, token, consent or report variables, the root as working
   directory, stdin closed.
@@ -32,7 +32,7 @@ and compiled it their own way.
   surfaces (the CLI crate is the only one that depends on all of them). A test whose assertions are all facts of
   the compiled project is `specforge-project`'s; of an operation's document, `specforge-ops`'s; of an MCP reply,
   `specforge-mcp`'s. A command's own test file stays whole.
-- **D4. A guard test holds it.** `specforge-cli/tests/isolation.rs` fails when a test outside the CLI's support
+- **D4. A guard test holds it.** `crates/surfaces/cli/tests/isolation.rs` fails when a test outside the CLI's support
   module runs the binary or sets HOME, when any test calls `CompiledProject::compile` itself, or builds the
   production runtime outside the component crate's tests.
 

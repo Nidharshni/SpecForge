@@ -1,0 +1,37 @@
+---
+source: crates/surfaces/cli/tests/read_views.rs
+expression: "normalized(mcp, root)"
+---
+{
+  "declared_count": 3,
+  "declared_pct": 75.0,
+  "diagnostic_summary": {
+    "errors": 0,
+    "infos": 3,
+    "warnings": 9
+  },
+  "edge_count": 1,
+  "entity_count": 7,
+  "entity_counts": [
+    {
+      "count": 3,
+      "kind": "behavior"
+    },
+    {
+      "count": 1,
+      "kind": "feature"
+    },
+    {
+      "count": 1,
+      "kind": "property"
+    },
+    {
+      "count": 2,
+      "kind": "type"
+    }
+  ],
+  "proof_pct": 50.0,
+  "testable_count": 4,
+  "unconnected_count": 5,
+  "verified_count": 4
+}

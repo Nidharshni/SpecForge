@@ -40,7 +40,7 @@ listed the product module. Both close here: the queries are `@specforge/product`
 
 ## What moved
 
-`crates/specforge-cli/src/product` is deleted, with `ProductAction` and the kind names in
+`crates/surfaces/cli/src/product` is deleted, with `ProductAction` and the kind names in
 `main.rs`. The queries and their rendering are `extensions/product/src/{queries,commands}.rs`,
 declared in `describe_surfaces.json` (now in code, each with its handler: ADR 0011, Adjustments); the duplicate `get_field` helpers are the SDK's
 `GraphNode::text`, and the nine compile-query-print bodies are one `render`. The command names,

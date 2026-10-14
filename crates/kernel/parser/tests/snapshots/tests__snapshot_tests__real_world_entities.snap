@@ -1,0 +1,376 @@
+---
+source: crates/kernel/parser/tests/snapshot_tests.rs
+expression: result.entities
+---
+[
+    Entity {
+        kind: EntityKind {
+            raw: Sym("behavior"),
+        },
+        id: EntityId {
+            raw: Sym("parse_spec_file_to_ast"),
+        },
+        title: Some(
+            "Parse Spec File to AST",
+        ),
+        fields: FieldMap {
+            entries: [
+                FieldEntry {
+                    key: Sym("invariants"),
+                    value: ReferenceList(
+                        [
+                            SpannedRef {
+                                id: "multi_error_collection",
+                                span: SourceSpan {
+                                    file: Sym("behaviors/parsing.spec"),
+                                    start_line: 6,
+                                    start_col: 17,
+                                    end_line: 6,
+                                    end_col: 39,
+                                },
+                            },
+                            SpannedRef {
+                                id: "string_interning_consistency",
+                                span: SourceSpan {
+                                    file: Sym("behaviors/parsing.spec"),
+                                    start_line: 6,
+                                    start_col: 41,
+                                    end_line: 6,
+                                    end_col: 69,
+                                },
+                            },
+                        ],
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("behaviors/parsing.spec"),
+                            start_line: 6,
+                            start_col: 16,
+                            end_line: 6,
+                            end_col: 70,
+                        },
+                    ),
+                },
+                FieldEntry {
+                    key: Sym("types"),
+                    value: ReferenceList(
+                        [
+                            SpannedRef {
+                                id: "SpecFile",
+                                span: SourceSpan {
+                                    file: Sym("behaviors/parsing.spec"),
+                                    start_line: 7,
+                                    start_col: 17,
+                                    end_line: 7,
+                                    end_col: 25,
+                                },
+                            },
+                            SpannedRef {
+                                id: "ParseError",
+                                span: SourceSpan {
+                                    file: Sym("behaviors/parsing.spec"),
+                                    start_line: 7,
+                                    start_col: 27,
+                                    end_line: 7,
+                                    end_col: 37,
+                                },
+                            },
+                            SpannedRef {
+                                id: "SourceSpan",
+                                span: SourceSpan {
+                                    file: Sym("behaviors/parsing.spec"),
+                                    start_line: 7,
+                                    start_col: 39,
+                                    end_line: 7,
+                                    end_col: 49,
+                                },
+                            },
+                        ],
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("behaviors/parsing.spec"),
+                            start_line: 7,
+                            start_col: 16,
+                            end_line: 7,
+                            end_col: 50,
+                        },
+                    ),
+                },
+                FieldEntry {
+                    key: Sym("requires"),
+                    value: Block(
+                        FieldMap {
+                            entries: [
+                                FieldEntry {
+                                    key: Sym("valid_utf8_input"),
+                                    value: String(
+                                        "Input buffer is valid UTF-8",
+                                    ),
+                                    annotations: [],
+                                    value_span: Some(
+                                        SourceSpan {
+                                            file: Sym("behaviors/parsing.spec"),
+                                            start_line: 10,
+                                            start_col: 26,
+                                            end_line: 10,
+                                            end_col: 55,
+                                        },
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("behaviors/parsing.spec"),
+                            start_line: 9,
+                            start_col: 14,
+                            end_line: 11,
+                            end_col: 6,
+                        },
+                    ),
+                },
+                FieldEntry {
+                    key: Sym("ensures"),
+                    value: Block(
+                        FieldMap {
+                            entries: [
+                                FieldEntry {
+                                    key: Sym("ast_produced"),
+                                    value: String(
+                                        "A complete AST is produced",
+                                    ),
+                                    annotations: [],
+                                    value_span: Some(
+                                        SourceSpan {
+                                            file: Sym("behaviors/parsing.spec"),
+                                            start_line: 14,
+                                            start_col: 22,
+                                            end_line: 14,
+                                            end_col: 50,
+                                        },
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("behaviors/parsing.spec"),
+                            start_line: 13,
+                            start_col: 13,
+                            end_line: 15,
+                            end_col: 6,
+                        },
+                    ),
+                },
+                FieldEntry {
+                    key: Sym("contract"),
+                    value: String(
+                        "Given a source file\nWhen parsed by the Tree-sitter grammar\nThen an AST is produced with all entities",
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("behaviors/parsing.spec"),
+                            start_line: 17,
+                            start_col: 14,
+                            end_line: 21,
+                            end_col: 8,
+                        },
+                    ),
+                },
+                FieldEntry {
+                    key: Sym("verify"),
+                    value: VerifyList(
+                        [
+                            VerifyStatement {
+                                kind: "unit",
+                                description: "produces AST for minimal valid file",
+                            },
+                            VerifyStatement {
+                                kind: "integration",
+                                description: "parses all .spec files in project",
+                            },
+                        ],
+                    ),
+                    annotations: [],
+                    value_span: None,
+                },
+            ],
+        },
+        raw_body: Some(
+            "\n    invariants [multi_error_collection, string_interning_consistency]\n    types      [SpecFile, ParseError, SourceSpan]\n\n    requires {\n        valid_utf8_input \"Input buffer is valid UTF-8\"\n    }\n\n    ensures {\n        ast_produced \"A complete AST is produced\"\n    }\n\n    contract \"\"\"\n        Given a source file\n        When parsed by the Tree-sitter grammar\n        Then an AST is produced with all entities\n    \"\"\"\n\n    verify unit \"produces AST for minimal valid file\"\n    verify integration \"parses all .spec files in project\"\n",
+        ),
+        span: SourceSpan {
+            file: Sym("behaviors/parsing.spec"),
+            start_line: 5,
+            start_col: 1,
+            end_line: 25,
+            end_col: 2,
+        },
+        methods: [],
+    },
+    Entity {
+        kind: EntityKind {
+            raw: Sym("ref"),
+        },
+        id: EntityId {
+            raw: Sym("gh.issue:1"),
+        },
+        title: Some(
+            "Initial parser",
+        ),
+        fields: FieldMap {
+            entries: [
+                FieldEntry {
+                    key: Sym("scheme"),
+                    value: String(
+                        "gh",
+                    ),
+                    annotations: [],
+                    value_span: None,
+                },
+                FieldEntry {
+                    key: Sym("ref_kind"),
+                    value: String(
+                        "issue",
+                    ),
+                    annotations: [],
+                    value_span: None,
+                },
+                FieldEntry {
+                    key: Sym("identifier"),
+                    value: String(
+                        "1",
+                    ),
+                    annotations: [],
+                    value_span: None,
+                },
+            ],
+        },
+        raw_body: None,
+        span: SourceSpan {
+            file: Sym("behaviors/parsing.spec"),
+            start_line: 27,
+            start_col: 1,
+            end_line: 27,
+            end_col: 32,
+        },
+        methods: [],
+    },
+    Entity {
+        kind: EntityKind {
+            raw: Sym("behavior"),
+        },
+        id: EntityId {
+            raw: Sym("recover_from_syntax_errors"),
+        },
+        title: Some(
+            "Recover from Syntax Errors",
+        ),
+        fields: FieldMap {
+            entries: [
+                FieldEntry {
+                    key: Sym("invariants"),
+                    value: ReferenceList(
+                        [
+                            SpannedRef {
+                                id: "multi_error_collection",
+                                span: SourceSpan {
+                                    file: Sym("behaviors/parsing.spec"),
+                                    start_line: 30,
+                                    start_col: 17,
+                                    end_line: 30,
+                                    end_col: 39,
+                                },
+                            },
+                        ],
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("behaviors/parsing.spec"),
+                            start_line: 30,
+                            start_col: 16,
+                            end_line: 30,
+                            end_col: 40,
+                        },
+                    ),
+                },
+                FieldEntry {
+                    key: Sym("types"),
+                    value: ReferenceList(
+                        [
+                            SpannedRef {
+                                id: "ParseError",
+                                span: SourceSpan {
+                                    file: Sym("behaviors/parsing.spec"),
+                                    start_line: 31,
+                                    start_col: 17,
+                                    end_line: 31,
+                                    end_col: 27,
+                                },
+                            },
+                        ],
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("behaviors/parsing.spec"),
+                            start_line: 31,
+                            start_col: 16,
+                            end_line: 31,
+                            end_col: 28,
+                        },
+                    ),
+                },
+                FieldEntry {
+                    key: Sym("status"),
+                    value: Identifier(
+                        "planned",
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("behaviors/parsing.spec"),
+                            start_line: 32,
+                            start_col: 16,
+                            end_line: 32,
+                            end_col: 23,
+                        },
+                    ),
+                },
+                FieldEntry {
+                    key: Sym("verify"),
+                    value: VerifyList(
+                        [
+                            VerifyStatement {
+                                kind: "property",
+                                description: "N errors produce N diagnostics",
+                            },
+                        ],
+                    ),
+                    annotations: [],
+                    value_span: None,
+                },
+            ],
+        },
+        raw_body: Some(
+            "\n    invariants [multi_error_collection]\n    types      [ParseError]\n    status     planned\n    verify property \"N errors produce N diagnostics\"\n",
+        ),
+        span: SourceSpan {
+            file: Sym("behaviors/parsing.spec"),
+            start_line: 29,
+            start_col: 1,
+            end_line: 34,
+            end_col: 2,
+        },
+        methods: [],
+    },
+]

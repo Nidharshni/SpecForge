@@ -421,8 +421,8 @@ export function auth_login(username: string, password: string): Token {
 ### Existing Documentation
 
 - `/Users/u1070457/Projects/Perso/specforge/docs/extension-model.md`
-- `/Users/u1070457/Projects/Perso/specforge/crates/specforge-wasm/src/host_functions.rs`
-- `/Users/u1070457/Projects/Perso/specforge/crates/specforge-graph/src/spec_graph.rs`
+- `/Users/u1070457/Projects/Perso/specforge/crates/runtime/wasm/src/host_functions.rs`
+- `/Users/u1070457/Projects/Perso/specforge/crates/pipeline/graph/src/spec_graph.rs`
 
 ---
 

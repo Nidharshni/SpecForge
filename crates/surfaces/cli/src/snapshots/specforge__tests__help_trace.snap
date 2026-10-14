@@ -1,0 +1,29 @@
+---
+source: crates/surfaces/cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Show traceability chain for an entity, or for every entity
+
+Usage: specforge trace [OPTIONS] [ENTITY]
+
+Arguments:
+  [ENTITY]
+          Entity ID to trace (omit to trace every entity)
+
+Options:
+      --plan <FILE>
+          An agent plan file (an AgentPlan's JSON) to check against the graph instead of tracing
+
+      --path <PATH>
+          A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
+          
+          [default: .]
+
+      --format <FORMAT>
+          Output format: json or human
+          
+          [default: json]
+          [possible values: human, json]
+
+  -h, --help
+          Print help

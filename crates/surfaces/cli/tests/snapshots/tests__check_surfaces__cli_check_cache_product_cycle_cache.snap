@@ -1,0 +1,9 @@
+---
+source: crates/surfaces/cli/tests/check_surfaces.rs
+expression: "normalized(&doc, dir.path())"
+---
+{
+  "cache_file": null,
+  "exit": 1,
+  "stderr": "note: specforge-cache.json not written: the check failed\n"
+}

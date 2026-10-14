@@ -130,12 +130,12 @@ pub static CHECKS: &[Check] = &[
         proves: "the committed tree-sitter artifacts are what grammar.js generates",
         reach: Reach::Hook,
         trigger: Trigger::Paths(&[
-            "crates/tree-sitter-specforge/grammar.js",
-            "crates/tree-sitter-specforge/src/**",
+            "crates/kernel/tree-sitter/grammar.js",
+            "crates/kernel/tree-sitter/src/**",
         ]),
         compiles: false,
         after: &[],
-        fix: "cd crates/tree-sitter-specforge && tree-sitter generate, then commit src/parser.c, src/grammar.json, src/node-types.json",
+        fix: "cd crates/kernel/tree-sitter && tree-sitter generate, then commit src/parser.c, src/grammar.json, src/node-types.json",
         run: steps::grammar,
     },
     Check {
@@ -281,10 +281,10 @@ pub static CHECKS: &[Check] = &[
             "**/*.spec",
             "**/specforge.json",
             "extensions/**",
-            "crates/specforge-emitter/**",
-            "crates/specforge-graph/**",
-            "crates/specforge-registry/**",
-            "crates/specforge-ops/tests/operations/schema.rs",
+            "crates/pipeline/emitter/**",
+            "crates/pipeline/graph/**",
+            "crates/pipeline/registry/**",
+            "crates/app/ops/tests/operations/schema.rs",
         ]),
         compiles: false,
         after: &["build"],
@@ -364,10 +364,10 @@ pub fn render_list() -> String {
 fn spec_files(repo: &Repo, changes: &ChangeSet) -> Result<Selection, String> {
     // Sources only: a `.spec` fixture under a crate's `tests/` is no project's spec.
     const FORMATTING_CODE: &[&str] = &[
-        "crates/specforge-formatter/src/**",
-        "crates/specforge-parser/src/**",
-        "crates/tree-sitter-specforge/src/**",
-        "crates/tree-sitter-specforge/grammar.js",
+        "crates/pipeline/formatter/src/**",
+        "crates/kernel/parser/src/**",
+        "crates/kernel/tree-sitter/src/**",
+        "crates/kernel/tree-sitter/grammar.js",
     ];
     if !changes.matching(FORMATTING_CODE).is_empty() {
         return Ok(Selection::Everything);

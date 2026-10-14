@@ -562,7 +562,7 @@
       <h3>Concept proof — core-DSL GBNF sketch</h3>
       <p class="sup" style="margin-bottom:10px">Mirror of <code>grammar.js#C5E2</code> (generation side). Simplifications marked; the shipped artifact would be generated from the grammar plus per-kind field constraints from extension manifests — strictly <em>tighter</em> than tree-sitter.</p>
       <pre><span class="c"># specforge-core.gbnf — generation-side grammar (sketch)</span>
-<span class="c"># source: crates/tree-sitter-specforge/grammar.js</span>
+<span class="c"># source: crates/kernel/tree-sitter/grammar.js</span>
 root      ::= <span class="f">block*</span>
 block     ::= useLine | entityBlock | unionBlock
             | specBlock | defineBlock | verifyLine
@@ -738,7 +738,7 @@ $ specforge check   <span class="c"># semantic gate: refs, orphans, cycles</span
     <li><span class="id">E17.3</span> — <strong>Repo:</strong> docs/vision/principles.md#CFB1 — §7 extensions-over-built-ins; §8 zero-config/60s test</li>
     <li><span class="id">E17.4</span> — <strong>Repo:</strong> spec/extensions/embeddings/behaviors.spec#4320 — cache-by-content-hash + E028 semantics</li>
     <li><span class="id">E17.5</span> — <strong>Repo:</strong> spec/features/infer.spec#68D3 + spec/types/infer.spec#107F — infer manifest, plan mode, gap analysis, resume-by-hash</li>
-    <li><span class="id">E17.6</span> — <strong>Repo:</strong> crates/tree-sitter-specforge/grammar.js#C5E2 — 4 dedicated constructs + generic entity_block; full rule set</li>
+    <li><span class="id">E17.6</span> — <strong>Repo:</strong> crates/kernel/tree-sitter/grammar.js#C5E2 — 4 dedicated constructs + generic entity_block; full rule set</li>
     <li><span class="id">E17.7</span> — <strong>Repo:</strong> spec/research/RES-29-extension-defined-grammars.md — extension-defined grammars (parsing side)</li>
     <li><span class="id">E17.8</span> — <strong>Repo:</strong> README.md#DE2D, docs/vision/north-star.md — "the graph is the product"; agent-first surfaces</li>
     <li><span class="id">E18</span> — "A Performance Study of vLLM and HuggingFace TGI", arXiv (Nov 2025) — up to 24× vs TGI at high concurrency · <a href="https://arxiv.org">arxiv.org</a></li>

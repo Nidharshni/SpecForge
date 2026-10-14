@@ -75,7 +75,7 @@ pub fn spec_format(ctx: &Ctx, selection: &Selection) -> Result<(), String> {
 
 pub fn grammar(ctx: &Ctx, _: &Selection) -> Result<(), String> {
     ctx.tool(&TREE_SITTER)?;
-    let crate_dir = ctx.repo.root.join("crates/tree-sitter-specforge");
+    let crate_dir = ctx.repo.root.join("crates/kernel/tree-sitter");
     let scratch = ctx.repo.target_dir.join("gate/grammar");
     let _ = std::fs::remove_dir_all(&scratch);
     std::fs::create_dir_all(&scratch).map_err(|e| e.to_string())?;

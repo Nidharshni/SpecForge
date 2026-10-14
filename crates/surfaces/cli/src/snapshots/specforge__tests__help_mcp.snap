@@ -1,0 +1,17 @@
+---
+source: crates/surfaces/cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Start MCP server (JSON-RPC over stdio)
+
+Usage: specforge mcp [ROOT]
+
+Arguments:
+  [ROOT]
+          Where to find the project to serve: the nearest directory at or above it holding specforge.json (none yet: served once one exists there; in a handshake session a call may also serve the project its path names or init creates)
+          
+          [default: .]
+
+Options:
+  -h, --help
+          Print help

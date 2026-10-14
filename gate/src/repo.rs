@@ -15,7 +15,7 @@ pub struct Repo {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Member {
     pub name: String,
-    /// Repo-relative, `/`-separated, no trailing slash (`crates/specforge-coverage`).
+    /// Repo-relative, `/`-separated, no trailing slash (`crates/leaf/coverage`).
     pub dir: String,
 }
 
@@ -152,12 +152,12 @@ pub(crate) fn this_repo() -> Repo {
     Repo {
         target_dir: root.join("target"),
         members: vec![
-            member("specforge-coverage", "crates/specforge-coverage"),
-            member("specforge-diagnostics", "crates/specforge-diagnostics"),
-            member("specforge-extension-sdk", "crates/specforge-extension-sdk"),
-            member("specforge-formatter", "crates/specforge-formatter"),
-            member("specforge-lsp", "crates/specforge-lsp"),
-            member("specforge-registry", "crates/specforge-registry"),
+            member("specforge-coverage", "crates/leaf/coverage"),
+            member("specforge-diagnostics", "crates/leaf/diagnostics"),
+            member("specforge-extension-sdk", "crates/runtime/extension-sdk"),
+            member("specforge-formatter", "crates/pipeline/formatter"),
+            member("specforge-lsp", "crates/surfaces/lsp"),
+            member("specforge-registry", "crates/pipeline/registry"),
             member("specforge-test", "integrations/rust/specforge-test"),
             member("gate", "gate"),
             member("xtask", "xtask"),
@@ -174,7 +174,7 @@ mod tests {
     fn the_longest_member_directory_holds_a_path() {
         let repo = this_repo();
         assert_eq!(
-            repo.member_of("crates/specforge-lsp/src/lib.rs")
+            repo.member_of("crates/surfaces/lsp/src/lib.rs")
                 .unwrap()
                 .name,
             "specforge-lsp"
@@ -188,7 +188,7 @@ mod tests {
         assert_eq!(repo.member_of("xtask").unwrap().name, "xtask");
         assert!(repo.member_of("extensions/governance/src/lib.rs").is_none());
         assert!(
-            repo.member_of("crates/specforge-lsp-extra/src/lib.rs")
+            repo.member_of("crates/surfaces/lsp-extra/src/lib.rs")
                 .is_none()
         );
     }

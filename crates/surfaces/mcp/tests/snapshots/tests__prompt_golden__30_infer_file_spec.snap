@@ -1,0 +1,79 @@
+---
+source: crates/surfaces/mcp/tests/prompt_golden.rs
+expression: "shape(&reply, dir.path())"
+---
+{
+  "description": "Get inference guidance for discovering spec entities from code",
+  "instruction": "You are inferring spec entities from the file 'main.spec'. The entities listed below already reference this file — do not duplicate them. Use the kind guides to identify new entities.",
+  "layout": "turns",
+  "payload": {
+    "existing_entities_referencing_file": [],
+    "file": "main.spec",
+    "kinds": [
+      {
+        "inference_guide": "[guide]",
+        "kind": "feature"
+      },
+      {
+        "inference_guide": "[guide]",
+        "kind": "journey"
+      },
+      {
+        "inference_guide": "[guide]",
+        "kind": "deliverable"
+      },
+      {
+        "inference_guide": "[guide]",
+        "kind": "milestone"
+      },
+      {
+        "inference_guide": "[guide]",
+        "kind": "module"
+      },
+      {
+        "inference_guide": "[guide]",
+        "kind": "term"
+      },
+      {
+        "inference_guide": "[guide]",
+        "kind": "persona"
+      },
+      {
+        "inference_guide": "[guide]",
+        "kind": "channel"
+      },
+      {
+        "inference_guide": "[guide]",
+        "kind": "release"
+      },
+      {
+        "inference_guide": "[guide]",
+        "kind": "behavior"
+      },
+      {
+        "inference_guide": "[guide]",
+        "kind": "invariant"
+      },
+      {
+        "inference_guide": "[guide]",
+        "kind": "event"
+      },
+      {
+        "inference_guide": "[guide]",
+        "kind": "type"
+      },
+      {
+        "inference_guide": "[guide]",
+        "kind": "port"
+      }
+    ],
+    "match_mode": "none",
+    "project_conventions": "",
+    "scope": "file",
+    "validation": "After writing .spec files, call specforge.validate to check for errors (and specforge.analyze for coverage/contract findings). Fix any errors before proceeding."
+  },
+  "roles": [
+    "user",
+    "user"
+  ]
+}

@@ -1,0 +1,15 @@
+---
+source: crates/surfaces/cli/tests/read_views.rs
+expression: human.stdout
+---
+login [behavior]
+  upstream:
+    (none)
+  downstream:
+    -features-> signin [feature] (depth 1)
+  missing:
+    MISSING login -consumes-> [event] (depth 1)
+    MISSING login -invariants-> [invariant] (depth 1)
+    MISSING login -ports-> [port] (depth 1)
+    MISSING login -produces-> [event] (depth 1)
+    MISSING login -types-> [type] (depth 1)

@@ -58,9 +58,9 @@
     <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">live bug</span>
   </div>
   <ul class="font-mono text-sm text-slate-600 space-y-0.5">
-    <li>crates/specforge-emitter/src/json.rs:102-146 · schema.rs:670-972 · emit.rs:122-133</li>
-    <li>crates/specforge-registry/src/checks/values.rs:89-93 · compilation/graph_inputs.rs:85-100</li>
-    <li>crates/specforge-graph/src/coerce.rs:55-85 · crates/specforge-parser/src/expr.rs:67</li>
+    <li>crates/pipeline/emitter/src/json.rs:102-146 · schema.rs:670-972 · emit.rs:122-133</li>
+    <li>crates/pipeline/registry/src/checks/values.rs:89-93 · compilation/graph_inputs.rs:85-100</li>
+    <li>crates/pipeline/graph/src/coerce.rs:55-85 · crates/kernel/parser/src/expr.rs:67</li>
     <li>extensions/{formal,software,governance}/src/declaration.rs</li>
   </ul>
   <div class="grid md:grid-cols-2 gap-4">
@@ -131,9 +131,9 @@ flowchart LR
     <span class="px-2 py-0.5 rounded text-xs bg-indigo-100 text-indigo-700">#1 hot spot</span>
   </div>
   <ul class="font-mono text-sm text-slate-600 space-y-0.5">
-    <li>crates/specforge-ops/src/extension/{add.rs:630-862, remove.rs:255-326, update.rs, init.rs:162-405}</li>
-    <li>crates/specforge-ops/src/extension/{lock_plan.rs:958-976, peer_set.rs:44-56, inventory.rs:131-209}</li>
-    <li>crates/specforge-installed/src/change.rs:139-200</li>
+    <li>crates/app/ops/src/extension/{add.rs:630-862, remove.rs:255-326, update.rs, init.rs:162-405}</li>
+    <li>crates/app/ops/src/extension/{lock_plan.rs:958-976, peer_set.rs:44-56, inventory.rs:131-209}</li>
+    <li>crates/runtime/installed/src/change.rs:139-200</li>
   </ul>
   <div class="grid md:grid-cols-2 gap-4">
     <div class="rounded-lg border border-slate-200 p-3 diagram">
@@ -205,9 +205,9 @@ flowchart TB
     <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">live bug</span>
   </div>
   <ul class="font-mono text-sm text-slate-600 space-y-0.5">
-    <li>crates/specforge-common/src/project.rs:330-336 (load_project_config)</li>
-    <li>crates/specforge-ops/src/format.rs:656-661 · crates/specforge-migrate/src/lib.rs:685-687</li>
-    <li>crates/specforge-ops/src/config.rs:44-50 (usable)</li>
+    <li>crates/kernel/common/src/project.rs:330-336 (load_project_config)</li>
+    <li>crates/app/ops/src/format.rs:656-661 · crates/pipeline/migrate/src/lib.rs:685-687</li>
+    <li>crates/app/ops/src/config.rs:44-50 (usable)</li>
   </ul>
   <div class="grid md:grid-cols-2 gap-4">
     <div class="rounded-lg border border-slate-200 p-3 diagram">
@@ -296,8 +296,8 @@ flowchart TB
     <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">live bug</span>
   </div>
   <ul class="font-mono text-sm text-slate-600 space-y-0.5">
-    <li>crates/specforge-emitter/src/schema.rs:443-558 (diff_schemas, compute_schema_version, negotiate_version, content_hash)</li>
-    <li>crates/specforge-ops/src/schema_cache/mod.rs:54-166 · ops/src/export.rs:183-264 · crates/specforge-migrate/src/lib.rs:223-246</li>
+    <li>crates/pipeline/emitter/src/schema.rs:443-558 (diff_schemas, compute_schema_version, negotiate_version, content_hash)</li>
+    <li>crates/app/ops/src/schema_cache/mod.rs:54-166 · ops/src/export.rs:183-264 · crates/pipeline/migrate/src/lib.rs:223-246</li>
   </ul>
   <div class="grid md:grid-cols-2 gap-4">
     <div class="rounded-lg border border-slate-200 p-3 diagram">
@@ -343,7 +343,7 @@ flowchart LR
     <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process (pure deletion)</span>
   </div>
   <ul class="font-mono text-sm text-slate-600 space-y-0.5">
-    <li>crates/specforge-graph/build.rs:30-141</li>
+    <li>crates/pipeline/graph/build.rs:30-141</li>
     <li>integrations/rust/specforge-test/src/atexit.rs:155-176 · coverage.rs:84-140</li>
   </ul>
   <div class="grid md:grid-cols-2 gap-4">
@@ -385,8 +385,8 @@ flowchart LR
     <span class="px-2 py-0.5 rounded text-xs bg-indigo-100 text-indigo-700">test friction</span>
   </div>
   <ul class="font-mono text-sm text-slate-600 space-y-0.5">
-    <li>crates/specforge-cli/tests/extension_surfaces.rs:49-76 · src/extension_command.rs:389-421, 518</li>
-    <li>crates/specforge-cli/tests/parity.rs:727-777</li>
+    <li>crates/surfaces/cli/tests/extension_surfaces.rs:49-76 · src/extension_command.rs:389-421, 518</li>
+    <li>crates/surfaces/cli/tests/parity.rs:727-777</li>
   </ul>
   <div class="grid md:grid-cols-2 gap-4">
     <div class="rounded-lg border border-slate-200 p-3 diagram">
@@ -431,9 +431,9 @@ flowchart LR
     <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process</span>
   </div>
   <ul class="font-mono text-sm text-slate-600 space-y-0.5">
-    <li>crates/specforge-project/src/coverage.rs:70, 164-187 · crates/specforge-ops/src/collect/mod.rs:520-526</li>
+    <li>crates/session/project/src/coverage.rs:70, 164-187 · crates/app/ops/src/collect/mod.rs:520-526</li>
     <li>extensions/{testing:186-203, formal:286, product/lifecycle:297, cargo-test:116-120, vitest:125-129}</li>
-    <li>crates/specforge-protocol-types/src/calls.rs:645 · crates/specforge-coverage/src/lib.rs:26</li>
+    <li>crates/leaf/protocol-types/src/calls.rs:645 · crates/leaf/coverage/src/lib.rs:26</li>
   </ul>
   <div class="grid md:grid-cols-2 gap-4">
     <div class="rounded-lg border border-slate-200 p-3 diagram">
@@ -478,7 +478,7 @@ flowchart LR
   </div>
   <ul class="font-mono text-sm text-slate-600 space-y-0.5">
     <li>xtask/src/snapshot_builtins.rs:21-124 · xtask/src/revendor.rs:16, 76-79</li>
-    <li>crates/specforge-component/tests/declarations.rs:46-93 · crates/specforge-extension-sdk/tests/golden.rs:80-91 · ci.yml:130</li>
+    <li>crates/runtime/component/tests/declarations.rs:46-93 · crates/runtime/extension-sdk/tests/golden.rs:80-91 · ci.yml:130</li>
     <li>fixtures/docref-extension/docref.wasm · fixtures/sandbox-probe/probe.wasm</li>
   </ul>
   <div class="grid md:grid-cols-2 gap-4">
@@ -518,7 +518,7 @@ flowchart LR
     <span class="px-2 py-0.5 rounded text-xs bg-slate-200 text-slate-700 font-semibold">Speculative</span>
     <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process</span>
   </div>
-  <ul class="font-mono text-sm text-slate-600"><li>crates/specforge-cli/src/** (31 PATH_HELP sites) · main.rs:254-305</li></ul>
+  <ul class="font-mono text-sm text-slate-600"><li>crates/surfaces/cli/src/** (31 PATH_HELP sites) · main.rs:254-305</li></ul>
   <div class="grid md:grid-cols-2 gap-4">
     <div class="rounded-lg border border-slate-200 p-3">
       <p class="lbl text-slate-500 mb-2">Before</p>

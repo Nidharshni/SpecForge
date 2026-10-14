@@ -1,0 +1,85 @@
+---
+source: crates/surfaces/cli/src/extension_command.rs
+expression: "pinned.join(\"\\n\")"
+---
+$ specforge x --help
+Usage: specforge x <COMMAND>
+
+Commands:
+  show   Show one thing
+  plain  List plain things
+  help   Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help  Print help
+
+$ specforge x show --help
+Show one thing in full: its fields, then its links.
+
+Usage: specforge x show [OPTIONS] <TARGET> <FILE> <SIDE> <COUNT>
+
+Arguments:
+  <TARGET>
+          The target id
+
+  <FILE>
+          
+
+  <SIDE>
+          Which side
+          
+          [possible values: left, right]
+
+  <COUNT>
+          How many
+
+Options:
+      --label <LABEL>
+          A label to show
+
+      --out <OUT>
+          
+
+      --status <STATUS>
+          Only things with this status
+          
+          [default: open]
+          [possible values: open, closed]
+
+      --limit <LIMIT>
+          Return at most this many
+          
+          [default: 10]
+
+      --shift <SHIFT>
+          
+
+      --details
+          Show every field
+
+      --strict
+          
+
+      --path <PATH>
+          A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
+          
+          [default: .]
+
+      --format <FORMAT>
+          Output format
+          
+          [default: human]
+          [possible values: human, json]
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+$ specforge x plain --help
+List plain things
+
+Usage: specforge x plain [OPTIONS]
+
+Options:
+      --path <PATH>      A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration) [default: .]
+      --format <FORMAT>  Output format [default: human] [possible values: human, json]
+  -h, --help             Print help

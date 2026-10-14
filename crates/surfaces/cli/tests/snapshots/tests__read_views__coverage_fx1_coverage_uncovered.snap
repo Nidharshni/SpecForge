@@ -1,0 +1,34 @@
+---
+source: crates/surfaces/cli/tests/read_views.rs
+expression: "normalized(&result, root)"
+---
+{
+  "entities": [
+    {
+      "declared": false,
+      "entity_id": "logout",
+      "evidence_collected": true,
+      "exempt": false,
+      "kind": "behavior",
+      "linked": true,
+      "obligations": 0,
+      "proven": 0,
+      "status": "uncovered",
+      "unproven": []
+    },
+    {
+      "declared": true,
+      "entity_id": "reset_password",
+      "evidence_collected": true,
+      "exempt": false,
+      "kind": "behavior",
+      "linked": true,
+      "obligations": 1,
+      "proven": 0,
+      "status": "uncovered",
+      "unproven": [
+        "Reset link expires after one hour"
+      ]
+    }
+  ]
+}

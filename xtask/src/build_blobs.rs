@@ -725,10 +725,10 @@ mod tests {
     /// macros, and the coverage rule (ADR 0039, 0050). A host-only module in one of them, or a new
     /// path dependency of a guest, shows here as an input outside this list.
     const GUEST_CRATES: &[&str] = &[
-        "crates/specforge-protocol-types/",
-        "crates/specforge-extension-sdk/",
-        "crates/specforge-extension-sdk-macros/",
-        "crates/specforge-coverage/",
+        "crates/leaf/protocol-types/",
+        "crates/runtime/extension-sdk/",
+        "crates/runtime/extension-sdk-macros/",
+        "crates/leaf/coverage/",
     ];
 
     #[test]
@@ -767,7 +767,7 @@ mod tests {
             let record = BlobRecord::read(root, name).unwrap();
             for key in record.inputs.keys() {
                 assert_ne!(
-                    key, "crates/specforge-extension-sdk/src/testing.rs",
+                    key, "crates/runtime/extension-sdk/src/testing.rs",
                     "{name} compiles the SDK's test helpers"
                 );
                 let Ok(text) = std::fs::read_to_string(root.join(key)) else {

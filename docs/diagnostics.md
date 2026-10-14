@@ -2,7 +2,7 @@
 
 <!-- Generated file: do not edit by hand. -->
 
-This page is generated from the catalog table in `crates/specforge-diagnostics/src/catalog.rs`,
+This page is generated from the catalog table in `crates/leaf/diagnostics/src/catalog.rs`,
 the single registry of diagnostic codes; `specforge explain <CODE>` prints the
 same text. Every code emitted by the compiler, the CLI, or a first-party
 extension has exactly one entry, and each entry names its owner: `core` for the

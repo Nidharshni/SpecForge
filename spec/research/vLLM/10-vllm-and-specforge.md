@@ -61,7 +61,7 @@ prefix caching, Chapter 05), and exactly the crowd where Ollama wobbles
 And now the best idea in the whole evaluation (RES-31 calls it the flagship).
 
 SpecForge already owns the rules of recipe files — its parser
-(`crates/tree-sitter-specforge/grammar.js`) is the rulebook. Chapter 06 taught
+(`crates/kernel/tree-sitter/grammar.js`) is the rulebook. Chapter 06 taught
 you that vLLM can enforce **any rulebook** while the robot writes. So:
 
 1. Translate the rulebook **once** into a mold file: `specforge.gbnf`.

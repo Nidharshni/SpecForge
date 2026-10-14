@@ -1,0 +1,22 @@
+---
+source: crates/surfaces/cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Load the built component and report its declaration's diagnostics
+
+Usage: specforge extension validate [OPTIONS]
+
+Options:
+      --dir <DIR>
+          The extension crate's directory
+          
+          [default: .]
+
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
+  -h, --help
+          Print help

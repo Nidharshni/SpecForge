@@ -1,0 +1,69 @@
+[package]
+name = "specforge-cli"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+autotests = false
+
+# `cargo binstall --git <repo> specforge-cli` downloads the prebuilt release archive.
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/specforge-{ target }{ archive-suffix }"
+bin-dir = "specforge-{ target }/{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
+
+[[test]]
+name = "tests"
+path = "tests/main.rs"
+
+[[bin]]
+name = "specforge"
+path = "src/main.rs"
+
+[dependencies]
+clap = { workspace = true, features = ["string"] }
+clap_complete = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+specforge-common = { workspace = true }
+specforge-diagnostics = { path = "../../leaf/diagnostics" }
+specforge-formatter = { workspace = true }
+specforge-package = { path = "../../leaf/package" }
+specforge-protocol-types = { path = "../../leaf/protocol-types" }
+specforge-watch = { path = "../../session/watch" }
+chrono = "0.4.41"
+specforge-component = { workspace = true }
+specforge-mcp = { workspace = true }
+specforge-ops = { workspace = true }
+specforge-ops-registry = { path = "../../adapters/ops-registry" }
+specforge-project = { workspace = true }
+specforge-registry-client = { path = "../../adapters/registry-client" }
+
+[dev-dependencies]
+specforge-repo-root = { path = "../../leaf/repo-root" }
+# The test project and the MCP driver over it (`tests/support`).
+specforge-project = { workspace = true, features = ["testing"] }
+specforge-mcp = { workspace = true, features = ["testing"] }
+specforge-ops = { workspace = true, features = ["testing"] }
+specforge-registry = { workspace = true }
+specforge-emitter = { path = "../../pipeline/emitter" }
+# Extensions declared with the SDK, served in process (`specforge_wasm::testing`).
+specforge-extension-sdk = { path = "../../runtime/extension-sdk" }
+specforge-wasm = { workspace = true, features = ["testing"] }
+specforge-installed = { path = "../../runtime/installed", features = ["testing"] }
+assert_cmd = { workspace = true }
+predicates = { workspace = true }
+insta = { workspace = true }
+tempfile = { workspace = true }
+specforge-test = { workspace = true }
+specforge-test-macros = { workspace = true }
+specforge-component = { path = "../../runtime/component", features = ["testing"] }
+specforge-lsp = { path = "../lsp" }
+tokio = { workspace = true }
+specforge-registry-server = { path = "../registry-server", features = ["testing"] }
+specforge-registry-client = { path = "../../adapters/registry-client", features = ["testing"] }
+tower-lsp = { workspace = true }
+specforge-graph = { path = "../../pipeline/graph" }

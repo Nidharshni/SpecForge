@@ -1,0 +1,28 @@
+---
+source: crates/surfaces/cli/tests/read_views.rs
+expression: "normalized(result, root).to_string()"
+---
+{
+  "_meta": {
+    "diagnostics": [
+      {
+        "code": "I020",
+        "column": null,
+        "file": null,
+        "line": null,
+        "message": "unknown entity kind 'behaviour'",
+        "severity": "Info",
+        "span": null,
+        "suggestion": "did you mean 'behavior'?",
+        "title": "Unknown entity kind in a filter"
+      }
+    ]
+  },
+  "content": [
+    {
+      "text": "{\"entities\":[]}",
+      "type": "text"
+    }
+  ],
+  "isError": false
+}

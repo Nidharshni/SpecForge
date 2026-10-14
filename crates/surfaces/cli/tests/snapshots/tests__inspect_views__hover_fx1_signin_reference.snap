@@ -1,0 +1,36 @@
+---
+source: crates/surfaces/cli/tests/inspect_views.rs
+expression: markdown
+---
+**W006** · Behavior missing category
+
+behavior 'login' has no category — agents use category for task routing
+
+A `behavior` entity has no `category` field, which agents rely on for task routing. Add a `category` field to the behavior.
+
+[Documentation](https://github.com/leaderiop/SpecForge/blob/main/docs/diagnostics.md#w006)
+
+---
+
+**feature** `signin` — Sign in
+
+A user-facing capability that solves a specific problem
+*@specforge/product*
+
+---
+
+**Referenced by** *(1)*
+- behavior via `features`: login
+
+---
+
+**Fields**
+- `problem` = "Users cannot reach their data"
+- `solution` = "Let them log in"
+
+---
+
+**Diagnostics** *(3)*
+- [**I048**](https://github.com/leaderiop/SpecForge/blob/main/docs/diagnostics.md#i048) feature 'signin' has no acceptance criteria
+- [**I080**](https://github.com/leaderiop/SpecForge/blob/main/docs/diagnostics.md#i080) feature 'signin' has no owner
+- [**I081**](https://github.com/leaderiop/SpecForge/blob/main/docs/diagnostics.md#i081) feature 'signin' has no effort estimate

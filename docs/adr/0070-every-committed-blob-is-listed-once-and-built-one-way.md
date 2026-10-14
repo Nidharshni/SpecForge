@@ -45,7 +45,7 @@ canned handshake (1.0.0) is declared and pinned.
 
 - Fixture blobs moved: `fixtures/<name>/wasm/<artifact>`; the bridge crate is `fixtures/test-component`; the workspace
   excludes `extensions` and `fixtures` by prefix.
-- docref and the probe are pinned like greet; their snapshots join `crates/specforge-component/tests/declarations/`.
+- docref and the probe are pinned like greet; their snapshots join `crates/runtime/component/tests/declarations/`.
 - `xtask snapshot-builtins` is gone; ADR 0013's raw caller of `call_export` for exact bytes is
   `committed::wire_answers`.
 - The SDK's `golden.rs` keeps only its builder tests.

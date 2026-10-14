@@ -1,0 +1,48 @@
+---
+source: crates/surfaces/cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Export spec graph to stdout in various formats
+
+Usage: specforge export [OPTIONS]
+
+Options:
+      --path <PATH>
+          A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
+          
+          [default: .]
+
+      --format <FORMAT>
+          Output format
+
+          Possible values:
+          - graph:   every entity with its fields, file and line (Graph Protocol)
+          - context: headline and normative fields and verify, for an agent
+          - brief:   id, kind and title
+          - dot:     Graphviz
+          
+          [default: graph]
+
+      --scope <SCOPE>
+          Scope export to subgraph reachable from this entity ID
+
+      --depth <DEPTH>
+          With --scope, how many hops from the scoped entity to include
+
+      --kinds <KINDS>
+          Keep only entities of these kinds (comma-separated); the scoped entity always stays
+
+      --no-schema
+          Suppress schema embedding in `graph` exports (keeps format_version 1.0)
+
+      --with-schema
+          Embed the schema in `context` and `brief` exports, and in a `graph` export under --max-tokens. They leave it out by default: an agent reading the export needs the entities, and the schema is most of the bytes. Under --max-tokens an embedded schema counts toward the budget, and a budget it doesn't fit in fails (E062)
+
+      --schema-version <SCHEMA_VERSION>
+          Fail unless a reader of this schema version reads the export: the same major version, not newer than the project's schema
+
+      --max-tokens <MAX_TOKENS>
+          Token budget for the export: keeps the most central entities that fit. The schema is left out unless --with-schema is given, and then counts toward the budget. The export lists the dropped entities under `token_budget`; below one entity it is the envelope with no entities, and below even that it fails (E062). Ignored by `dot`
+
+  -h, --help
+          Print help (see a summary with '-h')

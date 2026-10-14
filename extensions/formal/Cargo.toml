@@ -7,9 +7,9 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-specforge-extension-sdk = { path = "../../crates/specforge-extension-sdk" }
+specforge-extension-sdk = { path = "../../crates/runtime/extension-sdk" }
 # W035 reads @specforge/testing's coverage rule (ADR 0004, D2-f).
-specforge-coverage = { path = "../../crates/specforge-coverage" }
+specforge-coverage = { path = "../../crates/leaf/coverage" }
 
 [dev-dependencies]
 serde_json = "1.0"

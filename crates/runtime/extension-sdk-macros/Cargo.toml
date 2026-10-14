@@ -1,0 +1,23 @@
+[package]
+name = "specforge-extension-sdk-macros"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Attribute macro for the SpecForge extension SDK: builds an extension's declaration from its Contributions impl"
+readme = "../extension-sdk/README.md"
+keywords = ["specforge", "wasm", "component-model", "macros"]
+categories = ["development-tools"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2", features = ["full", "parsing", "derive"] }
+quote = "1"
+proc-macro2 = "1"
+specforge-protocol-types = { path = "../../leaf/protocol-types", version = "0.1.0" }
+
+[dev-dependencies]
+specforge-test = { workspace = true }
+specforge-test-macros = { workspace = true }

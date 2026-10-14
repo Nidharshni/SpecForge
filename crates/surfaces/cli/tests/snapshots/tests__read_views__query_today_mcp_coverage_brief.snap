@@ -1,0 +1,13 @@
+---
+source: crates/surfaces/cli/tests/read_views.rs
+expression: without_hashes(&text)
+---
+{
+  "content": [
+    {
+      "text": "{\"edges\":[{\"label\":\"features\",\"source\":\"login\",\"target\":\"signin\"}],\"nodes\":[{\"coverage_status\":\"covered\",\"id\":\"login\",\"kind\":\"behavior\",\"title\":\"Log in\"},{\"coverage_status\":\"uncovered\",\"id\":\"signin\",\"kind\":\"feature\",\"title\":\"Sign in\"}],\"schema_version\":\"1.0.0\"}",
+      "type": "text"
+    }
+  ],
+  "isError": false
+}

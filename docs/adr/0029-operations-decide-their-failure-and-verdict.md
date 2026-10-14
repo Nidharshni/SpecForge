@@ -143,4 +143,4 @@ no report and a plan is refused where it is read (ADR 0076 D3).
 - **D9a.** D9's process-level tests are the binary contract only: clap, the exit table, the streams, human
   rendering, the environment, process life, and comparisons across surfaces. A test whose assertions are all facts
   of the compiled project or of an operation's document lives in the crate that owns that behaviour (ADR 0078
-  D3). Every process test runs through `specforge-cli/tests/support::Cli`, under the project's own HOME.
+  D3). Every process test runs through `crates/surfaces/cli/tests/support::Cli`, under the project's own HOME.

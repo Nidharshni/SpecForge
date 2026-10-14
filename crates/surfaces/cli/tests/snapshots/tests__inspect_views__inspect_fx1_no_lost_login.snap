@@ -1,0 +1,57 @@
+---
+source: crates/surfaces/cli/tests/inspect_views.rs
+expression: "normalized(result, root)"
+---
+{
+  "coverage_status": "uncovered",
+  "declared": true,
+  "diagnostics": [
+    {
+      "code": "W123",
+      "column": 1,
+      "file": "main.spec",
+      "line": 28,
+      "message": "property 'no_lost_login' is not referenced by any behavior — it may be unused",
+      "origin": "@specforge/formal",
+      "severity": "Warning",
+      "span": {
+        "end_col": 2,
+        "end_line": 32,
+        "file": "main.spec",
+        "start_col": 1,
+        "start_line": 28
+      },
+      "suggestion": null,
+      "title": "Unreferenced property"
+    }
+  ],
+  "entity_id": "no_lost_login",
+  "exempt": false,
+  "fields": {
+    "expression": "once logged in, a session stays until logout",
+    "property_type": "safety",
+    "verify": [
+      {
+        "description": "no login is lost",
+        "kind": "unit"
+      }
+    ]
+  },
+  "kind": "property",
+  "obligated": false,
+  "referenced_by": [],
+  "refers_to": [],
+  "source_extension": "@specforge/formal",
+  "source_span": {
+    "end_col": 2,
+    "end_line": 32,
+    "file": "main.spec",
+    "start_col": 1,
+    "start_line": 28
+  },
+  "testable": false,
+  "title": "A login is never lost",
+  "verify_declarations": [
+    "unit no login is lost"
+  ]
+}

@@ -1,12 +1,12 @@
 use super::*;
 use serde_json::{json, Value};
 
-/// The rule's golden vectors (`crates/specforge-coverage`), run through
+/// The rule's golden vectors (`crates/leaf/coverage`), run through
 /// this pass: the Wasm side reports what the crate's own tests expect.
 #[test]
 fn the_pass_matches_the_shared_golden_vectors() {
     let cases: Vec<Value> = serde_json::from_str(include_str!(
-        "../../../crates/specforge-coverage/tests/fixtures/coverage-cases.json"
+        "../../../crates/leaf/coverage/tests/fixtures/coverage-cases.json"
     ))
     .unwrap();
     assert!(!cases.is_empty());

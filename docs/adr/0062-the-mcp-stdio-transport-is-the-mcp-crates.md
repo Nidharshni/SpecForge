@@ -6,7 +6,7 @@ amends none.
 `specforge mcp`'s stdio loop (`specforge_cli::mcp`) held the MCP stdio transport's rules: a message per
 line, blank lines skipped, a response before the notifications it queued, a flush per message, stop when
 stdout's reader leaves, disconnect at the end of input. A process was the only way to test them, so
-`specforge-cli/tests/e2e_mcp.rs` (3,082 lines, 81 tests) proved MCP's replies again through the binary: 45 of
+`crates/surfaces/cli/tests/e2e_mcp.rs` (3,082 lines, 81 tests) proved MCP's replies again through the binary: 45 of
 its 48 linked obligations were also linked in `specforge-mcp`, and 41 of the 45 commits that touched it also
 touched `specforge-mcp`. Six of those in-crate twins were weaker than the e2e test (a limit asserted `<= 1`, a
 kind filter shown only to exclude), so neither copy was the proof of record. The loop also read its input
@@ -38,9 +38,9 @@ silence, exit 0, every later request lost.
 
 - User-visible over MCP stdio: a line that is not UTF-8 is answered with -32700 instead of ending the session;
   a line wrapped in non-ASCII whitespace (U+00A0) is now -32700 too, as JSON says.
-- A reply change touches `specforge-mcp`'s tests only; `e2e_mcp.rs` is gone (`specforge-cli/tests/mcp.rs`, 4
+- A reply change touches `specforge-mcp`'s tests only; `e2e_mcp.rs` is gone (`crates/surfaces/cli/tests/mcp.rs`, 4
   tests).
-- `Terminal::read_line` is deleted; the transport's rules are tested in memory (`specforge-mcp/tests/stdio.rs`).
+- `Terminal::read_line` is deleted; the transport's rules are tested in memory (`crates/surfaces/mcp/tests/stdio.rs`).
 
 ## Rejected
 

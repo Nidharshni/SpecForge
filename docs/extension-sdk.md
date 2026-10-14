@@ -1,9 +1,9 @@
 # Extension SDK
 
-> The SDK is `crates/specforge-extension-sdk`: a `ContributionsBuilder` you fill in a `Contributions` impl, the
+> The SDK is `crates/runtime/extension-sdk`: a `ContributionsBuilder` you fill in a `Contributions` impl, the
 > `#[extension]` attribute that names the extension, and `component_guest!`, which serves it as a `wasm32-wasip2`
 > component exporting the `specforge:bridge` world. The working example is `fixtures/greet-extension/`, built in
-> CI and pinned by `crates/specforge-component/tests/greet_sdk.rs`.
+> CI and pinned by `crates/runtime/component/tests/greet_sdk.rs`.
 >
 > `call(name, export-name, input) -> result<list<u8>, string>` dispatches `__handshake` / `__describe` from the
 > builder, every declared surface and operation to the handler declared with it, and any other export name to the
@@ -92,7 +92,7 @@ This is the `greet` fixture (`fixtures/greet-extension/src/`), built in CI:
 //! What the greet extension declares, authored entirely with the SpecForge
 //! extension SDK. Kept apart from the component glue (`lib.rs`) so the
 //! host's tests can serve the same declarations in process
-//! (`crates/specforge-component/tests/greet_sdk.rs` includes this file) and
+//! (`crates/runtime/component/tests/greet_sdk.rs` includes this file) and
 //! check both runtimes answer alike.
 
 use specforge_extension_sdk::prelude::*;

@@ -1,0 +1,79 @@
+---
+source: crates/surfaces/mcp/tests/prompt_golden.rs
+expression: "shape(&reply, dir.path())"
+---
+{
+  "description": "Analyze coverage gaps for an entity or the whole graph",
+  "instruction": "Analyze the following coverage report for the entire graph. Identify the highest-priority gaps to address. Focus on entities marked 'uncovered' and unconnected entities that may indicate missing relationships.",
+  "layout": "turns",
+  "payload": {
+    "coverage_summary": [
+      {
+        "declared": true,
+        "entity_id": "alpha",
+        "evidence_collected": false,
+        "exempt": false,
+        "kind": "behavior",
+        "linked": false,
+        "obligations": 1,
+        "proven": 0,
+        "status": "uncovered",
+        "unproven": [
+          "alpha works"
+        ]
+      },
+      {
+        "declared": true,
+        "entity_id": "beta",
+        "evidence_collected": false,
+        "exempt": false,
+        "kind": "behavior",
+        "linked": false,
+        "obligations": 1,
+        "proven": 0,
+        "status": "uncovered",
+        "unproven": [
+          "beta works"
+        ]
+      },
+      {
+        "declared": false,
+        "entity_id": "delta",
+        "evidence_collected": false,
+        "exempt": false,
+        "kind": "behavior",
+        "linked": false,
+        "obligations": 0,
+        "proven": 0,
+        "status": "uncovered",
+        "unproven": []
+      },
+      {
+        "declared": true,
+        "entity_id": "inv_session",
+        "evidence_collected": false,
+        "exempt": false,
+        "kind": "invariant",
+        "linked": false,
+        "obligations": 1,
+        "proven": 0,
+        "status": "uncovered",
+        "unproven": [
+          "sessions expire"
+        ]
+      }
+    ],
+    "entity_id": "*",
+    "findings": [
+      {
+        "entity_id": "delta",
+        "message": "Entity 'delta' has no verify declarations",
+        "severity": "warning"
+      }
+    ]
+  },
+  "roles": [
+    "user",
+    "user"
+  ]
+}

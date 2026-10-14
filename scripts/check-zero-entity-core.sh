@@ -15,18 +15,18 @@ cd "$(dirname "$0")/.."
 ENTITY_PATTERN='"behavior"|"feature"|"invariant"|"port"|"decision"|"constraint"|"failure_mode"|"journey"|"deliverable"|"milestone"|"module"|"term"|"persona"|"release"|"condition"|"axiom"|"refinement"|"process"'
 
 CORE_DIRS=(
-  crates/specforge-parser/src
-  crates/specforge-emitter/src
-  crates/specforge-graph/src
-  crates/specforge-lsp/src
-  crates/specforge-mcp/src
-  crates/specforge-coverage/src
-  crates/specforge-ops/src
-  crates/specforge-ops-registry/src
-  crates/specforge-registry-wire/src
-  crates/specforge-installed/src
-  crates/specforge-package/src
-  crates/specforge-shape-macros/src
+  crates/kernel/parser/src
+  crates/pipeline/emitter/src
+  crates/pipeline/graph/src
+  crates/surfaces/lsp/src
+  crates/surfaces/mcp/src
+  crates/leaf/coverage/src
+  crates/app/ops/src
+  crates/adapters/ops-registry/src
+  crates/adapters/registry-wire/src
+  crates/runtime/installed/src
+  crates/leaf/package/src
+  crates/kernel/shape-macros/src
 )
 
 # Files that `#[cfg(test)] mod name;` declares, relative to the declaring file:

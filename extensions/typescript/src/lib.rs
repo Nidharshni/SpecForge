@@ -4,7 +4,7 @@
 //! The analyzer is declared with the SDK builder (`c.analyzer`); the
 //! handshake is derived by the SDK from the extension metadata and the
 //! contributions. The scan/classify/map
-//! exports port `crates/specforge-emitter/src/builtins/typescript.rs`
+//! exports port `crates/pipeline/emitter/src/builtins/typescript.rs`
 //! verbatim (pure string logic — no tree-sitter), and their JSON wire types
 //! come from `specforge-protocol-types`, the same definitions the host uses.
 use specforge_extension_sdk::prelude::*;

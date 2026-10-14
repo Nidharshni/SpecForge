@@ -1,0 +1,29 @@
+---
+source: crates/surfaces/cli/tests/installed_extensions.rs
+expression: "serde_json::to_string_pretty(&document).unwrap()"
+---
+{
+  "batch_update_completed": {
+    "failedCount": 1,
+    "skippedCount": 1,
+    "timestamp": "[TIME]",
+    "updatedCount": 0
+  },
+  "extension_upgrade_completed": [],
+  "extensions": [
+    {
+      "from": "0.0.9",
+      "name": "@sdk/greet",
+      "status": "held_back",
+      "to": "0.1.0"
+    },
+    {
+      "code": "R-RES-001",
+      "message": "package '@acme/gone' not found in registry 'local'",
+      "name": "@acme/gone",
+      "status": "failed",
+      "suggestion": "check the package name and registry configuration"
+    }
+  ],
+  "ok": false
+}

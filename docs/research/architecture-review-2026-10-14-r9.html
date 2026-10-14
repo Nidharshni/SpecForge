@@ -63,7 +63,7 @@
     <li>extensions/product/src/queries.rs:42-83, :116, :183-200</li>
     <li>extensions/product/src/commands.rs:31-35, 101, 125</li>
     <li>extensions/product/src/lifecycle.rs:64-74</li>
-    <li>crates/specforge-registry/src/rules/check.rs:272-275</li>
+    <li>crates/pipeline/registry/src/rules/check.rs:272-275</li>
     <li>graph/field_form.rs:192 · lsp/completion.rs:194 · emitter/schema.rs:145</li>
   </ul>
   <div class="grid md:grid-cols-2 gap-4">
@@ -125,11 +125,11 @@ $ specforge product releases --status shipped         → INVALID_INPUT … got 
     <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">live bug</span>
   </div>
   <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
-    <li>crates/specforge-mcp/src/tool.rs:229, :519-526, :712-722</li>
-    <li>crates/specforge-mcp/src/tools/add_extension.rs:74-83</li>
+    <li>crates/surfaces/mcp/src/tool.rs:229, :519-526, :712-722</li>
+    <li>crates/surfaces/mcp/src/tools/add_extension.rs:74-83</li>
     <li>tools/{trace,render,search,model,infer_session}.rs · prompts/*</li>
     <li>ops/extension/{add,candidate,remove,lock_plan,resolve}.rs</li>
-    <li>crates/specforge-mcp/tests/refusal_arguments.rs:23-128</li>
+    <li>crates/surfaces/mcp/tests/refusal_arguments.rs:23-128</li>
   </ul>
   <div class="grid md:grid-cols-2 gap-4">
     <div class="rounded-lg border border-slate-200 p-4">
@@ -182,12 +182,12 @@ add_extension {"specifiers":["./notwasm.txt"]}             → -32603           
     <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">live bug</span>
   </div>
   <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
-    <li>crates/specforge-project/src/inputs.rs:228-254</li>
-    <li>crates/specforge-project/src/session.rs:506 (stale)</li>
-    <li>crates/specforge-project/src/freshness.rs:170-185</li>
-    <li>crates/specforge-watch/src/session.rs:153-186 · watcher.rs:76-78</li>
-    <li>crates/specforge-lsp/src/changes.rs:128 · watchers.rs:50</li>
-    <li>crates/specforge-common/src/discovery.rs:87</li>
+    <li>crates/session/project/src/inputs.rs:228-254</li>
+    <li>crates/session/project/src/session.rs:506 (stale)</li>
+    <li>crates/session/project/src/freshness.rs:170-185</li>
+    <li>crates/session/watch/src/session.rs:153-186 · watcher.rs:76-78</li>
+    <li>crates/surfaces/lsp/src/changes.rs:128 · watchers.rs:50</li>
+    <li>crates/kernel/common/src/discovery.rs:87</li>
   </ul>
   <div class="grid md:grid-cols-2 gap-4">
     <div class="rounded-lg border border-slate-200 p-4">
@@ -234,11 +234,11 @@ link.spec → ../outside/real.spec, edit     → 0 watch events; stats picks up 
     <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">live bug</span>
   </div>
   <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
-    <li>crates/specforge-mcp/src/subscriptions/mod.rs:64-95, :143-155</li>
-    <li>crates/specforge-mcp/src/state.rs:216-258</li>
-    <li>crates/specforge-project/src/session.rs:80-97 (Update)</li>
-    <li>crates/specforge-graph/src/build.rs:499-516</li>
-    <li>crates/specforge-cli/src/watch.rs:278</li>
+    <li>crates/surfaces/mcp/src/subscriptions/mod.rs:64-95, :143-155</li>
+    <li>crates/surfaces/mcp/src/state.rs:216-258</li>
+    <li>crates/session/project/src/session.rs:80-97 (Update)</li>
+    <li>crates/pipeline/graph/src/build.rs:499-516</li>
+    <li>crates/surfaces/cli/src/watch.rs:278</li>
     <li>spec/behaviors/mcp-server.spec:604-614</li>
   </ul>
   <div class="grid md:grid-cols-2 gap-4">
@@ -290,10 +290,10 @@ read → E001 at line 8 (was 5)            ← the resource changed
     <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">live bug</span>
   </div>
   <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
-    <li>crates/specforge-registry-wire/src/path.rs:1-7, :36-45</li>
-    <li>crates/specforge-registry-client/src/http_client.rs:42-43, :75, :100-103, :303-337</li>
-    <li>crates/specforge-registry-server/src/testing.rs:72</li>
-    <li>crates/specforge-registry-client/tests/contract.rs:34 · docs/registry-trust.md:15</li>
+    <li>crates/adapters/registry-wire/src/path.rs:1-7, :36-45</li>
+    <li>crates/adapters/registry-client/src/http_client.rs:42-43, :75, :100-103, :303-337</li>
+    <li>crates/surfaces/registry-server/src/testing.rs:72</li>
+    <li>crates/adapters/registry-client/tests/contract.rs:34 · docs/registry-trust.md:15</li>
   </ul>
   <div class="grid md:grid-cols-2 gap-4">
     <div class="rounded-lg border border-slate-200 p-4 text-xs">
@@ -340,10 +340,10 @@ curl /packages/@x%2Fy → 404 empty body     curl /v1/packages/@x%2Fy → 404 {"
     <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">live bug</span>
   </div>
   <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
-    <li>crates/specforge-ops/src/plan.rs:29, :101-120, :155-159</li>
-    <li>crates/specforge-project/src/coverage.rs:189</li>
-    <li>crates/specforge-coverage/src/lib.rs:214</li>
-    <li>crates/specforge-mcp/src/args.rs:310-324</li>
+    <li>crates/app/ops/src/plan.rs:29, :101-120, :155-159</li>
+    <li>crates/session/project/src/coverage.rs:189</li>
+    <li>crates/leaf/coverage/src/lib.rs:214</li>
+    <li>crates/surfaces/mcp/src/args.rs:310-324</li>
     <li>spec/types/graph.spec:227-237 · mcp-prompts.spec:170</li>
   </ul>
   <div class="grid md:grid-cols-2 gap-4">
@@ -393,9 +393,9 @@ after the report says "pass" instead of "passed"                → E045 schema_
     <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">live bug</span>
   </div>
   <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
-    <li>crates/specforge-mcp/src/target.rs:579-584, :605, :653-658</li>
-    <li>crates/specforge-mcp/src/surface_call.rs:174</li>
-    <li>crates/specforge-mcp/src/modern.rs:4-6 · mcp-server.spec:758-760</li>
+    <li>crates/surfaces/mcp/src/target.rs:579-584, :605, :653-658</li>
+    <li>crates/surfaces/mcp/src/surface_call.rs:174</li>
+    <li>crates/surfaces/mcp/src/modern.rs:4-6 · mcp-server.spec:758-760</li>
   </ul>
   <div class="grid md:grid-cols-2 gap-4">
     <div class="rounded-lg border border-slate-200 p-4">
@@ -441,7 +441,7 @@ flowchart TB
     <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process · local-substitutable</span>
   </div>
   <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
-    <li>crates/specforge-cli/tests/*.rs (24 local command helpers)</li>
+    <li>crates/surfaces/cli/tests/*.rs (24 local command helpers)</li>
     <li>cli/tests/{e2e_edges,product_rules,navigation_parity,read_views,pipeline}.rs</li>
     <li>106 CompiledProject::compile( sites · ≥9 compile helpers</li>
   </ul>
@@ -484,9 +484,9 @@ flowchart TB
     <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">ports &amp; adapters (mock at port)</span>
   </div>
   <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
-    <li>crates/specforge-ops/src/analyze.rs:423-433, :1269-1301</li>
-    <li>crates/specforge-ops/src/prove.rs:172-223</li>
-    <li>crates/specforge-ops/src/doctor.rs:334-339, :539-545</li>
+    <li>crates/app/ops/src/analyze.rs:423-433, :1269-1301</li>
+    <li>crates/app/ops/src/prove.rs:172-223</li>
+    <li>crates/app/ops/src/doctor.rs:334-339, :539-545</li>
   </ul>
   <div class="grid md:grid-cols-2 gap-4">
     <div class="rounded-lg border border-slate-200 p-4 text-xs">
@@ -525,9 +525,9 @@ flowchart TB
     <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process</span>
   </div>
   <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
-    <li>crates/specforge-emitter/src/emit.rs:100</li>
-    <li>crates/specforge-ops/src/query.rs:72-131 · command.rs:452-463</li>
-    <li>crates/specforge-mcp/src/tools/query.rs:74</li>
+    <li>crates/pipeline/emitter/src/emit.rs:100</li>
+    <li>crates/app/ops/src/query.rs:72-131 · command.rs:452-463</li>
+    <li>crates/surfaces/mcp/src/tools/query.rs:74</li>
   </ul>
   <div class="grid md:grid-cols-2 gap-4 text-xs">
     <div class="rounded-lg border border-slate-200 p-4">
@@ -563,8 +563,8 @@ flowchart TB
     <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700">live bug</span>
   </div>
   <ul class="font-mono text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6">
-    <li>crates/specforge-common/src/discovery.rs:73-80</li>
-    <li>crates/specforge-ops/src/format.rs:692</li>
+    <li>crates/kernel/common/src/discovery.rs:73-80</li>
+    <li>crates/app/ops/src/format.rs:692</li>
   </ul>
   <div class="grid md:grid-cols-2 gap-4 text-xs">
     <div class="rounded-lg border border-slate-200 p-4">

@@ -15,6 +15,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-specforge-repo-root = { path = "../crates/specforge-repo-root" }
+specforge-repo-root = { path = "../crates/leaf/repo-root" }
 insta = { workspace = true }
 tempfile = { workspace = true }

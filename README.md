@@ -153,7 +153,7 @@ cargo binstall --git https://github.com/leaderiop/SpecForge specforge-cli
 
 # From source (stable Rust toolchain)
 git clone https://github.com/leaderiop/SpecForge && cd SpecForge
-cargo install --path crates/specforge-cli
+cargo install --path crates/surfaces/cli
 ```
 
 Prebuilt archives for macOS, Linux and Windows are on the [Releases page](https://github.com/leaderiop/SpecForge/releases). Formal proofs (`@specforge/formal`) also need the [`z3`](https://github.com/Z3Prover/z3) solver on your `PATH`; everything else works without it.
