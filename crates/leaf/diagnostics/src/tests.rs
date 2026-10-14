@@ -254,7 +254,7 @@ fn untyped_is_called_only_where_codes_cross() {
         // The host's own E006 rules carry their code as text, like an extension's.
         "crates/pipeline/registry/src/rules/check.rs",
         // An MCP failure's code is text from an `OpError` or a message.
-        "crates/surfaces/mcp/src/tool.rs",
+        "crates/surfaces/mcp/src/tool/error.rs",
     ];
     let mut calling: Vec<String> = host_source()
         .into_iter()
