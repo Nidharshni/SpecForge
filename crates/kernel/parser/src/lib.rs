@@ -4,6 +4,8 @@ pub mod expr;
 pub mod format_version;
 pub mod lex;
 mod parse;
+#[cfg(feature = "testing")]
+pub mod testing;
 
 pub use ast::{
     Annotation, Entity, EntityId, EntityKind, FieldEntry, FieldMap, FieldValue, ImportBinding,

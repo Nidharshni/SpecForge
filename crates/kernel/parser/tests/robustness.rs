@@ -1,8 +1,30 @@
 //! What the parser does with text a user is still typing.
 
+use proptest::test_runner::TestRunner;
 use specforge_parser::lex::{MAX_NESTING, nested_too_deep};
 use specforge_parser::parse;
+use specforge_parser::testing::{edited_corpus, property_config};
 use specforge_test_macros::test as specforge_test;
+
+#[specforge_test(
+    behavior = "recover_from_syntax_errors",
+    verify = "parsing any text yields a file and never panics"
+)]
+fn parsing_any_edit_of_the_corpus_yields_a_file() {
+    let mut runner = TestRunner::new(property_config());
+    let result = runner.run(&edited_corpus(), |case| {
+        // A panic is a failure that proptest shrinks to the few bytes that matter.
+        let file = parse(&case.edited, "p.spec");
+        proptest::prop_assert!(
+            file.errors.iter().all(|e| e.span.start_line >= 1),
+            "an error without a line"
+        );
+        Ok(())
+    });
+    if let Err(failure) = result {
+        panic!("{failure}");
+    }
+}
 
 #[specforge_test(
     behavior = "recover_from_syntax_errors",

@@ -19,6 +19,9 @@ toml = { workspace = true }
 similar = { workspace = true }
 
 [dev-dependencies]
+specforge-parser = { workspace = true, features = ["testing"] }
+proptest = { version = "1.11", default-features = false, features = ["std"] }
+regex = { workspace = true }
 specforge-graph = { path = "../graph" }
 tempfile = { workspace = true }
 specforge-test = { workspace = true }
