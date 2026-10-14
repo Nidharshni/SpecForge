@@ -1,4 +1,5 @@
 use crate::support::{Cli, TestProject};
+use specforge_project::testing::specs;
 use specforge_test_macros::test as specforge_test;
 
 /// A directory holding `files` and nothing else.
@@ -784,4 +785,37 @@ fn budget_below_the_empty_envelope_fails() {
     assert_eq!(code, 1, "stdout: {stdout}");
     assert!(stdout.trim().is_empty(), "no over-budget export: {stdout}");
     assert!(stderr.contains("E062"), "{stderr}");
+}
+
+#[specforge_test(
+    behavior = "publish_schema_specification",
+    verify = "--kind with --publish, and --format without it, are refused"
+)]
+fn publish_refuses_kind_and_format_needs_publish() {
+    let dir = TestProject::new()
+        .enabling(&["@specforge/software"])
+        .config(|c| c["spec_root"] = "spec".into())
+        .file("spec/main.spec", specs::SOFTWARE);
+    let cli = Cli::on(&dir);
+
+    let kind = cli.run(&["schema", "--publish", "--kind", "behavior"]);
+    assert_eq!(kind.code, 2);
+    assert!(kind.stderr.contains("--kind"), "{}", kind.stderr);
+
+    let format = cli.run(&["schema", "--format", "brief"]);
+    assert_eq!(format.code, 2);
+    assert!(format.stderr.contains("--publish"), "{}", format.stderr);
+
+    // `json` is `graph`'s alias; plain `schema` runs with the default
+    // `--format` (a default does not trigger `requires`).
+    let json = cli
+        .run(&["schema", "--publish", "--format", "json"])
+        .exits(0)
+        .json();
+    let graph = cli
+        .run(&["schema", "--publish", "--format", "graph"])
+        .exits(0)
+        .json();
+    assert_eq!(json, graph);
+    cli.run(&["schema"]).exits(0).json();
 }

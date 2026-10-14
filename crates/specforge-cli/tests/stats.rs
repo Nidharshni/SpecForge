@@ -1,4 +1,5 @@
 use crate::support::{Cli, TestProject};
+use specforge_project::testing::specs;
 use specforge_test::prelude::*;
 
 /// A directory holding `files` and nothing else.
@@ -94,4 +95,29 @@ feature gamma "G" { behaviors [alpha, beta] }
     let output = Cli::on(&dir).command(&["stats"]).output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Declared: 50% of 2 testable"), "{stdout}");
+}
+
+#[test]
+fn stats_human_format_lists_all_kinds() {
+    let dir = TestProject::new().file("main.spec", specs::MULTI_EXTENSION);
+
+    let output = Cli::on(&dir).run(&["stats"]);
+
+    assert_eq!(output.code, 0, "{}", output.stderr);
+    let stdout = &output.stdout;
+
+    for kind in &[
+        "behavior",
+        "feature",
+        "decision",
+        "constraint",
+        "failure_mode",
+    ] {
+        assert!(
+            stdout.contains(kind),
+            "human stats missing kind '{}': {}",
+            kind,
+            stdout
+        );
+    }
 }

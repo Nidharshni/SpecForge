@@ -1,4 +1,5 @@
 use crate::support::{Cli, TestProject};
+use specforge_project::testing::specs;
 use specforge_test_macros::test as specforge_test;
 use std::fs;
 
@@ -1063,4 +1064,87 @@ fn a_closed_stdout_ends_the_output_quietly_in_the_binary() {
     let status = child.wait().unwrap();
     assert_eq!(status.code(), Some(0));
     assert_eq!(stderr, "");
+}
+
+#[specforge_test(
+    behavior = "export_diagnostics_as_json",
+    verify = "diagnostics serialized as JSON array to stdout"
+)]
+fn check_json_shows_cross_extension_errors() {
+    let dir = TestProject::new().file(
+        "main.spec",
+        r#"
+feature gamma "G" { behaviors [nonexistent] }
+decision use_rust "D" {
+    status accepted
+    context "need performance"
+    decision_text "use Rust"
+    consequences "fast"
+}
+"#,
+    );
+
+    let parsed = Cli::on(&dir).document(&["check"]).json;
+    let diagnostics = parsed.as_array().unwrap();
+    assert!(
+        diagnostics.iter().any(|d| d["code"] == "E003"),
+        "should produce E003 for nonexistent ref in cross-kind context"
+    );
+}
+
+#[specforge_test(
+    behavior = "check_mode_for_ci",
+    verify = "Check Mode for CI: CI check mode holds — validation_complete_fired, no_output_files_produced, diagnostics_to_stderr, appropriate_exit_code"
+)]
+fn check_full_multi_extension_project_exits_zero() {
+    let dir = TestProject::new().file("main.spec", specs::MULTI_EXTENSION);
+    let tree = |root: &std::path::Path| {
+        let mut entries: Vec<_> = walk(root)
+            .into_iter()
+            .map(|p| (p.clone(), std::fs::read(&p).unwrap_or_default()))
+            .collect();
+        entries.sort();
+        entries
+    };
+    let before = tree(dir.root());
+
+    // validation_complete_fired, appropriate_exit_code: a clean project
+    // validates and exits 0.
+    let output = Cli::on(&dir).run(&["check"]);
+    let stderr = &output.stderr;
+    assert_eq!(output.code, 0, "{stderr}");
+
+    // diagnostics_to_stderr: the report goes to stderr, nothing to stdout.
+    assert!(output.stdout.is_empty());
+    // No specforge.json: checked structurally, which I002 says.
+    assert!(stderr.contains("0 errors, 0 warnings, 1 info"), "{stderr}");
+
+    // no_output_files_produced
+    assert_eq!(tree(dir.root()), before, "check must not write files");
+
+    // An error in the same project flips the exit code, still on stderr.
+    let broken = format!(
+        "{}\nfeature broken_ref \"B\" {{ behaviors [missing_one] }}\n",
+        specs::MULTI_EXTENSION
+    );
+    let dir = TestProject::new().file("main.spec", &broken);
+    let output = Cli::on(&dir).run(&["check"]);
+    let stderr = &output.stderr;
+    assert_eq!(output.code, 1, "{stderr}");
+    assert!(output.stdout.is_empty());
+    assert!(stderr.contains("missing_one"), "{stderr}");
+}
+
+/// Every file under `dir`, recursively.
+fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut files = Vec::new();
+    for entry in std::fs::read_dir(dir).unwrap().filter_map(Result::ok) {
+        let path = entry.path();
+        if path.is_dir() {
+            files.extend(walk(&path));
+        } else {
+            files.push(path);
+        }
+    }
+    files
 }

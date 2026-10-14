@@ -264,7 +264,7 @@ pub static CHECKS: &[Check] = &[
             "crates/specforge-emitter/**",
             "crates/specforge-graph/**",
             "crates/specforge-registry/**",
-            "crates/specforge-cli/tests/e2e_schema.rs",
+            "crates/specforge-ops/tests/operations/schema.rs",
         ]),
         compiles: false,
         after: &["build"],

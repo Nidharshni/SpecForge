@@ -253,3 +253,26 @@ failure_mode unresolved_ref "Unresolved Reference" {
     mitigations [resolve_refs]
 }
 "#;
+
+/// software + product loaded: `pay` implements a feature and enforces an invariant; `refund` is linked to nothing
+/// (what a trace reports as missing links).
+pub const TRACE_GAPS: &str = r#"
+feature checkout "Checkout" {
+    problem "Buyers need to pay"
+    solution "A payment step"
+}
+
+behavior pay "Pay" {
+    contract "The system MUST take payment once"
+    features [checkout]
+    invariants [paid_once]
+}
+
+behavior refund "Refund" {
+    contract "The system MUST return the payment"
+}
+
+invariant paid_once "Paid Once" {
+    guarantee "An order MUST be paid at most once"
+}
+"#;

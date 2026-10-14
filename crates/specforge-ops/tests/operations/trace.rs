@@ -413,3 +413,382 @@ fn reach_lists_what_the_chains_reach_and_what_is_unverified() {
     let refused = specforge_ops::trace::reach(&project.view(), ["nope"]).unwrap_err();
     assert_eq!(refused.code, "E003", "{refused:?}");
 }
+
+/// The end-to-end trace tests, which `specforge-cli` ran through the binary: the same requests, over a compiled
+/// project.
+mod compiled {
+    use crate::compiled_support::{TestProject, built, specs, trace_document, traced};
+    use specforge_ops::trace::Target;
+    use specforge_project::CompiledProject;
+    use specforge_test_macros::test as specforge_test;
+    use std::collections::BTreeSet;
+
+    /// One direction of a trace: its (entity_id, depth) links, in order.
+    type Links = Vec<(String, u64)>;
+
+    /// `specforge trace <id>`: (upstream, downstream).
+    fn trace(project: &CompiledProject, id: &str) -> (Links, Links) {
+        let parsed = trace_document(project, id);
+        assert_eq!(parsed["entity_id"], id);
+        let links = |direction: &str| {
+            parsed[direction]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|l| {
+                    (
+                        l["entity_id"].as_str().unwrap().to_string(),
+                        l["depth"].as_u64().unwrap(),
+                    )
+                })
+                .collect()
+        };
+        (links("upstream"), links("downstream"))
+    }
+
+    fn links(list: &[(&str, u64)]) -> Links {
+        list.iter().map(|(id, d)| (id.to_string(), *d)).collect()
+    }
+
+    /// The links as a set, after checking none repeats.
+    fn once_each(list: &Links) -> BTreeSet<(String, u64)> {
+        let set: BTreeSet<_> = list.iter().cloned().collect();
+        assert_eq!(set.len(), list.len(), "a node is visited twice: {list:?}");
+        set
+    }
+
+    // --- Trace depth tests ---
+
+    #[specforge_test(
+        behavior = "compute_traceability_chain",
+        verify = "trace from entity shows upstream and downstream connections"
+    )]
+    fn trace_isolated_entity_has_empty_upstream_and_downstream() {
+        let spec = format!(
+            "{}\nbehavior alpha \"A\" {{ contract \"first\" }}\nfeature beta \"B\" {{ problem \"p\" solution \"s\" behaviors [alpha] }}\n",
+            specs::ISOLATED
+        );
+        let (_project, compiled) = built(&[("main.spec", &spec)]);
+
+        // Unconnected: nothing either way.
+        assert_eq!(trace(&compiled, "isolated_node"), (links(&[]), links(&[])));
+        // beta -behaviors-> alpha: each sees the other on its own side.
+        assert_eq!(
+            trace(&compiled, "alpha"),
+            (links(&[("beta", 1)]), links(&[]))
+        );
+        assert_eq!(
+            trace(&compiled, "beta"),
+            (links(&[]), links(&[("alpha", 1)]))
+        );
+    }
+
+    #[specforge_test(
+        behavior = "compute_traceability_chain",
+        verify = "trace shows full chain depth"
+    )]
+    fn trace_linear_chain_shows_correct_depths() {
+        let (_project, compiled) = built(&[("main.spec", specs::DEEP_CHAIN)]);
+
+        // inv_deep -enforced_by-> beh_middle -features-> feat_root: the whole
+        // chain, each hop at its depth.
+        let (upstream, downstream) = trace(&compiled, "inv_deep");
+        assert_eq!(upstream, links(&[]));
+        assert_eq!(downstream, links(&[("beh_middle", 1), ("feat_root", 2)]));
+    }
+
+    #[test]
+    fn trace_includes_edge_labels() {
+        let (_project, compiled) = built(&[("main.spec", specs::DEEP_CHAIN)]);
+
+        let parsed = trace_document(&compiled, "inv_deep");
+        let upstream = parsed["upstream"].as_array().unwrap();
+
+        for link in upstream {
+            let label = link["edge_label"].as_str().unwrap();
+            assert!(
+                !label.is_empty(),
+                "every TraceLink must have a non-empty edge_label"
+            );
+        }
+    }
+
+    #[specforge_test(
+        invariant = "graph_traversal_integrity",
+        verify = "traversal from any node visits every reachable node exactly once"
+    )]
+    fn trace_handles_cycles_without_hanging() {
+        let (_project, compiled) = built(&[("main.spec", specs::CYCLE)]);
+
+        // Edges: cycle_a -> cycle_c, cycle_b -> cycle_a, cycle_c -> cycle_a.
+        // From cycle_c the cycle is walked both ways, each other node once,
+        // and the walk stops rather than coming back to cycle_c.
+        let (upstream, downstream) = trace(&compiled, "cycle_c");
+        assert_eq!(
+            once_each(&upstream),
+            BTreeSet::from([("cycle_a".to_string(), 1), ("cycle_b".to_string(), 2)])
+        );
+        assert_eq!(
+            once_each(&downstream),
+            BTreeSet::from([("cycle_a".to_string(), 1)])
+        );
+    }
+
+    #[specforge_test(
+        invariant = "graph_traversal_integrity",
+        verify = "traversal from any node visits every reachable node exactly once"
+    )]
+    fn trace_cycle_visits_each_node_once() {
+        let (_project, compiled) = built(&[("main.spec", specs::CYCLE)]);
+
+        // Upstream of cycle_a: cycle_b and cycle_c point at it. Downstream:
+        // cycle_a -> cycle_c, whose only edge leads back to cycle_a.
+        let (upstream, downstream) = trace(&compiled, "cycle_a");
+        assert_eq!(
+            once_each(&upstream),
+            BTreeSet::from([("cycle_b".to_string(), 1), ("cycle_c".to_string(), 1)])
+        );
+        assert_eq!(
+            once_each(&downstream),
+            BTreeSet::from([("cycle_c".to_string(), 1)])
+        );
+    }
+
+    #[specforge_test(
+        invariant = "graph_traversal_integrity",
+        verify = "identical graph inputs produce identical traversal results"
+    )]
+    fn trace_deterministic_output() {
+        let (_project, compiled) = built(&[("main.spec", specs::DEEP_CHAIN)]);
+
+        let stdout1 = trace_document(&compiled, "beh_middle").to_string();
+        let stdout2 = trace_document(&compiled, "beh_middle").to_string();
+        assert_eq!(stdout1, stdout2, "trace output should be deterministic");
+    }
+
+    #[specforge_test(
+        behavior = "compute_traceability_chain",
+        verify = "trace from entity shows upstream and downstream connections"
+    )]
+    fn trace_root_entity_has_no_upstream() {
+        let (_project, compiled) = built(&[("main.spec", specs::DEEP_CHAIN)]);
+
+        // inv_deep is a root: nothing points at it, but it reaches the chain.
+        let (upstream, downstream) = trace(&compiled, "inv_deep");
+        assert_eq!(upstream, links(&[]), "inv_deep should have no upstream");
+        assert_eq!(downstream, links(&[("beh_middle", 1), ("feat_root", 2)]));
+
+        // beh_middle is in the middle: feat_root and inv_deep point at it, and
+        // it points at feat_root.
+        let (upstream, downstream) = trace(&compiled, "beh_middle");
+        assert_eq!(
+            once_each(&upstream),
+            BTreeSet::from([("feat_root".to_string(), 1), ("inv_deep".to_string(), 1)])
+        );
+        assert_eq!(downstream, links(&[("feat_root", 1)]));
+
+        // typ_leaf has no references either way.
+        assert_eq!(trace(&compiled, "typ_leaf"), (links(&[]), links(&[])));
+    }
+
+    #[specforge_test(
+        behavior = "compute_traceability_chain",
+        verify = "trace from entity shows upstream and downstream connections"
+    )]
+    fn trace_leaf_entity_has_no_downstream() {
+        let (_project, compiled) = built(&[(
+            "main.spec",
+            r#"
+behavior alpha "A" { contract "first" }
+feature beta "B" { problem "p" solution "s" behaviors [alpha] }
+"#,
+        )]);
+
+        // alpha has no outgoing edges (it's a leaf), but beta points to it
+        let parsed = trace_document(&compiled, "alpha");
+        assert_eq!(parsed["entity_id"], "alpha");
+        assert_eq!(
+            parsed["downstream"].as_array().unwrap().len(),
+            0,
+            "alpha should have no downstream"
+        );
+        assert!(
+            !parsed["upstream"].as_array().unwrap().is_empty(),
+            "alpha should have upstream (beta)"
+        );
+    }
+
+    #[test]
+    fn trace_multi_kind_chain_preserves_entity_kind() {
+        let (_project, compiled) = built(&[("main.spec", specs::DEEP_CHAIN)]);
+
+        let parsed = trace_document(&compiled, "inv_deep");
+
+        assert_eq!(parsed["entity_kind"], "invariant");
+
+        let upstream = parsed["upstream"].as_array().unwrap();
+        for link in upstream {
+            let kind = link["entity_kind"].as_str().unwrap();
+            assert!(
+                !kind.is_empty(),
+                "every TraceLink should have a non-empty entity_kind"
+            );
+        }
+
+        // beh_middle should have kind "behavior"
+        if let Some(beh) = upstream.iter().find(|l| l["entity_id"] == "beh_middle") {
+            assert_eq!(beh["entity_kind"], "behavior");
+        }
+    }
+
+    // --- Missing links ---
+
+    /// software + product loaded: `pay` implements a feature and enforces an
+    /// invariant; `refund` is linked to nothing.
+    fn gap_project() -> (TestProject, CompiledProject) {
+        let project = TestProject::new()
+            .enabling(&["@specforge/software", "@specforge/product"])
+            .file("main.spec", specs::TRACE_GAPS);
+        let compiled = project.compile();
+        (project, compiled)
+    }
+
+    /// `specforge trace [entity]`'s document: one entity's chain, or every entity's.
+    fn run_trace(project: &CompiledProject, args: &[&str]) -> serde_json::Value {
+        match args {
+            [] => serde_json::to_value(traced(project, Target::Every)).unwrap(),
+            [id] => trace_document(project, id),
+            _ => unreachable!("one entity or none"),
+        }
+    }
+
+    /// A chain's missing links as (from, edge_label, edge_type, expected_kind),
+    /// after checking each is marked missing at depth 1.
+    fn missing_links(chain: &serde_json::Value) -> Vec<(String, String, String, String)> {
+        chain["missing"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| {
+                assert_eq!(m["status"], "missing");
+                assert_eq!(m["depth"], 1);
+                (
+                    m["from"].as_str().unwrap().to_string(),
+                    m["edge_label"].as_str().unwrap().to_string(),
+                    m["edge_type"].as_str().unwrap().to_string(),
+                    m["expected_kind"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect()
+    }
+
+    fn gap(
+        from: &str,
+        label: &str,
+        edge_type: &str,
+        kind: &str,
+    ) -> (String, String, String, String) {
+        (
+            from.to_string(),
+            label.to_string(),
+            edge_type.to_string(),
+            kind.to_string(),
+        )
+    }
+
+    /// What the software extension declares every behavior may reach, as
+    /// missing links of `from`.
+    fn software_gaps(from: &str) -> Vec<(String, String, String, String)> {
+        vec![
+            gap(from, "consumes", "BehaviorConsumesEvent", "event"),
+            gap(from, "ports", "BehaviorUsesPort", "port"),
+            gap(from, "produces", "BehaviorProducesEvent", "event"),
+            gap(from, "types", "BehaviorReferencesType", "type"),
+        ]
+    }
+
+    #[specforge_test(
+        behavior = "compute_traceability_chain",
+        verify = "missing link in chain is flagged"
+    )]
+    fn trace_json_flags_missing_links() {
+        let (_project, compiled) = gap_project();
+
+        // pay has its feature and its invariant: only the edges the software
+        // extension declares for behaviors that pay leaves out are missing.
+        let pay = run_trace(&compiled, &["pay"]);
+        assert_eq!(missing_links(&pay), software_gaps("pay"));
+        for link in pay["downstream"].as_array().unwrap() {
+            assert_eq!(link["status"], "resolved");
+        }
+
+        // refund also lacks a feature and an invariant.
+        let refund = run_trace(&compiled, &["refund"]);
+        let mut expected = software_gaps("refund");
+        expected.push(gap(
+            "refund",
+            "features",
+            "BehaviorImplementsFeature",
+            "feature",
+        ));
+        expected.push(gap(
+            "refund",
+            "invariants",
+            "BehaviorEnforcesInvariant",
+            "invariant",
+        ));
+        expected.sort_by(|a, b| a.1.cmp(&b.1));
+        assert_eq!(missing_links(&refund), expected);
+
+        // A feature's only reference fields point at features: a hierarchy,
+        // not an expected edge.
+        let checkout = run_trace(&compiled, &["checkout"]);
+        assert_eq!(missing_links(&checkout), vec![]);
+
+        // With no extensions loaded nothing is expected, so nothing is missing.
+        let (_bare_project, bare) = built(&[("main.spec", specs::ISOLATED)]);
+        let isolated = run_trace(&bare, &["isolated_node"]);
+        assert_eq!(isolated["missing"], serde_json::json!([]));
+    }
+
+    #[specforge_test(
+        behavior = "serialize_traceability_data",
+        verify = "gaps in chain are highlighted"
+    )]
+    fn trace_without_entity_serializes_every_chain_with_its_gaps() {
+        let (_project, compiled) = gap_project();
+
+        let all = run_trace(&compiled, &[]);
+        assert!(all["schema_version"].is_string());
+        let traces = all["traces"].as_array().unwrap();
+        let ids: Vec<&str> = traces
+            .iter()
+            .map(|t| t["entity_id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, vec!["checkout", "paid_once", "pay", "refund"]);
+
+        // Each chain carries the same gaps as its own trace.
+        for trace in traces {
+            let id = trace["entity_id"].as_str().unwrap();
+            let single = run_trace(&compiled, &[id]);
+            assert_eq!(trace["missing"], single["missing"], "{id}");
+        }
+        assert_eq!(missing_links(&traces[2]), software_gaps("pay"));
+        assert_eq!(missing_links(&traces[3]).len(), 6);
+    }
+
+    #[specforge_test(
+        behavior = "compute_traceability_chain",
+        verify = "trace output includes schema version"
+    )]
+    fn trace_output_includes_schema_version() {
+        let (_project, compiled) = built(&[("main.spec", specs::ISOLATED)]);
+
+        let parsed = trace_document(&compiled, "isolated_node");
+        assert!(
+            parsed["schema_version"].is_string(),
+            "trace output must include schema_version field"
+        );
+        assert!(!parsed["schema_version"].as_str().unwrap().is_empty());
+    }
+}

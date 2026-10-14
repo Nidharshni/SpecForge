@@ -546,7 +546,7 @@ fn published_kinds(document: &serde_json::Value) -> std::collections::BTreeSet<S
 }
 
 // Not linked: only a few top-level keys are checked here.
-// schema_publish_produces_json_schema_draft in specforge-cli's e2e_schema
+// schema_publish_produces_json_schema_draft in specforge-ops's schema::published
 // tests checks every keyword of the published schema against draft 2020-12.
 #[test]
 fn publish_json_schema_valid() {
@@ -868,7 +868,7 @@ fn schema_reflects_current_state() {
 
 // Not linked: this checks required keys and the kind enum by hand, not the
 // whole export against the schema. schema_publish_validates_a_real_export in
-// specforge-cli's e2e_schema tests runs a validator over a real export.
+// specforge-ops's schema::published tests runs a validator over a real export.
 #[test]
 fn published_schema_validates_known_good_export() {
     let schema = sample_schema();
