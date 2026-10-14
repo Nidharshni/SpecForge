@@ -1,4 +1,7 @@
 use super::*;
+use crate::layering::{
+    ABSTRACT_FLAG_FIELD, REFINEMENT_ABSTRACT_FIELD, REFINEMENT_CONCRETE_FIELD, REFINES_FIELD,
+};
 use specforge_extension_sdk::{PassEdge, PassSeverity};
 
 fn entity(id: &str, kind: &str) -> PassEntity {

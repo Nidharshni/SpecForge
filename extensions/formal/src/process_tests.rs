@@ -1,4 +1,5 @@
 use super::*;
+use crate::layering::{REFINEMENT_ABSTRACT_FIELD, REFINEMENT_CONCRETE_FIELD};
 use specforge_extension_sdk::PassEdge;
 
 fn codes(findings: &[PassDiagnostic]) -> Vec<&str> {
