@@ -4,7 +4,8 @@
 //! Plan 12 §3 R1, R4 and R6.
 
 use sha2::{Digest, Sha256};
-use specforge_ops::extension::{Trust, resolve};
+use specforge_ops::extension::resolve;
+use specforge_ops::registry::Trust;
 use specforge_ops::registry::{Registry, TrustPolicy};
 use specforge_ops_registry::{ConfiguredRegistry, User};
 use specforge_package::{PackageName, PackageRef, Version};

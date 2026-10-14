@@ -187,7 +187,8 @@ fn add_package(
     registry: &specforge_ops::registry::testing::MemoryRegistry,
     specifier: &str,
 ) -> specforge_ops::Refusal<specforge_ops::extension::AddField> {
-    use specforge_ops::extension::{self, AddRequest, Trust};
+    use specforge_ops::extension::{self, AddRequest};
+    use specforge_ops::registry::Trust;
     extension::add(
         &AddRequest {
             root: &specforge_common::ProjectRoot::of(dir).unwrap(),
@@ -208,7 +209,7 @@ fn add_package(
 )]
 fn a_registry_refusal_is_never_an_internal_error() {
     use specforge_ops::OpErrorKind;
-    use specforge_ops::extension::Trust;
+    use specforge_ops::registry::Trust;
     use specforge_ops::registry::testing::{MemoryRegistry, Published, declaration};
     use specforge_ops::registry::{Registry, TrustPolicy};
     use specforge_package::{PackageName, Version};

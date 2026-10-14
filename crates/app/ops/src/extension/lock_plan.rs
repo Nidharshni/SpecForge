@@ -28,10 +28,10 @@ use specforge_package::{PackageName, Version, highest_matching};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration, PeerDependency};
 use specforge_wasm::WasmRuntime;
 
+use super::Origin;
 use super::candidate::{Installable, LocalFile};
 use super::peer_set::{Declarations, ProjectPeers};
-use super::{Origin, Trust};
-use crate::registry::{KeyPin, METADATA_MISMATCH, Publisher, Registry, TrustPolicy};
+use crate::registry::{KeyPin, METADATA_MISMATCH, Publisher, Registry, Trust, TrustPolicy};
 use crate::{OpError, OpErrorKind, Writes};
 
 /// What a lock plan is for. It words the refusal of an install that a locked extension does not

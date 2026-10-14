@@ -308,7 +308,8 @@ fn add_cases() -> Vec<Case> {
     verify = "add and check agree: an add check would report E027 or E073 for is refused, and an add that passes leaves none"
 )]
 fn add_and_check_agree_on_the_project_peer_set() {
-    use specforge_ops::extension::{self, AddRequest, Source, Trust};
+    use specforge_ops::extension::{self, AddRequest, Source};
+    use specforge_ops::registry::Trust;
     use specforge_ops::testing::probes;
 
     let cases = add_cases();
@@ -387,7 +388,8 @@ fn snapshot(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u
     verify = "a dry run answers what the add answers, refusals and the builtins it enables included, and writes nothing"
 )]
 fn a_dry_run_answers_what_the_add_answers() {
-    use specforge_ops::extension::{self, AddRequest, Source, Trust};
+    use specforge_ops::extension::{self, AddRequest, Source};
+    use specforge_ops::registry::Trust;
     use specforge_ops::testing::probes;
 
     for (case, config, files, locked, adds, _refused) in add_cases() {

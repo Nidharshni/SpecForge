@@ -3,7 +3,7 @@
 use super::candidate::LocalFile;
 use super::lock_plan::{Ask, Asked, Fetching, Install, LockPlan, Purpose};
 use super::{Origin, builtin_name};
-use crate::registry::{Acceptance, Publisher, Registry};
+use crate::registry::{Acceptance, Publisher, Registry, Trust};
 use crate::{OpError, OpErrorKind, Refusal, Writes};
 use serde::Serialize;
 use specforge_common::codes;
@@ -197,17 +197,6 @@ pub(crate) fn named(several: bool, specifier: &str, error: OpError) -> OpError {
     } else {
         error
     }
-}
-
-/// How a key change in a signed package is decided.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Trust {
-    /// Refuse it (MCP, `--format json`): nobody can be asked.
-    Refuse,
-    /// Accept it (`--yes`).
-    AssumeYes,
-    /// Ask on the terminal, refusing when there is none.
-    Prompt,
 }
 
 /// What to add, and where.

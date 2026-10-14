@@ -10,9 +10,8 @@
 //! The publisher keys the update's fetches accepted are pinned with it, once it is written: an
 //! update that is not applied pins nothing (ADR 0059).
 
-use super::Trust;
 use super::lock_plan::{Ask, Fetching, Install, LockPlan};
-use crate::registry::{Acceptance, NO_REGISTRY, Publisher, Registry};
+use crate::registry::{Acceptance, NO_REGISTRY, Publisher, Registry, Trust};
 use crate::{OpError, OpErrorKind};
 use serde::Serialize;
 use specforge_common::shape::Shape;

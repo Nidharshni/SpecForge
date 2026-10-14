@@ -6,8 +6,9 @@ use std::path::{Path, PathBuf};
 
 use specforge_ops::Writes;
 use specforge_ops::extension::{
-    self, AddOutcome, AddRequest, RemoveRequest, Source, StrandedEntity, Trust,
+    self, AddOutcome, AddRequest, RemoveRequest, Source, StrandedEntity,
 };
+use specforge_ops::registry::Trust;
 use specforge_ops::testing::{self, declaring, serving_builtin};
 use specforge_ops::view::ProjectView;
 use specforge_project::CompiledProject;

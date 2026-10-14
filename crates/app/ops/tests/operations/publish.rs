@@ -4,8 +4,8 @@
 use std::path::{Path, PathBuf};
 
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
-use specforge_ops::extension::Trust;
 use specforge_ops::publish::{PublishReport, publish};
+use specforge_ops::registry::Trust;
 use specforge_ops::registry::testing::{Asked, MemoryRegistry};
 use specforge_ops::registry::{Registry, TrustPolicy, Unconfigured};
 use specforge_ops::testing::declaring;

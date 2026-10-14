@@ -10,7 +10,6 @@
 //! `specforge_ops_registry::ConfiguredRegistry`, which only the surfaces that
 //! reach a registry (the CLI, MCP) link (ADR 0010).
 
-use crate::extension::Trust;
 use crate::options::{Choice, OptionTable};
 use crate::{OpError, OpErrorKind};
 use specforge_common::{Code, Diagnostic, codes};
@@ -84,6 +83,17 @@ pub struct Manifest {
     pub version: Version,
     pub sha256: String,
     pub declaration: ExtensionDeclaration,
+}
+
+/// How a key change in a signed package is decided.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Trust {
+    /// Refuse it (MCP, `--format json`): nobody can be asked.
+    Refuse,
+    /// Accept it (`--yes`).
+    AssumeYes,
+    /// Ask on the terminal, refusing when there is none.
+    Prompt,
 }
 
 /// How a fetch decides a package's publisher: the caller's two choices, and the key the project

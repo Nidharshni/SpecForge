@@ -16,7 +16,7 @@ mod update;
 pub use add::{
     AddDocument, AddField, AddOutcome, AddRequest, AddResult, Added, AddedExtension, BuiltinSource,
     DuplicateSpecifier, EnabledBuiltin, InstalledPackage, PlannedAdd, PresentExtension, Source,
-    Specified, Trust, add, parse, specified,
+    Specified, add, parse, specified,
 };
 pub(crate) use add::{git_not_supported, named};
 pub use candidate::{Candidate, Installable, LocalFile, binary_at};

@@ -3,7 +3,7 @@
 //! user whose files live in a temporary directory, never in `~/.specforge`.
 
 use specforge_ops::OpErrorKind;
-use specforge_ops::extension::Trust;
+use specforge_ops::registry::Trust;
 use specforge_ops::registry::testing::declaration;
 use specforge_ops::registry::{Registry, TrustPolicy, Upload};
 use specforge_ops_registry::{ConfiguredRegistry, User};
