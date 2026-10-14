@@ -35,6 +35,8 @@ tests/spec/
 /specforge-graph.dot
 .specforge/
 .claude/worktrees/
+# Claude Code's per-user settings (shared ones belong in .claude/settings.json)
+**/.claude/settings.local.json
 # docs/research holds the round reports; any other page there is local (ADR 0082)
 /docs/research/*
 !/docs/research/architecture-review-*.html
