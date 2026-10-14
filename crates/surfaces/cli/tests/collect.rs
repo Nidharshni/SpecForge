@@ -94,7 +94,14 @@ exit 0
 fn write_report(root: &Path, entries: &str) {
     let dir = root.join("target/specforge");
     std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("old.json"), format!(r#"{{"entries":{entries}}}"#)).unwrap();
+    let file = std::fs::File::create(dir.join("old.json")).unwrap();
+    std::io::Write::write_all(&mut &file, format!(r#"{{"entries":{entries}}}"#).as_bytes())
+        .unwrap();
+    // Backdate it: collect keeps a report whose time is within 100 ms of the
+    // run's start (the kernel's coarse file clock), so a report written just
+    // before the run would read as the run's own.
+    let long_ago = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+    file.set_modified(long_ago).unwrap();
 }
 
 #[test]
