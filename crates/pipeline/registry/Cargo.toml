@@ -1,5 +1,6 @@
 [package]
 name = "specforge-registry"
+description = "The Registry build: extension declarations in load order turned into kind, field and edge registries, the rule set and pass order, and the checks over a built graph's entities (ADR 0031)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

@@ -1,5 +1,6 @@
 [package]
 name = "specforge-wasm"
+description = "The host side of the extension protocol: the WasmRuntime port, every typed extension call and its E028 failure, the sandbox limits and the in-process test runtime (ADR 0013, ADR 0037)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

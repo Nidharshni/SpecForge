@@ -1,5 +1,6 @@
 [package]
 name = "xtask"
+description = "Repository tasks that link the workspace: build-blobs, revendor and check-links"
 edition = "2024"
 version = "0.1.0"
 publish = false

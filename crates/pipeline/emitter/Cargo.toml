@@ -1,5 +1,6 @@
 [package]
 name = "specforge-emitter"
+description = "Export formats: a built graph and the registries that describe it as text (Graph Protocol JSON, the agent formats, DOT, the model and outline diagrams); no compile, no Wasm runtime, no file I/O (ADR 0007)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

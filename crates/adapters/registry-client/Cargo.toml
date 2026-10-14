@@ -1,5 +1,6 @@
 [package]
 name = "specforge-registry-client"
+description = "The package-registry client: search, resolve and publish over HTTP, credentials in the OS keyring, publisher key pinning and package signing"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

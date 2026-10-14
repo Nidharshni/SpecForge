@@ -1,5 +1,6 @@
 [package]
 name = "specforge-mcp"
+description = "The MCP server: tools, prompts, resources and events, each one typed definition over specforge-ops, served over the stdio transport (ADR 0024, ADR 0062)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

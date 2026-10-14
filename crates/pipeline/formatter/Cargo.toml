@@ -1,5 +1,6 @@
 [package]
 name = "specforge-formatter"
+description = "The .spec formatter: a document, or the blocks a range touches, in canonical layout under its .specforgefmt.toml, a form it cannot read kept as written (ADR 0021, ADR 0063)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

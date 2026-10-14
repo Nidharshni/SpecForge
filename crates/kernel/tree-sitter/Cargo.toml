@@ -1,5 +1,6 @@
 [package]
 name = "tree-sitter-specforge"
+description = "The tree-sitter grammar of the .spec language: grammar.js, the generated parser and its scanner, the node-kind and field vocabulary, and the editor queries"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

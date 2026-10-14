@@ -1,5 +1,6 @@
 [package]
 name = "specforge-resolver"
+description = "Import resolution over a compile's sources: an import names a source by its key, its path relative to the spec root; nothing here reads a file (ADR 0055)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

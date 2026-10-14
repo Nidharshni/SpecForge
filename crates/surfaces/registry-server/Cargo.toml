@@ -1,5 +1,6 @@
 [package]
 name = "specforge-registry-server"
+description = "The package registry server (specforge-registry): the registry contract's routes over SQLite and blob storage, publish authentication and signature checks (ADR 0044, ADR 0061)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

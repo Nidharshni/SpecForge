@@ -1,5 +1,6 @@
 [package]
 name = "specforge-common"
+description = "What every host crate shares: the diagnostic and its source span, the interned symbol, the project root and its specforge.json, .spec discovery, the JSON shape (ADR 0048) and how diagnostics print"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

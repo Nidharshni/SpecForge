@@ -1,5 +1,6 @@
 [package]
 name = "specforge-watch"
+description = "What keeps a project session current from the file system: the file watcher, the one debounce rule watch and the LSP share, and the loop specforge watch runs (ADR 0035)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
