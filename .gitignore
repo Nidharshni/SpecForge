@@ -1,6 +1,8 @@
 # Rust
 /target/
 **/target/
+# the MCP crate's `target` module (ADR 0087) is source, not build output
+!crates/surfaces/mcp/src/target/
 **/*.rs.bk
 
 # Node
