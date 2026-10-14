@@ -161,7 +161,8 @@ pub fn handle_list_tools(
     revision: Revision,
     id: Option<Value>,
 ) -> JsonRpcResponse {
-    let tools = serde_json::to_value(listed_tools(state, revision).collect::<Vec<_>>()).unwrap();
+    let tools = serde_json::to_value(listed_tools(state, revision).collect::<Vec<_>>())
+        .expect("a listed descriptor serializes");
     let count = tools.as_array().map_or(0, Vec::len);
     state.events.record(McpEvent::McpDiscoveryInvoked {
         discovery_type: Listing::Tools,
@@ -173,7 +174,7 @@ pub fn handle_list_tools(
 pub fn handle_list_resources(state: &mut McpState, id: Option<Value>) -> JsonRpcResponse {
     let resources: Vec<Value> = listed_resources(state)
         .filter(|r| matches!(r, Listed::Resource(_)))
-        .map(|r| serde_json::to_value(r).unwrap())
+        .map(|r| serde_json::to_value(r).expect("a listed descriptor serializes"))
         .collect();
     state.events.record(McpEvent::McpDiscoveryInvoked {
         discovery_type: Listing::Resources,
@@ -187,7 +188,7 @@ pub fn handle_list_resources(state: &mut McpState, id: Option<Value>) -> JsonRpc
 pub fn handle_list_resource_templates(state: &mut McpState, id: Option<Value>) -> JsonRpcResponse {
     let templates: Vec<Value> = listed_resources(state)
         .filter(|r| matches!(r, Listed::Template(_)))
-        .map(|r| serde_json::to_value(r).unwrap())
+        .map(|r| serde_json::to_value(r).expect("a listed descriptor serializes"))
         .collect();
     state.events.record(McpEvent::McpDiscoveryInvoked {
         discovery_type: Listing::ResourceTemplates,
@@ -201,7 +202,7 @@ pub fn handle_list_prompts(state: &mut McpState, id: Option<Value>) -> JsonRpcRe
     // prompt.
     let prompts: Vec<Value> = crate::prompts::CORE_PROMPTS
         .iter()
-        .map(|p| serde_json::to_value(p.descriptor()).unwrap())
+        .map(|p| serde_json::to_value(p.descriptor()).expect("a listed descriptor serializes"))
         .collect();
     state.events.record(McpEvent::McpDiscoveryInvoked {
         discovery_type: Listing::Prompts,

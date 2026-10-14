@@ -266,7 +266,10 @@ fn dfs_cycle<'a>(
             } else if on_stack.contains(dep.as_str()) {
                 // Found a cycle: extract it from the stack and start it at
                 // its smallest path.
-                let start = stack.iter().position(|n| *n == dep).unwrap();
+                let start = stack
+                    .iter()
+                    .position(|n| *n == dep)
+                    .expect("a dependency on the stack is in the path");
                 let mut cycle: Vec<String> = stack[start..].iter().map(|s| s.to_string()).collect();
                 let smallest = (0..cycle.len()).min_by_key(|&i| &cycle[i]).unwrap_or(0);
                 cycle.rotate_left(smallest);
