@@ -45,6 +45,24 @@ members = [
     "gate",
 ]
 
+# One lint policy for every workspace member (ADR 0089). An exception is an `#[expect(lint, reason = "...")]` on
+# the item it excuses; `#[allow]` only where an `expect` cannot hold (macro output, a module shared by several test
+# binaries, a test crate's root).
+[workspace.lints.rust]
+# Production unsafe is the tree-sitter FFI; each unsafe item says why it is sound.
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+# An `unwrap` states no invariant. `expect("...")` names the one it relies on; a fallible input returns an error.
+unwrap_used = "deny"
+# MCP and the LSP own stdout: it is their protocol stream. A binary that owns its stdout says so.
+print_stdout = "deny"
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+# Every `#[allow]` that remains says why.
+allow_attributes_without_reason = "deny"
+
 [workspace.package]
 edition = "2024"
 version = "0.1.0"
