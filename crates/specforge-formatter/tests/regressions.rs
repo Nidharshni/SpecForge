@@ -77,3 +77,16 @@ fn a_strings_trailing_whitespace_is_its_value() {
         );
     }
 }
+
+#[specforge_test(
+    behavior = "apply_format_rules",
+    verify = "an expression block's lines are indented one level inside it, whatever their indentation"
+)]
+fn an_expression_block_is_reindented() {
+    let canonical =
+        "constraint c \"C\" {\n  expression expr {\n    a < 250ms\n    b < 75MB\n  }\n}\n";
+    let relaid =
+        "constraint c \"C\" {\n  expression expr {\n          a < 250ms\n\tb < 75MB\n     }\n}\n";
+    assert_eq!(fmt(relaid), fmt(canonical));
+    assert_eq!(fmt(canonical), canonical);
+}

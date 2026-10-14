@@ -787,6 +787,34 @@ fn field_member(node: Node, source: &str, config: &FormatConfig, depth: usize) -
             key,
             annotations,
         },
+        kind::EXPR_GROUP => {
+            // `expr {` follows the key; each expression line is indented one
+            // level inside it; `}` closes at the field's level
+            // (formatting_consistency).
+            let indent = config.indent_str();
+            let text = node_text(value, source);
+            let mut lines = text.lines();
+            let mut value = vec![lines.next().unwrap_or("").trim_end().to_string()];
+            let body: Vec<&str> = lines.collect();
+            let (inner, close) = body.split_at(body.len().saturating_sub(1));
+            value.extend(
+                inner
+                    .iter()
+                    .map(|l| l.trim())
+                    .filter(|l| !l.is_empty())
+                    .map(|l| format!("{}{l}", indent.repeat(depth + 1))),
+            );
+            value.extend(
+                close
+                    .iter()
+                    .map(|l| format!("{}{}", indent.repeat(depth), l.trim())),
+            );
+            Member::Field {
+                key,
+                value,
+                annotations,
+            }
+        }
         _ => {
             // Multi-line values (triple-quoted strings, ...) are opaque: the
             // first line follows the key, the rest stays as written. A
