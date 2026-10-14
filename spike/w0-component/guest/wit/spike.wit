@@ -1,9 +1,0 @@
-package specforge:spike@1.0.0;
-
-world extension {
-    /// Trivial call: boundary overhead measurement floor.
-    export ping: func() -> string;
-    /// Batch-shaped call: 1.5 MB JSON payload in, echoed metadata out
-    /// (mirrors __pass_<name> snapshot semantics).
-    export pass: func(payload: string) -> result<string, string>;
-}

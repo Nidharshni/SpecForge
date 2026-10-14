@@ -143,10 +143,6 @@ The industry has independently converged on structured context files (CLAUDE.md,
 | [RES-27](../spec/research/RES-27-software-eng-entity-redesign.md) | Software engineering entity redesign |
 | [Extension Model](extension-model.md) | Extensions, providers, and generators architecture |
 
-## Business Plan
-
-A comprehensive business plan covering 10 areas (executive summary, financials, go-to-market, technical roadmap, pricing, product strategy, community, investment thesis, operations, strategic analysis) is available at **[business/README.md](../business/README.md)**.
-
 ## Validation Codes
 
 Every diagnostic code, with its meaning, owner and fix, is listed in [Diagnostic Codes](diagnostics.md), generated from the catalog that `specforge explain <CODE>` prints.

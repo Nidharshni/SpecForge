@@ -283,7 +283,7 @@ Also planned: agents that edit the spec through typed operations, so nobody (hum
 - **[Quick reference](docs/quick-reference.md)**: every command, entity kind and diagnostic code on one page.
 - **[Vision](vision/README.md)**: the manifesto, [principles](vision/principles.md) and [north star](vision/north-star.md).
 - **[Architecture](ARCHITECTURE.md)** and **[Contributing](CONTRIBUTING.md)**: how SpecForge is built, and how to work on it.
-- **[Documentation hub](docs/README.md)**: entity reference, traceability chain, research, and the business plan.
+- **[Documentation hub](docs/README.md)**: entity reference, traceability chain and research.
 
 ## License
 
