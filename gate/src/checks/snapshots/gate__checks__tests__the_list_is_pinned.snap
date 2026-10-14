@@ -13,6 +13,8 @@ grammar           hook       crates/kernel/tree-sitter/grammar.js, crates/kernel
                              the committed tree-sitter artifacts are what grammar.js generates
 zero-entity       hook       crates/**/src/**, scripts/check-zero-entity-core.sh
                              the core crates name no entity kind of an extension
+layers            hook       Cargo.toml, crates/**/Cargo.toml, gate/src/layers.rs
+                             no crate has a normal or build dependency on a crate in a higher layer (its folder under crates/) or in none, and the LSP links no package registry client (ADR 0010)
 links             hook       computed: a .spec file; a test file or one with a `verify =` attribute
                              every test's verify text and entity is declared by the spec (A016, static)
 doc-links         hook       always

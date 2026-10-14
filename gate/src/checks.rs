@@ -4,6 +4,7 @@ use std::path::Path;
 use crate::blob_inputs;
 use crate::change_set::{ChangeSet, Pattern};
 use crate::judge;
+use crate::layers;
 use crate::repo::Repo;
 use crate::run::{Ctx, Mode};
 use crate::steps;
@@ -147,6 +148,16 @@ pub static CHECKS: &[Check] = &[
         after: &[],
         fix: "name the kind through the registry, or mark the line `// zero-entity-core: exempt`",
         run: steps::zero_entity,
+    },
+    Check {
+        name: "layers",
+        proves: "no crate has a normal or build dependency on a crate in a higher layer (its folder under crates/) or in none, and the LSP links no package registry client (ADR 0010)",
+        reach: Reach::Hook,
+        trigger: Trigger::Paths(&["Cargo.toml", "crates/**/Cargo.toml", layers::RULE]),
+        compiles: false,
+        after: &[],
+        fix: "make the dependency point down (move what it uses to a lower layer) and put each crate in crates/<layer>/<name>/; an upward edge an ADR accepts is an ALLOWED entry in gate/src/layers.rs; a crate the LSP must not link is reached through the chain the message names: cut that edge",
+        run: steps::layers,
     },
     Check {
         name: "links",
