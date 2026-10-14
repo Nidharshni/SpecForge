@@ -1,40 +1,41 @@
-use std::fmt::Write;
+use std::fmt::{self, Write};
+
+use crate::text;
 
 use super::{GroupBy, ModelIntermediate, ModelOptions};
 use crate::diagram::{escape_dot, escape_html};
 
 pub(super) fn render_dot(model: &ModelIntermediate, options: &ModelOptions) -> String {
-    let mut out = String::new();
+    text::written(|out| {
+        writeln!(out, "digraph model {{")?;
+        writeln!(out, "  rankdir=LR;")?;
+        writeln!(out, "  node [shape=none, fontname=\"Helvetica\"];")?;
+        writeln!(out, "  edge [fontname=\"Helvetica\", fontsize=10];")?;
 
-    writeln!(out, "digraph model {{").unwrap();
-    writeln!(out, "  rankdir=LR;").unwrap();
-    writeln!(out, "  node [shape=none, fontname=\"Helvetica\"];").unwrap();
-    writeln!(out, "  edge [fontname=\"Helvetica\", fontsize=10];").unwrap();
+        match options.group_by {
+            GroupBy::Extension => render_grouped(model, out)?,
+            GroupBy::None => render_flat(model, out)?,
+        }
 
-    match options.group_by {
-        GroupBy::Extension => render_grouped(model, &mut out),
-        GroupBy::None => render_flat(model, &mut out),
-    }
+        // Edges
+        for rel in &model.relationships {
+            writeln!(
+                out,
+                "  {} -> {} [label=\"{}\\n[{}]\"];",
+                rel.source,
+                rel.target,
+                escape_dot(&rel.name),
+                rel.cardinality
+            )?;
+        }
 
-    // Edges
-    for rel in &model.relationships {
-        writeln!(
-            out,
-            "  {} -> {} [label=\"{}\\n[{}]\"];",
-            rel.source,
-            rel.target,
-            escape_dot(&rel.name),
-            rel.cardinality
-        )
-        .unwrap();
-    }
+        writeln!(out, "}}")?;
 
-    writeln!(out, "}}").unwrap();
-
-    out
+        Ok(())
+    })
 }
 
-fn render_grouped(model: &ModelIntermediate, out: &mut String) {
+fn render_grouped(model: &ModelIntermediate, out: &mut String) -> fmt::Result {
     for ext in &model.extensions {
         let entities: Vec<_> = model
             .entities
@@ -48,28 +49,30 @@ fn render_grouped(model: &ModelIntermediate, out: &mut String) {
         let ext_color = model.extension_color(&ext.name);
         let cluster_id = ext.name.replace("@specforge/", "").replace('/', "_");
 
-        writeln!(out).unwrap();
-        writeln!(out, "  subgraph cluster_{} {{", cluster_id).unwrap();
-        writeln!(out, "    label=\"{}\";", escape_dot(&ext.name)).unwrap();
-        writeln!(out, "    style=dashed;").unwrap();
-        writeln!(out, "    color=\"{}\";", ext_color).unwrap();
+        writeln!(out)?;
+        writeln!(out, "  subgraph cluster_{} {{", cluster_id)?;
+        writeln!(out, "    label=\"{}\";", escape_dot(&ext.name))?;
+        writeln!(out, "    style=dashed;")?;
+        writeln!(out, "    color=\"{}\";", ext_color)?;
 
         for entity in entities {
-            render_entity(entity, entity_color(entity, ext_color), out);
+            render_entity(entity, entity_color(entity, ext_color), out)?;
         }
 
-        writeln!(out, "  }}").unwrap();
+        writeln!(out, "  }}")?;
     }
+    Ok(())
 }
 
-fn render_flat(model: &ModelIntermediate, out: &mut String) {
+fn render_flat(model: &ModelIntermediate, out: &mut String) -> fmt::Result {
     for entity in &model.entities {
         render_entity(
             entity,
             entity_color(entity, model.extension_color(&entity.extension)),
             out,
-        );
+        )?;
     }
+    Ok(())
 }
 
 /// Per-kind declared color wins; the extension palette is the fallback (C13-03).
@@ -77,8 +80,8 @@ fn entity_color<'a>(entity: &'a super::ModelEntity, fallback: &'a str) -> &'a st
     entity.dot_color.as_deref().unwrap_or(fallback)
 }
 
-fn render_entity(entity: &super::ModelEntity, color: &str, out: &mut String) {
-    writeln!(out).unwrap();
+fn render_entity(entity: &super::ModelEntity, color: &str, out: &mut String) -> fmt::Result {
+    writeln!(out)?;
 
     let has_contributions = entity
         .fields
@@ -96,29 +99,29 @@ fn render_entity(entity: &super::ModelEntity, color: &str, out: &mut String) {
     });
 
     if entity.fields.is_empty() {
-        writeln!(out, "    {} [label=<", entity.name).unwrap();
+        writeln!(out, "    {} [label=<", entity.name)?;
         writeln!(
             out,
             "      <table border=\"1\" cellborder=\"0\" cellspacing=\"0\">"
-        )
-        .unwrap();
+        )?;
         writeln!(
-            out, "        <tr><td bgcolor=\"{}\" colspan=\"{}\"><font color=\"white\"><b>{}</b></font></td></tr>",
+            out,
+            "        <tr><td bgcolor=\"{}\" colspan=\"{}\"><font color=\"white\"><b>{}</b></font></td></tr>",
             color, colspan, header_label
-        ).unwrap();
-        writeln!(out, "      </table>").unwrap();
-        writeln!(out, "    >];").unwrap();
+        )?;
+        writeln!(out, "      </table>")?;
+        writeln!(out, "    >];")?;
     } else {
-        writeln!(out, "    {} [label=<", entity.name).unwrap();
+        writeln!(out, "    {} [label=<", entity.name)?;
         writeln!(
             out,
             "      <table border=\"1\" cellborder=\"0\" cellspacing=\"0\">"
-        )
-        .unwrap();
+        )?;
         writeln!(
-            out, "        <tr><td bgcolor=\"{}\" colspan=\"{}\"><font color=\"white\"><b>{}</b></font></td></tr>",
+            out,
+            "        <tr><td bgcolor=\"{}\" colspan=\"{}\"><font color=\"white\"><b>{}</b></font></td></tr>",
             color, colspan, header_label
-        ).unwrap();
+        )?;
 
         for field in &entity.fields {
             let name_str = if field.required || field.is_primary_key {
@@ -151,20 +154,21 @@ fn render_entity(entity: &super::ModelEntity, color: &str, out: &mut String) {
                     .map(|s| format!("<font color=\"gray\">{}</font>", escape_html(s)))
                     .unwrap_or_default();
                 writeln!(
-                    out, "        <tr><td align=\"left\">{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
+                    out,
+                    "        <tr><td align=\"left\">{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
                     name_str, field_type, marker, contribution, source
-                ).unwrap();
+                )?;
             } else {
                 writeln!(
                     out,
                     "        <tr><td align=\"left\">{}</td><td>{}</td><td>{}</td></tr>",
                     name_str, field_type, marker
-                )
-                .unwrap();
+                )?;
             }
         }
 
-        writeln!(out, "      </table>").unwrap();
-        writeln!(out, "    >];").unwrap();
+        writeln!(out, "      </table>")?;
+        writeln!(out, "    >];")?;
     }
+    Ok(())
 }

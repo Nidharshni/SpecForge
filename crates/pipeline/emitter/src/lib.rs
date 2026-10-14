@@ -19,6 +19,7 @@ pub mod model;
 pub mod outline;
 mod publish;
 pub mod schema;
+mod text;
 
 pub use dot::DotOptions;
 pub use emit::{EmitFormat, EmitOptions, document_schema, emit};

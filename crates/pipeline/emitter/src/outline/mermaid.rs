@@ -1,5 +1,7 @@
 use std::fmt::Write;
 
+use crate::text;
+
 use super::{OutlineDetail, OutlineIntermediate, OutlineOptions};
 use crate::diagram::{escape_mermaid, extension_id as sanitize_id};
 
@@ -15,162 +17,156 @@ const PALETTE: &[(&str, &str, &str, &str)] = &[
 ];
 
 pub(super) fn render_mermaid(outline: &OutlineIntermediate, options: &OutlineOptions) -> String {
-    let mut out = String::new();
-    let mut edge_count: usize = 0;
+    text::written(|out| {
+        let mut edge_count: usize = 0;
 
-    writeln!(out, "flowchart TB").unwrap();
+        writeln!(out, "flowchart TB")?;
 
-    // Extension subgraph cards
-    for (i, ext) in outline.extensions.iter().enumerate() {
-        let id = sanitize_id(&ext.name);
-        let card_id = format!("{}_card", id);
-        let content = build_card_content(ext, outline, options);
+        // Extension subgraph cards
+        for (i, ext) in outline.extensions.iter().enumerate() {
+            let id = sanitize_id(&ext.name);
+            let card_id = format!("{}_card", id);
+            let content = build_card_content(ext, outline, options);
 
-        writeln!(out).unwrap();
-        writeln!(
-            out,
-            "    subgraph {}[\"  {} v{}  \"]",
-            id,
-            escape_mermaid(&ext.name),
-            escape_mermaid(&ext.version)
-        )
-        .unwrap();
-        writeln!(out, "        {}[\"{}\"]", card_id, content).unwrap();
-        writeln!(out, "    end").unwrap();
+            writeln!(out)?;
+            writeln!(
+                out,
+                "    subgraph {}[\"  {} v{}  \"]",
+                id,
+                escape_mermaid(&ext.name),
+                escape_mermaid(&ext.version)
+            )?;
+            writeln!(out, "        {}[\"{}\"]", card_id, content)?;
+            writeln!(out, "    end")?;
 
-        // classDef for inner card node
-        let (_, _, inner_stroke, _) = palette(i);
-        writeln!(
-            out,
-            "    classDef cls_{} fill:#fff,stroke:{},stroke-width:1.5px,color:#333",
-            id, inner_stroke
-        )
-        .unwrap();
-        writeln!(out, "    class {} cls_{}", card_id, id).unwrap();
-    }
+            // classDef for inner card node
+            let (_, _, inner_stroke, _) = palette(i);
+            writeln!(
+                out,
+                "    classDef cls_{} fill:#fff,stroke:{},stroke-width:1.5px,color:#333",
+                id, inner_stroke
+            )?;
+            writeln!(out, "    class {} cls_{}", card_id, id)?;
+        }
 
-    writeln!(out).unwrap();
+        writeln!(out)?;
 
-    // Filter dependencies by visibility mode
-    let visible_deps = super::filter_dependencies(&outline.dependencies, options.deps);
+        // Filter dependencies by visibility mode
+        let visible_deps = super::filter_dependencies(&outline.dependencies, options.deps);
 
-    // Required dependency edges (solid)
-    for dep in visible_deps.iter().filter(|d| !d.optional) {
-        let from_id = sanitize_id(&dep.from);
-        let to_id = sanitize_id(&dep.to);
-        writeln!(out, "    {} -->|\"depends on\"| {}", from_id, to_id).unwrap();
-        edge_count += 1;
-    }
-
-    // Optional dependency edges (dashed)
-    for dep in visible_deps.iter().filter(|d| d.optional) {
-        let from_id = sanitize_id(&dep.from);
-        let to_id = sanitize_id(&dep.to);
-        writeln!(out, "    {} -.->|\"optional dep\"| {}", from_id, to_id).unwrap();
-        edge_count += 1;
-    }
-
-    // Enhancement edges (dotted)
-    for enh in &outline.enhancements {
-        let from_id = sanitize_id(&enh.enhancer);
-        let to_id = sanitize_id(&enh.owner);
-        writeln!(
-            out,
-            "    {} -.->|\"enhances {}\"| {}",
-            from_id,
-            escape_mermaid(&enh.target_kind),
-            to_id
-        )
-        .unwrap();
-        edge_count += 1;
-    }
-
-    // Position orphan extensions (no edges) with invisible links
-    let connected: std::collections::HashSet<String> = visible_deps
-        .iter()
-        .flat_map(|d| [d.from.clone(), d.to.clone()])
-        .chain(
-            outline
-                .enhancements
-                .iter()
-                .flat_map(|e| [e.enhancer.clone(), e.owner.clone()]),
-        )
-        .collect();
-    let orphans: Vec<_> = outline
-        .extensions
-        .iter()
-        .filter(|e| !connected.contains(&e.name))
-        .collect();
-    if !orphans.is_empty()
-        && let Some(first_connected) = outline
-            .extensions
-            .iter()
-            .find(|e| connected.contains(&e.name))
-    {
-        for orphan in &orphans {
-            let orphan_id = sanitize_id(&orphan.name);
-            let anchor_id = sanitize_id(&first_connected.name);
-            writeln!(out, "    {} ~~~ {}", orphan_id, anchor_id).unwrap();
+        // Required dependency edges (solid)
+        for dep in visible_deps.iter().filter(|d| !d.optional) {
+            let from_id = sanitize_id(&dep.from);
+            let to_id = sanitize_id(&dep.to);
+            writeln!(out, "    {} -->|\"depends on\"| {}", from_id, to_id)?;
             edge_count += 1;
         }
-    }
 
-    writeln!(out).unwrap();
+        // Optional dependency edges (dashed)
+        for dep in visible_deps.iter().filter(|d| d.optional) {
+            let from_id = sanitize_id(&dep.from);
+            let to_id = sanitize_id(&dep.to);
+            writeln!(out, "    {} -.->|\"optional dep\"| {}", from_id, to_id)?;
+            edge_count += 1;
+        }
 
-    // Subgraph style directives (backgrounds)
-    for (i, ext) in outline.extensions.iter().enumerate() {
-        let id = sanitize_id(&ext.name);
-        let (fill, stroke, _, text) = palette(i);
-        writeln!(
-            out,
-            "    style {} fill:{},stroke:{},stroke-width:2px,color:{}",
-            id, fill, stroke, text
-        )
-        .unwrap();
-    }
+        // Enhancement edges (dotted)
+        for enh in &outline.enhancements {
+            let from_id = sanitize_id(&enh.enhancer);
+            let to_id = sanitize_id(&enh.owner);
+            writeln!(
+                out,
+                "    {} -.->|\"enhances {}\"| {}",
+                from_id,
+                escape_mermaid(&enh.target_kind),
+                to_id
+            )?;
+            edge_count += 1;
+        }
 
-    // linkStyle for edge colors
-    let mut link_idx = 0;
-    // Required deps
-    for dep in visible_deps.iter().filter(|d| !d.optional) {
-        let color = extension_stroke(&dep.from, &outline.extensions);
-        writeln!(
-            out,
-            "    linkStyle {} stroke:{},stroke-width:2px",
-            link_idx, color
-        )
-        .unwrap();
-        link_idx += 1;
-    }
-    // Optional deps
-    for dep in visible_deps.iter().filter(|d| d.optional) {
-        let color = extension_stroke(&dep.from, &outline.extensions);
-        writeln!(
-            out,
-            "    linkStyle {} stroke:{},stroke-width:2px,stroke-dasharray:5",
-            link_idx, color
-        )
-        .unwrap();
-        link_idx += 1;
-    }
-    // Enhancements
-    for enh in &outline.enhancements {
-        let color = extension_stroke(&enh.enhancer, &outline.extensions);
-        writeln!(
-            out,
-            "    linkStyle {} stroke:{},stroke-width:1px,stroke-dasharray:3",
-            link_idx, color
-        )
-        .unwrap();
-        link_idx += 1;
-    }
-    // Invisible links
-    while link_idx < edge_count {
-        writeln!(out, "    linkStyle {} stroke:none", link_idx).unwrap();
-        link_idx += 1;
-    }
+        // Position orphan extensions (no edges) with invisible links
+        let connected: std::collections::HashSet<String> = visible_deps
+            .iter()
+            .flat_map(|d| [d.from.clone(), d.to.clone()])
+            .chain(
+                outline
+                    .enhancements
+                    .iter()
+                    .flat_map(|e| [e.enhancer.clone(), e.owner.clone()]),
+            )
+            .collect();
+        let orphans: Vec<_> = outline
+            .extensions
+            .iter()
+            .filter(|e| !connected.contains(&e.name))
+            .collect();
+        if !orphans.is_empty()
+            && let Some(first_connected) = outline
+                .extensions
+                .iter()
+                .find(|e| connected.contains(&e.name))
+        {
+            for orphan in &orphans {
+                let orphan_id = sanitize_id(&orphan.name);
+                let anchor_id = sanitize_id(&first_connected.name);
+                writeln!(out, "    {} ~~~ {}", orphan_id, anchor_id)?;
+                edge_count += 1;
+            }
+        }
 
-    out
+        writeln!(out)?;
+
+        // Subgraph style directives (backgrounds)
+        for (i, ext) in outline.extensions.iter().enumerate() {
+            let id = sanitize_id(&ext.name);
+            let (fill, stroke, _, text) = palette(i);
+            writeln!(
+                out,
+                "    style {} fill:{},stroke:{},stroke-width:2px,color:{}",
+                id, fill, stroke, text
+            )?;
+        }
+
+        // linkStyle for edge colors
+        let mut link_idx = 0;
+        // Required deps
+        for dep in visible_deps.iter().filter(|d| !d.optional) {
+            let color = extension_stroke(&dep.from, &outline.extensions);
+            writeln!(
+                out,
+                "    linkStyle {} stroke:{},stroke-width:2px",
+                link_idx, color
+            )?;
+            link_idx += 1;
+        }
+        // Optional deps
+        for dep in visible_deps.iter().filter(|d| d.optional) {
+            let color = extension_stroke(&dep.from, &outline.extensions);
+            writeln!(
+                out,
+                "    linkStyle {} stroke:{},stroke-width:2px,stroke-dasharray:5",
+                link_idx, color
+            )?;
+            link_idx += 1;
+        }
+        // Enhancements
+        for enh in &outline.enhancements {
+            let color = extension_stroke(&enh.enhancer, &outline.extensions);
+            writeln!(
+                out,
+                "    linkStyle {} stroke:{},stroke-width:1px,stroke-dasharray:3",
+                link_idx, color
+            )?;
+            link_idx += 1;
+        }
+        // Invisible links
+        while link_idx < edge_count {
+            writeln!(out, "    linkStyle {} stroke:none", link_idx)?;
+            link_idx += 1;
+        }
+
+        Ok(())
+    })
 }
 
 fn build_card_content(

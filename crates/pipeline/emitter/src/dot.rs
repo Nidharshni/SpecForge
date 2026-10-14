@@ -1,6 +1,8 @@
 use specforge_graph::{Graph, Node};
 use std::collections::BTreeMap;
-use std::fmt::Write;
+use std::fmt::{self, Write};
+
+use crate::text;
 
 use crate::diagram::{escape_dot, extension_id};
 
@@ -33,112 +35,114 @@ impl Default for DotOptions<'_> {
     }
 }
 pub fn emit_dot(graph: &Graph, options: &DotOptions<'_>) -> String {
-    let mut out = String::new();
-    writeln!(out, "digraph specforge {{").unwrap();
-    writeln!(out, "  rankdir=LR;").unwrap();
-    writeln!(out, "  node [shape=box];").unwrap();
+    text::written(|out| {
+        writeln!(out, "digraph specforge {{")?;
+        writeln!(out, "  rankdir=LR;")?;
+        writeln!(out, "  node [shape=box];")?;
 
-    let kind_entry = |kind: &str| match options.kind_registry {
-        Some(registry) => registry
-            .iter()
-            .find(|(name, _)| *name == kind)
-            .map(|(_, e)| e),
-        None => None,
-    };
-    let included = |node: &Node| {
-        options
-            .kind_filter
-            .is_none_or(|f| f.iter().any(|k| k == node.kind.raw.as_str()))
-    };
-    let write_node = |out: &mut String, node: &Node, indent: &str| {
-        let mut style = String::new();
-        if let Some(entry) = kind_entry(node.kind.raw.as_str()) {
-            if let Some(shape) = &entry.declared.dot_shape {
-                style.push_str(&format!(" shape=\"{}\"", escape_dot(shape)));
+        let kind_entry = |kind: &str| match options.kind_registry {
+            Some(registry) => registry
+                .iter()
+                .find(|(name, _)| *name == kind)
+                .map(|(_, e)| e),
+            None => None,
+        };
+        let included = |node: &Node| {
+            options
+                .kind_filter
+                .is_none_or(|f| f.iter().any(|k| k == node.kind.raw.as_str()))
+        };
+        let write_node = |out: &mut String, node: &Node, indent: &str| -> fmt::Result {
+            let mut style = String::new();
+            if let Some(entry) = kind_entry(node.kind.raw.as_str()) {
+                if let Some(shape) = &entry.declared.dot_shape {
+                    style.push_str(&format!(" shape=\"{}\"", escape_dot(shape)));
+                }
+                if let Some(color) = &entry.declared.dot_color {
+                    style.push_str(&format!(" color=\"{}\"", escape_dot(color)));
+                }
+                if let Some(fill) = &entry.declared.dot_fillcolor {
+                    style.push_str(&format!(" fillcolor=\"{}\"", escape_dot(fill)));
+                }
             }
-            if let Some(color) = &entry.declared.dot_color {
-                style.push_str(&format!(" color=\"{}\"", escape_dot(color)));
+            let label = if options.labels {
+                match &node.title {
+                    Some(title) => format!(
+                        "{}\\n{}",
+                        escape_dot(node.id.raw.as_str()),
+                        escape_dot(title)
+                    ),
+                    None => escape_dot(node.id.raw.as_str()),
+                }
+            } else {
+                escape_dot(node.id.raw.as_str())
+            };
+            writeln!(
+                out,
+                "{indent}\"{}\" [label=\"{}\"{}];",
+                escape_dot(node.id.raw.as_str()),
+                label,
+                style
+            )?;
+            Ok(())
+        };
+
+        if options.cluster_by_extension {
+            let mut clusters: BTreeMap<&str, Vec<&Node>> = BTreeMap::new();
+            let mut top_level: Vec<&Node> = Vec::new();
+            for node in graph.nodes() {
+                if !included(node) {
+                    continue;
+                }
+                match kind_entry(node.kind.raw.as_str()).map(|e| e.source_extension.as_str()) {
+                    Some(ext) => clusters.entry(ext).or_default().push(node),
+                    None => top_level.push(node),
+                }
             }
-            if let Some(fill) = &entry.declared.dot_fillcolor {
-                style.push_str(&format!(" fillcolor=\"{}\"", escape_dot(fill)));
+            for node in top_level {
+                write_node(out, node, "  ")?;
             }
-        }
-        let label = if options.labels {
-            match &node.title {
-                Some(title) => format!(
-                    "{}\\n{}",
-                    escape_dot(node.id.raw.as_str()),
-                    escape_dot(title)
-                ),
-                None => escape_dot(node.id.raw.as_str()),
+            for (ext, nodes) in clusters {
+                let cluster_id = extension_id(ext);
+                writeln!(out)?;
+                writeln!(out, "  subgraph cluster_{cluster_id} {{")?;
+                writeln!(out, "    label=\"{ext}\";")?;
+                for node in nodes {
+                    write_node(out, node, "    ")?;
+                }
+                writeln!(out, "  }}")?;
             }
         } else {
-            escape_dot(node.id.raw.as_str())
-        };
-        writeln!(
-            out,
-            "{indent}\"{}\" [label=\"{}\"{}];",
-            escape_dot(node.id.raw.as_str()),
-            label,
-            style
-        )
-        .unwrap();
-    };
+            for node in graph.nodes() {
+                if included(node) {
+                    write_node(out, node, "  ")?;
+                }
+            }
+        }
 
-    if options.cluster_by_extension {
-        let mut clusters: BTreeMap<&str, Vec<&Node>> = BTreeMap::new();
-        let mut top_level: Vec<&Node> = Vec::new();
-        for node in graph.nodes() {
-            if !included(node) {
+        let mut edges: Vec<_> = graph.edges().to_vec();
+        edges.sort_by(|a, b| {
+            (&a.source, &a.target, &a.label).cmp(&(&b.source, &b.target, &b.label))
+        });
+
+        for edge in &edges {
+            let keep = graph.node(edge.source.as_str()).is_none_or(included)
+                && graph.node(edge.target.as_str()).is_none_or(included);
+            if !keep {
                 continue;
             }
-            match kind_entry(node.kind.raw.as_str()).map(|e| e.source_extension.as_str()) {
-                Some(ext) => clusters.entry(ext).or_default().push(node),
-                None => top_level.push(node),
-            }
+            writeln!(
+                out,
+                "  \"{}\" -> \"{}\" [label=\"{}\"];",
+                escape_dot(edge.source.as_str()),
+                escape_dot(edge.target.as_str()),
+                escape_dot(edge.label.as_str())
+            )?;
         }
-        for node in top_level {
-            write_node(&mut out, node, "  ");
-        }
-        for (ext, nodes) in clusters {
-            let cluster_id = extension_id(ext);
-            writeln!(out).unwrap();
-            writeln!(out, "  subgraph cluster_{cluster_id} {{").unwrap();
-            writeln!(out, "    label=\"{ext}\";").unwrap();
-            for node in nodes {
-                write_node(&mut out, node, "    ");
-            }
-            writeln!(out, "  }}").unwrap();
-        }
-    } else {
-        for node in graph.nodes() {
-            if included(node) {
-                write_node(&mut out, node, "  ");
-            }
-        }
-    }
 
-    let mut edges: Vec<_> = graph.edges().to_vec();
-    edges.sort_by(|a, b| (&a.source, &a.target, &a.label).cmp(&(&b.source, &b.target, &b.label)));
-
-    for edge in &edges {
-        let keep = graph.node(edge.source.as_str()).is_none_or(included)
-            && graph.node(edge.target.as_str()).is_none_or(included);
-        if !keep {
-            continue;
-        }
-        writeln!(
-            out,
-            "  \"{}\" -> \"{}\" [label=\"{}\"];",
-            escape_dot(edge.source.as_str()),
-            escape_dot(edge.target.as_str()),
-            escape_dot(edge.label.as_str())
-        )
-        .unwrap();
-    }
-
-    writeln!(out, "}}").unwrap();
-    out
+        writeln!(out, "}}")?;
+        Ok(())
+    })
 }
 
 #[cfg(test)]
