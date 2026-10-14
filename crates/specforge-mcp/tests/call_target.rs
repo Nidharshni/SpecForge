@@ -483,7 +483,7 @@ fn a_mutation_on_another_project_does_not_reload_the_served_one() {
         fs::remove_file(served.path().join("added.spec")).unwrap();
     }
 
-    // R6: init of a new project elsewhere.
+    // R6: init of a new project elsewhere is refused, and reloads nothing.
     let mut server = McpServer::new();
     initialize(&mut server, served.path());
     fs::write(
@@ -499,7 +499,11 @@ fn a_mutation_on_another_project_does_not_reload_the_served_one() {
         "specforge.init",
         json!({"path": dir.to_str().unwrap(), "name": "fresh"}),
     );
-    assert_eq!(resp["result"]["isError"], false, "{resp}");
+    // A project is served, so nothing outside it is created (ADR 0092 D4),
+    // and nothing of the served project is reloaded.
+    let error = crate::tool_errors::mcp_error(&resp);
+    assert_eq!(error["code"], "invalid_input", "{error}");
+    assert!(!dir.exists());
     assert_eq!(server.state().session_generation(), generation);
     assert!(server.state().graph().node("unseen").is_none());
 }

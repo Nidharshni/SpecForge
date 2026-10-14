@@ -740,7 +740,7 @@ fn read_config(project: &Path) -> Value {
 fn init_creates_the_project() {
     let dir = fresh_project_dir();
     let project = dir.path().join("fresh");
-    let mut server = test_server();
+    let mut server = unserved();
 
     let parsed = init(
         &mut server,
@@ -781,7 +781,7 @@ fn init_without_a_path_is_invalid_input_on_path() {
 )]
 fn init_adds_the_requested_extensions_to_the_config() {
     let dir = fresh_project_dir();
-    let mut server = components_server();
+    let mut server = unserved();
 
     init(
         &mut server,
@@ -802,7 +802,7 @@ fn init_adds_the_requested_extensions_to_the_config() {
 )]
 fn init_extensions_in_result() {
     let dir = fresh_project_dir();
-    let mut server = components_server();
+    let mut server = unserved();
 
     let parsed = init(
         &mut server,
@@ -894,7 +894,7 @@ fn init_refuses_to_overwrite_a_starter_file() {
     std::fs::create_dir_all(dir.path().join("spec")).unwrap();
     let starter = dir.path().join("spec/hello.spec");
     std::fs::write(&starter, "term mine \"Mine\" {\n}\n").unwrap();
-    let mut server = test_server();
+    let mut server = unserved();
 
     let error = init_error(
         &mut server,
@@ -915,7 +915,7 @@ fn init_refuses_to_overwrite_a_starter_file() {
     verify = "invalid project name returns error"
 )]
 fn init_rejects_an_invalid_project_name() {
-    let mut server = test_server();
+    let mut server = unserved();
     for name in ["", ".hidden", "-dash", "has space"] {
         let dir = fresh_project_dir();
         let error = init_error(
@@ -942,7 +942,7 @@ fn init_rejects_an_invalid_project_name() {
 )]
 fn init_rejects_an_unknown_extension() {
     let dir = fresh_project_dir();
-    let mut server = test_server();
+    let mut server = unserved();
 
     let error = init_error(
         &mut server,
@@ -1010,7 +1010,18 @@ fn init_then_validate_has_no_errors() {
 )]
 fn init_contract() {
     let dir = fresh_project_dir();
-    let mut server = test_server();
+    let mut server = unserved();
+
+    // extensions_validated: an unknown extension is refused, and nothing
+    // is created.
+    let other = fresh_project_dir();
+    let error = init_error(
+        &mut server,
+        json!({"path": other.path().to_str().unwrap(), "name": "other",
+               "extensions": ["@specforge/nonexistent"]}),
+    );
+    assert_eq!(error["code"], "precondition_failed", "{error}");
+    assert!(!other.path().join("specforge.json").exists());
 
     // filesystem_available, project_created
     init(
@@ -1039,16 +1050,6 @@ fn init_contract() {
         "{error}"
     );
     assert!(!nested.exists());
-
-    // extensions_validated: an unknown extension is refused.
-    let other = fresh_project_dir();
-    let error = init_error(
-        &mut server,
-        json!({"path": other.path().to_str().unwrap(), "name": "other",
-               "extensions": ["@specforge/nonexistent"]}),
-    );
-    assert_eq!(error["code"], "precondition_failed", "{error}");
-    assert!(!other.path().join("specforge.json").exists());
 
     // project_initialized_emitted (once: only for the created project),
     // tool_invoked_emitted.
@@ -1592,7 +1593,7 @@ fn rename_invalid_name_format() {
 )]
 fn init_default_version_value() {
     let dir = fresh_project_dir();
-    let mut server = test_server();
+    let mut server = unserved();
     let resp = call_tool(
         &mut server,
         "specforge.init",
@@ -1610,7 +1611,7 @@ fn init_default_version_value() {
 )]
 fn init_version_override_value() {
     let dir = fresh_project_dir();
-    let mut server = test_server();
+    let mut server = unserved();
     let resp = call_tool(
         &mut server,
         "specforge.init",

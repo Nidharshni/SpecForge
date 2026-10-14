@@ -258,7 +258,6 @@ fn render_out_dir_outside_the_served_project_is_refused() {
     invariant = "mcp_served_project_consistency",
     verify = "init creates its project inside the server's root and never inside the served project"
 )]
-#[ignore = "fixed by T4"]
 fn init_outside_the_served_project_is_refused() {
     let scene = Scene::new();
     let mut server = scene.serve();
@@ -270,6 +269,36 @@ fn init_outside_the_served_project_is_refused() {
     );
     assert!(!target.exists(), "init created {}", target.display());
     assert_refused(&reply, "path");
+}
+
+/// With nothing served the server's root bounds `init`: a project is created
+/// inside it, and served; one beside it is refused.
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "init creates its project inside the server's root and never inside the served project"
+)]
+fn init_with_nothing_served_stays_inside_the_servers_root() {
+    let scene = Scene::new();
+    let root = scene.dir.path().join("workspace");
+    fs::create_dir_all(&root).unwrap();
+    let mut server = McpServer::with_project_root(root.clone());
+    let reply = call(&mut server, "initialize", json!({}));
+    assert!(reply["error"].is_null(), "{reply}");
+    assert!(server.state().project_root().is_none());
+
+    let beside = scene.dir.path().join("beside");
+    let refused = call_tool(
+        &mut server,
+        "specforge.init",
+        json!({"path": beside.display().to_string()}),
+    );
+    assert!(!beside.exists(), "init created {}", beside.display());
+    assert_refused(&refused, "path");
+
+    // A relative path is read against the root.
+    let made = call_tool(&mut server, "specforge.init", json!({"path": "first"}));
+    assert_eq!(made["result"]["isError"], false, "{made}");
+    assert!(root.join("first/specforge.json").is_file());
 }
 
 /// `outline`'s `file` is joined onto the spec root: whether a file outside
@@ -319,7 +348,7 @@ fn infer_session_source_paths_outside_the_project_are_refused() {
     invariant = "mcp_served_project_consistency",
     verify = "a mutation reads and writes no file through a symlink that leaves the project"
 )]
-#[ignore = "fixed by T3"]
+#[ignore = "fixed by T6"]
 fn format_does_not_write_through_a_symlink_that_leaves_the_project() {
     let scene = Scene::new();
     std::os::unix::fs::symlink(scene.outside(), scene.proj().join("spec/dir")).unwrap();
@@ -341,7 +370,7 @@ fn format_does_not_write_through_a_symlink_that_leaves_the_project() {
     invariant = "mcp_served_project_consistency",
     verify = "a mutation reads and writes no file through a symlink that leaves the project"
 )]
-#[ignore = "fixed by T4"]
+#[ignore = "fixed by T6"]
 fn infer_session_marks_no_file_behind_a_symlink_that_leaves_the_project() {
     let scene = Scene::new();
     std::os::unix::fs::symlink(scene.outside(), scene.proj().join("src")).unwrap();

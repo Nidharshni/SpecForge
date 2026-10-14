@@ -229,9 +229,15 @@ pub fn write_all() -> Vec<Observed> {
             served = writing();
         }
         let filled = fill(arguments, &served);
+        // Init creates the first project of a session: none is served for it.
+        let response = if tool == "specforge.init" {
+            call_tool(&mut super::unserved(), tool, parse(&filled))
+        } else {
+            call_tool(&mut served, tool, parse(&filled))
+        };
         observed.push(Observed {
             tool,
-            response: call_tool(&mut served, tool, parse(&filled)),
+            response,
             arguments: arguments.to_string(),
         });
         previous = Some((tool, arguments));

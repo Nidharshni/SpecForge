@@ -89,3 +89,14 @@ pub fn within(served: &std::path::Path, other: tempfile::TempDir) -> Nested {
     std::fs::rename(other.path(), &to).expect("move the project inside the served one");
     Nested(to)
 }
+
+/// A server that serves nothing and has no root, recording its events: no
+/// path is bounded yet (ADR 0092 D2), and `init` creates the first project
+/// of the session wherever it is told, then serves it. With a project served
+/// `init` creates none.
+pub fn unserved() -> Logged {
+    let mut server = logged(specforge_mcp::McpServer::new());
+    let reply = call(&mut server, "initialize", json!({}));
+    assert!(reply["error"].is_null(), "{reply}");
+    server
+}

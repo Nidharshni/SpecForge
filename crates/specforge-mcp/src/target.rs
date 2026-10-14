@@ -652,7 +652,14 @@ pub fn resolve(
             let Some(path) = argument::<String>(arguments, TargetArgument::Path)? else {
                 return Err(TargetError::PathRequired);
             };
-            let dir = PathBuf::from(path);
+            let mut dir = PathBuf::from(path);
+            // Inside the request's bound, read against it (ADR 0092 D2, D4):
+            // with a project served that is the project, and inside it is
+            // refused below, so init creates the first project of a session.
+            if let Some(bound) = Containment::of(state) {
+                bound.resolve(&dir).map_err(TargetError::Outside)?;
+                dir = bound.spelled(&dir);
+            }
             if let Some(root) = state.project_root() {
                 let (inside, root) = (containment::resolved(&dir), containment::resolved(root));
                 if inside.starts_with(&root) {

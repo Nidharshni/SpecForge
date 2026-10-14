@@ -195,7 +195,10 @@ behavior provide_mcp_init_tool "Provide MCP Init Tool" {
     parameter specifying the target directory for the new project. The path
     MUST be outside the project the server serves: a path inside its root
     is refused by the call target (conflict, naming path) before anything
-    is written. A directory whose starter file already exists is refused
+    is written, and a path outside it is refused as invalid_input on path, so
+    with a project served init creates nothing: it creates the first project
+    of a session, inside the server's root (a server with no root bounds no
+    path, mcp_served_project_consistency). A directory whose starter file already exists is refused
     (conflict), as specforge init refuses it. The tool MUST create
     a new specforge.json project configuration file and scaffold the spec
     directory at the specified path. If extensions are specified, they MUST
