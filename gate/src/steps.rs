@@ -8,6 +8,7 @@ use serde_json::Value;
 use crate::checks::{self, Selection};
 use crate::doc_links;
 use crate::judge;
+use crate::layers;
 use crate::repo::{OUTSIDE_WORKSPACE, Repo};
 use crate::root_layout;
 use crate::run::{CARGO_AUDIT, Ctx, Mode, TREE_SITTER};
@@ -104,6 +105,16 @@ pub fn grammar(ctx: &Ctx, _: &Selection) -> Result<(), String> {
 
 pub fn zero_entity(ctx: &Ctx, _: &Selection) -> Result<(), String> {
     ctx.sh(ctx.cmd("bash").arg("scripts/check-zero-entity-core.sh"))
+}
+
+/// The layer rule ([`layers::verdict`]) over the members `cargo metadata` listed when the run began: the violations
+/// first, then the stack and the edge counts.
+pub fn layers(ctx: &Ctx, _: &Selection) -> Result<(), String> {
+    let verdict = layers::verdict(&ctx.repo.members, layers::ALLOWED);
+    for line in verdict.violations.iter().chain(&verdict.lines) {
+        ctx.log(line);
+    }
+    finish(verdict.violations)
 }
 
 pub fn links(ctx: &Ctx, _: &Selection) -> Result<(), String> {
