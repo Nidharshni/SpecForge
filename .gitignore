@@ -33,6 +33,9 @@ tests/spec/
 /specforge-report.json
 .specforge/
 .claude/worktrees/
+# docs/research holds the round reports; any other page there is local (ADR 0082)
+/docs/research/*
+!/docs/research/architecture-review-*.html
 
 # Planning notes from planning sessions: their decisions live in docs/adr/
 /.planning/
