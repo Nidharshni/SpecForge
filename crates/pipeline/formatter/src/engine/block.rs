@@ -183,10 +183,19 @@ fn format_body(
                         " ".repeat(annotated_width + 1 - value[0].len())
                     )
                 } else {
-                    format!("{} {anns}", value[0])
+                    value[0].clone()
                 };
                 lines.push(format!("{indent}{key}{}{first}", pad(&key)));
                 lines.extend(value[1..].iter().cloned());
+                // Annotations of a multi-line value follow its last line, not
+                // its first: inside a string they would be its text.
+                if value.len() > 1
+                    && !annotations.is_empty()
+                    && let Some(last) = lines.last_mut()
+                {
+                    last.push(' ');
+                    last.push_str(&anns);
+                }
             }
             Member::Nested {
                 key,

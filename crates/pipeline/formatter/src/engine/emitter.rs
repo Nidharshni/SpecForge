@@ -49,7 +49,13 @@ impl<'a> Emitter<'a> {
         let error_regions = collect_error_regions(root);
         let broken = |node: Node| overlaps(node, &error_regions) || piece.holds_unclosed(node);
         let mut cursor = root.walk();
-        let items: Vec<Node> = root.children(&mut cursor).collect();
+        // An item that lies wholly in the delimiter appended after an unclosed
+        // string holds no source row: writing it would write the last row again.
+        let source_end = self.source_end(piece);
+        let items: Vec<Node> = root
+            .children(&mut cursor)
+            .filter(|n| base + n.start_position().row <= source_end)
+            .collect();
 
         // Items sharing a row form a run; a run holding a broken item is
         // kept whole, so every source row is written once.
@@ -144,13 +150,19 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    /// The last row (absolute) of `piece`'s source, the appended delimiter and
+    /// trailing newlines excluded.
+    fn source_end(&self, piece: &Piece<'_>) -> usize {
+        let source_part = &piece.text()[..piece.source_len()];
+        piece.row() + source_part.trim_end_matches('\n').matches('\n').count()
+    }
+
     /// The rows (absolute, inclusive) of `node` of `piece` as source lines:
     /// from its first row to its last row in the piece's source (the
     /// appended delimiter excluded), trailing blank lines dropped.
     fn rows(&self, piece: &Piece<'_>, node: Node<'_>) -> (usize, usize) {
         let base = piece.row();
-        let source_part = &piece.text()[..piece.source_len()];
-        let piece_last = base + source_part.trim_end_matches('\n').matches('\n').count();
+        let piece_last = self.source_end(piece);
         let first = (base + node.start_position().row).min(piece_last);
         let mut last = (base + node.end_position().row).min(piece_last);
         while last > first
