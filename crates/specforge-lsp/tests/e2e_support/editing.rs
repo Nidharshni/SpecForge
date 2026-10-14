@@ -306,3 +306,39 @@ async fn e2e_extension_cycle_rule_reports_its_own_code() {
 
     assert!(codes.contains(&"E007".to_string()), "{codes:?}");
 }
+
+#[tokio::test]
+#[ignore = "fixed by T1 (the server keeps serving) and T2 (the text)"]
+async fn e2e_an_edit_at_the_largest_column_keeps_the_server_serving() {
+    let (mut client, uri) = Session::with_doc(None, "test.spec", "éé\n").await;
+
+    // A column no line has: the edit lands at the line's end.
+    client
+        .did_change(
+            &uri,
+            2,
+            vec![json!({
+                "range": {
+                    "start": { "line": 0, "character": u32::MAX },
+                    "end": { "line": 0, "character": u32::MAX },
+                },
+                "text": "x"
+            })],
+        )
+        .await;
+
+    // The server answers: a request after the edit is not met by a closed
+    // connection, and shutdown is answered.
+    let hover = client.hover(&uri, 0, 0).await;
+    assert!(hover["error"].is_null(), "{hover}");
+    let shutdown = client.shutdown().await;
+    assert!(shutdown["error"].is_null(), "{shutdown}");
+
+    // The buffer is `ééx`: its syntax error quotes it.
+    let published = client
+        .wait_for_notification("textDocument/publishDiagnostics", 5000)
+        .await
+        .expect("diagnostics after the edit");
+    let text = published["params"]["diagnostics"].to_string();
+    assert!(text.contains("ééx"), "{text}");
+}

@@ -231,3 +231,29 @@ fn positions_past_a_line_end() {
         "a range's ends clamp to the text"
     );
 }
+
+// -- a column no line has --------------------------------------------------------
+
+#[test]
+#[ignore = "fixed by T2"]
+fn a_column_past_the_line_end_resolves_to_the_line_end() {
+    for text in ["éé\n", "// éé\n", "a😀b\n", "ascii\n"] {
+        let index = LineIndex::new(text);
+        let end = index.line_end(0).unwrap();
+        for character in [end as u32 + 1, u32::MAX / 2, u32::MAX - 1, u32::MAX] {
+            let at = Position { line: 0, character };
+            assert_eq!(index.offset(at), None, "{text:?} at {character}");
+            assert_eq!(index.offset_clamped(at), end, "{text:?} at {character}");
+        }
+    }
+}
+
+#[test]
+#[ignore = "fixed by T2"]
+fn an_edit_at_the_largest_column_applies_at_the_line_end() {
+    for (text, expected) in [("éé\n", "ééx\n"), ("// éé\n", "// ééx\n")] {
+        let mut doc = Document::new(text.into());
+        doc.apply_change(Some(crate::lsp_range(0, u32::MAX, 0, u32::MAX)), "x");
+        assert_eq!(doc.text(), expected);
+    }
+}
