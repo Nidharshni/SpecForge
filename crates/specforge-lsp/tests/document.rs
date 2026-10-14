@@ -234,8 +234,10 @@ fn positions_past_a_line_end() {
 
 // -- a column no line has --------------------------------------------------------
 
-#[test]
-#[ignore = "fixed by T2"]
+#[spec(
+    invariant = "lsp_utf16_positions",
+    verify = "a column past its line's end, up to the largest, resolves to the line's end"
+)]
 fn a_column_past_the_line_end_resolves_to_the_line_end() {
     for text in ["éé\n", "// éé\n", "a😀b\n", "ascii\n"] {
         let index = LineIndex::new(text);
@@ -248,12 +250,42 @@ fn a_column_past_the_line_end_resolves_to_the_line_end() {
     }
 }
 
-#[test]
-#[ignore = "fixed by T2"]
+#[spec(
+    behavior = "incremental_document_sync",
+    verify = "an edit at any column past its line's end applies at the line's end"
+)]
 fn an_edit_at_the_largest_column_applies_at_the_line_end() {
     for (text, expected) in [("éé\n", "ééx\n"), ("// éé\n", "// ééx\n")] {
         let mut doc = Document::new(text.into());
         doc.apply_change(Some(crate::lsp_range(0, u32::MAX, 0, u32::MAX)), "x");
         assert_eq!(doc.text(), expected);
+    }
+}
+
+#[spec(
+    invariant = "lsp_utf16_positions",
+    verify = "a column past its line's end, up to the largest, resolves to the line's end"
+)]
+fn every_column_resolves_to_a_character_boundary() {
+    for text in ["éé\n", "// éé\n", "a😀b\n", "ascii\n", "x\nb😀é\nlast"] {
+        let index = LineIndex::new(text);
+        for line in 0..index.line_count() as u32 {
+            let end = index.line_end(line as usize).unwrap();
+            let columns = (0..=end as u32 + 3).chain(u32::MAX - 3..=u32::MAX);
+            for character in columns {
+                let at = Position { line, character };
+                let offset = index.offset_clamped(at);
+                assert!(
+                    text.is_char_boundary(offset),
+                    "{text:?} at {line}:{character} -> {offset}"
+                );
+                assert!(offset <= end, "{text:?} at {line}:{character} -> {offset}");
+                // An in-line column round-trips through its offset.
+                if index.offset(at).is_some() {
+                    let back = index.position(offset);
+                    assert_eq!(index.offset(back), Some(offset), "{text:?} at {at:?}");
+                }
+            }
+        }
     }
 }

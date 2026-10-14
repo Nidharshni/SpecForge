@@ -69,6 +69,10 @@ impl Document {
                 let start = self.index.offset_clamped(range.start);
                 let end = self.index.offset_clamped(range.end);
                 let (start, end) = (start.min(end), start.max(end));
+                debug_assert!(
+                    self.text.is_char_boundary(start) && self.text.is_char_boundary(end),
+                    "an edit lands on character boundaries"
+                );
                 self.text.replace_range(start..end, text);
             }
             None => self.text = text.to_string(),

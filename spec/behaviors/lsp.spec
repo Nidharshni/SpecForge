@@ -970,6 +970,7 @@ behavior incremental_document_sync "Incremental Document Sync" {
   """
   verify unit "incremental change applies correctly to source buffer"
   verify unit "multiple incremental changes produce correct source"
+  verify unit "an edit at any column past its line's end applies at the line's end"
   verify integration "incremental sync reduces transfer size vs full sync"
   verify contract "Incremental Document Sync: incremental document sync holds — lsp_initialized_fired, document_open, buffer_consistent, partial_update_applied"
 }

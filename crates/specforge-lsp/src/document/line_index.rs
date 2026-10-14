@@ -1,5 +1,11 @@
 //! Byte offsets and LSP positions (0-based line, UTF-16 column), both
-//! ways: the one place the LSP converts them (ADR 0023).
+//! ways: the one place the LSP converts them (ADR 0023). A client can send
+//! any column, so nothing here may overflow, index or slice out of range.
+#![deny(
+    clippy::arithmetic_side_effects,
+    clippy::indexing_slicing,
+    clippy::string_slice
+)]
 
 use specforge_common::{SourceSpan, Sym};
 use std::collections::HashMap;
@@ -37,12 +43,12 @@ impl LineIndex {
         let mut line_start = 0usize;
         for (offset, ch) in text.char_indices() {
             if ch == '\n' {
-                line += 1;
-                line_start = offset + 1;
+                line = line.saturating_add(1);
+                line_start = offset.saturating_add(1);
                 starts.push(line_start as u32);
             } else if !ch.is_ascii() {
                 wide.entry(line).or_default().push(Wide {
-                    col: (offset - line_start) as u32,
+                    col: offset.saturating_sub(line_start) as u32,
                     utf8: ch.len_utf8() as u8,
                     utf16: ch.len_utf16() as u8,
                 });
@@ -78,8 +84,8 @@ impl LineIndex {
     /// The byte offset just past 0-based `line`'s text, its `\n` excluded.
     pub fn line_end(&self, line: usize) -> Option<usize> {
         self.starts.get(line)?;
-        Some(match self.starts.get(line + 1) {
-            Some(next) => *next as usize - 1,
+        Some(match self.starts.get(line.saturating_add(1)) {
+            Some(next) => (*next as usize).saturating_sub(1),
             None => self.len as usize,
         })
     }
@@ -91,41 +97,46 @@ impl LineIndex {
 
     /// The byte column of UTF-16 column `character` on `line` (not
     /// clamped to the line). A column inside a character resolves to the
-    /// character's start.
-    fn byte_col(&self, line: usize, character: u32) -> usize {
+    /// character's start. A column past the line's last character adds
+    /// ASCII bytes only, so the sum saturates rather than wraps: the
+    /// result is then past the line's end, which `offset` refuses and
+    /// `offset_clamped` clamps.
+    fn byte_col(&self, line: usize, character: u32) -> u32 {
         let (mut byte, mut units) = (0u32, 0u32);
         for wide in self.wides(line) {
-            let ascii = wide.col - byte;
-            if units + ascii >= character {
-                return (byte + character - units) as usize;
+            let ascii = wide.col.saturating_sub(byte);
+            if character <= units.saturating_add(ascii) {
+                return byte.saturating_add(character.saturating_sub(units));
             }
-            units += ascii;
+            units = units.saturating_add(ascii);
             byte = wide.col;
-            if units + u32::from(wide.utf16) > character {
-                return byte as usize;
+            if character < units.saturating_add(u32::from(wide.utf16)) {
+                // Inside the character: its start.
+                return byte;
             }
-            units += u32::from(wide.utf16);
-            byte += u32::from(wide.utf8);
+            units = units.saturating_add(u32::from(wide.utf16));
+            byte = byte.saturating_add(u32::from(wide.utf8));
         }
-        (byte + character - units) as usize
+        byte.saturating_add(character.saturating_sub(units))
     }
 
     /// The UTF-16 column of byte column `col` on `line`. A byte inside a
     /// character counts as the character's start.
     fn utf16_col(&self, line: usize, col: usize) -> u32 {
-        let col = col as u32;
+        let col = u32::try_from(col).unwrap_or(u32::MAX);
         let mut shift = 0u32;
         for wide in self.wides(line) {
             if wide.col >= col {
                 break;
             }
-            if wide.col + u32::from(wide.utf8) > col {
+            if wide.col.saturating_add(u32::from(wide.utf8)) > col {
                 // Inside the character: its start.
-                return wide.col - shift;
+                return wide.col.saturating_sub(shift);
             }
-            shift += u32::from(wide.utf8) - u32::from(wide.utf16);
+            shift =
+                shift.saturating_add(u32::from(wide.utf8).saturating_sub(u32::from(wide.utf16)));
         }
-        col - shift
+        col.saturating_sub(shift)
     }
 
     /// The byte offset of `position`; `None` past the end of its line or of
@@ -135,18 +146,22 @@ impl LineIndex {
         let line = position.line as usize;
         let start = self.line_start(line)?;
         let end = self.line_end(line)?;
-        let offset = start + self.byte_col(line, position.character);
+        let offset = start.saturating_add(self.byte_col(line, position.character) as usize);
         (offset <= end).then_some(offset)
     }
 
     /// [`Self::offset`], clamped to its line's end and to the text's end:
-    /// what an edit's range means.
+    /// what an edit's range means. The result is always a character
+    /// boundary: a column inside a character resolves to its start, and one
+    /// past the line's last character is the line's end.
     pub fn offset_clamped(&self, position: Position) -> usize {
         let line = position.line as usize;
         let (Some(start), Some(end)) = (self.line_start(line), self.line_end(line)) else {
             return self.len as usize;
         };
-        (start + self.byte_col(line, position.character)).min(end)
+        start
+            .saturating_add(self.byte_col(line, position.character) as usize)
+            .min(end)
     }
 
     /// The position of byte `offset`. An offset inside a character is that
@@ -155,21 +170,22 @@ impl LineIndex {
         let offset = offset.min(self.len as usize) as u32;
         let line = match self.starts.binary_search(&offset) {
             Ok(line) => line,
-            Err(line) => line - 1,
+            Err(line) => line.saturating_sub(1),
         };
+        let start = self.starts.get(line).copied().unwrap_or(0);
         Position {
             line: line as u32,
-            character: self.utf16_col(line, (offset - self.starts[line]) as usize),
+            character: self.utf16_col(line, offset.saturating_sub(start) as usize),
         }
     }
 
     /// The position of 0-based `line` at byte column `col` (what rename
     /// edits name), clamped to the line and to the text.
     pub fn position_at(&self, line: usize, col: usize) -> Position {
-        let line = line.min(self.starts.len() - 1);
-        let start = self.starts[line] as usize;
+        let line = line.min(self.starts.len().saturating_sub(1));
+        let start = self.line_start(line).unwrap_or(0);
         let end = self.line_end(line).unwrap_or(start);
-        self.position((start + col).min(end))
+        self.position(start.saturating_add(col).min(end))
     }
 
     /// The range of `span` (1-based lines, 1-based byte columns, end
@@ -190,8 +206,7 @@ impl LineIndex {
     pub fn span(&self, file: Sym, range: Range) -> SourceSpan {
         let at = |position: Position| {
             let offset = self.offset_clamped(position);
-            let line = self.position(offset).line as usize;
-            (line + 1, offset - self.starts[line] as usize + 1)
+            self.one_based(self.position(offset).line as usize, offset)
         };
         let (start_line, start_col) = at(range.start);
         let (end_line, end_col) = at(range.end);
@@ -208,7 +223,15 @@ impl LineIndex {
     /// positions; `None` past the end of its line or of the text.
     pub fn source_position(&self, position: Position) -> Option<(usize, usize)> {
         let offset = self.offset(position)?;
-        let line = position.line as usize;
-        Some((line + 1, offset - self.starts[line] as usize + 1))
+        Some(self.one_based(position.line as usize, offset))
+    }
+
+    /// The 1-based (line, byte column) of byte `offset` on 0-based `line`.
+    fn one_based(&self, line: usize, offset: usize) -> (usize, usize) {
+        let start = self.line_start(line).unwrap_or(0);
+        (
+            line.saturating_add(1),
+            offset.saturating_sub(start).saturating_add(1),
+        )
     }
 }

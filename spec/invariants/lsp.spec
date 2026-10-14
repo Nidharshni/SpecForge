@@ -66,7 +66,8 @@ invariant lsp_utf16_positions "LSP UTF-16 Positions" {
     code units, as the Language Server Protocol requires, so non-ASCII text
     before the cursor never shifts the word, range or edit it resolves to.
     One line index per text converts byte offsets and UTF-16 positions,
-    both ways; nothing else in the LSP converts them (ADR 0023). A span of
+    both ways; a column past its line's end, whatever its value, is that
+    end; nothing else in the LSP converts them (ADR 0023). A span of
     the graph or of a diagnostic is a position in the text the project was
     compiled from, so it converts against that text, never against the
     buffer typed since nor the disk now; a file the compile holds no text
@@ -80,6 +81,7 @@ invariant lsp_utf16_positions "LSP UTF-16 Positions" {
   verify unit "a span converts against the text the project was compiled from, not the buffer typed since"
   verify unit "a span of a file the compile holds no text of has no range, never byte columns"
   verify unit "a fix is offered whole or not at all: never over a buffer typed since, nor a file with no compiled text"
+  verify unit "a column past its line's end, up to the largest, resolves to the line's end"
 }
 
 invariant lsp_survives_its_faults "The LSP Survives Its Faults" {

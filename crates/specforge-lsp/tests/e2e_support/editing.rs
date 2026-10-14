@@ -338,8 +338,11 @@ async fn e2e_an_edit_at_the_largest_column_keeps_the_server_serving() {
     assert!(shutdown["error"].is_null(), "{shutdown}");
 }
 
+#[spec(
+    behavior = "incremental_document_sync",
+    verify = "an edit at any column past its line's end applies at the line's end"
+)]
 #[tokio::test]
-#[ignore = "fixed by T2"]
 async fn e2e_an_edit_at_the_largest_column_applies_at_the_line_end_e2e() {
     let (mut client, uri) = Session::with_doc(None, "test.spec", "éé\n").await;
 
