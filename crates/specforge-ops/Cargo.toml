@@ -43,6 +43,8 @@ strsim = { workspace = true }
 # The production adapter, in the tests that load the builtins.
 specforge-component = { workspace = true, features = ["testing"] }
 specforge-ops = { path = ".", features = ["testing"] }
+# The project a test builds, and the sample sources.
+specforge-project = { workspace = true, features = ["testing"] }
 # Extensions declared with the SDK, served in process.
 specforge-extension-sdk = { path = "../specforge-extension-sdk" }
 # One diagnostic of each kind the host builds, for the diagnostics JSON pin.

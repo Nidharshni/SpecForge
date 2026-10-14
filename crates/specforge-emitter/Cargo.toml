@@ -30,7 +30,7 @@ specforge-component = { path = "../specforge-component", features = ["testing"] 
 # The outline tests read the real builtin declarations.
 specforge-wasm = { path = "../specforge-wasm" }
 # Integration tests compile whole projects through the crate built on this one.
-specforge-project = { workspace = true }
+specforge-project = { workspace = true, features = ["testing"] }
 criterion.workspace = true
 insta.workspace = true
 tempfile.workspace = true

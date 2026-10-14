@@ -1,21 +1,17 @@
-use crate::e2e_fixtures::*;
+use super::compiled_support::{
+    built, exported, exported_as, query_document, specs, trace_document,
+};
+use specforge_ops::export::Format;
 use specforge_test_macros::test as specforge_test;
 use std::collections::BTreeSet;
 
 type EdgeSet = BTreeSet<(String, String, String)>;
 
-/// `specforge export --format=graph` of a one-file project: its node ids
+/// The graph export of a one-file project: its node ids
 /// and its (source, target, label) edges.
 fn exported_graph(spec: &str) -> (BTreeSet<String>, EdgeSet) {
-    let dir = setup_project(&[("main.spec", spec)]);
-    let output = specforge_cmd()
-        .args(["export", "--format=graph"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-    assert!(output.status.success());
-    let parsed = parse_json_stdout(&output);
+    let (_project, compiled) = built(&[("main.spec", spec)]);
+    let parsed = exported(&compiled);
     let nodes = parsed["nodes"]
         .as_array()
         .unwrap()
@@ -145,7 +141,7 @@ failure_mode parser_crash "PC" {
     verify = "edge types match relationship semantics"
 )]
 fn export_graph_edge_labels_are_field_names() {
-    let dir = setup_project(&[(
+    let (_project, compiled) = built(&[(
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" }
@@ -153,14 +149,7 @@ feature gamma "G" { behaviors [alpha] }
 "#,
     )]);
 
-    let output = specforge_cmd()
-        .args(["export", "--format=graph"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-
-    let parsed = parse_json_stdout(&output);
+    let parsed = exported(&compiled);
     let edges = parsed["edges"].as_array().unwrap();
     assert_eq!(
         edges[0]["label"], "behaviors",
@@ -173,7 +162,7 @@ feature gamma "G" { behaviors [alpha] }
     verify = "edges are labeled with types"
 )]
 fn dot_export_shows_edge_labels() {
-    let dir = setup_project(&[(
+    let (_project, compiled) = built(&[(
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" }
@@ -181,15 +170,7 @@ feature gamma "G" { behaviors [alpha] }
 "#,
     )]);
 
-    let output = specforge_cmd()
-        .args(["export", "--format=dot"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = exported_as(&compiled, Format::Dot);
     assert!(stdout.contains("digraph"), "should be a DOT digraph");
     assert!(
         stdout.contains("behaviors"),
@@ -202,17 +183,9 @@ feature gamma "G" { behaviors [alpha] }
     verify = "trace from entity shows upstream and downstream connections"
 )]
 fn trace_follows_edges_across_entity_kinds() {
-    let dir = setup_project(&[("main.spec", CROSS_REF_SPEC)]);
+    let (_project, compiled) = built(&[("main.spec", specs::CROSS_REF)]);
 
-    let output = specforge_cmd()
-        .args(["trace", "validate_graph"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let parsed = parse_json_stdout(&output);
+    let parsed = trace_document(&compiled, "validate_graph");
 
     assert_eq!(parsed["entity_id"], "validate_graph");
     let links = |direction: &str| -> BTreeSet<(String, String, String, u64)> {
@@ -262,7 +235,7 @@ fn trace_follows_edges_across_entity_kinds() {
     verify = "depth 1 returns direct neighbors"
 )]
 fn query_depth_2_traverses_multi_hop() {
-    let dir = setup_project(&[(
+    let (_project, compiled) = built(&[(
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" features [feat_a] }
@@ -272,15 +245,7 @@ journey dev_journey "DJ" { description "workflow" }
     )]);
 
     // Query from feat_a at depth 1 should reach alpha
-    let output = specforge_cmd()
-        .args(["query", "feat_a", "--depth=1"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let parsed = parse_json_stdout(&output);
+    let parsed = query_document(&compiled, "feat_a", Some(1), &[]);
     let nodes = parsed["nodes"].as_array().unwrap();
     let ids: Vec<&str> = nodes.iter().map(|n| n["id"].as_str().unwrap()).collect();
     assert!(ids.contains(&"feat_a"), "root entity should be in results");
@@ -318,17 +283,9 @@ invariant inv_a "I" { guarantee "always" enforced_by [validate] }
     verify = "nodes are labeled with IDs"
 )]
 fn dot_export_all_entity_kinds_as_nodes() {
-    let dir = setup_project(&[("main.spec", MULTI_EXTENSION_SPEC)]);
+    let (_project, compiled) = built(&[("main.spec", specs::MULTI_EXTENSION)]);
 
-    let output = specforge_cmd()
-        .args(["export", "--format=dot"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = exported_as(&compiled, Format::Dot);
     assert!(stdout.contains("digraph"));
 
     // Check some entity IDs are present as nodes
@@ -347,7 +304,7 @@ fn dot_export_all_entity_kinds_as_nodes() {
     verify = "nodes are labeled with IDs"
 )]
 fn dot_export_cross_kind_edges() {
-    let dir = setup_project(&[(
+    let (_project, compiled) = built(&[(
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" }
@@ -356,15 +313,7 @@ failure_mode fm "FM" { severity 1 occurrence 1 detection 1 cause "x" effect "y" 
 "#,
     )]);
 
-    let output = specforge_cmd()
-        .args(["export", "--format=dot"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = exported_as(&compiled, Format::Dot);
     // Should have edges from gamma->alpha and fm->alpha
     assert!(stdout.contains("gamma"), "should have gamma node");
     assert!(stdout.contains("alpha"), "should have alpha node");
@@ -376,23 +325,9 @@ failure_mode fm "FM" { severity 1 occurrence 1 detection 1 cause "x" effect "y" 
     verify = "same input produces identical output across runs"
 )]
 fn dot_export_deterministic_output() {
-    let dir = setup_project(&[("main.spec", MULTI_EXTENSION_SPEC)]);
+    let (_project, compiled) = built(&[("main.spec", specs::MULTI_EXTENSION)]);
 
-    let output1 = specforge_cmd()
-        .args(["export", "--format=dot"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-
-    let output2 = specforge_cmd()
-        .args(["export", "--format=dot"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-
-    let stdout1 = String::from_utf8_lossy(&output1.stdout);
-    let stdout2 = String::from_utf8_lossy(&output2.stdout);
+    let stdout1 = exported_as(&compiled, Format::Dot);
+    let stdout2 = exported_as(&compiled, Format::Dot);
     assert_eq!(stdout1, stdout2, "DOT output should be deterministic");
 }

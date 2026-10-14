@@ -3,9 +3,10 @@
 //! whenever `check` fails on the project's setup.
 
 use specforge_ops::testing::ScriptedSolver;
+use specforge_project::testing::compile_at;
 use std::sync::Arc;
 
-use specforge_common::{ProjectRoot, Severity};
+use specforge_common::Severity;
 use specforge_extension_sdk::prelude::{CheckKind, ValidationSeverity};
 use specforge_extension_sdk::{CommandOutput, ContributionsBuilder, ExtensionMeta};
 use specforge_ops::check::{CheckOptions, check};
@@ -105,10 +106,7 @@ fn compiled(
         }
         std::fs::write(&path, lock.to_string()).unwrap();
     }
-    let project = CompiledProject::compile(
-        &ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let project = compile_at(dir.path(), Some(Arc::new(runtime)));
     (dir, project)
 }
 

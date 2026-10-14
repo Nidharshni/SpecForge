@@ -2,6 +2,7 @@
 //! by: the hooks they declare run in it, in dependency order, and a failing
 //! hook or a changed graph structure restores the migrated files.
 
+use specforge_project::testing::compile_at;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -138,7 +139,7 @@ fn a_header_only_migration_of_the_dogfood_spec_keeps_its_graph() {
     let files = copy_at_old_format(&repo.join("spec"), &dir.path().join("spec"));
     assert!(files > 100, "the corpus is the dogfood spec: {files}");
     specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
-    let runtime = Arc::new(specforge_component::ComponentRuntime::with_user_cache());
+    let runtime = specforge_project::testing::component_runtime();
 
     let outcome = run(
         &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
@@ -862,10 +863,7 @@ fn a_diagnostic_the_migration_introduces_is_reported() {
         )
         .map_err(|e| e.to_string())
     }));
-    let before = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(runtime.clone()),
-    );
+    let before = compile_at(dir.path(), Some(runtime.clone()));
     assert!(
         !before.diagnostics().iter().any(|d| d.code == "E003"),
         "{:?}",

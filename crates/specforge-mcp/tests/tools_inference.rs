@@ -38,7 +38,7 @@ fn typescript(c: &mut ContributionsBuilder) {
     });
 }
 
-fn setup_project_with_sources(dir: &std::path::Path) {
+fn write_sources(dir: &std::path::Path) {
     let src = dir.join("src");
     std::fs::create_dir_all(&src).unwrap();
     std::fs::write(src.join("main.rs"), "fn main() {}").unwrap();
@@ -64,7 +64,7 @@ fn infer_progress_returns_summary_for_empty_project() {
 #[test]
 fn infer_progress_discovers_source_files() {
     let tmp = TestProject::new();
-    setup_project_with_sources(tmp.root());
+    write_sources(tmp.root());
 
     // Write a manifest with source_roots pointing to src/
     let manifest = json!({
@@ -92,7 +92,7 @@ fn infer_progress_discovers_source_files() {
 #[test]
 fn infer_progress_shows_analyzed_file() {
     let tmp = TestProject::new();
-    setup_project_with_sources(tmp.root());
+    write_sources(tmp.root());
 
     let manifest = json!({
         "version": 1,
@@ -558,7 +558,7 @@ const MANIFEST_WITH_AN_UNREADABLE_SESSION: &str = r#"{
 )]
 fn a_session_the_manifest_cannot_read_refuses_every_action() {
     let tmp = TestProject::new();
-    setup_project_with_sources(tmp.root());
+    write_sources(tmp.root());
     write_manifest(tmp.root(), MANIFEST_WITH_AN_UNREADABLE_SESSION);
     let mut server = init_server(tmp);
 
@@ -641,7 +641,7 @@ fn a_rewrite_keeps_the_keys_it_does_not_define() {
 )]
 fn mark_analyzed_records_the_root_relative_path() {
     let tmp = TestProject::new();
-    setup_project_with_sources(tmp.root());
+    write_sources(tmp.root());
     write_manifest(tmp.root(), r#"{"version":1,"source_roots":["src"]}"#);
     let mut server = init_server(tmp);
 

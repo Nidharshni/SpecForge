@@ -3,29 +3,20 @@
 
 use specforge_lsp::LspState;
 use specforge_lsp::publish::{FilePublication, Publication};
-use specforge_project::{Buffer, CheckMode, ProjectSession, SourceChange};
+use specforge_project::testing::TestProject;
+use specforge_project::{Buffer, CheckMode, SourceChange};
 use specforge_test_macros::test as spec;
 use std::path::Path;
-use std::sync::Arc;
 use tower_lsp::lsp_types::{DiagnosticTag, Url};
 
 /// A project of `files` with `extensions`, opened as the LSP opens it.
-fn project(extensions: &[&str], files: &[(&str, &str)]) -> (tempfile::TempDir, LspState) {
-    let dir = tempfile::TempDir::new().unwrap();
-    std::fs::write(
-        dir.path().join("specforge.json"),
-        serde_json::json!({"name": "p", "extensions": extensions}).to_string(),
-    )
-    .unwrap();
-    for (name, text) in files {
-        std::fs::write(dir.path().join(name), text).unwrap();
-    }
-    let runtime = specforge_component::ComponentRuntime::with_user_cache();
+fn project(extensions: &[&str], files: &[(&str, &str)]) -> (TestProject, LspState) {
+    let dir = TestProject::new()
+        .config(|c| c["name"] = "p".into())
+        .enabling(extensions)
+        .files(files);
     let mut state = LspState::new();
-    state.set_session(ProjectSession::open_with_runtime(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    ));
+    state.set_session(dir.session());
     (dir, state)
 }
 
@@ -68,7 +59,7 @@ fn each_diagnostic_goes_on_the_file_its_span_names() {
             ("b.spec", CLEAN),
         ],
     );
-    let b = uri(dir.path(), "b.spec");
+    let b = uri(dir.root(), "b.spec");
     state.open_document(&b, CLEAN, 1);
     let publication = Publication::of(&state, Some("b.spec"), &[]);
     let on_a = publication
@@ -109,8 +100,8 @@ fn a_spanless_cycle_goes_on_the_first_entitys_name() {
             ("other.spec", "behavior gamma \"G\" {\n}\n"),
         ],
     );
-    let cycle = uri(dir.path(), "cycle.spec");
-    let other = uri(dir.path(), "other.spec");
+    let cycle = uri(dir.root(), "cycle.spec");
+    let other = uri(dir.root(), "other.spec");
     state.open_document(&other, "behavior gamma \"G\" {\n}\n", 1);
     let publication = Publication::of(&state, Some("other.spec"), &[]);
     let w061 = publication.files["cycle.spec"]
@@ -140,8 +131,8 @@ fn a_spanless_cycle_goes_on_the_first_entitys_name() {
 fn a_diagnostic_about_nothing_goes_on_the_edited_document_else_the_anchor_else_the_first_open() {
     // No extension configured: I002, about no entity and no file.
     let (dir, mut state) = project(&[], &[("a.spec", "\n"), ("b.spec", "\n")]);
-    let a = uri(dir.path(), "a.spec");
-    let b = uri(dir.path(), "b.spec");
+    let a = uri(dir.root(), "a.spec");
+    let b = uri(dir.root(), "b.spec");
     state.open_document(&a, "\n", 1);
     state.open_document(&b, "\n", 1);
     let about_nothing = |publication: &Publication, file: &str| {
@@ -190,7 +181,7 @@ fn a_publish_clears_files_whose_diagnostics_are_gone() {
     // The reference is fixed: the file is sent an empty list, once.
     let fixed = "behavior alpha \"A\" {\n  contract \"x\"\n  category command\n}\n";
     state.session_mut().unwrap().update_with(
-        SourceChange::Hold(&[Buffer::new(dir.path().join("a.spec"), fixed)]),
+        SourceChange::Hold(&[Buffer::new(dir.root().join("a.spec"), fixed)]),
         CheckMode::Full,
     );
     let publication = Publication::of(&state, None, &[]);

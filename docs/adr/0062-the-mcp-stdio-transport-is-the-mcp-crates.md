@@ -52,3 +52,10 @@ silence, exit 0, every later request lost.
 - **A failed read or write as a refusal (exit 1)**: a transport failure would need a failure kind ops cannot know,
   ADR 0029's own reopening trigger, and no client reads that exit.
 - **Keeping `e2e_mcp.rs` beside the in-crate tests**: two copies of each reply and neither the proof of record.
+
+## Amendment (architecture round 9, plan 08)
+
+- **D5a.** Besides `tests/mcp.rs`, a CLI test spawns `specforge mcp` only for what a process alone shows: the
+  `[ROOT]` argument resolved from the working directory, and the process environment (a proxy). Every other CLI
+  test that needs an MCP reply asks `specforge_mcp::testing::Served::rooted`, the server `specforge mcp <root>`
+  builds, in process.

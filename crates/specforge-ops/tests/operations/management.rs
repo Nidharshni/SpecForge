@@ -8,6 +8,7 @@ use specforge_ops::extension::{self, RemoveRequest, Status};
 use specforge_ops::testing::ScriptedSolver;
 use specforge_ops::view::ProjectView;
 use specforge_project::coverage::RecordedCoverage;
+use specforge_project::testing::compile_at;
 use specforge_project::{EnabledExtension, Environment, ExtensionLoad, Loaded};
 use specforge_test::prelude::*;
 use specforge_wasm::testing::InProcessRuntime;
@@ -168,10 +169,7 @@ fn the_providers_listing_reports_what_the_environment_registered() {
         ],
     });
     std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    let compiled = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        None,
-    );
+    let compiled = compile_at(dir.path(), None);
 
     let listing = extension::providers(&ProjectView::of(&compiled));
 
@@ -223,10 +221,7 @@ fn the_providers_listing_reads_the_registration() {
         "providers": [{"scheme": "gh", "alias": "work", "extension": "@acme/issues"}],
     });
     std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    let compiled = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        None,
-    );
+    let compiled = compile_at(dir.path(), None);
 
     // specforge.json now says something else entirely.
     std::fs::write(
@@ -292,8 +287,8 @@ fn an_extensions_source_is_the_entry_that_loaded_it() {
     std::fs::write(dir.path().join("greet.wasm"), specforge_ops::testing::GREET).unwrap();
 
     // The named entry is not installed (no lock) and fails; the file entry loads it.
-    let compiled = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+    let compiled = compile_at(
+        dir.path(),
         Some(std::sync::Arc::new(specforge_ops::testing::candidates())),
     );
     let view = ProjectView::of(&compiled);

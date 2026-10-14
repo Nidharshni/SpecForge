@@ -4,16 +4,14 @@
 //! `specforge-registry/tests/build/consistency.rs` proves the rule through
 //! `build_registries`; these prove the load reports what the build found.
 
-use std::fs;
-
 use specforge_common::{Diagnostic, Severity};
 use specforge_extension_sdk::PeerDependency;
 use specforge_extension_sdk::prelude::*;
 use specforge_project::Environment;
+use specforge_project::testing::TestProject;
 use specforge_test::prelude::*;
 use specforge_wasm::testing::InProcessRuntime;
 use std::sync::Arc;
-use tempfile::TempDir;
 
 /// Extensions, served in process, that contribute entity kinds (with their
 /// fields) and edge types. Each is `{ "name", "peers": [..], "entities":
@@ -52,16 +50,11 @@ fn kind_extensions(specs: Vec<serde_json::Value>) -> InProcessRuntime {
 
 /// Load a project configuring `extensions` (in order) from `runtime`.
 fn load(runtime: InProcessRuntime, extensions: &[&str]) -> Environment {
-    let dir = TempDir::new().unwrap();
-    let config = serde_json::json!({
-        "name": "p", "version": "0.1.0", "extensions": extensions
-    });
-    fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
-    Environment::load(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(std::sync::Arc::new(runtime)),
-    )
+    let dir = TestProject::new()
+        .config(|c| c["name"] = "p".into())
+        .enabling(extensions)
+        .installing_enabled();
+    Environment::load(&dir.project_root(), Some(std::sync::Arc::new(runtime)))
 }
 
 fn w021(env: &Environment) -> Vec<Diagnostic> {
@@ -309,22 +302,16 @@ fn population_completes_before_any_validation() {
             "entities": [{ "name": "person" }]
         }),
     ]);
-    let dir = TempDir::new().unwrap();
-    let config = serde_json::json!({
-        "name": "p", "version": "0.1.0", "extensions": ["@test/tasks", "@test/people"]
-    });
-    fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
-    fs::write(
-        dir.path().join("main.spec"),
-        "task t1 \"T\" {\n  owner p1\n}\n\nperson p1 \"P\" {\n}\n",
-    )
-    .unwrap();
+    let dir = TestProject::new()
+        .config(|c| c["name"] = "p".into())
+        .enabling(&["@test/tasks", "@test/people"])
+        .installing_enabled()
+        .file(
+            "main.spec",
+            "task t1 \"T\" {\n  owner p1\n}\n\nperson p1 \"P\" {\n}\n",
+        );
 
-    let project = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let project = dir.compile_in(Arc::new(runtime));
 
     let loaded: Vec<&str> = project
         .environment()

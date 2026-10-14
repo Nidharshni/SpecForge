@@ -281,12 +281,19 @@ impl TestProject {
         ProjectSession::open_with_runtime(&self.project_root(), None)
     }
 
-    /// The runtime every CLI command compiles with, unless a test serves its own.
-    fn runtime(&self) -> SharedRuntime {
+    /// The runtime every CLI command compiles with (the component runtime with the per-user compile cache), unless a
+    /// test serves its own: for a test that loads the environment itself.
+    pub fn runtime(&self) -> SharedRuntime {
         match &self.served {
             Some(served) => Arc::clone(served) as SharedRuntime,
-            None => Arc::new(specforge_component::ComponentRuntime::with_user_cache()),
+            None => self.component_runtime(),
         }
+    }
+
+    /// The component runtime every CLI command compiles with, as its concrete type (for a test that asks it what it
+    /// loaded).
+    pub fn component_runtime(&self) -> Arc<specforge_component::ComponentRuntime> {
+        component_runtime()
     }
 
     /// Bring the disk up to the value: `specforge.json`, and the installs a served runtime needs.
@@ -328,6 +335,21 @@ impl TestProject {
         text.push('\n');
         self.write("specforge.json", text);
     }
+}
+
+/// The component runtime every CLI command compiles with: the builtins, with the per-user compile cache. For a test
+/// that builds its project apart from a [`TestProject`].
+pub fn component_runtime() -> Arc<specforge_component::ComponentRuntime> {
+    Arc::new(specforge_component::ComponentRuntime::with_user_cache())
+}
+
+/// The project at `root`, a directory a test owns (moved, renamed, built apart from a [`TestProject`]), compiled with
+/// `runtime`.
+pub fn compile_at(root: &Path, runtime: Option<SharedRuntime>) -> CompiledProject {
+    CompiledProject::compile(
+        &ProjectRoot::of(root).expect("the project directory exists"),
+        runtime,
+    )
 }
 
 /// Copy the tree at `from` to `to`, leaving out `.specforge` and `target`.

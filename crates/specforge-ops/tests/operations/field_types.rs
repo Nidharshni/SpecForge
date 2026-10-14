@@ -2,44 +2,36 @@
 //! `specforge check` reports values that can't be that type (E061), and
 //! `specforge export` carries the coerced value.
 
-use crate::e2e_fixtures::*;
+use super::compiled_support::{TestProject, check_document, checked, command_document, exported};
+use serde_json::{Value, json};
+use specforge_ops::check::CheckOptions;
+use specforge_project::CompiledProject;
 use specforge_test_macros::test as specforge_test;
 
-const GOVERNANCE_CONFIG: &str = r#"{"name":"t","version":"0.1.0","spec_root":"spec","extensions":["@specforge/software","@specforge/governance"]}"#;
-
-fn governance_project(spec: &str) -> tempfile::TempDir {
-    setup_project_with_config(GOVERNANCE_CONFIG, &[("main.spec", spec)])
+/// A project enabling software and governance, `spec` as its one file under `spec/`.
+fn governance_project(spec: &str) -> (TestProject, CompiledProject) {
+    project_enabling(&["@specforge/software", "@specforge/governance"], spec)
 }
 
-/// `specforge check --format=json`: the exit code and the diagnostics.
-fn check(dir: &tempfile::TempDir) -> (Option<i32>, Vec<serde_json::Value>) {
-    let output = specforge_cmd()
-        .args(["check", "--format=json"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-    let diags = parse_json_stdout(&output)
-        .as_array()
-        .expect("check prints a JSON array")
-        .clone();
-    (output.status.code(), diags)
+/// A project enabling `extensions`, `spec` as its one file under `spec/`.
+fn project_enabling(extensions: &[&str], spec: &str) -> (TestProject, CompiledProject) {
+    let project = TestProject::new()
+        .enabling(extensions)
+        .config(|c| c["spec_root"] = "spec".into())
+        .file("spec/main.spec", spec);
+    let compiled = project.compile();
+    (project, compiled)
+}
+
+/// `specforge check --format=json`: whether it passes (exit 0) and the diagnostics.
+fn check(compiled: &CompiledProject) -> (bool, Vec<Value>) {
+    let ok = checked(compiled, CheckOptions::default()).ok();
+    (ok, check_document(compiled, CheckOptions::default()))
 }
 
 /// The exported fields of entity `id`.
-fn exported_fields(dir: &tempfile::TempDir, id: &str) -> serde_json::Value {
-    let output = specforge_cmd()
-        .args(["export", "--format=graph"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let export = parse_json_stdout(&output);
+fn exported_fields(compiled: &CompiledProject, id: &str) -> Value {
+    let export = exported(compiled);
     export["nodes"]
         .as_array()
         .unwrap()
@@ -58,7 +50,7 @@ const FAILURE_MODE_FIELDS: &str = r#"cause "disk full"
     verify = "a single string on a string_list field becomes a one-item list"
 )]
 fn a_single_string_on_a_string_list_field_is_exported_as_a_list() {
-    let dir = governance_project(
+    let (_project, compiled) = governance_project(
         r#"decision d1 "D" {
   status accepted
   context "c"
@@ -68,11 +60,11 @@ fn a_single_string_on_a_string_list_field_is_exported_as_a_list() {
 "#,
     );
 
-    let (code, diags) = check(&dir);
+    let (code, diags) = check(&compiled);
     assert_eq!(diags, Vec::<serde_json::Value>::new());
-    assert_eq!(code, Some(0));
+    assert!(code);
     assert_eq!(
-        exported_fields(&dir, "d1")["consequences"],
+        exported_fields(&compiled, "d1")["consequences"],
         serde_json::json!(["just a string"])
     );
 }
@@ -82,7 +74,7 @@ fn a_single_string_on_a_string_list_field_is_exported_as_a_list() {
     verify = "a single reference on a reference_list field becomes a one-item list"
 )]
 fn a_single_reference_on_a_reference_list_field_links_like_a_list() {
-    let dir = governance_project(
+    let (_project, compiled) = governance_project(
         r#"invariant inv1 "I" {
   guarantee "holds"
 }
@@ -100,22 +92,16 @@ decision d1 "D" {
 "#,
     );
 
-    let (code, diags) = check(&dir);
+    let (code, diags) = check(&compiled);
     assert_eq!(diags, Vec::<serde_json::Value>::new());
-    assert_eq!(code, Some(0));
+    assert!(code);
     assert_eq!(
-        exported_fields(&dir, "d1")["invariants"],
+        exported_fields(&compiled, "d1")["invariants"],
         serde_json::json!(["inv1"])
     );
 
     // The single reference is an edge, exactly as `invariants [inv1]` is.
-    let output = specforge_cmd()
-        .args(["export", "--format=graph"])
-        .arg("--path")
-        .arg(dir.path())
-        .output()
-        .unwrap();
-    let export = parse_json_stdout(&output);
+    let export = exported(&compiled);
     let edges: Vec<(String, String, String)> = export["edges"]
         .as_array()
         .unwrap()
@@ -139,7 +125,7 @@ decision d1 "D" {
     verify = "a value that is not the declared integer, bool or enum type is an error"
 )]
 fn a_value_that_is_not_an_integer_on_an_integer_field_is_an_error() {
-    let dir = governance_project(&format!(
+    let (_project, compiled) = governance_project(&format!(
         r#"failure_mode fm1 "F" {{
   {FAILURE_MODE_FIELDS}
   rpn "abc"
@@ -147,8 +133,8 @@ fn a_value_that_is_not_an_integer_on_an_integer_field_is_an_error() {
 "#
     ));
 
-    let (code, diags) = check(&dir);
-    assert_eq!(code, Some(1), "{diags:?}");
+    let (code, diags) = check(&compiled);
+    assert!(!code, "{diags:?}");
     assert_eq!(diags.len(), 1, "{diags:?}");
     let diag = &diags[0];
     assert_eq!(diag["code"], "E061");
@@ -168,7 +154,7 @@ fn a_value_that_is_not_an_integer_on_an_integer_field_is_an_error() {
     verify = "a value that is not the declared integer, bool or enum type is an error"
 )]
 fn a_quoted_integer_on_an_integer_field_is_exported_as_a_number() {
-    let dir = governance_project(&format!(
+    let (_project, compiled) = governance_project(&format!(
         r#"failure_mode fm1 "F" {{
   {FAILURE_MODE_FIELDS}
   rpn "12"
@@ -180,11 +166,17 @@ failure_mode fm2 "G" {{
 "#
     ));
 
-    let (code, diags) = check(&dir);
+    let (code, diags) = check(&compiled);
     assert_eq!(diags, Vec::<serde_json::Value>::new());
-    assert_eq!(code, Some(0));
-    assert_eq!(exported_fields(&dir, "fm1")["rpn"], serde_json::json!(12));
-    assert_eq!(exported_fields(&dir, "fm2")["rpn"], serde_json::json!(40));
+    assert!(code);
+    assert_eq!(
+        exported_fields(&compiled, "fm1")["rpn"],
+        serde_json::json!(12)
+    );
+    assert_eq!(
+        exported_fields(&compiled, "fm2")["rpn"],
+        serde_json::json!(40)
+    );
 }
 
 #[specforge_test(
@@ -192,7 +184,7 @@ failure_mode fm2 "G" {{
     verify = "a list on a field declared as a single value is an error"
 )]
 fn a_list_on_a_string_field_is_an_error() {
-    let dir = governance_project(
+    let (_project, compiled) = governance_project(
         r#"decision d1 "D" {
   status accepted
   context ["one", "two"]
@@ -201,8 +193,8 @@ fn a_list_on_a_string_field_is_an_error() {
 "#,
     );
 
-    let (code, diags) = check(&dir);
-    assert_eq!(code, Some(1), "{diags:?}");
+    let (code, diags) = check(&compiled);
+    assert!(!code, "{diags:?}");
     let e061: Vec<_> = diags.iter().filter(|d| d["code"] == "E061").collect();
     assert_eq!(e061.len(), 1, "{diags:?}");
     assert_eq!(
@@ -217,7 +209,7 @@ fn a_list_on_a_string_field_is_an_error() {
     verify = "a single integer, boolean or date, or a mixed list, on a list field becomes a list of strings"
 )]
 fn a_single_integer_or_a_mixed_list_on_a_list_field_is_exported_as_a_list() {
-    let dir = governance_project(
+    let (_project, compiled) = governance_project(
         r#"decision d1 "D" {
   status accepted
   context "c"
@@ -233,26 +225,32 @@ decision d2 "E" {
 "#,
     );
 
-    let (code, diags) = check(&dir);
+    let (code, diags) = check(&compiled);
     assert_eq!(diags, Vec::<serde_json::Value>::new());
-    assert_eq!(code, Some(0));
+    assert!(code);
     assert_eq!(
-        exported_fields(&dir, "d1")["consequences"],
+        exported_fields(&compiled, "d1")["consequences"],
         serde_json::json!(["5"])
     );
     assert_eq!(
-        exported_fields(&dir, "d2")["consequences"],
+        exported_fields(&compiled, "d2")["consequences"],
         serde_json::json!(["a", "7"])
     );
 }
 
 // -- the builtins' field vocabularies (plan 01) --
 
-const VOCABULARY_CONFIG: &str = r#"{"name":"t","version":"0.1.0","spec_root":"spec","extensions":["@specforge/software","@specforge/product","@specforge/governance","@specforge/formal"]}"#;
-
 /// A project of the four builtins that declare vocabularies, over `spec`.
-fn vocabulary_project(spec: &str) -> tempfile::TempDir {
-    setup_project_with_config(VOCABULARY_CONFIG, &[("main.spec", spec)])
+fn vocabulary_project(spec: &str) -> (TestProject, CompiledProject) {
+    project_enabling(
+        &[
+            "@specforge/software",
+            "@specforge/product",
+            "@specforge/governance",
+            "@specforge/formal",
+        ],
+        spec,
+    )
 }
 
 /// One entity of every kind with a vocabulary, each field written with a
@@ -344,10 +342,10 @@ fn refused_field(message: &str) -> String {
     verify = "a value outside a builtin vocabulary is E061"
 )]
 fn every_builtin_vocabulary_refuses_a_value_outside_it() {
-    let dir = vocabulary_project(OFF_VOCABULARY);
+    let (_project, compiled) = vocabulary_project(OFF_VOCABULARY);
 
-    let (code, diags) = check(&dir);
-    assert_eq!(code, Some(1), "{diags:?}");
+    let (code, diags) = check(&compiled);
+    assert!(!code, "{diags:?}");
     let mut refused: Vec<String> = diags
         .iter()
         .filter(|d| d["code"] == "E061")
@@ -398,16 +396,13 @@ fn every_builtin_vocabulary_refuses_a_value_outside_it() {
     verify = "an enum value suggests the closest declared value"
 )]
 fn an_off_vocabulary_value_suggests_the_closest_value() {
-    let dir = setup_project_with_config(
-        r#"{"name":"t","version":"0.1.0","spec_root":"spec","extensions":["@specforge/product"]}"#,
-        &[(
-            "main.spec",
-            "feature feat \"F\" {\n  problem \"p\"\n  status dne\n}\n",
-        )],
+    let (_project, compiled) = project_enabling(
+        &["@specforge/product"],
+        "feature feat \"F\" {\n  problem \"p\"\n  status dne\n}\n",
     );
 
-    let (code, diags) = check(&dir);
-    assert_eq!(code, Some(1), "{diags:?}");
+    let (code, diags) = check(&compiled);
+    assert!(!code, "{diags:?}");
     let e061: Vec<_> = diags.iter().filter(|d| d["code"] == "E061").collect();
     assert_eq!(e061.len(), 1, "{diags:?}");
     assert_eq!(
@@ -550,28 +545,17 @@ fn every_closed_value() -> String {
     verify = "check admits every value the list filters take, and the lists find it"
 )]
 fn the_lists_take_every_value_check_admits() {
-    let dir = vocabulary_project(&every_closed_value());
+    let (_project, compiled) = vocabulary_project(&every_closed_value());
 
-    let (_code, diags) = check(&dir);
+    let (_ok, diags) = check(&compiled);
     let refused: Vec<&serde_json::Value> = diags.iter().filter(|d| d["code"] == "E061").collect();
     assert!(refused.is_empty(), "{refused:?}");
 
     for (kind, field, values) in CLOSED_FILTERS {
         let last = values.last().unwrap();
-        let output = specforge_cmd()
-            .args([
-                "product",
-                &plural(kind),
-                &format!("--{}", field.replace('_', "-")),
-                last,
-            ])
-            .args(["--format", "json"])
-            .arg("--path")
-            .arg(dir.path())
-            .output()
-            .unwrap();
-        assert_eq!(output.status.code(), Some(0), "{kind} --{field} {last}");
-        let listed = parse_json_stdout(&output);
+        let (exit_code, listed) =
+            command_document(&compiled, "product", &plural(kind), json!({ field: last }));
+        assert_eq!(exit_code, 0, "{kind} --{field} {last}");
         let ids: Vec<&str> = listed[plural(kind)]
             .as_array()
             .unwrap()

@@ -2566,3 +2566,64 @@ fn analyze_gates_on_min() {
     let error = mcp_error(&resp);
     assert_eq!(error["diagnostic"]["code"], "E068", "{error}");
 }
+
+// --- specforge.validate never writes the build cache ---
+
+/// Product declares `status` the lifecycle field of feature and milestone; software's behavior has a `status` too,
+/// but no lifecycle field.
+fn build_cache_project() -> TestProject {
+    TestProject::new()
+        .enabling(&["@specforge/software", "@specforge/product"])
+        .files(&[
+            (
+                "b.spec",
+                "feature zeta \"Z\" {\n  problem \"p\"\n  status in_progress\n}\n\nbehavior beta \"B\" {\n  contract \"a status, but no lifecycle\"\n  status draft\n}\n",
+            ),
+            (
+                "a.spec",
+                "feature alpha \"A\" {\n  problem \"p\"\n  status done\n}\n\nmilestone mid \"M\" {\n  status \"planned\"\n}\n",
+            ),
+        ])
+}
+
+#[specforge_test(
+    behavior = "write_build_cache",
+    verify = "MCP validate never writes the build cache"
+)]
+fn mcp_validate_never_writes_the_build_cache() {
+    const CACHE: &str = "specforge-cache.json";
+    let mut served = Served::rooted(build_cache_project());
+    // Without strict the project passes the check, which is when `check
+    // --cache` writes; under strict its warnings fail it. validate takes no
+    // cache argument, and an unknown one is refused (ADR 0033).
+    let runs = [json!({}), json!({"strict": true})];
+    let validate = |served: &mut Served, arguments: &Value| {
+        let resp = served.call_tool("specforge.validate", arguments.clone());
+        assert_eq!(resp["result"]["isError"], false, "{resp}");
+        let passes = arguments["strict"] != true;
+        assert_eq!(
+            resp["result"]["_meta"]["specforge/check"]["ok"], passes,
+            "{arguments}: {resp}"
+        );
+    };
+    for arguments in &runs {
+        validate(&mut served, arguments);
+        assert!(!served.root().join(CACHE).exists(), "{arguments}");
+    }
+    let refused = served.call_tool("specforge.validate", json!({"cache": true}));
+    assert_eq!(refused["result"]["isError"], true, "{refused}");
+    assert_eq!(refused["result"]["structuredContent"]["argument"], "cache");
+    assert!(!served.root().join(CACHE).exists());
+
+    // An existing cache is read, never rewritten.
+    let previous = "{\"format\": 1, \"statuses\": {}}\n";
+    served.write(CACHE, previous);
+    for arguments in &runs {
+        validate(&mut served, arguments);
+        assert_eq!(
+            std::fs::read_to_string(served.root().join(CACHE)).unwrap(),
+            previous,
+            "{arguments}"
+        );
+    }
+}

@@ -1,14 +1,10 @@
 use crate::support::{Cli, TestProject};
+use specforge_project::testing::specs;
 use specforge_test::prelude::*;
-
-/// A directory holding `files` and nothing else.
-fn setup_project(files: &[(&str, &str)]) -> TestProject {
-    TestProject::new().without_config().files(files)
-}
 
 #[test]
 fn stats_reports_entity_and_edge_counts() {
-    let dir = setup_project(&[(
+    let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" }
@@ -27,7 +23,9 @@ feature gamma "G" { behaviors [alpha, beta] }
 
 #[test]
 fn stats_on_empty_project() {
-    let dir = setup_project(&[("main.spec", "")]);
+    let dir = TestProject::new()
+        .without_config()
+        .files(&[("main.spec", "")]);
 
     let output = Cli::on(&dir).command(&["stats"]).output().unwrap();
 
@@ -38,7 +36,7 @@ fn stats_on_empty_project() {
 
 #[test]
 fn stats_json_format() {
-    let dir = setup_project(&[(
+    let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" }
@@ -67,7 +65,7 @@ feature gamma "G" { behaviors [alpha] }
     verify = "stats reports coverage percentage"
 )]
 fn stats_reports_coverage_over_testable_kinds() {
-    let dir = setup_project(&[
+    let dir = TestProject::new().without_config().files(&[
         (
             "specforge.json",
             r#"{"name":"test","version":"0.1.0","extensions":["@specforge/software","@specforge/testing"]}"#,
@@ -94,4 +92,29 @@ feature gamma "G" { behaviors [alpha, beta] }
     let output = Cli::on(&dir).command(&["stats"]).output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Declared: 50% of 2 testable"), "{stdout}");
+}
+
+#[test]
+fn stats_human_format_lists_all_kinds() {
+    let dir = TestProject::new().file("main.spec", specs::MULTI_EXTENSION);
+
+    let output = Cli::on(&dir).run(&["stats"]);
+
+    assert_eq!(output.code, 0, "{}", output.stderr);
+    let stdout = &output.stdout;
+
+    for kind in &[
+        "behavior",
+        "feature",
+        "decision",
+        "constraint",
+        "failure_mode",
+    ] {
+        assert!(
+            stdout.contains(kind),
+            "human stats missing kind '{}': {}",
+            kind,
+            stdout
+        );
+    }
 }

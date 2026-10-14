@@ -6,9 +6,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use specforge_extension_sdk::prelude::*;
+use specforge_project::testing::TestProject;
 use specforge_project::{
-    Buffer, Changes, CheckMode, CompiledProject, ProjectSession, RuntimeSource, SharedRuntime,
-    SourceChange, UpdateKind,
+    Buffer, Changes, CheckMode, ProjectSession, RuntimeSource, SharedRuntime, SourceChange,
+    UpdateKind,
 };
 use specforge_test::prelude::*;
 use specforge_wasm::testing::InProcessRuntime;
@@ -47,16 +48,13 @@ fn check_runs(runtime: &InProcessRuntime) -> usize {
 
 /// A project holding `a.spec` (alpha) that enables the counting extension,
 /// opened over `runtime`.
-fn opened(runtime: &Arc<InProcessRuntime>) -> (TempDir, ProjectSession) {
-    let dir = TempDir::new().unwrap();
-    let config = serde_json::json!({"name": "p", "version": "0.1.0", "extensions": [EXT]});
-    fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    specforge_installed::testing::install(dir.path(), &[EXT]);
-    fs::write(dir.path().join("a.spec"), ALPHA).unwrap();
-    let session = ProjectSession::open_with_runtime(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::clone(runtime) as SharedRuntime),
-    );
+fn opened(runtime: &Arc<InProcessRuntime>) -> (TestProject, ProjectSession) {
+    let dir = TestProject::new()
+        .config(|c| c["name"] = "p".into())
+        .enabling(&[EXT])
+        .installing(&[EXT])
+        .file("a.spec", ALPHA);
+    let session = dir.session_in(Arc::clone(runtime) as SharedRuntime);
     (dir, session)
 }
 
@@ -64,9 +62,9 @@ fn has(session: &ProjectSession, id: &str) -> bool {
     session.project().graph().node(id).is_some()
 }
 
-fn hold(session: &mut ProjectSession, dir: &TempDir, text: &str) {
+fn hold(session: &mut ProjectSession, dir: &TestProject, text: &str) {
     session.update(SourceChange::Hold(&[Buffer::new(
-        dir.path().join("a.spec"),
+        dir.root().join("a.spec"),
         text,
     )]));
 }
@@ -78,7 +76,7 @@ fn hold(session: &mut ProjectSession, dir: &TempDir, text: &str) {
 fn a_held_buffer_is_the_truth_for_its_file_until_released() {
     let rt = counting();
     let (dir, mut session) = opened(&rt);
-    let a = dir.path().join("a.spec");
+    let a = dir.root().join("a.spec");
     hold(&mut session, &dir, OMEGA);
     fs::write(&a, ZETA).unwrap();
     assert!(session.changes(std::iter::once(a.as_path())).is_empty());
@@ -98,7 +96,7 @@ fn a_held_buffer_is_the_truth_for_its_file_until_released() {
 fn a_held_buffers_deleted_file_is_not_stale() {
     let rt = counting();
     let (dir, mut session) = opened(&rt);
-    let a = dir.path().join("a.spec");
+    let a = dir.root().join("a.spec");
     hold(&mut session, &dir, OMEGA);
     fs::remove_file(&a).unwrap();
     assert!(session.stale().is_empty());
@@ -122,7 +120,7 @@ fn holding_a_buffer_whose_text_is_its_files_runs_no_check() {
     let (dir, mut session) = opened(&rt);
     let before = check_runs(&rt);
     let update = session.update(SourceChange::Hold(&[Buffer::new(
-        dir.path().join("a.spec"),
+        dir.root().join("a.spec"),
         ALPHA,
     )
     .at_version(Some(3))]));
@@ -138,7 +136,7 @@ fn holding_a_buffer_whose_text_is_its_files_runs_no_check() {
 fn releasing_a_saved_buffer_reads_it_once_and_leaves_nothing_stale() {
     let rt = counting();
     let (dir, mut session) = opened(&rt);
-    let a = dir.path().join("a.spec");
+    let a = dir.root().join("a.spec");
     hold(&mut session, &dir, OMEGA);
     fs::write(&a, OMEGA).unwrap(); // saved
     let before = check_runs(&rt);
@@ -189,7 +187,7 @@ fn releasing_a_buffer_outside_the_project_drops_it() {
 fn releasing_a_buffer_that_did_not_parse_runs_the_skipped_checks() {
     let rt = counting();
     let (dir, mut session) = opened(&rt);
-    let a = dir.path().join("a.spec");
+    let a = dir.root().join("a.spec");
     let broken = "type alpha \"A\" {\n  contract \"\n";
     session.update_with(
         SourceChange::Hold(&[Buffer::new(&a, broken)]),
@@ -202,10 +200,7 @@ fn releasing_a_buffer_that_did_not_parse_runs_the_skipped_checks() {
     let update = session.release(&[a]).expect("the skipped checks run");
     assert_eq!(update.kind, UpdateKind::Checks);
     assert!(reported(&session));
-    let fresh = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(rt.clone()),
-    );
+    let fresh = dir.compile_in(rt.clone());
     let codes = |d: Vec<specforge_common::Diagnostic>| -> Vec<String> {
         d.into_iter().map(|d| d.code).collect()
     };
@@ -241,13 +236,13 @@ fn opening_a_project_in_place_of_a_session_keeps_its_buffers() {
     drop(session);
     let mut detached = ProjectSession::detached();
     detached.update(SourceChange::Hold(&[Buffer::new(
-        dir.path().join("a.spec"),
+        dir.root().join("a.spec"),
         OMEGA,
     )
     .at_version(Some(4))]));
     let before = check_runs(&rt);
     let session = ProjectSession::begin_open(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        &dir.project_root(),
         RuntimeSource::Fixed(Some(Arc::clone(&rt) as SharedRuntime)),
     )
     .finish_holding(detached.into_buffers());
@@ -262,32 +257,25 @@ fn opening_a_project_in_place_of_a_session_keeps_its_buffers() {
     verify = "a held buffer that a reload brings into the project is built from its text"
 )]
 fn a_held_buffer_a_reload_brings_into_the_project_is_built_from_its_text() {
-    let dir = TempDir::new().unwrap();
-    let config = |root: &str| serde_json::json!({"name": "p", "version": "0.1.0", "extensions": [], "spec_root": root});
-    fs::write(
-        dir.path().join("specforge.json"),
-        config("spec").to_string(),
-    )
-    .unwrap();
-    fs::create_dir_all(dir.path().join("spec")).unwrap();
-    fs::create_dir_all(dir.path().join("spec2")).unwrap();
-    fs::write(dir.path().join("spec2/b.spec"), ZETA).unwrap();
-    let mut session = ProjectSession::open_with_runtime(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        None,
-    );
+    let dir = TestProject::new()
+        .config(|c| {
+            c["name"] = "p".into();
+            c["spec_root"] = "spec".into();
+        })
+        .file("spec2/b.spec", ZETA);
+    fs::create_dir_all(dir.root().join("spec")).unwrap();
+    let mut session = dir.session_bare();
 
     session.update(SourceChange::Hold(&[Buffer::new(
-        dir.path().join("spec2/b.spec"),
+        dir.root().join("spec2/b.spec"),
         OMEGA,
     )]));
     assert!(!has(&session, "omega"), "outside the spec root");
 
-    fs::write(
-        dir.path().join("specforge.json"),
-        config("spec2").to_string(),
-    )
-    .unwrap();
+    dir.write(
+        "specforge.json",
+        serde_json::json!({"name": "p", "version": "0.1.0", "extensions": [], "spec_root": "spec2"}).to_string(),
+    );
     session.reload_environment();
     assert!(has(&session, "omega") && !has(&session, "zeta"));
 }
@@ -301,7 +289,7 @@ fn the_session_classifies_a_held_file_as_nothing() {
     let (dir, mut session) = opened(&rt);
     hold(&mut session, &dir, OMEGA);
     // A file as the session read it changes nothing: write the config again.
-    let root = std::fs::canonicalize(dir.path()).unwrap();
+    let root = std::fs::canonicalize(dir.root()).unwrap();
     let config = std::fs::read_to_string(root.join("specforge.json")).unwrap();
     std::fs::write(root.join("specforge.json"), format!("{config}\n")).unwrap();
     std::fs::write(root.join("a.spec"), "type other \"O\" {}\n").unwrap();

@@ -199,13 +199,13 @@ pub fn tests(ctx: &Ctx, selection: &Selection) -> Result<(), String> {
 }
 
 /// The exports of this repository, its examples and five fixtures against their published schemas
-/// (`e2e_schema.rs`): the one test file whose names carry the claim.
+/// (`schema.rs`, `specforge-ops`'s `published` tests): the one test module whose names carry the claim.
 pub fn published_schemas(ctx: &Ctx, _: &Selection) -> Result<(), String> {
     ctx.sh(ctx.cmd("cargo").args([
         "nextest",
         "run",
         "-p",
-        "specforge-cli",
+        "specforge-ops",
         "--profile",
         ctx.mode.nextest_profile(),
         "-E",

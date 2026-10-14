@@ -10,7 +10,6 @@ use specforge_test_macros::test as spec;
 use tree_sitter_specforge::{field, kind};
 
 use crate::registries::registries;
-use std::sync::Arc;
 
 /// The semantic tokens of `text` over `registries` and `graph`.
 fn tokens_over(text: &str, registries: RegistryBuild, graph: &Graph) -> Vec<SemanticToken> {
@@ -713,10 +712,9 @@ fn walk<'t>(node: tree_sitter::Node<'t>, out: &mut Vec<tree_sitter::Node<'t>>) {
 )]
 fn tokens_agree_with_the_grammar() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let project = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(&root).unwrap(),
-        Some(Arc::new(runtime)),
+    let project = specforge_project::testing::compile_at(
+        &root,
+        Some(specforge_project::testing::component_runtime()),
     );
     let view = ProjectView::of(&project);
     let declared: Vec<&str> = view

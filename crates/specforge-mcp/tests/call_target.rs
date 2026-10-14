@@ -9,7 +9,6 @@ use specforge_mcp::target::TargetSpec;
 use specforge_test::prelude::*;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use tempfile::TempDir;
 
 fn initialize(server: &mut McpServer, root: &Path) {
@@ -629,10 +628,7 @@ fn a_mutation_on_another_project_reports_what_a_fresh_compile_reports() {
 
     let payload: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
     let runtime = ext.runtime();
-    let fresh = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(other.path()).unwrap(),
-        Some(runtime.clone()),
-    );
+    let fresh = specforge_project::testing::compile_at(other.path(), Some(runtime.clone()));
     let expected =
         serde_json::to_value(specforge_common::diagnostics_json(&fresh.diagnostics())).unwrap();
     assert_eq!(payload["diagnostics"], expected);
@@ -666,11 +662,8 @@ fn an_extension_added_to_another_project_is_loaded_when_it_is_brought_up_to_date
     );
     assert_eq!(resp["result"]["isError"], false, "{resp}");
     let payload: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let fresh = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(other.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let runtime = specforge_project::testing::component_runtime();
+    let fresh = specforge_project::testing::compile_at(other.path(), Some(runtime));
     let expected =
         serde_json::to_value(specforge_common::diagnostics_json(&fresh.diagnostics())).unwrap();
     assert_eq!(payload["diagnostics"], expected);
@@ -1283,10 +1276,7 @@ fn validate_reports_what_check_reports_when_an_excluded_import_target_appears() 
         json!({"name": "served", "version": "0.1.0", "extensions": [], "exclude": ["drafts/"]});
     fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
     let fresh_codes = |root: &Path| -> Vec<String> {
-        let compiled = specforge_project::CompiledProject::compile(
-            &specforge_common::ProjectRoot::of(root).unwrap(),
-            None,
-        );
+        let compiled = specforge_project::testing::compile_at(root, None);
         let mut codes: Vec<String> = compiled
             .diagnostics()
             .iter()

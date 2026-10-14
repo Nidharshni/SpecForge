@@ -8,10 +8,10 @@ use specforge_ops::extension::{Trust, resolve};
 use specforge_ops::registry::{Registry, TrustPolicy};
 use specforge_ops_registry::{ConfiguredRegistry, User};
 use specforge_package::{PackageName, PackageRef, Version};
+use specforge_project::testing::TestProject;
 use specforge_registry_server::testing::LocalRegistry;
 use specforge_registry_wire::PackageMetadata;
 use specforge_test_macros::test as specforge_test;
-use tempfile::TempDir;
 
 /// The declaration of `@acme/tool@1.0.0`, as `specforge publish` uploads it.
 const MANIFEST: &str = r#"{"handshake":{"protocol_version":"1.0.0","name":"@acme/tool","version":"1.0.0","peer_dependencies":[],"sandbox_policy":null}}"#;
@@ -36,13 +36,10 @@ fn serving(versions: &[&str]) -> LocalRegistry {
 }
 
 /// A project whose `registries` is `registry`, as `entry` writes it.
-fn project_with(registry: &str) -> TempDir {
-    let dir = TempDir::new().unwrap();
-    let config = format!(
+fn project_with(registry: &str) -> TestProject {
+    TestProject::new().raw_config(format!(
         r#"{{"name":"p","version":"0.1.0","spec_root":"spec","extensions":[],"registries":[{registry}]}}"#
-    );
-    std::fs::write(dir.path().join("specforge.json"), config).unwrap();
-    dir
+    ))
 }
 
 fn default_registry(url: &str) -> String {
@@ -60,10 +57,7 @@ fn name(text: &str) -> PackageName {
 fn the_adapter_requests_these_paths() {
     let served = serving(&["1.4.0", "2.0.0-beta.1"]);
     let dir = project_with(&default_registry(served.root().as_str()));
-    let registry = ConfiguredRegistry::for_project(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        "add",
-    );
+    let registry = ConfiguredRegistry::for_project(&dir.project_root(), "add");
 
     // The registry is asked for the versions, and ops picks among them:
     // `1.x`, `1.2` and `latest` are no longer fetched as versions (§3 R1,
@@ -122,10 +116,7 @@ fn the_adapter_asks_no_registry_for_a_name_none_serves() {
         r#"{{"alias":"acme","url":"{}","scope_filter":"@acme"}}"#,
         served.root().as_str()
     ));
-    let registry = ConfiguredRegistry::for_project(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        "add",
-    );
+    let registry = ConfiguredRegistry::for_project(&dir.project_root(), "add");
 
     let error = registry.versions(&name("@other/x")).unwrap_err();
     assert_eq!(error.code, "R-OPS-001", "{error:?}");
@@ -149,12 +140,8 @@ fn the_registry_is_chosen_once() {
     // from it (§3 R4).
     let served = serving(&["1.0.0"]);
     let dir = project_with(&default_registry(served.root().as_str()));
-    let home = User::at(dir.path().join("home"), None);
-    let registry = ConfiguredRegistry::for_project(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        "add",
-    )
-    .as_user(home);
+    let home = User::at(dir.home(), None);
+    let registry = ConfiguredRegistry::for_project(&dir.project_root(), "add").as_user(home);
 
     assert_eq!(
         registry.versions(&name("@acme/tool")).unwrap(),

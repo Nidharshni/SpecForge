@@ -3,35 +3,26 @@
 //! checks off, which fields count as file references, and which rules fire.
 //! Each pin that encodes a bug says which ticket flips it.
 
-use std::fs;
-
-use serde_json::json;
 use specforge_common::Diagnostic;
 use specforge_extension_sdk::PeerDependency;
 use specforge_extension_sdk::prelude::*;
-use specforge_project::CompiledProject;
+use specforge_project::testing::TestProject;
 use specforge_test::prelude::*;
 use specforge_wasm::testing::InProcessRuntime;
-use tempfile::TempDir;
 
 /// A project loading `extensions`, with `a.spec` as given.
-fn project(extensions: &[&str], spec: &str) -> TempDir {
-    let dir = TempDir::new().unwrap();
-    let config = json!({ "name": "p", "version": "0.1.0", "extensions": extensions });
-    fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
-    fs::write(dir.path().join("a.spec"), spec).unwrap();
-    dir
+fn project(extensions: &[&str], spec: &str) -> TestProject {
+    TestProject::new()
+        .config(|c| c["name"] = "p".into())
+        .enabling(extensions)
+        .installing_enabled()
+        .file("a.spec", spec)
 }
 
 /// The compile's diagnostics as `[code, message]` pairs, keeping only
 /// `codes`, in the order the compile reported them.
-fn reported(runtime: InProcessRuntime, dir: &TempDir, codes: &[&str]) -> Vec<[String; 2]> {
-    let diagnostics: Vec<Diagnostic> = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(std::sync::Arc::new(runtime)),
-    )
-    .diagnostics();
+fn reported(runtime: InProcessRuntime, dir: &TestProject, codes: &[&str]) -> Vec<[String; 2]> {
+    let diagnostics: Vec<Diagnostic> = dir.compile_in(std::sync::Arc::new(runtime)).diagnostics();
     diagnostics
         .into_iter()
         .filter(|d| codes.contains(&d.code.as_str()))

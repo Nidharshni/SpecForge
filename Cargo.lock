@@ -3098,6 +3098,7 @@ dependencies = [
  "specforge-common",
  "specforge-ops",
  "specforge-package",
+ "specforge-project",
  "specforge-protocol-types",
  "specforge-registry-client",
  "specforge-registry-server",

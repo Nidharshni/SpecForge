@@ -9,9 +9,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde_json::json;
+use specforge_project::testing::{TestProject, compile_at};
 use specforge_project::{
-    Buffer, Changes, CompiledProject, ProjectSession, SharedRuntime, SourceChange, UpdateKind,
-    WatchRoot, Watched,
+    Buffer, Changes, ProjectSession, SharedRuntime, SourceChange, UpdateKind, WatchRoot, Watched,
 };
 use specforge_test::prelude::*;
 use tempfile::TempDir;
@@ -26,16 +26,11 @@ fn write(root: &Path, path: &str, text: &str) {
 
 /// A project whose `specforge.json` is `config`, opened with no runtime
 /// (no extension loads; the config is still read).
-fn open(config: serde_json::Value, files: &[(&str, &str)]) -> (TempDir, ProjectSession) {
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    for (path, text) in files {
-        write(dir.path(), path, text);
-    }
-    let session = ProjectSession::open_with_runtime(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        None,
-    );
+fn open(config: serde_json::Value, files: &[(&str, &str)]) -> (TestProject, ProjectSession) {
+    let dir = TestProject::new()
+        .raw_config(config.to_string())
+        .files(files);
+    let session = dir.session_bare();
     (dir, session)
 }
 
@@ -45,7 +40,7 @@ fn plain() -> serde_json::Value {
 
 /// The session agrees with a fresh compile of what is on disk now.
 fn assert_matches_a_fresh_compile(session: &ProjectSession, root: &Path) {
-    let fresh = CompiledProject::compile(&specforge_common::ProjectRoot::of(root).unwrap(), None);
+    let fresh = compile_at(root, None);
     assert_eq!(
         session.project().diagnostics(),
         fresh.diagnostics(),
@@ -61,7 +56,7 @@ const TERM: &str = "term alpha_one \"A\" {}\n";
 )]
 fn a_directory_moved_inside_the_spec_root_moves_its_sources() {
     let (dir, mut session) = open(plain(), &[("r.spec", ""), ("old/a.spec", TERM)]);
-    let root = fs::canonicalize(dir.path()).unwrap();
+    let root = fs::canonicalize(dir.root()).unwrap();
     fs::rename(root.join("old"), root.join("new")).unwrap();
 
     let changes = session.changes([root.join("new").as_path(), root.join("old").as_path()]);
@@ -79,7 +74,7 @@ fn a_directory_moved_inside_the_spec_root_moves_its_sources() {
 )]
 fn a_directory_moved_in_from_outside_adds_its_sources() {
     let (dir, session) = open(plain(), &[("r.spec", "")]);
-    let root = fs::canonicalize(dir.path()).unwrap();
+    let root = fs::canonicalize(dir.root()).unwrap();
     let outside = TempDir::new().unwrap();
     write(outside.path(), "pkg/g.spec", TERM);
     fs::rename(outside.path().join("pkg"), root.join("pkg")).unwrap();
@@ -94,7 +89,7 @@ fn a_directory_moved_in_from_outside_adds_its_sources() {
 )]
 fn a_directory_moved_out_removes_its_sources() {
     let (dir, session) = open(plain(), &[("r.spec", ""), ("d/e/x.spec", TERM)]);
-    let root = fs::canonicalize(dir.path()).unwrap();
+    let root = fs::canonicalize(dir.root()).unwrap();
     let outside = TempDir::new().unwrap();
     fs::rename(root.join("d"), outside.path().join("d")).unwrap();
 
@@ -108,7 +103,7 @@ fn a_directory_moved_out_removes_its_sources() {
 )]
 fn a_directory_reported_alone_brings_the_sources_written_in_it() {
     let (dir, session) = open(plain(), &[("r.spec", "")]);
-    let root = fs::canonicalize(dir.path()).unwrap();
+    let root = fs::canonicalize(dir.root()).unwrap();
     write(&root, "n/m/a.spec", TERM);
     write(&root, "n/m/b.spec", "term beta_one \"B\" {}\n");
 
@@ -131,7 +126,7 @@ fn a_symlink_inside_the_spec_root_is_keyed_by_its_own_name() {
             ("r.spec", "term root_one \"R\" {}\n"),
         ],
     );
-    let root = fs::canonicalize(dir.path()).unwrap();
+    let root = fs::canonicalize(dir.root()).unwrap();
     std::os::unix::fs::symlink("shared/r.spec", root.join("alias.spec")).unwrap();
 
     let changes = session.changes([root.join("alias.spec").as_path()]);
@@ -160,21 +155,18 @@ fn an_edit_to_a_symlinked_sources_target_changes_that_source() {
 /// A project whose `link.spec` is a symlink to `real.spec` in a directory
 /// outside it: (project, opened session, canonical outside directory).
 #[cfg(unix)]
-fn linked_project() -> (TempDir, ProjectSession, PathBuf) {
+fn linked_project() -> (TestProject, ProjectSession, PathBuf) {
     let outside = TempDir::new().unwrap();
     let outside_dir = fs::canonicalize(outside.path()).unwrap();
     // Kept alive for the test: the directory is leaked into the process.
     std::mem::forget(outside);
     fs::write(outside_dir.join("real.spec"), "term real_one \"R\" {}\n").unwrap();
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("specforge.json"), plain().to_string()).unwrap();
-    fs::write(dir.path().join("a.spec"), "").unwrap();
-    std::os::unix::fs::symlink(outside_dir.join("real.spec"), dir.path().join("link.spec"))
+    let dir = TestProject::new()
+        .raw_config(plain().to_string())
+        .file("a.spec", "");
+    std::os::unix::fs::symlink(outside_dir.join("real.spec"), dir.root().join("link.spec"))
         .unwrap();
-    let session = ProjectSession::open_with_runtime(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        None,
-    );
+    let session = dir.session_bare();
     (dir, session, outside_dir)
 }
 
@@ -184,7 +176,7 @@ fn linked_project() -> (TempDir, ProjectSession, PathBuf) {
 )]
 fn a_path_whose_file_is_as_read_changes_nothing() {
     let (dir, session) = open(plain(), &[("a.spec", TERM)]);
-    let root = fs::canonicalize(dir.path()).unwrap();
+    let root = fs::canonicalize(dir.root()).unwrap();
 
     assert!(session.changes([root.join("a.spec").as_path()]).is_empty());
     assert!(
@@ -200,12 +192,11 @@ fn a_path_whose_file_is_as_read_changes_nothing() {
 )]
 fn a_detached_session_takes_no_change_from_disk() {
     let session = ProjectSession::detached();
-    let dir = TempDir::new().unwrap();
-    write(dir.path(), "b.spec", TERM);
+    let dir = TestProject::new().without_config().file("b.spec", TERM);
 
     assert!(
         session
-            .changes([dir.path().join("b.spec").as_path()])
+            .changes([dir.root().join("b.spec").as_path()])
             .is_empty()
     );
 }
@@ -245,7 +236,7 @@ fn a_moved_directory_holding_a_module_reloads_the_environment() {
         json!({"name": "c", "version": "0.1.0", "extensions": ["@acme/local=ext/local.wasm"]}),
         &[("ext/local.wasm", "not wasm")],
     );
-    let root = fs::canonicalize(dir.path()).unwrap();
+    let root = fs::canonicalize(dir.root()).unwrap();
     fs::rename(root.join("ext"), root.join("ext2")).unwrap();
 
     let changes = session.changes([root.join("ext").as_path(), root.join("ext2").as_path()]);
@@ -264,7 +255,7 @@ fn a_held_file_under_a_moved_directory_is_left_out() {
             ("old/b.spec", "term beta_one \"B\" {}\n"),
         ],
     );
-    let root = fs::canonicalize(dir.path()).unwrap();
+    let root = fs::canonicalize(dir.root()).unwrap();
     session.update(SourceChange::Hold(&[Buffer::new(
         root.join("old/a.spec"),
         "term held_one \"H\" {}\n".to_string(),
@@ -284,16 +275,12 @@ fn a_held_file_under_a_moved_directory_is_left_out() {
 )]
 fn a_batch_of_many_file_events_is_one_update() {
     let files: Vec<String> = (0..40).map(|n| format!("feat/f{n:02}.spec")).collect();
-    let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("specforge.json"), plain().to_string()).unwrap();
-    for (n, path) in files.iter().enumerate() {
-        write(dir.path(), path, &format!("term feat_{n:02} \"T\" {{}}\n"));
-    }
-    let mut session = ProjectSession::open_with_runtime(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        None,
+    let dir = files.iter().enumerate().fold(
+        TestProject::new().raw_config(plain().to_string()),
+        |dir, (n, path)| dir.file(path, format!("term feat_{n:02} \"T\" {{}}\n")),
     );
-    let root = fs::canonicalize(dir.path()).unwrap();
+    let mut session = dir.session_bare();
+    let root = fs::canonicalize(dir.root()).unwrap();
 
     // The branch checkout: every file of `feat/` goes, forty more are
     // written into a new nested directory.
@@ -342,7 +329,7 @@ fn a_discovered_spec_file_is_a_source_keyed_from_the_spec_root() {
             ("spec/sub/b.spec", "term beta \"B\" {\n}\n"),
         ],
     );
-    let root = dir.path();
+    let root = dir.root();
     let canonical_root = fs::canonicalize(root).unwrap();
     write(root, "spec/a.spec", "term alpha \"A\" {\n}\n\n");
     write(root, "spec/sub/b.spec", "term beta \"B\" {\n}\n\n");
@@ -401,7 +388,7 @@ fn config_lock_and_loaded_modules_are_environment_inputs() {
         }),
         &[("main.spec", "")],
     );
-    let root = dir.path();
+    let root = dir.root();
 
     // A builtin has no module on disk; a local entry and an installed one do.
     assert_eq!(
@@ -444,7 +431,7 @@ fn an_unloaded_wasm_changes_nothing() {
         json!({"name": "c", "version": "0.1.0", "extensions": ["@acme/local=ext/local.wasm"]}),
         &[("main.spec", "")],
     );
-    let root = dir.path();
+    let root = dir.root();
 
     for path in ["target/x.wasm", "ext/other.wasm", "plugin.wasm"] {
         write(root, path, "bytes");
@@ -461,7 +448,7 @@ fn an_unloaded_wasm_changes_nothing() {
 )]
 fn the_build_cache_reruns_the_checks_only() {
     let dir = passes_project(SPEC);
-    let root = dir.path();
+    let root = dir.root();
     let ext = Arc::new(passes_extension());
     let mut session = ProjectSession::open_with_runtime(
         &specforge_common::ProjectRoot::of(root).unwrap(),
@@ -500,7 +487,7 @@ fn the_build_cache_reruns_the_checks_only() {
 
     // Without a check pass, the cache is no input at all.
     let (plain, session) = open(json!({"name": "c", "version": "0.1.0"}), &[("a.spec", "")]);
-    let cache = plain.path().join(specforge_project::BUILD_CACHE_FILE);
+    let cache = plain.root().join(specforge_project::BUILD_CACHE_FILE);
     assert!(
         !session
             .inputs()
@@ -517,7 +504,7 @@ fn the_build_cache_reruns_the_checks_only() {
 )]
 fn a_referenced_file_reruns_the_checks() {
     let dir = passes_project("gadget doc \"Doc\" {\n  docs [\"docs/guide.md\"]\n}\n");
-    let root = dir.path();
+    let root = dir.root();
     let ext = Arc::new(passes_extension());
     let mut session = ProjectSession::open_with_runtime(
         &specforge_common::ProjectRoot::of(root).unwrap(),
@@ -548,7 +535,7 @@ fn a_referenced_file_reruns_the_checks() {
 )]
 fn an_update_that_names_a_new_file_changes_the_inputs() {
     let dir = passes_project("gadget doc \"Doc\" {\n}\n");
-    let root = dir.path();
+    let root = dir.root();
     let ext = Arc::new(passes_extension());
     let mut session = ProjectSession::open_with_runtime(
         &specforge_common::ProjectRoot::of(root).unwrap(),
@@ -633,7 +620,7 @@ fn a_file_a_file_exists_rule_names_reruns_the_checks() {
             "note n \"N\" {\n  doc \"guide.md\"\n  docs [\"more/one.md\"]\n}\n",
         )],
     );
-    let root = dir.path();
+    let root = dir.root();
     specforge_installed::testing::install(root, &["@test/files"]);
     let ext = Arc::new(file_rule_extension());
     let mut session = ProjectSession::open_with_runtime(
@@ -686,7 +673,7 @@ fn excluded_and_undiscovered_spec_files_change_nothing() {
         json!({"name": "c", "version": "0.1.0", "spec_root": "spec", "exclude": ["drafts"]}),
         &[("spec/a.spec", "")],
     );
-    let root = dir.path();
+    let root = dir.root();
 
     for path in [
         "spec/drafts/x.spec",
@@ -720,7 +707,7 @@ fn watch_roots_cover_every_input() {
         }),
         &[("spec/a.spec", "")],
     );
-    let root = fs::canonicalize(dir.path()).unwrap();
+    let root = fs::canonicalize(dir.root()).unwrap();
     assert_eq!(
         session.inputs().watch_roots(),
         vec![
@@ -766,7 +753,7 @@ fn a_detached_session_has_no_inputs() {
 /// config, lock, module, build cache, then each of `docs` resolved against
 /// the root (the spec root), and a sibling of the last in its directory.
 struct InputsLayout {
-    project: TempDir,
+    project: TestProject,
     _outside: TempDir,
     _far: TempDir,
     elsewhere: TempDir,
@@ -794,7 +781,7 @@ fn inputs_layout() -> InputsLayout {
     let elsewhere_name = elsewhere.path().file_name().unwrap().to_string_lossy();
     let project = passes_project("");
     fs::write(
-        project.path().join("specforge.json"),
+        project.root().join("specforge.json"),
         json!({
             "name": "p",
             "version": "0.1.0",
@@ -804,13 +791,13 @@ fn inputs_layout() -> InputsLayout {
     )
     .unwrap();
     write(
-        project.path(),
+        project.root(),
         "a.spec",
         &format!(
             "gadget doc \"Doc\" {{\n  docs [\"../{outside_name}/guide.md\", \"missing/sub.md\", \"../{elsewhere_name}/far/deep/guide.md\"]\n}}\n"
         ),
     );
-    let root = project.path();
+    let root = project.root();
     InputsLayout {
         out_guide: root.join(format!("../{outside_name}/guide.md")),
         far_guide: root.join(format!("../{elsewhere_name}/far/deep/guide.md")),
@@ -832,7 +819,7 @@ fn inputs_layout() -> InputsLayout {
 )]
 fn every_input_lies_under_a_watch_root() {
     let layout = inputs_layout();
-    let root = layout.project.path();
+    let root = layout.project.root();
     let ext = Arc::new(passes_extension());
     let session = ProjectSession::open_with_runtime(
         &specforge_common::ProjectRoot::of(root).unwrap(),
@@ -911,8 +898,8 @@ fn relinking_a_source_changes_the_inputs() {
     fs::write(outside_dir.join("real.spec"), "term real_one \"R\" {}\n").unwrap();
     let keys = ["a.spec".to_string()];
 
-    fs::remove_file(dir.path().join("a.spec")).unwrap();
-    std::os::unix::fs::symlink(outside_dir.join("real.spec"), dir.path().join("a.spec")).unwrap();
+    fs::remove_file(dir.root().join("a.spec")).unwrap();
+    std::os::unix::fs::symlink(outside_dir.join("real.spec"), dir.root().join("a.spec")).unwrap();
     let update = session.update(SourceChange::Disk(&keys));
     assert!(update.inputs_changed);
     let outside_root = WatchRoot {
@@ -924,8 +911,8 @@ fn relinking_a_source_changes_the_inputs() {
     // The same update again moves nothing.
     assert!(!session.update(SourceChange::Disk(&keys)).inputs_changed);
 
-    fs::remove_file(dir.path().join("a.spec")).unwrap();
-    fs::write(dir.path().join("a.spec"), TERM).unwrap();
+    fs::remove_file(dir.root().join("a.spec")).unwrap();
+    fs::write(dir.root().join("a.spec"), TERM).unwrap();
     let update = session.update(SourceChange::Disk(&keys));
     assert!(update.inputs_changed);
     assert!(!session.inputs().watch_roots().contains(&outside_root));
@@ -940,7 +927,7 @@ fn a_nested_projects_marker_changes_the_sources_under_it() {
         plain(),
         &[("a.spec", TERM), ("sub/c.spec", "term sub_only \"S\" {}\n")],
     );
-    let root = fs::canonicalize(dir.path()).unwrap();
+    let root = fs::canonicalize(dir.root()).unwrap();
     assert!(session.project().graph().node("sub_only").is_some());
 
     write(&root, "sub/specforge.json", "{}");

@@ -2,26 +2,21 @@
 //! with the extension's other rules, their `wasm_function` resolved against
 //! the extension when it loads, and dispatched to it on compile.
 
-use std::fs;
-
 use specforge_common::{Diagnostic, Severity};
 use specforge_extension_sdk::prelude::*;
-use specforge_project::{CompiledProject, Environment};
+use specforge_project::Environment;
+use specforge_project::testing::TestProject;
 use specforge_registry::CheckKind;
 use specforge_test::prelude::*;
 use specforge_wasm::testing::InProcessRuntime;
 use std::sync::Arc;
-use tempfile::TempDir;
 
-fn project(extensions: &[&str], spec: &str) -> TempDir {
-    let dir = TempDir::new().unwrap();
-    let config = serde_json::json!({
-        "name": "p", "version": "0.1.0", "extensions": extensions
-    });
-    fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
-    fs::write(dir.path().join("a.spec"), spec).unwrap();
-    dir
+fn project(extensions: &[&str], spec: &str) -> TestProject {
+    TestProject::new()
+        .config(|c| c["name"] = "p".into())
+        .enabling(extensions)
+        .installing_enabled()
+        .file("a.spec", spec)
 }
 
 fn w112(diagnostics: &[Diagnostic]) -> Vec<&Diagnostic> {
@@ -105,12 +100,8 @@ fn rules_extension() -> InProcessRuntime {
 )]
 fn a_builtin_custom_rule_is_registered_with_its_wasm_function() {
     let dir = project(&["@specforge/software"], "");
-    let runtime = specforge_component::ComponentRuntime::with_user_cache();
 
-    let env = Environment::load(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let env = Environment::load(&dir.project_root(), Some(dir.runtime()));
 
     let w010 = env
         .registries()
@@ -145,10 +136,7 @@ fn a_builtin_custom_rule_is_registered_with_its_wasm_function() {
 fn an_unresolvable_wasm_function_is_w112_on_load() {
     let dir = project(&[EXTENSION], "");
 
-    let env = Environment::load(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(rules_extension())),
-    );
+    let env = Environment::load(&dir.project_root(), Some(Arc::new(rules_extension())));
 
     let diagnostics: Vec<Diagnostic> = env.diagnostics().cloned().collect();
     let warnings = w112_naming(&diagnostics, "'validate__absent'");
@@ -176,10 +164,7 @@ fn an_unresolvable_wasm_function_is_w112_on_load() {
 fn a_custom_rule_without_a_wasm_function_is_w112_and_not_registered() {
     let dir = project(&[EXTENSION], "");
 
-    let env = Environment::load(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(rules_extension())),
-    );
+    let env = Environment::load(&dir.project_root(), Some(Arc::new(rules_extension())));
 
     let diagnostics: Vec<Diagnostic> = env.diagnostics().cloned().collect();
     let warnings = w112_naming(&diagnostics, "'E903'");
@@ -213,10 +198,7 @@ fn custom_rules_register_resolve_and_dispatch_through_a_compile() {
         "gadget good \"Good\" {\n}\n\ngadget bad \"Bad\" {\n}\n",
     );
 
-    let compiled = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(rules_extension())),
-    );
+    let compiled = dir.compile_in(Arc::new(rules_extension()));
 
     // extension_manifests_loaded_fired + custom_patterns_registered
     assert_eq!(compiled.environment().registries().declarations().len(), 1);
