@@ -1,6 +1,6 @@
 {
   "artifact": "specforge_ext_formal.wasm",
-  "artifact_sha256": "a0c60c4f9c43856dc811fa91d6a50f172af79705c1cff91f5a5fdf58ed0f78ea",
+  "artifact_sha256": "55f17f2a2a1c13f9f2749536e297cc5d8fea99217ce676d54d70a41df28b07cb",
   "built_with": "rustc 1.98.1 (48a229cea 2026-09-01)",
   "inputs": {
     "Cargo.toml#workspace-inherited": "e294cda7c0ad0b2bfd8c63bea79dd9c0ab5a3f9fab4ae25df24c718cf069fe30",
@@ -15,13 +15,20 @@
     "crates/runtime/extension-sdk-macros/Cargo.toml": "83778a762f96c708313efb2a2c60bcfd259324780815eb0e39988f9d06b20f40",
     "crates/runtime/extension-sdk-macros/src/lib.rs": "05b9dfd092444a55acc0993f35172ee3d0e4db9b6b1bed77682ce912ba54f67a",
     "crates/runtime/extension-sdk/Cargo.toml": "ca71ab37270b04e143e414a7c656f95b4b0901d779bc0e77133a529f21d975bd",
-    "crates/runtime/extension-sdk/src/lib.rs": "1b82900fd65dfed0521af92a0a9941833deb6df20991a9de37be965f14b79f2a",
+    "crates/runtime/extension-sdk/src/builders.rs": "0ffe8949a1ea4e1fd71e47ba724d7a4dc1ec27ae91b855122bd24d85fc5a3e2c",
+    "crates/runtime/extension-sdk/src/command_graph.rs": "e88d26d3134c7591aa1afeee1f432ecdf0437a191c23b5d2eb50a50a0b7e5562",
+    "crates/runtime/extension-sdk/src/guest.rs": "d1805a20fb3cb635e1765026c31cfa7e9d14716573bcb39f8519f91d7a0d3466",
+    "crates/runtime/extension-sdk/src/lib.rs": "7080f90633a091cf91ae1e4cf573a68922ff99374ff3e0ca77d7b96c1cb5f556",
     "crates/runtime/extension-sdk/src/operations.rs": "5abc571e460dd645044eb5b5c40e505bec76f4ca12600ae1e23a1eb77895c2f4",
     "crates/runtime/extension-sdk/src/surface.rs": "04753671ca050f7a48b7f2b7bdcbb024e89da6585081e1aae87dde14653b946e",
     "crates/runtime/extension-sdk/src/vocabulary.rs": "93f85b5300e870259d78823b33cc19639aac0c30d966e934d9125e693fc94281",
     "extensions/formal/Cargo.lock": "85c070e5204f233dfd5794d9f8c1a4f61ba1570258aace3fca140c29d4655a97",
     "extensions/formal/Cargo.toml": "94722950a3276e59294435c08708944e0221e49ad1d41fc29d3fa3ea9e2ab6c6",
+    "extensions/formal/src/conditions.rs": "461be0847cda870b246d0f4296968128a3c5dc4325ee7ec2829284b59af7c113",
+    "extensions/formal/src/coverage_tracking.rs": "f3b3fc1736c866bf8e2f452644df71929f640872ac0f83a1a6b1b859998a0992",
     "extensions/formal/src/declaration.rs": "51b057ac726c1c8a6cef32da5325fd9ba559e35a5ee29ea6d25b1242f203ed51",
-    "extensions/formal/src/lib.rs": "7eebf9f27a5246dd8b78c87b2f7bce6eb401e2ba87c772a139e9142ba9ecc161"
+    "extensions/formal/src/event_graph.rs": "741e63b33065415d221dbc1905f2e6e8dbf168afb749b13705a9596cdf13a022",
+    "extensions/formal/src/layering.rs": "7639baa6dd236eff3b7568432b666a1f375e599198add10f0395a3cb2c86eb1a",
+    "extensions/formal/src/lib.rs": "76c70fb52a8015cd70c23f2eb7125558971440f03476f1c7b4144f16dc27915e"
   }
 }
