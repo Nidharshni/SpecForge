@@ -238,3 +238,64 @@ fn every_accepted_edge_names_an_adr_that_exists() {
         );
     }
 }
+
+const CLIENT: (&str, &str) = (
+    "specforge-registry-client",
+    "crates/adapters/registry-client",
+);
+
+const KEEP_OUT: &[Apart] = &[Apart {
+    from: "specforge-lsp",
+    to: "specforge-registry-client",
+    adr: "0010",
+}];
+
+#[test]
+fn a_crate_the_lsp_must_not_link_is_reported_with_its_chain() {
+    let members = [
+        member(LSP.0, LSP.1, &[edge(OPS, Normal)]),
+        member(OPS.0, OPS.1, &[edge(CLIENT, Normal)]),
+        member(CLIENT.0, CLIENT.1, &[]),
+    ];
+    assert_eq!(
+        linked_apart(&members, KEEP_OUT),
+        [
+            "specforge-lsp links specforge-registry-client (ADR 0010 keeps them apart): specforge-lsp -> specforge-ops -> specforge-registry-client"
+        ]
+    );
+}
+
+#[test]
+fn a_dev_dependency_does_not_link_it() {
+    let members = [
+        member(LSP.0, LSP.1, &[edge(OPS, Normal), edge(CLIENT, Dev)]),
+        member(OPS.0, OPS.1, &[edge(COMMON, Normal)]),
+        member(COMMON.0, COMMON.1, &[]),
+        member(CLIENT.0, CLIENT.1, &[]),
+    ];
+    assert!(linked_apart(&members, KEEP_OUT).is_empty());
+}
+
+#[test]
+fn an_entry_naming_no_member_is_reported() {
+    let members = [member(LSP.0, LSP.1, &[])];
+    assert_eq!(
+        linked_apart(&members, KEEP_OUT),
+        [
+            "gate/src/layers.rs keeps specforge-lsp apart from specforge-registry-client (ADR 0010), but no workspace member is named specforge-registry-client: fix or delete the entry"
+        ]
+    );
+}
+
+#[test]
+fn the_adr_0010_entries_name_the_registry_crates() {
+    let names: Vec<_> = APART.iter().map(|a| (a.from, a.to, a.adr)).collect();
+    assert_eq!(
+        names,
+        [
+            ("specforge-lsp", "specforge-registry-client", "0010"),
+            ("specforge-lsp", "specforge-registry-wire", "0010"),
+            ("specforge-lsp", "specforge-ops-registry", "0010"),
+        ]
+    );
+}

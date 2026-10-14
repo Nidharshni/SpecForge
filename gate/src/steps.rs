@@ -107,14 +107,19 @@ pub fn zero_entity(ctx: &Ctx, _: &Selection) -> Result<(), String> {
     ctx.sh(ctx.cmd("bash").arg("scripts/check-zero-entity-core.sh"))
 }
 
-/// The layer rule ([`layers::verdict`]) over the members `cargo metadata` listed when the run began: the violations
-/// first, then the stack and the edge counts.
+/// The layer rule ([`layers::verdict`]) and the crates ADRs keep apart ([`layers::linked_apart`]) over the members
+/// `cargo metadata` listed when the run began: the violations first, then the stack and the edge counts.
 pub fn layers(ctx: &Ctx, _: &Selection) -> Result<(), String> {
     let verdict = layers::verdict(&ctx.repo.members, layers::ALLOWED);
-    for line in verdict.violations.iter().chain(&verdict.lines) {
+    let apart = layers::linked_apart(&ctx.repo.members, layers::APART);
+    for line in apart
+        .iter()
+        .chain(&verdict.violations)
+        .chain(&verdict.lines)
+    {
         ctx.log(line);
     }
-    finish(verdict.violations)
+    finish(apart.into_iter().chain(verdict.violations).collect())
 }
 
 pub fn links(ctx: &Ctx, _: &Selection) -> Result<(), String> {
