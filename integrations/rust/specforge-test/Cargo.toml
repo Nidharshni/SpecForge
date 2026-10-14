@@ -14,4 +14,5 @@ libc = "0.2"
 crossbeam-queue = "0.3"
 
 [dev-dependencies]
+specforge-repo-root = { path = "../../../crates/specforge-repo-root" }
 tempfile = "3"

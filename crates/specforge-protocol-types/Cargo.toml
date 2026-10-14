@@ -13,5 +13,6 @@ serde = { workspace = true }
 serde_json = { workspace = true, features = ["raw_value"] }
 
 [dev-dependencies]
+specforge-repo-root = { path = "../specforge-repo-root" }
 specforge-test-macros = { workspace = true }
 specforge-test = { workspace = true }

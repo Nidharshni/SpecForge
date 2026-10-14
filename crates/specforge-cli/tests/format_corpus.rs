@@ -4,6 +4,7 @@
 //! reformatting the corpus, and stays as a regression test.
 
 use crate::support::{Cli, TestProject};
+use specforge_repo_root::repo_root;
 use specforge_test_macros::test as specforge_test;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -17,10 +18,6 @@ const CORPORA: &[&str] = &[
     "examples/shop",
     "integrations/rust/spec",
 ];
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
 
 fn run_stdout(project: &TestProject, args: &[&str]) -> String {
     Cli::on(project).bare(args).stdout
@@ -215,7 +212,7 @@ fn formatting_the_corpus_changes_nothing_but_layout() {
         let before: BTreeMap<PathBuf, String> = originals
             .iter()
             .map(|p| {
-                let relative = p.strip_prefix(&root).unwrap().to_path_buf();
+                let relative = p.strip_prefix(root).unwrap().to_path_buf();
                 let mangled = mangle(&std::fs::read_to_string(p).unwrap());
                 copy.write(relative.to_str().unwrap(), &mangled);
                 (relative, mangled)

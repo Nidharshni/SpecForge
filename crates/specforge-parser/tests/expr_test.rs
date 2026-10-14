@@ -1,5 +1,4 @@
 use specforge_parser::{Expr, FieldValue, parse};
-use std::path::PathBuf;
 
 fn metric_field(source: &str) -> FieldValue {
     let result = parse(source, "test.spec");
@@ -110,8 +109,7 @@ fn corpus_parses_clean_end_to_end() {
     // errors. The historical baselines (port `method` signatures, union
     // types with `|`) are fully supported since the method and type_union
     // grammar slices - the tolerated-error era is over.
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let root = manifest_dir.join("../../spec");
+    let root = specforge_repo_root::repo_root().join("spec");
 
     let mut files = Vec::new();
     let mut stack = vec![root];

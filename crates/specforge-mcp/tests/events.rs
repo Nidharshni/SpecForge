@@ -471,10 +471,9 @@ fn a_session_records_every_mcp_event() {
     let events = recorded(&server);
     let emitted: std::collections::BTreeSet<&str> =
         events.iter().map(|(name, _)| name.as_str()).collect();
-    let spec = std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../spec/events/mcp.spec"),
-    )
-    .unwrap();
+    let spec =
+        std::fs::read_to_string(specforge_repo_root::repo_root().join("spec/events/mcp.spec"))
+            .unwrap();
     let declared: std::collections::BTreeSet<&str> = spec
         .lines()
         .filter_map(|line| line.strip_prefix("event "))

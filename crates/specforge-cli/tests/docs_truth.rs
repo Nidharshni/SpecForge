@@ -3,14 +3,8 @@
 //! builtin manifests and pin the docs to it.
 
 use crate::support::{Cli, TestProject};
+use specforge_repo_root::repo_root;
 use std::collections::BTreeSet;
-
-fn repo_root() -> std::path::PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .expect("repo root")
-}
 
 fn manifest_domain_kinds() -> BTreeSet<String> {
     let mut kinds = BTreeSet::new();

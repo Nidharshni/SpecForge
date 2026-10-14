@@ -144,10 +144,7 @@ fn join(base: &str, rel: &str) -> String {
 /// files are read), no `cargo metadata`.
 #[cfg(test)]
 pub(crate) fn this_repo() -> Repo {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .to_path_buf();
+    let root = specforge_repo_root::repo_root().to_path_buf();
     let member = |name: &str, dir: &str| Member {
         name: name.into(),
         dir: dir.into(),

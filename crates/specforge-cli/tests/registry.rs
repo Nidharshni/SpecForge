@@ -839,7 +839,7 @@ fn non_test_files(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
     verify = "no registry URL on the specforge.dev domain is compiled into non-test source"
 )]
 fn no_source_names_specforge_dev() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = specforge_repo_root::repo_root();
     let mut files = Vec::new();
     for top in ["crates", "extensions"] {
         non_test_files(&root.join(top), &mut files);
@@ -850,7 +850,7 @@ fn no_source_names_specforge_dev() {
     let mut allowed_used = std::collections::BTreeSet::new();
     for path in files {
         let rel = path
-            .strip_prefix(&root)
+            .strip_prefix(root)
             .unwrap_or(&path)
             .to_string_lossy()
             .replace('\\', "/");

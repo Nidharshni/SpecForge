@@ -38,6 +38,7 @@ serde_json = { workspace = true }
 tempfile = { workspace = true, optional = true }
 
 [dev-dependencies]
+specforge-repo-root = { path = "../specforge-repo-root" }
 specforge-project = { path = ".", features = ["testing"] }
 # The builtins, loaded outside the extension load by the tests.
 specforge-component = { path = "../specforge-component", features = ["testing"] }

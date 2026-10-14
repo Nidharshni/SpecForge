@@ -415,7 +415,7 @@ fn a_field_outside_a_declared_end_does_not_write_the_edge_type() {
 // warnings at gate/baseline.json; its info counts are pinned nowhere. Never flipped.
 #[test]
 fn the_builtins_edge_rules_keep_their_meaning() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/todo-app");
+    let root = specforge_repo_root::repo_root().join("examples/todo-app");
     let runtime = specforge_component::ComponentRuntime::new();
     let names: Vec<String> = [
         "@specforge/software",

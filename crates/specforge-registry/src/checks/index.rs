@@ -53,8 +53,8 @@ mod tests {
     fn the_bundled_keyword_index_maps_every_builtin_keyword() {
         // The bundled file must say what the builtins' own declarations say
         // (their pinned wire answers).
-        let declarations = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../specforge-component/tests/declarations");
+        let declarations =
+            specforge_repo_root::repo_root().join("crates/specforge-component/tests/declarations");
         let mut expected = std::collections::BTreeMap::new();
         for entry in std::fs::read_dir(&declarations).unwrap() {
             let src = entry.unwrap().path();
@@ -91,8 +91,8 @@ mod tests {
     fn the_bundled_field_index_maps_every_builtin_enhancement_field() {
         // The bundled file must say what the builtins' enhancements say
         // (their pinned wire answers).
-        let declarations = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../specforge-component/tests/declarations");
+        let declarations =
+            specforge_repo_root::repo_root().join("crates/specforge-component/tests/declarations");
         let mut expected = std::collections::BTreeMap::new();
         for entry in std::fs::read_dir(&declarations).unwrap() {
             let src = entry.unwrap().path();

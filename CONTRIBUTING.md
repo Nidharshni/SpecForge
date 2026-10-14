@@ -35,6 +35,10 @@ through one driver: `compile()`/`session()` in process, `specforge_mcp::testing:
 only the binary's contract (arguments, exit codes, streams, environment) and cross-surface comparisons are CLI
 tests ([ADR 0078](docs/adr/0078-a-tests-project-is-one-fixture.md)).
 
+A test or tool that reads a file outside its own crate finds it from `specforge_repo_root::repo_root()`
+(`crates/specforge-repo-root`), never by counting `..` from `CARGO_MANIFEST_DIR`: crates sit at different depths
+under `crates/` ([ADR 0081](docs/adr/0081-the-repository-root-is-found-not-counted.md)).
+
 ## Where things are
 
 - [`crates/`](crates/) — the Rust workspace: compiler, graph, extension runtime, CLI, LSP, MCP.

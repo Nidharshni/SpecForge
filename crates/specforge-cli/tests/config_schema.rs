@@ -2,15 +2,7 @@
 //! config key, and the two shipped copies never drift.
 
 use crate::support::{Cli, TestProject};
-use std::path::Path;
-
-fn repo_root() -> &'static Path {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-}
+use specforge_repo_root::repo_root;
 
 fn schema_path() -> std::path::PathBuf {
     repo_root().join("schema/specforge.schema.json")

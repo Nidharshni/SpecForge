@@ -50,9 +50,9 @@ impl CommittedBlob {
         format!("{}/wasm/{}", self.crate_dir, self.artifact)
     }
 
-    /// [`Self::repo_path`] under [`repo_root`].
+    /// [`Self::repo_path`] under the repository root.
     pub fn path(&self) -> PathBuf {
-        repo_root().join(self.repo_path())
+        specforge_repo_root::repo_root().join(self.repo_path())
     }
 
     /// The committed bytes. Panics naming the file when they cannot be read.
@@ -134,18 +134,9 @@ pub const COMMITTED: &[CommittedBlob] = &{
     out
 };
 
-/// The repository root: this crate's manifest directory, two levels up.
-pub fn repo_root() -> PathBuf {
-    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(std::path::Path::parent)
-        .expect("the crate lives in <root>/crates/")
-        .to_path_buf()
-}
-
-/// Where the SDK blobs' wire answers are pinned: `crates/specforge-component/tests/declarations/`.
+/// Where the SDK blobs' wire answers are pinned: this crate's `tests/declarations/`.
 pub fn snapshots() -> PathBuf {
-    repo_root().join("crates/specforge-component/tests/declarations")
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/declarations")
 }
 
 /// One wire answer: the file it is pinned in (`handshake.json`, `describe_<category>.json`)
