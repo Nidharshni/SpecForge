@@ -27,7 +27,7 @@ use specforge_registry::DeclaredPass;
 use crate::solver::Solver;
 use crate::{OpError, OpErrorKind, Refusal, RunVerdict};
 
-pub use crate::view::ProjectView;
+use crate::view::ProjectView;
 
 /// Where the test report comes from.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

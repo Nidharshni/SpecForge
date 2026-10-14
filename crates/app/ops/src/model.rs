@@ -93,7 +93,7 @@ fn loaded(declarations: &[ExtensionDeclaration], name: &str) -> Result<(), OpErr
     };
     Err(OpError::new(
         OpErrorKind::ExtensionNotFound,
-        crate::extension::NOT_FOUND,
+        OpErrorKind::ExtensionNotFound.as_str(),
         format!("extension '{name}' is not loaded by this project"),
     )
     .with_suggestion(suggestion)
