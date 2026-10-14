@@ -1,5 +1,5 @@
 ---
-source: crates/surfaces/cli/src/extension_command.rs
+source: crates/surfaces/cli/src/extension_command/tests.rs
 expression: "pinned.join(\"\\n\")"
 ---
 $ specforge x --help
