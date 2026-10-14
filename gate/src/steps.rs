@@ -130,6 +130,21 @@ pub fn links(ctx: &Ctx, _: &Selection) -> Result<(), String> {
         .args(["run", "-q", "-p", "xtask", "--bin", "check-links"]))
 }
 
+pub fn crate_map(ctx: &Ctx, _: &Selection) -> Result<(), String> {
+    let problems = crate::crate_map::judge(ctx.repo);
+    for problem in &problems {
+        ctx.log(problem);
+    }
+    let Some(first) = problems.first() else {
+        return Ok(());
+    };
+    Err(if problems.len() == 1 {
+        first.clone()
+    } else {
+        format!("{} problems, the first: {first}", problems.len())
+    })
+}
+
 pub fn doc_links(ctx: &Ctx, _: &Selection) -> Result<(), String> {
     let tracked = tracked_paths(ctx)?;
     let root = &ctx.repo.root;

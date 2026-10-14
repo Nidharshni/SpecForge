@@ -5,6 +5,7 @@ mod baseline;
 pub mod blob_inputs;
 mod change_set;
 mod checks;
+pub mod crate_map;
 mod doc_links;
 pub mod judge;
 pub mod layers;

@@ -17,6 +17,8 @@ layers            hook       Cargo.toml, crates/**/Cargo.toml, gate/src/layers.r
                              no crate has a normal or build dependency on a crate in a higher layer (its folder under crates/) or in none, and the LSP links no package registry client (ADR 0010)
 file-size         hook       **/*.rs, gate/baseline.json
                              no tracked .rs file is over 800 lines but those gate/baseline.json lists, none past its listed size
+crate-map         hook       computed: ARCHITECTURE.md, crates/README.md, the root manifest, or a member's manifest or crate root
+                             ARCHITECTURE.md's layer stack and crates/README.md's crate table are what the members' folders and descriptions say; every member has a description and crate docs
 links             hook       computed: a .spec file; a test file or one with a `verify =` attribute
                              every test's verify text and entity is declared by the spec (A016, static)
 doc-links         hook       always

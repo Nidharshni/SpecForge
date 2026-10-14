@@ -3,6 +3,7 @@ use std::path::Path;
 
 use crate::blob_inputs;
 use crate::change_set::{ChangeSet, Pattern};
+use crate::crate_map;
 use crate::judge;
 use crate::layers;
 use crate::repo::Repo;
@@ -169,6 +170,19 @@ pub static CHECKS: &[Check] = &[
         after: &[],
         fix: "split the file along its sections, or put new code and tests in a new module (a listed file may not grow); one that shrank, moved or went: cargo gate baseline --only file-size",
         run: steps::file_size,
+    },
+    Check {
+        name: "crate-map",
+        proves: "ARCHITECTURE.md's layer stack and crates/README.md's crate table are what the members' folders and descriptions say; every member has a description and crate docs",
+        reach: Reach::Hook,
+        trigger: Trigger::Computed(
+            "ARCHITECTURE.md, crates/README.md, the root manifest, or a member's manifest or crate root",
+            crate_map_sources,
+        ),
+        compiles: false,
+        after: &[],
+        fix: "cargo gate crate-map, then stage ARCHITECTURE.md and crates/README.md; a missing description or crate doc: write it in the crate",
+        run: steps::crate_map,
     },
     Check {
         name: "links",
@@ -379,6 +393,25 @@ pub fn render_list() -> String {
         out.push_str(&format!("{:<29}{}\n", "", check.proves));
     }
     out
+}
+
+/// What can change what the crate map shows: its two files, the root manifest (the member list), or a member's
+/// manifest (its description) or crate root (its doc).
+fn crate_map_sources(repo: &Repo, changes: &ChangeSet) -> Result<Selection, String> {
+    let drawn_from = |path: &str| {
+        path == crate_map::ARCHITECTURE
+            || path == crate_map::CRATES_README
+            || path == "Cargo.toml"
+            || repo.members.iter().any(|member| {
+                crate_map::manifest_of(member) == path
+                    || member.roots.iter().any(|root| root == path)
+            })
+    };
+    Ok(if changes.paths().any(drawn_from) {
+        Selection::Everything
+    } else {
+        Selection::Skip
+    })
 }
 
 /// The `.spec` files a hook or quick run formats: those inside a project's spec directory (the set CI checks), or

@@ -483,3 +483,25 @@ fn file_size_runs_in_the_hook_for_any_rust_file_or_the_baseline() {
             .contains(&format!("over {} lines", crate::size_cap::CAP))
     );
 }
+
+#[test]
+fn the_crate_map_runs_when_what_it_is_drawn_from_changes() {
+    let repo = this_repo();
+    let manifest = crate::crate_map::manifest_of(&repo.members[0]);
+    for path in [
+        "ARCHITECTURE.md",
+        "crates/README.md",
+        "Cargo.toml",
+        manifest.as_str(),
+    ] {
+        assert_eq!(
+            selection("crate-map", Mode::Hook, &[path]),
+            Selection::Everything,
+            "{path}"
+        );
+    }
+    assert_eq!(
+        selection("crate-map", Mode::Hook, &["docs/guide.md"]),
+        Selection::Skip
+    );
+}
