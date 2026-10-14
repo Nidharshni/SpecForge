@@ -169,7 +169,7 @@ impl<E: Editor> Reaction<E> {
         let opening = match plan.root().cloned() {
             Some(root) => {
                 let runtime = self.runtime.clone();
-                match unwinding(move || ProjectSession::begin_open(&root, runtime)) {
+                match crate::unwind::unwinding(move || ProjectSession::begin_open(&root, runtime)) {
                     Ok(opening) => {
                         self.state
                             .blocking_write()
@@ -182,7 +182,7 @@ impl<E: Editor> Reaction<E> {
             None => None,
         };
 
-        let updated = unwinding(move || {
+        let updated = crate::unwind::unwinding(move || {
             // The project opens in the place of the session the editor's buffers were
             // given to (detached until now): it holds them, built in its one cold build.
             let mut session = match opening {
@@ -294,15 +294,4 @@ impl<E: Editor> Reaction<E> {
             self.editor.refresh_tokens();
         }
     }
-}
-
-/// `f`'s result, or the message it panicked with.
-fn unwinding<T>(f: impl FnOnce() -> T) -> Result<T, String> {
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).map_err(|panic| {
-        panic
-            .downcast_ref::<&str>()
-            .map(|s| s.to_string())
-            .or_else(|| panic.downcast_ref::<String>().cloned())
-            .unwrap_or_else(|| "an update panicked".into())
-    })
 }

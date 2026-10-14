@@ -14,9 +14,11 @@ pub struct LocalStorage {
 }
 
 impl LocalStorage {
-    pub fn new(base_dir: PathBuf) -> Self {
-        std::fs::create_dir_all(&base_dir).expect("failed to create storage directory");
-        Self { base_dir }
+    /// Storage under `base_dir`, created when missing.
+    pub fn new(base_dir: PathBuf) -> Result<Self, String> {
+        std::fs::create_dir_all(&base_dir)
+            .map_err(|e| format!("failed to create storage directory: {e}"))?;
+        Ok(Self { base_dir })
     }
 
     /// Storage-safe directory key for a package name. The name may contain
@@ -109,7 +111,7 @@ mod tests {
     #[test]
     fn temp_commit_round_trip_is_atomic_in_intent() {
         let dir = tempfile::tempdir().unwrap();
-        let storage = LocalStorage::new(dir.path().to_path_buf());
+        let storage = LocalStorage::new(dir.path().to_path_buf()).unwrap();
 
         let temp = storage
             .store_wasm_temp("@t/pkg", "1.0.0", b"payload-bytes")
@@ -130,7 +132,7 @@ mod tests {
     #[test]
     fn discarded_temp_leaves_no_blob() {
         let dir = tempfile::tempdir().unwrap();
-        let storage = LocalStorage::new(dir.path().to_path_buf());
+        let storage = LocalStorage::new(dir.path().to_path_buf()).unwrap();
         let temp = storage
             .store_wasm_temp("@t/pkg", "1.0.0", b"rejected")
             .unwrap();
@@ -141,7 +143,7 @@ mod tests {
     #[test]
     fn distinct_names_never_share_a_directory() {
         let dir = tempfile::tempdir().unwrap();
-        let storage = LocalStorage::new(dir.path().to_path_buf());
+        let storage = LocalStorage::new(dir.path().to_path_buf()).unwrap();
         let t1 = storage
             .store_wasm_temp("@a/pkg_1", "1.0.0", b"one")
             .unwrap();

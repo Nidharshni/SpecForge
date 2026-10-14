@@ -73,6 +73,12 @@ behavior recover_from_syntax_errors "Recover From Syntax Errors" {
     unclosed string took is reported by the string alone. No parse error is
     hidden: a string or body left unclosed is reported in every entity,
     whatever its kind.
+    Parsing never panics: any text, valid or not, yields a SpecFile. A
+    syntax error quotes at most the first 57 bytes of its node's first line,
+    cut at a character boundary, followed by "...".
+    Brackets ((), [] and {}, outside strings and comments) nest at most 32
+    levels deep. A source nested deeper is read into no tree: its one
+    syntax error is reported at the first bracket past the limit.
   """
   requires {
     error_recovery_enabled "SourceParser is initialized with error-recovery mode enabled"
@@ -97,6 +103,9 @@ behavior recover_from_syntax_errors "Recover From Syntax Errors" {
   verify integration "a string or body left unclosed is reported in every entity, whatever its kind"
   verify unit "completely invalid syntax produces error with location"
   verify unit "missing opening brace produces a parse error"
+  verify unit "a syntax error quoting a long first line cuts it at a character boundary"
+  verify property "parsing any text yields a file and never panics"
+  verify unit "brackets nested past 32 levels are one parse error, and no tree is read"
   verify contract "Recover From Syntax Errors: syntax error recovery holds — error_recovery_enabled, valid_utf8_input, valid_blocks_preserved, errors_collected"
 }
 

@@ -2,7 +2,8 @@ use specforge_registry_server::state::{AppState, PublishLimits, ReadAccess};
 use specforge_registry_server::{auth, db::Database, handlers};
 
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::ExitCode;
 use std::sync::Arc;
 
 #[derive(Parser)]
@@ -89,16 +90,26 @@ enum TokenAction {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> ExitCode {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "specforge_registry_server=info".parse().unwrap()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                tracing_subscriber::EnvFilter::new("specforge_registry_server=info")
+            }),
         )
         .init();
 
-    let cli = Cli::parse();
+    match run(Cli::parse()).await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(why) => {
+            eprintln!("error: {why}");
+            ExitCode::FAILURE
+        }
+    }
+}
 
+/// The command, or why it could not run: what an operator reads instead of a panic.
+async fn run(cli: Cli) -> Result<(), String> {
     match cli.command {
         Commands::Serve {
             port,
@@ -112,8 +123,9 @@ async fn main() {
                 ReadAccess::Public
             };
             let app_state = Arc::new(
-                AppState::open(&data_dir, PublishLimits::SERVE, read_access)
-                    .expect("failed to open registry"),
+                AppState::open(&data_dir, PublishLimits::SERVE, read_access).map_err(|e| {
+                    format!("cannot open the registry at {}: {e}", data_dir.display())
+                })?,
             );
 
             let app = handlers::router(app_state);
@@ -121,13 +133,15 @@ async fn main() {
             let addr = format!("{}:{}", host, port);
             let listener = tokio::net::TcpListener::bind(&addr)
                 .await
-                .unwrap_or_else(|e| panic!("failed to bind to {}: {}", addr, e));
+                .map_err(|e| format!("cannot listen on {addr}: {e}"))?;
 
             tracing::info!(
                 "registry server listening on http://{addr} (a registries entry's \"url\": \"http://{addr}\")"
             );
 
-            axum::serve(listener, app).await.expect("server error");
+            axum::serve(listener, app)
+                .await
+                .map_err(|e| format!("the server stopped: {e}"))?;
         }
         Commands::Token { action } => match action {
             TokenAction::Create {
@@ -138,9 +152,13 @@ async fn main() {
                 admin,
                 data_dir,
             } => {
-                std::fs::create_dir_all(&data_dir).expect("failed to create data directory");
-                let database =
-                    Database::open(&data_dir.join("registry.db")).expect("failed to open database");
+                std::fs::create_dir_all(&data_dir).map_err(|e| {
+                    format!(
+                        "cannot create the data directory {}: {e}",
+                        data_dir.display()
+                    )
+                })?;
+                let database = open_database(&data_dir)?;
 
                 let expires_in_days = if no_expiry {
                     None
@@ -164,9 +182,9 @@ async fn main() {
                 println!("\nStore this token securely — it cannot be retrieved later.");
             }
             TokenAction::List { data_dir } => {
-                let database =
-                    Database::open(&data_dir.join("registry.db")).expect("failed to open database");
-                let tokens = auth::list_tokens(&database).expect("failed to list tokens");
+                let database = open_database(&data_dir)?;
+                let tokens =
+                    auth::list_tokens(&database).map_err(|e| format!("cannot list tokens: {e}"))?;
                 if tokens.is_empty() {
                     println!("No tokens found.");
                 } else {
@@ -183,17 +201,21 @@ async fn main() {
                 }
             }
             TokenAction::Revoke { id, data_dir } => {
-                let database =
-                    Database::open(&data_dir.join("registry.db")).expect("failed to open database");
+                let database = open_database(&data_dir)?;
                 match auth::revoke_token(&database, &id) {
                     Ok(true) => println!("Token revoked."),
                     Ok(false) => println!("No token found with id '{id}'."),
-                    Err(refused) => {
-                        eprintln!("Token not revoked: {refused:?}");
-                        std::process::exit(1);
-                    }
+                    Err(refused) => return Err(format!("token not revoked: {refused:?}")),
                 }
             }
         },
     }
+    Ok(())
+}
+
+/// The token database under `data_dir`.
+fn open_database(data_dir: &Path) -> Result<Database, String> {
+    let path = data_dir.join("registry.db");
+    Database::open(&path)
+        .map_err(|e| format!("cannot open the token database {}: {e}", path.display()))
 }

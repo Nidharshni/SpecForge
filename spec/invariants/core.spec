@@ -109,6 +109,7 @@ invariant incremental_correctness "Incremental Correctness" {
   risk      high
   verify property "incremental recompilation produces the same graph as a full rebuild"
   verify property "a session reports what a fresh compile of the same sources reports, in the same order, after every update that runs the checks"
+  verify property "a file parsed with its previous text and tree reads as the same file parsed cold"
   verify unit "no stale nodes or edges remain after incremental recompilation"
   verify unit "a file discovery does not find changes nothing a compile or a session reports"
 }

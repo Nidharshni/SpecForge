@@ -134,10 +134,10 @@ impl LanguageServer for Backend {
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let document = params.text_document;
-        self.state
-            .write()
-            .await
-            .open_document(&document.uri, &document.text, document.version);
+        self.applying("textDocument/didOpen", |state| {
+            state.open_document(&document.uri, &document.text, document.version);
+        })
+        .await;
 
         react(&self.reaction, Change::Edited(vec![document.uri])).await;
     }
@@ -146,10 +146,10 @@ impl LanguageServer for Backend {
         let id = params.text_document;
 
         // Apply text changes immediately (keeps buffer current for completions/hover)
-        self.state
-            .write()
-            .await
-            .change_document(&id.uri, id.version, &params.content_changes);
+        self.applying("textDocument/didChange", |state| {
+            state.change_document(&id.uri, id.version, &params.content_changes);
+        })
+        .await;
 
         // Hand off to the serialized latest-wins worker (C4-03): the burst
         // is coalesced and one whole-graph pass runs at a time.
@@ -158,7 +158,8 @@ impl LanguageServer for Backend {
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
         let uri = params.text_document.uri;
-        self.state.write().await.close_document(&uri);
+        self.applying("textDocument/didClose", |state| state.close_document(&uri))
+            .await;
         // The buffer is no longer the truth for its file (ADR 0023 D9): the reaction publishes
         // the file as the project reports it now (ADR 0043 D7).
         react(&self.reaction, Change::Closed(uri)).await;
@@ -173,20 +174,22 @@ impl LanguageServer for Backend {
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         let at = params.text_document_position_params;
-        Ok(answers::hover(
-            &*self.state.read().await,
-            &at.text_document.uri,
-            at.position,
-        ))
+        self.answering("textDocument/hover", |state| {
+            Ok(answers::hover(state, &at.text_document.uri, at.position))
+        })
+        .await
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         let at = params.text_document_position;
-        Ok(answers::completion(
-            &*self.state.read().await,
-            &at.text_document.uri,
-            at.position,
-        ))
+        self.answering("textDocument/completion", |state| {
+            Ok(answers::completion(
+                state,
+                &at.text_document.uri,
+                at.position,
+            ))
+        })
+        .await
     }
 
     async fn goto_definition(
@@ -194,80 +197,86 @@ impl LanguageServer for Backend {
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
         let at = params.text_document_position_params;
-        Ok(answers::definition(
-            &*self.state.read().await,
-            &at.text_document.uri,
-            at.position,
-        ))
+        self.answering("textDocument/definition", |state| {
+            Ok(answers::definition(
+                state,
+                &at.text_document.uri,
+                at.position,
+            ))
+        })
+        .await
     }
 
     async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
         let at = params.text_document_position;
-        Ok(answers::references(
-            &*self.state.read().await,
-            &at.text_document.uri,
-            at.position,
-            params.context.include_declaration,
-        ))
+        self.answering("textDocument/references", |state| {
+            Ok(answers::references(
+                state,
+                &at.text_document.uri,
+                at.position,
+                params.context.include_declaration,
+            ))
+        })
+        .await
     }
 
     async fn prepare_rename(
         &self,
         params: TextDocumentPositionParams,
     ) -> Result<Option<PrepareRenameResponse>> {
-        answers::prepare_rename(
-            &*self.state.read().await,
-            &params.text_document.uri,
-            params.position,
-        )
+        self.answering("textDocument/prepareRename", |state| {
+            answers::prepare_rename(state, &params.text_document.uri, params.position)
+        })
+        .await
     }
 
     async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
         let at = params.text_document_position;
-        answers::rename(
-            &*self.state.read().await,
-            &at.text_document.uri,
-            at.position,
-            &params.new_name,
-        )
+        self.answering("textDocument/rename", |state| {
+            answers::rename(state, &at.text_document.uri, at.position, &params.new_name)
+        })
+        .await
     }
 
     async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
-        Ok(answers::code_actions(
-            &*self.state.read().await,
-            &params.text_document.uri,
-            params.range,
-        ))
+        self.answering("textDocument/codeAction", |state| {
+            Ok(answers::code_actions(
+                state,
+                &params.text_document.uri,
+                params.range,
+            ))
+        })
+        .await
     }
 
     async fn document_symbol(
         &self,
         params: DocumentSymbolParams,
     ) -> Result<Option<DocumentSymbolResponse>> {
-        Ok(answers::document_symbols(
-            &*self.state.read().await,
-            &params.text_document.uri,
-        ))
+        self.answering("textDocument/documentSymbol", |state| {
+            Ok(answers::document_symbols(state, &params.text_document.uri))
+        })
+        .await
     }
 
     async fn symbol(
         &self,
         params: WorkspaceSymbolParams,
     ) -> Result<Option<Vec<SymbolInformation>>> {
-        Ok(answers::workspace_symbols(
-            &*self.state.read().await,
-            &params.query,
-        ))
+        self.answering("workspace/symbol", |state| {
+            Ok(answers::workspace_symbols(state, &params.query))
+        })
+        .await
     }
 
     async fn semantic_tokens_full(
         &self,
         params: SemanticTokensParams,
     ) -> Result<Option<SemanticTokensResult>> {
-        Ok(answers::semantic_tokens(
-            &*self.state.read().await,
-            &params.text_document.uri,
-        ))
+        self.answering("textDocument/semanticTokens/full", |state| {
+            Ok(answers::semantic_tokens(state, &params.text_document.uri))
+        })
+        .await
     }
 
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
@@ -289,6 +298,48 @@ impl LanguageServer for Backend {
 }
 
 impl Backend {
+    /// What `answer` reads from the state, or -32603 InternalError after telling the client what `method`
+    /// panicked with: a panic in a handler is a fault of the server, not the end of the session
+    /// (`lsp_survives_its_faults`). `tokio::sync::RwLock` does not poison, so the state is whole after it.
+    async fn answering<T>(
+        &self,
+        method: &str,
+        answer: impl FnOnce(&LspState) -> Result<T>,
+    ) -> Result<T> {
+        let outcome = {
+            let state = self.state.read().await;
+            crate::unwind::unwinding(|| answer(&state))
+        };
+        match outcome {
+            Ok(result) => result,
+            Err(panic) => {
+                self.fault(method, &panic).await;
+                Err(tower_lsp::jsonrpc::Error::internal_error())
+            }
+        }
+    }
+
+    /// A notification's change to the state: a panic is logged and the server goes on.
+    async fn applying(&self, method: &str, apply: impl FnOnce(&mut LspState)) {
+        let outcome = {
+            let mut state = self.state.write().await;
+            crate::unwind::unwinding(|| apply(&mut state))
+        };
+        if let Err(panic) = outcome {
+            self.fault(method, &panic).await;
+        }
+    }
+
+    /// Tell the client which handler failed and with what.
+    async fn fault(&self, method: &str, panic: &str) {
+        self.client
+            .log_message(
+                MessageType::ERROR,
+                format!("specforge-lsp: {method} failed: {panic}"),
+            )
+            .await;
+    }
+
     /// Format an open document as `specforge format` formats its file
     /// (ADR 0021): what [`answers::formatting`] answers, published beside
     /// the compile's diagnostics, and the editor told once per
@@ -299,7 +350,11 @@ impl Backend {
         options: &FormattingOptions,
         lines: Option<format::Lines>,
     ) -> Result<Option<Vec<TextEdit>>> {
-        let formatted = answers::formatting(&*self.state.read().await, uri, options, lines);
+        let formatted = self
+            .answering("textDocument/formatting", |state| {
+                Ok(answers::formatting(state, uri, options, lines))
+            })
+            .await?;
         let Some(formatted) = formatted else {
             return Ok(None);
         };

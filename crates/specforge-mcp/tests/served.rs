@@ -1,7 +1,7 @@
 //! `specforge_mcp::testing::Served`: a server over a `TestProject`.
 
 use crate::support::*;
-use serde_json::json;
+use serde_json::{Value, json};
 
 const EXT: &str = crate::support::extension::EXT;
 
@@ -58,4 +58,58 @@ fn rooted_serves_what_specforge_mcp_serves() {
     let mut rooted = Served::rooted(project);
     assert_eq!(rooted.tool("specforge.validate", json!({})), expected);
     assert!(rooted.state().graph().node("alpha").is_some());
+}
+
+/// The error codes `specforge.validate` lists, in its order.
+fn validate_codes(served: &mut Served) -> Vec<String> {
+    let reply = served.tool("specforge.validate", json!({}));
+    let mut codes = Vec::new();
+    collect_codes(&reply, &mut codes);
+    codes
+}
+
+fn collect_codes(value: &Value, codes: &mut Vec<String>) {
+    match value {
+        Value::Object(map) => {
+            if let Some(Value::String(code)) = map.get("code") {
+                codes.push(code.clone());
+            }
+            map.values().for_each(|v| collect_codes(v, codes));
+        }
+        Value::Array(items) => items.iter().for_each(|v| collect_codes(v, codes)),
+        _ => {}
+    }
+}
+
+#[test]
+fn a_project_file_nested_past_the_limit_is_reported_and_the_server_serves() {
+    // Deep enough to overflow a thread's stack in any build profile.
+    let depth = 5000;
+    let text = format!(
+        "invariant deep_x \"Deep\" {{\n  description \"d\"\n  risk low\n  expression expr {{\n    {}x < 1{}\n  }}\n}}\n",
+        "(".repeat(depth),
+        ")".repeat(depth)
+    );
+    let project = TestProject::new().file("a.spec", &text);
+    let mut served = Served::initialized(project);
+
+    assert!(
+        validate_codes(&mut served).contains(&"E001".to_string()),
+        "validate lists the nesting error"
+    );
+    let ping = call(&mut served, "ping", json!({}));
+    assert!(ping["error"].is_null(), "{ping}");
+}
+
+#[test]
+fn a_project_whose_error_line_holds_wide_characters_initializes() {
+    // The 57th byte of the line falls inside a three-byte character.
+    let line = "ref rust.fn:x// ── Property Entity Kind ──────────────────────\n";
+    let project = TestProject::new().file("main.spec", line);
+    let mut served = Served::initialized(project);
+
+    assert!(
+        validate_codes(&mut served).contains(&"E001".to_string()),
+        "validate lists the syntax error"
+    );
 }

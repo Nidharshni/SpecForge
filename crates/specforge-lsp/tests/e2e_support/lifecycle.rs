@@ -68,3 +68,24 @@ async fn e2e_requests_after_shutdown_are_invalid() {
     let hover = client.hover(&uri, 0, 10).await;
     assert_eq!(hover["error"]["code"], -32600, "{hover}");
 }
+
+#[tokio::test]
+async fn e2e_a_project_whose_error_line_holds_wide_characters_opens() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join("spec")).unwrap();
+    std::fs::write(
+        dir.path().join("specforge.json"),
+        r#"{"name":"r","version":"0.1.0"}"#,
+    )
+    .unwrap();
+    // The 57th byte of the line falls inside a three-byte character.
+    let text = "ref rust.fn:x// ── Property Entity Kind ──────────────────────\n";
+    let path = dir.path().join("spec/main.spec");
+    std::fs::write(&path, text).unwrap();
+
+    let (mut client, _) = Session::start(Some(dir.path())).await;
+    let uri = uri_of(&path);
+    client.open(&uri, text).await;
+    let diagnostics = client.diagnostics(&uri).await;
+    assert!(codes(&diagnostics).contains(&"E001"), "{diagnostics:?}");
+}

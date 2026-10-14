@@ -60,7 +60,7 @@ impl AppState {
         Ok(AppState {
             read_access,
             database,
-            storage: LocalStorage::new(data_dir.join("packages")),
+            storage: LocalStorage::new(data_dir.join("packages"))?,
             rate_limiter: RateLimiter::new(limits.window.as_secs().max(1)),
             publish_limit_per_token: limits.per_token,
             publish_limit_per_ip: limits.per_ip,

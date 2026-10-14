@@ -152,7 +152,7 @@ behavior handle_text_document_change "Handle Text Document Change" {
   category   command
   ports      [LspProtocol]
   produces   [file_changed]
-  invariants [incremental_correctness, lsp_response_latency]
+  invariants [incremental_correctness, lsp_response_latency, lsp_survives_its_faults]
   requires {
     document_open "the document has been opened via didOpen and is in the open document set"
   }
@@ -645,6 +645,7 @@ behavior shared_incremental_pipeline "Shared Incremental Pipeline" {
     zero_domain_knowledge_core,
     watch_mode_response_latency,
     lsp_extension_reload_consistency,
+    lsp_survives_its_faults,
   ]
   category   command
   types      [Graph]
@@ -969,6 +970,7 @@ behavior incremental_document_sync "Incremental Document Sync" {
   """
   verify unit "incremental change applies correctly to source buffer"
   verify unit "multiple incremental changes produce correct source"
+  verify unit "an edit at any column past its line's end applies at the line's end"
   verify integration "incremental sync reduces transfer size vs full sync"
   verify contract "Incremental Document Sync: incremental document sync holds — lsp_initialized_fired, document_open, buffer_consistent, partial_update_applied"
 }

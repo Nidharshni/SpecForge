@@ -236,7 +236,8 @@ impl<'a> Emitter<'a> {
 
     /// Emit one piece's top-level items. An item is kept verbatim when it
     /// overlaps an error region of the piece's tree or holds the piece's
-    /// unclosed string.
+    /// unclosed string. Items that share a source row form a run, and a run
+    /// holding a kept item is kept whole, so every source row is written once.
     fn piece(&mut self, piece: &Piece<'_>) {
         let text = piece.text();
         let base = piece.row();
@@ -246,12 +247,48 @@ impl<'a> Emitter<'a> {
         let mut cursor = root.walk();
         let items: Vec<Node> = root.children(&mut cursor).collect();
 
+        // Items sharing a row form a run; a run holding a broken item is
+        // kept whole, so every source row is written once.
+        let rows_of = |n: Node| (base + n.start_position().row, base + n.end_position().row);
+        let mut run_end = vec![0; items.len()]; // index one past the last item of i's run
+        let mut run_broken = vec![false; items.len()];
+        let mut run_start = 0;
+        while run_start < items.len() {
+            let mut end = run_start + 1;
+            let mut last_row = rows_of(items[run_start]).1;
+            while end < items.len() && rows_of(items[end]).0 <= last_row {
+                last_row = last_row.max(rows_of(items[end]).1);
+                end += 1;
+            }
+            let broken_run = items[run_start..end].iter().any(|&n| broken(n));
+            for k in run_start..end {
+                run_end[k] = end;
+                run_broken[k] = broken_run;
+            }
+            run_start = end;
+        }
+
         let mut i = 0;
         while i < items.len() {
             let node = items[i];
             let class = Item::of(node);
             let start = base + node.start_position().row;
             let end = base + node.end_position().row;
+
+            if run_broken[i] {
+                let (first, _) = self.rows(piece, node);
+                let (_, last) = self.rows(piece, items[run_end[i] - 1]);
+                if let Some((prev_class, prev_end)) = self.prev
+                    && needs_blank_line(prev_class, class, first.saturating_sub(prev_end + 1))
+                {
+                    self.out.push(String::new());
+                }
+                self.kept.push((first, last));
+                self.out.extend(self.lines(first, last));
+                self.prev = Some((Item::of(items[run_end[i] - 1]), last));
+                i = run_end[i];
+                continue;
+            }
 
             // A comment on the line where the previous item ends stays there.
             if class == Item::Comment
@@ -276,12 +313,10 @@ impl<'a> Emitter<'a> {
             if class == Item::Import {
                 let mut run = Vec::new();
                 let mut last_end = end;
-                while i < items.len() && Item::of(items[i]) == Item::Import {
+                while i < items.len() && Item::of(items[i]) == Item::Import && !run_broken[i] {
                     let import = items[i];
                     last_end = base + import.end_position().row;
-                    if broken(import) {
-                        run.push(self.keep(piece, import).join("\n"));
-                    } else if holds_comment(import) {
+                    if holds_comment(import) {
                         let (first, last) = self.rows(piece, import);
                         run.push(self.lines(first, last).join("\n"));
                     } else {
@@ -295,12 +330,7 @@ impl<'a> Emitter<'a> {
                 continue;
             }
 
-            let mut end = end;
-            if broken(node) {
-                let kept = self.keep(piece, node);
-                end = self.rows(piece, node).1;
-                self.out.extend(kept);
-            } else if class == Item::Comment {
+            if class == Item::Comment {
                 self.out.push(comment_text(node, text));
             } else {
                 self.out.extend(format_block(node, text, self.config));
@@ -335,13 +365,6 @@ impl<'a> Emitter<'a> {
         (first..=last)
             .filter_map(|row| self.source_lines.get(row).map(|l| l.trim_end().to_string()))
             .collect()
-    }
-
-    /// Keep `node` verbatim: its lines, with its rows noted for a W142.
-    fn keep(&mut self, piece: &Piece<'_>, node: Node<'_>) -> Vec<String> {
-        let (first, last) = self.rows(piece, node);
-        self.kept.push((first, last));
-        self.lines(first, last)
     }
 
     /// The text (`out` joined, final newline) and one W142 per kept range
@@ -446,12 +469,52 @@ fn one_line(node: Node, source: &str) -> String {
 }
 
 /// `node`'s text as written: the first line from the node's start, the
-/// rest with their own indentation, trailing whitespace trimmed.
+/// rest with their own indentation, trailing whitespace trimmed outside
+/// strings.
 fn as_written(node: Node, source: &str) -> Vec<String> {
-    let mut lines = node_text(node, source).lines();
-    let first = lines.next().unwrap_or("").trim().to_string();
-    std::iter::once(first)
-        .chain(lines.map(|l| l.trim_end().to_string()))
+    let mut lines = lines_keeping_strings(node, source);
+    if let Some(first) = lines.first_mut() {
+        *first = first.trim_start().to_string();
+    }
+    lines
+}
+
+/// `node`'s text split into lines, trailing whitespace trimmed, except at a
+/// line break inside a string literal: a string's lines are its value, so
+/// its trailing whitespace is kept (the formatter keeps strings
+/// byte-for-byte).
+fn lines_keeping_strings(node: Node, source: &str) -> Vec<String> {
+    fn strings(node: Node, found: &mut Vec<(usize, usize)>) {
+        if matches!(node.kind(), kind::STRING | kind::TRIPLE_QUOTED_STRING) {
+            found.push((node.start_byte(), node.end_byte()));
+            return;
+        }
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            strings(child, found);
+        }
+    }
+    let mut spans = Vec::new();
+    strings(node, &mut spans);
+    let text = node_text(node, source);
+    let mut offset = node.start_byte();
+    let mut pieces: Vec<&str> = text.split('\n').collect();
+    if text.ends_with('\n') {
+        pieces.pop();
+    }
+    pieces
+        .into_iter()
+        .map(|piece| {
+            let line_break = offset + piece.len();
+            offset = line_break + 1;
+            let inside = spans.iter().any(|&(a, b)| a < line_break && line_break < b);
+            let piece = piece.strip_suffix('\r').unwrap_or(piece);
+            if inside {
+                piece.to_string()
+            } else {
+                piece.trim_end().to_string()
+            }
+        })
         .collect()
 }
 
@@ -514,12 +577,7 @@ fn format_block(node: Node, source: &str, config: &FormatConfig) -> Vec<String> 
         kind::REF_INLINE if holds_comment(node) => return as_written(node, source),
         kind::REF_INLINE => return vec![format!("ref {} {}", text(field::ID), text(field::TITLE))],
         kind::UNION_BLOCK => return format_union_block(node, source, config),
-        _ => {
-            return node_text(node, source)
-                .lines()
-                .map(|l| l.trim_end().to_string())
-                .collect();
-        }
+        _ => return lines_keeping_strings(node, source),
     };
     let mut lines = vec![format!("{header} {{")];
     format_body(node, source, config, 1, &mut lines);
@@ -538,10 +596,7 @@ fn format_union_block(node: Node, source: &str, config: &FormatConfig) -> Vec<St
         return vec![node_text(node, source).trim_end().to_string()];
     };
     if holds_comment(node) {
-        return node_text(node, source)
-            .lines()
-            .map(|l| l.trim_end().to_string())
-            .collect();
+        return lines_keeping_strings(node, source);
     }
     let mut cursor = variants.walk();
     let children: Vec<Node> = variants.children(&mut cursor).collect();
@@ -732,17 +787,41 @@ fn field_member(node: Node, source: &str, config: &FormatConfig, depth: usize) -
             key,
             annotations,
         },
-        _ => {
-            // Multi-line values (triple-quoted strings, ...) are opaque: the
-            // first line follows the key, the rest stays as written.
+        kind::EXPR_GROUP => {
+            // `expr {` follows the key; each expression line is indented one
+            // level inside it; `}` closes at the field's level
+            // (formatting_consistency).
+            let indent = config.indent_str();
             let text = node_text(value, source);
-            let mut value_lines = text.lines();
-            let first = value_lines.next().unwrap_or("").trim_end().to_string();
-            let mut value: Vec<String> = vec![first];
-            value.extend(value_lines.map(|l| l.trim_end().to_string()));
+            let mut lines = text.lines();
+            let mut value = vec![lines.next().unwrap_or("").trim_end().to_string()];
+            let body: Vec<&str> = lines.collect();
+            let (inner, close) = body.split_at(body.len().saturating_sub(1));
+            value.extend(
+                inner
+                    .iter()
+                    .map(|l| l.trim())
+                    .filter(|l| !l.is_empty())
+                    .map(|l| format!("{}{l}", indent.repeat(depth + 1))),
+            );
+            value.extend(
+                close
+                    .iter()
+                    .map(|l| format!("{}{}", indent.repeat(depth), l.trim())),
+            );
             Member::Field {
                 key,
                 value,
+                annotations,
+            }
+        }
+        _ => {
+            // Multi-line values (triple-quoted strings, ...) are opaque: the
+            // first line follows the key, the rest stays as written. A
+            // string's lines are its value, so its trailing whitespace stays.
+            Member::Field {
+                key,
+                value: lines_keeping_strings(value, source),
                 annotations,
             }
         }
@@ -762,10 +841,7 @@ fn list_value(
     let mut cursor = node.walk();
     let children: Vec<Node> = node.children(&mut cursor).collect();
     if children.iter().any(|c| c.kind() == kind::COMMENT) {
-        return node_text(node, source)
-            .lines()
-            .map(|l| l.trim_end().to_string())
-            .collect();
+        return lines_keeping_strings(node, source);
     }
     let items: Vec<String> = children
         .iter()

@@ -311,7 +311,9 @@ behavior apply_format_rules "Apply Format Rules" {
     exactly one newline; no blank line opens or closes it, and a blank text
     formats to the empty text. String literals, triple-quoted ones included, are
     kept byte-for-byte: their text is a field's value. Statements keep their source
-    order; only runs of imports are sorted. Field keys align to the longest
+    order; only runs of imports are sorted. An expression block's
+    expressions are indented one level inside it, its closing brace at its
+    field's level, whatever their indentation. Field keys align to the longest
     key plus one; annotations of single-line values align in one column;
     `verify [kind] "..."` statements are single-spaced. A list that does
     not fit wraps one item per line, splitting only between items. All rules MUST produce
@@ -335,6 +337,7 @@ behavior apply_format_rules "Apply Format Rules" {
   verify unit "blank line rules enforce exactly one between blocks"
   verify unit "comment rules normalize spacing around inline comments"
   verify unit "multiline string literals are kept byte-for-byte"
+  verify unit "an expression block's lines are indented one level inside it, whatever their indentation"
   verify property "two files differing only in whitespace produce identical output after formatting"
   verify unit "the formatted text has LF line endings and exactly one final newline"
   verify contract "Apply Format Rules: format rule application holds — cst_available, format_config_loaded, contribution_registry_available, deterministic_output, no_domain_logic, extension_rules_applied"
@@ -536,7 +539,9 @@ behavior format_with_parse_errors "Format Files with Parse Errors" {
     parser reads whole. A form that holds a parse error (a tree-sitter ERROR
     or MISSING node, or a string the parser's recovery ended) MUST be left
     unchanged, from its first line to its last, blank lines after it
-    excluded; all original whitespace within it MUST be preserved
+    excluded; a form that shares a line with a form left unchanged is left
+    unchanged with it, so every source line is written at most once;
+    all original whitespace within it MUST be preserved
     byte-for-byte, trailing whitespace aside. A diagnostic MUST be emitted
     listing each file that could not be fully formatted due to parse errors,
     one per form left unchanged (adjacent ones joined), including its line
@@ -552,6 +557,8 @@ behavior format_with_parse_errors "Format Files with Parse Errors" {
   verify unit "diagnostic lists files with parse errors and error line ranges"
   verify unit "a form the parser could not read whole is kept as written and the forms after it are formatted"
   verify unit "the diagnostic spans every line of the form it kept, never past the document"
+  verify unit "forms that share a line with a form left unchanged are kept with it, each line written once"
+  verify property "formatting any text never panics, and formatting its output again changes nothing"
   verify contract "Format Files with Parse Errors: formatting with parse errors holds — cst_with_errors, no_crash, well_formed_regions_formatted, error_regions_preserved, parse_error_diagnosed"
 }
 

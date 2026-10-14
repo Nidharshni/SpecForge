@@ -1150,3 +1150,33 @@ fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     }
     files
 }
+
+// === a source nested past the limit ===
+
+#[test]
+fn check_reports_a_file_nested_past_the_limit() {
+    // Deep enough to overflow the main thread's stack in any build profile.
+    let depth = 5000;
+    let text = format!(
+        "invariant deep_x \"Deep\" {{\n  description \"d\"\n  risk low\n  expression expr {{\n    {}x < 1{}\n  }}\n}}\n",
+        "(".repeat(depth),
+        ")".repeat(depth)
+    );
+    let dir = TestProject::new()
+        .raw_config(r#"{"extensions": ["@specforge/governance"]}"#)
+        .file("a.spec", &text);
+
+    let run = Cli::on(&dir).run(&["check", "--format=json"]);
+
+    assert_eq!(run.code, 1, "{}", run.stderr);
+    assert!(!run.stderr.contains("overflowed"), "{}", run.stderr);
+    let diagnostics = run.json();
+    let codes: Vec<&str> = diagnostics
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|d| d["severity"] == "Error")
+        .map(|d| d["code"].as_str().unwrap())
+        .collect();
+    assert_eq!(codes, ["E001"], "{diagnostics}");
+}
