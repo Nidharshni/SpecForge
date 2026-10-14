@@ -49,3 +49,31 @@ fn a_line_shared_with_a_broken_form_is_written_once() {
         );
     }
 }
+
+#[specforge_test(
+    behavior = "apply_format_rules",
+    verify = "multiline string literals are kept byte-for-byte"
+)]
+fn a_strings_trailing_whitespace_is_its_value() {
+    for source in [
+        "behavior a \"A\" {\n  contract \"\"\"\n    one \n    two\n  \"\"\"\n}\n",
+        "behavior a \"A\" {\n  contract \"one \n  two\"\n}\n",
+        // A statement kept as written (it holds a comment).
+        "behavior a \"A\" {\n  contract \"one \n  two\" // c\n}\n",
+        // A list kept as written (it holds a comment).
+        "behavior a \"A\" {\n  tags [\n    // c\n    \"one \n    two\"\n  ]\n}\n",
+    ] {
+        let value = |text: &str| {
+            format!(
+                "{:?}",
+                specforge_parser::parse(text, "a.spec").entities[0].fields
+            )
+        };
+        assert_eq!(value(&fmt(source)), value(source), "{source:?}");
+        assert_eq!(
+            fmt(source),
+            source,
+            "a canonical file with a trailing space in a string is a fixed point"
+        );
+    }
+}

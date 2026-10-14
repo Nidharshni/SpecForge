@@ -469,12 +469,52 @@ fn one_line(node: Node, source: &str) -> String {
 }
 
 /// `node`'s text as written: the first line from the node's start, the
-/// rest with their own indentation, trailing whitespace trimmed.
+/// rest with their own indentation, trailing whitespace trimmed outside
+/// strings.
 fn as_written(node: Node, source: &str) -> Vec<String> {
-    let mut lines = node_text(node, source).lines();
-    let first = lines.next().unwrap_or("").trim().to_string();
-    std::iter::once(first)
-        .chain(lines.map(|l| l.trim_end().to_string()))
+    let mut lines = lines_keeping_strings(node, source);
+    if let Some(first) = lines.first_mut() {
+        *first = first.trim_start().to_string();
+    }
+    lines
+}
+
+/// `node`'s text split into lines, trailing whitespace trimmed, except at a
+/// line break inside a string literal: a string's lines are its value, so
+/// its trailing whitespace is kept (the formatter keeps strings
+/// byte-for-byte).
+fn lines_keeping_strings(node: Node, source: &str) -> Vec<String> {
+    fn strings(node: Node, found: &mut Vec<(usize, usize)>) {
+        if matches!(node.kind(), kind::STRING | kind::TRIPLE_QUOTED_STRING) {
+            found.push((node.start_byte(), node.end_byte()));
+            return;
+        }
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            strings(child, found);
+        }
+    }
+    let mut spans = Vec::new();
+    strings(node, &mut spans);
+    let text = node_text(node, source);
+    let mut offset = node.start_byte();
+    let mut pieces: Vec<&str> = text.split('\n').collect();
+    if text.ends_with('\n') {
+        pieces.pop();
+    }
+    pieces
+        .into_iter()
+        .map(|piece| {
+            let line_break = offset + piece.len();
+            offset = line_break + 1;
+            let inside = spans.iter().any(|&(a, b)| a < line_break && line_break < b);
+            let piece = piece.strip_suffix('\r').unwrap_or(piece);
+            if inside {
+                piece.to_string()
+            } else {
+                piece.trim_end().to_string()
+            }
+        })
         .collect()
 }
 
@@ -537,12 +577,7 @@ fn format_block(node: Node, source: &str, config: &FormatConfig) -> Vec<String> 
         kind::REF_INLINE if holds_comment(node) => return as_written(node, source),
         kind::REF_INLINE => return vec![format!("ref {} {}", text(field::ID), text(field::TITLE))],
         kind::UNION_BLOCK => return format_union_block(node, source, config),
-        _ => {
-            return node_text(node, source)
-                .lines()
-                .map(|l| l.trim_end().to_string())
-                .collect();
-        }
+        _ => return lines_keeping_strings(node, source),
     };
     let mut lines = vec![format!("{header} {{")];
     format_body(node, source, config, 1, &mut lines);
@@ -561,10 +596,7 @@ fn format_union_block(node: Node, source: &str, config: &FormatConfig) -> Vec<St
         return vec![node_text(node, source).trim_end().to_string()];
     };
     if holds_comment(node) {
-        return node_text(node, source)
-            .lines()
-            .map(|l| l.trim_end().to_string())
-            .collect();
+        return lines_keeping_strings(node, source);
     }
     let mut cursor = variants.walk();
     let children: Vec<Node> = variants.children(&mut cursor).collect();
@@ -757,15 +789,11 @@ fn field_member(node: Node, source: &str, config: &FormatConfig, depth: usize) -
         },
         _ => {
             // Multi-line values (triple-quoted strings, ...) are opaque: the
-            // first line follows the key, the rest stays as written.
-            let text = node_text(value, source);
-            let mut value_lines = text.lines();
-            let first = value_lines.next().unwrap_or("").trim_end().to_string();
-            let mut value: Vec<String> = vec![first];
-            value.extend(value_lines.map(|l| l.trim_end().to_string()));
+            // first line follows the key, the rest stays as written. A
+            // string's lines are its value, so its trailing whitespace stays.
             Member::Field {
                 key,
-                value,
+                value: lines_keeping_strings(value, source),
                 annotations,
             }
         }
@@ -785,10 +813,7 @@ fn list_value(
     let mut cursor = node.walk();
     let children: Vec<Node> = node.children(&mut cursor).collect();
     if children.iter().any(|c| c.kind() == kind::COMMENT) {
-        return node_text(node, source)
-            .lines()
-            .map(|l| l.trim_end().to_string())
-            .collect();
+        return lines_keeping_strings(node, source);
     }
     let items: Vec<String> = children
         .iter()
