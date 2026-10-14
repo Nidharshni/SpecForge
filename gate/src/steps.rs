@@ -9,6 +9,7 @@ use crate::checks::{self, Selection};
 use crate::doc_links;
 use crate::judge;
 use crate::repo::{OUTSIDE_WORKSPACE, Repo};
+use crate::root_layout;
 use crate::run::{CARGO_AUDIT, Ctx, Mode, TREE_SITTER};
 
 /// Ok when nothing failed; else every failure, one per line.
@@ -118,6 +119,13 @@ pub fn doc_links(ctx: &Ctx, _: &Selection) -> Result<(), String> {
         std::fs::read_to_string(root.join(path)).ok()
     });
     finish(broken.iter().map(ToString::to_string).collect())
+}
+
+pub fn root_layout(ctx: &Ctx, _: &Selection) -> Result<(), String> {
+    finish(root_layout::disagreements(
+        root_layout::ROOT,
+        &tracked_paths(ctx)?,
+    ))
 }
 
 /// `git ls-files -z`: every tracked path, repo-relative.

@@ -172,6 +172,16 @@ pub static CHECKS: &[Check] = &[
         run: steps::doc_links,
     },
     Check {
+        name: "root-layout",
+        proves: "the tracked top-level entries are the root list's (gate/src/root_layout.rs)",
+        reach: Reach::Hook,
+        trigger: Trigger::Always,
+        compiles: false,
+        after: &[],
+        fix: "shipped material goes in an existing folder, planning and experiments in the planning repository; a new top-level entry joins ROOT with its reason and CONTRIBUTING.md#where-things-are",
+        run: steps::root_layout,
+    },
+    Check {
         name: "builtins",
         proves: "every committed blob was built from the sources it recorded",
         reach: Reach::Quick,

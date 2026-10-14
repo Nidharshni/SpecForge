@@ -7,6 +7,7 @@ mod checks;
 mod doc_links;
 pub mod judge;
 mod repo;
+mod root_layout;
 mod run;
 mod steps;
 

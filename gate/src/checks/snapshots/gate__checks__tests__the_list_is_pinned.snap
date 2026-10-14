@@ -17,6 +17,8 @@ links             hook       computed: a .spec file; a test file or one with a `
                              every test's verify text and entity is declared by the spec (A016, static)
 doc-links         hook       always
                              every relative link in a tracked Markdown file names a tracked file or directory
+root-layout       hook       always
+                             the tracked top-level entries are the root list's (gate/src/root_layout.rs)
 builtins          quick      computed: a file some blob's inputs.json records
                              every committed blob was built from the sources it recorded
 guests            quick      extensions/**, crates/**, integrations/rust/**, Cargo.toml
