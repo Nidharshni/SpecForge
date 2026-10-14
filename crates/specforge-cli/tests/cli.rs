@@ -1159,7 +1159,6 @@ fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
 // === a source nested past the limit ===
 
 #[test]
-#[ignore = "fixed by plan 10 T3: exit 134 (stack overflow) until then"]
 fn check_reports_a_file_nested_past_the_limit() {
     // Deep enough to overflow the main thread's stack in any build profile.
     let depth = 5000;

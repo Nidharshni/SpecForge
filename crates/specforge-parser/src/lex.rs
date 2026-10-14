@@ -374,6 +374,30 @@ fn triple_string(text: &str, open: usize, top_indent: usize) -> (usize, bool) {
     }
 }
 
+/// The deepest the grammar's brackets may nest: `(`, `[` and `{` counted together, outside strings and
+/// comments. The repository's 235 `.spec` files nest at most 3; the parser, the grammar and every walk of
+/// their trees recurse once per level, and an editor's thread has a 2 MiB stack.
+pub const MAX_NESTING: usize = 32;
+
+/// The byte offset of the first opening bracket of `text` that nests deeper than [`MAX_NESTING`], read
+/// through [`lex`]; `None` when every bracket is within it. A closer never takes the depth below zero.
+pub fn nested_too_deep(text: &str) -> Option<usize> {
+    let mut depth = 0usize;
+    for lexeme in lex(text) {
+        match lexeme.kind {
+            LexemeKind::Punct('(' | '[' | '{') => {
+                depth = depth.saturating_add(1);
+                if depth > MAX_NESTING {
+                    return Some(lexeme.start);
+                }
+            }
+            LexemeKind::Punct(')' | ']' | '}') => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+    None
+}
+
 /// The lexemes of `text`, in order, whitespace skipped. Text that starts
 /// inside a string is read as code: callers lex from a statement's start.
 /// A string the grammar would not close is marked `Str { closed: false }`:

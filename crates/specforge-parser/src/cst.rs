@@ -58,12 +58,18 @@ pub enum CstError {
     Language(LanguageError),
     /// Tree-sitter returned no tree.
     NoTree,
+    /// Brackets nest deeper than [`lex::MAX_NESTING`]: the source is read into no tree. `at` is the byte of
+    /// the first bracket past the limit.
+    TooDeep { at: usize },
 }
 
 impl<'s> Cst<'s> {
     /// Read `source`, reusing `old_tree` (already edited to `source`) for
     /// the whole text's parse.
     pub fn read(source: &'s str, old_tree: Option<&Tree>) -> Result<Cst<'s>, CstError> {
+        if let Some(at) = lex::nested_too_deep(source) {
+            return Err(CstError::TooDeep { at });
+        }
         let mut parser = Parser::new();
         parser
             .set_language(&tree_sitter_specforge::LANGUAGE.into())

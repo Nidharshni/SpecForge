@@ -2,6 +2,7 @@ use crate::ast::*;
 use crate::cst::{Cst, CstError, UnclosedString};
 use crate::expr::{CmpOp, Expr, ExprSpan, SpannedExpr};
 use crate::format_version::{CURRENT_FORMAT_VERSION, detect_format_version};
+use crate::lex::MAX_NESTING;
 use specforge_common::{SourceSpan, Sym, structural};
 use tree_sitter::Node;
 use tree_sitter_specforge::{field, kind};
@@ -60,15 +61,30 @@ fn parse_syntax(
         Ok(cst) => cst,
         Err(CstError::Language(e)) => {
             return (
-                unparsed(file_sym, format!("failed to load specforge grammar: {e}")),
+                unparsed(
+                    file_sym,
+                    format!("failed to load specforge grammar: {e}"),
+                    unparsed_span(file_sym),
+                ),
                 None,
             );
         }
         Err(CstError::NoTree) => {
             return (
-                unparsed(file_sym, "tree-sitter parse failed".to_string()),
+                unparsed(
+                    file_sym,
+                    "tree-sitter parse failed".to_string(),
+                    unparsed_span(file_sym),
+                ),
                 None,
             );
+        }
+        Err(CstError::TooDeep { at }) => {
+            let message = format!(
+                "brackets nested more than {MAX_NESTING} deep: a .spec file nests (), [] and {{}} at most {MAX_NESTING} levels"
+            );
+            let span = position_span(source, file_sym, at, at + 1);
+            return (unparsed(file_sym, message, span), None);
         }
     };
     let mut file = SpecFile {
@@ -115,7 +131,19 @@ fn parse_syntax(
 }
 
 /// A file nothing could be read from, with the one error saying why.
-fn unparsed(file_sym: Sym, message: String) -> SpecFile {
+/// The span of an error that has no place in the text: the first character.
+fn unparsed_span(file_sym: Sym) -> SourceSpan {
+    SourceSpan {
+        file: file_sym,
+        start_line: 1,
+        start_col: 1,
+        end_line: 1,
+        end_col: 1,
+    }
+}
+
+/// A file read into no tree: its one error, `message` at `span`.
+fn unparsed(file_sym: Sym, message: String, span: SourceSpan) -> SpecFile {
     SpecFile {
         path: file_sym,
         imports: Vec::new(),
@@ -124,13 +152,7 @@ fn unparsed(file_sym: Sym, message: String) -> SpecFile {
         format_diagnostics: Vec::new(),
         errors: vec![ParseError {
             message,
-            span: SourceSpan {
-                file: file_sym,
-                start_line: 1,
-                start_col: 1,
-                end_line: 1,
-                end_col: 1,
-            },
+            span,
             expected: None,
             found: None,
         }],

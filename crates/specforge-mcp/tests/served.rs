@@ -82,7 +82,6 @@ fn collect_codes(value: &Value, codes: &mut Vec<String>) {
 }
 
 #[test]
-#[ignore = "fixed by plan 10 T3: the server aborts (stack overflow) until then"]
 fn a_project_file_nested_past_the_limit_is_reported_and_the_server_serves() {
     // Deep enough to overflow a thread's stack in any build profile.
     let depth = 5000;
