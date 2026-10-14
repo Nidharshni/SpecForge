@@ -12,6 +12,7 @@ use specforge_ops::view::ProjectView;
 use specforge_parser::{EntityId, EntityKind, FieldMap};
 use specforge_project::CompiledProject;
 use specforge_project::coverage::RecordedCoverage;
+use specforge_project::testing::TestProject;
 use specforge_registry::RegistryBuild;
 use specforge_test_macros::test as spec;
 use std::sync::Arc;
@@ -21,26 +22,12 @@ use tower_lsp::lsp_types::{
 
 /// A project of `files` with `@specforge/software`, compiled with its
 /// extension loaded (and the directory that holds it).
-pub fn compiled(files: &[(&str, &str)]) -> (tempfile::TempDir, CompiledProject) {
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::write(
-        dir.path().join("specforge.json"),
-        serde_json::json!({"name": "completion", "extensions": ["@specforge/software"]})
-            .to_string(),
-    )
-    .unwrap();
-    for (name, text) in files {
-        std::fs::write(dir.path().join(name), text).unwrap();
-    }
-    let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let project = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
-    assert!(
-        project.diagnostics().iter().all(|d| d.code != "I002"),
-        "the extension did not load"
-    );
+pub fn compiled(files: &[(&str, &str)]) -> (TestProject, CompiledProject) {
+    let dir = TestProject::new()
+        .config(|c| c["name"] = "completion".into())
+        .enabling(&["@specforge/software"])
+        .files(files);
+    let project = dir.loaded();
     (dir, project)
 }
 
@@ -356,21 +343,15 @@ fn an_enum_value_suggests_its_declared_values() {
     verify = "a builtin vocabulary's field completes its values"
 )]
 fn a_builtin_vocabulary_completes_its_values() {
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::write(
-        dir.path().join("specforge.json"),
-        serde_json::json!({"name": "vocab", "extensions": ["@specforge/product"]}).to_string(),
-    )
-    .unwrap();
     let text = "feature f \"F\" {\n  status \n}\n";
-    std::fs::write(dir.path().join("test.spec"), text).unwrap();
+    let dir = TestProject::new()
+        .config(|c| c["name"] = "vocab".into())
+        .enabling(&["@specforge/product"])
+        .file("test.spec", text);
     let runtime = specforge_component::ComponentRuntime::new();
     specforge_component::builtins::load_builtins_for(&runtime, &["@specforge/product".to_string()])
         .unwrap();
-    let project = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let project = dir.compile_in(Arc::new(runtime));
     let found = complete(text, 1, 9, &ProjectView::of(&project)).1;
     assert_eq!(
         labels(&found),
