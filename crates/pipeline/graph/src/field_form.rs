@@ -313,13 +313,6 @@ impl Graph {
 #[serde(transparent)]
 pub struct FieldJson(Value);
 
-impl FieldJson {
-    /// The JSON as a value.
-    pub fn as_value(&self) -> &Value {
-        &self.0
-    }
-}
-
 impl From<FieldJson> for Value {
     fn from(written: FieldJson) -> Self {
         written.0

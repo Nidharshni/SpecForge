@@ -17,8 +17,6 @@
 
 use serde::Serialize;
 
-use specforge_common::{SourceSpan, Sym};
-
 // ── AST ─────────────────────────────────────────────────────────────────────
 
 /// A 1-based line/column source range relative to the parsed input.
@@ -174,30 +172,6 @@ impl SpannedExpr {
 impl std::fmt::Display for SpannedExpr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.render(0, f)
-    }
-}
-
-impl SpannedExpr {
-    /// Best-effort mapping to a file span, given the origin (1-based line,
-    /// 1-based column) of this expression's first character in the file.
-    /// Relative lines shift the origin line; columns are exact only on the
-    /// origin line (dedented block content loses column fidelity).
-    pub fn absolute_span(&self, file: Sym, origin_line: usize, origin_col: usize) -> SourceSpan {
-        SourceSpan {
-            file,
-            start_line: origin_line + self.span.start_line - 1,
-            start_col: if self.span.start_line == 1 {
-                origin_col + self.span.start_col - 1
-            } else {
-                1
-            },
-            end_line: origin_line + self.span.end_line - 1,
-            end_col: if self.span.end_line == 1 {
-                origin_col + self.span.end_col - 1
-            } else {
-                1
-            },
-        }
     }
 }
 
