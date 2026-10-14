@@ -3,12 +3,12 @@
 //! document both surfaces print (`McpStatsResult`, ADR 0052).
 
 use serde::Serialize;
+use specforge_common::Counts;
 use specforge_common::Diagnostic;
 use specforge_common::shape::Shape;
 use specforge_project::coverage::Summary;
 
 use crate::OpError;
-use crate::check::Counts;
 use crate::view::ProjectView;
 
 /// The project's statistics: what `specforge stats --format json` and

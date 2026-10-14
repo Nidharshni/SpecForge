@@ -3,8 +3,8 @@
 
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_ops::infer::{self, InferencePlanRequest, PlanDocument};
-use specforge_ops::navigate::{anchors_of_file, source_anchors};
+use specforge_ops::read::infer::{self, InferencePlanRequest, PlanDocument};
+use specforge_ops::read::navigate::{anchors_of_file, source_anchors};
 
 use crate::args::Arguments;
 use crate::prompt::{CorePrompt, Prompted};
@@ -13,7 +13,7 @@ use crate::tool::CoreTool;
 use crate::tool::{ErrorCode, McpError};
 use crate::tools::find_spec_for_source::{Anchored, MatchMode};
 use crate::tools::{analyze, infer_progress, infer_session, query, schema, search, validate};
-use specforge_ops::infer::KindGuideField;
+use specforge_ops::read::infer::KindGuideField;
 use specforge_ops::view::ProjectView;
 
 /// The core tools the workflow protocol names, in the order it lists them.
@@ -235,7 +235,7 @@ fn validation() -> String {
 
 fn get_file_scoped(project: &ProjectView, file_path: &str) -> Outcome {
     // The entities anchored to the file: the one file rule
-    // (specforge_ops::navigate::anchors_of_file) over the anchors manifest,
+    // (specforge_ops::read::navigate::anchors_of_file) over the anchors manifest,
     // the answer specforge.find_spec_for_source gives (C9-09). With no
     // project there is no manifest.
     let manifest = source_anchors(project).map_err(McpError::from)?;

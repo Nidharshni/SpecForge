@@ -9,7 +9,7 @@
 use serde_json::{Value, json};
 use specforge_common::Diagnostic;
 use specforge_extension_sdk::prelude::*;
-use specforge_ops::analyze::{AnalyzeOptions, analyze};
+use specforge_ops::analysis::analyze::{AnalyzeOptions, analyze};
 use specforge_registry::build_registries;
 use specforge_registry_client::registry_client::RegistryError;
 
@@ -109,7 +109,7 @@ fn dense_inference() -> Diagnostic {
         .to_string(),
     )
     .unwrap();
-    only(specforge_ops::infer::lint(&project.view()), "I202")
+    only(specforge_ops::read::infer::lint(&project.view()), "I202")
 }
 
 /// The one diagnostic of `diagnostics` whose code is `code`.

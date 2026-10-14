@@ -3,7 +3,7 @@
 use super::candidate::LocalFile;
 use super::lock_plan::{Ask, Asked, Fetching, Install, LockPlan, Purpose};
 use super::{Origin, builtin_name};
-use crate::registry::{Acceptance, Publisher, Registry};
+use crate::registry::{Acceptance, Publisher, Registry, Trust};
 use crate::{OpError, OpErrorKind, Refusal, Writes};
 use serde::Serialize;
 use specforge_common::codes;
@@ -197,17 +197,6 @@ pub(crate) fn named(several: bool, specifier: &str, error: OpError) -> OpError {
     } else {
         error
     }
-}
-
-/// How a key change in a signed package is decided.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Trust {
-    /// Refuse it (MCP, `--format json`): nobody can be asked.
-    Refuse,
-    /// Accept it (`--yes`).
-    AssumeYes,
-    /// Ask on the terminal, refusing when there is none.
-    Prompt,
 }
 
 /// What to add, and where.
@@ -1592,21 +1581,6 @@ mod tests {
             Some("this specforge build's builtin extensions disagree: reinstall specforge")
         );
         assert_eq!(files_under(dir.path()), before);
-
-        // init refuses the same way, before it writes anything.
-        let target = tempfile::tempdir().unwrap();
-        let extensions = vec!["@specforge/formal".to_string()];
-        let error = crate::init::init(
-            &crate::init::Request {
-                dir: &target.path().join("demo"),
-                name: Some("demo"),
-                version: crate::init::DEFAULT_VERSION,
-                extensions: &extensions,
-            },
-            &runtime,
-        )
-        .unwrap_err();
-        assert_eq!(error.error.code, "E027");
     }
 
     /// The project's peer set (ADR 0041, amendment round 7) is what an add is judged against.
@@ -1619,7 +1593,7 @@ mod tests {
 
     /// A registry publishing `bytes` as the package they declare.
     fn registry_publishing(bytes: &[u8]) -> MemoryRegistry {
-        let declared = crate::publish::declare(&testing::probes(), bytes)
+        let declared = crate::extension::declare(&testing::probes(), bytes)
             .unwrap()
             .0;
         MemoryRegistry::new().serving(Published::new(bytes.to_vec(), declared))
@@ -2605,7 +2579,7 @@ mod tests {
         let served = |wasm: &[u8]| {
             Published::new(
                 wasm.to_vec(),
-                crate::publish::declare(runtime, wasm).unwrap().0,
+                crate::extension::declare(runtime, wasm).unwrap().0,
             )
         };
         MemoryRegistry::new()

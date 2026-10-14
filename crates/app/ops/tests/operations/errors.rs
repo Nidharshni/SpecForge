@@ -1,6 +1,6 @@
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
-use specforge_ops::trace::TraceError;
+use specforge_ops::read::trace::TraceError;
 use specforge_parser::{EntityId, EntityKind, FieldMap};
 
 fn span() -> SourceSpan {
@@ -42,9 +42,9 @@ fn build_graph() -> Graph {
 #[test]
 fn trace_nonexistent_returns_entity_not_found() {
     let project = crate::view_support::Project::of_graph(build_graph(), Default::default());
-    let err = specforge_ops::trace::trace(
+    let err = specforge_ops::read::trace::trace(
         &project.view(),
-        specforge_ops::trace::Target::Entity("nonexistent"),
+        specforge_ops::read::trace::Target::Entity("nonexistent"),
     )
     .unwrap_err();
     assert!(
@@ -60,8 +60,11 @@ fn trace_nonexistent_returns_entity_not_found() {
 fn tracing_an_unknown_entity_is_e003_with_a_suggestion() {
     let project = crate::view_support::Project::of_graph(build_graph(), Default::default());
     let trace = |id| {
-        specforge_ops::trace::trace(&project.view(), specforge_ops::trace::Target::Entity(id))
-            .unwrap_err()
+        specforge_ops::read::trace::trace(
+            &project.view(),
+            specforge_ops::read::trace::Target::Entity(id),
+        )
+        .unwrap_err()
     };
     let near = trace("bb");
     assert_eq!(
@@ -86,8 +89,8 @@ fn tracing_an_unknown_entity_is_e003_with_a_suggestion() {
     verify = "a missing entity is one E003 refusal naming the closest entity on every read view"
 )]
 fn a_missing_entity_is_one_refusal() {
-    use specforge_ops::export::{Request, export};
-    use specforge_ops::navigate::Navigator;
+    use specforge_ops::read::export::{Request, export};
+    use specforge_ops::read::navigate::Navigator;
     use specforge_ops::{OpError, OpErrorKind};
 
     let mut graph = Graph::new();
@@ -112,15 +115,15 @@ fn a_missing_entity_is_one_refusal() {
         ),
         (
             "inspect",
-            specforge_ops::inspect::inspect(&view, "logn")
+            specforge_ops::read::inspect::inspect(&view, "logn")
                 .unwrap_err()
                 .error,
         ),
         (
             "explore",
-            specforge_ops::explore::explore(
+            specforge_ops::read::explore::explore(
                 &view,
-                &specforge_ops::explore::ExplorationRequest {
+                &specforge_ops::read::explore::ExplorationRequest {
                     entity_id: Some("logn"),
                     ..Default::default()
                 },
@@ -130,9 +133,9 @@ fn a_missing_entity_is_one_refusal() {
         ),
         (
             "review",
-            specforge_ops::review::review(
+            specforge_ops::read::review::review(
                 &view,
-                &specforge_ops::review::ReviewRequest {
+                &specforge_ops::read::review::ReviewRequest {
                     entity_id: Some("logn"),
                     ..Default::default()
                 },
@@ -143,15 +146,18 @@ fn a_missing_entity_is_one_refusal() {
         ("navigator", navigator.definition("logn").unwrap_err().error),
         (
             "rename",
-            specforge_ops::rename::plan(&navigator, "logn", "fine_name")
+            specforge_ops::authoring::rename::plan(&navigator, "logn", "fine_name")
                 .unwrap_err()
                 .error,
         ),
         (
             "trace",
             OpError::from(
-                specforge_ops::trace::trace(&view, specforge_ops::trace::Target::Entity("logn"))
-                    .unwrap_err(),
+                specforge_ops::read::trace::trace(
+                    &view,
+                    specforge_ops::read::trace::Target::Entity("logn"),
+                )
+                .unwrap_err(),
             ),
         ),
     ];
@@ -187,7 +193,8 @@ fn add_package(
     registry: &specforge_ops::registry::testing::MemoryRegistry,
     specifier: &str,
 ) -> specforge_ops::Refusal<specforge_ops::extension::AddField> {
-    use specforge_ops::extension::{self, AddRequest, Trust};
+    use specforge_ops::extension::{self, AddRequest};
+    use specforge_ops::registry::Trust;
     extension::add(
         &AddRequest {
             root: &specforge_common::ProjectRoot::of(dir).unwrap(),
@@ -208,7 +215,7 @@ fn add_package(
 )]
 fn a_registry_refusal_is_never_an_internal_error() {
     use specforge_ops::OpErrorKind;
-    use specforge_ops::extension::Trust;
+    use specforge_ops::registry::Trust;
     use specforge_ops::registry::testing::{MemoryRegistry, Published, declaration};
     use specforge_ops::registry::{Registry, TrustPolicy};
     use specforge_package::{PackageName, Version};

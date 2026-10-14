@@ -1,4 +1,4 @@
-//! `specforge.collect`: record which entities the tests prove (`specforge_ops::collect`).
+//! `specforge.collect`: record which entities the tests prove (`specforge_ops::analysis::collect`).
 
 use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup, WriteHints};
@@ -8,11 +8,11 @@ use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
 use crate::reply::Answered;
 use crate::target::ProjectRef;
-use specforge_ops::collect::CollectField;
+use specforge_ops::analysis::collect::CollectField;
 
 /// `specforge.collect`'s reply: the document `specforge collect --format
 /// json` prints (`McpCollectResult`).
-type Reply = specforge_ops::collect::CollectDocument;
+type Reply = specforge_ops::analysis::collect::CollectDocument;
 
 /// `specforge.collect`'s arguments.
 #[derive(Debug, Arguments)]
@@ -50,7 +50,7 @@ impl CoreTool for Tool {
     type Returns = Answered<Reply>;
 
     fn call(project: ProjectRef<'_>, args: Args) -> Answered<Reply> {
-        use specforge_ops::collect::{self, Consent, Mode, Request, RunnerOutput};
+        use specforge_ops::analysis::collect::{self, Consent, Mode, Request, RunnerOutput};
 
         let runner = args.runner.as_deref().filter(|r| *r != "auto");
         let run = args.run;

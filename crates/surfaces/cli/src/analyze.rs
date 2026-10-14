@@ -1,6 +1,6 @@
 //! `specforge analyze` — static analysis passes over the compiled graph.
 //!
-//! The analysis itself is [`specforge_ops::analyze`], shared with the MCP
+//! The analysis itself is [`specforge_ops::analysis::analyze`], shared with the MCP
 //! tool. This module is the CLI half: arguments in, rendering and exit
 //! codes out.
 
@@ -8,7 +8,9 @@ use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, err, errln, outln};
 use specforge_common::{codes, diagnostic_summary, render_diagnostics, truncate_diagnostics};
 use specforge_ops::OpError;
-use specforge_ops::analyze::{AnalyzeOptions, AnalyzeOutcome, ReportSource, StrayRecord, analyze};
+use specforge_ops::analysis::analyze::{
+    AnalyzeOptions, AnalyzeOutcome, ReportSource, StrayRecord, analyze,
+};
 use specforge_ops::solver::{Solver, Z3};
 use specforge_ops::view::ProjectView;
 use specforge_project::CompiledProject;
@@ -71,7 +73,7 @@ impl Args {
             pass: self
                 .pass
                 .clone()
-                .unwrap_or_else(|| specforge_ops::analyze::EVERY_PASS.to_string()),
+                .unwrap_or_else(|| specforge_ops::analysis::analyze::EVERY_PASS.to_string()),
             strict: self.strict,
             report: match &self.test_results {
                 Some(path) => ReportSource::File(path.clone()),
@@ -224,7 +226,7 @@ mod summary_tests {
     fn the_flags_build_the_analysis_options() {
         let (plain_args, z3) = (args(&[]), super::Z3::default());
         let plain = plain_args.options(&z3);
-        assert_eq!(plain.pass, specforge_ops::analyze::EVERY_PASS);
+        assert_eq!(plain.pass, specforge_ops::analysis::analyze::EVERY_PASS);
         assert!(matches!(plain.report, ReportSource::Recorded));
         assert!(plain.prove.is_none() && plain.min.is_none() && !plain.strict);
 

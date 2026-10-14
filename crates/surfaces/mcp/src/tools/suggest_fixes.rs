@@ -3,7 +3,7 @@ use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::SourceSpan;
 use specforge_common::shape::Shape;
-use specforge_ops::navigate::{Fix, FixKind, FixQuery};
+use specforge_ops::read::navigate::{Fix, FixKind, FixQuery};
 
 use crate::args::Arguments;
 use crate::reply::Answered;

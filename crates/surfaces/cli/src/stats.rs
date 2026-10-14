@@ -1,6 +1,6 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, outln};
-use specforge_ops::stats::Stats;
+use specforge_ops::read::stats::Stats;
 use specforge_ops::view::ProjectView;
 
 // `specforge stats`'s command line.
@@ -24,7 +24,7 @@ impl Args {
             Ok(project) => project,
             Err(error) => return Refusal::measuring(self.output.format).report(terminal, &error),
         };
-        let stats = match specforge_ops::stats::stats(&ProjectView::of(&project)) {
+        let stats = match specforge_ops::read::stats::stats(&ProjectView::of(&project)) {
             Ok(stats) => stats,
             Err(error) => return Refusal::measuring(format).report(terminal, &error),
         };

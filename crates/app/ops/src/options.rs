@@ -130,7 +130,7 @@ impl<T: Copy + PartialEq + 'static> OptionTable<T> {
     }
 
     /// Whether `value` is one of the table's (a table may list a subset of
-    /// its type: [`crate::export::AGENT_FORMAT`]).
+    /// its type: [`crate::read::export::AGENT_FORMAT`]).
     pub fn admits(&self, value: T) -> bool {
         self.choices.iter().any(|choice| choice.value == value)
     }

@@ -17,7 +17,7 @@ use crate::project::ProjectArg;
 use serde::Serialize;
 use specforge_common::DiagnosticList;
 use specforge_common::shape::Shape;
-use specforge_ops::check::Counts;
+use specforge_ops::analysis::check::Counts;
 use specforge_ops::{OpError, OpErrorKind};
 use specforge_project::{DiagnosticsDelta, GraphDelta, ProjectSession, UpdateKind};
 use specforge_watch::{Applied, DEFAULT_DEBOUNCE_WINDOW, Notify, SessionWatch, WatchEvent};

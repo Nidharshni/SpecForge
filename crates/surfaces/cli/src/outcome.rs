@@ -68,8 +68,8 @@ impl OutputFormat {
     /// How a publisher key change is decided for this output: `--yes`
     /// accepts it; JSON output can't ask anyone, so it refuses; a terminal
     /// is asked.
-    pub(crate) fn trust(self, assume_yes: bool) -> specforge_ops::extension::Trust {
-        use specforge_ops::extension::Trust;
+    pub(crate) fn trust(self, assume_yes: bool) -> specforge_ops::registry::Trust {
+        use specforge_ops::registry::Trust;
         match (assume_yes, self) {
             (true, _) => Trust::AssumeYes,
             (false, OutputFormat::Json) => Trust::Refuse,
@@ -227,7 +227,7 @@ mod tests {
 
     #[test]
     fn trust_is_yes_then_what_the_output_can_ask() {
-        use specforge_ops::extension::Trust;
+        use specforge_ops::registry::Trust;
         assert_eq!(OutputFormat::Human.trust(true), Trust::AssumeYes);
         assert_eq!(OutputFormat::Json.trust(true), Trust::AssumeYes);
         assert_eq!(OutputFormat::Json.trust(false), Trust::Refuse);

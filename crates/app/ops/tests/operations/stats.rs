@@ -309,7 +309,7 @@ fn stats_today_through_the_registries() {
         specforge_common::Diagnostic::new(specforge_common::codes::E001, "err"),
         specforge_common::Diagnostic::untyped("W002", Severity::Warning, "warn"),
     ];
-    let stats = specforge_ops::stats::stats(&project.view().reporting(&diagnostics)).unwrap();
+    let stats = specforge_ops::read::stats::stats(&project.view().reporting(&diagnostics)).unwrap();
     assert_eq!(debug_body(&stats), STATS_TODAY);
 }
 

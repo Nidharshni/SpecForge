@@ -2,7 +2,7 @@ use crate::target::View;
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_ops::coverage::{CoverageQuery, CoverageRowDocument};
+use specforge_ops::read::coverage::{CoverageQuery, CoverageRowDocument};
 use specforge_project::coverage::Status;
 
 use crate::args::Arguments;
@@ -18,7 +18,7 @@ pub struct Args {
     /// Filter by entity kind
     kind: Option<String>,
     /// Only entities with this coverage status
-    #[arg(choice = specforge_ops::coverage::STATUS)]
+    #[arg(choice = specforge_ops::read::coverage::STATUS)]
     status_filter: Option<Status>,
 }
 
@@ -51,7 +51,8 @@ impl CoreTool for Tool {
             kind: args.kind.as_deref(),
             status: args.status_filter,
         };
-        let outcome = specforge_ops::coverage::coverage(&view, &query).map_err(McpError::from)?;
+        let outcome =
+            specforge_ops::read::coverage::coverage(&view, &query).map_err(McpError::from)?;
         Ok(Reply {
             entities: outcome.rows.iter().map(|row| row.document()).collect(),
         }

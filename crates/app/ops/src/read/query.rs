@@ -10,9 +10,9 @@ use specforge_common::Diagnostic;
 use specforge_graph::Node;
 
 use crate::Refusal;
-use crate::export::{self, AGENT_FORMAT, ExportField, FORMAT, Format, Schema};
-use crate::navigate::{
-    self, EntityMatch, EntityQuery, MatchScope, MatchedOn, find_entities, snippet,
+use crate::read::export::{self, AGENT_FORMAT, ExportField, FORMAT, Format, Schema};
+use crate::read::navigate::{
+    EntityMatch, EntityQuery, MatchScope, MatchedOn, find_entities, snippet,
 };
 use crate::view::ProjectView;
 
@@ -49,7 +49,7 @@ pub struct QueryRequest<'a> {
     /// is not an agent format.
     pub format: Option<Format>,
     /// Give every exported entity its coverage status (`coverage_status`,
-    /// a [`crate::coverage::STATUS`] name).
+    /// a [`crate::read::coverage::STATUS`] name).
     pub include_coverage: bool,
 }
 
@@ -67,7 +67,7 @@ pub struct QueryOutcome {
 }
 
 /// The query `request` over the view. An entity the graph lacks is
-/// [`crate::navigate::not_found`] (E003, did-you-mean), refused before the
+/// [`crate::view::not_found`] (E003, did-you-mean), refused before the
 /// recorded report is read; a recorded report that cannot be read, when
 /// coverage is asked for, is its E045 failure.
 pub fn query(
@@ -86,9 +86,9 @@ pub fn query(
     }
     let notices = view.kinds().unknown_in(&request.kinds);
     let graph = view.graph();
-    graph
-        .node(request.entity_id)
-        .ok_or_else(|| navigate::not_found(graph, request.entity_id).about(QueryField::EntityId))?;
+    graph.node(request.entity_id).ok_or_else(|| {
+        crate::view::not_found(graph, request.entity_id).about(QueryField::EntityId)
+    })?;
     let coverage = request
         .include_coverage
         .then(|| view.coverage())

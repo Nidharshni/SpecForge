@@ -4,11 +4,11 @@
 use specforge_emitter::model::{FieldLevel, GroupBy, ModelFormat, ModelOptions};
 use specforge_emitter::outline::{DependencyDepth, OutlineDetail, OutlineFormat, OutlineOptions};
 use specforge_ops::OpErrorKind;
-use specforge_ops::export::{AGENT_FORMAT, FORMAT, Format};
-use specforge_ops::model::{
+use specforge_ops::options::OptionTable;
+use specforge_ops::read::export::{AGENT_FORMAT, FORMAT, Format};
+use specforge_ops::read::model::{
     DEPS, GROUP_BY, MODEL_FIELDS, MODEL_FORMAT, OUTLINE_FIELDS, OUTLINE_FORMAT,
 };
-use specforge_ops::options::OptionTable;
 
 #[specforge_test_macros::test(
     behavior = "name_enumerated_options_once",

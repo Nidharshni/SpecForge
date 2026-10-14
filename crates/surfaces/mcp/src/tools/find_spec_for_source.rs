@@ -3,7 +3,7 @@ use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_graph::Graph;
-use specforge_ops::navigate::{
+use specforge_ops::read::navigate::{
     FileAnchors, FileMatch, SourceAnchor, anchors_of_file, source_anchors,
 };
 
@@ -83,7 +83,7 @@ impl Anchored {
 }
 
 /// The entities anchored to the source files `file_path` names, under the
-/// one file rule (`specforge_ops::navigate::anchors_of_file`).
+/// one file rule (`specforge_ops::read::navigate::anchors_of_file`).
 pub(crate) struct Tool;
 
 impl CoreTool for Tool {

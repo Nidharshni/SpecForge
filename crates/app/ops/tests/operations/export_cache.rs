@@ -23,7 +23,7 @@ fn cache_file(project: &crate::view_support::Project) -> std::path::PathBuf {
     verify = "the schema cache is the view root's, never an ancestor's"
 )]
 fn export_recorded_compares_then_records_on_success() {
-    use specforge_ops::export::{CacheWrite, Request, export_recorded};
+    use specforge_ops::read::export::{CacheWrite, Request, export_recorded};
     let project = recorded_project();
     let request = Request::default();
 
@@ -64,7 +64,7 @@ fn export_recorded_compares_then_records_on_success() {
 
 #[test]
 fn an_export_reads_the_record_once() {
-    use specforge_ops::export::{CacheWrite, Request, export_recorded};
+    use specforge_ops::read::export::{CacheWrite, Request, export_recorded};
     let project = recorded_project();
     std::fs::create_dir_all(cache_file(&project).parent().unwrap()).unwrap();
     std::fs::write(cache_file(&project), r#"{"schema": {"#).unwrap();
@@ -87,7 +87,7 @@ fn an_export_reads_the_record_once() {
 
 #[test]
 fn a_failed_export_leaves_the_cache() {
-    use specforge_ops::export::{CacheWrite, Request, export_recorded};
+    use specforge_ops::read::export::{CacheWrite, Request, export_recorded};
     let project = recorded_project();
     let request = Request {
         scope: Some("nope"),
@@ -111,7 +111,7 @@ fn a_failed_export_leaves_the_cache() {
 /// A project whose versioned schema is 2.0.0: its cache recorded a kind the
 /// project no longer has, a breaking change not yet recorded over.
 fn project_at_two() -> crate::view_support::Project {
-    use specforge_ops::export::{Request, export_recorded};
+    use specforge_ops::read::export::{Request, export_recorded};
     let project = recorded_project();
     assert!(
         export_recorded(&project.view(), &Request::default())
@@ -136,7 +136,7 @@ fn project_at_two() -> crate::view_support::Project {
 )]
 
 fn the_model_names_the_versioned_schema() {
-    use specforge_ops::model::{ModelFormat, ModelOptions, model};
+    use specforge_ops::read::model::{ModelFormat, ModelOptions, model};
     let project = project_at_two();
     let json = |format| {
         model(
@@ -162,8 +162,8 @@ fn the_model_names_the_versioned_schema() {
     verify = "every JSON export carries the project's schema version, whether the schema is attached or not"
 )]
 fn every_document_names_the_versioned_schema() {
-    use specforge_ops::export::{Format, Request, Schema, export};
-    use specforge_ops::trace::{Target, trace};
+    use specforge_ops::read::export::{Format, Request, Schema, export};
+    use specforge_ops::read::trace::{Target, trace};
     let project = project_at_two();
     let view = project.view();
     let version = |request: Request| {
@@ -217,7 +217,7 @@ fn every_document_names_the_versioned_schema() {
     verify = "the trace document carries the project's schema version"
 )]
 fn a_trace_carries_the_projects_schema_version() {
-    use specforge_ops::trace::{Target, trace};
+    use specforge_ops::read::trace::{Target, trace};
     let project = project_at_two();
     let view = project.view();
     let entity = serde_json::to_value(trace(&view, Target::Entity("b")).unwrap()).unwrap();

@@ -6,7 +6,8 @@
 //! comments and verify statements that mentions the ID is not a reference,
 //! and is left alone (ADR 0016).
 
-use crate::navigate::{Direction, EntityField, Navigator, Precision, ReferenceQuery};
+use crate::read::navigate::{Direction, Navigator, Precision, ReferenceQuery};
+use crate::view::EntityField;
 use crate::{OpError, OpErrorKind, Refusal};
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -134,7 +135,7 @@ pub fn plan<F: Fn(&str) -> Option<String>>(
     validate_id(new_id).map_err(|error| error.about(RenameField::NewId))?;
     let graph = nav.view().graph();
     if graph.node(old_id).is_none() {
-        return Err(crate::navigate::not_found(graph, old_id).about(RenameField::OldId));
+        return Err(crate::view::not_found(graph, old_id).about(RenameField::OldId));
     }
     if graph.node(new_id).is_some() {
         return Err(OpError::new(

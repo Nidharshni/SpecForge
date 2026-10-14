@@ -5,8 +5,8 @@
 
 use super::compiled_support::{TestProject, analyzed, check_document};
 use serde_json::Value;
-use specforge_ops::analyze::{AnalyzeOptions, ReportSource};
-use specforge_ops::check::CheckOptions;
+use specforge_ops::analysis::analyze::{AnalyzeOptions, ReportSource};
+use specforge_ops::analysis::check::CheckOptions;
 use specforge_test_macros::test as specforge_test;
 
 /// A project enabling @specforge/formal and its peer @specforge/software,

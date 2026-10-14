@@ -59,3 +59,5 @@ not an `AgentPlan`; `specforge.trace` answers it.
 A plan that must state an order the graph cannot (two independent entities an agent must sequence for its own reasons):
 then `dependencies` returns, with the gaps that reconcile it with the entry order. A second plan format (a file format
 for humans): then the decode takes a format, still checked against one schema.
+
+**Amended by ADR 0086 (2026-10-14):** the plan check is `specforge_ops::read::plan::check`.

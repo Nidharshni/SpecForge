@@ -1,7 +1,7 @@
 use crate::outcome::{Exit, OutputFormat, Refusal};
 use crate::terminal::{Terminal, out};
-use specforge_ops::plan::AgentPlan;
-use specforge_ops::trace::Target;
+use specforge_ops::read::plan::AgentPlan;
+use specforge_ops::read::trace::Target;
 use specforge_ops::view::ProjectView;
 
 // `specforge trace`'s command line.
@@ -42,7 +42,7 @@ impl Args {
             Err(error) => return Refusal::of(self.format).report(terminal, &error),
         };
         if let Some(plan) = &self.plan {
-            let outcome = specforge_ops::plan::check(&ProjectView::of(&project), plan);
+            let outcome = specforge_ops::read::plan::check(&ProjectView::of(&project), plan);
             match self.format {
                 OutputFormat::Human => out!(terminal, "{}", outcome.to_human()),
                 OutputFormat::Json => terminal.json(&outcome),
@@ -50,7 +50,7 @@ impl Args {
             return Exit::of_verdict(outcome.ok);
         }
         let target = self.entity.as_deref().map_or(Target::Every, Target::Entity);
-        let outcome = match specforge_ops::trace::trace(&ProjectView::of(&project), target) {
+        let outcome = match specforge_ops::read::trace::trace(&ProjectView::of(&project), target) {
             Ok(outcome) => outcome,
             Err(error) => {
                 return Refusal::of(self.format)

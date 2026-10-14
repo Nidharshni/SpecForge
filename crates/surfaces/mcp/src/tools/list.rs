@@ -3,7 +3,7 @@ use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use specforge_common::shape::Shape;
-use specforge_ops::query::{ListRequest, Listing, list};
+use specforge_ops::read::query::{ListRequest, Listing, list};
 
 use crate::args::Arguments;
 use crate::reply::{Answer, Answered};
@@ -53,7 +53,7 @@ pub(crate) fn rows(listing: &Listing) -> Vec<Listed> {
         .collect()
 }
 
-/// `specforge.list`: the list read view (`specforge_ops::query::list`), the
+/// `specforge.list`: the list read view (`specforge_ops::read::query::list`), the
 /// entities of `kind` (every entity without one) whose fields hold what
 /// `where` asks, sorted by id, then paged by `offset` and `limit`. Domain
 /// free: any kind, any field (an extension's own list commands, such as

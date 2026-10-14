@@ -1,7 +1,7 @@
 use serde_json::Value;
 use specforge_emitter::model::{FieldLevel, ModelFormat, ModelOptions, ModelRoot};
 use specforge_ops::OpErrorKind;
-use specforge_ops::model::{ModelOutcome, model};
+use specforge_ops::read::model::{ModelOutcome, model};
 use specforge_protocol_types::{
     EdgeTypeDescriptor, EntityKindDescriptor, ExtensionDeclaration, FieldDescriptor,
     HandshakeResponse,
@@ -102,7 +102,7 @@ fn two_extensions() -> Project {
 fn outcome_of(
     project: &Project,
     options: ModelOptions,
-) -> Result<ModelOutcome, specforge_ops::Refusal<specforge_ops::model::ModelField>> {
+) -> Result<ModelOutcome, specforge_ops::Refusal<specforge_ops::read::model::ModelField>> {
     model(
         &project.view(),
         &ModelOptions {
@@ -411,7 +411,7 @@ fn an_extensions_counts_after_a_filter_are_what_the_selection_draws() {
     verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
 )]
 fn model_states_which_field_a_refusal_is_about() {
-    use specforge_ops::model::ModelField;
+    use specforge_ops::read::model::ModelField;
     let project = two_extensions();
     let root = ModelOptions {
         root: Some(ModelRoot {

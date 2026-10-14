@@ -9,10 +9,9 @@
 //! `brief` and any export under a token budget leave it out unless asked
 //! for it. `dot` never carries a schema.
 
-use crate::navigate;
 use crate::options::{Choice, OptionTable};
 use crate::schema_version::{NotAdmitted, VersionedSchema};
-use crate::view::ProjectView;
+use crate::view::{ProjectView, not_found};
 use crate::{OpError, OpErrorKind, Refusal};
 use specforge_common::Diagnostic;
 use specforge_emitter::{EmitFormat, EmitOptions, EmitterError, SchemaVersion, emit};
@@ -270,7 +269,7 @@ pub fn export_recorded(view: &ProjectView, request: &Request) -> RecordedExport 
 fn failure(view: &ProjectView, error: EmitterError) -> Refusal<ExportField> {
     let (kind, field) = match &error {
         EmitterError::ScopeNotFound { entity_id } => {
-            return navigate::not_found(view.graph(), entity_id).about(ExportField::Scope);
+            return not_found(view.graph(), entity_id).about(ExportField::Scope);
         }
         EmitterError::BudgetTooSmall { .. } => (OpErrorKind::InvalidInput, ExportField::MaxTokens),
         EmitterError::Serialization(_) => {

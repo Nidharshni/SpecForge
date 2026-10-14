@@ -1,4 +1,4 @@
-//! `specforge.inspect`: one entity's facts (`specforge_ops::inspect`), as
+//! `specforge.inspect`: one entity's facts (`specforge_ops::read::inspect`), as
 //! JSON. The tool renders the read view; it reads no edge, coverage row or
 //! attribution itself (ADR 0015, section "Inspect").
 
@@ -8,14 +8,14 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{DiagnosticList, SourceSpan};
 use specforge_graph::FieldJson;
-use specforge_ops::inspect::{EntityCoverage, EntityFacts, obligation_text};
+use specforge_ops::read::inspect::{EntityCoverage, EntityFacts, obligation_text};
 use std::collections::BTreeMap;
 
 use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
 use crate::reply::Answered;
 use crate::tool::McpError;
-use specforge_ops::navigate::EntityField;
+use specforge_ops::view::EntityField;
 use specforge_ops::view::ProjectView;
 
 /// `specforge.inspect`'s arguments.
@@ -87,10 +87,10 @@ impl CoreTool for Tool {
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
         let facts =
-            specforge_ops::inspect::inspect(&view, &args.entity_id).map_err(Self::refused)?;
+            specforge_ops::read::inspect::inspect(&view, &args.entity_id).map_err(Self::refused)?;
         // A recorded report that cannot be read fails the call (ADR 0004 D2-e).
-        let coverage =
-            specforge_ops::inspect::coverage(&view, &args.entity_id).map_err(McpError::from)?;
+        let coverage = specforge_ops::read::inspect::coverage(&view, &args.entity_id)
+            .map_err(McpError::from)?;
         Ok(Reply::of(&facts, &coverage).into())
     }
 }

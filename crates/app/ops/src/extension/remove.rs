@@ -487,7 +487,8 @@ mod tests {
     )]
     fn remove_refuses_as_add_and_update_do() {
         use crate::config::testing::UNUSABLE;
-        use crate::extension::{AddRequest, Source, Trust, UpdateRequest, add, update};
+        use crate::extension::{AddRequest, Source, UpdateRequest, add, update};
+        use crate::registry::Trust;
 
         for config in UNUSABLE {
             let fixture = installed(Fixture::new(), "@acme/x");

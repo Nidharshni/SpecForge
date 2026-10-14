@@ -14,7 +14,7 @@ use crate::editor::ClientEditor;
 use crate::reaction::Reaction;
 use crate::{ClientSupport, LspState, answers};
 
-use specforge_ops::format;
+use specforge_ops::authoring::format;
 
 /// The reaction, behind the queue every change waits in (ADR 0043 D4).
 type Shared = Arc<Mutex<Reaction<ClientEditor>>>;

@@ -2,7 +2,7 @@ use crate::target::Project;
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_ops::infer::{
+use specforge_ops::read::infer::{
     self, EndStatus, Recorded, SessionAction, SessionField, SessionOutcome, SessionStatus,
     SessionStep,
 };
@@ -60,7 +60,7 @@ pub struct Reply {
 }
 
 /// `specforge.infer_session`: one step of an inference session
-/// (`specforge_ops::infer::session`), which writes `specforge-infer.json`.
+/// (`specforge_ops::read::infer::session`), which writes `specforge-infer.json`.
 pub(crate) struct Tool;
 
 impl ArgumentOf<SessionField> for Tool {

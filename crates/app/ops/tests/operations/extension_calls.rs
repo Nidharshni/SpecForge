@@ -8,8 +8,8 @@ use std::fs;
 use std::path::PathBuf;
 
 use serde_json::{Value, json};
-use specforge_ops::collect::{Collector, dispatch};
-use specforge_ops::migrate::{MigrationInput, invoke_hooks};
+use specforge_ops::analysis::collect::{Collector, dispatch};
+use specforge_ops::authoring::migrate::{MigrationInput, invoke_hooks};
 use specforge_protocol_types::{CollectReportFile, ExtensionDeclaration, HandshakeResponse};
 use specforge_test_macros::test as specforge_test;
 use specforge_wasm::testing::InProcessRuntime;
@@ -242,7 +242,7 @@ fn the_migration_hook_input_and_any_answer() {
 mod evidence {
     use crate::view_support::{Project, registries};
     use serde_json::Map;
-    use specforge_ops::command::{CommandFormat, ExtensionCommand, run};
+    use specforge_ops::extension::command::{CommandFormat, ExtensionCommand, run};
     use specforge_protocol_types::{
         CommandDescriptor, CommandEvidence, CommandOutput, EntityEvidence,
     };
@@ -370,8 +370,8 @@ mod the_views_runtime {
 
     use serde_json::Map;
     use specforge_extension_sdk::prelude::*;
-    use specforge_ops::analyze::{AnalyzeOptions, analyze};
-    use specforge_ops::command::{CommandFormat, ExtensionCommands, RunError, run};
+    use specforge_ops::analysis::analyze::{AnalyzeOptions, analyze};
+    use specforge_ops::extension::command::{CommandFormat, ExtensionCommands, RunError, run};
     use specforge_ops::view::ProjectView;
     use specforge_project::SharedRuntime;
     use specforge_project::testing::compile_at;

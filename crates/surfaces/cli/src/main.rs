@@ -407,6 +407,9 @@ mod tests {
             .iter()
             .map(|value| value.to_string_lossy().into_owned())
             .collect();
-        assert_eq!(defaults, [specforge_ops::query::DEFAULT_DEPTH.to_string()]);
+        assert_eq!(
+            defaults,
+            [specforge_ops::read::query::DEFAULT_DEPTH.to_string()]
+        );
     }
 }

@@ -5,17 +5,17 @@ use crate::target::ProjectRef;
 use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use specforge_ops::Refusal;
-use specforge_ops::analyze::{AnalyzeField, AnalyzeOptions, ReportSource, analyze};
+use specforge_ops::analysis::analyze::{AnalyzeField, AnalyzeOptions, ReportSource, analyze};
 
 /// `specforge.analyze`'s reply: the document `specforge analyze --format json`
 /// prints (`McpAnalyzeResult`).
-type Reply = specforge_ops::analyze::AnalyzeDocument;
+type Reply = specforge_ops::analysis::analyze::AnalyzeDocument;
 
 /// `specforge.analyze`'s arguments.
 #[derive(Debug, Arguments)]
 pub struct Args {
     /// Analysis pass to run: all, coverage, contracts, or a pass an extension declares (`<extension>:<pass>`)
-    #[arg(default = specforge_ops::analyze::EVERY_PASS.to_string())]
+    #[arg(default = specforge_ops::analysis::analyze::EVERY_PASS.to_string())]
     pass: String,
     /// Promote warnings to errors
     strict: bool,

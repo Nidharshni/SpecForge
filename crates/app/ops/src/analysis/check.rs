@@ -233,7 +233,7 @@ pub fn check(view: &ProjectView<'_>, options: &CheckOptions) -> Result<CheckOutc
         lint_profiles: options.lint_profiles.clone(),
     };
     let reported = policy.apply(view.reported(), |profile| match profile {
-        LintProfile::Inferred => crate::infer::lint(view),
+        LintProfile::Inferred => crate::read::infer::lint(view),
         LintProfile::Pedantic => Vec::new(),
     });
     let counts = Counts::of(&reported);

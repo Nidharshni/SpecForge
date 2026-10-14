@@ -1,4 +1,4 @@
-//! Query, list and search (`specforge_ops::query`, ADR 0015 "Query"): the
+//! Query, list and search (`specforge_ops::read::query`, ADR 0015 "Query"): the
 //! read views the CLI and MCP render, tested through the operation's
 //! interface. The query tests are the emitter's former `query` tests,
 //! re-homed where the behavior now lives.
@@ -6,8 +6,8 @@
 use serde_json::{Value, json};
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
-use specforge_ops::export::Format;
-use specforge_ops::query::{
+use specforge_ops::read::export::Format;
+use specforge_ops::read::query::{
     DEFAULT_SEARCH_LIMIT, FieldHolds, ListRequest, QueryRequest, SearchRequest, list, query, search,
 };
 use specforge_parser::{EntityId, EntityKind, FieldMap};
@@ -321,7 +321,7 @@ fn a_query_with_coverage_conforms_to_the_published_schema() {
     use specforge_common::shape::{unchecked_keywords, violations};
     let project = covered();
     for format in [Format::Graph, Format::Context, Format::Brief] {
-        let published = specforge_ops::schema::json_schema(&project.view(), format).unwrap();
+        let published = specforge_ops::read::schema::json_schema(&project.view(), format).unwrap();
         assert!(unchecked_keywords(&published).is_empty(), "{format:?}");
         let document: Value =
             serde_json::from_str(&queried(&project, "login", format, true)).unwrap();
@@ -609,7 +609,7 @@ fn query_contract_valid_entity_returns_subgraph() {
     verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
 )]
 fn query_states_which_field_a_refusal_is_about() {
-    use specforge_ops::query::QueryField;
+    use specforge_ops::read::query::QueryField;
     let project = linear();
     let missing = query(
         &project.view(),
@@ -636,8 +636,8 @@ fn query_states_which_field_a_refusal_is_about() {
 /// project.
 mod compiled {
     use crate::compiled_support::{built, published, queried, query_document, specs};
-    use specforge_ops::export::Format;
-    use specforge_ops::query::QueryRequest;
+    use specforge_ops::read::export::Format;
+    use specforge_ops::read::query::QueryRequest;
     use specforge_test_macros::test as specforge_test;
     // --- Query depth tests, over a compiled project ---
 

@@ -1,7 +1,7 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, errln, outln};
 use specforge_common::ProjectRoot;
-use specforge_ops::init;
+use specforge_ops::authoring::init;
 use std::path::{Path, PathBuf};
 
 // `specforge init`'s command line.
@@ -12,7 +12,7 @@ pub(crate) struct Args {
     name: Option<String>,
 
     /// Project version
-    #[arg(long, default_value = specforge_ops::init::DEFAULT_VERSION)]
+    #[arg(long, default_value = specforge_ops::authoring::init::DEFAULT_VERSION)]
     version: String,
 
     /// Extensions to install
@@ -38,7 +38,7 @@ impl Args {
     }
 }
 
-/// `specforge init`: the shared scaffold (`specforge_ops::init`), validated
+/// `specforge init`: the shared scaffold (`specforge_ops::authoring::init`), validated
 /// and judged before anything is written, then presented.
 fn init_at(
     path: &Path,

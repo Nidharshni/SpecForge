@@ -279,7 +279,7 @@ fn init_help_states_the_default_version_from_the_constant() {
     assert!(
         text.contains(&format!(
             "[default: {}]",
-            specforge_ops::init::DEFAULT_VERSION
+            specforge_ops::authoring::init::DEFAULT_VERSION
         )),
         "{text}"
     );

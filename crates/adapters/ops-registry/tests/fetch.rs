@@ -5,7 +5,7 @@
 //! Each test serves one package from an in-memory client (ADR 0044) and pins
 //! keys in a temporary store, never in `~/.specforge`.
 
-use specforge_ops::extension::Trust;
+use specforge_ops::registry::Trust;
 use specforge_ops::registry::{Publisher, Registry, TrustPolicy};
 use specforge_ops_registry::{ConfiguredRegistry, User};
 use specforge_package::PackageName;

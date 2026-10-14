@@ -78,7 +78,7 @@ pub fn gaps(view: &ProjectView) -> Result<Gaps, OpError> {
     let root = view.project_root()?;
     let declarations = view.registries().declarations();
     let files = source_files(root, declarations, &InferenceManifest::at(root)?);
-    let scanned = crate::scan::scan_source_files(
+    let scanned = crate::read::infer::scan::scan_source_files(
         view.runtime().map(|r| r.as_ref()),
         declarations,
         root,

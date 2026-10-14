@@ -9,18 +9,18 @@
 //! is one lookup in it ([`ExtensionSurfaceTable::tool`]); resources alike.
 //! Each name is served once, the first in this order: core tools, explicit
 //! extension tools in extension load order, then extension commands
-//! (`specforge_ops::command::ExtensionCommands`, load then declaration
+//! (`specforge_ops::extension::command::ExtensionCommands`, load then declaration
 //! order). A contribution not served under its name is reported with I017
 //! saying why, and so is a command the host refuses or shadows.
 //!
 //! Nothing here knows how a command's schema is derived or how its tool is
-//! named: that is `specforge_ops::command::ExtensionCommand`'s. Nothing
+//! named: that is `specforge_ops::extension::command::ExtensionCommand`'s. Nothing
 //! here calls an extension either: dispatch is `extension_dispatch`'s,
 //! over the `WasmRuntime` seam.
 
 use serde_json::Value;
 use specforge_common::{Code, Diagnostic, codes};
-use specforge_ops::command::{ExtensionCommand, ExtensionCommands};
+use specforge_ops::extension::command::{ExtensionCommand, ExtensionCommands};
 use specforge_registry::RegistryBuild;
 
 use crate::lifecycle::Revision;

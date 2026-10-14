@@ -16,6 +16,7 @@ mod failures;
 mod field_types;
 mod formal_diagnostics;
 mod graph_edges;
+mod groups;
 mod infer;
 mod infer_guide;
 mod inspect;

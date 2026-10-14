@@ -1,8 +1,8 @@
 use super::compiled_support::{
     TestProject, built, checked, exported, exported_as, query_document, specs, stats_of,
 };
-use specforge_ops::check::CheckOptions;
-use specforge_ops::export::Format;
+use specforge_ops::analysis::check::CheckOptions;
+use specforge_ops::read::export::Format;
 use specforge_test_macros::test as specforge_test;
 
 // --- Phase 1b: All entity kinds through check/export/query/trace/stats ---

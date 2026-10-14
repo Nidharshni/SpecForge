@@ -1,7 +1,7 @@
 //! What the LSP knows about one position of a document (ADR 0023).
 
 use specforge_common::Sym;
-use specforge_ops::navigate::{Navigator, Occurrence};
+use specforge_ops::read::navigate::{Navigator, Occurrence};
 use specforge_ops::view::ProjectView;
 use specforge_parser::lex::LexemeKind;
 use tower_lsp::lsp_types::{Position, Range};

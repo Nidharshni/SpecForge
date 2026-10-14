@@ -7,7 +7,7 @@
 //! call's event sink when the export returned, whatever it answered.
 
 use serde_json::{Value, json};
-use specforge_ops::command::{CommandFormat, ExtensionCommand, RunError};
+use specforge_ops::extension::command::{CommandFormat, ExtensionCommand, RunError};
 use specforge_protocol_types::CommandOutput;
 use specforge_wasm::runtime::WasmRuntime;
 
@@ -143,7 +143,12 @@ fn command_adapter(
 ) -> (ToolOutcome, Option<McpEvent>) {
     let given = arguments.as_object().cloned().unwrap_or_default();
     let started = std::time::Instant::now();
-    match specforge_ops::command::run(&project.view(), command, &given, CommandFormat::Json) {
+    match specforge_ops::extension::command::run(
+        &project.view(),
+        command,
+        &given,
+        CommandFormat::Json,
+    ) {
         Ok(output) => {
             let event = McpEvent::SurfaceCommandDispatched {
                 extension_name: command.extension().to_string(),

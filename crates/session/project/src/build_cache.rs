@@ -4,7 +4,7 @@
 //! input, never hidden state. An entity is recorded when its kind declares
 //! a lifecycle field (`lifecycle_field`, ADR 0009); the cache names no
 //! field itself. `specforge check --cache` writes it, through the check
-//! operation (`specforge_ops::check`), only when the check passes and no
+//! operation (`specforge_ops::analysis::check`), only when the check passes and no
 //! other surface does (behavior `write_build_cache`); every compile that
 //! runs a check-phase pass reads it and hands it to the passes as
 //! `previous` (behavior `read_build_cache`).

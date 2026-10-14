@@ -1,5 +1,5 @@
 //! `specforge infer-status`: the shared inference progress and gaps
-//! (`specforge_ops::infer`), presented. The JSON document is the MCP
+//! (`specforge_ops::read::infer`), presented. The JSON document is the MCP
 //! `specforge.infer_progress` answer; `--gaps` adds the unanalyzed files
 //! by directory and `--gaps-detail` the `specforge.infer_gaps` report.
 
@@ -7,7 +7,7 @@ use crate::terminal::{Terminal, out, outln};
 
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use serde::Serialize;
-use specforge_ops::infer::{
+use specforge_ops::read::infer::{
     self, Gaps, GapsDocument, MANIFEST_FILENAME, Progress, ProgressDocument, UnanalyzedDirectory,
 };
 use specforge_ops::view::ProjectView;

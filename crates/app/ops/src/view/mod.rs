@@ -11,6 +11,7 @@
 //! ancestor directory.
 
 mod connectivity;
+mod entity;
 mod kinds;
 
 use std::path::Path;
@@ -28,6 +29,8 @@ use specforge_project::{ExtensionLoad, Loaded};
 use specforge_registry::RegistryBuild;
 
 pub use connectivity::{Connectivity, Degree};
+pub(crate) use entity::unresolved;
+pub use entity::{EntityField, not_found};
 pub use kinds::{KnownKinds, UNKNOWN_KIND};
 
 use crate::OpError;

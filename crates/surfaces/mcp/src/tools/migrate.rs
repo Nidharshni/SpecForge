@@ -1,4 +1,4 @@
-//! `specforge.migrate`: run the migration pipeline (`specforge_ops::migrate`).
+//! `specforge.migrate`: run the migration pipeline (`specforge_ops::authoring::migrate`).
 
 use crate::args::Arguments;
 use crate::mutation::{
@@ -10,7 +10,7 @@ use crate::target::{AnyProject, Project};
 use crate::tool::McpError;
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 use specforge_ops::OpError;
-use specforge_ops::migrate::MigrateField;
+use specforge_ops::authoring::migrate::MigrateField;
 
 /// `specforge.migrate`'s arguments.
 #[derive(Debug, Arguments)]
@@ -36,7 +36,7 @@ impl MutationReply for Reply {
 /// `specforge.migrate`'s reply: the migration document
 /// `specforge migrate --format json` prints, whether anything was pending
 /// or not (a failed run carries it in its error's `data`; ADR 0052).
-type Reply = specforge_ops::migrate::MigrateDocument;
+type Reply = specforge_ops::authoring::migrate::MigrateDocument;
 
 pub(crate) struct Tool;
 
@@ -70,19 +70,23 @@ impl CoreTool for Tool {
         let no_backup = args.no_backup;
         // The format version to migrate to, checked as `specforge migrate
         // --target-version` checks it.
-        let target = specforge_ops::migrate::parse_target(args.target_version.as_deref())
-            .map_err(Self::failed)?;
+        let target =
+            specforge_ops::authoring::migrate::parse_target(args.target_version.as_deref())
+                .map_err(Self::failed)?;
 
         let runtime = project.runtime;
         // The migration `specforge migrate` runs, hooks and rollback included.
-        let request = specforge_ops::migrate::Request {
+        let request = specforge_ops::authoring::migrate::Request {
             root: path,
             target,
             dry_run,
             no_backup,
         };
-        let outcome =
-            specforge_ops::migrate::run_within(&request, Some(runtime.clone()), Some(path.dir()))?;
+        let outcome = specforge_ops::authoring::migrate::run_within(
+            &request,
+            Some(runtime.clone()),
+            Some(path.dir()),
+        )?;
         // A failed run's report rides in `data`, and what it left written (its
         // backups after a rollback, the files migrated before a failure) is
         // reported.

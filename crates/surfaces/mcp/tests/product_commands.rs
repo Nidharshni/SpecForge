@@ -71,16 +71,16 @@ fn an_mcp_tool_call_returns_the_json_payload() {
     // What `specforge product health --format json` prints: the command run over the compiled project.
     let compiled = project.compile();
     let view = specforge_ops::view::ProjectView::of(&compiled);
-    let commands = specforge_ops::command::ExtensionCommands::build(view.registries());
+    let commands = specforge_ops::extension::command::ExtensionCommands::build(view.registries());
     let health = commands
         .of("product")
         .find(|command| command.id() == "health")
         .expect("product health");
-    let printed = specforge_ops::command::run(
+    let printed = specforge_ops::extension::command::run(
         &view,
         health,
         &serde_json::Map::new(),
-        specforge_ops::command::CommandFormat::Json,
+        specforge_ops::extension::command::CommandFormat::Json,
     )
     .expect("health runs");
     let cli: Value = serde_json::from_str(&printed.stdout).unwrap();

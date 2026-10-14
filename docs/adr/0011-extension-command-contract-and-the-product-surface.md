@@ -309,3 +309,5 @@ project view cannot give (ADR 0008's trigger).
 `Vocabulary` (ADR 0071), so `check` refuses (E061) what the filter refuses; the drift test now walks every declared
 vocabulary field and every closed filter. "An absent lifecycle status is its first value" is the status field's
 declared default. The closed filters' help no longer lists the values (clap and the MCP schema list them).
+
+**Amended by ADR 0086 (2026-10-14):** the command operation is `specforge_ops::extension::command`.

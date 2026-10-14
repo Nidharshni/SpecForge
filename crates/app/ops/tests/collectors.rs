@@ -1,7 +1,7 @@
 //! The runner extensions' collectors, read through the protocol from
 //! their real Wasm blobs and dispatched by the host's collect flow.
 
-use specforge_ops::collect::{collectors, dispatch};
+use specforge_ops::analysis::collect::{collectors, dispatch};
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_protocol_types::{CollectReportFile, TestStatus};
 use specforge_wasm::CallFailure;
@@ -122,7 +122,7 @@ fn cargo_test_reports_plain_tests_as_unlinked() {
     verify = "collect maps test results to the entities of its view"
 )]
 fn collect_maps_results_to_the_views_entities() {
-    use specforge_ops::collect::{Consent, Mode, Request, collect};
+    use specforge_ops::analysis::collect::{Consent, Mode, Request, collect};
     use specforge_ops::view::ProjectView;
 
     let runtime: specforge_project::SharedRuntime = std::sync::Arc::new(wasm_runtime_for(&[

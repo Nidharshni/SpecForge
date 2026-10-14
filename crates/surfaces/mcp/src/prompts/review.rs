@@ -1,14 +1,14 @@
 //! `specforge://prompts/review`: the coverage gaps of an entity's
 //! neighbourhood, or of the whole graph. It renders the review
-//! (`specforge_ops::review`).
+//! (`specforge_ops::read::review`).
 
-use specforge_ops::review::{DEFAULT_DEPTH, ReviewDocument, ReviewRequest, review};
+use specforge_ops::read::review::{DEFAULT_DEPTH, ReviewDocument, ReviewRequest, review};
 
 use crate::args::Arguments;
 use crate::prompt::{CorePrompt, Prompted};
 use crate::refusal::ArgumentOf;
 use crate::tool::McpError;
-use specforge_ops::navigate::EntityField;
+use specforge_ops::view::EntityField;
 use specforge_ops::view::ProjectView;
 
 /// The review prompt (`McpReviewPromptResult`).

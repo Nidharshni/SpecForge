@@ -6,14 +6,14 @@
 
 use crate::support::{Serve, Served, TestProject, call_tool};
 use serde_json::{Value, json};
-use specforge_ops::coverage::STATUS;
-use specforge_ops::export::{AGENT_FORMAT, FORMAT};
-use specforge_ops::infer::{END_STATUS, SESSION_ACTION};
-use specforge_ops::model::{
+use specforge_ops::options::OptionTable;
+use specforge_ops::read::coverage::STATUS;
+use specforge_ops::read::export::{AGENT_FORMAT, FORMAT};
+use specforge_ops::read::infer::{END_STATUS, SESSION_ACTION};
+use specforge_ops::read::model::{
     DEPS, GROUP_BY, MODEL_FIELDS, MODEL_FORMAT, OUTLINE_FIELDS, OUTLINE_FORMAT,
 };
-use specforge_ops::navigate::DIRECTION;
-use specforge_ops::options::OptionTable;
+use specforge_ops::read::navigate::DIRECTION;
 
 /// What a table says an input-schema property must hold.
 struct Advertised {
@@ -76,7 +76,7 @@ fn name_lists() -> Vec<(&'static str, &'static str, &'static [&'static str])> {
         (
             "specforge.validate",
             "severity_filter",
-            specforge_ops::check::SEVERITY_NAMES,
+            specforge_ops::analysis::check::SEVERITY_NAMES,
         ),
         (
             "specforge.validate",

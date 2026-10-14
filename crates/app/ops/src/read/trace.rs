@@ -9,9 +9,8 @@ use specforge_graph::Graph;
 use specforge_registry::RegistryBuild;
 use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 
-use crate::navigate::EntityField;
-use crate::plan::PlanGap;
-use crate::view::ProjectView;
+use crate::read::plan::PlanGap;
+use crate::view::{EntityField, ProjectView};
 use crate::{OpError, Refusal};
 
 #[derive(Debug, Serialize, Shape)]
@@ -281,7 +280,7 @@ impl std::fmt::Display for TraceError {
 
 impl std::error::Error for TraceError {}
 
-/// `navigate::not_found`: E003, its message, and a did-you-mean when an
+/// `view::not_found`: E003, its message, and a did-you-mean when an
 /// entity is close.
 impl From<TraceError> for OpError {
     fn from(error: TraceError) -> Self {
@@ -294,8 +293,7 @@ impl From<TraceError> for Refusal<EntityField> {
     fn from(error: TraceError) -> Self {
         match error {
             TraceError::EntityNotFound { entity_id, near } => {
-                crate::navigate::unresolved(&entity_id, near.as_deref())
-                    .about(EntityField::EntityId)
+                crate::view::unresolved(&entity_id, near.as_deref()).about(EntityField::EntityId)
             }
         }
     }

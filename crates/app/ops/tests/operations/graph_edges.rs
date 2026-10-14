@@ -1,7 +1,7 @@
 use super::compiled_support::{
     built, exported, exported_as, query_document, specs, trace_document,
 };
-use specforge_ops::export::Format;
+use specforge_ops::read::export::Format;
 use specforge_test_macros::test as specforge_test;
 use std::collections::BTreeSet;
 

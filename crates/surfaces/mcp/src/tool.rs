@@ -736,11 +736,11 @@ impl From<OpError> for McpError {
 }
 
 /// A question about `entity_id`, which no entity of `graph` declares:
-/// `specforge_ops::navigate::not_found` (E003 in `diagnostic`, a
+/// `specforge_ops::view::not_found` (E003 in `diagnostic`, a
 /// did-you-mean when an id is close), the one refusal tools and prompts
 /// share with every operation.
 pub fn entity_not_found(graph: &Graph, entity_id: &str) -> McpError {
-    specforge_ops::navigate::not_found(graph, entity_id).into()
+    specforge_ops::view::not_found(graph, entity_id).into()
 }
 
 /// What a refusal of a file the project does not hold says before the file's

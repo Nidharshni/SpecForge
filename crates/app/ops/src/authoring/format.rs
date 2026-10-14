@@ -347,7 +347,7 @@ pub enum Failure {
 
 /// The code of a [`Failure::Read`] as an [`OpError`]: the file could not be
 /// read.
-pub const UNREADABLE: &str = crate::rename::UNREADABLE;
+pub const UNREADABLE: &str = crate::authoring::rename::UNREADABLE;
 /// The code of a [`Failure::Write`] as an [`OpError`]: the file could not be
 /// written.
 pub const UNWRITABLE: &str = "file_unwritable";

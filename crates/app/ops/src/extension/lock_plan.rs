@@ -28,10 +28,10 @@ use specforge_package::{PackageName, Version, highest_matching};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration, PeerDependency};
 use specforge_wasm::WasmRuntime;
 
+use super::Origin;
 use super::candidate::{Installable, LocalFile};
 use super::peer_set::{Declarations, ProjectPeers};
-use super::{Origin, Trust};
-use crate::registry::{KeyPin, METADATA_MISMATCH, Publisher, Registry, TrustPolicy};
+use crate::registry::{KeyPin, METADATA_MISMATCH, Publisher, Registry, Trust, TrustPolicy};
 use crate::{OpError, OpErrorKind, Writes};
 
 /// What a lock plan is for. It words the refusal of an install that a locked extension does not
@@ -1772,7 +1772,7 @@ mod tests {
         let runtime = runtime();
         let registry = base_registry().serving(Published::new(
             APP_NEEDS_BASE_1.to_vec(),
-            crate::publish::declare(&runtime, APP_NEEDS_BASE_1)
+            crate::extension::declare(&runtime, APP_NEEDS_BASE_1)
                 .unwrap()
                 .0,
         ));
@@ -2032,7 +2032,7 @@ mod tests {
     fn app_registry(signer: Option<&str>) -> MemoryRegistry {
         let app = Published::new(
             APP_NEEDS_BASE_1.to_vec(),
-            crate::publish::declare(&runtime(), APP_NEEDS_BASE_1)
+            crate::extension::declare(&runtime(), APP_NEEDS_BASE_1)
                 .expect("a publishable binary")
                 .0,
         );
@@ -2229,7 +2229,7 @@ mod tests {
 
     /// `bytes` published as the package the in-process probe runtime says they declare.
     fn published_probe(bytes: &[u8]) -> Published {
-        let declared = crate::publish::declare(&crate::testing::probes(), bytes)
+        let declared = crate::extension::declare(&crate::testing::probes(), bytes)
             .unwrap()
             .0;
         Published::new(bytes.to_vec(), declared)

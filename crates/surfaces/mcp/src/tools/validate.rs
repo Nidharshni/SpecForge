@@ -5,13 +5,15 @@ use crate::target::ProjectRef;
 use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ToolGroup};
 use specforge_ops::Refusal;
-use specforge_ops::check::{CheckField, CheckOptions, check, parse_lint_profiles, parse_severity};
+use specforge_ops::analysis::check::{
+    CheckField, CheckOptions, check, parse_lint_profiles, parse_severity,
+};
 
 /// `specforge.validate`'s arguments.
 #[derive(Debug, Arguments)]
 pub struct Args {
     /// Only report diagnostics of this severity, after strict promotion (case-insensitive). The verdict in _meta["specforge/check"] still counts everything reported
-    #[arg(names = specforge_ops::check::SEVERITY_NAMES)]
+    #[arg(names = specforge_ops::analysis::check::SEVERITY_NAMES)]
     severity_filter: Option<String>,
     /// Promote warnings to errors, before severity_filter applies
     strict: bool,

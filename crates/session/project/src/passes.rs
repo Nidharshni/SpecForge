@@ -3,7 +3,7 @@
 //! which order its passes run, is the registry build's
 //! (`specforge_registry::RegistryBuild::passes`). Check-phase passes run with
 //! every compile ([`crate::check_passes`]); the others under
-//! `specforge analyze` (`specforge_ops::analyze`). Findings are standard host
+//! `specforge analyze` (`specforge_ops::analysis::analyze`). Findings are standard host
 //! diagnostics.
 
 use specforge_common::{Diagnostic, codes};

@@ -1,4 +1,4 @@
-//! `specforge_ops::migrate::run` through the runtime the extensions are served
+//! `specforge_ops::authoring::migrate::run` through the runtime the extensions are served
 //! by: the hooks they declare run in it, in dependency order, and a failing
 //! hook or a changed graph structure restores the migrated files.
 
@@ -7,7 +7,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
-use specforge_ops::migrate::{
+use specforge_ops::authoring::migrate::{
     Failure, MigrationInput, Outcome, Request, invoke_hooks, parse_target, rollback,
 };
 use specforge_ops::{OpError, OpErrorKind};
@@ -36,9 +36,9 @@ use specforge_wasm::runtime::{WasmCallResult, WasmTrapInfo};
 use specforge_wasm::testing::InProcessRuntime;
 
 /// A migration that is not refused: the tests that expect a refusal call
-/// `specforge_ops::migrate::run`.
+/// `specforge_ops::authoring::migrate::run`.
 fn run(request: &Request, runtime: Option<specforge_project::SharedRuntime>) -> Outcome {
-    specforge_ops::migrate::run(request, runtime).unwrap()
+    specforge_ops::authoring::migrate::run(request, runtime).unwrap()
 }
 
 const OLD: &str = "// specforge-format: 0.9\nbehavior alpha \"Alpha\" {\n}\n";
@@ -428,7 +428,7 @@ fn a_config_that_hides_the_sources_refuses_the_migration() {
             let before = files_under(dir.path());
             let runtime = Arc::new(hooked(|_| Ok(())));
 
-            let refused = specforge_ops::migrate::run(
+            let refused = specforge_ops::authoring::migrate::run(
                 &Request {
                     dry_run,
                     ..request(&specforge_common::ProjectRoot::of(dir.path()).unwrap())
@@ -1250,7 +1250,7 @@ fn a_migration_without_backups_removes_the_record() {
     verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
 )]
 fn migrate_states_which_field_a_refusal_is_about() {
-    use specforge_ops::migrate::MigrateField;
+    use specforge_ops::authoring::migrate::MigrateField;
     for target in ["99.0", "latest"] {
         assert_eq!(
             parse_target(Some(target)).unwrap_err().subject,

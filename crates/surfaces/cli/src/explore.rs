@@ -1,6 +1,6 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, errln, outln};
-use specforge_ops::explore::{Exploration, ExplorationRequest, explore};
+use specforge_ops::read::explore::{Exploration, ExplorationRequest, explore};
 use specforge_ops::view::ProjectView;
 
 // `specforge explore`'s command line.

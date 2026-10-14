@@ -3,15 +3,15 @@
 
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_ops::plan::AgentPlan;
-use specforge_ops::trace::{Target, trace};
+use specforge_ops::read::plan::AgentPlan;
+use specforge_ops::read::trace::{Target, trace};
 
 use crate::args::Arguments;
 use crate::prompt::{CorePrompt, Prompted};
 use crate::refusal::ArgumentOf;
 use crate::tool::{ErrorCode, McpError};
 use crate::tools::trace::Gap;
-use specforge_ops::navigate::EntityField;
+use specforge_ops::view::EntityField;
 use specforge_ops::view::ProjectView;
 
 /// The trace prompt (`McpTracePromptResult`).
@@ -60,11 +60,11 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
     // plan's, or the entity's chain's missing links.
     let (seeds, coverage_gaps, subject) = match (&args.plan, args.entity_id.as_deref()) {
         (Some(plan), _) => {
-            let outcome = specforge_ops::plan::check(&view, plan);
+            let outcome = specforge_ops::read::plan::check(&view, plan);
             let gaps = outcome
                 .gaps
                 .iter()
-                .map(|gap| Gap::of(&specforge_ops::trace::Gap::Plan(gap.clone())))
+                .map(|gap| Gap::of(&specforge_ops::read::trace::Gap::Plan(gap.clone())))
                 .collect();
             (outcome.entries, gaps, "the plan".to_string())
         }
@@ -92,7 +92,7 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
     };
 
     // What the seeds' chains reach, and which of it is unverified.
-    let reach = specforge_ops::trace::reach(&view, seeds.iter().map(String::as_str))
+    let reach = specforge_ops::read::trace::reach(&view, seeds.iter().map(String::as_str))
         .map_err(|error| Box::new(McpError::from(error)))?;
     let payload = Payload {
         coverage_gaps,

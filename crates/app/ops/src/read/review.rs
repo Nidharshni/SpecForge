@@ -8,9 +8,8 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 
 use crate::Refusal;
-use crate::coverage::{CoverageQuery, CoverageRow, CoverageRowDocument, coverage};
-use crate::navigate::EntityField;
-use crate::view::ProjectView;
+use crate::read::coverage::{CoverageQuery, CoverageRow, CoverageRowDocument, coverage};
+use crate::view::{EntityField, ProjectView};
 
 /// Hops around the reviewed entity when a request names none.
 pub const DEFAULT_DEPTH: usize = 1;
@@ -128,7 +127,7 @@ pub struct FindingDocument {
 }
 
 /// The review `request` asks for. An `entity_id` the graph lacks is
-/// `navigate::not_found` (E003); a recorded report that cannot be read is
+/// `view::not_found` (E003); a recorded report that cannot be read is
 /// its E045 failure (`ProjectView::coverage`).
 pub fn review(view: &ProjectView, request: &ReviewRequest) -> Result<Review, Refusal<EntityField>> {
     let neighbourhood: Option<BTreeSet<&'static str>> = request

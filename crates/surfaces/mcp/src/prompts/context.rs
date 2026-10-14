@@ -11,7 +11,7 @@ use crate::args::{Arguments, EntityIds};
 use crate::prompt::{CorePrompt, Prompted};
 use crate::refusal::ArgumentOf;
 use crate::tool::{ErrorCode, McpError};
-use specforge_ops::navigate::EntityField;
+use specforge_ops::view::EntityField;
 use specforge_ops::view::ProjectView;
 
 /// The context prompt (`McpContextPromptResult`).
@@ -83,7 +83,7 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
     let entity_id = args.entity_id.as_str();
     // The inspect read view, without the reported diagnostics (the prompt
     // shows none); it shows no coverage, so it reads no report.
-    let facts = specforge_ops::inspect::inspect(&view.reporting(&[]), entity_id)
+    let facts = specforge_ops::read::inspect::inspect(&view.reporting(&[]), entity_id)
         .map_err(|refusal| Box::new(Prompt::refused(refusal)))?;
     let node = facts.node;
 
@@ -105,7 +105,7 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
     let verify_expectations: Vec<String> = facts
         .obligations
         .iter()
-        .map(specforge_ops::inspect::obligation_text)
+        .map(specforge_ops::read::inspect::obligation_text)
         .collect();
 
     // Structural constraints: entities the caller wants in the context even

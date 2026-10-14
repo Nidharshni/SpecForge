@@ -1,6 +1,6 @@
 use crate::target::View;
 use crate::tool::{CoreTool, Effect, ToolGroup};
-use specforge_ops::export::{self, ExportField, Format, Schema};
+use specforge_ops::read::export::{self, ExportField, Format, Schema};
 
 use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
@@ -11,7 +11,7 @@ use specforge_ops::view::ProjectView;
 #[derive(Debug, Arguments)]
 pub struct Args {
     /// Export format
-    #[arg(choice = specforge_ops::export::AGENT_FORMAT)]
+    #[arg(choice = specforge_ops::read::export::AGENT_FORMAT)]
     format: Format,
     /// Scope to entity subgraph
     scope: Option<String>,

@@ -16,11 +16,11 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
-use specforge_ops::export::{AGENT_FORMAT, FORMAT};
-use specforge_ops::model::{
+use specforge_ops::options::OptionTable;
+use specforge_ops::read::export::{AGENT_FORMAT, FORMAT};
+use specforge_ops::read::model::{
     DEPS, GROUP_BY, MODEL_FIELDS, MODEL_FORMAT, OUTLINE_FIELDS, OUTLINE_FORMAT,
 };
-use specforge_ops::options::OptionTable;
 
 use crate::coverage_corpus::{mcp_calls, served};
 use crate::support::{Cli, TestProject};

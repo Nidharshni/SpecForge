@@ -46,7 +46,10 @@ pub fn source_anchors(view: &ProjectView<'_>) -> Result<AnchorManifest, OpError>
     let Some(root) = view.root() else {
         return Ok(AnchorManifest::default());
     };
-    Ok(crate::infer::read_manifest::<AnchorManifest>(root, ANCHORS_FILENAME)?.unwrap_or_default())
+    Ok(
+        crate::read::infer::read_manifest::<AnchorManifest>(root, ANCHORS_FILENAME)?
+            .unwrap_or_default(),
+    )
 }
 
 /// The anchors of `entity_id`, in manifest order.

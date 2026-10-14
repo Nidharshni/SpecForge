@@ -6,8 +6,9 @@ use std::path::{Path, PathBuf};
 
 use specforge_ops::Writes;
 use specforge_ops::extension::{
-    self, AddOutcome, AddRequest, RemoveRequest, Source, StrandedEntity, Trust,
+    self, AddOutcome, AddRequest, RemoveRequest, Source, StrandedEntity,
 };
+use specforge_ops::registry::Trust;
 use specforge_ops::testing::{self, declaring, serving_builtin};
 use specforge_ops::view::ProjectView;
 use specforge_project::CompiledProject;
@@ -162,7 +163,7 @@ const TIDY: &str = "behavior tidy \"Tidy\" {\n  contract \"The system MUST work\
 #[cfg(unix)]
 #[test]
 fn format_writes_are_the_files_it_rewrote() {
-    use specforge_ops::format::{self, Mode, Request};
+    use specforge_ops::authoring::format::{self, Mode, Request};
     use std::os::unix::fs::PermissionsExt;
     let dir = project(
         &[],
@@ -202,8 +203,8 @@ fn format_writes_are_the_files_it_rewrote() {
 
 #[test]
 fn rename_writes_are_the_files_it_edited() {
-    use specforge_ops::navigate::Navigator;
-    use specforge_ops::rename;
+    use specforge_ops::authoring::rename;
+    use specforge_ops::read::navigate::Navigator;
     let limit = "invariant session_limit \"Limit\" {\n  guarantee \"x\"\n}\n";
     let login = "behavior login \"Login\" {\n  invariants [session_limit]\n}\n";
     let other = "behavior other \"Other\" {\n}\n";
@@ -239,8 +240,8 @@ fn runtime() -> Arc<specforge_component::ComponentRuntime> {
 
 /// What `init` scaffolds in `dir` with `extensions`, the candidates read in
 /// process.
-fn init(dir: &Path, extensions: &[String]) -> specforge_ops::init::Outcome {
-    use specforge_ops::init;
+fn init(dir: &Path, extensions: &[String]) -> specforge_ops::authoring::init::Outcome {
+    use specforge_ops::authoring::init;
     let request = init::Request {
         dir,
         name: Some("demo"),
@@ -290,7 +291,7 @@ fn init_writes_include_gitignore_only_when_it_changed() {
     verify = "the starter spec's version is the project's"
 )]
 fn the_starter_states_the_project_version() {
-    use specforge_ops::init;
+    use specforge_ops::authoring::init;
     let scratch = TempDir::new().unwrap();
     // The structural starter, and the templates the software and product
     // builtins contribute (`{version}` in them is the project's version).
@@ -360,7 +361,7 @@ fn init_with_a_local_extension_writes_its_module_and_lock() {
     verify = "init refuses a directory whose starter file exists, writing nothing"
 )]
 fn init_refuses_a_directory_whose_starter_file_exists() {
-    use specforge_ops::{OpErrorKind, init};
+    use specforge_ops::{OpErrorKind, authoring::init};
     let scratch = TempDir::new().unwrap();
     let dir = scratch.path().join("victim");
     std::fs::create_dir_all(dir.join("spec")).unwrap();
@@ -385,7 +386,7 @@ fn init_refuses_a_directory_whose_starter_file_exists() {
     verify = "init refuses local extensions the lock plan refuses before it writes anything"
 )]
 fn init_refuses_local_extensions_over_an_unreadable_lock_before_writing() {
-    use specforge_ops::init;
+    use specforge_ops::authoring::init;
     let blobs = Blobs::new();
     let scratch = TempDir::new().unwrap();
     let dir = scratch.path().join("victim");
@@ -411,7 +412,7 @@ fn init_refuses_local_extensions_over_an_unreadable_lock_before_writing() {
     verify = "a failed init leaves the directory as it was, files that were there included"
 )]
 fn a_failed_init_puts_back_what_was_there() {
-    use specforge_ops::init;
+    use specforge_ops::authoring::init;
     let blobs = Blobs::new();
     let scratch = TempDir::new().unwrap();
     let dir = scratch.path().join("victim");
@@ -455,7 +456,7 @@ fn a_failed_init_puts_back_what_was_there() {
     verify = "a failed init leaves the directory as it was, files that were there included"
 )]
 fn a_failed_init_leaves_an_empty_directory_empty() {
-    use specforge_ops::init;
+    use specforge_ops::authoring::init;
     let blobs = Blobs::new();
     let scratch = TempDir::new().unwrap();
     let dir = scratch.path().join("victim");
@@ -490,7 +491,7 @@ fn a_failed_init_leaves_an_empty_directory_empty() {
     verify = "init reads its extension specifiers as add reads them, with add's codes"
 )]
 fn init_reads_its_specifiers_as_add_reads_them() {
-    use specforge_ops::init;
+    use specforge_ops::authoring::init;
     let scratch = TempDir::new().unwrap();
     let missing = scratch.path().join("missing.wasm").display().to_string();
     let cases = [
@@ -812,8 +813,8 @@ const OLD: &str = "// specforge-format: 0.9\nbehavior gamma \"Gamma\" {\n}\n";
 fn migration(
     root: &specforge_common::ProjectRoot,
     dry_run: bool,
-) -> specforge_ops::migrate::Request<'_> {
-    specforge_ops::migrate::Request {
+) -> specforge_ops::authoring::migrate::Request<'_> {
+    specforge_ops::authoring::migrate::Request {
         root,
         target: specforge_parser::CURRENT_FORMAT_VERSION,
         dry_run,
@@ -834,7 +835,7 @@ fn a_migration_writes_each_file_and_its_backup() {
     let root = dir.path();
     let before = files_under(root);
 
-    let preview = specforge_ops::migrate::run(
+    let preview = specforge_ops::authoring::migrate::run(
         &migration(&specforge_common::ProjectRoot::of(root).unwrap(), true),
         None,
     )
@@ -842,7 +843,7 @@ fn a_migration_writes_each_file_and_its_backup() {
     assert!(preview.writes.is_empty());
     assert_eq!(changed_since(root, &before), Vec::<String>::new());
 
-    let outcome = specforge_ops::migrate::run(
+    let outcome = specforge_ops::authoring::migrate::run(
         &migration(&specforge_common::ProjectRoot::of(root).unwrap(), false),
         None,
     )
@@ -873,7 +874,7 @@ fn a_rolled_back_migration_keeps_only_its_backups() {
         c
     });
 
-    let outcome = specforge_ops::migrate::run(
+    let outcome = specforge_ops::authoring::migrate::run(
         &migration(&specforge_common::ProjectRoot::of(root).unwrap(), false),
         Some(std::sync::Arc::new(runtime)),
     )
@@ -889,7 +890,7 @@ fn a_rolled_back_migration_keeps_only_its_backups() {
     verify = "init enables a builtin after the builtins it requires, as add does"
 )]
 fn init_enables_a_builtin_after_the_builtins_it_requires() {
-    use specforge_ops::init;
+    use specforge_ops::authoring::init;
     let scratch = TempDir::new().unwrap();
     let extensions = vec!["@specforge/formal".to_string()];
     let request = init::Request {
@@ -918,7 +919,7 @@ fn init_enables_a_builtin_after_the_builtins_it_requires() {
     verify = "init enables a builtin after the builtins it requires, as add does"
 )]
 fn init_enables_each_builtin_after_the_builtins_it_requires() {
-    use specforge_ops::init;
+    use specforge_ops::authoring::init;
     let scratch = TempDir::new().unwrap();
     let runtime = runtime();
     for (i, builtin) in specforge_project::builtins().names().enumerate() {
@@ -957,7 +958,7 @@ fn init_enables_each_builtin_after_the_builtins_it_requires() {
 
 #[test]
 fn init_refuses_a_local_binary_that_claims_a_builtins_name_before_writing() {
-    use specforge_ops::init;
+    use specforge_ops::authoring::init;
     let scratch = TempDir::new().unwrap();
     let wasm = scratch.path().join("product.wasm");
     std::fs::write(&wasm, b"\0asm impostor").unwrap();
@@ -990,7 +991,7 @@ fn init_refuses_a_local_binary_that_claims_a_builtins_name_before_writing() {
     verify = "add, init and publish read a candidate's declaration in the runtime their surface passes"
 )]
 fn init_reads_a_local_file_once() {
-    use specforge_ops::init;
+    use specforge_ops::authoring::init;
     let blobs = Blobs::new();
     let scratch = TempDir::new().unwrap();
     let dir = scratch.path().join("once");
@@ -1046,7 +1047,7 @@ fn add_from_a_subdirectory_adds_to_the_project_it_is_in() {
     verify = "init refuses local extensions the lock plan refuses before it writes anything"
 )]
 fn init_refuses_a_local_file_the_embedded_builtin_does_not_satisfy() {
-    use specforge_ops::init;
+    use specforge_ops::authoring::init;
     let scratch = TempDir::new().unwrap();
     let needs = scratch.path().join("needs.wasm");
     std::fs::write(&needs, testing::NEEDS_SOFTWARE_9).unwrap();
@@ -1081,7 +1082,7 @@ fn init_refuses_a_local_file_the_embedded_builtin_does_not_satisfy() {
     verify = "init enables the builtins a local file requires before it"
 )]
 fn init_enables_the_builtins_a_local_file_requires() {
-    use specforge_ops::init;
+    use specforge_ops::authoring::init;
     let scratch = TempDir::new().unwrap();
     let needs = scratch.path().join("needs.wasm");
     std::fs::write(&needs, testing::NEEDS_SOFTWARE_1).unwrap();

@@ -3,8 +3,8 @@
 //! is the document module's to say.
 
 use specforge_common::structural;
-use specforge_ops::infer::{KindGuide, guide};
-use specforge_ops::navigate::{EntityQuery, MatchScope, find_entities};
+use specforge_ops::read::infer::{KindGuide, guide};
+use specforge_ops::read::navigate::{EntityQuery, MatchScope, find_entities};
 use specforge_ops::view::ProjectView;
 use specforge_registry::{FieldRegistry, FieldType};
 use tower_lsp::lsp_types::{

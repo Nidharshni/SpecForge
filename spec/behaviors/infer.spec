@@ -236,7 +236,7 @@ behavior provide_mcp_infer_session_tool "Provide MCP Infer Session Tool" {
   }
   contract """
     Register a mutating MCP tool specforge.infer_session over the one
-    session operation (specforge_ops::infer::session), with three actions:
+    session operation (specforge_ops::read::infer::session), with three actions:
     - start: Call start_inference_session, return session_id.
     - mark_analyzed: Call mark_source_file_analyzed with provided
       source_file path and entities_produced list.
@@ -300,7 +300,7 @@ behavior compute_inference_guide "Compute Inference Guide" {
     project_directory "the spec directory is the project's spec root"
   }
   contract   """
-    The inference guide (specforge_ops::infer::guide, kind_guide) MUST give,
+    The inference guide (specforge_ops::read::infer::guide, kind_guide) MUST give,
     for every kind a loaded extension declares (once, as the extension the
     kind registry registered it for declares it), in declaration order:
     its keyword, extension and description; every field the registry
@@ -363,7 +363,7 @@ behavior provide_infer_plan_scope "Provide Infer Prompt Plan Scope" {
   }
   contract """
     When specforge://prompts/infer is invoked with scope=plan, render the
-    inference plan (specforge_ops::infer::inference_plan): the target
+    inference plan (specforge_ops::read::infer::inference_plan): the target
     spec directory (target_spec_directory, else the project's spec root
     relative to its root), the inference progress, the unanalyzed and
     stale source files in pages of at most 50 from cursor, each page

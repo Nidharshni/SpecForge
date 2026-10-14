@@ -82,7 +82,8 @@ impl CoreTool for Tool {
     type Returns = Mutation<Reply>;
 
     fn call(project: ProjectRef<'_>, args: Args) -> Mutation<Reply> {
-        use specforge_ops::extension::{self, AddRequest, Trust};
+        use specforge_ops::extension::{self, AddRequest};
+        use specforge_ops::registry::Trust;
 
         // The project the call installs into: the served one, or the one
         // `path` names.

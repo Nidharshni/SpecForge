@@ -83,9 +83,9 @@ fn trace_output_is_deterministic() {
     let outputs: Vec<_> = (0..5)
         .map(|_| {
             let project = crate::view_support::Project::of_graph(graph.clone(), Default::default());
-            let outcome = specforge_ops::trace::trace(
+            let outcome = specforge_ops::read::trace::trace(
                 &project.view(),
-                specforge_ops::trace::Target::Entity("alpha"),
+                specforge_ops::read::trace::Target::Entity("alpha"),
             )
             .unwrap();
             serde_json::to_string_pretty(&outcome).unwrap()

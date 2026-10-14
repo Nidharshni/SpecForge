@@ -8,7 +8,7 @@
 //! operation sees it (ADR 0044) is [`ConfiguredRegistry`]'s doc.
 
 use specforge_common::{Code, Diagnostic, codes};
-use specforge_ops::extension::Trust;
+use specforge_ops::registry::Trust;
 use specforge_ops::registry::{
     Found, KeyPin, METADATA_MISMATCH, Manifest, NO_REGISTRY, NO_REGISTRY_FOR_NAME,
     NOT_AUTHENTICATED, Package, Published, Publisher, Registry, Searched, TrustPolicy,

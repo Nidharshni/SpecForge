@@ -7,7 +7,7 @@ use specforge_ops::view::ProjectView;
 
 /// `specforge.stats`'s reply: the statistics document
 /// `specforge stats --format json` prints (ADR 0052).
-type Reply = specforge_ops::stats::Stats;
+type Reply = specforge_ops::read::stats::Stats;
 
 /// `specforge.stats`: the stats operation over the call's project view, its
 /// diagnostics what the server reports for the project (the view's
@@ -27,7 +27,7 @@ impl CoreTool for Tool {
     type Returns = Answered<Reply>;
 
     fn call(view: ProjectView<'_>, _args: NoArgs) -> Answered<Reply> {
-        let stats = specforge_ops::stats::stats(&view).map_err(McpError::from)?;
+        let stats = specforge_ops::read::stats::stats(&view).map_err(McpError::from)?;
         Ok(stats.into())
     }
 }

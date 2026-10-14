@@ -1,6 +1,6 @@
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
-use specforge_ops::trace::{Target, TraceExpectations, TraceLinkStatus};
+use specforge_ops::read::trace::{Target, TraceExpectations, TraceLinkStatus};
 use specforge_registry::RegistryBuild;
 
 use crate::view_support::{Project, chain, chain_in, every_chain};
@@ -101,7 +101,7 @@ fn trace_shows_full_chain_depth() {
 fn trace_nonexistent_entity_returns_error() {
     let graph = build_chain();
     let project = Project::of_graph(graph, RegistryBuild::default());
-    let result = specforge_ops::trace::trace(&project.view(), Target::Entity("nonexistent"));
+    let result = specforge_ops::read::trace::trace(&project.view(), Target::Entity("nonexistent"));
     assert!(result.is_err());
 }
 
@@ -113,7 +113,7 @@ fn trace_nonexistent_entity_returns_error() {
 fn trace_serializes_to_json() {
     let graph = build_chain();
     let project = Project::of_graph(graph, RegistryBuild::default());
-    let outcome = specforge_ops::trace::trace(&project.view(), Target::Entity("b")).unwrap();
+    let outcome = specforge_ops::read::trace::trace(&project.view(), Target::Entity("b")).unwrap();
     let json = serde_json::to_string_pretty(&outcome).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
@@ -181,7 +181,7 @@ fn expectations() -> TraceExpectations {
 }
 
 /// The missing links of a chain as (from, edge_label, expected_kind).
-fn missing(chain: &specforge_ops::trace::TraceChain) -> Vec<(&str, &str, &str)> {
+fn missing(chain: &specforge_ops::read::trace::TraceChain) -> Vec<(&str, &str, &str)> {
     chain
         .missing
         .iter()
@@ -367,7 +367,7 @@ fn trace_human_output_marks_missing_links() {
         label: "behaviors".into(),
     });
     let project = Project::of_graph(graph, crate::trace_support::build());
-    let outcome = specforge_ops::trace::trace(&project.view(), Target::Entity("b")).unwrap();
+    let outcome = specforge_ops::read::trace::trace(&project.view(), Target::Entity("b")).unwrap();
     assert_eq!(
         outcome.to_human(),
         concat!(
@@ -398,7 +398,7 @@ fn reach_lists_what_the_chains_reach_and_what_is_unverified() {
         label: "behaviors".into(),
     });
 
-    let reach = specforge_ops::trace::reach(&project.view(), ["beta"]).unwrap();
+    let reach = specforge_ops::read::trace::reach(&project.view(), ["beta"]).unwrap();
     assert_eq!(reach.affected, ["alpha", "beta"]);
     // alpha is testable and unproven; beta, a feature, is not obligated.
     assert_eq!(reach.unverified, ["alpha"]);
@@ -407,10 +407,10 @@ fn reach_lists_what_the_chains_reach_and_what_is_unverified() {
         project.record_passing(&[("alpha", "test alpha")]);
         project
     };
-    let reach = specforge_ops::trace::reach(&project.view(), ["beta"]).unwrap();
+    let reach = specforge_ops::read::trace::reach(&project.view(), ["beta"]).unwrap();
     assert_eq!(reach.unverified, Vec::<String>::new());
 
-    let refused = specforge_ops::trace::reach(&project.view(), ["nope"]).unwrap_err();
+    let refused = specforge_ops::read::trace::reach(&project.view(), ["nope"]).unwrap_err();
     assert_eq!(refused.code, "E003", "{refused:?}");
 }
 
@@ -418,7 +418,7 @@ fn reach_lists_what_the_chains_reach_and_what_is_unverified() {
 /// project.
 mod compiled {
     use crate::compiled_support::{TestProject, built, specs, trace_document, traced};
-    use specforge_ops::trace::Target;
+    use specforge_ops::read::trace::Target;
     use specforge_project::CompiledProject;
     use specforge_test_macros::test as specforge_test;
     use std::collections::BTreeSet;

@@ -615,7 +615,7 @@ fn a_command_the_cli_refuses_is_no_tool() {
     let refused = |arg: &str| {
         let declaration: specforge_protocol_types::CommandDescriptor =
             serde_json::from_value(command("x", arg)).unwrap();
-        specforge_ops::command::ExtensionCommand::new(EXT, "cmds", &declaration)
+        specforge_ops::extension::command::ExtensionCommand::new(EXT, "cmds", &declaration)
             .refusal()
             .map(ToString::to_string)
     };
@@ -1357,7 +1357,8 @@ fn mcp_sends_a_commands_export_the_args_its_derivation_normalizes() {
     let normalized = |declaration: Value, given: Value| -> Value {
         let declaration: specforge_protocol_types::CommandDescriptor =
             serde_json::from_value(declaration).unwrap();
-        let command = specforge_ops::command::ExtensionCommand::new(EXT, "cmds", &declaration);
+        let command =
+            specforge_ops::extension::command::ExtensionCommand::new(EXT, "cmds", &declaration);
         Value::Object(command.normalize(given.as_object().unwrap()).unwrap())
     };
     // R2: the declared default, and an unset flag false.

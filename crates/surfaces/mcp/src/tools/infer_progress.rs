@@ -6,10 +6,10 @@ use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 
 /// `specforge.infer_progress`'s reply: the document `specforge infer-status
 /// --format json` prints (`McpInferProgressResult`).
-type Reply = specforge_ops::infer::ProgressDocument;
+type Reply = specforge_ops::read::infer::ProgressDocument;
 
 /// `specforge.infer_progress`: the shared progress document
-/// (`specforge_ops::infer::progress`). With no project served it is the
+/// (`specforge_ops::read::infer::progress`). With no project served it is the
 /// no-project refusal (the call target's), as the operation refuses a view
 /// without a root.
 pub(crate) struct Tool;
@@ -26,7 +26,8 @@ impl CoreTool for Tool {
     type Returns = Answered<Reply>;
 
     fn call(project: ProjectRef<'_>, _args: crate::args::NoArgs) -> Answered<Reply> {
-        let progress = specforge_ops::infer::progress(&project.view()).map_err(McpError::from)?;
+        let progress =
+            specforge_ops::read::infer::progress(&project.view()).map_err(McpError::from)?;
         Ok(progress.document().into())
     }
 }

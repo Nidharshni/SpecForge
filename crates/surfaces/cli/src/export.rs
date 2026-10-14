@@ -1,8 +1,8 @@
 use crate::options;
 use crate::outcome::{Exit, OutputFormat, Refusal};
 use crate::terminal::{Terminal, errln, outln};
-use specforge_ops::export;
-use specforge_ops::schema::SchemaRequest;
+use specforge_ops::read::export;
+use specforge_ops::read::schema::SchemaRequest;
 use specforge_ops::view::ProjectView;
 
 // `specforge export`'s command line.
@@ -14,8 +14,8 @@ pub(crate) struct Args {
     /// Output format
     #[arg(
         long,
-        value_parser = options::choice(&specforge_ops::export::FORMAT),
-        default_value = specforge_ops::export::FORMAT.default_name()
+        value_parser = options::choice(&specforge_ops::read::export::FORMAT),
+        default_value = specforge_ops::read::export::FORMAT.default_name()
     )]
     format: export::Format,
 
@@ -145,8 +145,8 @@ pub(crate) struct SchemaArgs {
     #[arg(
         long,
         requires = "publish",
-        value_parser = options::choice(&specforge_ops::export::AGENT_FORMAT),
-        default_value = specforge_ops::export::AGENT_FORMAT.default_name()
+        value_parser = options::choice(&specforge_ops::read::export::AGENT_FORMAT),
+        default_value = specforge_ops::read::export::AGENT_FORMAT.default_name()
     )]
     format: export::Format,
 }
@@ -174,11 +174,11 @@ impl SchemaArgs {
         };
         let view = ProjectView::of(&project);
         let output = if self.publish {
-            specforge_ops::schema::json_schema(&view, self.format).map(|schema| {
+            specforge_ops::read::schema::json_schema(&view, self.format).map(|schema| {
                 serde_json::to_string_pretty(&schema).expect("a published schema serializes")
             })
         } else {
-            specforge_ops::schema::schema(&view, &self.request())
+            specforge_ops::read::schema::schema(&view, &self.request())
                 .map(|outcome| serde_json::to_string_pretty(&outcome).expect("a schema serializes"))
                 .map_err(specforge_ops::Refusal::into_error)
         };

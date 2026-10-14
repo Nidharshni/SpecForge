@@ -1,10 +1,10 @@
-//! `specforge.init`: create a project (`specforge_ops::init`).
+//! `specforge.init`: create a project (`specforge_ops::authoring::init`).
 
 use crate::refusal::ArgumentOf;
 use crate::target::TargetArgument;
 use crate::target::{NewProject, NewProjectDir};
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
-use specforge_ops::init::InitField;
+use specforge_ops::authoring::init::InitField;
 
 use crate::args::Arguments;
 use crate::events::ProjectInitialized;
@@ -18,7 +18,7 @@ pub struct Args {
     /// Project name (defaults to the directory name)
     name: Option<String>,
     /// Project version
-    #[arg(default = specforge_ops::init::DEFAULT_VERSION.to_string())]
+    #[arg(default = specforge_ops::authoring::init::DEFAULT_VERSION.to_string())]
     version: String,
     /// Builtin extensions to enable (e.g. @specforge/software) and local .wasm files to install
     extensions: Vec<String>,
@@ -36,7 +36,7 @@ impl MutationReply for Reply {
 
 /// `specforge.init`'s reply: the init document `specforge
 /// init --format json` prints (ADR 0052).
-type Reply = specforge_ops::init::InitDocument;
+type Reply = specforge_ops::authoring::init::InitDocument;
 
 pub(crate) struct Tool;
 
@@ -67,7 +67,7 @@ impl CoreTool for Tool {
 
     fn call(new: NewProjectDir<'_>, args: Args) -> Mutation<Reply> {
         let (path, runtime) = (new.dir, &new.runtime);
-        use specforge_ops::init;
+        use specforge_ops::authoring::init;
 
         // The directory the target names (as given: init creates it).
         let extensions = &args.extensions;

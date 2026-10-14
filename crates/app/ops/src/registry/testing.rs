@@ -10,11 +10,10 @@ use specforge_package::{PackageName, Version, VersionRequirement};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 
 use super::{
-    Found, KeyPin, Manifest, Package, Published as Receipt, Publisher, Registry, Searched,
+    Found, KeyPin, Manifest, Package, Published as Receipt, Publisher, Registry, Searched, Trust,
     TrustPolicy, Upload,
 };
 use crate::OpError;
-use crate::extension::Trust;
 
 /// One version a [`MemoryRegistry`] publishes. Its name and version are its declaration's, so it can never
 /// describe another package (a reply the configured registry refuses before ops sees it).

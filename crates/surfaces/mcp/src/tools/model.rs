@@ -1,6 +1,6 @@
 use crate::target::View;
 use crate::tool::{CoreTool, Effect, ToolGroup};
-use specforge_ops::model::{
+use specforge_ops::read::model::{
     self, FieldLevel, GroupBy, ModelField, ModelFormat, ModelOptions, ModelRoot,
 };
 
@@ -14,13 +14,13 @@ use specforge_ops::view::ProjectView;
 #[derive(Debug, Arguments)]
 pub struct Args {
     /// Output format
-    #[arg(choice = specforge_ops::model::MODEL_FORMAT)]
+    #[arg(choice = specforge_ops::read::model::MODEL_FORMAT)]
     format: ModelFormat,
     /// How to group entities
-    #[arg(choice = specforge_ops::model::GROUP_BY)]
+    #[arg(choice = specforge_ops::read::model::GROUP_BY)]
     group_by: GroupBy,
     /// Field detail level
-    #[arg(choice = specforge_ops::model::MODEL_FIELDS)]
+    #[arg(choice = specforge_ops::read::model::MODEL_FIELDS)]
     fields: FieldLevel,
     /// Filter to a single extension
     extension: Option<String>,

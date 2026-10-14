@@ -6,7 +6,7 @@ use std::path::Path;
 
 use specforge_common::Severity;
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
-use specforge_ops::doctor::{Part, diagnose};
+use specforge_ops::analysis::doctor::{Part, diagnose};
 use specforge_ops::view::ProjectView;
 use specforge_protocol_types::PeerDependency;
 use specforge_test_macros::test as specforge_test;
@@ -166,9 +166,9 @@ fn check_reports_a_cycle_among_required_peers() {
         "cycle detected in peer dependencies: @acme/a, @acme/b"
     );
 
-    let outcome = specforge_ops::check::check(
+    let outcome = specforge_ops::analysis::check::check(
         &ProjectView::of(&compiled),
-        &specforge_ops::check::CheckOptions::default(),
+        &specforge_ops::analysis::check::CheckOptions::default(),
     )
     .unwrap();
     assert!(!outcome.ok());
@@ -308,7 +308,8 @@ fn add_cases() -> Vec<Case> {
     verify = "add and check agree: an add check would report E027 or E073 for is refused, and an add that passes leaves none"
 )]
 fn add_and_check_agree_on_the_project_peer_set() {
-    use specforge_ops::extension::{self, AddRequest, Source, Trust};
+    use specforge_ops::extension::{self, AddRequest, Source};
+    use specforge_ops::registry::Trust;
     use specforge_ops::testing::probes;
 
     let cases = add_cases();
@@ -387,7 +388,8 @@ fn snapshot(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u
     verify = "a dry run answers what the add answers, refusals and the builtins it enables included, and writes nothing"
 )]
 fn a_dry_run_answers_what_the_add_answers() {
-    use specforge_ops::extension::{self, AddRequest, Source, Trust};
+    use specforge_ops::extension::{self, AddRequest, Source};
+    use specforge_ops::registry::Trust;
     use specforge_ops::testing::probes;
 
     for (case, config, files, locked, adds, _refused) in add_cases() {

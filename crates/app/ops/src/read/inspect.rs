@@ -10,8 +10,8 @@ use specforge_project::coverage::{Status, Verdict};
 use specforge_project::snapshot::{ObligationRecord, Standing};
 use specforge_registry::KindRegistryEntry;
 
-use crate::navigate::{EntityField, References, is_about, not_found};
-use crate::view::ProjectView;
+use crate::read::navigate::{References, is_about};
+use crate::view::{EntityField, ProjectView, not_found};
 use crate::{OpError, Refusal};
 
 /// Everything a surface shows about one entity, borrowed from the view.
@@ -79,7 +79,7 @@ pub fn coverage(view: &ProjectView, entity_id: &str) -> Result<EntityCoverage, O
 
 /// The facts of the entity `entity_id`, with the diagnostics the view
 /// reports about it (MCP: its call target's; the LSP: what it published).
-/// An entity the graph lacks is `navigate::not_found`.
+/// An entity the graph lacks is `view::not_found`.
 pub fn inspect<'v>(
     view: &ProjectView<'v>,
     entity_id: &str,

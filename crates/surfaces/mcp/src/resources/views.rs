@@ -4,7 +4,7 @@
 //! function; the entity list and the diagnostics read what `specforge.list`
 //! and `specforge.validate` read. Nothing here reads the server's state.
 
-use specforge_ops::export::{ExportField, Format, Request};
+use specforge_ops::read::export::{ExportField, Format, Request};
 
 use crate::resources::{ReadOutcome, ResourceText};
 use crate::tool::{ErrorCode, McpError};
@@ -13,7 +13,7 @@ use specforge_ops::view::ProjectView;
 /// The query keys a graph view reads.
 const KEYS: &str = "scope (or root), depth, kinds and max_tokens";
 
-/// What a graph-view resource URI asks `ops::export` for: the template's
+/// What a graph-view resource URI asks `ops::read::export` for: the template's
 /// placeholder (or `?scope=`, alias `?root=`, on an untemplated URI) as the
 /// scope, `depth`, `kinds` (comma-separated) and `max_tokens`. Keys and
 /// values are percent-decoded; nothing in a query is ignored: an unknown or
@@ -235,14 +235,14 @@ fn check_entity_id(entity_id: &str) -> Result<(), Box<McpError>> {
 }
 
 fn exported(view: ProjectView<'_>, query: &ViewQuery, format: Format) -> ReadOutcome {
-    specforge_ops::export::export(&view, &query.request(format))
+    specforge_ops::read::export::export(&view, &query.request(format))
         .map(ResourceText::json)
         .map_err(|refusal| Box::new(McpError::refused(refusal, |field| query.argument(field))))
 }
 
 /// `specforge://entities/{kind}`: what `specforge.list {kind}` lists, the
 /// same rows from the same read view and presenter
-/// ([`specforge_ops::query::list`], [`crate::tools::list::rows`]), as a bare
+/// ([`specforge_ops::read::query::list`], [`crate::tools::list::rows`]), as a bare
 /// array (a resource is not a tool result).
 pub(crate) fn entities_view(view: ProjectView<'_>, uri: &str) -> ReadOutcome {
     let (path, _) = uri.split_once('?').unwrap_or((uri, ""));
@@ -254,9 +254,9 @@ pub(crate) fn entities_view(view: ProjectView<'_>, uri: &str) -> ReadOutcome {
     )?;
     // A resource has no `_meta`: the listing's notices (an unknown kind)
     // are not carried.
-    let listing = specforge_ops::query::list(
+    let listing = specforge_ops::read::query::list(
         &view,
-        &specforge_ops::query::ListRequest {
+        &specforge_ops::read::query::ListRequest {
             kind: Some(&kind),
             ..Default::default()
         },

@@ -1,6 +1,6 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, outln};
-use specforge_ops::infer::{InferenceGuide, KindGuide, guide, kind_guide};
+use specforge_ops::read::infer::{InferenceGuide, KindGuide, guide, kind_guide};
 use specforge_ops::view::ProjectView;
 
 // `specforge infer-guide`'s command line.

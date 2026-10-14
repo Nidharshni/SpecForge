@@ -1,8 +1,8 @@
 //! The review (plan 04, ADR 0015 "Prompt read views"): the coverage gaps of
 //! an entity's neighbourhood, or of the whole project.
 
-use specforge_ops::explore::{ExplorationRequest, explore};
-use specforge_ops::review::{ReviewFinding, ReviewGap, ReviewRequest, review};
+use specforge_ops::read::explore::{ExplorationRequest, explore};
+use specforge_ops::read::review::{ReviewFinding, ReviewGap, ReviewRequest, review};
 use specforge_test::prelude::*;
 
 use crate::view_support::{Project, registries};

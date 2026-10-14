@@ -229,7 +229,7 @@ impl ModelIntermediate {
 /// (grey when none does).
 ///
 /// Total: a name `schema` does not have selects nothing. Refusing or
-/// reporting such a name is the operation's job (`specforge_ops::model::model`).
+/// reporting such a name is the operation's job (`specforge_ops::read::model::model`).
 pub fn export(
     schema: &GraphProtocolSchema,
     declarations: &[ExtensionDeclaration],
