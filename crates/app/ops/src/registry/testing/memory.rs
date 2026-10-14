@@ -101,7 +101,7 @@ pub enum Asked {
 /// A package registry held in memory: the second adapter of [`Registry`], beside
 /// `specforge_ops_registry::ConfiguredRegistry`. It serves what it publishes as the configured registry
 /// serves a package that passed the fetch policy, refuses as it refuses (both are held to
-/// [`assert_registry_contract`]), and records what it was asked and what it accepted. It verifies no
+/// [`assert_registry_contract`](super::contract::assert_registry_contract)), and records what it was asked and what it accepted. It verifies no
 /// signature; it decides a publisher against its own pins and the policy's locked key as the configured
 /// registry does, and records pins only through [`Registry::pin`]. A publish is signed by the key id
 /// `"in-memory"`.
