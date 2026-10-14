@@ -293,7 +293,7 @@ impl TestProject {
     /// The component runtime every CLI command compiles with, as its concrete type (for a test that asks it what it
     /// loaded).
     pub fn component_runtime(&self) -> Arc<specforge_component::ComponentRuntime> {
-        Arc::new(specforge_component::ComponentRuntime::with_user_cache())
+        component_runtime()
     }
 
     /// Bring the disk up to the value: `specforge.json`, and the installs a served runtime needs.
@@ -335,6 +335,12 @@ impl TestProject {
         text.push('\n');
         self.write("specforge.json", text);
     }
+}
+
+/// The component runtime every CLI command compiles with: the builtins, with the per-user compile cache. For a test
+/// that builds its project apart from a [`TestProject`].
+pub fn component_runtime() -> Arc<specforge_component::ComponentRuntime> {
+    Arc::new(specforge_component::ComponentRuntime::with_user_cache())
 }
 
 /// The project at `root`, a directory a test owns (moved, renamed, built apart from a [`TestProject`]), compiled with

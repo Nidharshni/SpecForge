@@ -11,6 +11,7 @@ use specforge_ops::extension::{
 use specforge_ops::testing::{self, declaring, serving_builtin};
 use specforge_ops::view::ProjectView;
 use specforge_project::CompiledProject;
+use specforge_project::testing::compile_at;
 use specforge_wasm::testing::InProcessRuntime;
 use std::sync::Arc;
 use tempfile::TempDir;
@@ -133,20 +134,13 @@ fn add(
 
 /// The project at `root`, compiled in process with [`candidates`].
 fn compiled(root: &Path) -> CompiledProject {
-    CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(root).unwrap(),
-        Some(Arc::new(candidates())),
-    )
+    compile_at(root, Some(Arc::new(candidates())))
 }
 
 /// The project at `root`, compiled with the component runtime that loads
 /// the builtins.
 fn compiled_with_builtins(root: &Path) -> CompiledProject {
-    let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(root).unwrap(),
-        Some(Arc::new(runtime)),
-    )
+    compile_at(root, Some(specforge_project::testing::component_runtime()))
 }
 
 fn remove(root: &Path, name: &str, dry_run: bool) -> extension::RemoveOutcome {
@@ -239,8 +233,8 @@ fn rename_writes_are_the_files_it_edited() {
 }
 
 /// The component runtime that loads the builtins, with the per-user cache.
-fn runtime() -> specforge_component::ComponentRuntime {
-    specforge_component::ComponentRuntime::with_user_cache()
+fn runtime() -> Arc<specforge_component::ComponentRuntime> {
+    specforge_project::testing::component_runtime()
 }
 
 /// What `init` scaffolds in `dir` with `extensions`, the candidates read in
@@ -311,7 +305,7 @@ fn the_starter_states_the_project_version() {
             version,
             extensions,
         };
-        init::init(&request, &runtime()).unwrap();
+        init::init(&request, &*runtime()).unwrap();
         let config: serde_json::Value =
             serde_json::from_slice(&std::fs::read(dir.join("specforge.json")).unwrap()).unwrap();
         assert_eq!(config["version"], version);
@@ -905,7 +899,7 @@ fn init_enables_a_builtin_after_the_builtins_it_requires() {
         extensions: &extensions,
     };
 
-    let outcome = init::init(&request, &runtime()).unwrap();
+    let outcome = init::init(&request, &*runtime()).unwrap();
 
     assert_eq!(
         outcome.extensions,
@@ -936,14 +930,14 @@ fn init_enables_each_builtin_after_the_builtins_it_requires() {
             extensions: &extensions,
         };
 
-        let extensions = init::init(&request, &runtime).unwrap().extensions;
+        let extensions = init::init(&request, &*runtime).unwrap().extensions;
 
         for enabled in &extensions {
             let Some(enabled) = extension::builtin_name(enabled) else {
                 continue;
             };
             let position = |name: &str| extensions.iter().position(|e| e == name);
-            for required in extension::Candidate::builtin(&runtime, enabled)
+            for required in extension::Candidate::builtin(&*runtime, enabled)
                 .unwrap()
                 .peers()
                 .iter()
@@ -1111,10 +1105,7 @@ fn init_enables_the_builtins_a_local_file_requires() {
             "@specforge/testing"
         ]
     );
-    let compiled = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(&dir).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let compiled = compile_at(&dir, Some(Arc::new(runtime)));
     assert!(
         !compiled.diagnostics().iter().any(|d| d.code == "E027"),
         "{:?}",

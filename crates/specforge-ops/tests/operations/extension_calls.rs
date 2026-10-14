@@ -373,7 +373,8 @@ mod the_views_runtime {
     use specforge_ops::analyze::{AnalyzeOptions, analyze};
     use specforge_ops::command::{CommandFormat, ExtensionCommands, RunError, run};
     use specforge_ops::view::ProjectView;
-    use specforge_project::{CompiledProject, SharedRuntime};
+    use specforge_project::SharedRuntime;
+    use specforge_project::testing::compile_at;
     use specforge_test_macros::test as specforge_test;
     use specforge_wasm::CallFailure;
     use specforge_wasm::testing::InProcessRuntime;
@@ -418,10 +419,7 @@ mod the_views_runtime {
         let dir = project();
         let rt = Arc::new(extension());
         let shared: SharedRuntime = rt.clone();
-        let compiled = CompiledProject::compile(
-            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-            Some(shared),
-        );
+        let compiled = compile_at(dir.path(), Some(shared));
         let view = ProjectView::of(&compiled);
 
         let outcome = analyze(&view, &AnalyzeOptions::default()).unwrap();
@@ -448,17 +446,11 @@ mod the_views_runtime {
         let dir = project();
         // Compiled with a runtime only to learn the command the project's
         // extension declares; the environment under test has none.
-        let declared = CompiledProject::compile(
-            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-            Some(Arc::new(extension())),
-        );
+        let declared = compile_at(dir.path(), Some(Arc::new(extension())));
         let commands = ExtensionCommands::build(ProjectView::of(&declared).registries());
         let hello = commands.all().iter().find(|c| c.id() == "hello").unwrap();
 
-        let bare = CompiledProject::compile(
-            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-            None,
-        );
+        let bare = compile_at(dir.path(), None);
         let view = ProjectView::of(&bare);
         let RunError::Call(error) =
             run(&view, hello, &Map::new(), CommandFormat::Json).unwrap_err()

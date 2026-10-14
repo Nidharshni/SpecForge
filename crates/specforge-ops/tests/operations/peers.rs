@@ -1,13 +1,13 @@
 //! Peer requirements as `doctor` reports them over a compiled project.
 
 use specforge_ops::testing::ScriptedSolver;
+use specforge_project::testing::compile_at;
 use std::path::Path;
 
 use specforge_common::Severity;
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
 use specforge_ops::doctor::{Part, diagnose};
 use specforge_ops::view::ProjectView;
-use specforge_project::CompiledProject;
 use specforge_protocol_types::PeerDependency;
 use specforge_test_macros::test as specforge_test;
 use specforge_wasm::testing::InProcessRuntime;
@@ -74,10 +74,7 @@ fn a_peer_a_builtin_satisfies_is_not_reported_by_doctor() {
     specforge_installed::testing::install(dir.path(), &["@acme/app"]);
     locked_peers(dir.path(), "@acme/app", &[("@specforge/software", "^1.0")]);
 
-    let compiled = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let compiled = compile_at(dir.path(), Some(Arc::new(runtime)));
     assert!(
         !compiled.diagnostics().iter().any(|d| d.code == "E027"),
         "{:?}",
@@ -108,10 +105,7 @@ fn doctor_reports_the_peer_requirements_check_reports() {
     specforge_installed::testing::install(dir.path(), &["@acme/base", "@acme/bad"]);
     locked_peers(dir.path(), "@acme/bad", &[("@acme/base", "one-ish")]);
 
-    let compiled = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let compiled = compile_at(dir.path(), Some(Arc::new(runtime)));
     let all = compiled.diagnostics();
     let reported: Vec<_> = all
         .iter()
@@ -141,10 +135,7 @@ fn doctor_reports_the_peer_requirements_check_reports() {
         .with(served("@acme/base", "1.0.0", &[]))
         .with(served("@acme/app", "1.0.0", &[("@acme/base", "^2.0")]));
     specforge_installed::testing::install(dir.path(), &["@acme/base", "@acme/app"]);
-    let compiled = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let compiled = compile_at(dir.path(), Some(Arc::new(runtime)));
     let all = compiled.diagnostics();
     let e027: Vec<_> = all.iter().filter(|d| d.code == "E027").collect();
     assert_eq!(e027.len(), 1, "{e027:?}");
@@ -166,10 +157,7 @@ fn check_reports_a_cycle_among_required_peers() {
         .with(served("@acme/b", "1.0.0", &[("@acme/a", "^1")]));
     specforge_installed::testing::install(dir.path(), &["@acme/a", "@acme/b"]);
 
-    let compiled = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let compiled = compile_at(dir.path(), Some(Arc::new(runtime)));
     let all = compiled.diagnostics();
     let cycles: Vec<_> = all.iter().filter(|d| d.code == "E027").collect();
     assert_eq!(cycles.len(), 1, "{cycles:?}");
@@ -365,10 +353,7 @@ fn add_and_check_agree_on_the_project_peer_set() {
             }
             None => {
                 result.unwrap_or_else(|error| panic!("{case}: {error:?}"));
-                let compiled = CompiledProject::compile(
-                    &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-                    Some(Arc::new(probes())),
-                );
+                let compiled = compile_at(dir.path(), Some(Arc::new(probes())));
                 let all = compiled.diagnostics();
                 let peers: Vec<_> = all
                     .iter()
@@ -570,8 +555,8 @@ fn remove_and_check_agree_on_the_project_peer_set() {
 
     for (case, config, files, locked, name, force, refused) in cases {
         let dir = removal_project(config, files, &locked);
-        let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
-        let compiled = CompiledProject::compile(&root, Some(Arc::new(probes())));
+        let root = dir.path();
+        let compiled = compile_at(root, Some(Arc::new(probes())));
         let before = snapshot(dir.path());
 
         let result = extension::remove(
@@ -601,7 +586,7 @@ fn remove_and_check_agree_on_the_project_peer_set() {
         } else {
             result.unwrap_or_else(|error| panic!("{case}: {error:?}"));
             if !force {
-                let recompiled = CompiledProject::compile(&root, Some(Arc::new(probes())));
+                let recompiled = compile_at(root, Some(Arc::new(probes())));
                 let all = recompiled.diagnostics();
                 let peers: Vec<_> = all
                     .iter()

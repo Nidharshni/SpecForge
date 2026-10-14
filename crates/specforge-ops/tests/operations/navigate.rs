@@ -5,6 +5,7 @@ use specforge_common::SourceSpan;
 use specforge_extension_sdk::prelude::*;
 use specforge_ops::navigate::{Direction, Navigator, Occurrence, Precision, ReferenceQuery, Role};
 use specforge_ops::view::ProjectView;
+use specforge_project::testing::compile_at;
 use specforge_project::{CompiledProject, Environment};
 use specforge_test::prelude::*;
 use tempfile::TempDir;
@@ -28,11 +29,8 @@ pub fn compile(extensions: &[&str], files: &[(&str, &str)]) -> Compiled {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, text).unwrap();
     }
-    let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let project = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let runtime = specforge_project::testing::component_runtime();
+    let project = compile_at(dir.path(), Some(runtime));
     let unloaded: Vec<_> = project
         .diagnostics()
         .into_iter()
@@ -939,10 +937,7 @@ fn an_untargeted_obligation_rule_stubs_every_kind_that_accepts_verify() {
     .unwrap();
     specforge_installed::testing::install(dir.path(), &["@pin/untargeted"]);
     let runtime = specforge_wasm::testing::InProcessRuntime::new().with(untargeted_rule);
-    let project = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let project = compile_at(dir.path(), Some(Arc::new(runtime)));
     let reported: Vec<String> = project
         .diagnostics()
         .into_iter()
