@@ -510,6 +510,39 @@ mod tests {
         assert!(!dir.exists(), "nothing was written");
     }
 
+    /// The add test of the same name holds `add` to it; init judges the same peer set (ADR 0065).
+    #[test]
+    fn init_refuses_a_required_builtin_peer_the_embedded_one_does_not_satisfy() {
+        use crate::testing::{candidates, serving_builtin};
+        // formal wants software ^2.0; the software this specforge embeds is 1.0.0. (Init also
+        // enables testing beside software.)
+        let runtime = serving_builtin(
+            serving_builtin(
+                serving_builtin(
+                    candidates(),
+                    "@specforge/formal",
+                    declaring(
+                        "@specforge/formal",
+                        "1.0.0",
+                        &[("@specforge/software", "^2.0", false)],
+                    ),
+                ),
+                "@specforge/software",
+                declaring("@specforge/software", "1.0.0", &[]),
+            ),
+            "@specforge/testing",
+            declaring("@specforge/testing", "1.0.0", &[]),
+        );
+        let target = tempfile::tempdir().unwrap();
+        let dir = target.path().join("demo");
+        let extensions = vec!["@specforge/formal".to_string()];
+
+        let error = init(&request(&dir, &extensions), &runtime).unwrap_err();
+
+        assert_eq!(error.error.code, "E027");
+        assert!(!dir.exists(), "nothing was written");
+    }
+
     #[test]
     fn init_installs_a_crate_directory() {
         let scratch = tempfile::tempdir().unwrap();

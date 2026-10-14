@@ -1581,21 +1581,6 @@ mod tests {
             Some("this specforge build's builtin extensions disagree: reinstall specforge")
         );
         assert_eq!(files_under(dir.path()), before);
-
-        // init refuses the same way, before it writes anything.
-        let target = tempfile::tempdir().unwrap();
-        let extensions = vec!["@specforge/formal".to_string()];
-        let error = crate::init::init(
-            &crate::init::Request {
-                dir: &target.path().join("demo"),
-                name: Some("demo"),
-                version: crate::init::DEFAULT_VERSION,
-                extensions: &extensions,
-            },
-            &runtime,
-        )
-        .unwrap_err();
-        assert_eq!(error.error.code, "E027");
     }
 
     /// The project's peer set (ADR 0041, amendment round 7) is what an add is judged against.
