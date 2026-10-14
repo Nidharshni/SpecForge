@@ -427,3 +427,30 @@ fn no_trigger_assumes_how_deep_a_crate_sits() {
         Selection::Everything
     );
 }
+
+#[test]
+fn the_layer_check_runs_when_a_manifest_or_the_rule_changes() {
+    for path in [
+        "Cargo.toml",
+        "crates/app/ops/Cargo.toml",
+        "crates/kernel/tree-sitter/Cargo.toml",
+        "gate/src/layers.rs",
+    ] {
+        assert_eq!(
+            selection("layers", Mode::Hook, &[path]),
+            Selection::Everything,
+            "{path}"
+        );
+    }
+    for path in [
+        "crates/app/ops/src/lib.rs",
+        "extensions/product/Cargo.toml",
+        "gate/src/checks.rs",
+    ] {
+        assert_eq!(
+            selection("layers", Mode::Hook, &[path]),
+            Selection::Skip,
+            "{path}"
+        );
+    }
+}

@@ -6,6 +6,7 @@ mod change_set;
 mod checks;
 mod doc_links;
 pub mod judge;
+pub mod layers;
 mod repo;
 mod root_layout;
 mod run;
