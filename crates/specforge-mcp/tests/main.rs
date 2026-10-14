@@ -14,6 +14,7 @@ mod operations_mgmt;
 mod operations_mutation;
 mod option_tables;
 mod output_schemas;
+mod path_containment;
 mod product_commands;
 mod prompt_golden;
 mod prompt_infer;
