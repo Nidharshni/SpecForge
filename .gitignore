@@ -31,6 +31,8 @@ tests/spec/
 
 # SpecForge: test results written by `specforge collect`, and runner reports
 /specforge-report.json
+# `specforge export --format dot > specforge-graph.dot`: regenerate it, never commit it
+/specforge-graph.dot
 .specforge/
 .claude/worktrees/
 # docs/research holds the round reports; any other page there is local (ADR 0082)
