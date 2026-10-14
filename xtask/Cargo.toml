@@ -17,6 +17,7 @@ name = "check-links"
 path = "src/check_links.rs"
 
 [dependencies]
+specforge-repo-root = { path = "../crates/specforge-repo-root" }
 specforge-common = { workspace = true }
 specforge-coverage = { path = "../crates/specforge-coverage" }
 specforge-project = { workspace = true }

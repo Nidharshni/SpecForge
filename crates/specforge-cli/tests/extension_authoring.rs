@@ -3,6 +3,7 @@
 //! and the declaration that component serves (ADR 0012).
 
 use crate::support::{Cli, TestProject};
+use specforge_repo_root::repo_root;
 use specforge_test_macros::test as specforge_test;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -24,10 +25,6 @@ fn walk(dir: &Path) -> Vec<PathBuf> {
 /// An empty directory the test scaffolds and builds in (no `specforge.json`).
 fn scratch() -> TestProject {
     TestProject::new().without_config()
-}
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
 /// `extension init --name <name>` in a fresh directory.

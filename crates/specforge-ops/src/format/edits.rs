@@ -100,7 +100,6 @@ fn splits_crlf(source: &str, at: usize) -> bool {
 
 #[cfg(test)]
 pub(super) mod tests {
-    use std::path::Path;
 
     use super::super::{EditorOptions, Lines, Place, document};
     use super::*;
@@ -290,7 +289,7 @@ pub(super) mod tests {
 
     /// Every corpus file under every perturbation, then the edge inputs.
     fn corpus_inputs() -> Vec<Input> {
-        let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let workspace = specforge_repo_root::repo_root();
         let mut inputs = Vec::new();
         let mut seed = 0;
         for (corpus, dir) in CORPORA.iter().enumerate() {

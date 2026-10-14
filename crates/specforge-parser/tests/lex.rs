@@ -60,7 +60,7 @@ fn grammar_leaves(node: tree_sitter::Node, out: &mut Vec<(usize, usize, LexemeKi
     verify = "the lexer agrees with the grammar on every spec file of the repository"
 )]
 fn lexer_agrees_with_the_grammar() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = specforge_repo_root::repo_root();
     let mut files = Vec::new();
     spec_files(&root.join("spec"), &mut files);
     assert!(files.len() > 150, "found only {} spec files", files.len());
@@ -416,7 +416,7 @@ fn form_start_lines() {
     verify = "a line starts a top-level form exactly where the grammar reads one, on every spec file of the repository"
 )]
 fn form_starts_are_the_grammars_top_level_nodes() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = specforge_repo_root::repo_root();
     let mut files = Vec::new();
     for corpus in ["spec", "integrations/rust/spec", "examples"] {
         spec_files(&root.join(corpus), &mut files);
@@ -511,7 +511,7 @@ fn grammar_ends_a_body_at(parser: &mut tree_sitter::Parser, line: &str) -> bool 
     verify = "the grammar ends an unclosed body at exactly the lines the form-start rule reads as form starts"
 )]
 fn the_grammars_scanner_reads_form_starts_as_the_lexer_does() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = specforge_repo_root::repo_root();
     let mut files = Vec::new();
     for corpus in ["spec", "integrations/rust/spec", "examples"] {
         spec_files(&root.join(corpus), &mut files);
@@ -592,7 +592,7 @@ fn the_grammars_scanner_reads_form_starts_as_the_lexer_does() {
     verify = "a document's form starts are the grammar's top-level nodes, and stay so with every body left unclosed"
 )]
 fn a_documents_form_starts_are_its_top_level_nodes() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = specforge_repo_root::repo_root();
     let mut files = Vec::new();
     for corpus in ["spec", "integrations/rust/spec", "examples"] {
         spec_files(&root.join(corpus), &mut files);

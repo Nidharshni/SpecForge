@@ -972,7 +972,7 @@ feature gamma "G" { behaviors [alpha] }
     /// A copy of `<repo>/<rel>`; for the repository itself, only `specforge.json` and `spec/`. `export` records the
     /// schema cache in the project it exports, so a test never exports a committed directory.
     fn copy_project(rel: &str) -> TestProject {
-        let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let repo = specforge_repo_root::repo_root();
         if rel == "." {
             TestProject::new()
                 .raw_config(std::fs::read(repo.join("specforge.json")).unwrap())

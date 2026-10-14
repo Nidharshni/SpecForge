@@ -123,7 +123,7 @@ fn test_sources() -> Vec<(String, String)> {
             }
         }
     }
-    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let repo = specforge_repo_root::repo_root();
     let mut files = Vec::new();
     for krate in std::fs::read_dir(repo.join("crates"))
         .unwrap()
@@ -140,7 +140,7 @@ fn test_sources() -> Vec<(String, String)> {
         .map(|path| {
             let text = std::fs::read_to_string(&path).unwrap();
             let rel = path
-                .strip_prefix(&repo)
+                .strip_prefix(repo)
                 .unwrap()
                 .to_string_lossy()
                 .into_owned();

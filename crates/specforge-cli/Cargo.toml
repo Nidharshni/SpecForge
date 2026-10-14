@@ -43,6 +43,7 @@ specforge-project = { workspace = true }
 specforge-registry-client = { path = "../specforge-registry-client" }
 
 [dev-dependencies]
+specforge-repo-root = { path = "../specforge-repo-root" }
 # The test project and the MCP driver over it (`tests/support`).
 specforge-project = { workspace = true, features = ["testing"] }
 specforge-mcp = { workspace = true, features = ["testing"] }

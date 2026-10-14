@@ -5,14 +5,13 @@
 use specforge_component::builtins::{BUILTIN_EXTENSIONS, BUILTINS};
 use specforge_component::committed::{COMMITTED, FIXTURES};
 use specforge_test_macros::test as specforge_test;
-use std::path::Path;
 
 #[specforge_test(
     behavior = "load_extension_manifests",
     verify = "every builtin is listed once, by the directory its crate lives in"
 )]
 fn the_table_is_the_extensions_directory() {
-    let extensions = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../extensions");
+    let extensions = specforge_repo_root::repo_root().join("extensions");
     let mut on_disk: Vec<String> = std::fs::read_dir(extensions)
         .expect("extensions/")
         .flatten()
@@ -59,7 +58,7 @@ fn the_table_is_the_extensions_directory() {
     verify = "every fixture crate is listed once, by its directory under fixtures/"
 )]
 fn the_fixtures_are_the_fixtures_directory() {
-    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures");
+    let fixtures = specforge_repo_root::repo_root().join("fixtures");
     let mut on_disk: Vec<String> = std::fs::read_dir(&fixtures)
         .expect("fixtures/")
         .flatten()

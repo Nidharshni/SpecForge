@@ -14,10 +14,7 @@ use specforge_test::registry::TestRecordEntry;
 use specforge_test::report;
 
 fn schema_path(name: &str) -> std::path::PathBuf {
-    let manifest = env!("CARGO_MANIFEST_DIR");
-    std::path::Path::new(manifest)
-        .join("../../../schema")
-        .join(name)
+    specforge_repo_root::repo_root().join("schema").join(name)
 }
 
 fn load_schema(name: &str) -> Value {
@@ -252,8 +249,7 @@ fn the_recorded_report_example_matches_its_schema() {
         }
     }
 
-    let example = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../examples/todo-app/specforge-report.json");
+    let example = specforge_repo_root::repo_root().join("examples/todo-app/specforge-report.json");
     let report: Value = serde_json::from_str(&std::fs::read_to_string(&example).unwrap()).unwrap();
     let mut errors = Vec::new();
     validate(&report, &schema, &schema, "$", &mut errors);

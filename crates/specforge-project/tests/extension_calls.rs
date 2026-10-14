@@ -5,7 +5,7 @@
 
 use std::collections::HashSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde_json::{Value, json};
 use specforge_common::{Diagnostic, Severity};
@@ -20,7 +20,7 @@ use std::sync::Arc;
 const EXT: &str = "@pin/passes";
 
 fn wire_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../specforge-wasm/tests/wire")
+    specforge_repo_root::repo_root().join("crates/specforge-wasm/tests/wire")
 }
 
 fn sorted(value: &Value) -> Value {

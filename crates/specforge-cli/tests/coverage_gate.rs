@@ -254,12 +254,7 @@ fn strict_leaves_stray_records_alone() {
 // working — collect from the committed runner report, analyze, and trace.
 #[test]
 fn todo_app_traceability_loop_stays_wired() {
-    let example = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("examples/todo-app");
+    let example = specforge_repo_root::repo_root().join("examples/todo-app");
     // Copy the project (spec + config + committed fixture) so collect writes
     // its report into the copy, not the repo.
     let tmp = TestProject::copy_of(&example);
@@ -378,12 +373,7 @@ fn a_gate_without_the_coverage_pass_is_refused_before_the_analysis() {
 // committed runner fixture (and `schemas_test` holds it to its schema).
 #[test]
 fn the_example_report_is_what_collect_writes() {
-    let example = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("examples/todo-app");
+    let example = specforge_repo_root::repo_root().join("examples/todo-app");
     let tmp = TestProject::copy_of(&example);
     let committed = std::fs::read_to_string(tmp.root().join("specforge-report.json")).unwrap();
     tmp.remove("specforge-report.json");

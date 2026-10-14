@@ -17,6 +17,7 @@ tree-sitter = { workspace = true }
 tree-sitter-specforge = { workspace = true }
 
 [dev-dependencies]
+specforge-repo-root = { path = "../specforge-repo-root" }
 criterion = { workspace = true }
 insta = { workspace = true }
 specforge-test = { workspace = true }

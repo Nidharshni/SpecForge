@@ -267,8 +267,8 @@ fn peer_dependency_checking_holds() {
     verify = "peer_dependencies includes optional @specforge/software"
 )]
 fn governance_peer_on_software_is_optional() {
-    let handshake = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../specforge-component/tests/declarations/governance/handshake.json");
+    let handshake = specforge_repo_root::repo_root()
+        .join("crates/specforge-component/tests/declarations/governance/handshake.json");
     let handshake: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(handshake).unwrap()).unwrap();
     let software = handshake["peer_dependencies"]

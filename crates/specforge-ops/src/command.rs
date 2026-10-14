@@ -1387,8 +1387,8 @@ mod tests {
         )
         .unwrap();
 
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../specforge-wasm/tests/wire/command.input.json");
+        let path = specforge_repo_root::repo_root()
+            .join("crates/specforge-wasm/tests/wire/command.input.json");
         let expected: Value =
             serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         assert_eq!(last_input(&runtime), expected, "golden command.input.json");

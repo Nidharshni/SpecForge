@@ -10,6 +10,7 @@ build = "build.rs"
 tree-sitter-language = { workspace = true }
 
 [dev-dependencies]
+specforge-repo-root = { path = "../specforge-repo-root" }
 tree-sitter = { workspace = true }
 specforge-test = { workspace = true }
 specforge-test-macros = { workspace = true }

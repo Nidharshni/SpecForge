@@ -5,7 +5,7 @@
 //! silently reintroduce a first-party native tier (which would violate R-1:
 //! all plugins are the same kind, executed through the same Wasm runtime).
 
-use std::path::{Path, PathBuf};
+use specforge_repo_root::repo_root;
 
 const FORBIDDEN_SYMBOLS: &[&str] = &[
     "BuiltinRuntime",
@@ -15,21 +15,12 @@ const FORBIDDEN_SYMBOLS: &[&str] = &[
     "runtime_for_extensions",
 ];
 
-fn workspace_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .to_path_buf()
-}
-
 #[test]
 fn no_native_tier_symbols_in_workspace_source() {
-    let root = workspace_root();
+    let root = repo_root();
     let mut offenders = Vec::new();
 
-    let mut stack = vec![root.clone()];
+    let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
         let Ok(entries) = std::fs::read_dir(&dir) else {
             continue;
@@ -66,5 +57,5 @@ fn no_native_tier_symbols_in_workspace_source() {
         offenders.join("\n")
     );
     // Sanity: the gate actually walks source (it must be able to find THIS file).
-    assert!(workspace_root().join("crates").exists());
+    assert!(repo_root().join("crates").exists());
 }

@@ -1,15 +1,9 @@
 use super::*;
-
-fn root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .to_path_buf()
-}
+use specforge_repo_root::repo_root;
 
 /// The builtins a change feeds; the fixtures that record their inputs are left out.
 fn fed(paths: &[&str]) -> Vec<String> {
-    let mut fed = fed_by(&root(), &ChangeSet::of(paths.iter().copied())).unwrap();
+    let mut fed = fed_by(repo_root(), &ChangeSet::of(paths.iter().copied())).unwrap();
     fed.retain(|crate_dir| crate_dir.starts_with("extensions/"));
     fed
 }
@@ -30,10 +24,10 @@ const NINE: [&str; 9] = [
 #[test]
 fn a_record_round_trips_byte_for_byte() {
     let scratch = tempfile::tempdir().unwrap();
-    for builtin in blobs(&root()).unwrap() {
-        let record = BlobRecord::read(&root(), &builtin).unwrap();
+    for builtin in blobs(repo_root()).unwrap() {
+        let record = BlobRecord::read(repo_root(), &builtin).unwrap();
         record.write(scratch.path(), &builtin).unwrap();
-        let original = std::fs::read(root().join(shown(&builtin))).unwrap();
+        let original = std::fs::read(repo_root().join(shown(&builtin))).unwrap();
         let written = std::fs::read(scratch.path().join(shown(&builtin))).unwrap();
         assert_eq!(original, written, "{builtin}");
     }
@@ -66,7 +60,7 @@ fn a_test_only_sdk_file_feeds_no_blob() {
 
 #[test]
 fn blobs_lists_the_recorded_blobs() {
-    let listed = blobs(&root()).unwrap();
+    let listed = blobs(repo_root()).unwrap();
     assert!(NINE.iter().all(|nine| listed.iter().any(|l| l == nine)));
     assert!(
         listed
