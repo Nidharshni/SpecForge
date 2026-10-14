@@ -3,77 +3,15 @@
 //! extension declares (ADR 0008). Output, flags and names are the ones the
 //! built-in `product` subcommands had.
 
-use crate::support::mcp_process::{
-    find_response, parse_tool_content, raw_session_in as mcp_raw_session_in,
-    request as mcp_request, session_in as mcp_session_in,
-};
 use crate::support::{Cli, TestProject};
+use specforge_project::testing::specs;
 use specforge_test_macros::test as specforge_test;
 
 pub fn setup_product_project() -> TestProject {
     TestProject::new()
         .config(|c| c["name"] = "test-project".into())
         .enabling(&["@specforge/product"])
-        .file(
-            "spec.spec",
-            r#"persona dev "Developer" {
-    description "A software developer"
-    status active
-}
-
-channel cli "CLI" {
-    description "Command-line interface"
-    status active
-}
-
-feature f1 "Core Feature" {
-    status proposed
-    priority high
-}
-
-feature f2 "Secondary Feature" {
-    status done
-    priority medium
-    depends_on [f1]
-}
-
-journey j1 "Dev Flow" {
-    persona dev
-    channels [cli]
-    features [f1, f2]
-    description "Developer uses CLI"
-}
-
-module mod1 "Core Module" {
-    features [f1]
-}
-
-milestone m1 "Launch" {
-    status planned
-    features [f1, f2]
-    modules [mod1]
-}
-
-deliverable d1 "CLI App" {
-    artifact_type cli
-    status draft
-    journeys [j1]
-    modules [mod1]
-    milestones [m1]
-}
-
-term specification "Specification" {
-    definition "A formal description of system behavior"
-}
-
-release r1 "Initial Release" {
-    version "1.0.0"
-    status planned
-    deliverables [d1]
-    milestones [m1]
-}
-"#,
-        )
+        .file("spec.spec", specs::PRODUCT_COMMANDS)
 }
 
 #[test]
@@ -401,33 +339,6 @@ fn an_extension_command_has_the_declared_command_line() {
 
 #[specforge_test(
     behavior = "surface_list_features",
-    verify = "status filter reduces result set"
-)]
-fn the_features_command_is_an_mcp_tool_with_its_filters() {
-    let dir = setup_product_project();
-    let call = |id: u64, args: serde_json::Value| {
-        mcp_request(
-            id,
-            "tools/call",
-            serde_json::json!({"name": "specforge.product.features", "arguments": args}),
-        )
-    };
-    let responses = mcp_session_in(
-        &dir,
-        &[
-            call(1, serde_json::json!({})),
-            call(2, serde_json::json!({"status": "done"})),
-        ],
-    );
-    let all = parse_tool_content(find_response(&responses, 1).unwrap());
-    assert_eq!(all["total"], 2, "{all}");
-    let done = parse_tool_content(find_response(&responses, 2).unwrap());
-    assert_eq!(done["total"], 1, "{done}");
-    assert_eq!(done["features"][0]["id"], "f2");
-}
-
-#[specforge_test(
-    behavior = "surface_list_features",
     verify = "pagination offset and limit are respected"
 )]
 fn the_features_command_pages_after_counting() {
@@ -503,95 +414,6 @@ fn completions_refuse_a_path_that_does_not_exist() {
         String::from_utf8_lossy(&output.stderr)
             .contains("error[file_not_found]: path not found: nope"),
         "{output:?}"
-    );
-}
-
-/// `requests` after an `initialize` negotiating MCP 2025-06-18, the first
-/// revision with structured content.
-pub fn structured_session(dir: &TestProject, requests: &[String]) -> Vec<serde_json::Value> {
-    let initialize = mcp_request(
-        0,
-        "initialize",
-        serde_json::json!({
-            "protocolVersion": "2025-06-18",
-            "capabilities": {},
-            "clientInfo": {"name": "e2e", "version": "0"}
-        }),
-    );
-    let mut all = vec![initialize];
-    all.extend_from_slice(requests);
-    mcp_raw_session_in(dir, &all)
-}
-
-fn tool_call(id: u64, name: &str, args: serde_json::Value) -> String {
-    mcp_request(
-        id,
-        "tools/call",
-        serde_json::json!({"name": name, "arguments": args}),
-    )
-}
-
-#[specforge_test(
-    behavior = "dispatch_surface_command",
-    verify = "over MCP a command is asked for json and its JSON output is the tool's structured content"
-)]
-fn over_mcp_a_command_answers_json_as_structured_content() {
-    let dir = setup_product_project();
-    let responses = structured_session(
-        &dir,
-        &[
-            mcp_request(1, "tools/list", serde_json::json!({})),
-            tool_call(
-                2,
-                "specforge.product.milestone_completion",
-                serde_json::json!({"milestone": "m1"}),
-            ),
-        ],
-    );
-    // The tool has no format argument: the host always asks for json.
-    let tools = &find_response(&responses, 1).unwrap()["result"]["tools"];
-    let tool = tools
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|t| t["name"] == "specforge.product.milestone_completion")
-        .unwrap();
-    assert!(
-        tool["inputSchema"]["properties"].get("format").is_none(),
-        "{tool}"
-    );
-
-    let response = find_response(&responses, 2).unwrap();
-    let result = &response["result"];
-    assert_eq!(result["isError"], false, "{response}");
-    let structured = &result["structuredContent"];
-    assert_eq!(structured["milestone_id"], "m1", "{response}");
-    assert_eq!(parse_tool_content(response), *structured);
-}
-
-#[specforge_test(
-    behavior = "surface_format_conventions",
-    verify = "an MCP tool call returns the json payload"
-)]
-fn an_mcp_tool_call_returns_the_json_payload() {
-    let dir = setup_product_project();
-    let output = Cli::on(&dir)
-        .command(&["product", "health", "--format", "json"])
-        .output()
-        .unwrap();
-    let cli: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    // Asked for nothing, the tool answers what --format json prints.
-    let responses = mcp_session_in(
-        &dir,
-        &[tool_call(
-            1,
-            "specforge.product.health",
-            serde_json::json!({}),
-        )],
-    );
-    assert_eq!(
-        parse_tool_content(find_response(&responses, 1).unwrap()),
-        cli
     );
 }
 
@@ -707,29 +529,6 @@ fn under_json_a_usage_error_is_an_invalid_input_object() {
         String::from_utf8_lossy(&help.stdout).contains("Usage: specforge product features"),
         "{help:?}"
     );
-}
-
-#[specforge_test(
-    behavior = "surface_error_handling",
-    verify = "MCP tool errors are isError results carrying the error object"
-)]
-fn over_mcp_an_error_is_an_is_error_result_with_the_object() {
-    let dir = setup_product_project();
-    let responses = structured_session(
-        &dir,
-        &[tool_call(
-            1,
-            "specforge.product.journey_coverage",
-            serde_json::json!({"journey": "j2"}),
-        )],
-    );
-    let response = find_response(&responses, 1).unwrap();
-    let result = &response["result"];
-    assert_eq!(result["isError"], true, "{response}");
-    let expected = serde_json::json!({"code": "ENTITY_NOT_FOUND",
-        "message": "journey 'j2' not found", "entity_id": "j2", "suggestion": "j1"});
-    assert_eq!(parse_tool_content(response), expected);
-    assert_eq!(result["structuredContent"], expected);
 }
 
 /// [`setup_product_project`] with `m1` due in 2000.

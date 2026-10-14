@@ -276,3 +276,63 @@ invariant paid_once "Paid Once" {
     guarantee "An order MUST be paid at most once"
 }
 "#;
+
+/// The product project the `specforge product <command>` tests run on: a persona, a channel, two features (the
+/// second depends on the first), a journey, a module, a milestone, a deliverable, a term and a release.
+pub const PRODUCT_COMMANDS: &str = r#"persona dev "Developer" {
+    description "A software developer"
+    status active
+}
+
+channel cli "CLI" {
+    description "Command-line interface"
+    status active
+}
+
+feature f1 "Core Feature" {
+    status proposed
+    priority high
+}
+
+feature f2 "Secondary Feature" {
+    status done
+    priority medium
+    depends_on [f1]
+}
+
+journey j1 "Dev Flow" {
+    persona dev
+    channels [cli]
+    features [f1, f2]
+    description "Developer uses CLI"
+}
+
+module mod1 "Core Module" {
+    features [f1]
+}
+
+milestone m1 "Launch" {
+    status planned
+    features [f1, f2]
+    modules [mod1]
+}
+
+deliverable d1 "CLI App" {
+    artifact_type cli
+    status draft
+    journeys [j1]
+    modules [mod1]
+    milestones [m1]
+}
+
+term specification "Specification" {
+    definition "A formal description of system behavior"
+}
+
+release r1 "Initial Release" {
+    version "1.0.0"
+    status planned
+    deliverables [d1]
+    milestones [m1]
+}
+"#;
