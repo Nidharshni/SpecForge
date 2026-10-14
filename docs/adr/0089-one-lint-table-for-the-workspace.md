@@ -29,7 +29,7 @@ ended a server that an editor or an agent was talking to; plan 10's first ticket
 
   | Option | Listed files touched (of the 46 holding unwrap hits) | Verdict |
   |---|---|---|
-  | Root `#![allow]` in each target | 2: the only listed files that are themselves a target root (`ops-registry/tests/fetch.rs`, `registry-server/tests/server_contracts.rs`, 23 helper unwraps). The other 44 are modules of an unlisted `main.rs` | chosen; the 2 get `.expect("...")` in place of `.unwrap()`, line count unchanged |
+  | Root `#![allow]` in each target | 2: the only listed files that are themselves a target root (`ops-registry/tests/fetch.rs`, `registry-server/tests/server_contracts.rs`, 24 helper unwraps). The other 44 are modules of an unlisted `main.rs` | chosen; the 2 get `.expect("...")` in place of `.unwrap()`, line count unchanged |
   | `allow-unwrap-in-tests` alone | 0, but leaves 1,118 hits | insufficient |
   | A `[lints.clippy]` copy per crate with listed tests | 0, but cargo forbids it beside `workspace = true`, so the table is copied into ~13 crates and drifts | rejected |
   | Strict lints on `--lib --bins` in the gate only | 0, but the workspace table cannot carry `unwrap_used` (a table applies to every target), so the editor and a local `cargo clippy` stop seeing it | fallback, not needed |
@@ -55,6 +55,8 @@ ended a server that an editor or an agent was talking to; plan 10's first ticket
 - The lint tables sit after `[workspace]` and before `[workspace.package]`: `gate::blob_inputs` keeps every line
   under an inherited header, comments included, so a comment placed after `[workspace.dependencies]` would change
   every blob's record.
+- A `#[cfg_attr(<cfg>, allow(...))]` is linted only under its cfg: the ones that remain carry a reason too, and
+  `project/tests/session.rs`'s (a listed file, live only off unix) cannot take one without growing.
 - Every `#[allow]` that remains carries its reason; every other exception disappears with the code it excused.
 
 ## Rejected
