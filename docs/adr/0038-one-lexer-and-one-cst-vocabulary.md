@@ -81,7 +81,7 @@ resume rule reads more than one line.
 ## Amendment: one form-start rule (2026-10-11, architecture plan 03)
 
 D2 stated where a top-level form starts as recovery's own rule (`recovery::is_block_start`, private). The
-LSP's document kept a second copy (`Walk::starts_a_block` in `specforge-lsp/src/document/syntax.rs`, written
+LSP's document kept a second copy (`Walk::starts_a_block` in `crates/surfaces/lsp/src/document/syntax.rs`, written
 with ADR 0023 and documented as "the parser's recovery rule"), which the inventory of scanners above missed.
 The two disagreed. The LSP's copy had no union form, wanted a `{` after `ref scheme.kind:id "T"`, took a bare
 `use` or `pub`, took any line with a `{` after a name, and looked at column 1 only. So inside a body left
@@ -166,7 +166,7 @@ The parser has no recovery of its own for an unclosed body: tree-sitter's error 
 every line after the body as its fields. A file with one body left open lost every block after it from the
 graph (a union after it became a field, W020), while the LSP's document (D6) resumed at each form.
 
-**D8. The grammar's external scanner reads D6's rule.** `crates/tree-sitter-specforge/src/scanner.c`
+**D8. The grammar's external scanner reads D6's rule.** `crates/kernel/tree-sitter/src/scanner.c`
 produces a zero-width `_form_start` after the token before a line that starts a top-level form: first on its
 line, indented no deeper than the line the current top-level form started on, and reading one of D2's shapes
 (`lex::starts_top_level_form`, over the line's characters). Between top-level forms the token is optional and

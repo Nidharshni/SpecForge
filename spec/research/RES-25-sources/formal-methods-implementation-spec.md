@@ -214,7 +214,7 @@ interface InvokeQueryInput {
 type InvokeQueryOutput = JsonValue;  // Query result (free-form)
 ```
 
-**Implementation location**: `/Users/u1070457/Projects/Perso/specforge/crates/specforge-wasm/src/host_functions.rs`
+**Implementation location**: `/Users/u1070457/Projects/Perso/specforge/crates/runtime/wasm/src/host_functions.rs`
 
 **Implementation pseudocode**:
 ```rust

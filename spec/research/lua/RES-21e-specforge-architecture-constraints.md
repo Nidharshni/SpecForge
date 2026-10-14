@@ -63,7 +63,7 @@ pub fn validate(files: &[SpecFile], graph: &SpecGraph, config: &CompilerConfig) 
 ### Plugin Manifests — Hardcoded Constructors
 
 ```rust
-// crates/specforge-common/src/plugin_manifest.rs
+// crates/kernel/common/src/plugin_manifest.rs
 impl PluginManifest {
     pub fn product() -> Self { /* hardcoded */ }
     pub fn governance() -> Self { /* hardcoded */ }

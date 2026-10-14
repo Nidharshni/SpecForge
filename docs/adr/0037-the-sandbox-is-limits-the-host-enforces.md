@@ -15,7 +15,7 @@ capability at all, which the sandbox probe proves. Docs and spec described enfor
 Its WASI context preopens no directory, passes no environment, arguments or stdin, discards stdout
 and stderr, and refuses TCP, UDP and name lookup, written out in `no_capabilities()` rather than left
 to wasmtime-wasi's defaults. Clocks and randomness are WASI's own. This holds for every export of
-the instance whatever the declaration says; `crates/specforge-component/tests/sandbox_probe.rs` is
+the instance whatever the declaration says; `crates/runtime/component/tests/sandbox_probe.rs` is
 its proof.
 
 ## D2. The policy declares limits only

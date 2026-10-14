@@ -60,8 +60,8 @@ surface held it (ADR 0032), but each surface reported a divergence its own way, 
 - `specforge_lsp::DEBOUNCE_WINDOW` is gone; the LSP builds its debouncer from
   `specforge_watch::DEFAULT_DEBOUNCE_WINDOW`.
 - The watch loop's re-arm, catch-up and naming are tested without a process
-  (`crates/specforge-watch/tests/session_watch.rs`), and the debounce rule without a clock
-  (`crates/specforge-watch/tests/coalesce.rs`).
+  (`crates/session/watch/tests/session_watch.rs`), and the debounce rule without a clock
+  (`crates/session/watch/tests/coalesce.rs`).
 - A failed move of the watchers is reported once per set of roots, and the session still catches up.
 
 ## Rejected

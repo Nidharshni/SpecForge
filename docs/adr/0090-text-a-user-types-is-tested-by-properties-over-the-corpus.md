@@ -39,7 +39,7 @@ doubled it on every run. The formatter stripped trailing whitespace inside strin
   subsume.
 - **A coverage percentage or ratchet gate:** the bugs above were in covered lines. What was missing was inputs, and a
   percentage gate fails on moves.
-- **Hand-rolled seeded RNGs** (as `specforge-project/tests/session.rs`): no shrinking, and the corpus edits make
+- **Hand-rolled seeded RNGs** (as `crates/session/project/tests/session.rs`): no shrinking, and the corpus edits make
   large inputs.
 
 ## What would reopen it

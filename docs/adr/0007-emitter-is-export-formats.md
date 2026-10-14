@@ -112,7 +112,7 @@ and the schema.
   file and `PassBuildCache` (the SDK, so every blob), and wants a field flag of its own.~~ Closed
   by [ADR 0009](0009-host-passes-read-declarations.md): a kind declares its lifecycle field, and
   the cache file and `PassBuildCache` are unchanged.
-- ~~**`specforge-cli/src/product`** implements product queries natively.~~ Closed by
+- ~~**`crates/surfaces/cli/src/product`** implements product queries natively.~~ Closed by
   [ADR 0008](0008-extension-commands-run-over-the-graph.md): they are `@specforge/product`'s commands.
 - The model's DOT cluster ids strip the `@specforge/` scope (snapshot-locked output).
 - ~~**Implicit edge types name their first writer only.** An edge a field writes without its extension

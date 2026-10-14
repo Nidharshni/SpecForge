@@ -30,7 +30,7 @@ This document also establishes:
 ### 1. The `PluginKind` Enum Forces Single-Role Extensions
 
 ```rust
-// Current: crates/specforge-wasm/src/manifest.rs:69-76
+// Current: crates/runtime/wasm/src/manifest.rs:69-76
 pub enum PluginKind {
     Plugin,     // entities + edges + validation
     Provider,   // ref schemes + URL resolution
@@ -46,8 +46,8 @@ The current model forces this into three extensions or an arbitrary choice of on
 ### 2. Duplicated Structs
 
 Two manifest types coexist with overlapping concerns:
-- `WasmPluginManifest` in `specforge-wasm/src/manifest.rs` — full manifest with sandbox, peer deps, lifecycle
-- `PluginManifestV2` in `specforge-common/src/field_registry.rs` — lightweight subset for enhancement registration
+- `WasmPluginManifest` in `crates/runtime/wasm/src/manifest.rs` — full manifest with sandbox, peer deps, lifecycle
+- `PluginManifestV2` in `crates/kernel/common/src/field_registry.rs` — lightweight subset for enhancement registration
 
 These should be one type.
 
@@ -552,20 +552,20 @@ The flat `SandboxPolicy` becomes scoped:
 
 | Current | New | Location |
 |---|---|---|
-| `WasmPluginManifest` | `ExtensionManifest` | `specforge-wasm/src/manifest.rs` |
-| `PluginManifestV2` | Removed (merged into `ExtensionManifest`) | `specforge-common/src/field_registry.rs` |
-| `PluginKind` | Removed (inferred from `contributes`) | `specforge-wasm/src/manifest.rs` |
-| `PluginLifecycleState` | `ExtensionLifecycleState` | `specforge-wasm/src/manifest.rs` |
-| `WasmEntityKind` | `ContributedEntity` | `specforge-wasm/src/manifest.rs` |
-| `WasmEntityField` | `ContributedField` | `specforge-wasm/src/manifest.rs` |
-| `WasmProviderConfig` | Removed (inline in `ContributedRefScheme`) | `specforge-wasm/src/manifest.rs` |
-| `WasmRuntime` | `ExtensionRuntime` | `specforge-wasm/src/runtime.rs` |
-| `WasmError` | `ExtensionError` | `specforge-wasm/src/error.rs` |
-| `WarmInstancePool` | `WarmExtensionPool` | `specforge-wasm/src/warm.rs` |
-| `LoadedPlugin` | `LoadedExtension` | `specforge-wasm/src/loader.rs` |
-| `load_wasm_module` | `load_extension_module` | `specforge-wasm/src/loader.rs` |
-| `discover_wasm_plugins` | `discover_extensions` | `specforge-wasm/src/discover.rs` |
-| `HostContext.in_initialize` | `HostContext.active_phase` | `specforge-wasm/src/host_functions.rs` |
+| `WasmPluginManifest` | `ExtensionManifest` | `crates/runtime/wasm/src/manifest.rs` |
+| `PluginManifestV2` | Removed (merged into `ExtensionManifest`) | `crates/kernel/common/src/field_registry.rs` |
+| `PluginKind` | Removed (inferred from `contributes`) | `crates/runtime/wasm/src/manifest.rs` |
+| `PluginLifecycleState` | `ExtensionLifecycleState` | `crates/runtime/wasm/src/manifest.rs` |
+| `WasmEntityKind` | `ContributedEntity` | `crates/runtime/wasm/src/manifest.rs` |
+| `WasmEntityField` | `ContributedField` | `crates/runtime/wasm/src/manifest.rs` |
+| `WasmProviderConfig` | Removed (inline in `ContributedRefScheme`) | `crates/runtime/wasm/src/manifest.rs` |
+| `WasmRuntime` | `ExtensionRuntime` | `crates/runtime/wasm/src/runtime.rs` |
+| `WasmError` | `ExtensionError` | `crates/runtime/wasm/src/error.rs` |
+| `WarmInstancePool` | `WarmExtensionPool` | `crates/runtime/wasm/src/warm.rs` |
+| `LoadedPlugin` | `LoadedExtension` | `crates/runtime/wasm/src/loader.rs` |
+| `load_wasm_module` | `load_extension_module` | `crates/runtime/wasm/src/loader.rs` |
+| `discover_wasm_plugins` | `discover_extensions` | `crates/runtime/wasm/src/discover.rs` |
+| `HostContext.in_initialize` | `HostContext.active_phase` | `crates/runtime/wasm/src/host_functions.rs` |
 
 Unchanged (correct as-is):
 - `load_manifest` — still loads a manifest
@@ -1233,6 +1233,6 @@ Same extension. Same name. Additive evolution.
 - `spec/features/wasm.spec` — Feature specifications for the extension model
 - `spec/invariants/wasm.spec` — Runtime invariants for sandbox and isolation
 - `spec/governance/decisions.spec` — ADRs `wasm_extism_plugin_runtime`, `wasm_peer_dependencies`
-- `crates/specforge-wasm/src/manifest.rs` — Current `WasmPluginManifest` (to be replaced)
-- `crates/specforge-common/src/field_registry.rs` — Current `FieldRegistry` + `PluginManifestV2`
+- `crates/runtime/wasm/src/manifest.rs` — Current `WasmPluginManifest` (to be replaced)
+- `crates/kernel/common/src/field_registry.rs` — Current `FieldRegistry` + `PluginManifestV2`
 - `schema/specforge.schema.json` — Current config schema (to be updated)

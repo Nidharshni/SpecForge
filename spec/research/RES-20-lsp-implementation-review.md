@@ -14,7 +14,7 @@ depends_on: RES-11a
 
 ## Problem Statement
 
-The SpecForge LSP (`crates/specforge-lsp/src/`, 17 files, ~2,200 lines) is functional: it provides go-to-definition, references, hover, completion, rename, code actions, semantic tokens, outline, and workspace symbol search. However, a systematic review against the LSP 3.17 specification and the declared behavioral contracts in `spec/behaviors/lsp.spec` reveals scaling gaps, DX gaps, and spec coverage gaps that will matter as SpecForge projects grow beyond a handful of files.
+The SpecForge LSP (`crates/surfaces/lsp/src/`, 17 files, ~2,200 lines) is functional: it provides go-to-definition, references, hover, completion, rename, code actions, semantic tokens, outline, and workspace symbol search. However, a systematic review against the LSP 3.17 specification and the declared behavioral contracts in `spec/behaviors/lsp.spec` reveals scaling gaps, DX gaps, and spec coverage gaps that will matter as SpecForge projects grow beyond a handful of files.
 
 This review was performed to:
 1. Rate each aspect of the implementation on a /10 scale
@@ -26,7 +26,7 @@ This review was performed to:
 
 ## Methodology
 
-- **Scope**: All 17 files in `crates/specforge-lsp/src/`
+- **Scope**: All 17 files in `crates/surfaces/lsp/src/`
 - **Reference**: LSP 3.17 specification, existing `spec/behaviors/lsp.spec`, `spec/features/lsp.spec`, `spec/ports/inbound.spec`
 - **Aspects evaluated**: 13 (listed below)
 - **Rating scale**: 1 (missing/broken) to 10 (production-grade, no gaps)
