@@ -20,7 +20,6 @@ fn registry(args: &[&str]) -> Output {
 }
 
 #[test]
-#[ignore = "fixed by T4"]
 fn token_create_with_an_unusable_data_dir_exits_1() {
     let (_file, dir) = unusable_data_dir();
     let output = registry(&["token", "create", "--no-expiry", "--data-dir", &dir]);
@@ -34,7 +33,6 @@ fn token_create_with_an_unusable_data_dir_exits_1() {
 }
 
 #[test]
-#[ignore = "fixed by T4"]
 fn serve_with_an_unusable_data_dir_exits_1() {
     let (_file, dir) = unusable_data_dir();
     let output = registry(&["serve", "--data-dir", &dir, "--port", "0"]);
