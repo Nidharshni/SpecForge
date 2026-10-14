@@ -17,4 +17,4 @@ pub use format_version::{
     CURRENT_FORMAT_VERSION, FORMAT_HEADER_PREFIX, FormatVersion, MAX_SUPPORTED_VERSION,
     MIN_SUPPORTED_VERSION, detect_format_version,
 };
-pub use parse::{parse, parse_incremental};
+pub use parse::{Previous, parse, parse_incremental};

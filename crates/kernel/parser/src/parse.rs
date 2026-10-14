@@ -11,6 +11,7 @@ mod body;
 mod declarations;
 mod errors;
 mod expression;
+mod reparse;
 
 use errors::{position_span, unclosed_error};
 
@@ -43,14 +44,23 @@ pub fn parse(source: &str, file_path: &str) -> SpecFile {
     parse_incremental(source, file_path, None).0
 }
 
-/// Parse with an optional old tree for incremental reparsing.
-/// Returns the parsed `SpecFile` and the new `tree_sitter::Tree` for reuse.
+/// What a file held before its replacement: its text and the tree it parsed to.
+#[derive(Clone, Copy)]
+pub struct Previous<'a> {
+    pub text: &'a str,
+    pub tree: &'a tree_sitter::Tree,
+}
+
+/// Parse `source`, reusing the subtrees of `previous` that the replacement left
+/// unchanged (the longest common byte prefix and suffix of the two texts).
+/// Returns the file and its tree, for the next reparse.
 pub fn parse_incremental(
     source: &str,
     file_path: &str,
-    old_tree: Option<&tree_sitter::Tree>,
+    previous: Option<Previous<'_>>,
 ) -> (SpecFile, Option<tree_sitter::Tree>) {
-    let (mut file, tree) = parse_syntax(source, file_path, old_tree);
+    let old_tree = previous.map(|previous| reparse::edited(previous, source));
+    let (mut file, tree) = parse_syntax(source, file_path, old_tree.as_ref());
     // The header is read with the file, so every consumer of a parse (check,
     // watch, the LSP, MCP) has the version and what it reports.
     (file.format_version, file.format_diagnostics) = detect_format_version(source, file_path);

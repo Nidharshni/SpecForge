@@ -2,8 +2,8 @@
 
 use proptest::test_runner::TestRunner;
 use specforge_parser::lex::{MAX_NESTING, nested_too_deep};
-use specforge_parser::parse;
 use specforge_parser::testing::{edited_corpus, property_config};
+use specforge_parser::{Previous, parse, parse_incremental};
 use specforge_test_macros::test as specforge_test;
 
 #[specforge_test(
@@ -18,6 +18,34 @@ fn parsing_any_edit_of_the_corpus_yields_a_file() {
         proptest::prop_assert!(
             file.errors.iter().all(|e| e.span.start_line >= 1),
             "an error without a line"
+        );
+        Ok(())
+    });
+    if let Err(failure) = result {
+        panic!("{failure}");
+    }
+}
+
+#[specforge_test(
+    invariant = "incremental_correctness",
+    verify = "a file parsed with its previous text and tree reads as the same file parsed cold"
+)]
+fn a_reparse_reads_as_a_cold_parse() {
+    let mut runner = TestRunner::new(property_config());
+    let result = runner.run(&edited_corpus(), |case| {
+        let (_, tree) = parse_incremental(&case.original, "p.spec", None);
+        let tree = tree.expect("a corpus file has a tree");
+        let previous = Previous {
+            text: &case.original,
+            tree: &tree,
+        };
+        let (reparsed, _) = parse_incremental(&case.edited, "p.spec", Some(previous));
+        let cold = parse(&case.edited, "p.spec");
+        let read =
+            |file: &specforge_parser::SpecFile| format!("{:?}{:?}", file.entities, file.errors);
+        proptest::prop_assert!(
+            read(&reparsed) == read(&cold),
+            "the reparse differs from a cold parse"
         );
         Ok(())
     });
