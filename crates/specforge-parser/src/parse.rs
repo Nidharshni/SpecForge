@@ -389,9 +389,10 @@ impl<'a> ParseContext<'a> {
         let text = self.text(node);
         let trimmed = text.trim();
         let first_line = trimmed.lines().next().unwrap_or(trimmed);
-        // Truncate very long error text for readability
+        // At most 57 bytes, cut at the last character boundary at or before
+        // byte 57: a cut inside a character would panic (the hover's rule).
         let display = if first_line.len() > 60 {
-            format!("{}...", &first_line[..57])
+            format!("{}...", &first_line[..first_line.floor_char_boundary(57)])
         } else {
             first_line.to_string()
         };
