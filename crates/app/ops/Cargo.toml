@@ -55,3 +55,6 @@ specforge-installed = { path = "../../runtime/installed", features = ["testing"]
 specforge-test = { workspace = true }
 specforge-test-macros = { workspace = true }
 tempfile = { workspace = true }
+# The module-group check parses `src/` (tests/operations/groups.rs), with xtask's versions.
+proc-macro2 = { version = "1", features = ["span-locations"] }
+syn = { version = "2", features = ["full", "visit"] }
