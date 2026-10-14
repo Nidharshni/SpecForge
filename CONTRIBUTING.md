@@ -49,7 +49,7 @@ under `crates/` ([ADR 0081](docs/adr/0081-the-repository-root-is-found-not-count
 Follow [crates/README.md](crates/README.md#adding-or-moving-a-crate): pick its layer, give it a `description` and a
 crate doc, model it in `spec/product/modules.spec`, then run `cargo gate crate-map`.
 
-### Coverage
+## Coverage
 
 `rustup component add llvm-tools-preview && cargo install cargo-llvm-cov`, then `cargo llvm-cov nextest
 --workspace --html` (open `target/llvm-cov/html/index.html`). CI runs the same on every push to `main` and uploads

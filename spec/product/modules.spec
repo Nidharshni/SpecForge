@@ -66,7 +66,7 @@ module specforge_parser "specforge-parser" {
   family      core
   description "The .spec language read from text: the one lexer, the recovered syntax, the AST, the expression grammar and the format version (ADR 0038, ADR 0063)"
   features    [spec_file_parsing, error_recovery_during_parsing]
-  depends_on  [specforge_common, tree_sitter_specforge]
+  depends_on  [specforge_common, specforge_repo_root, tree_sitter_specforge]
   tags        ["parser", "pipeline"]
 }
 
