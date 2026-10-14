@@ -22,8 +22,6 @@ mod semantic_tokens;
 mod symbols;
 
 // What every e2e support file reads through `use super::*`.
-#[allow(unused_imports)]
 pub use crate::session::{Session, codes, uri_of};
 pub use serde_json::{Value, json};
-#[allow(unused_imports)]
 pub use specforge_test_macros::test as spec;

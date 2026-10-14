@@ -91,7 +91,7 @@ const REGISTRY_URL: &str = "https://local.invalid";
 fn registry_config() -> RegistryConfig {
     RegistryConfig {
         alias: "local".to_string(),
-        url: RegistryRoot::parse(REGISTRY_URL).unwrap(),
+        url: RegistryRoot::parse(REGISTRY_URL).expect("a valid literal"),
         scope_filter: None,
         default_registry: true,
     }
@@ -123,7 +123,7 @@ impl Project {
     fn pin(&self, key: &SigningKey) {
         let mut known = KnownKeys::default();
         known.pin(NAME, &key.key_id());
-        save_known_keys_at(&self.known_keys(), &known).unwrap();
+        save_known_keys_at(&self.known_keys(), &known).expect("the pins file is writable");
     }
 
     fn registry(&self) -> ConfiguredRegistry {
@@ -138,8 +138,8 @@ impl Project {
         trust: Trust,
     ) -> Result<specforge_ops::registry::Package, specforge_ops::OpError> {
         self.registry().fetch(
-            &PackageName::parse(NAME).unwrap(),
-            &Version::parse(VERSION).unwrap(),
+            &PackageName::parse(NAME).expect("a valid literal"),
+            &Version::parse(VERSION).expect("a valid literal"),
             TrustPolicy::new(allow_unsigned, trust),
         )
     }
@@ -185,15 +185,15 @@ fn fetch_through(
     trust: Trust,
 ) -> Result<specforge_ops::registry::Package, specforge_ops::OpError> {
     registry.fetch(
-        &PackageName::parse(NAME).unwrap(),
-        &Version::parse(VERSION).unwrap(),
+        &PackageName::parse(NAME).expect("a valid literal"),
+        &Version::parse(VERSION).expect("a valid literal"),
         TrustPolicy::new(allow_unsigned, trust),
     )
 }
 
 fn pinned_at(path: &Path) -> Option<String> {
     load_known_keys_at(path)
-        .unwrap()
+        .expect("the pins file reads")
         .pin_for(NAME)
         .map(str::to_string)
 }
@@ -420,8 +420,8 @@ fn fetch_locked(
     trust: Trust,
 ) -> Result<specforge_ops::registry::Package, specforge_ops::OpError> {
     registry.fetch(
-        &PackageName::parse(NAME).unwrap(),
-        &Version::parse(VERSION).unwrap(),
+        &PackageName::parse(NAME).expect("a valid literal"),
+        &Version::parse(VERSION).expect("a valid literal"),
         TrustPolicy::new(false, trust).locked(Some(locked)),
     )
 }
@@ -671,8 +671,8 @@ fn a_download_that_misses_is_refused_and_pins_nothing() {
 /// `home` with `credentials.json` holding `json`.
 fn store_credentials(project: &Project, json: &str) {
     let home = project.dir.home();
-    std::fs::create_dir_all(home).unwrap();
-    std::fs::write(home.join("credentials.json"), json).unwrap();
+    std::fs::create_dir_all(home).expect("the home directory is created");
+    std::fs::write(home.join("credentials.json"), json).expect("the credentials file is writable");
 }
 
 /// Every read the client answered: versions, metadata and download calls.

@@ -71,7 +71,10 @@ impl Z3 {
     pub fn timeout(&self) -> Duration {
         self.timeout
     }
+}
 
+#[cfg(any(test, feature = "testing"))]
+impl Z3 {
     /// The W098 for a z3 that is not on `PATH` (what `ScriptedSolver::not_found` answers).
     pub(crate) fn not_on_path() -> Diagnostic {
         unavailable(Unrunnable::NotOnPath)

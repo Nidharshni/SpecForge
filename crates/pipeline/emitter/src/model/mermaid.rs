@@ -1,41 +1,42 @@
-use std::fmt::Write;
+use std::fmt::{self, Write};
+
+use crate::text;
 
 use super::{Cardinality, GroupBy, ModelIntermediate, ModelOptions};
 use crate::diagram::{escape_mermaid, mermaid_name};
 
 pub(super) fn render_mermaid(model: &ModelIntermediate, options: &ModelOptions) -> String {
-    let mut out = String::new();
+    text::written(|out| {
+        writeln!(out, "erDiagram")?;
 
-    writeln!(out, "erDiagram").unwrap();
-
-    match options.group_by {
-        GroupBy::Extension => render_grouped(model, &mut out),
-        GroupBy::None => render_flat(model, &mut out),
-    }
-
-    // Relationships
-    if !model.relationships.is_empty() {
-        writeln!(out).unwrap();
-        writeln!(out, "    %% Relationships").unwrap();
-        writeln!(out).unwrap();
-        for rel in &model.relationships {
-            let notation = cardinality_notation(rel.cardinality);
-            writeln!(
-                out,
-                "    {} {} {} : \"{}\"",
-                mermaid_name(&rel.source),
-                notation,
-                mermaid_name(&rel.target),
-                escape_mermaid(&rel.name)
-            )
-            .unwrap();
+        match options.group_by {
+            GroupBy::Extension => render_grouped(model, out)?,
+            GroupBy::None => render_flat(model, out)?,
         }
-    }
 
-    out
+        // Relationships
+        if !model.relationships.is_empty() {
+            writeln!(out)?;
+            writeln!(out, "    %% Relationships")?;
+            writeln!(out)?;
+            for rel in &model.relationships {
+                let notation = cardinality_notation(rel.cardinality);
+                writeln!(
+                    out,
+                    "    {} {} {} : \"{}\"",
+                    mermaid_name(&rel.source),
+                    notation,
+                    mermaid_name(&rel.target),
+                    escape_mermaid(&rel.name)
+                )?;
+            }
+        }
+
+        Ok(())
+    })
 }
 
-fn render_grouped(model: &ModelIntermediate, out: &mut String) {
+fn render_grouped(model: &ModelIntermediate, out: &mut String) -> fmt::Result {
     for ext in &model.extensions {
         let entities: Vec<_> = model
             .entities
@@ -46,39 +47,40 @@ fn render_grouped(model: &ModelIntermediate, out: &mut String) {
             continue;
         }
 
-        writeln!(out).unwrap();
-        writeln!(out, "    %% {}", escape_mermaid(&ext.name)).unwrap();
-        writeln!(out).unwrap();
+        writeln!(out)?;
+        writeln!(out, "    %% {}", escape_mermaid(&ext.name))?;
+        writeln!(out)?;
 
         for entity in entities {
-            render_entity(entity, out);
+            render_entity(entity, out)?;
         }
     }
+    Ok(())
 }
 
-fn render_flat(model: &ModelIntermediate, out: &mut String) {
+fn render_flat(model: &ModelIntermediate, out: &mut String) -> fmt::Result {
     for entity in &model.entities {
-        writeln!(out).unwrap();
-        render_entity(entity, out);
+        writeln!(out)?;
+        render_entity(entity, out)?;
     }
+    Ok(())
 }
 
-fn render_entity(entity: &super::ModelEntity, out: &mut String) {
+fn render_entity(entity: &super::ModelEntity, out: &mut String) -> fmt::Result {
     if !entity.enhanced_by.is_empty() {
         writeln!(
             out,
             "    %% Enhanced by: {}",
             escape_mermaid(&entity.enhanced_by.join(", "))
-        )
-        .unwrap();
+        )?;
     }
 
     if entity.fields.is_empty() {
         // No fields: just declare entity name
-        writeln!(out, "    {} {{", mermaid_name(&entity.name)).unwrap();
-        writeln!(out, "    }}").unwrap();
+        writeln!(out, "    {} {{", mermaid_name(&entity.name))?;
+        writeln!(out, "    }}")?;
     } else {
-        writeln!(out, "    {} {{", mermaid_name(&entity.name)).unwrap();
+        writeln!(out, "    {} {{", mermaid_name(&entity.name))?;
         for field in &entity.fields {
             let type_str = field.field_type.to_string();
             let mut markers = Vec::new();
@@ -125,11 +127,11 @@ fn render_entity(entity: &super::ModelEntity, out: &mut String) {
                 mermaid_name(&field.name),
                 marker_str,
                 desc_str
-            )
-            .unwrap();
+            )?;
         }
-        writeln!(out, "    }}").unwrap();
+        writeln!(out, "    }}")?;
     }
+    Ok(())
 }
 
 fn cardinality_notation(c: Cardinality) -> &'static str {

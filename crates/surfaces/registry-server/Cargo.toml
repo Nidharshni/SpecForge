@@ -41,3 +41,6 @@ tempfile = { workspace = true }
 specforge-registry-client = { path = "../../adapters/registry-client" }
 specforge-registry-server = { path = ".", features = ["testing"] }
 serde = { workspace = true }
+
+[lints]
+workspace = true

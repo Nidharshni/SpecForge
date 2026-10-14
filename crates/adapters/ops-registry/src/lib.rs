@@ -7,6 +7,9 @@
 //! [`ConfiguredRegistry`] and pass it in. What a package passes before an
 //! operation sees it (ADR 0044) is [`ConfiguredRegistry`]'s doc.
 
+mod reports;
+
+use reports::PolicyReports;
 use specforge_common::{Code, Diagnostic, codes};
 use specforge_ops::registry::Trust;
 use specforge_ops::registry::{
@@ -27,7 +30,7 @@ use specforge_registry_client::{
 };
 use specforge_registry_wire::{PackageMetadata, SearchQuery};
 use std::path::PathBuf;
-use std::sync::{Mutex, OnceLock};
+use std::sync::OnceLock;
 
 /// Whom a key change is asked of.
 type Asker = Box<dyn Fn(&KeyChange) -> bool + Send + Sync>;
@@ -243,7 +246,7 @@ pub struct ConfiguredRegistry {
     /// Whom a key change is asked of when a fetch is `Trust::Prompt`ed; nobody by default.
     asker: Option<Asker>,
     /// What the fetch policy reported (W155 at a fetch, W156 at a pin), in order.
-    reported_by_policy: Mutex<Vec<Diagnostic>>,
+    reported_by_policy: PolicyReports,
 }
 
 impl ConfiguredRegistry {
@@ -257,7 +260,7 @@ impl ConfiguredRegistry {
             client: Box::new(Retrying::new(HttpRegistryClient::new())),
             user: User::current(),
             asker: None,
-            reported_by_policy: Mutex::new(Vec::new()),
+            reported_by_policy: PolicyReports::default(),
         }
     }
 
@@ -291,7 +294,7 @@ impl ConfiguredRegistry {
             Some(Ok(configured)) => configured.diagnostics.clone(),
             _ => Vec::new(),
         };
-        reported.extend(self.reported_by_policy.lock().unwrap().iter().cloned());
+        reported.extend(self.reported_by_policy.all());
         reported
     }
 
@@ -386,10 +389,7 @@ impl Registry for ConfiguredRegistry {
             policy.locked_key,
         )
         .map_err(refused_by_trust)?; // 4: R-TRUST-001..006, writes nothing
-        self.reported_by_policy
-            .lock()
-            .unwrap()
-            .extend(trusted.diagnostics); // W155
+        self.reported_by_policy.extend(trusted.diagnostics); // W155
 
         Ok(Package {
             name: name.clone(),
@@ -426,7 +426,7 @@ impl Registry for ConfiguredRegistry {
             .collect();
         let repinned = specforge_registry_client::trust_flow::record(&new, &self.user.known_keys())
             .map_err(refused_by_trust)?; // R-TRUST-006, nothing saved
-        self.reported_by_policy.lock().unwrap().extend(repinned); // W156, one per re-pin
+        self.reported_by_policy.extend(repinned); // W156, one per re-pin
         Ok(())
     }
 

@@ -38,3 +38,6 @@ specforge-test-macros = { workspace = true }
 [[test]]
 name = "caught_signals"
 harness = false
+
+[lints]
+workspace = true

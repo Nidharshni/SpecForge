@@ -1,3 +1,8 @@
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
+
 use specforge_protocol_types::TestStatus;
 use specforge_test::registry;
 use std::sync::Mutex;

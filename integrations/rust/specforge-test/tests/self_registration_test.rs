@@ -1,5 +1,9 @@
 //! Its own test binary: the guard this test records must not race the
 //! registry assertions in `macro_test.rs`.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 /// The attribute alone registers the test: there is no `#[test]` here, yet
 /// this runs (and shows in `cargo test -- --list`).

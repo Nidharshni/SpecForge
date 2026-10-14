@@ -4,6 +4,10 @@
 //! `epoch_deadline.rs`'s spin component), built by [`bridge_component`]:
 //! each call spins a counted loop, grows linear memory, and answers a
 //! fixed string.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 mod probe_support;
 

@@ -1,5 +1,9 @@
 //! Every adapter of the `Registry` port keeps one contract (ADR 0044): the configured registry over the
 //! real server in process, and over the in-memory client. `MemoryRegistry` keeps it in `specforge-ops`.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use specforge_ops::registry::testing::{Published, assert_registry_contract, contract_packages};
 use specforge_ops_registry::{ConfiguredRegistry, User};

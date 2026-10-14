@@ -4,6 +4,10 @@
 //! symbols reappear anywhere in workspace source, so a future change cannot
 //! silently reintroduce a first-party native tier (which would violate R-1:
 //! all plugins are the same kind, executed through the same Wasm runtime).
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use specforge_repo_root::repo_root;
 

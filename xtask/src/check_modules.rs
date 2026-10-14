@@ -7,6 +7,10 @@
 //!
 //! Prints one line per difference (`MISSING`, `DUPLICATE`, `DESCRIPTION`, `DEPENDS_ON`); exits 1 on any, 2 when
 //! `cargo metadata` or the project cannot be read.
+#![expect(
+    clippy::print_stdout,
+    reason = "a developer tool: its report is its stdout"
+)]
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;

@@ -1,6 +1,10 @@
 //! ComponentRuntime end-to-end: load a real wasip2 component, call through
 //! the bridge world, exercise reload/unload semantics (hardening-plan W2 +
 //! H1 parity).
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use specforge_component::ComponentRuntime;
 use specforge_wasm::runtime::WasmCallResult;

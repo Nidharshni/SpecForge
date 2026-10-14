@@ -91,7 +91,9 @@ pub fn load_or_create_signing_key_at(path: &Path) -> Result<(SigningKey, bool), 
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("failed to create {}: {}", parent.display(), e))?;
     }
-    std::fs::write(path, serde_json::to_string_pretty(&stored).unwrap())
+    let json = serde_json::to_string_pretty(&stored)
+        .map_err(|e| format!("failed to encode signing key: {e}"))?;
+    std::fs::write(path, json)
         .map_err(|e| format!("failed to write signing key {}: {}", path.display(), e))?;
     restrict_permissions(path);
     Ok((key, true))

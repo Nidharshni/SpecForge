@@ -7,6 +7,10 @@
 //! It also holds `ScriptedSolver`, the SMT solver tests script (ADR 0079).
 //!
 //! Behind the `testing` feature; no production code reads it.
+#![allow(
+    clippy::unwrap_used,
+    reason = "test support behind the `testing` feature: a failed unwrap fails the calling test"
+)]
 
 use std::collections::VecDeque;
 use std::sync::Mutex;
@@ -18,7 +22,6 @@ use specforge_wasm::testing::InProcessRuntime;
 use crate::solver::{Availability, SolveFailure, Solver, Z3};
 
 #[path = "../../../../fixtures/greet-extension/src/contributions.rs"]
-#[allow(dead_code, reason = "the fixture's own source: only `build` is served")]
 mod greet;
 
 /// The bytes the in-process runtime serves as `@sdk/greet` 0.1.0.

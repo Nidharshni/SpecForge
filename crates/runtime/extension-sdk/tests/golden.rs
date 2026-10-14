@@ -2,6 +2,10 @@
 //! declares. (The typed round trip of every committed blob's declaration
 //! is `crates/runtime/component/tests/declarations.rs`.) This is the pin behind "typed descriptors
 //! shared wire-exact with the host" (wayfinder map #1, ticket #2).
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use specforge_extension_sdk::{
     ContributionsBuilder, ExtensionDeclaration, ExtensionMeta, HandshakeResponse, PeerDependency,

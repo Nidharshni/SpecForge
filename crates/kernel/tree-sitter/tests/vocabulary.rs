@@ -1,4 +1,8 @@
 //! The CST vocabulary (`kind`, `field`) is the compiled grammar's.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use std::collections::BTreeSet;
 use tree_sitter_specforge::{LANGUAGE, field, kind};

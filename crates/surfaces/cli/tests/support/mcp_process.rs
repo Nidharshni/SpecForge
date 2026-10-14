@@ -96,16 +96,3 @@ pub fn parse_tool_content(response: &Value) -> Value {
     serde_json::from_str(text)
         .unwrap_or_else(|e| panic!("content text is not valid JSON: {e}\ntext: {text}"))
 }
-
-/// `requests` after the standard `initialize` (id 0), against `specforge mcp <root>`: every line it wrote.
-pub fn session_in(project: &TestProject, requests: &[String]) -> Vec<Value> {
-    let mut all = vec![initialize(0)];
-    all.extend_from_slice(requests);
-    raw_session_in(project, &all)
-}
-
-/// `specforge mcp <root>` fed exactly `requests`, no `initialize` first (a stateless MCP 2026-07-28 client).
-pub fn raw_session_in(project: &TestProject, requests: &[String]) -> Vec<Value> {
-    let root = project.root().to_str().expect("a UTF-8 root");
-    session(project, project.root(), root, requests, &[])
-}

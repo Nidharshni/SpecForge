@@ -4,6 +4,10 @@
 //! ADR 0026 D4); the registry build checks each rule when it registers it
 //! (`check_extension_code`, W150), and this test checks them all, so a
 //! mismatch fails a test and not only a user's compile.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use specforge_component::ComponentRuntime;
 use specforge_component::builtins::BUILTIN_EXTENSIONS;

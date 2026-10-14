@@ -13,13 +13,27 @@
 //! binary still answers the libtest list protocol nextest asks first
 //! (`--list --format terse`, then `--exact <name>`), so it lists its one test
 //! instead of running it while nextest only wants the list.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
+#![allow(
+    clippy::print_stdout,
+    reason = "this binary is its own test harness: it reports to nextest on stdout"
+)]
 
 /// The one test this binary runs, as libtest would name it.
 #[cfg(target_os = "macos")]
 const TEST: &str = "runtime_survives_sigchld_with_a_handler";
 
 // Off macOS nothing follows the `--list` branch, so its `return` is needless.
-#[cfg_attr(not(target_os = "macos"), allow(clippy::needless_return))]
+#[cfg_attr(
+    not(target_os = "macos"),
+    allow(
+        clippy::needless_return,
+        reason = "only the macOS build has code after the `--list` branch"
+    )
+)]
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "--list") {
@@ -53,6 +67,10 @@ fn selected(args: &[String]) -> bool {
 }
 
 #[cfg(target_os = "macos")]
+#[expect(
+    unsafe_code,
+    reason = "sigaction from libc: the handler is a plain extern fn and the struct is laid out as sigaction(2) takes it"
+)]
 fn runtime_survives_sigchld_with_a_handler() {
     /// macOS `struct sigaction` as `sigaction(2)` takes it.
     #[repr(C)]

@@ -13,6 +13,10 @@
 //! Prints `A016 <file>:<line> <entity> "<verify>"` per finding (and the
 //! closest declared text), `UNKNOWN <file>:<line> <entity>` for a link to an
 //! entity the project does not have; exits 1 on any.
+#![expect(
+    clippy::print_stdout,
+    reason = "a developer tool: its report is its stdout"
+)]
 
 use specforge_common::ProjectRoot;
 use specforge_component::ComponentRuntime;

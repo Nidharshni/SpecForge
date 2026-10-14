@@ -9,6 +9,10 @@
 //! and shows the diff for review. Byte identity also guards against a
 //! dependency enabling `serde_json/preserve_order` in a guest, which would
 //! reorder every key.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use std::collections::BTreeSet;
 

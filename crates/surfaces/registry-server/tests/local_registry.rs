@@ -1,4 +1,8 @@
 //! The real server in process (`specforge_registry_server::testing`), as the HTTP client sees it.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use sha2::{Digest, Sha256};
 use specforge_package::{PackageName, Version};

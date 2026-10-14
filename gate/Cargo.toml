@@ -19,3 +19,6 @@ serde_json = { workspace = true }
 specforge-repo-root = { path = "../crates/leaf/repo-root" }
 insta = { workspace = true }
 tempfile = { workspace = true }
+
+[lints]
+workspace = true

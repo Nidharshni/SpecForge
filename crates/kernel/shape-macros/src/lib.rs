@@ -403,7 +403,7 @@ fn expand(input: &DeriveInput) -> syn::Result<TokenStream2> {
         impl #impl_generics #shape::Shape for #name #ty_generics #where_clause {
             const NAME: ::core::option::Option<&'static str> = #named;
 
-            #[allow(unused_variables)]
+            #[allow(unused_variables, reason = "a shape with no definitions leaves `defs` unread")]
             fn body(defs: &mut #shape::Definitions) -> #shape::Value {
                 #schema
             }
@@ -545,7 +545,10 @@ fn object_expr(
     }
     let required = required.iter();
     Ok(quote! {{
-        #[allow(unused_mut)]
+        #[allow(
+            unused_mut,
+            reason = "a shape with no flattened or optional fields never mutates `schema`"
+        )]
         let mut schema = #shape::object(
             ::std::vec![#(#properties),*],
             ::std::vec![#(#required),*],

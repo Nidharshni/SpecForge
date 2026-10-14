@@ -1,3 +1,8 @@
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
+
 use specforge_component::{ComponentRuntime, builtins};
 use specforge_protocol_types::DeclaredCategory;
 use specforge_test_macros::test as specforge_test;

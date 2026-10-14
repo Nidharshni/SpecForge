@@ -54,3 +54,6 @@ specforge-test-macros = { workspace = true }
 insta = { workspace = true }
 tempfile = { workspace = true }
 specforge-emitter = { path = "../../pipeline/emitter" }
+
+[lints]
+workspace = true

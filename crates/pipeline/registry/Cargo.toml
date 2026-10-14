@@ -27,3 +27,6 @@ specforge-test = { workspace = true }
 specforge-test-macros = { workspace = true }
 specforge-extension-sdk = { path = "../../runtime/extension-sdk" }
 tempfile = { workspace = true }
+
+[lints]
+workspace = true

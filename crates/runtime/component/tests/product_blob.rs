@@ -3,6 +3,10 @@
 //! declares answers through the component, as the host calls it, and the
 //! dependency commands walk a long chain within the component's stack.
 //! The commands' behaviour is tested with the extension (ADR 0013 D8).
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use serde_json::{Map, Value, json};
 use specforge_component::{ComponentRuntime, builtins};

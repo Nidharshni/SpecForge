@@ -33,3 +33,6 @@ specforge-wasm = { path = ".", features = ["testing"] }
 specforge-test = { workspace = true }
 specforge-test-macros = { workspace = true }
 specforge-extension-sdk = { path = "../extension-sdk" }
+
+[lints]
+workspace = true

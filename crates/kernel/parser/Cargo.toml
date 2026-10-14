@@ -36,3 +36,6 @@ specforge-test-macros = { workspace = true }
 [[bench]]
 name = "parse"
 harness = false
+
+[lints]
+workspace = true

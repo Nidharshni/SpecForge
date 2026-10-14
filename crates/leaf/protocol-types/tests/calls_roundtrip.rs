@@ -1,6 +1,10 @@
 //! The operational payloads (`specforge_protocol_types::calls`): each is
 //! one type the host and the SDK share, and the host's bytes, pinned in
 //! `crates/runtime/wasm/tests/wire/`, decode as it.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;

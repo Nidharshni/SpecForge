@@ -13,6 +13,10 @@
 //!
 //! A blob is built in a staged workspace ([`Stage`]), so its bytes depend only on
 //! its sources and the toolchain, not on where the repository is checked out.
+#![expect(
+    clippy::print_stdout,
+    reason = "a developer tool: its report is its stdout"
+)]
 
 use gate::blob_inputs::{self, BlobRecord, WORKSPACE_INHERITED};
 use serde_json::Value;
@@ -144,7 +148,8 @@ impl Stage {
     /// - every staged `Cargo.toml` without its dev-dependency tables: a staged path package is a
     ///   workspace member, and its dev-dependencies would join the resolution;
     /// - a `Cargo.toml` naming the extension as the member, with the root manifest's inherited
-    ///   tables;
+    ///   tables (`[workspace.package]`, `[workspace.dependencies]` and the `[workspace.lints]` tables
+    ///   the staged crates' `[lints] workspace = true` reads);
     /// - the extension's `Cargo.lock` and the toolchain file.
     fn prepare(repo: &Path, blob: &CommittedBlob) -> Result<Stage, String> {
         let crate_dir = blob.crate_dir;

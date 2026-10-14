@@ -24,7 +24,7 @@ pub fn find_close_match<'a>(
         // depends on the caller's iteration order (R-6 / hardening-plan D1).
         .min_by(|a, b| {
             a.1.cmp(&b.1)
-                .then_with(|| b.2.partial_cmp(&a.2).unwrap())
+                .then_with(|| b.2.total_cmp(&a.2))
                 .then_with(|| a.0.cmp(b.0))
         })
         .map(|(s, _, _)| s)

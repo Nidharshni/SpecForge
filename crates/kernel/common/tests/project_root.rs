@@ -1,5 +1,9 @@
 //! The project a path is in (`ProjectRoot`, behavior `locate_project_root`,
 //! ADR 0053): the one rule every surface opens a project by.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use std::fs;
 use std::io::ErrorKind;

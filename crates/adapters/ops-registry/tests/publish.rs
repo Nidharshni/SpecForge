@@ -1,6 +1,10 @@
 //! `ConfiguredRegistry::publish`: the registry for the name, the credential, the signing key, then the
 //! signed upload (ADR 0045). Each test runs the adapter over a recording in-memory client (ADR 0044) as a
 //! user whose files live in a temporary directory, never in `~/.specforge`.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use specforge_ops::OpErrorKind;
 use specforge_ops::registry::Trust;
@@ -481,6 +485,10 @@ fn an_unset_token_variable_is_r010_before_any_request() {
 #[specforge_test(
     behavior = "authenticate_registry_request",
     verify = "token resolved from environment variable"
+)]
+#[expect(
+    unsafe_code,
+    reason = "set_var before any thread of this test reads the environment; the test runs in its own process under nextest"
 )]
 fn a_token_variable_is_sent_as_the_bearer_token() {
     let world = World::acme();

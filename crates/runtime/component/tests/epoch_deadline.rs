@@ -6,6 +6,10 @@
 //! The guest is a hand-written component whose `call` export spins forever
 //! (canonical-ABI signature matching `specforge:bridge`), so an unbounded
 //! call would hang the host thread unless the deadline traps it.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};

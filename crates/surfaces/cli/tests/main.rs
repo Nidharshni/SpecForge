@@ -1,3 +1,8 @@
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
+
 mod analyze;
 mod build_cache;
 mod check_surfaces;
@@ -15,7 +20,6 @@ mod export_version;
 mod extension_authoring;
 mod extension_surfaces;
 mod extensions;
-#[allow(deprecated)]
 mod format;
 mod format_corpus;
 mod init;
@@ -24,7 +28,6 @@ mod installed_extensions;
 mod isolation;
 mod mcp;
 mod mcp_add;
-#[allow(deprecated)]
 mod migrate;
 mod navigation_parity;
 mod options;

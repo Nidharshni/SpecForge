@@ -107,7 +107,6 @@ pub struct Occurrence {
 
 impl Occurrence {
     /// The sort key: file, then position, then what it names.
-    #[allow(clippy::type_complexity)]
     fn key(&self) -> (Sym, usize, usize, usize, usize, Sym, Sym, Role, Option<Sym>) {
         (
             self.span.file,

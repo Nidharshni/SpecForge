@@ -11,11 +11,16 @@ use serde::{Deserialize, Serialize};
 use crate::change_set::ChangeSet;
 
 pub const FILE: &str = "inputs.json";
-/// The key for the root manifest's `[workspace.package]` and `[workspace.dependencies]` tables: the shared crates
-/// inherit edition, version, license and dependency specs from them, and only those tables can change what they
-/// compile to.
+/// The key for the root manifest's tables a staged crate inherits: `[workspace.package]` (edition, version,
+/// license), `[workspace.dependencies]` (dependency specs) and the two `[workspace.lints]` tables (the lint levels
+/// its `[lints] workspace = true` reads). Only these can change how a staged crate builds.
 pub const WORKSPACE_INHERITED: &str = "Cargo.toml#workspace-inherited";
-pub const INHERITED_TABLES: &[&str] = &["[workspace.package]", "[workspace.dependencies]"];
+pub const INHERITED_TABLES: &[&str] = &[
+    "[workspace.package]",
+    "[workspace.dependencies]",
+    "[workspace.lints.rust]",
+    "[workspace.lints.clippy]",
+];
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlobRecord {

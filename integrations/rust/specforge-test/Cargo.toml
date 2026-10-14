@@ -16,3 +16,6 @@ crossbeam-queue = "0.3"
 [dev-dependencies]
 specforge-repo-root = { path = "../../../crates/leaf/repo-root" }
 tempfile = "3"
+
+[lints]
+workspace = true

@@ -36,3 +36,6 @@ specforge-wasm = { path = "../crates/runtime/wasm" }
 specforge-protocol-types = { path = "../crates/leaf/protocol-types" }
 serde_json = "1.0"
 gate = { path = "../gate" }
+
+[lints]
+workspace = true

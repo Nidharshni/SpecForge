@@ -1,5 +1,9 @@
 //! `#[derive(Shape)]`: the schema it derives is the shape serde writes
 //! (ADR 0048). One probe type per rule, asserting the exact schema.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use std::collections::BTreeMap;
 
@@ -139,10 +143,16 @@ struct Renamed {
     #[serde(rename = "other-name")]
     second_name: String,
     #[serde(skip)]
-    #[allow(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "a #[serde(skip)] field: the test asserts the schema omits it, nothing reads it"
+    )]
     hidden: String,
     #[serde(skip_serializing)]
-    #[allow(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "a #[serde(skip_serializing)] field: the test asserts the schema omits it, nothing reads it"
+    )]
     also_hidden: String,
 }
 

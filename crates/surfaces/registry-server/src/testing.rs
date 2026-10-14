@@ -1,5 +1,9 @@
 //! The real registry server in process, for tests of what reaches a registry over HTTP: the CLI, the HTTP
 //! client's contract run, the configured registry's (ADR 0044).
+#![allow(
+    clippy::unwrap_used,
+    reason = "test support behind the `testing` feature: a failed unwrap fails the calling test"
+)]
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

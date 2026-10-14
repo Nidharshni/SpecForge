@@ -21,3 +21,6 @@ specforge-protocol-types = { path = "../../leaf/protocol-types" }
 [dev-dependencies]
 specforge-test = { workspace = true }
 specforge-test-macros = { workspace = true }
+
+[lints]
+workspace = true

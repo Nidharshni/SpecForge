@@ -1,6 +1,10 @@
 //! The exit handler writes the binary report and nothing else: it reads no
 //! graph, prints nothing and leaves no side file (ADR 0068). Runs the
 //! `ignore_fixture` binary, as `ignore_test.rs` does.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 mod support;
 use specforge_test_macros::test as specforge_test;
 use std::path::{Path, PathBuf};

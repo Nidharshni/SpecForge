@@ -2,6 +2,10 @@
 //! reports it as ignored and nothing is recorded, and `--include-ignored`
 //! runs the body and records the result. Runs the `ignore_fixture` test
 //! binary, which `cargo test` builds next to this one.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 mod support;
 use specforge_test_macros::test as specforge_test;

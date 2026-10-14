@@ -148,7 +148,7 @@ impl<'s> Call<'s> {
     /// it), and a target that is no project is an internal error: tools
     /// return it with `?` through `From<McpError> for ToolOutcome`, prompts
     /// as their refusal.
-    #[allow(
+    #[expect(
         clippy::result_large_err,
         reason = "the refusal is the McpError tools and prompts return as is (ADR 0014)"
     )]

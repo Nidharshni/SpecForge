@@ -68,3 +68,6 @@ specforge-registry-server = { path = "../registry-server", features = ["testing"
 specforge-registry-client = { path = "../../adapters/registry-client", features = ["testing"] }
 tower-lsp = { workspace = true }
 specforge-graph = { path = "../../pipeline/graph" }
+
+[lints]
+workspace = true

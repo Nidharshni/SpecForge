@@ -6,10 +6,6 @@ version.workspace = true
 license.workspace = true
 repository.workspace = true
 
-[lints.clippy]
-# MCP owns stdout (it is the JSON-RPC stream): shared operations never print.
-print_stdout = "deny"
-
 [features]
 # `specforge_ops::testing`: extensions a test serves in process as
 # candidates (`@sdk/greet`, builtin look-alikes), and a package registry in
@@ -58,3 +54,6 @@ tempfile = { workspace = true }
 # The module-group check parses `src/` (tests/operations/groups.rs), with xtask's versions.
 proc-macro2 = { version = "1", features = ["span-locations"] }
 syn = { version = "2", features = ["full", "visit"] }
+
+[lints]
+workspace = true

@@ -115,7 +115,10 @@ impl Graph {
 
     /// The reference-list entries that name an existing entity but have no
     /// edge (source, target, field). Empty after every link.
-    #[cfg_attr(not(debug_assertions), allow(dead_code))]
+    #[cfg_attr(
+        not(debug_assertions),
+        allow(dead_code, reason = "only debug assertions call it")
+    )]
     pub(crate) fn unlinked_references(&self) -> Vec<(Sym, Sym, Sym)> {
         let mut unlinked = Vec::new();
         for node in self.nodes.values() {
@@ -147,7 +150,10 @@ impl Graph {
 
     /// Panic, naming them, when [`Self::unlinked_references`] is not empty:
     /// a SpecForge bug, never a spec error.
-    #[cfg_attr(not(debug_assertions), allow(dead_code))]
+    #[cfg_attr(
+        not(debug_assertions),
+        allow(dead_code, reason = "only debug assertions call it")
+    )]
     pub(crate) fn assert_linked(&self) {
         let unlinked = self.unlinked_references();
         assert!(

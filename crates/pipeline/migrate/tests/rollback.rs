@@ -1,4 +1,8 @@
 //! What `specforge migrate --rollback` restores: the recorded migration, no more.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use specforge_migrate::{MigrationRecord, RecordChange, migrate_project, restore, run_rollback};
 use specforge_parser::CURRENT_FORMAT_VERSION;

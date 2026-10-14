@@ -3,6 +3,10 @@
 //! Proves the cache is configured at engine construction and actually
 //! populates on first compile — the previous `.aot` side cache was a byte
 //! copy no runtime ever consumed.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use specforge_component::ComponentRuntime;
 use specforge_wasm::runtime::WasmRuntime;

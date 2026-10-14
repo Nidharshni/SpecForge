@@ -27,6 +27,12 @@ Run `cargo gate` (what the working tree changed) before a PR and `cargo gate ful
 
 The prove tests ask the real SMT solver: install z3 (`brew install z3`, `apt-get install z3`); CI installs it. Every other test chooses the solver it sees.
 
+Lints are one table in the root `Cargo.toml` (`[workspace.lints]`), inherited by every crate. No `unwrap()` outside
+tests: use `expect("...")` naming the invariant, or return an error for anything a user controls. An exception is
+`#[expect(lint, reason = "...")]` on the item it excuses ([ADR 0089](docs/adr/0089-one-lint-table-for-the-workspace.md)).
+A new test target starts with `#![allow(clippy::unwrap_used, reason = "a test's unwrap is its assertion: a None or an Err fails the test")]`
+(a test file that is a module of another target's root needs none).
+
 No tracked `.rs` file may be over 800 lines (the `file-size` check, [ADR 0085](docs/adr/0085-no-tracked-rust-file-is-over-800-lines.md)).
 The files already over it are listed in `gate/baseline.json` and may only shrink: they take no new lines, so new code
 and new tests go in a new module (a test binary's `tests/<file>/<topic>.rs`) or the file is split first. After you

@@ -10,6 +10,10 @@
 //! rewrite the declaration snapshots of every SDK blob, in process; check what it
 //! did not write (`build-blobs --check` and the declarations test) and print
 //! the paths to stage.
+#![expect(
+    clippy::print_stdout,
+    reason = "a developer tool: its report is its stdout"
+)]
 
 use specforge_component::ComponentRuntime;
 use specforge_component::committed::{COMMITTED, snapshots, wire_answers};

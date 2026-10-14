@@ -31,3 +31,6 @@ walkdir = { workspace = true }
 specforge-test = { workspace = true }
 specforge-test-macros = { workspace = true }
 tempfile = { workspace = true }
+
+[lints]
+workspace = true

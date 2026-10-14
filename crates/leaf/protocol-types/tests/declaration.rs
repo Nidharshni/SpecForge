@@ -1,5 +1,9 @@
 //! The extension declaration: one type from the SDK to the registry build,
 //! assembled from and served as the protocol's wire answers.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use serde_json::json;
 use specforge_protocol_types::{

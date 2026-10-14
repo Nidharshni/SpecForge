@@ -37,3 +37,6 @@ specforge-test = { workspace = true }
 specforge-test-macros = { workspace = true }
 tempfile = { workspace = true }
 tree-sitter-specforge = { workspace = true }
+
+[lints]
+workspace = true

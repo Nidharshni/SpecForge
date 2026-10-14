@@ -353,6 +353,10 @@ impl Installed {
     /// load is a [`LoadFailure`] on its entry with its diagnostic, and what an
     /// entry reports though it loaded is on the entry too
     /// ([`Installed::load_diagnostics`] orders them).
+    #[expect(
+        clippy::result_large_err,
+        reason = "Failed<Diagnostic> / LoadFailure carry the whole diagnostic the surfaces present (clippy.toml admits a bare Diagnostic only)"
+    )]
     pub fn load(
         &self,
         entries: &[String],
@@ -463,6 +467,10 @@ impl Installed {
 
     /// Load the extension a named entry names from `bytes`: a builtin's embedded bytes, or the
     /// pinned module of the lock `entry` it is installed by.
+    #[expect(
+        clippy::result_large_err,
+        reason = "Failed<Diagnostic> / LoadFailure carry the whole diagnostic the surfaces present (clippy.toml admits a bare Diagnostic only)"
+    )]
     fn load_bytes(
         &self,
         name: &str,

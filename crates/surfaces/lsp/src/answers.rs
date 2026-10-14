@@ -403,7 +403,10 @@ pub fn workspace_symbols(state: &LspState, query: &str) -> Option<Vec<SymbolInfo
 
     let kind_reg = state.kind_registry();
     let compiled = Compiled::new(state);
-    #[allow(deprecated)]
+    #[expect(
+        deprecated,
+        reason = "lsp-types marks SymbolInformation::deprecated deprecated; a struct literal must still set it"
+    )]
     let symbols: Vec<SymbolInformation> = found
         .into_iter()
         .filter_map(|m| {
