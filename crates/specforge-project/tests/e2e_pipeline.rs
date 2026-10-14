@@ -4,9 +4,7 @@
 
 use specforge_project::testing::TestProject;
 use specforge_test::prelude::*;
-use std::fs;
 use std::sync::Arc;
-use tempfile::TempDir;
 
 /// `graph` exported as `format`, unscoped and unbudgeted.
 fn export(graph: &specforge_graph::Graph, format: specforge_emitter::EmitFormat) -> String {
@@ -35,19 +33,9 @@ fn compile_specs(files: &[(&str, &str)]) -> specforge_project::CompiledProject {
 }
 
 /// [`compile_specs`], keeping the directory the files were written to.
-fn compile_specs_in(files: &[(&str, &str)]) -> (TempDir, specforge_project::CompiledProject) {
-    let dir = TempDir::new().unwrap();
-    for (name, content) in files {
-        let path = dir.path().join(name);
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).unwrap();
-        }
-        fs::write(&path, content).unwrap();
-    }
-    let compiled = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        None,
-    );
+fn compile_specs_in(files: &[(&str, &str)]) -> (TestProject, specforge_project::CompiledProject) {
+    let dir = TestProject::new().without_config().files(files);
+    let compiled = dir.compile_bare();
     (dir, compiled)
 }
 
@@ -56,31 +44,14 @@ fn compile_with_builtins(
     extensions: &[&str],
     files: &[(&str, &str)],
 ) -> specforge_project::CompiledProject {
-    let dir = TempDir::new().unwrap();
-    let ext_json = extensions
-        .iter()
-        .map(|e| format!("\"{e}\""))
-        .collect::<Vec<_>>()
-        .join(", ");
-    fs::write(
-        dir.path().join("specforge.json"),
-        format!(
-            r#"{{ "name": "t", "version": "0.1.0", "spec_root": "spec", "extensions": [{ext_json}] }}"#
-        ),
-    )
-    .unwrap();
-    for (name, content) in files {
-        let path = dir.path().join("spec").join(name);
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).unwrap();
-        }
-        fs::write(&path, content).unwrap();
-    }
+    let dir = TestProject::new()
+        .enabling(extensions)
+        .config(|c| c["spec_root"] = "spec".into());
+    let dir = files.iter().fold(dir, |dir, (name, content)| {
+        dir.file(&format!("spec/{name}"), content)
+    });
     let runtime = wasm_runtime_for(extensions);
-    specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    )
+    dir.compile_in(Arc::new(runtime))
 }
 
 // Port method signatures are read by the core grammar: no E001, and none is
@@ -429,11 +400,8 @@ fn validation_diagnostics_surface() {
     verify = "graph contains one node per entity"
 )]
 fn empty_project_produces_empty_graph() {
-    let dir = TempDir::new().unwrap();
-    let ctx = specforge_project::CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        None,
-    );
+    let dir = TestProject::new().without_config();
+    let ctx = dir.compile_bare();
 
     assert!(
         ctx.graph().nodes().is_empty(),

@@ -10,13 +10,12 @@ use std::path::{Path, PathBuf};
 use serde_json::{Value, json};
 use specforge_common::{Diagnostic, Severity};
 use specforge_extension_sdk::prelude::*;
-use specforge_project::CompiledProject;
 use specforge_project::coverage::TestReport;
 use specforge_project::passes::{AnalysisContext, pass_input, run_extension_passes};
+use specforge_project::testing::TestProject;
 use specforge_wasm::testing::InProcessRuntime;
 use specforge_wasm::{WasmCallResult, WasmTrapInfo};
 use std::sync::Arc;
-use tempfile::TempDir;
 
 const EXT: &str = "@pin/passes";
 
@@ -113,13 +112,12 @@ fn runtime() -> InProcessRuntime {
 const SPEC: &str = "gadget a \"A\" {\n  needs b\n  status \"active\"\n  verify unit \"a works\"\n}\n\n\
 gadget b \"B\" {\n  status \"retired\"\n}\n\ngadget c \"C\" {\n  abstract true\n}\n";
 
-fn project() -> TempDir {
-    let dir = TempDir::new().unwrap();
-    let config = json!({ "name": "p", "version": "0.1.0", "extensions": [EXT] });
-    fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
-    fs::write(dir.path().join("a.spec"), SPEC).unwrap();
-    dir
+fn project() -> TestProject {
+    TestProject::new()
+        .config(|c| c["name"] = "p".into())
+        .enabling(&[EXT])
+        .installing_enabled()
+        .file("a.spec", SPEC)
 }
 
 /// The input the last call to `export` received.
@@ -142,10 +140,7 @@ fn last_input(runtime: &InProcessRuntime, export: &str) -> Value {
 fn c4_the_pass_input_of_an_analysis() {
     let dir = project();
     let runtime = Arc::new(runtime());
-    let compiled = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(runtime.clone()),
-    );
+    let compiled = dir.compile_in(runtime.clone());
     let report: TestReport = serde_json::from_value(json!({
         "runner": "cargo-test",
         "results": {"a": {"tests": [
@@ -176,15 +171,12 @@ fn c4_the_pass_input_of_an_analysis() {
 fn c4_the_pass_input_of_a_compile_carries_previous() {
     let dir = project();
     fs::write(
-        dir.path().join("specforge-cache.json"),
+        dir.root().join("specforge-cache.json"),
         json!({"format": 1, "statuses": {"a": {"kind": "gadget", "status": "draft"}}}).to_string(),
     )
     .unwrap();
     let runtime = Arc::new(runtime());
-    CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(runtime.clone()),
-    );
+    dir.compile_in(runtime.clone());
     // flipped in T6: `test_results` and `proved_claims` are absent, not null
     golden(
         "pass.check.input.json",
@@ -200,11 +192,7 @@ fn span(file: &str, line: usize) -> Value {
 fn compile_answering(answer: WasmCallResult) -> Vec<Diagnostic> {
     let dir = project();
     let runtime = Arc::new(runtime().answer_raw(EXT, "__pass_audit", answer));
-    CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(runtime.clone()),
-    )
-    .diagnostics()
+    dir.compile_in(runtime.clone()).diagnostics()
 }
 
 fn pass_findings(diagnostics: &[Diagnostic]) -> Vec<&Diagnostic> {
@@ -318,10 +306,7 @@ fn c4_a_failing_analyze_pass_is_an_e028_finding_of_its_report() {
             export_name: "__pass_report".into(),
         }),
     ));
-    let compiled = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(runtime.clone()),
-    );
+    let compiled = dir.compile_in(runtime.clone());
     let registries = compiled.environment().registries();
     let reports = run_extension_passes(
         registries.analyze_passes(),
@@ -360,10 +345,7 @@ fn c4_a_failing_analyze_pass_is_an_e028_finding_of_its_report() {
 fn c6_the_validator_context() {
     let dir = project();
     let runtime = Arc::new(runtime());
-    CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(runtime.clone()),
-    );
+    dir.compile_in(runtime.clone());
     let contexts: Vec<Value> = runtime
         .calls()
         .into_iter()
@@ -385,21 +367,13 @@ fn c6_a_verdict_is_read_and_a_failure_is_w112_on_load() {
         "validate__shape",
         WasmCallResult::Ok(br#"{"verdict":"fail","field":"needs","value":"b"}"#.to_vec()),
     ));
-    let failed = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(runtime.clone()),
-    )
-    .diagnostics();
+    let failed = dir.compile_in(runtime.clone()).diagnostics();
     let e991: Vec<&Diagnostic> = failed.iter().filter(|d| d.code == "E991").collect();
     assert_eq!(e991.len(), 3, "{failed:?}");
     assert_eq!(e991[0].message, "gadget 'a' has a bad needs");
 
     let runtime = Arc::new(runtime_with_trap());
-    let trapped = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(runtime.clone()),
-    )
-    .diagnostics();
+    let trapped = dir.compile_in(runtime.clone()).diagnostics();
     let w112: Vec<&Diagnostic> = trapped.iter().filter(|d| d.code == "W112").collect();
     assert_eq!(w112.len(), 1, "{trapped:?}");
     assert_eq!(
@@ -418,11 +392,7 @@ fn c6_a_verdict_is_read_and_a_failure_is_w112_on_load() {
         "validate__shape",
         WasmCallResult::Ok(br#"{"field":"needs"}"#.to_vec()),
     );
-    let malformed = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(answering_garbage)),
-    )
-    .diagnostics();
+    let malformed = dir.compile_in(Arc::new(answering_garbage)).diagnostics();
     let w112: Vec<&Diagnostic> = malformed.iter().filter(|d| d.code == "W112").collect();
     assert_eq!(w112.len(), 1, "{malformed:?}");
     assert!(

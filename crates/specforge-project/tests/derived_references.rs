@@ -3,15 +3,13 @@
 //! from the type names entities write in their field types and method
 //! signatures, and the extension's own rules see them.
 
-use std::fs;
-
 use specforge_common::Diagnostic;
 use specforge_extension_sdk::prelude::*;
 use specforge_project::CompiledProject;
+use specforge_project::testing::TestProject;
 use specforge_test::prelude::*;
 use specforge_wasm::testing::InProcessRuntime;
 use std::sync::Arc;
-use tempfile::TempDir;
 
 const EXTENSION: &str = "@test/shapes";
 
@@ -47,15 +45,12 @@ fn shapes_extension() -> InProcessRuntime {
     })
 }
 
-fn project(spec: &str) -> TempDir {
-    let dir = TempDir::new().unwrap();
-    let config = serde_json::json!({
-        "name": "p", "version": "0.1.0", "extensions": [EXTENSION]
-    });
-    fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
-    fs::write(dir.path().join("a.spec"), spec).unwrap();
-    dir
+fn project(spec: &str) -> TestProject {
+    TestProject::new()
+        .config(|c| c["name"] = "p".into())
+        .enabling(&[EXTENSION])
+        .installing_enabled()
+        .file("a.spec", spec)
 }
 
 /// The (target, label) of every edge out of `id`, sorted.
@@ -95,10 +90,7 @@ iface Garage {
 "#,
     );
 
-    let compiled = CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(shapes_extension())),
-    );
+    let compiled = dir.compile_in(Arc::new(shapes_extension()));
 
     let edge = |target: &str, label: &str| (target.to_string(), label.to_string());
     assert_eq!(edges_from(&compiled, "Car"), vec![edge("Wheel", "parts")]);
@@ -122,18 +114,12 @@ iface Garage {
 
 /// `spec` compiled with the builtin @specforge/software.
 fn compile_with_software(spec: &str) -> CompiledProject {
-    let dir = TempDir::new().unwrap();
-    let config = serde_json::json!({
-        "name": "p", "version": "0.1.0", "extensions": ["@specforge/software"]
-    });
-    fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
-    fs::write(dir.path().join("a.spec"), spec).unwrap();
-    let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    CompiledProject::compile(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    )
+    TestProject::new()
+        .config(|c| c["name"] = "p".into())
+        .enabling(&["@specforge/software"])
+        .installing_enabled()
+        .file("a.spec", spec)
+        .compile()
 }
 
 /// The W002 messages, sorted.

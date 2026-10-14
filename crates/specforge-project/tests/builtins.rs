@@ -3,7 +3,6 @@ use specforge_project::testing::TestProject;
 use specforge_protocol_types::{DeclaredCategory, EntityKindDescriptor, ExtensionDeclaration};
 use specforge_wasm::WasmRuntime;
 use specforge_wasm::protocol::load_declaration;
-use std::sync::Arc;
 
 /// A Wasm runtime holding the builtin extensions `ext_names` — the only way
 /// extensions exist now (WASM-only migration, Phase 7: the native mirror
@@ -492,20 +491,16 @@ fn product_lifecycle_kinds_declare_status() {
     verify = "the builtin extensions' rules register with no W112, W147 or W021"
 )]
 fn the_builtin_extensions_rules_register_cleanly() {
-    let dir = tempfile::TempDir::new().unwrap();
     let names: Vec<&str> = specforge_component::builtins::BUILTIN_EXTENSIONS
         .iter()
         .map(|(name, _)| *name)
         .collect();
     assert_eq!(names.len(), 9, "{names:?}");
-    let config = serde_json::json!({ "name": "all", "version": "0.1.0", "extensions": names });
-    std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
-    let runtime = specforge_component::ComponentRuntime::with_user_cache();
+    let dir = TestProject::new()
+        .config(|c| c["name"] = "all".into())
+        .enabling(&names);
 
-    let env = specforge_project::Environment::load(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        Some(Arc::new(runtime)),
-    );
+    let env = specforge_project::Environment::load(&dir.project_root(), Some(dir.runtime()));
 
     assert_eq!(env.registries().declarations().len(), 9);
     assert!(
