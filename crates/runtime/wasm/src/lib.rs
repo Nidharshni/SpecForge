@@ -3,8 +3,6 @@
 //! extension to (ADR 0037), and, under `testing`, the in-process runtime. Its production adapter is
 //! `specforge-component`.
 
-#![allow(clippy::result_large_err)]
-
 pub mod calls;
 pub mod protocol;
 pub mod runtime;

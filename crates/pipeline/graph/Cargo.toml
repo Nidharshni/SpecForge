@@ -27,3 +27,6 @@ specforge-test-macros = { workspace = true }
 [[bench]]
 name = "graph"
 harness = false
+
+[lints]
+workspace = true

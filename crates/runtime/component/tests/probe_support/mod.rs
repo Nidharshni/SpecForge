@@ -4,7 +4,10 @@
 //! `sandbox_limits.rs`.
 
 // Each test binary uses the part of the probe it needs.
-#![allow(dead_code)]
+#![allow(
+    dead_code,
+    reason = "shared by sandbox_probe and sandbox_limits: each binary uses part of the probe"
+)]
 
 use serde_json::{Value, json};
 use specforge_component::ComponentRuntime;

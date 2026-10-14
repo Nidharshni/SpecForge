@@ -3,6 +3,10 @@
 //! runtime. The fixture's component blob is vendored at
 //! `specforge_component::committed::GREET` (refresh:
 //! `cargo run -p xtask --bin revendor`).
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use std::path::PathBuf;
 

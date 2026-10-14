@@ -179,7 +179,6 @@ fn ignore_unread(descriptor: &ValidationRuleDescriptor, rule: &mut Rule) -> Vec<
 /// The rule `descriptor` declares, with the check its kind names and the
 /// properties that check reads; W112 when it cannot work as declared.
 /// Edge rules are resolved afterwards ([`resolve`]).
-#[allow(clippy::result_large_err)]
 fn shape(descriptor: &ValidationRuleDescriptor, extension: &str) -> Result<Rule, Diagnostic> {
     let r = descriptor;
     let Some(check_kind) = CheckKind::parse(&r.check) else {
@@ -369,7 +368,6 @@ fn shape(descriptor: &ValidationRuleDescriptor, extension: &str) -> Result<Rule,
 /// project and the rule is dropped (inert). A cycle rule follows every
 /// field that writes its edge type. An edge or cycle rule whose edge type no
 /// loaded extension declares is dropped (inert).
-#[allow(clippy::result_large_err)]
 fn resolve(mut rule: Rule, registries: Registries<'_>) -> Result<Option<Rule>, Diagnostic> {
     if let Some(kind) = rule.target.as_deref()
         && !registries.kinds.contains(kind)

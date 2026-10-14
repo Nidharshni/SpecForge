@@ -166,6 +166,10 @@ impl Change<'_> {
 
     /// Write the change: every binary placed or moved aside, then the lock
     /// once. All or nothing (see [`Self::commit_with`]).
+    #[expect(
+        clippy::result_large_err,
+        reason = "Failed<Diagnostic> / LoadFailure carry the whole diagnostic the surfaces present (clippy.toml admits a bare Diagnostic only)"
+    )]
     pub fn commit(self) -> Result<Committed, Failed<Diagnostic>> {
         self.run(|| Ok(()), std::convert::identity)
     }

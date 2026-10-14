@@ -1,6 +1,10 @@
 //! The builtin table (`specforge_component::builtins::BUILTINS`) is the one list of builtins: it is
 //! the `extensions/` directory, by the naming rule, and the (name, bytes) view the extension load
 //! reads is its rows.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use specforge_component::builtins::{BUILTIN_EXTENSIONS, BUILTINS};
 use specforge_component::committed::{COMMITTED, FIXTURES};

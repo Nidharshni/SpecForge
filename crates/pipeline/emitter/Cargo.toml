@@ -41,3 +41,6 @@ specforge-test-macros.workspace = true
 [[bench]]
 name = "emit"
 harness = false
+
+[lints]
+workspace = true

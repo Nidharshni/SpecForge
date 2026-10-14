@@ -4,8 +4,6 @@
 //! runtime, and how installing, updating and removing them changes all of
 //! it at once or not at all (ADR 0028).
 
-#![allow(clippy::result_large_err)]
-
 mod change;
 mod declare;
 mod health;

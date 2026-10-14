@@ -1,5 +1,9 @@
 //! The migration crate's pure comparison: the graph a migration must keep
 //! ([`structural_differences`]).
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use specforge_common::{Diagnostic, Sym};
 use specforge_graph::{Graph, compute_graph_delta};

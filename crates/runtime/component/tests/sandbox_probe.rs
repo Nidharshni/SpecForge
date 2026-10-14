@@ -6,6 +6,10 @@
 //! stdin, connect to a port the test listens on, and resolve a name, and
 //! reports what it got. The probe runs through the component runtime the
 //! host runs every extension in, called as the host dispatches each surface.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 mod probe_support;
 
