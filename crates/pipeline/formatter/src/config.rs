@@ -140,6 +140,29 @@ mod tests {
     }
 
     #[specforge_test_macros::test(
+        invariant = "config_defaults_valid",
+        verify = "default FormatConfig passes validation"
+    )]
+    fn the_default_config_reads_back_without_a_diagnostic() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join(".specforgefmt.toml");
+        let d = FormatConfig::default();
+        std::fs::write(
+            &path,
+            format!(
+                "indent_width = {}\nuse_tabs = {}\nmax_width = {}\n",
+                d.indent_width, d.use_tabs, d.max_width
+            ),
+        )
+        .unwrap();
+
+        let (config, diagnostics) = read_config_file(&path);
+
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        assert_eq!(config, d);
+    }
+
+    #[specforge_test_macros::test(
         behavior = "load_format_config",
         verify = "missing config file uses defaults"
     )]
