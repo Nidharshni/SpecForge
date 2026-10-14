@@ -363,3 +363,38 @@ fn a_column_or_content_change_is_no_move() {
     assert_eq!(edited.delta.modified_nodes.len(), 1);
     assert_eq!(edited.delta.modified_nodes[0].id, "alpha");
 }
+
+#[specforge_test(
+    behavior = "compute_graph_delta",
+    verify = "an entity that only moved is a moved node, not a modification"
+)]
+fn replacing_a_graph_lists_the_nodes_whose_place_changed() {
+    let before = GraphBuild::of(
+        [file(
+            "a.spec",
+            &format!("{ALPHA}behavior beta \"B\" {{ contract \"b\" }}\n"),
+        )],
+        GraphConfig::default(),
+    );
+    let after = GraphBuild::of(
+        [
+            file("a.spec", "behavior beta \"B\" { contract \"b\" }\n"),
+            file("b.spec", ALPHA),
+        ],
+        GraphConfig::default(),
+    );
+    // alpha moved file; beta moved from line 2 to line 1.
+    let moved: Vec<(String, String, usize)> =
+        specforge_graph::moved_nodes(before.graph(), after.graph())
+            .into_iter()
+            .map(|n| (n.id, n.file, n.line))
+            .collect();
+    assert_eq!(
+        moved,
+        [
+            ("alpha".into(), "b.spec".into(), 1),
+            ("beta".into(), "a.spec".into(), 1)
+        ]
+    );
+    assert!(specforge_graph::moved_nodes(after.graph(), after.graph()).is_empty());
+}

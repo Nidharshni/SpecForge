@@ -11,13 +11,22 @@ autotests = false
 name = "tests"
 path = "tests/main.rs"
 
+[features]
+# The corpus and edit strategies the property tests of the parser, the
+# formatter and the project draw from (ADR 0090). Only dev-dependencies turn it
+# on, so no shipped binary links proptest.
+testing = ["dep:proptest", "dep:specforge-repo-root"]
+
 [dependencies]
 specforge-common = { workspace = true }
 serde = { workspace = true }
 tree-sitter = { workspace = true }
 tree-sitter-specforge = { workspace = true }
+proptest = { version = "1.11", default-features = false, features = ["std"], optional = true }
+specforge-repo-root = { path = "../../leaf/repo-root", optional = true }
 
 [dev-dependencies]
+specforge-parser = { path = ".", features = ["testing"] }
 specforge-repo-root = { path = "../../leaf/repo-root" }
 criterion = { workspace = true }
 insta = { workspace = true }

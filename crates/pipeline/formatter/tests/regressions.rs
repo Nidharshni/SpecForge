@@ -4,12 +4,12 @@ use specforge_formatter::{FormatConfig, format_source};
 use specforge_test_macros::test as specforge_test;
 use std::collections::BTreeMap;
 
-fn fmt(source: &str) -> String {
+pub(crate) fn fmt(source: &str) -> String {
     format_source(source, &FormatConfig::default()).formatted
 }
 
 /// How often each non-blank line occurs.
-fn line_counts(text: &str) -> BTreeMap<&str, usize> {
+pub(crate) fn line_counts(text: &str) -> BTreeMap<&str, usize> {
     let mut counts = BTreeMap::new();
     for line in text
         .lines()
@@ -89,4 +89,34 @@ fn an_expression_block_is_reindented() {
         "constraint c \"C\" {\n  expression expr {\n          a < 250ms\n\tb < 75MB\n     }\n}\n";
     assert_eq!(fmt(relaid), fmt(canonical));
     assert_eq!(fmt(canonical), canonical);
+}
+
+#[specforge_test(
+    behavior = "format_with_parse_errors",
+    verify = "formatting any text never panics, and formatting its output again changes nothing"
+)]
+fn the_last_line_before_an_unclosed_strings_delimiter_is_written_once() {
+    // The closing quote that runs into text leaves a `"` unclosed: the piece
+    // ends with an appended delimiter on a row of its own. That row held no
+    // source, and it wrote the last source row again, on every run.
+    let source = "  contract   \"\"\"\n  \"\"\"\n  verify unit \"s\"pecforge.query tool returns subgraph for valid entityId\"\n  verify unit \"the default query is the document specforge://graph/{entityId} serves\"\n";
+    let once = fmt(source);
+    assert_eq!(line_counts(&once), line_counts(source), "{once:?}");
+    assert_eq!(fmt(&once), once, "a second run changes nothing");
+}
+
+#[specforge_test(
+    invariant = "formatting_semantic_preservation",
+    verify = "format(spec) parses to an identical entity graph as spec"
+)]
+fn an_annotation_after_a_multiline_value_stays_after_it() {
+    // `@optional` once moved to the first line, inside the string.
+    let source = "feature f \"F\" {\n  solution \"\"\"\n    text\n  \"\"\" @optional\n}\n";
+    let value = |text: &str| {
+        let file = specforge_parser::parse(text, "a.spec");
+        format!("{:?}", file.entities[0].fields)
+    };
+    let once = fmt(source);
+    assert_eq!(value(&once), value(source), "{once:?}");
+    assert_eq!(once, source);
 }

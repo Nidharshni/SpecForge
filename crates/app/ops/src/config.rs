@@ -273,6 +273,23 @@ mod tests {
     }
 
     #[test]
+    fn remove_entry_drops_only_the_entries_written_so() {
+        let dir = project(
+            r#"{"name":"p","extensions":["./ext/a.wasm"," ./ext/a.wasm ","./ext/a.wasm@1","@acme/foo"]}"#,
+        );
+
+        assert_eq!(remove_entry(dir.path(), "./ext/a.wasm"), Ok(true));
+        assert_eq!(extensions(dir.path()), ["./ext/a.wasm@1", "@acme/foo"]);
+        let before = std::fs::read(dir.path().join(CONFIG_FILE)).unwrap();
+        assert_eq!(remove_entry(dir.path(), " ./ext/a.wasm "), Ok(false));
+        assert_eq!(
+            std::fs::read(dir.path().join(CONFIG_FILE)).unwrap(),
+            before,
+            "no write when nothing matched"
+        );
+    }
+
+    #[test]
     fn entry_name_strips_only_a_version_suffix() {
         assert_eq!(entry_name("@acme/foo"), "@acme/foo");
         assert_eq!(entry_name("@acme/foo@1.2.0"), "@acme/foo");

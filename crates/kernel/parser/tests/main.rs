@@ -6,6 +6,7 @@ mod guide_spec_blocks;
 mod lex;
 mod methods_test;
 mod parse_test;
+mod ref_components;
 mod robustness;
 mod snapshot_tests;
 mod structural_keywords;

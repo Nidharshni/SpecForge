@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use specforge_common::{Diagnostic, codes};
 use specforge_graph::{FileChange, GraphBuild};
-use specforge_parser::{SpecFile, parse_incremental};
+use specforge_parser::{Previous, SpecFile, parse_incremental};
 
 use crate::inputs::source_key;
 
@@ -114,7 +114,7 @@ impl SourceCache {
     }
 
     /// One source's new state: its parse (reusing the retained tree,
-    /// through [`edited_tree_for_replacement`]), or its removal when it is
+    /// through `parse_incremental`'s `Previous`), or its removal when it is
     /// gone or can no longer be read (then its E025 is kept until it is
     /// readable or gone).
     pub fn change(&mut self, path: &str, read: Read) -> FileChange {
@@ -198,14 +198,11 @@ impl SourceCache {
 
     /// Parse `text` as `path`, reusing the retained tree.
     fn parse(&mut self, path: &str, text: String) -> SpecFile {
-        let old_tree = match (self.trees.get(path), self.texts.get(path)) {
-            (Some(tree), Some(old)) if **old != *text => {
-                Some(edited_tree_for_replacement(tree, old, &text))
-            }
-            (Some(tree), Some(_)) => Some(tree.clone()),
+        let previous = match (self.trees.get(path), self.texts.get(path)) {
+            (Some(tree), Some(old)) => Some(Previous { text: old, tree }),
             _ => None,
         };
-        let (spec_file, tree) = parse_incremental(&text, path, old_tree.as_ref());
+        let (spec_file, tree) = parse_incremental(&text, path, previous);
         match tree {
             Some(tree) => self.trees.insert(path.to_string(), tree),
             None => self.trees.remove(path),
@@ -213,58 +210,6 @@ impl SourceCache {
         self.texts.insert(path.to_string(), Arc::from(text));
         spec_file
     }
-}
-
-/// The [`tree_sitter::InputEdit`] for a whole-file replacement, applied to
-/// a copy of `old_tree`, so `parse_incremental` can reuse unchanged
-/// subtrees: the longest common byte prefix and suffix of the two texts.
-fn edited_tree_for_replacement(
-    old_tree: &tree_sitter::Tree,
-    old_src: &str,
-    new_src: &str,
-) -> tree_sitter::Tree {
-    let mut prefix = 0;
-    let max_prefix = old_src.len().min(new_src.len());
-    while prefix < max_prefix && old_src.as_bytes()[prefix] == new_src.as_bytes()[prefix] {
-        prefix += 1;
-    }
-    while prefix > 0 && !old_src.is_char_boundary(prefix) {
-        prefix -= 1;
-    }
-
-    let mut suffix = 0;
-    let max_suffix = max_prefix - prefix;
-    while suffix < max_suffix
-        && old_src.as_bytes()[old_src.len() - 1 - suffix]
-            == new_src.as_bytes()[new_src.len() - 1 - suffix]
-    {
-        suffix += 1;
-    }
-    while suffix > 0 && !new_src.is_char_boundary(new_src.len() - suffix) {
-        suffix -= 1;
-    }
-
-    let start_byte = prefix;
-    let old_end_byte = old_src.len() - suffix;
-    let new_end_byte = new_src.len() - suffix;
-
-    let point = |src: &str, byte: usize| {
-        let before = &src[..byte];
-        let row = before.matches('\n').count();
-        let column = byte - before.rfind('\n').map(|i| i + 1).unwrap_or(0);
-        tree_sitter::Point { row, column }
-    };
-
-    let mut tree = old_tree.clone();
-    tree.edit(&tree_sitter::InputEdit {
-        start_byte,
-        old_end_byte,
-        new_end_byte,
-        start_position: point(old_src, start_byte),
-        old_end_position: point(old_src, old_end_byte),
-        new_end_position: point(new_src, new_end_byte),
-    });
-    tree
 }
 
 #[cfg(test)]

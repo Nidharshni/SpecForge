@@ -4,6 +4,7 @@
 mod compiled_support;
 mod connectivity;
 mod contracts;
+mod contracts_pass;
 mod coverage;
 mod cross_extension;
 mod determinism;

@@ -114,15 +114,6 @@ impl FieldMap {
         });
     }
 
-    pub fn push_annotated(&mut self, key: Sym, value: FieldValue, annotations: Vec<Annotation>) {
-        self.entries.push(FieldEntry {
-            key,
-            value,
-            annotations,
-            value_span: None,
-        });
-    }
-
     /// Append an entry as is, keeping its value span.
     pub fn push_entry(&mut self, entry: FieldEntry) {
         self.entries.push(entry);

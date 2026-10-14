@@ -1,0 +1,39 @@
+name: Coverage
+
+# A measurement, not a check: `cargo gate ci` (ci.yml) is the list that blocks a merge.
+# This job reports line coverage per file and per crate, and uploads it (ADR 0090 D4).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+          targets: wasm32-wasip2
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@nextest
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Install z3 (SMT solver for prove tests)
+        run: sudo apt-get update && sudo apt-get install -y z3
+      - name: Run the workspace tests under coverage
+        run: cargo llvm-cov nextest --workspace --no-fail-fast --lcov --output-path lcov.info
+      - name: Summarise per file and per crate
+        run: |
+          cargo llvm-cov report --summary-only | tee coverage-files.txt
+          cargo llvm-cov report --json --summary-only --output-path coverage.json
+          python3 -I scripts/coverage-by-crate.py coverage.json | tee coverage-crates.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            lcov.info
+            coverage-files.txt
+            coverage-crates.txt

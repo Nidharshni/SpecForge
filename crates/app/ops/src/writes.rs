@@ -30,14 +30,6 @@ impl Writes {
         self.0.insert(path.into());
     }
 
-    /// [`Self::record`] when `changed`: for a writer that reports whether
-    /// it changed anything (`config::remove_extension`).
-    pub fn record_if(&mut self, changed: bool, path: impl Into<PathBuf>) {
-        if changed {
-            self.record(path);
-        }
-    }
-
     /// `path` holds again what it held before the operation.
     pub fn forget(&mut self, path: &Path) {
         self.0.remove(path);
@@ -144,15 +136,6 @@ mod tests {
         assert_eq!(writes.len(), 2);
         let paths: Vec<&Path> = writes.paths().collect();
         assert_eq!(paths, [Path::new("/p/a.spec"), Path::new("/p/b.spec")]);
-    }
-
-    #[test]
-    fn record_if_skips_an_unchanged_write() {
-        let mut writes = Writes::none();
-        writes.record_if(false, "/p/specforge.json");
-        assert!(writes.is_empty());
-        writes.record_if(true, "/p/specforge.json");
-        assert_eq!(writes, Writes::from_iter(["/p/specforge.json"]));
     }
 
     #[test]
