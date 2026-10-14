@@ -289,9 +289,16 @@ fn apply(
             path,
             entities,
         } => {
+            // A symlink that leaves the root is a path outside it (ADR 0092
+            // D8): its target is not read.
+            let file = root.join(&path);
+            if crate::resolves_outside(&file, root).is_some() {
+                return Err(outside_root(SOURCE_OUTSIDE_ROOT, "source_file", given)
+                    .about(SessionField::SourceFile));
+            }
             // The file is named as the agent did: the absolute path would
             // leak where the server's project lives.
-            let content_hash = compute_content_hash(&root.join(&path)).map_err(|e| {
+            let content_hash = compute_content_hash(&file).map_err(|e| {
                 OpError::new(
                     OpErrorKind::of_io(&e),
                     SOURCE_UNREADABLE,

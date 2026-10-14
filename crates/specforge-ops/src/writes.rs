@@ -102,6 +102,14 @@ impl<P: Into<PathBuf>> FromIterator<P> for Writes {
     }
 }
 
+/// Where `file` really is, when that is outside `within`: a symlink in the
+/// project that leaves it (ADR 0092 D8). `None` when it is inside, and when
+/// either does not exist, since nothing is read or written there.
+pub fn resolves_outside(file: &Path, within: &Path) -> Option<PathBuf> {
+    let (real, within) = (file.canonicalize().ok()?, within.canonicalize().ok()?);
+    (!real.starts_with(within)).then_some(real)
+}
+
 /// `path` absolute and canonical as far as it exists: the canonical form
 /// of its nearest existing ancestor, joined with the rest.
 fn canonical(path: &Path) -> PathBuf {

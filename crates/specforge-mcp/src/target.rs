@@ -17,6 +17,7 @@ use specforge_ops::solver::Solver;
 use specforge_ops::view::ProjectView;
 use specforge_project::{ProjectSession, SharedRuntime};
 
+use crate::containment::{self, Containment, Outside};
 use crate::events::EventSink;
 use crate::lifecycle::Revision;
 use crate::state::McpState;
@@ -293,6 +294,9 @@ pub enum TargetError {
     /// `init` was asked to create a project inside the served one:
     /// `conflict`.
     InsideServed { dir: PathBuf, served: PathBuf },
+    /// `path` resolves outside the served project (while none is served,
+    /// the server's root): `invalid_input` on argument `path` (ADR 0092).
+    Outside(Outside),
     /// `init` was called without the `path` it creates: `invalid_input`
     /// "Missing required parameter: path" on argument `path`.
     PathRequired,
@@ -316,6 +320,7 @@ impl TargetError {
             TargetError::PathNotFound(_)
             | TargetError::OtherProjectRefused
             | TargetError::InsideServed { .. }
+            | TargetError::Outside(_)
             | TargetError::PathRequired => Some(TargetArgument::Path),
             TargetError::InvalidArgument { argument, .. } => Some(*argument),
             TargetError::NoProject(_) => None,
@@ -335,6 +340,7 @@ impl From<TargetError> for McpError {
                 ErrorCode::InvalidInput,
                 "this tool acts on the project the server serves; path cannot name another project",
             ),
+            TargetError::Outside(outside) => outside.refusal(TargetArgument::Path.name()),
             TargetError::PathRequired => {
                 McpError::new(ErrorCode::InvalidInput, "Missing required parameter: path")
             }
@@ -646,9 +652,16 @@ pub fn resolve(
             let Some(path) = argument::<String>(arguments, TargetArgument::Path)? else {
                 return Err(TargetError::PathRequired);
             };
-            let dir = PathBuf::from(path);
+            let mut dir = PathBuf::from(path);
+            // Inside the request's bound, read against it (ADR 0092 D2, D4):
+            // with a project served that is the project, and inside it is
+            // refused below, so init creates the first project of a session.
+            if let Some(bound) = Containment::of(state) {
+                bound.resolve(&dir).map_err(TargetError::Outside)?;
+                dir = bound.spelled(&dir);
+            }
             if let Some(root) = state.project_root() {
-                let (inside, root) = (absolute(&dir), absolute(root));
+                let (inside, root) = (containment::resolved(&dir), containment::resolved(root));
                 if inside.starts_with(&root) {
                     return Err(TargetError::InsideServed { dir, served: root });
                 }
@@ -675,8 +688,26 @@ pub fn resolve(
     let Some(path) = path else {
         return served(state);
     };
-    let root = project_at(Path::new(path))?;
-    let served_root = state.project_root().map(absolute);
+    // The project it names lies inside the request's bound, and so does the
+    // path itself, which is read against it (ADR 0092 D2, D3).
+    let bound = Containment::of(state);
+    let named = match &bound {
+        Some(bound) => {
+            bound
+                .resolve(Path::new(path))
+                .map_err(TargetError::Outside)?;
+            bound.spelled(Path::new(path))
+        }
+        None => PathBuf::from(path),
+    };
+    let root = project_at(&named)?;
+    if let Some(bound) = &bound
+        && !bound.holds(root.canonical())
+    {
+        let landed = root.canonical().to_path_buf();
+        return Err(TargetError::Outside(bound.outside(&named, landed)));
+    }
+    let served_root = state.project_root().map(containment::resolved);
     if served_root.is_none()
         && serving == Serving::Adopts
         && reach != Reach::Served
@@ -731,26 +762,6 @@ fn project_at(path: &Path) -> Result<ProjectRoot, TargetError> {
     ProjectRoot::of(path)
         .map(ProjectRoot::canonicalized)
         .map_err(|e| TargetError::PathNotFound(e.path))
-}
-
-/// `path` made absolute and canonical as far as it exists (a directory
-/// `init` is about to create need not).
-fn absolute(path: &Path) -> PathBuf {
-    let path = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
-    let mut existing = path.clone();
-    let mut rest = Vec::new();
-    while !existing.exists() {
-        let Some(name) = existing.file_name().map(|n| n.to_os_string()) else {
-            break;
-        };
-        rest.push(name);
-        if !existing.pop() {
-            break;
-        }
-    }
-    let mut absolute = std::fs::canonicalize(&existing).unwrap_or(existing);
-    absolute.extend(rest.into_iter().rev());
-    absolute
 }
 
 /// What a core tool's handler is given before its arguments, and so its

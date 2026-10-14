@@ -2847,7 +2847,7 @@ expression: listing
       "additionalProperties": false,
       "properties": {
         "file": {
-          "description": "File path",
+          "description": "Spec file, relative to the project's spec root",
           "type": "string"
         }
       },
@@ -6429,7 +6429,7 @@ expression: listing
           "type": "string"
         },
         "out_dir": {
-          "description": "Directory to write the rendering into, relative to the project root (returned inline when omitted)",
+          "description": "Directory to write the rendering into, inside the project (relative to its root; returned inline when omitted)",
           "type": "string"
         },
         "scope": {

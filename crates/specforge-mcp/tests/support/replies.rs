@@ -203,13 +203,18 @@ pub fn read_all() -> Vec<Observed> {
 /// `start` on the same server.
 pub fn write_all() -> Vec<Observed> {
     let elsewhere = TempDir::new().expect("a temp dir");
-    let collected = collected();
     let greet = specforge_component::committed::GREET.path();
-    let fill = |arguments: &str| {
-        arguments
+    // The project a collect names lies inside the served one (ADR 0092), so
+    // it is built for the call, not before the server.
+    let fill = |arguments: &str, served: &Served| {
+        let arguments = arguments
             .replace("<elsewhere>", elsewhere.path().to_str().expect("UTF-8"))
-            .replace("<greet>", greet.to_str().expect("UTF-8"))
-            .replace("<collected>", collected.path().to_str().expect("UTF-8"))
+            .replace("<greet>", greet.to_str().expect("UTF-8"));
+        if arguments.contains("<collected>") {
+            let collected = super::within(served.root(), collected());
+            return arguments.replace("<collected>", collected.path().to_str().expect("UTF-8"));
+        }
+        arguments
     };
     let mut observed = Vec::new();
     let mut served = writing();
@@ -223,9 +228,16 @@ pub fn write_all() -> Vec<Observed> {
         if !continues {
             served = writing();
         }
+        let filled = fill(arguments, &served);
+        // Init creates the first project of a session: none is served for it.
+        let response = if tool == "specforge.init" {
+            call_tool(&mut super::unserved(), tool, parse(&filled))
+        } else {
+            call_tool(&mut served, tool, parse(&filled))
+        };
         observed.push(Observed {
             tool,
-            response: call_tool(&mut served, tool, parse(&fill(arguments))),
+            response,
             arguments: arguments.to_string(),
         });
         previous = Some((tool, arguments));

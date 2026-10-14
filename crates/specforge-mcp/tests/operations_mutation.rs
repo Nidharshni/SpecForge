@@ -740,7 +740,7 @@ fn read_config(project: &Path) -> Value {
 fn init_creates_the_project() {
     let dir = fresh_project_dir();
     let project = dir.path().join("fresh");
-    let mut server = test_server();
+    let mut server = unserved();
 
     let parsed = init(
         &mut server,
@@ -781,7 +781,7 @@ fn init_without_a_path_is_invalid_input_on_path() {
 )]
 fn init_adds_the_requested_extensions_to_the_config() {
     let dir = fresh_project_dir();
-    let mut server = components_server();
+    let mut server = unserved();
 
     init(
         &mut server,
@@ -802,7 +802,7 @@ fn init_adds_the_requested_extensions_to_the_config() {
 )]
 fn init_extensions_in_result() {
     let dir = fresh_project_dir();
-    let mut server = components_server();
+    let mut server = unserved();
 
     let parsed = init(
         &mut server,
@@ -894,7 +894,7 @@ fn init_refuses_to_overwrite_a_starter_file() {
     std::fs::create_dir_all(dir.path().join("spec")).unwrap();
     let starter = dir.path().join("spec/hello.spec");
     std::fs::write(&starter, "term mine \"Mine\" {\n}\n").unwrap();
-    let mut server = test_server();
+    let mut server = unserved();
 
     let error = init_error(
         &mut server,
@@ -915,7 +915,7 @@ fn init_refuses_to_overwrite_a_starter_file() {
     verify = "invalid project name returns error"
 )]
 fn init_rejects_an_invalid_project_name() {
-    let mut server = test_server();
+    let mut server = unserved();
     for name in ["", ".hidden", "-dash", "has space"] {
         let dir = fresh_project_dir();
         let error = init_error(
@@ -942,7 +942,7 @@ fn init_rejects_an_invalid_project_name() {
 )]
 fn init_rejects_an_unknown_extension() {
     let dir = fresh_project_dir();
-    let mut server = test_server();
+    let mut server = unserved();
 
     let error = init_error(
         &mut server,
@@ -984,7 +984,11 @@ fn init_requires_a_path() {
 )]
 fn init_then_validate_has_no_errors() {
     let dir = fresh_project_dir();
-    let mut server = test_server();
+    // Nothing is served and the server has no root, so no path is bounded
+    // (ADR 0092 D2): the project init creates is the one validate names.
+    let mut server = McpServer::new();
+    let reply = call(&mut server, "initialize", json!({}));
+    assert!(reply["error"].is_null(), "{reply}");
     init(
         &mut server,
         json!({"path": dir.path().to_str().unwrap(), "name": "integration",
@@ -1006,7 +1010,18 @@ fn init_then_validate_has_no_errors() {
 )]
 fn init_contract() {
     let dir = fresh_project_dir();
-    let mut server = test_server();
+    let mut server = unserved();
+
+    // extensions_validated: an unknown extension is refused, and nothing
+    // is created.
+    let other = fresh_project_dir();
+    let error = init_error(
+        &mut server,
+        json!({"path": other.path().to_str().unwrap(), "name": "other",
+               "extensions": ["@specforge/nonexistent"]}),
+    );
+    assert_eq!(error["code"], "precondition_failed", "{error}");
+    assert!(!other.path().join("specforge.json").exists());
 
     // filesystem_available, project_created
     init(
@@ -1035,16 +1050,6 @@ fn init_contract() {
         "{error}"
     );
     assert!(!nested.exists());
-
-    // extensions_validated: an unknown extension is refused.
-    let other = fresh_project_dir();
-    let error = init_error(
-        &mut server,
-        json!({"path": other.path().to_str().unwrap(), "name": "other",
-               "extensions": ["@specforge/nonexistent"]}),
-    );
-    assert_eq!(error["code"], "precondition_failed", "{error}");
-    assert!(!other.path().join("specforge.json").exists());
 
     // project_initialized_emitted (once: only for the created project),
     // tool_invoked_emitted.
@@ -1588,7 +1593,7 @@ fn rename_invalid_name_format() {
 )]
 fn init_default_version_value() {
     let dir = fresh_project_dir();
-    let mut server = test_server();
+    let mut server = unserved();
     let resp = call_tool(
         &mut server,
         "specforge.init",
@@ -1606,7 +1611,7 @@ fn init_default_version_value() {
 )]
 fn init_version_override_value() {
     let dir = fresh_project_dir();
-    let mut server = test_server();
+    let mut server = unserved();
     let resp = call_tool(
         &mut server,
         "specforge.init",
@@ -2060,8 +2065,8 @@ fn project_with_duplicate_registry_alias() -> tempfile::TempDir {
     verify = "add_extension of a registry package reports what reading the registry configuration found"
 )]
 fn add_extension_from_a_registry_reports_a_duplicate_registry_alias() {
-    let dir = project_with_duplicate_registry_alias();
     let mut server = test_server();
+    let dir = within(server.root(), project_with_duplicate_registry_alias());
     let path = dir.path().to_str().unwrap();
 
     let resp = call_tool(
@@ -2093,8 +2098,8 @@ fn add_extension_from_a_registry_reports_a_duplicate_registry_alias() {
     verify = "an operation shows the registry configuration's diagnostics once it has asked a registry"
 )]
 fn add_extension_dry_run_shows_the_registry_configuration_it_asked() {
-    let dir = project_with_duplicate_registry_alias();
     let mut server = test_server();
+    let dir = within(server.root(), project_with_duplicate_registry_alias());
     let path = dir.path().to_str().unwrap();
 
     let resp = call_tool(
@@ -2157,11 +2162,11 @@ fn served_project(extensions: &[&str], files: &[(&str, &str)]) -> (McpServer, te
 fn remove_on_another_project_checks_that_projects_dependents() {
     // The served project enables formal, which requires software; the
     // other enables software alone.
-    let (mut server, _served) = served_project(
+    let (mut server, served) = served_project(
         &["@specforge/software", "@specforge/formal"],
         &[("main.spec", "")],
     );
-    let other = tempfile::TempDir::new().unwrap();
+    let other = within(served.path(), tempfile::TempDir::new().unwrap());
     std::fs::write(
         other.path().join("specforge.json"),
         json!({"name": "o", "version": "0.1.0", "extensions": ["@specforge/software"]}).to_string(),

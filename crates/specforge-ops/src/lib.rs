@@ -49,7 +49,7 @@ pub mod view;
 mod writes;
 
 pub use refusal::Refusal;
-pub use writes::Writes;
+pub use writes::{Writes, resolves_outside};
 
 use specforge_common::Code;
 use specforge_diagnostics::Level;

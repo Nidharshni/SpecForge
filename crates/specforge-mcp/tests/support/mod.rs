@@ -65,3 +65,38 @@ pub fn path_tool_calls() -> Vec<(&'static str, Value)> {
         ("specforge.migrate", json!({"dry_run": true})),
     ]
 }
+
+/// A project a test built in a directory of its own, moved inside the
+/// project a server serves: a call may name only projects there (ADR 0092).
+pub struct Nested(std::path::PathBuf);
+
+impl Nested {
+    pub fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+/// `other` (its directory moved, so nothing of it is left behind) inside
+/// `served`, the root of the project the server serves.
+pub fn within(served: &std::path::Path, other: tempfile::TempDir) -> Nested {
+    let name = other
+        .path()
+        .file_name()
+        .expect("a temp dir has a name")
+        .to_os_string();
+    let to = served.join("nested").join(name);
+    std::fs::create_dir_all(to.parent().unwrap()).unwrap();
+    std::fs::rename(other.path(), &to).expect("move the project inside the served one");
+    Nested(to)
+}
+
+/// A server that serves nothing and has no root, recording its events: no
+/// path is bounded yet (ADR 0092 D2), and `init` creates the first project
+/// of the session wherever it is told, then serves it. With a project served
+/// `init` creates none.
+pub fn unserved() -> Logged {
+    let mut server = logged(specforge_mcp::McpServer::new());
+    let reply = call(&mut server, "initialize", json!({}));
+    assert!(reply["error"].is_null(), "{reply}");
+    server
+}

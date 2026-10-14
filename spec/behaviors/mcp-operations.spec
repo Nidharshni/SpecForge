@@ -195,7 +195,10 @@ behavior provide_mcp_init_tool "Provide MCP Init Tool" {
     parameter specifying the target directory for the new project. The path
     MUST be outside the project the server serves: a path inside its root
     is refused by the call target (conflict, naming path) before anything
-    is written. A directory whose starter file already exists is refused
+    is written, and a path outside it is refused as invalid_input on path, so
+    with a project served init creates nothing: it creates the first project
+    of a session, inside the server's root (a server with no root bounds no
+    path, mcp_served_project_consistency). A directory whose starter file already exists is refused
     (conflict), as specforge init refuses it. The tool MUST create
     a new specforge.json project configuration file and scaffold the spec
     directory at the specified path. If extensions are specified, they MUST
@@ -564,10 +567,12 @@ behavior provide_mcp_render_tool "Provide MCP Render Tool" {
     accepts format (required, a format string matching a registered renderer),
     out_dir? (output directory path) and scope? (an entity id). The tool MUST
     invoke the matching registered renderer and write output files to out_dir;
-    without out_dir it MUST return the rendering inline instead. A relative
-    out_dir names a directory under the call's project root, wherever the
-    server runs; with no project served a relative out_dir MUST be refused as
-    invalid input on out_dir. output_files lists the absolute paths written.
+    without out_dir it MUST return the rendering inline instead. out_dir
+    names a directory inside the call's project: a relative one is read
+    against its root, wherever the server runs, and one that leaves the
+    project (by .., an absolute name or a symlink) MUST be refused as invalid
+    input on out_dir, as MUST any out_dir with no project served.
+    output_files lists the absolute paths written.
     The renderers are the core graph engine's export formats (see P7
     justification in features/output.spec), named as `specforge export
     --format` names them: graph (also accepted as json; the full graph, as

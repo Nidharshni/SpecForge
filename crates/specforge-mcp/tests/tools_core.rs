@@ -1148,7 +1148,7 @@ fn analyze_strict_promotes_warnings() {
 fn analyze_of_another_project_leaves_the_served_one() {
     use crate::fake_extension::{self, FakeExtension};
 
-    let (mut server, _ext, _served) = fake_extension::initialized(FakeExtension::new());
+    let (mut server, _ext, served) = fake_extension::initialized(FakeExtension::new());
     let served_root = server
         .state()
         .project_root()
@@ -1156,7 +1156,7 @@ fn analyze_of_another_project_leaves_the_served_one() {
     assert!(served_root.is_some());
     let served_nodes = server.state().graph().node_count();
 
-    let other = tempfile::tempdir().unwrap();
+    let other = within(served.path(), tempfile::tempdir().unwrap());
     std::fs::write(
         other.path().join("specforge.json"),
         r#"{"name":"o","version":"0.1.0","extensions":["@specforge/software"]}"#,

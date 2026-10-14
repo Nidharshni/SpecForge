@@ -200,14 +200,14 @@ fn render_accepts_graph_and_its_json_alias() {
     let mut server = served();
     let mut written = Vec::new();
     for name in ["graph", "json"] {
-        let out = tempfile::TempDir::new().unwrap();
+        let out = server.root().join(name);
         let result = content(&call_tool(
             &mut server,
             "specforge.render",
-            json!({"format": name, "out_dir": out.path().to_str().unwrap()}),
+            json!({"format": name, "out_dir": out.to_str().unwrap()}),
         ));
         assert_eq!(result["format"], "graph", "{name}: {result}");
-        let file = out.path().join("graph.json");
+        let file = out.join("graph.json");
         assert_eq!(
             result["output_files"],
             json!([file.display().to_string()]),

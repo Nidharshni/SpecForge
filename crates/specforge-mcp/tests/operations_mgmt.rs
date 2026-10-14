@@ -172,7 +172,7 @@ fn collect_project() -> tempfile::TempDir {
 )]
 fn collect_returns_result() {
     let mut server = test_server();
-    let project = collect_project();
+    let project = within(server.root(), collect_project());
     let root = project.path();
     let resp = call_tool(
         &mut server,
@@ -215,22 +215,25 @@ fn each_listed_extension_is_an_mcp_extension_info() {
     );
 }
 
-fn collected(root: &std::path::Path) -> Value {
+/// `specforge.collect` over `project`, moved inside the project a server
+/// serves: its reply, where the project is now, and the server, which owns
+/// the directory the project is in.
+fn collected(project: tempfile::TempDir) -> (Value, Nested, Served) {
     let mut server = test_server();
+    let project = within(server.root(), project);
     let resp = call_tool(
         &mut server,
         "specforge.collect",
-        json!({"path": root.to_str().unwrap()}),
+        json!({"path": project.path().to_str().unwrap()}),
     );
-    serde_json::from_str(&tool_text(&resp)).unwrap_or_else(|_| panic!("{resp}"))
+    let result = serde_json::from_str(&tool_text(&resp)).unwrap_or_else(|_| panic!("{resp}"));
+    (result, project, server)
 }
 
 #[test]
 fn collect_result_is_an_mcp_collect_result() {
-    let project = collect_project();
+    let (result, project, _server) = collected(collect_project());
     let root = project.path();
-
-    let result = collected(root);
     assert_eq!(
         result["report"],
         std::fs::canonicalize(root)
@@ -244,10 +247,7 @@ fn collect_result_is_an_mcp_collect_result() {
 
 #[test]
 fn each_collect_runner_is_an_mcp_collect_runner() {
-    let project = collect_project();
-    let root = project.path();
-
-    let result = collected(root);
+    let (result, _project, _server) = collected(collect_project());
 
     let runner = &result["runners"][0];
     // Read, not run: no exit code.
@@ -261,7 +261,7 @@ fn each_collect_runner_is_an_mcp_collect_runner() {
 )]
 fn collect_refuses_unapproved_command() {
     let mut server = test_server();
-    let project = collect_project();
+    let project = within(server.root(), collect_project());
     let root = project.path();
     // A fresh temp project was never approved, and the server never asks.
     let resp = call_tool(
@@ -296,7 +296,7 @@ fn collect_without_collector_errors() {
 )]
 fn collect_contract() {
     let mut server = test_server();
-    let project = collect_project();
+    let project = within(server.root(), collect_project());
     let root = project.path();
     let path = root.to_str().unwrap();
     // Delegated to the enabled extension's collector; the report is written.
@@ -669,8 +669,8 @@ fn render(server: &mut McpServer, args: Value) -> Value {
 )]
 fn render_writes_the_output_into_out_dir() {
     let mut server = test_server();
-    let out = tempfile::TempDir::new().unwrap();
-    let out_dir = out.path().join("rendered");
+    // Inside the served project: an out_dir may not leave it (ADR 0092).
+    let out_dir = server.root().join("rendered");
 
     let parsed = render(
         &mut server,
@@ -694,17 +694,16 @@ fn render_writes_the_output_into_out_dir() {
 )]
 fn render_uses_the_renderer_the_format_names() {
     let mut server = test_server();
-    let out = tempfile::TempDir::new().unwrap();
+    let out = server.root().join("rendered");
 
     let parsed = render(
         &mut server,
-        json!({"format": "json", "out_dir": out.path().to_str().unwrap()}),
+        json!({"format": "json", "out_dir": out.to_str().unwrap()}),
     );
     // `json` is the graph renderer's alias; the result names the renderer.
     assert_eq!(parsed["format"], "graph");
     let graph: Value =
-        serde_json::from_str(&std::fs::read_to_string(out.path().join("graph.json")).unwrap())
-            .unwrap();
+        serde_json::from_str(&std::fs::read_to_string(out.join("graph.json")).unwrap()).unwrap();
     assert_eq!(graph["nodes"][0]["id"], "alpha", "{graph}");
 
     // Without out_dir the rendering comes back inline and nothing is written.
@@ -758,17 +757,17 @@ fn render_unknown_format_lists_the_available_renderers() {
 )]
 fn render_contract() {
     let mut server = test_server();
-    let out = tempfile::TempDir::new().unwrap();
+    let out = server.root().join("rendered");
 
     let parsed = render(
         &mut server,
-        json!({"format": "context", "out_dir": out.path().to_str().unwrap()}),
+        json!({"format": "context", "out_dir": out.to_str().unwrap()}),
     );
 
     let files = parsed["output_files"].as_array().unwrap();
     assert_eq!(files.len(), 1, "{parsed}");
     let written = std::path::Path::new(files[0].as_str().unwrap());
-    assert!(written.starts_with(out.path()), "{parsed}");
+    assert!(written.starts_with(&out), "{parsed}");
     assert!(std::fs::read_to_string(written).unwrap().contains("alpha"));
     assert!(
         events(&server, "mcp_tool_invoked")
@@ -827,7 +826,11 @@ fn a_relative_out_dir_with_nothing_served_is_refused() {
     verify = "specforge.collect of a directory that holds no project refuses with no_project"
 )]
 fn collect_of_a_directory_that_is_no_project_is_no_project() {
-    let mut server = test_server();
+    // A server that serves nothing and has no root bounds no path (ADR 0092
+    // D2): the directory is read for the call, and holds no project.
+    let mut server = McpServer::new();
+    let reply = call(&mut server, "initialize", json!({}));
+    assert!(reply["error"].is_null(), "{reply}");
     let bare = tempfile::TempDir::new().unwrap();
     let resp = call_tool(
         &mut server,

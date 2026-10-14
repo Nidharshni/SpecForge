@@ -88,7 +88,8 @@ nearest project, else the directory itself" on their own.
   (`project_root_of`), so MCP answers `no_project` where it answered E058 for a directory that is no project.
 - **D8a. MCP resolves a relative `out_dir` of `specforge.render` against the call's project root** as it does
   `test_results`; with no project served a relative one is invalid input on `out_dir`. `output_files` lists
-  absolute paths.
+  absolute paths. *(ADR 0092: an `out_dir`, absolute or not, must resolve inside the call's project; with no project
+  served every one is invalid input.)*
 
 ## Amendment (architecture round 6, plan 11)
 

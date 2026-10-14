@@ -265,7 +265,7 @@ fn installing_and_removing_a_local_extension_write_three_files() {
     verify = "files_changed is the number of files the call wrote, for every mutation tool"
 )]
 fn init_with_a_local_extension_writes_five_files() {
-    let mut server = empty_components();
+    let mut server = unserved();
     let scratch = tempfile::TempDir::new().unwrap();
     let dir = scratch.path().join("n1");
 
@@ -299,7 +299,7 @@ fn init_with_a_local_extension_writes_five_files() {
     verify = "files_changed is the number of files the call wrote, for every mutation tool"
 )]
 fn init_beside_a_complete_gitignore_writes_two_files() {
-    let mut server = empty_components();
+    let mut server = unserved();
     let scratch = tempfile::TempDir::new().unwrap();
     let dir = scratch.path().join("n2");
     std::fs::create_dir_all(&dir).unwrap();
@@ -578,6 +578,9 @@ fn the_domain_event_precedes_the_mutation_event() {
         ]
     );
 
+    // Init creates the first project of a session: on a server that serves
+    // none (ADR 0092 D4).
+    let mut server = unserved();
     let scratch = tempfile::TempDir::new().unwrap();
     let dir = scratch.path().join("fresh");
     let since = server.log().len();
@@ -716,7 +719,7 @@ fn add_extension_adds_every_specifier_as_one_change() {
 /// Init `name` in a new directory of `scratch` with `extensions`; the
 /// `project_initialized` events recorded.
 fn initialized(name: &str, extensions: Value) -> Vec<Value> {
-    let mut server = empty_components();
+    let mut server = unserved();
     let scratch = tempfile::TempDir::new().unwrap();
     let dir = scratch.path().join(name);
     assert_ok(&call_tool(
@@ -836,11 +839,16 @@ fn shown(changed: &[PathBuf]) -> Vec<String> {
 
 /// Call `tool`; the files it wrote on disk equal its reply's
 /// `files_written`, whose length is its event's `files_changed`.
-fn lists_what_it_wrote(server: &mut Served, root: &Path, tool: &str, arguments: Value) -> Value {
+fn lists_what_it_wrote<S: std::ops::DerefMut<Target = McpServer> + Logs>(
+    server: &mut S,
+    root: &Path,
+    tool: &str,
+    arguments: Value,
+) -> Value {
     let (reply, changed) = wrote(server, root, tool, arguments.clone());
     let listed = files_written(&reply);
     assert_eq!(listed, shown(&changed), "{tool} {arguments}: {reply}");
-    let event = last_completed(server).expect("a mutation event");
+    let event = last_completed(&*server).expect("a mutation event");
     assert_eq!(event["toolName"], tool);
     assert_eq!(event["files_changed"], listed.len(), "{tool} {arguments}");
     reply
@@ -873,7 +881,7 @@ fn every_mutation_reply_lists_what_it_wrote() {
     let n1 = scratch.path().join("n1");
     let init = "specforge.init";
     let first = lists_what_it_wrote(
-        &mut server,
+        &mut unserved(),
         &n1,
         init,
         json!({"path": n1.to_str().unwrap(), "name": "newone", "extensions": [greet()]}),
@@ -887,7 +895,7 @@ fn every_mutation_reply_lists_what_it_wrote() {
     )
     .unwrap();
     lists_what_it_wrote(
-        &mut server,
+        &mut unserved(),
         &n2,
         init,
         json!({"path": n2.to_str().unwrap(), "name": "newtwo"}),

@@ -224,6 +224,15 @@ fn format_ok_is_false_when_a_file_cannot_be_read() {
     assert_eq!(mcp_error(&response)["data"]["ok"], false, "{response}");
 }
 
+/// A server that serves nothing and has no root: no path is bounded
+/// (ADR 0092 D2), so a call may name a directory that holds no project.
+fn nothing_served() -> specforge_mcp::McpServer {
+    let mut server = specforge_mcp::McpServer::new();
+    let reply = call(&mut server, "initialize", json!({}));
+    assert!(reply["error"].is_null(), "{reply}");
+    server
+}
+
 /// A directory with one unformatted `a.spec` and no project config.
 fn loose(text: &str, name: &str) -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
@@ -236,7 +245,7 @@ fn loose(text: &str, name: &str) -> tempfile::TempDir {
     verify = "a directory that is no project is formatted with the defaults, as specforge format formats it"
 )]
 fn a_directory_that_is_no_project_is_formatted_with_the_defaults() {
-    let mut served = served();
+    let mut served = nothing_served();
     let dir = loose(MESSY, "a.spec");
 
     let result = tool(
@@ -275,7 +284,7 @@ fn a_directory_that_is_no_project_is_formatted_with_the_defaults() {
     verify = "a directory that is no project is migrated as specforge migrate migrates it"
 )]
 fn a_directory_that_is_no_project_is_migrated() {
-    let mut served = served();
+    let mut served = nothing_served();
     let dir = loose(
         "// specforge-format: 0.1\nbehavior old_one \"Old\" {\n}\n",
         "old.spec",

@@ -2949,8 +2949,7 @@ fn contract_providers() {
 )]
 fn contract_render() {
     let mut server = test_server();
-    let out = tempfile::TempDir::new().unwrap();
-    let out_dir = out.path().join("rendered");
+    let out_dir = server.root().join("rendered");
 
     // files_written / files_listed: the json renderer's file, in out_dir.
     let json_render = tool(
