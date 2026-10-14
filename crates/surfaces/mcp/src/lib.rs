@@ -1,3 +1,7 @@
+//! The MCP server: its tools, prompts, resources and events, each one typed definition (ADR 0033, ADR 0048) over
+//! `specforge-ops`, through one request pipeline (ADR 0024) and the stdio transport this crate owns (ADR 0062).
+//! It serves projects from disk (ADR 0025); `McpServer` is its entry.
+
 extern crate self as specforge_mcp;
 
 pub mod args;

@@ -27,10 +27,11 @@ The `ModelIntermediate` enriches this with:
 ## Crate Locations
 
 ```
-specforge-emitter/
+crates/pipeline/emitter/
   src/
     model/
       mod.rs           -- ModelOptions, ModelRoot, export(); the IR (pub(crate)) and the format dispatch
+      build.rs         -- builds the ModelIntermediate from the schema and the declarations
       markdown.rs      -- Markdown renderer
       mermaid.rs       -- Mermaid erDiagram renderer
       dot.rs           -- DOT schema-level renderer (HTML-like labels)
@@ -39,11 +40,11 @@ specforge-emitter/
       cardinality.rs   -- Cardinality inference from field types
       filter.rs        -- the selection and the field level (private)
 
-specforge-cli/
+crates/surfaces/cli/
   src/
     model.rs           -- CLI command handler (clap args -> ModelOptions -> ops::read::model::model -> stdout, notices on stderr, a refusal as error[CODE])
 
-specforge-mcp/
+crates/surfaces/mcp/
   src/
     tools/
       model.rs         -- MCP tool handler (JSON args -> ModelOptions -> ops::read::model::model -> text, notices in _meta.diagnostics)

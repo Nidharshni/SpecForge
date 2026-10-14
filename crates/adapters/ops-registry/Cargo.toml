@@ -1,6 +1,6 @@
 [package]
 name = "specforge-ops-registry"
-description = "The package registry behind specforge-ops' Registry port: the fetch policy over the registry client"
+description = "Which registries a project uses, and the adapter behind specforge-ops' Registry port: the fetch policy over the registry client and the publish signed as the user (ADR 0010)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

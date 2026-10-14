@@ -1,5 +1,6 @@
 [package]
 name = "specforge-parser"
+description = "The .spec language read from text: the one lexer, the recovered syntax, the AST, the expression grammar and the format version (ADR 0038, ADR 0063)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

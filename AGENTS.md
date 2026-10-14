@@ -20,5 +20,7 @@ Configuration (created by `/setup-matt-pocock-skills`):
 - **Planning repository**: rounds, strategy, archived plans and experiments live in the private
   `leaderiop/SpecForge-planning`, checked out at `../SpecForge-planning`. This repository tracks only what ships
   and what builds it; `cargo gate`'s `root-layout` and `doc-links` checks hold that — see `CONTRIBUTING.md#where-things-are`
+- **Code map**: `ARCHITECTURE.md` (the layers and the dependency rule) and `crates/README.md` (every crate's line),
+  both generated in part by `cargo gate crate-map`: never edit between the `crate-map` markers
 
 Run engineering skills before assuming workflow; they read this block and the files above.

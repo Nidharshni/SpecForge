@@ -318,6 +318,7 @@ milestone extension_ecosystem "Phase 11: Extension Ecosystem" {
     specforge_package_vitest,
     specforge_test_lib,
     specforge_test_macros_lib,
+    specforge_registry_server,
   ]
   tags          ["h2", "ecosystem"]
   exit_criteria [

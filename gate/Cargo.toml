@@ -1,5 +1,6 @@
 [package]
 name = "gate"
+description = "The repository's check list: every check CI, cargo gate and the pre-commit hook run, each written once (ADR 0066)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

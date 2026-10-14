@@ -12,7 +12,19 @@ pub struct Repo {
     pub members: Vec<Member>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// The target kinds whose source is a crate root: a lib (any crate type), a proc macro or a binary. Tests, benches,
+/// examples and build scripts are not.
+const ROOT_KINDS: &[&str] = &[
+    "lib",
+    "rlib",
+    "dylib",
+    "cdylib",
+    "staticlib",
+    "proc-macro",
+    "bin",
+];
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Member {
     pub name: String,
     /// Repo-relative, `/`-separated, no trailing slash (`crates/leaf/coverage`).
@@ -20,6 +32,10 @@ pub struct Member {
     /// Its path dependencies inside the root, in `cargo metadata`'s order: one per manifest entry, so a crate named
     /// under both `[dependencies]` and `[dev-dependencies]` is here twice.
     pub dependencies: Vec<Dependency>,
+    /// The manifest's `description`, when it has one: the member's line in the crate map (ADR 0091).
+    pub description: Option<String>,
+    /// Its crate roots, repo-relative: the source of each lib, proc-macro and bin target, in manifest order.
+    pub roots: Vec<String>,
 }
 
 /// A path dependency of a member on a package inside the root.
@@ -105,6 +121,8 @@ impl Repo {
                 name: name.to_string(),
                 dir,
                 dependencies: dependencies(&root, package)?,
+                description: package["description"].as_str().map(str::to_string),
+                roots: crate_roots(&root, package),
             });
         }
         members.sort_by(|a, b| a.dir.cmp(&b.dir));
@@ -144,6 +162,25 @@ impl Repo {
             })
             .collect()
     }
+}
+
+/// A package's crate roots inside `root`: the `src_path` of each target of a kind in [`ROOT_KINDS`].
+fn crate_roots(root: &Path, package: &Value) -> Vec<String> {
+    package["targets"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+        .iter()
+        .filter(|target| {
+            target["kind"].as_array().is_some_and(|kinds| {
+                kinds
+                    .iter()
+                    .any(|kind| kind.as_str().is_some_and(|k| ROOT_KINDS.contains(&k)))
+            })
+        })
+        .filter_map(|target| target["src_path"].as_str())
+        .filter_map(|path| relative(root, Path::new(path)))
+        .collect()
 }
 
 /// A package's path dependencies inside `root`; a registry or git dependency, or a path outside the root, is no
@@ -208,7 +245,7 @@ pub(crate) fn this_repo() -> Repo {
     let member = |name: &str, dir: &str| Member {
         name: name.into(),
         dir: dir.into(),
-        dependencies: Vec::new(),
+        ..Default::default()
     };
     Repo {
         target_dir: root.join("target"),
@@ -286,6 +323,34 @@ mod tests {
         assert_eq!(repo.target_dir, PathBuf::from("/elsewhere/targets/p04"));
         let dirs: Vec<&str> = repo.members.iter().map(|m| m.dir.as_str()).collect();
         assert_eq!(dirs, ["crates/a", "gate"]);
+    }
+
+    #[test]
+    fn cargo_metadata_gives_each_member_its_description_and_crate_roots() {
+        let metadata = serde_json::json!({
+            "workspace_root": "/r",
+            "target_directory": "/r/target",
+            "packages": [{
+                "name": "a",
+                "manifest_path": "/r/crates/leaf/a/Cargo.toml",
+                "description": "The a crate",
+                "targets": [
+                    {"kind": ["lib"], "src_path": "/r/crates/leaf/a/src/lib.rs"},
+                    {"kind": ["bin"], "src_path": "/r/crates/leaf/a/src/main.rs"},
+                    {"kind": ["test"], "src_path": "/r/crates/leaf/a/tests/t.rs"},
+                    {"kind": ["custom-build"], "src_path": "/r/crates/leaf/a/build.rs"},
+                ],
+            }, {"name": "b", "manifest_path": "/r/b/Cargo.toml"}],
+        });
+        let repo = Repo::from_metadata(&metadata).unwrap();
+        let a = repo.members.iter().find(|m| m.name == "a").unwrap();
+        assert_eq!(a.description.as_deref(), Some("The a crate"));
+        assert_eq!(
+            a.roots,
+            ["crates/leaf/a/src/lib.rs", "crates/leaf/a/src/main.rs"]
+        );
+        let b = repo.members.iter().find(|m| m.name == "b").unwrap();
+        assert_eq!((b.description.as_deref(), b.roots.len()), (None, 0));
     }
 
     #[test]

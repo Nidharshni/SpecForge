@@ -1,6 +1,6 @@
 [package]
 name = "specforge-ops"
-description = "User-level operations (init, add, remove, ...) shared by the CLI and the MCP server"
+description = "User-level operations shared by the CLI, the MCP server and the LSP: a typed request in, a typed outcome or a refusal out (ADR 0015, ADR 0029)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

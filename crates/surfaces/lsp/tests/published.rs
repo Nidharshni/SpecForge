@@ -1,4 +1,4 @@
-//! What the editor is shown for a file has one writer: the compile's layer and the formatter's,
+//! What the editor is shown for a file has one writer: the compile's part and the formatter's,
 //! each with the buffer version it belongs to (ADR 0056).
 
 use serde_json::Value;
@@ -118,7 +118,7 @@ fn a_formatting_publish_carries_one_version() {
         "the compile is at version 1: nothing is sent that mixes the two"
     );
 
-    // The compile of version 2 sends both layers, positions in the same text.
+    // The compile of version 2 sends both parts, positions in the same text.
     served.apply(Change::Edited(vec![uri.clone()]));
     let sent = served.sent();
     let at_two: Vec<_> = sent
@@ -170,7 +170,7 @@ fn hovering_the_kept_region_shows_its_w142() {
     behavior = "lsp_format_document",
     verify = "the formatter's diagnostics stay published until the document changes"
 )]
-fn the_formatter_layer_survives_another_documents_publish() {
+fn the_formatter_part_survives_another_documents_publish() {
     let mut served =
         Served::new(&[("f.spec", KEPT), ("g.spec", "type gamma \"G\" {}\n")]).open(&["f.spec"]);
     let (f, g) = (served.uri("f.spec"), served.uri("g.spec"));

@@ -1,3 +1,7 @@
+//! The `.spec` language read from text: the one lexer (`lex`), the recovered syntax (`cst`), the AST the parser
+//! walks it into (`ast`, `parse`), the expression grammar (`expr`) and the format version header
+//! (`format_version`). Every reader of `.spec` text goes through it (ADR 0038, ADR 0063).
+
 pub mod ast;
 pub mod cst;
 pub mod expr;

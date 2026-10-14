@@ -16,6 +16,7 @@ fn member(name: &str, dir: &str, dependencies: &[(&str, &str, DependencyKind)]) 
                 kind,
             })
             .collect(),
+        ..Default::default()
     }
 }
 

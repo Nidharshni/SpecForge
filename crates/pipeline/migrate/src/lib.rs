@@ -1,3 +1,7 @@
+//! Format-version migration of a project's `.spec` files: the rewrite to a target format version, the backups and
+//! the `.specforge/migration.json` record a rollback undoes, and W054 for each thing the rewrite changed in the
+//! graph (`structural_differences`).
+
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use specforge_common::shape::Shape;

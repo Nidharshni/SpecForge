@@ -1,3 +1,7 @@
+//! The tree-sitter grammar of the `.spec` language: `LANGUAGE` (the parser generated from `grammar.js`, with its
+//! external scanner) and the names of its node kinds (`kind`) and fields (`field`), which the parser and the
+//! formatter name nodes by. `queries/` holds the editor queries.
+
 use tree_sitter_language::LanguageFn;
 
 pub mod field;

@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for working on SpecForge. Read [ARCHITECTURE.md](ARCHITECTURE.md) first for how the pieces fit.
+Thanks for working on SpecForge. Read [ARCHITECTURE.md](ARCHITECTURE.md) first for how the pieces fit, and [crates/README.md](crates/README.md) for what each crate owns.
 
 ## Build from source
 
@@ -44,6 +44,11 @@ A test or tool that reads a file outside its own crate finds it from `specforge_
 (`crates/leaf/repo-root`), never by counting `..` from `CARGO_MANIFEST_DIR`: crates sit at different depths
 under `crates/` ([ADR 0081](docs/adr/0081-the-repository-root-is-found-not-counted.md)).
 
+## Adding a crate
+
+Follow [crates/README.md](crates/README.md#adding-or-moving-a-crate): pick its layer, give it a `description` and a
+crate doc, model it in `spec/product/modules.spec`, then run `cargo gate crate-map`.
+
 ## Where things are
 
 The repository tracks what ships and what builds, tests or documents it, and nothing else
@@ -53,7 +58,7 @@ repository, `leaderiop/SpecForge-planning`.
 
 What ships:
 
-- [`crates/`](crates/): the Rust workspace: compiler, graph, extension runtime, CLI, LSP, MCP.
+- [`crates/`](crates/): the Rust workspace, one folder per layer ([crates/README.md](crates/README.md)).
 - [`extensions/`](extensions/): the builtin extensions and their vendored blobs, embedded in the binary.
 - [`integrations/`](integrations/): the Rust test-tracing crates and the VS Code extension.
 - [`schema/`](schema/): the JSON Schemas `specforge.json` and the test reports name.

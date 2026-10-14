@@ -1,6 +1,6 @@
 [package]
 name = "specforge-project"
-description = "The compiled project: one environment load, one compile, shared by every surface"
+description = "The compiled project and the project session: one environment load, one compile, kept current for watch, the LSP and MCP (ADR 0004, ADR 0047)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

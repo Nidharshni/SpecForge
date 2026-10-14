@@ -1,3 +1,6 @@
+//! Test traceability for SpecForge: a Rust test annotated with `#[specforge_test(...)]` names the spec entity it
+//! proves, and this crate records what it proved in the report `specforge collect` reads.
+
 pub mod atexit;
 pub mod guard;
 pub mod registry;

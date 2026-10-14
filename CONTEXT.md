@@ -104,11 +104,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   stale are all found by that key, so two spellings of one URI (VS Code writes `@` as `%40`) are one document. The
   URI the client opened it with is kept only to name the file back to the client (`specforge_lsp::files::Files`,
   ADR 0056). It is given to the project session as a held buffer.
-- **Published diagnostics**: what the LSP last told the editor about one file, kept by session key in two layers,
+- **Published diagnostics**: what the LSP last told the editor about one file, kept by session key in two parts,
   each labelled with the version of the buffer it is positions in: the compile's (what the project reports) and the
   formatter's (a W142 per region formatting kept verbatim, while the document is the text it formatted). A publish
-  sends the file's whole list, the compile layer plus the formatter layer of the same version, under the one URI
-  the client names the file by. Hover and code actions read the layers; one module writes them (ADR 0056).
+  sends the file's whole list, the compile part plus the formatter part of the same version, under the one URI
+  the client names the file by. Hover and code actions read the parts; one module writes them (ADR 0056, which
+  calls them layers).
 - **Call target**: the project one MCP call acts on, resolved from the call's optional `path` and its
   entry's target before the handler runs: the served session (brought up to date), another project opened as a
   session for that call only and brought up to date after the call writes, as the served one is, the directory
@@ -179,6 +180,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   once, `specforge_component::committed::COMMITTED`; git tracks exactly that list. An SDK blob answers the host's
   protocol and its wire answers are pinned; a bridge blob (the runtime's own test component) is written without the
   SDK and declares the canned protocol it answers. `revendor` rebuilds every one (ADR 0070).
+- **Layer**: one of the eight folders under `crates/` that a workspace crate sits in, bottom to top `leaf kernel
+  pipeline runtime session app adapters surfaces` (`crates/<layer>/<crate>/`). A crate's normal and build dependencies
+  stay in its layer or go down; the gate's `layers` check holds it (ADR 0084). What each layer owns is in
+  `ARCHITECTURE.md`, and every crate's line (its `Cargo.toml` `description`) is in `crates/README.md`; both are
+  rendered by `cargo gate crate-map` and checked by `crate-map` (ADR 0091). Not the parts of the LSP's published
+  diagnostics.
 - **Installed extension**: an extension placed in the project under
   `.specforge/extensions/<name>/extension.wasm` and pinned by its `specforge.lock` entry (version,
   source `registry` or `local:<path>`, the SHA-256 of the binary and, for a signed registry package, its

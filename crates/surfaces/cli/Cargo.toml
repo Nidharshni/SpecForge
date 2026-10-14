@@ -1,5 +1,6 @@
 [package]
 name = "specforge-cli"
+description = "The specforge binary: every command's arguments, the terminal it writes to and asks from, and its exit code, over specforge-ops (ADR 0029)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

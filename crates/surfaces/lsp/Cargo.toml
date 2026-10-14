@@ -1,5 +1,6 @@
 [package]
 name = "specforge-lsp"
+description = "The language server: open documents held in the project session, published diagnostics, navigation, completion, hover and formatting (ADR 0023, ADR 0043, ADR 0046)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

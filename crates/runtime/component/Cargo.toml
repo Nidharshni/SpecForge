@@ -1,5 +1,6 @@
 [package]
 name = "specforge-component"
+description = "The wasmtime component-model runtime: the production adapter of the WasmRuntime port, which enforces the sandbox's limits, and the builtin blobs the host embeds (ADR 0037, ADR 0070)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

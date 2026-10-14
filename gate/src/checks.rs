@@ -3,6 +3,7 @@ use std::path::Path;
 
 use crate::blob_inputs;
 use crate::change_set::{ChangeSet, Pattern};
+use crate::crate_map;
 use crate::judge;
 use crate::layers;
 use crate::repo::Repo;
@@ -171,6 +172,19 @@ pub static CHECKS: &[Check] = &[
         run: steps::file_size,
     },
     Check {
+        name: "crate-map",
+        proves: "ARCHITECTURE.md's layer stack and crates/README.md's crate table are what the members' folders and descriptions say; every member has a description and crate docs",
+        reach: Reach::Hook,
+        trigger: Trigger::Computed(
+            "ARCHITECTURE.md, crates/README.md, the root manifest, or a member's manifest or crate root",
+            crate_map_sources,
+        ),
+        compiles: false,
+        after: &[],
+        fix: "cargo gate crate-map, then stage ARCHITECTURE.md and crates/README.md; a missing description or crate doc: write it in the crate",
+        run: steps::crate_map,
+    },
+    Check {
         name: "links",
         proves: "every test's verify text and entity is declared by the spec (A016, static)",
         reach: Reach::Hook,
@@ -331,6 +345,19 @@ pub static CHECKS: &[Check] = &[
         run: steps::specs,
     },
     Check {
+        name: "spec-modules",
+        proves: "spec/product/modules.spec models every crate: one module each, with its manifest's description and dependencies",
+        reach: Reach::Quick,
+        trigger: Trigger::Computed(
+            "spec/product/modules.spec, the root manifest or a member's manifest",
+            module_sources,
+        ),
+        compiles: false,
+        after: &[],
+        fix: "edit the module each line names in spec/product/modules.spec (or the manifest it disagrees with)",
+        run: steps::spec_modules,
+    },
+    Check {
         name: "dogfood",
         proves: "the tests' reports leave no unknown entity (W115), failing proof (A014) or undeclared obligation (A016)",
         reach: Reach::Full,
@@ -379,6 +406,42 @@ pub fn render_list() -> String {
         out.push_str(&format!("{:<29}{}\n", "", check.proves));
     }
     out
+}
+
+/// What can change what the crate map shows: its two files, the root manifest (the member list), or a member's
+/// manifest (its description) or crate root (its doc).
+fn crate_map_sources(repo: &Repo, changes: &ChangeSet) -> Result<Selection, String> {
+    let drawn_from = |path: &str| {
+        path == crate_map::ARCHITECTURE
+            || path == crate_map::CRATES_README
+            || path == "Cargo.toml"
+            || repo.members.iter().any(|member| {
+                crate_map::manifest_of(member) == path
+                    || member.roots.iter().any(|root| root == path)
+            })
+    };
+    Ok(if changes.paths().any(drawn_from) {
+        Selection::Everything
+    } else {
+        Selection::Skip
+    })
+}
+
+/// What can change how the spec's modules should read: the module file, the member list, or a member's manifest.
+fn module_sources(repo: &Repo, changes: &ChangeSet) -> Result<Selection, String> {
+    let read = |path: &str| {
+        path == crate_map::MODULES_SPEC
+            || path == "Cargo.toml"
+            || repo
+                .members
+                .iter()
+                .any(|member| crate_map::manifest_of(member) == path)
+    };
+    Ok(if changes.paths().any(read) {
+        Selection::Everything
+    } else {
+        Selection::Skip
+    })
 }
 
 /// The `.spec` files a hook or quick run formats: those inside a project's spec directory (the set CI checks), or

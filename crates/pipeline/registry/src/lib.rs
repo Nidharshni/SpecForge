@@ -1,3 +1,8 @@
+//! The Registry build: extension declarations in load order turned into kind, field and edge registries (each edge
+//! type resolved once, ADR 0060), the rule set, the pass order and the graph inputs, and the checks it runs over a
+//! built graph's entity records in one order (ADR 0031). Callers reach it only through `build_registries` and the
+//! build's methods. Not the package registry, which is `specforge-registry-client` and `-server`.
+
 // Module groups
 mod checks;
 pub mod compilation;
