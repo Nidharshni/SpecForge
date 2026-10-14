@@ -5,6 +5,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
+use crate::baseline::{self, Baseline};
 use crate::checks::{self, Selection};
 use crate::doc_links;
 use crate::judge;
@@ -290,7 +291,7 @@ pub fn doctests(ctx: &Ctx, selection: &Selection) -> Result<(), String> {
 
 pub fn specs(ctx: &Ctx, _: &Selection) -> Result<(), String> {
     let found = project_diagnostics(ctx)?;
-    let verdict = judge::spec_verdict(&found, &read_baseline(ctx.repo)?, false);
+    let verdict = judge::spec_verdict(&found, &Baseline::read(&ctx.repo.root)?.specs, false);
     for line in &verdict.lines {
         ctx.log(line);
     }
@@ -342,22 +343,26 @@ pub fn builtins_verify(ctx: &Ctx, _: &Selection) -> Result<(), String> {
     ]))
 }
 
-/// `cargo gate baseline`: lower `gate/baseline.json` to today's warning counts; never raises one.
-pub fn write_baseline(ctx: &Ctx) -> Result<Vec<String>, String> {
-    let found = project_diagnostics(ctx)?;
-    let verdict = judge::spec_verdict(&found, &read_baseline(ctx.repo)?, true);
-    let mut lines = verdict.lines;
-    match verdict.new_baseline {
-        Some(baseline) if !verdict.failed => {
-            let mut text = serde_json::to_string_pretty(&baseline).map_err(|e| e.to_string())?;
-            text.push('\n');
-            let path = ctx.repo.root.join(judge::BASELINE);
-            std::fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
-            lines.push(format!("wrote {}", judge::BASELINE));
-            Ok(lines)
+/// `cargo gate baseline`: lower the section of `gate/baseline.json` that `only` names (every section when `None`) to
+/// what its check finds today; never raises an entry. Writes nothing when a section refuses.
+pub fn write_baseline(ctx: &Ctx, only: Option<&str>) -> Result<Vec<String>, String> {
+    let mut baseline = Baseline::read(&ctx.repo.root)?;
+    let (mut lines, mut refused) = (Vec::new(), false);
+    if only.is_none_or(|name| name == "specs") {
+        let found = project_diagnostics(ctx)?;
+        let verdict = judge::spec_verdict(&found, &baseline.specs, true);
+        lines.extend(verdict.lines);
+        match verdict.new_baseline {
+            Some(section) if !verdict.failed => baseline.specs = section,
+            _ => refused = true,
         }
-        _ => Err(lines.join("\n")),
     }
+    if refused {
+        return Err(lines.join("\n"));
+    }
+    baseline.write(&ctx.repo.root)?;
+    lines.push(format!("wrote {}", baseline::PATH));
+    Ok(lines)
 }
 
 fn first_problem(lines: &[String]) -> String {
@@ -366,12 +371,6 @@ fn first_problem(lines: &[String]) -> String {
         .find(|l| l.starts_with("  "))
         .or(lines.first())
         .map_or_else(String::new, |l| l.trim().to_string())
-}
-
-fn read_baseline(repo: &Repo) -> Result<Value, String> {
-    let path = repo.root.join(judge::BASELINE);
-    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 /// `specforge check --path <project> --format json` for every project: each one's diagnostics.

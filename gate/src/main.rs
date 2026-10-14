@@ -6,7 +6,9 @@
 //! cargo gate full            every check but the bootstrap's
 //! cargo gate ci              what CI's main job runs
 //! cargo gate bootstrap       what CI's cold job runs
-//! cargo gate baseline        lower gate/baseline.json to today's warning counts (never raises one)
+//! cargo gate baseline        lower gate/baseline.json to what the checks find today (never raises an entry)
+//! cargo gate baseline --only specs
+//!                            one section
 //! cargo gate list            print the table: name, reach, trigger, proves
 //! cargo gate <mode> --only <check>
 //! ```
@@ -17,8 +19,7 @@ use std::process::ExitCode;
 
 use gate::{Mode, Repo};
 
-const USAGE: &str =
-    "usage: cargo gate [hook|quick|full|ci|bootstrap] [--only <check>] | baseline | list";
+const USAGE: &str = "usage: cargo gate [hook|quick|full|ci|bootstrap] [--only <check>] | baseline [--only specs] | list";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -49,7 +50,7 @@ fn main() -> ExitCode {
         Err(e) => return fail(&e),
     };
     if word == Some("baseline") {
-        return match gate::baseline(&repo) {
+        return match gate::baseline(&repo, only) {
             Ok(lines) => {
                 lines.iter().for_each(|l| println!("{l}"));
                 ExitCode::SUCCESS

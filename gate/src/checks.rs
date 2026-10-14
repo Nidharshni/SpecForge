@@ -316,7 +316,7 @@ pub static CHECKS: &[Check] = &[
         ]),
         compiles: false,
         after: &[],
-        fix: "fix the new errors and warnings; a count that fell: cargo gate baseline, in the same commit",
+        fix: "fix the new errors and warnings; a count that fell: cargo gate baseline --only specs, in the same commit",
         run: steps::specs,
     },
     Check {

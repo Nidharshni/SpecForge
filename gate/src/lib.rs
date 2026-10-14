@@ -1,6 +1,7 @@
 //! The repository's check list: every check CI, `cargo gate` and the pre-commit hook run, each written once
 //! with the run it joins and the paths that trigger it. `cargo gate list` prints it.
 
+mod baseline;
 pub mod blob_inputs;
 mod change_set;
 mod checks;

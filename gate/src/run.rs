@@ -465,9 +465,17 @@ pub fn run(mode: Mode, repo: &Repo, only: Option<&str>) -> Result<Report, String
     Ok(Report { outcomes, log_dir })
 }
 
-/// `cargo gate baseline`: build the CLI and lower `gate/baseline.json` to today's warning counts (never raises one).
-/// Returns the lines to print.
-pub fn baseline(repo: &Repo) -> Result<Vec<String>, String> {
+/// `cargo gate baseline [--only <check>]`: lower `gate/baseline.json`'s sections (`only`: that check's alone) to what
+/// the checks find today; never raises an entry. The `specs` section builds the CLI. Returns the lines to print.
+pub fn baseline(repo: &Repo, only: Option<&str>) -> Result<Vec<String>, String> {
+    if let Some(name) = only
+        && !crate::baseline::SECTIONS.contains(&name)
+    {
+        return Err(format!(
+            "`{name}` keeps no baseline ({})",
+            crate::baseline::SECTIONS.join(", ")
+        ));
+    }
     let log_dir = repo.target_dir.join("gate");
     std::fs::create_dir_all(&log_dir).map_err(|e| format!("{}: {e}", log_dir.display()))?;
     let log = File::create(log_dir.join("baseline.log"))
@@ -480,7 +488,7 @@ pub fn baseline(repo: &Repo) -> Result<Vec<String>, String> {
         log,
         specforge: &specforge,
     };
-    crate::steps::write_baseline(&ctx)
+    crate::steps::write_baseline(&ctx, only)
 }
 
 fn run_one(
