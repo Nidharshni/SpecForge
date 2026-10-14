@@ -51,3 +51,5 @@ presents it.
 **Amended by ADR 0059 (2026-10-12):** `fetch` takes a `TrustPolicy` (the caller's two choices and the key the
 lock records for the name) and writes nothing; the port gains `pin`, which saves the publisher keys a committed
 lock plan accepted. `check_and_pin` is split into `trust_flow::check` and `trust_flow::record`.
+
+**Amended by ADR 0086 (2026-10-14):** `Trust` is defined in `specforge_ops::registry`, beside `TrustPolicy`, and named `registry::Trust`; the port names no extension module.

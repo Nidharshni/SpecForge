@@ -115,3 +115,5 @@ An editor-only navigation need with no MCP counterpart (it would live in the LSP
 
 ADR 0010 is unaffected: the only new dependency of `specforge-ops` is `strsim`, which is pure, and
 `cargo tree -p specforge-lsp -e normal | rg -c "reqwest|keyring|ed25519"` finds none.
+
+**Amended by ADR 0086 (2026-10-14):** navigation is one module at `specforge_ops::read::navigate`, beside `authoring::rename`; `not_found` and `EntityField` are the project view's.
