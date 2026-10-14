@@ -1,0 +1,107 @@
+---
+source: crates/pipeline/emitter/tests/model.rs
+expression: output
+---
+{
+  "schema_version": "1.0.0",
+  "extensions": [
+    {
+      "name": "@specforge/software",
+      "version": "1.0.0",
+      "entity_count": 2,
+      "edge_count": 2
+    },
+    {
+      "name": "@specforge/product",
+      "version": "1.0.0",
+      "entity_count": 2,
+      "edge_count": 1
+    }
+  ],
+  "entities": [
+    {
+      "name": "behavior",
+      "extension": "@specforge/software",
+      "fields": [
+        {
+          "name": "id",
+          "field_type": "string",
+          "required": true,
+          "is_primary_key": true
+        },
+        {
+          "name": "contract",
+          "field_type": "string",
+          "required": true,
+          "description": "The contract",
+          "is_primary_key": false
+        },
+        {
+          "name": "features",
+          "field_type": "reference_list",
+          "required": false,
+          "is_primary_key": false,
+          "references": "feature",
+          "contribution": "BehaviorImplementsFeature -> feature"
+        }
+      ]
+    },
+    {
+      "name": "event",
+      "extension": "@specforge/software",
+      "fields": [
+        {
+          "name": "id",
+          "field_type": "string",
+          "required": true,
+          "is_primary_key": true
+        }
+      ]
+    },
+    {
+      "name": "feature",
+      "extension": "@specforge/product",
+      "fields": [
+        {
+          "name": "id",
+          "field_type": "string",
+          "required": true,
+          "is_primary_key": true
+        }
+      ]
+    },
+    {
+      "name": "journey",
+      "extension": "@specforge/product",
+      "fields": [
+        {
+          "name": "id",
+          "field_type": "string",
+          "required": true,
+          "is_primary_key": true
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "name": "BehaviorImplementsFeature",
+      "source": "behavior",
+      "target": "feature",
+      "cardinality": "N:M",
+      "source_field": "features"
+    },
+    {
+      "name": "Triggers",
+      "source": "behavior",
+      "target": "event",
+      "cardinality": "N:M"
+    },
+    {
+      "name": "JourneyExercisesFeature",
+      "source": "journey",
+      "target": "feature",
+      "cardinality": "N:M"
+    }
+  ]
+}

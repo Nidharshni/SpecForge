@@ -8,7 +8,7 @@ run.
 
 ## Before the demo
 
-- Install the binary (about 10 minutes): `cargo install --path crates/specforge-cli`.
+- Install the binary (about 10 minutes): `cargo install --path crates/surfaces/cli`.
 - Warm the demo crate so `cargo test` doesn't compile on stage:
   `cd examples/shop && cargo test -q`.
 - To show the approval prompt, make sure the project isn't approved yet:

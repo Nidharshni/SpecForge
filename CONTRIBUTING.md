@@ -8,7 +8,7 @@ You need the stable Rust toolchain (pinned in `rust-toolchain.toml`).
 
 ```bash
 git clone https://github.com/leaderiop/SpecForge && cd SpecForge
-cargo install --path crates/specforge-cli     # installs `specforge` into ~/.cargo/bin
+cargo install --path crates/surfaces/cli     # installs `specforge` into ~/.cargo/bin
 ```
 
 Building the CLI uses the committed builtin blobs, so it needs no wasm target. Re-vendoring the blobs after changing anything they compile from (an extension, the SDK, the protocol types) needs `rustup target add wasm32-wasip2`, then:
@@ -31,12 +31,12 @@ The prove tests ask the real SMT solver: install z3 (`brew install z3`, `apt-get
 
 A test builds its project with `specforge_project::testing::TestProject` (feature `testing`) and exercises it
 through one driver: `compile()`/`session()` in process, `specforge_mcp::testing::Served` over MCP, or
-`crates/specforge-cli/tests/support::Cli` through the binary. Put a test in the crate that owns what it asserts;
+`crates/surfaces/cli/tests/support::Cli` through the binary. Put a test in the crate that owns what it asserts;
 only the binary's contract (arguments, exit codes, streams, environment) and cross-surface comparisons are CLI
 tests ([ADR 0078](docs/adr/0078-a-tests-project-is-one-fixture.md)).
 
 A test or tool that reads a file outside its own crate finds it from `specforge_repo_root::repo_root()`
-(`crates/specforge-repo-root`), never by counting `..` from `CARGO_MANIFEST_DIR`: crates sit at different depths
+(`crates/leaf/repo-root`), never by counting `..` from `CARGO_MANIFEST_DIR`: crates sit at different depths
 under `crates/` ([ADR 0081](docs/adr/0081-the-repository-root-is-found-not-counted.md)).
 
 ## Where things are

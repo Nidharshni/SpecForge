@@ -1,0 +1,5 @@
+---
+source: crates/pipeline/emitter/tests/emit_brief.rs
+expression: "crate::export(&multi_kind_graph(), specforge_emitter::EmitFormat::Brief, None)"
+---
+{"schema_version":"1.0.0","nodes":[{"id":"alpha","kind":"behavior","title":"Alpha"},{"id":"beta","kind":"feature","title":"Beta"},{"id":"gamma","kind":"invariant"}],"edges":[{"source":"beta","target":"alpha","label":"behaviors"}]}

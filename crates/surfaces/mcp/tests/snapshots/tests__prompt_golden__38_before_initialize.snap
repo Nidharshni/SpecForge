@@ -1,0 +1,10 @@
+---
+source: crates/surfaces/mcp/tests/prompt_golden.rs
+expression: "shape(&uninitialized, dir.path())"
+---
+{
+  "error": {
+    "code": -32600,
+    "message": "Server not initialized"
+  }
+}

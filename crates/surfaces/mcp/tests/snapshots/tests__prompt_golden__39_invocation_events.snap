@@ -1,0 +1,13 @@
+---
+source: crates/surfaces/mcp/tests/prompt_golden.rs
+expression: invoked
+---
+[
+  {
+    "entityId": "alpha",
+    "promptName": "specforge://prompts/context"
+  },
+  {
+    "promptName": "specforge://prompts/explore"
+  }
+]

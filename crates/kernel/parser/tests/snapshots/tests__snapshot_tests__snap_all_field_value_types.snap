@@ -1,0 +1,262 @@
+---
+source: crates/kernel/parser/tests/snapshot_tests.rs
+expression: "parse_ok(source, \"test.spec\").entities"
+---
+[
+    Entity {
+        kind: EntityKind {
+            raw: Sym("behavior"),
+        },
+        id: EntityId {
+            raw: Sym("test_values"),
+        },
+        title: Some(
+            "Test Values",
+        ),
+        fields: FieldMap {
+            entries: [
+                FieldEntry {
+                    key: Sym("name"),
+                    value: String(
+                        "a string",
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("test.spec"),
+                            start_line: 3,
+                            start_col: 10,
+                            end_line: 3,
+                            end_col: 20,
+                        },
+                    ),
+                },
+                FieldEntry {
+                    key: Sym("count"),
+                    value: Integer(
+                        42,
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("test.spec"),
+                            start_line: 4,
+                            start_col: 11,
+                            end_line: 4,
+                            end_col: 13,
+                        },
+                    ),
+                },
+                FieldEntry {
+                    key: Sym("enabled"),
+                    value: Boolean(
+                        true,
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("test.spec"),
+                            start_line: 5,
+                            start_col: 13,
+                            end_line: 5,
+                            end_col: 17,
+                        },
+                    ),
+                },
+                FieldEntry {
+                    key: Sym("disabled"),
+                    value: Boolean(
+                        false,
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("test.spec"),
+                            start_line: 6,
+                            start_col: 14,
+                            end_line: 6,
+                            end_col: 19,
+                        },
+                    ),
+                },
+                FieldEntry {
+                    key: Sym("created"),
+                    value: Date(
+                        "2024-01-15",
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("test.spec"),
+                            start_line: 7,
+                            start_col: 13,
+                            end_line: 7,
+                            end_col: 23,
+                        },
+                    ),
+                },
+                FieldEntry {
+                    key: Sym("status"),
+                    value: Identifier(
+                        "planned",
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("test.spec"),
+                            start_line: 8,
+                            start_col: 12,
+                            end_line: 8,
+                            end_col: 19,
+                        },
+                    ),
+                },
+                FieldEntry {
+                    key: Sym("tags"),
+                    value: ReferenceList(
+                        [
+                            SpannedRef {
+                                id: "alpha",
+                                span: SourceSpan {
+                                    file: Sym("test.spec"),
+                                    start_line: 9,
+                                    start_col: 11,
+                                    end_line: 9,
+                                    end_col: 16,
+                                },
+                            },
+                            SpannedRef {
+                                id: "beta",
+                                span: SourceSpan {
+                                    file: Sym("test.spec"),
+                                    start_line: 9,
+                                    start_col: 18,
+                                    end_line: 9,
+                                    end_col: 22,
+                                },
+                            },
+                            SpannedRef {
+                                id: "gamma",
+                                span: SourceSpan {
+                                    file: Sym("test.spec"),
+                                    start_line: 9,
+                                    start_col: 24,
+                                    end_line: 9,
+                                    end_col: 29,
+                                },
+                            },
+                        ],
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("test.spec"),
+                            start_line: 9,
+                            start_col: 10,
+                            end_line: 9,
+                            end_col: 30,
+                        },
+                    ),
+                },
+                FieldEntry {
+                    key: Sym("labels"),
+                    value: StringList(
+                        [
+                            "tag-one",
+                            "tag-two",
+                        ],
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("test.spec"),
+                            start_line: 10,
+                            start_col: 12,
+                            end_line: 10,
+                            end_col: 34,
+                        },
+                    ),
+                },
+                FieldEntry {
+                    key: Sym("config"),
+                    value: Block(
+                        FieldMap {
+                            entries: [
+                                FieldEntry {
+                                    key: Sym("timeout"),
+                                    value: Integer(
+                                        30,
+                                    ),
+                                    annotations: [],
+                                    value_span: Some(
+                                        SourceSpan {
+                                            file: Sym("test.spec"),
+                                            start_line: 12,
+                                            start_col: 17,
+                                            end_line: 12,
+                                            end_col: 19,
+                                        },
+                                    ),
+                                },
+                                FieldEntry {
+                                    key: Sym("retries"),
+                                    value: Integer(
+                                        3,
+                                    ),
+                                    annotations: [],
+                                    value_span: Some(
+                                        SourceSpan {
+                                            file: Sym("test.spec"),
+                                            start_line: 13,
+                                            start_col: 17,
+                                            end_line: 13,
+                                            end_col: 18,
+                                        },
+                                    ),
+                                },
+                            ],
+                        },
+                    ),
+                    annotations: [],
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("test.spec"),
+                            start_line: 11,
+                            start_col: 12,
+                            end_line: 14,
+                            end_col: 6,
+                        },
+                    ),
+                },
+                FieldEntry {
+                    key: Sym("verify"),
+                    value: VerifyList(
+                        [
+                            VerifyStatement {
+                                kind: "unit",
+                                description: "it works",
+                            },
+                            VerifyStatement {
+                                kind: "property",
+                                description: "always valid",
+                            },
+                        ],
+                    ),
+                    annotations: [],
+                    value_span: None,
+                },
+            ],
+        },
+        raw_body: Some(
+            "\n    name \"a string\"\n    count 42\n    enabled true\n    disabled false\n    created 2024-01-15\n    status planned\n    tags [alpha, beta, gamma]\n    labels [\"tag-one\", \"tag-two\"]\n    config {\n        timeout 30\n        retries 3\n    }\n    verify unit \"it works\"\n    verify property \"always valid\"\n",
+        ),
+        span: SourceSpan {
+            file: Sym("test.spec"),
+            start_line: 2,
+            start_col: 1,
+            end_line: 17,
+            end_col: 2,
+        },
+        methods: [],
+    },
+]

@@ -82,7 +82,7 @@ fn run(root: &Path) -> Result<(), String> {
         })
         .collect();
     println!(
-        "  git add {} crates/specforge-component/tests/declarations",
+        "  git add {} crates/runtime/component/tests/declarations",
         paths.join(" ")
     );
     if !changed.is_empty() {

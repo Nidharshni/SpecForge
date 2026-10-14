@@ -1,0 +1,35 @@
+---
+source: crates/session/project/tests/registry_build_snapshot.rs
+expression: "digest(&load(&runtime, &[name]))"
+---
+{
+  "check_passes": [],
+  "diagnostics": [
+    {
+      "code": "E027",
+      "message": "extension '@specforge/cargo-test' requires peer dependency '@specforge/testing' ^1.0 which is not installed"
+    }
+  ],
+  "edges": {},
+  "ext_short": {
+    "@specforge/cargo-test": "cargo-test"
+  },
+  "extension_info": [
+    [
+      "@specforge/cargo-test",
+      "1.0.0"
+    ]
+  ],
+  "fields": {},
+  "graph_inputs": {
+    "absent_reference_targets": {},
+    "bidirectional_pairs": [],
+    "derived_references": [],
+    "field_forms": {},
+    "single_reference_fields": []
+  },
+  "kinds": {},
+  "manifest_surfaces": [],
+  "rules": [],
+  "surfaces": []
+}

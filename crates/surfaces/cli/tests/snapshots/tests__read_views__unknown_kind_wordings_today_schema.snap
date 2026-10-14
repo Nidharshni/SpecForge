@@ -1,0 +1,13 @@
+---
+source: crates/surfaces/cli/tests/read_views.rs
+expression: "normalized(&answer, root).to_string()"
+---
+{
+  "content": [
+    {
+      "text": "{\"argument\":\"kind\",\"code\":\"invalid_input\",\"data\":{\"suggestion\":\"did you mean 'behavior'?\"},\"message\":\"unknown entity kind 'behaviour'\",\"tool\":\"specforge.schema\"}",
+      "type": "text"
+    }
+  ],
+  "isError": true
+}

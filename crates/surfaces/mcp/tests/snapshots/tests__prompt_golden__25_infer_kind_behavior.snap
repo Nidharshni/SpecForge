@@ -1,0 +1,107 @@
+---
+source: crates/surfaces/mcp/tests/prompt_golden.rs
+expression: "shape(&reply, dir.path())"
+---
+{
+  "description": "Get inference guidance for discovering spec entities from code",
+  "instruction": "You are inferring 'behavior' entities from this codebase. Use the guide below. Do not duplicate the existing entity IDs listed.",
+  "layout": "turns",
+  "payload": {
+    "description": "A testable unit of system functionality with a defined contract",
+    "example": "behavior example_behavior \"Example Title\" {\n  contract \"...\"\n  category \"...\"\n  consumes [ref_1, ref_2]\n  description \"...\"\n}",
+    "existing_entity_ids": [
+      "alpha",
+      "beta",
+      "delta"
+    ],
+    "extension": "@specforge/software",
+    "fields": [
+      {
+        "description": "Classification tag for agent task routing",
+        "name": "category",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "description": "Events this behavior reacts to",
+        "name": "consumes",
+        "required": false,
+        "type": "reference_list"
+      },
+      {
+        "description": "The behavioral contract this behavior guarantees",
+        "name": "contract",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "description": "Human-readable summary of this behavior",
+        "name": "description",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "description": "Diagnostic message for validation tooling",
+        "name": "diagnostic",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "description": "Product features this behavior implements",
+        "name": "features",
+        "required": false,
+        "type": "reference_list"
+      },
+      {
+        "description": "Invariants this behavior enforces",
+        "name": "invariants",
+        "required": false,
+        "type": "reference_list"
+      },
+      {
+        "description": "Port interfaces this behavior interacts with",
+        "name": "ports",
+        "required": false,
+        "type": "reference_list"
+      },
+      {
+        "description": "Events produced as a result of this behavior",
+        "name": "produces",
+        "required": false,
+        "type": "reference_list"
+      },
+      {
+        "description": "External references such as issue or document URIs",
+        "name": "refs",
+        "required": false,
+        "type": "string_list"
+      },
+      {
+        "description": "Impact level if this behavior fails",
+        "name": "severity",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "description": "Current lifecycle status of this behavior",
+        "name": "status",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "description": "Type definitions used by this behavior",
+        "name": "types",
+        "required": false,
+        "type": "reference_list"
+      }
+    ],
+    "inference_guide": "[guide]",
+    "kind": "behavior",
+    "scope": "kind",
+    "validation": "After writing .spec files, call specforge.validate to check for errors (and specforge.analyze for coverage/contract findings). Fix any errors before proceeding."
+  },
+  "roles": [
+    "user",
+    "user"
+  ]
+}

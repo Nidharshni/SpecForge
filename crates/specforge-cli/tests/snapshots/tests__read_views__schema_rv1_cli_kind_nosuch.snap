@@ -1,7 +1,0 @@
----
-source: crates/specforge-cli/tests/read_views.rs
-expression: "format!(\"exit: {:?}\\nstderr:\\n{}\", nosuch.code, nosuch.stderr)"
----
-exit: Some(1)
-stderr:
-error[unknown_kind]: unknown entity kind 'nosuch'

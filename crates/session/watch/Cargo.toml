@@ -1,0 +1,32 @@
+[package]
+name = "specforge-watch"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+autotests = false
+
+[[test]]
+name = "tests"
+path = "tests/main.rs"
+
+[features]
+# `Debouncer::coalesce_async`, the rule on a tokio channel (the LSP's).
+tokio = ["dep:tokio"]
+
+[dependencies]
+notify = { workspace = true }
+specforge-project = { workspace = true }
+tokio = { workspace = true, optional = true, features = ["sync", "time"] }
+
+[dev-dependencies]
+# The tests of the tokio adapter.
+specforge-watch = { path = ".", features = ["tokio"] }
+# The committed blobs the tests load (`specforge_component::committed`).
+specforge-component = { path = "../../runtime/component", features = ["testing"] }
+serde_json = { workspace = true }
+specforge-common = { workspace = true }
+specforge-test = { workspace = true }
+specforge-test-macros = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time", "macros", "rt-multi-thread"] }

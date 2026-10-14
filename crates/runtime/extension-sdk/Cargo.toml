@@ -1,0 +1,28 @@
+[package]
+name = "specforge-extension-sdk"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Author SpecForge extensions in Rust: an extension's declaration and the handlers of its commands, passes and other operations, compiled to a wasm32-wasip2 component"
+readme = "README.md"
+keywords = ["specforge", "wasm", "component-model", "extensions", "ai-agents"]
+categories = ["development-tools"]
+
+[dependencies]
+specforge-protocol-types = { path = "../../leaf/protocol-types", version = "0.1.0" }
+specforge-extension-sdk-macros = { path = "../extension-sdk-macros", version = "0.1.0" }
+wit-bindgen = "0.30"
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[features]
+# `testing`: MockHost and call_every_command, for an extension's own tests. A guest enables it in
+# [dev-dependencies] only, so no blob compiles it (ADR 0050).
+testing = []
+
+[dev-dependencies]
+specforge-repo-root = { path = "../../leaf/repo-root" }
+specforge-extension-sdk = { path = ".", features = ["testing"] }
+specforge-test = { workspace = true }
+specforge-test-macros = { workspace = true }

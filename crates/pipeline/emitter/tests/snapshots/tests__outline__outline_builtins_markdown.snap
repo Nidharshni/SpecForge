@@ -1,0 +1,408 @@
+---
+source: crates/pipeline/emitter/tests/outline.rs
+expression: "drawn(&manifests, opts)"
+---
+# Extension Architecture
+
+## Overview
+
+| Extension | Version | Entities | Edges | Rules | Enhances |
+|-----------|---------|----------|-------|-------|----------|
+| @specforge/product | 1.0.0 | 9 | 20 | 50 | — |
+| @specforge/software | 1.0.0 | 5 | 15 | 11 | module (+2), milestone (+1) |
+| @specforge/governance | 1.0.0 | 3 | 11 | 0 | — |
+| @specforge/formal | 1.0.0 | 5 | 10 | 12 | behavior (+7), event (+3), invariant (+1) |
+
+## Dependencies
+
+- @specforge/software → @specforge/product (^1.0, optional)
+- @specforge/governance → @specforge/software (^1.0, optional)
+- @specforge/governance → @specforge/product (^1.0, optional)
+- @specforge/formal → @specforge/software (^1.0)
+- @specforge/formal → @specforge/product (^1.0, optional, transitive, unused)
+
+## Enhancements
+
+- @specforge/software enhances @specforge/product/module: +2 fields (ports, ports_defined)
+- @specforge/software enhances @specforge/product/milestone: +1 fields (behaviors)
+- @specforge/formal enhances @specforge/software/behavior: +7 fields (requires, ensures, maintains, satisfies, sync, abstract, refines)
+- @specforge/formal enhances @specforge/software/event: +3 fields (follows_protocol, participates_in, sync)
+- @specforge/formal enhances @specforge/software/invariant: +1 fields (expression)
+
+## Cross-Extension Edges
+
+- BehaviorImplementsFeature (@specforge/software.behavior → @specforge/product.feature)
+- DecisionProtectsInvariant (@specforge/governance.decision → @specforge/software.invariant)
+- ConstraintEnforcedByBehavior (@specforge/governance.constraint → @specforge/software.behavior)
+- ConstraintConstrainsBehavior (@specforge/governance.constraint → @specforge/software.behavior)
+- ConstraintProtectsInvariant (@specforge/governance.constraint → @specforge/software.invariant)
+- FailureModeTargetsInvariant (@specforge/governance.failure_mode → @specforge/software.invariant)
+- ConstraintGovernsFeature (@specforge/governance.constraint → @specforge/product.feature)
+- DecisionAffectsFeature (@specforge/governance.decision → @specforge/product.feature)
+- FailureModeThreatensFeature (@specforge/governance.failure_mode → @specforge/product.feature)
+- FailureModeAffectsBehavior (@specforge/governance.failure_mode → @specforge/software.behavior)
+- AxiomAssumesInvariant (@specforge/formal.axiom → @specforge/software.invariant)
+- PropertyDependsOnInvariant (@specforge/formal.property → @specforge/software.invariant)
+- BehaviorRefinesBehavior (@specforge/formal.behavior → @specforge/software.behavior)
+- RefinementRefinesAbstract (@specforge/formal.refinement → @specforge/software.behavior)
+- RefinementRefinesConcrete (@specforge/formal.refinement → @specforge/software.behavior)
+
+## Extensions
+
+### @specforge/product (9 entities, 20 edges, 50 rules)
+
+**Entity kinds**: feature, journey, deliverable, milestone, module, term, persona, channel, release
+
+**Contributes**: entities, edges, shared_fields, validation_rules, surfaces, passes
+
+**Validation rules**: W041, W042, W044, I010, I046, I047, E007, E015, E052, W045, W092, W093, I048, I062, I053, I061, I050, I068, I068, I068, I068, I068, I068, I068, I068, I068, I086, I087, W049, I059, W057, I060, I066, I069, I070, I057, I089, W043, W046, I067, I055, I082, I083, I048, I054, I080, I080, I080, I080, I081 (50 total)
+  Severity breakdown: 3 errors, 10 warnings, 37 info
+
+**Surfaces**: 40 CLI commands, 0 MCP tools, 0 MCP resources
+
+**Shared fields** (applied to all entities): tags
+
+#### feature (Feature)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| description | string | no | @specforge/product | — | — |
+| problem | string | yes | @specforge/product | — | — |
+| solution | string | no | @specforge/product | — | — |
+| priority | enum | no | @specforge/product | — | — |
+| status | enum | no | @specforge/product | — | — |
+| acceptance | string_list | no | @specforge/product | — | — |
+| depends_on | reference_list | no | @specforge/product | FeatureDependsOn | feature |
+| features | reference_list | no | @specforge/product | FeatureRelatesTo | feature |
+| refs | string_list | no | @specforge/product | — | — |
+| reason | string | no | @specforge/product | — | — |
+| owner | string | no | @specforge/product | — | — |
+| contributors | string_list | no | @specforge/product | — | — |
+| effort | enum | no | @specforge/product | — | — |
+| tests | string_list | no | @specforge/product | — | — |
+
+#### journey (Journey)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| persona | reference | no | @specforge/product | JourneyTargetsPersona | persona |
+| description | string | no | @specforge/product | — | — |
+| channels | reference_list | no | @specforge/product | JourneyUsesChannel | channel |
+| features | reference_list | no | @specforge/product | JourneyExercisesFeature | feature |
+| flow | string_list | yes | @specforge/product | — | — |
+| priority | enum | no | @specforge/product | — | — |
+
+#### deliverable (Deliverable)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| description | string | no | @specforge/product | — | — |
+| artifact_type | enum | yes | @specforge/product | — | — |
+| status | enum | no | @specforge/product | — | — |
+| journeys | reference_list | no | @specforge/product | DeliverableSupportsJourney | journey |
+| modules | reference_list | no | @specforge/product | DeliverableContainsModule | module |
+| version | string | no | @specforge/product | — | — |
+| milestones | reference_list | no | @specforge/product | DeliverableTrackedByMilestone | milestone |
+| depends_on | reference_list | no | @specforge/product | DeliverableDependsOn | deliverable |
+| reason | string | no | @specforge/product | — | — |
+| owner | string | no | @specforge/product | — | — |
+| contributors | string_list | no | @specforge/product | — | — |
+
+#### milestone (Milestone)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| description | string | no | @specforge/product | — | — |
+| status | enum | no | @specforge/product | — | — |
+| features | reference_list | no | @specforge/product | MilestoneDeliversFeature | feature |
+| exit_criteria | string_list | no | @specforge/product | — | — |
+| target_date | string | no | @specforge/product | — | — |
+| start_date | string | no | @specforge/product | — | — |
+| modules | reference_list | no | @specforge/product | MilestoneScopesModule | module |
+| depends_on | reference_list | no | @specforge/product | MilestoneDependsOn | milestone |
+| blockers | string_list | no | @specforge/product | — | — |
+| priority | enum | no | @specforge/product | — | — |
+| reason | string | no | @specforge/product | — | — |
+| owner | string | no | @specforge/product | — | — |
+| contributors | string_list | no | @specforge/product | — | — |
+| refs | string_list | no | @specforge/product | — | — |
+
+*Enhanced by @specforge/software*: +1 fields (behaviors)
+
+#### module (Module)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| family | string | no | @specforge/product | — | — |
+| description | string | no | @specforge/product | — | — |
+| features | reference_list | no | @specforge/product | ModuleContainsFeature | feature |
+| depends_on | reference_list | no | @specforge/product | ModuleDependsOn | module |
+| reason | string | no | @specforge/product | — | — |
+
+*Enhanced by @specforge/software*: +2 fields (ports, ports_defined)
+
+#### term (Term)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| definition | string | yes | @specforge/product | — | — |
+| context | string | no | @specforge/product | — | — |
+| aliases | string_list | no | @specforge/product | — | — |
+| see_also | reference_list | no | @specforge/product | TermReferencesRelatedTerm | term |
+| module | reference | no | @specforge/product | TermBelongsToModule | module |
+
+#### persona (Persona)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| description | string | yes | @specforge/product | — | — |
+| technical_level | enum | no | @specforge/product | — | — |
+| goals | string_list | no | @specforge/product | — | — |
+| pain_points | string_list | no | @specforge/product | — | — |
+| status | enum | no | @specforge/product | — | — |
+| reason | string | no | @specforge/product | — | — |
+| key_features | reference_list | no | @specforge/product | PersonaPrioritizesFeature | feature |
+
+#### channel (Channel)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| description | string | yes | @specforge/product | — | — |
+| interaction_model | enum | no | @specforge/product | — | — |
+| url | string | no | @specforge/product | — | — |
+| status | enum | no | @specforge/product | — | — |
+| reason | string | no | @specforge/product | — | — |
+
+#### release (Release)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| description | string | no | @specforge/product | — | — |
+| version | string | yes | @specforge/product | — | — |
+| status | enum | no | @specforge/product | — | — |
+| deliverables | reference_list | no | @specforge/product | ReleaseIncludesDeliverable | deliverable |
+| milestones | reference_list | no | @specforge/product | ReleaseCompletesMilestone | milestone |
+| target_date | string | no | @specforge/product | — | — |
+| release_date | string | no | @specforge/product | — | — |
+| changelog | string | no | @specforge/product | — | — |
+| depends_on | reference_list | no | @specforge/product | ReleaseDependsOn | release |
+| owner | string | no | @specforge/product | — | — |
+| contributors | string_list | no | @specforge/product | — | — |
+| reason | string | no | @specforge/product | — | — |
+| refs | string_list | no | @specforge/product | — | — |
+
+### @specforge/software (5 entities, 15 edges, 11 rules)
+
+**Entity kinds**: behavior, invariant, event, type, port
+
+**Contributes**: entities, edges, enhancements, validation_rules
+
+**Validation rules**: W001, W002, W003, W005, W006, W007, W008, W010, E004, E051, E010 (11 total)
+  Severity breakdown: 3 errors, 8 warnings
+
+**Enhances**:
+- @specforge/product/module: +2 fields (ports, ports_defined)
+- @specforge/product/milestone: +1 fields (behaviors)
+
+#### behavior (Behavior)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| contract | string | yes | @specforge/software | — | — |
+| invariants | reference_list | no | @specforge/software | BehaviorEnforcesInvariant | invariant |
+| types | reference_list | no | @specforge/software | BehaviorReferencesType | type |
+| ports | reference_list | no | @specforge/software | BehaviorUsesPort | port |
+| produces | reference_list | no | @specforge/software | BehaviorProducesEvent | event |
+| consumes | reference_list | no | @specforge/software | BehaviorConsumesEvent | event |
+| category | string | no | @specforge/software | — | — |
+| features | reference_list | no | @specforge/software | BehaviorImplementsFeature | feature |
+| description | string | no | @specforge/software | — | — |
+| status | string | no | @specforge/software | — | — |
+| refs | string_list | no | @specforge/software | — | — |
+| severity | string | no | @specforge/software | — | — |
+| diagnostic | string | no | @specforge/software | — | — |
+
+*Enhanced by @specforge/formal*: +7 fields (requires, ensures, maintains, satisfies, sync, abstract, refines)
+
+#### invariant (Invariant)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| guarantee | string | yes | @specforge/software | — | — |
+| risk | string | no | @specforge/software | — | — |
+| description | string | no | @specforge/software | — | — |
+| refs | string_list | no | @specforge/software | — | — |
+
+*Enhanced by @specforge/formal*: +1 fields (expression)
+
+#### event (Event)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| channel | string | no | @specforge/software | — | — |
+| channel_type | string | no | @specforge/software | — | — |
+| category | string | no | @specforge/software | — | — |
+| payload | reference | no | @specforge/software | EventCarriesPayloadType | type |
+| description | string | no | @specforge/software | — | — |
+| refs | string_list | no | @specforge/software | — | — |
+| contract | string | no | @specforge/software | — | — |
+
+*Enhanced by @specforge/formal*: +3 fields (follows_protocol, participates_in, sync)
+
+#### type (Type)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| composed_types | reference_list | no | @specforge/software | TypeComposesType | type |
+| extends | reference | no | @specforge/software | TypeExtendsType | type |
+| description | string | no | @specforge/software | — | — |
+| refs | string_list | no | @specforge/software | — | — |
+
+#### port (Port)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| direction | string | yes | @specforge/software | — | — |
+| category | string | no | @specforge/software | — | — |
+| methods | block | no | @specforge/software | — | — |
+| types | reference_list | no | @specforge/software | PortReferencesType | type |
+| description | string | no | @specforge/software | — | — |
+| refs | string_list | no | @specforge/software | — | — |
+
+### @specforge/governance (3 entities, 11 edges, 0 rules)
+
+**Entity kinds**: decision, constraint, failure_mode
+
+**Contributes**: entities, edges
+
+#### decision (Decision)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| status | enum | yes | @specforge/governance | — | — |
+| context | string | yes | @specforge/governance | — | — |
+| decision | string | yes | @specforge/governance | — | — |
+| consequences | string_list | no | @specforge/governance | — | — |
+| superseded_by | reference | no | @specforge/governance | DecisionSupersedesDecision | decision |
+| invariants | reference_list | no | @specforge/governance | DecisionProtectsInvariant | invariant |
+| refs | string_list | no | @specforge/governance | — | — |
+| description | string | no | @specforge/governance | — | — |
+| date | string | no | @specforge/governance | — | — |
+| authors | string_list | no | @specforge/governance | — | — |
+| tags | string_list | no | @specforge/governance | — | — |
+| alternatives | string_list | no | @specforge/governance | — | — |
+| reason | string | no | @specforge/governance | — | — |
+| deciders | string_list | no | @specforge/governance | — | — |
+| affects_features | reference_list | no | @specforge/governance | DecisionAffectsFeature | feature |
+| constraints | reference_list | no | @specforge/governance | DecisionImposesConstraint | constraint |
+
+#### constraint (Constraint)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| category | string | no | @specforge/governance | — | — |
+| priority | enum | no | @specforge/governance | — | — |
+| metric | string | no | @specforge/governance | — | — |
+| threshold | string | no | @specforge/governance | — | — |
+| description | string | yes | @specforge/governance | — | — |
+| refs | string_list | no | @specforge/governance | — | — |
+| enforced_by | reference_list | no | @specforge/governance | ConstraintEnforcedByBehavior | behavior |
+| scope | string | no | @specforge/governance | — | — |
+| constrains | reference_list | no | @specforge/governance | ConstraintConstrainsBehavior | behavior |
+| protects | reference_list | no | @specforge/governance | ConstraintProtectsInvariant | invariant |
+| governs_features | reference_list | no | @specforge/governance | ConstraintGovernsFeature | feature |
+
+#### failure_mode (FailureMode)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| severity | enum | yes | @specforge/governance | — | — |
+| occurrence | enum | no | @specforge/governance | — | — |
+| detection | enum | no | @specforge/governance | — | — |
+| cause | string | yes | @specforge/governance | — | — |
+| effect | string | yes | @specforge/governance | — | — |
+| mitigation | string | no | @specforge/governance | — | — |
+| post_severity | enum | no | @specforge/governance | — | — |
+| post_occurrence | enum | no | @specforge/governance | — | — |
+| post_detection | enum | no | @specforge/governance | — | — |
+| invariant | reference | no | @specforge/governance | FailureModeTargetsInvariant | invariant |
+| refs | string_list | no | @specforge/governance | — | — |
+| description | string | no | @specforge/governance | — | — |
+| risk | string | no | @specforge/governance | — | — |
+| rpn | integer | no | @specforge/governance | — | — |
+| post_mitigation | block | no | @specforge/governance | — | — |
+| threatens_features | reference_list | no | @specforge/governance | FailureModeThreatensFeature | feature |
+| affected_behaviors | reference_list | no | @specforge/governance | FailureModeAffectsBehavior | behavior |
+
+### @specforge/formal (5 entities, 10 edges, 12 rules)
+
+**Entity kinds**: property, axiom, protocol, refinement, process
+
+**Contributes**: entities, edges, enhancements, validation_rules, passes
+
+**Validation rules**: W123, W126, W128, W131, W134, W124, W127, W129, W132, W135, W136, W133 (12 total)
+  Severity breakdown: 12 warnings
+
+**Enhances**:
+- @specforge/software/behavior: +7 fields (requires, ensures, maintains, satisfies, sync, abstract, refines)
+- @specforge/software/event: +3 fields (follows_protocol, participates_in, sync)
+- @specforge/software/invariant: +1 fields (expression)
+
+#### property (Property)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| expression | string | yes | @specforge/formal | — | — |
+| property_type | enum | yes | @specforge/formal | — | — |
+| scope | string | no | @specforge/formal | — | — |
+| description | string | no | @specforge/formal | — | — |
+| refs | string_list | no | @specforge/formal | — | — |
+
+#### axiom (Axiom)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| expression | string | yes | @specforge/formal | — | — |
+| assumes | reference_list | no | @specforge/formal | AxiomAssumesInvariant | invariant |
+| justification | string | no | @specforge/formal | — | — |
+| description | string | no | @specforge/formal | — | — |
+| refs | string_list | no | @specforge/formal | — | — |
+
+#### protocol (Protocol)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| alphabet | string_list | yes | @specforge/formal | — | — |
+| states | string_list | no | @specforge/formal | — | — |
+| transitions | string_list | no | @specforge/formal | — | — |
+| initial_state | string | yes | @specforge/formal | — | — |
+| description | string | no | @specforge/formal | — | — |
+| refs | string_list | no | @specforge/formal | — | — |
+
+#### refinement (Refinement)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| abstract_entity | reference | yes | @specforge/formal | RefinementRefinesAbstract | behavior |
+| concrete_entity | reference | yes | @specforge/formal | RefinementRefinesConcrete | behavior |
+| invariant_deltas | string_list | no | @specforge/formal | — | — |
+| chains_to | reference | no | @specforge/formal | RefinementChainsToRefinement | refinement |
+| description | string | no | @specforge/formal | — | — |
+| refs | string_list | no | @specforge/formal | — | — |
+
+#### process (Process)
+
+| Field | Type | Required | Source | Edge | Target |
+|-------|------|----------|--------|------|--------|
+| alphabet | string_list | yes | @specforge/formal | — | — |
+| states | string_list | no | @specforge/formal | — | — |
+| initial_state | string | yes | @specforge/formal | — | — |
+| composition | string | no | @specforge/formal | — | — |
+| sub_processes | reference_list | no | @specforge/formal | ProcessComposesProcess | process |
+| description | string | no | @specforge/formal | — | — |
+| refs | string_list | no | @specforge/formal | — | — |
+
+## Summary
+
+- **4** extensions, **22** entity kinds, **56** edge types
+- **73** validation rules, **15** cross-extension edges, **5** enhancements

@@ -9,7 +9,7 @@ rustfmt           hook       **/*.rs
                              the workspace, the nine guests and the four fixtures (the bridge component included) are rustfmt-clean
 spec-format       hook       computed: a .spec file in a project's spec dir; the formatter, parser or grammar
                              the .spec files of every project are formatted
-grammar           hook       crates/tree-sitter-specforge/grammar.js, crates/tree-sitter-specforge/src/**
+grammar           hook       crates/kernel/tree-sitter/grammar.js, crates/kernel/tree-sitter/src/**
                              the committed tree-sitter artifacts are what grammar.js generates
 zero-entity       hook       crates/**/src/**, scripts/check-zero-entity-core.sh
                              the core crates name no entity kind of an extension
@@ -33,7 +33,7 @@ clippy            quick      crates/**, integrations/rust/**, xtask/**, gate/**,
                              the workspace is clippy-clean with warnings denied
 doctests          quick      computed: a workspace member that holds a runnable doctest (after build)
                              the doctests of the crates that have one pass
-published-schemas quick      **/*.spec, **/specforge.json, extensions/**, crates/specforge-emitter/**, crates/specforge-graph/**, crates/specforge-registry/**, crates/specforge-ops/tests/operations/schema.rs (after build)
+published-schemas quick      **/*.spec, **/specforge.json, extensions/**, crates/pipeline/emitter/**, crates/pipeline/graph/**, crates/pipeline/registry/**, crates/app/ops/tests/operations/schema.rs (after build)
                              every project's exports validate against the schema `specforge schema --publish` prints for their format
 specs             quick      **/*.spec, **/specforge.json, gate/baseline.json, extensions/**, crates/**/src/**, crates/**/Cargo.toml
                              every project checks with no error and no warning above the baseline

@@ -1,0 +1,10 @@
+---
+source: crates/surfaces/mcp/tests/prompt_golden.rs
+expression: "shape(&unknown, dir.path())"
+---
+{
+  "error": {
+    "code": -32602,
+    "message": "Unknown prompt: specforge://prompts/nope"
+  }
+}

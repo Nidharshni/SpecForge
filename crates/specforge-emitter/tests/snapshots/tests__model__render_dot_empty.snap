@@ -1,9 +1,0 @@
----
-source: crates/specforge-emitter/tests/model.rs
-expression: output
----
-digraph model {
-  rankdir=LR;
-  node [shape=none, fontname="Helvetica"];
-  edge [fontname="Helvetica", fontsize=10];
-}

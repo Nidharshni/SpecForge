@@ -1,0 +1,28 @@
+---
+source: crates/surfaces/cli/tests/read_views.rs
+expression: "normalized(&schema_digest(value), root)"
+---
+{
+  "entity_kinds": [
+    "behavior",
+    "event",
+    "invariant",
+    "port",
+    "type"
+  ],
+  "extensions": [
+    {
+      "name": "@specforge/software",
+      "version": "1.0.0"
+    },
+    {
+      "name": "@specforge/testing",
+      "version": "1.0.0"
+    }
+  ],
+  "schema_version": {
+    "major": 1,
+    "minor": 0,
+    "patch": 0
+  }
+}

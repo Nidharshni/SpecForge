@@ -1,0 +1,19 @@
+---
+source: crates/surfaces/mcp/tests/prompt_golden.rs
+expression: "shape(&reply, dir.path())"
+---
+{
+  "error": {
+    "code": -32602,
+    "data": {
+      "argument": "scope",
+      "code": "invalid_input",
+      "data": {
+        "suggestion": "did you mean 'behavior'?"
+      },
+      "message": "unknown entity kind 'Behavior'",
+      "prompt": "specforge://prompts/infer"
+    },
+    "message": "unknown entity kind 'Behavior'"
+  }
+}

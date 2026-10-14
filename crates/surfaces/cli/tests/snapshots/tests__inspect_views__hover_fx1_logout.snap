@@ -1,0 +1,44 @@
+---
+source: crates/surfaces/cli/tests/inspect_views.rs
+expression: markdown
+---
+**W001** · Behavior implements no feature
+
+behavior 'logout' does not implement any feature
+
+A `behavior` entity has no outgoing edge to any `feature`, meaning it doesn't implement anything declared. Add an `implements` reference to a feature, or remove the behavior if it's unused.
+
+[Documentation](https://github.com/leaderiop/SpecForge/blob/main/docs/diagnostics.md#w001)
+
+---
+
+**W004** · Untested testable entity
+
+behavior 'logout' is testable but declares no verify obligations
+
+A testable entity (`behavior`, `invariant`, `event`, `type`, or `port`) declares no `verify` obligations, so nothing states what a test must prove about it. Add `verify unit "..."` (or another obligation kind) statements. Union types and entities marked `abstract true` (through a flag their kind declares) are exempt; a struct member named `verify` is a field, not an obligation.
+
+[Documentation](https://github.com/leaderiop/SpecForge/blob/main/docs/diagnostics.md#w004)
+
+---
+
+**W006** · Behavior missing category
+
+behavior 'logout' has no category — agents use category for task routing
+
+A `behavior` entity has no `category` field, which agents rely on for task routing. Add a `category` field to the behavior.
+
+[Documentation](https://github.com/leaderiop/SpecForge/blob/main/docs/diagnostics.md#w006)
+
+---
+
+**behavior** `logout` — Log out
+
+A testable unit of system functionality with a defined contract
+*@specforge/software* · `testable` · `verify`
+
+> The system MUST end the session on logout
+
+---
+
+**Coverage** · `uncovered` · 0/0 obligations proven · 1 test

@@ -1,0 +1,33 @@
+---
+source: crates/surfaces/mcp/tests/prompt_golden.rs
+expression: "shape(&reply, dir.path())"
+---
+{
+  "description": "Analyze coverage gaps for an entity or the whole graph",
+  "instruction": "Analyze the following coverage report for alpha. Identify the highest-priority gaps to address. Focus on entities marked 'uncovered' and unconnected entities that may indicate missing relationships.",
+  "layout": "turns",
+  "payload": {
+    "coverage_summary": [
+      {
+        "declared": true,
+        "entity_id": "alpha",
+        "evidence_collected": false,
+        "exempt": false,
+        "kind": "behavior",
+        "linked": false,
+        "obligations": 1,
+        "proven": 0,
+        "status": "uncovered",
+        "unproven": [
+          "alpha works"
+        ]
+      }
+    ],
+    "entity_id": "alpha",
+    "findings": []
+  },
+  "roles": [
+    "user",
+    "user"
+  ]
+}

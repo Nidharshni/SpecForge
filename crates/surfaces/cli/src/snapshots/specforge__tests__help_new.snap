@@ -1,0 +1,29 @@
+---
+source: crates/surfaces/cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Scaffold a new extension project
+
+Usage: specforge new [OPTIONS] <NAME>
+
+Arguments:
+  <NAME>
+          Extension name (e.g. @you/my-ext)
+
+Options:
+      --extension
+          Scaffold an extension project (SDK-authored wasm)
+
+      --dir <DIR>
+          Directory to scaffold into
+          
+          [default: .]
+
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
+  -h, --help
+          Print help

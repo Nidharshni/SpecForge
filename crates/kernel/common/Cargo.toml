@@ -1,0 +1,32 @@
+[package]
+name = "specforge-common"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# The catalog's title on every diagnostics JSON entry; it has no dependencies.
+specforge-diagnostics = { path = "../../leaf/diagnostics" }
+# `ExtensionEntry` reads package names; `peers` reports the peer rule's verdicts (ADR 0050).
+specforge-package = { path = "../../leaf/package" }
+# `peers` reports on `PeerDependency`; `shape` describes `FieldType`.
+specforge-protocol-types = { path = "../../leaf/protocol-types" }
+# `#[derive(Shape)]`: a type's JSON shape beside its serialization (ADR 0048). A plain
+# path dependency, not a workspace entry: that would change the builtin blobs' hash.
+specforge-shape-macros = { path = "../shape-macros" }
+# `shape` describes the coverage `Status` an export node carries.
+specforge-coverage = { path = "../../leaf/coverage" }
+# The source-annotated rendering of diagnostics (`render_diagnostics`).
+ariadne = { workspace = true }
+glob = { workspace = true }
+lasso = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strsim = { workspace = true }
+walkdir = { workspace = true }
+
+[dev-dependencies]
+specforge-test = { workspace = true }
+specforge-test-macros = { workspace = true }
+tempfile = { workspace = true }

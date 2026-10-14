@@ -36,7 +36,7 @@ fn a_record_round_trips_byte_for_byte() {
 #[test]
 fn a_change_to_coverage_feeds_the_blobs_that_record_it() {
     assert_eq!(
-        fed(&["crates/specforge-coverage/src/lib.rs"]),
+        fed(&["crates/leaf/coverage/src/lib.rs"]),
         [
             "extensions/formal",
             "extensions/product",
@@ -47,15 +47,15 @@ fn a_change_to_coverage_feeds_the_blobs_that_record_it() {
 
 #[test]
 fn protocol_types_and_the_root_manifest_feed_all_nine() {
-    assert_eq!(fed(&["crates/specforge-protocol-types/src/lib.rs"]), NINE);
+    assert_eq!(fed(&["crates/leaf/protocol-types/src/lib.rs"]), NINE);
     assert_eq!(fed(&["Cargo.toml"]), NINE);
-    assert_eq!(fed(&["crates/specforge-extension-sdk/src/lib.rs"]), NINE);
+    assert_eq!(fed(&["crates/runtime/extension-sdk/src/lib.rs"]), NINE);
 }
 
 #[test]
 fn a_test_only_sdk_file_feeds_no_blob() {
-    assert!(fed(&["crates/specforge-extension-sdk/src/testing.rs"]).is_empty());
-    assert!(fed(&["crates/specforge-lsp/src/lib.rs"]).is_empty());
+    assert!(fed(&["crates/runtime/extension-sdk/src/testing.rs"]).is_empty());
+    assert!(fed(&["crates/surfaces/lsp/src/lib.rs"]).is_empty());
 }
 
 #[test]

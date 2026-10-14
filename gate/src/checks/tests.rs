@@ -67,7 +67,7 @@ fn ci_and_full_select_the_same_checks() {
 #[test]
 fn the_hook_reaches_no_check_that_compiles_and_not_the_builtins() {
     let repo = this_repo();
-    let everything = ChangeSet::of(["crates/specforge-lsp/src/lib.rs", "a.spec", "Cargo.toml"]);
+    let everything = ChangeSet::of(["crates/surfaces/lsp/src/lib.rs", "a.spec", "Cargo.toml"]);
     for check in CHECKS {
         let selected = check.selection(Mode::Hook, &repo, &everything).unwrap() != Selection::Skip;
         if selected {
@@ -154,7 +154,7 @@ fn a_staged_starter_template_is_not_format_checked() {
     // §3.5: a template a blob embeds, and a parser fixture, are formatted or not by their tests' needs.
     for path in [
         "extensions/software/src/starter.spec",
-        "crates/specforge-parser/tests/fixtures/lexemes.spec",
+        "crates/kernel/parser/tests/fixtures/lexemes.spec",
     ] {
         assert_eq!(
             selection("spec-format", Mode::Hook, &[path]),
@@ -166,7 +166,7 @@ fn a_staged_starter_template_is_not_format_checked() {
         selection(
             "spec-format",
             Mode::Hook,
-            &["crates/specforge-cli/tests/fixtures/parity/clean/spec/a.spec"]
+            &["crates/surfaces/cli/tests/fixtures/parity/clean/spec/a.spec"]
         ),
         Selection::Skip
     );
@@ -196,7 +196,7 @@ fn a_staged_starter_template_is_not_format_checked() {
         selection(
             "spec-format",
             Mode::Hook,
-            &["crates/specforge-formatter/src/lib.rs"]
+            &["crates/pipeline/formatter/src/lib.rs"]
         ),
         Selection::Everything
     );
@@ -208,7 +208,7 @@ fn a_grammar_edit_is_judged_by_the_hook() {
         selection(
             "grammar",
             Mode::Hook,
-            &["crates/tree-sitter-specforge/grammar.js"]
+            &["crates/kernel/tree-sitter/grammar.js"]
         ),
         Selection::Everything
     );
@@ -216,12 +216,12 @@ fn a_grammar_edit_is_judged_by_the_hook() {
         selection(
             "grammar",
             Mode::Hook,
-            &["crates/tree-sitter-specforge/src/parser.c"]
+            &["crates/kernel/tree-sitter/src/parser.c"]
         ),
         Selection::Everything
     );
     assert_eq!(
-        selection("grammar", Mode::Hook, &["crates/specforge-lsp/src/lib.rs"]),
+        selection("grammar", Mode::Hook, &["crates/surfaces/lsp/src/lib.rs"]),
         Selection::Skip
     );
 }
@@ -229,7 +229,7 @@ fn a_grammar_edit_is_judged_by_the_hook() {
 #[test]
 fn quick_runs_the_guests_and_the_specs_when_a_rule_crate_changes() {
     // gate.sh:227 ran `specforge check` only for the emitter, and no guest for an SDK edit.
-    let path = "crates/specforge-registry/src/checks/values.rs";
+    let path = "crates/pipeline/registry/src/checks/values.rs";
     assert_eq!(
         selection("guests", Mode::Quick, &[path]),
         Selection::Everything
@@ -239,7 +239,7 @@ fn quick_runs_the_guests_and_the_specs_when_a_rule_crate_changes() {
         selection(
             "guests",
             Mode::Quick,
-            &["crates/specforge-extension-sdk/src/lib.rs"]
+            &["crates/runtime/extension-sdk/src/lib.rs"]
         ),
         Selection::Everything
     );
@@ -288,8 +288,8 @@ fn packages_map_changed_paths_to_members_and_manifests_to_everything() {
             "tests",
             Mode::Quick,
             &[
-                "crates/specforge-lsp/src/lib.rs",
-                "crates/specforge-lsp/tests/a.rs",
+                "crates/surfaces/lsp/src/lib.rs",
+                "crates/surfaces/lsp/tests/a.rs",
                 "xtask/src/x.rs"
             ]
         ),
@@ -323,16 +323,12 @@ fn doctests_run_for_the_changed_members_that_hold_one() {
         selection(
             "doctests",
             Mode::Quick,
-            &["crates/specforge-diagnostics/src/lib.rs"]
+            &["crates/leaf/diagnostics/src/lib.rs"]
         ),
         only(&["specforge-diagnostics"])
     );
     assert_eq!(
-        selection(
-            "doctests",
-            Mode::Quick,
-            &["crates/specforge-lsp/src/lib.rs"]
-        ),
+        selection("doctests", Mode::Quick, &["crates/surfaces/lsp/src/lib.rs"]),
         Selection::Skip
     );
 }
@@ -341,10 +337,10 @@ fn doctests_run_for_the_changed_members_that_hold_one() {
 fn quick_runs_the_builtins_check_when_a_recorded_input_changes() {
     // §3.1: quick passed all four of these edits while `build-blobs --check` failed on them.
     for path in [
-        "crates/specforge-coverage/src/lib.rs",
-        "crates/specforge-protocol-types/src/lib.rs",
+        "crates/leaf/coverage/src/lib.rs",
+        "crates/leaf/protocol-types/src/lib.rs",
         "Cargo.toml",
-        "crates/specforge-extension-sdk/src/lib.rs",
+        "crates/runtime/extension-sdk/src/lib.rs",
     ] {
         assert_ne!(
             selection("builtins", Mode::Quick, &[path]),
@@ -353,18 +349,14 @@ fn quick_runs_the_builtins_check_when_a_recorded_input_changes() {
         );
     }
     assert_eq!(
-        selection(
-            "builtins",
-            Mode::Quick,
-            &["crates/specforge-lsp/src/lib.rs"]
-        ),
+        selection("builtins", Mode::Quick, &["crates/surfaces/lsp/src/lib.rs"]),
         Selection::Skip
     );
     assert_eq!(
         selection(
             "builtins",
             Mode::Quick,
-            &["crates/specforge-coverage/src/lib.rs"]
+            &["crates/leaf/coverage/src/lib.rs"]
         ),
         only(&[
             "extensions/formal",
@@ -382,7 +374,7 @@ fn the_list_is_pinned() {
 #[test]
 fn published_schemas_run_when_a_writer_or_a_declaration_changes() {
     for path in [
-        "crates/specforge-emitter/src/publish.rs",
+        "crates/pipeline/emitter/src/publish.rs",
         "extensions/formal/src/declaration.rs",
         "spec/behaviors/output-schema.spec",
     ] {

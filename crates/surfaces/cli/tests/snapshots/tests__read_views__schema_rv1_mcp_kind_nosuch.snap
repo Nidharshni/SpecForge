@@ -1,0 +1,12 @@
+---
+source: crates/surfaces/cli/tests/read_views.rs
+expression: "normalized(&schema_digest(value), root)"
+---
+{
+  "isError": {
+    "argument": "kind",
+    "code": "invalid_input",
+    "message": "unknown entity kind 'nosuch'",
+    "tool": "specforge.schema"
+  }
+}

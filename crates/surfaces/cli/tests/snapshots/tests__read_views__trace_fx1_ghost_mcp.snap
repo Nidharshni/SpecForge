@@ -1,0 +1,24 @@
+---
+source: crates/surfaces/cli/tests/read_views.rs
+expression: "normalized(value, root)"
+---
+{
+  "isError": {
+    "argument": "entity_id",
+    "code": "entity_not_found",
+    "diagnostic": {
+      "code": "E003",
+      "column": null,
+      "file": null,
+      "line": null,
+      "message": "unresolved entity 'ghost' — not found in graph",
+      "severity": "Error",
+      "span": null,
+      "suggestion": null,
+      "title": "Unresolved reference"
+    },
+    "entity_id": "ghost",
+    "message": "unresolved entity 'ghost' — not found in graph",
+    "tool": "specforge.trace"
+  }
+}

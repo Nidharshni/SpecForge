@@ -1,0 +1,34 @@
+---
+source: crates/surfaces/cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Migrate .spec files between format versions
+
+Usage: specforge migrate [OPTIONS]
+
+Options:
+      --path <PATH>
+          A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
+          
+          [default: .]
+
+      --dry-run
+          Show unified diff without modifying files
+
+      --no-backup
+          Skip creating .spec.bak backup files
+
+      --rollback
+          Restore files from .spec.bak backups
+
+      --target-version <TARGET_VERSION>
+          Target format version (defaults to current)
+
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
+  -h, --help
+          Print help

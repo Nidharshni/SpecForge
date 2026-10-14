@@ -1,0 +1,40 @@
+---
+source: crates/surfaces/mcp/tests/prompt_golden.rs
+expression: "shape(&reply, dir.path())"
+---
+{
+  "description": "Get inference guidance for discovering spec entities from code",
+  "instruction": "## Inference Workflow Protocol\n\n### Step 1: Start Session\nCall `specforge.infer_session` with `action: \"start\"` and `agent: \"<your-id>\"`.\nOptionally set `source_roots` to limit scanning scope.\n\n### Step 2: Check Progress\nCall `specforge.infer_progress` to see unanalyzed files and current project.\n\n### Step 3: For Each Source File\n1. Read the source file\n2. Identify entities (behaviors, types, events, etc.) using entity kind guides\n3. Write a `.spec` file with the discovered entities\n4. Call `specforge.validate` to check for errors — fix any before proceeding\n5. Call `specforge.infer_session` with `action: \"mark_analyzed\"`, `source_file`, and `entities_produced`\n\n### Step 4: Validate Continuously\nAfter every 3-5 files, call `specforge.validate` to catch cross-file issues.\nUse `specforge.search` to find existing entities and avoid duplicates.\nUse `specforge.query` to check how new entities connect to the graph.\n\n### Step 5: End Session\nCall `specforge.infer_session` with `action: \"end\"` and the `session_id` from Step 1.\nUse `status: \"completed\"` when done, or `status: \"paused\"` to resume later.\n\n### Retry Pattern\nIf validation fails, fix the .spec file and re-validate. Do not skip errors.\nIf a file has no identifiable entities, still mark it as analyzed with an empty `entities_produced`.\n",
+  "layout": "turns",
+  "payload": {
+    "installed_kinds": [
+      "feature",
+      "journey",
+      "deliverable",
+      "milestone",
+      "module",
+      "term",
+      "persona",
+      "channel",
+      "release",
+      "behavior",
+      "invariant",
+      "event",
+      "type",
+      "port"
+    ],
+    "scope": "workflow",
+    "tools": [
+      "specforge.infer_session",
+      "specforge.infer_progress",
+      "specforge.validate",
+      "specforge.query",
+      "specforge.search",
+      "specforge.schema"
+    ]
+  },
+  "roles": [
+    "user",
+    "user"
+  ]
+}

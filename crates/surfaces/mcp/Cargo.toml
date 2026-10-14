@@ -1,0 +1,55 @@
+[package]
+name = "specforge-mcp"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+autotests = false
+
+[[test]]
+name = "tests"
+path = "tests/main.rs"
+
+# Its own binary: its global allocator counts what the server holds.
+[[test]]
+name = "heap"
+path = "tests/heap.rs"
+
+[dependencies]
+specforge-common = { workspace = true }
+specforge-graph = { path = "../../pipeline/graph" }
+specforge-component = { path = "../../runtime/component" }
+specforge-registry = { workspace = true }
+specforge-mcp-macros = { path = "../mcp-macros" }
+specforge-ops = { workspace = true }
+specforge-ops-registry = { path = "../../adapters/ops-registry" }
+specforge-project = { workspace = true }
+specforge-protocol-types = { path = "../../leaf/protocol-types" }
+specforge-wasm = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { version = "0.4.41", optional = true }
+
+[features]
+# `specforge_mcp::testing`: the MCP driver over a `TestProject` (`Served`), the request helpers and `EventLog`, a
+# sink that keeps every event a server records, stamped, for tests (`McpServer::with_events`).
+testing = ["dep:chrono", "specforge-project/testing", "specforge-ops/testing", "specforge-wasm/testing"]
+
+[dev-dependencies]
+specforge-repo-root = { path = "../../leaf/repo-root" }
+specforge-mcp = { path = ".", features = ["testing"] }
+# The committed blobs the tests load (`specforge_component::committed`).
+specforge-component = { path = "../../runtime/component", features = ["testing"] }
+chrono = "0.4.41"
+specforge-extension-sdk = { path = "../../runtime/extension-sdk" }
+# Candidates served in process (`specforge_ops::testing`).
+specforge-ops = { workspace = true, features = ["testing"] }
+# Extensions served in process (`specforge_wasm::testing`).
+specforge-wasm = { workspace = true, features = ["testing"] }
+specforge-installed = { path = "../../runtime/installed", features = ["testing"] }
+specforge-parser = { workspace = true }
+specforge-test = { workspace = true }
+specforge-test-macros = { workspace = true }
+insta = { workspace = true }
+tempfile = { workspace = true }
+specforge-emitter = { path = "../../pipeline/emitter" }

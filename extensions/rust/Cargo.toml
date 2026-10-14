@@ -7,9 +7,9 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-specforge-extension-sdk = { path = "../../crates/specforge-extension-sdk" }
-specforge-protocol-types = { path = "../../crates/specforge-protocol-types" }
+specforge-extension-sdk = { path = "../../crates/runtime/extension-sdk" }
+specforge-protocol-types = { path = "../../crates/leaf/protocol-types" }
 
 [dev-dependencies]
 serde_json = "1.0"
-specforge-extension-sdk = { path = "../../crates/specforge-extension-sdk", features = ["testing"] }
+specforge-extension-sdk = { path = "../../crates/runtime/extension-sdk", features = ["testing"] }

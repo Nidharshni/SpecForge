@@ -1,0 +1,10 @@
+---
+source: crates/pipeline/emitter/tests/model.rs
+expression: output
+---
+{
+  "schema_version": "1.0.0",
+  "extensions": [],
+  "entities": [],
+  "relationships": []
+}

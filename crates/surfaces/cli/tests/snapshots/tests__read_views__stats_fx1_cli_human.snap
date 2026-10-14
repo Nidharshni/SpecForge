@@ -1,0 +1,15 @@
+---
+source: crates/surfaces/cli/tests/read_views.rs
+expression: "normalized_text(&human.stdout, root)"
+---
+Entities: 7
+  behavior: 3
+  feature: 1
+  property: 1
+  type: 2
+Edges:    1
+Unconnected: 5
+Verified: 4
+Declared: 75% of 4 testable
+Proven:   50% of 4 testable
+Diagnostics: 0 errors, 9 warnings, 3 info
