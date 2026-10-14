@@ -85,6 +85,20 @@ fn inherited_tables_ignore_members_and_profiles() {
 }
 
 #[test]
+fn inherited_tables_keep_the_lint_tables() {
+    let a = "[workspace]\nmembers = []\n[workspace.lints.rust]\nunsafe_code = \"deny\"\n\
+             [workspace.lints.clippy]\nunwrap_used = \"deny\"\n[profile.dev]\ndebug = 1\n";
+    let kept = inherited_tables(a);
+    assert!(kept.contains("unsafe_code = \"deny\""));
+    assert!(kept.contains("unwrap_used = \"deny\""));
+    assert!(!kept.contains("debug = 1"));
+    assert_ne!(
+        kept,
+        inherited_tables(&a.replace("unwrap_used = \"deny\"", "unwrap_used = \"warn\""))
+    );
+}
+
+#[test]
 fn a_key_names_the_repo_path_it_hashes() {
     assert_eq!(path_of(WORKSPACE_INHERITED), "Cargo.toml");
     assert_eq!(path_of("crates/x/src/lib.rs"), "crates/x/src/lib.rs");

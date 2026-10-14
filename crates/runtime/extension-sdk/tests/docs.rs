@@ -1,4 +1,8 @@
 //! `docs/extension-sdk.md` names only what the SDK has.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 fn doc() -> String {
     std::fs::read_to_string(specforge_repo_root::repo_root().join("docs/extension-sdk.md"))

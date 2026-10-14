@@ -2,6 +2,10 @@
 //! (`specforge_protocol_types::command_args`, ADR 0017): what the host
 //! sends a `cmd__` export on either surface is what an SDK command reads,
 //! and a value the host refuses the SDK refuses with the same error.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use serde_json::{Map, Value, json};
 use specforge_extension_sdk::prelude::*;

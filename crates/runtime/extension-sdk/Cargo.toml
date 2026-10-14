@@ -26,3 +26,6 @@ specforge-repo-root = { path = "../../leaf/repo-root" }
 specforge-extension-sdk = { path = ".", features = ["testing"] }
 specforge-test = { workspace = true }
 specforge-test-macros = { workspace = true }
+
+[lints]
+workspace = true

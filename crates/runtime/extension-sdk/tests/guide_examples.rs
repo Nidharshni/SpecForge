@@ -1,6 +1,10 @@
 //! The command examples of `docs/guides/extending-specforge.md` ("A command"
 //! and "Test without a runtime"), the same code between the markers, so the
 //! guide's code compiles and does what the guide says. Change both together.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use specforge_extension_sdk::prelude::*;
 

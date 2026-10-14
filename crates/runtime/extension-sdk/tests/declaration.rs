@@ -3,6 +3,10 @@
 //! raw category is checked when the extension is built; and the generated
 //! guest's routing is one value, `Served`, which an in-process host reuses
 //! and which reads the declaration once.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use specforge_extension_sdk::prelude::*;
 use specforge_extension_sdk::testing::MockHost;

@@ -16,3 +16,6 @@ serde_json = { workspace = true, features = ["raw_value"] }
 specforge-repo-root = { path = "../repo-root" }
 specforge-test-macros = { workspace = true }
 specforge-test = { workspace = true }
+
+[lints]
+workspace = true

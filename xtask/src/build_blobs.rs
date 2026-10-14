@@ -148,7 +148,8 @@ impl Stage {
     /// - every staged `Cargo.toml` without its dev-dependency tables: a staged path package is a
     ///   workspace member, and its dev-dependencies would join the resolution;
     /// - a `Cargo.toml` naming the extension as the member, with the root manifest's inherited
-    ///   tables;
+    ///   tables (`[workspace.package]`, `[workspace.dependencies]` and the `[workspace.lints]` tables
+    ///   the staged crates' `[lints] workspace = true` reads);
     /// - the extension's `Cargo.lock` and the toolchain file.
     fn prepare(repo: &Path, blob: &CommittedBlob) -> Result<Stage, String> {
         let crate_dir = blob.crate_dir;

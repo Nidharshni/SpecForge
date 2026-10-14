@@ -3,6 +3,10 @@
 //! their export through the handler declared with them, reading and
 //! writing the protocol's types, and a declaration without its handler is
 //! refused when the extension is built.
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use serde_json::json;
 use specforge_extension_sdk::answer_export;

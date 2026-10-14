@@ -1,6 +1,10 @@
 //! The SDK's operational payload names are the protocol's types, not
 //! copies: what a guest decodes is what the host encodes, and the other way
 //! round (ADR 0013).
+#![allow(
+    clippy::unwrap_used,
+    reason = "a test's unwrap is its assertion: a None or an Err fails the test"
+)]
 
 use std::any::TypeId;
 
