@@ -321,8 +321,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   Never read a graph node to answer what an entity says or owes.
 - **Field text**: the one string a field value is to a rule, a custom validator and a compiler pass
   (ADR 0019): scalars as written; lists of strings or references and mixed lists joined by `", "`;
-  variant lists and type unions by `" | "`; expressions by `", "`; verify statements by `"; "`; a
-  block's keys by `", "`. An empty value is `""`. Every written field has one, and none is null.
+  variant lists and type unions by `" | "`; expressions by `", "`; a
+  block's keys by `", "`. An entity's `verify` statements are not a field and have no field text (ADR 0094). An empty value is `""`. Every written field has one, and none is null.
 - **Field type**: how the host reads a field's value, one of eight names an extension declares:
   `string`, `integer`, `bool`, `enum` (its values are the declaration's `enum_values`, its absent value its `default_value`: a field
   vocabulary; an enum without values, or a default outside them, is W021), `string_list`,
@@ -568,7 +568,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Anchors manifest**: `<root>/specforge-anchors.json`, which source item each entity is anchored
   to. Navigation reads it (`specforge_ops::read::navigate::source_anchors`): the anchors of a source file
   and of an entity; E071 when it cannot be used.
-- **Obligation**: one `verify` statement on an entity. **Proven** when a passing test names its
+- **Obligation**: one `verify` statement on an entity, its own member beside its methods (ADR 0094), never a field. **Proven** when a passing test names its
   exact text, or a formal claim discharges it. Who owes obligations is the entity's standing.
 - **Unverified**: an entity that counts toward coverage and is not proven
   (its standing counts and its verdict is not proven; `ProjectCoverage::is_unverified`).

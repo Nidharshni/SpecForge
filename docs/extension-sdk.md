@@ -477,7 +477,6 @@ custom rule (`ValidatorField.value`, always a JSON string) and a compiler pass
 | mixed list (`[1, true]`) | items' texts joined by `", "` |
 | variant list (`values [low, high]`), type union (`string \| string[]`) | members joined by `" \| "` |
 | expression group (`expr { a < 10ms, b > 5 }`) | each expression's display form, joined by `", "` |
-| verify statements | their texts joined by `"; "` |
 | block (`ensures { done "…" }`) | its keys joined by `", "` |
 
 A written empty list or block is present with the text `""`, so
