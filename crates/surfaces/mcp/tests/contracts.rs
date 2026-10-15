@@ -3177,7 +3177,7 @@ fn a_model_depth_without_a_root_is_refused() {
     assert_eq!(error["argument"], "root");
     assert_eq!(
         error["message"],
-        "'depth' needs 'root': the kind the depth counts from"
+        "a depth counts from a root kind: give a root too"
     );
 }
 
