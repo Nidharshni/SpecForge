@@ -55,7 +55,6 @@ fn mcp_document(project: &TestProject, tool: &str, arguments: Value) -> Value {
     invariant = "document_project_paths",
     verify = "the CLI and MCP documents of one run are byte-equal, whatever the working directory or root spelling"
 )]
-#[ignore = "flipped by T7"]
 fn one_run_prints_the_same_bytes_on_both_surfaces() {
     let (cli_project, mcp_project) = (project(), project());
     let elsewhere = tempfile::TempDir::new().unwrap();
