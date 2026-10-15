@@ -74,3 +74,5 @@ changed `add` only because a plan rule changed what its callers call. Three chan
 
 An operation that must judge something other than the project peer set (a builtin's version change); a registry
 protocol whose manifest is not the declaration the gate judges; a surface that previews an init.
+
+**Amended by ADR 0098 (2026-10-15):** D4: `init` also claims its specifiers through add's rule (`extension::claims`): two specifiers that add one extension differently are refused with `extension_conflict`.

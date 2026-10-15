@@ -76,3 +76,5 @@ Every argument of a tool, prompt or resource that names a file or directory, and
 - `Reach::AnyProject` and `Reach::Served` stay: they decide which entries take a `path`; D2 decides where it
   may point.
 - The invariant `mcp_served_project_consistency` states the rule; its tests are `tests/path_containment.rs`.
+
+**Amended by ADR 0098 (2026-10-15):** D7: `init` reads a relative local specifier from the directory it creates (the CLI's working directory, over MCP the directory the call names), as `add_extension` reads it from the project's root. Whether MCP may install from outside the project stays open.
