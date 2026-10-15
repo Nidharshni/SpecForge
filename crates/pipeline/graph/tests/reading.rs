@@ -53,3 +53,39 @@ fn only_a_declared_reference_is_a_single_reference() {
     assert!(!forms.reading("open", "owner").is_single_reference());
     assert!(!forms.reading("doc", "unknown").is_single_reference());
 }
+
+#[test]
+fn references_of_a_reference_list_are_its_items_with_their_spans() {
+    use specforge_common::{SourceSpan, Sym};
+    use specforge_parser::{FieldEntry, FieldValue, SpannedRef};
+
+    let span = |col| SourceSpan {
+        file: Sym::new("t.spec"),
+        start_line: 1,
+        start_col: col,
+        end_line: 1,
+        end_col: col + 1,
+    };
+    let entry = FieldEntry {
+        key: Sym::new("see_also"),
+        value: FieldValue::ReferenceList(vec![
+            SpannedRef {
+                id: "a".into(),
+                span: span(3),
+            },
+            SpannedRef {
+                id: "b".into(),
+                span: span(6),
+            },
+        ]),
+        annotations: vec![],
+        value_span: None,
+    };
+    let forms = forms();
+    let references = forms.reading("doc", "see_also").references(&entry);
+    let read: Vec<(&str, usize)> = references
+        .iter()
+        .map(|r| (r.id, r.span.unwrap().start_col))
+        .collect();
+    assert_eq!(read, [("a", 3), ("b", 6)]);
+}

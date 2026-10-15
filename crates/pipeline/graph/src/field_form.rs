@@ -11,7 +11,7 @@ use serde_json::{Map, Value, json};
 use specforge_common::SourceSpan;
 use specforge_common::find_close_match;
 use specforge_common::shape::{Definitions, Shape};
-use specforge_parser::{FieldMap, FieldValue, SpannedRef};
+use specforge_parser::{FieldEntry, FieldMap, FieldValue, SpannedRef};
 use specforge_protocol_types::FieldType;
 
 use crate::Graph;
@@ -303,6 +303,13 @@ impl FieldForms {
     }
 }
 
+/// One id a field's value references and where it is written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Reference<'v> {
+    pub id: &'v str,
+    pub span: Option<&'v SourceSpan>,
+}
+
 /// How a (kind, field) reads: see [`FieldForms::reading`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Reading<'f> {
@@ -322,6 +329,21 @@ impl Reading<'_> {
         match self {
             Self::Declared(form) => form.coerce(value, span),
             Self::Member | Self::Undeclared => None,
+        }
+    }
+
+    /// What `entry`'s value references, in written order: every item of a
+    /// reference list, with its span.
+    pub fn references<'v>(&self, entry: &'v FieldEntry) -> Vec<Reference<'v>> {
+        match &entry.value {
+            FieldValue::ReferenceList(refs) => refs
+                .iter()
+                .map(|r| Reference {
+                    id: r.id.as_str(),
+                    span: Some(&r.span),
+                })
+                .collect(),
+            _ => Vec::new(),
         }
     }
 

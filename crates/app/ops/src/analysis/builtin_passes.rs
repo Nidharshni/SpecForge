@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use specforge_common::{Diagnostic, Severity, codes};
-use specforge_parser::FieldValue;
+use specforge_graph::Reading;
 use specforge_project::passes::{AnalysisContext, Finding};
 
 /// Result of one analysis pass.
@@ -32,7 +32,7 @@ pub const COVERAGE_PASS: &str = "@specforge/testing:coverage";
 /// reported as unconstrained. Reference existence is already checked by the
 /// compiler (E003) and is not repeated here.
 pub fn pass_contracts(ctx: &AnalysisContext) -> (Vec<Finding>, serde_json::Value) {
-    let mut contract_fields: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut contract_fields: HashMap<&str, Vec<(&str, Reading)>> = HashMap::new();
     for (kind, field, entry) in ctx.field_registry.iter() {
         if !entry.field_type().is_reference() {
             continue;
@@ -47,13 +47,16 @@ pub fn pass_contracts(ctx: &AnalysisContext) -> (Vec<Finding>, serde_json::Value
             .and_then(|t| ctx.kind_registry.get(t))
             .is_some_and(|kind| kind.declared.contract_target)
         {
-            contract_fields.entry(kind).or_default().push(field);
+            contract_fields
+                .entry(kind)
+                .or_default()
+                .push((field, Reading::Declared(entry.form())));
         }
     }
     for fields in contract_fields.values_mut() {
         // Suggestions render this list — keep it registry-order-independent
         // (hardening-plan D4 / R-6).
-        fields.sort_unstable();
+        fields.sort_unstable_by_key(|(name, _)| *name);
     }
 
     let mut findings = Vec::new();
@@ -70,11 +73,11 @@ pub fn pass_contracts(ctx: &AnalysisContext) -> (Vec<Finding>, serde_json::Value
         };
         let declared = fields
             .iter()
-            .filter(|f| {
-                matches!(
-                    node.fields.get(f),
-                    Some(FieldValue::ReferenceList(items)) if !items.is_empty()
-                )
+            .filter(|(name, reading)| {
+                node.fields
+                    .entries()
+                    .iter()
+                    .any(|e| e.key.as_str() == *name && !reading.references(e).is_empty())
             })
             .count();
         if declared > 0 {
@@ -95,7 +98,11 @@ pub fn pass_contracts(ctx: &AnalysisContext) -> (Vec<Finding>, serde_json::Value
                 .with_suggestion(format!(
                     "add requires/ensures/maintains references (registered for '{}': {})",
                     node.kind.raw,
-                    fields.join(", ")
+                    fields
+                        .iter()
+                        .map(|(name, _)| *name)
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 )),
             );
         }

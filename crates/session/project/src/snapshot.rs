@@ -489,12 +489,17 @@ fn record(
             .collect(),
         references: entries
             .iter()
-            .filter_map(|entry| match &entry.value {
-                FieldValue::ReferenceList(refs) => Some((
-                    entry.key.to_string(),
-                    refs.iter().map(|r| r.id.clone()).collect(),
-                )),
-                _ => None,
+            .filter_map(|entry| {
+                let refs = registries
+                    .field_forms()
+                    .reading(node.kind.raw.as_str(), entry.key.as_str())
+                    .references(entry);
+                (!refs.is_empty()).then(|| {
+                    (
+                        entry.key.to_string(),
+                        refs.iter().map(|r| r.id.to_string()).collect(),
+                    )
+                })
             })
             .collect(),
         obligations: node

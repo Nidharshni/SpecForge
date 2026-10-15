@@ -422,35 +422,12 @@ fn define_block_warning(entity: &Entity) -> Diagnostic {
 /// Link reference edges, resolve E003s (single-reference aware) and emit
 /// W061 cycle warnings, over the whole graph.
 fn link_and_diagnose(graph: &mut Graph, config: &GraphConfig) -> Vec<Diagnostic> {
-    let mut diagnostics = Vec::new();
-
     // Values take their declared types before anything reads them.
     graph.coerce_field_values(&config.inputs.field_forms);
 
-    // Link references -> edges.
-    graph.resolve_references_with(
-        &crate::FieldForms::default(),
-        &config.inputs.absent_reference_targets,
-    );
-
-    // Detect reference cycles and emit W061
-    let cycles = graph.detect_cycles();
-    for cycle in &cycles {
-        let path: Vec<String> = cycle.iter().map(|s| s.to_string()).collect();
-        diagnostics.push(
-            Diagnostic::new(
-                codes::W061,
-                format!("reference cycle detected: {}", path.join(" -> ")),
-            )
-            .with_suggestion("break the cycle by removing or inverting one reference")
-            .with_data(specforge_common::DiagnosticData::ReferenceCycle { path }),
-        );
-    }
-
-    // Re-resolve references with single-reference field awareness. Replaces
-    // the initial reference diagnostics with ones that also account for
-    // single Reference fields (e.g., journey.persona -> persona).
-    let mut ref_diags = graph.resolve_references_with(
+    // Link references -> edges (E003, I004) and warn on reference cycles
+    // (W061), which leave a declared single reference out.
+    let diagnostics = graph.link(
         &config.inputs.field_forms,
         &config.inputs.absent_reference_targets,
     );
@@ -465,10 +442,9 @@ fn link_and_diagnose(graph: &mut Graph, config: &GraphConfig) -> Vec<Diagnostic>
     // The linker's postcondition (E060, retired): every reference to an
     // existing entity has its edge.
     #[cfg(debug_assertions)]
-    graph.assert_linked();
+    graph.assert_linked(&config.inputs.field_forms);
 
-    ref_diags.extend(diagnostics);
-    ref_diags
+    diagnostics
 }
 
 /// `diagnostics` by the file of their span (`""`: no span), each file's in
