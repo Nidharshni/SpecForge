@@ -1,7 +1,6 @@
 //! `verify` statements are not fields (ADR 0094): a field named `verify` is checked like any field, and statements
 //! on a kind that accepts none are W158.
 
-use specforge_extension_sdk::prelude::*;
 use specforge_registry::entity::EntityRecord;
 
 use crate::support::{build, check, declare, software, span};

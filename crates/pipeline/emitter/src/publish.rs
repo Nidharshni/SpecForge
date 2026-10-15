@@ -12,7 +12,8 @@ use std::collections::BTreeSet;
 use serde_json::{Map, Value, json};
 use specforge_common::shape::{Definitions, Shape};
 use specforge_common::structural::NODE_KINDS;
-use specforge_graph::field_form::{FieldJson, Obligation};
+use specforge_graph::Obligation;
+use specforge_graph::field_form::FieldJson;
 
 use crate::emit::{EmitFormat, document_schema};
 use crate::schema::{GraphProtocolSchema, SchemaEntityKind, schema_url};

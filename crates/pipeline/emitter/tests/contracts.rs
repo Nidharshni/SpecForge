@@ -1,6 +1,6 @@
 use specforge_common::{Diagnostic, Severity, SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
-use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue, VerifyStatement};
+use specforge_parser::{FieldMap, FieldValue, VerifyStatement};
 use specforge_test::prelude::*;
 
 fn span() -> SourceSpan {
@@ -24,14 +24,9 @@ fn node_with_fields(id: &str, kind: &str, contract: &str, status: &str) -> Node 
         FieldValue::Identifier(status.to_string()),
     );
     Node {
-        id: EntityId { raw: Sym::new(id) },
-        kind: EntityKind {
-            raw: Sym::new(kind),
-        },
         title: Some(format!("Title {}", id)),
         fields,
-        source_span: span(),
-        methods: Vec::new(),
+        ..Node::new(id, kind, span())
     }
 }
 
@@ -41,6 +36,7 @@ fn testable_node(id: &str) -> Node {
         Sym::new("contract"),
         FieldValue::String("The system MUST work".to_string()),
     );
+    // Temporary (until T8): the parser still writes the statements as a field too.
     fields.push(
         Sym::new("verify"),
         FieldValue::VerifyList(vec![VerifyStatement {
@@ -49,14 +45,13 @@ fn testable_node(id: &str) -> Node {
         }]),
     );
     Node {
-        id: EntityId { raw: Sym::new(id) },
-        kind: EntityKind {
-            raw: Sym::new("behavior"),
-        },
         title: Some(format!("Title {}", id)),
         fields,
-        source_span: span(),
-        methods: Vec::new(),
+        obligations: vec![VerifyStatement {
+            kind: "unit".to_string(),
+            description: "it works".to_string(),
+        }],
+        ..Node::new(id, "behavior", span())
     }
 }
 

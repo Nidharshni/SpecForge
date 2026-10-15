@@ -36,6 +36,7 @@ fn build_graph() -> Graph {
             fields,
             source_span: span(),
             methods: Vec::new(),
+            obligations: Vec::new(),
         });
     }
 
@@ -322,6 +323,7 @@ fn file_emission_order_independent_of_filesystem() {
                 end_col: 0,
             },
             methods: Vec::new(),
+            obligations: Vec::new(),
         });
     }
 
@@ -349,6 +351,7 @@ fn file_emission_order_independent_of_filesystem() {
                 end_col: 0,
             },
             methods: Vec::new(),
+            obligations: Vec::new(),
         });
     }
 

@@ -11,10 +11,11 @@ use serde_json::{Map, Value, json};
 use specforge_common::SourceSpan;
 use specforge_common::find_close_match;
 use specforge_common::shape::{Definitions, Shape};
-use specforge_parser::{FieldMap, FieldValue, SpannedRef, VerifyStatement};
+use specforge_parser::{FieldMap, FieldValue, SpannedRef};
 use specforge_protocol_types::FieldType;
 
 use crate::Graph;
+use crate::obligations::Obligation;
 
 /// What a field's value was written as, after the graph build coerced it:
 /// one variant per parsed value form, so a check tells `"1"` from `1`, a
@@ -337,23 +338,6 @@ impl Shape for FieldJson {
             ]}},
             {"type": "object", "additionalProperties": this},
         ]})
-    }
-}
-
-/// One `verify` statement as every output writes it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, specforge_common::shape::Shape)]
-#[shape(define = "VerifyStatement")]
-pub struct Obligation {
-    pub kind: String,
-    pub description: String,
-}
-
-impl Obligation {
-    pub fn of(statement: &VerifyStatement) -> Self {
-        Self {
-            kind: statement.kind.clone(),
-            description: statement.description.clone(),
-        }
     }
 }
 

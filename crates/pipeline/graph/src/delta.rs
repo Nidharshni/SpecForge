@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{Graph, Node};
+use crate::{FieldValue, Graph, Node};
 use serde::Serialize;
 use serde_json::Value;
 use specforge_common::Sym;
@@ -18,8 +18,8 @@ use specforge_common::shape::Shape;
 pub struct GraphDelta {
     pub added_nodes: Vec<NodeChange>,
     pub removed_nodes: Vec<NodeChange>,
-    /// Nodes in both graphs whose fields (verify list included), kind,
-    /// title, methods or outgoing edges differ.
+    /// Nodes in both graphs whose fields, kind,
+    /// title, methods, obligations or outgoing edges differ.
     pub modified_nodes: Vec<ModifiedNodeChange>,
     pub added_edges: Vec<EdgeChange>,
     pub removed_edges: Vec<EdgeChange>,
@@ -45,7 +45,7 @@ pub struct ModifiedNodeChange {
     /// here whatever its name, `kind` and `methods` included.
     pub changed_fields: Vec<String>,
     /// What else differs (sorted, each once): its kind, its title, its
-    /// methods, its outgoing edges.
+    /// methods, its obligations, its outgoing edges.
     pub changed_aspects: Vec<NodeAspect>,
     pub file: String,
     pub line: usize,
@@ -58,6 +58,7 @@ pub enum NodeAspect {
     Kind,
     Title,
     Methods,
+    Obligations,
     Edges,
 }
 
@@ -325,6 +326,9 @@ fn changes(
     if methods(old) != methods(new) {
         aspects.insert(NodeAspect::Methods);
     }
+    if old.obligations != new.obligations {
+        aspects.insert(NodeAspect::Obligations);
+    }
     if old_out != new_out {
         aspects.insert(NodeAspect::Edges);
     }
@@ -336,6 +340,10 @@ fn changes(
 fn field_contents(node: &Node) -> BTreeMap<String, Vec<Value>> {
     let mut fields: BTreeMap<String, Vec<Value>> = BTreeMap::new();
     for entry in node.fields.entries() {
+        // Temporary (until T8): the parser still writes statements as a field.
+        if matches!(entry.value, FieldValue::VerifyList(_)) {
+            continue;
+        }
         let value = serde_json::json!({
             "value": Value::from(crate::field_form::write(&entry.value)),
             "annotations": serde_json::to_value(&entry.annotations).unwrap_or_default(),

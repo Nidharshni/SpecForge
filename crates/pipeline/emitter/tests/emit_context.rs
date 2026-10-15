@@ -27,13 +27,6 @@ fn rich_node() -> Node {
         Sym::new("status"),
         FieldValue::Identifier("done".to_string()),
     );
-    fields.push(
-        Sym::new("verify"),
-        FieldValue::VerifyList(vec![VerifyStatement {
-            kind: "unit".to_string(),
-            description: "it works".to_string(),
-        }]),
-    );
     Node {
         id: EntityId {
             raw: Sym::new("alpha"),
@@ -45,6 +38,10 @@ fn rich_node() -> Node {
         fields,
         source_span: span(),
         methods: Vec::new(),
+        obligations: vec![VerifyStatement {
+            kind: "unit".to_string(),
+            description: "it works".to_string(),
+        }],
     }
 }
 
@@ -119,6 +116,7 @@ fn context_includes_edges_and_schema_version() {
         fields: FieldMap::new(),
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     };
     node_b.fields.push(
         Sym::new("contract"),
@@ -210,6 +208,7 @@ fn context_keeps_normative_fields() {
         fields,
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     });
     let mut registry = FieldRegistry::new();
     for (field, normative) in [("guarantee", true), ("description", false)] {
@@ -274,6 +273,7 @@ fn context_lifts_the_fields_an_extension_declares_headline() {
             fields: fields.clone(),
             source_span: span(),
             methods: Vec::new(),
+            obligations: Vec::new(),
         });
     }
     // Only `behavior` declares the two as headline fields; on `type` they
@@ -342,6 +342,7 @@ fn a_headline_field_named_coverage_status_is_not_lifted() {
         fields,
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     });
     let mut registry = FieldRegistry::new();
     registry.register(

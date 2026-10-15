@@ -41,6 +41,7 @@ fn emit_graph_includes_all_fields_and_metadata() {
         fields,
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     });
 
     let json = crate::support::emit_json(&graph);
@@ -79,6 +80,7 @@ fn emit_graph_equals_emit_json() {
             fields: FieldMap::new(),
             source_span: span(),
             methods: Vec::new(),
+            obligations: Vec::new(),
         });
     }
     for (source, target, label) in [
@@ -136,6 +138,7 @@ fn graph_format_conforms_to_graph_protocol_schema() {
         fields: FieldMap::new(),
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     });
     graph.add_node(Node {
         id: EntityId {
@@ -148,6 +151,7 @@ fn graph_format_conforms_to_graph_protocol_schema() {
         fields: FieldMap::new(),
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     });
     graph.add_edge(Edge {
         source: Sym::new("beta"),
@@ -191,6 +195,7 @@ fn graph_format_includes_schema_version() {
         fields: FieldMap::new(),
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     });
 
     let json = crate::support::emit_json(&graph);
@@ -220,6 +225,7 @@ fn graph_format_scoped_nonexistent_entity_produces_e001() {
         fields: FieldMap::new(),
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     });
 
     let err = crate::support::scoped_json(&graph, "nonexistent").unwrap_err();
@@ -265,6 +271,7 @@ fn structural_only_graph_exports_raw_keywords() {
         fields: FieldMap::new(),
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     });
     graph.add_node(Node {
         id: EntityId {
@@ -277,6 +284,7 @@ fn structural_only_graph_exports_raw_keywords() {
         fields: FieldMap::new(),
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     });
 
     let json = crate::support::emit_json(&graph);
@@ -306,6 +314,7 @@ fn without_verdicts_no_node_carries_a_coverage_status() {
             fields: FieldMap::new(),
             source_span: span(),
             methods: Vec::new(),
+            obligations: Vec::new(),
         });
     }
     let verdicts = BTreeMap::from([(

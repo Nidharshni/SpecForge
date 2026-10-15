@@ -25,6 +25,7 @@ fn node(id: &str, kind: &str, title: Option<&str>) -> Node {
         fields: FieldMap::new(),
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     }
 }
 
@@ -136,6 +137,7 @@ fn json_includes_fields() {
         fields,
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     });
 
     let json = crate::support::emit_json(&graph);
@@ -227,6 +229,7 @@ fn json_includes_source_location() {
             end_col: 1,
         },
         methods: Vec::new(),
+        obligations: Vec::new(),
     });
 
     let json = crate::support::emit_json(&graph);

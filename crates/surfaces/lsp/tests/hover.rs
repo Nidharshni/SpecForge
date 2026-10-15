@@ -9,7 +9,6 @@ use specforge_common::{Severity, SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
 use specforge_lsp::LineIndex;
 use specforge_ops::view::ProjectView;
-use specforge_parser::{EntityId, EntityKind, FieldMap};
 use specforge_project::Environment;
 use specforge_project::coverage::RecordedCoverage;
 use specforge_test_macros::test as spec;
@@ -22,20 +21,18 @@ use specforge_extension_sdk::prelude::{ContributionsBuilder, FieldType, Vocabula
 /// A graph node for the tests of the renderer, which hand it facts.
 fn node(id: &str, kind: &str, title: Option<&str>) -> Node {
     Node {
-        id: EntityId { raw: Sym::new(id) },
-        kind: EntityKind {
-            raw: Sym::new(kind),
-        },
         title: title.map(|t| t.to_string()),
-        fields: FieldMap::new(),
-        source_span: SourceSpan {
-            file: Sym::new("test.spec"),
-            start_line: 0,
-            start_col: 0,
-            end_line: 0,
-            end_col: 0,
-        },
-        methods: Vec::new(),
+        ..Node::new(
+            id,
+            kind,
+            SourceSpan {
+                file: Sym::new("test.spec"),
+                start_line: 0,
+                start_col: 0,
+                end_line: 0,
+                end_col: 0,
+            },
+        )
     }
 }
 

@@ -256,23 +256,10 @@ fn collected(entries: &[(&str, &str, TestStatus)]) -> CollectOutput {
 )]
 fn known_entities_are_the_snapshots_records() {
     use specforge_common::{SourceSpan, Sym};
-    use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue, VerifyStatement};
+    use specforge_parser::{EntityId, EntityKind, FieldMap, VerifyStatement};
 
     let mut fixture = crate::view::testing::Fixture::new();
-    let mut fields = FieldMap::new();
-    fields.push(
-        Sym::new("verify"),
-        FieldValue::VerifyList(vec![
-            VerifyStatement {
-                kind: "unit".into(),
-                description: "first".into(),
-            },
-            VerifyStatement {
-                kind: "integration".into(),
-                description: "second".into(),
-            },
-        ]),
-    );
+    let fields = FieldMap::new();
     fixture.graph.add_node(specforge_graph::Node {
         id: EntityId {
             raw: Sym::new("widget"),
@@ -290,6 +277,16 @@ fn known_entities_are_the_snapshots_records() {
             end_col: 1,
         },
         methods: Vec::new(),
+        obligations: vec![
+            VerifyStatement {
+                kind: "unit".into(),
+                description: "first".into(),
+            },
+            VerifyStatement {
+                kind: "integration".into(),
+                description: "second".into(),
+            },
+        ],
     });
     let view = fixture.view();
 

@@ -497,7 +497,8 @@ fn record(
                 _ => None,
             })
             .collect(),
-        obligations: specforge_graph::obligations(node)
+        obligations: node
+            .obligations
             .iter()
             .map(|statement| ObligationRecord {
                 kind: statement.kind.clone(),

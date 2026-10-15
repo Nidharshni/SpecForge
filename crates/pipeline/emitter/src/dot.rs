@@ -176,6 +176,7 @@ mod dot_escape_tests {
                 end_col: 1,
             },
             methods: Vec::new(),
+            obligations: Vec::new(),
         });
         let dot = emit_dot(&graph, &DotOptions::default());
         let node_stmts = dot

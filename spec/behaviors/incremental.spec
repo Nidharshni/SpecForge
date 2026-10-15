@@ -466,8 +466,8 @@ behavior compute_graph_delta "Compute Graph Delta" {
     previous graph state against the new graph state to produce a
     GraphDelta. The delta MUST enumerate all added nodes, removed nodes,
     modified nodes (with what changed: the fields whose values differ, by
-    name, and apart from them which of its kind, title, methods and
-    outgoing edges differ, so a field named kind or methods is never read
+    name, and apart from them which of its kind, title, methods, obligations
+    and outgoing edges differ, so a field named kind or methods is never read
     as the aspect), added edges, removed edges, and the list of affected
     files. Source positions are ignored: an entity that only moved is not
     modified. The update lists it apart, as a moved node: its id and kind
@@ -490,6 +490,8 @@ behavior compute_graph_delta "Compute Graph Delta" {
   verify unit "a field named like an aspect is a changed field, never the aspect"
   verify unit "an entity that only moved is a moved node, not a modification"
   verify unit "a change of column or content alone moves no node"
+  verify unit "a verify statement edit is the obligations aspect, not a changed field"
+  verify unit "an incremental build compares each node's obligations"
   verify contract "Compute Graph Delta: graph delta computation holds — previous_graph_available"
 }
 

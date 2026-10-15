@@ -303,6 +303,7 @@ impl Fixture {
                     end_col: 1,
                 },
                 methods: Vec::new(),
+                obligations: Vec::new(),
             });
         }
         let env = specforge_project::Environment::with_registries(registries, None);

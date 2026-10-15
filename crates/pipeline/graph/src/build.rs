@@ -396,6 +396,7 @@ fn node_from_entity(entity: &Entity) -> Node {
         fields: entity.fields.clone(),
         source_span: entity.span.clone(),
         methods: entity.methods.clone(),
+        obligations: entity.obligations.clone(),
     }
 }
 
@@ -499,7 +500,7 @@ fn compare_graph_contents(incremental: &Graph, cold: &Graph) -> Result<(), Strin
             .iter()
             .map(|n| {
                 let sig = format!(
-                    "{} in {}:{}:{} title={:?} fields={:?} methods={:?}",
+                    "{} in {}:{}:{} title={:?} fields={:?} methods={:?} obligations={:?}",
                     n.kind.raw,
                     n.source_span.file,
                     n.source_span.start_line,
@@ -507,6 +508,7 @@ fn compare_graph_contents(incremental: &Graph, cold: &Graph) -> Result<(), Strin
                     n.title,
                     n.fields,
                     n.methods,
+                    n.obligations,
                 );
                 (n.id.raw.to_string(), sig)
             })
