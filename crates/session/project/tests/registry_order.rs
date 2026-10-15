@@ -30,6 +30,7 @@ fn colliding_extensions_with(peer: bool, custom: bool) -> InProcessRuntime {
         .fold(InProcessRuntime::new(), |runtime, ext| {
             runtime.with(move || {
                 let mut c = ContributionsBuilder::new(ExtensionMeta::new(ext, "1.0.0"));
+                c.meta.short = Some("gadgets".to_string());
                 if peer && ext == "@test/alpha" {
                     c.meta.peer_dependencies = vec![PeerDependency {
                         name: "@test/missing".into(),

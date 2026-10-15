@@ -14,6 +14,7 @@ use crate::support::{build, codes, declare, peer};
 /// custom rule whose function does not exist.
 fn colliding(name: &str, first: bool) -> ExtensionDeclaration {
     declare(name, |c| {
+        c.meta.short = Some("dup".to_string());
         c.kind("Dup", |k| {
             k.keyword("dup");
             if first {

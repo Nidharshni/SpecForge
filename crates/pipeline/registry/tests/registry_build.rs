@@ -163,7 +163,10 @@ fn derived_graph_inputs_match_the_manifests() {
 
 #[test]
 fn surface_conflicts_come_last_in_the_builds_diagnostics() {
-    let build = build_registries(vec![software(), product()]);
+    // Routed under `@test/software`'s short name: its `hello` is E039.
+    let mut product = product();
+    product.handshake.ext_short = Some("software".into());
+    let build = build_registries(vec![software(), product]);
 
     let reported = codes(&build);
     assert_eq!(

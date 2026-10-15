@@ -117,7 +117,10 @@ fn scenarios() -> Vec<(&'static str, (tempfile::TempDir, CompiledProject))> {
         (
             "E039",
             compiled(
-                &[("@acme/a", None, hello), ("@acme/b", None, hello)],
+                &[
+                    ("@acme/a", Some("acme"), hello),
+                    ("@acme/b", Some("acme"), hello),
+                ],
                 none(),
                 &[],
             ),
