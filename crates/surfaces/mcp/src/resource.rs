@@ -16,6 +16,7 @@ use crate::registry::Listed;
 use crate::subscriptions::Watched;
 use crate::target::TargetSpec;
 use crate::tool::{ErrorCode, McpError};
+use crate::uri_template::{Malformed, Matched};
 use specforge_ops::view::ProjectView;
 
 /// One core resource, stated once in its own module under `resources/`.
@@ -29,10 +30,11 @@ pub trait CoreResource: Sync + 'static {
     /// What its content changes with (`subscriptions::Watched`): which
     /// updates notify its subscribers.
     const CHANGES_WITH: Watched;
-    /// Read the resource at a URI it [names](ResourceSpec::names), over the
-    /// project view it is given: the served project's, brought up to date,
+    /// Read the resource at a URI it [names](ResourceSpec::names), whose
+    /// placeholders the template has read ([`crate::uri_template::read`]),
+    /// over the project view it is given: the served project's, brought up to date,
     /// or the empty session's when nothing is served.
-    fn read(view: ProjectView<'_>, uri: &str) -> ReadOutcome;
+    fn read(view: ProjectView<'_>, uri: &Matched<'_>) -> ReadOutcome;
 }
 
 /// What a resource read returned: its MIME type and text. The URI is the one
@@ -64,7 +66,8 @@ pub trait ResourceSpec: Sync {
     fn mime_type(&self) -> &'static str;
     /// What its content changes with ([`CoreResource::CHANGES_WITH`]).
     fn changes_with(&self) -> Watched;
-    /// Read the resource at a URI it [names](Self::names).
+    /// Read the resource at a URI it [names](Self::names): the template
+    /// reads its placeholders first, and refuses a malformed one.
     fn read(&self, view: ProjectView<'_>, uri: &str) -> ReadOutcome;
 
     /// How it reaches its project: every core resource reads the served
@@ -113,7 +116,8 @@ impl<T: CoreResource> ResourceSpec for T {
     }
 
     fn read(&self, view: ProjectView<'_>, uri: &str) -> ReadOutcome {
-        T::read(view, uri)
+        let matched = crate::uri_template::read(T::URI, uri).map_err(Malformed::refusal)?;
+        T::read(view, &matched)
     }
 }
 

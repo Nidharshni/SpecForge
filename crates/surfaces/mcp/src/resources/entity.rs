@@ -3,6 +3,7 @@ use specforge_ops::view::ProjectView;
 
 use crate::resource::{CoreResource, ReadOutcome};
 use crate::subscriptions::Watched;
+use crate::uri_template::Matched;
 
 /// `specforge://graph/{entity_id}`: the entity and its neighbours, the
 /// scoped graph export at depth 1 (a `depth` query widens it). A malformed
@@ -16,8 +17,8 @@ impl CoreResource for Resource {
     const DESCRIPTION: &'static str = "Subgraph rooted at a specific entity";
     const CHANGES_WITH: Watched = Watched::Graph;
 
-    fn read(view: ProjectView<'_>, uri: &str) -> ReadOutcome {
-        let mut query = super::view::ViewQuery::parse(uri, Some(Self::URI))?;
+    fn read(view: ProjectView<'_>, uri: &Matched<'_>) -> ReadOutcome {
+        let mut query = super::view::ViewQuery::parse(uri, Some("entity_id"))?;
         super::view::check_entity_id(query.scope.as_deref().unwrap_or_default())?;
         // The entity and its immediate neighbors, not everything reachable.
         query.depth.get_or_insert(1);

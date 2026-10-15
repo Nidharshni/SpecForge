@@ -30,7 +30,7 @@ pub mod target;
 pub mod testing;
 pub mod tool;
 pub mod tools;
-mod uri_template;
+pub mod uri_template;
 
 use events::{EventSink, McpEvent};
 use protocol::router::route;

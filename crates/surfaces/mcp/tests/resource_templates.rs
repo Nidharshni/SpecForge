@@ -55,7 +55,6 @@ fn an_entity_placeholder_is_one_non_empty_segment() {
     behavior = "provide_mcp_entities_by_kind",
     verify = "the entities resource refuses an empty kind or one of more than one path segment as invalid input naming kind"
 )]
-#[ignore = "flipped by T3"]
 fn a_kind_placeholder_is_one_non_empty_segment() {
     let mut server = served();
     for uri in [

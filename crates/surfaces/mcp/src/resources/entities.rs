@@ -3,6 +3,7 @@ use specforge_ops::view::ProjectView;
 use crate::resource::{CoreResource, ReadOutcome, ResourceText};
 use crate::subscriptions::Watched;
 use crate::tool::{ErrorCode, McpError};
+use crate::uri_template::Matched;
 
 /// `specforge://entities/{kind}`: what `specforge.list {kind}` lists, the
 /// same rows from the same read view and presenter
@@ -16,20 +17,15 @@ impl CoreResource for Resource {
     const DESCRIPTION: &'static str = "All entities of a specific kind (e.g. feature, behavior)";
     const CHANGES_WITH: Watched = Watched::Content;
 
-    fn read(view: ProjectView<'_>, uri: &str) -> ReadOutcome {
-        let (path, _) = uri.split_once('?').unwrap_or((uri, ""));
+    fn read(view: ProjectView<'_>, uri: &Matched<'_>) -> ReadOutcome {
         super::view::no_query(uri)?;
-        let kind = super::view::decode(
-            "kind",
-            path.strip_prefix(super::view::prefix(Self::URI))
-                .unwrap_or_default(),
-        )?;
+        let kind = uri.value("kind").unwrap_or_default();
         // A resource has no `_meta`: the listing's notices (an unknown kind)
         // are not carried.
         let listing = specforge_ops::read::query::list(
             &view,
             &specforge_ops::read::query::ListRequest {
-                kind: Some(&kind),
+                kind: Some(kind),
                 ..Default::default()
             },
         );

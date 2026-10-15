@@ -3,6 +3,7 @@ use specforge_ops::view::ProjectView;
 
 use crate::resource::{CoreResource, ReadOutcome};
 use crate::subscriptions::Watched;
+use crate::uri_template::Matched;
 
 /// `specforge://context`: the context export.
 pub struct Resource;
@@ -13,7 +14,7 @@ impl CoreResource for Resource {
     const DESCRIPTION: &'static str = "Context-optimized graph (contract, status, verify fields)";
     const CHANGES_WITH: Watched = Watched::Content;
 
-    fn read(view: ProjectView<'_>, uri: &str) -> ReadOutcome {
+    fn read(view: ProjectView<'_>, uri: &Matched<'_>) -> ReadOutcome {
         super::view::export_view(view, uri, Format::Context, None)
     }
 }
