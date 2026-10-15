@@ -690,7 +690,9 @@ behavior validate_agent_plan "Validate Agent Implementation Plan" {
     snapshot, never the recorded test report. The outcome MUST be one JSON
     document on every surface (McpTracePlanResult): ok (no unresolved entry
     and no ordering gap), the entries that name an entity, and the gaps;
-    specforge trace --plan exits 1 when ok is false.
+    specforge trace --plan exits 1 when ok is false. An entity and a plan
+    are two requests: every surface refuses both together as invalid input
+    on the plan.
   """
   verify unit "plan with all valid entity IDs passes validation"
   verify unit "plan referencing nonexistent entity ID produces E003"
@@ -700,6 +702,7 @@ behavior validate_agent_plan "Validate Agent Implementation Plan" {
   verify unit "the plan check reads no recorded test report"
   verify unit "a plan that is not an AgentPlan is refused, naming every place it departs from the type"
   verify unit "a plan passes when every entry names an entity and none comes before what it depends on; a missing entry is a warning"
+  verify unit "an entity and a plan together are invalid input about the plan, on every surface"
   verify integration "specforge trace --plan and specforge.trace answer the same document for a plan"
   verify integration "specforge trace --plan exits 1 when an entry names no entity or comes before what it depends on"
   verify contract "Validate Agent Implementation Plan: agent plan validation holds — validation_complete_fired, unresolvable_ids_diagnosed, missing_entries_warned, ordering_validated, structured_report_produced, plan_validated_emitted"
