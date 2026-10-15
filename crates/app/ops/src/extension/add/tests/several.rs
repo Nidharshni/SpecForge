@@ -50,7 +50,7 @@ fn several_specifiers_are_added_as_one_change() {
         "{outcomes:?}"
     );
     assert_eq!(
-        added.writes.names_under(dir.path()),
+        added.writes.named(Some(dir.path())),
         [
             ".specforge/extensions/@sdk/greet/extension.wasm",
             "specforge.json",

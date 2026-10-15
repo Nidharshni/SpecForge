@@ -382,7 +382,7 @@ fn every_step_reports_the_manifest_as_its_write() {
         .unwrap(),
     );
     for outcome in all {
-        assert_eq!(outcome.writes.names_under(root), ["specforge-infer.json"]);
+        assert_eq!(outcome.writes.named(Some(root)), ["specforge-infer.json"]);
     }
     // The first write created the file; a refusal later writes none.
     let refused = step(

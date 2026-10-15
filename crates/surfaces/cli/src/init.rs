@@ -74,7 +74,7 @@ fn init_at(
 
     // Every file init wrote: .gitignore when it lacked an entry, the
     // config, the starter, and each installed module and lock.
-    let written = outcome.writes.names_under(path);
+    let written = outcome.writes.named(Some(path));
     match format {
         OutputFormat::Json => {
             terminal.json(&Written::of(outcome.document(), written));

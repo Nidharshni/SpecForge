@@ -126,7 +126,6 @@ fn format_failures_name_the_file_from_the_project_root() {
     behavior = "format_spec_files",
     verify = "the format document names each file from the project root, whatever the working directory"
 )]
-#[ignore = "flipped by T3"]
 fn files_written_outside_the_root_is_absolute_and_canonical() {
     let project = project_with_a_bad_file();
     let root = project.root().to_path_buf();

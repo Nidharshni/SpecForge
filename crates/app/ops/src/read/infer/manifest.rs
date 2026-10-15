@@ -545,7 +545,7 @@ mod tests {
         m.upsert_source_entry(entry("crates/my-crate/src/lib.rs", &["a", "b"]));
 
         let writes = m.write(dir.path()).unwrap();
-        assert_eq!(writes.names_under(dir.path()), ["specforge-infer.json"]);
+        assert_eq!(writes.named(Some(dir.path())), ["specforge-infer.json"]);
         let loaded = InferenceManifest::read(dir.path()).unwrap().unwrap();
         assert_eq!(loaded, m);
     }

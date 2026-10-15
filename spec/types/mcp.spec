@@ -180,8 +180,9 @@ type McpPromptArgument {
 // (Diagnostic, MigrationResult, MigrationDiff, RollbackSummary) is one
 // $defs entry the reply's fields refer to; an optional field is absent,
 // never null; a mutation's reply
-// also carries files_written (string[], absent from a preview), which the
-// mutation pipeline adds to every mutation tool, and rename's diagnostics,
+// also carries files_written (string[], absent from a preview; each file named
+// from the project root with /, absolute and canonical outside it, ADR 0102),
+// which the mutation pipeline adds to every mutation tool, and rename's diagnostics,
 // which it adds after a successful rename (ADR 0022). A test holds each
 // type below to the schema its tool's reply type derives. Where the CLI
 // prints the same operation's outcome under --format json, it prints the same
