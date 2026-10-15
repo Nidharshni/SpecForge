@@ -49,11 +49,6 @@ impl RuntimeSource {
 
 /// What changed in a session's sources.
 pub enum SourceChange<'a> {
-    /// Files changed, created or deleted on disk, by path relative to the
-    /// spec root. A file that is gone was deleted; one that is there and
-    /// cannot be read is E025 and leaves the graph. A file a buffer holds is
-    /// left as the buffer has it.
-    Disk(&'a [String]),
     /// The editor holds these buffers now, each the truth for its file until
     /// it is released ([`ProjectSession::release`]), whatever happens to the
     /// file on disk: one update, one run of the checks. A buffer whose text
@@ -311,49 +306,48 @@ impl ProjectSession {
 
     /// Apply a change to the project's sources, then run every check. An
     /// update that changes no file runs no check (unless the checks were
-    /// skipped since they last ran: then it runs them). A changed path that is
-    /// no source (an `exclude` entry, a skipped directory, not `.spec`,
-    /// inside a nested project) changes nothing, unless the project holds
-    /// it: then it leaves the graph.
+    /// skipped since they last ran: then it runs them).
     pub fn update(&mut self, change: SourceChange<'_>) -> Update {
         self.update_with(change, CheckMode::Full)
     }
 
     /// [`Self::update`], running the checks `mode` asks for.
     pub fn update_with(&mut self, change: SourceChange<'_>, mode: CheckMode) -> Update {
-        let mut moved = false;
-        let reads: Vec<(String, Read)> = match change {
-            SourceChange::Disk(paths) => {
-                let mut keys: Vec<String> = paths.to_vec();
-                self.held.leave_out(&mut keys);
-                // Stamped before they are read again (crate::freshness).
-                self.snapshot.stamp_sources(&self.inputs, &keys);
-                moved = self.relink(&keys);
-                keys.into_iter()
-                    .map(|key| {
-                        let read = self.read_disk(&key);
-                        (key, read)
-                    })
-                    // A key that is no source and never was changes nothing.
-                    .filter(|(key, read)| {
-                        !(matches!(read, Read::Gone) && self.project.is_current(key, read))
-                    })
-                    .collect()
+        let SourceChange::Hold(buffers) = change;
+        let mut reads = Vec::new();
+        for buffer in buffers {
+            let key = self.source_key(&buffer.path);
+            let read = Read::Text(buffer.text.clone());
+            if !self.excludes(&key) && !self.project.is_current(&key, &read) {
+                reads.push((key.clone(), read));
             }
-            SourceChange::Hold(buffers) => {
-                let mut reads = Vec::new();
-                for buffer in buffers {
-                    let key = self.source_key(&buffer.path);
-                    let read = Read::Text(buffer.text.clone());
-                    if !self.excludes(&key) && !self.project.is_current(&key, &read) {
-                        reads.push((key.clone(), read));
-                    }
-                    self.held.hold(key, buffer.clone());
-                }
-                reads
-            }
-        };
-        self.applied(reads, mode, moved)
+            self.held.hold(key, buffer.clone());
+        }
+        self.applied(reads, mode, false)
+    }
+
+    /// Read the sources `keys` names again: the sources [`Self::changes`] or [`Self::stale`] found
+    /// changed, by path relative to the spec root. A file that is gone was deleted; one that is there and
+    /// cannot be read is E025 and leaves the graph. A changed path that is no source (an `exclude` entry, a
+    /// skipped directory, not `.spec`, inside a nested project) changes nothing, unless the project holds
+    /// it: then it leaves the graph. Then every check runs.
+    fn reread(&mut self, keys: &[String]) -> Update {
+        let keys = keys.to_vec();
+        // Stamped before they are read again (crate::freshness).
+        self.snapshot.stamp_sources(&self.inputs, &keys);
+        let moved = self.relink(&keys);
+        let reads: Vec<(String, Read)> = keys
+            .into_iter()
+            .map(|key| {
+                let read = self.read_disk(&key);
+                (key, read)
+            })
+            // A key that is no source and never was changes nothing.
+            .filter(|(key, read)| {
+                !(matches!(read, Read::Gone) && self.project.is_current(key, read))
+            })
+            .collect();
+        self.applied(reads, CheckMode::Full, moved)
     }
 
     /// What `key` is on disk to this session: its file's read, or gone when
@@ -559,7 +553,7 @@ impl ProjectSession {
         if !changes.environment.is_empty() && self.inputs.root().is_some() {
             Some(self.reload_environment())
         } else if !sources.is_empty() {
-            Some(self.update(SourceChange::Disk(&sources)))
+            Some(self.reread(&sources))
         } else if !changes.check_inputs.is_empty() && self.inputs.root().is_some() {
             Some(self.recheck())
         } else {
