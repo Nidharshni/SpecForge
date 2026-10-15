@@ -12,6 +12,7 @@ mod contracts;
 mod cursor;
 mod document;
 mod e2e;
+mod follow;
 mod hover;
 mod identity;
 mod lifecycle;
