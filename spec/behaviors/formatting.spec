@@ -46,7 +46,8 @@ behavior format_spec_files "Format Spec Files" {
     Under --format json the command MUST print instead the format document
     specforge.format answers (McpFormatResult) with the files it wrote, its
     diagnostics and failures in the document, and nothing on stderr; the
-    exit code is the same.
+    exit code is the same. Every file the document names is named from the
+    project root, as files_written is (ADR 0102).
     The project's specforge.json is read through the read the compile uses.
     One that does not say which files are the project's sources (it can't
     be used, or spec_root, exclude or extensions has the wrong type) MUST

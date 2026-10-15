@@ -30,7 +30,6 @@ fn document_from(project: &TestProject, dir: &Path, args: &[&str]) -> Value {
     behavior = "format_spec_files",
     verify = "the format document names each file from the project root, whatever the working directory"
 )]
-#[ignore = "flipped by T4"]
 fn format_document_names_a_named_file_from_the_project_root_from_any_cwd() {
     let project = project_with_a_bad_file();
     let root = project.root().to_path_buf();
@@ -84,7 +83,6 @@ fn format_document_names_a_named_file_from_the_project_root_from_any_cwd() {
     behavior = "format_spec_files",
     verify = "the format document names each file from the project root, whatever the working directory"
 )]
-#[ignore = "flipped by T4"]
 fn format_failures_name_the_file_from_the_project_root() {
     let project = project_with_a_bad_file();
     let root = project.root().to_path_buf();

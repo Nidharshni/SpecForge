@@ -19,7 +19,6 @@ fn server_with_unformatted() -> Served {
     behavior = "provide_mcp_format_tool",
     verify = "the format document names each file from the project root"
 )]
-#[ignore = "flipped by T4"]
 fn format_reply_names_files_from_the_project_root() {
     let mut server = server_with_unformatted();
     let absolute = server.root().join("a.spec");

@@ -476,6 +476,7 @@ type McpInitResult {
 }
 
 type McpFormatResult {
+  /// The files that would change (or did), each named from the project root (ADR 0102).
   changed_files string[]
   total_checked integer
   /// The verdict specforge format exits by (0 when true): every file read and
@@ -494,13 +495,14 @@ type McpFormatResult {
   diffs         FormatDiff[]       @optional
   /// Why the call failed; a failed call's data holds this reply.
   message       string             @optional
-  /// The files the call could not read or write (the call failed).
+  /// The files the call could not read or write (the call failed), each named from the project root.
   failed_files  string[]           @optional
   failures      McpFormatFailure[] @optional
   verify unit "McpFormatResult schema is valid"
 }
 
 type McpFormatFailure "One file a format could not read or write" {
+  /// The file, named from the project root.
   file      string @readonly
   operation string
   /// The McpErrorCode of the file's failure.
