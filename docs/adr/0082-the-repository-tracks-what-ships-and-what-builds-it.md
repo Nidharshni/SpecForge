@@ -20,9 +20,10 @@ install.sh, the README and licences), what documents it (`docs/`, including `doc
 the entry documents) and what builds, tests or checks it (`gate/`, `xtask/`, `scripts/`, `fixtures/`,
 `evaluation/`, the toolchain and agent configuration). Nothing else is tracked.
 
-D2. Planning rounds, strategy, archived plans, studies and experiments live in the private repository
-`leaderiop/SpecForge-planning`, checked out at `../SpecForge-planning`: round folders at its top, `archive/`,
-`strategy/`, `labs/`, `research/`. A round's `.planning/` folder stays gitignored here and is committed there.
+D2. Planning rounds, strategy, archived plans, studies and experiments live in `../SpecForge-planning`, a plain local folder that is not version-controlled
+(amended 2026-10-15: it was first planned as the private repository `leaderiop/SpecForge-planning`; the owner
+decided planning needs no version control): round folders at its top, `archive/`, `strategy/`, `labs/`,
+`research/`. A round's `.planning/` folder stays gitignored here and is copied there when the round merges.
 
 D3. `cargo gate` keeps both rules: `root-layout` compares the tracked top-level entries with the reviewed list
 `gate/src/root_layout.rs` `ROOT` (each with its reason; CONTRIBUTING lists the same), and `doc-links` requires
