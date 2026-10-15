@@ -11,3 +11,9 @@ Paste this block at the top of each brief you send.
   re-run clippy and nextest for the crates you touched.
 - No backward compatibility: SpecForge is pre-release; delete the old name and update every caller.
 - Untracked files in the checkout (`git status --short | grep '^??'`) are the user's: not yours to add, edit or delete.
+- A Bash call that reads stdin never returns (the harness keeps stdin open), and the agent hangs for hours. Never leave
+  a file argument empty (an unset variable as a file name), never run a bare `cat`, `sed`, `grep`, `head` or `python3 -`
+  without a file or a heredoc that feeds it, append `</dev/null` to any command that might read stdin, wrap long
+  commands in `timeout`, and edit files with the Edit/Write tools, not piped one-offs.
+- A target directory built in one worktree bakes that worktree's path into the test binaries (`specforge-repo-root`).
+  After the worktree is deleted or moved, use a fresh `CARGO_TARGET_DIR`: the stale one fails hundreds of tests.
