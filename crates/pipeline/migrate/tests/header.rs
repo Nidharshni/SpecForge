@@ -13,7 +13,6 @@ use tempfile::TempDir;
     behavior = "migrate_spec_files_in_place",
     verify = "a header below leading blank lines is rewritten where it stands"
 )]
-#[ignore = "flipped by T4"]
 fn a_header_below_blank_lines_is_rewritten_where_it_stands() {
     let dir = TempDir::new().unwrap();
     std::fs::write(
