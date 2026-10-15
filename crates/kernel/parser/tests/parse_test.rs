@@ -1175,58 +1175,6 @@ fn malformed_ref_missing_scheme_produces_error() {
     );
 }
 
-#[test]
-fn entity_preserves_raw_body() {
-    let source = r#"
-behavior parse_things "Parse Things" {
-    status planned
-    tags [alpha, beta]
-    verify unit "it works"
-}
-"#;
-    let result = parse(source, "test.spec");
-
-    assert!(
-        result.errors.is_empty(),
-        "unexpected errors: {:?}",
-        result.errors
-    );
-    let entity = &result.entities[0];
-
-    // raw_body should contain the verbatim text between the braces
-    let raw = entity.raw_body.as_ref().expect("missing raw_body");
-    assert!(
-        raw.contains("status planned"),
-        "raw_body should contain field text, got: {raw:?}"
-    );
-    assert!(
-        raw.contains("tags [alpha, beta]"),
-        "raw_body should contain list, got: {raw:?}"
-    );
-    assert!(
-        raw.contains("verify unit"),
-        "raw_body should contain verify, got: {raw:?}"
-    );
-}
-
-#[test]
-fn empty_block_has_empty_raw_body() {
-    let source = "behavior empty \"Empty\" {\n}\n";
-    let result = parse(source, "test.spec");
-
-    assert!(
-        result.errors.is_empty(),
-        "unexpected errors: {:?}",
-        result.errors
-    );
-    let entity = &result.entities[0];
-    let raw = entity.raw_body.as_ref().expect("missing raw_body");
-    assert!(
-        raw.trim().is_empty(),
-        "expected empty raw_body, got: {raw:?}"
-    );
-}
-
 #[specforge_test(
     behavior = "parse_spec_file_to_ast",
     verify = "parse valid file produces complete AST"
@@ -1513,35 +1461,11 @@ behavior foo "T" {
     }
 }
 
-#[test]
-fn spec_block_preserves_raw_body() {
-    let source = r#"
-spec "MyProject" {
-    version "1.0.0"
-}
-"#;
-    let result = parse(source, "test.spec");
-
-    assert!(
-        result.errors.is_empty(),
-        "unexpected errors: {:?}",
-        result.errors
-    );
-    let raw = result.entities[0]
-        .raw_body
-        .as_ref()
-        .expect("missing raw_body on spec block");
-    assert!(
-        raw.contains("version"),
-        "spec block raw_body should contain fields, got: {raw:?}"
-    );
-}
-
 #[specforge_test(
     behavior = "parse_define_blocks",
     verify = "define block supports standard field syntax"
 )]
-fn define_block_preserves_raw_body() {
+fn define_block_supports_standard_field_syntax() {
     let source = r#"
 define my_kind {
     testable true
@@ -1554,7 +1478,7 @@ define my_kind {
         "unexpected errors: {:?}",
         result.errors
     );
-    // `testable true` is parsed as a standard field...
+    // `testable true` is parsed as a standard field.
     assert!(
         matches!(
             result.entities[0].fields.get("testable"),
@@ -1562,15 +1486,6 @@ define my_kind {
         ),
         "{:?}",
         result.entities[0].fields
-    );
-    // ...and the raw body is kept too.
-    let raw = result.entities[0]
-        .raw_body
-        .as_ref()
-        .expect("missing raw_body on define block");
-    assert!(
-        raw.contains("testable"),
-        "define block raw_body should contain fields, got: {raw:?}"
     );
 }
 

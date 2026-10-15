@@ -48,7 +48,6 @@ pub struct Entity {
     pub id: EntityId,
     pub title: Option<String>,
     pub fields: FieldMap,
-    pub raw_body: Option<String>,
     pub span: SourceSpan,
     /// `method name(param: Type) -> Ret` members (ports define their
     /// interfaces this way). Empty for kinds that never declare methods.

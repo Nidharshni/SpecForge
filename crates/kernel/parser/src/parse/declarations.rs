@@ -14,7 +14,6 @@ impl<'a> ParseContext<'a> {
             .child_by_field_name(field::TITLE)
             .map(|n| self.unquote(n));
 
-        let raw_body = self.extract_brace_body(node);
         let (fields, verify, methods) = self.parse_block_body(node);
         let mut field_map = fields;
         if !verify.is_empty() {
@@ -26,7 +25,6 @@ impl<'a> ParseContext<'a> {
             id: EntityId { raw: name },
             title,
             fields: field_map,
-            raw_body,
             span: self.span(node),
             methods,
         });
@@ -38,7 +36,6 @@ impl<'a> ParseContext<'a> {
             .map(|n| self.unquote(n))
             .unwrap_or_default();
 
-        let raw_body = self.extract_brace_body(node);
         let (fields, verify, methods) = self.parse_block_body(node);
         let mut field_map = fields;
         if !verify.is_empty() {
@@ -54,7 +51,6 @@ impl<'a> ParseContext<'a> {
             },
             title: Some(name),
             fields: field_map,
-            raw_body,
             span: self.span(node),
             methods,
         });
@@ -99,7 +95,6 @@ impl<'a> ParseContext<'a> {
             },
             title,
             fields,
-            raw_body: None,
             span: self.span(node),
             methods: Vec::new(),
         });
@@ -141,7 +136,6 @@ impl<'a> ParseContext<'a> {
             id: EntityId { raw: name },
             title: None,
             fields,
-            raw_body: None,
             span: self.span(node),
             methods: Vec::new(),
         });
@@ -153,7 +147,6 @@ impl<'a> ParseContext<'a> {
             .map(|n| Sym::new(self.text(n)))
             .unwrap_or_else(|| Sym::new(""));
 
-        let raw_body = self.extract_brace_body(node);
         let (fields, verify, methods) = self.parse_block_body(node);
         let mut field_map = fields;
         if !verify.is_empty() {
@@ -167,7 +160,6 @@ impl<'a> ParseContext<'a> {
             id: EntityId { raw: name },
             title: None,
             fields: field_map,
-            raw_body,
             span: self.span(node),
             methods,
         });

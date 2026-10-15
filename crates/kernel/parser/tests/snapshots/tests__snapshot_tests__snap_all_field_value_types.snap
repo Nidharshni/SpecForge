@@ -247,9 +247,6 @@ expression: "parse_ok(source, \"test.spec\").entities"
                 },
             ],
         },
-        raw_body: Some(
-            "\n    name \"a string\"\n    count 42\n    enabled true\n    disabled false\n    created 2024-01-15\n    status planned\n    tags [alpha, beta, gamma]\n    labels [\"tag-one\", \"tag-two\"]\n    config {\n        timeout 30\n        retries 3\n    }\n    verify unit \"it works\"\n    verify property \"always valid\"\n",
-        ),
         span: SourceSpan {
             file: Sym("test.spec"),
             start_line: 2,

@@ -46,15 +46,12 @@ fn first_difference(a: &str, b: &str) -> String {
     )
 }
 
-/// `entities`' Debug text without source positions or raw bodies, and without
+/// `entities`' Debug text without source positions, and without
 /// the whitespace of a method's types: what formatting may change.
 fn layout_free(entities: &[specforge_parser::Entity]) -> String {
     static SPANS: OnceLock<regex::Regex> = OnceLock::new();
     let spans = SPANS.get_or_init(|| {
-        regex::Regex::new(
-            r#"(SourceSpan|ExprSpan) \{[^}]*\}|raw_body: (Some\("(?:[^"\\]|\\.)*"\)|None)|span: \d+\.\.\d+"#,
-        )
-        .unwrap()
+        regex::Regex::new(r#"(SourceSpan|ExprSpan) \{[^}]*\}|span: \d+\.\.\d+"#).unwrap()
     });
     static TYPES: OnceLock<regex::Regex> = OnceLock::new();
     let types = TYPES

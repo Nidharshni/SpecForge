@@ -277,23 +277,5 @@ impl<'a> ParseContext<'a> {
         }
     }
 
-    fn extract_brace_body(&self, node: Node) -> Option<String> {
-        let mut open = None;
-        let mut close = None;
-        let mut cursor = node.walk();
-        for child in node.children(&mut cursor) {
-            if child.kind() == "{" {
-                open = Some(child.end_byte());
-            } else if child.kind() == "}" {
-                close = Some(child.start_byte());
-            }
-        }
-        match (open, close) {
-            (Some(start), Some(end)) if end > start => Some(self.source[start..end].to_string()),
-            (Some(start), Some(end)) if start == end => Some(String::new()),
-            _ => None,
-        }
-    }
-
     // --- Formal expressions (`metric expr { ... }`) ---------------------
 }

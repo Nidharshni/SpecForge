@@ -150,7 +150,7 @@ use { SpecFile, ParseError } from "types/core"
 // B:parse_all_block_types — verify contract "requires/ensures consistency for block type parsing"
 #[specforge_test(
     behavior = "parse_all_block_types",
-    verify = "Parse All Block Types: block type parsing holds — source_parser_available, generic_blocks_parsed, unknown_keywords_accepted, raw_body_preserved"
+    verify = "Parse All Block Types: block type parsing holds — source_parser_available, generic_blocks_parsed, unknown_keywords_accepted"
 )]
 fn parse_all_block_types_contract() {
     // Requires: source with behavior, feature, type (different keywords)

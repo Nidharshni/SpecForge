@@ -164,7 +164,6 @@ behavior parse_all_block_types "Parse All Block Types" {
   ensures {
     generic_blocks_parsed     "All keyword blocks are parsed as generic entity_block AST nodes regardless of keyword"
     unknown_keywords_accepted "Unknown keywords are parsed without error — rejection deferred to semantic phase"
-    raw_body_preserved        "Raw body text of each entity block is preserved verbatim before field parsing"
   }
   contract   """
     The parser MUST use a single generic entity_block rule that parses
@@ -173,10 +172,7 @@ behavior parse_all_block_types "Parse All Block Types" {
     syntax (ref uses scheme:identifier format). All other keywords MUST
     be parsed generically — the parser MUST NOT reject unknown keywords.
     Keyword validation happens in the semantic phase after extensions
-    populate the KindRegistry. The parser MUST capture the raw body text
-    of each entity block.
-    Raw body text MUST be preserved verbatim before any field parsing
-    occurs.
+    populate the KindRegistry.
     A field named `kind` inside an entity body is an ordinary field of
     that entity, never the block's keyword.
   """
@@ -193,7 +189,7 @@ behavior parse_all_block_types "Parse All Block Types" {
   verify unit "generic block preserves kind, name, title, and fields"
   verify unit "parse string field values correctly"
   verify unit "a type field named kind is an ordinary field"
-  verify contract "Parse All Block Types: block type parsing holds — source_parser_available, generic_blocks_parsed, unknown_keywords_accepted, raw_body_preserved"
+  verify contract "Parse All Block Types: block type parsing holds — source_parser_available, generic_blocks_parsed, unknown_keywords_accepted"
   verify unit "field annotations are extracted into FieldEntry"
   verify unit "homogeneous reference list is not MixedList"
   verify unit "homogeneous string list is not MixedList"

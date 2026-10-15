@@ -97,9 +97,6 @@ expression: "parse_ok(source, \"test.spec\").entities"
                 },
             ],
         },
-        raw_body: Some(
-            "\n    status planned\n    tags [alpha, beta, gamma]\n    verify unit \"produces AST for minimal valid file\"\n    verify integration \"parses all .spec files in project\"\n",
-        ),
         span: SourceSpan {
             file: Sym("test.spec"),
             start_line: 2,

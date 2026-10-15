@@ -46,9 +46,6 @@ expression: "parse_ok(source, \"test.spec\").entities"
                 },
             ],
         },
-        raw_body: Some(
-            "\n    version \"0.1.0\"\n    verify integration \"project compiles\"\n",
-        ),
         span: SourceSpan {
             file: Sym("test.spec"),
             start_line: 2,
@@ -96,7 +93,6 @@ expression: "parse_ok(source, \"test.spec\").entities"
                 },
             ],
         },
-        raw_body: None,
         span: SourceSpan {
             file: Sym("test.spec"),
             start_line: 7,
@@ -160,7 +156,6 @@ expression: "parse_ok(source, \"test.spec\").entities"
                 },
             ],
         },
-        raw_body: None,
         span: SourceSpan {
             file: Sym("test.spec"),
             start_line: 9,
@@ -227,9 +222,6 @@ expression: "parse_ok(source, \"test.spec\").entities"
                 },
             ],
         },
-        raw_body: Some(
-            "\n    base_kind \"entity\"\n    testable true\n    verify unit \"custom kind registers\"\n",
-        ),
         span: SourceSpan {
             file: Sym("test.spec"),
             start_line: 13,
