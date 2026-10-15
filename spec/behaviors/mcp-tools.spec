@@ -809,7 +809,9 @@ behavior provide_mcp_entities_by_kind "List Entities by Kind over MCP" {
     matching entity's id, kind and title: the tool as an object whose
     entities are those rows, the resource as an array of them. An unknown
     kind MUST yield an empty list, and the tool's response metadata MUST carry I020 naming
-    the closest kind. The tool MUST also accept a `where` object (field name to
+    the closest kind. The resource's kind is one non-empty path segment:
+    specforge://entities/ and a kind of more than one segment are invalid
+    input naming kind. The tool MUST also accept a `where` object (field name to
     the value the field holds, any kind's fields, no field known to core)
     and `offset`/`limit`, applied to the entities sorted by id.
     Extensions that list their own kinds their way contribute commands,
@@ -823,6 +825,7 @@ behavior provide_mcp_entities_by_kind "List Entities by Kind over MCP" {
   verify unit "specforge.list reports an unknown kind with I020"
   verify unit "the entities resource lists what specforge.list lists for the kind"
   verify unit "entity-by-kind resource returns entities"
+  verify unit "the entities resource refuses an empty kind or one of more than one path segment as invalid input naming kind"
   verify unit "specforge.list tool appears in tool list"
   verify unit "entities resource template in resource template list"
 }

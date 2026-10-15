@@ -29,6 +29,7 @@ mod prompts;
 mod protocol;
 mod refusal_arguments;
 mod request_meaning;
+mod resource_templates;
 mod resources;
 mod revision;
 mod schema_reflection;

@@ -163,9 +163,13 @@ behavior list_mcp_resources "List MCP Resources" {
     and reflect the current set of loaded extensions. Every core resource it lists MUST be readable.
     A resource whose URI is a template (it holds a {placeholder}) MUST be
     listed by resources/templates/list as a resource template, not by
-    resources/list.
+    resources/list. A core resource template MUST read each {placeholder}
+    as one non-empty, percent-decoded path segment; a URI it names whose
+    placeholder is empty or spans more than one segment MUST be refused as
+    invalid input naming the placeholder.
   """
   verify unit "templated resources are listed by resources/templates/list, not resources/list"
+  verify unit "a core resource template reads each placeholder as one non-empty, percent-decoded path segment and refuses any other value as invalid input naming it"
   verify unit "returns all registered resource descriptors after extension load"
   verify unit "returns core-provided descriptors when no extensions installed"
   verify unit "reflects resources from newly loaded extension"
@@ -522,12 +526,14 @@ behavior expose_entity_as_mcp_resource "Expose Per-Entity MCP Resource" {
     nodes, and the edges between them. If the entity_id does not exist, the
     read MUST fail as not found (-32002 in a handshake session, -32602 in a
     2026-07-28 request) whose data is an entity_not_found McpError carrying
-    E003 and the uri (the 404 case); a malformed entity_id is invalid input
-    (the 400 case). The resource MUST refresh after recompilation.
+    E003 and the uri (the 404 case); a malformed entity_id (empty, more than one path
+    segment, or a character no entity ID holds) is invalid input naming
+    entity_id (the 400 case). The resource MUST refresh after recompilation.
   """
   verify unit "specforge://graph/{entity_id} returns entity and its neighbors"
   verify unit "non-existent entity_id returns 404 error"
   verify unit "malformed entity_id returns 400 error"
+  verify unit "an empty entity_id or one of more than one path segment is invalid input naming entity_id, in both entity templates"
   verify unit "the entity resource is the scoped graph export with its schema_ref"
   verify unit "resource refreshes after recompilation"
   verify contract "Expose Per-Entity MCP Resource: per-entity MCP resource holds — validation_complete_fired, subgraph_returned, resource_read_emitted"
