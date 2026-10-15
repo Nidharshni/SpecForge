@@ -1,4 +1,4 @@
-//! The LSP's one reaction to a change the client reports (ADR 0035 D6, ADR 0043): apply it to
+//! The LSP's one reaction to a change the client reports (ADR 0035 D6, ADR 0043, ADR 0099): apply it to
 //! the project session, publish what the project reports, then, when what the session is built
 //! from moved, ask the editor to watch it and catch up on what changed on disk while it did not,
 //! and last tell the editor its highlighting may be stale. Opening the workspace and closing a
@@ -17,15 +17,11 @@ use tokio::sync::RwLock;
 use tower_lsp::lsp_types::*;
 
 use specforge_project::{ProjectSession, RuntimeSource};
+use specforge_watch::{Follower, Following};
 
 use crate::LspState;
 use crate::changes::{Applied, Change, Plan};
 use crate::editor::{Editor, WorkDone};
-
-/// How many times the editor's watchers follow the session after one change: each round needs
-/// the previous catch-up to have moved what the session is built from again, so it ends long
-/// before this in practice.
-const FOLLOW_ROUNDS: usize = 8;
 
 /// What every change to the project session is reacted to by. The backend holds one behind an
 /// async mutex, which is the queue changes wait in (ADR 0043 D4).
@@ -36,7 +32,7 @@ pub struct Reaction<E> {
     /// runtime in production (`RuntimeSource::project()`), the in-process runtime in tests.
     runtime: RuntimeSource,
     /// The watchers the editor holds for the server ([`crate::watchers`]).
-    watched: Vec<FileSystemWatcher>,
+    following: Following<Vec<FileSystemWatcher>>,
 }
 
 impl<E: Editor> Reaction<E> {
@@ -47,7 +43,7 @@ impl<E: Editor> Reaction<E> {
             editor,
             state,
             runtime,
-            watched: Vec::new(),
+            following: Following::default(),
         }
     }
 
@@ -60,7 +56,7 @@ impl<E: Editor> Reaction<E> {
     pub fn open(&mut self, root: Option<PathBuf>) {
         let defaults = crate::watchers::default_watchers();
         if self.editor.watch(&defaults).is_ok() {
-            self.watched = defaults;
+            self.following = Following::new(defaults);
         }
         self.editor.progress(WorkDone::Begin {
             title: "specforge: indexing workspace".into(),
@@ -224,47 +220,13 @@ impl<E: Editor> Reaction<E> {
         None
     }
 
-    /// What the session is built from moved: the editor watches it now
-    /// ([`Self::sync_watchers`]), then the session catches up on what changed on disk while it
-    /// did not ([`Change::CatchUp`]), again while that catch-up moves it (ADR 0035; at most
-    /// `FOLLOW_ROUNDS`).
+    /// What the session is built from moved: the editor watches it now, then the session
+    /// catches up on what changed on disk while it did not ([`Change::CatchUp`]), again while
+    /// that catch-up moves it ([`Following`], ADR 0099).
     fn follow(&mut self) {
-        for _ in 0..FOLLOW_ROUNDS {
-            if !self.sync_watchers() {
-                return;
-            }
-            if !self
-                .apply(Change::CatchUp)
-                .is_some_and(|applied| applied.rewatch())
-            {
-                return;
-            }
-        }
-    }
-
-    /// Ask the editor to watch every file the project is built from
-    /// ([`crate::watchers::file_watchers`]), in place of what it watched, when the two differ;
-    /// an editor that refuses keeps the static watchers. Whether it was asked.
-    fn sync_watchers(&mut self) -> bool {
-        let wanted = {
-            let st = self.state.blocking_read();
-            let Some(session) = st.session() else {
-                return false;
-            };
-            crate::watchers::file_watchers(session.inputs(), st.client().relative_patterns)
-        };
-        if self.watched == wanted {
-            return false;
-        }
-        self.watched = match self.editor.watch(&wanted) {
-            Ok(()) => wanted,
-            Err(_) => {
-                let defaults = crate::watchers::default_watchers();
-                let _ = self.editor.watch(&defaults);
-                defaults
-            }
-        };
-        true
+        let mut following = std::mem::take(&mut self.following);
+        following.follow(&mut Rewatch(self));
+        self.following = following;
     }
 
     /// Publish what `applied` says the project reports now ([`Applied::publication`]). What is
@@ -293,5 +255,45 @@ impl<E: Editor> Reaction<E> {
         if stale && supported {
             self.editor.refresh_tokens();
         }
+    }
+}
+
+/// The reaction as what [`Following`] moves: the editor's watchers and the session's catch-up.
+struct Rewatch<'a, E>(&'a mut Reaction<E>);
+
+impl<E: Editor> Follower for Rewatch<'_, E> {
+    type Watched = Vec<FileSystemWatcher>;
+
+    /// Every file the project is built from ([`crate::watchers::file_watchers`]).
+    fn wanted(&self) -> Option<Vec<FileSystemWatcher>> {
+        let st = self.0.state.blocking_read();
+        let session = st.session()?;
+        Some(crate::watchers::file_watchers(
+            session.inputs(),
+            st.client().relative_patterns,
+        ))
+    }
+
+    fn watch(&mut self, wanted: &Vec<FileSystemWatcher>) -> Result<(), String> {
+        self.0.editor.watch(wanted)
+    }
+
+    /// An editor that refuses keeps the static watchers, and is told why.
+    fn refused(&mut self, reason: String, _was: Vec<FileSystemWatcher>) -> Vec<FileSystemWatcher> {
+        let defaults = crate::watchers::default_watchers();
+        let _ = self.0.editor.watch(&defaults);
+        self.0.editor.log(
+            MessageType::WARNING,
+            format!(
+                "specforge-lsp: the editor refused the project's file watchers ({reason}); it watches every .spec, config and lock file instead"
+            ),
+        );
+        defaults
+    }
+
+    fn catch_up(&mut self) -> bool {
+        self.0
+            .apply(Change::CatchUp)
+            .is_some_and(|applied| applied.rewatch())
     }
 }

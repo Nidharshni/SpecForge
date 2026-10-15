@@ -48,7 +48,6 @@ fn touch_config(root: &std::path::Path) {
     behavior = "classify_project_changes",
     verify = "a set of watchers refused once is not asked for again in the same follow"
 )]
-#[ignore = "flipped by T4"]
 fn a_refused_set_of_watchers_is_asked_for_once_per_follow() {
     let served = refusing();
     let root = served.root().to_path_buf();
@@ -63,7 +62,6 @@ fn a_refused_set_of_watchers_is_asked_for_once_per_follow() {
     behavior = "classify_project_changes",
     verify = "the LSP reports a refused set of watchers and registers the static ones"
 )]
-#[ignore = "flipped by T4"]
 fn a_refused_set_of_watchers_is_logged_after_the_static_ones() {
     let served = refusing().open(&[]);
 
