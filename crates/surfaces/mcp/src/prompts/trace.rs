@@ -4,7 +4,7 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_ops::read::plan::AgentPlan;
-use specforge_ops::read::trace::{Target, trace};
+use specforge_ops::read::trace::{Ask, Target, TraceField, trace};
 
 use crate::args::Arguments;
 use crate::prompt::{CorePrompt, Prompted};
@@ -21,6 +21,14 @@ impl ArgumentOf<EntityField> for Prompt {
     fn argument(field: EntityField) -> Option<&'static str> {
         match field {
             EntityField::EntityId => Some("entity_id"),
+        }
+    }
+}
+
+impl ArgumentOf<TraceField> for Prompt {
+    fn argument(field: TraceField) -> Option<&'static str> {
+        match field {
+            TraceField::Plan => Some("plan"),
         }
     }
 }
@@ -49,7 +57,7 @@ pub struct Payload {
 /// `specforge://prompts/trace`'s arguments.
 #[derive(Debug, Arguments)]
 pub struct Args {
-    /// AgentPlan JSON ({"plan_id", "entries": [{"entity_id", "action"}]}) to check against the graph
+    /// AgentPlan JSON ({"plan_id", "entries": [{"entity_id", "action"}]}) to check against the graph; not with entity_id
     plan: Option<AgentPlan>,
     /// Entity ID to trace when no plan is given
     entity_id: Option<String>,
@@ -58,38 +66,41 @@ pub struct Args {
 fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<McpError>> {
     // A plan's entries, or the one entity, seed the trace; the gaps are the
     // plan's, or the entity's chain's missing links.
-    let (seeds, coverage_gaps, subject) = match (&args.plan, args.entity_id.as_deref()) {
-        (Some(plan), _) => {
-            let outcome = specforge_ops::read::plan::check(&view, plan);
-            let gaps = outcome
-                .gaps
-                .iter()
-                .map(|gap| Gap::of(&specforge_ops::read::trace::Gap::Plan(gap.clone())))
-                .collect();
-            (outcome.entries, gaps, "the plan".to_string())
-        }
-        (None, Some(entity_id)) => {
-            // As the trace tool traces it: its chain and missing links.
-            let outcome = trace(&view, Target::Entity(entity_id))
-                .map_err(|error| Prompt::refused(specforge_ops::Refusal::from(error)))?;
-            let gaps = outcome.gaps().iter().map(Gap::of).collect();
-            (
-                vec![entity_id.to_string()],
-                gaps,
-                format!("entity '{entity_id}'"),
-            )
-        }
-        (None, None) => {
-            // As the trace tool refuses it.
-            return Err(Box::new(
-                McpError::new(
-                    ErrorCode::InvalidInput,
-                    "Missing required parameter: entity_id or plan",
+    let (seeds, coverage_gaps, subject) =
+        match Ask::of(args.entity_id.as_deref(), args.plan.as_ref())
+            .map_err(|refusal| Box::new(Prompt::refused(refusal)))?
+        {
+            Ask::Plan(plan) => {
+                let outcome = specforge_ops::read::plan::check(&view, plan);
+                let gaps = outcome
+                    .gaps
+                    .iter()
+                    .map(|gap| Gap::of(&specforge_ops::read::trace::Gap::Plan(gap.clone())))
+                    .collect();
+                (outcome.entries, gaps, "the plan".to_string())
+            }
+            Ask::Entity(entity_id) => {
+                // As the trace tool traces it: its chain and missing links.
+                let outcome = trace(&view, Target::Entity(entity_id))
+                    .map_err(|error| Prompt::refused(specforge_ops::Refusal::from(error)))?;
+                let gaps = outcome.gaps().iter().map(Gap::of).collect();
+                (
+                    vec![entity_id.to_string()],
+                    gaps,
+                    format!("entity '{entity_id}'"),
                 )
-                .with_argument("entity_id"),
-            ));
-        }
-    };
+            }
+            Ask::Every => {
+                // As the trace tool refuses it.
+                return Err(Box::new(
+                    McpError::new(
+                        ErrorCode::InvalidInput,
+                        "Missing required parameter: entity_id or plan",
+                    )
+                    .with_argument("entity_id"),
+                ));
+            }
+        };
 
     // What the seeds' chains reach, and which of it is unverified.
     let reach = specforge_ops::read::trace::reach(&view, seeds.iter().map(String::as_str))

@@ -39,7 +39,7 @@ expression: "reply[\"result\"]"
     {
       "arguments": [
         {
-          "description": "AgentPlan JSON ({\"plan_id\", \"entries\": [{\"entity_id\", \"action\"}]}) to check against the graph",
+          "description": "AgentPlan JSON ({\"plan_id\", \"entries\": [{\"entity_id\", \"action\"}]}) to check against the graph; not with entity_id",
           "name": "plan",
           "required": false
         },

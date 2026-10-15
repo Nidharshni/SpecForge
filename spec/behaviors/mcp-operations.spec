@@ -529,8 +529,9 @@ behavior provide_mcp_collect_tool "Provide MCP Collect Tool" {
   }
   contract   """
     In MCP server mode, the system MUST register a specforge.collect tool
-    that accepts runner? (a collector name or extension; detected from
-    project files when omitted), run? (default false) and path? (the
+    that accepts runner? (a collector name or extension, read as
+    `specforge collect --runner` reads it; detected from project files only
+    when omitted: no name stands for detection), run? (default false) and path? (the
     project root; the initialized root when omitted). It runs the same
     flow as `specforge collect`: by default it parses the runners' existing
     reports; with run=true it first runs each runner's declared command,
@@ -547,6 +548,8 @@ behavior provide_mcp_collect_tool "Provide MCP Collect Tool" {
   verify unit "specforge.collect refuses to run an unapproved command"
   verify unit "specforge.collect of a directory that holds no project refuses with no_project"
   verify unit "a project without a collector returns an E058 error"
+  verify integration "specforge.collect reads runner as specforge collect --runner reads it"
+  verify unit "a runner no collector answers to, auto included, is an E058 error on runner"
   verify contract "Provide MCP Collect Tool: MCP collect tool holds — filesystem_available, compiler_api_available, report_emitted, collector_delegated, never_prompts, tool_invoked_emitted"
 }
 

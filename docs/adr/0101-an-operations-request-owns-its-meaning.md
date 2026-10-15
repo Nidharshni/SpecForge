@@ -1,0 +1,62 @@
+# An operation's request owns its meaning; a surface only spells it
+
+**Status:** accepted (2026-10-15, round 10, plan 10). Extends ADR 0027 (option tables) and ADR 0033 D4 (one
+default) from names and defaults to every rule a request's values follow.
+
+The CLI and MCP each build an operation's request by hand. Most of that is spelling: copying a field, reading a
+shared constant. Three times a surface decided what the arguments *mean*, and the two disagreed:
+
+- `specforge.collect` read `runner: "auto"` as "detect" before the operation saw it, a leftover of the tool ADR 0002
+  replaced; the CLI forwards the name as typed and refuses `auto` (E058).
+- `specforge.trace` and `specforge://prompts/trace` let `plan` win silently over `entity_id`; `specforge trace`
+  refuses an entity with `--plan`.
+- `specforge.export` let `no_schema` win silently over `with_schema`; `specforge export` refuses both flags.
+
+No test paired those arguments across surfaces, so nothing caught them. Some rules were already read once in ops
+(`format::Mode::of_flags`, `migrate::parse_target`, `check::parse_severity`, the option tables, export's depth
+without a scope); one more was still written twice (a model's depth needs a root).
+
+## Decision
+
+- D1. What a request's values mean is the operation's. A default (ADR 0033 D4), a value that stands for
+  another, arguments that exclude or need each other, and how several flags combine into one choice are each
+  stated once in ops, beside the operation: as a reader the surfaces call (`format::Mode::of_flags`,
+  `migrate::parse_target`, `export::Schema::of_flags`, `trace::Ask::of`, `model::root`) or as a check
+  the operation makes on the request it is given (export's depth without a scope). A reader that refuses
+  refuses about a field of the request (ADR 0072), so each surface names its own argument.
+- D2. A surface spells. It names, documents and lists the arguments, reads their argv or JSON types, and copies
+  them into the request or hands them to the reader. It maps no value to another and ranks no argument over
+  another. `specforge.collect`'s `runner: "auto"` is gone: an absent runner asks for detection on both
+  surfaces, and a name no collector answers to is E058.
+- D3. The CLI may refuse first. clap's `conflicts_with` and `requires` are the CLI's spelling of a relation the
+  operation holds: a usage error (exit 2) before anything compiles, as ADR 0027 D5 refuses an unknown name. A
+  relation clap states that the operation does not hold is a drift; D5's table has a row for each.
+- D4. Exclusive arguments are refused, never ranked: trace's entity and plan (tool, prompt, command), export's
+  with_schema and no_schema. A surface may offer less than another (MCP's trace does not trace every entity),
+  never mean otherwise.
+- D5. One pairing table: `crates/surfaces/cli/tests/request_pairs.rs` lists each request as a command line and a
+  tool call over one project; both answer the same normalized document or both refuse. The in-process MCP call
+  and the normalization the harnesses share are `crates/surfaces/cli/tests/support/pairing.rs`.
+
+## Consequences
+
+User-visible over MCP: `specforge.collect` with `runner: "auto"` is E058 on `runner`; `specforge.trace` and
+`specforge://prompts/trace` with both `entity_id` and `plan` are invalid input on `plan`; `specforge.export` with
+both `with_schema` and `no_schema` is invalid input on `with_schema`; `specforge.model`'s depth-without-root
+message is the operation's. The CLI is unchanged.
+
+The refusal codes (`entity_with_plan`, `with_and_without_schema`, `depth_without_root`) are `OpError` code
+strings, not catalogue diagnostics; over MCP the wire code stays the kind (`invalid_input`).
+
+## Rejected
+
+- One request decoder in ops over a neutral argument map: spelling is a surface's (ADR 0029 D2, ADR 0033).
+- Comparing the two surfaces' requests by value: the CLI is a binary crate and both surfaces' argument structs
+  are private; the table compares answers in process instead.
+- Ranking (plan wins, no_schema wins) on every surface: it hides a caller's mistake.
+- Deleting clap's relations so ops alone refuses: the CLI would lose its usage message and exit 2 (ADR 0027 D5).
+
+## What would reopen it
+
+A third surface that spells requests (a REST surface, an LSP command taking these arguments), or an argument
+whose meaning depends on the project (then it is checked against the view, as ADR 0027 D6 does for passes).

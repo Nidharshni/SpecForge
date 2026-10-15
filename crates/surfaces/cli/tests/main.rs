@@ -39,6 +39,7 @@ mod publish;
 mod query;
 mod read_views;
 mod registry;
+mod request_pairs;
 mod schema_cache;
 mod stats;
 mod support;
