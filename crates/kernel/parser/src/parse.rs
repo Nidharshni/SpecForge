@@ -167,12 +167,7 @@ fn unparsed(file_sym: Sym, message: String, span: SourceSpan) -> SpecFile {
         entities: Vec::new(),
         format_version: CURRENT_FORMAT_VERSION,
         format_diagnostics: Vec::new(),
-        errors: vec![ParseError {
-            message,
-            span,
-            expected: None,
-            found: None,
-        }],
+        errors: vec![ParseError { message, span }],
     }
 }
 

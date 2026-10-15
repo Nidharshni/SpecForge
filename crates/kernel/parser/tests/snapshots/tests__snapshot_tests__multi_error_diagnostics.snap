@@ -12,11 +12,5 @@ expression: result.errors
             end_line: 8,
             end_col: 2,
         },
-        expected: Some(
-            "a valid block: keyword name \"Title\" {{ fields... }}",
-        ),
-        found: Some(
-            "behavior ??? {",
-        ),
     },
 ]

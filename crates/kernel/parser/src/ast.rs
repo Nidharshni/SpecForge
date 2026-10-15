@@ -211,12 +211,10 @@ pub struct VerifyStatement {
     pub description: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct ParseError {
     pub message: String,
     pub span: SourceSpan,
-    pub expected: Option<String>,
-    pub found: Option<String>,
 }
 
 impl From<&ParseError> for specforge_common::Diagnostic {
