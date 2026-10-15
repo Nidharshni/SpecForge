@@ -12,6 +12,7 @@
 use serde_json::{Value, json};
 
 use crate::lifecycle::{MODERN_PROTOCOL_VERSIONS, Revision, server_info};
+use crate::protocol::method::Method;
 use crate::protocol::{JsonRpcError, JsonRpcResponse, error_codes};
 use crate::state::{McpState, ServerPhase};
 
@@ -25,23 +26,12 @@ pub const SERVER_INFO_META: &str = "io.modelcontextprotocol/serverInfo";
 /// The revision's error for a version the server does not speak.
 pub const UNSUPPORTED_PROTOCOL_VERSION: i64 = -32022;
 
-/// The results the revision makes cacheable. The server's are about the
-/// project on disk, which any request may recompile: nothing stays fresh
-/// (`ttlMs` 0), and nothing is shared beyond this client (`private`).
-const CACHEABLE: [&str; 6] = [
-    "server/discover",
-    "tools/list",
-    "prompts/list",
-    "resources/list",
-    "resources/templates/list",
-    "resources/read",
-];
-
 /// Whether `method` with `params` is a stateless request: `server/discover`,
 /// which exists only in that revision, or any request whose `_meta` names a
 /// protocol version.
 pub fn is_modern(method: &str, params: &Value) -> bool {
-    method == "server/discover" || params["_meta"].get(PROTOCOL_VERSION_META).is_some()
+    Method::named(method, true) == Some(Method::Discover)
+        || params["_meta"].get(PROTOCOL_VERSION_META).is_some()
 }
 
 /// Serve one stateless request or notification. A `subscriptions/listen`
@@ -55,7 +45,7 @@ pub fn handle(
 ) -> Option<JsonRpcResponse> {
     if id.is_none() {
         // Cancellation is the revision's one client notification.
-        if method == "notifications/cancelled" {
+        if Method::named(method, true) == Some(Method::Cancelled) {
             crate::lifecycle::handle_cancel(state, params, None);
         }
         return None;
@@ -77,26 +67,7 @@ pub fn handle(
     state.follow_root();
 
     let revision = Revision::Stateless(version);
-    let response = match method {
-        "server/discover" => Some(crate::lifecycle::handle_discover(id)),
-        "subscriptions/listen" => crate::subscriptions::requests::listen(state, &params, id),
-        "tools/list"
-        | "tools/call"
-        | "resources/list"
-        | "resources/templates/list"
-        | "resources/read"
-        | "prompts/list"
-        | "prompts/get" => Some(crate::protocol::router::route(
-            state, revision, method, params, id,
-        )),
-        // ping, logging/setLevel, resources/subscribe and the rest are not
-        // methods of this revision; completion/complete is not offered.
-        _ => Some(JsonRpcResponse::error(
-            id,
-            error_codes::METHOD_NOT_FOUND,
-            format!("Method not found: {method}"),
-        )),
-    };
+    let response = crate::protocol::router::route(state, revision, method, params, id);
     response.map(|response| decorate(response, method))
 }
 
@@ -142,7 +113,7 @@ fn decorate(mut response: JsonRpcResponse, method: &str) -> JsonRpcResponse {
             serde_json::to_value(server_info()).unwrap_or_default(),
         );
     }
-    if CACHEABLE.contains(&method) {
+    if crate::protocol::method::cacheable(method) {
         result.insert("ttlMs".into(), Value::from(0));
         result.insert("cacheScope".into(), Value::from("private"));
     }

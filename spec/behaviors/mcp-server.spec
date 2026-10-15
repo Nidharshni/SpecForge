@@ -812,6 +812,7 @@ behavior serve_stateless_mcp_requests "Serve Stateless MCP Requests" {
   verify unit "a stateless request without the client capabilities is -32602"
   verify unit "an unsupported protocol version is -32022 naming the supported versions"
   verify unit "ping and resources/subscribe are not stateless methods"
+  verify unit "each method is answered in the revisions its method table row names and is -32601 in the others"
   verify unit "a stateless request after initialize is served under its own revision"
   verify unit "a stateless request's revision ends with the request"
   verify unit "a stateless request after initialize reads the project the handshake session serves"

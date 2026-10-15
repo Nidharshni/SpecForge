@@ -14,6 +14,7 @@ mod invariants;
 mod lifecycle;
 mod management_view;
 mod message_spec;
+mod methods;
 mod mutation_outcome;
 mod operations_mgmt;
 mod operations_mutation;

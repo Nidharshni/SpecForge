@@ -160,13 +160,13 @@ impl McpServer {
             if modern {
                 modern::handle(&mut self.state, &request.method, request.params, request.id)
             } else {
-                Some(route(
+                route(
                     &mut self.state,
                     revision,
                     &request.method,
                     request.params,
                     request.id,
-                ))
+                )
             }
         }))
         .unwrap_or_else(|_| {

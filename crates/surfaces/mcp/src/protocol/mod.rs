@@ -1,4 +1,5 @@
 pub mod error_codes;
+pub(crate) mod method;
 pub mod router;
 
 use serde::{Deserialize, Serialize};
