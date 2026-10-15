@@ -1,6 +1,6 @@
 # One graph build for a compile and every update; the resolver returns its diagnostics
 
-**Status:** accepted (2026-10-07). Amends [ADR 0006](0006-one-incremental-rebuild.md).
+**Status:** accepted (2026-10-07). Amends [ADR 0006](0006-one-incremental-rebuild.md). Amended by [ADR 0094](0094-obligations-are-an-entitys-own-member.md) (the incremental check compares obligations) and [ADR 0093](0093-a-fields-declared-type-decides-what-its-value-references.md) (the graph inputs carry `FieldForms`).
 
 ADR 0006 put the incremental rebuild in `specforge-project`. Its graph half reached into
 `specforge-graph` through five items public for that one caller (`entity_pass` with an optional sink,

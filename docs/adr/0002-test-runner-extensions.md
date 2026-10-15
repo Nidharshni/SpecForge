@@ -1,6 +1,6 @@
 # Tests belong to extensions: `@specforge/testing` plus one extension per test runner
 
-**Status:** accepted
+**Status:** accepted. Amended by [ADR 0094](0094-obligations-are-an-entitys-own-member.md) (placement of `verify` statements; W158 for W020).
 
 Test concepts are spread across the core compiler today. `verify` is core grammar. The `analyze`
 coverage pass, the `specforge-report.json` shape and the `collect` normalizer are hard-coded to
