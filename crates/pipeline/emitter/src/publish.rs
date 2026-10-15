@@ -5,7 +5,7 @@
 //! project's Graph Protocol schema. A field's value schema is its field
 //! form's ([`specforge_graph::FieldForm::json_schema`]), so what a published
 //! field takes is what the writer writes for a value its check admits
-//! (ADR-NEW-01).
+//! (ADR 0064).
 
 use std::collections::BTreeSet;
 

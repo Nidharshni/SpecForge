@@ -147,8 +147,10 @@ Level: error
 E003: Unresolved reference
 
 A reference field names an entity ID that doesn't resolve to any declared
-entity. Fix the typo or add the missing entity; a `did you mean` suggestion is
-included when a close match exists.
+entity: a `reference` field's value or a `reference_list` field's item, quoted
+or not, or a scheme ref ID in a string list. A `string_list` field's other items
+are strings, never references. Fix the typo or add the missing entity; a `did
+you mean` suggestion is included when a close match exists.
 
 Owner: core
 Level: error
@@ -694,9 +696,9 @@ like, are enum fields); an integer field an integer; a bool field true or false;
 a reference field one id; a string_list or reference_list field a list; a block
 field a block. Values that can be read as the declared type are converted
 without a diagnostic: a single string, id, integer, boolean or date on a list
-field becomes a one-item list, a mixed list the list of its items' text, a
-quoted integer or boolean the number or boolean. Fix the value, or check the
-field's type with `specforge schema --kind <kind>`.
+field becomes a one-item list, a list is stored as written, a quoted integer or
+boolean the number or boolean. Fix the value, or check the field's type with
+`specforge schema --kind <kind>`.
 
 Owner: core
 Level: error

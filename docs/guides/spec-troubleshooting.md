@@ -32,7 +32,7 @@ Find the code or symptom, read the cause, apply the fix. For a guided introducti
 | Code | Symptom | Cause | Fix |
 |------|---------|-------|-----|
 | **E001** | a parse / syntax error | A `.spec` file could not be parsed (missing brace, unclosed string, invalid field syntax). | Fix the syntax at the reported span. |
-| **E003** | `unresolved reference 'X' in entity 'Y'` | A reference list points at an entity that doesn't exist (often a typo or a missing `use`). | Correct the name, or `use` the file that defines it. Check you used an unquoted reference, not a string. |
+| **E003** | `unresolved reference 'X' in entity 'Y'` | A reference list points at an entity that doesn't exist (often a typo or a missing `use`). | Correct the name, or `use` the file that defines it. |
 | **E006** | `entity 'X' is missing required field 'F'` | A required field is absent (e.g. `constraint` without `description`, `feature` without `problem`, `persona`/`channel` without `description`, `journey` without `flow`, `term` without `definition`). | Add the required field. |
 | **E022** | `reference 'X' in field 'F' of 'Y' targets a 'A', but this field expects 'B'` | A reference points to the wrong *kind* of entity (e.g. `term.see_also` pointing at a behavior — it only accepts terms). | Point the field at an entity of the expected kind. |
 | **E024** | `unknown entity kind 'K' for entity 'X'` | You used a keyword from an extension that isn't installed. | `specforge add @specforge/<ext>`, or fix the keyword. |
