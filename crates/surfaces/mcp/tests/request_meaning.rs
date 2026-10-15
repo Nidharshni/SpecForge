@@ -36,8 +36,10 @@ fn collect_refuses_auto_as_an_unknown_runner() {
     assert_refused(&reply, "runner", Some("E058"));
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "provide_mcp_trace_tool",
+    verify = "a trace call with both entity_id and plan is invalid input on plan"
+)]
 fn trace_refuses_an_entity_with_a_plan_on_plan() {
     let reply = call_tool(
         &mut served(),
@@ -47,8 +49,10 @@ fn trace_refuses_an_entity_with_a_plan_on_plan() {
     assert_refused(&reply, "plan", None);
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "provide_mcp_trace_prompt",
+    verify = "the trace prompt refuses an entity_id given with a plan, as invalid input on plan"
+)]
 fn trace_prompt_refuses_an_entity_with_a_plan_on_plan() {
     let reply = call(
         &mut served(),

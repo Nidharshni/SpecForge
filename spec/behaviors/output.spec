@@ -704,6 +704,7 @@ behavior validate_agent_plan "Validate Agent Implementation Plan" {
   verify unit "a plan passes when every entry names an entity and none comes before what it depends on; a missing entry is a warning"
   verify unit "an entity and a plan together are invalid input about the plan, on every surface"
   verify integration "specforge trace --plan and specforge.trace answer the same document for a plan"
+  verify integration "specforge trace and specforge.trace both refuse an entity with a plan"
   verify integration "specforge trace --plan exits 1 when an entry names no entity or comes before what it depends on"
   verify contract "Validate Agent Implementation Plan: agent plan validation holds — validation_complete_fired, unresolvable_ids_diagnosed, missing_entries_warned, ordering_validated, structured_report_produced, plan_validated_emitted"
 }

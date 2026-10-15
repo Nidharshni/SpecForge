@@ -219,6 +219,8 @@ behavior provide_mcp_trace_tool "Provide MCP Trace Tool" {
     MUST perform the plan check (validate_agent_plan) and return its document,
     a McpTracePlanResult: ok, the affected entities and the gaps. At least one of entityId
     or plan MUST be provided; otherwise the tool MUST return an error.
+    entityId and plan are two requests: a call with both MUST be refused as
+    invalid input on plan, as specforge trace refuses an entity with --plan.
   """
   verify unit "specforge.trace tool returns traceability chain for valid entityId"
   verify unit "plan parameter triggers gap analysis"
@@ -226,6 +228,7 @@ behavior provide_mcp_trace_tool "Provide MCP Trace Tool" {
   verify unit "non-existent entityId returns error response"
   verify unit "response includes upstream and downstream links"
   verify unit "missing links flagged in trace output"
+  verify unit "a trace call with both entity_id and plan is invalid input on plan"
   verify contract "Provide MCP Trace Tool: MCP trace tool holds — graph_available, trace_result_returned, gaps_identified, tool_invoked_emitted"
 }
 

@@ -187,8 +187,10 @@ fn collect_runner_auto_is_one_request() {
     assert_eq!(pair("collect_runner_auto").0, Outcome::Refused);
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test_macros::test(
+    behavior = "validate_agent_plan",
+    verify = "specforge trace and specforge.trace both refuse an entity with a plan"
+)]
 fn trace_entity_and_plan_is_one_request() {
     assert_eq!(pair("trace_entity_and_plan").0, Outcome::Refused);
 }
