@@ -6,6 +6,7 @@
 mod contracts;
 mod corpus_syntax;
 mod expr_test;
+mod format_header;
 mod format_version;
 mod guide_spec_blocks;
 mod lex;
