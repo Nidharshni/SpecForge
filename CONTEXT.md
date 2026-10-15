@@ -602,7 +602,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   both "proven" (the gate) and the covered/partial/uncovered status (the MCP view)
   (`specforge_coverage::Verdict`).
 - **Operation**: one user-level command (init, add, remove, …) as a typed request and outcome,
-  independent of surface. An operation that writes names the files it changed on disk in its
+  independent of surface. What its request's values mean (a default, a value standing for another, arguments that
+  exclude or need each other) is the operation's, read once in ops; a surface only spells the arguments (ADR 0101).
+  An operation that writes names the files it changed on disk in its
   outcome (`specforge_ops::Writes`), recorded where it wrote. It fails with an `OpError` whose kind
   (`OpErrorKind`: invalid input, not found, conflict, schema mismatch, compilation failed, …) is
   stated where it is raised — at the operation's own raise site (`OpError::coded`), or where a lower

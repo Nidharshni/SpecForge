@@ -1,7 +1,7 @@
 use crate::outcome::{Exit, OutputFormat, Refusal};
 use crate::terminal::{Terminal, out};
 use specforge_ops::read::plan::AgentPlan;
-use specforge_ops::read::trace::Target;
+use specforge_ops::read::trace::{Ask, Target};
 use specforge_ops::view::ProjectView;
 
 // `specforge trace`'s command line.
@@ -41,7 +41,14 @@ impl Args {
             Ok(project) => project,
             Err(error) => return Refusal::of(self.format).report(terminal, &error),
         };
-        if let Some(plan) = &self.plan {
+        // clap refuses an entity with --plan first; the reading is the operation's all the same.
+        let ask = match Ask::of(self.entity.as_deref(), self.plan.as_ref()) {
+            Ok(ask) => ask,
+            Err(refusal) => {
+                return Refusal::of(self.format).report(terminal, &refusal.into_error());
+            }
+        };
+        if let Ask::Plan(plan) = ask {
             let outcome = specforge_ops::read::plan::check(&ProjectView::of(&project), plan);
             match self.format {
                 OutputFormat::Human => out!(terminal, "{}", outcome.to_human()),
@@ -49,7 +56,10 @@ impl Args {
             }
             return Exit::of_verdict(outcome.ok);
         }
-        let target = self.entity.as_deref().map_or(Target::Every, Target::Entity);
+        let target = match ask {
+            Ask::Entity(entity) => Target::Entity(entity),
+            Ask::Every | Ask::Plan(_) => Target::Every,
+        };
         let outcome = match specforge_ops::read::trace::trace(&ProjectView::of(&project), target) {
             Ok(outcome) => outcome,
             Err(error) => {

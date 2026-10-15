@@ -3,7 +3,7 @@ use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_ops::read::plan::{AgentPlan, PlanOutcome};
-use specforge_ops::read::trace::{ChainDocument, Target, TraceChain};
+use specforge_ops::read::trace::{Ask, ChainDocument, Target, TraceChain, TraceField};
 use specforge_ops::view::ProjectView;
 
 use crate::args::Arguments;
@@ -17,7 +17,7 @@ use specforge_ops::view::EntityField;
 pub struct Args {
     /// Entity ID to trace
     entity_id: Option<String>,
-    /// An AgentPlan ({"plan_id", "entries": [{"entity_id", "action"}]}), or its JSON text, to check for gaps against the graph instead of tracing one entity
+    /// An AgentPlan ({"plan_id", "entries": [{"entity_id", "action"}]}), or its JSON text, to check for gaps against the graph instead of tracing one entity; not with entity_id
     plan: Option<AgentPlan>,
 }
 
@@ -64,6 +64,14 @@ impl ArgumentOf<EntityField> for Tool {
     }
 }
 
+impl ArgumentOf<TraceField> for Tool {
+    fn argument(field: TraceField) -> Option<&'static str> {
+        match field {
+            TraceField::Plan => Some("plan"),
+        }
+    }
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.trace";
     const DESCRIPTION: &'static str = "Show traceability chain for an entity, or check an agent plan for gaps (entity_id or plan)";
@@ -76,14 +84,19 @@ impl CoreTool for Tool {
     type Returns = Answered<Reply>;
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
-        if let Some(plan) = &args.plan {
-            return Ok(Reply::Plan(specforge_ops::read::plan::check(&view, plan)).into());
-        }
-        let Some(entity_id) = args.entity_id.as_deref() else {
-            return Err(Box::new(McpError::invalid_input(
-                "entity_id",
-                "Missing required parameter: entity_id or plan",
-            )));
+        let entity_id = match Ask::of(args.entity_id.as_deref(), args.plan.as_ref())
+            .map_err(|refusal| Box::new(Self::refused(refusal)))?
+        {
+            Ask::Plan(plan) => {
+                return Ok(Reply::Plan(specforge_ops::read::plan::check(&view, plan)).into());
+            }
+            Ask::Entity(entity_id) => entity_id,
+            Ask::Every => {
+                return Err(Box::new(McpError::invalid_input(
+                    "entity_id",
+                    "Missing required parameter: entity_id or plan",
+                )));
+            }
         };
         let outcome = specforge_ops::read::trace::trace(&view, Target::Entity(entity_id)).map_err(
             |error| Self::refused(specforge_ops::Refusal::from(error)).with_entity(entity_id),

@@ -162,8 +162,9 @@ behavior provide_mcp_trace_prompt "Provide MCP Trace Prompt" {
   }
   contract   """
     In MCP server mode, the system MUST register a specforge://prompts/trace
-    prompt that accepts plan (an AgentPlan's JSON text, types/graph.spec) or,
-    in its place, entity_id (trace that one entity's chain).
+    prompt that accepts plan (an AgentPlan's JSON text, types/graph.spec) or
+    entity_id (trace that one entity's chain), not both: both MUST be refused
+    as invalid input on plan, as specforge.trace refuses them.
     The prompt MUST perform gap analysis against the current graph, identify
     entities affected by the plan, flag missing traceability links, and return
     identified gaps with deterministic gap context.
@@ -175,6 +176,7 @@ behavior provide_mcp_trace_prompt "Provide MCP Trace Prompt" {
   verify unit "affected entities are listed"
   verify unit "malformed plan JSON returns validation error"
   verify unit "unverified entities are the ones the trace reaches that count toward coverage and are not proven"
+  verify unit "the trace prompt refuses an entity_id given with a plan, as invalid input on plan"
   verify contract "Provide MCP Trace Prompt: MCP trace prompt holds — graph_available, gaps_returned, affected_entities_listed, prompt_invoked_emitted"
 }
 

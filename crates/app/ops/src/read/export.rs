@@ -95,6 +95,27 @@ pub enum Schema {
     Without,
 }
 
+/// The code of the refusal of both schema flags: one embeds the schema, the other leaves it out.
+pub const WITH_AND_WITHOUT_SCHEMA: &str = "with_and_without_schema";
+
+impl Schema {
+    /// The one reading of the surfaces' two flags (`--with-schema`/`with_schema`, `--no-schema`/`no_schema`):
+    /// either, or neither (the policy); both are refused, invalid input about the schema.
+    pub fn of_flags(with: bool, without: bool) -> Result<Schema, Refusal<ExportField>> {
+        match (with, without) {
+            (true, true) => Err(OpError::new(
+                OpErrorKind::InvalidInput,
+                WITH_AND_WITHOUT_SCHEMA,
+                "the schema is embedded or left out, not both: give one of with-schema and no-schema",
+            )
+            .about(ExportField::Schema)),
+            (true, false) => Ok(Schema::With),
+            (false, true) => Ok(Schema::Without),
+            (false, false) => Ok(Schema::Default),
+        }
+    }
+}
+
 /// A requested schema version that does not parse (`InvalidInput`).
 pub const INVALID_SCHEMA_VERSION: &str = "invalid_schema_version";
 /// The code of the refusal of `depth` without a `scope`: depth limits a
@@ -157,6 +178,8 @@ pub enum ExportField {
     MaxTokens,
     /// `Request::schema_version`.
     SchemaVersion,
+    /// `Request::schema`: the two schema flags.
+    Schema,
 }
 
 /// The export text of the view's project for `request`. A schema it
@@ -309,6 +332,20 @@ mod tests {
             AGENT_FORMAT.parse("dot").unwrap_err().message,
             "Unknown format: dot. Expected: graph, context, brief"
         );
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "export_agent_graph_format",
+        verify = "with_schema and no_schema together are invalid input on every surface"
+    )]
+    fn both_schema_flags_are_invalid_input() {
+        let refusal = Schema::of_flags(true, true).unwrap_err();
+        assert_eq!(refusal.error.kind, OpErrorKind::InvalidInput);
+        assert_eq!(refusal.error.code, WITH_AND_WITHOUT_SCHEMA);
+        assert_eq!(refusal.subject, Some(ExportField::Schema));
+        assert_eq!(Schema::of_flags(true, false), Ok(Schema::With));
+        assert_eq!(Schema::of_flags(false, true), Ok(Schema::Without));
+        assert_eq!(Schema::of_flags(false, false), Ok(Schema::Default));
     }
 
     fn failed(request: &Request) -> OpError {

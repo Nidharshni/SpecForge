@@ -109,8 +109,11 @@ pub fn query(
     .map_err(|refusal| {
         refusal.map_subject(|field| match field {
             ExportField::Scope => Some(QueryField::EntityId),
-            // A query always scopes and sends neither of these.
-            ExportField::Depth | ExportField::MaxTokens | ExportField::SchemaVersion => None,
+            // A query always scopes and sends none of these.
+            ExportField::Depth
+            | ExportField::MaxTokens
+            | ExportField::SchemaVersion
+            | ExportField::Schema => None,
         })
     })?;
     Ok(QueryOutcome { document, notices })

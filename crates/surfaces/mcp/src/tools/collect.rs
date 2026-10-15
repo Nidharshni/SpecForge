@@ -52,7 +52,7 @@ impl CoreTool for Tool {
     fn call(project: ProjectRef<'_>, args: Args) -> Answered<Reply> {
         use specforge_ops::analysis::collect::{self, Consent, Mode, Request, RunnerOutput};
 
-        let runner = args.runner.as_deref().filter(|r| *r != "auto");
+        let runner = args.runner.as_deref();
         let run = args.run;
 
         // Tests map to the entities on disk now: the target brought the served

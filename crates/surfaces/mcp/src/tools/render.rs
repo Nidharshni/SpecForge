@@ -50,7 +50,10 @@ impl ArgumentOf<ExportField> for Tool {
         match field {
             ExportField::Scope => Some("scope"),
             // Render sends none of the others.
-            ExportField::Depth | ExportField::MaxTokens | ExportField::SchemaVersion => None,
+            ExportField::Depth
+            | ExportField::MaxTokens
+            | ExportField::SchemaVersion
+            | ExportField::Schema => None,
         }
     }
 }

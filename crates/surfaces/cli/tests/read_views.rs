@@ -18,8 +18,10 @@ use serde_json::{Value, json};
 use specforge_mcp::testing::Served;
 use std::path::{Path, PathBuf};
 
-use crate::coverage_corpus::{mcp_calls, mcp_responses, project, served};
-use crate::parity::normalized;
+use crate::coverage_corpus::project;
+use crate::support::pairing::{
+    mcp_calls, mcp_responses, normalized, normalized_text, served, without_hashes,
+};
 use crate::support::{Cli, TestProject};
 
 /// A scratch copy of `fixtures/read_views/rv1`.
@@ -55,13 +57,6 @@ fn cli_json(served: &Served, args: &[&str]) -> Value {
     let run = cli(served, args);
     serde_json::from_str(&run.stdout)
         .unwrap_or_else(|e| panic!("{args:?} is not JSON ({e}): {}{}", run.stdout, run.stderr))
-}
-
-/// `text` with the machine-specific parts of `root` replaced.
-fn normalized_text(text: &str, root: &Path) -> String {
-    let canonical = root.canonicalize().unwrap();
-    text.replace(s(&canonical), "[ROOT]")
-        .replace(s(root), "[ROOT]")
 }
 
 /// The text content of each MCP tool call's result, as the server wrote it.
@@ -247,42 +242,6 @@ fn assert_traces_agree(tmp: &mut Served) {
 fn cli_and_mcp_trace_are_the_same_chain() {
     assert_traces_agree(&mut served(project("fx1")));
     assert_traces_agree(&mut served(rv1()));
-}
-
-#[specforge_test_macros::test(
-    behavior = "validate_agent_plan",
-    verify = "specforge trace --plan and specforge.trace answer the same document for a plan"
-)]
-fn cli_and_mcp_plan_check_are_one_document() {
-    let mut tmp = served(project("fx1"));
-    let root_buf = tmp.root().to_path_buf();
-    let root = root_buf.as_path();
-    let plan = json!({"plan_id": "p", "entries": [
-        {"entity_id": "login", "action": "implement"},
-        {"entity_id": "ghost", "action": "implement"}]});
-    let file = tmp.root().join("agent-plan.json");
-    std::fs::write(&file, plan.to_string()).unwrap();
-
-    let run = cli(
-        &tmp,
-        &[
-            "trace",
-            "--plan",
-            s(&file),
-            "--path",
-            s(root),
-            "--format",
-            "json",
-        ],
-    );
-    assert_eq!(run.code, Some(1), "{}{}", run.stdout, run.stderr);
-    let printed: Value = serde_json::from_str(&run.stdout).unwrap();
-    let mcp = mcp_calls(
-        &mut tmp,
-        &[json!({"name": "specforge.trace", "arguments": {"plan": plan}})],
-    );
-    assert_eq!(printed, mcp[0]);
-    assert_eq!(printed["ok"], false, "{printed}");
 }
 
 #[test]
@@ -638,47 +597,6 @@ fn cli_and_mcp_schema_kind_are_one_document() {
     );
 }
 
-#[specforge_test_macros::test(
-    behavior = "serve_schema_resource",
-    verify = "--no-edges and --validation-rules select what include_edges and include_validation_rules select"
-)]
-fn cli_and_mcp_schema_requests_agree() {
-    let mut tmp = served(rv1());
-    let root_buf = tmp.root().to_path_buf();
-    let root = root_buf.as_path();
-    let cases: [(&[&str], Value); 3] = [
-        (&["--no-edges"], json!({"include_edges": false})),
-        (
-            &["--validation-rules"],
-            json!({"include_validation_rules": true}),
-        ),
-        (
-            &["--kind", "behavior", "--validation-rules", "--no-edges"],
-            json!({"kind": "behavior", "include_validation_rules": true, "include_edges": false}),
-        ),
-    ];
-    let calls: Vec<Value> = cases
-        .iter()
-        .map(|(_, arguments)| json!({"name": "specforge.schema", "arguments": arguments}))
-        .collect();
-    for ((flags, arguments), answered) in cases.iter().zip(mcp_calls(&mut tmp, &calls)) {
-        let mut args = vec!["schema", "--path", s(root)];
-        args.extend(*flags);
-        let printed = cli_json(&tmp, &args);
-        assert_eq!(printed, answered, "{flags:?} vs {arguments}");
-        assert_eq!(
-            printed.get("edge_types").is_some(),
-            !flags.contains(&"--no-edges"),
-            "{flags:?}"
-        );
-        assert_eq!(
-            printed.get("validation_rules").is_some(),
-            flags.contains(&"--validation-rules"),
-            "{flags:?}"
-        );
-    }
-}
-
 /// `rv1` with a `specforge-report.json` that does not parse.
 fn rv1_with_a_malformed_report() -> TestProject {
     rv1().file("specforge-report.json", "{not json")
@@ -912,27 +830,6 @@ fn node_ids(document: &str) -> Vec<String> {
         .iter()
         .map(|n| n["id"].as_str().unwrap().to_string())
         .collect()
-}
-
-/// `text` with every run of 64 hexadecimal digits (a SHA-256) replaced by
-/// `[SHA256]`.
-fn without_hashes(text: &str) -> String {
-    let mut out = String::new();
-    let mut run = String::new();
-    let flush = |run: &mut String, out: &mut String| {
-        out.push_str(if run.len() == 64 { "[SHA256]" } else { run });
-        run.clear();
-    };
-    for ch in text.chars() {
-        if ch.is_ascii_hexdigit() {
-            run.push(ch);
-        } else {
-            flush(&mut run, &mut out);
-            out.push(ch);
-        }
-    }
-    flush(&mut run, &mut out);
-    out
 }
 
 fn mcp_query(arguments: Value) -> Value {

@@ -646,8 +646,8 @@ fn listed_required_arguments_are_exactly_the_unrenderable_omissions() {
 
         let rendered = get_prompt(&mut server, &prompt, full.clone());
         assert!(
-            rendered["error"].is_null(),
-            "{prompt} renders with every argument: {rendered}"
+            rendered["error"].is_null() || rendered["error"]["data"]["argument"] == "plan",
+            "{prompt} renders with every argument (trace's two exclude each other, ADR 0101): {rendered}"
         );
 
         for (argument, required) in &arguments {
