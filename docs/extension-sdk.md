@@ -473,9 +473,8 @@ custom rule (`ValidatorField.value`, always a JSON string) and a compiler pass
 |---|---|
 | string, identifier, date | as written |
 | integer, boolean | its literal (`42`, `true`) |
-| list of strings or references | items joined by `", "` |
-| mixed list (`[1, true]`) | items' texts joined by `", "` |
-| variant list (`values [low, high]`), type union (`string \| string[]`) | members joined by `" \| "` |
+| list (`["a", b]`, `[1, true]`) | items' texts joined by `", "` |
+| variant list, type union (`string \| string[]`) | members joined by `" \| "` |
 | expression group (`expr { a < 10ms, b > 5 }`) | each expression's display form, joined by `", "` |
 | block (`ensures { done "…" }`) | its keys joined by `", "` |
 

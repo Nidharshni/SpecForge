@@ -919,15 +919,9 @@ expression: "digest(&load(&runtime, &[name]))"
       "type.extends": "reference",
       "type.refs": "string_list"
     },
-    "single_reference_fields": [
-      [
-        "event",
-        "payload"
-      ],
-      [
-        "type",
-        "extends"
-      ]
+    "member_kinds": [
+      "port",
+      "type"
     ]
   },
   "kinds": {

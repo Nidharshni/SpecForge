@@ -1,17 +1,17 @@
-//! A declared field type's one reading (ADR-NEW-01): which written values a
+//! A declared field type's one reading (ADR 0064, ADR 0093): which written values a
 //! field takes, how the graph build stores a written value, the JSON every
 //! output writes for a field value, and the JSON Schema of that JSON. The
 //! graph build's coercion, E061, the export writer, the graph delta and the
 //! published schema read it; nothing else decides a field value's form.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 use specforge_common::SourceSpan;
 use specforge_common::find_close_match;
 use specforge_common::shape::{Definitions, Shape};
-use specforge_parser::{FieldMap, FieldValue, SpannedRef};
+use specforge_parser::{FieldEntry, FieldMap, FieldValue, ListItem, Written};
 use specforge_protocol_types::FieldType;
 
 use crate::Graph;
@@ -29,12 +29,8 @@ pub enum ValueShape {
     Date,
     Integer,
     Boolean,
-    /// `["a", "b"]`.
-    Strings,
-    /// `[a, b]`.
-    References,
-    /// A list whose items have different shapes.
-    Mixed,
+    /// `[a, "b", 1]`: a list, however its items were written.
+    List,
     /// A variant list (`a | b` in a body).
     Variants,
     TypeUnion,
@@ -53,9 +49,7 @@ impl ValueShape {
             FieldValue::Date(_) => Self::Date,
             FieldValue::Integer(_) => Self::Integer,
             FieldValue::Boolean(_) => Self::Boolean,
-            FieldValue::StringList(_) => Self::Strings,
-            FieldValue::ReferenceList(_) => Self::References,
-            FieldValue::MixedList(_) => Self::Mixed,
+            FieldValue::List(_) => Self::List,
             FieldValue::VariantList(_) => Self::Variants,
             FieldValue::TypeUnion(_) => Self::TypeUnion,
             FieldValue::Block(_) => Self::Block,
@@ -63,12 +57,9 @@ impl ValueShape {
         }
     }
 
-    /// A list: of strings, references, mixed items or variants.
+    /// A list, or a variant list.
     pub fn is_list(self) -> bool {
-        matches!(
-            self,
-            Self::Strings | Self::References | Self::Mixed | Self::Variants
-        )
+        matches!(self, Self::List | Self::Variants)
     }
 }
 
@@ -132,10 +123,9 @@ impl FieldForm {
     /// cannot be the type is E061's); idempotent. `span` is the value's own,
     /// which a single reference keeps when it becomes a one-item list.
     ///
-    /// - `string_list`, `reference_list`: a bare word becomes the one-item
-    ///   reference list `field [id]` parses to; a string, integer, boolean
-    ///   or date the one-item string list of its text; a list mixing
-    ///   strings, integers and booleans the string list of its items' texts.
+    /// - `string_list`, `reference_list`: a list is stored as written; a
+    ///   bare word, string, integer, boolean or date becomes the one-item
+    ///   list `field [value]` parses to.
     /// - `integer`: a quoted integer becomes the integer.
     /// - `bool`: a quoted or bare `true` / `false` becomes the boolean.
     /// - `string`, `enum`: an integer or boolean becomes its text.
@@ -173,7 +163,7 @@ impl FieldForm {
     /// | `integer` | an integer |
     /// | `bool` | `true` or `false` |
     /// | `reference` | a bare word or a string |
-    /// | `string_list`, `reference_list` | a list of strings, references or variants |
+    /// | `string_list`, `reference_list` | a list, however its items were written |
     /// | `block` | a block |
     pub fn admit(&self, shape: ValueShape, text: &str) -> Result<(), Refusal> {
         let single_value = || Refusal::with("give a single value, not a list");
@@ -219,7 +209,7 @@ impl FieldForm {
                 _ => Err(Refusal::with("name one entity by its id")),
             },
             FieldType::StringList | FieldType::ReferenceList => match shape {
-                ValueShape::Strings | ValueShape::References | ValueShape::Variants => Ok(()),
+                ValueShape::List | ValueShape::Variants => Ok(()),
                 _ => Err(Refusal::with("write a list: [a, b]")),
             },
             FieldType::Block => match shape {
@@ -253,47 +243,183 @@ impl FieldForm {
     }
 }
 
-/// The list a single written value, or a list of scalars, is stored as on a
-/// `string_list` / `reference_list` field.
-fn coerce_list(value: &FieldValue, span: Option<&SourceSpan>) -> Option<FieldValue> {
-    let one = |text: String| Some(FieldValue::StringList(vec![text]));
-    match value {
-        FieldValue::String(s) | FieldValue::Date(s) => one(s.clone()),
-        FieldValue::Integer(n) => one(n.to_string()),
-        FieldValue::Boolean(b) => one(b.to_string()),
-        FieldValue::Identifier(id) => Some(FieldValue::ReferenceList(vec![SpannedRef {
-            id: id.clone(),
-            span: span?.clone(),
-        }])),
-        FieldValue::MixedList(items) => items
-            .iter()
-            .map(|item| match item {
-                FieldValue::String(s) => Some(s.clone()),
-                FieldValue::Integer(n) => Some(n.to_string()),
-                FieldValue::Boolean(b) => Some(b.to_string()),
-                _ => None,
-            })
-            .collect::<Option<Vec<_>>>()
-            .map(FieldValue::StringList),
-        _ => None,
+/// Every registered field's form, and the kinds that take any field: what
+/// the graph build and every reader ask what a field's value is and
+/// references (ADR 0093). Built once per registry build.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct FieldForms {
+    forms: HashMap<(String, String), FieldForm>,
+    member_kinds: BTreeSet<String>,
+}
+
+impl FieldForms {
+    /// `forms` maps (kind, field) to the field's form; `member_kinds` are
+    /// the kinds that declare `open_fields`.
+    pub fn new(
+        forms: HashMap<(String, String), FieldForm>,
+        member_kinds: BTreeSet<String>,
+    ) -> Self {
+        Self {
+            forms,
+            member_kinds,
+        }
+    }
+
+    /// How `kind`'s field `field` reads: its declared form, an undeclared
+    /// field of a kind that takes any field, or no form at all.
+    pub fn reading(&self, kind: &str, field: &str) -> Reading<'_> {
+        if let Some(form) = self.forms.get(&(kind.to_string(), field.to_string())) {
+            Reading::Declared(form)
+        } else if self.member_kinds.contains(kind) {
+            Reading::Member
+        } else {
+            Reading::Undeclared
+        }
+    }
+
+    /// No field is declared.
+    pub fn is_empty(&self) -> bool {
+        self.forms.is_empty()
+    }
+
+    /// Every declared (kind, field) and its form.
+    pub fn iter(&self) -> impl Iterator<Item = (&(String, String), &FieldForm)> {
+        self.forms.iter()
+    }
+
+    /// The kinds that take any field (`open_fields`).
+    pub fn member_kinds(&self) -> &BTreeSet<String> {
+        &self.member_kinds
     }
 }
 
+/// One id a field's value references and where it is written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Reference<'v> {
+    pub id: &'v str,
+    pub span: Option<&'v SourceSpan>,
+}
+
+/// How a (kind, field) reads: see [`FieldForms::reading`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reading<'f> {
+    /// The field is declared; its form decides.
+    Declared(&'f FieldForm),
+    /// An undeclared field of a kind that takes any field.
+    Member,
+    /// No form: a closed kind's unknown field, an unregistered kind, a
+    /// project without extensions.
+    Undeclared,
+}
+
+impl Reading<'_> {
+    /// What the graph build stores for `value`: the form's coercion when
+    /// declared, else `None` (as written).
+    pub fn coerce(&self, value: &FieldValue, span: Option<&SourceSpan>) -> Option<FieldValue> {
+        match self {
+            Self::Declared(form) => form.coerce(value, span),
+            Self::Member | Self::Undeclared => None,
+        }
+    }
+
+    /// What `entry`'s value references, in written order, each with its
+    /// span (ADR 0093). The one rule every reader asks:
+    ///
+    /// | reading | a single value | a list item |
+    /// |---|---|---|
+    /// | declared `reference` | the value, bare or quoted | none |
+    /// | declared `reference_list` | none (the build stores it as a list) | every item |
+    /// | declared `string_list` | none | a scheme ref ID |
+    /// | other declared types, a member | none | none |
+    /// | undeclared | none | a bare word or a scheme ref ID |
+    pub fn references<'v>(&self, entry: &'v FieldEntry) -> Vec<Reference<'v>> {
+        let item = |item: &'v ListItem| Reference {
+            id: item.text.as_str(),
+            span: Some(&item.span),
+        };
+        match (self, &entry.value) {
+            (Self::Declared(form), FieldValue::Identifier(id) | FieldValue::String(id))
+                if form.field_type() == FieldType::Reference =>
+            {
+                vec![Reference {
+                    id: id.as_str(),
+                    span: entry.value_span.as_ref(),
+                }]
+            }
+            (Self::Declared(form), FieldValue::List(items)) => match form.field_type() {
+                FieldType::ReferenceList => items.iter().map(item).collect(),
+                FieldType::StringList => items
+                    .iter()
+                    .filter(|i| i.written == Written::SchemeRef)
+                    .map(item)
+                    .collect(),
+                _ => Vec::new(),
+            },
+            (Self::Undeclared, FieldValue::List(items)) => items
+                .iter()
+                .filter(|i| matches!(i.written, Written::Bare | Written::SchemeRef))
+                .map(item)
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Whether a name written as `written`, as a value of the field or as
+    /// an item of its list, may name an entity: the editor's
+    /// reference positions. Any name on a declared `reference` or
+    /// `reference_list`; a scheme ref ID on a `string_list`; nothing on
+    /// another declared type; a bare word or scheme ref ID on a member or
+    /// an undeclared field (what its word names, as the graph reads it).
+    pub fn may_name(&self, written: Written) -> bool {
+        match self {
+            Self::Declared(form) => match form.field_type() {
+                FieldType::Reference | FieldType::ReferenceList => true,
+                FieldType::StringList => written == Written::SchemeRef,
+                _ => false,
+            },
+            Self::Member | Self::Undeclared => {
+                matches!(written, Written::Bare | Written::SchemeRef)
+            }
+        }
+    }
+
+    /// Whether the field is a declared `reference`: its edges link after
+    /// reference cycles are detected.
+    pub fn is_single_reference(&self) -> bool {
+        matches!(self, Self::Declared(form) if form.field_type() == FieldType::Reference)
+    }
+}
+
+/// The one-item list a single written value is stored as on a
+/// `string_list` / `reference_list` field; a list is stored as written.
+fn coerce_list(value: &FieldValue, span: Option<&SourceSpan>) -> Option<FieldValue> {
+    let (text, written) = match value {
+        FieldValue::String(s) => (s.clone(), Written::Quoted),
+        FieldValue::Identifier(id) => (id.clone(), Written::Bare),
+        FieldValue::Date(s) => (s.clone(), Written::Literal),
+        FieldValue::Integer(n) => (n.to_string(), Written::Literal),
+        FieldValue::Boolean(b) => (b.to_string(), Written::Literal),
+        _ => return None,
+    };
+    Some(FieldValue::List(vec![ListItem {
+        text,
+        span: span?.clone(),
+        written,
+    }]))
+}
+
 impl Graph {
-    /// Store every node's registered field values as their forms coerce
-    /// them; `forms` maps (entity kind, field name) to the field's form.
-    /// Idempotent, so rebuilds may re-run it on already coerced nodes.
-    pub(crate) fn coerce_field_values(&mut self, forms: &HashMap<(String, String), FieldForm>) {
+    /// Store every node's field values as their forms coerce them. Idempotent,
+    /// so rebuilds may re-run it on already coerced nodes.
+    pub(crate) fn coerce_field_values(&mut self, forms: &FieldForms) {
         if forms.is_empty() {
             return;
         }
         for node in self.nodes_mut() {
             let kind = node.kind.raw.as_str().to_string();
             for entry in node.fields.entries_mut() {
-                let Some(form) = forms.get(&(kind.clone(), entry.key.as_str().to_string())) else {
-                    continue;
-                };
-                if let Some(value) = form.coerce(&entry.value, entry.value_span.as_ref()) {
+                let reading = forms.reading(&kind, entry.key.as_str());
+                if let Some(value) = reading.coerce(&entry.value, entry.value_span.as_ref()) {
                     entry.value = value;
                 }
             }
@@ -339,8 +465,7 @@ impl Shape for FieldJson {
 /// joined by `" | "`; an expression group as its conjuncts, each in its
 /// display form, joined by `"\n"` (the string form the prove pass reads, one
 /// comparison per line, ADR 0009); an integer and a boolean as JSON scalars;
-/// a reference, string or variant list as an array of strings; a mixed list
-/// as an array of its items; a block
+/// a list or variant list as an array of its items' text; a block
 /// as an object of its entries, each written by this function. Never the
 /// parser's tree, never a position.
 pub fn write(value: &FieldValue) -> FieldJson {
@@ -358,10 +483,13 @@ pub fn write(value: &FieldValue) -> FieldJson {
         ),
         FieldValue::Integer(n) => Value::Number((*n).into()),
         FieldValue::Boolean(b) => Value::Bool(*b),
-        FieldValue::ReferenceList(refs) => {
-            Value::Array(refs.iter().map(|r| Value::String(r.id.clone())).collect())
-        }
-        FieldValue::VariantList(items) | FieldValue::StringList(items) => {
+        FieldValue::List(items) => Value::Array(
+            items
+                .iter()
+                .map(|item| Value::String(item.text.clone()))
+                .collect(),
+        ),
+        FieldValue::VariantList(items) => {
             Value::Array(items.iter().cloned().map(Value::String).collect())
         }
         FieldValue::Block(inner) => Value::Object(
@@ -370,9 +498,6 @@ pub fn write(value: &FieldValue) -> FieldJson {
                 .map(|(key, written)| (key, written.0))
                 .collect::<Map<_, _>>(),
         ),
-        FieldValue::MixedList(items) => {
-            Value::Array(items.iter().map(|item| write(item).0).collect())
-        }
     })
 }
 

@@ -753,20 +753,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "refinement.invariant_deltas": "string_list",
       "refinement.refs": "string_list"
     },
-    "single_reference_fields": [
-      [
-        "refinement",
-        "abstract_entity"
-      ],
-      [
-        "refinement",
-        "chains_to"
-      ],
-      [
-        "refinement",
-        "concrete_entity"
-      ]
-    ]
+    "member_kinds": []
   },
   "kinds": {
     "axiom": {

@@ -194,7 +194,7 @@ fn pass_entity(runtime: &InProcessRuntime, id: &str) -> Value {
 
 /// `alpha`'s fields as §3.1 expects every reader to see them.
 const ALPHA: &[(&str, &str)] = &[
-    ("values", "low | high"),
+    ("values", "low, high"),
     ("mix", "1, true"),
     ("ensures", "done"),
     ("empty_block", ""),

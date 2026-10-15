@@ -1036,16 +1036,7 @@ expression: "digest(&load(&runtime, &[name]))"
       "failure_mode.severity": "enum (critical, high, medium, low)",
       "failure_mode.threatens_features": "reference_list"
     },
-    "single_reference_fields": [
-      [
-        "decision",
-        "superseded_by"
-      ],
-      [
-        "failure_mode",
-        "invariant"
-      ]
-    ]
+    "member_kinds": []
   },
   "kinds": {
     "constraint": {

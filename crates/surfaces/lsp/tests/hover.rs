@@ -743,9 +743,8 @@ fn hovering_a_diagnostic_shows_the_catalogue_entry() {
     assert_eq!(
         md,
         "**E003** · Unresolved reference\n\nunresolved reference 'ghost'\n\n\
-         A reference field names an entity ID that doesn't resolve to any declared entity. \
-         Fix the typo or add the missing entity; a `did you mean` suggestion is included when \
-         a close match exists.\n\n\
+         A reference field names an entity ID that doesn't resolve to any declared entity: a `reference` field's value or a `reference_list` field's item, quoted or not, or a scheme ref ID in a string list. \
+         A `string_list` field's other items are strings, never references. Fix the typo or add the missing entity; a `did you mean` suggestion is included when a close match exists.\n\n\
          [Documentation](https://github.com/leaderiop/SpecForge/blob/main/docs/diagnostics.md#e003)"
     );
     // Outside the range, nothing.

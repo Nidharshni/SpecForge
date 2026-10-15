@@ -276,8 +276,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   caller reach it only through `build_registries` and that build's methods; its steps, its checks and
   its fields are private (ADR 0031).
 - **Graph inputs**: what the graph build reads of the loaded extensions (`specforge_graph::GraphInputs`):
-  the kinds whose bodies an extension parses, the single and the absent-target reference fields, the
-  inverse field pairs (a reference field and its inverse fields, fields of its target kind), each field's form and the derived reference fields. Only the registry
+  the kinds whose bodies an extension parses, the absent-target reference fields, the
+  inverse field pairs (a reference field and its inverse fields, fields of its target kind), each field's form with the kinds that take any field (`FieldForms`) and the derived reference fields. Only the registry
   build derives them (`RegistryBuild::graph_inputs`); with the provider schemes the environment
   registers they are every graph's `GraphConfig` (`Environment::graph_config`, ADR 0032).
 - **Edge type**: a relationship an extension declares (`edges`), or that fields name without one declaring it
@@ -351,7 +351,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   pass, a rollup, a conditional rule's value) read the same constant. An open set of standard values (a module's
   family) is not one: its field is a string, and an info rule names the standard values (`{allowed}`) (ADR 0071).
 - **Field form**: a field's declared type with an enum's values, read once
-  (`specforge_graph::FieldForm`, from `FieldRegistryEntry::form`): which
+  (`specforge_graph::FieldForm`, from `FieldRegistryEntry::form`; `FieldForms::reading(kind, field)` is a
+  `Declared` form, a `Member` of an open-fields kind or `Undeclared`, and `Reading::references` is the one rule
+  for what a written value references, ADR 0093): which
   stored values the field takes (E061 reads it), how the graph build stores a
   written value (coercion), and the JSON Schema of the written value (the
   published schema reads it). Every output writes a field value through one
@@ -899,7 +901,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   an extension pass named). Consumers that act on a diagnostic (the LSP's quick fixes, MCP's
   suggest_fixes, and navigation's attribution of a diagnostic to the entities it is about) read it;
   none parses the message, which is presentation.
-- **Reference**: an occurrence of an entity's ID in another entity's field that resolves to it (one
+- **Reference**: an id a field's declared type reads as a reference (a `reference` field's value, a
+  `reference_list` field's items, a scheme ref ID in a `string_list`, ADR 0093), an occurrence of an entity's ID in another entity's field that resolves to it (one
   edge, written where its token is). The references *to* an entity are incoming; what an entity
   *refers to* are its outgoing references. "Find references" means incoming, with the declaration
   only on request (`specforge_ops::read::navigate`).
@@ -936,8 +939,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`specforge_parser::lex`) and their block structure, never from the graph: the word under it, whether
   it is in code, a string or a comment, the entity block, field and reference list around it, and the
   `use` statement it is on. The entity a cursor names is the declaration or reference token under it,
-  else an identifier at a reference position (a header's name, a value or item of a field the
-  registry does not type as a non-reference, a `use` binding's imported name) that names an entity;
+  else an identifier at a reference position (a header's name, a value or item of a field whose
+  reading may name an entity, a `use` binding's imported name) that names an entity;
   hover, definition, references and rename all ask the cursor, completion asks it what completes
   there, and semantic tokens mark the same reference positions (`specforge_lsp::document`, ADR 0023).
   While the document is not the text the project was compiled from, the cursor never asks navigation

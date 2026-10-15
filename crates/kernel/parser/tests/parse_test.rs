@@ -1,5 +1,5 @@
 use specforge_common::Sym;
-use specforge_parser::{Annotation, EntityId, EntityKind, FieldValue, parse};
+use specforge_parser::{Annotation, EntityId, EntityKind, FieldValue, Written, parse};
 use specforge_test_macros::test as specforge_test;
 use std::path::PathBuf;
 
@@ -282,21 +282,22 @@ behavior test_values "Test Values" {
     assert!(matches!(e.fields.get("created"), Some(FieldValue::Date(d)) if d == "2024-01-15"));
     assert!(matches!(e.fields.get("status"), Some(FieldValue::Identifier(id)) if id == "planned"));
 
-    // Reference list (all identifiers)
+    // A list of bare words
     match e.fields.get("tags").expect("missing tags") {
-        FieldValue::ReferenceList(items) => {
-            let ids: Vec<&str> = items.iter().map(|r| r.id.as_str()).collect();
+        FieldValue::List(items) => {
+            let ids: Vec<&str> = items.iter().map(|r| r.text.as_str()).collect();
             assert_eq!(ids, ["alpha", "beta", "gamma"]);
         }
-        other => panic!("expected ReferenceList, got {:?}", other),
+        other => panic!("expected List, got {:?}", other),
     }
 
-    // String list (contains quoted strings)
+    // A list of quoted strings
     match e.fields.get("labels").expect("missing labels") {
-        FieldValue::StringList(items) => {
-            assert_eq!(items, &["tag-one", "tag-two"]);
+        FieldValue::List(items) => {
+            let texts: Vec<&str> = items.iter().map(|r| r.text.as_str()).collect();
+            assert_eq!(texts, ["tag-one", "tag-two"]);
         }
-        other => panic!("expected StringList, got {:?}", other),
+        other => panic!("expected List, got {:?}", other),
     }
 
     // Nested block
@@ -530,11 +531,11 @@ behavior trailing "Trailing Comma" {
         result.errors
     );
     match result.entities[0].fields.get("tags").expect("missing tags") {
-        FieldValue::ReferenceList(items) => {
-            let ids: Vec<&str> = items.iter().map(|r| r.id.as_str()).collect();
+        FieldValue::List(items) => {
+            let ids: Vec<&str> = items.iter().map(|r| r.text.as_str()).collect();
             assert_eq!(ids, ["alpha", "beta", "gamma"]);
         }
-        other => panic!("expected ReferenceList, got {:?}", other),
+        other => panic!("expected List, got {:?}", other),
     }
 }
 
@@ -553,10 +554,11 @@ behavior with_refs "Refs" {
         result.errors
     );
     match result.entities[0].fields.get("refs").expect("missing refs") {
-        FieldValue::ReferenceList(items) => {
+        FieldValue::List(items) => {
             assert_eq!(items.len(), 2);
-            assert_eq!(items[0].id, "gh.issue:42");
-            assert_eq!(items[1].id, "jira.story:ABC-123");
+            assert_eq!(items[0].text, "gh.issue:42");
+            assert_eq!(items[1].text, "jira.story:ABC-123");
+            assert_eq!(items[0].written, Written::SchemeRef);
             // Each item keeps the exact span of its identifier token
             // (C3-07). Line 3 is `    refs [gh.issue:42, jira.story:ABC-123]`:
             // `gh.issue:42` occupies columns 11-21, `jira.story:ABC-123` 24-41.
@@ -567,7 +569,7 @@ behavior with_refs "Refs" {
             assert_eq!(items[1].span.start_col, 24);
             assert_eq!(items[1].span.end_col, 42);
         }
-        other => panic!("expected ReferenceList with scheme refs, got {:?}", other),
+        other => panic!("expected List with scheme refs, got {:?}", other),
     }
 }
 
@@ -1395,10 +1397,10 @@ behavior foo "T" {
         result.errors
     );
     match result.entities[0].fields.get("tags").expect("missing tags") {
-        FieldValue::ReferenceList(items) => {
+        FieldValue::List(items) => {
             assert!(items.is_empty(), "expected empty list, got: {items:?}");
         }
-        other => panic!("expected ReferenceList, got {:?}", other),
+        other => panic!("expected List, got {:?}", other),
     }
 }
 
@@ -2218,115 +2220,85 @@ type Config {
 
 #[specforge_test(
     behavior = "parse_all_block_types",
-    verify = "mixed-type list preserves per-item types"
+    verify = "a list keeps each item's text, span and how it was written"
 )]
-fn parse_mixed_list_preserves_item_types() {
+fn parse_list_keeps_each_items_text_and_lexeme() {
     let source = r#"
 behavior mixed_test "Mixed Test" {
-    items ["hello", 42, true]
+    items ["hello", 42, true, bare, gh.issue:7]
 }
 "#;
     let result = parse(source, "test.spec");
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let items = match result.entities[0].fields.get("items") {
+        Some(FieldValue::List(items)) => items,
+        other => panic!("expected List, got: {other:?}"),
+    };
+    let read: Vec<(&str, Written)> = items.iter().map(|i| (i.text.as_str(), i.written)).collect();
+    assert_eq!(
+        read,
+        [
+            ("hello", Written::Quoted),
+            ("42", Written::Literal),
+            ("true", Written::Literal),
+            ("bare", Written::Bare),
+            ("gh.issue:7", Written::SchemeRef),
+        ]
+    );
+    // A quoted item's span is its token, quotes included (line 3, column 12).
+    assert_eq!((items[0].span.start_line, items[0].span.start_col), (3, 12));
+    assert_eq!(items[0].span.end_col, 19);
+}
 
-    // Mixed lists produce a warning but should still parse
-    let entity = &result.entities[0];
-    let items = entity.fields.get("items").expect("missing 'items' field");
-    match items {
-        FieldValue::MixedList(values) => {
-            assert_eq!(values.len(), 3, "expected 3 items in mixed list");
-            assert!(
-                matches!(&values[0], FieldValue::String(s) if s == "hello"),
-                "first item should be String(\"hello\"), got: {:?}",
-                values[0]
-            );
-            assert!(
-                matches!(&values[1], FieldValue::Integer(42)),
-                "second item should be Integer(42), got: {:?}",
-                values[1]
-            );
-            assert!(
-                matches!(&values[2], FieldValue::Boolean(true)),
-                "third item should be Boolean(true), got: {:?}",
-                values[2]
-            );
+#[specforge_test(
+    behavior = "parse_all_block_types",
+    verify = "a list of quoted strings keeps each item quoted"
+)]
+fn parse_quoted_list_keeps_items_quoted() {
+    let result = parse(
+        "behavior homo_test \"Homo Test\" {\n    tags [\"a\", \"b\"]\n}\n",
+        "test.spec",
+    );
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    match result.entities[0].fields.get("tags") {
+        Some(FieldValue::List(items)) => {
+            assert!(items.iter().all(|i| i.written == Written::Quoted));
         }
-        other => panic!("expected MixedList, got: {:?}", other),
+        other => panic!("expected List, got: {other:?}"),
     }
 }
 
 #[specforge_test(
     behavior = "parse_all_block_types",
-    verify = "homogeneous string list is not MixedList"
+    verify = "a list of bare words keeps each item bare"
 )]
-fn parse_homogeneous_string_list_remains_string_list() {
-    let source = r#"
-behavior homo_test "Homo Test" {
-    tags ["a", "b", "c"]
-}
-"#;
-    let result = parse(source, "test.spec");
-    assert!(
-        result.errors.is_empty(),
-        "unexpected errors: {:?}",
-        result.errors
+fn parse_bare_list_keeps_items_bare() {
+    let result = parse(
+        "behavior ref_test \"Ref Test\" {\n    features [auth_login, auth_logout]\n}\n",
+        "test.spec",
     );
-    let entity = &result.entities[0];
-    let tags = entity.fields.get("tags").expect("missing 'tags' field");
-    assert!(
-        matches!(tags, FieldValue::StringList(_)),
-        "expected StringList, got: {:?}",
-        tags
-    );
-}
-
-#[specforge_test(
-    behavior = "parse_all_block_types",
-    verify = "homogeneous reference list is not MixedList"
-)]
-fn parse_homogeneous_ref_list_remains_ref_list() {
-    let source = r#"
-behavior ref_test "Ref Test" {
-    features [auth_login, auth_logout]
-}
-"#;
-    let result = parse(source, "test.spec");
-    assert!(
-        result.errors.is_empty(),
-        "unexpected errors: {:?}",
-        result.errors
-    );
-    let entity = &result.entities[0];
-    let features = entity
-        .fields
-        .get("features")
-        .expect("missing 'features' field");
-    assert!(
-        matches!(features, FieldValue::ReferenceList(_)),
-        "expected ReferenceList, got: {:?}",
-        features
-    );
-}
-
-#[specforge_test(
-    behavior = "parse_all_block_types",
-    verify = "mixed list with strings and integers preserves both"
-)]
-fn parse_mixed_list_strings_and_integers() {
-    let source = r#"
-behavior mix_si "Mix String Int" {
-    values ["alpha", 99]
-}
-"#;
-    let result = parse(source, "test.spec");
-    let entity = &result.entities[0];
-    let values = entity.fields.get("values").expect("missing 'values' field");
-    match values {
-        FieldValue::MixedList(items) => {
-            assert_eq!(items.len(), 2);
-            assert!(matches!(&items[0], FieldValue::String(s) if s == "alpha"));
-            assert!(matches!(&items[1], FieldValue::Integer(99)));
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    match result.entities[0].fields.get("features") {
+        Some(FieldValue::List(items)) => {
+            assert!(items.iter().all(|i| i.written == Written::Bare));
         }
-        other => panic!("expected MixedList, got: {:?}", other),
+        other => panic!("expected List, got: {other:?}"),
+    }
+}
+
+#[specforge_test(
+    behavior = "parse_all_block_types",
+    verify = "a list mixing quoted strings and bare words is no parse error"
+)]
+fn parse_mixed_list_is_no_error() {
+    let result = parse(
+        "behavior mix \"Mix\" {\n    values [\"alpha\", beta, 99]\n}\n",
+        "test.spec",
+    );
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    match result.entities[0].fields.get("values") {
+        Some(FieldValue::List(items)) => assert_eq!(items.len(), 3),
+        other => panic!("expected List, got: {other:?}"),
     }
 }
 

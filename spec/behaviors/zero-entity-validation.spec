@@ -155,7 +155,6 @@ behavior register_custom_validation_patterns "Register Custom Validation Pattern
   invariants [zero_domain_knowledge_core, declarative_validation_determinism]
   category   command
   types      [ValidationRulePattern, CustomCall, ExtensionDeclaration]
-  refs       [provide_host_function_query_graph]
   ports      [WasmRuntime]
   consumes   [extension_manifests_loaded]
   requires {
@@ -263,7 +262,7 @@ behavior snapshot_entities_once "Snapshot the Entities Once per Compile" {
     one standing.
   """
   verify unit "every field an entity writes has one text, the same for declarative rules, custom validators and compiler passes"
-  verify unit "a variant list or type union is its members joined by ' | ', a mixed list or expression group its items joined by ', '"
+  verify unit "a variant list or type union is its members joined by ' | ', a list or expression group its items joined by ', '"
   verify unit "an empty list or block is written, with empty text, never left out or null"
   verify unit "every edge in the snapshot is typed by the edge type its field writes from the kind it starts at, and counted by that type"
   verify unit "an entity owes obligations when a no_verify_statements rule applies to its kind and neither a union body nor an exempting flag exempts it"
@@ -331,6 +330,7 @@ behavior check_entities_in_one_order "Check the Entities in One Order" {
   verify unit "an entity ID equal to a structural keyword or a registered kind's keyword is E013"
   verify unit "an entity ID shorter than 2 or longer than 60 characters is E014"
   verify unit "a reference to an existing entity of another kind than its field's target kind is E022"
+  verify unit "a single reference to an existing entity of another kind than its field's target kind is E022"
   verify unit "the files the checks read are those file_reference fields name and those file_exists rules read"
   verify integration "a compile reports the structural checks in the order the registry build runs them"
 }

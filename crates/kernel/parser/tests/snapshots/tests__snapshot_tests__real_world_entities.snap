@@ -17,10 +17,10 @@ expression: result.entities
             entries: [
                 FieldEntry {
                     key: Sym("invariants"),
-                    value: ReferenceList(
+                    value: List(
                         [
-                            SpannedRef {
-                                id: "multi_error_collection",
+                            ListItem {
+                                text: "multi_error_collection",
                                 span: SourceSpan {
                                     file: Sym("behaviors/parsing.spec"),
                                     start_line: 6,
@@ -28,9 +28,10 @@ expression: result.entities
                                     end_line: 6,
                                     end_col: 39,
                                 },
+                                written: Bare,
                             },
-                            SpannedRef {
-                                id: "string_interning_consistency",
+                            ListItem {
+                                text: "string_interning_consistency",
                                 span: SourceSpan {
                                     file: Sym("behaviors/parsing.spec"),
                                     start_line: 6,
@@ -38,6 +39,7 @@ expression: result.entities
                                     end_line: 6,
                                     end_col: 69,
                                 },
+                                written: Bare,
                             },
                         ],
                     ),
@@ -54,10 +56,10 @@ expression: result.entities
                 },
                 FieldEntry {
                     key: Sym("types"),
-                    value: ReferenceList(
+                    value: List(
                         [
-                            SpannedRef {
-                                id: "SpecFile",
+                            ListItem {
+                                text: "SpecFile",
                                 span: SourceSpan {
                                     file: Sym("behaviors/parsing.spec"),
                                     start_line: 7,
@@ -65,9 +67,10 @@ expression: result.entities
                                     end_line: 7,
                                     end_col: 25,
                                 },
+                                written: Bare,
                             },
-                            SpannedRef {
-                                id: "ParseError",
+                            ListItem {
+                                text: "ParseError",
                                 span: SourceSpan {
                                     file: Sym("behaviors/parsing.spec"),
                                     start_line: 7,
@@ -75,9 +78,10 @@ expression: result.entities
                                     end_line: 7,
                                     end_col: 37,
                                 },
+                                written: Bare,
                             },
-                            SpannedRef {
-                                id: "SourceSpan",
+                            ListItem {
+                                text: "SourceSpan",
                                 span: SourceSpan {
                                     file: Sym("behaviors/parsing.spec"),
                                     start_line: 7,
@@ -85,6 +89,7 @@ expression: result.entities
                                     end_line: 7,
                                     end_col: 49,
                                 },
+                                written: Bare,
                             },
                         ],
                     ),
@@ -268,10 +273,10 @@ expression: result.entities
             entries: [
                 FieldEntry {
                     key: Sym("invariants"),
-                    value: ReferenceList(
+                    value: List(
                         [
-                            SpannedRef {
-                                id: "multi_error_collection",
+                            ListItem {
+                                text: "multi_error_collection",
                                 span: SourceSpan {
                                     file: Sym("behaviors/parsing.spec"),
                                     start_line: 30,
@@ -279,6 +284,7 @@ expression: result.entities
                                     end_line: 30,
                                     end_col: 39,
                                 },
+                                written: Bare,
                             },
                         ],
                     ),
@@ -295,10 +301,10 @@ expression: result.entities
                 },
                 FieldEntry {
                     key: Sym("types"),
-                    value: ReferenceList(
+                    value: List(
                         [
-                            SpannedRef {
-                                id: "ParseError",
+                            ListItem {
+                                text: "ParseError",
                                 span: SourceSpan {
                                     file: Sym("behaviors/parsing.spec"),
                                     start_line: 31,
@@ -306,6 +312,7 @@ expression: result.entities
                                     end_line: 31,
                                     end_col: 27,
                                 },
+                                written: Bare,
                             },
                         ],
                     ),

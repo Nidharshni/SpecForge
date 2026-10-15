@@ -5,15 +5,16 @@
 
 mod build;
 pub mod field_form;
-pub use field_form::{FieldForm, FieldJson, ValueShape};
+pub use field_form::{FieldForm, FieldForms, FieldJson, Reading, Reference, ValueShape};
 mod delta;
 pub use delta::{
     EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect, NodeChange, compute_graph_delta,
     moved_nodes,
 };
 mod derive;
-pub use derive::{DerivedFrom, DerivedReference};
+pub use derive::{DerivedFrom, DerivedReference, type_expressions};
 mod graph;
+mod link;
 mod obligations;
 // The cycle walker lives in specforge-common (the registry's rules use it
 // without linking the graph); re-exported here unchanged.

@@ -77,9 +77,7 @@ fn describe(field: &FieldRecord) -> String {
         | ValueShape::Integer
         | ValueShape::Boolean
         | ValueShape::TypeUnion => field.text.clone(),
-        ValueShape::Strings | ValueShape::References | ValueShape::Mixed | ValueShape::Variants => {
-            "a list".to_string()
-        }
+        ValueShape::List | ValueShape::Variants => "a list".to_string(),
         ValueShape::Block => "a block".to_string(),
         ValueShape::Expression => "an expression".to_string(),
     }

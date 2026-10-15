@@ -310,7 +310,7 @@ fn soft_cross_extension_resolution_contract() {
         }),
         &[(
             "a.spec",
-            "feature checkout \"Checkout\" {\n}\n\ninvariant alpha \"Alpha\" {\n  refs [missing]\n}\n",
+            "feature checkout \"Checkout\" {\n}\n\nbehavior alpha \"Alpha\" {\n  contract \"c\"\n  invariants [missing]\n}\n",
         )],
     );
 

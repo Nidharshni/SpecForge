@@ -193,14 +193,8 @@ fn graph_inputs(inputs: &GraphInputs) -> Value {
             })
         })
         .collect();
-    let mut single_reference_fields: Vec<String> = inputs
-        .single_reference_fields
-        .iter()
-        .map(|(kind, field)| format!("{kind}.{field}"))
-        .collect();
-    single_reference_fields.sort();
     json!({
-        "single_reference_fields": single_reference_fields,
+        "member_kinds": inputs.field_forms.member_kinds(),
         "bidirectional_pairs": bidirectional_pairs,
         "absent_reference_targets": absent_reference_targets,
         "field_forms": field_forms,

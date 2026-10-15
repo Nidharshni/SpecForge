@@ -127,9 +127,7 @@ fn graph_inputs(env: &Environment) -> Value {
         })
         .collect();
     json!({
-        "single_reference_fields": sorted(
-            config.single_reference_fields.iter().map(|(k, f)| json!([k, f])).collect()
-        ),
+        "member_kinds": config.field_forms.member_kinds(),
         "bidirectional_pairs": sorted(bidirectional_pairs),
         "absent_reference_targets": absent_reference_targets,
         "field_forms": field_forms,

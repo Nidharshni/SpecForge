@@ -277,12 +277,14 @@ behavior report_entities_without_contract_obligations "Report Entities Without C
     specforge analyze contracts runs the host's one built-in pass. A
     contract-bearing kind is one with a reference field whose target kind an
     extension declares a contract target. Each entity of such a kind that
-    lists no reference in any of those fields is one A010, an info, at the
+    references nothing in any of those fields (a list item or a single
+    reference) is one A010, an info, at the
     entity's span; its suggestion names the kind's contract fields, sorted.
     The summary counts contract_entities (entities with at least one such
     reference), unconstrained_entities and obligation_references (the
     non-empty contract fields). Entities are visited in ID order.
   """
   verify unit "an entity of a contract-bearing kind that references no contract target is A010, an info"
+  verify unit "a single contract reference is a contract obligation"
   verify unit "the contracts pass's suggestion names the kind's contract fields, sorted"
 }

@@ -190,7 +190,7 @@ hover and E061; the older spellings are read, never written (ADR 0034).
 What a field takes and what is written for it (ADR 0064): `string` takes text, a bare word, a date, a type
 union or an `expr { }` group, and is written as a string (a group as its conjuncts, one per line); `enum` one of
 its `enum_values`; `integer` and `bool` their JSON scalars; `reference` one id, written as a string;
-`string_list` and `reference_list` a list (a single value or a mixed list is stored as a list), written as an
+`string_list` and `reference_list` a list (a single value is stored as a one-item list; a list is stored as written), written as an
 array of strings; `block` a block, written as an object of its entries. Anything else is E061. A command's
 `graph` input, the exports and MCP carry exactly these forms.
 

@@ -96,7 +96,12 @@
       "BTreeSet",
       "String"
     ],
-    "referenced": []
+    "referenced": [
+      {
+        "id": "b",
+        "kind": "gadget"
+      }
+    ]
   },
   {
     "declared_types": [],

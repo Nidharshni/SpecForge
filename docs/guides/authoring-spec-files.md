@@ -175,14 +175,15 @@ behavior field_value_kinds "Field Value Kinds" {
 
   invariants [data_persistence]       // reference list → creates graph EDGES (compiler-checked)
   acceptance ["fast", "secure"]       // string list → opaque values (not checked)
-  refs       ["gh.issue:42"]          // external reference strings
+  refs       [gh.issue:42]            // a scheme ref ID links its `ref` entity
 }
 ```
 
-> 💡 The difference between `[data_persistence]` and `["data_persistence"]` matters. The
-> **unquoted** list is a *reference list* — each item must resolve to a real entity or you
-> get an error. The **quoted** list is an opaque string list. Reference lists build the
-> graph; string lists don't.
+> 💡 The field's **declared type** decides what a value references, not how it is written.
+> Every item of a `reference_list` field (and the value of a `reference` field) must resolve to
+> a real entity or you get an error, quoted or not. A `string_list` field's items are opaque
+> strings, whether quoted or bare; only a scheme ref ID (`gh.issue:42`) links its `ref`.
+> Reference fields build the graph; string lists don't.
 
 **Comments** are line-only (`//`). **Imports** wire files together:
 

@@ -5127,47 +5127,9 @@ expression: "digest(&load(&runtime, &all))"
       "type.extends": "reference",
       "type.refs": "string_list"
     },
-    "single_reference_fields": [
-      [
-        "behavior",
-        "refines"
-      ],
-      [
-        "decision",
-        "superseded_by"
-      ],
-      [
-        "event",
-        "payload"
-      ],
-      [
-        "failure_mode",
-        "invariant"
-      ],
-      [
-        "journey",
-        "persona"
-      ],
-      [
-        "refinement",
-        "abstract_entity"
-      ],
-      [
-        "refinement",
-        "chains_to"
-      ],
-      [
-        "refinement",
-        "concrete_entity"
-      ],
-      [
-        "term",
-        "module"
-      ],
-      [
-        "type",
-        "extends"
-      ]
+    "member_kinds": [
+      "port",
+      "type"
     ]
   },
   "kinds": {

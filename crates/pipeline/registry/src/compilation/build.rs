@@ -9,7 +9,7 @@
 //! It is pure: no I/O, no runtime.
 
 use specforge_common::Diagnostic;
-use specforge_graph::GraphInputs;
+use specforge_graph::{FieldForms, GraphInputs};
 use specforge_protocol_types::{CompilerPassDescriptor, ExtensionDeclaration};
 
 use super::declaration::{consistency, order_passes, shape};
@@ -112,6 +112,8 @@ pub struct RegistryBuild {
     declarations: Vec<ExtensionDeclaration>,
     pub(crate) kinds: KindRegistry,
     pub(crate) fields: FieldRegistry,
+    /// Every field's form and the kinds that take any field, derived once.
+    field_forms: FieldForms,
     pub(crate) edges: EdgeRegistry,
     /// The rule set: the extensions' rules (checked and resolved against
     /// the registries) plus the host-generated E006 rules for required
@@ -150,6 +152,13 @@ impl RegistryBuild {
         &self.fields
     }
 
+    /// How every field reads (ADR 0093): its declared form, a member of an
+    /// open-fields kind, or undeclared. What each reader asks what a written
+    /// value is and references.
+    pub fn field_forms(&self) -> &FieldForms {
+        &self.field_forms
+    }
+
     /// The edge types, each resolved once (ADR 0060): declared, and every
     /// label a field maps to without declaring it, with every field that
     /// writes it, its ends, and the edge type each field writes.
@@ -174,12 +183,12 @@ impl RegistryBuild {
         &self.commands
     }
 
-    /// What the graph build reads of these declarations: single and
-    /// absent-target reference fields, inverse pairs, value coercions and
+    /// What the graph build reads of these declarations: absent-target
+    /// reference fields, inverse pairs, value coercions and
     /// derived references (ADR 0032, amended). The one place they are
     /// derived; `Environment::graph_config` adds the provider schemes.
     pub fn graph_inputs(&self) -> GraphInputs {
-        graph_inputs::derive(&self.kinds, &self.fields)
+        graph_inputs::derive(&self.kinds, &self.fields, &self.field_forms)
     }
 
     /// Ask `verdicts` once for each `custom` rule's function, on an entity
@@ -308,10 +317,12 @@ pub fn build_registries(declarations: Vec<ExtensionDeclaration>) -> RegistryBuil
     let (commands, duplicates) = register_surface_contributions(&declarations);
     surface_diagnostics.extend(about(BuildPart::Collision, duplicates));
 
+    let field_forms = graph_inputs::field_forms(&kinds, &fields);
     RegistryBuild {
         declarations,
         kinds,
         fields,
+        field_forms,
         edges,
         rules,
         commands,

@@ -78,7 +78,7 @@ impl FieldRegistryEntry {
         self.form.enum_values()
     }
 
-    /// The field's declared type read once (ADR-NEW-01): which stored
+    /// The field's declared type read once (ADR 0064): which stored
     /// values it takes, how a written value is stored as it and the JSON
     /// written for it.
     pub fn form(&self) -> &FieldForm {

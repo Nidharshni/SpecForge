@@ -3,35 +3,23 @@
 //! and nowhere else. The grammar parses values generically; the field
 //! registry says what a field's value must be and which fields are edges.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 
-use specforge_graph::{DerivedFrom, DerivedReference, FieldForm, GraphInputs};
+use specforge_graph::{DerivedFrom, DerivedReference, FieldForms, GraphInputs};
 
-use crate::{FieldRegistry, FieldType, KindRegistry};
+use crate::{FieldRegistry, KindRegistry};
 
-pub(super) fn derive(kinds: &KindRegistry, fields: &FieldRegistry) -> GraphInputs {
-    GraphInputs {
-        bidirectional_pairs: bidirectional_pairs(fields),
-        single_reference_fields: single_reference_fields(kinds, fields),
-        absent_reference_targets: absent_reference_targets(kinds, fields),
-        field_forms: field_forms(fields),
-        derived_references: derived_references(fields),
-    }
-}
-
-/// Every registered `reference` field, while some kind is registered.
-fn single_reference_fields(
+pub(super) fn derive(
     kinds: &KindRegistry,
     fields: &FieldRegistry,
-) -> HashSet<(String, String)> {
-    if kinds.is_empty() {
-        return HashSet::new();
+    forms: &FieldForms,
+) -> GraphInputs {
+    GraphInputs {
+        bidirectional_pairs: bidirectional_pairs(fields),
+        absent_reference_targets: absent_reference_targets(kinds, fields),
+        field_forms: forms.clone(),
+        derived_references: derived_references(fields),
     }
-    fields
-        .iter()
-        .filter(|(_, _, entry)| entry.field_type() == FieldType::Reference)
-        .map(|(kind, field, _)| (kind.to_string(), field.to_string()))
-        .collect()
 }
 
 /// Reference fields whose target kind `kinds` doesn't declare, as
@@ -75,14 +63,22 @@ fn bidirectional_pairs(fields: &FieldRegistry) -> Vec<(String, String)> {
     pairs.into_iter().collect()
 }
 
-/// Every registered field's form: how the graph build stores a written
-/// value as the field's declared type. The values that still can't be the
-/// declared type are `RegistryBuild::check`'s E061.
-fn field_forms(fields: &FieldRegistry) -> HashMap<(String, String), FieldForm> {
-    fields
+/// Every registered field's form, and the kinds that take any field
+/// (`open_fields`): how the graph build stores a written value as the
+/// field's declared type, and what each reader takes it to reference. The
+/// values that still can't be the declared type are `RegistryBuild::check`'s
+/// E061.
+pub(super) fn field_forms(kinds: &KindRegistry, fields: &FieldRegistry) -> FieldForms {
+    let forms = fields
         .iter()
         .map(|(kind, field, entry)| ((kind.to_string(), field.to_string()), entry.form().clone()))
-        .collect()
+        .collect();
+    let member_kinds = kinds
+        .iter()
+        .filter(|(_, entry)| entry.declared.open_fields)
+        .map(|(name, _)| name.clone())
+        .collect();
+    FieldForms::new(forms, member_kinds)
 }
 
 /// The registered reference fields whose edges the host derives

@@ -1484,7 +1484,7 @@ fn an_undeclared_edge_two_kinds_write_names_every_writer() {
 
 // ===========================================================================
 // The published schema is the export document's, narrowed by the project
-// (ADR-NEW-01)
+// (ADR 0064)
 // ===========================================================================
 
 const AGENT_FORMATS: [EmitFormat; 3] = [EmitFormat::Json, EmitFormat::Context, EmitFormat::Brief];

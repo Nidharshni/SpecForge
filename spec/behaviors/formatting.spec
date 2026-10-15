@@ -382,7 +382,6 @@ behavior lsp_format_document "LSP Format Document" {
   ]
   category   query
   types      [FormatConfig, TextEdit]
-  refs       [format_with_parse_errors]
   ports      [LspProtocol]
   produces   [format_complete]
   requires {
