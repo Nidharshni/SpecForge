@@ -275,7 +275,7 @@ fn hover_shows_field_values() {
 /// `behavior` (obligated) with a headline `contract`, `type` (obligated),
 /// `constraint` (testable, no rule) and `note` (not testable), declared by
 /// three extensions.
-fn coverage_project(source: &str) -> Served {
+pub(crate) fn coverage_project(source: &str) -> Served {
     Served::new(&[("main.spec", source)])
         .extension("@t/soft", |c| {
             c.kind("behavior", |k| {

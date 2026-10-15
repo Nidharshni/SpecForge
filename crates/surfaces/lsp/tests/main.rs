@@ -14,6 +14,7 @@ mod document;
 mod e2e;
 mod follow;
 mod hover;
+mod hover_obligations;
 mod identity;
 mod lifecycle;
 mod navigation;

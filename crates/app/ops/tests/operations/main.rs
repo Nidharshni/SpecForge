@@ -32,6 +32,7 @@ mod migrate;
 mod model;
 mod multi_entity;
 mod navigate;
+mod obligations_member;
 mod options;
 mod peers;
 mod plan;
