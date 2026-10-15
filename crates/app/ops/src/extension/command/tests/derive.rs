@@ -213,18 +213,62 @@ fn a_command_is_routed_once_by_its_short_name_and_cli_name() {
             ("@acme/tools", "specforge.t.a-b".to_string()),
         ]
     );
-    let shadowed: Vec<(&str, &str)> = commands
+    let shadowed: Vec<(&str, &str, &str)> = commands
         .shadowed()
-        .iter()
-        .map(|c| (c.extension(), c.id()))
+        .map(|(c, winner)| (c.extension(), c.id(), winner.extension()))
         .collect();
     assert_eq!(
         shadowed,
-        [("@other/widgets", "list"), ("@acme/tools", "a_b")]
+        [
+            ("@other/widgets", "list", "@acme/widgets"),
+            ("@acme/tools", "a_b", "@acme/tools")
+        ]
     );
     assert_eq!(commands.shorts(), ["widgets", "t"]);
     let of_widgets: Vec<&str> = commands.of("widgets").map(|c| c.id()).collect();
     assert_eq!(of_widgets, ["list", "a_b", "show"]);
+}
+
+/// The routing table is the registry build's: the same commands in the same
+/// order, and the same winners.
+#[test]
+fn the_routing_table_is_the_registry_builds() {
+    let build = build_of(&[
+        ("@acme/widgets", None, &["list", "a_b"]),
+        ("@other/widgets", None, &["list", "show"]),
+        ("@acme/tools", Some("t"), &["a-b", "a_b"]),
+    ]);
+    let commands = ExtensionCommands::build(&build);
+    let routes = build.commands();
+
+    let table: Vec<(&str, &str)> = commands
+        .all()
+        .iter()
+        .map(|c| (c.extension(), c.id()))
+        .collect();
+    let routed: Vec<(&str, &str)> = routes
+        .routed()
+        .iter()
+        .map(|r| (r.extension(), r.declaration().id.as_str()))
+        .collect();
+    assert_eq!(table, routed);
+    let pairs: Vec<(&str, &str, &str)> = commands
+        .shadowed()
+        .map(|(s, w)| (s.extension(), s.id(), w.extension()))
+        .collect();
+    let expected: Vec<(&str, &str, &str)> = routes
+        .shadowed()
+        .iter()
+        .map(|s| {
+            (
+                s.route().extension(),
+                s.route().declaration().id.as_str(),
+                routes.winner(s).extension(),
+            )
+        })
+        .collect();
+    assert_eq!(pairs, expected);
+    assert_eq!(pairs.len(), 2);
 }
 
 #[specforge_test(type = "ExtensionCommand", verify = "ExtensionCommand schema is valid")]

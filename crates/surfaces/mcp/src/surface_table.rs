@@ -9,8 +9,8 @@
 //! is one lookup in it ([`ExtensionSurfaceTable::tool`]); resources alike.
 //! Each name is served once, the first in this order: core tools, explicit
 //! extension tools in extension load order, then extension commands
-//! (`specforge_ops::extension::command::ExtensionCommands`, load then declaration
-//! order). A contribution not served under its name is reported with I017
+//! (`specforge_ops::extension::command::ExtensionCommands`, as the registry build
+//! routes them: load then declaration order). A contribution not served under its name is reported with I017
 //! saying why, and so is a command the host refuses or shadows.
 //!
 //! Nothing here knows how a command's schema is derived or how its tool is
@@ -222,7 +222,7 @@ impl ExtensionSurfaceTable {
             }
         }
         let commands = ExtensionCommands::build(registries);
-        table.stats.declared = commands.all().len() + commands.shadowed().len();
+        table.stats.declared = commands.all().len() + commands.shadowed().count();
         for command in commands.all() {
             let name = command.tool_name();
             let why = match command.refusal() {
@@ -246,16 +246,12 @@ impl ExtensionSurfaceTable {
             });
             table.stats.promoted += 1;
         }
-        for shadowed in commands.shadowed() {
-            let winner = commands
-                .all()
-                .iter()
-                .find(|c| c.short() == shadowed.short() && c.cli_name() == shadowed.cli_name())
-                .map_or("", |c| c.extension());
+        for (shadowed, winner) in commands.shadowed() {
             table.not_served(format!(
-                "command '{}' of '{}' not auto-promoted: '{winner}' routes a command of that name first",
+                "command '{}' of '{}' not auto-promoted: '{}' routes a command of that name first",
                 shadowed.id(),
-                shadowed.extension()
+                shadowed.extension(),
+                winner.extension()
             ));
             table.stats.conflicts += 1;
         }
