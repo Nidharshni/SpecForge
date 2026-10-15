@@ -46,7 +46,7 @@ async fn missing_verify_produces_stub() {
         .iter()
         .find(|e| e.id.raw == "first")
         .unwrap();
-    assert!(first.fields.get("verify").is_some(), "{:?}", first.fields);
+    assert_eq!(first.obligations.len(), 1, "{:?}", first.obligations);
 }
 
 /// `text` with the zero-width insertion `edit` applied.

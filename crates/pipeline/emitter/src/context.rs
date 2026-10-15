@@ -90,7 +90,6 @@ pub(crate) fn normative_fields(
     node.fields
         .entries()
         .iter()
-        .filter(|entry| !matches!(entry.value, FieldValue::VerifyList(_)))
         .filter(|entry| !is_headline(node, entry.key.as_str(), registry))
         .filter(|entry| {
             registry

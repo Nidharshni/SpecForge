@@ -195,7 +195,6 @@ pub enum FieldValue {
     /// Preserves per-item type information instead of flattening to StringList.
     MixedList(Vec<FieldValue>),
     Block(FieldMap),
-    VerifyList(Vec<VerifyStatement>),
     /// First-class formal expressions: `metric expr { a < 10ms, b > 5 }`.
     /// Spans are absolute file positions.
     Expression(Vec<SpannedExpr>),

@@ -15,7 +15,6 @@ use specforge_parser::{FieldMap, FieldValue, SpannedRef};
 use specforge_protocol_types::FieldType;
 
 use crate::Graph;
-use crate::obligations::Obligation;
 
 /// What a field's value was written as, after the graph build coerced it:
 /// one variant per parsed value form, so a check tells `"1"` from `1`, a
@@ -40,8 +39,6 @@ pub enum ValueShape {
     Variants,
     TypeUnion,
     Block,
-    /// `verify` statements.
-    Verify,
     /// An `expr { … }` group.
     Expression,
 }
@@ -62,7 +59,6 @@ impl ValueShape {
             FieldValue::VariantList(_) => Self::Variants,
             FieldValue::TypeUnion(_) => Self::TypeUnion,
             FieldValue::Block(_) => Self::Block,
-            FieldValue::VerifyList(_) => Self::Verify,
             FieldValue::Expression(_) => Self::Expression,
         }
     }
@@ -308,8 +304,7 @@ impl Graph {
 /// A field value as every output writes it: the Graph Protocol's field
 /// value. Made only by [`write`]. Its shape (named `FieldJson`) is the schema
 /// of every value `write` can produce, declared or not: a string, an
-/// integer, a boolean, an array of strings, integers, booleans and
-/// `VerifyStatement` objects, or an object whose values are `FieldJson`.
+/// integer, a boolean, an array of strings, integers and booleans, or an object whose values are `FieldJson`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct FieldJson(Value);
@@ -324,7 +319,6 @@ impl Shape for FieldJson {
     const NAME: Option<&'static str> = Some("FieldJson");
 
     fn body(defs: &mut Definitions) -> Value {
-        let statement = Obligation::schema(defs);
         let this = defs.reference::<FieldJson>("FieldJson");
         json!({"anyOf": [
             {"type": "string"},
@@ -334,7 +328,6 @@ impl Shape for FieldJson {
                 {"type": "string"},
                 {"type": "integer"},
                 {"type": "boolean"},
-                statement,
             ]}},
             {"type": "object", "additionalProperties": this},
         ]})
@@ -347,7 +340,7 @@ impl Shape for FieldJson {
 /// display form, joined by `"\n"` (the string form the prove pass reads, one
 /// comparison per line, ADR 0009); an integer and a boolean as JSON scalars;
 /// a reference, string or variant list as an array of strings; a mixed list
-/// as an array of its items; verify statements as [`Obligation`]s; a block
+/// as an array of its items; a block
 /// as an object of its entries, each written by this function. Never the
 /// parser's tree, never a position.
 pub fn write(value: &FieldValue) -> FieldJson {
@@ -371,12 +364,6 @@ pub fn write(value: &FieldValue) -> FieldJson {
         FieldValue::VariantList(items) | FieldValue::StringList(items) => {
             Value::Array(items.iter().cloned().map(Value::String).collect())
         }
-        FieldValue::VerifyList(statements) => Value::Array(
-            statements
-                .iter()
-                .map(|s| json!(Obligation::of(s)))
-                .collect(),
-        ),
         FieldValue::Block(inner) => Value::Object(
             write_fields(inner)
                 .into_iter()
@@ -395,8 +382,6 @@ pub fn write_fields(fields: &FieldMap) -> BTreeMap<String, FieldJson> {
     fields
         .entries()
         .iter()
-        // Temporary (until T8): the parser still writes the statements as a field.
-        .filter(|entry| !matches!(entry.value, FieldValue::VerifyList(_)))
         .map(|entry| (entry.key.to_string(), write(&entry.value)))
         .collect()
 }

@@ -185,23 +185,6 @@ expression: result.entities
                         },
                     ),
                 },
-                FieldEntry {
-                    key: Sym("verify"),
-                    value: VerifyList(
-                        [
-                            VerifyStatement {
-                                kind: "unit",
-                                description: "produces AST for minimal valid file",
-                            },
-                            VerifyStatement {
-                                kind: "integration",
-                                description: "parses all .spec files in project",
-                            },
-                        ],
-                    ),
-                    annotations: [],
-                    value_span: None,
-                },
             ],
         },
         span: SourceSpan {
@@ -352,19 +335,6 @@ expression: result.entities
                             end_col: 23,
                         },
                     ),
-                },
-                FieldEntry {
-                    key: Sym("verify"),
-                    value: VerifyList(
-                        [
-                            VerifyStatement {
-                                kind: "property",
-                                description: "N errors produce N diagnostics",
-                            },
-                        ],
-                    ),
-                    annotations: [],
-                    value_span: None,
                 },
             ],
         },

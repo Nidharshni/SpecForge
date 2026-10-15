@@ -31,19 +31,6 @@ expression: "parse_ok(source, \"test.spec\").entities"
                         },
                     ),
                 },
-                FieldEntry {
-                    key: Sym("verify"),
-                    value: VerifyList(
-                        [
-                            VerifyStatement {
-                                kind: "integration",
-                                description: "project compiles",
-                            },
-                        ],
-                    ),
-                    annotations: [],
-                    value_span: None,
-                },
             ],
         },
         span: SourceSpan {
@@ -214,19 +201,6 @@ expression: "parse_ok(source, \"test.spec\").entities"
                             end_col: 18,
                         },
                     ),
-                },
-                FieldEntry {
-                    key: Sym("verify"),
-                    value: VerifyList(
-                        [
-                            VerifyStatement {
-                                kind: "unit",
-                                description: "custom kind registers",
-                            },
-                        ],
-                    ),
-                    annotations: [],
-                    value_span: None,
                 },
             ],
         },

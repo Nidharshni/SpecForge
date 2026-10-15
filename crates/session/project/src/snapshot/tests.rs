@@ -22,14 +22,12 @@ fn texts(source: &str) -> Vec<(String, &'static str, String)> {
                 FieldValue::TypeUnion(_) => "TypeUnion",
                 FieldValue::MixedList(_) => "MixedList",
                 FieldValue::Expression(_) => "Expression",
-                FieldValue::VerifyList(_) => "VerifyList",
                 FieldValue::Block(_) => "Block",
             };
             // The text is the items joined, for every list-shaped value.
             if let Some(items) = field_items(&e.value) {
                 let joiner = match variant {
                     "VariantList" | "TypeUnion" => " | ",
-                    "VerifyList" => "; ",
                     _ => ", ",
                 };
                 assert_eq!(items.join(joiner), field_text(&e.value), "{}", e.key);
@@ -94,7 +92,7 @@ fn every_variant_has_a_value_shape() {
     ] {
         assert!(shape.is_list());
     }
-    assert!(!ValueShape::Block.is_list() && !ValueShape::Verify.is_list());
+    assert!(!ValueShape::Block.is_list());
 
     // Each value carries the span it is written at: its own line.
     let lines: Vec<(&str, Option<usize>)> = record
@@ -149,7 +147,6 @@ fn field_text_of_every_variant() {
         ("mix", "MixedList", "1, true, two"),
         ("metric", "Expression", "latency < 10ms, load > 5"),
         ("ensures", "Block", "done, kept"),
-        ("verify", "VerifyList", "x works; x holds"),
     ];
     let actual = texts(source);
     assert_eq!(
@@ -182,7 +179,6 @@ fn field_text_of_every_variant() {
     assert_eq!(of("mix"), owned(&["1", "true", "two"]));
     assert_eq!(of("metric"), owned(&["latency < 10ms", "load > 5"]));
     assert_eq!(of("ensures"), owned(&["done", "kept"]));
-    assert_eq!(of("verify"), owned(&["x works", "x holds"]));
     for scalar in ["title", "owner", "due", "count", "active"] {
         assert_eq!(of(scalar), None, "{scalar}");
     }

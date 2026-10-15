@@ -152,7 +152,6 @@ behavior parse_all_block_types "Parse All Block Types" {
     ReferenceList,
     StringList,
     Block,
-    VerifyList,
     VerifyStatement,
     VerifyKind,
     SourceSpan,
@@ -280,7 +279,7 @@ behavior parse_verify_statements "Parse Verify Statements" {
     string_interning_consistency,
   ]
   category   validation
-  types      [SpecFile, VerifyList, VerifyStatement, VerifyKind, SourceSpan]
+  types      [SpecFile, VerifyStatement, VerifyKind, SourceSpan]
   ports      [SourceParser]
   requires {
     source_parser_available "SourceParser port is initialized and ready to accept input"

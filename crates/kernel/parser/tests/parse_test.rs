@@ -107,17 +107,12 @@ behavior validate_input "Validate Input" {
         result.errors
     );
     let entity = &result.entities[0];
-    let verify = entity.fields.get("verify").expect("missing verify field");
-    match verify {
-        FieldValue::VerifyList(stmts) => {
-            assert_eq!(stmts.len(), 2);
-            assert_eq!(stmts[0].kind, "unit");
-            assert_eq!(stmts[0].description, "rejects invalid UTF-8");
-            assert_eq!(stmts[1].kind, "integration");
-            assert_eq!(stmts[1].description, "validates end-to-end");
-        }
-        other => panic!("expected VerifyList, got {:?}", other),
-    }
+    let stmts = &entity.obligations;
+    assert_eq!(stmts.len(), 2);
+    assert_eq!(stmts[0].kind, "unit");
+    assert_eq!(stmts[0].description, "rejects invalid UTF-8");
+    assert_eq!(stmts[1].kind, "integration");
+    assert_eq!(stmts[1].description, "validates end-to-end");
 }
 
 #[specforge_test(
@@ -238,7 +233,7 @@ define my_custom_type {
     assert_eq!(entity.id.raw, "my_custom_type");
     assert!(entity.title.is_none());
     assert!(matches!(entity.fields.get("base_kind"), Some(FieldValue::String(s)) if s == "entity"));
-    assert!(entity.fields.get("verify").is_some());
+    assert!(!entity.obligations.is_empty());
 }
 
 #[specforge_test(
@@ -710,7 +705,7 @@ behavior recover_from_syntax_errors "Recover from Syntax Errors" {
     assert!(b1.fields.get("requires").is_some());
     assert!(b1.fields.get("ensures").is_some());
     assert!(b1.fields.get("contract").is_some());
-    assert!(b1.fields.get("verify").is_some());
+    assert!(!b1.obligations.is_empty());
 
     // Ref
     let r = &result.entities[1];
@@ -923,20 +918,12 @@ spec "MyProject" {
         }
     );
 
-    let verify = entity
-        .fields
-        .get("verify")
-        .expect("missing verify in spec block");
-    match verify {
-        FieldValue::VerifyList(stmts) => {
-            assert_eq!(stmts.len(), 2);
-            assert_eq!(stmts[0].kind, "integration");
-            assert_eq!(stmts[0].description, "project compiles end-to-end");
-            assert_eq!(stmts[1].kind, "unit");
-            assert_eq!(stmts[1].description, "version field is valid semver");
-        }
-        other => panic!("expected VerifyList, got {:?}", other),
-    }
+    let stmts = &entity.obligations;
+    assert_eq!(stmts.len(), 2);
+    assert_eq!(stmts[0].kind, "integration");
+    assert_eq!(stmts[0].description, "project compiles end-to-end");
+    assert_eq!(stmts[1].kind, "unit");
+    assert_eq!(stmts[1].description, "version field is valid semver");
 }
 
 #[specforge_test(
@@ -967,18 +954,10 @@ define my_custom_kind {
         }
     );
 
-    let verify = entity
-        .fields
-        .get("verify")
-        .expect("missing verify in define block");
-    match verify {
-        FieldValue::VerifyList(stmts) => {
-            assert_eq!(stmts.len(), 2);
-            assert_eq!(stmts[0].kind, "unit");
-            assert_eq!(stmts[1].kind, "property");
-        }
-        other => panic!("expected VerifyList, got {:?}", other),
-    }
+    let stmts = &entity.obligations;
+    assert_eq!(stmts.len(), 2);
+    assert_eq!(stmts[0].kind, "unit");
+    assert_eq!(stmts[1].kind, "property");
 }
 
 /// The `after` entity of the unclosed-string fixtures, with its fields.
@@ -1299,23 +1278,18 @@ event manifests_loaded "Manifests Loaded" {
         result.errors
     );
     let entity = &result.entities[0];
-    let verify = entity.fields.get("verify").expect("missing verify field");
-    match verify {
-        FieldValue::VerifyList(stmts) => {
-            assert_eq!(stmts.len(), 1);
-            // When kind is omitted, it should default to empty string or a sentinel
-            assert!(
-                stmts[0].kind.is_empty(),
-                "kind should be empty when omitted, got: {:?}",
-                stmts[0].kind
-            );
-            assert_eq!(
-                stmts[0].description,
-                "Extension manifests MUST be loaded before populating the kind registry"
-            );
-        }
-        other => panic!("expected VerifyList, got {:?}", other),
-    }
+    let stmts = &entity.obligations;
+    assert_eq!(stmts.len(), 1);
+    // When kind is omitted, it should default to empty string or a sentinel
+    assert!(
+        stmts[0].kind.is_empty(),
+        "kind should be empty when omitted, got: {:?}",
+        stmts[0].kind
+    );
+    assert_eq!(
+        stmts[0].description,
+        "Extension manifests MUST be loaded before populating the kind registry"
+    );
 }
 
 #[specforge_test(
@@ -1690,25 +1664,20 @@ behavior multi_verify "Multi Verify" {
         result.errors
     );
     let entity = &result.entities[0];
-    let verify = entity.fields.get("verify").expect("missing verify field");
-    match verify {
-        FieldValue::VerifyList(stmts) => {
-            assert_eq!(
-                stmts.len(),
-                4,
-                "expected 4 verify statements in same entity"
-            );
-            assert_eq!(stmts[0].kind, "unit");
-            assert_eq!(stmts[0].description, "first unit test");
-            assert_eq!(stmts[1].kind, "unit");
-            assert_eq!(stmts[1].description, "second unit test");
-            assert_eq!(stmts[2].kind, "integration");
-            assert_eq!(stmts[2].description, "integration test");
-            assert_eq!(stmts[3].kind, "property");
-            assert_eq!(stmts[3].description, "property-based test");
-        }
-        other => panic!("expected VerifyList, got {:?}", other),
-    }
+    let stmts = &entity.obligations;
+    assert_eq!(
+        stmts.len(),
+        4,
+        "expected 4 verify statements in same entity"
+    );
+    assert_eq!(stmts[0].kind, "unit");
+    assert_eq!(stmts[0].description, "first unit test");
+    assert_eq!(stmts[1].kind, "unit");
+    assert_eq!(stmts[1].description, "second unit test");
+    assert_eq!(stmts[2].kind, "integration");
+    assert_eq!(stmts[2].description, "integration test");
+    assert_eq!(stmts[3].kind, "property");
+    assert_eq!(stmts[3].description, "property-based test");
 }
 
 #[specforge_test(

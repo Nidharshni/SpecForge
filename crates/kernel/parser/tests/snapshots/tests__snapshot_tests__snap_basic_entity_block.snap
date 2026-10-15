@@ -78,23 +78,6 @@ expression: "parse_ok(source, \"test.spec\").entities"
                         },
                     ),
                 },
-                FieldEntry {
-                    key: Sym("verify"),
-                    value: VerifyList(
-                        [
-                            VerifyStatement {
-                                kind: "unit",
-                                description: "produces AST for minimal valid file",
-                            },
-                            VerifyStatement {
-                                kind: "integration",
-                                description: "parses all .spec files in project",
-                            },
-                        ],
-                    ),
-                    annotations: [],
-                    value_span: None,
-                },
             ],
         },
         span: SourceSpan {

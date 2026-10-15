@@ -75,17 +75,7 @@ type result "R" {
         .iter()
         .map(|e| e.key.as_str())
         .collect();
-    assert!(keys.contains(&"verify"), "{keys:?}");
-    let statements = entity
-        .fields
-        .entries()
-        .iter()
-        .filter_map(|e| match &e.value {
-            FieldValue::VerifyList(list) => Some(list.len()),
-            _ => None,
-        })
-        .sum::<usize>();
-    assert_eq!(statements, 2);
+    assert_eq!(keys, ["verify"]);
     let kinds: Vec<&str> = entity.obligations.iter().map(|o| o.kind.as_str()).collect();
     assert_eq!(entity.obligations.len(), 2);
     assert_eq!(kinds, ["unit", ""]);

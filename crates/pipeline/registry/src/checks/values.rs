@@ -81,7 +81,6 @@ fn describe(field: &FieldRecord) -> String {
             "a list".to_string()
         }
         ValueShape::Block => "a block".to_string(),
-        ValueShape::Verify => "verify statements".to_string(),
         ValueShape::Expression => "an expression".to_string(),
     }
 }

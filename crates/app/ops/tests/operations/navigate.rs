@@ -1000,7 +1000,7 @@ fn the_verify_stub_lands_inside_the_block() {
     );
     let parsed = specforge_parser::parse(&edited, "solo.spec");
     assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
-    assert!(parsed.entities[0].fields.get("verify").is_some());
+    assert_eq!(parsed.entities[0].obligations.len(), 1);
 }
 
 /// A view of `p`'s graph with `registries` instead of its extensions'.

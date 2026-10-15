@@ -5,7 +5,7 @@
 use specforge_common::shape::{self, Definitions};
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::field_form::{self, FieldForm, FieldJson, ValueShape};
-use specforge_parser::{FieldMap, FieldValue, SpannedRef, VerifyStatement, parse_expression};
+use specforge_parser::{FieldMap, FieldValue, SpannedRef, parse_expression};
 use specforge_protocol_types::FieldType;
 use specforge_test_macros::test as specforge_test;
 
@@ -57,10 +57,6 @@ fn samples() -> Vec<FieldValue> {
         FieldValue::VariantList(vec!["a".into(), "b".into()]),
         FieldValue::TypeUnion(vec!["string".into(), "string[]".into()]),
         FieldValue::Block(block),
-        FieldValue::VerifyList(vec![VerifyStatement {
-            kind: "unit".into(),
-            description: "d".into(),
-        }]),
         expression(),
     ]
 }

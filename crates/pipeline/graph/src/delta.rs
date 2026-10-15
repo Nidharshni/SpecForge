@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{FieldValue, Graph, Node};
+use crate::{Graph, Node};
 use serde::Serialize;
 use serde_json::Value;
 use specforge_common::Sym;
@@ -340,10 +340,6 @@ fn changes(
 fn field_contents(node: &Node) -> BTreeMap<String, Vec<Value>> {
     let mut fields: BTreeMap<String, Vec<Value>> = BTreeMap::new();
     for entry in node.fields.entries() {
-        // Temporary (until T8): the parser still writes statements as a field.
-        if matches!(entry.value, FieldValue::VerifyList(_)) {
-            continue;
-        }
         let value = serde_json::json!({
             "value": Value::from(crate::field_form::write(&entry.value)),
             "annotations": serde_json::to_value(&entry.annotations).unwrap_or_default(),

@@ -474,8 +474,6 @@ fn record(
         span: node.source_span.clone(),
         fields: entries
             .iter()
-            // Temporary (until T8): the parser still writes the statements as a field.
-            .filter(|entry| !matches!(entry.value, FieldValue::VerifyList(_)))
             .map(|entry| FieldRecord {
                 key: entry.key.to_string(),
                 text: field_text(&entry.value),
@@ -602,14 +600,12 @@ pub fn field_text(value: &FieldValue) -> String {
         | FieldValue::Expression(_)
         | FieldValue::Block(_) => joined(", "),
         FieldValue::VariantList(_) | FieldValue::TypeUnion(_) => joined(" | "),
-        FieldValue::VerifyList(_) => joined("; "),
     }
 }
 
 /// A list-shaped value's items, unjoined, each as its text: the list's
 /// strings or ids, a variant list's or type union's members, a mixed
-/// list's items' texts, each expression's display form, each verify
-/// statement's text, a block's keys. `None` for a scalar. [`field_text`]
+/// list's items' texts, each expression's display form, a block's keys. `None` for a scalar. [`field_text`]
 /// is these joined.
 pub fn field_items(value: &FieldValue) -> Option<Vec<String>> {
     match value {
@@ -624,9 +620,6 @@ pub fn field_items(value: &FieldValue) -> Option<Vec<String>> {
         FieldValue::ReferenceList(refs) => Some(refs.iter().map(|r| r.id.clone()).collect()),
         FieldValue::MixedList(items) => Some(items.iter().map(field_text).collect()),
         FieldValue::Expression(exprs) => Some(exprs.iter().map(ToString::to_string).collect()),
-        FieldValue::VerifyList(statements) => {
-            Some(statements.iter().map(|s| s.description.clone()).collect())
-        }
         FieldValue::Block(block) => {
             Some(block.entries().iter().map(|e| e.key.to_string()).collect())
         }

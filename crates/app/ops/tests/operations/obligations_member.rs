@@ -51,7 +51,6 @@ fn an_export_with_a_field_named_verify_meets_its_published_schema() {
 }
 
 #[test]
-#[ignore = "flipped by T8"]
 fn a_field_named_verify_is_one_field_of_the_node() {
     let p = project(BOTH);
     let node = p.graph().node("Payload").unwrap();
@@ -62,4 +61,5 @@ fn a_field_named_verify_is_one_field_of_the_node() {
         .map(|e| e.key.as_str())
         .collect();
     assert_eq!(keys, ["verify", "name"]);
+    assert_eq!(node.obligations.len(), 1);
 }

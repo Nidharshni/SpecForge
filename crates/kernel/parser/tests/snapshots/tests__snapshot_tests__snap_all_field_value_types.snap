@@ -228,23 +228,6 @@ expression: "parse_ok(source, \"test.spec\").entities"
                         },
                     ),
                 },
-                FieldEntry {
-                    key: Sym("verify"),
-                    value: VerifyList(
-                        [
-                            VerifyStatement {
-                                kind: "unit",
-                                description: "it works",
-                            },
-                            VerifyStatement {
-                                kind: "property",
-                                description: "always valid",
-                            },
-                        ],
-                    ),
-                    annotations: [],
-                    value_span: None,
-                },
             ],
         },
         span: SourceSpan {

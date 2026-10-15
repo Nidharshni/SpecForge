@@ -15,16 +15,11 @@ impl<'a> ParseContext<'a> {
             .map(|n| self.unquote(n));
 
         let (fields, verify, methods) = self.parse_block_body(node);
-        let mut field_map = fields;
-        if !verify.is_empty() {
-            field_map.push(Sym::new("verify"), FieldValue::VerifyList(verify.clone()));
-        }
-
         self.entities.push(Entity {
             kind: EntityKind { raw: kind },
             id: EntityId { raw: name },
             title,
-            fields: field_map,
+            fields,
             span: self.span(node),
             methods,
             obligations: verify,
@@ -38,11 +33,6 @@ impl<'a> ParseContext<'a> {
             .unwrap_or_default();
 
         let (fields, verify, methods) = self.parse_block_body(node);
-        let mut field_map = fields;
-        if !verify.is_empty() {
-            field_map.push(Sym::new("verify"), FieldValue::VerifyList(verify.clone()));
-        }
-
         self.entities.push(Entity {
             kind: EntityKind {
                 raw: Sym::new(structural::SPEC),
@@ -51,7 +41,7 @@ impl<'a> ParseContext<'a> {
                 raw: Sym::new(&name),
             },
             title: Some(name),
-            fields: field_map,
+            fields,
             span: self.span(node),
             methods,
             obligations: verify,
@@ -152,18 +142,13 @@ impl<'a> ParseContext<'a> {
             .unwrap_or_else(|| Sym::new(""));
 
         let (fields, verify, methods) = self.parse_block_body(node);
-        let mut field_map = fields;
-        if !verify.is_empty() {
-            field_map.push(Sym::new("verify"), FieldValue::VerifyList(verify.clone()));
-        }
-
         self.entities.push(Entity {
             kind: EntityKind {
                 raw: Sym::new(structural::DEFINE),
             },
             id: EntityId { raw: name },
             title: None,
-            fields: field_map,
+            fields,
             span: self.span(node),
             methods,
             obligations: verify,
