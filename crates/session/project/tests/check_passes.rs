@@ -9,8 +9,8 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use specforge_common::{Diagnostic, Severity};
 use specforge_extension_sdk::prelude::*;
+use specforge_project::Buffer;
 use specforge_project::testing::TestProject;
-use specforge_project::{Buffer, SourceChange};
 use specforge_test::prelude::*;
 use specforge_wasm::testing::InProcessRuntime;
 
@@ -218,10 +218,10 @@ fn a_session_reports_check_pass_diagnostics_after_an_update() {
     let mut session = dir.session_in(Arc::clone(&ext) as specforge_project::SharedRuntime);
     assert!(with_code(&session.project().diagnostics(), "E951").is_empty());
 
-    let update = session.update(SourceChange::Hold(&[Buffer::new(
+    let update = session.hold(&[Buffer::new(
         dir.root().join("a.spec"),
         "gadget good \"Good\" {\n}\n\ngadget bad_two \"Bad\" {\n}\n",
-    )]));
+    )]);
 
     let audit = with_code(&update.diagnostics, "E951");
     assert_eq!(audit.len(), 1, "{:?}", update.diagnostics);

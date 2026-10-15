@@ -205,9 +205,7 @@ fn lsp_state_holds_graph() {
     // builds the same graph and reports the same diagnostics.
     let mut watch = specforge_project::ProjectSession::detached();
     for (path, text) in [("/p/login.spec", LOGIN), ("/p/limit.spec", limit)] {
-        watch.update(specforge_project::SourceChange::Hold(&[
-            specforge_project::Buffer::new(path, text),
-        ]));
+        watch.hold(&[specforge_project::Buffer::new(path, text)]);
     }
     let ids = |g: &specforge_graph::Graph| {
         let mut ids: Vec<String> = g.nodes().iter().map(|n| n.id.raw.to_string()).collect();
@@ -604,9 +602,10 @@ fn a_debug_build_of_the_lsp_verifies_each_rebuild() {
         ("/p/limit.spec", limit),
         ("/p/limit.spec", "invariant session_cap \"Cap\" {\n}\n"),
     ] {
-        let update = state.session_mut().expect("no update is running").update(
-            specforge_project::SourceChange::Hold(&[specforge_project::Buffer::new(path, text)]),
-        );
+        let update = state
+            .session_mut()
+            .expect("no update is running")
+            .hold(&[specforge_project::Buffer::new(path, text)]);
         assert_eq!(update.verification, Some(Ok(())), "after {path}");
     }
 }

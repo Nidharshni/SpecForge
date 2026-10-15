@@ -11,7 +11,7 @@ use std::sync::Arc;
 use serde_json::json;
 use specforge_project::testing::{TestProject, compile_at, disk_changed};
 use specforge_project::{
-    Buffer, Changes, ProjectSession, SharedRuntime, SourceChange, UpdateKind, WatchRoot, Watched,
+    Buffer, Changes, ProjectSession, SharedRuntime, UpdateKind, WatchRoot, Watched,
 };
 use specforge_test::prelude::*;
 use tempfile::TempDir;
@@ -256,10 +256,10 @@ fn a_held_file_under_a_moved_directory_is_left_out() {
         ],
     );
     let root = fs::canonicalize(dir.root()).unwrap();
-    session.update(SourceChange::Hold(&[Buffer::new(
+    session.hold(&[Buffer::new(
         root.join("old/a.spec"),
         "term held_one \"H\" {}\n".to_string(),
-    )]));
+    )]);
     fs::rename(root.join("old"), root.join("new")).unwrap();
 
     let changes = session.changes([root.join("new").as_path(), root.join("old").as_path()]);

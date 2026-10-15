@@ -5,7 +5,7 @@ use std::sync::Arc;
 use specforge_common::Diagnostic;
 use specforge_graph::Graph;
 use specforge_project::testing::{TestProject, disk_changed};
-use specforge_project::{Buffer, CheckMode, ProjectSession, SourceChange, UpdateKind};
+use specforge_project::{Buffer, CheckMode, ProjectSession, UpdateKind};
 use specforge_test::prelude::*;
 use tempfile::TempDir;
 
@@ -539,10 +539,10 @@ fn a_nested_projects_files_are_not_compiled() {
 
     let mut session = ProjectSession::open(&project_root);
     let held = root.join("sub/b.spec");
-    let update = session.update(SourceChange::Hold(&[Buffer::new(
+    let update = session.hold(&[Buffer::new(
         held.to_str().unwrap(),
         "term login_flow \"Held\" {\n}\n",
-    )]));
+    )]);
     assert!(
         update.rebuilt_files.is_empty(),
         "{:?}",
@@ -585,10 +585,10 @@ fn a_nested_project_appearing_takes_its_files_out_and_its_removal_puts_them_back
 
     // A buffer released while the marker exists leaves the graph.
     let path = root.join("sub/c.spec");
-    session.update(SourceChange::Hold(&[Buffer::new(
+    session.hold(&[Buffer::new(
         path.to_str().unwrap(),
         "term sub_only \"S\" {\n}\n",
-    )]));
+    )]);
     write(root, "sub/specforge.json", "{}");
     session.release(std::slice::from_ref(&path));
     assert!(session.project().graph().node("sub_only").is_none());
@@ -913,10 +913,7 @@ fn buffer_edits_leave_what_a_fresh_compile_builds() {
         behavior("beta", "  invariants [alpha]\n"),
     ];
     for text in &texts {
-        let update = session.update(SourceChange::Hold(&[Buffer::new(
-            root.join("a.spec"),
-            text,
-        )]));
+        let update = session.hold(&[Buffer::new(root.join("a.spec"), text)]);
         assert_eq!(update.rebuilt_files, ["a.spec"]);
         assert_eq!(update.verification, Some(Ok(())), "{text}");
         write(root, "a.spec", text);
@@ -955,10 +952,7 @@ fn the_session_keeps_the_text_each_file_was_built_from() {
     // A buffer the disk does not hold yet: the build, and so the text, is
     // the buffer's.
     let buffer = behavior("beta", "  invariants [alpha]\n");
-    session.update(SourceChange::Hold(&[Buffer::new(
-        root.join("a.spec"),
-        buffer.clone(),
-    )]));
+    session.hold(&[Buffer::new(root.join("a.spec"), buffer.clone())]);
     assert_eq!(
         session.project().source_text("a.spec").as_deref(),
         Some(&*buffer)
@@ -1003,7 +997,7 @@ fn several_buffers_are_one_update() {
             behavior("beta", "  invariants [omega]\n"),
         ),
     ];
-    let update = session.update_with(SourceChange::Hold(&buffers), CheckMode::Full);
+    let update = session.hold_with(&buffers, CheckMode::Full);
     assert_eq!(update.rebuilt_files, ["a.spec", "b.spec"]);
     assert_eq!(update.verification, Some(Ok(())));
     assert!(
@@ -1020,7 +1014,7 @@ fn several_buffers_are_one_update() {
 
     // Files discovery would not find are held and build nothing.
     let ignored = [Buffer::new(root.join("notes.txt"), "x")];
-    let update = session.update(SourceChange::Hold(&ignored));
+    let update = session.hold(&ignored);
     assert!(update.rebuilt_files.is_empty());
     assert_matches_a_fresh_compile(&session, &dir);
 }
@@ -1046,7 +1040,7 @@ fn a_parse_error_in_any_edited_buffer_skips_the_checks() {
             "behavior beta \"B\" {\n  contract \"\n",
         ),
     ];
-    let full = session.update_with(SourceChange::Hold(&buffers), CheckMode::Full);
+    let full = session.hold_with(&buffers, CheckMode::Full);
 
     // The same buffers again change nothing: b.spec gets one more line, still
     // unclosed.
@@ -1057,10 +1051,7 @@ fn a_parse_error_in_any_edited_buffer_skips_the_checks() {
             "behavior beta \"B\" {\n  contract \"\n\n",
         ),
     ];
-    let fast = session.update_with(
-        SourceChange::Hold(&more),
-        CheckMode::SyntaxOnlyIfParseErrors,
-    );
+    let fast = session.hold_with(&more, CheckMode::SyntaxOnlyIfParseErrors);
     let codes: Vec<&str> = fast.diagnostics.iter().map(|d| d.code.as_str()).collect();
     assert!(
         codes.contains(&"E001"),
@@ -1078,10 +1069,7 @@ fn a_parse_error_in_any_edited_buffer_skips_the_checks() {
         Buffer::new(root.join("a.spec"), behavior("alpha", "")),
         Buffer::new(root.join("b.spec"), behavior("beta", "")),
     ];
-    let update = session.update_with(
-        SourceChange::Hold(&parses),
-        CheckMode::SyntaxOnlyIfParseErrors,
-    );
+    let update = session.hold_with(&parses, CheckMode::SyntaxOnlyIfParseErrors);
     assert!(!update.diagnostics.iter().any(|d| d.code == "E001"));
 }
 
@@ -1489,10 +1477,7 @@ fn random_updates_leave_what_a_fresh_compile_builds() {
             let previous = session.project().graph().clone();
             let update = match &buffer {
                 Some((path, text)) => {
-                    let update = session.update(SourceChange::Hold(&[Buffer::new(
-                        spec.join(path),
-                        text.clone(),
-                    )]));
+                    let update = session.hold(&[Buffer::new(spec.join(path), text.clone())]);
                     // Saved, so released to nothing: the next disk steps apply.
                     assert!(session.release(&[spec.join(path)]).is_none());
                     Some(update)
@@ -1725,10 +1710,7 @@ fn a_session_reports_what_a_fresh_compile_reports_in_order() {
                 2 => {
                     let (path, text) = (rng.pick(PATHS), random_spec(&mut rng));
                     write(&spec, path, &text);
-                    let update = session.update(SourceChange::Hold(&[Buffer::new(
-                        spec.join(path),
-                        text.clone(),
-                    )]));
+                    let update = session.hold(&[Buffer::new(spec.join(path), text.clone())]);
                     assert!(session.release(&[spec.join(path)]).is_none());
                     Some(update)
                 }
@@ -1746,7 +1728,7 @@ fn a_session_reports_what_a_fresh_compile_reports_in_order() {
                         .iter()
                         .map(|(path, text)| Buffer::new(spec.join(path), text.clone()))
                         .collect();
-                    let update = session.update(SourceChange::Hold(&held));
+                    let update = session.hold(&held);
                     let paths: Vec<_> = held.iter().map(|b| b.path.clone()).collect();
                     assert!(session.release(&paths).is_none());
                     Some(update)
@@ -2265,10 +2247,7 @@ fn an_update_that_skips_the_checks_still_scores_its_own_graph() {
     // snapshot, taken once, in its environment (the spec root included).
     write(root, "b.spec", "behavior b \"B\" {\n  contract \"\n");
     let broken = Buffer::new(root.join("b.spec"), "behavior b \"B\" {\n  contract \"\n");
-    session.update_with(
-        SourceChange::Hold(&[broken]),
-        CheckMode::SyntaxOnlyIfParseErrors,
-    );
+    session.hold_with(&[broken], CheckMode::SyntaxOnlyIfParseErrors);
     let entities = session.project().entities();
     assert!(!std::ptr::eq(entities, &*before), "a fresh memo per update");
     assert_eq!(
@@ -2817,7 +2796,7 @@ fn an_import_names_an_unsaved_buffer() {
     assert_eq!(e025(&session.project().diagnostics()).len(), 1);
 
     let buffers = [Buffer::new(root.join("b.spec"), "term b \"B\" {\n}\n")];
-    let update = session.update(SourceChange::Hold(&buffers));
+    let update = session.hold(&buffers);
 
     assert!(
         e025(&update.diagnostics).is_empty(),

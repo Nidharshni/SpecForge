@@ -47,18 +47,6 @@ impl RuntimeSource {
     }
 }
 
-/// What changed in a session's sources.
-pub enum SourceChange<'a> {
-    /// The editor holds these buffers now, each the truth for its file until
-    /// it is released ([`ProjectSession::release`]), whatever happens to the
-    /// file on disk: one update, one run of the checks. A buffer whose text
-    /// is the text the session built its file from changes nothing (its
-    /// version is still kept). A buffer of a file discovery would not find
-    /// (outside the spec root, excluded, not `.spec`) is held and builds
-    /// nothing.
-    Hold(&'a [Buffer]),
-}
-
 /// Which checks an update runs on the updated graph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheckMode {
@@ -304,16 +292,18 @@ impl ProjectSession {
         self.project.set_verify(enabled);
     }
 
-    /// Apply a change to the project's sources, then run every check. An
-    /// update that changes no file runs no check (unless the checks were
-    /// skipped since they last ran: then it runs them).
-    pub fn update(&mut self, change: SourceChange<'_>) -> Update {
-        self.update_with(change, CheckMode::Full)
+    /// The editor holds these buffers now, each the truth for its file until
+    /// it is released ([`Self::release`]), whatever happens to the file on
+    /// disk: one update, then every check. A buffer whose text is the text the
+    /// session built its file from changes nothing (its version is still
+    /// kept). A buffer of a file discovery would not find (outside the spec
+    /// root, excluded, not `.spec`) is held and builds nothing.
+    pub fn hold(&mut self, buffers: &[Buffer]) -> Update {
+        self.hold_with(buffers, CheckMode::Full)
     }
 
-    /// [`Self::update`], running the checks `mode` asks for.
-    pub fn update_with(&mut self, change: SourceChange<'_>, mode: CheckMode) -> Update {
-        let SourceChange::Hold(buffers) = change;
+    /// [`Self::hold`], running the checks `mode` asks for.
+    pub fn hold_with(&mut self, buffers: &[Buffer], mode: CheckMode) -> Update {
         let mut reads = Vec::new();
         for buffer in buffers {
             let key = self.source_key(&buffer.path);

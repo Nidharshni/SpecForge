@@ -2,7 +2,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use specforge_lsp::LspState;
-use specforge_project::{Buffer, SourceChange};
+use specforge_project::Buffer;
 use specforge_test_macros::test as spec;
 
 use crate::{change, url};
@@ -92,9 +92,7 @@ async fn concurrent_reads_see_consistent_state() {
     {
         let mut s = state.write().await;
         s.open_document(&url(URI), &text(1), 1);
-        s.session_mut()
-            .unwrap()
-            .update(SourceChange::Hold(&[Buffer::new(PATH, text(1))]));
+        s.session_mut().unwrap().hold(&[Buffer::new(PATH, text(1))]);
     }
 
     /// What a reader sees: the buffer's version and the versions of the
@@ -139,7 +137,7 @@ async fn concurrent_reads_see_consistent_state() {
                 };
                 // A reader during the recompile.
                 assert_consistent(observe(&state).await);
-                session.update(SourceChange::Hold(&[Buffer::new(PATH, text(v))]));
+                session.hold(&[Buffer::new(PATH, text(v))]);
                 tokio::task::yield_now().await;
                 state.write().await.set_session(session);
             }
