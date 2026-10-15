@@ -47,7 +47,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   current version and reports nothing. The parser reads it with the file
   (`specforge_parser::detect_format_version`, `SpecFile::format_version`) and the compile reports
   I007 (older) and E019 (newer, or a header that is not `MAJOR.MINOR`) on the header line, like any
-  parser diagnostic; `specforge migrate` reads the version through the same function. It is
+  parser diagnostic; `specforge migrate` reads and rewrites it through the same module
+  (`with_format_version`), so a rewritten header stands where the parser reads it. It is
   distinct from the Graph Protocol's schema version.
 - **Schema version**: the Graph Protocol schema's `MAJOR.MINOR.PATCH`, computed, never declared: the version the
   schema record holds, bumped by the largest change between the recorded schema and the one the loaded extensions
