@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde_json::json;
-use specforge_project::testing::{TestProject, compile_at};
+use specforge_project::testing::{TestProject, compile_at, disk_changed};
 use specforge_project::{
     Buffer, Changes, ProjectSession, SharedRuntime, SourceChange, UpdateKind, WatchRoot, Watched,
 };
@@ -547,7 +547,7 @@ fn an_update_that_names_a_new_file_changes_the_inputs() {
     let named = "gadget doc \"Doc\" {\n  docs [\"new.md\"]\n}\n";
     write(root, "a.spec", named);
     let keys = ["a.spec".to_string()];
-    let update = session.update(SourceChange::Disk(&keys));
+    let update = disk_changed(&mut session, &keys).unwrap();
     assert!(update.inputs_changed);
     assert_ne!(*session.inputs(), before);
     assert!(
@@ -558,7 +558,7 @@ fn an_update_that_names_a_new_file_changes_the_inputs() {
     );
 
     // The same update again, and a re-check of nothing renamed: no change.
-    assert!(!session.update(SourceChange::Disk(&keys)).inputs_changed);
+    assert!(disk_changed(&mut session, &keys).is_none());
     let recheck = session
         .apply(&Changes {
             check_inputs: vec![root.join("new.md")],
@@ -900,7 +900,7 @@ fn relinking_a_source_changes_the_inputs() {
 
     fs::remove_file(dir.root().join("a.spec")).unwrap();
     std::os::unix::fs::symlink(outside_dir.join("real.spec"), dir.root().join("a.spec")).unwrap();
-    let update = session.update(SourceChange::Disk(&keys));
+    let update = disk_changed(&mut session, &keys).unwrap();
     assert!(update.inputs_changed);
     let outside_root = WatchRoot {
         dir: outside_dir.clone(),
@@ -909,11 +909,11 @@ fn relinking_a_source_changes_the_inputs() {
     assert!(session.inputs().watch_roots().contains(&outside_root));
 
     // The same update again moves nothing.
-    assert!(!session.update(SourceChange::Disk(&keys)).inputs_changed);
+    assert!(disk_changed(&mut session, &keys).is_none());
 
     fs::remove_file(dir.root().join("a.spec")).unwrap();
     fs::write(dir.root().join("a.spec"), TERM).unwrap();
-    let update = session.update(SourceChange::Disk(&keys));
+    let update = disk_changed(&mut session, &keys).unwrap();
     assert!(update.inputs_changed);
     assert!(!session.inputs().watch_roots().contains(&outside_root));
 }

@@ -346,9 +346,7 @@ fn a_stand_in_reads_the_snapshot_of_its_own_graph() {
     // the new graph, with a snapshot of its own.
     std::fs::write(project.path().join("b.spec"), "behavior b \"B\" {\n}\n").unwrap();
     let mut session = state.take_session().expect("the session is held");
-    session.update(specforge_project::SourceChange::Disk(&[
-        "b.spec".to_string()
-    ]));
+    specforge_project::testing::disk_changed(&mut session, &["b.spec"]).unwrap();
     state.set_session(session);
     let session = state.take_session().expect("the session is held");
     let view = state.view();

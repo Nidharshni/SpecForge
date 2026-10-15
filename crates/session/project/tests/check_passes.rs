@@ -403,7 +403,10 @@ fn check_passes_receive_the_cached_statuses() {
         &dir,
         r#"{"format": 1, "statuses": {"good": {"kind": "gadget", "status": "active"}}}"#,
     );
-    session.update(SourceChange::Disk(&["a.spec".to_string()]));
+    let cache = dir.root().join(specforge_project::BUILD_CACHE_FILE);
+    session
+        .apply(&session.changes([cache.as_path()]))
+        .expect("the cache is a check input");
     assert_eq!(
         last_input(&ext, "__pass_audit")["previous"]["statuses"]["good"]["status"],
         "active"
