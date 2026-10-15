@@ -89,7 +89,6 @@ fn a_refused_set_of_watchers_is_logged_after_the_static_ones() {
     behavior = "classify_project_changes",
     verify = "an environment reload that leaves the inputs as they were moves no watchers"
 )]
-#[ignore = "flipped by T5"]
 fn a_reload_that_leaves_the_inputs_asks_for_no_watchers() {
     let mut served = refusing().open(&[]);
     served.sent();

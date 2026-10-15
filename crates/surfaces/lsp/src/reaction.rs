@@ -136,7 +136,7 @@ impl<E: Editor> Reaction<E> {
                     ),
                 );
             }
-            if applied.rewatch() {
+            if applied.inputs_changed {
                 self.follow();
             }
         }
@@ -294,6 +294,6 @@ impl<E: Editor> Follower for Rewatch<'_, E> {
     fn catch_up(&mut self) -> bool {
         self.0
             .apply(Change::CatchUp)
-            .is_some_and(|applied| applied.rewatch())
+            .is_some_and(|applied| applied.inputs_changed)
     }
 }
