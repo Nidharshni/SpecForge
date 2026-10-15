@@ -2,6 +2,8 @@ use specforge_common::{SourceSpan, Sym};
 use specforge_parser::{EntityId, EntityKind, FieldMap};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+mod link;
+
 #[derive(Debug, Clone)]
 pub struct Node {
     pub id: EntityId,
@@ -58,10 +60,10 @@ pub struct Graph {
     /// BTreeMap keyed by Sym: iteration is string-sorted (Sym::cmp orders
     /// by content), so reads are deterministic with no sort-at-read
     /// compensation (C5-12).
-    pub(crate) nodes: BTreeMap<Sym, Node>,
-    pub(crate) edges: Vec<Edge>,
+    nodes: BTreeMap<Sym, Node>,
+    edges: Vec<Edge>,
     /// Index: source sym -> indices into `edges`
-    pub(crate) source_index: HashMap<Sym, Vec<usize>>,
+    source_index: HashMap<Sym, Vec<usize>>,
     /// Index: target sym -> indices into `edges`
     target_index: HashMap<Sym, Vec<usize>>,
     /// Known bidirectional edge pairs where A->B with label X and B->A with label Y
@@ -128,7 +130,7 @@ impl Graph {
         self.edges.push(edge);
     }
 
-    pub(crate) fn clear_edges(&mut self) {
+    fn clear_edges(&mut self) {
         self.edges.clear();
         self.source_index.clear();
         self.target_index.clear();

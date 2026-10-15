@@ -8,6 +8,12 @@ use std::collections::HashMap;
 
 use crate::{Edge, FieldForms, Graph};
 
+/// An edge as written, and whether a declared single reference wrote it.
+struct WrittenEdge {
+    edge: Edge,
+    single: bool,
+}
+
 impl Graph {
     /// Resolve every node's references into edges and report what does not
     /// resolve: E003 (with a fuzzy-match suggestion when there is one), or
@@ -27,7 +33,7 @@ impl Graph {
         self.clear_edges();
         let mut diagnostics = Vec::new();
         // Every edge in written order, and whether it is a single reference's.
-        let mut edges: Vec<(Edge, bool)> = Vec::new();
+        let mut edges: Vec<WrittenEdge> = Vec::new();
 
         for node in self.nodes.values() {
             let kind = node.kind.raw.as_str();
@@ -37,14 +43,14 @@ impl Graph {
                 for reference in reading.references(entry) {
                     let target = Sym::new(reference.id);
                     if self.nodes.contains_key(&target) {
-                        edges.push((
-                            Edge {
+                        edges.push(WrittenEdge {
+                            edge: Edge {
                                 source: node.id.raw,
                                 target,
                                 label: entry.key,
                             },
                             single,
-                        ));
+                        });
                     } else if let Some(target_kind) =
                         absent_targets.get(&(kind.to_string(), entry.key.as_str().to_string()))
                     {
@@ -87,14 +93,14 @@ impl Graph {
             }
         }
 
-        for (edge, _) in edges.iter().filter(|(_, single)| !single) {
-            self.add_edge(*edge);
+        for written in edges.iter().filter(|w| !w.single) {
+            self.add_edge(written.edge);
         }
         diagnostics.extend(self.cycle_warnings());
         // The single references join, keeping the edges in written order.
         self.clear_edges();
-        for (edge, _) in edges {
-            self.add_edge(edge);
+        for written in edges {
+            self.add_edge(written.edge);
         }
         diagnostics
     }
