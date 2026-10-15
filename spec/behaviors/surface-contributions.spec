@@ -34,7 +34,6 @@ behavior register_surface_contributions "Register Surface Contributions" {
     SurfaceDescriptor,
     CommandRoutes,
     CommandRoute,
-    SurfaceRegistryEntry,
     SurfaceType,
     SurfaceError,
   ]

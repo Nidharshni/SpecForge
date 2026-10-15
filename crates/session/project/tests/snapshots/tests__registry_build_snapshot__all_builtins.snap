@@ -8381,6 +8381,5 @@ expression: "digest(&load(&runtime, &all))"
       "wasm_function": null
     }
   ],
-  "shadowed": 0,
-  "surfaces": []
+  "shadowed": 0
 }

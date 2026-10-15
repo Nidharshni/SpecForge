@@ -128,6 +128,5 @@ expression: "digest(&load(&runtime, &[\"@sdk/greet\"]))"
       "wasm_function": null
     }
   ],
-  "shadowed": 0,
-  "surfaces": []
+  "shadowed": 0
 }

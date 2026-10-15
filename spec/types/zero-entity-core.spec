@@ -69,7 +69,6 @@ type RegistryBuild {
   rules        ValidationRulePattern[]
   // The commands, routed by (short name, CLI name); a shadowed one is E039
   commands     CommandRoutes
-  surfaces     SurfaceRegistryEntry[]
   // Every declared pass, extension by extension in load order, each
   // extension's in its after/before order
   passes       CompilerPassDeclaration[]

@@ -200,15 +200,7 @@ type CommandRoutes {
   verify unit "CommandRoutes schema is valid"
 }
 
-// ── Surface Registry ────────────────────────────────────────
-
-type SurfaceRegistryEntry {
-  surface_type      SurfaceType
-  contribution_name string @readonly
-  extension_name    string @readonly
-  export_name       string @readonly
-  verify unit "SurfaceRegistryEntry schema is valid"
-}
+// ── Surface Types ──────────────────────────────────────────
 
 type SurfaceType = command | mcp_tool | mcp_resource
 

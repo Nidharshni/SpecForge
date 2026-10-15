@@ -250,12 +250,6 @@ fn digest(env: &Environment) -> Value {
             "export": c.declaration().export,
         })).collect::<Vec<_>>(),
         "shadowed": r.commands().shadowed().len(),
-        "surfaces": r.surfaces().iter().map(|s| json!({
-            "surface_type": format!("{:?}", s.surface_type),
-            "name": s.contribution_name,
-            "extension": s.extension_name,
-            "export": s.export_name,
-        })).collect::<Vec<_>>(),
         "manifest_surfaces": r.declarations().iter()
             .filter(|d| d.surfaces != SurfaceDescriptor::default())
             .map(|d| json!({ "extension": d.name(), "surfaces": surfaces(&d.surfaces) }))

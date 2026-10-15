@@ -3,10 +3,7 @@ use specforge_protocol_types::{
     CommandArgDescriptor, CommandDescriptor, DeclaredCategory, ExtensionDeclaration,
     McpResourceDescriptor, McpToolDescriptor, SurfaceDescriptor,
 };
-use specforge_registry::{
-    CommandArgType, CommandRoutes, SurfaceRegistryEntry, SurfaceType,
-    register_surface_contributions,
-};
+use specforge_registry::{CommandArgType, CommandRoutes, register_surface_contributions};
 use specforge_test_macros::test as specforge_test;
 
 fn make_surfaces(
@@ -147,10 +144,10 @@ fn test_all_command_arg_type_variants_deserialize() {
     assert_eq!(args[4].arg_type, CommandArgType::Integer);
 }
 
-/// The routes and registry entries of one declaration, parsed from its
-/// JSON, whose `surfaces` category declares a command, an MCP tool and an
-/// MCP resource.
-fn registered_from_manifest() -> (CommandRoutes, Vec<SurfaceRegistryEntry>) {
+/// The routes of one declaration, parsed from its JSON, whose `surfaces`
+/// category declares a command, an MCP tool and an MCP resource, and the
+/// declaration itself.
+fn registered_from_manifest() -> (CommandRoutes, ExtensionDeclaration) {
     let declaration = declared_with(Some(serde_json::json!({
         "commands": [{
             "id": "analyze",
@@ -171,22 +168,9 @@ fn registered_from_manifest() -> (CommandRoutes, Vec<SurfaceRegistryEntry>) {
             "mime_type": "application/json"
         }]
     })));
-    let (routes, entries, diags) = register_surface_contributions(&[declaration]);
+    let (routes, diags) = register_surface_contributions(std::slice::from_ref(&declaration));
     assert!(diags.is_empty(), "{diags:?}");
-    assert_eq!(entries.len(), 2);
-    (routes, entries)
-}
-
-/// `(name, export)` of every registered entry of `surface_type`.
-fn of_type(entries: &[SurfaceRegistryEntry], surface_type: SurfaceType) -> Vec<(&str, &str)> {
-    entries
-        .iter()
-        .filter(|e| e.surface_type == surface_type)
-        .inspect(|e| {
-            assert_eq!(e.extension_name, "@ext/test");
-        })
-        .map(|e| (e.contribution_name.as_str(), e.export_name.as_str()))
-        .collect()
+    (routes, declaration)
 }
 
 #[specforge_test(
@@ -214,11 +198,11 @@ fn a_manifests_commands_are_registered() {
     verify = "MCP tools parsed from manifest surfaces field"
 )]
 fn a_manifests_mcp_tools_are_registered() {
-    let (_, entries) = registered_from_manifest();
-    assert_eq!(
-        of_type(&entries, SurfaceType::McpTool),
-        [("search", "mcp__search")]
-    );
+    let (_, declaration) = registered_from_manifest();
+    let tools: Vec<(&str, &str)> = (declaration.surfaces.mcp_tools.iter())
+        .map(|t| (t.name.as_str(), t.export.as_str()))
+        .collect();
+    assert_eq!(tools, [("search", "mcp__search")]);
 }
 
 #[specforge_test(
@@ -226,11 +210,11 @@ fn a_manifests_mcp_tools_are_registered() {
     verify = "MCP resources parsed from manifest surfaces field"
 )]
 fn a_manifests_mcp_resources_are_registered() {
-    let (_, entries) = registered_from_manifest();
-    assert_eq!(
-        of_type(&entries, SurfaceType::McpResource),
-        [("graph", "mcp__graph")]
-    );
+    let (_, declaration) = registered_from_manifest();
+    let resources: Vec<(&str, &str)> = (declaration.surfaces.mcp_resources.iter())
+        .map(|r| (r.name.as_str(), r.export.as_str()))
+        .collect();
+    assert_eq!(resources, [("graph", "mcp__graph")]);
 }
 
 #[specforge_test(
@@ -253,7 +237,7 @@ fn two_extensions_of_one_short_name_routing_one_name_is_e039() {
         ("@ext/a", Some("ext"), s1),
         ("@ext/b", Some("ext"), s2),
     ]);
-    let (routes, _, diags) = register_surface_contributions(&manifests);
+    let (routes, diags) = register_surface_contributions(&manifests);
     assert_eq!(diags.len(), 1);
     assert_eq!(diags[0].code, "E039");
     assert!(diags[0].message.contains("analyze"));
@@ -270,7 +254,7 @@ fn test_register_duplicate_mcp_tool_e039() {
     let s2 = make_surfaces(vec![], vec![make_tool("search", "mcp__search_v2")], vec![]);
 
     let manifests = declarations(vec![("@ext/a", None, s1), ("@ext/b", None, s2)]);
-    let (_, _, diags) = register_surface_contributions(&manifests);
+    let (_, diags) = register_surface_contributions(&manifests);
     assert_eq!(diags.len(), 1);
     assert_eq!(diags[0].code, "E039");
     assert!(diags[0].message.contains("search"));
@@ -293,10 +277,9 @@ fn test_register_no_duplicates_clean() {
     );
 
     let manifests = declarations(vec![("@ext/a", None, s1), ("@ext/b", None, s2)]);
-    let (routes, entries, diags) = register_surface_contributions(&manifests);
+    let (routes, diags) = register_surface_contributions(&manifests);
     assert!(diags.is_empty());
     assert_eq!(routes.routed().len(), 2);
-    assert_eq!(entries.len(), 2);
 }
 
 // B:register_surface_contributions — verify contract
@@ -310,17 +293,14 @@ fn test_register_surface_contributions_contract() {
         vec![make_resource("spec", "mcp__spec")],
     );
     let manifests = declarations(vec![("@ext/a", None, surfaces)]);
-    let (routes, entries, diags) = register_surface_contributions(&manifests);
+    let (routes, diags) = register_surface_contributions(&manifests);
     assert!(diags.is_empty());
     assert_eq!(routes.routed().len(), 1);
-    assert_eq!(entries.len(), 2);
-    assert!(entries.iter().all(|e| e.extension_name == "@ext/a"));
 
     // ensures: empty surfaces register nothing
     let manifests2 = declarations(vec![("@ext/b", None, SurfaceDescriptor::default())]);
-    let (routes2, entries2, diags2) = register_surface_contributions(&manifests2);
+    let (routes2, diags2) = register_surface_contributions(&manifests2);
     assert!(routes2.routed().is_empty());
-    assert!(entries2.is_empty());
     assert!(diags2.is_empty());
 
     // ensures: duplicates produce E039
@@ -330,23 +310,17 @@ fn test_register_surface_contributions_contract() {
         ("@ext/a", Some("ext"), s1),
         ("@ext/b", Some("ext"), s2),
     ]);
-    let (_, _, diags3) = register_surface_contributions(&manifests3);
+    let (_, diags3) = register_surface_contributions(&manifests3);
     assert!(!diags3.is_empty() && diags3.iter().all(|d| d.code == "E039"));
 }
 
 /// The registry build over one extension contributing `tools`: the tools
-/// it registered (and lists to MCP), and its surface diagnostics.
-fn build_with_tools(tools: Vec<McpToolDescriptor>) -> (Vec<String>, Vec<String>, Vec<String>) {
+/// it lists to MCP (a refused one is left out), and its surface diagnostics.
+fn build_with_tools(tools: Vec<McpToolDescriptor>) -> (Vec<String>, Vec<String>) {
     let mut declaration =
         ContributionsBuilder::new(ExtensionMeta::new("@ext/t", "1.0.0")).declaration();
     declaration.surfaces = make_surfaces(vec![], tools, vec![]);
     let build = specforge_registry::build_registries(vec![declaration]);
-    let registered = build
-        .surfaces()
-        .iter()
-        .filter(|e| e.surface_type == SurfaceType::McpTool)
-        .map(|e| e.contribution_name.clone())
-        .collect();
     let listed = build
         .declarations()
         .iter()
@@ -357,7 +331,7 @@ fn build_with_tools(tools: Vec<McpToolDescriptor>) -> (Vec<String>, Vec<String>,
         .filter(|d| ["E055", "E039"].contains(&d.code.as_str()))
         .map(|d| d.code.clone())
         .collect();
-    (registered, listed, codes)
+    (listed, codes)
 }
 
 #[specforge_test(
@@ -367,8 +341,7 @@ fn build_with_tools(tools: Vec<McpToolDescriptor>) -> (Vec<String>, Vec<String>,
 fn a_tool_whose_input_schema_is_not_an_object_is_refused() {
     let mut tool = make_tool("bad", "mcp__bad");
     tool.input_schema = serde_json::json!("object");
-    let (registered, listed, codes) = build_with_tools(vec![tool, make_tool("ok", "mcp__ok")]);
-    assert_eq!(registered, ["ok"]);
+    let (listed, codes) = build_with_tools(vec![tool, make_tool("ok", "mcp__ok")]);
     assert_eq!(listed, ["ok"]);
     assert_eq!(codes, ["E055"]);
 }
@@ -380,8 +353,8 @@ fn a_tool_whose_input_schema_is_not_an_object_is_refused() {
 fn a_tool_whose_output_schema_is_not_an_object_is_refused() {
     let mut tool = make_tool("bad", "mcp__bad");
     tool.output_schema = Some(serde_json::json!([1]));
-    let (registered, listed, codes) = build_with_tools(vec![tool]);
-    assert!(registered.is_empty() && listed.is_empty());
+    let (listed, codes) = build_with_tools(vec![tool]);
+    assert!(listed.is_empty());
     assert_eq!(codes, ["E055"]);
 }
 
@@ -392,8 +365,7 @@ fn a_tool_whose_output_schema_is_not_an_object_is_refused() {
 fn a_tool_whose_schemas_are_objects_is_registered() {
     let mut tool = make_tool("ok", "mcp__ok");
     tool.output_schema = Some(serde_json::json!({"type": "object"}));
-    let (registered, listed, codes) = build_with_tools(vec![tool]);
-    assert_eq!(registered, ["ok"]);
+    let (listed, codes) = build_with_tools(vec![tool]);
     assert_eq!(listed, ["ok"]);
     assert!(codes.is_empty(), "{codes:?}");
 }
@@ -403,8 +375,8 @@ fn a_tool_whose_schemas_are_objects_is_registered() {
     verify = "a tool whose schemas are JSON objects is registered"
 )]
 fn the_invariant_keeps_a_wellformed_tool() {
-    let (registered, _, codes) = build_with_tools(vec![make_tool("ok", "mcp__ok")]);
-    assert_eq!(registered, ["ok"]);
+    let (listed, codes) = build_with_tools(vec![make_tool("ok", "mcp__ok")]);
+    assert_eq!(listed, ["ok"]);
     assert!(codes.is_empty());
 }
 
@@ -415,7 +387,7 @@ fn the_invariant_keeps_a_wellformed_tool() {
 fn the_invariant_refuses_a_malformed_tool() {
     let mut tool = make_tool("bad", "mcp__bad");
     tool.input_schema = serde_json::json!(null);
-    let (registered, _, codes) = build_with_tools(vec![tool]);
-    assert!(registered.is_empty());
+    let (listed, codes) = build_with_tools(vec![tool]);
+    assert!(listed.is_empty());
     assert_eq!(codes, ["E055"]);
 }

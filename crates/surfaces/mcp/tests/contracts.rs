@@ -1243,7 +1243,6 @@ fn contract_list_tools() {
 fn contract_auto_promote_commands() {
     use crate::fake_extension::{self, EXT, FakeExtension};
     use specforge_mcp::surface_table::ToolKind;
-    use specforge_registry::SurfaceType;
     let output = json!({"exit_code": 0, "stdout": "report written", "stderr": ""});
     let (mut server, ext, _dir) =
         fake_extension::initialized(FakeExtension::new().with_output("cmd__report", output));
@@ -1259,9 +1258,9 @@ fn contract_auto_promote_commands() {
         routed,
         [pair("report", "cmd__report"), pair("check", "cmd__check")]
     );
-    let tools: Vec<_> = (registries.surfaces().iter())
-        .filter(|e| e.surface_type == SurfaceType::McpTool)
-        .map(|e| pair(&e.contribution_name, &e.export_name))
+    let tools: Vec<_> = (registries.declarations().iter())
+        .flat_map(|d| &d.surfaces.mcp_tools)
+        .map(|t| pair(&t.name, &t.export))
         .collect();
     assert_eq!(tools, [pair("specforge.cmds.check", "mcp__check")]);
 
