@@ -6,5 +6,6 @@
 mod coalesce;
 mod contracts;
 mod debounce;
+mod follow;
 mod session_watch;
 mod watcher;

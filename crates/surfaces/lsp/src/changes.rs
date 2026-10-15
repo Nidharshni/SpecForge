@@ -207,7 +207,7 @@ pub struct Applied {
     /// The session changed.
     pub changed: bool,
     /// The session's inputs changed (`Update::inputs_changed`): what the
-    /// client is asked to watch must follow them.
+    /// client is asked to watch follows it, and only it (ADR 0099).
     pub inputs_changed: bool,
     /// Where an incremental rebuild differed from a cold build, when the
     /// session verifies its updates (debug builds).
@@ -220,12 +220,6 @@ pub struct Applied {
 }
 
 impl Applied {
-    /// What the client is asked to watch must follow (ADR 0035): the
-    /// environment was loaded, or the session's inputs changed.
-    pub fn rewatch(&self) -> bool {
-        self.environment || self.inputs_changed
-    }
-
     /// What an update says about the session's inputs and its own check.
     fn record(&mut self, update: Update) {
         self.inputs_changed |= update.inputs_changed;

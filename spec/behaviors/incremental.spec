@@ -103,7 +103,10 @@ behavior classify_project_changes "Classify Project Changes" {
     source's target (the LSP spelling each under the project root as
     opened), the LSP MUST ask its client to report every entry
     created or deleted under the project root, and both MUST follow every
-    update that changes the inputs.
+    update that changes the inputs. A set of watchers refused once is not
+    asked for again in the same follow: the refusal is reported (watch: a
+    warning event; the LSP: a WARNING log, after it registers the static
+    watchers in its place) and the session still catches up.
   """
   verify unit "a discovered .spec file is a source change keyed relative to the spec root"
   verify unit "specforge.json, specforge.lock and a loaded extension module are environment changes"
@@ -123,6 +126,9 @@ behavior classify_project_changes "Classify Project Changes" {
   verify unit "a detached session takes no change from disk"
   verify unit "a directory moved above an environment or check input changes that input"
   verify unit "a session's watch roots and the LSP's watchers cover every symlinked source's target"
+  verify unit "a set of watchers refused once is not asked for again in the same follow"
+  verify unit "the LSP reports a refused set of watchers and registers the static ones"
+  verify unit "an environment reload that leaves the inputs as they were moves no watchers"
   verify integration "the LSP asks its client to report every directory created or deleted under the project root"
   verify property "the changes of a batch naming every changed path are what the session finds stale"
   verify unit "a nested project's specforge.json appearing or going changes every source under its directory"

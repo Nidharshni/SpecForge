@@ -28,6 +28,8 @@ surface held it (ADR 0032), but each surface reported a divergence its own way, 
   document whose file exists, because its buffer is the truth), and repeats while the catch-up moves
   the inputs again, at most eight times. MCP watches nothing and ignores it. This amends ADR 0014 D9:
   the catch-up is part of following.
+  *(ADR 0099: both surfaces enter on `inputs_changed` alone, "(or loaded the environment)" goes, and the loop
+  is one, `specforge_watch::Following`.)*
   *(ADR 0046: the session leaves out every file an editor buffer holds, whether or not it exists; the LSP's
   catch-up is `ProjectSession::stale` as it is.)*
 - **D3. Each surface reports a divergence where it reports.** Watch prints it in its event, the LSP
@@ -70,6 +72,8 @@ surface held it (ADR 0032), but each surface reported a divergence its own way, 
   to compare was the bug.
 - **A session-driven loop over a watcher trait**: the LSP's registration is an async request
   answered by the client after the blocking update, and MCP has no watcher.
+  *(ADR 0099: ADR 0043 made the reaction synchronous, so that premise is gone; the loop is shared over a
+  `Follower` seam.)*
 - **Deleting `specforge-watch`** (review 2026-10-07 c11): about 140 lines moved into the CLI,
   concentrating nothing.
 - **A configurable window**: it would change on a reload for both surfaces, and nothing asked for it.
