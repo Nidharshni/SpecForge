@@ -289,8 +289,8 @@ fn a_fields_proof_role_reaches_its_entry() {
             .get("rule", "expression")
             .unwrap()
             .source_extension(),
-        "@test/ext",
-        "an enhancement field is the kind's through its owner"
+        "@test/other",
+        "an enhancement field is its declarer's"
     );
 }
 

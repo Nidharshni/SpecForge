@@ -25,7 +25,6 @@ fn compiled() -> CompiledProject {
     behavior = "compute_traceability_chain",
     verify = "a reference field another extension adds to a kind is not an expected link"
 )]
-#[ignore = "flipped by T3"]
 fn trace_does_not_expect_the_fields_another_extension_adds() {
     let compiled = compiled();
     let document = trace_document(&compiled, "core_mod");
@@ -42,7 +41,6 @@ fn trace_does_not_expect_the_fields_another_extension_adds() {
     behavior = "build_model_intermediate",
     verify = "a field an entity enhancement adds names the extension that declared it"
 )]
-#[ignore = "flipped by T3"]
 fn the_model_names_the_extension_that_added_a_field() {
     let compiled = compiled();
     let options = ModelOptions {

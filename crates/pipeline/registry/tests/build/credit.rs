@@ -10,7 +10,6 @@ use crate::support::{build, coded, declare, diagnostics, software};
     behavior = "register_entity_enhancements",
     verify = "an enhancement's fields are credited to the extension that declares the enhancement"
 )]
-#[ignore = "flipped by T3"]
 fn an_enhancements_fields_are_credited_to_its_declarer() {
     let mut enhancer = declare("@acme/enhancer", |c| {
         c.optional_peer("@specforge/software", "^1");
@@ -62,7 +61,6 @@ fn an_enhancements_fields_are_credited_to_its_declarer() {
     behavior = "register_entity_enhancements",
     verify = "an enhancement of an unknown kind is skipped silently when its extension declares an optional peer the project does not load"
 )]
-#[ignore = "flipped by T3"]
 fn an_unknown_target_is_silent_only_behind_an_unloaded_optional_peer() {
     let enhance_absent = |name: &str, owner: &str, optional: bool| {
         declare(name, |c| {

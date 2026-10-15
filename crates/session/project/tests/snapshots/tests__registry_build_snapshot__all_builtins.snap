@@ -892,7 +892,7 @@ expression: "digest(&load(&runtime, &all))"
         "behavior"
       ],
       "writers": [
-        "@specforge/product milestone.behaviors -> behavior"
+        "@specforge/software milestone.behaviors -> behavior"
       ]
     },
     "MilestoneScopesModule": {
@@ -930,7 +930,7 @@ expression: "digest(&load(&runtime, &all))"
         "port"
       ],
       "writers": [
-        "@specforge/product module.ports -> port"
+        "@specforge/software module.ports -> port"
       ]
     },
     "ModuleContainsFeature": {
@@ -968,7 +968,7 @@ expression: "digest(&load(&runtime, &all))"
         "port"
       ],
       "writers": [
-        "@specforge/product module.ports_defined -> port"
+        "@specforge/software module.ports_defined -> port"
       ]
     },
     "ModuleDependsOn": {
@@ -3440,7 +3440,7 @@ expression: "digest(&load(&runtime, &all))"
       "normative": false,
       "proof_role": null,
       "required": false,
-      "source_extension": "@specforge/product",
+      "source_extension": "@specforge/software",
       "target_kind": "behavior"
     },
     "milestone.blockers": {
@@ -3780,7 +3780,7 @@ expression: "digest(&load(&runtime, &all))"
       "normative": false,
       "proof_role": null,
       "required": false,
-      "source_extension": "@specforge/product",
+      "source_extension": "@specforge/software",
       "target_kind": "port"
     },
     "module.ports_defined": {
@@ -3797,7 +3797,7 @@ expression: "digest(&load(&runtime, &all))"
       "normative": false,
       "proof_role": null,
       "required": false,
-      "source_extension": "@specforge/product",
+      "source_extension": "@specforge/software",
       "target_kind": "port"
     },
     "module.reason": {

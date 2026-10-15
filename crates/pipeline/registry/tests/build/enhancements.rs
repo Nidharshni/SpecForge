@@ -46,8 +46,8 @@ fn an_enhancement_registers_its_fields_on_the_target_kind() {
     assert_eq!(field.field_type(), FieldType::String);
     assert_eq!(
         field.source_extension(),
-        "@specforge/software",
-        "the field is the kind's through the owner the enhancement names"
+        "@test/coverage",
+        "an enhancement's fields are its extension's"
     );
     // The kind's own fields stay.
     assert!(build.fields().contains("behavior", "contract"));
@@ -102,17 +102,27 @@ fn an_enhancement_of_an_unknown_kind_is_i004() {
 
 #[spec(
     behavior = "register_entity_enhancements",
-    verify = "enhancement of a kind owned by an extension that is not loaded is skipped silently"
+    verify = "an enhancement of an unknown kind whose extension's optional peer is not loaded is skipped silently"
 )]
-fn an_enhancement_of_a_kind_whose_owner_is_not_loaded_is_skipped_silently() {
-    let enhancing = || enhancer("@test/ext", "module", "@specforge/product", &["layer"]);
+fn an_enhancement_of_a_kind_whose_optional_peer_is_not_loaded_is_skipped_silently() {
+    let enhancing = || {
+        declare("@test/ext", |c| {
+            c.optional_peer("@specforge/product", "^1");
+            c.enhance("module", "@specforge/product", |e| {
+                e.field("layer", |f| {
+                    f.field_type(FieldType::String);
+                });
+            });
+        })
+    };
 
-    // The owner is not loaded: the project doesn't use it, nothing to say.
+    // The optional peer is not loaded: the project doesn't use it, nothing
+    // to say.
     let build = build([software(), enhancing()]);
     assert!(diagnostics(&build).is_empty(), "{:?}", diagnostics(&build));
     assert!(!build.fields().contains("module", "layer"));
 
-    // The owner is loaded, yet declares no such kind: a real mismatch, I004.
+    // The peer is loaded, yet declares no such kind: a real mismatch, I004.
     let product = declare("@specforge/product", |c| {
         c.kind("Feature", |k| {
             k.keyword("feature");

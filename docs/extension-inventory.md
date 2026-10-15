@@ -232,7 +232,7 @@ Load order: `product` first (no dependencies), then `software` (optionally depen
 
 ### Entity Enhancements (7)
 
-Each enhancement makes its target kind testable with the verify kinds listed. An enhancement whose owner extension isn't enabled is skipped silently.
+Each enhancement makes its target kind testable with the verify kinds listed. An enhancement of a kind whose extension isn't enabled is skipped silently (both are optional peers of @specforge/testing).
 
 | Target Kind | Owner Extension | Verify Kinds | W004 when no obligations |
 |-------------|----------------|--------------|--------------------------|

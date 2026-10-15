@@ -981,8 +981,8 @@ enhances a kind no enabled extension declares, or a `.spec` file has an
 the missing extension with `specforge add <name>` to resolve the reference. An
 entity whose keyword no enabled extension declares is an error instead (E024),
 whose suggestion names the extension to install. An extension's enhancement of a
-kind owned by an extension the project doesn't use is skipped silently, not
-reported.
+kind no enabled extension declares is skipped silently, not reported, when the
+extension declares an optional peer the project does not load.
 
 Owner: core
 Level: info

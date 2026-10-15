@@ -33,18 +33,11 @@ pub(crate) fn populate(
     }
 
     // After every extension, apply the entity enhancements.
-    let all_enhancements: Vec<(String, EntityEnhancementDescriptor)> = declarations
-        .iter()
-        .flat_map(|d| {
-            d.enhancements
-                .iter()
-                .map(move |e| (d.name().to_string(), e.clone()))
-        })
-        .collect();
-    let loaded: Vec<String> = declarations.iter().map(|d| d.name().to_string()).collect();
-    let enh_diags =
-        apply_entity_enhancements(&all_enhancements, &loaded, &mut kind_reg, &mut field_reg);
-    diagnostics.extend(enh_diags);
+    diagnostics.extend(apply_entity_enhancements(
+        declarations,
+        &mut kind_reg,
+        &mut field_reg,
+    ));
 
     // Once every kind, field and enhancement is registered: each edge type
     // with every field that writes it (ADR 0060).
@@ -59,71 +52,93 @@ pub(crate) fn populate(
     (kind_reg, field_reg, edge_reg, diagnostics)
 }
 
-/// Apply entity enhancements to the FieldRegistry.
-/// Enhancement fields do NOT overwrite existing kind-level fields.
+/// Apply entity enhancements to the FieldRegistry, declarations in load
+/// order. Enhancement fields do NOT overwrite existing kind-level fields.
 ///
-/// An enhancement whose target kind is unknown is skipped. It is *conditional*
-/// — skipped silently — when it names another extension as the kind's owner
-/// (`source_extension`) and that extension is not in `loaded_extensions`: the
-/// project simply doesn't use it. Any other unknown target is reported as I004.
+/// An enhancement whose target kind is unknown is skipped: silently when its
+/// extension declares an optional peer the project does not load (the project
+/// does not use it), else as I004. Its fields are its extension's (ADR 0096).
 ///
 /// An enhancement carrying `verify_kinds` makes its target kind testable
 /// with exactly those kinds (ADR 0002).
 fn apply_entity_enhancements(
-    enhancements: &[(String, EntityEnhancementDescriptor)],
-    loaded_extensions: &[String],
+    declarations: &[ExtensionDeclaration],
     kind_reg: &mut KindRegistry,
     field_reg: &mut FieldRegistry,
 ) -> Vec<Reported> {
     let mut diagnostics = Vec::new();
+    let loaded: Vec<&str> = declarations.iter().map(|d| d.name()).collect();
 
-    for (ext_name, enhancement) in enhancements {
-        if !kind_reg.contains(&enhancement.target_kind) {
-            let owner = &enhancement.source_extension;
-            let owner_absent = !owner.is_empty()
-                && owner != ext_name
-                && !loaded_extensions.iter().any(|loaded| loaded == owner);
-            if owner_absent {
-                continue;
-            }
-            diagnostics.push(Reported::new(
-                BuildPart::Registries,
-                Diagnostic::new(
-                    codes::I004,
-                    format!(
-                        "extension '{}': entity enhancement targets unknown kind '{}' (extension may not be installed)",
-                        ext_name, enhancement.target_kind
-                    ),
-                ),
-            ));
-            continue;
-        }
-
-        if let Some(verify_kinds) = &enhancement.verify_kinds
-            && let Some(kind) = kind_reg.get_mut(&enhancement.target_kind)
-        {
-            kind.testable = true;
-            kind.supports_verify = true;
-            kind.allowed_verify_kinds = verify_kinds.clone();
-        }
-
-        for field in &enhancement.fields {
-            // Kind-level fields win — do not overwrite
-            if field_reg.contains(&enhancement.target_kind, &field.name) {
-                continue;
-            }
-
-            register_single_field(
+    for declaration in declarations {
+        for enhancement in &declaration.enhancements {
+            apply_enhancement(
+                declaration,
+                enhancement,
+                &loaded,
+                kind_reg,
                 field_reg,
-                &enhancement.target_kind,
-                field,
-                &enhancement.source_extension,
                 &mut diagnostics,
             );
         }
     }
 
     diagnostics
+}
+
+/// Whether `declaration` declares an optional peer the project does not load.
+fn has_unloaded_optional_peer(declaration: &ExtensionDeclaration, loaded: &[&str]) -> bool {
+    declaration
+        .peers()
+        .iter()
+        .any(|p| p.optional && !loaded.contains(&p.name.as_str()))
+}
+
+fn apply_enhancement(
+    declaration: &ExtensionDeclaration,
+    enhancement: &EntityEnhancementDescriptor,
+    loaded: &[&str],
+    kind_reg: &mut KindRegistry,
+    field_reg: &mut FieldRegistry,
+    diagnostics: &mut Vec<Reported>,
+) {
+    if !kind_reg.contains(&enhancement.target_kind) {
+        if !has_unloaded_optional_peer(declaration, loaded) {
+            diagnostics.push(Reported::new(
+                BuildPart::Registries,
+                Diagnostic::new(
+                    codes::I004,
+                    format!(
+                        "extension '{}': entity enhancement targets unknown kind '{}' (extension may not be installed)",
+                        declaration.name(),
+                        enhancement.target_kind
+                    ),
+                ),
+            ));
+        }
+        return;
+    }
+
+    if let Some(verify_kinds) = &enhancement.verify_kinds
+        && let Some(kind) = kind_reg.get_mut(&enhancement.target_kind)
+    {
+        kind.testable = true;
+        kind.supports_verify = true;
+        kind.allowed_verify_kinds = verify_kinds.clone();
+    }
+
+    for field in &enhancement.fields {
+        // Kind-level fields win: do not overwrite.
+        if field_reg.contains(&enhancement.target_kind, &field.name) {
+            continue;
+        }
+        register_single_field(
+            field_reg,
+            &enhancement.target_kind,
+            field,
+            declaration.name(),
+            diagnostics,
+        );
+    }
 }
 
 /// Register a declaration's entity kinds into the KindRegistry.

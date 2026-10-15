@@ -308,6 +308,7 @@ type FieldRegistryEntry {
   /// canonically; its enum values and proof role are the descriptor's.
   field_type          FieldType              @readonly
   enum_values         string[]               @optional
+  // The extension that declared the field: the kind's own, its shared field's or an enhancement's
   source_extension    string                 @readonly
   edge                string                 @optional
   target_kind         string                 @optional
