@@ -65,8 +65,10 @@ fn trace_prompt_refuses_an_entity_with_a_plan_on_plan() {
     assert_eq!(reply["error"]["data"]["argument"], "plan", "{reply}");
 }
 
-#[test]
-#[ignore = "flipped by T6"]
+#[specforge_test(
+    behavior = "provide_mcp_export_tool",
+    verify = "with_schema and no_schema together are invalid input on with_schema"
+)]
 fn export_refuses_both_schema_flags_on_with_schema() {
     let reply = call_tool(
         &mut served(),

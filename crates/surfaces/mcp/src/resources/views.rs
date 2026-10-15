@@ -125,7 +125,7 @@ impl ViewQuery {
             ExportField::Scope => Some(self.scope_key),
             ExportField::Depth => Some("depth"),
             ExportField::MaxTokens => Some("max_tokens"),
-            ExportField::SchemaVersion => None,
+            ExportField::SchemaVersion | ExportField::Schema => None,
         }
     }
 

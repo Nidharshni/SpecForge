@@ -162,7 +162,10 @@ behavior provide_mcp_export_tool "Provide MCP Export Tool" {
     policy: a full graph export is Graph Protocol 2.0 with the schema
     embedded, a scoped one carries a schema_ref, and context, brief and a
     budgeted export leave the schema out unless with_schema is true;
-    no_schema leaves it out of a graph export (format 1.0). The embedded
+    no_schema leaves it out of a graph export (format 1.0). with_schema and
+    no_schema exclude each other: both MUST be refused as invalid input on
+    with_schema, as specforge export refuses --with-schema with
+    --no-schema. The embedded
     schema carries the version specforge export computes against the
     project's schema cache; the tool only reads the cache.
   """
@@ -177,6 +180,8 @@ behavior provide_mcp_export_tool "Provide MCP Export Tool" {
   verify integration "the graph export is the document specforge export --format graph writes, Graph Protocol 2.0 with the schema embedded"
   verify integration "with_schema embeds the schema in a context, brief or budgeted export, and no_schema leaves it out of a graph export"
   verify integration "the embedded schema carries the version specforge export computes against the schema cache, which the tool leaves as it is"
+  verify integration "specforge export and specforge.export both refuse with_schema with no_schema"
+  verify unit "with_schema and no_schema together are invalid input on with_schema"
 }
 
 behavior provide_mcp_trace_tool "Provide MCP Trace Tool" {

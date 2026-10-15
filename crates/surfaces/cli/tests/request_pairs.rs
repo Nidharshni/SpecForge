@@ -195,8 +195,10 @@ fn trace_entity_and_plan_is_one_request() {
     assert_eq!(pair("trace_entity_and_plan").0, Outcome::Refused);
 }
 
-#[test]
-#[ignore = "flipped by T6"]
+#[specforge_test_macros::test(
+    behavior = "provide_mcp_export_tool",
+    verify = "specforge export and specforge.export both refuse with_schema with no_schema"
+)]
 fn export_both_schema_flags_is_one_request() {
     assert_eq!(pair("export_with_and_without_schema").0, Outcome::Refused);
 }

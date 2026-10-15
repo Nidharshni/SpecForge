@@ -60,8 +60,8 @@ pub(crate) struct Args {
 
 impl Args {
     /// The export the flags ask for.
-    fn request(&self) -> export::Request<'_> {
-        export::Request {
+    fn request(&self) -> Result<export::Request<'_>, specforge_ops::Refusal<export::ExportField>> {
+        Ok(export::Request {
             format: Some(self.format),
             scope: self.scope.as_deref(),
             depth: self.depth,
@@ -69,14 +69,10 @@ impl Args {
             max_tokens: self.max_tokens,
             // context, brief and a budgeted graph export leave the schema
             // out unless asked for it (the policy lives in specforge-ops).
-            schema: match (self.no_schema, self.with_schema) {
-                (true, _) => export::Schema::Without,
-                (_, true) => export::Schema::With,
-                _ => export::Schema::Default,
-            },
+            schema: export::Schema::of_flags(self.with_schema, self.no_schema)?,
             schema_version: self.schema_version.as_deref(),
             coverage: None,
-        }
+        })
     }
 
     /// Export the project compiled at `path` to stdout. Before it writes,
@@ -92,13 +88,17 @@ impl Args {
             Ok(project) => project,
             Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
         };
+        let request = match self.request() {
+            Ok(request) => request,
+            Err(refusal) => return Refusal::of(OutputFormat::Human).report(terminal, &refusal),
+        };
         let view = ProjectView::of(&project);
 
         // The export goes to stdout: there is no output directory holding
         // earlier exports, and `.specforge/` holds extensions and the watch
         // snapshot too, so nothing here shows the project was exported
         // before.
-        let recorded = export::export_recorded(&view, &self.request());
+        let recorded = export::export_recorded(&view, &request);
         for diagnostic in &recorded.diagnostics {
             errln!(terminal, "{}", specforge_common::render_plain(diagnostic));
         }
@@ -205,7 +205,9 @@ mod tests {
 
     fn schema_policy(flags: &[&str]) -> Result<export::Schema, clap::Error> {
         let line = Line::try_parse_from(std::iter::once("export").chain(flags.iter().copied()))?;
-        Ok(line.args.request().schema)
+        // clap refused both flags before the reader could.
+        let request = line.args.request();
+        Ok(request.unwrap_or_else(|_| unreachable!()).schema)
     }
 
     #[test]
