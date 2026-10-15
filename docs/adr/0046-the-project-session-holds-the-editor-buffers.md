@@ -24,6 +24,7 @@ a list computed while an edit waited in the debounce went out with the newer ver
   specification's "the server must not try to read the document's content using the document's Uri"):
   `stale()`, `changes(paths)` and `apply` leave every held file out. A buffer of a file that is not a project
   source is held and builds nothing; a reload that brings it into the project builds it from its text.
+  *(ADR 0100: `SourceChange::Hold` is `ProjectSession::hold`/`hold_with`.)*
 - **D2. Releasing a buffer is the one read.** `ProjectSession::release(paths)` stamps a project source and
   reads it through the session's one read (ADR 0032); any other file leaves the project (with no project, the
   buffer was its only text). A release that changes nothing returns `None` and runs no check, unless the typing
