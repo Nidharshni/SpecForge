@@ -91,9 +91,6 @@ type GraphInputs {
   // kind), each pair written lesser label first, sorted: a two-hop cycle
   // through both labels of one pair is not a reference cycle
   bidirectional_pairs      string[] @readonly
-  // kind.field of every registered reference field (none while no kind is
-  // registered): its one value links as an edge
-  single_reference_fields  string[] @readonly
   // kind.field of every reference field whose target kind no loaded
   // extension declares, with that kind: an unresolved value there is I004
   absent_reference_targets string[] @readonly
@@ -101,6 +98,9 @@ type GraphInputs {
   // declared type: a list type to a list; integer, bool, string or enum to
   // that type; a single reference or a block is read as written
   field_coercions          string[] @readonly
+  // the kinds that take any field (open_fields): an undeclared field of one
+  // is a member, which references nothing (ADR 0093)
+  member_kinds             string[] @readonly
   // kind.field of every reference field whose edges the host derives
   // (derived_from), with its target kind and source, sorted by kind and field
   derived_references       string[] @readonly

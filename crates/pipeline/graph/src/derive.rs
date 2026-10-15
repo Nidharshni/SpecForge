@@ -9,7 +9,6 @@
 use crate::{Edge, Graph};
 use specforge_common::Sym;
 use specforge_parser::FieldValue;
-use std::collections::HashSet;
 
 /// Where a derived reference field takes its targets from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,7 +55,7 @@ impl Graph {
     pub(crate) fn link_derived_references(
         &mut self,
         derived: &[DerivedReference],
-        single_ref_fields: &HashSet<(String, String)>,
+        forms: &crate::FieldForms,
     ) {
         let mut edges: Vec<Edge> = Vec::new();
         for reference in derived {
@@ -66,8 +65,9 @@ impl Graph {
                 match reference.from {
                     DerivedFrom::TypeExpressions => {
                         for entry in node.fields.entries() {
-                            if single_ref_fields
-                                .contains(&(kind.to_string(), entry.key.as_str().to_string()))
+                            if forms
+                                .reading(kind, entry.key.as_str())
+                                .is_single_reference()
                             {
                                 continue;
                             }

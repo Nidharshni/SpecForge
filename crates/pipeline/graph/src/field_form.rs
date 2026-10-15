@@ -1,10 +1,10 @@
-//! A declared field type's one reading (ADR-NEW-01): which written values a
+//! A declared field type's one reading (ADR 0064, ADR 0093): which written values a
 //! field takes, how the graph build stores a written value, the JSON every
 //! output writes for a field value, and the JSON Schema of that JSON. The
 //! graph build's coercion, E061, the export writer, the graph delta and the
 //! published schema read it; nothing else decides a field value's form.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use serde::Serialize;
 use serde_json::{Map, Value, json};
@@ -253,6 +253,85 @@ impl FieldForm {
     }
 }
 
+/// Every registered field's form, and the kinds that take any field: what
+/// the graph build and every reader ask what a field's value is and
+/// references (ADR 0093). Built once per registry build.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct FieldForms {
+    forms: HashMap<(String, String), FieldForm>,
+    member_kinds: BTreeSet<String>,
+}
+
+impl FieldForms {
+    /// `forms` maps (kind, field) to the field's form; `member_kinds` are
+    /// the kinds that declare `open_fields`.
+    pub fn new(
+        forms: HashMap<(String, String), FieldForm>,
+        member_kinds: BTreeSet<String>,
+    ) -> Self {
+        Self {
+            forms,
+            member_kinds,
+        }
+    }
+
+    /// How `kind`'s field `field` reads: its declared form, an undeclared
+    /// field of a kind that takes any field, or no form at all.
+    pub fn reading(&self, kind: &str, field: &str) -> Reading<'_> {
+        if let Some(form) = self.forms.get(&(kind.to_string(), field.to_string())) {
+            Reading::Declared(form)
+        } else if self.member_kinds.contains(kind) {
+            Reading::Member
+        } else {
+            Reading::Undeclared
+        }
+    }
+
+    /// No field is declared.
+    pub fn is_empty(&self) -> bool {
+        self.forms.is_empty()
+    }
+
+    /// Every declared (kind, field) and its form.
+    pub fn iter(&self) -> impl Iterator<Item = (&(String, String), &FieldForm)> {
+        self.forms.iter()
+    }
+
+    /// The kinds that take any field (`open_fields`).
+    pub fn member_kinds(&self) -> &BTreeSet<String> {
+        &self.member_kinds
+    }
+}
+
+/// How a (kind, field) reads: see [`FieldForms::reading`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reading<'f> {
+    /// The field is declared; its form decides.
+    Declared(&'f FieldForm),
+    /// An undeclared field of a kind that takes any field.
+    Member,
+    /// No form: a closed kind's unknown field, an unregistered kind, a
+    /// project without extensions.
+    Undeclared,
+}
+
+impl Reading<'_> {
+    /// What the graph build stores for `value`: the form's coercion when
+    /// declared, else `None` (as written).
+    pub fn coerce(&self, value: &FieldValue, span: Option<&SourceSpan>) -> Option<FieldValue> {
+        match self {
+            Self::Declared(form) => form.coerce(value, span),
+            Self::Member | Self::Undeclared => None,
+        }
+    }
+
+    /// Whether the field is a declared `reference`: its edges link after
+    /// reference cycles are detected.
+    pub fn is_single_reference(&self) -> bool {
+        matches!(self, Self::Declared(form) if form.field_type() == FieldType::Reference)
+    }
+}
+
 /// The list a single written value, or a list of scalars, is stored as on a
 /// `string_list` / `reference_list` field.
 fn coerce_list(value: &FieldValue, span: Option<&SourceSpan>) -> Option<FieldValue> {
@@ -280,20 +359,17 @@ fn coerce_list(value: &FieldValue, span: Option<&SourceSpan>) -> Option<FieldVal
 }
 
 impl Graph {
-    /// Store every node's registered field values as their forms coerce
-    /// them; `forms` maps (entity kind, field name) to the field's form.
-    /// Idempotent, so rebuilds may re-run it on already coerced nodes.
-    pub(crate) fn coerce_field_values(&mut self, forms: &HashMap<(String, String), FieldForm>) {
+    /// Store every node's field values as their forms coerce them. Idempotent,
+    /// so rebuilds may re-run it on already coerced nodes.
+    pub(crate) fn coerce_field_values(&mut self, forms: &FieldForms) {
         if forms.is_empty() {
             return;
         }
         for node in self.nodes_mut() {
             let kind = node.kind.raw.as_str().to_string();
             for entry in node.fields.entries_mut() {
-                let Some(form) = forms.get(&(kind.clone(), entry.key.as_str().to_string())) else {
-                    continue;
-                };
-                if let Some(value) = form.coerce(&entry.value, entry.value_span.as_ref()) {
+                let reading = forms.reading(&kind, entry.key.as_str());
+                if let Some(value) = reading.coerce(&entry.value, entry.value_span.as_ref()) {
                     entry.value = value;
                 }
             }

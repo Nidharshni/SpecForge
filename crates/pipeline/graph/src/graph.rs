@@ -369,8 +369,7 @@ impl Graph {
     ///
     /// The method clears all existing edges, then iterates every node's
     /// `ReferenceList` fields plus any `Identifier` fields that match
-    /// `single_ref_fields` (a set of `(entity_kind, field_name)` pairs
-    /// declaring which Identifier fields are single-reference fields).
+    /// `forms` (which fields are declared single references).
     /// For each target that exists in the graph an edge is created; for
     /// each target that does *not* exist a diagnostic is emitted (with a
     /// fuzzy-match suggestion when possible). An unresolved target in a
@@ -379,7 +378,7 @@ impl Graph {
     /// reference can't resolve until its extension is enabled.
     pub(crate) fn resolve_references_with(
         &mut self,
-        single_ref_fields: &HashSet<(String, String)>,
+        forms: &crate::FieldForms,
         absent_targets: &HashMap<(String, String), String>,
     ) -> Vec<Diagnostic> {
         self.clear_edges();
@@ -456,10 +455,9 @@ impl Graph {
                         }
                     }
                     FieldValue::Identifier(target_id)
-                        if single_ref_fields.contains(&(
-                            node_kind.as_str().to_string(),
-                            entry.key.as_str().to_string(),
-                        )) =>
+                        if forms
+                            .reading(node_kind.as_str(), entry.key.as_str())
+                            .is_single_reference() =>
                     {
                         let target_sym = Sym::new(target_id);
                         if entity_ids.contains(&target_sym) {

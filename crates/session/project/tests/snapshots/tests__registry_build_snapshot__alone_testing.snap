@@ -22,7 +22,7 @@ expression: "digest(&load(&runtime, &[name]))"
     "bidirectional_pairs": [],
     "derived_references": [],
     "field_forms": {},
-    "single_reference_fields": []
+    "member_kinds": []
   },
   "kinds": {},
   "manifest_surfaces": [],

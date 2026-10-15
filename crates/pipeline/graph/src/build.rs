@@ -14,20 +14,16 @@ pub struct GraphInputs {
     /// two-hop cycle through both labels of one pair is a known
     /// bidirectional relationship, not a reference cycle.
     pub bidirectional_pairs: Vec<(String, String)>,
-    /// (kind, field) pairs registered as single reference fields (none while
-    /// no kind is registered): references are re-resolved with
-    /// single-reference awareness, creating edges for fields like
-    /// `journey.persona -> persona`.
-    pub single_reference_fields: HashSet<(String, String)>,
     /// (kind, field) reference fields whose target kind no loaded extension
     /// declares, mapped to that kind: an unresolved reference there is an
     /// I004 hint (the kind's extension isn't enabled), not an E003.
     pub absent_reference_targets: HashMap<(String, String), String>,
-    /// (kind, field) -> the field's form, for every registered field: the
-    /// graph build stores each written value as its form coerces it, before
-    /// references resolve, so a single reference on a reference_list field
-    /// links like `field [id]`.
-    pub field_forms: HashMap<(String, String), crate::FieldForm>,
+    /// Every registered field's form, and the kinds that take any field:
+    /// the graph build stores each written value as its form coerces it,
+    /// before references resolve, so a single reference on a reference_list
+    /// field links like `field [id]`; a declared `reference` field's edges
+    /// link after cycle detection (`journey.persona -> persona`).
+    pub field_forms: crate::FieldForms,
     /// Registered fields whose edges come from the type names an entity
     /// writes in its field types or method signatures (`derived_from`),
     /// sorted by kind and field.
@@ -432,8 +428,10 @@ fn link_and_diagnose(graph: &mut Graph, config: &GraphConfig) -> Vec<Diagnostic>
     graph.coerce_field_values(&config.inputs.field_forms);
 
     // Link references -> edges.
-    let mut ref_diags =
-        graph.resolve_references_with(&HashSet::new(), &config.inputs.absent_reference_targets);
+    graph.resolve_references_with(
+        &crate::FieldForms::default(),
+        &config.inputs.absent_reference_targets,
+    );
 
     // Detect reference cycles and emit W061
     let cycles = graph.detect_cycles();
@@ -452,18 +450,16 @@ fn link_and_diagnose(graph: &mut Graph, config: &GraphConfig) -> Vec<Diagnostic>
     // Re-resolve references with single-reference field awareness. Replaces
     // the initial reference diagnostics with ones that also account for
     // single Reference fields (e.g., journey.persona -> persona).
-    if !config.inputs.single_reference_fields.is_empty() {
-        ref_diags = graph.resolve_references_with(
-            &config.inputs.single_reference_fields,
-            &config.inputs.absent_reference_targets,
-        );
-    }
+    let mut ref_diags = graph.resolve_references_with(
+        &config.inputs.field_forms,
+        &config.inputs.absent_reference_targets,
+    );
 
     // Derived reference fields, after cycle detection: a recursive type is
     // not a reference cycle.
     graph.link_derived_references(
         &config.inputs.derived_references,
-        &config.inputs.single_reference_fields,
+        &config.inputs.field_forms,
     );
 
     // The linker's postcondition (E060, retired): every reference to an

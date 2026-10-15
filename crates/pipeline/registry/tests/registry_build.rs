@@ -5,7 +5,7 @@
 use specforge_test_macros::test as spec;
 
 use specforge_extension_sdk::prelude::*;
-use specforge_graph::{FieldForm, GraphInputs};
+use specforge_graph::{GraphInputs, Reading};
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::build_registries;
 
@@ -132,13 +132,15 @@ fn derived_graph_inputs_match_the_manifests() {
 
     assert!(
         inputs
-            .single_reference_fields
-            .contains(&("behavior".to_string(), "owner".to_string()))
+            .field_forms
+            .reading("behavior", "owner")
+            .is_single_reference()
     );
     assert!(
         !inputs
-            .single_reference_fields
-            .contains(&("behavior".to_string(), "types".to_string())),
+            .field_forms
+            .reading("behavior", "types")
+            .is_single_reference(),
         "a reference list is not a single reference"
     );
     // `team` is declared by no loaded extension.
@@ -150,11 +152,9 @@ fn derived_graph_inputs_match_the_manifests() {
         Some("team")
     );
     // A single reference is read as written; a reference list is a list.
-    let form = |field: &str| {
-        inputs
-            .field_forms
-            .get(&("behavior".to_string(), field.to_string()))
-            .map(FieldForm::field_type)
+    let form = |field: &str| match inputs.field_forms.reading("behavior", field) {
+        Reading::Declared(form) => Some(form.field_type()),
+        _ => None,
     };
     assert_eq!(form("owner"), Some(FieldType::Reference));
     assert_eq!(form("contract"), Some(FieldType::String));

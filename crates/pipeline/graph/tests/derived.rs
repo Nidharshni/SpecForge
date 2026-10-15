@@ -35,9 +35,18 @@ fn build(
     let config = GraphConfig {
         inputs: GraphInputs {
             derived_references: derived,
-            single_reference_fields: [("shape".to_string(), "base".to_string())]
+            field_forms: specforge_graph::FieldForms::new(
+                [(
+                    ("shape".to_string(), "base".to_string()),
+                    specforge_graph::FieldForm::new(
+                        specforge_protocol_types::FieldType::Reference,
+                        Vec::new(),
+                    ),
+                )]
                 .into_iter()
                 .collect(),
+                Default::default(),
+            ),
             ..Default::default()
         },
         ..Default::default()

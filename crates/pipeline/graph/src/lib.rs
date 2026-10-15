@@ -5,7 +5,7 @@
 
 mod build;
 pub mod field_form;
-pub use field_form::{FieldForm, FieldJson, ValueShape};
+pub use field_form::{FieldForm, FieldForms, FieldJson, Reading, ValueShape};
 mod delta;
 pub use delta::{
     EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect, NodeChange, compute_graph_delta,
