@@ -715,7 +715,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the host passes (`specforge_protocol_types::CommandInput`: args, project root, graph, the
   command format and today's date, UTC). The CLI runs it as `specforge <short> <command>`, MCP as
   the auto-promoted tool `specforge.<short>.<id>`, `short` being the declaration's (`ext_short`,
-  else its name's last segment); neither knows any command (ADR 0008). One derivation serves both
+  else its name's last segment); neither knows any command (ADR 0008). The registry build routes it
+  under `(short, CLI name)`, the first in load order; a later one of that name is E039 and runs on no
+  surface (`RegistryBuild::commands`, ADR 0097). One derivation serves both
   surfaces (`specforge_ops::extension::command::ExtensionCommand`): its CLI name, its tool name, its args'
   command-line shapes, its input schema and the args both send, normalized by the one arg rule the
   SDK also runs (`specforge_protocol_types::command_args`): declared defaults applied by the host,

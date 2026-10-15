@@ -1243,32 +1243,26 @@ fn contract_list_tools() {
 fn contract_auto_promote_commands() {
     use crate::fake_extension::{self, EXT, FakeExtension};
     use specforge_mcp::surface_table::ToolKind;
-    use specforge_registry::SurfaceType;
     let output = json!({"exit_code": 0, "stdout": "report written", "stderr": ""});
     let (mut server, ext, _dir) =
         fake_extension::initialized(FakeExtension::new().with_output("cmd__report", output));
 
     // surfaces_registered: the compile registered the
     // extension's contributions, commands included.
-    let entries = |ty: SurfaceType| -> Vec<(String, String)> {
-        server
-            .state()
-            .registries()
-            .surfaces()
-            .iter()
-            .filter(|e| e.surface_type == ty)
-            .map(|e| (e.contribution_name.clone(), e.export_name.clone()))
-            .collect()
-    };
+    let registries = server.state().registries();
     let pair = |a: &str, b: &str| (a.to_string(), b.to_string());
+    let routed: Vec<_> = (registries.commands().routed().iter())
+        .map(|c| pair(&c.declaration().id, &c.declaration().export))
+        .collect();
     assert_eq!(
-        entries(SurfaceType::Command),
+        routed,
         [pair("report", "cmd__report"), pair("check", "cmd__check")]
     );
-    assert_eq!(
-        entries(SurfaceType::McpTool),
-        [pair("specforge.cmds.check", "mcp__check")]
-    );
+    let tools: Vec<_> = (registries.declarations().iter())
+        .flat_map(|d| &d.surfaces.mcp_tools)
+        .map(|t| pair(&t.name, &t.export))
+        .collect();
+    assert_eq!(tools, [pair("specforge.cmds.check", "mcp__check")]);
 
     // all_commands_promoted + naming_convention_enforced: every command
     // becomes specforge.cmds.<id> unless an explicit tool has the name.

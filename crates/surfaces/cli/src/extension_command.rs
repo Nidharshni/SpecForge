@@ -111,10 +111,9 @@ pub fn run(argv: &[String], builtins: &[String], terminal: &Terminal) -> i32 {
         }
         // A later extension's command of this name is not routed (D13):
         // say which, so its author can tell why it never runs.
-        for shadowed in routed
+        for (shadowed, _) in routed
             .shadowed()
-            .iter()
-            .filter(|s| s.short() == ext && s.cli_name() == command.cli_name())
+            .filter(|(_, by)| std::ptr::eq(*by, command))
         {
             errln!(
                 terminal,

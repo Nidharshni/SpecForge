@@ -7,7 +7,7 @@
 //! shapes, the args both surfaces send its export (normalized by the one
 //! arg rule the SDK also runs, `specforge_protocol_types::command_args`),
 //! and why the host refuses it. [`ExtensionCommands`] is the project's
-//! routing table. The CLI and MCP both read them and run the command here:
+//! commands as the registry build routes them (ADR 0097). The CLI and MCP both read them and run the command here:
 //! the export receives the protocol's `CommandInput` (the args, the project
 //! root, the compiled graph in the graph export's shape, the format the
 //! caller asked for and the host's date) and answers with a
@@ -28,7 +28,7 @@ use specforge_protocol_types::{
     CommandArgDescriptor, CommandArgType, CommandDescriptor, CommandError, CommandEvidence,
     CommandInput, CommandOutput, EntityEvidence, RawGraph,
 };
-use specforge_registry::RegistryBuild;
+use specforge_registry::{CommandRoute, RegistryBuild};
 use specforge_wasm::{CallError, CallFailure, ExtensionCalls, Operation};
 use std::path::{Path, PathBuf};
 
@@ -170,6 +170,11 @@ impl ExtensionArg {
 }
 
 impl ExtensionCommand {
+    /// The command `route` routes, derived for every surface.
+    pub fn of(route: &CommandRoute) -> Self {
+        Self::new(route.extension(), route.short(), route.declaration())
+    }
+
     /// `declaration`, a command of `extension` (short name `short`),
     /// derived for every surface.
     pub fn new(extension: &str, short: &str, declaration: &CommandDescriptor) -> Self {
@@ -281,36 +286,31 @@ impl ExtensionCommand {
     }
 }
 
-/// The project's extension commands, routed by `(short name, CLI name)`:
-/// each once, the first in load order (then declaration order) winning; a
+/// The project's extension commands, as the registry build routes them
+/// (`RegistryBuild::commands`, ADR 0097): each once, under `(short name,
+/// CLI name)`, the first in load order (then declaration order) winning; a
 /// later command under a taken pair is [`shadowed`](Self::shadowed) and
-/// runs on no surface.
+/// runs on no surface. It derives each route and decides nothing.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ExtensionCommands {
     commands: Vec<ExtensionCommand>,
-    shadowed: Vec<ExtensionCommand>,
+    /// Each shadowed command with the index, in `commands`, of the one
+    /// routed under its name.
+    shadowed: Vec<(ExtensionCommand, usize)>,
 }
 
 impl ExtensionCommands {
-    /// The commands `build`'s declarations declare, in load order.
+    /// The commands `build` routes, in its order.
     pub fn build(build: &RegistryBuild) -> Self {
-        let mut routed = ExtensionCommands::default();
-        for declaration in build.declarations() {
-            let short = declaration.short();
-            for command in &declaration.surfaces.commands {
-                let command = ExtensionCommand::new(declaration.name(), &short, command);
-                let taken = routed
-                    .commands
-                    .iter()
-                    .any(|c| c.short == command.short && c.cli_name() == command.cli_name());
-                if taken {
-                    routed.shadowed.push(command);
-                } else {
-                    routed.commands.push(command);
-                }
-            }
+        let routes = build.commands();
+        ExtensionCommands {
+            commands: routes.routed().iter().map(ExtensionCommand::of).collect(),
+            shadowed: routes
+                .shadowed()
+                .iter()
+                .map(|s| (ExtensionCommand::of(s.route()), s.by()))
+                .collect(),
         }
-        routed
     }
 
     /// Every routed command, refused ones included, in load order.
@@ -334,10 +334,12 @@ impl ExtensionCommands {
         shorts
     }
 
-    /// The commands a command earlier in load order shadows: same short
-    /// name, same CLI name.
-    pub fn shadowed(&self) -> &[ExtensionCommand] {
-        &self.shadowed
+    /// The commands that run on no surface, each with the command routed
+    /// under its name: same short name, same CLI name.
+    pub fn shadowed(&self) -> impl Iterator<Item = (&ExtensionCommand, &ExtensionCommand)> + '_ {
+        self.shadowed
+            .iter()
+            .map(|(shadowed, by)| (shadowed, &self.commands[*by]))
     }
 }
 

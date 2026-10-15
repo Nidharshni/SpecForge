@@ -132,6 +132,8 @@ fn pin_product() -> ExtensionDeclaration {
         t.description("Probe").handler(|_| Ok(json!({})));
     });
     let mut product = c.declaration();
+    // Routes under `@pin/software`'s short name: its `hello` is E039.
+    product.handshake.ext_short = Some("software".into());
     product.surfaces.mcp_tools[0].input_schema = json!("string");
     product
 }

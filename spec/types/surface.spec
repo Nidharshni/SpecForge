@@ -172,15 +172,35 @@ type ExtensionCommand {
   verify unit "ExtensionCommand schema is valid"
 }
 
-// ── Surface Registry ────────────────────────────────────────
+// ── Command Routes ──────────────────────────────────────────
 
-type SurfaceRegistryEntry {
-  surface_type      SurfaceType
-  contribution_name string @readonly
-  extension_name    string @readonly
-  export_name       string @readonly
-  verify unit "SurfaceRegistryEntry schema is valid"
+// One command and the name it is routed under:
+// specforge {short} {cli_name} (ADR 0097)
+type CommandRoute {
+  extension   string @readonly
+  short       string @readonly
+  cli_name    string @readonly
+  declaration CommandContribution
+  verify unit "CommandRoute schema is valid"
 }
+
+// A command routed under the name of an earlier one: it runs on no surface
+type ShadowedRoute {
+  route CommandRoute
+  // Index of the command that has its name, in CommandRoutes.routed
+  by    integer @readonly
+  verify unit "ShadowedRoute schema is valid"
+}
+
+// The project's commands, routed by (short name, CLI name), the first in
+// load then declaration order winning
+type CommandRoutes {
+  routed   CommandRoute[]
+  shadowed ShadowedRoute[]
+  verify unit "CommandRoutes schema is valid"
+}
+
+// ── Surface Types ──────────────────────────────────────────
 
 type SurfaceType = command | mcp_tool | mcp_resource
 

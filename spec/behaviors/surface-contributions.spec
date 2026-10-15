@@ -29,22 +29,33 @@ behavior register_surface_contributions "Register Surface Contributions" {
   features   [surface_contributions]
   invariants [surface_contribution_uniqueness]
   category   command
-  types      [ExtensionDeclaration, SurfaceDescriptor, SurfaceRegistryEntry, SurfaceType, SurfaceError]
+  types      [
+    ExtensionDeclaration,
+    SurfaceDescriptor,
+    CommandRoutes,
+    CommandRoute,
+    SurfaceType,
+    SurfaceError,
+  ]
   consumes   [manifest_loaded]
   requires {
     manifest_loaded_fired "manifest_loaded event has fired, confirming extension manifests are parsed and available"
   }
   ensures {
-    all_surfaces_registered "All CLI commands, MCP tools, and MCP resources from manifest surfaces fields are registered in the SurfaceRegistry"
-    duplicates_detected     "Duplicate contribution names within each surface type across extensions produce E039"
+    all_surfaces_registered "Every CLI command is routed under its extension's short name and its CLI name (its id, `_` as `-`), the first in load then declaration order; every MCP tool and MCP resource is registered"
+    duplicates_detected     "A command routed under a name an earlier command has (one short name, one CLI name) runs on no surface and is E039 naming the command that has it; so is an MCP tool name or MCP resource name an earlier extension registered. One id under two short names is two names"
     unparsed_fails_load     "A surfaces description that does not parse fails the extension's load with E028"
   }
   contract   """
     When extension manifests are loaded, the compiler MUST parse the
-    surfaces field from each manifest and register all declared CLI
-    commands, MCP tools, and MCP resources in the SurfaceRegistry.
-    Registration MUST detect duplicate contribution names within each
-    surface type across all extensions — duplicates MUST produce E039.
+    surfaces field from each manifest, route every declared CLI command
+    under (the extension's short name, the command's CLI name) and
+    register its MCP tools and MCP resources (ADR 0097). A command routed
+    under a name an earlier command has, from another extension or the
+    same one, MUST run on no surface and produce E039, naming the command
+    that has the name; so MUST a duplicate MCP tool name or MCP resource
+    name across extensions. One command id under two short names is two
+    names, not a duplicate.
     Registration happens when the project's registries are built from
     the manifests its extensions describe, before any surface export is
     dispatched: surface contributions are declarative, like entity
@@ -57,7 +68,11 @@ behavior register_surface_contributions "Register Surface Contributions" {
   verify unit "commands parsed from manifest surfaces field"
   verify unit "MCP tools parsed from manifest surfaces field"
   verify unit "MCP resources parsed from manifest surfaces field"
-  verify unit "duplicate command ID across extensions produces E039"
+  verify unit "two extensions of one short name routing one CLI name produce E039"
+  verify unit "one command id under two short names is routed twice, with no E039"
+  verify unit "an SDK command prefix names the export, not the route"
+  verify unit "two command ids of one CLI name under one short name produce E039"
+  verify unit "one extension declaring one CLI name twice produces E039"
   verify unit "duplicate MCP tool name across extensions produces E039"
   verify unit "registration succeeds with no duplicates"
   verify unit "a surfaces description that does not parse fails the extension's load"
@@ -97,7 +112,7 @@ behavior auto_promote_commands_to_mcp_tools "Auto-Promote Commands to MCP Tools"
   types      [CommandContribution, ExtensionCommand]
   produces   [commands_auto_promoted]
   requires {
-    surfaces_registered "the registry build has registered the project's CLI command and MCP tool contributions"
+    surfaces_registered "the registry build has routed the project's CLI commands and registered its MCP tools"
   }
   ensures {
     all_commands_promoted          "Every CLI command contribution the host does not refuse is auto-promoted to an MCP tool"

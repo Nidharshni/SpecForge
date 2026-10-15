@@ -587,7 +587,6 @@ mod declared_in_process {
     use super::served_project as project;
     use specforge_extension_sdk::prelude::*;
     use specforge_project::Environment;
-    use specforge_registry::SurfaceType;
     use specforge_wasm::testing::InProcessRuntime;
     use std::sync::Arc;
 
@@ -642,16 +641,14 @@ mod declared_in_process {
     fn a_commands_only_extension_registers_its_commands() {
         let runtime = Arc::new(InProcessRuntime::new().with(commands_only));
         let env = load(&["@acme/cmds"], runtime);
-        let registered: Vec<(&SurfaceType, &str)> = env
+        let registered: Vec<&str> = env
             .registries()
-            .surfaces()
+            .commands()
+            .routed()
             .iter()
-            .map(|s| (&s.surface_type, s.contribution_name.as_str()))
+            .map(|r| r.declaration().id.as_str())
             .collect();
-        assert!(
-            registered.contains(&(&SurfaceType::Command, "hello")),
-            "{registered:?}"
-        );
+        assert!(registered.contains(&"hello"), "{registered:?}");
         let errors: Vec<_> = env
             .diagnostics()
             .filter(|d| d.severity == specforge_common::Severity::Error)

@@ -4,6 +4,7 @@ expression: "digest(&load(&runtime, &[name]))"
 ---
 {
   "check_passes": [],
+  "commands": [],
   "diagnostics": [],
   "edges": {},
   "ext_short": {
@@ -26,5 +27,5 @@ expression: "digest(&load(&runtime, &[name]))"
   "kinds": {},
   "manifest_surfaces": [],
   "rules": [],
-  "surfaces": []
+  "shadowed": 0
 }
