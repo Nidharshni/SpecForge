@@ -17,6 +17,7 @@ behavior format_spec_files "Format Spec Files" {
     comment_preservation,
     format_rule_determinism,
     formatting_semantic_preservation,
+    document_project_paths,
   ]
   category   query
   types      [FormatConfig, FormatDiff]
@@ -61,6 +62,7 @@ behavior format_spec_files "Format Spec Files" {
   verify unit "a region left unformatted makes the run exit 1, the rest of the file still written"
   verify unit "the format document names each changed file, each failed file with its kind, and the run's verdict"
   verify unit "under --format json the run prints the format document on stdout and nothing on stderr"
+  verify unit "the format document names each file from the project root, whatever the working directory"
   verify contract "Format Spec Files: spec file formatting holds — spec_files_available, format_config_loaded, formatted_output_written, unchanged_files_preserved, format_complete_emitted, summary_printed"
   verify unit "a problem in specforge.json the run goes around is reported as E069 and makes the run exit 1, the files still formatted"
 }

@@ -20,6 +20,7 @@ mod operations_mutation;
 mod option_tables;
 mod output_schemas;
 mod path_containment;
+mod path_spelling;
 mod product_commands;
 mod prompt_golden;
 mod prompt_infer;

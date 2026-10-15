@@ -72,6 +72,7 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
     migration_atomicity,
     migration_semantic_preservation,
     zero_domain_knowledge_core,
+    document_project_paths,
   ]
   category   mutation
   types      [SpecFile, MigrationResult, MigrationSummary, MigrationBackup]
@@ -144,6 +145,7 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
     project's to migrate.
   """
   verify integration "migrate --format json lists each migrated file and its backup in files_written"
+  verify integration "the migrate document names each file and backup from the project root"
   verify integration "migrate --format json prints the migration document specforge.migrate answers, with files_written"
   verify contract "Migrate Spec Files In Place: in-place migration holds — semantic_preservation"
   verify unit "files migrated from source to target version"

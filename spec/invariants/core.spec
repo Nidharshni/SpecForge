@@ -221,6 +221,22 @@ invariant dry_run_side_effect_freedom "Dry-Run Side-Effect Freedom" {
   verify property "no file write operations occur during dry-run execution"
 }
 
+invariant document_project_paths "Document Project Paths" {
+  guarantee """
+    A field of a surface document that names a file or directory an
+    operation opened by path or wrote MUST be relative to the root of the
+    project the call acted on, with / between components; a path outside
+    that root (only the CLI can name one) is absolute and canonical. A
+    document's anchor directory (init's project_root, watch's spec_root) is
+    absolute. A location the graph declares (a span, a navigation result,
+    an export node, rename's plan) is named by its source key, relative to
+    the spec root. The CLI and MCP print the same bytes for one run,
+    whatever the working directory or the spelling of the root.
+  """
+  risk      medium
+  verify integration "the CLI and MCP documents of one run are byte-equal, whatever the working directory or root spelling"
+}
+
 invariant source_span_completeness "Source Span Completeness" {
   guarantee """
     Every AST node produced by the parser MUST carry a valid SourceSpan
