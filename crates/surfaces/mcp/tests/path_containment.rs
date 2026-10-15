@@ -301,6 +301,34 @@ fn init_with_nothing_served_stays_inside_the_servers_root() {
     assert!(root.join("first/specforge.json").is_file());
 }
 
+/// `init` reads a relative local specifier from the project it creates, as `add_extension` reads
+/// one from the project's root (ADR 0092 D7), wherever the server runs.
+#[test]
+#[ignore = "flipped by T6"]
+fn init_reads_a_relative_local_specifier_from_the_project_it_creates() {
+    let scene = Scene::new();
+    let root = scene.dir.path().join("workspace");
+    fs::create_dir_all(&root).unwrap();
+    fs::copy(
+        specforge_component::committed::GREET.path(),
+        root.join("greet.wasm"),
+    )
+    .unwrap();
+    let mut server = McpServer::with_project_root(root.clone());
+    let reply = call(&mut server, "initialize", json!({}));
+    assert!(reply["error"].is_null(), "{reply}");
+
+    let made = call_tool(
+        &mut server,
+        "specforge.init",
+        json!({"path": "first", "extensions": ["../greet.wasm"]}),
+    );
+
+    assert_eq!(made["result"]["isError"], false, "{made}");
+    let lock = fs::read_to_string(root.join("first/specforge.lock")).unwrap();
+    assert!(lock.contains("@sdk/greet"), "{lock}");
+}
+
 /// `outline`'s `file` is joined onto the spec root: whether a file outside
 /// it exists is answered (success against `file_not_found`).
 #[specforge_test(
