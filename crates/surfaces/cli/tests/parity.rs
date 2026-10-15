@@ -1665,20 +1665,7 @@ fn collect_outcome_is_the_same_on_both_surfaces() {
     let mcp_doc = mcp_tool(mcp_dir.root(), "specforge.collect");
 
     assert_eq!(cli_doc["diagnostics"][0]["code"], "W115", "{cli_doc}");
-    let without_report = |doc: &Value, root: &Path| {
-        let mut doc = doc.clone();
-        let report = doc["report"].as_str().unwrap().to_string();
-        assert!(
-            Path::new(&report).ends_with("specforge-report.json"),
-            "{report}"
-        );
-        doc["report"] = json!(normalized(&json!(report), root));
-        doc
-    };
-    assert_eq!(
-        without_report(&cli_doc, cli_dir.root()),
-        without_report(&mcp_doc, mcp_dir.root())
-    );
+    assert_eq!(cli_doc, mcp_doc);
     assert_eq!(
         std::fs::read_to_string(cli_dir.root().join("specforge-report.json")).unwrap(),
         std::fs::read_to_string(mcp_dir.root().join("specforge-report.json")).unwrap(),

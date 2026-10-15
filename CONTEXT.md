@@ -42,6 +42,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `.spec` files are discovered (`spec_root` in its `specforge.json`, else the project root): the spec root is
   never a project of its own, but a directory below it that holds `specforge.json` is a **nested project**,
   and a path inside it names that project, whose files are none of the outer project's sources (ADR 0080).
+- **Project path**: how a surface document names a file an operation opened or wrote: relative to the project root
+  with `/` between components, absolute and canonical outside it (`specforge_common::ProjectPath`, ADR 0102). A
+  declaration's location (a span, a navigation result) is not one: it is named by its source key, relative to the spec
+  root (ADR 0055). The CLI's human output names files as typed.
 - **Format version**: the `.spec` file format a file was written against, `MAJOR.MINOR`, declared by
   the `// specforge-format:` header on its first non-blank line; a file with no header is at the
   current version and reports nothing. The parser reads it with the file

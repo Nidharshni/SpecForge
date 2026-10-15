@@ -54,9 +54,9 @@ fn changed_since(root: &Path, before: &Snapshot) -> Vec<String> {
     changed
 }
 
-/// `writes` as the root-relative names a surface lists.
 fn listed(writes: &Writes, root: &Path) -> Vec<String> {
-    writes.names_under(root)
+    let names = writes.named(Some(root));
+    names.iter().map(ToString::to_string).collect()
 }
 
 /// A project directory whose `specforge.json` enables `extensions`, with

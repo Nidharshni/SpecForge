@@ -232,16 +232,8 @@ fn collected(project: tempfile::TempDir) -> (Value, Nested, Served) {
 
 #[test]
 fn collect_result_is_an_mcp_collect_result() {
-    let (result, project, _server) = collected(collect_project());
-    let root = project.path();
-    assert_eq!(
-        result["report"],
-        std::fs::canonicalize(root)
-            .unwrap()
-            .join("specforge-report.json")
-            .display()
-            .to_string()
-    );
+    let (result, _project, _server) = collected(collect_project());
+    assert_eq!(result["report"], "specforge-report.json");
     assert_eq!(result["diagnostics"][0]["code"], "W115", "{result}");
 }
 
@@ -678,11 +670,7 @@ fn render_writes_the_output_into_out_dir() {
     );
 
     let written = out_dir.join("graph.dot");
-    assert_eq!(
-        parsed["output_files"],
-        json!([written.display().to_string()]),
-        "{parsed}"
-    );
+    assert_eq!(parsed["output_files"], json!(["rendered/graph.dot"]));
     let dot = std::fs::read_to_string(&written).unwrap();
     assert!(dot.starts_with("digraph"), "{dot}");
     assert!(dot.contains("alpha"), "{dot}");
@@ -766,7 +754,7 @@ fn render_contract() {
 
     let files = parsed["output_files"].as_array().unwrap();
     assert_eq!(files.len(), 1, "{parsed}");
-    let written = std::path::Path::new(files[0].as_str().unwrap());
+    let written = server.root().join(files[0].as_str().unwrap());
     assert!(written.starts_with(&out), "{parsed}");
     assert!(std::fs::read_to_string(written).unwrap().contains("alpha"));
     assert!(
@@ -791,11 +779,7 @@ fn a_relative_out_dir_is_written_under_the_project_root() {
 
     let written = root.join("rendered/graph.dot");
     assert!(written.exists(), "{parsed}");
-    assert_eq!(
-        parsed["output_files"],
-        json!([written.display().to_string()]),
-        "{parsed}"
-    );
+    assert_eq!(parsed["output_files"], json!(["rendered/graph.dot"]));
     assert!(!in_cwd.exists(), "nothing is written under the cwd");
 }
 

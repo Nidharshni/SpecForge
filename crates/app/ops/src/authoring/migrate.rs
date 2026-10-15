@@ -276,7 +276,7 @@ impl Outcome {
                 .results
                 .iter()
                 .filter(|r| r.status == MigrationStatus::Failed)
-                .map(|r| (r.file_path.clone(), r.error.clone().unwrap_or_default()))
+                .map(|r| (r.file_path.to_string(), r.error.clone().unwrap_or_default()))
                 .collect();
             return Some(Failure::FilesFailed { files });
         }
@@ -388,7 +388,7 @@ pub fn run_within(
 
     outcome.summary = migrate_project(project, &sources, target, false, request.no_backup);
     outcome.applied = true;
-    outcome.writes = summary_writes(&outcome.summary);
+    outcome.writes = summary_writes(project.dir(), &outcome.summary);
     if outcome.summary.failed_count > 0 {
         return Ok(outcome);
     }
@@ -402,7 +402,7 @@ pub fn run_within(
             .results
             .iter()
             .filter(|r| r.status == MigrationStatus::Migrated)
-            .map(|r| r.file_path.clone())
+            .map(|r| r.file_path.under(project.dir()).display().to_string())
             .collect(),
     };
     let (invoked, failures) = match pre.environment().runtime().map(|r| r.as_ref()) {
@@ -412,7 +412,7 @@ pub fn run_within(
     outcome.hooks_invoked = invoked;
     outcome.hook_failures = failures;
     if !outcome.hook_failures.is_empty() {
-        roll_back(&mut outcome);
+        roll_back(project.dir(), &mut outcome);
         return Ok(outcome);
     }
 
@@ -422,7 +422,7 @@ pub fn run_within(
     outcome.graph_delta = compute_graph_delta(pre.graph(), post.graph());
     outcome.post_diagnostics = post.diagnostics();
     if !outcome.graph_delta.is_empty() {
-        roll_back(&mut outcome);
+        roll_back(project.dir(), &mut outcome);
         return Ok(outcome);
     }
     keep_record(project.dir(), request, &mut outcome);
@@ -451,37 +451,37 @@ fn keep_record(root: &Path, request: &Request, outcome: &mut Outcome) {
 
 /// What `migrate_project` wrote: each file it migrated and each backup
 /// it made.
-fn summary_writes(summary: &MigrationSummary) -> Writes {
+fn summary_writes(root: &Path, summary: &MigrationSummary) -> Writes {
     let migrated = summary
         .results
         .iter()
         .filter(|r| r.status == MigrationStatus::Migrated)
-        .map(|r| r.file_path.as_str());
-    let backups = summary.backups.iter().map(|b| b.backup_path.as_str());
+        .map(|r| r.file_path.under(root));
+    let backups = summary.backups.iter().map(|b| b.backup_path.under(root));
     migrated.chain(backups).collect()
 }
 
 /// Restore the files this run migrated, with the text it read before them (backups or not) after a
 /// failed check: each is forgotten as a write. No other file is touched.
-fn roll_back(outcome: &mut Outcome) {
+fn roll_back(root: &Path, outcome: &mut Outcome) {
     let summary = restore(&outcome.summary.originals);
     for restored in summary
         .results
         .iter()
         .filter(|r| r.status == MigrationStatus::Restored)
     {
-        outcome.writes.forget(Path::new(&restored.file_path));
+        outcome.writes.forget(&restored.file_path.under(root));
     }
     outcome.rollback = Some(summary);
 }
 
 /// What a rollback rewrote: each file it restored from its backup.
-fn restored_writes(summary: &RollbackSummary) -> Writes {
+fn restored_writes(root: &Path, summary: &RollbackSummary) -> Writes {
     summary
         .results
         .iter()
         .filter(|r| r.status == MigrationStatus::Restored)
-        .map(|r| r.file_path.as_str())
+        .map(|r| r.file_path.under(root))
         .collect()
 }
 
@@ -505,7 +505,7 @@ impl RollbackOutcome {
 /// backup.
 pub fn rollback(root: &specforge_common::ProjectRoot) -> RollbackOutcome {
     let summary = run_rollback(root);
-    let mut writes = restored_writes(&summary);
+    let mut writes = restored_writes(root.dir(), &summary);
     if summary.record != RecordChange::Unchanged {
         writes.record(root.dir().join(MigrationRecord::PATH));
     }

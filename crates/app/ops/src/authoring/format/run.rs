@@ -3,7 +3,7 @@
 
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_common::{Diagnostic, DiagnosticList, ProjectRoot, codes};
+use specforge_common::{Diagnostic, DiagnosticList, ProjectPath, ProjectRoot, codes};
 use std::path::{Path, PathBuf};
 
 use super::document::{Configs, FormattedDocument, format_text};
@@ -173,6 +173,13 @@ impl Failure {
     }
 }
 
+impl Failure {
+    /// [`Display`](std::fmt::Display) naming the file as `name` does: what a document says.
+    pub fn naming(&self, name: &ProjectPath) -> String {
+        format!("failed to {} {name}: {}", self.verb(), self.error())
+    }
+}
+
 impl std::fmt::Display for Failure {
     /// `failed to read <path>: <error>` (or `write`).
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -188,6 +195,8 @@ impl std::fmt::Display for Failure {
 
 #[derive(Debug, Clone, Default)]
 pub struct Outcome {
+    /// The directory of the project the run started in: every file the document names is named from it.
+    pub root: PathBuf,
     /// The mode the run ran in.
     pub mode: Mode,
     /// Files read and formatted.
@@ -272,27 +281,31 @@ impl Outcome {
     /// `diff`).
     pub fn document(&self, diffs: bool) -> FormatDocument {
         let failed = !self.failures.is_empty();
+        let named = |path: &Path| ProjectPath::of(&self.root, path);
         FormatDocument {
-            changed_files: self.changes.iter().map(|c| shown(&c.path)).collect(),
+            changed_files: self.changes.iter().map(|c| named(&c.path)).collect(),
             total_checked: self.checked,
             ok: self.ok(),
             all_clean: self.clean(),
             check_only: !self.mode.writes(),
             diagnostics: DiagnosticList(self.diagnostics.clone()),
-            diffs: diffs.then(|| self.changes.iter().map(FileDiff::of).collect()),
+            diffs: diffs.then(|| {
+                let of = |change| FileDiff::of(change, named(&change.path));
+                self.changes.iter().map(of).collect()
+            }),
             message: failed.then(|| {
-                let reasons: Vec<String> = self.failures.iter().map(ToString::to_string).collect();
+                let reasons: Vec<String> = (self.failures.iter())
+                    .map(|f| f.naming(&named(f.path())))
+                    .collect();
                 reasons.join("; ")
             }),
-            failed_files: failed.then(|| self.failures.iter().map(|f| shown(f.path())).collect()),
-            failures: failed.then(|| self.failures.iter().map(FileFailure::of).collect()),
+            failed_files: failed.then(|| self.failures.iter().map(|f| named(f.path())).collect()),
+            failures: failed.then(|| {
+                let of = |failure| FileFailure::of(failure, named(failure.path()));
+                self.failures.iter().map(of).collect()
+            }),
         }
     }
-}
-
-/// A path as the format document shows it.
-fn shown(path: &Path) -> String {
-    path.display().to_string()
 }
 
 /// What `specforge format --format json` and `specforge.format` print
@@ -301,7 +314,7 @@ fn shown(path: &Path) -> String {
 #[derive(Debug, Clone, Serialize, Shape)]
 pub struct FormatDocument {
     /// Files whose formatting differs, in discovery order.
-    pub changed_files: Vec<String>,
+    pub changed_files: Vec<ProjectPath>,
     /// Files read and formatted.
     pub total_checked: usize,
     /// The run's verdict ([`Outcome::ok`]).
@@ -321,7 +334,7 @@ pub struct FormatDocument {
     pub message: Option<String>,
     /// The files the run could not read or write.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub failed_files: Option<Vec<String>>,
+    pub failed_files: Option<Vec<ProjectPath>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub failures: Option<Vec<FileFailure>>,
 }
@@ -329,7 +342,7 @@ pub struct FormatDocument {
 /// One changed file's before and after text (`FormatDiff`).
 #[derive(Debug, Clone, Serialize, Shape)]
 pub struct FileDiff {
-    pub file_path: String,
+    pub file_path: ProjectPath,
     pub before: String,
     pub after: String,
     pub insertions: usize,
@@ -337,9 +350,9 @@ pub struct FileDiff {
 }
 
 impl FileDiff {
-    fn of(change: &FileChange) -> Self {
-        let file_path = shown(&change.path);
-        let stats = specforge_formatter::unified_diff(&file_path, &change.before, &change.after);
+    fn of(change: &FileChange, file_path: ProjectPath) -> Self {
+        let stats =
+            specforge_formatter::unified_diff(file_path.as_str(), &change.before, &change.after);
         FileDiff {
             file_path,
             before: change.before.clone(),
@@ -353,7 +366,7 @@ impl FileDiff {
 /// One file the run could not read or write (`McpFormatFailure`).
 #[derive(Debug, Clone, Serialize, Shape)]
 pub struct FileFailure {
-    pub file: String,
+    pub file: ProjectPath,
     /// `read` or `write`.
     pub operation: String,
     /// The kind of the file's failure ([`OpErrorKind::as_str`], MCP's
@@ -363,12 +376,12 @@ pub struct FileFailure {
 }
 
 impl FileFailure {
-    fn of(failure: &Failure) -> Self {
+    fn of(failure: &Failure, file: ProjectPath) -> Self {
         FileFailure {
-            file: shown(failure.path()),
             operation: failure.verb().to_string(),
             code: failure.kind().as_str().to_string(),
-            message: failure.to_string(),
+            message: failure.naming(&file),
+            file,
         }
     }
 }
@@ -396,6 +409,7 @@ pub fn run_within(request: &Request, within: Option<&Path>) -> Result<Outcome, O
     // MCP have none), and each configuration file is read once.
     let mut configs = Configs::default();
     let mut outcome = Outcome {
+        root: request.root.dir().to_path_buf(),
         mode: request.mode,
         diagnostics,
         ..Outcome::default()
@@ -418,11 +432,13 @@ pub fn run_within(request: &Request, within: Option<&Path>) -> Result<Outcome, O
         };
         outcome.checked += 1;
         let resolved = configs.for_file(&target, None);
+        // A span names the file as the document does.
+        let name = ProjectPath::of(&outcome.root, &target);
         let FormattedDocument {
             formatted,
             diagnostics,
             ..
-        } = format_text(resolved, &source, None, Some(&target));
+        } = format_text(resolved, &source, None, Some(Path::new(name.as_str())));
         outcome.diagnostics.extend(diagnostics);
         if formatted == source {
             continue;

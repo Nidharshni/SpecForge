@@ -82,7 +82,7 @@ impl Args {
             // them; a run that only reports lists none.
             let files_written = mode
                 .writes()
-                .then(|| outcome.writes().names_under(project_root.dir()));
+                .then(|| outcome.writes().named(Some(project_root.dir())));
             terminal.json(&Written {
                 document: outcome.document(self.diff),
                 files_written,

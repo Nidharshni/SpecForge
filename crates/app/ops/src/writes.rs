@@ -1,5 +1,6 @@
 //! What an operation changed on disk.
 
+use specforge_common::ProjectPath;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
@@ -53,38 +54,20 @@ impl Writes {
         self.0.is_empty()
     }
 
-    /// Every path for display, sorted: relative to `root` when it lies
-    /// under it, else as recorded. A path and a root that name one place
-    /// through a symbolic link (`/var` and `/private/var`) are compared as
-    /// their canonical forms, a removed file's through its nearest
-    /// existing ancestor.
-    pub fn under(&self, root: &Path) -> Vec<PathBuf> {
-        let canonical_root = canonical(root);
-        let mut shown: Vec<PathBuf> = self
+    /// Every path as a document names it ([`ProjectPath`]), sorted and listed once: relative to `root` with `/`,
+    /// absolute and canonical outside it; with no root, absolute and canonical.
+    pub fn named(&self, root: Option<&Path>) -> Vec<ProjectPath> {
+        let mut named: Vec<ProjectPath> = self
             .0
             .iter()
-            .map(|path| {
-                path.strip_prefix(root)
-                    .map(Path::to_path_buf)
-                    .or_else(|_| {
-                        canonical(path)
-                            .strip_prefix(&canonical_root)
-                            .map(Path::to_path_buf)
-                    })
-                    .unwrap_or_else(|_| path.clone())
+            .map(|path| match root {
+                Some(root) => ProjectPath::of(root, path),
+                None => ProjectPath::absolute(path),
             })
             .collect();
-        shown.sort();
-        shown.dedup();
-        shown
-    }
-
-    /// [`Self::under`] as display strings: what a surface lists.
-    pub fn names_under(&self, root: &Path) -> Vec<String> {
-        self.under(root)
-            .iter()
-            .map(|path| path.display().to_string())
-            .collect()
+        named.sort();
+        named.dedup();
+        named
     }
 }
 
@@ -100,26 +83,6 @@ impl<P: Into<PathBuf>> FromIterator<P> for Writes {
 pub fn resolves_outside(file: &Path, within: &Path) -> Option<PathBuf> {
     let (real, within) = (file.canonicalize().ok()?, within.canonicalize().ok()?);
     (!real.starts_with(within)).then_some(real)
-}
-
-/// `path` absolute and canonical as far as it exists: the canonical form
-/// of its nearest existing ancestor, joined with the rest.
-fn canonical(path: &Path) -> PathBuf {
-    let path = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
-    let mut existing = path.clone();
-    let mut rest = Vec::new();
-    while !existing.exists() {
-        let Some(name) = existing.file_name().map(|n| n.to_os_string()) else {
-            break;
-        };
-        rest.push(name);
-        if !existing.pop() {
-            break;
-        }
-    }
-    let mut canonical = std::fs::canonicalize(&existing).unwrap_or(existing);
-    canonical.extend(rest.into_iter().rev());
-    canonical
 }
 
 #[cfg(test)]
@@ -164,28 +127,28 @@ mod tests {
     }
 
     #[test]
-    fn under_lists_paths_relative_to_the_root() {
+    fn named_lists_paths_relative_to_the_root() {
         let writes =
             Writes::from_iter(["/p/spec/a.spec", "/p/specforge.json", "/elsewhere/x.wasm"]);
+        let named: Vec<String> = writes
+            .named(Some(Path::new("/p")))
+            .into_iter()
+            .map(ProjectPath::into_string)
+            .collect();
         assert_eq!(
-            writes.names_under(Path::new("/p")),
+            named,
             ["/elsewhere/x.wasm", "spec/a.spec", "specforge.json"]
         );
     }
 
     #[test]
-    fn under_sees_through_a_linked_root() {
-        let dir = tempfile::tempdir().unwrap();
-        let real = dir.path().join("real");
-        std::fs::create_dir_all(real.join("spec")).unwrap();
-        #[cfg(unix)]
-        {
-            let link = dir.path().join("link");
-            std::os::unix::fs::symlink(&real, &link).unwrap();
-            // Written through the link, shown under the real root; a removed
-            // file (no longer on disk) included.
-            let writes = Writes::from_iter([link.join("spec/a.spec"), link.join("gone.wasm")]);
-            assert_eq!(writes.names_under(&real), ["gone.wasm", "spec/a.spec"]);
-        }
+    fn named_without_a_root_is_absolute() {
+        let writes = Writes::from_iter(["/p/spec/a.spec", "/p/b.spec"]);
+        let named: Vec<String> = writes
+            .named(None)
+            .into_iter()
+            .map(ProjectPath::into_string)
+            .collect();
+        assert_eq!(named, ["/p/b.spec", "/p/spec/a.spec"]);
     }
 }

@@ -15,6 +15,7 @@ pub mod package;
 pub mod peers;
 mod present;
 mod project;
+mod project_path;
 mod project_root;
 pub mod shape;
 mod slug;
@@ -35,6 +36,7 @@ pub use project::{
     ConfigProblem, ConfigRead, ExtensionEntry, InferenceConfig, ProjectConfig,
     extension_entry_name, parse_project_config, read_project_config, validate_project_name,
 };
+pub use project_path::ProjectPath;
 pub use project_root::{NoSuchPath, PROJECT_FILE, ProjectRoot};
 pub use slug::slug;
 pub use span::SourceSpan;

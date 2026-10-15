@@ -9,8 +9,8 @@
 //! on stderr, or under JSON output the error document on stdout.
 
 use crate::terminal::{Terminal, err};
-use specforge_common::Code;
-use specforge_ops::{OpError, OpErrorKind, Writes};
+use specforge_common::{Code, ProjectPath};
+use specforge_ops::{OpError, OpErrorKind};
 use std::path::Path;
 
 /// The process exit code: one table for every core command. A core
@@ -157,12 +157,12 @@ pub(crate) struct Written<D> {
     #[serde(flatten)]
     pub(crate) document: D,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) files_written: Option<Vec<String>>,
+    pub(crate) files_written: Option<Vec<ProjectPath>>,
 }
 
 impl<D> Written<D> {
     /// `document` with the files a command wrote.
-    pub(crate) fn of(document: D, files_written: Vec<String>) -> Self {
+    pub(crate) fn of(document: D, files_written: Vec<ProjectPath>) -> Self {
         Self {
             document,
             files_written: Some(files_written),
@@ -180,7 +180,7 @@ pub(crate) struct ErrorDocument<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     suggestion: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    files_written: Option<Vec<String>>,
+    files_written: Option<Vec<ProjectPath>>,
 }
 
 /// The document a refusal prints under `--format json`.
@@ -189,7 +189,7 @@ pub(crate) fn error_document<'a>(error: &'a OpError, root: Option<&Path>) -> Err
         error: &error.message,
         code: &error.code,
         suggestion: error.suggestion.as_deref(),
-        files_written: (!error.writes.is_empty()).then(|| files_written(&error.writes, root)),
+        files_written: (!error.writes.is_empty()).then(|| error.writes.named(root)),
     }
 }
 
@@ -200,22 +200,10 @@ pub(crate) fn error_lines(error: &OpError, root: Option<&Path>) -> String {
     if let Some(suggestion) = &error.suggestion {
         lines.push_str(&format!("  hint: {suggestion}\n"));
     }
-    for file in files_written(&error.writes, root) {
+    for file in error.writes.named(root) {
         lines.push_str(&format!("  wrote: {file}\n"));
     }
     lines
-}
-
-/// The files `writes` names, as a command lists them: relative to `root`
-/// (absolute outside it), sorted.
-pub(crate) fn files_written(writes: &Writes, root: Option<&Path>) -> Vec<String> {
-    match root {
-        Some(root) => writes.names_under(root),
-        None => writes
-            .paths()
-            .map(|path| path.display().to_string())
-            .collect(),
-    }
 }
 
 #[cfg(test)]
@@ -223,7 +211,7 @@ mod tests {
     use super::*;
     use crate::terminal::Facts;
     use specforge_common::codes;
-    use specforge_ops::RunVerdict;
+    use specforge_ops::{RunVerdict, Writes};
 
     #[test]
     fn trust_is_yes_then_what_the_output_can_ask() {

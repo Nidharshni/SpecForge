@@ -2952,10 +2952,7 @@ fn contract_render() {
         json!({"format": "json", "out_dir": out_dir.to_str().unwrap()}),
     );
     let graph_file = out_dir.join("graph.json");
-    assert_eq!(
-        json_render["output_files"],
-        json!([graph_file.to_str().unwrap()])
-    );
+    assert_eq!(json_render["output_files"], json!(["rendered/graph.json"]));
     let written: Value =
         serde_json::from_str(&std::fs::read_to_string(&graph_file).unwrap()).unwrap();
     assert_eq!(node_ids(&written), ["alpha", "beta"]);
@@ -2967,10 +2964,7 @@ fn contract_render() {
         json!({"format": "dot", "out_dir": out_dir.to_str().unwrap()}),
     );
     let dot_file = out_dir.join("graph.dot");
-    assert_eq!(
-        dot_render["output_files"],
-        json!([dot_file.to_str().unwrap()])
-    );
+    assert_eq!(dot_render["output_files"], json!(["rendered/graph.dot"]));
     let dot = std::fs::read_to_string(&dot_file).unwrap();
     assert!(dot.starts_with("digraph"), "{dot}");
     assert!(dot.contains("alpha") && dot.contains("beta"), "{dot}");

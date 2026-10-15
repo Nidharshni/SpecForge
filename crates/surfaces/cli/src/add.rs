@@ -1,5 +1,6 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, outln};
+use specforge_common::ProjectPath;
 use specforge_ops::extension::{self, AddOutcome, AddRequest, Added, AddedExtension, Origin};
 use specforge_ops_registry::ConfiguredRegistry;
 
@@ -60,7 +61,7 @@ impl Args {
         terminal.diagnostics(&registry.reported());
         match added {
             Ok(added) => {
-                present(&added, added.writes.names_under(path), format, terminal);
+                present(&added, added.writes.named(Some(path)), format, terminal);
                 Exit::Passed
             }
             // An install that failed after placing its module names it.
@@ -71,7 +72,12 @@ impl Args {
 
 /// The add's outcome; its JSON is the add document with `files_written`
 /// (empty when every extension was already enabled).
-fn present(added: &Added, files_written: Vec<String>, format: OutputFormat, terminal: &Terminal) {
+fn present(
+    added: &Added,
+    files_written: Vec<ProjectPath>,
+    format: OutputFormat,
+    terminal: &Terminal,
+) {
     match format {
         OutputFormat::Json => terminal.json(&Written::of(added.document(), files_written)),
         OutputFormat::Human => {

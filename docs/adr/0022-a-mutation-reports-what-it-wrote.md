@@ -1,6 +1,7 @@
 # A mutation reports what it wrote, typed
 
 **Status:** accepted (2026-10-06); amended 2026-10-11 (architecture round 6, plan 09, last section).
+D7's paths amended 2026-10-15 by ADR 0102 (canonical outside the root, `/` separators).
 
 What an MCP mutation did crossed the dispatcher seam as JSON. Each operation returned a typed
 outcome; the handler built a `json!` reply from it; a per-tool `effect` closure in the tool table

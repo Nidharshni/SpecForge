@@ -249,9 +249,15 @@ fn the_document_is_the_run_both_surfaces_print() {
         &std::io::Error::from(std::io::ErrorKind::PermissionDenied),
     ));
     let failed = serde_json::to_value(outcome.document(false)).unwrap();
-    let shown = locked.display().to_string();
-    assert_eq!(failed["failed_files"], serde_json::json!([shown]));
-    assert_eq!(failed["failures"][0]["file"], shown);
+    assert_eq!(
+        failed["failed_files"],
+        serde_json::json!(["spec/locked.spec"])
+    );
+    assert_eq!(failed["failures"][0]["file"], "spec/locked.spec");
+    assert_eq!(
+        failed["message"],
+        "failed to read spec/locked.spec: permission denied"
+    );
     assert_eq!(failed["failures"][0]["operation"], "read");
     assert_eq!(failed["failures"][0]["code"], "permission_denied");
     assert_eq!(failed["message"], failed["failures"][0]["message"]);

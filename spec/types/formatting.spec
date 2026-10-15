@@ -83,6 +83,7 @@ type ExtensionFormatRule {
 }
 
 type FormatDiff "Per-file formatting diff with change statistics" {
+  /// The file, named from the project root (ADR 0102).
   file_path  string @readonly
   before     string
   after      string

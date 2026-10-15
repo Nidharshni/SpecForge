@@ -1,8 +1,10 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, errln, outln};
+use specforge_common::ProjectPath;
 use specforge_ops::authoring::migrate::{
     self, MigrateDocument, MigrationStatus, Request, RollbackSummary,
 };
+use std::path::Path;
 
 // `specforge migrate`'s command line.
 #[derive(clap::Args)]
@@ -43,8 +45,9 @@ impl Args {
         if self.rollback {
             let outcome = migrate::rollback(&root);
             print_rollback(
+                path,
                 &outcome.summary,
-                &outcome.writes.names_under(path),
+                &outcome.writes.named(Some(path)),
                 format,
                 terminal,
             );
@@ -53,7 +56,7 @@ impl Args {
 
         let target = match migrate::parse_target(self.target_version.as_deref()) {
             Ok(target) => target,
-            Err(error) => return Refusal::of(format).report(terminal, &error),
+            Err(error) => return Refusal::of(format).at(path).report(terminal, &error),
         };
 
         // The shared migration: migrate, run the extensions' hooks, then check
@@ -70,10 +73,10 @@ impl Args {
             Ok(outcome) => outcome,
             // A config that does not say which files are the sources or
             // which extensions load: nothing was read or written.
-            Err(error) => return Refusal::of(format).report(terminal, &error),
+            Err(error) => return Refusal::of(format).at(path).report(terminal, &error),
         };
         // Each migrated file and each backup (none for a dry run).
-        let written = (!dry_run).then(|| outcome.writes.names_under(path));
+        let written = (!dry_run).then(|| outcome.writes.named(Some(path)));
         print_migration(&outcome.document(), written, format, terminal);
 
         if outcome.summary.failed_count != 0 {
@@ -102,8 +105,9 @@ impl Args {
 
 /// The restore; its JSON lists each file restored in `files_written`.
 fn print_rollback(
+    root: &Path,
     summary: &RollbackSummary,
-    files_written: &[String],
+    files_written: &[ProjectPath],
     format: OutputFormat,
     terminal: &Terminal,
 ) {
@@ -117,13 +121,19 @@ fn print_rollback(
             }
             for r in &summary.results {
                 match r.status {
-                    MigrationStatus::Restored => errln!(terminal, "  restored: {}", r.file_path),
+                    MigrationStatus::Restored => {
+                        errln!(
+                            terminal,
+                            "  restored: {}",
+                            r.file_path.under(root).display()
+                        );
+                    }
                     MigrationStatus::Skipped => {}
                     MigrationStatus::Failed => {
                         errln!(
                             terminal,
                             "  failed: {} ({})",
-                            r.file_path,
+                            r.file_path.under(root).display(),
                             r.error.as_deref().unwrap_or("unknown")
                         );
                     }
@@ -145,7 +155,7 @@ fn print_rollback(
 /// (absent from a dry run).
 fn print_migration(
     document: &MigrateDocument,
-    files_written: Option<Vec<String>>,
+    files_written: Option<Vec<ProjectPath>>,
     format: OutputFormat,
     terminal: &Terminal,
 ) {

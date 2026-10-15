@@ -33,6 +33,8 @@ mod navigation_parity;
 mod options;
 mod outcome;
 mod parity;
+mod path_parity;
+mod path_spelling;
 mod product_commands;
 mod project_from_path;
 mod publish;

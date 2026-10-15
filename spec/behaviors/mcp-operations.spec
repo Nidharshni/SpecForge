@@ -36,6 +36,7 @@ behavior provide_mcp_format_tool "Provide MCP Format Tool" {
     formatting_consistency,
     format_rule_determinism,
     dry_run_side_effect_freedom,
+    document_project_paths,
   ]
   category   query
   types      [McpFormatResult, FormatDiff, McpToolDescriptor]
@@ -82,6 +83,7 @@ behavior provide_mcp_format_tool "Provide MCP Format Tool" {
     any file is read, writing nothing.
   """
   verify unit "specforge.format formats spec files"
+  verify unit "the format document names each file from the project root"
   verify unit "check mode reports without modifying files"
   verify unit "diff mode returns FormatDiff entries"
   verify unit "paths filter restricts to specified files"
@@ -512,7 +514,7 @@ behavior provide_mcp_doctor_tool "Provide MCP Doctor Tool" {
 
 behavior provide_mcp_collect_tool "Provide MCP Collect Tool" {
   features   [mcp_project_management_tools]
-  invariants [diagnostic_determinism, mcp_structured_error_responses]
+  invariants [document_project_paths, diagnostic_determinism, mcp_structured_error_responses]
   category   query
   types      [McpCollectResult, McpCollectRunner, McpToolDescriptor]
   ports      [McpProtocol, CompilerApi, FileSystem]
@@ -542,9 +544,10 @@ behavior provide_mcp_collect_tool "Provide MCP Collect Tool" {
     command is an E059 error,
     and a missing collector or report is an error naming its code. The
     result lists each runner's counts, the W115 diagnostics and the path of
-    the written specforge-report.json.
+    the written specforge-report.json, named from the project root.
   """
   verify unit "specforge.collect parses test results and maps to entities"
+  verify unit "the collect document names the report from the project root"
   verify unit "specforge.collect refuses to run an unapproved command"
   verify unit "specforge.collect of a directory that holds no project refuses with no_project"
   verify unit "a project without a collector returns an E058 error"
@@ -555,7 +558,12 @@ behavior provide_mcp_collect_tool "Provide MCP Collect Tool" {
 
 behavior provide_mcp_render_tool "Provide MCP Render Tool" {
   features   [mcp_project_management_tools]
-  invariants [graph_traversal_integrity, diagnostic_determinism, mcp_structured_error_responses]
+  invariants [
+    document_project_paths,
+    graph_traversal_integrity,
+    diagnostic_determinism,
+    mcp_structured_error_responses,
+  ]
   category   query
   types      [McpRenderResult, McpToolDescriptor]
   ports      [McpProtocol, CompilerApi, FileSystem]
@@ -579,7 +587,7 @@ behavior provide_mcp_render_tool "Provide MCP Render Tool" {
     against its root, wherever the server runs, and one that leaves the
     project (by .., an absolute name or a symlink) MUST be refused as invalid
     input on out_dir, as MUST any out_dir with no project served.
-    output_files lists the absolute paths written.
+    output_files lists the files written, each named from the project root.
     The renderers are the core graph engine's export formats (see P7
     justification in features/output.spec), named as `specforge export
     --format` names them: graph (also accepted as json; the full graph, as
@@ -596,6 +604,7 @@ behavior provide_mcp_render_tool "Provide MCP Render Tool" {
     The response MUST list all files written.
   """
   verify unit "specforge.render writes output files to out_dir"
+  verify unit "the render document names each output file from the project root"
   verify unit "a relative out_dir is written under the call's project root, wherever the server runs"
   verify unit "a relative out_dir with no project served is invalid input on out_dir"
   verify unit "registered renderer invoked for matching format"

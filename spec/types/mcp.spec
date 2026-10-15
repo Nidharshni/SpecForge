@@ -180,8 +180,9 @@ type McpPromptArgument {
 // (Diagnostic, MigrationResult, MigrationDiff, RollbackSummary) is one
 // $defs entry the reply's fields refer to; an optional field is absent,
 // never null; a mutation's reply
-// also carries files_written (string[], absent from a preview), which the
-// mutation pipeline adds to every mutation tool, and rename's diagnostics,
+// also carries files_written (string[], absent from a preview; each file named
+// from the project root with /, absolute and canonical outside it, ADR 0102),
+// which the mutation pipeline adds to every mutation tool, and rename's diagnostics,
 // which it adds after a successful rename (ADR 0022). A test holds each
 // type below to the schema its tool's reply type derives. Where the CLI
 // prints the same operation's outcome under --format json, it prints the same
@@ -475,6 +476,7 @@ type McpInitResult {
 }
 
 type McpFormatResult {
+  /// The files that would change (or did), each named from the project root (ADR 0102).
   changed_files string[]
   total_checked integer
   /// The verdict specforge format exits by (0 when true): every file read and
@@ -493,13 +495,14 @@ type McpFormatResult {
   diffs         FormatDiff[]       @optional
   /// Why the call failed; a failed call's data holds this reply.
   message       string             @optional
-  /// The files the call could not read or write (the call failed).
+  /// The files the call could not read or write (the call failed), each named from the project root.
   failed_files  string[]           @optional
   failures      McpFormatFailure[] @optional
   verify unit "McpFormatResult schema is valid"
 }
 
 type McpFormatFailure "One file a format could not read or write" {
+  /// The file, named from the project root.
   file      string @readonly
   operation string
   /// The McpErrorCode of the file's failure.
@@ -732,7 +735,7 @@ type McpCollectResult {
   runners     McpCollectRunner[]
   /// What collecting reported (W115: a test names an unknown entity).
   diagnostics Diagnostic[]
-  /// The path of the written specforge-report.json.
+  /// The written specforge-report.json, named from the project root (ADR 0102).
   report      string @readonly
   verify unit "McpCollectResult schema is valid"
 }
@@ -761,7 +764,7 @@ type McpRenderResult {
   format       "graph" | "context" | "brief" | "dot" @readonly
   /// The rendering itself, when no out_dir was given.
   output       string                                @optional
-  /// The files written into out_dir, absolute.
+  /// The files written into out_dir, each named from the project root (ADR 0102).
   output_files string[]
   verify unit "McpRenderResult schema is valid"
 }

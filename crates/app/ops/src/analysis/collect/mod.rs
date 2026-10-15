@@ -33,7 +33,7 @@ use crate::view::ProjectView;
 use crate::{OpError, OpErrorKind, Refusal};
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_common::{Code, Diagnostic, DiagnosticList, codes};
+use specforge_common::{Code, Diagnostic, DiagnosticList, ProjectPath, codes};
 use specforge_project::coverage::TestReport;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -130,6 +130,8 @@ pub struct RunnerResult {
 /// The outcome of a successful collect.
 #[derive(Debug)]
 pub struct Outcome {
+    /// The project the collect ran in: the document names the report from it.
+    pub root: PathBuf,
     pub runners: Vec<RunnerResult>,
     pub diagnostics: Vec<Diagnostic>,
     pub report: PathBuf,
@@ -146,7 +148,7 @@ impl Outcome {
             status: CollectStatus::Collected,
             runners: self.runners.clone(),
             diagnostics: DiagnosticList(self.diagnostics.clone()),
-            report: self.report.display().to_string(),
+            report: ProjectPath::of(&self.root, &self.report),
         }
     }
 }
@@ -157,8 +159,8 @@ pub struct CollectDocument {
     pub status: CollectStatus,
     pub runners: Vec<RunnerResult>,
     pub diagnostics: DiagnosticList,
-    /// The merged test report the collect wrote.
-    pub report: String,
+    /// The merged test report the collect wrote, named from the project root.
+    pub report: ProjectPath,
 }
 
 /// A collect that finished says so.
@@ -300,6 +302,7 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, Refusal<
 
     let report = save_report(root, &report)?;
     Ok(Outcome {
+        root: root.to_path_buf(),
         runners,
         diagnostics,
         report,
