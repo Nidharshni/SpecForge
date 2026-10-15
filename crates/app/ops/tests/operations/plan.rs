@@ -1,7 +1,7 @@
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
 use specforge_ops::read::plan::{AgentPlan, PlanGapKind};
-use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue, VerifyStatement};
+use specforge_parser::{EntityId, EntityKind, FieldMap, VerifyStatement};
 use specforge_test::prelude::*;
 
 use crate::view_support::{Project, gap_texts, registries};
@@ -26,18 +26,12 @@ fn node(id: &str, kind: &str) -> Node {
         fields: FieldMap::new(),
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     }
 }
 
 fn testable_node(id: &str) -> Node {
-    let mut fields = FieldMap::new();
-    fields.push(
-        Sym::new("verify"),
-        FieldValue::VerifyList(vec![VerifyStatement {
-            kind: "unit".to_string(),
-            description: "it works".to_string(),
-        }]),
-    );
+    let fields = FieldMap::new();
     Node {
         id: EntityId { raw: Sym::new(id) },
         kind: EntityKind {
@@ -47,6 +41,10 @@ fn testable_node(id: &str) -> Node {
         fields,
         source_span: span(),
         methods: Vec::new(),
+        obligations: vec![VerifyStatement {
+            kind: "unit".to_string(),
+            description: "it works".to_string(),
+        }],
     }
 }
 

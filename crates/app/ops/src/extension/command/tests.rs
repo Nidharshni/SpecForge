@@ -62,6 +62,7 @@ fn graph() -> Graph {
             end_col: 2,
         },
         methods: Vec::new(),
+        obligations: Vec::new(),
     });
     graph
 }

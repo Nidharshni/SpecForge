@@ -16,6 +16,7 @@ type Entity {
   // and stored here for display, but does not participate in field validation.
   title       string
   fields      FieldMap
+  obligations VerifyStatement[]
   source_span SourceSpan @readonly
   verify unit "Entity schema is valid"
 }
@@ -59,7 +60,7 @@ type FieldEntry {
 // Note: integer, bool, and enum field values are parsed as StringValue
 // by the generic tree-sitter grammar. Type coercion and validation happen
 // in the semantic phase using FieldRegistry type declarations.
-type FieldValue = StringValue | ReferenceList | StringList | Block | VerifyList
+type FieldValue = StringValue | ReferenceList | StringList | Block
 
 type StringValue {
   _tag    "StringValue" @literal
@@ -83,12 +84,6 @@ type Block {
   _tag    "Block" @literal
   entries FieldEntry[]
   verify unit "Block schema is valid"
-}
-
-type VerifyList {
-  _tag  "VerifyList" @literal
-  items VerifyStatement[]
-  verify unit "VerifyList schema is valid"
 }
 
 type VerifyStatement {

@@ -26,7 +26,7 @@ fn handshake_request_json_field_names() {
 
 #[test]
 fn protocol_version_constant() {
-    assert_eq!(PROTOCOL_VERSION, "1.4.0");
+    assert_eq!(PROTOCOL_VERSION, "1.5.0");
 }
 
 // ── Step 2: HandshakeResponse ──

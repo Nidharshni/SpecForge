@@ -235,12 +235,12 @@ fn two_phase_validate_semantic_contract() {
     );
 }
 
-/// With no entity kind registered, E024, E013, E014, W020, E022 and E061 do
+/// With no entity kind registered, E024, E013, E014, W020, W158, E022 and E061 do
 /// not run; W012 and the rules still do (and W151 says what is unchecked). (E016 needs a declared kind to hold
 /// its `file_reference` field.)
 #[spec(
     behavior = "check_entities_in_one_order",
-    verify = "with no entity kind registered, E024, E013, E014, W020, E022 and E061 do not run, and W012, E016 and the rules still do"
+    verify = "with no entity kind registered, E024, E013, E014, W020, W158, E022 and E061 do not run, and W012, E016 and the rules still do"
 )]
 fn a_build_with_no_kind_checks_no_kind() {
     let records = vec![

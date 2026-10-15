@@ -303,13 +303,14 @@ behavior check_entities_in_one_order "Check the Entities in One Order" {
     check over its records, in this order: unreferenced refs (W012),
     missing referenced files (E016), unknown kinds (E024), reserved
     entity IDs (E013), the identifier length contract (E014), unknown
-    fields (W020), references to an entity of the wrong kind (E022),
+    fields (W020), verify statements on a kind that accepts none (W158),
+    references to an entity of the wrong kind (E022),
     field values that cannot be their declared type (E061), then the
     rule set. Check, watch, the LSP and MCP MUST report them in this
     order, and no check reads a graph node.
 
     When no loaded extension declares an entity kind, the project is
-    structural-only: E024, E013, E014, W020, E022 and E061 MUST NOT run,
+    structural-only: E024, E013, E014, W020, W158, E022 and E061 MUST NOT run,
     while W012, E016 and the rules still do. With no extension loaded,
     I002 says so. With extensions loaded that declare no kind, one
     W151 MUST name how many entities, and of which kinds, are left
@@ -324,8 +325,8 @@ behavior check_entities_in_one_order "Check the Entities in One Order" {
     those a file_exists rule reads, resolved against the spec root, are
     the session's check inputs.
   """
-  verify unit "the structural checks run in one order: W012, E016, E024, E013, E014, W020, E022, E061, then the rule set"
-  verify unit "with no entity kind registered, E024, E013, E014, W020, E022 and E061 do not run, and W012, E016 and the rules still do"
+  verify unit "the structural checks run in one order: W012, E016, E024, E013, E014, W020, W158, E022, E061, then the rule set"
+  verify unit "with no entity kind registered, E024, E013, E014, W020, W158, E022 and E061 do not run, and W012, E016 and the rules still do"
   verify unit "extensions that load but declare no entity kind report one W151 naming the unchecked entities"
   verify unit "an entity ID equal to a structural keyword or a registered kind's keyword is E013"
   verify unit "an entity ID shorter than 2 or longer than 60 characters is E014"
@@ -364,17 +365,18 @@ behavior detect_unknown_entity_fields "Detect Unknown Entity Fields" {
     field index, e.g. an invariant's `expression` from @specforge/formal),
     the W020 MUST suggest installing that extension, as E024 does for a
     kind.
-    `verify` is reserved syntax whose meaning extensions supply
-    (ADR 0002): it MUST be accepted only on kinds an extension made
-    testable (supports_verify) and produce W020 elsewhere. When the entity's kind
-    itself is unregistered (already reported as E024), field validation
+    `verify` statements are not fields (ADR 0094): a field named `verify`
+    MUST be checked like any field, and statements on a kind no
+    extension made testable (supports_verify) MUST produce W158. When the
+    entity's kind itself is unregistered (already reported as E024), field validation
     MUST be skipped for that entity to avoid cascading diagnostics.
   """
   verify unit "unregistered field name produces W020"
   verify unit "W020 includes field name, entity kind, and source span"
   verify unit "registered field name does not produce W020"
-  verify unit "structural fields (title, verify) not checked against FieldRegistry"
-  verify unit "verify on a kind no extension made testable produces W020"
+  verify unit "title is not checked against the field registry"
+  verify unit "a field named verify is checked like any field"
+  verify unit "verify statements on a kind no extension made testable produce W158"
   verify unit "expression is checked like any other field (W020 where undeclared)"
   verify unit "an undeclared field a builtin enhancement adds suggests its extension"
   verify unit "field validation skipped when entity kind is unregistered"

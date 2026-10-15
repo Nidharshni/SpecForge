@@ -23,18 +23,12 @@ fn node(id: &str, kind: &str) -> Node {
         fields: FieldMap::new(),
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     }
 }
 
 fn node_with_verify(id: &str, kind: &str) -> Node {
-    let mut fields = FieldMap::new();
-    fields.push(
-        Sym::new("verify"),
-        FieldValue::VerifyList(vec![VerifyStatement {
-            kind: "unit".to_string(),
-            description: "it works".to_string(),
-        }]),
-    );
+    let fields = FieldMap::new();
     Node {
         id: EntityId { raw: Sym::new(id) },
         kind: EntityKind {
@@ -44,6 +38,10 @@ fn node_with_verify(id: &str, kind: &str) -> Node {
         fields,
         source_span: span(),
         methods: Vec::new(),
+        obligations: vec![VerifyStatement {
+            kind: "unit".to_string(),
+            description: "it works".to_string(),
+        }],
     }
 }
 
@@ -198,12 +196,9 @@ fn stats_includes_diagnostic_summary() {
 )]
 fn stats_counts_obligations_behind_a_verify_member() {
     let mut payload = node_with_verify("Payload", "type");
-    let mut fields = FieldMap::new();
-    fields.push(Sym::new("verify"), FieldValue::Identifier("string".into()));
-    for entry in payload.fields.entries() {
-        fields.push(entry.key, entry.value.clone());
-    }
-    payload.fields = fields;
+    payload
+        .fields
+        .push(Sym::new("verify"), FieldValue::Identifier("string".into()));
     let mut graph = Graph::new();
     graph.add_node(payload);
     graph.add_node(node("Status", "type"));

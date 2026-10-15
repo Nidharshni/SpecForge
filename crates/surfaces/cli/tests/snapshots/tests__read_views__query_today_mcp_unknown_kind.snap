@@ -1,6 +1,6 @@
 ---
 source: crates/surfaces/cli/tests/read_views.rs
-expression: text
+expression: without_hashes(&text)
 ---
 {
   "_meta": {
@@ -20,7 +20,7 @@ expression: text
   },
   "content": [
     {
-      "text": "{\"edges\":[],\"format_version\":\"2.0\",\"nodes\":[{\"fields\":{\"contract\":\"The system MUST let a known user log in\",\"features\":[\"signin\"],\"verify\":[{\"description\":\"a known user logs in\",\"kind\":\"unit\"}]},\"file\":\"main.spec\",\"id\":\"login\",\"kind\":\"behavior\",\"line\":1,\"title\":\"Log in\"}],\"schema_ref\":{\"content_hash\":\"[SHA256]\",\"url\":\"https://specforge.dev/schema/graph-protocol-v1.0.0.json\"},\"schema_version\":\"1.0.0\"}",
+      "text": "{\"edges\":[],\"format_version\":\"2.0\",\"nodes\":[{\"fields\":{\"contract\":\"The system MUST let a known user log in\",\"features\":[\"signin\"]},\"file\":\"main.spec\",\"id\":\"login\",\"kind\":\"behavior\",\"line\":1,\"title\":\"Log in\",\"verify\":[{\"description\":\"a known user logs in\",\"kind\":\"unit\"}]}],\"schema_ref\":{\"content_hash\":\"[SHA256]\",\"url\":\"https://specforge.dev/schema/graph-protocol-v1.0.0.json\"},\"schema_version\":\"1.0.0\"}",
       "type": "text"
     }
   ],

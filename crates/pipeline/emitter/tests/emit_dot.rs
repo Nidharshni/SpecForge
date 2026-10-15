@@ -23,6 +23,7 @@ fn node(id: &str, kind: &str, title: Option<&str>) -> Node {
         fields: FieldMap::new(),
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     }
 }
 

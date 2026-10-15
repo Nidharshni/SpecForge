@@ -8,16 +8,15 @@
   ],
   "entities": [
     {
-      "owes_none": false,
       "fields": {
         "needs": "b",
-        "status": "active",
-        "verify": "a works"
+        "status": "active"
       },
       "id": "a",
       "incoming_edge_count": 0,
       "kind": "gadget",
       "outgoing_edge_count": 1,
+      "owes_none": false,
       "span": {
         "end_col": 2,
         "end_line": 5,
@@ -34,7 +33,6 @@
       ]
     },
     {
-      "owes_none": false,
       "fields": {
         "status": "retired"
       },
@@ -42,6 +40,7 @@
       "incoming_edge_count": 1,
       "kind": "gadget",
       "outgoing_edge_count": 0,
+      "owes_none": false,
       "span": {
         "end_col": 2,
         "end_line": 9,
@@ -54,7 +53,6 @@
       "verify_texts": []
     },
     {
-      "owes_none": true,
       "fields": {
         "abstract": "true"
       },
@@ -62,6 +60,7 @@
       "incoming_edge_count": 0,
       "kind": "gadget",
       "outgoing_edge_count": 0,
+      "owes_none": true,
       "span": {
         "end_col": 2,
         "end_line": 13,

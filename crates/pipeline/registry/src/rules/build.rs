@@ -205,15 +205,16 @@ fn shape(descriptor: &ValidationRuleDescriptor, extension: &str) -> Result<Rule,
         CheckKind::NoOutgoingEdges => Check::NoOutgoingEdges(EdgeScope::Any),
         CheckKind::NoEdges => Check::NoEdges,
         CheckKind::MissingFieldWhenFlagSet => {
-            let field = requires_field()?;
-            Check::MissingField {
-                skip_owing_nothing: field == VERIFY_FIELD,
-                field,
+            // `verify` names the entity's statements, not a field (ADR 0094).
+            match requires_field()? {
+                field if field == VERIFY_FIELD => Check::NoVerifyStatements {
+                    obligations: Obligations::Statements,
+                },
+                field => Check::MissingField { field },
             }
         }
         CheckKind::MissingRequiredField => Check::MissingField {
             field: requires_field()?,
-            skip_owing_nothing: false,
         },
         CheckKind::FileExists => Check::FileExists {
             field: requires_field()?,
@@ -473,10 +474,7 @@ fn required_field_rules(registries: Registries<'_>) -> Vec<Rule> {
             message_field: Some(field.clone()),
             origin: Origin::Host,
             check_kind: CheckKind::MissingRequiredField,
-            check: Check::MissingField {
-                field,
-                skip_owing_nothing: false,
-            },
+            check: Check::MissingField { field },
             declared: Declared::default(),
         })
         .collect()

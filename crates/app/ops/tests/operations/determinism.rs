@@ -36,6 +36,7 @@ fn build_graph() -> Graph {
             fields,
             source_span: span(),
             methods: Vec::new(),
+            obligations: Vec::new(),
         });
     }
 

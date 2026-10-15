@@ -1,7 +1,8 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_coverage::Status;
-use specforge_graph::field_form::{FieldJson, Obligation, write};
+use specforge_graph::Obligation;
+use specforge_graph::field_form::{FieldJson, write};
 use specforge_graph::{FieldValue, Node};
 use specforge_registry::FieldRegistry;
 use std::collections::BTreeMap;
@@ -89,7 +90,6 @@ pub(crate) fn normative_fields(
     node.fields
         .entries()
         .iter()
-        .filter(|entry| !matches!(entry.value, FieldValue::VerifyList(_)))
         .filter(|entry| !is_headline(node, entry.key.as_str(), registry))
         .filter(|entry| {
             registry
@@ -113,7 +113,7 @@ pub(crate) fn context_node(
         title: n.title.clone(),
         headline: headline_fields(n, registry),
         verify: {
-            let statements = specforge_graph::obligations(n);
+            let statements = &n.obligations;
             (!statements.is_empty()).then(|| statements.iter().map(Obligation::of).collect())
         },
         fields: normative_fields(n, registry),

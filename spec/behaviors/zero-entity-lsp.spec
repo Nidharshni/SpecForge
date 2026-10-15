@@ -84,7 +84,7 @@ behavior provide_extension_entity_hover "Provide Extension Entity Hover" {
     the references to it grouped
     by referencing kind and field and the references it makes grouped by
     field, each with its count, every other field value (a long string cut
-    at a character boundary), and the diagnostics about the entity that the
+    at a character boundary), its obligations, and the diagnostics about the entity that the
     diagnostics under the cursor do not already show, each code linked to
     its catalogue entry when it has one. The hover content MUST be
     formatted as markdown and MUST NOT carry editor-specific markup.
@@ -104,6 +104,7 @@ behavior provide_extension_entity_hover "Provide Extension Entity Hover" {
   verify unit "hover shows the headline statement as its summary"
   verify unit "hover shows reference count from graph"
   verify unit "hover shows the entity's coverage as specforge.inspect reports it"
+  verify unit "hover lists the entity's obligations apart from its fields"
   verify unit "hover lists the entity's diagnostics the cursor's do not already show"
   verify unit "a long field value is cut at a character boundary"
   verify unit "hover never states a coverage fact it cannot read: while the project rebuilds it says so"

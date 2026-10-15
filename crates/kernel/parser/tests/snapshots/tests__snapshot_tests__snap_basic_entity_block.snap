@@ -78,28 +78,8 @@ expression: "parse_ok(source, \"test.spec\").entities"
                         },
                     ),
                 },
-                FieldEntry {
-                    key: Sym("verify"),
-                    value: VerifyList(
-                        [
-                            VerifyStatement {
-                                kind: "unit",
-                                description: "produces AST for minimal valid file",
-                            },
-                            VerifyStatement {
-                                kind: "integration",
-                                description: "parses all .spec files in project",
-                            },
-                        ],
-                    ),
-                    annotations: [],
-                    value_span: None,
-                },
             ],
         },
-        raw_body: Some(
-            "\n    status planned\n    tags [alpha, beta, gamma]\n    verify unit \"produces AST for minimal valid file\"\n    verify integration \"parses all .spec files in project\"\n",
-        ),
         span: SourceSpan {
             file: Sym("test.spec"),
             start_line: 2,
@@ -108,5 +88,15 @@ expression: "parse_ok(source, \"test.spec\").entities"
             end_col: 2,
         },
         methods: [],
+        obligations: [
+            VerifyStatement {
+                kind: "unit",
+                description: "produces AST for minimal valid file",
+            },
+            VerifyStatement {
+                kind: "integration",
+                description: "parses all .spec files in project",
+            },
+        ],
     },
 ]

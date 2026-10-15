@@ -32,4 +32,8 @@ A testable unit of system functionality with a defined contract
 
 **Fields**
 - `features` = [signin]
-- `verify` = unit: a known user logs in
+
+---
+
+**Obligations**
+- unit: a known user logs in

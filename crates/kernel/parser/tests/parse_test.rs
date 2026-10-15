@@ -107,17 +107,12 @@ behavior validate_input "Validate Input" {
         result.errors
     );
     let entity = &result.entities[0];
-    let verify = entity.fields.get("verify").expect("missing verify field");
-    match verify {
-        FieldValue::VerifyList(stmts) => {
-            assert_eq!(stmts.len(), 2);
-            assert_eq!(stmts[0].kind, "unit");
-            assert_eq!(stmts[0].description, "rejects invalid UTF-8");
-            assert_eq!(stmts[1].kind, "integration");
-            assert_eq!(stmts[1].description, "validates end-to-end");
-        }
-        other => panic!("expected VerifyList, got {:?}", other),
-    }
+    let stmts = &entity.obligations;
+    assert_eq!(stmts.len(), 2);
+    assert_eq!(stmts[0].kind, "unit");
+    assert_eq!(stmts[0].description, "rejects invalid UTF-8");
+    assert_eq!(stmts[1].kind, "integration");
+    assert_eq!(stmts[1].description, "validates end-to-end");
 }
 
 #[specforge_test(
@@ -238,7 +233,7 @@ define my_custom_type {
     assert_eq!(entity.id.raw, "my_custom_type");
     assert!(entity.title.is_none());
     assert!(matches!(entity.fields.get("base_kind"), Some(FieldValue::String(s)) if s == "entity"));
-    assert!(entity.fields.get("verify").is_some());
+    assert!(!entity.obligations.is_empty());
 }
 
 #[specforge_test(
@@ -710,7 +705,7 @@ behavior recover_from_syntax_errors "Recover from Syntax Errors" {
     assert!(b1.fields.get("requires").is_some());
     assert!(b1.fields.get("ensures").is_some());
     assert!(b1.fields.get("contract").is_some());
-    assert!(b1.fields.get("verify").is_some());
+    assert!(!b1.obligations.is_empty());
 
     // Ref
     let r = &result.entities[1];
@@ -923,20 +918,12 @@ spec "MyProject" {
         }
     );
 
-    let verify = entity
-        .fields
-        .get("verify")
-        .expect("missing verify in spec block");
-    match verify {
-        FieldValue::VerifyList(stmts) => {
-            assert_eq!(stmts.len(), 2);
-            assert_eq!(stmts[0].kind, "integration");
-            assert_eq!(stmts[0].description, "project compiles end-to-end");
-            assert_eq!(stmts[1].kind, "unit");
-            assert_eq!(stmts[1].description, "version field is valid semver");
-        }
-        other => panic!("expected VerifyList, got {:?}", other),
-    }
+    let stmts = &entity.obligations;
+    assert_eq!(stmts.len(), 2);
+    assert_eq!(stmts[0].kind, "integration");
+    assert_eq!(stmts[0].description, "project compiles end-to-end");
+    assert_eq!(stmts[1].kind, "unit");
+    assert_eq!(stmts[1].description, "version field is valid semver");
 }
 
 #[specforge_test(
@@ -967,18 +954,10 @@ define my_custom_kind {
         }
     );
 
-    let verify = entity
-        .fields
-        .get("verify")
-        .expect("missing verify in define block");
-    match verify {
-        FieldValue::VerifyList(stmts) => {
-            assert_eq!(stmts.len(), 2);
-            assert_eq!(stmts[0].kind, "unit");
-            assert_eq!(stmts[1].kind, "property");
-        }
-        other => panic!("expected VerifyList, got {:?}", other),
-    }
+    let stmts = &entity.obligations;
+    assert_eq!(stmts.len(), 2);
+    assert_eq!(stmts[0].kind, "unit");
+    assert_eq!(stmts[1].kind, "property");
 }
 
 /// The `after` entity of the unclosed-string fixtures, with its fields.
@@ -1175,58 +1154,6 @@ fn malformed_ref_missing_scheme_produces_error() {
     );
 }
 
-#[test]
-fn entity_preserves_raw_body() {
-    let source = r#"
-behavior parse_things "Parse Things" {
-    status planned
-    tags [alpha, beta]
-    verify unit "it works"
-}
-"#;
-    let result = parse(source, "test.spec");
-
-    assert!(
-        result.errors.is_empty(),
-        "unexpected errors: {:?}",
-        result.errors
-    );
-    let entity = &result.entities[0];
-
-    // raw_body should contain the verbatim text between the braces
-    let raw = entity.raw_body.as_ref().expect("missing raw_body");
-    assert!(
-        raw.contains("status planned"),
-        "raw_body should contain field text, got: {raw:?}"
-    );
-    assert!(
-        raw.contains("tags [alpha, beta]"),
-        "raw_body should contain list, got: {raw:?}"
-    );
-    assert!(
-        raw.contains("verify unit"),
-        "raw_body should contain verify, got: {raw:?}"
-    );
-}
-
-#[test]
-fn empty_block_has_empty_raw_body() {
-    let source = "behavior empty \"Empty\" {\n}\n";
-    let result = parse(source, "test.spec");
-
-    assert!(
-        result.errors.is_empty(),
-        "unexpected errors: {:?}",
-        result.errors
-    );
-    let entity = &result.entities[0];
-    let raw = entity.raw_body.as_ref().expect("missing raw_body");
-    assert!(
-        raw.trim().is_empty(),
-        "expected empty raw_body, got: {raw:?}"
-    );
-}
-
 #[specforge_test(
     behavior = "parse_spec_file_to_ast",
     verify = "parse valid file produces complete AST"
@@ -1351,23 +1278,18 @@ event manifests_loaded "Manifests Loaded" {
         result.errors
     );
     let entity = &result.entities[0];
-    let verify = entity.fields.get("verify").expect("missing verify field");
-    match verify {
-        FieldValue::VerifyList(stmts) => {
-            assert_eq!(stmts.len(), 1);
-            // When kind is omitted, it should default to empty string or a sentinel
-            assert!(
-                stmts[0].kind.is_empty(),
-                "kind should be empty when omitted, got: {:?}",
-                stmts[0].kind
-            );
-            assert_eq!(
-                stmts[0].description,
-                "Extension manifests MUST be loaded before populating the kind registry"
-            );
-        }
-        other => panic!("expected VerifyList, got {:?}", other),
-    }
+    let stmts = &entity.obligations;
+    assert_eq!(stmts.len(), 1);
+    // When kind is omitted, it should default to empty string or a sentinel
+    assert!(
+        stmts[0].kind.is_empty(),
+        "kind should be empty when omitted, got: {:?}",
+        stmts[0].kind
+    );
+    assert_eq!(
+        stmts[0].description,
+        "Extension manifests MUST be loaded before populating the kind registry"
+    );
 }
 
 #[specforge_test(
@@ -1513,35 +1435,11 @@ behavior foo "T" {
     }
 }
 
-#[test]
-fn spec_block_preserves_raw_body() {
-    let source = r#"
-spec "MyProject" {
-    version "1.0.0"
-}
-"#;
-    let result = parse(source, "test.spec");
-
-    assert!(
-        result.errors.is_empty(),
-        "unexpected errors: {:?}",
-        result.errors
-    );
-    let raw = result.entities[0]
-        .raw_body
-        .as_ref()
-        .expect("missing raw_body on spec block");
-    assert!(
-        raw.contains("version"),
-        "spec block raw_body should contain fields, got: {raw:?}"
-    );
-}
-
 #[specforge_test(
     behavior = "parse_define_blocks",
     verify = "define block supports standard field syntax"
 )]
-fn define_block_preserves_raw_body() {
+fn define_block_supports_standard_field_syntax() {
     let source = r#"
 define my_kind {
     testable true
@@ -1554,7 +1452,7 @@ define my_kind {
         "unexpected errors: {:?}",
         result.errors
     );
-    // `testable true` is parsed as a standard field...
+    // `testable true` is parsed as a standard field.
     assert!(
         matches!(
             result.entities[0].fields.get("testable"),
@@ -1562,15 +1460,6 @@ define my_kind {
         ),
         "{:?}",
         result.entities[0].fields
-    );
-    // ...and the raw body is kept too.
-    let raw = result.entities[0]
-        .raw_body
-        .as_ref()
-        .expect("missing raw_body on define block");
-    assert!(
-        raw.contains("testable"),
-        "define block raw_body should contain fields, got: {raw:?}"
     );
 }
 
@@ -1775,25 +1664,20 @@ behavior multi_verify "Multi Verify" {
         result.errors
     );
     let entity = &result.entities[0];
-    let verify = entity.fields.get("verify").expect("missing verify field");
-    match verify {
-        FieldValue::VerifyList(stmts) => {
-            assert_eq!(
-                stmts.len(),
-                4,
-                "expected 4 verify statements in same entity"
-            );
-            assert_eq!(stmts[0].kind, "unit");
-            assert_eq!(stmts[0].description, "first unit test");
-            assert_eq!(stmts[1].kind, "unit");
-            assert_eq!(stmts[1].description, "second unit test");
-            assert_eq!(stmts[2].kind, "integration");
-            assert_eq!(stmts[2].description, "integration test");
-            assert_eq!(stmts[3].kind, "property");
-            assert_eq!(stmts[3].description, "property-based test");
-        }
-        other => panic!("expected VerifyList, got {:?}", other),
-    }
+    let stmts = &entity.obligations;
+    assert_eq!(
+        stmts.len(),
+        4,
+        "expected 4 verify statements in same entity"
+    );
+    assert_eq!(stmts[0].kind, "unit");
+    assert_eq!(stmts[0].description, "first unit test");
+    assert_eq!(stmts[1].kind, "unit");
+    assert_eq!(stmts[1].description, "second unit test");
+    assert_eq!(stmts[2].kind, "integration");
+    assert_eq!(stmts[2].description, "integration test");
+    assert_eq!(stmts[3].kind, "property");
+    assert_eq!(stmts[3].description, "property-based test");
 }
 
 #[specforge_test(
@@ -2125,14 +2009,14 @@ behavior overflowed "Overflow" {
         !result.errors.is_empty(),
         "overflow must be reported as an error"
     );
-    // Verify the error has useful span and expected/found info
-    let err = result
-        .errors
-        .iter()
-        .find(|e| e.message.contains("too large"))
-        .unwrap();
-    assert!(err.expected.is_some(), "error should have 'expected' field");
-    assert!(err.found.is_some(), "error should have 'found' field");
+    assert!(
+        result
+            .errors
+            .iter()
+            .any(|e| e.message.contains("too large")),
+        "the error says the integer is too large: {:?}",
+        result.errors
+    );
 }
 
 // B:recover_from_syntax_errors — verify unit "missing opening brace produces a parse error"
@@ -2170,11 +2054,6 @@ fn completely_invalid_syntax_produces_error_with_location() {
     assert!(
         err.span.start_line >= 1,
         "error span should have valid line number"
-    );
-    // Error should have expected field with guidance
-    assert!(
-        err.expected.is_some(),
-        "error should suggest what was expected"
     );
 }
 

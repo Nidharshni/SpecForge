@@ -137,7 +137,6 @@ fn a_list_on_a_single_value_field_is_an_error() {
 fn the_message_describes_the_value_by_its_shape() {
     let found = e061(&[
         ("points", ValueShape::Block, "a, b"),
-        ("points", ValueShape::Verify, "x works"),
         ("points", ValueShape::Expression, "a < 1"),
         ("points", ValueShape::TypeUnion, "string | int"),
         ("points", ValueShape::Date, "2026-10-07"),
@@ -151,7 +150,6 @@ fn the_message_describes_the_value_by_its_shape() {
         given,
         [
             "a block",
-            "verify statements",
             "an expression",
             "string | int",
             "2026-10-07",
@@ -202,7 +200,7 @@ fn e061_points_at_the_value_else_the_entity() {
     verify = "a value of a shape its declared type never takes is an error"
 )]
 fn a_value_of_a_shape_its_type_never_takes_is_an_error() {
-    let refused: [(&str, ValueShape, &str, &str, Option<&str>); 7] = [
+    let refused: [(&str, ValueShape, &str, &str, Option<&str>); 6] = [
         (
             "summary",
             ValueShape::Block,
@@ -229,13 +227,6 @@ fn a_value_of_a_shape_its_type_never_takes_is_an_error() {
             ValueShape::Block,
             "a",
             "a block",
-            Some("write a list: [a, b]"),
-        ),
-        (
-            "watchers",
-            ValueShape::Verify,
-            "x works",
-            "verify statements",
             Some("write a list: [a, b]"),
         ),
         (

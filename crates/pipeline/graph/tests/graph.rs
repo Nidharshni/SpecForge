@@ -2,25 +2,20 @@ use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{
     Edge, FileChange, Graph, GraphBuild, GraphConfig, GraphInputs, Node, SpecFile,
 };
-use specforge_parser::{EntityId, EntityKind, FieldMap, parse};
+use specforge_parser::parse;
 use specforge_test_macros::test as specforge_test;
 
 fn make_node(id: &str, kind: &str) -> Node {
+    let span = SourceSpan {
+        file: Sym::new("test.spec"),
+        start_line: 1,
+        start_col: 1,
+        end_line: 1,
+        end_col: 1,
+    };
     Node {
-        id: EntityId { raw: Sym::new(id) },
-        kind: EntityKind {
-            raw: Sym::new(kind),
-        },
         title: Some(id.to_string()),
-        fields: FieldMap::new(),
-        source_span: SourceSpan {
-            file: Sym::new("test.spec"),
-            start_line: 1,
-            start_col: 1,
-            end_line: 1,
-            end_col: 1,
-        },
-        methods: Vec::new(),
+        ..Node::new(id, kind, span)
     }
 }
 

@@ -12,6 +12,27 @@ pub struct Node {
     /// `method` members parsed from the entity body (ports define their
     /// interfaces this way). Empty for kinds that never declare methods.
     pub methods: Vec<specforge_parser::MethodDecl>,
+    /// `verify` statements in declaration order (ADR 0094): an entity's own
+    /// member, never a field.
+    pub obligations: Vec<specforge_parser::VerifyStatement>,
+}
+
+impl Node {
+    /// A node of `kind` named `id` at `source_span`, with no title, field, method or
+    /// obligation.
+    pub fn new(id: &str, kind: &str, source_span: SourceSpan) -> Node {
+        Node {
+            id: EntityId { raw: Sym::new(id) },
+            kind: EntityKind {
+                raw: Sym::new(kind),
+            },
+            title: None,
+            fields: FieldMap::new(),
+            source_span,
+            methods: Vec::new(),
+            obligations: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

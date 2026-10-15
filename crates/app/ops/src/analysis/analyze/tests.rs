@@ -197,6 +197,7 @@ fn add_entity_with(
             end_col: 1,
         },
         methods: Vec::new(),
+        obligations: Vec::new(),
     });
 }
 

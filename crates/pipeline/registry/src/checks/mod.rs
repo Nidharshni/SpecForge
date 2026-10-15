@@ -8,6 +8,7 @@ mod files;
 mod identifiers;
 mod index;
 mod kinds;
+mod obligations;
 mod references;
 mod refs;
 mod values;
@@ -28,8 +29,8 @@ impl RegistryBuild {
     /// 2. E016: a path a `file_reference` field names that does not exist
     ///    under `input.spec_root` (with a close sibling as the suggestion);
     /// 3. unless [`Self::structural_only`]: E024 unknown kind, E013
-    ///    reserved ID, E014 identifier length, W020 unknown field, E022
-    ///    reference to the wrong kind, E061 value not of its declared type;
+    ///    reserved ID, E014 identifier length, W020 unknown field, W158 verify
+    ///    statements on a kind that accepts none, E022 reference to the wrong kind, E061 value not of its declared type;
     ///    when structural-only with extensions loaded, one W151 instead;
     /// 4. the rule set ([`crate::rules::Rules::check`]), asking `verdicts`
     ///    for `custom` rules.
@@ -49,6 +50,7 @@ impl RegistryBuild {
             diagnostics.extend(identifiers::reserved(entities, &self.kinds)); // E013
             diagnostics.extend(identifiers::length(entities)); // E014
             diagnostics.extend(fields::unknown(entities, &self.kinds, &self.fields)); // W020
+            diagnostics.extend(obligations::refused(entities, &self.kinds)); // W158
             diagnostics.extend(references::mistyped(entities, &self.kinds, &self.fields)); // E022
             diagnostics.extend(values::mistyped(entities, &self.kinds, &self.fields)); // E061
         }

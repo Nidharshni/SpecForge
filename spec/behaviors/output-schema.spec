@@ -518,6 +518,7 @@ behavior publish_schema_specification "Publish Schema Specification" {
   verify unit "published schema requires the Graph Protocol top-level properties"
   verify unit "published context schema admits declared headline and normative fields"
   verify unit "--kind with --publish, and --format without it, are refused"
+  verify unit "an export holding a field named verify meets its published schema"
   verify unit "a context or brief export validates against the published schema of its format"
   verify unit "an export of a project with no errors validates against the published schema"
   verify integration "this repository's and its example projects' exports validate against their published schemas"

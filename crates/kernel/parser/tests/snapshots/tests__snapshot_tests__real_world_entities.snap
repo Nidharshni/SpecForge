@@ -185,28 +185,8 @@ expression: result.entities
                         },
                     ),
                 },
-                FieldEntry {
-                    key: Sym("verify"),
-                    value: VerifyList(
-                        [
-                            VerifyStatement {
-                                kind: "unit",
-                                description: "produces AST for minimal valid file",
-                            },
-                            VerifyStatement {
-                                kind: "integration",
-                                description: "parses all .spec files in project",
-                            },
-                        ],
-                    ),
-                    annotations: [],
-                    value_span: None,
-                },
             ],
         },
-        raw_body: Some(
-            "\n    invariants [multi_error_collection, string_interning_consistency]\n    types      [SpecFile, ParseError, SourceSpan]\n\n    requires {\n        valid_utf8_input \"Input buffer is valid UTF-8\"\n    }\n\n    ensures {\n        ast_produced \"A complete AST is produced\"\n    }\n\n    contract \"\"\"\n        Given a source file\n        When parsed by the Tree-sitter grammar\n        Then an AST is produced with all entities\n    \"\"\"\n\n    verify unit \"produces AST for minimal valid file\"\n    verify integration \"parses all .spec files in project\"\n",
-        ),
         span: SourceSpan {
             file: Sym("behaviors/parsing.spec"),
             start_line: 5,
@@ -215,6 +195,16 @@ expression: result.entities
             end_col: 2,
         },
         methods: [],
+        obligations: [
+            VerifyStatement {
+                kind: "unit",
+                description: "produces AST for minimal valid file",
+            },
+            VerifyStatement {
+                kind: "integration",
+                description: "parses all .spec files in project",
+            },
+        ],
     },
     Entity {
         kind: EntityKind {
@@ -254,7 +244,6 @@ expression: result.entities
                 },
             ],
         },
-        raw_body: None,
         span: SourceSpan {
             file: Sym("behaviors/parsing.spec"),
             start_line: 27,
@@ -263,6 +252,7 @@ expression: result.entities
             end_col: 32,
         },
         methods: [],
+        obligations: [],
     },
     Entity {
         kind: EntityKind {
@@ -346,24 +336,8 @@ expression: result.entities
                         },
                     ),
                 },
-                FieldEntry {
-                    key: Sym("verify"),
-                    value: VerifyList(
-                        [
-                            VerifyStatement {
-                                kind: "property",
-                                description: "N errors produce N diagnostics",
-                            },
-                        ],
-                    ),
-                    annotations: [],
-                    value_span: None,
-                },
             ],
         },
-        raw_body: Some(
-            "\n    invariants [multi_error_collection]\n    types      [ParseError]\n    status     planned\n    verify property \"N errors produce N diagnostics\"\n",
-        ),
         span: SourceSpan {
             file: Sym("behaviors/parsing.spec"),
             start_line: 29,
@@ -372,5 +346,11 @@ expression: result.entities
             end_col: 2,
         },
         methods: [],
+        obligations: [
+            VerifyStatement {
+                kind: "property",
+                description: "N errors produce N diagnostics",
+            },
+        ],
     },
 ]

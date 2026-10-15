@@ -47,14 +47,14 @@ The handshake is the first call the host makes after loading a Wasm binary. It e
 **Input:**
 
 ```json
-{ "host_version": "1.4.0" }
+{ "host_version": "1.5.0" }
 ```
 
 **Output** (`specforge_protocol_types::HandshakeResponse`):
 
 ```json
 {
-  "protocol_version": "1.4.0",
+  "protocol_version": "1.5.0",
   "name": "@specforge/software",
   "version": "1.0.0",
   "peer_dependencies": [
@@ -300,7 +300,7 @@ check leaves it as written.
 | `no_incoming_edges` | no edge points at the entity (only edges of `edge_type`, from its source kind, when set) | — | `edge_type` | `constraint`, `wasm_function` |
 | `no_outgoing_edges` | the entity points at nothing (only edges of `edge_type`, to its target kind, when set) | — | `edge_type` | `constraint`, `wasm_function` |
 | `no_edges` | the entity has no edges in either direction | — | — | `edge_type`, `constraint`, `wasm_function` |
-| `missing_field_when_flag_set` | `field` is absent (an entity owing no `verify` statements is exempt for `verify`) | `field` | `field` | `edge_type`, `constraint`, `wasm_function` |
+| `missing_field_when_flag_set` | `field` is absent (when `field` is `verify`, the entity's `verify` statements; an entity owing none is exempt) | `field` | `field` | `edge_type`, `constraint`, `wasm_function` |
 | `missing_required_field` | `field` is absent | `field` | `field` | `edge_type`, `constraint`, `wasm_function` |
 | `file_exists` | the path in `field` (each item of a list field) does not exist, relative to the spec root | `field` | `field` | `edge_type`, `constraint`, `wasm_function` |
 | `field_value_constraint` | `field`'s value breaks the constraint | `field`; a constraint `non_empty`, `one_of` with values, or `matches` with a `pattern` that compiles | the constraint | `edge_type`, `wasm_function`; `pattern` on `non_empty`/`one_of`; `values` on `non_empty`/`matches` |
@@ -619,6 +619,7 @@ The host-function surface is versioned alongside the wire protocol (`protocol_ve
 | `1.2.0` | the same as `1.0.0` |
 | `1.3.0` | the same as `1.0.0` |
 | `1.4.0` | the same as `1.0.0` |
+| `1.5.0` | the same as `1.0.0` |
 
 ### Protocol Versions
 
@@ -638,6 +639,7 @@ or answered.
 | `1.2.0` | The declared categories are the only describe categories (`fields`, `grammars`, `body_parsers` are gone); the handshake request carries only `host_version`; the handshake response carries `providers` and no `contribution_flags`; a pass's `PassEntity` says `owes_none` where it said `exempt` (ADR 0050). A 1.2 host loads every 1.x guest and ignores an older guest's flags; a 1.1 host cannot read a 1.2 guest's handshake. |
 | `1.3.0` | An enhancement declares no `edge_types`: an edge type is declared once, in `edges` (an enhancement's fields name it as their `edge`). A 1.3 host reports a 1.2 guest's enhancement `edge_types` key as W138 and ignores it (ADR 0060). |
 | `1.4.0` | A recorded test is one `TestResult` with a `TestStatus`: `passed`, `failed` or `skipped`, decoded strictly on the collect wire (a collector's other status is E028), and a pass's `test_results` carry the same, `duration_ms` included (they said `pass`/`fail`). A 1.3 pass that reads `test_results` misreads 1.4 values (ADR 0069). |
+| `1.5.0` | An entity's `verify` statements are no field text (ADR 0094): a pass's `PassEntity.fields` and a validator's `ValidatorField` carry no `verify` entry, so a field named `verify` is never overwritten; a pass reads the statements in `verify_kinds` and `verify_texts`, and the graph a command gets may carry a node-level `verify`, which a guest ignores. A 1.4 guest that read `fields["verify"]` loses it. |
 
 A host of `1.0.x` still loads a `1.1.0` guest and hands it the `1.0.0` values; a guest that needs the
 `1.1.0` values can read `host_version` in its handshake request.

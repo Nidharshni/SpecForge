@@ -48,11 +48,13 @@ pub struct Entity {
     pub id: EntityId,
     pub title: Option<String>,
     pub fields: FieldMap,
-    pub raw_body: Option<String>,
     pub span: SourceSpan,
     /// `method name(param: Type) -> Ret` members (ports define their
     /// interfaces this way). Empty for kinds that never declare methods.
     pub methods: Vec<MethodDecl>,
+    /// `verify [kind] "text"` statements, in declaration order (ADR 0002,
+    /// ADR 0094).
+    pub obligations: Vec<VerifyStatement>,
 }
 
 /// One `method` member of an entity body.
@@ -193,7 +195,6 @@ pub enum FieldValue {
     /// Preserves per-item type information instead of flattening to StringList.
     MixedList(Vec<FieldValue>),
     Block(FieldMap),
-    VerifyList(Vec<VerifyStatement>),
     /// First-class formal expressions: `metric expr { a < 10ms, b > 5 }`.
     /// Spans are absolute file positions.
     Expression(Vec<SpannedExpr>),
@@ -212,12 +213,10 @@ pub struct VerifyStatement {
     pub description: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct ParseError {
     pub message: String,
     pub span: SourceSpan,
-    pub expected: Option<String>,
-    pub found: Option<String>,
 }
 
 impl From<&ParseError> for specforge_common::Diagnostic {

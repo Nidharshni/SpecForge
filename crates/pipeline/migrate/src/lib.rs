@@ -251,18 +251,19 @@ pub fn structural_differences(delta: &GraphDelta) -> Vec<Diagnostic> {
         .collect()
 }
 
-/// What changed in `node`: its fields by name, then its aspects. A field named like an aspect (`kind`, `methods`)
+/// What changed in `node`: its fields by name, then its aspects. A field named like an aspect (`kind`, `methods`, `obligations`)
 /// is written `field 'kind'`, so the two read apart.
 fn changed(node: &ModifiedNodeChange) -> String {
     let aspect = |a: &NodeAspect| match a {
         NodeAspect::Kind => "kind",
         NodeAspect::Title => "title",
         NodeAspect::Methods => "methods",
+        NodeAspect::Obligations => "obligations",
         NodeAspect::Edges => "edges",
     };
     let aspects: Vec<&str> = node.changed_aspects.iter().map(aspect).collect();
     let fields = node.changed_fields.iter().map(|f| {
-        if ["kind", "title", "methods", "edges"].contains(&f.as_str()) {
+        if ["kind", "title", "methods", "obligations", "edges"].contains(&f.as_str()) {
             format!("field '{f}'")
         } else {
             f.clone()

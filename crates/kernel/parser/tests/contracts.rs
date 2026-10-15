@@ -150,7 +150,7 @@ use { SpecFile, ParseError } from "types/core"
 // B:parse_all_block_types — verify contract "requires/ensures consistency for block type parsing"
 #[specforge_test(
     behavior = "parse_all_block_types",
-    verify = "Parse All Block Types: block type parsing holds — source_parser_available, generic_blocks_parsed, unknown_keywords_accepted, raw_body_preserved"
+    verify = "Parse All Block Types: block type parsing holds — source_parser_available, generic_blocks_parsed, unknown_keywords_accepted"
 )]
 fn parse_all_block_types_contract() {
     // Requires: source with behavior, feature, type (different keywords)
@@ -254,20 +254,12 @@ behavior validate "Validate" {
         "unexpected errors: {:?}",
         result.errors
     );
-    let verify = result.entities[0]
-        .fields
-        .get("verify")
-        .expect("missing verify field");
-    match verify {
-        FieldValue::VerifyList(stmts) => {
-            assert_eq!(stmts.len(), 3, "three verify statements must be parsed");
-            assert_eq!(stmts[0].kind, "unit");
-            assert_eq!(stmts[0].description, "rejects invalid input");
-            assert_eq!(stmts[1].kind, "integration");
-            assert_eq!(stmts[2].kind, "property");
-        }
-        other => panic!("expected VerifyList, got {:?}", other),
-    }
+    let stmts = &result.entities[0].obligations;
+    assert_eq!(stmts.len(), 3, "three verify statements must be parsed");
+    assert_eq!(stmts[0].kind, "unit");
+    assert_eq!(stmts[0].description, "rejects invalid input");
+    assert_eq!(stmts[1].kind, "integration");
+    assert_eq!(stmts[2].kind, "property");
 }
 
 // B:parse_ref_blocks — verify contract "requires/ensures consistency for ref block parsing"
@@ -331,7 +323,7 @@ define my_custom_type {
         Some(FieldValue::Boolean(true))
     ));
     assert!(
-        entity.fields.get("verify").is_some(),
-        "verify field must be present"
+        !entity.obligations.is_empty(),
+        "verify statements must be present"
     );
 }

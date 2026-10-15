@@ -28,6 +28,7 @@ fn node(id: &str, kind: &str) -> Node {
             end_col: 0,
         },
         methods: Vec::new(),
+        obligations: Vec::new(),
     }
 }
 

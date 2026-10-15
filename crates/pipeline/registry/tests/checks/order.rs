@@ -39,7 +39,7 @@ fn shapes() -> ExtensionDeclaration {
 
 #[spec(
     behavior = "check_entities_in_one_order",
-    verify = "the structural checks run in one order: W012, E016, E024, E013, E014, W020, E022, E061, then the rule set"
+    verify = "the structural checks run in one order: W012, E016, E024, E013, E014, W020, W158, E022, E061, then the rule set"
 )]
 fn the_checks_run_in_one_order() {
     let s = span("a.spec");
@@ -50,7 +50,9 @@ fn the_checks_run_in_one_order() {
         EntityRecord::new("gadget", "g_size", s).with_value("size", ValueShape::String, "big"),
         EntityRecord::new("gadget", "g_parts", s).with_reference("parts", &["w_one"]),
         EntityRecord::new("widget", "w_one", s),
-        EntityRecord::new("gadget", "g_bogus", s).with_fields(&["bogus"]),
+        EntityRecord::new("gadget", "g_bogus", s)
+            .with_fields(&["bogus"])
+            .with_obligation("unit", "x"),
         EntityRecord::new("gadget", "x", s),
         EntityRecord::new("gadget", "gadget", s),
         EntityRecord::new("wibble", "wb_one", s),
@@ -62,7 +64,7 @@ fn the_checks_run_in_one_order() {
     assert_eq!(
         codes,
         [
-            "W012", "E016", "E024", "E013", "E014", "W020", "E022", "E061", "W900"
+            "W012", "E016", "E024", "E013", "E014", "W020", "W158", "E022", "E061", "W900"
         ],
         "{diags:?}"
     );

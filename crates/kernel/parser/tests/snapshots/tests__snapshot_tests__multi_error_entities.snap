@@ -33,9 +33,6 @@ expression: result.entities
                 },
             ],
         },
-        raw_body: Some(
-            "\n    status planned\n",
-        ),
         span: SourceSpan {
             file: Sym("test.spec"),
             start_line: 2,
@@ -44,6 +41,7 @@ expression: result.entities
             end_col: 2,
         },
         methods: [],
+        obligations: [],
     },
     Entity {
         kind: EntityKind {
@@ -75,9 +73,6 @@ expression: result.entities
                 },
             ],
         },
-        raw_body: Some(
-            "\n    status done\n",
-        ),
         span: SourceSpan {
             file: Sym("test.spec"),
             start_line: 10,
@@ -86,5 +81,6 @@ expression: result.entities
             end_col: 2,
         },
         methods: [],
+        obligations: [],
     },
 ]

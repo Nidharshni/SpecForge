@@ -26,4 +26,8 @@ A temporal property assertion (safety, liveness, fairness)
 **Fields**
 - `property_type` = `safety`
 - `expression` = "once logged in, a session stays until logout"
-- `verify` = unit: no login is lost
+
+---
+
+**Obligations**
+- unit: no login is lost

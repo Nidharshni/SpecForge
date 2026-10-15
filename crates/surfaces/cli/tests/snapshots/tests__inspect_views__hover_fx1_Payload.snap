@@ -25,4 +25,8 @@ A data structure or domain model definition
 
 **Fields**
 - `verify` = `string`
-- `verify` = unit: Payload schema is valid
+
+---
+
+**Obligations**
+- unit: Payload schema is valid

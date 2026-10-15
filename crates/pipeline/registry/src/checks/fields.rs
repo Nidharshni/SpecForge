@@ -9,11 +9,10 @@ use crate::{FieldRegistry, KindRegistry};
 /// W020 for each field name not declared on a registered kind. `title` is
 /// structural and always valid; every other name, `expression` included, is
 /// valid where an extension declares it (the prove pass reads the fields
-/// extensions give a proof role, ADR 0009). `verify` is reserved syntax
-/// whose meaning comes from extensions (ADR 0002): it is valid only on
-/// kinds an extension made testable (`supports_verify`), e.g. via
-/// @specforge/testing. Entities with unregistered kinds are skipped to avoid
-/// cascading diagnostics.
+/// extensions give a proof role, ADR 0009). A field named `verify` is
+/// checked like any field: `verify` statements are not fields (ADR 0094; a
+/// kind that accepts none is W158). Entities with unregistered kinds are
+/// skipped to avoid cascading diagnostics.
 pub(super) fn unknown(
     entities: &[EntityRecord],
     kinds: &KindRegistry,
@@ -34,27 +33,17 @@ pub(super) fn unknown(
         }
 
         for field_name in entity.field_keys() {
-            let accepted = match field_name {
-                "title" => true,
-                "verify" => entry.supports_verify,
-                _ => fields.contains(kind, field_name),
-            };
-            if accepted {
+            if field_name == "title" || fields.contains(kind, field_name) {
                 continue;
             }
-            let suggestion = if field_name == "verify" {
-                Some(format!(
-                    "'{kind}' accepts no verify obligations: enable an extension that makes it testable (for software kinds, `specforge add @specforge/testing`)"
-                ))
-            } else {
-                KeywordExtensionIndex::bundled_fields()
+            let suggestion = KeywordExtensionIndex::bundled_fields()
                     .lookup(&format!("{kind}.{field_name}"))
                     .map(|ext| {
                         format!(
                             "{ext} declares '{field_name}' on '{kind}': install it with: specforge add {ext}"
                         )
                     })
-            };
+;
             let mut diagnostic = Diagnostic::new(
                 codes::W020,
                 format!(

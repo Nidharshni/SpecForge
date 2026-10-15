@@ -23,6 +23,7 @@ fn node(id: &str, kind: &str, title: Option<&str>) -> Node {
         fields: FieldMap::new(),
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     }
 }
 
@@ -41,6 +42,7 @@ fn node_with_contract(id: &str, kind: &str, title: &str, contract: &str) -> Node
         fields,
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     }
 }
 

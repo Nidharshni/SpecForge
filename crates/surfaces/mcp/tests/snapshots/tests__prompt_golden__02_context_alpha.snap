@@ -16,12 +16,6 @@ expression: "shape(&reply, dir.path())"
       "contract": "first",
       "features": [
         "feat_login"
-      ],
-      "verify": [
-        {
-          "description": "alpha works",
-          "kind": "unit"
-        }
       ]
     },
     "kind": "behavior",

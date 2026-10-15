@@ -29,13 +29,7 @@ expression: "normalized(result, root)"
   "exempt": false,
   "fields": {
     "expression": "once logged in, a session stays until logout",
-    "property_type": "safety",
-    "verify": [
-      {
-        "description": "no login is lost",
-        "kind": "unit"
-      }
-    ]
+    "property_type": "safety"
   },
   "kind": "property",
   "obligated": false,

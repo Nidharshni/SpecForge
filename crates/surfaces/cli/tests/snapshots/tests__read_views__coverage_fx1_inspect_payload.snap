@@ -28,12 +28,7 @@ expression: "normalized(&result, root)"
   "entity_id": "Payload",
   "exempt": false,
   "fields": {
-    "verify": [
-      {
-        "description": "Payload schema is valid",
-        "kind": "unit"
-      }
-    ]
+    "verify": "string"
   },
   "kind": "type",
   "obligated": true,

@@ -148,8 +148,8 @@ impl<G> CommandInput<G> {
 
 /// A command input's graph as it is on the wire: its entities sorted by id,
 /// its resolved references sorted by (source, target, label). Keys of the
-/// graph export it does not name (`format_version`, a node's `file` and
-/// `line`) are ignored.
+/// graph export it does not name (`format_version`, a node's `file`, `line` and
+/// `verify`) are ignored.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct GraphWire {
     #[serde(default)]
@@ -371,9 +371,10 @@ pub struct PassEntity {
     /// Every field the entity writes, by name, as its field text (ADR 0019,
     /// protocol 1.1.0): scalars as written; lists of strings or references
     /// and mixed lists joined by `", "`; variant lists and type unions by
-    /// `" | "`; expressions by `", "`; verify statements by `"; "`; a
-    /// block's keys by `", "`. A written empty list or block is `""`, never
-    /// absent. A name written twice keeps its last text.
+    /// `" | "`; expressions by `", "`; a block's keys by `", "`. A written
+    /// empty list or block is `""`, never absent. A name written twice keeps
+    /// its last text. The entity's `verify` statements are not a field (ADR
+    /// 0094, protocol 1.5.0): they are `verify_kinds` and `verify_texts`.
     #[serde(default)]
     pub fields: BTreeMap<String, String>,
     #[serde(default)]

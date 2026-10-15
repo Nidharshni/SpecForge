@@ -75,18 +75,18 @@ gadget g_docs { docs [\"missing.md\"] }
 wibble wb_one { }
 gadget gadget { }
 gadget x { }
-gadget g_bogus { bogus \"1\" }
+gadget g_bogus { bogus \"1\"\n  verify unit \"x\" }
 widget w_one { }
 gadget g_parts { parts [w_one] }
 gadget g_size { size \"big\" }
 ";
 
-const ORDER: [&str; 9] = [
-    "W012", "E016", "E024", "E013", "E014", "W020", "E022", "E061", "W900",
+const ORDER: [&str; 10] = [
+    "W012", "E016", "E024", "E013", "E014", "W020", "W158", "E022", "E061", "W900",
 ];
 
 /// Every structural check reports, then the extension's rule: the order is
-/// W012, E016, E024, E013, E014, W020, E022, E061, then the rules. It must
+/// W012, E016, E024, E013, E014, W020, W158, E022, E061, then the rules. It must
 /// stay byte-identical while the checks move (plan 04, T0..T12).
 #[specforge_test(
     behavior = "check_entities_in_one_order",

@@ -41,8 +41,6 @@ impl<'a> ParseContext<'a> {
             self.errors.push(ParseError {
                 message: "syntax error in field value".to_string(),
                 span,
-                expected: None,
-                found: Some(self.text(broken).chars().take(40).collect()),
             });
         }
         let key_sym = Sym::new(self.text(key));
@@ -120,8 +118,6 @@ impl<'a> ParseContext<'a> {
                                 text
                             ),
                             span: self.span(node),
-                            expected: Some("integer within i64 range".to_string()),
-                            found: Some(text.to_string()),
                         });
                         FieldValue::Integer(0)
                     }
@@ -222,8 +218,6 @@ impl<'a> ParseContext<'a> {
                     message: "mixed list contains both quoted strings and bare identifiers"
                         .to_string(),
                     span: self.span(node),
-                    expected: Some("either all quoted strings or all bare identifiers".to_string()),
-                    found: None,
                 });
             }
             return FieldValue::MixedList(typed_items);

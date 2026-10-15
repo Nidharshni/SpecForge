@@ -12,7 +12,7 @@ use std::collections::BTreeSet;
 use serde_json::{Map, Value, json};
 use specforge_common::shape::{Definitions, Shape};
 use specforge_common::structural::NODE_KINDS;
-use specforge_graph::field_form::{FieldJson, Obligation};
+use specforge_graph::field_form::FieldJson;
 
 use crate::emit::{EmitFormat, document_schema};
 use crate::schema::{GraphProtocolSchema, SchemaEntityKind, schema_url};
@@ -28,7 +28,7 @@ use crate::schema::{GraphProtocolSchema, SchemaEntityKind, schema_url};
 /// - graph nodes: one branch per kind an export can hold (every declared
 ///   kind, then the structural `ref` and `spec`), `$defs/node_<kind>`,
 ///   chosen by `oneOf`; a declared kind's `fields` is `$defs/fields_<kind>`:
-///   each declared field's field form schema, `verify` as `VerifyStatement`s,
+///   each declared field's field form schema,
 ///   its required fields required, any other key a `FieldJson`;
 /// - context and brief nodes: `kind` is one of those kinds;
 /// - the embedded schema's edge type labels are the registered ones, and an
@@ -175,8 +175,7 @@ fn ordered<'s>(schema: &'s GraphProtocolSchema, mut kinds: Vec<&'s str>) -> Vec<
     kinds
 }
 
-/// `kind`'s `fields` object: each declared field's form, its `verify`
-/// statements, the required fields required, any other key a field value.
+/// `kind`'s `fields` object: each declared field's form, the required fields required, any other key a field value.
 fn fields_schema(kind: &SchemaEntityKind, defs: &mut Definitions) -> Value {
     let mut properties = Map::new();
     let mut required = Vec::new();
@@ -186,9 +185,6 @@ fn fields_schema(kind: &SchemaEntityKind, defs: &mut Definitions) -> Value {
             required.push(json!(field.name));
         }
     }
-    properties
-        .entry("verify")
-        .or_insert_with(|| json!({"type": "array", "items": Obligation::schema(defs)}));
     let mut object = Map::new();
     object.insert("type".into(), json!("object"));
     object.insert("properties".into(), Value::Object(properties));

@@ -1,7 +1,6 @@
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Graph, Node};
 use specforge_ops::read::navigate::{EntityQuery, MatchScope, find_entities};
-use specforge_parser::{EntityId, EntityKind, FieldMap};
 use specforge_test_macros::test as specforge_test;
 use tower_lsp::lsp_types::{
     DocumentSymbolResponse, GotoDefinitionResponse, Position, PrepareRenameResponse, Url,
@@ -12,39 +11,35 @@ use specforge_lsp::answers;
 
 fn node(id: &str, kind: &str, title: Option<&str>) -> Node {
     Node {
-        id: EntityId { raw: Sym::new(id) },
-        kind: EntityKind {
-            raw: Sym::new(kind),
-        },
         title: title.map(|t| t.to_string()),
-        fields: FieldMap::new(),
-        source_span: SourceSpan {
-            file: Sym::new("test.spec"),
-            start_line: 0,
-            start_col: 0,
-            end_line: 3,
-            end_col: 1,
-        },
-        methods: Vec::new(),
+        ..Node::new(
+            id,
+            kind,
+            SourceSpan {
+                file: Sym::new("test.spec"),
+                start_line: 0,
+                start_col: 0,
+                end_line: 3,
+                end_col: 1,
+            },
+        )
     }
 }
 
 fn node_at(id: &str, kind: &str, file: &str, line: usize, col: usize) -> Node {
     Node {
-        id: EntityId { raw: Sym::new(id) },
-        kind: EntityKind {
-            raw: Sym::new(kind),
-        },
         title: Some(format!("{id} title")),
-        fields: FieldMap::new(),
-        source_span: SourceSpan {
-            file: Sym::new(file),
-            start_line: line,
-            start_col: col,
-            end_line: line + 3,
-            end_col: col + id.len(),
-        },
-        methods: Vec::new(),
+        ..Node::new(
+            id,
+            kind,
+            SourceSpan {
+                file: Sym::new(file),
+                start_line: line,
+                start_col: col,
+                end_line: line + 3,
+                end_col: col + id.len(),
+            },
+        )
     }
 }
 

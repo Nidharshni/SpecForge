@@ -190,6 +190,7 @@ mod tests {
                 end_col: 0,
             },
             methods: Vec::new(),
+            obligations: Vec::new(),
         }
     }
 

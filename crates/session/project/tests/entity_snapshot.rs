@@ -202,7 +202,6 @@ const ALPHA: &[(&str, &str)] = &[
     ("doc", "doc.md"),
     ("metric", "latency < 10ms, load > 5"),
     ("shape", "string | string[]"),
-    ("verify", "alpha works"),
 ];
 
 #[specforge_test_macros::test(

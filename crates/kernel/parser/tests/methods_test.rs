@@ -55,10 +55,8 @@ port P {
     let port = result.entities.first().unwrap();
     assert_eq!(port.methods.len(), 1);
     assert!(port.fields.get("method").is_none());
-    assert!(matches!(
-        port.fields.get("verify"),
-        Some(FieldValue::VerifyList(_))
-    ));
+    assert_eq!(port.obligations.len(), 1);
+    assert!(port.fields.get("verify").is_none());
 }
 
 #[test]
