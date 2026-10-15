@@ -5,6 +5,7 @@
 use serde_json::{Value, json};
 use std::path::Path;
 
+use crate::coverage_corpus::project;
 use crate::support::pairing::{Outcome, cli_outcome, mcp_calls, mcp_outcome, served};
 use crate::support::{Cli, TestProject};
 
@@ -98,6 +99,99 @@ const PAIRS: &[Pair] = &[
         tool: "specforge.model",
         arguments: || json!({"depth": 2}),
     },
+    Pair {
+        label: "export_context_with_schema",
+        project: rv1,
+        cli: &[
+            "export",
+            "--path",
+            "{root}",
+            "--format",
+            "context",
+            "--with-schema",
+        ],
+        exit: 0,
+        tool: "specforge.export",
+        arguments: || json!({"format": "context", "with_schema": true}),
+    },
+    Pair {
+        label: "export_brief_with_schema",
+        project: rv1,
+        cli: &[
+            "export",
+            "--path",
+            "{root}",
+            "--format",
+            "brief",
+            "--with-schema",
+        ],
+        exit: 0,
+        tool: "specforge.export",
+        arguments: || json!({"format": "brief", "with_schema": true}),
+    },
+    Pair {
+        label: "export_graph_no_schema",
+        project: rv1,
+        cli: &[
+            "export",
+            "--path",
+            "{root}",
+            "--format",
+            "graph",
+            "--no-schema",
+        ],
+        exit: 0,
+        tool: "specforge.export",
+        arguments: || json!({"format": "graph", "no_schema": true}),
+    },
+    Pair {
+        label: "schema_no_edges",
+        project: rv1,
+        cli: &["schema", "--path", "{root}", "--no-edges"],
+        exit: 0,
+        tool: "specforge.schema",
+        arguments: || json!({"include_edges": false}),
+    },
+    Pair {
+        label: "schema_validation_rules",
+        project: rv1,
+        cli: &["schema", "--path", "{root}", "--validation-rules"],
+        exit: 0,
+        tool: "specforge.schema",
+        arguments: || json!({"include_validation_rules": true}),
+    },
+    Pair {
+        label: "schema_kind_rules_no_edges",
+        project: rv1,
+        cli: &[
+            "schema",
+            "--path",
+            "{root}",
+            "--kind",
+            "behavior",
+            "--validation-rules",
+            "--no-edges",
+        ],
+        exit: 0,
+        tool: "specforge.schema",
+        arguments: || json!({"kind": "behavior", "include_validation_rules": true, "include_edges": false}),
+    },
+    Pair {
+        label: "trace_plan",
+        project: fx1_with_plan,
+        cli: &[
+            "trace",
+            "--plan",
+            "{root}/agent-plan.json",
+            "--path",
+            "{root}",
+            "--format",
+            "json",
+        ],
+        exit: 1,
+        tool: "specforge.trace",
+        arguments: || json!({"plan": fx1_plan()}),
+    },
 ];
 
 /// The project of one behavior with a passing recorded test, for the cargo-test collector.
@@ -129,6 +223,18 @@ fn plan() -> Value {
 /// `rv1` with [`plan`] written as `agent-plan.json`.
 fn rv1_with_plan() -> TestProject {
     rv1().file("agent-plan.json", plan().to_string())
+}
+
+/// The plan of the `trace_plan` row: one entry names an entity, one names none.
+fn fx1_plan() -> Value {
+    json!({"plan_id": "p", "entries": [
+        {"entity_id": "login", "action": "implement"},
+        {"entity_id": "ghost", "action": "implement"}]})
+}
+
+/// The coverage corpus's `fx1` with [`fx1_plan`] written as `agent-plan.json`.
+fn fx1_with_plan() -> TestProject {
+    project("fx1").file("agent-plan.json", fx1_plan().to_string())
 }
 
 /// Run `label`'s row on both surfaces over one served project: assert the CLI's exit and that the
@@ -211,4 +317,56 @@ fn export_depth_without_scope_is_refused_on_both() {
 #[test]
 fn model_depth_without_root_is_refused_on_both() {
     assert_eq!(pair("model_depth_without_root").0, Outcome::Refused);
+}
+
+/// The document a row's surfaces both answered.
+fn answered(label: &str) -> Value {
+    match pair(label).0 {
+        Outcome::Answered(document) => document,
+        Outcome::Refused => panic!("{label}: both surfaces refused"),
+    }
+}
+
+#[specforge_test_macros::test(
+    behavior = "provide_mcp_export_tool",
+    verify = "with_schema embeds the schema in a context, brief or budgeted export, and no_schema leaves it out of a graph export"
+)]
+fn export_schema_flags_select_the_same_export() {
+    for label in ["export_context_with_schema", "export_brief_with_schema"] {
+        let with = answered(label);
+        // The pairing's normalization redacts an embedded schema to a marker.
+        assert_eq!(with["schema"], "[SCHEMA]", "{label}: {with}");
+    }
+    let without = answered("export_graph_no_schema");
+    assert_eq!(without["format_version"], "1.0", "{without}");
+    assert!(without.get("schema").is_none(), "{without}");
+
+    let mut served = served(rv1());
+    let call = json!({"name": "specforge.export", "arguments": {
+        "format": "graph", "max_tokens": 100000, "with_schema": true}});
+    let budgeted = mcp_calls(&mut served, &[call]).remove(0);
+    assert!(budgeted["schema"].is_object(), "{budgeted}");
+}
+
+#[specforge_test_macros::test(
+    behavior = "serve_schema_resource",
+    verify = "--no-edges and --validation-rules select what include_edges and include_validation_rules select"
+)]
+fn schema_flags_select_the_same_document() {
+    let no_edges = answered("schema_no_edges");
+    assert!(no_edges.get("edge_types").is_none(), "{no_edges}");
+    let rules = answered("schema_validation_rules");
+    assert!(rules.get("edge_types").is_some(), "{rules}");
+    assert!(rules.get("validation_rules").is_some(), "{rules}");
+    let both = answered("schema_kind_rules_no_edges");
+    assert!(both.get("edge_types").is_none(), "{both}");
+    assert!(both.get("validation_rules").is_some(), "{both}");
+}
+
+#[specforge_test_macros::test(
+    behavior = "validate_agent_plan",
+    verify = "specforge trace --plan and specforge.trace answer the same document for a plan"
+)]
+fn a_plan_check_is_one_document() {
+    assert_eq!(answered("trace_plan")["ok"], false);
 }

@@ -244,42 +244,6 @@ fn cli_and_mcp_trace_are_the_same_chain() {
     assert_traces_agree(&mut served(rv1()));
 }
 
-#[specforge_test_macros::test(
-    behavior = "validate_agent_plan",
-    verify = "specforge trace --plan and specforge.trace answer the same document for a plan"
-)]
-fn cli_and_mcp_plan_check_are_one_document() {
-    let mut tmp = served(project("fx1"));
-    let root_buf = tmp.root().to_path_buf();
-    let root = root_buf.as_path();
-    let plan = json!({"plan_id": "p", "entries": [
-        {"entity_id": "login", "action": "implement"},
-        {"entity_id": "ghost", "action": "implement"}]});
-    let file = tmp.root().join("agent-plan.json");
-    std::fs::write(&file, plan.to_string()).unwrap();
-
-    let run = cli(
-        &tmp,
-        &[
-            "trace",
-            "--plan",
-            s(&file),
-            "--path",
-            s(root),
-            "--format",
-            "json",
-        ],
-    );
-    assert_eq!(run.code, Some(1), "{}{}", run.stdout, run.stderr);
-    let printed: Value = serde_json::from_str(&run.stdout).unwrap();
-    let mcp = mcp_calls(
-        &mut tmp,
-        &[json!({"name": "specforge.trace", "arguments": {"plan": plan}})],
-    );
-    assert_eq!(printed, mcp[0]);
-    assert_eq!(printed["ok"], false, "{printed}");
-}
-
 #[test]
 fn coverage_views_today() {
     let mut tmp = served(project("fx1"));
@@ -631,47 +595,6 @@ fn cli_and_mcp_schema_kind_are_one_document() {
         printed.stdout.trim_end(),
         serde_json::to_string_pretty(&schema).unwrap()
     );
-}
-
-#[specforge_test_macros::test(
-    behavior = "serve_schema_resource",
-    verify = "--no-edges and --validation-rules select what include_edges and include_validation_rules select"
-)]
-fn cli_and_mcp_schema_requests_agree() {
-    let mut tmp = served(rv1());
-    let root_buf = tmp.root().to_path_buf();
-    let root = root_buf.as_path();
-    let cases: [(&[&str], Value); 3] = [
-        (&["--no-edges"], json!({"include_edges": false})),
-        (
-            &["--validation-rules"],
-            json!({"include_validation_rules": true}),
-        ),
-        (
-            &["--kind", "behavior", "--validation-rules", "--no-edges"],
-            json!({"kind": "behavior", "include_validation_rules": true, "include_edges": false}),
-        ),
-    ];
-    let calls: Vec<Value> = cases
-        .iter()
-        .map(|(_, arguments)| json!({"name": "specforge.schema", "arguments": arguments}))
-        .collect();
-    for ((flags, arguments), answered) in cases.iter().zip(mcp_calls(&mut tmp, &calls)) {
-        let mut args = vec!["schema", "--path", s(root)];
-        args.extend(*flags);
-        let printed = cli_json(&tmp, &args);
-        assert_eq!(printed, answered, "{flags:?} vs {arguments}");
-        assert_eq!(
-            printed.get("edge_types").is_some(),
-            !flags.contains(&"--no-edges"),
-            "{flags:?}"
-        );
-        assert_eq!(
-            printed.get("validation_rules").is_some(),
-            flags.contains(&"--validation-rules"),
-            "{flags:?}"
-        );
-    }
 }
 
 /// `rv1` with a `specforge-report.json` that does not parse.

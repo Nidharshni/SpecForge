@@ -1055,40 +1055,6 @@ fn mcp_export_carries_the_schema_version_the_cli_computes() {
 }
 
 #[specforge_test_macros::test(
-    behavior = "provide_mcp_export_tool",
-    verify = "with_schema embeds the schema in a context, brief or budgeted export, and no_schema leaves it out of a graph export"
-)]
-fn mcp_export_schema_flags_are_the_cli_flags() {
-    let dir = scratch();
-    project(&dir);
-
-    for format in ["context", "brief"] {
-        let plain = mcp_export(dir.root(), json!({"format": format}));
-        assert!(plain.get("schema").is_none(), "{format}: {plain}");
-        let with = mcp_export(dir.root(), json!({"format": format, "with_schema": true}));
-        assert!(with["schema"].is_object(), "{format}: {with}");
-        assert_eq!(
-            with,
-            cli_export(&dir, &["--format", format, "--with-schema"])
-        );
-    }
-
-    let budgeted = mcp_export(
-        dir.root(),
-        json!({"format": "graph", "max_tokens": 100000, "with_schema": true}),
-    );
-    assert!(budgeted["schema"].is_object(), "{budgeted}");
-
-    let without = mcp_export(dir.root(), json!({"format": "graph", "no_schema": true}));
-    assert_eq!(without["format_version"], "1.0", "{without}");
-    assert!(without.get("schema").is_none(), "{without}");
-    assert_eq!(
-        without,
-        cli_export(&dir, &["--format", "graph", "--no-schema"])
-    );
-}
-
-#[specforge_test_macros::test(
     behavior = "serve_graph_resource",
     verify = "specforge://graph under max_tokens stays within the budget, as the budgeted export does"
 )]
