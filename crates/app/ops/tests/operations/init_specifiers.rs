@@ -39,8 +39,10 @@ fn init_with(
     )
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test_macros::test(
+    behavior = "non_interactive_init",
+    verify = "init enables an extension two of its specifiers name the same way once, and refuses two that add it differently with extension_conflict, as add does"
+)]
 fn init_refuses_two_local_files_that_add_one_extension_differently() {
     let scratch = TempDir::new().unwrap();
     let (a, b) = (scratch.path().join("a.wasm"), scratch.path().join("b.wasm"));

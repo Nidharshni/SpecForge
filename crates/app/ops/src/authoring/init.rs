@@ -1,6 +1,7 @@
 //! `specforge init` and `specforge.init`: one scaffold for both surfaces.
 //!
-//! [`init`] validates everything, reads its extension specifiers as `add` reads them, and writes
+//! [`init`] validates everything, reads its extension specifiers as `add` reads them and claims
+//! them as `add` does (two that add one extension differently are refused, ADR 0098), and writes
 //! one change: it enables builtins and installs local `.wasm` extensions through the lock plan
 //! `add` uses (ADR 0004 D3-e, ADR 0041, ADR 0065), judged once before any file is written, so it
 //! never writes an entry `specforge check` can't load. The modules, the lock, `specforge.json`,
@@ -9,7 +10,7 @@
 //! afterwards with `specforge add`.
 
 use crate::extension::{
-    self, AddField, Also, Ask, Candidate, Install, LocalFile, LockPlan, Source,
+    self, AddField, Also, Ask, Candidate, Claimed, Claims, Install, LocalFile, LockPlan, Source,
 };
 use crate::{OpError, OpErrorKind, Refusal, Writes};
 use serde::Serialize;
@@ -115,7 +116,8 @@ pub struct InitDocument {
 
 /// Scaffold the project `req` describes: validated first, its extension specifiers read as `add`
 /// reads them (E054, R-RES-003, E040; a registry package is E063 and a git source E064, both
-/// before anything is written), its lock plan judged once, then written as one change: the
+/// before anything is written) and claims them as `add` does (the same way twice is enabled
+/// once, another way is `extension_conflict`, naming both), its lock plan judged once, then written as one change: the
 /// installed modules, `specforge.lock`, `specforge.json`, the `.gitignore` entries and the
 /// starter. Init only adds: the starter is created, never overwritten, and a failed init puts
 /// back what was there before it ran and removes what it created. Its error reports nothing
@@ -191,24 +193,31 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     )?;
     // What each local file contributes to the starter, by the name it declares.
     let mut templates: Vec<(String, Option<String>)> = Vec::new();
+    let mut claims = Claims::default();
     for (at, one) in wanted.iter().enumerate() {
-        if wanted[..at]
-            .iter()
-            .any(|earlier| earlier.source == one.source)
-        {
+        // A claim names both specifiers itself, as add's does.
+        let claimed = |error: OpError| error.about(InitField::Extensions);
+        if claims.repeated(one).is_some() {
             continue;
         }
         match &one.source {
-            Source::Builtin(name) => plan.enable(Ask(at), name),
+            Source::Builtin(name) => {
+                if claims.builtin(one, name).map_err(claimed)? == Claimed::First {
+                    plan.enable(Ask(at), name);
+                }
+            }
             Source::Local(path) => {
                 let local = LocalFile::read(runtime, path).map_err(|e| named(at, e))?;
                 let candidate = local.binary.candidate();
-                templates.push((
+                let declared = (
                     candidate.name().to_string(),
                     candidate.starter_template().map(str::to_string),
-                ));
+                );
                 let install = Install::local(req.dir, local).map_err(|e| named(at, e))?;
-                plan.install(Ask(at), install);
+                if claims.local(one, &install).map_err(claimed)? == Claimed::First {
+                    templates.push(declared);
+                    plan.install(Ask(at), install);
+                }
             }
             Source::Registry(_) => return Err(named(at, no_registry(&one.specifier))),
             Source::Git { url } => return Err(named(at, extension::git_not_supported(url))),
