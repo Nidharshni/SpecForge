@@ -364,6 +364,25 @@ impl Reading<'_> {
         }
     }
 
+    /// Whether a name written as `written`, as a value of the field or as
+    /// an item of its list, may name an entity: the editor's
+    /// reference positions. Any name on a declared `reference` or
+    /// `reference_list`; a scheme ref ID on a `string_list`; nothing on
+    /// another declared type; a bare word or scheme ref ID on a member or
+    /// an undeclared field (what its word names, as the graph reads it).
+    pub fn may_name(&self, written: Written) -> bool {
+        match self {
+            Self::Declared(form) => match form.field_type() {
+                FieldType::Reference | FieldType::ReferenceList => true,
+                FieldType::StringList => written == Written::SchemeRef,
+                _ => false,
+            },
+            Self::Member | Self::Undeclared => {
+                matches!(written, Written::Bare | Written::SchemeRef)
+            }
+        }
+    }
+
     /// Whether the field is a declared `reference`: its edges link after
     /// reference cycles are detected.
     pub fn is_single_reference(&self) -> bool {

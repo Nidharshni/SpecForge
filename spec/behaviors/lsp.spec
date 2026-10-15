@@ -736,6 +736,7 @@ behavior provide_semantic_tokens "Provide Semantic Tokens" {
   """
   verify unit "entity ID declaration uses its kind's semantic_token from the KindRegistry"
   verify unit "structural keywords are classified as keyword"
+  verify unit "a string list's bare item is no reference"
   verify unit "triple-quoted strings are classified as strings"
   verify unit "a string spanning lines is one string, holding no other token"
   verify unit "entity ID declaration without a declared semantic_token is 'function'"

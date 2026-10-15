@@ -155,7 +155,6 @@ behavior register_custom_validation_patterns "Register Custom Validation Pattern
   invariants [zero_domain_knowledge_core, declarative_validation_determinism]
   category   command
   types      [ValidationRulePattern, CustomCall, ExtensionDeclaration]
-  refs       [provide_host_function_query_graph]
   ports      [WasmRuntime]
   consumes   [extension_manifests_loaded]
   requires {

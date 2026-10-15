@@ -3,6 +3,7 @@
 //! is the document module's to say.
 
 use specforge_common::structural;
+use specforge_graph::Reading;
 use specforge_ops::read::infer::{KindGuide, guide};
 use specforge_ops::read::navigate::{EntityQuery, MatchScope, find_entities};
 use specforge_ops::view::ProjectView;
@@ -67,17 +68,21 @@ pub fn items(
             prefix,
         } => {
             let entry = registries.fields().get(kind, field);
-            match entry.map(|e| e.field_type()) {
-                // A reference list, or a field the registry does not type.
-                None | Some(FieldType::ReferenceList) => {
+            match registries.field_forms().reading(kind, field) {
+                // A reference list: the ids of its target kind.
+                Reading::Declared(form) if form.field_type() == FieldType::ReferenceList => {
                     let target = entry.and_then(|e| e.declared().target_kind.as_deref());
                     entity_ids(view, prefix, target)
                 }
-                // A string list's items are strings; the refs a scheme ref
-                // ID names are linked from any list (the only entities a
-                // string list names).
-                Some(FieldType::StringList) => entity_ids(view, prefix, Some(structural::REF)),
-                Some(_) => Vec::new(),
+                // A string list's items are strings; the only entities it
+                // names are the refs a scheme ref ID names.
+                Reading::Declared(form) if form.field_type() == FieldType::StringList => {
+                    entity_ids(view, prefix, Some(structural::REF))
+                }
+                Reading::Declared(_) => Vec::new(),
+                // An undeclared field, or a member of an open-fields kind
+                // (whose lists name types): every id.
+                Reading::Member | Reading::Undeclared => entity_ids(view, prefix, None),
             }
         }
         CompletionSite::Value {
