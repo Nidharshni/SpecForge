@@ -544,7 +544,7 @@ behavior provide_mcp_collect_tool "Provide MCP Collect Tool" {
     command is an E059 error,
     and a missing collector or report is an error naming its code. The
     result lists each runner's counts, the W115 diagnostics and the path of
-    the written specforge-report.json.
+    the written specforge-report.json, named from the project root.
   """
   verify unit "specforge.collect parses test results and maps to entities"
   verify unit "the collect document names the report from the project root"
@@ -587,7 +587,7 @@ behavior provide_mcp_render_tool "Provide MCP Render Tool" {
     against its root, wherever the server runs, and one that leaves the
     project (by .., an absolute name or a symlink) MUST be refused as invalid
     input on out_dir, as MUST any out_dir with no project served.
-    output_files lists the absolute paths written.
+    output_files lists the files written, each named from the project root.
     The renderers are the core graph engine's export formats (see P7
     justification in features/output.spec), named as `specforge export
     --format` names them: graph (also accepted as json; the full graph, as

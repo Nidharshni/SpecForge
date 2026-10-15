@@ -50,7 +50,6 @@ fn format_reply_names_files_from_the_project_root() {
     behavior = "provide_mcp_render_tool",
     verify = "the render document names each output file from the project root"
 )]
-#[ignore = "flipped by T5"]
 fn render_output_files_are_named_from_the_project_root() {
     let mut server = TestProject::new()
         .file("test.spec", "behavior alpha \"Alpha\" {\n}\n")
@@ -69,7 +68,6 @@ fn render_output_files_are_named_from_the_project_root() {
     behavior = "provide_mcp_collect_tool",
     verify = "the collect document names the report from the project root"
 )]
-#[ignore = "flipped by T5"]
 fn collect_reply_names_the_report_from_the_project_root() {
     let mut server = TestProject::new()
         .enabling(&[

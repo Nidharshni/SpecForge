@@ -161,7 +161,6 @@ fn files_written_outside_the_root_is_absolute_and_canonical() {
     behavior = "provide_mcp_collect_tool",
     verify = "the collect document names the report from the project root"
 )]
-#[ignore = "flipped by T5"]
 fn collect_report_is_named_from_the_project_root() {
     let project = TestProject::new().raw_config(
         r#"{"name":"col","spec_root":"spec","extensions":["@specforge/software","@specforge/testing","@specforge/cargo-test"]}"#,

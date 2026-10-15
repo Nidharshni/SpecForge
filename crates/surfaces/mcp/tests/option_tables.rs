@@ -210,7 +210,7 @@ fn render_accepts_graph_and_its_json_alias() {
         let file = out.join("graph.json");
         assert_eq!(
             result["output_files"],
-            json!([file.display().to_string()]),
+            json!([format!("{name}/graph.json")]),
             "{name}"
         );
         let graph: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();

@@ -735,7 +735,7 @@ type McpCollectResult {
   runners     McpCollectRunner[]
   /// What collecting reported (W115: a test names an unknown entity).
   diagnostics Diagnostic[]
-  /// The path of the written specforge-report.json.
+  /// The written specforge-report.json, named from the project root (ADR 0102).
   report      string @readonly
   verify unit "McpCollectResult schema is valid"
 }
@@ -764,7 +764,7 @@ type McpRenderResult {
   format       "graph" | "context" | "brief" | "dot" @readonly
   /// The rendering itself, when no out_dir was given.
   output       string                                @optional
-  /// The files written into out_dir, absolute.
+  /// The files written into out_dir, each named from the project root (ADR 0102).
   output_files string[]
   verify unit "McpRenderResult schema is valid"
 }
