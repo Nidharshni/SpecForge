@@ -6,9 +6,9 @@ use crate::subscriptions::Watched;
 use crate::uri_template::Matched;
 
 /// `specforge://graph`: the whole graph export.
-pub struct Resource;
+pub struct GraphResource;
 
-impl CoreResource for Resource {
+impl CoreResource for GraphResource {
     const URI: &'static str = "specforge://graph";
     const NAME: &'static str = "graph";
     const DESCRIPTION: &'static str = "Full spec graph in JSON format";

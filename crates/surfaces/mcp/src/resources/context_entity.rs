@@ -6,9 +6,9 @@ use crate::subscriptions::Watched;
 use crate::uri_template::Matched;
 
 /// `specforge://context/{entity_id}`: the context export rooted at an entity.
-pub struct Resource;
+pub struct ContextEntityResource;
 
-impl CoreResource for Resource {
+impl CoreResource for ContextEntityResource {
     const URI: &'static str = "specforge://context/{entity_id}";
     const NAME: &'static str = "context_entity";
     const DESCRIPTION: &'static str = "Context-optimized subgraph rooted at an entity";

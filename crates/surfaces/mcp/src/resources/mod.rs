@@ -122,14 +122,14 @@ impl Surface for Resources {
 
 /// The core resources, in listing order.
 pub static CORE_RESOURCES: &[&dyn ResourceSpec] = &[
-    &graph::Resource,
-    &schema::Resource,
-    &context::Resource,
-    &context_entity::Resource,
-    &brief::Resource,
-    &diagnostics::Resource,
-    &entity::Resource,
-    &entities::Resource,
+    &graph::GraphResource,
+    &schema::SchemaResource,
+    &context::ContextResource,
+    &context_entity::ContextEntityResource,
+    &brief::BriefResource,
+    &diagnostics::DiagnosticsResource,
+    &entity::EntityResource,
+    &entities::EntitiesResource,
 ];
 
 /// The core resource that names `uri`, if any.

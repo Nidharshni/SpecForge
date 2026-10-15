@@ -7,9 +7,9 @@ use crate::uri_template::Matched;
 
 /// `specforge://schema`: the GraphProtocolSchema a full export embeds, the
 /// same document `specforge.schema` returns unfiltered.
-pub struct Resource;
+pub struct SchemaResource;
 
-impl CoreResource for Resource {
+impl CoreResource for SchemaResource {
     const URI: &'static str = "specforge://schema";
     const NAME: &'static str = "schema";
     const DESCRIPTION: &'static str = "Graph schema definition";

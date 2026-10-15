@@ -6,9 +6,9 @@ use crate::uri_template::Matched;
 
 /// `specforge://diagnostics`: what the server reports for the call's
 /// project, as `specforge check --format json` writes it.
-pub struct Resource;
+pub struct DiagnosticsResource;
 
-impl CoreResource for Resource {
+impl CoreResource for DiagnosticsResource {
     const URI: &'static str = "specforge://diagnostics";
     const NAME: &'static str = "diagnostics";
     const DESCRIPTION: &'static str = "Current compilation diagnostics";
