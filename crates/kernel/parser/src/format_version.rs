@@ -33,9 +33,7 @@ pub const MIN_SUPPORTED_VERSION: FormatVersion = FormatVersion { major: 1, minor
 /// Maximum supported target version.
 pub const MAX_SUPPORTED_VERSION: FormatVersion = FormatVersion { major: 1, minor: 0 };
 
-/// What a format version header starts with.
-pub const FORMAT_HEADER_PREFIX: &str = HEADER_PREFIX;
-
+/// What a format version header starts with. Private: the header is this module's.
 const HEADER_PREFIX: &str = "// specforge-format: ";
 
 impl fmt::Display for FormatVersion {
