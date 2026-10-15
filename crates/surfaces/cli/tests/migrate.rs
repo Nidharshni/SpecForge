@@ -143,7 +143,7 @@ fn migrate_unknown_target_version_produces_error() {
             "error[E019]: unsupported target version 99.0",
         ))
         .stderr(predicate::str::contains(
-            "Use a format version between 1.0 and 1.0.",
+            "Use a format version between 0.0 and 1.0.",
         ));
     assert_eq!(
         fs::read_to_string(root.join("spec/test.spec")).unwrap(),
@@ -330,7 +330,7 @@ fn migrate_leaves_a_nested_projects_files_alone() {
         .map(|r| r["file_path"].as_str().unwrap())
         .collect();
     assert_eq!(files.len(), 1, "{json}");
-    assert!(files[0].ends_with("/a.spec"), "{json}");
+    assert_eq!(files[0], "a.spec", "{json}");
 }
 
 // C2: Backup created before modification (simulated with version 0.1 if we had a transform)

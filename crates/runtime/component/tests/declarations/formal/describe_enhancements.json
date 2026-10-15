@@ -82,7 +82,6 @@
           "target_kind": "behavior"
         }
       ],
-      "source_extension": "@specforge/formal",
       "target_kind": "behavior"
     },
     {
@@ -121,7 +120,6 @@
           "target_kind": null
         }
       ],
-      "source_extension": "@specforge/formal",
       "target_kind": "event"
     },
     {
@@ -140,7 +138,6 @@
           "target_kind": null
         }
       ],
-      "source_extension": "@specforge/formal",
       "target_kind": "invariant"
     }
   ]

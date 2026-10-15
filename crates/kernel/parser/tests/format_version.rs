@@ -3,9 +3,7 @@
 //! header reports, spanned where it is declared.
 
 use specforge_common::Severity;
-use specforge_parser::{
-    CURRENT_FORMAT_VERSION, FormatVersion, MIN_SUPPORTED_VERSION, detect_format_version, parse,
-};
+use specforge_parser::{CURRENT_FORMAT_VERSION, FormatVersion, detect_format_version, parse};
 use specforge_test_macros::test as specforge_test;
 
 const BODY: &str = "behavior foo \"Foo\" {\n  contract \"x\"\n}\n";
@@ -124,7 +122,7 @@ fn a_newer_version_is_e019_with_guidance() {
 fn a_header_that_is_not_major_minor_is_e019() {
     for header in ["abc", "1.x", "1.0.0", "-1"] {
         let (version, diagnostics) = detect_format_version(&with_header(header), "a.spec");
-        assert_eq!(version, MIN_SUPPORTED_VERSION, "{header}");
+        assert_eq!(version, CURRENT_FORMAT_VERSION, "{header}");
         assert_eq!(diagnostics.len(), 1, "{header}: {diagnostics:?}");
         assert_eq!(diagnostics[0].code, "E019", "{header}");
         assert!(

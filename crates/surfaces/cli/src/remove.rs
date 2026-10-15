@@ -52,7 +52,7 @@ impl Args {
         match format {
             OutputFormat::Json => terminal.json(&Written::of(
                 outcome.document(),
-                outcome.writes.names_under(path),
+                outcome.writes.named(Some(path)),
             )),
             OutputFormat::Human => {
                 let (removed, disabled) = if outcome.dry_run {

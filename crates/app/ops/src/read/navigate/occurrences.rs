@@ -5,7 +5,7 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{SourceSpan, Sym};
-use specforge_graph::{DerivedFrom, Edge, Node};
+use specforge_graph::{DerivedFrom, Edge, FieldForms, Node, type_expressions};
 use specforge_parser::FieldValue;
 
 use super::references::reference_edges;
@@ -244,7 +244,7 @@ impl<F: Fn(&str) -> Option<String>> Navigator<'_, F> {
             return entity();
         };
 
-        let mut spans = written_references(holder, edge);
+        let mut spans = written_references(holder, edge, self.view.registries().field_forms());
         if spans.is_empty() {
             spans = self.derived_references(&text, holder, edge);
         }
@@ -284,20 +284,14 @@ impl<F: Fn(&str) -> Option<String>> Navigator<'_, F> {
             .and_then(|entry| entry.declared().derived_from.as_deref())
             .and_then(DerivedFrom::parse);
         let target = edge.target.as_str();
-        let single = registries.graph_inputs().single_reference_fields;
+        let forms = registries.field_forms();
         let mut spans = Vec::new();
         match derived {
             Some(DerivedFrom::TypeExpressions) => {
                 for entry in holder.fields.entries() {
-                    let single =
-                        single.contains(&(kind.to_string(), entry.key.as_str().to_string()));
-                    let typed = matches!(
-                        entry.value,
-                        FieldValue::Identifier(_)
-                            | FieldValue::TypeUnion(_)
-                            | FieldValue::VariantList(_)
-                    );
-                    if let (false, true, Some(span)) = (single, typed, &entry.value_span) {
+                    let reading = forms.reading(kind, entry.key.as_str());
+                    let typed = !type_expressions(&reading, &entry.value).is_empty();
+                    if let (true, Some(span)) = (typed, &entry.value_span) {
                         spans.extend(tokens_named(text, span, target));
                     }
                 }
@@ -327,8 +321,9 @@ impl<F: Fn(&str) -> Option<String>> Navigator<'_, F> {
 /// The tokens `holder` writes for `edge` in the field the edge is labeled
 /// with: each reference-list item naming the target, or the value of a
 /// single-reference field naming it.
-fn written_references(holder: &Node, edge: &Edge) -> Vec<SourceSpan> {
+fn written_references(holder: &Node, edge: &Edge, forms: &FieldForms) -> Vec<SourceSpan> {
     let target = edge.target.as_str();
+    let reading = forms.reading(holder.kind.raw.as_str(), edge.label.as_str());
     let mut spans = Vec::new();
     for entry in holder
         .fields
@@ -336,17 +331,17 @@ fn written_references(holder: &Node, edge: &Edge) -> Vec<SourceSpan> {
         .iter()
         .filter(|e| e.key == edge.label)
     {
-        match &entry.value {
-            FieldValue::ReferenceList(items) => spans.extend(
-                items
-                    .iter()
-                    .filter(|item| item.id == target)
-                    .map(|item| item.span.clone()),
-            ),
-            FieldValue::Identifier(value) if value == target => {
-                spans.extend(entry.value_span.clone());
-            }
-            _ => {}
+        spans.extend(
+            reading
+                .references(entry)
+                .iter()
+                .filter(|item| item.id == target)
+                .filter_map(|item| item.span.cloned()),
+        );
+        if let FieldValue::Identifier(value) = &entry.value
+            && value == target
+        {
+            spans.extend(entry.value_span.clone());
         }
     }
     spans

@@ -162,7 +162,10 @@ behavior provide_mcp_export_tool "Provide MCP Export Tool" {
     policy: a full graph export is Graph Protocol 2.0 with the schema
     embedded, a scoped one carries a schema_ref, and context, brief and a
     budgeted export leave the schema out unless with_schema is true;
-    no_schema leaves it out of a graph export (format 1.0). The embedded
+    no_schema leaves it out of a graph export (format 1.0). with_schema and
+    no_schema exclude each other: both MUST be refused as invalid input on
+    with_schema, as specforge export refuses --with-schema with
+    --no-schema. The embedded
     schema carries the version specforge export computes against the
     project's schema cache; the tool only reads the cache.
   """
@@ -177,6 +180,8 @@ behavior provide_mcp_export_tool "Provide MCP Export Tool" {
   verify integration "the graph export is the document specforge export --format graph writes, Graph Protocol 2.0 with the schema embedded"
   verify integration "with_schema embeds the schema in a context, brief or budgeted export, and no_schema leaves it out of a graph export"
   verify integration "the embedded schema carries the version specforge export computes against the schema cache, which the tool leaves as it is"
+  verify integration "specforge export and specforge.export both refuse with_schema with no_schema"
+  verify unit "with_schema and no_schema together are invalid input on with_schema"
 }
 
 behavior provide_mcp_trace_tool "Provide MCP Trace Tool" {
@@ -219,6 +224,8 @@ behavior provide_mcp_trace_tool "Provide MCP Trace Tool" {
     MUST perform the plan check (validate_agent_plan) and return its document,
     a McpTracePlanResult: ok, the affected entities and the gaps. At least one of entityId
     or plan MUST be provided; otherwise the tool MUST return an error.
+    entityId and plan are two requests: a call with both MUST be refused as
+    invalid input on plan, as specforge trace refuses an entity with --plan.
   """
   verify unit "specforge.trace tool returns traceability chain for valid entityId"
   verify unit "plan parameter triggers gap analysis"
@@ -226,6 +233,7 @@ behavior provide_mcp_trace_tool "Provide MCP Trace Tool" {
   verify unit "non-existent entityId returns error response"
   verify unit "response includes upstream and downstream links"
   verify unit "missing links flagged in trace output"
+  verify unit "a trace call with both entity_id and plan is invalid input on plan"
   verify contract "Provide MCP Trace Tool: MCP trace tool holds — graph_available, trace_result_returned, gaps_identified, tool_invoked_emitted"
 }
 
@@ -801,7 +809,9 @@ behavior provide_mcp_entities_by_kind "List Entities by Kind over MCP" {
     matching entity's id, kind and title: the tool as an object whose
     entities are those rows, the resource as an array of them. An unknown
     kind MUST yield an empty list, and the tool's response metadata MUST carry I020 naming
-    the closest kind. The tool MUST also accept a `where` object (field name to
+    the closest kind. The resource's kind is one non-empty path segment:
+    specforge://entities/ and a kind of more than one segment are invalid
+    input naming kind. The tool MUST also accept a `where` object (field name to
     the value the field holds, any kind's fields, no field known to core)
     and `offset`/`limit`, applied to the entities sorted by id.
     Extensions that list their own kinds their way contribute commands,
@@ -815,6 +825,7 @@ behavior provide_mcp_entities_by_kind "List Entities by Kind over MCP" {
   verify unit "specforge.list reports an unknown kind with I020"
   verify unit "the entities resource lists what specforge.list lists for the kind"
   verify unit "entity-by-kind resource returns entities"
+  verify unit "the entities resource refuses an empty kind or one of more than one path segment as invalid input naming kind"
   verify unit "specforge.list tool appears in tool list"
   verify unit "entities resource template in resource template list"
 }

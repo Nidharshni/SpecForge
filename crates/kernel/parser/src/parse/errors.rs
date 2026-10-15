@@ -26,8 +26,6 @@ pub(super) fn unclosed_error(
             u.delim
         ),
         span,
-        expected: Some(format!("a closing '{}'", u.delim)),
-        found: Some(u.delim.to_string()),
     }
 }
 
@@ -94,8 +92,6 @@ impl<'a> ParseContext<'a> {
         ParseError {
             message: format!("syntax error: unclosed block — missing closing '}}'{line}"),
             span: self.span(open),
-            expected: Some("a closing '}'".to_string()),
-            found: None,
         }
     }
 
@@ -124,8 +120,6 @@ impl<'a> ParseContext<'a> {
                 self.errors.push(ParseError {
                     message: format!("syntax error: missing '{}'", node.kind()),
                     span,
-                    expected: Some(format!("'{}'", node.kind())),
-                    found: None,
                 });
             } else {
                 self.push_error_node(node);
@@ -154,31 +148,20 @@ impl<'a> ParseContext<'a> {
         };
 
         // Provide contextual suggestions for common mistakes
-        let (message, expected) = if trimmed.contains('{') && !trimmed.contains('}') {
-            (
-                format!(
-                    "syntax error near '{}': unclosed block — missing closing '}}'",
-                    display
-                ),
-                Some("a closing '}'".to_string()),
+        let message = if trimmed.contains('{') && !trimmed.contains('}') {
+            format!(
+                "syntax error near '{}': unclosed block — missing closing '}}'",
+                display
             )
         } else if trimmed.starts_with('}') {
-            (
-                "syntax error: unexpected '}' — possible extra closing brace".to_string(),
-                Some("a valid entity block (e.g., behavior name \"Title\" {{ ... }})".to_string()),
-            )
+            "syntax error: unexpected '}' — possible extra closing brace".to_string()
         } else {
-            (
-                format!("syntax error: unexpected '{}'", display),
-                Some("a valid block: keyword name \"Title\" {{ fields... }}".to_string()),
-            )
+            format!("syntax error: unexpected '{}'", display)
         };
 
         self.errors.push(ParseError {
             message,
             span: self.span(node),
-            expected,
-            found: Some(display),
         });
     }
 }

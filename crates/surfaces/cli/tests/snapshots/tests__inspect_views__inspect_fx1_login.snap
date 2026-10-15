@@ -32,12 +32,6 @@ expression: "normalized(result, root)"
     "contract": "The system MUST let a known user log in",
     "features": [
       "signin"
-    ],
-    "verify": [
-      {
-        "description": "a known user logs in",
-        "kind": "unit"
-      }
     ]
   },
   "kind": "behavior",

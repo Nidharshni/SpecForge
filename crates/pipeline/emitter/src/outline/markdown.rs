@@ -73,10 +73,9 @@ pub(super) fn render_markdown(outline: &OutlineIntermediate, options: &OutlineOp
             for enh in &outline.enhancements {
                 writeln!(
                     out,
-                    "- {} enhances {}/{}: +{} fields ({})",
+                    "- {} enhances {}: +{} fields ({})",
                     enh.enhancer,
-                    enh.owner,
-                    enh.target_kind,
+                    enhanced_kind(enh),
                     enh.field_count,
                     enh.field_names.join(", ")
                 )?;
@@ -227,9 +226,8 @@ pub(super) fn render_markdown(outline: &OutlineIntermediate, options: &OutlineOp
                 for enh in ext_enhancements {
                     writeln!(
                         out,
-                        "- {}/{}: +{} fields ({})",
-                        enh.owner,
-                        enh.target_kind,
+                        "- {}: +{} fields ({})",
+                        enhanced_kind(enh),
                         enh.field_count,
                         enh.field_names.join(", ")
                     )?;
@@ -329,4 +327,13 @@ fn summarize_enhancements(outline: &OutlineIntermediate, ext_name: &str) -> Stri
         .map(|e| format!("{} (+{})", e.target_kind, e.field_count))
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+/// The kind an enhancement targets: `owner/kind`, or the kind alone and the
+/// words that no enabled extension declares it (ADR 0096).
+fn enhanced_kind(enh: &super::OutlineEnhancement) -> String {
+    match &enh.owner {
+        Some(owner) => format!("{owner}/{}", enh.target_kind),
+        None => format!("{} (no enabled extension declares it)", enh.target_kind),
+    }
 }

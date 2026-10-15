@@ -147,8 +147,10 @@ Level: error
 E003: Unresolved reference
 
 A reference field names an entity ID that doesn't resolve to any declared
-entity. Fix the typo or add the missing entity; a `did you mean` suggestion is
-included when a close match exists.
+entity: a `reference` field's value or a `reference_list` field's item, quoted
+or not, or a scheme ref ID in a string list. A `string_list` field's other items
+are strings, never references. Fix the typo or add the missing entity; a `did
+you mean` suggestion is included when a close match exists.
 
 Owner: core
 Level: error
@@ -460,9 +462,13 @@ Level: error
 ```
 E039: Duplicate surface contribution
 
-Two extensions register the same CLI surface command ID, the same MCP tool name,
-or the same MCP resource name. Rename one extension's contribution so the
-identifier is unique across installed extensions.
+Two contributions claim one name. Two commands route under one name, `specforge
+<short> <command>`: one short name, and ids that spell one command name (`_` and
+`-` alike), whether from two extensions or declared twice by one; the first in
+load order is routed and the later runs on no surface. Or two extensions
+register one MCP tool name, or one MCP resource name. One command id under two
+short names is two names, not a collision. Rename the later contribution, or
+give its extension another short name (`ext_short`; the SDK's `short`).
 
 Owner: core
 Level: error
@@ -690,9 +696,9 @@ like, are enum fields); an integer field an integer; a bool field true or false;
 a reference field one id; a string_list or reference_list field a list; a block
 field a block. Values that can be read as the declared type are converted
 without a diagnostic: a single string, id, integer, boolean or date on a list
-field becomes a one-item list, a mixed list the list of its items' text, a
-quoted integer or boolean the number or boolean. Fix the value, or check the
-field's type with `specforge schema --kind <kind>`.
+field becomes a one-item list, a list is stored as written, a quoted integer or
+boolean the number or boolean. Fix the value, or check the field's type with
+`specforge schema --kind <kind>`.
 
 Owner: core
 Level: error
@@ -977,8 +983,8 @@ enhances a kind no enabled extension declares, or a `.spec` file has an
 the missing extension with `specforge add <name>` to resolve the reference. An
 entity whose keyword no enabled extension declares is an error instead (E024),
 whose suggestion names the extension to install. An extension's enhancement of a
-kind owned by an extension the project doesn't use is skipped silently, not
-reported.
+kind no enabled extension declares is skipped silently, not reported, when the
+extension declares an optional peer the project does not load.
 
 Owner: core
 Level: info
@@ -1130,9 +1136,10 @@ or an earlier extension's tool; a resource whose URIs a core resource or an
 earlier extension resource already serves; a command whose tool name an explicit
 tool (or a core tool) already has; a command the host refuses (an arg taking
 `--path`, `--format` or `--help`, two args spelling one option, or a default its
-declaration contradicts); a command another extension of the same short name
-routes first. Only MCP reports it, so `specforge check` does not. Rename the
-contribution if the collision is unintended; otherwise no action is needed.
+declaration contradicts); a command another command routes first under its name
+(`specforge check` reports that one as E039). I017 itself only MCP reports.
+Rename the contribution if the collision is unintended; otherwise no action is
+needed.
 
 Owner: core
 Level: info
@@ -3118,6 +3125,22 @@ is reported when the pin is saved: an install that is refused or fails pins
 nothing and reports none. That is what a key rotation looks like, and also what
 a compromised publisher looks like: confirm the change with the publisher if you
 did not expect it. The message names both key ids.
+
+Owner: core
+Level: warning
+```
+
+## W158
+
+```
+W158: Verify statements on a kind that accepts none
+
+An entity declares `verify` statements, but its kind accepts none: no extension
+made the kind testable (`supports_verify`). `verify` is reserved syntax; what an
+obligation means comes from an extension, so a kind takes statements only once
+one enables them (ADR 0002, ADR 0094). The statements are not fields, so this is
+not W020. Enable an extension that makes the kind testable (for software kinds,
+`specforge add @specforge/testing`), or remove the statements.
 
 Owner: core
 Level: warning

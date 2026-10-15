@@ -22,6 +22,7 @@ type Node {
   kind        EntityKind
   title       string
   fields      FieldMap
+  obligations VerifyStatement[]
   source_span SourceSpan @readonly
   verify unit "Node schema is valid"
 }
@@ -104,12 +105,13 @@ type SchemaEntityKind {
 }
 
 type SchemaField {
-  name          string    @readonly
-  field_type    FieldType @readonly
-  required      boolean
-  target_kind   string    @optional
-  enum_values   string[]  @optional
-  default_value string    @optional
+  name             string    @readonly
+  field_type       FieldType @readonly
+  required         boolean
+  target_kind      string    @optional
+  enum_values      string[]  @optional
+  default_value    string    @optional
+  source_extension string    @readonly // the extension that declared the field
   verify unit "SchemaField schema is valid"
 }
 
@@ -196,14 +198,14 @@ type ModifiedNodeChange {
   /// The fields whose values differ, by name, sorted: a field named kind or
   /// methods is a field here.
   changed_fields  string[]
-  /// What else differs, sorted: its kind, title, methods or outgoing edges.
+  /// What else differs, sorted: its kind, title, methods, obligations or outgoing edges.
   changed_aspects NodeAspect[]
   file            string  @readonly
   line            integer @readonly
   verify unit "ModifiedNodeChange schema is valid"
 }
 
-type NodeAspect = "kind" | "title" | "methods" | "edges"
+type NodeAspect = "kind" | "title" | "methods" | "obligations" | "edges"
 
 /// One edge in a GraphDelta, as the graph export writes an edge.
 type EdgeChange {

@@ -28,6 +28,7 @@ fn node_with_contract(id: &str, kind: &str, contract: &str) -> Node {
         fields,
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     }
 }
 

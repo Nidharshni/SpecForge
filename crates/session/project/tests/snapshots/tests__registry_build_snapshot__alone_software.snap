@@ -4,6 +4,7 @@ expression: "digest(&load(&runtime, &[name]))"
 ---
 {
   "check_passes": [],
+  "commands": [],
   "diagnostics": [],
   "edges": {
     "BehaviorConsumesEvent": {
@@ -918,15 +919,9 @@ expression: "digest(&load(&runtime, &[name]))"
       "type.extends": "reference",
       "type.refs": "string_list"
     },
-    "single_reference_fields": [
-      [
-        "event",
-        "payload"
-      ],
-      [
-        "type",
-        "extends"
-      ]
+    "member_kinds": [
+      "port",
+      "type"
     ]
   },
   "kinds": {
@@ -1161,5 +1156,5 @@ expression: "digest(&load(&runtime, &[name]))"
       "wasm_function": null
     }
   ],
-  "surfaces": []
+  "shadowed": 0
 }

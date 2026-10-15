@@ -9,7 +9,7 @@
 //! It is pure: no I/O, no runtime.
 
 use specforge_common::Diagnostic;
-use specforge_graph::GraphInputs;
+use specforge_graph::{FieldForms, GraphInputs};
 use specforge_protocol_types::{CompilerPassDescriptor, ExtensionDeclaration};
 
 use super::declaration::{consistency, order_passes, shape};
@@ -19,7 +19,7 @@ use super::populate::populate;
 use super::validate::validate_extension_testability;
 use crate::rules::{CustomVerdicts, Registries, Rules};
 use crate::{
-    EdgeRegistry, FieldRegistry, KindRegistry, SurfaceRegistryEntry, refuse_malformed_tool_schemas,
+    CommandRoutes, EdgeRegistry, FieldRegistry, KindRegistry, refuse_malformed_tool_schemas,
     register_surface_contributions,
 };
 
@@ -112,13 +112,16 @@ pub struct RegistryBuild {
     declarations: Vec<ExtensionDeclaration>,
     pub(crate) kinds: KindRegistry,
     pub(crate) fields: FieldRegistry,
+    /// Every field's form and the kinds that take any field, derived once.
+    field_forms: FieldForms,
     pub(crate) edges: EdgeRegistry,
     /// The rule set: the extensions' rules (checked and resolved against
     /// the registries) plus the host-generated E006 rules for required
     /// fields, each with its origin (ADR 0020).
     pub(crate) rules: Rules,
-    /// Registered surface contributions (first registration wins).
-    pub(crate) surfaces: Vec<SurfaceRegistryEntry>,
+    /// The extensions' commands as the CLI and MCP route them; a shadowed
+    /// one is E039 (ADR 0097).
+    pub(crate) commands: CommandRoutes,
     /// Every declared pass with its extension: extension by extension in
     /// load order, each extension's in its after/before order.
     pub(crate) passes: Vec<DeclaredPass>,
@@ -132,7 +135,7 @@ pub struct RegistryBuild {
     registry_diagnostics: Vec<Reported>,
     /// The custom rules' probes (W112), set by [`Self::probe`]; empty until then.
     probe_diagnostics: Vec<Diagnostic>,
-    /// Refused MCP tools (E055) and surface registration conflicts (E039).
+    /// Refused MCP tools (E055) and surface conflicts (E039).
     surface_diagnostics: Vec<Reported>,
 }
 
@@ -147,6 +150,13 @@ impl RegistryBuild {
     /// fields and enhancements.
     pub fn fields(&self) -> &FieldRegistry {
         &self.fields
+    }
+
+    /// How every field reads (ADR 0093): its declared form, a member of an
+    /// open-fields kind, or undeclared. What each reader asks what a written
+    /// value is and references.
+    pub fn field_forms(&self) -> &FieldForms {
+        &self.field_forms
     }
 
     /// The edge types, each resolved once (ADR 0060): declared, and every
@@ -166,18 +176,19 @@ impl RegistryBuild {
         &self.passes
     }
 
-    /// The surface contributions registered (first registration wins; a
-    /// later duplicate is E039).
-    pub fn surfaces(&self) -> &[SurfaceRegistryEntry] {
-        &self.surfaces
+    /// The extensions' commands as the CLI and MCP route them, each under
+    /// `(short name, CLI name)`: the first in load order runs, a later one
+    /// of that name is shadowed and E039 (ADR 0097).
+    pub fn commands(&self) -> &CommandRoutes {
+        &self.commands
     }
 
-    /// What the graph build reads of these declarations: single and
-    /// absent-target reference fields, inverse pairs, value coercions and
+    /// What the graph build reads of these declarations: absent-target
+    /// reference fields, inverse pairs, value coercions and
     /// derived references (ADR 0032, amended). The one place they are
     /// derived; `Environment::graph_config` adds the provider schemes.
     pub fn graph_inputs(&self) -> GraphInputs {
-        graph_inputs::derive(&self.kinds, &self.fields)
+        graph_inputs::derive(&self.kinds, &self.fields, &self.field_forms)
     }
 
     /// Ask `verdicts` once for each `custom` rule's function, on an entity
@@ -303,20 +314,18 @@ pub fn build_registries(declarations: Vec<ExtensionDeclaration>) -> RegistryBuil
         Rules::duplicate_codes(&declarations),
     ));
 
-    let surface_inputs: Vec<(String, _)> = declarations
-        .iter()
-        .map(|d| (d.name().to_string(), d.surfaces.clone()))
-        .collect();
-    let (surfaces, duplicates) = register_surface_contributions(&surface_inputs);
+    let (commands, duplicates) = register_surface_contributions(&declarations);
     surface_diagnostics.extend(about(BuildPart::Collision, duplicates));
 
+    let field_forms = graph_inputs::field_forms(&kinds, &fields);
     RegistryBuild {
         declarations,
         kinds,
         fields,
+        field_forms,
         edges,
         rules,
-        surfaces,
+        commands,
         passes,
         declaration_diagnostics,
         registry_diagnostics,

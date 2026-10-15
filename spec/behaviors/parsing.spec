@@ -149,10 +149,9 @@ behavior parse_all_block_types "Parse All Block Types" {
     FieldEntry,
     FieldValue,
     StringValue,
-    ReferenceList,
-    StringList,
+    ListValue,
+    ListItem,
     Block,
-    VerifyList,
     VerifyStatement,
     VerifyKind,
     SourceSpan,
@@ -164,7 +163,6 @@ behavior parse_all_block_types "Parse All Block Types" {
   ensures {
     generic_blocks_parsed     "All keyword blocks are parsed as generic entity_block AST nodes regardless of keyword"
     unknown_keywords_accepted "Unknown keywords are parsed without error — rejection deferred to semantic phase"
-    raw_body_preserved        "Raw body text of each entity block is preserved verbatim before field parsing"
   }
   contract   """
     The parser MUST use a single generic entity_block rule that parses
@@ -173,10 +171,7 @@ behavior parse_all_block_types "Parse All Block Types" {
     syntax (ref uses scheme:identifier format). All other keywords MUST
     be parsed generically — the parser MUST NOT reject unknown keywords.
     Keyword validation happens in the semantic phase after extensions
-    populate the KindRegistry. The parser MUST capture the raw body text
-    of each entity block.
-    Raw body text MUST be preserved verbatim before any field parsing
-    occurs.
+    populate the KindRegistry.
     A field named `kind` inside an entity body is an ordinary field of
     that entity, never the block's keyword.
   """
@@ -193,13 +188,13 @@ behavior parse_all_block_types "Parse All Block Types" {
   verify unit "generic block preserves kind, name, title, and fields"
   verify unit "parse string field values correctly"
   verify unit "a type field named kind is an ordinary field"
-  verify contract "Parse All Block Types: block type parsing holds — source_parser_available, generic_blocks_parsed, unknown_keywords_accepted, raw_body_preserved"
+  verify contract "Parse All Block Types: block type parsing holds — source_parser_available, generic_blocks_parsed, unknown_keywords_accepted"
   verify unit "field annotations are extracted into FieldEntry"
-  verify unit "homogeneous reference list is not MixedList"
-  verify unit "homogeneous string list is not MixedList"
+  verify unit "a list of bare words keeps each item bare"
+  verify unit "a list of quoted strings keeps each item quoted"
   verify unit "integer overflow produces parse error instead of silent 0"
-  verify unit "mixed list with strings and integers preserves both"
-  verify unit "mixed-type list preserves per-item types"
+  verify unit "a list mixing quoted strings and bare words is no parse error"
+  verify unit "a list keeps each item's text, span and how it was written"
   verify unit "multiple annotations on a single field are all extracted"
   verify unit "negative integer parsed as field value"
   verify unit "negative integer parsed as field value with larger magnitude"
@@ -284,7 +279,7 @@ behavior parse_verify_statements "Parse Verify Statements" {
     string_interning_consistency,
   ]
   category   validation
-  types      [SpecFile, VerifyList, VerifyStatement, VerifyKind, SourceSpan]
+  types      [SpecFile, VerifyStatement, VerifyKind, SourceSpan]
   ports      [SourceParser]
   requires {
     source_parser_available "SourceParser port is initialized and ready to accept input"
@@ -311,6 +306,7 @@ behavior parse_verify_statements "Parse Verify Statements" {
   verify unit "verify parsed in spec block"
   verify unit "verify parsed in define block"
   verify unit "verify kind and description extracted correctly"
+  verify unit "a field named verify is exported beside the entity's verify statements"
   verify contract "Parse Verify Statements: verify statement parsing holds — source_parser_available, verify_statements_extracted, all_block_types_supported, semantic_validation_deferred"
 }
 

@@ -27,7 +27,7 @@ pub(crate) fn subscribe(
     if !resources::is_served(state, &uri) {
         return JsonRpcResponse::from_error(
             id,
-            resources::unknown_resource(revision.resource_not_found_code(), &uri),
+            crate::resource::unknown_resource(revision.resource_not_found_code(), &uri),
         );
     }
     state.subscriptions.subscribe(&uri, &mut *state.events);

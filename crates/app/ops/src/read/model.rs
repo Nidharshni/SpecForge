@@ -36,6 +36,27 @@ pub enum ModelField {
     Root,
 }
 
+/// The code of the refusal of a depth without a root kind to count it from.
+pub const DEPTH_WITHOUT_ROOT: &str = "depth_without_root";
+
+/// The one reading of a model request's root and depth: a root with its depth, or nothing; a depth
+/// without a root is refused, invalid input about the root.
+pub fn root(
+    kind: Option<String>,
+    depth: Option<usize>,
+) -> Result<Option<ModelRoot>, Refusal<ModelField>> {
+    match (kind, depth) {
+        (Some(kind), depth) => Ok(Some(ModelRoot { kind, depth })),
+        (None, None) => Ok(None),
+        (None, Some(_)) => Err(OpError::new(
+            OpErrorKind::InvalidInput,
+            DEPTH_WITHOUT_ROOT,
+            "a depth counts from a root kind: give a root too",
+        )
+        .about(ModelField::Root)),
+    }
+}
+
 /// The logical data model of the view's extensions, as `options` asks.
 ///
 /// Err:
@@ -201,3 +222,22 @@ pub const DEPS: OptionTable<DependencyDepth> = OptionTable {
     ],
     default: Some(DependencyDepth::Direct),
 };
+
+#[cfg(test)]
+mod root_tests {
+    use super::*;
+
+    #[specforge_test_macros::test(
+        behavior = "filter_model",
+        verify = "a depth without a root is refused"
+    )]
+    fn a_depth_without_a_root_is_invalid_input_about_the_root() {
+        let refusal = root(None, Some(1)).unwrap_err();
+        assert_eq!(refusal.error.kind, OpErrorKind::InvalidInput);
+        assert_eq!(refusal.error.code, DEPTH_WITHOUT_ROOT);
+        assert_eq!(refusal.subject, Some(ModelField::Root));
+        let rooted = root(Some("behavior".into()), Some(1)).unwrap().unwrap();
+        assert_eq!((rooted.kind.as_str(), rooted.depth), ("behavior", Some(1)));
+        assert!(root(None, None).unwrap().is_none());
+    }
+}

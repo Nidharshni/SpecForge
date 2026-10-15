@@ -6,8 +6,9 @@
 //! Nothing here names a kind or a field: kinds and fields are read as
 //! structure; the registries are consulted by the readers.
 
-use specforge_parser::lex::Lexeme;
-use specforge_registry::{FieldRegistry, FieldType};
+use specforge_graph::FieldForms;
+use specforge_parser::Written;
+use specforge_parser::lex::{Lexeme, LexemeKind};
 
 mod walk;
 
@@ -240,13 +241,10 @@ impl Syntax {
 
     /// Whether lexeme `i` is at a reference position: an entity header's
     /// name; a value or list item, in the entity's own body, of a field
-    /// the registry does not type as `Enum`, `Bool`, `Integer`, `String`,
-    /// `StringList` (but for an unquoted item, which the graph links) or
-    /// `Block`; a `use` binding's imported name. The one rule the cursor
-    /// (what a word names), completion (where entity IDs complete; a string
-    /// list's declared strings complete only refs) and semantic tokens
-    /// (what is a reference) share.
-    pub(crate) fn reference_position(&self, text: &str, i: u32, fields: &FieldRegistry) -> bool {
+    /// whose reading may name an entity (`Reading::may_name`, ADR 0093); a
+    /// `use` binding's imported name. The one rule the cursor (what a word
+    /// names) and semantic tokens (what is a reference) share.
+    pub(crate) fn reference_position(&self, text: &str, i: u32, forms: &FieldForms) -> bool {
         let lexeme = &self.lexemes[i as usize];
         if !lexeme.is_name() {
             return false;
@@ -265,10 +263,13 @@ impl Syntax {
                     }),
                     _ => self.frame_of[i as usize] == self.frame_of[key as usize],
                 };
-                let item = self.roles[i as usize] == Role::Item;
+                let written = match lexeme.kind {
+                    LexemeKind::RefId => Written::SchemeRef,
+                    _ => Written::Bare,
+                };
                 own && self
                     .kind_of_key(text, key)
-                    .is_some_and(|kind| may_reference(fields, kind, self.text(text, key), item))
+                    .is_some_and(|kind| forms.reading(kind, self.text(text, key)).may_name(written))
             }
             _ => false,
         }
@@ -299,20 +300,6 @@ impl Syntax {
                 self.roles[i] = Role::Other;
             }
         }
-    }
-}
-
-/// Whether a name written as a value of a field, or as an item of its
-/// list when `item`, may name an entity: the registry does not type the
-/// field as a value that names none. A name written unquoted in any list
-/// is linked to the entity it names (the graph reads every such list as
-/// references), so a string list's unquoted items are references too; its
-/// strings are strings.
-pub(crate) fn may_reference(fields: &FieldRegistry, kind: &str, field: &str, item: bool) -> bool {
-    match fields.get(kind, field).map(|entry| entry.field_type()) {
-        None | Some(FieldType::Reference | FieldType::ReferenceList) => true,
-        Some(FieldType::StringList) => item,
-        Some(_) => false,
     }
 }
 

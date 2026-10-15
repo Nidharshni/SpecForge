@@ -5,9 +5,10 @@
 
 use crate::document::LineIndex;
 use specforge_common::Diagnostic;
+use specforge_graph::Node;
 use specforge_ops::OpError;
 use specforge_ops::read::inspect::{EntityCoverage, EntityFacts};
-use specforge_parser::FieldValue;
+use specforge_parser::{FieldValue, ListItem, Written};
 use specforge_registry::FieldRegistry;
 use std::collections::BTreeMap;
 use tower_lsp::lsp_types::Position;
@@ -81,6 +82,7 @@ pub fn diagnostics(shown: &[&Diagnostic]) -> Option<String> {
 /// - **Referenced by**: the references to it, grouped by the referencing
 ///   kind and field;
 /// - **Fields**: its field values but the headline;
+/// - **Obligations**: its `verify` statements, one per line (ADR 0094);
 /// - **Diagnostics**: the diagnostics about it that are not among those
 ///   `shown` for the cursor, each code linked to its catalogue entry.
 pub fn entity(
@@ -181,6 +183,9 @@ pub fn entity(
         sections.push(format!("**Fields**\n{}", fields.join("\n")));
     }
 
+    // Section 5b: its obligations, apart from its fields
+    sections.extend(obligations_section(node));
+
     // Section 6: the diagnostics about it the cursor's do not already show
     let listed: Vec<String> = facts
         .diagnostics
@@ -205,6 +210,23 @@ pub fn entity(
     }
 
     sections.join(SECTION)
+}
+
+/// **Obligations** and one line for each of `node`'s `verify` statements, `kind: description`
+/// (just the description for a bare `verify "…"`); `None` when it declares none.
+fn obligations_section(node: &Node) -> Option<String> {
+    if node.obligations.is_empty() {
+        return None;
+    }
+    let lines: Vec<String> = node
+        .obligations
+        .iter()
+        .map(|statement| match statement.kind.as_str() {
+            "" => format!("- {}", statement.description),
+            kind => format!("- {kind}: {}", statement.description),
+        })
+        .collect();
+    Some(format!("**Obligations**\n{}", lines.join("\n")))
 }
 
 /// Whether `value` is the headline statement: the very string the read
@@ -371,49 +393,28 @@ fn format_field_value(fv: &FieldValue) -> String {
         FieldValue::Integer(n) => n.to_string(),
         FieldValue::Boolean(b) => b.to_string(),
         FieldValue::Date(d) => d.clone(),
-        FieldValue::ReferenceList(refs) => {
-            format!(
-                "[{}]",
-                refs.iter()
-                    .map(|r| r.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        }
-        FieldValue::StringList(items) => {
-            if items.len() <= 5 {
+        FieldValue::List(items) => {
+            // Every item as written: a quoted one in quotes. A list of only
+            // quoted strings shows its first five.
+            let shown = |item: &ListItem| match item.written {
+                Written::Quoted => format!("\"{}\"", item.text),
+                _ => item.text.clone(),
+            };
+            let all_quoted = items.iter().all(|item| item.written == Written::Quoted);
+            if all_quoted && items.len() > 5 {
+                let first: Vec<_> = items[..5].iter().map(shown).collect();
+                format!("[{}, … +{}]", first.join(", "), items.len() - 5)
+            } else {
                 format!(
                     "[{}]",
-                    items
-                        .iter()
-                        .map(|s| format!("\"{}\"", s))
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                    items.iter().map(shown).collect::<Vec<_>>().join(", ")
                 )
-            } else {
-                let shown: Vec<_> = items[..5].iter().map(|s| format!("\"{}\"", s)).collect();
-                format!("[{}, … +{}]", shown.join(", "), items.len() - 5)
             }
         }
         FieldValue::VariantList(variants) => format!("[{}]", variants.join(" | ")),
-        FieldValue::MixedList(items) => {
-            let formatted: Vec<_> = items.iter().map(format_field_value).collect();
-            format!("[{}]", formatted.join(", "))
-        }
         FieldValue::Block(map) => {
             let count = map.entries().len();
             format!("{{…}} ({} fields)", count)
-        }
-        FieldValue::VerifyList(stmts) => {
-            let items: Vec<_> = stmts
-                .iter()
-                .map(|v| format!("{}: {}", v.kind, v.description))
-                .collect();
-            if items.len() <= 3 {
-                items.join("; ")
-            } else {
-                format!("{}; … +{}", items[..3].join("; "), items.len() - 3)
-            }
         }
     }
 }

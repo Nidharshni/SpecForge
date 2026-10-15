@@ -3,7 +3,6 @@
   "items": [
     {
       "fields": [],
-      "source_extension": "@specforge/software",
       "target_kind": "behavior",
       "verify_kinds": [
         "unit",
@@ -15,7 +14,6 @@
     },
     {
       "fields": [],
-      "source_extension": "@specforge/software",
       "target_kind": "invariant",
       "verify_kinds": [
         "unit",
@@ -27,7 +25,6 @@
     },
     {
       "fields": [],
-      "source_extension": "@specforge/software",
       "target_kind": "event",
       "verify_kinds": [
         "integration",
@@ -38,7 +35,6 @@
     },
     {
       "fields": [],
-      "source_extension": "@specforge/software",
       "target_kind": "type",
       "verify_kinds": [
         "unit",
@@ -47,7 +43,6 @@
     },
     {
       "fields": [],
-      "source_extension": "@specforge/software",
       "target_kind": "port",
       "verify_kinds": [
         "integration",
@@ -56,7 +51,6 @@
     },
     {
       "fields": [],
-      "source_extension": "@specforge/governance",
       "target_kind": "constraint",
       "verify_kinds": [
         "unit",
@@ -68,7 +62,6 @@
     },
     {
       "fields": [],
-      "source_extension": "@specforge/governance",
       "target_kind": "failure_mode",
       "verify_kinds": [
         "unit",

@@ -1,7 +1,7 @@
 use crate::options;
 use crate::outcome::{Exit, OutputFormat, Refusal};
 use crate::terminal::{Terminal, errln, out};
-use specforge_ops::read::model::{FieldLevel, GroupBy, ModelFormat, ModelOptions, ModelRoot};
+use specforge_ops::read::model::{FieldLevel, GroupBy, ModelFormat, ModelOptions};
 use specforge_ops::view::ProjectView;
 
 // `specforge model`'s command line.
@@ -53,18 +53,18 @@ pub(crate) struct Args {
 
 impl Args {
     /// The model the flags ask for.
-    fn options(&self) -> ModelOptions {
-        ModelOptions {
+    fn options(
+        &self,
+    ) -> Result<ModelOptions, specforge_ops::Refusal<specforge_ops::read::model::ModelField>> {
+        Ok(ModelOptions {
             format: self.format,
             group_by: self.group_by,
             fields: self.fields,
             extension: self.extension.clone(),
             kinds: self.kinds.clone(),
-            root: self.root.clone().map(|kind| ModelRoot {
-                kind,
-                depth: self.depth,
-            }),
-        }
+            // clap's `requires` refuses a depth without a root first; the reading is the operation's.
+            root: specforge_ops::read::model::root(self.root.clone(), self.depth)?,
+        })
     }
 
     /// `specforge model`: the model operation over the project compiled at
@@ -75,7 +75,11 @@ impl Args {
             Ok(project) => project,
             Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
         };
-        match specforge_ops::read::model::model(&ProjectView::of(&project), &self.options()) {
+        let options = match self.options() {
+            Ok(options) => options,
+            Err(refusal) => return Refusal::of(OutputFormat::Human).report(terminal, &refusal),
+        };
+        match specforge_ops::read::model::model(&ProjectView::of(&project), &options) {
             Ok(outcome) => {
                 for notice in &outcome.notices {
                     errln!(terminal, "{}", specforge_common::render_plain(notice));

@@ -17,10 +17,10 @@ expression: result.entities
             entries: [
                 FieldEntry {
                     key: Sym("invariants"),
-                    value: ReferenceList(
+                    value: List(
                         [
-                            SpannedRef {
-                                id: "multi_error_collection",
+                            ListItem {
+                                text: "multi_error_collection",
                                 span: SourceSpan {
                                     file: Sym("behaviors/parsing.spec"),
                                     start_line: 6,
@@ -28,9 +28,10 @@ expression: result.entities
                                     end_line: 6,
                                     end_col: 39,
                                 },
+                                written: Bare,
                             },
-                            SpannedRef {
-                                id: "string_interning_consistency",
+                            ListItem {
+                                text: "string_interning_consistency",
                                 span: SourceSpan {
                                     file: Sym("behaviors/parsing.spec"),
                                     start_line: 6,
@@ -38,6 +39,7 @@ expression: result.entities
                                     end_line: 6,
                                     end_col: 69,
                                 },
+                                written: Bare,
                             },
                         ],
                     ),
@@ -54,10 +56,10 @@ expression: result.entities
                 },
                 FieldEntry {
                     key: Sym("types"),
-                    value: ReferenceList(
+                    value: List(
                         [
-                            SpannedRef {
-                                id: "SpecFile",
+                            ListItem {
+                                text: "SpecFile",
                                 span: SourceSpan {
                                     file: Sym("behaviors/parsing.spec"),
                                     start_line: 7,
@@ -65,9 +67,10 @@ expression: result.entities
                                     end_line: 7,
                                     end_col: 25,
                                 },
+                                written: Bare,
                             },
-                            SpannedRef {
-                                id: "ParseError",
+                            ListItem {
+                                text: "ParseError",
                                 span: SourceSpan {
                                     file: Sym("behaviors/parsing.spec"),
                                     start_line: 7,
@@ -75,9 +78,10 @@ expression: result.entities
                                     end_line: 7,
                                     end_col: 37,
                                 },
+                                written: Bare,
                             },
-                            SpannedRef {
-                                id: "SourceSpan",
+                            ListItem {
+                                text: "SourceSpan",
                                 span: SourceSpan {
                                     file: Sym("behaviors/parsing.spec"),
                                     start_line: 7,
@@ -85,6 +89,7 @@ expression: result.entities
                                     end_line: 7,
                                     end_col: 49,
                                 },
+                                written: Bare,
                             },
                         ],
                     ),
@@ -185,28 +190,8 @@ expression: result.entities
                         },
                     ),
                 },
-                FieldEntry {
-                    key: Sym("verify"),
-                    value: VerifyList(
-                        [
-                            VerifyStatement {
-                                kind: "unit",
-                                description: "produces AST for minimal valid file",
-                            },
-                            VerifyStatement {
-                                kind: "integration",
-                                description: "parses all .spec files in project",
-                            },
-                        ],
-                    ),
-                    annotations: [],
-                    value_span: None,
-                },
             ],
         },
-        raw_body: Some(
-            "\n    invariants [multi_error_collection, string_interning_consistency]\n    types      [SpecFile, ParseError, SourceSpan]\n\n    requires {\n        valid_utf8_input \"Input buffer is valid UTF-8\"\n    }\n\n    ensures {\n        ast_produced \"A complete AST is produced\"\n    }\n\n    contract \"\"\"\n        Given a source file\n        When parsed by the Tree-sitter grammar\n        Then an AST is produced with all entities\n    \"\"\"\n\n    verify unit \"produces AST for minimal valid file\"\n    verify integration \"parses all .spec files in project\"\n",
-        ),
         span: SourceSpan {
             file: Sym("behaviors/parsing.spec"),
             start_line: 5,
@@ -215,6 +200,16 @@ expression: result.entities
             end_col: 2,
         },
         methods: [],
+        obligations: [
+            VerifyStatement {
+                kind: "unit",
+                description: "produces AST for minimal valid file",
+            },
+            VerifyStatement {
+                kind: "integration",
+                description: "parses all .spec files in project",
+            },
+        ],
     },
     Entity {
         kind: EntityKind {
@@ -254,7 +249,6 @@ expression: result.entities
                 },
             ],
         },
-        raw_body: None,
         span: SourceSpan {
             file: Sym("behaviors/parsing.spec"),
             start_line: 27,
@@ -263,6 +257,7 @@ expression: result.entities
             end_col: 32,
         },
         methods: [],
+        obligations: [],
     },
     Entity {
         kind: EntityKind {
@@ -278,10 +273,10 @@ expression: result.entities
             entries: [
                 FieldEntry {
                     key: Sym("invariants"),
-                    value: ReferenceList(
+                    value: List(
                         [
-                            SpannedRef {
-                                id: "multi_error_collection",
+                            ListItem {
+                                text: "multi_error_collection",
                                 span: SourceSpan {
                                     file: Sym("behaviors/parsing.spec"),
                                     start_line: 30,
@@ -289,6 +284,7 @@ expression: result.entities
                                     end_line: 30,
                                     end_col: 39,
                                 },
+                                written: Bare,
                             },
                         ],
                     ),
@@ -305,10 +301,10 @@ expression: result.entities
                 },
                 FieldEntry {
                     key: Sym("types"),
-                    value: ReferenceList(
+                    value: List(
                         [
-                            SpannedRef {
-                                id: "ParseError",
+                            ListItem {
+                                text: "ParseError",
                                 span: SourceSpan {
                                     file: Sym("behaviors/parsing.spec"),
                                     start_line: 31,
@@ -316,6 +312,7 @@ expression: result.entities
                                     end_line: 31,
                                     end_col: 27,
                                 },
+                                written: Bare,
                             },
                         ],
                     ),
@@ -346,24 +343,8 @@ expression: result.entities
                         },
                     ),
                 },
-                FieldEntry {
-                    key: Sym("verify"),
-                    value: VerifyList(
-                        [
-                            VerifyStatement {
-                                kind: "property",
-                                description: "N errors produce N diagnostics",
-                            },
-                        ],
-                    ),
-                    annotations: [],
-                    value_span: None,
-                },
             ],
         },
-        raw_body: Some(
-            "\n    invariants [multi_error_collection]\n    types      [ParseError]\n    status     planned\n    verify property \"N errors produce N diagnostics\"\n",
-        ),
         span: SourceSpan {
             file: Sym("behaviors/parsing.spec"),
             start_line: 29,
@@ -372,5 +353,11 @@ expression: result.entities
             end_col: 2,
         },
         methods: [],
+        obligations: [
+            VerifyStatement {
+                kind: "property",
+                description: "N errors produce N diagnostics",
+            },
+        ],
     },
 ]

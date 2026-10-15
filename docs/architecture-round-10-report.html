@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture round 10 report</title>
+<style>
+  :root { --bg:#fafafa; --fg:#1d2128; --muted:#5b6573; --card:#fff; --line:#d6dbe3; --accent:#2457d6; --ok:#177a3c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171c; --fg:#e6e9ee; --muted:#9aa4b2; --card:#1c2027; --line:#323a46; --accent:#7aa2ff; --ok:#5fd38a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 system-ui, sans-serif; }
+  main { max-width:1100px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { margin:0 0 4px; font-size:1.9rem; }
+  h2 { margin:40px 0 12px; font-size:1.3rem; border-bottom:1px solid var(--line); padding-bottom:6px; }
+  h3 { margin:0 0 4px; font-size:1.1rem; }
+  p.sub { color:var(--muted); margin:0 0 20px; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; }
+  .kpi b { display:block; font-size:1.6rem; color:var(--accent); }
+  .kpi span { color:var(--muted); font-size:.85rem; }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:8px; overflow:hidden; font-size:.92rem; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  .plan { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin:18px 0; }
+  .plan .tag { color:var(--muted); font-size:.85rem; }
+  .plan p { margin:6px 0; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:10px; }
+  .cols > div { min-width:0; overflow-x:auto; border:1px solid var(--line); border-radius:8px; padding:8px; }
+  .cols h4 { margin:0 0 6px; font-size:.85rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  @media (max-width:760px) { .cols { grid-template-columns:1fr; } }
+  .ok { color:var(--ok); font-weight:600; }
+  code { font-size:.88em; }
+</style>
+</head>
+<body>
+<main>
+<h1>Architecture round 10</h1>
+<p class="sub">Twelve plans, one branch (<code>refactor/architecture-2026-10-15</code>, base <code>fb4c5957</code>). Each plan keeps its own commits; every commit carries boxed ASCII BEFORE/AFTER diagrams, and this page shows the same before/after pairs as Mermaid.</p>
+
+<div class="kpis">
+  <div class="kpi"><b>12</b><span>plans merged</span></div>
+  <div class="kpi"><b>82</b><span>non-merge commits (before this report)</span></div>
+  <div class="kpi"><b>11</b><span>new ADRs (0093–0103)</span></div>
+  <div class="kpi"><b>442</b><span>files changed (before this report)</span></div>
+  <div class="kpi"><b>+9,212 / −4,815</b><span>lines</span></div>
+  <div class="kpi"><b>5279 / 5279</b><span>workspace tests pass</span></div>
+  <div class="kpi"><b>22 / 22</b><span><code>cargo gate full</code> checks ok</span></div>
+  <div class="kpi"><b>1</b><span>re-vendor (12 blobs), protocol 1.5.0</span></div>
+</div>
+
+<h2>Plans at a glance</h2>
+<table id="summary"><thead><tr><th>Plan</th><th>What changes</th><th>ADR</th><th>Commits</th></tr></thead><tbody></tbody></table>
+
+<h2>Before and after, plan by plan</h2>
+<div id="plans"></div>
+
+<h2>Verification</h2>
+<p><span class="ok">✔</span> <code>cargo gate full</code>: 22 of 22 checks ok (rustfmt, clippy, layers, file-size, crate-map, links, doc-links, root-layout, builtins, guests, audit, build, tests, doctests, published-schemas, specs, spec-modules, dogfood).<br>
+<span class="ok">✔</span> <code>cargo nextest run --workspace</code>: 5279 tests run, 5279 passed, 12 skipped.<br>
+<span class="ok">✔</span> Re-vendor after plan 04: <code>build-blobs --check</code> fresh; the diff dropped <code>source_extension</code> from three <code>describe_enhancements.json</code> snapshots, as planned.</p>
+
+<h2>Breaking changes</h2>
+<ul>
+  <li>Extension protocol 1.4.0 → 1.5.0: no <code>verify</code> row in field text; an enhancement names no <code>source_extension</code>.</li>
+  <li>MCP: <code>specforge://entities/</code> and <code>entities/&lt;a&gt;/&lt;b&gt;</code> are <code>invalid_input</code>; entity refusals read <code>Malformed entity_id: …</code>.</li>
+  <li>New diagnostic <code>W158</code>: statements on a kind that accepts none. A field named <code>verify</code> is a field.</li>
+  <li>Documents (format, collect, render, migrate) name files from the project root.</li>
+  <li>Internal API removals: <code>Entity.raw_body</code>, <code>ParseError.expected/found</code>, <code>SourceChange</code>, <code>ProjectSession::update/update_with</code>, the registry surface table.</li>
+</ul>
+
+<h2>Not in this PR</h2>
+<ul>
+  <li>Plan 07 T7–T8 (close ADR 0092 D7) stay open; no <code>W160</code> (plan 03).</li>
+  <li>Folding each crate's <code>tests/*.rs</code> into one binary to shrink <code>target/</code>.</li>
+</ul>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<script>
+const PLANS = [
+ { n:"01", t:"Obligations are an entity's own member", adr:"0094", c:10,
+   problem:"A <code>verify</code> block was stored as a pseudo-field, so a real field named <code>verify</code> collided with it and every reader rebuilt obligations from field text.",
+   before:`flowchart LR
+  P[parser] -->|verify as pseudo-field| F[field map]
+  F --> G[graph rebuilds obligations]
+  F -.->|real field named verify| X[collision]
+  style X fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  P[parser] --> E["Entity.obligations"]
+  P --> M[field map: fields only]
+  E --> N["Node.obligations"]
+  R[registry] -->|W158| K[kind accepts none]
+  style E fill:#bfe,stroke:#177a3c
+  style N fill:#bfe,stroke:#177a3c`},
+ { n:"02", t:"A field's declared type decides what its value references", adr:"0093", c:8,
+   problem:"Whether a list referenced anything depended on whether it was written unquoted, and a declared single reference was ignored by some readers.",
+   before:`flowchart LR
+  S[syntax: unquoted list] -->|means reference| R1[reader A]
+  S --> R2[reader B]
+  D[declared single reference] -.->|ignored| R2
+  style R2 fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  P[parser: List is written syntax] --> FF["FieldForms (one per registry build)"]
+  FF --> RD["Reading.references / may_name"]
+  RD --> A[graph]
+  RD --> B[ops]
+  RD --> C[LSP]
+  style FF fill:#bfe,stroke:#177a3c`},
+ { n:"03", t:"The format header has one module", adr:"0095", c:9,
+   problem:"Reading and rewriting the format header was spread over several modules, each with its own idea of the BOM.",
+   before:`flowchart LR
+  A[module A] --> H[(header)]
+  B[module B] --> H
+  C[module C] --> H
+  style H fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  A[caller] --> M["header module (read, rewrite, BOM)"]
+  B[caller] --> M
+  M --> H[(header)]
+  style M fill:#bfe,stroke:#177a3c`},
+ { n:"04", t:"An enhancement's fields are credited to its declarer", adr:"0096", c:6,
+   problem:"An enhancement's fields were credited by <code>source_extension</code>, so the outline and the diagnostics named the wrong owner.",
+   before:`flowchart LR
+  E[enhancement] -->|source_extension| O[credited extension]
+  E -.->|unknown target behind unloaded peer| W[W138 noise]
+  style W fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  D[declaring extension] --> E["enhance(kind, f)"]
+  E --> O[credit = declarer]
+  E -.->|unloaded optional peer| S[skipped silently]
+  style O fill:#bfe,stroke:#177a3c`},
+ { n:"05", t:"A command's name is judged by its route", adr:"0097", c:6,
+   problem:"A parallel surface table nothing read decided command collisions beside the real routes.",
+   before:`flowchart LR
+  T[(surface table)] -.->|nobody reads| X[ ]
+  N[command name] --> E039[E039 by name]
+  style T fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  R["CommandRoutes (registry)"] --> E039[E039 by route]
+  R --> X[ExtensionCommands]
+  style R fill:#bfe,stroke:#177a3c`},
+ { n:"06", t:"Bridge WIT equality test", adr:"none", c:1,
+   problem:"Nothing proved the two copies of the bridge interface stay equal.",
+   before:`flowchart LR
+  A[bridge.wit copy 1] -.- B[bridge.wit copy 2]
+  B -.->|may drift| X[ ]`,
+   after:`flowchart LR
+  A[bridge.wit copy 1] --> T{equality test}
+  B[bridge.wit copy 2] --> T
+  T -->|fails on drift| CI[CI]
+  style T fill:#bfe,stroke:#177a3c`},
+ { n:"07", t:"One claim rule for the extensions a change names", adr:"0098", c:6,
+   problem:"<code>add</code> and <code>init</code> each decided which extension claims a specifier, and they disagreed.",
+   before:`flowchart LR
+  ADD[add] --> RA[rule A]
+  INIT[init] --> RB[rule B]
+  RA -.-> X[different claims]
+  RB -.-> X
+  style X fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  ADD[add] --> R["claim rule (one)"]
+  INIT[init] --> R
+  style R fill:#bfe,stroke:#177a3c`},
+ { n:"08", t:"The follow loop is written once", adr:"0099", c:6,
+   problem:"Each watcher surface carried its own copy of the follow loop, and re-watched on every change.",
+   before:`flowchart LR
+  L1[LSP loop] --> W[(watch)]
+  L2[CLI loop] --> W
+  L3[session watch loop] --> W
+  style W fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  F["Following / Follower"] --> W[(watch)]
+  L1[LSP] --> F
+  L2[CLI] --> F
+  style F fill:#bfe,stroke:#177a3c`},
+ { n:"09", t:"A session takes a change from disk only as changes", adr:"0100", c:6,
+   problem:"A session had several entry points for new text: <code>update</code>, <code>update_with</code> and <code>SourceChange</code>.",
+   before:`flowchart LR
+  W[watcher] --> U[update]
+  T[tests] --> UW[update_with]
+  L[LSP] --> SC[SourceChange]
+  U --> S[(session)]
+  UW --> S
+  SC --> S`,
+   after:`flowchart LR
+  W[watcher] --> CH[changes]
+  T[tests: disk_changed] --> CH
+  CH --> AP[apply]
+  L[LSP buffers] --> H["hold / hold_with"]
+  AP --> S[(session)]
+  H --> S
+  style AP fill:#bfe,stroke:#177a3c`},
+ { n:"10", t:"An operations request owns its meaning", adr:"0101", c:9,
+   problem:"MCP and the CLI each interpreted a request's arguments their own way.",
+   before:`flowchart LR
+  MCP[MCP] --> M1[its own parsing]
+  CLI[CLI] --> M2[its own parsing]
+  M1 -.-> X[drift]
+  M2 -.-> X
+  style X fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  MCP[MCP] --> R["Request (owns meaning)"]
+  CLI[CLI] --> R
+  R --> OPS[ops]
+  style R fill:#bfe,stroke:#177a3c`},
+ { n:"11", t:"A document names a project file from the project root", adr:"0102", c:7,
+   problem:"Format, collect, render and migrate reports spelled paths absolute or redacted, differently per surface.",
+   before:`flowchart LR
+  F[format] --> P1["/abs/path"]
+  C[collect] --> P2["[ROOT]/path"]
+  M[migrate] --> P3[mixed]
+  style P1 fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  F[format] --> PP["ProjectPath (from root)"]
+  C[collect] --> PP
+  M[migrate] --> PP
+  R[render] --> PP
+  style PP fill:#bfe,stroke:#177a3c`},
+ { n:"12", t:"A core MCP resource is one module; the methods are one table", adr:"0103", c:6,
+   problem:"Resource templates read their placeholders by hand in a long match, and the MCP methods were scattered across the router.",
+   before:`flowchart LR
+  RT[router] --> BIG[big match]
+  BIG --> R1[resource 1 inline]
+  BIG --> R2[resource 2 inline]
+  RT --> F1[follow_root per handler]
+  style BIG fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  RT[router] --> TB["Method table"]
+  RT -->|follow_root once| S[session request]
+  TB --> CR["CoreResource modules (7)"]
+  CR --> UT["uri_template::read"]
+  style TB fill:#bfe,stroke:#177a3c`}
+];
+
+const tbody = document.querySelector("#summary tbody");
+const host = document.getElementById("plans");
+PLANS.forEach(p => {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td>${p.n}</td><td>${p.t}</td><td>${p.adr}</td><td>${p.c}</td>`;
+  tbody.appendChild(tr);
+  const s = document.createElement("section");
+  s.className = "plan";
+  s.innerHTML = `<h3>Plan ${p.n}: ${p.t}</h3><div class="tag">ADR ${p.adr} · ${p.c} commit${p.c > 1 ? "s" : ""}</div>
+    <p>${p.problem}</p>
+    <div class="cols">
+      <div><h4>Before</h4><pre class="mermaid"></pre></div>
+      <div><h4>After</h4><pre class="mermaid"></pre></div>
+    </div>`;
+  const pre = s.querySelectorAll("pre.mermaid");
+  pre[0].textContent = p.before;
+  pre[1].textContent = p.after;
+  host.appendChild(s);
+});
+const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "neutral", securityLevel: "strict" });
+mermaid.run({ querySelector: "pre.mermaid" });
+</script>
+</body>
+</html>

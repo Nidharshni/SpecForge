@@ -9,7 +9,6 @@ use specforge_common::{Severity, SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
 use specforge_lsp::LineIndex;
 use specforge_ops::view::ProjectView;
-use specforge_parser::{EntityId, EntityKind, FieldMap};
 use specforge_project::Environment;
 use specforge_project::coverage::RecordedCoverage;
 use specforge_test_macros::test as spec;
@@ -22,20 +21,18 @@ use specforge_extension_sdk::prelude::{ContributionsBuilder, FieldType, Vocabula
 /// A graph node for the tests of the renderer, which hand it facts.
 fn node(id: &str, kind: &str, title: Option<&str>) -> Node {
     Node {
-        id: EntityId { raw: Sym::new(id) },
-        kind: EntityKind {
-            raw: Sym::new(kind),
-        },
         title: title.map(|t| t.to_string()),
-        fields: FieldMap::new(),
-        source_span: SourceSpan {
-            file: Sym::new("test.spec"),
-            start_line: 0,
-            start_col: 0,
-            end_line: 0,
-            end_col: 0,
-        },
-        methods: Vec::new(),
+        ..Node::new(
+            id,
+            kind,
+            SourceSpan {
+                file: Sym::new("test.spec"),
+                start_line: 0,
+                start_col: 0,
+                end_line: 0,
+                end_col: 0,
+            },
+        )
     }
 }
 
@@ -275,7 +272,7 @@ fn hover_shows_field_values() {
 /// `behavior` (obligated) with a headline `contract`, `type` (obligated),
 /// `constraint` (testable, no rule) and `note` (not testable), declared by
 /// three extensions.
-fn coverage_project(source: &str) -> Served {
+pub(crate) fn coverage_project(source: &str) -> Served {
     Served::new(&[("main.spec", source)])
         .extension("@t/soft", |c| {
             c.kind("behavior", |k| {
@@ -438,7 +435,7 @@ note doc \"Doc\" {\n  verify unit \"read\"\n}\n";
         "{header}"
     );
     assert!(!one.contains("`contract` ="), "Fields skips it:\n{one}");
-    assert!(one.contains("- `verify` = unit: it does"), "{one}");
+    assert!(one.contains("**Obligations**\n- unit: it does"), "{one}");
 
     let three = project.hover_on("main.spec", "three").unwrap();
     let header = three.split("\n\n---\n\n").next().unwrap();
@@ -746,9 +743,8 @@ fn hovering_a_diagnostic_shows_the_catalogue_entry() {
     assert_eq!(
         md,
         "**E003** · Unresolved reference\n\nunresolved reference 'ghost'\n\n\
-         A reference field names an entity ID that doesn't resolve to any declared entity. \
-         Fix the typo or add the missing entity; a `did you mean` suggestion is included when \
-         a close match exists.\n\n\
+         A reference field names an entity ID that doesn't resolve to any declared entity: a `reference` field's value or a `reference_list` field's item, quoted or not, or a scheme ref ID in a string list. \
+         A `string_list` field's other items are strings, never references. Fix the typo or add the missing entity; a `did you mean` suggestion is included when a close match exists.\n\n\
          [Documentation](https://github.com/leaderiop/SpecForge/blob/main/docs/diagnostics.md#e003)"
     );
     // Outside the range, nothing.

@@ -56,11 +56,6 @@
           "annotations": [],
           "key": "status",
           "value": "active"
-        },
-        {
-          "annotations": [],
-          "key": "verify",
-          "value": "a works"
         }
       ],
       "id": "a",
@@ -101,7 +96,12 @@
       "BTreeSet",
       "String"
     ],
-    "referenced": []
+    "referenced": [
+      {
+        "id": "b",
+        "kind": "gadget"
+      }
+    ]
   },
   {
     "declared_types": [],

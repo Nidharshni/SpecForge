@@ -28,6 +28,7 @@ fn node(id: &str, kind: &str) -> Node {
         fields: FieldMap::new(),
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     }
 }
 

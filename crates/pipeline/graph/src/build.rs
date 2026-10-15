@@ -14,20 +14,16 @@ pub struct GraphInputs {
     /// two-hop cycle through both labels of one pair is a known
     /// bidirectional relationship, not a reference cycle.
     pub bidirectional_pairs: Vec<(String, String)>,
-    /// (kind, field) pairs registered as single reference fields (none while
-    /// no kind is registered): references are re-resolved with
-    /// single-reference awareness, creating edges for fields like
-    /// `journey.persona -> persona`.
-    pub single_reference_fields: HashSet<(String, String)>,
     /// (kind, field) reference fields whose target kind no loaded extension
     /// declares, mapped to that kind: an unresolved reference there is an
     /// I004 hint (the kind's extension isn't enabled), not an E003.
     pub absent_reference_targets: HashMap<(String, String), String>,
-    /// (kind, field) -> the field's form, for every registered field: the
-    /// graph build stores each written value as its form coerces it, before
-    /// references resolve, so a single reference on a reference_list field
-    /// links like `field [id]`.
-    pub field_forms: HashMap<(String, String), crate::FieldForm>,
+    /// Every registered field's form, and the kinds that take any field:
+    /// the graph build stores each written value as its form coerces it,
+    /// before references resolve, so a single reference on a reference_list
+    /// field links like `field [id]`; a declared `reference` field's edges
+    /// link after cycle detection (`journey.persona -> persona`).
+    pub field_forms: crate::FieldForms,
     /// Registered fields whose edges come from the type names an entity
     /// writes in its field types or method signatures (`derived_from`),
     /// sorted by kind and field.
@@ -396,6 +392,7 @@ fn node_from_entity(entity: &Entity) -> Node {
         fields: entity.fields.clone(),
         source_span: entity.span.clone(),
         methods: entity.methods.clone(),
+        obligations: entity.obligations.clone(),
     }
 }
 
@@ -425,53 +422,29 @@ fn define_block_warning(entity: &Entity) -> Diagnostic {
 /// Link reference edges, resolve E003s (single-reference aware) and emit
 /// W061 cycle warnings, over the whole graph.
 fn link_and_diagnose(graph: &mut Graph, config: &GraphConfig) -> Vec<Diagnostic> {
-    let mut diagnostics = Vec::new();
-
     // Values take their declared types before anything reads them.
     graph.coerce_field_values(&config.inputs.field_forms);
 
-    // Link references -> edges.
-    let mut ref_diags =
-        graph.resolve_references_with(&HashSet::new(), &config.inputs.absent_reference_targets);
-
-    // Detect reference cycles and emit W061
-    let cycles = graph.detect_cycles();
-    for cycle in &cycles {
-        let path: Vec<String> = cycle.iter().map(|s| s.to_string()).collect();
-        diagnostics.push(
-            Diagnostic::new(
-                codes::W061,
-                format!("reference cycle detected: {}", path.join(" -> ")),
-            )
-            .with_suggestion("break the cycle by removing or inverting one reference")
-            .with_data(specforge_common::DiagnosticData::ReferenceCycle { path }),
-        );
-    }
-
-    // Re-resolve references with single-reference field awareness. Replaces
-    // the initial reference diagnostics with ones that also account for
-    // single Reference fields (e.g., journey.persona -> persona).
-    if !config.inputs.single_reference_fields.is_empty() {
-        ref_diags = graph.resolve_references_with(
-            &config.inputs.single_reference_fields,
-            &config.inputs.absent_reference_targets,
-        );
-    }
+    // Link references -> edges (E003, I004) and warn on reference cycles
+    // (W061), which leave a declared single reference out.
+    let diagnostics = graph.link(
+        &config.inputs.field_forms,
+        &config.inputs.absent_reference_targets,
+    );
 
     // Derived reference fields, after cycle detection: a recursive type is
     // not a reference cycle.
     graph.link_derived_references(
         &config.inputs.derived_references,
-        &config.inputs.single_reference_fields,
+        &config.inputs.field_forms,
     );
 
     // The linker's postcondition (E060, retired): every reference to an
     // existing entity has its edge.
     #[cfg(debug_assertions)]
-    graph.assert_linked();
+    graph.assert_linked(&config.inputs.field_forms);
 
-    ref_diags.extend(diagnostics);
-    ref_diags
+    diagnostics
 }
 
 /// `diagnostics` by the file of their span (`""`: no span), each file's in
@@ -499,7 +472,7 @@ fn compare_graph_contents(incremental: &Graph, cold: &Graph) -> Result<(), Strin
             .iter()
             .map(|n| {
                 let sig = format!(
-                    "{} in {}:{}:{} title={:?} fields={:?} methods={:?}",
+                    "{} in {}:{}:{} title={:?} fields={:?} methods={:?} obligations={:?}",
                     n.kind.raw,
                     n.source_span.file,
                     n.source_span.start_line,
@@ -507,6 +480,7 @@ fn compare_graph_contents(incremental: &Graph, cold: &Graph) -> Result<(), Strin
                     n.title,
                     n.fields,
                     n.methods,
+                    n.obligations,
                 );
                 (n.id.raw.to_string(), sig)
             })

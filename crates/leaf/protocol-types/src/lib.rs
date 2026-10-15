@@ -49,8 +49,10 @@ pub use vocabulary::{CheckKind, ConstraintKind, FieldType, ProofRole};
 /// carrying contribution flags; 1.3.0 is ADR 0060's: an enhancement declares
 /// no edge types (an edge type is declared once, in `edges`); 1.4.0 is
 /// ADR 0069's: a recorded test's status is `passed`, `failed` or `skipped`,
-/// and a pass's test results carry `duration_ms`.
-pub const PROTOCOL_VERSION: &str = "1.4.0";
+/// and a pass's test results carry `duration_ms`; 1.5.0 is ADR 0094's: an
+/// entity's `verify` statements are no field text, so a pass's and a validator's
+/// `fields` carry no `verify` entry.
+pub const PROTOCOL_VERSION: &str = "1.5.0";
 
 /// Errors that can occur during the extension protocol lifecycle.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -355,16 +357,18 @@ pub struct EdgeTypeDescriptor {
 
 // ── Shared Field Descriptor ──
 
-/// A field applied globally to all entity kinds. Structurally identical to FieldDescriptor.
+/// A field every kind of the declaring extension gets (a kind's own field of
+/// that name wins). Structurally identical to FieldDescriptor.
 pub type SharedFieldDescriptor = FieldDescriptor;
 
 // ── Entity Enhancement Descriptor ──
 
-/// Describes fields added to a foreign entity kind.
+/// Fields and verify kinds an extension adds to an entity kind another
+/// extension declares. The host credits the fields to the declaring extension
+/// and reads the kind's owner from the kind registry (ADR 0096).
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EntityEnhancementDescriptor {
     pub target_kind: String,
-    pub source_extension: String,
     #[serde(default)]
     pub fields: Vec<FieldDescriptor>,
     /// Makes the target kind testable with these `verify` kinds.
@@ -695,9 +699,10 @@ pub struct ValidatorField {
     /// The field's text, always a JSON string (ADR 0019, protocol 1.1.0):
     /// scalars as written; lists of strings or references and mixed lists
     /// joined by `", "`; variant lists and type unions by `" | "`;
-    /// expressions by `", "`; verify statements by `"; "`; a block's keys by
-    /// `", "`; an empty list or block `""`. Under protocol 1.0.0 a variant
-    /// list, mixed list, expression or type union was `null`.
+    /// expressions by `", "`; a block's keys by `", "`; an empty list or block
+    /// `""`. Under protocol 1.0.0 a variant list, mixed list, expression or
+    /// type union was `null`. An entity's `verify` statements are not a field
+    /// and have no entry here (ADR 0094, protocol 1.5.0).
     pub value: serde_json::Value,
     /// Annotation names applied to the field, without the `@`.
     #[serde(default)]

@@ -152,6 +152,8 @@ read, and a reload keeps the held buffers in its one cold build instead of apply
   (release) / 2.3 ms (debug) for this repository's 1,977 entities against a ~140 ms update, and the LSP
   is the only reader of a session while it updates. It would add copy-on-write to the incremental
   build for one reader.
+  *(ADR 0100: the stand-in now copies the graph, the environment handle, the source texts, the source keys and
+  the memo's snapshot; the rejection and its reopen condition stand.)*
 - **Refusing every cursor request while the document is stale**: hover and F12 would be blank after
   every keystroke.
 - **One update per buffer with the checks deferred to the last**: one more check mode for what one

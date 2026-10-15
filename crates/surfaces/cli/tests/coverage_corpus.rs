@@ -20,9 +20,10 @@
 //! The `*_today` tests prove no spec obligation (they pin current behavior,
 //! bugs included), so they carry no `specforge_test` link.
 
+use crate::support::pairing::{mcp_calls, served};
 use crate::support::{Cli, TestProject};
 use serde_json::{Value, json};
-use specforge_mcp::testing::{Served, rpc};
+use specforge_mcp::testing::Served;
 use specforge_test_macros::test as specforge_test;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -41,11 +42,6 @@ pub(crate) fn project(name: &str) -> TestProject {
 /// A scratch copy of the shipped `examples/todo-app`.
 fn todo_app() -> TestProject {
     TestProject::copy_of(specforge_repo_root::repo_root().join("examples/todo-app"))
-}
-
-/// The project as `specforge mcp <root>` serves it, its `initialize` negotiating MCP 2025-03-26.
-pub(crate) fn served(project: TestProject) -> Served {
-    Served::rooted_at(project, "2025-03-26")
 }
 
 /// The `@specforge/testing:coverage` pass of `analyze coverage --json`.
@@ -96,40 +92,6 @@ pub(crate) fn stats(project: &TestProject) -> Value {
             String::from_utf8_lossy(&out.stdout)
         )
     })
-}
-
-/// The JSON-RPC responses to `calls` on `served`, one per call, in order. A call is a tool's `{name, arguments}`,
-/// or `{method, params}` for any other request.
-pub(crate) fn mcp_responses(served: &mut Served, calls: &[Value]) -> Vec<Value> {
-    calls
-        .iter()
-        .map(|call| match call.get("method") {
-            Some(method) => rpc::call(served, method.as_str().unwrap(), call["params"].clone()),
-            None => rpc::call(served, "tools/call", call.clone()),
-        })
-        .collect()
-}
-
-/// Call MCP tools on `served`; one result per call, in order: the tool's JSON
-/// content, `{"isError": content}` for an error result, or `{"error": ...}`
-/// for a JSON-RPC error ([`mcp_responses`]).
-pub(crate) fn mcp_calls(served: &mut Served, calls: &[Value]) -> Vec<Value> {
-    mcp_responses(served, calls)
-        .into_iter()
-        .map(|resp| {
-            if !resp["error"].is_null() {
-                return json!({"error": resp["error"]});
-            }
-            let Some(text) = resp["result"]["content"][0]["text"].as_str() else {
-                return resp["result"].clone();
-            };
-            let content = serde_json::from_str(text).unwrap_or_else(|_| json!({"text": text}));
-            if resp["result"]["isError"] == true {
-                return json!({ "isError": content });
-            }
-            content
-        })
-        .collect()
 }
 
 /// `specforge.coverage` rows as `id -> (status, obligations, proven)`.

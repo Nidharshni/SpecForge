@@ -390,7 +390,6 @@ failure_mode fresh_clone_wasm_bootstrap_missing {
   cause      "Repository is cloned fresh and the embedded builtin .wasm blobs (extensions/*/src/*.wasm) have not been built — the wasm32-wasip2 target was never installed or the bootstrap step was skipped."
   effect     "Extension loading fails at startup; wasm-backed behaviors (registry populate, describe fetch, custom validation rules) are unavailable, and builds depending on them error instead of degrading."
   mitigation "Bootstrap script builds the four builtin .wasm blobs (extensions/*/src) for wasm32-wasip2 before first run; compile-cache warm path documents the requirement; CI builds the blobs ahead of workspace tests."
-  invariant  wasm_extension_runtime_integrity
   post_mitigation {
     severity   low
     occurrence unlikely

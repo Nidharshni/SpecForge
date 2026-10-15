@@ -16,6 +16,7 @@ type Entity {
   // and stored here for display, but does not participate in field validation.
   title       string
   fields      FieldMap
+  obligations VerifyStatement[]
   source_span SourceSpan @readonly
   verify unit "Entity schema is valid"
 }
@@ -59,7 +60,7 @@ type FieldEntry {
 // Note: integer, bool, and enum field values are parsed as StringValue
 // by the generic tree-sitter grammar. Type coercion and validation happen
 // in the semantic phase using FieldRegistry type declarations.
-type FieldValue = StringValue | ReferenceList | StringList | Block | VerifyList
+type FieldValue = StringValue | ListValue | Block
 
 type StringValue {
   _tag    "StringValue" @literal
@@ -67,28 +68,25 @@ type StringValue {
   verify unit "StringValue schema is valid"
 }
 
-type ReferenceList {
-  _tag "ReferenceList" @literal
-  ids  EntityId[]
-  verify unit "ReferenceList schema is valid"
+// A list as written (ADR 0093): what it references is its field's declared
+// type, never the list's own shape.
+type ListValue {
+  _tag  "ListValue" @literal
+  items ListItem[]
+  verify unit "ListValue schema is valid"
 }
 
-type StringList {
-  _tag  "StringList" @literal
-  items string[]
-  verify unit "StringList schema is valid"
+type ListItem {
+  text    string
+  // bare, scheme_ref, quoted or literal
+  written string
+  verify unit "ListItem schema is valid"
 }
 
 type Block {
   _tag    "Block" @literal
   entries FieldEntry[]
   verify unit "Block schema is valid"
-}
-
-type VerifyList {
-  _tag  "VerifyList" @literal
-  items VerifyStatement[]
-  verify unit "VerifyList schema is valid"
 }
 
 type VerifyStatement {

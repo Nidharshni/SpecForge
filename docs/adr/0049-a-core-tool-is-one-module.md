@@ -2,7 +2,8 @@
 
 **Status:** accepted (2026-10-11). Amends ADR 0024 A1 (what a tool spec is), ADR 0048 D2 (where
 the reply type is named) and D9, ADR 0017 D8 (the adapters' module and names) and D9 (the URI rule),
-and ADR 0015 P7 (how prompts name tools). D1 applied to prompts by ADR 0058.
+and ADR 0015 P7 (how prompts name tools). D1 applied to prompts by ADR 0058. D7's placeholder reading for core
+resources is the template's (ADR 0103).
 
 A core MCP tool was stated in three code places: its module (`Args`, `Reply`, `call`), a `mod` line,
 and an entry in `tools/table.rs` (502 lines) that restated the handler's input, arguments and reply

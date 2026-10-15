@@ -10,27 +10,24 @@ use specforge_ops::read::export::Format;
 use specforge_ops::read::query::{
     DEFAULT_SEARCH_LIMIT, FieldHolds, ListRequest, QueryRequest, SearchRequest, list, query, search,
 };
-use specforge_parser::{EntityId, EntityKind, FieldMap};
 use specforge_test::prelude::*;
 
 use crate::view_support::{Project, registries};
 
 fn node(id: &str, kind: &str) -> Node {
     Node {
-        id: EntityId { raw: Sym::new(id) },
-        kind: EntityKind {
-            raw: Sym::new(kind),
-        },
         title: Some(format!("Title {id}")),
-        fields: FieldMap::new(),
-        source_span: SourceSpan {
-            file: Sym::new("test.spec"),
-            start_line: 1,
-            start_col: 0,
-            end_line: 1,
-            end_col: 0,
-        },
-        methods: Vec::new(),
+        ..Node::new(
+            id,
+            kind,
+            SourceSpan {
+                file: Sym::new("test.spec"),
+                start_line: 1,
+                start_col: 0,
+                end_line: 1,
+                end_col: 0,
+            },
+        )
     }
 }
 

@@ -26,7 +26,7 @@ fn handshake_request_json_field_names() {
 
 #[test]
 fn protocol_version_constant() {
-    assert_eq!(PROTOCOL_VERSION, "1.4.0");
+    assert_eq!(PROTOCOL_VERSION, "1.5.0");
 }
 
 // ── Step 2: HandshakeResponse ──
@@ -387,7 +387,6 @@ fn entity_enhancement_descriptor_round_trip() {
     let enh = EntityEnhancementDescriptor {
         verify_kinds: None,
         target_kind: "behavior".to_string(),
-        source_extension: "@specforge/formal".to_string(),
         fields: vec![FieldDescriptor {
             name: "requires".to_string(),
             field_type: "block".to_string(),

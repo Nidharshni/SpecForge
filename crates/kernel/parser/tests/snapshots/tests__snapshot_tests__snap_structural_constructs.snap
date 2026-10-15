@@ -31,24 +31,8 @@ expression: "parse_ok(source, \"test.spec\").entities"
                         },
                     ),
                 },
-                FieldEntry {
-                    key: Sym("verify"),
-                    value: VerifyList(
-                        [
-                            VerifyStatement {
-                                kind: "integration",
-                                description: "project compiles",
-                            },
-                        ],
-                    ),
-                    annotations: [],
-                    value_span: None,
-                },
             ],
         },
-        raw_body: Some(
-            "\n    version \"0.1.0\"\n    verify integration \"project compiles\"\n",
-        ),
         span: SourceSpan {
             file: Sym("test.spec"),
             start_line: 2,
@@ -57,6 +41,12 @@ expression: "parse_ok(source, \"test.spec\").entities"
             end_col: 2,
         },
         methods: [],
+        obligations: [
+            VerifyStatement {
+                kind: "integration",
+                description: "project compiles",
+            },
+        ],
     },
     Entity {
         kind: EntityKind {
@@ -96,7 +86,6 @@ expression: "parse_ok(source, \"test.spec\").entities"
                 },
             ],
         },
-        raw_body: None,
         span: SourceSpan {
             file: Sym("test.spec"),
             start_line: 7,
@@ -105,6 +94,7 @@ expression: "parse_ok(source, \"test.spec\").entities"
             end_col: 42,
         },
         methods: [],
+        obligations: [],
     },
     Entity {
         kind: EntityKind {
@@ -160,7 +150,6 @@ expression: "parse_ok(source, \"test.spec\").entities"
                 },
             ],
         },
-        raw_body: None,
         span: SourceSpan {
             file: Sym("test.spec"),
             start_line: 9,
@@ -169,6 +158,7 @@ expression: "parse_ok(source, \"test.spec\").entities"
             end_col: 2,
         },
         methods: [],
+        obligations: [],
     },
     Entity {
         kind: EntityKind {
@@ -212,24 +202,8 @@ expression: "parse_ok(source, \"test.spec\").entities"
                         },
                     ),
                 },
-                FieldEntry {
-                    key: Sym("verify"),
-                    value: VerifyList(
-                        [
-                            VerifyStatement {
-                                kind: "unit",
-                                description: "custom kind registers",
-                            },
-                        ],
-                    ),
-                    annotations: [],
-                    value_span: None,
-                },
             ],
         },
-        raw_body: Some(
-            "\n    base_kind \"entity\"\n    testable true\n    verify unit \"custom kind registers\"\n",
-        ),
         span: SourceSpan {
             file: Sym("test.spec"),
             start_line: 13,
@@ -238,5 +212,11 @@ expression: "parse_ok(source, \"test.spec\").entities"
             end_col: 2,
         },
         methods: [],
+        obligations: [
+            VerifyStatement {
+                kind: "unit",
+                description: "custom kind registers",
+            },
+        ],
     },
 ]

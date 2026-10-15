@@ -22,7 +22,7 @@ fn drift(pre: &Graph, post: &Graph) -> Vec<Diagnostic> {
 )]
 fn format_only_migration_zero_differences() {
     use specforge_graph::{Edge, EntityId, EntityKind, FieldMap, FieldValue, Graph, Node};
-    use specforge_parser::SpannedRef;
+    use specforge_parser::{ListItem, Written};
 
     // A graph as compiled from files whose lines start at `first_line`:
     // a format migration adds a header line, shifting every span.
@@ -39,9 +39,10 @@ fn format_only_migration_zero_differences() {
         fields.push(Sym::new("contract"), FieldValue::String(contract.into()));
         fields.push(
             Sym::new("invariants"),
-            FieldValue::ReferenceList(vec![SpannedRef {
-                id: "inv_a".into(),
+            FieldValue::List(vec![ListItem {
+                text: "inv_a".into(),
                 span: span(first_line + 2),
+                written: Written::Bare,
             }]),
         );
         graph.add_node(Node {
@@ -55,6 +56,7 @@ fn format_only_migration_zero_differences() {
             source_span: span(first_line),
             fields,
             methods: Vec::new(),
+            obligations: Vec::new(),
         });
         for (id, kind) in [("inv_a", "invariant"), ("inv_b", "invariant")] {
             graph.add_node(Node {
@@ -66,6 +68,7 @@ fn format_only_migration_zero_differences() {
                 source_span: span(first_line + 5),
                 fields: FieldMap::new(),
                 methods: Vec::new(),
+                obligations: Vec::new(),
             });
         }
         graph.add_edge(Edge {
@@ -142,6 +145,7 @@ fn structural_differences_produce_warnings() {
         },
         fields: FieldMap::new(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     });
 
     let post = Graph::new(); // Empty graph — entity "foo" is missing
@@ -181,6 +185,7 @@ fn new_entities_after_migration_reported() {
         },
         fields: FieldMap::new(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     });
 
     let diags = drift(&pre, &post);
@@ -214,6 +219,7 @@ fn post_migration_integrity_contract() {
         },
         fields: FieldMap::new(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     };
 
     // Ensures: structural_equivalence_checked — identical graphs yield empty
@@ -273,6 +279,7 @@ fn cross_extension_broken_reference_produces_diagnostic() {
         },
         fields: FieldMap::new(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     };
 
     // Pre: behavior→feature cross-extension edge exists
@@ -349,6 +356,7 @@ fn graph_after(change: Option<Change>) -> Graph {
             } else {
                 Vec::new()
             },
+            obligations: Vec::new(),
         }
     };
     let mut graph = Graph::new();

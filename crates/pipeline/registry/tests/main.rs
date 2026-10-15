@@ -5,6 +5,7 @@
 
 mod build;
 mod checks;
+mod command_routes;
 mod declarations;
 mod registry_build;
 mod rules;

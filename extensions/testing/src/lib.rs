@@ -3,9 +3,9 @@
 //! Which kinds accept `verify` obligations, which obligation kinds each
 //! allows, and the rules over them (W004 untested testable entity, W009
 //! verify kind outside the allowlist) live here rather than in the extensions
-//! that own the kinds. Every testable kind is contributed as an enhancement
-//! naming its owner, so a kind whose extension a project doesn't use is
-//! skipped silently. Test runners (`@specforge/cargo-test`,
+//! that own the kinds. Every testable kind is contributed as an enhancement;
+//! each kind's extension is an optional peer, so a kind whose extension a
+//! project doesn't use is skipped silently. Test runners (`@specforge/cargo-test`,
 //! `@specforge/vitest`, …) build on this vocabulary.
 //!
 //! The `coverage` pass scores it: intent (verify obligations on testable
@@ -109,12 +109,18 @@ struct Testing;
 
 impl Contributions for Testing {
     fn contribute(c: &mut ContributionsBuilder) {
-        for owner in [SOFTWARE, GOVERNANCE] {
-            c.optional_peer(owner, "^1.0");
+        // Each kind's extension is an optional peer: the host skips the
+        // enhancement of a kind no loaded extension declares, silently.
+        let mut owners: Vec<&str> = Vec::new();
+        for t in TESTABLE {
+            if !owners.contains(&t.owner) {
+                owners.push(t.owner);
+                c.optional_peer(t.owner, "^1.0");
+            }
         }
 
         for t in TESTABLE {
-            c.enhance(t.kind, t.owner, |e| {
+            c.enhance(t.kind, |e| {
                 e.verify_kinds(t.verify_kinds);
             });
             if t.requires_obligations {

@@ -2,7 +2,7 @@
 //! (`specforge_lsp::answers`): no client, no debounce, no stdio.
 
 use specforge_lsp::{ClientSupport, LspState, answers};
-use specforge_project::{Buffer, ProjectSession, SourceChange};
+use specforge_project::{Buffer, ProjectSession};
 use specforge_test_macros::test as spec;
 use tempfile::TempDir;
 use tower_lsp::lsp_types::{
@@ -131,7 +131,7 @@ fn compile(state: &mut LspState) {
         .environment()
         .spec_root()
         .join("main.spec");
-    session.update(SourceChange::Hold(&[Buffer::new(path, STALE_TYPED)]));
+    session.hold(&[Buffer::new(path, STALE_TYPED)]);
 }
 
 fn quad(r: tower_lsp::lsp_types::Range) -> (u32, u32, u32, u32) {

@@ -5,7 +5,7 @@ use specforge_emitter::{
     SchemaExtensionInfo, SchemaField, SchemaVersion, generate_schema, publish,
 };
 use specforge_graph::{Edge, FieldValue, Graph, Node};
-use specforge_parser::{EntityId, EntityKind, FieldMap};
+use specforge_parser::FieldMap;
 use specforge_protocol_types::{
     EdgeTypeDescriptor, EntityKindDescriptor, ExtensionDeclaration, FieldDescriptor,
 };
@@ -46,14 +46,8 @@ fn span() -> SourceSpan {
 
 fn node(id: &str, kind: &str, title: Option<&str>) -> Node {
     Node {
-        id: EntityId { raw: Sym::new(id) },
-        kind: EntityKind {
-            raw: Sym::new(kind),
-        },
         title: title.map(|s| s.to_string()),
-        fields: FieldMap::new(),
-        source_span: span(),
-        methods: Vec::new(),
+        ..Node::new(id, kind, span())
     }
 }
 
@@ -714,16 +708,9 @@ fn a_graph_export_with_a_schema_keeps_every_field() {
         specforge_graph::FieldValue::String("MUST work".to_string()),
     );
     graph.add_node(Node {
-        id: EntityId {
-            raw: Sym::new("alpha"),
-        },
-        kind: EntityKind {
-            raw: Sym::new("behavior"),
-        },
         title: Some("Alpha".to_string()),
         fields,
-        source_span: span(),
-        methods: Vec::new(),
+        ..Node::new("alpha", "behavior", span())
     });
 
     let schema = GraphProtocolSchema::empty();
@@ -1497,7 +1484,7 @@ fn an_undeclared_edge_two_kinds_write_names_every_writer() {
 
 // ===========================================================================
 // The published schema is the export document's, narrowed by the project
-// (ADR-NEW-01)
+// (ADR 0064)
 // ===========================================================================
 
 const AGENT_FORMATS: [EmitFormat; 3] = [EmitFormat::Json, EmitFormat::Context, EmitFormat::Brief];

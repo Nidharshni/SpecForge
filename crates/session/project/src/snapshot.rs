@@ -489,15 +489,21 @@ fn record(
             .collect(),
         references: entries
             .iter()
-            .filter_map(|entry| match &entry.value {
-                FieldValue::ReferenceList(refs) => Some((
-                    entry.key.to_string(),
-                    refs.iter().map(|r| r.id.clone()).collect(),
-                )),
-                _ => None,
+            .filter_map(|entry| {
+                let refs = registries
+                    .field_forms()
+                    .reading(node.kind.raw.as_str(), entry.key.as_str())
+                    .references(entry);
+                (!refs.is_empty()).then(|| {
+                    (
+                        entry.key.to_string(),
+                        refs.iter().map(|r| r.id.to_string()).collect(),
+                    )
+                })
             })
             .collect(),
-        obligations: specforge_graph::obligations(node)
+        obligations: node
+            .obligations
             .iter()
             .map(|statement| ObligationRecord {
                 kind: statement.kind.clone(),
@@ -540,8 +546,8 @@ fn exemption(node: &Node, kinds: &KindRegistry, fields: &FieldRegistry) -> Optio
     let kind = node.kind.raw.as_str();
     let entries = node.fields.entries();
     // The union syntax is structural: its body is the variant list, under
-    // the parser's own key (a user's `values [a, b]` is a variant list too,
-    // and exempts nothing).
+    // the parser's own key (a user's `values [a, b]` is a list, and exempts
+    // nothing).
     let union = entries.iter().any(|entry| {
         matches!(&entry.value, FieldValue::VariantList(variants)
             if entry.key.as_str() == UNION_VARIANTS_FIELD && !variants.is_empty())
@@ -572,15 +578,13 @@ fn is_set(value: &FieldValue) -> bool {
     match value {
         FieldValue::Boolean(b) => *b,
         FieldValue::String(s) | FieldValue::Identifier(s) => !s.is_empty(),
-        FieldValue::StringList(list) => !list.is_empty(),
-        FieldValue::ReferenceList(refs) => !refs.is_empty(),
+        FieldValue::List(items) => !items.is_empty(),
         _ => false,
     }
 }
 
 /// A field value's text: the one rule every reader after the graph build
-/// shares (ADR 0019). Scalars as written; lists of strings or references
-/// and mixed lists joined by `", "`; variant lists and type unions by
+/// shares (ADR 0019). Scalars as written; lists joined by `", "`; variant lists and type unions by
 /// `" | "`; expressions by `", "` in their display form; verify statements'
 /// texts by `"; "`; a block's keys by `", "`. Empty values are `""`.
 ///
@@ -593,20 +597,13 @@ pub fn field_text(value: &FieldValue) -> String {
         FieldValue::String(s) | FieldValue::Identifier(s) | FieldValue::Date(s) => s.clone(),
         FieldValue::Integer(n) => n.to_string(),
         FieldValue::Boolean(b) => b.to_string(),
-        FieldValue::StringList(_)
-        | FieldValue::ReferenceList(_)
-        | FieldValue::MixedList(_)
-        | FieldValue::Expression(_)
-        | FieldValue::Block(_) => joined(", "),
+        FieldValue::List(_) | FieldValue::Expression(_) | FieldValue::Block(_) => joined(", "),
         FieldValue::VariantList(_) | FieldValue::TypeUnion(_) => joined(" | "),
-        FieldValue::VerifyList(_) => joined("; "),
     }
 }
 
 /// A list-shaped value's items, unjoined, each as its text: the list's
-/// strings or ids, a variant list's or type union's members, a mixed
-/// list's items' texts, each expression's display form, each verify
-/// statement's text, a block's keys. `None` for a scalar. [`field_text`]
+/// items' texts, a variant list's or type union's members, each expression's display form, a block's keys. `None` for a scalar. [`field_text`]
 /// is these joined.
 pub fn field_items(value: &FieldValue) -> Option<Vec<String>> {
     match value {
@@ -615,15 +612,9 @@ pub fn field_items(value: &FieldValue) -> Option<Vec<String>> {
         | FieldValue::Date(_)
         | FieldValue::Integer(_)
         | FieldValue::Boolean(_) => None,
-        FieldValue::StringList(items)
-        | FieldValue::VariantList(items)
-        | FieldValue::TypeUnion(items) => Some(items.clone()),
-        FieldValue::ReferenceList(refs) => Some(refs.iter().map(|r| r.id.clone()).collect()),
-        FieldValue::MixedList(items) => Some(items.iter().map(field_text).collect()),
+        FieldValue::VariantList(items) | FieldValue::TypeUnion(items) => Some(items.clone()),
+        FieldValue::List(items) => Some(items.iter().map(|item| item.text.clone()).collect()),
         FieldValue::Expression(exprs) => Some(exprs.iter().map(ToString::to_string).collect()),
-        FieldValue::VerifyList(statements) => {
-            Some(statements.iter().map(|s| s.description.clone()).collect())
-        }
         FieldValue::Block(block) => {
             Some(block.entries().iter().map(|e| e.key.to_string()).collect())
         }

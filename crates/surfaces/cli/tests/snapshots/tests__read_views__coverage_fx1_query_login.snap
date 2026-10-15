@@ -18,19 +18,19 @@ expression: "normalized(&result, root)"
         "contract": "The system MUST let a known user log in",
         "features": [
           "signin"
-        ],
-        "verify": [
-          {
-            "description": "a known user logs in",
-            "kind": "unit"
-          }
         ]
       },
       "file": "main.spec",
       "id": "login",
       "kind": "behavior",
       "line": 1,
-      "title": "Log in"
+      "title": "Log in",
+      "verify": [
+        {
+          "description": "a known user logs in",
+          "kind": "unit"
+        }
+      ]
     },
     {
       "coverage_status": "uncovered",

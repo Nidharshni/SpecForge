@@ -1,7 +1,7 @@
 use crate::target::View;
 use crate::tool::{CoreTool, Effect, ToolGroup};
 use specforge_ops::read::model::{
-    self, FieldLevel, GroupBy, ModelField, ModelFormat, ModelOptions, ModelRoot,
+    self, FieldLevel, GroupBy, ModelField, ModelFormat, ModelOptions,
 };
 
 use crate::args::Arguments;
@@ -69,16 +69,7 @@ impl CoreTool for Tool {
 /// table's default, as `specforge model` reads it (ADR 0027). A `depth`
 /// needs a `root`.
 fn options(args: Args) -> Result<ModelOptions, Box<McpError>> {
-    let root = match (args.root, args.depth) {
-        (Some(kind), depth) => Some(ModelRoot { kind, depth }),
-        (None, None) => None,
-        (None, Some(_)) => {
-            return Err(Box::new(McpError::invalid_input(
-                "root",
-                "'depth' needs 'root': the kind the depth counts from",
-            )));
-        }
-    };
+    let root = model::root(args.root, args.depth).map_err(|r| Box::new(Tool::refused(r)))?;
     Ok(ModelOptions {
         format: args.format,
         group_by: args.group_by,

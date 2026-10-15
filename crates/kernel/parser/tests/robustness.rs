@@ -62,13 +62,13 @@ fn a_long_error_line_is_cut_at_a_character_boundary() {
     // The 57th byte falls inside '─' (3 bytes): the cut used to panic.
     let line = "ref rust.fn:x// ── Property Entity Kind ──────────────────────";
     let file = parse(&format!("{line}\n"), "a.spec");
-    let found = file
+    let quoted = file
         .errors
         .iter()
-        .filter_map(|e| e.found.as_deref())
-        .find(|f| f.ends_with("..."))
+        .filter_map(|e| e.message.strip_prefix("syntax error: unexpected '"))
+        .filter_map(|m| m.strip_suffix("...'"))
+        .next()
         .unwrap_or_else(|| panic!("an error quoting the cut line: {:?}", file.errors));
-    let quoted = found.trim_end_matches("...");
     assert!(quoted.len() <= 57, "{quoted:?}");
     assert!(
         line.starts_with(quoted),

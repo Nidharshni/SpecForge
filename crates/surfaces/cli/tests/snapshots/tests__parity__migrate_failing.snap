@@ -44,8 +44,8 @@ expression: snapshot
       "post_migration_validated": false,
       "results": [
         {
-          "error": "E019: unsupported format version 99.0 (max supported: 1.0) — Use a format version between 1.0 and 1.0.",
-          "file_path": "[ROOT]/spec/bad.spec",
+          "error": "E019: unsupported format version 99.0 (max supported: 1.0) — Use a format version between 0.0 and 1.0.",
+          "file_path": "spec/bad.spec",
           "from_version": {
             "major": 99,
             "minor": 0
@@ -53,7 +53,7 @@ expression: snapshot
           "status": "failed"
         },
         {
-          "file_path": "[ROOT]/spec/main.spec",
+          "file_path": "spec/main.spec",
           "from_version": {
             "major": 1,
             "minor": 0
@@ -79,7 +79,7 @@ expression: snapshot
   "mcp": {
     "envelope": {
       "code": "schema_mismatch",
-      "message": "1 file(s) could not be migrated: [ROOT]/spec/bad.spec: E019: unsupported format version 99.0 (max supported: 1.0) — Use a format version between 1.0 and 1.0.",
+      "message": "1 file(s) could not be migrated: spec/bad.spec: E019: unsupported format version 99.0 (max supported: 1.0) — Use a format version between 0.0 and 1.0.",
       "tool": "specforge.migrate"
     }
   }

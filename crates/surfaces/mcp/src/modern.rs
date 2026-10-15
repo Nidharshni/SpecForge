@@ -4,14 +4,16 @@
 //! A request whose `_meta` names a protocol version is served on its own:
 //! no `initialize` before it, and nothing a prior request said changes how
 //! it is answered. It never changes what the server serves: that follows
-//! the server's root on disk ([`McpState::follow_root`]). Its result carries `resultType`, the server's identity
-//! in `_meta`, and on a list or a read the caching hints. A request without
+//! the server's root on disk, which the router brings up to date before
+//! every session method ([`McpState::follow_root`], ADR 0103 D6). Its result
+//! carries `resultType`, the server's identity in `_meta`, and on a list or a read the caching hints. A request without
 //! that `_meta` keeps the handshake rules of the revision `initialize`
 //! negotiated.
 
 use serde_json::{Value, json};
 
 use crate::lifecycle::{MODERN_PROTOCOL_VERSIONS, Revision, server_info};
+use crate::protocol::method::Method;
 use crate::protocol::{JsonRpcError, JsonRpcResponse, error_codes};
 use crate::state::{McpState, ServerPhase};
 
@@ -25,23 +27,12 @@ pub const SERVER_INFO_META: &str = "io.modelcontextprotocol/serverInfo";
 /// The revision's error for a version the server does not speak.
 pub const UNSUPPORTED_PROTOCOL_VERSION: i64 = -32022;
 
-/// The results the revision makes cacheable. The server's are about the
-/// project on disk, which any request may recompile: nothing stays fresh
-/// (`ttlMs` 0), and nothing is shared beyond this client (`private`).
-const CACHEABLE: [&str; 6] = [
-    "server/discover",
-    "tools/list",
-    "prompts/list",
-    "resources/list",
-    "resources/templates/list",
-    "resources/read",
-];
-
 /// Whether `method` with `params` is a stateless request: `server/discover`,
 /// which exists only in that revision, or any request whose `_meta` names a
 /// protocol version.
 pub fn is_modern(method: &str, params: &Value) -> bool {
-    method == "server/discover" || params["_meta"].get(PROTOCOL_VERSION_META).is_some()
+    Method::named(method, true) == Some(Method::Discover)
+        || params["_meta"].get(PROTOCOL_VERSION_META).is_some()
 }
 
 /// Serve one stateless request or notification. A `subscriptions/listen`
@@ -55,7 +46,7 @@ pub fn handle(
 ) -> Option<JsonRpcResponse> {
     if id.is_none() {
         // Cancellation is the revision's one client notification.
-        if method == "notifications/cancelled" {
+        if Method::named(method, true) == Some(Method::Cancelled) {
             crate::lifecycle::handle_cancel(state, params, None);
         }
         return None;
@@ -71,32 +62,8 @@ pub fn handle(
             "Server shutting down",
         ));
     }
-    // What is served follows the server's root before the request is read:
-    // while none is served, the project at or above it is served once one
-    // exists there. The request itself never changes it (ADR 0077).
-    state.follow_root();
-
     let revision = Revision::Stateless(version);
-    let response = match method {
-        "server/discover" => Some(crate::lifecycle::handle_discover(id)),
-        "subscriptions/listen" => crate::subscriptions::requests::listen(state, &params, id),
-        "tools/list"
-        | "tools/call"
-        | "resources/list"
-        | "resources/templates/list"
-        | "resources/read"
-        | "prompts/list"
-        | "prompts/get" => Some(crate::protocol::router::route(
-            state, revision, method, params, id,
-        )),
-        // ping, logging/setLevel, resources/subscribe and the rest are not
-        // methods of this revision; completion/complete is not offered.
-        _ => Some(JsonRpcResponse::error(
-            id,
-            error_codes::METHOD_NOT_FOUND,
-            format!("Method not found: {method}"),
-        )),
-    };
+    let response = crate::protocol::router::route(state, revision, method, params, id);
     response.map(|response| decorate(response, method))
 }
 
@@ -142,7 +109,7 @@ fn decorate(mut response: JsonRpcResponse, method: &str) -> JsonRpcResponse {
             serde_json::to_value(server_info()).unwrap_or_default(),
         );
     }
-    if CACHEABLE.contains(&method) {
+    if crate::protocol::method::cacheable(method) {
         result.insert("ttlMs".into(), Value::from(0));
         result.insert("cacheScope".into(), Value::from("private"));
     }

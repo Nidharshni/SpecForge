@@ -31,7 +31,7 @@ fn standings() -> Project {
         c.kind("note", |k| {
             k.keyword("note");
         });
-        c.enhance("behavior", "@t/soft", |e| {
+        c.enhance("behavior", |e| {
             e.field("abstract", |f| {
                 f.field_type(FieldType::Bool).exempts_obligations();
             });
@@ -233,7 +233,7 @@ fn facts_carry_the_node_kind_entry_headline_and_obligations() {
         .iter()
         .map(|e| e.key.as_str())
         .collect();
-    assert_eq!(fields, ["contract", "category", "verify"]);
+    assert_eq!(fields, ["contract", "category"]);
 
     // A kind no extension declares has no entry and no headline.
     let project = Project::new("gizmo g \"G\" {\n  note \"n\"\n}\n", Default::default());

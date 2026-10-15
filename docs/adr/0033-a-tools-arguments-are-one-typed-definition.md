@@ -99,3 +99,5 @@ schemas could be derived the same way).
 Amended by round 9 plan 06 (ADR 0076): the `AgentPlan` argument is `specforge_ops::plan::AgentPlan`, listed as its
 derived schema (the spec type `AgentPlan`), read from an object or a string holding its JSON, checked against that
 schema before it is decoded; its refusal names the argument and every place the value departs from the type.
+
+Extended by ADR 0101: every rule a request's values follow is the operation's.

@@ -138,7 +138,9 @@ fn check_field_value_types_contract() {
     // the declared types, with no diagnostic.
     assert!(e061(&diags).is_empty(), "{diags:?}");
     let node = graph.node("t1").unwrap();
-    assert!(matches!(node.fields.get("labels"), Some(FieldValue::StringList(l)) if l == &["one"]));
+    assert!(
+        matches!(node.fields.get("labels"), Some(FieldValue::List(l)) if l.len() == 1 && l[0].text == "one")
+    );
     assert!(matches!(
         node.fields.get("urgent"),
         Some(FieldValue::Boolean(true))

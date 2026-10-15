@@ -4,12 +4,7 @@ use std::time::Duration;
 
 use specforge_project::{Changes, ProjectSession, Update, WatchRoot};
 
-use crate::{Debouncer, SpecWatcher};
-
-/// How many times a [`SessionWatch`] follows the session's inputs after one
-/// batch: each round needs the previous round's catch-up to have moved them
-/// again, so it ends long before this in practice.
-const FOLLOW_ROUNDS: usize = 8;
+use crate::{Debouncer, Follower, Following, SpecWatcher};
 
 /// Where a [`SessionWatch`] watches: the seam between the loop and the file
 /// system. [`Notify`] is the production adapter; the crate's tests record
@@ -104,22 +99,21 @@ pub struct Applied {
 pub struct SessionWatch<W: Watchers> {
     session: ProjectSession,
     watchers: W,
-    roots: Vec<WatchRoot>,
+    following: Following<Vec<WatchRoot>>,
 }
 
 impl<W: Watchers> SessionWatch<W> {
     /// Watch what `session` is built from. `Err` when it is built from no
     /// directory ("failed to watch directory: <root> does not exist") or a
     /// watcher cannot start.
-    pub fn start(session: ProjectSession, watchers: W) -> Result<Self, String> {
-        let mut watch = Self {
+    pub fn start(session: ProjectSession, mut watchers: W) -> Result<Self, String> {
+        let roots = session.inputs().watch_roots();
+        arm(&mut watchers, &session, &roots)?;
+        Ok(Self {
             session,
             watchers,
-            roots: Vec::new(),
-        };
-        let roots = watch.session.inputs().watch_roots();
-        watch.arm(roots)?;
-        Ok(watch)
+            following: Following::new(roots),
+        })
     }
 
     pub fn session(&self) -> &ProjectSession {
@@ -133,8 +127,11 @@ impl<W: Watchers> SessionWatch<W> {
         let mut events = Vec::new();
         if let Some(update) = self.session.ensure_fresh() {
             let changed = update.rebuilt_files.clone();
-            events.push(self.applied(update, changed));
-            self.follow(&mut events);
+            let moved = update.inputs_changed;
+            events.push(applied(&self.session, update, changed));
+            if moved {
+                self.follow(&mut events);
+            }
         }
         events
     }
@@ -142,79 +139,33 @@ impl<W: Watchers> SessionWatch<W> {
     /// Apply `batch` (changed paths, absolute) and everything that follows
     /// from it. When the update moved what the session is built from, the
     /// watchers follow, then the session catches up on what changed while
-    /// they did not (`ensure_fresh`), and again while that catch-up moves it,
-    /// at most `FOLLOW_ROUNDS` times. Empty when the batch changes nothing
-    /// the session is built from.
+    /// they did not (`ensure_fresh`), and again while that catch-up moves it
+    /// ([`Following`]). Empty when the batch changes nothing the session is
+    /// built from.
     pub fn changed(&mut self, batch: &[PathBuf]) -> Vec<WatchEvent> {
         let changes = self.session.changes(batch.iter().map(PathBuf::as_path));
         let changed = self.labels(&changes);
         let Some(update) = self.session.apply(&changes) else {
             return Vec::new();
         };
-        let mut events = vec![self.applied(update, changed)];
-        self.follow(&mut events);
+        let moved = update.inputs_changed;
+        let mut events = vec![applied(&self.session, update, changed)];
+        if moved {
+            self.follow(&mut events);
+        }
         events
     }
 
-    /// Follow the session's inputs while the last update moved them: the
-    /// watchers move, then the session catches up on what changed while
-    /// they did not. A failed move is reported once per set of roots and the
-    /// catch-up still runs (what is watched is what was; the next batch
-    /// tries again).
+    /// Follow the session's inputs: the watchers move, then the session
+    /// catches up on what changed while they did not. A failed move is
+    /// reported once per set of roots and the catch-up still runs (what is
+    /// watched is what was; the next batch tries again).
     fn follow(&mut self, events: &mut Vec<WatchEvent>) {
-        let mut refused: Option<Vec<WatchRoot>> = None;
-        for _ in 0..FOLLOW_ROUNDS {
-            let Some(WatchEvent::Applied(last)) = events.last() else {
-                return;
-            };
-            if !last.update.inputs_changed {
-                return;
-            }
-            let roots = self.session.inputs().watch_roots();
-            if roots == self.roots || refused.as_ref() == Some(&roots) {
-                return; // every input is under a watched directory, or none can be
-            }
-            if let Err(e) = self.arm(roots.clone()) {
-                refused = Some(roots);
-                events.push(WatchEvent::Unwatched(e));
-            }
-            let Some(update) = self.session.ensure_fresh() else {
-                return;
-            };
-            let changed = update.rebuilt_files.clone();
-            events.push(self.applied(update, changed));
-        }
-    }
-
-    /// Watch `roots`; they are what is watched once the watchers run.
-    fn arm(&mut self, roots: Vec<WatchRoot>) -> Result<(), String> {
-        if roots.is_empty() {
-            return Err(format!(
-                "failed to watch directory: {} does not exist",
-                self.session.project().environment().root().display()
-            ));
-        }
-        self.watchers.watch(&roots)?;
-        self.roots = roots;
-        Ok(())
-    }
-
-    fn applied(&self, update: Update, changed: Vec<String>) -> WatchEvent {
-        WatchEvent::Applied(Box::new(Applied {
-            update,
-            changed,
-            files: self.session.project().file_count(),
-            nodes: self.session.project().graph().node_count(),
-            extensions: self
-                .session
-                .project()
-                .environment()
-                .registries()
-                .declarations()
-                .iter()
-                .map(|d| d.name().to_string())
-                .collect(),
-        }))
+        self.following.follow(&mut Rounds {
+            session: &mut self.session,
+            watchers: &mut self.watchers,
+            events,
+        });
     }
 
     /// How the changes of a batch are named in its event: a source by its
@@ -239,4 +190,71 @@ impl<W: Watchers> SessionWatch<W> {
         labels.dedup();
         labels
     }
+}
+
+/// The session, its watchers and the events of one follow: what [`Following`] moves.
+struct Rounds<'a, W> {
+    session: &'a mut ProjectSession,
+    watchers: &'a mut W,
+    events: &'a mut Vec<WatchEvent>,
+}
+
+impl<W: Watchers> Follower for Rounds<'_, W> {
+    type Watched = Vec<WatchRoot>;
+
+    fn wanted(&self) -> Option<Vec<WatchRoot>> {
+        Some(self.session.inputs().watch_roots())
+    }
+
+    fn watch(&mut self, wanted: &Vec<WatchRoot>) -> Result<(), String> {
+        arm(self.watchers, self.session, wanted)
+    }
+
+    fn refused(&mut self, reason: String, was: Vec<WatchRoot>) -> Vec<WatchRoot> {
+        self.events.push(WatchEvent::Unwatched(reason));
+        was
+    }
+
+    fn catch_up(&mut self) -> bool {
+        let Some(update) = self.session.ensure_fresh() else {
+            return false;
+        };
+        let changed = update.rebuilt_files.clone();
+        let moved = update.inputs_changed;
+        self.events.push(applied(self.session, update, changed));
+        moved
+    }
+}
+
+/// Watch `roots`; `Err` when there are none (the session is built from no directory) or the
+/// watchers refuse them.
+fn arm<W: Watchers>(
+    watchers: &mut W,
+    session: &ProjectSession,
+    roots: &[WatchRoot],
+) -> Result<(), String> {
+    if roots.is_empty() {
+        return Err(format!(
+            "failed to watch directory: {} does not exist",
+            session.project().environment().root().display()
+        ));
+    }
+    watchers.watch(roots)
+}
+
+fn applied(session: &ProjectSession, update: Update, changed: Vec<String>) -> WatchEvent {
+    WatchEvent::Applied(Box::new(Applied {
+        update,
+        changed,
+        files: session.project().file_count(),
+        nodes: session.project().graph().node_count(),
+        extensions: session
+            .project()
+            .environment()
+            .registries()
+            .declarations()
+            .iter()
+            .map(|d| d.name().to_string())
+            .collect(),
+    }))
 }

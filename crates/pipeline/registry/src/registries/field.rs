@@ -9,8 +9,8 @@ use specforge_protocol_types::{FieldDescriptor, FieldType, ProofRole};
 pub struct UnknownFieldType(pub String);
 
 /// One registered field of one kind: the descriptor its extension declared,
-/// the kind it is registered on and the extension it is the kind's through
-/// (its own, or the owner an enhancement names).
+/// the kind it is registered on and the extension that declared the field:
+/// the kind's own extension, its shared field's or the enhancement's.
 ///
 /// [`FieldRegistryEntry::new`] is the only way to make one, so an entry's
 /// type, enum values and proof role are always its declaration's, read once.
@@ -25,7 +25,7 @@ pub struct FieldRegistryEntry {
 }
 
 impl FieldRegistryEntry {
-    /// `declared`, registered on `kind_name` through `source_extension`.
+    /// `declared`, registered on `kind_name`, declared by `source_extension`.
     ///
     /// The declared type must be a name the host reads (canonical or an
     /// accepted older spelling), else `Err` (W019 at the registry build). The
@@ -62,7 +62,7 @@ impl FieldRegistryEntry {
         &self.declared.name
     }
 
-    /// The extension the field is the kind's through.
+    /// The extension that declared the field.
     pub fn source_extension(&self) -> &str {
         &self.source_extension
     }
@@ -78,7 +78,7 @@ impl FieldRegistryEntry {
         self.form.enum_values()
     }
 
-    /// The field's declared type read once (ADR-NEW-01): which stored
+    /// The field's declared type read once (ADR 0064): which stored
     /// values it takes, how a written value is stored as it and the JSON
     /// written for it.
     pub fn form(&self) -> &FieldForm {

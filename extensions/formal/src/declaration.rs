@@ -285,7 +285,7 @@ fn edges(c: &mut ContributionsBuilder) {
 }
 
 fn enhancements(c: &mut ContributionsBuilder) {
-    c.enhance("behavior", "@specforge/formal", |e| {
+    c.enhance("behavior", |e| {
         e.field("requires", |f| {
             f.field_type(FieldType::Block)
                 .description("Named preconditions: each condition's name and what it requires");
@@ -320,7 +320,7 @@ fn enhancements(c: &mut ContributionsBuilder) {
                 .target_kind("behavior");
         });
     });
-    c.enhance("event", "@specforge/formal", |e| {
+    c.enhance("event", |e| {
         e.field("follows_protocol", |f| {
             f.field_type(FieldType::ReferenceList)
                 .description("Synchronization protocol this event follows")
@@ -338,7 +338,7 @@ fn enhancements(c: &mut ContributionsBuilder) {
                 .description("Synchronization bound: barrier, timeout or delivery");
         });
     });
-    c.enhance("invariant", "@specforge/formal", |e| {
+    c.enhance("invariant", |e| {
         e.field("expression", |f| {
             f.field_type(FieldType::String)
                 .description(

@@ -5,7 +5,7 @@
 use specforge_test_macros::test as spec;
 
 use specforge_extension_sdk::prelude::*;
-use specforge_graph::{FieldForm, GraphInputs};
+use specforge_graph::{GraphInputs, Reading};
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::build_registries;
 
@@ -102,9 +102,9 @@ fn two_extensions_populate_without_collision() {
         "@test/product"
     );
     // No kind, field or edge collides (no E026, W018): the declarations'
-    // own W021s (targets nobody declares), and the extensions' commands
-    // collide (E039).
-    assert_eq!(codes(&build), ["W021", "W021", "E039"]);
+    // own W021s (targets nobody declares); the two `hello`s are two
+    // routes, one per short name.
+    assert_eq!(codes(&build), ["W021", "W021"]);
 }
 
 #[test]
@@ -132,13 +132,15 @@ fn derived_graph_inputs_match_the_manifests() {
 
     assert!(
         inputs
-            .single_reference_fields
-            .contains(&("behavior".to_string(), "owner".to_string()))
+            .field_forms
+            .reading("behavior", "owner")
+            .is_single_reference()
     );
     assert!(
         !inputs
-            .single_reference_fields
-            .contains(&("behavior".to_string(), "types".to_string())),
+            .field_forms
+            .reading("behavior", "types")
+            .is_single_reference(),
         "a reference list is not a single reference"
     );
     // `team` is declared by no loaded extension.
@@ -150,11 +152,9 @@ fn derived_graph_inputs_match_the_manifests() {
         Some("team")
     );
     // A single reference is read as written; a reference list is a list.
-    let form = |field: &str| {
-        inputs
-            .field_forms
-            .get(&("behavior".to_string(), field.to_string()))
-            .map(FieldForm::field_type)
+    let form = |field: &str| match inputs.field_forms.reading("behavior", field) {
+        Reading::Declared(form) => Some(form.field_type()),
+        _ => None,
     };
     assert_eq!(form("owner"), Some(FieldType::Reference));
     assert_eq!(form("contract"), Some(FieldType::String));
@@ -163,7 +163,10 @@ fn derived_graph_inputs_match_the_manifests() {
 
 #[test]
 fn surface_conflicts_come_last_in_the_builds_diagnostics() {
-    let build = build_registries(vec![software(), product()]);
+    // Routed under `@test/software`'s short name: its `hello` is E039.
+    let mut product = product();
+    product.handshake.ext_short = Some("software".into());
+    let build = build_registries(vec![software(), product]);
 
     let reported = codes(&build);
     assert_eq!(
@@ -172,7 +175,8 @@ fn surface_conflicts_come_last_in_the_builds_diagnostics() {
         "E039 comes last, after the registries' diagnostics: {reported:?}"
     );
     assert_eq!(reported.iter().filter(|c| **c == "E039").count(), 1);
-    assert_eq!(build.surfaces().len(), 1, "first registration wins");
+    assert_eq!(build.commands().routed().len(), 1, "first route wins");
+    assert_eq!(build.commands().shadowed().len(), 1);
     assert_eq!(
         build
             .declarations()
@@ -234,7 +238,7 @@ fn no_declarations_build_empty_registries() {
     assert!(build.edges().get("enforces").is_none());
     assert_eq!(build.edges().iter().count(), 0);
     assert!(build.rules().is_empty());
-    assert!(build.surfaces().is_empty());
+    assert!(build.commands().routed().is_empty());
     assert!(build.passes().is_empty());
     assert_eq!(build.graph_inputs(), GraphInputs::default());
     assert!(build.declarations().is_empty());

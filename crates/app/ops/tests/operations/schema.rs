@@ -422,8 +422,7 @@ mod published {
     }
 
     /// A project with an edge from nearly every reference field the software,
-    /// product and governance extensions declare, plus a `refs` list whose
-    /// entries name entities.
+    /// product and governance extensions declare.
     const EDGES_SPEC: &str = r#"
 invariant graph_acyclic "Graph Acyclicity" {
   guarantee "The dependency graph MUST be acyclic"
@@ -454,7 +453,6 @@ behavior parse_input "Parse Input" {
   ports      [file_reader]
   produces   [input_parsed]
   features   [fast_parsing]
-  refs       [emit_output]
 }
 
 behavior emit_output "Emit Output" {
@@ -584,7 +582,6 @@ failure_mode parser_crash "Parser Crash" {
                 "ports_defined",
                 "produces",
                 "protects",
-                "refs",
                 "threatens_features",
                 "types"
             ]))
@@ -916,7 +913,7 @@ feature gamma "G" { behaviors [alpha] }
         );
     }
 
-    // --- Exports validate against what is published (ADR-NEW-01, plan 01) ---
+    // --- Exports validate against what is published (ADR 0064, plan 01) ---
 
     /// The messages for which `export` does not conform to `published`: the
     /// published schema's own keywords are held to the checker's, the export is

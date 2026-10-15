@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// An editor buffer: the editor's text of one file. Given to a session with
-/// [`crate::SourceChange::Hold`]; held until
+/// [`crate::ProjectSession::hold`]; held until
 /// [`crate::ProjectSession::release`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Buffer {

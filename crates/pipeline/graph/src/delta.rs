@@ -18,8 +18,8 @@ use specforge_common::shape::Shape;
 pub struct GraphDelta {
     pub added_nodes: Vec<NodeChange>,
     pub removed_nodes: Vec<NodeChange>,
-    /// Nodes in both graphs whose fields (verify list included), kind,
-    /// title, methods or outgoing edges differ.
+    /// Nodes in both graphs whose fields, kind,
+    /// title, methods, obligations or outgoing edges differ.
     pub modified_nodes: Vec<ModifiedNodeChange>,
     pub added_edges: Vec<EdgeChange>,
     pub removed_edges: Vec<EdgeChange>,
@@ -45,7 +45,7 @@ pub struct ModifiedNodeChange {
     /// here whatever its name, `kind` and `methods` included.
     pub changed_fields: Vec<String>,
     /// What else differs (sorted, each once): its kind, its title, its
-    /// methods, its outgoing edges.
+    /// methods, its obligations, its outgoing edges.
     pub changed_aspects: Vec<NodeAspect>,
     pub file: String,
     pub line: usize,
@@ -58,6 +58,7 @@ pub enum NodeAspect {
     Kind,
     Title,
     Methods,
+    Obligations,
     Edges,
 }
 
@@ -324,6 +325,9 @@ fn changes(
     }
     if methods(old) != methods(new) {
         aspects.insert(NodeAspect::Methods);
+    }
+    if old.obligations != new.obligations {
+        aspects.insert(NodeAspect::Obligations);
     }
     if old_out != new_out {
         aspects.insert(NodeAspect::Edges);

@@ -41,18 +41,10 @@ impl<'a> ParseContext<'a> {
             self.errors.push(ParseError {
                 message: "syntax error in field value".to_string(),
                 span,
-                expected: None,
-                found: Some(self.text(broken).chars().take(40).collect()),
             });
         }
         let key_sym = Sym::new(self.text(key));
-        let mut field_value = self.parse_value(value);
-        // A field named "values" contains enum tags, not entity references
-        if key_sym == "values"
-            && let FieldValue::ReferenceList(items) = &field_value
-        {
-            field_value = FieldValue::VariantList(items.iter().map(|r| r.id.clone()).collect());
-        }
+        let field_value = self.parse_value(value);
 
         // Extract annotations (children with kind "annotation")
         let mut annotations = Vec::new();
@@ -120,8 +112,6 @@ impl<'a> ParseContext<'a> {
                                 text
                             ),
                             span: self.span(node),
-                            expected: Some("integer within i64 range".to_string()),
-                            found: Some(text.to_string()),
                         });
                         FieldValue::Integer(0)
                     }
@@ -145,102 +135,31 @@ impl<'a> ParseContext<'a> {
         dedent(inner)
     }
 
+    /// A list as written: every item with its text, token span and how it
+    /// was written. Never judged here: what a list references, and whether
+    /// its items suit the field, is the field's declared type's reading.
     fn parse_list(&mut self, node: Node) -> FieldValue {
-        let mut has_string = false;
-        let mut has_identifier = false;
-        let mut has_integer = false;
-        let mut has_boolean = false;
-
-        // Collect typed items for mixed-type detection
-        let mut typed_items: Vec<FieldValue> = Vec::new();
-        // Parallel flat string items for homogeneous lists, with each
-        // item's source span so references can be diagnosed token-exactly.
-        let mut flat_items: Vec<String> = Vec::new();
-        let mut item_spans: Vec<SourceSpan> = Vec::new();
-
+        let mut items = Vec::new();
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            match child.kind() {
-                kind::IDENTIFIER => {
-                    let text = self.text(child).to_string();
-                    let span = self.span(child);
-                    // Detect boolean literals that tree-sitter parses
-                    // as identifiers inside list context.
-                    if text == "true" || text == "false" {
-                        has_boolean = true;
-                        typed_items.push(FieldValue::Boolean(text == "true"));
-                    } else {
-                        has_identifier = true;
-                        typed_items.push(FieldValue::Identifier(text.clone()));
-                    }
-                    flat_items.push(text);
-                    item_spans.push(span);
-                }
-                kind::STRING => {
-                    let text = self.unquote(child);
-                    has_string = true;
-                    typed_items.push(FieldValue::String(text.clone()));
-                    flat_items.push(text);
-                    item_spans.push(self.span(child));
-                }
-                kind::SCHEME_REF_ID => {
-                    let text = self.text(child).to_string();
-                    has_identifier = true;
-                    typed_items.push(FieldValue::Identifier(text.clone()));
-                    flat_items.push(text);
-                    item_spans.push(self.span(child));
-                }
-                kind::INTEGER => {
-                    let text = self.text(child);
-                    has_integer = true;
-                    let val = text.parse::<i64>().unwrap_or(0);
-                    typed_items.push(FieldValue::Integer(val));
-                    flat_items.push(text.to_string());
-                    item_spans.push(self.span(child));
-                }
-                kind::BOOLEAN => {
-                    let text = self.text(child);
-                    has_boolean = true;
-                    typed_items.push(FieldValue::Boolean(text == "true"));
-                    flat_items.push(text.to_string());
-                    item_spans.push(self.span(child));
-                }
-                _ => {}
-            }
+            let (text, written) = match child.kind() {
+                // `true` / `false` arrive as identifiers inside a list.
+                kind::IDENTIFIER => match self.text(child) {
+                    text @ ("true" | "false") => (text.to_string(), Written::Literal),
+                    text => (text.to_string(), Written::Bare),
+                },
+                kind::STRING => (self.unquote(child), Written::Quoted),
+                kind::SCHEME_REF_ID => (self.text(child).to_string(), Written::SchemeRef),
+                kind::INTEGER | kind::BOOLEAN => (self.text(child).to_string(), Written::Literal),
+                _ => continue,
+            };
+            items.push(ListItem {
+                text,
+                span: self.span(child),
+                written,
+            });
         }
-
-        // Determine how many distinct type categories are present
-        let type_count = [has_string, has_identifier, has_integer, has_boolean]
-            .iter()
-            .filter(|&&b| b)
-            .count();
-
-        if type_count > 1 {
-            // Mixed types detected — emit warning and preserve per-item types
-            if has_string && has_identifier {
-                self.errors.push(ParseError {
-                    message: "mixed list contains both quoted strings and bare identifiers"
-                        .to_string(),
-                    span: self.span(node),
-                    expected: Some("either all quoted strings or all bare identifiers".to_string()),
-                    found: None,
-                });
-            }
-            return FieldValue::MixedList(typed_items);
-        }
-
-        // Homogeneous list — use flat string representation
-        if has_string {
-            FieldValue::StringList(flat_items)
-        } else {
-            FieldValue::ReferenceList(
-                flat_items
-                    .into_iter()
-                    .zip(item_spans)
-                    .map(|(id, span)| SpannedRef { id, span })
-                    .collect(),
-            )
-        }
+        FieldValue::List(items)
     }
 
     fn parse_nested_block(&mut self, node: Node) -> FieldValue {

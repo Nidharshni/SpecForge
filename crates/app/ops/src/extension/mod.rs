@@ -5,6 +5,7 @@
 
 mod add;
 mod candidate;
+mod claims;
 pub mod command;
 #[cfg(test)]
 mod fixtures;
@@ -39,6 +40,7 @@ pub use update::{
     UpdateOutcome, UpdateRequest, UpdateRow, UpdateStatus, UpgradeCompleted, update,
 };
 
+pub(crate) use claims::{Claimed, Claims};
 pub(crate) use lock_plan::{Also, Ask, Install, LockPlan};
 
 use specforge_installed::LockSource;

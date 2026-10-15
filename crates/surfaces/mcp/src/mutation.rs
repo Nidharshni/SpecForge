@@ -25,7 +25,7 @@ use std::path::Path;
 use serde::Serialize;
 use serde_json::Value;
 use specforge_common::shape::{Object, Shape};
-use specforge_common::{Diagnostic, DiagnosticList};
+use specforge_common::{Diagnostic, DiagnosticList, ProjectPath};
 use specforge_ops::{OpError, Writes};
 
 use crate::events::{EventSink, ExtensionAdded, McpEvent, ProjectInitialized};
@@ -252,7 +252,7 @@ pub struct WrittenReply<R, A> {
     #[serde(flatten)]
     reply: R,
     #[serde(skip_serializing_if = "Option::is_none")]
-    files_written: Option<Vec<String>>,
+    files_written: Option<Vec<ProjectPath>>,
     #[serde(flatten)]
     after: A,
 }
@@ -383,7 +383,7 @@ fn finished<R: MutationReply>(
 ) -> ToolOutcome {
     match mutation {
         Ok(Mutated { answer, written }) => {
-            let files = named(root, &written.files);
+            let files = written.files.named(root);
             let after = <R::After as AfterWrite>::of(diagnostics);
             let sent = sent(answer, Some(files.clone()), after);
             let outcome =
@@ -391,7 +391,7 @@ fn finished<R: MutationReply>(
                     // A reply its schema refuses still tells the client what the
                     // call wrote.
                     ToolOutcome::Refused(mut error) => {
-                        error.set_data_field(FILES_WRITTEN, Value::from(files));
+                        error.set_data_field(FILES_WRITTEN, listed(&files));
                         ToolOutcome::Refused(error)
                     }
                     sent => sent,
@@ -412,7 +412,7 @@ fn failure(
     events: &mut dyn EventSink,
 ) -> ToolOutcome {
     let Failed { mut error, files } = failed;
-    error.set_data_field(FILES_WRITTEN, Value::from(named(root, &files)));
+    error.set_data_field(FILES_WRITTEN, listed(&files.named(root)));
     record(events, tool, false, &Written::files(files));
     ToolOutcome::Refused(error)
 }
@@ -421,7 +421,7 @@ fn failure(
 /// `_meta.diagnostics`, `_meta`).
 fn sent<R: Object + Serialize, A: AfterWrite>(
     answer: Answer<R>,
-    files_written: Option<Vec<String>>,
+    files_written: Option<Vec<ProjectPath>>,
     after: A,
 ) -> ToolOutcome {
     let Answer {
@@ -459,16 +459,9 @@ fn record(events: &mut dyn EventSink, tool: &str, success: bool, written: &Writt
     });
 }
 
-/// `files` named from `root` ([`Writes::names_under`]), else displayed
-/// absolute.
-fn named(root: Option<&Path>, files: &Writes) -> Vec<String> {
-    match root {
-        Some(root) => files.names_under(root),
-        None => files
-            .paths()
-            .map(|path| path.display().to_string())
-            .collect(),
-    }
+/// `files` as the JSON array a failure's `data.files_written` holds.
+fn listed(files: &[ProjectPath]) -> Value {
+    Value::from(files.iter().map(ProjectPath::as_str).collect::<Vec<_>>())
 }
 
 #[cfg(test)]

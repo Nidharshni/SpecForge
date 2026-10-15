@@ -91,7 +91,7 @@ fn values_of_the_declared_types_are_no_diagnostic() {
         ("priority", ValueShape::Identifier, "high"),
         ("urgent", ValueShape::Boolean, "true"),
         ("points", ValueShape::Integer, "8"),
-        ("labels", ValueShape::Strings, "one"),
+        ("labels", ValueShape::List, "one"),
         ("summary", ValueShape::String, "free text"),
         ("blocker", ValueShape::Identifier, "t2"),
         ("details", ValueShape::Block, "k"),
@@ -117,9 +117,9 @@ fn an_enum_value_suggests_the_closest_declared_value() {
 )]
 fn a_list_on_a_single_value_field_is_an_error() {
     let found = e061(&[
-        ("summary", ValueShape::Strings, "a"),
-        ("blocker", ValueShape::References, "t2"),
-        ("priority", ValueShape::Strings, "low"),
+        ("summary", ValueShape::List, "a"),
+        ("blocker", ValueShape::List, "t2"),
+        ("priority", ValueShape::List, "low"),
     ]);
     assert_eq!(found.len(), 3, "{found:?}");
     assert_eq!(
@@ -137,11 +137,10 @@ fn a_list_on_a_single_value_field_is_an_error() {
 fn the_message_describes_the_value_by_its_shape() {
     let found = e061(&[
         ("points", ValueShape::Block, "a, b"),
-        ("points", ValueShape::Verify, "x works"),
         ("points", ValueShape::Expression, "a < 1"),
         ("points", ValueShape::TypeUnion, "string | int"),
         ("points", ValueShape::Date, "2026-10-07"),
-        ("points", ValueShape::Mixed, "1, x"),
+        ("points", ValueShape::List, "1, x"),
     ]);
     let given: Vec<&str> = found
         .iter()
@@ -151,7 +150,6 @@ fn the_message_describes_the_value_by_its_shape() {
         given,
         [
             "a block",
-            "verify statements",
             "an expression",
             "string | int",
             "2026-10-07",
@@ -202,7 +200,7 @@ fn e061_points_at_the_value_else_the_entity() {
     verify = "a value of a shape its declared type never takes is an error"
 )]
 fn a_value_of_a_shape_its_type_never_takes_is_an_error() {
-    let refused: [(&str, ValueShape, &str, &str, Option<&str>); 7] = [
+    let refused: [(&str, ValueShape, &str, &str, Option<&str>); 6] = [
         (
             "summary",
             ValueShape::Block,
@@ -229,13 +227,6 @@ fn a_value_of_a_shape_its_type_never_takes_is_an_error() {
             ValueShape::Block,
             "a",
             "a block",
-            Some("write a list: [a, b]"),
-        ),
-        (
-            "watchers",
-            ValueShape::Verify,
-            "x works",
-            "verify statements",
             Some("write a list: [a, b]"),
         ),
         (

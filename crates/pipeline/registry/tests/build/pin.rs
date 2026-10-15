@@ -96,9 +96,8 @@ fn pin_software() -> ExtensionDeclaration {
 
 /// `@pin/product`: two E027s and an E073 (its peers), E026 (`behavior`),
 /// W018 (`links_to`), W023 (`W900`), I004 (an enhancement of an unknown
-/// kind it owns), E039 (`hello`) and E055 (a tool whose input schema is
-/// not an object). Its enhancement of `module`, owned by an extension that
-/// is not loaded, is skipped silently.
+/// kind: it declares no optional peer), E039 (`hello`) and E055 (a tool
+/// whose input schema is not an object).
 fn pin_product() -> ExtensionDeclaration {
     let mut c = ContributionsBuilder::new(ExtensionMeta::new("@pin/product", "1.0.0"));
     c.meta.peer_dependencies = vec![
@@ -117,13 +116,8 @@ fn pin_product() -> ExtensionDeclaration {
             .message_template("'{id}' again")
             .check(CheckKind::NoIncomingEdges);
     });
-    c.enhance("nowhere_kind", "@pin/product", |e| {
+    c.enhance("nowhere_kind", |e| {
         e.field("extra", |f| {
-            f.field_type(FieldType::String);
-        });
-    });
-    c.enhance("module", "@pin/absent", |e| {
-        e.field("owner_team", |f| {
             f.field_type(FieldType::String);
         });
     });
@@ -132,8 +126,24 @@ fn pin_product() -> ExtensionDeclaration {
         t.description("Probe").handler(|_| Ok(json!({})));
     });
     let mut product = c.declaration();
+    // Routes under `@pin/software`'s short name: its `hello` is E039.
+    product.handshake.ext_short = Some("software".into());
     product.surfaces.mcp_tools[0].input_schema = json!("string");
     product
+}
+
+/// `@pin/enhancer`: no diagnostic. Its enhancement of `module`, a kind nothing
+/// loaded declares, is skipped silently because its optional peer is not
+/// loaded (ADR 0096).
+fn pin_enhancer() -> ExtensionDeclaration {
+    declare("@pin/enhancer", |c| {
+        c.optional_peer("@pin/absent", "^1");
+        c.enhance("module", |e| {
+            e.field("owner_team", |f| {
+                f.field_type(FieldType::String);
+            });
+        });
+    })
 }
 
 /// `""`: E030 (its name is empty).
@@ -183,14 +193,8 @@ fn graph_inputs(inputs: &GraphInputs) -> Value {
             })
         })
         .collect();
-    let mut single_reference_fields: Vec<String> = inputs
-        .single_reference_fields
-        .iter()
-        .map(|(kind, field)| format!("{kind}.{field}"))
-        .collect();
-    single_reference_fields.sort();
     json!({
-        "single_reference_fields": single_reference_fields,
+        "member_kinds": inputs.field_forms.member_kinds(),
         "bidirectional_pairs": bidirectional_pairs,
         "absent_reference_targets": absent_reference_targets,
         "field_forms": field_forms,
@@ -250,6 +254,6 @@ fn digest(build: &RegistryBuild) -> Value {
 
 #[test]
 fn the_build_of_every_diagnosed_declaration() {
-    let build = build([pin_software(), pin_product(), pin_unnamed()]);
+    let build = build([pin_software(), pin_product(), pin_enhancer(), pin_unnamed()]);
     insta::assert_json_snapshot!(digest(&build));
 }

@@ -20,7 +20,7 @@ use tempfile::TempDir;
 type Snapshot = BTreeMap<PathBuf, Vec<u8>>;
 
 /// Every file under `root` with its bytes; empty when `root` is absent.
-fn files_under(root: &Path) -> Snapshot {
+pub(crate) fn files_under(root: &Path) -> Snapshot {
     let mut files = Snapshot::new();
     let mut dirs = vec![root.to_path_buf()];
     while let Some(dir) = dirs.pop() {
@@ -54,14 +54,14 @@ fn changed_since(root: &Path, before: &Snapshot) -> Vec<String> {
     changed
 }
 
-/// `writes` as the root-relative names a surface lists.
 fn listed(writes: &Writes, root: &Path) -> Vec<String> {
-    writes.names_under(root)
+    let names = writes.named(Some(root));
+    names.iter().map(ToString::to_string).collect()
 }
 
 /// A project directory whose `specforge.json` enables `extensions`, with
 /// `files` written (path, text).
-fn project(extensions: &[&str], files: &[(&str, &str)]) -> TempDir {
+pub(crate) fn project(extensions: &[&str], files: &[(&str, &str)]) -> TempDir {
     let dir = TempDir::new().unwrap();
     let config = serde_json::json!({"name": "w", "version": "0.1.0", "extensions": extensions});
     std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
@@ -105,7 +105,7 @@ impl Blobs {
 
 /// What the tests serve in process: the blobs, and the builtin
 /// `@specforge/product` as a look-alike.
-fn candidates() -> InProcessRuntime {
+pub(crate) fn candidates() -> InProcessRuntime {
     serving_builtin(
         testing::candidates(),
         "@specforge/product",
@@ -484,72 +484,6 @@ fn a_failed_init_leaves_an_empty_directory_empty() {
         std::fs::read_to_string(dir.join(".specforge")).unwrap(),
         "not a directory\n"
     );
-}
-
-#[specforge_test_macros::test(
-    behavior = "non_interactive_init",
-    verify = "init reads its extension specifiers as add reads them, with add's codes"
-)]
-fn init_reads_its_specifiers_as_add_reads_them() {
-    use specforge_ops::authoring::init;
-    let scratch = TempDir::new().unwrap();
-    let missing = scratch.path().join("missing.wasm").display().to_string();
-    let cases = [
-        ("Bad Name", "E054"),
-        ("@acme/x@>>1", "R-RES-003"),
-        (missing.as_str(), "E054"),
-        ("git+https://x/y", "E064"),
-        ("@acme/x", "E063"),
-    ];
-    for (specifier, code) in cases {
-        let existing = project(&[], &[]);
-        let before = files_under(existing.path());
-        let by_add = extension::specified(&[specifier]).and_then(|extensions| {
-            extension::add(
-                &AddRequest {
-                    root: &specforge_common::ProjectRoot::of(existing.path()).unwrap(),
-                    extensions,
-                    allow_unsigned: false,
-                    trust: Trust::Refuse,
-                    dry_run: false,
-                },
-                &specforge_ops::registry::Unconfigured("add"),
-                &candidates(),
-            )
-            .map(|_| ())
-        });
-        let by_add = by_add.unwrap_err();
-        assert_eq!(by_add.error.code, code, "{specifier}: add: {by_add:?}");
-        assert_eq!(files_under(existing.path()), before);
-
-        let dir = scratch.path().join("fresh");
-        let extensions = [specifier.to_string()];
-        let request = init::Request {
-            dir: &dir,
-            name: Some("demo"),
-            version: init::DEFAULT_VERSION,
-            extensions: &extensions,
-        };
-        let by_init = init::init(&request, &candidates()).unwrap_err();
-        assert_eq!(by_init.error.code, code, "{specifier}: init: {by_init:?}");
-        if code != "E063" {
-            assert_eq!(by_init.error.message, by_add.error.message, "{specifier}");
-            assert_eq!(
-                by_init.error.suggestion, by_add.error.suggestion,
-                "{specifier}"
-            );
-        } else {
-            assert!(
-                by_init
-                    .error
-                    .suggestion
-                    .as_deref()
-                    .is_some_and(|s| s.contains("specforge add @acme/x")),
-                "{by_init:?}"
-            );
-        }
-        assert!(!dir.exists(), "{specifier}: nothing written");
-    }
 }
 
 #[test]

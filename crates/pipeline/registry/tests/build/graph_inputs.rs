@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use specforge_extension_sdk::prelude::*;
-use specforge_graph::{DerivedFrom, FieldForm, GraphInputs};
+use specforge_graph::{DerivedFrom, FieldForm, FieldForms, GraphInputs, Reading};
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_test_macros::test as spec;
 
@@ -68,7 +68,10 @@ fn a_fields_form_follows_its_registered_type() {
     .collect();
     // Every registered field has a form; a single reference and a block are
     // stored as written (their form coerces nothing).
-    assert_eq!(inputs.field_forms, expected);
+    assert_eq!(
+        inputs.field_forms,
+        FieldForms::new(expected, Default::default())
+    );
 }
 
 #[spec(
@@ -276,8 +279,9 @@ fn the_graph_inputs_contract_holds() {
     // registries_populated, registries_agree: each input says what the build holds.
     assert!(
         inputs
-            .single_reference_fields
-            .contains(&("doc".to_string(), "owner".to_string()))
+            .field_forms
+            .reading("doc", "owner")
+            .is_single_reference()
     );
     assert_eq!(
         inputs
@@ -292,10 +296,10 @@ fn the_graph_inputs_contract_holds() {
     );
     assert_eq!(inputs.derived_references.len(), 1);
     assert_eq!(
-        inputs
-            .field_forms
-            .get(&("thing".to_string(), "an_integer".to_string()))
-            .map(FieldForm::field_type),
+        match inputs.field_forms.reading("thing", "an_integer") {
+            Reading::Declared(form) => Some(form.field_type()),
+            _ => None,
+        },
         Some(FieldType::Integer)
     );
     // deterministic: the same declarations give the same inputs.

@@ -2,7 +2,7 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_coverage::Status;
 use specforge_graph::field_form::{FieldJson, write_fields};
-use specforge_graph::{Graph, Node};
+use specforge_graph::{Graph, Node, Obligation};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 
@@ -75,6 +75,9 @@ pub(crate) struct JsonNode {
     file: String,
     line: usize,
     fields: BTreeMap<String, FieldJson>,
+    /// The entity's own `verify` statements, beside its fields (ADR 0094); omitted when it has none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    verify: Option<Vec<Obligation>>,
     /// The entity's coverage status, when the export was given verdicts
     /// (`EmitOptions::coverage`): what `specforge query --include-coverage`
     /// shows.
@@ -91,6 +94,8 @@ pub(crate) fn graph_node(n: &Node, coverage_status: Option<Status>) -> JsonNode 
         file: n.source_span.file.to_string(),
         line: n.source_span.start_line,
         fields: write_fields(&n.fields),
+        verify: (!n.obligations.is_empty())
+            .then(|| n.obligations.iter().map(Obligation::of).collect()),
         coverage_status,
     }
 }

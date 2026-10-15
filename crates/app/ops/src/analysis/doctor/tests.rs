@@ -41,7 +41,6 @@ fn enhancements_list_the_edge_types_their_fields_write() {
     let mut declaration = Fixture::declaration("@acme/a", "1.0.0");
     declaration.enhancements = vec![EntityEnhancementDescriptor {
         target_kind: "behavior".into(),
-        source_extension: "@acme/a".into(),
         fields: vec![
             field("requires", Some("Requires")),
             field("note", None),

@@ -338,9 +338,21 @@ impl<'a> LockPlan<'a> {
     /// enables also enables it by its bare name (nothing when an entry already does). Nothing is
     /// judged yet.
     ///
+    /// A plan stages one install per name: the operation claims its specifiers first
+    /// (`extension::claims`, ADR 0098), so two that name one extension never both reach the plan.
+    ///
     /// # Panics
     /// On a plan opened with `installs: false` (it changes no lock, so it accepted any lock).
+    /// In a debug build, on a second install of one name.
     pub(crate) fn install(&mut self, ask: Ask, install: Install<'a>) {
+        debug_assert!(
+            !self
+                .staged
+                .iter()
+                .any(|staged| staged.name == install.pin.name),
+            "'{}' is installed twice by one plan: claim the specifiers first (ADR 0098)",
+            install.pin.name
+        );
         let Install {
             module,
             sha256,

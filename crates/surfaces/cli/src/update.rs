@@ -60,7 +60,7 @@ impl Args {
         let outcome = match updated {
             Ok(outcome) => outcome,
             Err(error) => {
-                return Refusal::of(format).report(terminal, &error);
+                return Refusal::of(format).at(root.dir()).report(terminal, &error);
             }
         };
         // The update ran to the end (applied or rolled back): it emits

@@ -1,7 +1,7 @@
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
 use specforge_parser::{
-    EntityId, EntityKind, FieldMap, FieldValue, SpannedRef, VerifyStatement, parse_expression,
+    EntityId, EntityKind, FieldMap, FieldValue, ListItem, Written, parse_expression,
 };
 use specforge_test::prelude::*;
 
@@ -25,6 +25,7 @@ fn node(id: &str, kind: &str, title: Option<&str>) -> Node {
         fields: FieldMap::new(),
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     }
 }
 
@@ -136,6 +137,7 @@ fn json_includes_fields() {
         fields,
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     });
 
     let json = crate::support::emit_json(&graph);
@@ -227,6 +229,7 @@ fn json_includes_source_location() {
             end_col: 1,
         },
         methods: Vec::new(),
+        obligations: Vec::new(),
     });
 
     let json = crate::support::emit_json(&graph);
@@ -308,7 +311,7 @@ fn references_between_generic_entities_produce_edges() {
     );
 }
 
-// -- The wire form of a field value (ADR-NEW-01, plan 01).
+// -- The wire form of a field value (ADR 0064, plan 01).
 
 fn exported_fields(fields: FieldMap) -> serde_json::Value {
     let mut graph = Graph::new();
@@ -345,9 +348,10 @@ fn every_other_value_is_written_as_today() {
     block.push(Sym::new("k"), FieldValue::String("v".into()));
     block.push(Sym::new("n"), FieldValue::Block(inner));
 
-    let reference = |id: &str| SpannedRef {
-        id: id.to_string(),
+    let item = |text: &str, written| ListItem {
+        text: text.to_string(),
         span: span(),
+        written,
     };
     let mut fields = FieldMap::new();
     fields.push(Sym::new("string"), FieldValue::String("s".into()));
@@ -361,7 +365,7 @@ fn every_other_value_is_written_as_today() {
     fields.push(Sym::new("boolean"), FieldValue::Boolean(true));
     fields.push(
         Sym::new("references"),
-        FieldValue::ReferenceList(vec![reference("x"), reference("y")]),
+        FieldValue::List(vec![item("x", Written::Bare), item("y", Written::Bare)]),
     );
     fields.push(
         Sym::new("variants"),
@@ -369,19 +373,15 @@ fn every_other_value_is_written_as_today() {
     );
     fields.push(
         Sym::new("strings"),
-        FieldValue::StringList(vec!["s".into()]),
-    );
-    fields.push(
-        Sym::new("verify"),
-        FieldValue::VerifyList(vec![VerifyStatement {
-            kind: "unit".into(),
-            description: "d".into(),
-        }]),
+        FieldValue::List(vec![item("s", Written::Quoted)]),
     );
     fields.push(Sym::new("block"), FieldValue::Block(block));
     fields.push(
         Sym::new("mixed"),
-        FieldValue::MixedList(vec![FieldValue::Integer(1), FieldValue::String("a".into())]),
+        FieldValue::List(vec![
+            item("1", Written::Literal),
+            item("a", Written::Quoted),
+        ]),
     );
 
     assert_eq!(
@@ -396,9 +396,8 @@ fn every_other_value_is_written_as_today() {
             "references": ["x", "y"],
             "variants": ["a", "b"],
             "strings": ["s"],
-            "verify": [{"kind": "unit", "description": "d"}],
             "block": {"k": "v", "n": {"m": 1}},
-            "mixed": [1, "a"],
+            "mixed": ["1", "a"],
         })
     );
 }

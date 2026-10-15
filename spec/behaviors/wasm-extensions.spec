@@ -49,8 +49,8 @@ behavior load_extension_manifest "Load Extension Manifest" {
       2. describe — every declared category, once
       3. build_registries_from_declarations — validate the declarations
          and populate the kind, field and edge registries and the rules
-      4. register_surface_contributions — populate SurfaceRegistry (CLI
-         commands, MCP tools, MCP resources)
+      4. register_surface_contributions — route the CLI commands and
+         register the MCP tools and MCP resources
     Steps 1-2 run per extension in entry order (the extension load); step 3
     puts the declarations in load order (registry_build_load_order) before
     anything registers; steps 3-4 run once over every loaded declaration,
@@ -83,17 +83,20 @@ behavior register_entity_enhancements "Register Entity Enhancements" {
     FieldRegistry, and register any dynamic edge types. Registration
     MUST happen before the resolve phase begins. The order of
     registration MUST follow the extensions array order in specforge.json.
-    An enhancement that names another extension as the target kind's owner
-    is conditional: when that owner is not loaded the enhancement MUST be
-    skipped without a diagnostic, because the project does not use it.
+    An enhancement of a kind no loaded extension declares is conditional
+    when its extension declares an optional peer the project does not load:
+    it MUST be skipped without a diagnostic. Its fields MUST be registered
+    as its extension's.
     An enhancement field MUST NOT overwrite a field the kind already
     declares.
   """
   produces   [enhancement_registered]
   verify unit "enhancement fields registered in FieldRegistry"
   verify unit "unknown target kind produces I004 info diagnostic"
-  verify unit "enhancement of a kind owned by an extension that is not loaded is skipped silently"
+  verify unit "an enhancement of an unknown kind whose extension's optional peer is not loaded is skipped silently"
   verify unit "an enhancement with verify kinds makes its target kind testable"
+  verify unit "an enhancement's fields are credited to the extension that declares the enhancement"
+  verify unit "an enhancement of an unknown kind is skipped silently when its extension declares an optional peer the project does not load"
   verify unit "enhanced reference fields create graph edges"
   verify unit "enhanced data fields participate in type validation"
   verify unit "registration order follows extensions array"

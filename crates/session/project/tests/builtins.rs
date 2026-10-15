@@ -108,23 +108,34 @@ fn testing_extension_makes_software_kinds_testable() {
     let manifest = load_via_protocol("@specforge/testing");
     assert_eq!(manifest.name(), "@specforge/testing");
     assert!(manifest.entities.is_empty(), "testing owns no kinds");
-    let testable: Vec<(&str, &str)> = manifest
+    let testable: Vec<&str> = manifest
         .enhancements
         .iter()
         .filter(|e| e.verify_kinds.is_some())
-        .map(|e| (e.target_kind.as_str(), e.source_extension.as_str()))
+        .map(|e| e.target_kind.as_str())
         .collect();
     assert_eq!(
         testable,
         [
-            ("behavior", "@specforge/software"),
-            ("invariant", "@specforge/software"),
-            ("event", "@specforge/software"),
-            ("type", "@specforge/software"),
-            ("port", "@specforge/software"),
-            ("constraint", "@specforge/governance"),
-            ("failure_mode", "@specforge/governance"),
+            "behavior",
+            "invariant",
+            "event",
+            "type",
+            "port",
+            "constraint",
+            "failure_mode"
         ]
+    );
+    // Each kind's extension is an optional peer, so an unloaded one is silent.
+    let optional_peers: Vec<&str> = manifest
+        .peers()
+        .iter()
+        .filter(|p| p.optional)
+        .map(|p| p.name.as_str())
+        .collect();
+    assert_eq!(
+        optional_peers,
+        ["@specforge/software", "@specforge/governance"]
     );
     let codes: std::collections::BTreeSet<&str> = manifest
         .validation_rules

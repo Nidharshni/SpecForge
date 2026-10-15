@@ -92,9 +92,6 @@ expression: listing
                   },
                   {
                     "type": "boolean"
-                  },
-                  {
-                    "$ref": "#/$defs/VerifyStatement"
                   }
                 ]
               },
@@ -390,6 +387,12 @@ expression: listing
                   },
                   "title": {
                     "type": "string"
+                  },
+                  "verify": {
+                    "items": {
+                      "$ref": "#/$defs/VerifyStatement"
+                    },
+                    "type": "array"
                   }
                 },
                 "required": [
@@ -1155,7 +1158,7 @@ expression: listing
         },
         "plan": {
           "additionalProperties": false,
-          "description": "An AgentPlan ({\"plan_id\", \"entries\": [{\"entity_id\", \"action\"}]}), or its JSON text, to check for gaps against the graph instead of tracing one entity",
+          "description": "An AgentPlan ({\"plan_id\", \"entries\": [{\"entity_id\", \"action\"}]}), or its JSON text, to check for gaps against the graph instead of tracing one entity; not with entity_id",
           "properties": {
             "entries": {
               "items": {
@@ -2446,9 +2449,6 @@ expression: listing
                   },
                   {
                     "type": "boolean"
-                  },
-                  {
-                    "$ref": "#/$defs/VerifyStatement"
                   }
                 ]
               },
@@ -2491,22 +2491,6 @@ expression: listing
             "start_col",
             "end_line",
             "end_col"
-          ],
-          "type": "object"
-        },
-        "VerifyStatement": {
-          "additionalProperties": false,
-          "properties": {
-            "description": {
-              "type": "string"
-            },
-            "kind": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "kind",
-            "description"
           ],
           "type": "object"
         }

@@ -9,6 +9,10 @@ use specforge_graph::Graph;
 use specforge_registry::RegistryBuild;
 use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 
+mod ask;
+
+pub use ask::{Ask, ENTITY_WITH_PLAN, TraceField};
+
 use crate::read::plan::PlanGap;
 use crate::view::{EntityField, ProjectView};
 use crate::{OpError, Refusal};

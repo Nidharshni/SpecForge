@@ -163,7 +163,7 @@ fn migrate_project_rewrites_only_the_sources_it_is_given() {
     let summary = migrate_project(&root, &given, &CURRENT_FORMAT_VERSION, false, true);
 
     assert_eq!(summary.results.len(), 1, "{summary:?}");
-    assert!(summary.results[0].file_path.ends_with("spec/a.spec"));
+    assert_eq!(summary.results[0].file_path, "spec/a.spec");
     assert_ne!(
         std::fs::read_to_string(dir.path().join("spec/a.spec")).unwrap(),
         OLD

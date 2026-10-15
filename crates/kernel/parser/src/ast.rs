@@ -48,11 +48,13 @@ pub struct Entity {
     pub id: EntityId,
     pub title: Option<String>,
     pub fields: FieldMap,
-    pub raw_body: Option<String>,
     pub span: SourceSpan,
     /// `method name(param: Type) -> Ret` members (ports define their
     /// interfaces this way). Empty for kinds that never declare methods.
     pub methods: Vec<MethodDecl>,
+    /// `verify [kind] "text"` statements, in declaration order (ADR 0002,
+    /// ADR 0094).
+    pub obligations: Vec<VerifyStatement>,
 }
 
 /// One `method` member of an entity body.
@@ -157,25 +159,35 @@ pub struct FieldEntry {
     pub value_span: Option<SourceSpan>,
 }
 
-/// One item of a reference list: the target ID plus the exact source span
-/// of its identifier token, so diagnostics (E003) can point at the token
-/// instead of the whole entity block.
+/// One item of a list as written: its text, the exact source span of its
+/// token (quotes included), and how it was written. What the item
+/// references is its field's reading, never decided here
+/// (`specforge_graph::Reading::references`).
 #[derive(Debug, Clone, PartialEq)]
-pub struct SpannedRef {
-    pub id: String,
+pub struct ListItem {
+    /// The item's text; a quoted item's is its unquoted content.
+    pub text: String,
     pub span: SourceSpan,
+    pub written: Written,
 }
 
-impl SpannedRef {
-    pub fn as_str(&self) -> &str {
-        &self.id
-    }
+/// How a list item was written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Written {
+    /// A bare word: `alpha`.
+    Bare,
+    /// A scheme reference ID: `gh.issue:7`.
+    SchemeRef,
+    /// A quoted string: `"alpha"`.
+    Quoted,
+    /// An integer or `true` / `false`.
+    Literal,
 }
 
 /// The field the parser gives a union body (`type X = a | b`) its variants
 /// under. The name is the parser's own, not the user's: a field the user
-/// writes as `values [a, b]` is also a [`FieldValue::VariantList`], under
-/// its own key, and is not a union.
+/// writes as `values [a, b]` is a [`FieldValue::List`], under its own key, and
+/// is not a union.
 pub const UNION_VARIANTS_FIELD: &str = "variants";
 
 /// The field of a scheme reference (`ref jira.issue:PROJ-1 "…"`, kind
@@ -186,14 +198,14 @@ pub const REF_SCHEME_FIELD: &str = "scheme";
 #[derive(Debug, Clone, PartialEq)]
 pub enum FieldValue {
     String(String),
-    ReferenceList(Vec<SpannedRef>),
+    /// `[a, "b", 1, gh.issue:7]` as written: each item keeps its text, span
+    /// and how it was written. What it references is its field's reading
+    /// (`specforge_graph::Reading::references`), never decided here.
+    List(Vec<ListItem>),
+    /// A union body's variants (`type X = a | b`), under
+    /// [`UNION_VARIANTS_FIELD`] only.
     VariantList(Vec<String>),
-    StringList(Vec<String>),
-    /// A list containing items of mixed types (e.g., strings, integers, booleans).
-    /// Preserves per-item type information instead of flattening to StringList.
-    MixedList(Vec<FieldValue>),
     Block(FieldMap),
-    VerifyList(Vec<VerifyStatement>),
     /// First-class formal expressions: `metric expr { a < 10ms, b > 5 }`.
     /// Spans are absolute file positions.
     Expression(Vec<SpannedExpr>),
@@ -212,12 +224,10 @@ pub struct VerifyStatement {
     pub description: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct ParseError {
     pub message: String,
     pub span: SourceSpan,
-    pub expected: Option<String>,
-    pub found: Option<String>,
 }
 
 impl From<&ParseError> for specforge_common::Diagnostic {

@@ -41,6 +41,7 @@ impl ArgumentOf<ExportField> for Tool {
             ExportField::Depth => Some("depth"),
             ExportField::MaxTokens => Some("max_tokens"),
             ExportField::SchemaVersion => Some("schema_version"),
+            ExportField::Schema => Some("with_schema"),
         }
     }
 }
@@ -57,11 +58,7 @@ impl CoreTool for Tool {
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Text> {
         // The tool serves the agent formats; dot is `specforge.render`'s.
-        let schema = match (args.no_schema, args.with_schema) {
-            (true, _) => Schema::Without,
-            (_, true) => Schema::With,
-            _ => Schema::Default,
-        };
+        let schema = Schema::of_flags(args.with_schema, args.no_schema).map_err(Self::refused)?;
         let request = export::Request {
             format: Some(args.format),
             scope: args.scope.as_deref(),

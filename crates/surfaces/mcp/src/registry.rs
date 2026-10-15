@@ -11,7 +11,7 @@ use specforge_common::shape::Shape;
 use crate::events::{Listing, McpEvent};
 use crate::lifecycle::Revision;
 use crate::protocol::JsonRpcResponse;
-use crate::resources::{CORE_RESOURCES, ResourceSpec};
+use crate::resources::CORE_RESOURCES;
 use crate::state::McpState;
 use crate::surface_table::ResourceEntry;
 use crate::tool::Category;
@@ -147,7 +147,7 @@ pub fn listed_tools<'s>(
 /// Every resource the server lists (templated or not), in order: the core
 /// resources, then the extension resources.
 pub fn listed_resources(state: &McpState) -> impl Iterator<Item = Listed> + '_ {
-    CORE_RESOURCES.iter().map(ResourceSpec::descriptor).chain(
+    CORE_RESOURCES.iter().map(|r| r.descriptor()).chain(
         state
             .surfaces()
             .resources()

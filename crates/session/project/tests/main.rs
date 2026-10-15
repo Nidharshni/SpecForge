@@ -11,6 +11,7 @@ mod compile;
 mod custom_rules;
 mod delta;
 mod derived_references;
+mod disk_changed;
 mod dual_mode;
 mod e2e_pipeline;
 mod edge_types;

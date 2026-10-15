@@ -28,7 +28,6 @@ fn payload_members(file: &specforge_parser::SpecFile, name: &str) -> Vec<Declare
         .fields
         .entries()
         .iter()
-        .filter(|entry| !matches!(entry.value, FieldValue::VerifyList(_)))
         .map(|entry| {
             let ty = match &entry.value {
                 FieldValue::Identifier(text) => text.clone(),

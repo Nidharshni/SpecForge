@@ -155,7 +155,7 @@ impl ContributionsBuilder {
         self
     }
 
-    /// Contribute a field shared by all entity kinds.
+    /// Contribute a field every kind this extension declares gets.
     pub fn shared_field(&mut self, name: &str, f: impl FnOnce(&mut FieldBuilder)) -> &mut Self {
         let mut b = FieldBuilder::new(name);
         f(&mut b);
@@ -163,15 +163,17 @@ impl ContributionsBuilder {
         self
     }
 
-    /// Add fields and/or edge types to an entity kind contributed by another
-    /// extension.
+    /// Add fields and/or verify kinds to an entity kind another extension
+    /// declares. The fields are this extension's. When no loaded extension
+    /// declares `target_kind`, the enhancement is skipped silently if this
+    /// extension declares an optional peer the project does not load, else
+    /// I004 (ADR 0096).
     pub fn enhance(
         &mut self,
         target_kind: &str,
-        source_extension: &str,
         f: impl FnOnce(&mut EnhancementBuilder),
     ) -> &mut Self {
-        let mut b = EnhancementBuilder::new(target_kind, source_extension);
+        let mut b = EnhancementBuilder::new(target_kind);
         f(&mut b);
         self.decl.enhancements.push(b.0);
         self

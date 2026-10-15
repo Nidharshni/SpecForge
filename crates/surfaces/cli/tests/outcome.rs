@@ -9,6 +9,7 @@
 
 use std::path::Path;
 
+use crate::support::pairing::normalized_text;
 use crate::support::{Cli, TestProject};
 
 /// An empty directory.
@@ -41,11 +42,7 @@ fn run_in(project: &TestProject, args: &[&str], stdin: Option<&str>) -> Run {
         None => Cli::on(project),
     };
     let out = cli.bare(args);
-    let canonical = dir.canonicalize().unwrap();
-    let clean = |text: &str| {
-        text.replace(canonical.to_str().unwrap(), "[ROOT]")
-            .replace(dir.to_str().unwrap(), "[ROOT]")
-    };
+    let clean = |text: &str| normalized_text(text, dir);
     Run {
         code: out.code,
         stdout: clean(&out.stdout),

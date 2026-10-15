@@ -13,6 +13,7 @@ type FormatVersion {
 }
 
 type MigrationDiff {
+  /// The file, named from the project root (ADR 0102).
   file_path      string      @readonly
   before_hash    string      @readonly
   after_hash     string      @readonly
@@ -22,6 +23,7 @@ type MigrationDiff {
 }
 
 type MigrationResult {
+  /// The file, named from the project root.
   file_path      string        @readonly
   source_version FormatVersion @readonly
   target_version FormatVersion @readonly
@@ -33,7 +35,9 @@ type MigrationResult {
 }
 
 type MigrationBackup {
+  /// The file the backup holds the old text of, named from the project root.
   original_path string @readonly
+  /// The backup, named from the project root.
   backup_path   string @readonly
   content_hash  string @readonly
   verify unit "MigrationBackup schema is valid"

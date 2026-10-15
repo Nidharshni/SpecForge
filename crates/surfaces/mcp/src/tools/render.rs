@@ -8,6 +8,7 @@ use std::path::Path;
 
 use serde::Serialize;
 use serde_json::json;
+use specforge_common::ProjectPath;
 use specforge_common::shape::Shape;
 
 use crate::args::Arguments;
@@ -40,7 +41,8 @@ pub struct Reply {
     /// The rendering itself, when no `out_dir` was given.
     #[serde(skip_serializing_if = "Option::is_none")]
     output: Option<String>,
-    output_files: Vec<String>,
+    /// The files written, named from the project root.
+    output_files: Vec<ProjectPath>,
 }
 
 pub(crate) struct Tool;
@@ -50,7 +52,10 @@ impl ArgumentOf<ExportField> for Tool {
         match field {
             ExportField::Scope => Some("scope"),
             // Render sends none of the others.
-            ExportField::Depth | ExportField::MaxTokens | ExportField::SchemaVersion => None,
+            ExportField::Depth
+            | ExportField::MaxTokens
+            | ExportField::SchemaVersion
+            | ExportField::Schema => None,
         }
     }
 }
@@ -145,7 +150,7 @@ impl CoreTool for Tool {
         Ok(Reply {
             format: name.to_string(),
             output: None,
-            output_files: vec![path.display().to_string()],
+            output_files: vec![ProjectPath::of(root, &path)],
         }
         .into())
     }

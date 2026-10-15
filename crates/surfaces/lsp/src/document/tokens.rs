@@ -108,7 +108,7 @@ fn classify(
         Role::VerifyKind => Some(("enumMember", 0)),
         Role::Value | Role::Item | Role::ImportName if lexeme.is_name() => {
             let fields = view.registries().fields();
-            if syntax.reference_position(text, i as u32, fields) {
+            if syntax.reference_position(text, i as u32, view.registries().field_forms()) {
                 let token = view
                     .graph()
                     .node(lexeme.text(text))

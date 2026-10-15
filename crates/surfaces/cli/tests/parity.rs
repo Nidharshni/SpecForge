@@ -31,6 +31,7 @@ use specforge_mcp::testing::{rooted_server, rpc};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use crate::support::pairing;
 use crate::support::{Cli, TestProject};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -658,58 +659,9 @@ fn observe(
     }
 }
 
-/// `value` with the parts that churn for reasons outside this harness
-/// redacted: the embedded Graph Protocol schema (any extension change moves
-/// it).
-fn redacted(value: &Value) -> Value {
-    match value {
-        Value::Object(map) => Value::Object(
-            map.iter()
-                .map(|(k, v)| {
-                    let v = match k.as_str() {
-                        "schema" if v.is_object() => json!("[SCHEMA]"),
-                        _ => redacted(v),
-                    };
-                    (k.clone(), v)
-                })
-                .collect(),
-        ),
-        Value::Array(items) => Value::Array(items.iter().map(redacted).collect()),
-        other => other.clone(),
-    }
-}
-
-/// `text` with every 64-digit hex run (a SHA-256: blob hashes move whenever
-/// an extension is rebuilt) replaced by `[SHA256]`.
-fn without_hashes(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut run = String::new();
-    for c in text.chars().chain(std::iter::once(' ')) {
-        if c.is_ascii_hexdigit() {
-            run.push(c);
-            continue;
-        }
-        if run.len() == 64 {
-            out.push_str("[SHA256]");
-        } else {
-            out.push_str(&run);
-        }
-        run.clear();
-        out.push(c);
-    }
-    out.pop();
-    out
-}
-
-/// `value` as pretty JSON with the machine-specific parts replaced.
+/// [`pairing::normalized`], with the greet blob's path replaced.
 pub(crate) fn normalized(value: &Value, root: &Path) -> String {
-    let mut text = without_hashes(&serde_json::to_string_pretty(&redacted(value)).unwrap());
-    let blob = s(&greet_blob());
-    text = text.replace(&blob, "[BLOB]");
-    let canonical = s(&root.canonicalize().unwrap());
-    text = text.replace(&canonical, "[ROOT]");
-    text = text.replace(&s(root), "[ROOT]");
-    text
+    pairing::normalized(value, root).replace(&s(&greet_blob()), "[BLOB]")
 }
 
 /// `value` with the machine-specific parts replaced ([`normalized`]), as
@@ -1099,40 +1051,6 @@ fn mcp_export_carries_the_schema_version_the_cli_computes() {
     assert_eq!(
         cli["schema"]["schema_version"],
         mcp["schema"]["schema_version"]
-    );
-}
-
-#[specforge_test_macros::test(
-    behavior = "provide_mcp_export_tool",
-    verify = "with_schema embeds the schema in a context, brief or budgeted export, and no_schema leaves it out of a graph export"
-)]
-fn mcp_export_schema_flags_are_the_cli_flags() {
-    let dir = scratch();
-    project(&dir);
-
-    for format in ["context", "brief"] {
-        let plain = mcp_export(dir.root(), json!({"format": format}));
-        assert!(plain.get("schema").is_none(), "{format}: {plain}");
-        let with = mcp_export(dir.root(), json!({"format": format, "with_schema": true}));
-        assert!(with["schema"].is_object(), "{format}: {with}");
-        assert_eq!(
-            with,
-            cli_export(&dir, &["--format", format, "--with-schema"])
-        );
-    }
-
-    let budgeted = mcp_export(
-        dir.root(),
-        json!({"format": "graph", "max_tokens": 100000, "with_schema": true}),
-    );
-    assert!(budgeted["schema"].is_object(), "{budgeted}");
-
-    let without = mcp_export(dir.root(), json!({"format": "graph", "no_schema": true}));
-    assert_eq!(without["format_version"], "1.0", "{without}");
-    assert!(without.get("schema").is_none(), "{without}");
-    assert_eq!(
-        without,
-        cli_export(&dir, &["--format", "graph", "--no-schema"])
     );
 }
 
@@ -1747,20 +1665,7 @@ fn collect_outcome_is_the_same_on_both_surfaces() {
     let mcp_doc = mcp_tool(mcp_dir.root(), "specforge.collect");
 
     assert_eq!(cli_doc["diagnostics"][0]["code"], "W115", "{cli_doc}");
-    let without_report = |doc: &Value, root: &Path| {
-        let mut doc = doc.clone();
-        let report = doc["report"].as_str().unwrap().to_string();
-        assert!(
-            Path::new(&report).ends_with("specforge-report.json"),
-            "{report}"
-        );
-        doc["report"] = json!(normalized(&json!(report), root));
-        doc
-    };
-    assert_eq!(
-        without_report(&cli_doc, cli_dir.root()),
-        without_report(&mcp_doc, mcp_dir.root())
-    );
+    assert_eq!(cli_doc, mcp_doc);
     assert_eq!(
         std::fs::read_to_string(cli_dir.root().join("specforge-report.json")).unwrap(),
         std::fs::read_to_string(mcp_dir.root().join("specforge-report.json")).unwrap(),

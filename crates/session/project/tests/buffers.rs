@@ -8,8 +8,7 @@ use std::sync::Arc;
 use specforge_extension_sdk::prelude::*;
 use specforge_project::testing::TestProject;
 use specforge_project::{
-    Buffer, Changes, CheckMode, ProjectSession, RuntimeSource, SharedRuntime, SourceChange,
-    UpdateKind,
+    Buffer, Changes, CheckMode, ProjectSession, RuntimeSource, SharedRuntime, UpdateKind,
 };
 use specforge_test::prelude::*;
 use specforge_wasm::testing::InProcessRuntime;
@@ -63,10 +62,7 @@ fn has(session: &ProjectSession, id: &str) -> bool {
 }
 
 fn hold(session: &mut ProjectSession, dir: &TestProject, text: &str) {
-    session.update(SourceChange::Hold(&[Buffer::new(
-        dir.root().join("a.spec"),
-        text,
-    )]));
+    session.hold(&[Buffer::new(dir.root().join("a.spec"), text)]);
 }
 
 #[specforge_test(
@@ -119,11 +115,7 @@ fn holding_a_buffer_whose_text_is_its_files_runs_no_check() {
     let rt = counting();
     let (dir, mut session) = opened(&rt);
     let before = check_runs(&rt);
-    let update = session.update(SourceChange::Hold(&[Buffer::new(
-        dir.root().join("a.spec"),
-        ALPHA,
-    )
-    .at_version(Some(3))]));
+    let update = session.hold(&[Buffer::new(dir.root().join("a.spec"), ALPHA).at_version(Some(3))]);
     assert_eq!(check_runs(&rt) - before, 0);
     assert!(update.rebuilt_files.is_empty());
     assert_eq!(session.buffer("a.spec").unwrap().version, Some(3));
@@ -157,7 +149,7 @@ fn releasing_a_saved_buffer_reads_it_once_and_leaves_nothing_stale() {
 fn releasing_a_buffer_outside_the_project_drops_it() {
     // No project: the buffer was the file's only text.
     let mut detached = ProjectSession::detached();
-    detached.update(SourceChange::Hold(&[Buffer::new("/p/a.spec", ALPHA)]));
+    detached.hold(&[Buffer::new("/p/a.spec", ALPHA)]);
     assert!(has(&detached, "alpha"));
     assert!(detached.release(&[PathBuf::from("/p/a.spec")]).is_some());
     assert!(!has(&detached, "alpha"));
@@ -166,10 +158,7 @@ fn releasing_a_buffer_outside_the_project_drops_it() {
     let rt = counting();
     let (_dir, mut session) = opened(&rt);
     let elsewhere = TempDir::new().unwrap();
-    session.update(SourceChange::Hold(&[Buffer::new(
-        elsewhere.path().join("x.spec"),
-        ZETA,
-    )]));
+    session.hold(&[Buffer::new(elsewhere.path().join("x.spec"), ZETA)]);
     assert!(!has(&session, "zeta"));
     let before = check_runs(&rt);
     assert!(
@@ -189,8 +178,8 @@ fn releasing_a_buffer_that_did_not_parse_runs_the_skipped_checks() {
     let (dir, mut session) = opened(&rt);
     let a = dir.root().join("a.spec");
     let broken = "type alpha \"A\" {\n  contract \"\n";
-    session.update_with(
-        SourceChange::Hold(&[Buffer::new(&a, broken)]),
+    session.hold_with(
+        &[Buffer::new(&a, broken)],
         CheckMode::SyntaxOnlyIfParseErrors,
     );
     let reported = |s: &ProjectSession| s.project().diagnostics().iter().any(|d| d.code == "I990");
@@ -235,11 +224,7 @@ fn opening_a_project_in_place_of_a_session_keeps_its_buffers() {
     let (dir, session) = opened(&rt);
     drop(session);
     let mut detached = ProjectSession::detached();
-    detached.update(SourceChange::Hold(&[Buffer::new(
-        dir.root().join("a.spec"),
-        OMEGA,
-    )
-    .at_version(Some(4))]));
+    detached.hold(&[Buffer::new(dir.root().join("a.spec"), OMEGA).at_version(Some(4))]);
     let before = check_runs(&rt);
     let session = ProjectSession::begin_open(
         &dir.project_root(),
@@ -266,10 +251,7 @@ fn a_held_buffer_a_reload_brings_into_the_project_is_built_from_its_text() {
     fs::create_dir_all(dir.root().join("spec")).unwrap();
     let mut session = dir.session_bare();
 
-    session.update(SourceChange::Hold(&[Buffer::new(
-        dir.root().join("spec2/b.spec"),
-        OMEGA,
-    )]));
+    session.hold(&[Buffer::new(dir.root().join("spec2/b.spec"), OMEGA)]);
     assert!(!has(&session, "omega"), "outside the spec root");
 
     dir.write(

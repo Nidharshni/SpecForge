@@ -64,7 +64,7 @@ A project as it lives: the environment load, the compile, and the project sessio
 | Crate | Package | Owns |
 |---|---|---|
 | [`project`](session/project/) | `specforge-project` | The compiled project and the project session: one environment load, one compile, kept current for watch, the LSP and MCP (ADR 0004, ADR 0047) |
-| [`watch`](session/watch/) | `specforge-watch` | What keeps a project session current from the file system: the file watcher, the one debounce rule watch and the LSP share, and the loop specforge watch runs (ADR 0035) |
+| [`watch`](session/watch/) | `specforge-watch` | What keeps a project session current from the file system: the file watcher, and the debounce rule and the follow loop watch and the LSP share (ADR 0035, ADR 0099) |
 
 ### `runtime`
 

@@ -79,7 +79,7 @@ fn expression_is_checked_like_any_other_field() {
     // kind like any other.
     let formal = declare("@specforge/formal", |c| {
         c.meta.peer_dependencies = vec![peer("@specforge/software", "^1")];
-        c.enhance("invariant", "@specforge/software", |e| {
+        c.enhance("invariant", |e| {
             e.field("expression", |f| {
                 f.field_type(FieldType::String)
                     .normative()
@@ -112,42 +112,13 @@ fn registered_field_name_does_not_produce_w020() {
 
 #[spec(
     behavior = "detect_unknown_entity_fields",
-    verify = "structural fields (title, verify) not checked against FieldRegistry"
+    verify = "title is not checked against the field registry"
 )]
-fn structural_fields_not_checked_against_field_registry() {
-    let entities = vec![
-        EntityRecord::new("behavior", "b1", span("test.spec")).with_fields(&["title", "verify"]),
-    ];
+fn title_is_not_checked_against_the_field_registry() {
+    let entities =
+        vec![EntityRecord::new("behavior", "b1", span("test.spec")).with_fields(&["title"])];
     let diags = check(&build([software()]), &entities);
-    assert!(diags.is_empty(), "structural fields should be skipped");
-}
-
-#[spec(
-    behavior = "detect_unknown_entity_fields",
-    verify = "verify on a kind no extension made testable produces W020"
-)]
-fn verify_on_non_testable_kind_produces_w020() {
-    let build = build([declare("@specforge/software", |c| {
-        c.kind("Behavior", |k| {
-            k.keyword("behavior")
-                .testable(true)
-                .singleton(false)
-                .supports_verify(false);
-        });
-    })]);
-    let entities = vec![
-        EntityRecord::new("behavior", "b1", span("test.spec")).with_fields(&["title", "verify"]),
-    ];
-    let diags = check(&build, &entities);
-    assert_eq!(diags.len(), 1, "only verify is flagged: {diags:?}");
-    assert_eq!(diags[0].code, "W020");
-    assert!(diags[0].message.contains("'verify'"));
-    assert!(
-        diags[0]
-            .suggestion
-            .as_deref()
-            .is_some_and(|s| s.contains("@specforge/testing"))
-    );
+    assert!(diags.is_empty(), "title should be skipped");
 }
 
 #[spec(

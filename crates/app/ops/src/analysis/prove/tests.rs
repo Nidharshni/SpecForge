@@ -29,6 +29,7 @@ fn node(id: &str, kind: &str, fields: FieldMap) -> Node {
         fields,
         source_span: span("spec/main.spec"),
         methods: Vec::new(),
+        obligations: Vec::new(),
     }
 }
 

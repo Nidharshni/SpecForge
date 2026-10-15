@@ -5,10 +5,10 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use specforge_common::shape::Shape;
-use specforge_common::{Diagnostic, ProjectRoot, Severity, codes};
+use specforge_common::{Diagnostic, ProjectPath, ProjectRoot, Severity, codes};
 use specforge_formatter::unified_diff;
 use specforge_graph::{EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect};
-use specforge_parser::{FORMAT_HEADER_PREFIX, FormatVersion, detect_format_version};
+use specforge_parser::{FormatVersion, detect_format_version, with_format_version};
 use std::path::{Path, PathBuf};
 
 // ---------------------------------------------------------------------------
@@ -18,7 +18,8 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Serialize, Shape)]
 #[shape(define)]
 pub struct MigrationResult {
-    pub file_path: String,
+    /// The file, named from the project root (ADR 0102).
+    pub file_path: ProjectPath,
     pub status: MigrationStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub from_version: Option<FormatVersion>,
@@ -39,14 +40,17 @@ pub enum MigrationStatus {
 
 #[derive(Debug, Clone, Serialize, Shape)]
 pub struct MigrationBackup {
-    pub original_path: String,
-    pub backup_path: String,
+    /// The file the backup holds the old text of, named from the project root.
+    pub original_path: ProjectPath,
+    /// The backup, named from the project root.
+    pub backup_path: ProjectPath,
 }
 
 #[derive(Debug, Clone, Serialize, Shape)]
 #[shape(define)]
 pub struct MigrationDiff {
-    pub file_path: String,
+    /// The file, named from the project root.
+    pub file_path: ProjectPath,
     pub before_hash: String,
     pub after_hash: String,
     pub unified_text: String,
@@ -72,6 +76,8 @@ pub struct MigrationSummary {
 #[derive(Debug, Clone)]
 pub struct Original {
     pub path: PathBuf,
+    /// The file as a document names it.
+    pub name: ProjectPath,
     pub text: String,
 }
 
@@ -133,11 +139,11 @@ impl MigrationRecord {
         let files = backups
             .iter()
             .map(|backup| {
-                let file = Path::new(&backup.original_path);
+                let file = backup.original_path.under(root);
                 Ok(RecordedFile {
-                    path: diff_label(file, root),
-                    backup: diff_label(Path::new(&backup.backup_path), root),
-                    sha256: sha256_hash(&std::fs::read_to_string(file)?),
+                    path: diff_label(&file, root),
+                    backup: diff_label(&backup.backup_path.under(root), root),
+                    sha256: sha256_hash(&std::fs::read_to_string(&file)?),
                 })
             })
             .collect::<std::io::Result<Vec<_>>>()?;
@@ -184,28 +190,10 @@ impl MigrationRecord {
 // Transform Functions (pure)
 // ---------------------------------------------------------------------------
 
-/// Update the format version header in a spec file's content.
-/// If no header exists, prepend one. If a header exists, replace it.
-fn set_format_version_header(content: &str, version: &FormatVersion) -> String {
-    let new_header = format!("{FORMAT_HEADER_PREFIX}{version}");
-
-    if let Some(line) = content
-        .lines()
-        .next()
-        .filter(|l| l.starts_with(FORMAT_HEADER_PREFIX))
-    {
-        let rest = &content[line.len()..];
-        return format!("{new_header}{rest}");
-    }
-
-    // Prepend header
-    format!("{new_header}\n{content}")
-}
-
 /// Transform content to version `to`.
 /// Currently v1 is the only version, so this just ensures the header is set.
 fn transform_content(content: &str, to: &FormatVersion) -> String {
-    set_format_version_header(content, to)
+    with_format_version(content, to)
 }
 
 // ---------------------------------------------------------------------------
@@ -269,18 +257,19 @@ pub fn structural_differences(delta: &GraphDelta) -> Vec<Diagnostic> {
         .collect()
 }
 
-/// What changed in `node`: its fields by name, then its aspects. A field named like an aspect (`kind`, `methods`)
+/// What changed in `node`: its fields by name, then its aspects. A field named like an aspect (`kind`, `methods`, `obligations`)
 /// is written `field 'kind'`, so the two read apart.
 fn changed(node: &ModifiedNodeChange) -> String {
     let aspect = |a: &NodeAspect| match a {
         NodeAspect::Kind => "kind",
         NodeAspect::Title => "title",
         NodeAspect::Methods => "methods",
+        NodeAspect::Obligations => "obligations",
         NodeAspect::Edges => "edges",
     };
     let aspects: Vec<&str> = node.changed_aspects.iter().map(aspect).collect();
     let fields = node.changed_fields.iter().map(|f| {
-        if ["kind", "title", "methods", "edges"].contains(&f.as_str()) {
+        if ["kind", "title", "methods", "obligations", "edges"].contains(&f.as_str()) {
             format!("field '{f}'")
         } else {
             f.clone()
@@ -341,7 +330,7 @@ fn migrate_file(
     dry_run: bool,
     no_backup: bool,
 ) -> FileMigration {
-    let path_str = path.display().to_string();
+    let name = ProjectPath::of(root, path);
     let label = diff_label(path, root);
 
     // Read file
@@ -350,7 +339,7 @@ fn migrate_file(
         Err(e) => {
             return FileMigration::of(
                 MigrationResult {
-                    file_path: path_str,
+                    file_path: name,
                     status: MigrationStatus::Failed,
                     from_version: None,
                     to_version: None,
@@ -363,7 +352,7 @@ fn migrate_file(
     };
 
     // Detect version; a header this build can't read fails the file.
-    let (detected_version, diags) = detect_format_version(&content, &path_str);
+    let (detected_version, diags) = detect_format_version(&content, name.as_str());
     if let Some(error) = diags.iter().find(|d| d.severity == Severity::Error) {
         let guidance = error
             .suggestion
@@ -372,7 +361,7 @@ fn migrate_file(
             .unwrap_or_default();
         return FileMigration::of(
             MigrationResult {
-                file_path: path_str,
+                file_path: name,
                 status: MigrationStatus::Failed,
                 from_version: Some(detected_version),
                 to_version: None,
@@ -387,7 +376,7 @@ fn migrate_file(
     if detected_version >= *target_version {
         return FileMigration::of(
             MigrationResult {
-                file_path: path_str,
+                file_path: name,
                 status: MigrationStatus::Skipped,
                 from_version: Some(detected_version.clone()),
                 to_version: Some(detected_version),
@@ -410,7 +399,7 @@ fn migrate_file(
             .diff_text
             .replace(&format!("+++ a/{label}"), &format!("+++ b/{label}"));
         Some(MigrationDiff {
-            file_path: path_str.clone(),
+            file_path: name.clone(),
             before_hash: sha256_hash(&content),
             after_hash: sha256_hash(&transformed),
             unified_text,
@@ -422,7 +411,7 @@ fn migrate_file(
     if dry_run {
         return FileMigration::of(
             MigrationResult {
-                file_path: path_str,
+                file_path: name,
                 status: MigrationStatus::Migrated,
                 from_version: Some(detected_version),
                 to_version: Some(target_version.clone()),
@@ -439,7 +428,7 @@ fn migrate_file(
         if let Err(e) = std::fs::write(&backup_path, &content) {
             return FileMigration::of(
                 MigrationResult {
-                    file_path: path_str,
+                    file_path: name,
                     status: MigrationStatus::Failed,
                     from_version: Some(detected_version),
                     to_version: None,
@@ -450,8 +439,8 @@ fn migrate_file(
             );
         }
         Some(MigrationBackup {
-            original_path: path_str.clone(),
-            backup_path: backup_path.display().to_string(),
+            original_path: name.clone(),
+            backup_path: ProjectPath::of(root, &backup_path),
         })
     } else {
         None
@@ -462,7 +451,7 @@ fn migrate_file(
     if let Err(e) = std::fs::write(&tmp_path, &transformed) {
         return FileMigration::of(
             MigrationResult {
-                file_path: path_str,
+                file_path: name,
                 status: MigrationStatus::Failed,
                 from_version: Some(detected_version),
                 to_version: None,
@@ -478,7 +467,7 @@ fn migrate_file(
         let _ = std::fs::remove_file(&tmp_path);
         return FileMigration::of(
             MigrationResult {
-                file_path: path_str,
+                file_path: name,
                 status: MigrationStatus::Failed,
                 from_version: Some(detected_version),
                 to_version: None,
@@ -491,7 +480,7 @@ fn migrate_file(
 
     FileMigration {
         result: MigrationResult {
-            file_path: path_str,
+            file_path: name.clone(),
             status: MigrationStatus::Migrated,
             from_version: Some(detected_version),
             to_version: Some(target_version.clone()),
@@ -501,6 +490,7 @@ fn migrate_file(
         diff,
         original: Some(Original {
             path: path.to_path_buf(),
+            name,
             text: content,
         }),
     }
@@ -518,7 +508,7 @@ fn write_atomically(target: &Path, text: &str) -> Result<(), String> {
 }
 
 fn rollback_result(
-    file_path: String,
+    file_path: ProjectPath,
     status: MigrationStatus,
     error: Option<String>,
 ) -> MigrationResult {
@@ -537,7 +527,7 @@ pub fn restore(originals: &[Original]) -> RollbackSummary {
     let mut results = Vec::new();
     let (mut restored, mut failed) = (0, 0);
     for original in originals {
-        let path = original.path.display().to_string();
+        let path = original.name.clone();
         match write_atomically(&original.path, &original.text) {
             Ok(()) => {
                 restored += 1;
@@ -594,7 +584,7 @@ pub fn run_rollback(root: &ProjectRoot) -> RollbackSummary {
     for recorded in &record.files {
         let target = root.join(&recorded.path);
         let backup = root.join(&recorded.backup);
-        let shown = target.display().to_string();
+        let shown = ProjectPath::of(root, &target);
 
         if !backup.exists() {
             summary.skipped_count += 1;

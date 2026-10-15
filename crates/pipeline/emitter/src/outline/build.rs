@@ -160,11 +160,8 @@ impl OutlineIntermediate {
 
             // Map entity enhancements
             for enh in &m.enhancements {
-                // Find which extension owns the target kind
-                let owner = kind_to_extension
-                    .get(&enh.target_kind)
-                    .cloned()
-                    .unwrap_or_else(|| enh.source_extension.clone());
+                // The extension that declares the target kind, if a declaration does
+                let owner = kind_to_extension.get(&enh.target_kind).cloned();
                 enhancements.push(OutlineEnhancement {
                     enhancer: m.name().to_string(),
                     owner,

@@ -453,10 +453,10 @@ impl<'d> Cursor<'d> {
             });
         }
         let word = word?;
-        let fields = view.registries().fields();
+        let forms = view.registries().field_forms();
         if self
             .syntax
-            .reference_position(self.text, word as u32, fields)
+            .reference_position(self.text, word as u32, forms)
             && let Some(target) = entity(word)
         {
             return Some(target);

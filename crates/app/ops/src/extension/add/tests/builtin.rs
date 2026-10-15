@@ -56,7 +56,7 @@ fn a_builtin_is_enabled_after_its_required_builtin_peers() {
             peers_enabled: vec!["@specforge/testing"],
         }
     );
-    assert_eq!(added.writes.names_under(dir.path()), ["specforge.json"]);
+    assert_eq!(added.writes.named(Some(dir.path())), ["specforge.json"]);
     assert_eq!(
         specforge_common::read_project_config(dir.path())
             .config
@@ -182,7 +182,7 @@ fn add_enables_what_a_required_builtin_requires_first() {
             "@specforge/formal"
         ]
     );
-    assert_eq!(added.writes.names_under(dir.path()), ["specforge.json"]);
+    assert_eq!(added.writes.named(Some(dir.path())), ["specforge.json"]);
 
     // A cycle among required builtins stops the walk: the registry build
     // reports it, and the add succeeds.

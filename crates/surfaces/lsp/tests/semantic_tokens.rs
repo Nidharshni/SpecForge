@@ -3,7 +3,6 @@ use specforge_extension_sdk::prelude::{ContributionsBuilder, FieldType, Vocabula
 use specforge_graph::{Graph, Node};
 use specforge_lsp::{Document, MOD_DECLARATION, MOD_REFERENCE, SemanticToken};
 use specforge_ops::view::ProjectView;
-use specforge_parser::{EntityId, EntityKind, FieldMap};
 use specforge_project::coverage::RecordedCoverage;
 use specforge_registry::RegistryBuild;
 use specforge_test_macros::test as spec;
@@ -586,22 +585,17 @@ fn a_trailing_comment_is_a_comment() {
 
 /// A node of `kind` named `id`.
 fn node(id: &str, kind: &str) -> Node {
-    Node {
-        id: EntityId { raw: Sym::new(id) },
-        kind: EntityKind {
-            raw: Sym::new(kind),
-        },
-        title: None,
-        fields: FieldMap::new(),
-        source_span: SourceSpan {
+    Node::new(
+        id,
+        kind,
+        SourceSpan {
             file: Sym::new("other.spec"),
             start_line: 1,
             start_col: 1,
             end_line: 1,
             end_col: 1,
         },
-        methods: Vec::new(),
-    }
+    )
 }
 
 #[spec(

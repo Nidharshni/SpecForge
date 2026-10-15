@@ -32,7 +32,7 @@ expression: snapshot
         {
           "after_hash": "[SHA256]",
           "before_hash": "[SHA256]",
-          "file_path": "[ROOT]/spec/old.spec",
+          "file_path": "spec/old.spec",
           "unified_text": "--- a/spec/old.spec\n+++ b/spec/old.spec\n@@ -1,4 +1,4 @@\n-// specforge-format: 0.1\n+// specforge-format: 1.0\n behavior old_one \"Old\" {\n   category \"core\"\n   contract \"The system MUST work\"\n"
         }
       ],
@@ -50,7 +50,7 @@ expression: snapshot
       "post_migration_validated": false,
       "results": [
         {
-          "file_path": "[ROOT]/spec/main.spec",
+          "file_path": "spec/main.spec",
           "from_version": {
             "major": 1,
             "minor": 0
@@ -62,7 +62,7 @@ expression: snapshot
           }
         },
         {
-          "file_path": "[ROOT]/spec/old.spec",
+          "file_path": "spec/old.spec",
           "from_version": {
             "major": 0,
             "minor": 1

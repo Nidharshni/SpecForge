@@ -67,7 +67,8 @@ type RegistryBuild {
   edges        EdgeRegistryEntry[]
   // The extensions' rules plus the host-generated E006 rules
   rules        ValidationRulePattern[]
-  surfaces     SurfaceRegistryEntry[]
+  // The commands, routed by (short name, CLI name); a shadowed one is E039
+  commands     CommandRoutes
   // Every declared pass, extension by extension in load order, each
   // extension's in its after/before order
   passes       CompilerPassDeclaration[]
@@ -90,9 +91,6 @@ type GraphInputs {
   // kind), each pair written lesser label first, sorted: a two-hop cycle
   // through both labels of one pair is not a reference cycle
   bidirectional_pairs      string[] @readonly
-  // kind.field of every registered reference field (none while no kind is
-  // registered): its one value links as an edge
-  single_reference_fields  string[] @readonly
   // kind.field of every reference field whose target kind no loaded
   // extension declares, with that kind: an unresolved value there is I004
   absent_reference_targets string[] @readonly
@@ -100,6 +98,9 @@ type GraphInputs {
   // declared type: a list type to a list; integer, bool, string or enum to
   // that type; a single reference or a block is read as written
   field_coercions          string[] @readonly
+  // the kinds that take any field (open_fields): an undeclared field of one
+  // is a member, which references nothing (ADR 0093)
+  member_kinds             string[] @readonly
   // kind.field of every reference field whose edges the host derives
   // (derived_from), with its target kind and source, sorted by kind and field
   derived_references       string[] @readonly
@@ -156,13 +157,10 @@ type EdgeTypeDescriptor {
 // Fields and verify kinds one extension adds to an entity kind
 // another extension declares.
 type EntityEnhancementDescriptor {
-  target_kind      string            @readonly
-  // The extension that owns the target kind: an enhancement of a kind whose
-  // owner is not loaded is skipped silently
-  source_extension string            @readonly
-  fields           FieldDescriptor[] @optional
+  target_kind  string            @readonly
+  fields       FieldDescriptor[] @optional
   // Makes the target kind testable with exactly these verify kinds (ADR 0002)
-  verify_kinds     string[]          @optional
+  verify_kinds string[]          @optional
   verify unit "EntityEnhancementDescriptor schema is valid"
 }
 
@@ -307,6 +305,7 @@ type FieldRegistryEntry {
   /// canonically; its enum values and proof role are the descriptor's.
   field_type          FieldType              @readonly
   enum_values         string[]               @optional
+  // The extension that declared the field: the kind's own, its shared field's or an enhancement's
   source_extension    string                 @readonly
   edge                string                 @optional
   target_kind         string                 @optional

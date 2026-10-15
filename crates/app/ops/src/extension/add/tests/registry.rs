@@ -249,8 +249,11 @@ fn an_install_enables_the_builtins_it_requires_first() {
         assert!(
             added
                 .writes
-                .names_under(dir.path())
-                .contains(&"specforge.json".to_string()),
+                .named(Some(dir.path()))
+                .contains(&specforge_common::ProjectPath::of(
+                    dir.path(),
+                    &dir.path().join("specforge.json")
+                )),
             "{:?}",
             added.writes
         );

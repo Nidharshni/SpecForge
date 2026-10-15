@@ -47,8 +47,9 @@ behavior serialize_json_graph "Serialize JSON Graph" {
     standard tools. Every field value MUST be written in its one wire form
     (ADR 0064): text as a string, an expression group as its conjuncts in
     their display form, one per line, an integer or boolean as a JSON
-    scalar, a list as an array, a block as an object of its entries, verify
-    statements as {kind, description} objects. No position and no parse tree
+    scalar, a list as an array, a block as an object of its entries; an entity's
+    verify statements as {kind, description} objects under the node's own
+    `verify`, beside its fields. No position and no parse tree
     is ever written.
   """
   verify unit "JSON output contains all nodes"
@@ -136,6 +137,7 @@ behavior render_extension_outline "Render the Extension Outline" {
   verify unit "the builtins' outline is unchanged in every format"
   verify unit "each extension's card names the describe categories it declares, and providers when its handshake says so"
   verify unit "the dependencies every format shows, json included, are the ones --deps selects"
+  verify unit "an enhancement of a kind no extension declares names no owner"
   verify contract "Render the Extension Outline: outline rendering holds — declarations_loaded, one_card_per_extension, declared_text_contained, deps_selected"
 }
 
@@ -179,6 +181,7 @@ behavior compute_traceability_chain "Compute Traceability Chain" {
   verify unit "an expected link declared from the other side, through an inverse field of the target kind, is not missing"
   verify unit "trace output includes schema version"
   verify unit "tracing an entity the graph lacks is E003 naming the closest entity"
+  verify unit "a reference field another extension adds to a kind is not an expected link"
   verify contract "Compute Traceability Chain: traceability chain computation holds — validation_complete_fired, full_chain_traversed, missing_links_flagged, trace_chain_computed_emitted"
 }
 
@@ -690,7 +693,9 @@ behavior validate_agent_plan "Validate Agent Implementation Plan" {
     snapshot, never the recorded test report. The outcome MUST be one JSON
     document on every surface (McpTracePlanResult): ok (no unresolved entry
     and no ordering gap), the entries that name an entity, and the gaps;
-    specforge trace --plan exits 1 when ok is false.
+    specforge trace --plan exits 1 when ok is false. An entity and a plan
+    are two requests: every surface refuses both together as invalid input
+    on the plan.
   """
   verify unit "plan with all valid entity IDs passes validation"
   verify unit "plan referencing nonexistent entity ID produces E003"
@@ -700,7 +705,9 @@ behavior validate_agent_plan "Validate Agent Implementation Plan" {
   verify unit "the plan check reads no recorded test report"
   verify unit "a plan that is not an AgentPlan is refused, naming every place it departs from the type"
   verify unit "a plan passes when every entry names an entity and none comes before what it depends on; a missing entry is a warning"
+  verify unit "an entity and a plan together are invalid input about the plan, on every surface"
   verify integration "specforge trace --plan and specforge.trace answer the same document for a plan"
+  verify integration "specforge trace and specforge.trace both refuse an entity with a plan"
   verify integration "specforge trace --plan exits 1 when an entry names no entity or comes before what it depends on"
   verify contract "Validate Agent Implementation Plan: agent plan validation holds — validation_complete_fired, unresolvable_ids_diagnosed, missing_entries_warned, ordering_validated, structured_report_produced, plan_validated_emitted"
 }
@@ -1031,7 +1038,8 @@ behavior export_agent_graph_format "Export Agent Graph Format" {
     references a non-existent entity ID, the system MUST emit an E003
     diagnostic and exit with code 1. --depth (with --scope) limits the hops
     from it, and --kinds keeps only entities of those kinds, the scoped
-    entity always kept; depth without a scope is invalid input.
+    entity always kept; depth without a scope is invalid input; so are --with-schema and
+    --no-schema together.
     specforge.export and the graph resources take the same options. The
     output MUST include a schema_version field identifying the Graph
     Protocol version.
@@ -1041,6 +1049,7 @@ behavior export_agent_graph_format "Export Agent Graph Format" {
   verify unit "scoped export returns only reachable subgraph"
   verify unit "non-existent scope entity produces E003 and exit code 1"
   verify unit "depth without a scope is invalid input on every surface"
+  verify unit "with_schema and no_schema together are invalid input on every surface"
   verify integration "depth and kinds narrow the export the same way on every surface"
   verify unit "an export failure carries its code as a constant, never in its message"
   verify unit "output conforms to Graph Protocol schema"

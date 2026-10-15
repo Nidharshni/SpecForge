@@ -1,6 +1,6 @@
 use specforge_common::{Diagnostic, Severity, SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
-use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue, VerifyStatement};
+use specforge_parser::{FieldMap, FieldValue, VerifyStatement};
 use specforge_test::prelude::*;
 
 fn span() -> SourceSpan {
@@ -24,14 +24,9 @@ fn node_with_fields(id: &str, kind: &str, contract: &str, status: &str) -> Node 
         FieldValue::Identifier(status.to_string()),
     );
     Node {
-        id: EntityId { raw: Sym::new(id) },
-        kind: EntityKind {
-            raw: Sym::new(kind),
-        },
         title: Some(format!("Title {}", id)),
         fields,
-        source_span: span(),
-        methods: Vec::new(),
+        ..Node::new(id, kind, span())
     }
 }
 
@@ -41,22 +36,14 @@ fn testable_node(id: &str) -> Node {
         Sym::new("contract"),
         FieldValue::String("The system MUST work".to_string()),
     );
-    fields.push(
-        Sym::new("verify"),
-        FieldValue::VerifyList(vec![VerifyStatement {
-            kind: "unit".to_string(),
-            description: "it works".to_string(),
-        }]),
-    );
     Node {
-        id: EntityId { raw: Sym::new(id) },
-        kind: EntityKind {
-            raw: Sym::new("behavior"),
-        },
         title: Some(format!("Title {}", id)),
         fields,
-        source_span: span(),
-        methods: Vec::new(),
+        obligations: vec![VerifyStatement {
+            kind: "unit".to_string(),
+            description: "it works".to_string(),
+        }],
+        ..Node::new(id, "behavior", span())
     }
 }
 
@@ -304,9 +291,12 @@ fn graph_format_contract_finalized_graph_produces_full_output() {
         d["fields"],
         serde_json::json!({
             "contract": "The system MUST work",
-            "verify": [{ "kind": "unit", "description": "it works" }],
             "description": "Long prose that explains the entity at length",
         })
+    );
+    assert_eq!(
+        d["verify"],
+        serde_json::json!([{ "kind": "unit", "description": "it works" }])
     );
     assert_eq!(parsed["nodes"][0]["fields"]["status"], "planned");
     assert_eq!(

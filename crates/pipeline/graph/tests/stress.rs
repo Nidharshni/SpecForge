@@ -1,6 +1,6 @@
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
-use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue, SpannedRef};
+use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue, ListItem, Written};
 
 fn span() -> SourceSpan {
     SourceSpan {
@@ -20,9 +20,10 @@ fn build_chain_graph(n: usize) -> Graph {
         if i > 0 {
             fields.push(
                 Sym::new("depends_on"),
-                FieldValue::ReferenceList(vec![SpannedRef {
-                    id: format!("entity_{}", i - 1),
+                FieldValue::List(vec![ListItem {
+                    text: format!("entity_{}", i - 1),
                     span: span(),
+                    written: Written::Bare,
                 }]),
             );
         }
@@ -35,6 +36,7 @@ fn build_chain_graph(n: usize) -> Graph {
             fields,
             source_span: span(),
             methods: Vec::new(),
+            obligations: Vec::new(),
         });
         if i > 0 {
             graph.add_edge(Edge {

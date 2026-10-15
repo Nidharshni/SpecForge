@@ -29,7 +29,7 @@ pub use specforge_protocol_types::PeerDependency;
 
 // --- The surfaces registry ---
 pub use surface::{
-    CommandArgType, SurfaceRegistryEntry, SurfaceType, refuse_malformed_tool_schemas,
+    CommandArgType, CommandRoute, CommandRoutes, ShadowedRoute, refuse_malformed_tool_schemas,
     register_surface_contributions,
 };
 

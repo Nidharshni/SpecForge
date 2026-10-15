@@ -33,6 +33,7 @@ fn node_with_fields(id: &str, kind: &str, contract: &str, status: &str) -> Node 
         fields,
         source_span: span(),
         methods: Vec::new(),
+        obligations: Vec::new(),
     }
 }
 
@@ -41,13 +42,6 @@ fn testable_node(id: &str) -> Node {
     fields.push(
         Sym::new("contract"),
         FieldValue::String("The system MUST work".to_string()),
-    );
-    fields.push(
-        Sym::new("verify"),
-        FieldValue::VerifyList(vec![VerifyStatement {
-            kind: "unit".to_string(),
-            description: "it works".to_string(),
-        }]),
     );
     Node {
         id: EntityId { raw: Sym::new(id) },
@@ -58,6 +52,10 @@ fn testable_node(id: &str) -> Node {
         fields,
         source_span: span(),
         methods: Vec::new(),
+        obligations: vec![VerifyStatement {
+            kind: "unit".to_string(),
+            description: "it works".to_string(),
+        }],
     }
 }
 

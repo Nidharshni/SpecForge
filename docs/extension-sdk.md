@@ -253,7 +253,7 @@ Every contribution is a builder call. The SDK adds the matching Wasm exports and
 | `c.kind(name, \|k\| ..)` | an entity kind; `k.field(..)` its fields | `entities` |
 | `c.edge(label, \|e\| ..)` | an edge type (`source_kind`, `target_kind`, DOT style) | `edges` |
 | `c.shared_field(name, \|f\| ..)` | a field every kind of the extension has | `shared_fields` |
-| `c.enhance(kind, owner, \|e\| ..)` | fields and verify kinds on another extension's kind | `enhancements` |
+| `c.enhance(kind, \|e\| ..)` | fields and verify kinds on another extension's kind | `enhancements` |
 | `c.rule(code, \|r\| ..)` | a declarative rule, or a custom one with `r.validate(..)` | `validation_rules` |
 | `c.command(id, \|cmd\| ..)` | a CLI command (also an MCP tool) and its handler | `surfaces` |
 | `c.mcp_tool(..)`, `c.mcp_resource(..)` | an MCP tool or resource and its handler | `surfaces` |
@@ -473,11 +473,9 @@ custom rule (`ValidatorField.value`, always a JSON string) and a compiler pass
 |---|---|
 | string, identifier, date | as written |
 | integer, boolean | its literal (`42`, `true`) |
-| list of strings or references | items joined by `", "` |
-| mixed list (`[1, true]`) | items' texts joined by `", "` |
-| variant list (`values [low, high]`), type union (`string \| string[]`) | members joined by `" \| "` |
+| list (`["a", b]`, `[1, true]`) | items' texts joined by `", "` |
+| variant list, type union (`string \| string[]`) | members joined by `" \| "` |
 | expression group (`expr { a < 10ms, b > 5 }`) | each expression's display form, joined by `", "` |
-| verify statements | their texts joined by `"; "` |
 | block (`ensures { done "…" }`) | its keys joined by `", "` |
 
 A written empty list or block is present with the text `""`, so
@@ -627,7 +625,7 @@ struct Gherkin;
 impl Contributions for Gherkin {
     fn contribute(c: &mut ContributionsBuilder) {
         c.peer("@specforge/software", "^1.0");
-        c.enhance("behavior", "@specforge/software", |e| {
+        c.enhance("behavior", |e| {
             e.field("gherkin", |f| {
                 f.field_type(FieldType::StringList)
                     .description("BDD scenario files")
@@ -644,6 +642,8 @@ impl Contributions for Gherkin {
     }
 }
 ```
+
+An enhancement's fields are your extension's. If the kind's extension may be absent, declare it with `c.optional_peer(..)`: the host then skips the enhancement silently instead of reporting I004.
 
 Running Cucumber and mapping its results would be a separate runner extension with a collector; see [Collectors](#collectors).
 

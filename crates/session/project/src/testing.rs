@@ -10,17 +10,20 @@
 //! The CLI driver (`crates/surfaces/cli/tests/support`) and the MCP driver (`specforge_mcp::testing::Served`) take a
 //! `TestProject`; nothing else in a test writes `specforge.json`, picks a runtime or calls
 //! `CompiledProject::compile`.
+//!
+//! [`disk_changed`] takes the files a test wrote as a watcher's batch: [`ProjectSession::changes`], then
+//! [`ProjectSession::apply`].
 
 pub mod specs;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde_json::{Value, json};
 use specforge_common::{ExtensionEntry, ProjectRoot};
 use specforge_wasm::testing::InProcessRuntime;
 
-use crate::{CompiledProject, ProjectSession, RuntimeSource, SharedRuntime};
+use crate::{CompiledProject, ProjectSession, RuntimeSource, SharedRuntime, Update};
 
 /// A project on disk with its own HOME. Built by value (`TestProject::new().enabling(..).file(..)`); every
 /// builder call writes through to disk at once, so the directory is always what the value says.
@@ -368,4 +371,18 @@ fn copy_tree(from: &Path, to: &Path) {
             std::fs::copy(&source, &target).unwrap_or_else(|e| panic!("{}: {e}", source.display()));
         }
     }
+}
+
+/// What a test wrote, created or deleted at the sources `keys` (each relative to the spec root), taken the way
+/// watch and the LSP take a watcher's batch: [`ProjectSession::changes`] of those paths, then
+/// [`ProjectSession::apply`]. `None` when nothing the paths reach differs from what the session read (a file the
+/// test did not touch, an excluded or undiscovered one) and for a detached session.
+pub fn disk_changed(session: &mut ProjectSession, keys: &[impl AsRef<str>]) -> Option<Update> {
+    let spec_root = session.inputs().spec_root()?.to_path_buf();
+    let paths: Vec<PathBuf> = keys
+        .iter()
+        .map(|key| spec_root.join(key.as_ref()))
+        .collect();
+    let changes = session.changes(paths.iter().map(PathBuf::as_path));
+    session.apply(&changes)
 }

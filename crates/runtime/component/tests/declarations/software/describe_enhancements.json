@@ -26,7 +26,6 @@
           "target_kind": "port"
         }
       ],
-      "source_extension": "@specforge/product",
       "target_kind": "module"
     },
     {
@@ -43,7 +42,6 @@
           "target_kind": "behavior"
         }
       ],
-      "source_extension": "@specforge/product",
       "target_kind": "milestone"
     }
   ]

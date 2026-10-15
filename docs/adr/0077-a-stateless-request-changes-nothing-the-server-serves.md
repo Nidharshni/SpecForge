@@ -3,7 +3,8 @@
 **Status:** accepted (2026-10-13, architecture round 9, plan 07). Amends ADR 0014 D5 (handshake sessions only),
 D6 (the root is looked at again while nothing is served) and D12, supersedes ADR 0014 D11 and ADR 0004 D3-d's
 `use_cached`, makes ADR 0004 D4-c's stateless clause precise, and amends ADR 0024 D5, ADR 0033 D1/D3 and ADR 0049 D2
-(the target declares `path` only).
+(the target declares `path` only). D3's `follow_root` is called once, by the
+router (ADR 0103).
 
 The stateless revision (MCP 2026-07-28, served since 2026-10-01 under ADR 0004 D4-c) promises that nothing a prior
 request said changes a request's answer (`mcp-server.spec`, `serve_stateless_mcp_requests`). Five things a request

@@ -3,11 +3,9 @@
 use "types/core"
 
 type ParseError {
-  _tag     "ParseError" @literal
-  message  string
-  span     SourceSpan   @readonly
-  expected string       @optional
-  found    string       @optional
+  _tag    "ParseError" @literal
+  message string
+  span    SourceSpan   @readonly
   verify unit "ParseError schema is valid"
 }
 

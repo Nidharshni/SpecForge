@@ -127,9 +127,7 @@ fn graph_inputs(env: &Environment) -> Value {
         })
         .collect();
     json!({
-        "single_reference_fields": sorted(
-            config.single_reference_fields.iter().map(|(k, f)| json!([k, f])).collect()
-        ),
+        "member_kinds": config.field_forms.member_kinds(),
         "bidirectional_pairs": sorted(bidirectional_pairs),
         "absent_reference_targets": absent_reference_targets,
         "field_forms": field_forms,
@@ -244,12 +242,12 @@ fn digest(env: &Environment) -> Value {
         "edges": edges,
         "rules": rules,
         "graph_inputs": graph_inputs(env),
-        "surfaces": r.surfaces().iter().map(|s| json!({
-            "surface_type": format!("{:?}", s.surface_type),
-            "name": s.contribution_name,
-            "extension": s.extension_name,
-            "export": s.export_name,
+        "commands": r.commands().routed().iter().map(|c| json!({
+            "extension": c.extension(),
+            "route": format!("{} {}", c.short(), c.cli_name()),
+            "export": c.declaration().export,
         })).collect::<Vec<_>>(),
+        "shadowed": r.commands().shadowed().len(),
         "manifest_surfaces": r.declarations().iter()
             .filter(|d| d.surfaces != SurfaceDescriptor::default())
             .map(|d| json!({ "extension": d.name(), "surfaces": surfaces(&d.surfaces) }))

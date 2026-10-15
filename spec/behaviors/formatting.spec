@@ -17,6 +17,7 @@ behavior format_spec_files "Format Spec Files" {
     comment_preservation,
     format_rule_determinism,
     formatting_semantic_preservation,
+    document_project_paths,
   ]
   category   query
   types      [FormatConfig, FormatDiff]
@@ -45,7 +46,8 @@ behavior format_spec_files "Format Spec Files" {
     Under --format json the command MUST print instead the format document
     specforge.format answers (McpFormatResult) with the files it wrote, its
     diagnostics and failures in the document, and nothing on stderr; the
-    exit code is the same.
+    exit code is the same. Every file the document names is named from the
+    project root, as files_written is (ADR 0102).
     The project's specforge.json is read through the read the compile uses.
     One that does not say which files are the project's sources (it can't
     be used, or spec_root, exclude or extensions has the wrong type) MUST
@@ -61,6 +63,7 @@ behavior format_spec_files "Format Spec Files" {
   verify unit "a region left unformatted makes the run exit 1, the rest of the file still written"
   verify unit "the format document names each changed file, each failed file with its kind, and the run's verdict"
   verify unit "under --format json the run prints the format document on stdout and nothing on stderr"
+  verify unit "the format document names each file from the project root, whatever the working directory"
   verify contract "Format Spec Files: spec file formatting holds — spec_files_available, format_config_loaded, formatted_output_written, unchanged_files_preserved, format_complete_emitted, summary_printed"
   verify unit "a problem in specforge.json the run goes around is reported as E069 and makes the run exit 1, the files still formatted"
 }
@@ -379,7 +382,6 @@ behavior lsp_format_document "LSP Format Document" {
   ]
   category   query
   types      [FormatConfig, TextEdit]
-  refs       [format_with_parse_errors]
   ports      [LspProtocol]
   produces   [format_complete]
   requires {

@@ -1243,32 +1243,26 @@ fn contract_list_tools() {
 fn contract_auto_promote_commands() {
     use crate::fake_extension::{self, EXT, FakeExtension};
     use specforge_mcp::surface_table::ToolKind;
-    use specforge_registry::SurfaceType;
     let output = json!({"exit_code": 0, "stdout": "report written", "stderr": ""});
     let (mut server, ext, _dir) =
         fake_extension::initialized(FakeExtension::new().with_output("cmd__report", output));
 
     // surfaces_registered: the compile registered the
     // extension's contributions, commands included.
-    let entries = |ty: SurfaceType| -> Vec<(String, String)> {
-        server
-            .state()
-            .registries()
-            .surfaces()
-            .iter()
-            .filter(|e| e.surface_type == ty)
-            .map(|e| (e.contribution_name.clone(), e.export_name.clone()))
-            .collect()
-    };
+    let registries = server.state().registries();
     let pair = |a: &str, b: &str| (a.to_string(), b.to_string());
+    let routed: Vec<_> = (registries.commands().routed().iter())
+        .map(|c| pair(&c.declaration().id, &c.declaration().export))
+        .collect();
     assert_eq!(
-        entries(SurfaceType::Command),
+        routed,
         [pair("report", "cmd__report"), pair("check", "cmd__check")]
     );
-    assert_eq!(
-        entries(SurfaceType::McpTool),
-        [pair("specforge.cmds.check", "mcp__check")]
-    );
+    let tools: Vec<_> = (registries.declarations().iter())
+        .flat_map(|d| &d.surfaces.mcp_tools)
+        .map(|t| pair(&t.name, &t.export))
+        .collect();
+    assert_eq!(tools, [pair("specforge.cmds.check", "mcp__check")]);
 
     // all_commands_promoted + naming_convention_enforced: every command
     // becomes specforge.cmds.<id> unless an explicit tool has the name.
@@ -2958,10 +2952,7 @@ fn contract_render() {
         json!({"format": "json", "out_dir": out_dir.to_str().unwrap()}),
     );
     let graph_file = out_dir.join("graph.json");
-    assert_eq!(
-        json_render["output_files"],
-        json!([graph_file.to_str().unwrap()])
-    );
+    assert_eq!(json_render["output_files"], json!(["rendered/graph.json"]));
     let written: Value =
         serde_json::from_str(&std::fs::read_to_string(&graph_file).unwrap()).unwrap();
     assert_eq!(node_ids(&written), ["alpha", "beta"]);
@@ -2973,10 +2964,7 @@ fn contract_render() {
         json!({"format": "dot", "out_dir": out_dir.to_str().unwrap()}),
     );
     let dot_file = out_dir.join("graph.dot");
-    assert_eq!(
-        dot_render["output_files"],
-        json!([dot_file.to_str().unwrap()])
-    );
+    assert_eq!(dot_render["output_files"], json!(["rendered/graph.dot"]));
     let dot = std::fs::read_to_string(&dot_file).unwrap();
     assert!(dot.starts_with("digraph"), "{dot}");
     assert!(dot.contains("alpha") && dot.contains("beta"), "{dot}");
@@ -3177,7 +3165,7 @@ fn a_model_depth_without_a_root_is_refused() {
     assert_eq!(error["argument"], "root");
     assert_eq!(
         error["message"],
-        "'depth' needs 'root': the kind the depth counts from"
+        "a depth counts from a root kind: give a root too"
     );
 }
 

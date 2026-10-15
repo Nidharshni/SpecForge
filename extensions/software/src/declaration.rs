@@ -334,7 +334,7 @@ fn edges(c: &mut ContributionsBuilder) {
 }
 
 fn enhancements(c: &mut ContributionsBuilder) {
-    c.enhance("module", "@specforge/product", |e| {
+    c.enhance("module", |e| {
         e.field("ports", |f| {
             f.field_type(FieldType::ReferenceList)
                 .description("Port interfaces this module consumes")
@@ -348,7 +348,7 @@ fn enhancements(c: &mut ContributionsBuilder) {
                 .target_kind("port");
         });
     });
-    c.enhance("milestone", "@specforge/product", |e| {
+    c.enhance("milestone", |e| {
         e.field("behaviors", |f| {
             f.field_type(FieldType::ReferenceList)
                 .description("Behaviors this milestone includes in its delivery scope")

@@ -92,7 +92,7 @@ expression: digest(&build)
     [
       "E039",
       "Error",
-      "duplicate surface command ID 'hello': extension '@pin/product' conflicts with '@pin/software'"
+      "command 'hello' of '@pin/product' is not routed: '@pin/software' routes `specforge software hello` first"
     ]
   ],
   "edges": [
@@ -117,9 +117,7 @@ expression: digest(&build)
       "behavior.watched": "reference_list",
       "rule.limit": "string"
     },
-    "single_reference_fields": [
-      "behavior.owner"
-    ]
+    "member_kinds": []
   },
   "kinds": [
     {

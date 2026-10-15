@@ -315,7 +315,7 @@ fn entity_resource_error_for_empty_id() {
     let resp = read_resource(&mut server, "specforge://graph/");
     assert_eq!(resp["error"]["code"], -32602);
     let message = resp["error"]["message"].as_str().unwrap();
-    assert!(message.starts_with("Malformed entity ID"), "{message}");
+    assert!(message.starts_with("Malformed entity_id"), "{message}");
     assert!(!message.contains("not found"), "{message}");
 }
 
@@ -523,7 +523,7 @@ fn entity_malformed_id_returns_error() {
     let resp = read_resource(&mut server, "specforge://graph/!@#$");
     assert_eq!(resp["error"]["code"], -32602);
     let message = resp["error"]["message"].as_str().unwrap();
-    assert!(message.starts_with("Malformed entity ID"), "{message}");
+    assert!(message.starts_with("Malformed entity_id"), "{message}");
     assert!(message.contains("!@#$"), "names the bad ID: {message}");
     assert!(!message.contains("not found"), "{message}");
 }
