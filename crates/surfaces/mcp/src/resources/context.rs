@@ -6,9 +6,9 @@ use crate::subscriptions::Watched;
 use crate::uri_template::Matched;
 
 /// `specforge://context`: the context export.
-pub struct Resource;
+pub struct ContextResource;
 
-impl CoreResource for Resource {
+impl CoreResource for ContextResource {
     const URI: &'static str = "specforge://context";
     const NAME: &'static str = "context";
     const DESCRIPTION: &'static str = "Context-optimized graph (contract, status, verify fields)";

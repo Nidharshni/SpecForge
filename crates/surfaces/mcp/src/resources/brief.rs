@@ -6,9 +6,9 @@ use crate::subscriptions::Watched;
 use crate::uri_template::Matched;
 
 /// `specforge://brief`: the brief export.
-pub struct Resource;
+pub struct BriefResource;
 
-impl CoreResource for Resource {
+impl CoreResource for BriefResource {
     const URI: &'static str = "specforge://brief";
     const NAME: &'static str = "brief";
     const DESCRIPTION: &'static str = "Brief graph (id, kind, title, edges only)";

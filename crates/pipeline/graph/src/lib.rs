@@ -14,7 +14,6 @@ pub use delta::{
 mod derive;
 pub use derive::{DerivedFrom, DerivedReference, type_expressions};
 mod graph;
-mod link;
 mod obligations;
 // The cycle walker lives in specforge-common (the registry's rules use it
 // without linking the graph); re-exported here unchanged.
