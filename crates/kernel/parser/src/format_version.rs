@@ -151,18 +151,25 @@ struct HeaderLine<'a> {
 
 /// The one placement rule: the first line whose `trim()` is non-empty, if it
 /// starts with the prefix. Lines split as `str::lines` splits them (on `\n`,
-/// a preceding `\r` dropped), with byte offsets.
+/// a preceding `\r` dropped), with byte offsets, after one leading byte-order mark.
 fn header_line(content: &str) -> Option<HeaderLine<'_>> {
     let mut offset = 0;
     for (index, raw) in content.split_inclusive('\n').enumerate() {
-        let text = match raw.strip_suffix('\n') {
+        let line = match raw.strip_suffix('\n') {
             Some(line) => line.strip_suffix('\r').unwrap_or(line),
             None => raw,
         };
+        // One leading byte-order mark is not part of the first line's text.
+        let bom = if index == 0 && line.starts_with('\u{feff}') {
+            '\u{feff}'.len_utf8()
+        } else {
+            0
+        };
+        let text = &line[bom..];
         if !text.trim().is_empty() {
             return text.starts_with(HEADER_PREFIX).then(|| HeaderLine {
                 index,
-                range: offset..offset + text.len(),
+                range: offset + bom..offset + bom + text.len(),
                 text,
             });
         }

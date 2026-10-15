@@ -112,7 +112,6 @@ fn the_header_written_is_the_header_read() {
 }
 
 #[test]
-#[ignore = "flipped by T9"]
 fn a_header_after_a_byte_order_mark_is_read_and_rewritten() {
     let text = "\u{feff}// specforge-format: 0.9\nB";
     let (version, diagnostics) = detect_format_version(text, "a.spec");
