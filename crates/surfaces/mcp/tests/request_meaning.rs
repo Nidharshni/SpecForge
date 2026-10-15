@@ -3,6 +3,7 @@
 
 use crate::support::*;
 use serde_json::{Value, json};
+use specforge_test::prelude::*;
 
 /// A server over a project with one behavior, `login`, and the cargo-test collector.
 fn served() -> Served {
@@ -22,8 +23,10 @@ fn assert_refused(reply: &Value, argument: &str, diagnostic: Option<&str>) {
     }
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test(
+    behavior = "provide_mcp_collect_tool",
+    verify = "a runner no collector answers to, auto included, is an E058 error on runner"
+)]
 fn collect_refuses_auto_as_an_unknown_runner() {
     let reply = call_tool(
         &mut served(),

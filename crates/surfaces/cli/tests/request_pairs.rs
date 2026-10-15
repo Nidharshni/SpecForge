@@ -179,8 +179,10 @@ fn collect_with_a_named_runner_is_one_request() {
     assert!(matches!(cli, Outcome::Answered(_)), "{cli:?}");
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test_macros::test(
+    behavior = "provide_mcp_collect_tool",
+    verify = "specforge.collect reads runner as specforge collect --runner reads it"
+)]
 fn collect_runner_auto_is_one_request() {
     assert_eq!(pair("collect_runner_auto").0, Outcome::Refused);
 }
