@@ -61,7 +61,6 @@ fn full() -> ExtensionDeclaration {
         shared_fields: vec![field("tags")],
         enhancements: vec![EntityEnhancementDescriptor {
             target_kind: "behavior".to_string(),
-            source_extension: "@acme/base".to_string(),
             fields: vec![field("report")],
             ..Default::default()
         }],
@@ -263,6 +262,12 @@ fn an_unknown_item_key_is_reported() {
                 category: "enhancements",
                 item: "x".to_string(),
                 key: "edge_types".to_string(),
+            },
+            // A 1.4 guest's enhancement source_extension: ignored, reported (ADR 0096).
+            UnknownKey {
+                category: "enhancements",
+                item: "x".to_string(),
+                key: "source_extension".to_string(),
             },
             UnknownKey {
                 category: "surfaces",

@@ -116,7 +116,7 @@ fn pin_product() -> ExtensionDeclaration {
             .message_template("'{id}' again")
             .check(CheckKind::NoIncomingEdges);
     });
-    c.enhance("nowhere_kind", "@pin/product", |e| {
+    c.enhance("nowhere_kind", |e| {
         e.field("extra", |f| {
             f.field_type(FieldType::String);
         });
@@ -138,7 +138,7 @@ fn pin_product() -> ExtensionDeclaration {
 fn pin_enhancer() -> ExtensionDeclaration {
     declare("@pin/enhancer", |c| {
         c.optional_peer("@pin/absent", "^1");
-        c.enhance("module", "@pin/absent", |e| {
+        c.enhance("module", |e| {
             e.field("owner_team", |f| {
                 f.field_type(FieldType::String);
             });

@@ -242,7 +242,6 @@ Returns field enhancements that add fields to entity kinds owned by other extens
   "items": [
     {
       "target_kind": "module",
-      "source_extension": "@specforge/product",
       "fields": [
         {
           "name": "ports",
@@ -283,6 +282,8 @@ Returns both declarative rules (pattern-based, evaluated by the host) and custom
   ]
 }
 ```
+
+The host credits the fields to the answering extension and reads the kind's owner from its kind registry (ADR 0096).
 
 Check kinds (`specforge_protocol_types::CheckKind`). The descriptor stays flat
 and string-typed on the wire; the host's registry build turns each rule into a

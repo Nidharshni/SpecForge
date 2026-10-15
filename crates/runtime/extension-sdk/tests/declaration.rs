@@ -225,7 +225,7 @@ fn a_raw_category_and_a_loaded_one_parse_alike() {
         .shared_field("tags", |f| {
             f.field_type(FieldType::String);
         })
-        .enhance("behavior", "@acme/base", |e| {
+        .enhance("behavior", |e| {
             e.field("report", |f| {
                 f.field_type(FieldType::String);
             });

@@ -357,16 +357,18 @@ pub struct EdgeTypeDescriptor {
 
 // ── Shared Field Descriptor ──
 
-/// A field applied globally to all entity kinds. Structurally identical to FieldDescriptor.
+/// A field every kind of the declaring extension gets (a kind's own field of
+/// that name wins). Structurally identical to FieldDescriptor.
 pub type SharedFieldDescriptor = FieldDescriptor;
 
 // ── Entity Enhancement Descriptor ──
 
-/// Describes fields added to a foreign entity kind.
+/// Fields and verify kinds an extension adds to an entity kind another
+/// extension declares. The host credits the fields to the declaring extension
+/// and reads the kind's owner from the kind registry (ADR 0096).
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EntityEnhancementDescriptor {
     pub target_kind: String,
-    pub source_extension: String,
     #[serde(default)]
     pub fields: Vec<FieldDescriptor>,
     /// Makes the target kind testable with these `verify` kinds.

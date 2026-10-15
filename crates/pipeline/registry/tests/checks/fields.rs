@@ -79,7 +79,7 @@ fn expression_is_checked_like_any_other_field() {
     // kind like any other.
     let formal = declare("@specforge/formal", |c| {
         c.meta.peer_dependencies = vec![peer("@specforge/software", "^1")];
-        c.enhance("invariant", "@specforge/software", |e| {
+        c.enhance("invariant", |e| {
             e.field("expression", |f| {
                 f.field_type(FieldType::String)
                     .normative()

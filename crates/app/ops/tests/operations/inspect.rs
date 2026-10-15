@@ -31,7 +31,7 @@ fn standings() -> Project {
         c.kind("note", |k| {
             k.keyword("note");
         });
-        c.enhance("behavior", "@t/soft", |e| {
+        c.enhance("behavior", |e| {
             e.field("abstract", |f| {
                 f.field_type(FieldType::Bool).exempts_obligations();
             });

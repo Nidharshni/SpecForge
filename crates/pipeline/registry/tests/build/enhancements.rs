@@ -10,11 +10,10 @@ use specforge_test_macros::test as spec;
 
 use crate::support::{build, check, coded, coded_in, codes, declare, diagnostics, software, span};
 
-/// An extension `name` enhancing `target` (owned by `owner`) with string
-/// fields `fields`.
-fn enhancer(name: &str, target: &str, owner: &str, fields: &[&str]) -> ExtensionDeclaration {
+/// An extension `name` enhancing `target` with string fields `fields`.
+fn enhancer(name: &str, target: &str, fields: &[&str]) -> ExtensionDeclaration {
     declare(name, |c| {
-        c.enhance(target, owner, |e| {
+        c.enhance(target, |e| {
             for field in fields {
                 e.field(field, |f| {
                     f.field_type(FieldType::String);
@@ -30,7 +29,7 @@ fn enhancer(name: &str, target: &str, owner: &str, fields: &[&str]) -> Extension
 )]
 fn an_enhancement_registers_its_fields_on_the_target_kind() {
     let coverage = declare("@test/coverage", |c| {
-        c.enhance("behavior", "@specforge/software", |e| {
+        c.enhance("behavior", |e| {
             e.field("coverage_threshold", |f| {
                 f.field_type(FieldType::String);
             });
@@ -56,8 +55,8 @@ fn an_enhancement_registers_its_fields_on_the_target_kind() {
     // Two enhancements of one kind, with different fields: both register.
     let build = crate::support::build([
         software(),
-        enhancer("@ext/a", "behavior", "@ext/a", &["priority"]),
-        enhancer("@ext/b", "behavior", "@ext/b", &["category"]),
+        enhancer("@ext/a", "behavior", &["priority"]),
+        enhancer("@ext/b", "behavior", &["category"]),
     ]);
     assert!(diagnostics(&build).is_empty(), "{:?}", diagnostics(&build));
     assert_eq!(
@@ -85,7 +84,7 @@ fn an_enhancement_registers_its_fields_on_the_target_kind() {
 fn an_enhancement_of_an_unknown_kind_is_i004() {
     let build = build([
         software(),
-        enhancer("@test/ext", "nonexistent_kind", "@test/ext", &["extra"]),
+        enhancer("@test/ext", "nonexistent_kind", &["extra"]),
     ]);
 
     let i004 = coded(&build, "I004");
@@ -108,7 +107,7 @@ fn an_enhancement_of_a_kind_whose_optional_peer_is_not_loaded_is_skipped_silentl
     let enhancing = || {
         declare("@test/ext", |c| {
             c.optional_peer("@specforge/product", "^1");
-            c.enhance("module", "@specforge/product", |e| {
+            c.enhance("module", |e| {
                 e.field("layer", |f| {
                     f.field_type(FieldType::String);
                 });
@@ -145,7 +144,7 @@ fn an_enhancement_with_verify_kinds_makes_its_target_testable() {
         });
     });
     let testing = declare("@specforge/testing", |c| {
-        c.enhance("behavior", "@specforge/software", |e| {
+        c.enhance("behavior", |e| {
             e.verify_kinds(&["unit", "contract"]);
         });
     });
@@ -171,10 +170,7 @@ fn an_enhancement_with_verify_kinds_makes_its_target_testable() {
 fn an_enhancement_field_never_overwrites_a_kind_field() {
     // `contract` is a block field of software's `behavior`; the enhancement
     // declares it again as a string.
-    let build = build([
-        software(),
-        enhancer("@test/ext", "behavior", "@test/ext", &["contract"]),
-    ]);
+    let build = build([software(), enhancer("@test/ext", "behavior", &["contract"])]);
     assert!(diagnostics(&build).is_empty(), "{:?}", diagnostics(&build));
     let contract = build.fields().get("behavior", "contract").unwrap();
     assert_eq!(contract.field_type(), FieldType::Block);
@@ -185,7 +181,7 @@ fn an_enhancement_field_never_overwrites_a_kind_field() {
 /// and a `<type>_note` field each.
 fn owner_enhancer(name: &str, field_type: FieldType) -> ExtensionDeclaration {
     declare(name, |c| {
-        c.enhance("behavior", name, |e| {
+        c.enhance("behavior", |e| {
             e.field("owner", |f| {
                 f.field_type(field_type);
             });

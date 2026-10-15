@@ -269,7 +269,7 @@ fn roles_extension(limit_role: &str, goal_role: &str) -> ExtensionDeclaration {
 fn a_fields_proof_role_reaches_its_entry() {
     // An enhancement's field carries its role onto the target kind.
     let other = declare("@test/other", |c| {
-        c.enhance("rule", "@test/ext", |e| {
+        c.enhance("rule", |e| {
             e.field("expression", |f| {
                 f.field_type(FieldType::String).proof_role("claim");
             });

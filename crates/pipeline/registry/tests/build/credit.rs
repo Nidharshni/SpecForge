@@ -13,7 +13,7 @@ use crate::support::{build, coded, declare, diagnostics, software};
 fn an_enhancements_fields_are_credited_to_its_declarer() {
     let mut enhancer = declare("@acme/enhancer", |c| {
         c.optional_peer("@specforge/software", "^1");
-        c.enhance("behavior", "@specforge/software", |e| {
+        c.enhance("behavior", |e| {
             e.field("layer", |f| {
                 f.field_type(FieldType::String);
             });
@@ -62,12 +62,12 @@ fn an_enhancements_fields_are_credited_to_its_declarer() {
     verify = "an enhancement of an unknown kind is skipped silently when its extension declares an optional peer the project does not load"
 )]
 fn an_unknown_target_is_silent_only_behind_an_unloaded_optional_peer() {
-    let enhance_absent = |name: &str, owner: &str, optional: bool| {
+    let enhance_absent = |name: &str, optional: bool| {
         declare(name, |c| {
             if optional {
                 c.optional_peer("@acme/absent", "^1");
             }
-            c.enhance("absent_kind", owner, |e| {
+            c.enhance("absent_kind", |e| {
                 e.field("x", |f| {
                     f.field_type(FieldType::String);
                 });
@@ -75,8 +75,8 @@ fn an_unknown_target_is_silent_only_behind_an_unloaded_optional_peer() {
         })
     };
 
-    // An unloaded optional peer, whatever owner the wire names: silent.
-    let silent = build([software(), enhance_absent("@acme/a", "@acme/a", true)]);
+    // An unloaded optional peer: silent.
+    let silent = build([software(), enhance_absent("@acme/a", true)]);
     assert!(
         diagnostics(&silent).is_empty(),
         "{:?}",
@@ -84,8 +84,8 @@ fn an_unknown_target_is_silent_only_behind_an_unloaded_optional_peer() {
     );
     assert!(!silent.fields().contains("absent_kind", "x"));
 
-    // No optional peer, whatever owner the wire names: I004.
-    let loud = build([software(), enhance_absent("@acme/b", "@acme/absent", false)]);
+    // No optional peer: I004.
+    let loud = build([software(), enhance_absent("@acme/b", false)]);
     assert_eq!(coded(&loud, "I004").len(), 1, "{:?}", diagnostics(&loud));
     assert_eq!(diagnostics(&loud).len(), 1);
 }

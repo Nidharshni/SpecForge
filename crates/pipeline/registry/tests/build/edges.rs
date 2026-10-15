@@ -358,7 +358,7 @@ fn a_declared_edge_type_names_its_writers() {
                 .edge("owns")
                 .target_kind("person");
         });
-        c.enhance("person", "@test/ext", |e| {
+        c.enhance("person", |e| {
             e.field("friend_of", |f| {
                 f.field_type(FieldType::ReferenceList)
                     .edge("owns")
