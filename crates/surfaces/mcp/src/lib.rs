@@ -18,6 +18,7 @@ pub mod protocol;
 mod refusal;
 pub mod registry;
 pub mod reply;
+pub mod resource;
 pub mod resources;
 pub mod state;
 pub mod stdio;
@@ -29,7 +30,7 @@ pub mod target;
 pub mod testing;
 pub mod tool;
 pub mod tools;
-mod uri_template;
+pub mod uri_template;
 
 use events::{EventSink, McpEvent};
 use protocol::router::route;
@@ -159,13 +160,13 @@ impl McpServer {
             if modern {
                 modern::handle(&mut self.state, &request.method, request.params, request.id)
             } else {
-                Some(route(
+                route(
                     &mut self.state,
                     revision,
                     &request.method,
                     request.params,
                     request.id,
-                ))
+                )
             }
         }))
         .unwrap_or_else(|_| {

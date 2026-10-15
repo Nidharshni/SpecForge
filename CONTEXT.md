@@ -827,20 +827,23 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the invocation, resolve the call target, run the handler (which records its own events), record the
   completion, answer with the kind's envelope; every record goes through the server's event sink. Each kind is one adapter; a refusal without `isError` (resources, prompts) is a JSON-RPC
   error whose data is its McpError (`specforge_mcp::surface_call`, ADR 0024).
-- **Resource spec**: the single definition of a core MCP resource: its URI or template, descriptor
-  and its read of the project view. A graph view (`graph`, `context`, `brief`, scoped or not, and `graph/{entity_id}`)
-  is `specforge export` over the call's project view; the entity list and the diagnostics read what
-  `specforge.list` and `specforge.validate` read (`specforge_mcp`'s `ResourceSpec` table). A URI names a resource, core or extension, by one
-  rule (`specforge_mcp`'s `uri_template`): a template names every URI that starts with its text before
-  the first placeholder, a URI without one names itself, alone or with a query; a placeholder's value
-  and a query are the reader's to read or refuse (ADR 0049).
+- **Resource spec**: the single definition of a core MCP resource: one module under `specforge_mcp::resources`
+  implementing `CoreResource` once (its URI or template, name, description, MIME type, what it changes with and its
+  read of the project view); `CORE_RESOURCES` lists each once, seen as a `ResourceSpec` (ADR 0103). A graph view
+  (`graph`, `context`, `brief`, scoped or not, and `graph/{entity_id}`) is `specforge export` over the call's project
+  view; the entity list and the diagnostics read what `specforge.list` and `specforge.validate` read. A URI names a
+  resource, core or extension, by one rule (`specforge_mcp`'s `uri_template::names`): a template names every URI that
+  starts with its text before the first placeholder, a URI without one names itself, alone or with a query. A core
+  template reads each placeholder as one non-empty, percent-decoded path segment and refuses any other value as
+  `invalid_input` naming it (`uri_template::read`); a query is the reader's to read or refuse (ADR 0049, ADR 0103).
 - **Stateless request**: an MCP request whose `_meta` names its protocol version (MCP 2026-07-28),
   answered on its own without `initialize`; every other request follows the revision `initialize`
   negotiated (`specforge_mcp::modern`). Every request is served under its revision, which travels
   with it from the router to the reply (`specforge_mcp::lifecycle::Revision`); the server state
   keeps only the negotiated one. A stateless request never changes what the server serves (its `path` is read
   for that call only, `init` serves nothing); on a connection that sent `initialize` it reads what that session
-  serves (ADR 0077).
+  serves (ADR 0077). The method table `specforge_mcp::protocol::method` names which revision serves
+  each method (ADR 0103).
 - **Stdio transport**: how one MCP client and the server talk over a pair of byte streams (`specforge mcp`:
   its standard input and output). Each line of input is one JSON-RPC message; a line of only JSON whitespace is
   skipped, and one that is not UTF-8 is answered as a parse error. A message's response, then each notification it

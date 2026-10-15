@@ -20,6 +20,7 @@ pub use events::*;
 pub use extension::TestExtension;
 pub use project::{Serve, TestProject};
 pub use spec::spec_files;
+pub use specforge_mcp::resource::ResourceSpec;
 pub use specforge_mcp::testing::Served;
 pub use specforge_mcp::testing::rpc::*;
 

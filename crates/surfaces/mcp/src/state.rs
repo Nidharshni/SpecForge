@@ -86,9 +86,9 @@ impl McpState {
     }
 
     /// While no project is served, serve the one at or above the server's
-    /// root if one exists there now (a fresh compile): called before every
-    /// request reads what is served, so what it reads follows disk, not
-    /// which request came first (ADR 0077 D3). Nothing while a project is
+    /// root if one exists there now (a fresh compile): called once, by the router,
+    /// before every session method in both revisions (ADR 0077 D3, ADR 0103
+    /// D6), so what a request reads follows disk, not which request came first. Nothing while a project is
     /// served (bringing it up to date is [`Self::ensure_fresh`]'s).
     pub(crate) fn follow_root(&mut self) {
         if self.project_root().is_none()

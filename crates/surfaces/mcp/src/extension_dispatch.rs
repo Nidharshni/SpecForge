@@ -13,7 +13,7 @@ use specforge_wasm::runtime::WasmRuntime;
 
 use crate::events::McpEvent;
 use crate::reply::Source;
-use crate::resources::{ReadOutcome, ResourceText};
+use crate::resource::{ReadOutcome, ResourceText};
 use crate::surface_table::{ResourceEntry, ToolEntry, ToolKind};
 use crate::target::{Call, ProjectRef};
 use crate::tool::{ErrorCode, McpError, ToolOutcome};
