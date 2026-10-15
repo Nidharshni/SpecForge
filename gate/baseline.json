@@ -19,7 +19,7 @@
     "crates/session/project/tests/compile.rs": 1230,
     "crates/session/project/tests/e2e_pipeline.rs": 989,
     "crates/session/project/tests/product_rules.rs": 1306,
-    "crates/session/project/tests/session.rs": 3090,
+    "crates/session/project/tests/session.rs": 3072,
     "crates/surfaces/cli/tests/analyze.rs": 1122,
     "crates/surfaces/cli/tests/cli.rs": 1182,
     "crates/surfaces/cli/tests/export.rs": 844,
