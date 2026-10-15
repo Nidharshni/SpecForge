@@ -52,6 +52,9 @@ pub struct Entity {
     /// `method name(param: Type) -> Ret` members (ports define their
     /// interfaces this way). Empty for kinds that never declare methods.
     pub methods: Vec<MethodDecl>,
+    /// `verify [kind] "text"` statements, in declaration order (ADR 0002,
+    /// ADR 0094).
+    pub obligations: Vec<VerifyStatement>,
 }
 
 /// One `method` member of an entity body.

@@ -54,6 +54,12 @@ expression: "parse_ok(source, \"test.spec\").entities"
             end_col: 2,
         },
         methods: [],
+        obligations: [
+            VerifyStatement {
+                kind: "integration",
+                description: "project compiles",
+            },
+        ],
     },
     Entity {
         kind: EntityKind {
@@ -101,6 +107,7 @@ expression: "parse_ok(source, \"test.spec\").entities"
             end_col: 42,
         },
         methods: [],
+        obligations: [],
     },
     Entity {
         kind: EntityKind {
@@ -164,6 +171,7 @@ expression: "parse_ok(source, \"test.spec\").entities"
             end_col: 2,
         },
         methods: [],
+        obligations: [],
     },
     Entity {
         kind: EntityKind {
@@ -230,5 +238,11 @@ expression: "parse_ok(source, \"test.spec\").entities"
             end_col: 2,
         },
         methods: [],
+        obligations: [
+            VerifyStatement {
+                kind: "unit",
+                description: "custom kind registers",
+            },
+        ],
     },
 ]

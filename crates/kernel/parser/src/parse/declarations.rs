@@ -17,7 +17,7 @@ impl<'a> ParseContext<'a> {
         let (fields, verify, methods) = self.parse_block_body(node);
         let mut field_map = fields;
         if !verify.is_empty() {
-            field_map.push(Sym::new("verify"), FieldValue::VerifyList(verify));
+            field_map.push(Sym::new("verify"), FieldValue::VerifyList(verify.clone()));
         }
 
         self.entities.push(Entity {
@@ -27,6 +27,7 @@ impl<'a> ParseContext<'a> {
             fields: field_map,
             span: self.span(node),
             methods,
+            obligations: verify,
         });
     }
 
@@ -39,7 +40,7 @@ impl<'a> ParseContext<'a> {
         let (fields, verify, methods) = self.parse_block_body(node);
         let mut field_map = fields;
         if !verify.is_empty() {
-            field_map.push(Sym::new("verify"), FieldValue::VerifyList(verify));
+            field_map.push(Sym::new("verify"), FieldValue::VerifyList(verify.clone()));
         }
 
         self.entities.push(Entity {
@@ -53,6 +54,7 @@ impl<'a> ParseContext<'a> {
             fields: field_map,
             span: self.span(node),
             methods,
+            obligations: verify,
         });
     }
 
@@ -97,6 +99,7 @@ impl<'a> ParseContext<'a> {
             fields,
             span: self.span(node),
             methods: Vec::new(),
+            obligations: Vec::new(),
         });
     }
 
@@ -138,6 +141,7 @@ impl<'a> ParseContext<'a> {
             fields,
             span: self.span(node),
             methods: Vec::new(),
+            obligations: Vec::new(),
         });
     }
 
@@ -150,7 +154,7 @@ impl<'a> ParseContext<'a> {
         let (fields, verify, methods) = self.parse_block_body(node);
         let mut field_map = fields;
         if !verify.is_empty() {
-            field_map.push(Sym::new("verify"), FieldValue::VerifyList(verify));
+            field_map.push(Sym::new("verify"), FieldValue::VerifyList(verify.clone()));
         }
 
         self.entities.push(Entity {
@@ -162,6 +166,7 @@ impl<'a> ParseContext<'a> {
             fields: field_map,
             span: self.span(node),
             methods,
+            obligations: verify,
         });
     }
 

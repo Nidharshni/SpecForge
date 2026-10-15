@@ -16,6 +16,7 @@ type Entity {
   // and stored here for display, but does not participate in field validation.
   title       string
   fields      FieldMap
+  obligations VerifyStatement[]
   source_span SourceSpan @readonly
   verify unit "Entity schema is valid"
 }

@@ -212,6 +212,16 @@ expression: result.entities
             end_col: 2,
         },
         methods: [],
+        obligations: [
+            VerifyStatement {
+                kind: "unit",
+                description: "produces AST for minimal valid file",
+            },
+            VerifyStatement {
+                kind: "integration",
+                description: "parses all .spec files in project",
+            },
+        ],
     },
     Entity {
         kind: EntityKind {
@@ -259,6 +269,7 @@ expression: result.entities
             end_col: 32,
         },
         methods: [],
+        obligations: [],
     },
     Entity {
         kind: EntityKind {
@@ -365,5 +376,11 @@ expression: result.entities
             end_col: 2,
         },
         methods: [],
+        obligations: [
+            VerifyStatement {
+                kind: "property",
+                description: "N errors produce N diagnostics",
+            },
+        ],
     },
 ]

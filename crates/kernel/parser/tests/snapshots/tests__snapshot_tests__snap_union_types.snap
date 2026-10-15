@@ -35,6 +35,7 @@ expression: "parse_ok(source, \"test.spec\").entities"
             end_col: 54,
         },
         methods: [],
+        obligations: [],
     },
     Entity {
         kind: EntityKind {
@@ -68,6 +69,7 @@ expression: "parse_ok(source, \"test.spec\").entities"
             end_col: 80,
         },
         methods: [],
+        obligations: [],
     },
     Entity {
         kind: EntityKind {
@@ -101,5 +103,6 @@ expression: "parse_ok(source, \"test.spec\").entities"
             end_col: 49,
         },
         methods: [],
+        obligations: [],
     },
 ]

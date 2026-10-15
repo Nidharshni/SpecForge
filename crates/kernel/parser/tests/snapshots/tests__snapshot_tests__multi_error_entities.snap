@@ -41,6 +41,7 @@ expression: result.entities
             end_col: 2,
         },
         methods: [],
+        obligations: [],
     },
     Entity {
         kind: EntityKind {
@@ -80,5 +81,6 @@ expression: result.entities
             end_col: 2,
         },
         methods: [],
+        obligations: [],
     },
 ]

@@ -105,5 +105,15 @@ expression: "parse_ok(source, \"test.spec\").entities"
             end_col: 2,
         },
         methods: [],
+        obligations: [
+            VerifyStatement {
+                kind: "unit",
+                description: "produces AST for minimal valid file",
+            },
+            VerifyStatement {
+                kind: "integration",
+                description: "parses all .spec files in project",
+            },
+        ],
     },
 ]

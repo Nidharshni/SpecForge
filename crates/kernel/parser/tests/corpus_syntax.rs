@@ -86,6 +86,9 @@ type result "R" {
         })
         .sum::<usize>();
     assert_eq!(statements, 2);
+    let kinds: Vec<&str> = entity.obligations.iter().map(|o| o.kind.as_str()).collect();
+    assert_eq!(entity.obligations.len(), 2);
+    assert_eq!(kinds, ["unit", ""]);
 }
 
 fn spec_files(dir: &Path, out: &mut Vec<PathBuf>) {
