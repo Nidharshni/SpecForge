@@ -330,7 +330,7 @@ fn migrate_leaves_a_nested_projects_files_alone() {
         .map(|r| r["file_path"].as_str().unwrap())
         .collect();
     assert_eq!(files.len(), 1, "{json}");
-    assert!(files[0].ends_with("/a.spec"), "{json}");
+    assert_eq!(files[0], "a.spec", "{json}");
 }
 
 // C2: Backup created before modification (simulated with version 0.1 if we had a transform)

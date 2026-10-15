@@ -526,7 +526,7 @@ fn migrate_reads_the_project_sources() {
         .map(|r| r.file_path.as_str())
         .collect();
     assert_eq!(visited.len(), 1, "{visited:?}");
-    assert!(visited[0].ends_with("specs/a.spec"), "{visited:?}");
+    assert_eq!(visited[0], "specs/a.spec", "{visited:?}");
     // A dry run records nothing, so there is nothing to roll back.
     let rollback = rollback(&specforge_common::ProjectRoot::of(root).unwrap()).summary;
     assert!(rollback.results.is_empty(), "{rollback:?}");

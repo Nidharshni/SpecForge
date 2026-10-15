@@ -192,7 +192,6 @@ fn collect_report_is_named_from_the_project_root() {
     behavior = "migrate_spec_files_in_place",
     verify = "the migrate document names each file and backup from the project root"
 )]
-#[ignore = "flipped by T6"]
 fn migrate_names_files_and_backups_from_the_project_root() {
     let project = TestProject::new().raw_config(r#"{"name":"test","version":"0.1.0"}"#);
     let root = project.root();
