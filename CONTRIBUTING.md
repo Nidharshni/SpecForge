@@ -69,8 +69,8 @@ specforge-formatter --test tests` (about 4 minutes; nextest's 60 s timeout is to
 
 The repository tracks what ships and what builds, tests or documents it, and nothing else
 ([ADR 0082](docs/adr/0082-the-repository-tracks-what-ships-and-what-builds-it.md)). `cargo gate`'s `root-layout` check keeps the top level to this list
-(`gate/src/root_layout.rs`); planning rounds, strategy, archived plans and experiments live in the private planning
-repository, `leaderiop/SpecForge-planning`.
+(`gate/src/root_layout.rs`); planning rounds, strategy, archived plans and experiments live in a plain folder next to this
+repository, `../SpecForge-planning`, which is not version-controlled.
 
 What ships:
 
