@@ -22,7 +22,7 @@ fn drift(pre: &Graph, post: &Graph) -> Vec<Diagnostic> {
 )]
 fn format_only_migration_zero_differences() {
     use specforge_graph::{Edge, EntityId, EntityKind, FieldMap, FieldValue, Graph, Node};
-    use specforge_parser::SpannedRef;
+    use specforge_parser::{ListItem, Written};
 
     // A graph as compiled from files whose lines start at `first_line`:
     // a format migration adds a header line, shifting every span.
@@ -39,9 +39,10 @@ fn format_only_migration_zero_differences() {
         fields.push(Sym::new("contract"), FieldValue::String(contract.into()));
         fields.push(
             Sym::new("invariants"),
-            FieldValue::ReferenceList(vec![SpannedRef {
-                id: "inv_a".into(),
+            FieldValue::List(vec![ListItem {
+                text: "inv_a".into(),
                 span: span(first_line + 2),
+                written: Written::Bare,
             }]),
         );
         graph.add_node(Node {

@@ -263,7 +263,7 @@ behavior snapshot_entities_once "Snapshot the Entities Once per Compile" {
     one standing.
   """
   verify unit "every field an entity writes has one text, the same for declarative rules, custom validators and compiler passes"
-  verify unit "a variant list or type union is its members joined by ' | ', a mixed list or expression group its items joined by ', '"
+  verify unit "a variant list or type union is its members joined by ' | ', a list or expression group its items joined by ', '"
   verify unit "an empty list or block is written, with empty text, never left out or null"
   verify unit "every edge in the snapshot is typed by the edge type its field writes from the kind it starts at, and counted by that type"
   verify unit "an entity owes obligations when a no_verify_statements rule applies to its kind and neither a union body nor an exempting flag exempts it"

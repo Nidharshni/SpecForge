@@ -6,9 +6,9 @@
 //! core names no kind: which kinds derive which edges comes only from
 //! [`DerivedReference`]s, built from the field registry.
 
-use crate::{Edge, Graph};
+use crate::{Edge, Graph, Reading};
 use specforge_common::Sym;
-use specforge_parser::FieldValue;
+use specforge_parser::{FieldValue, Written};
 
 /// Where a derived reference field takes its targets from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,6 +43,31 @@ pub struct DerivedReference {
     pub from: DerivedFrom,
 }
 
+/// The type expressions a field's value writes, as the derived walk reads
+/// them: a bare word, a union's or variant list's unquoted members, and a
+/// bare item of a list under a member of an open-fields kind (`values
+/// [critical, high]`). A single reference names an entity, not a type.
+pub fn type_expressions<'v>(reading: &Reading, value: &'v FieldValue) -> Vec<&'v str> {
+    if reading.is_single_reference() {
+        return Vec::new();
+    }
+    match value {
+        FieldValue::Identifier(expr) => vec![expr.as_str()],
+        // A quoted union member is a literal, not a type.
+        FieldValue::TypeUnion(members) | FieldValue::VariantList(members) => members
+            .iter()
+            .filter(|m| !m.starts_with('"'))
+            .map(String::as_str)
+            .collect(),
+        FieldValue::List(items) if *reading == Reading::Member => items
+            .iter()
+            .filter(|item| item.written == Written::Bare)
+            .map(|item| item.text.as_str())
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
 /// The names inside a type expression: `Result<A, B[]>` -> Result, A, B.
 fn type_names(expr: &str) -> impl Iterator<Item = &str> {
     expr.split(|c: char| !(c.is_alphanumeric() || c == '_'))
@@ -65,26 +90,8 @@ impl Graph {
                 match reference.from {
                     DerivedFrom::TypeExpressions => {
                         for entry in node.fields.entries() {
-                            if forms
-                                .reading(kind, entry.key.as_str())
-                                .is_single_reference()
-                            {
-                                continue;
-                            }
-                            match &entry.value {
-                                FieldValue::Identifier(expr) => expressions.push(expr),
-                                FieldValue::TypeUnion(members)
-                                | FieldValue::VariantList(members) => {
-                                    // A quoted union member is a literal, not a type.
-                                    expressions.extend(
-                                        members
-                                            .iter()
-                                            .filter(|m| !m.starts_with('"'))
-                                            .map(String::as_str),
-                                    );
-                                }
-                                _ => {}
-                            }
+                            let reading = forms.reading(kind, entry.key.as_str());
+                            expressions.extend(type_expressions(&reading, &entry.value));
                         }
                     }
                     DerivedFrom::MethodSignatures => {

@@ -33,10 +33,10 @@ expression: "parse_ok(source, \"test.spec\").entities"
                 },
                 FieldEntry {
                     key: Sym("tags"),
-                    value: ReferenceList(
+                    value: List(
                         [
-                            SpannedRef {
-                                id: "alpha",
+                            ListItem {
+                                text: "alpha",
                                 span: SourceSpan {
                                     file: Sym("test.spec"),
                                     start_line: 4,
@@ -44,9 +44,10 @@ expression: "parse_ok(source, \"test.spec\").entities"
                                     end_line: 4,
                                     end_col: 16,
                                 },
+                                written: Bare,
                             },
-                            SpannedRef {
-                                id: "beta",
+                            ListItem {
+                                text: "beta",
                                 span: SourceSpan {
                                     file: Sym("test.spec"),
                                     start_line: 4,
@@ -54,9 +55,10 @@ expression: "parse_ok(source, \"test.spec\").entities"
                                     end_line: 4,
                                     end_col: 22,
                                 },
+                                written: Bare,
                             },
-                            SpannedRef {
-                                id: "gamma",
+                            ListItem {
+                                text: "gamma",
                                 span: SourceSpan {
                                     file: Sym("test.spec"),
                                     start_line: 4,
@@ -64,6 +66,7 @@ expression: "parse_ok(source, \"test.spec\").entities"
                                     end_line: 4,
                                     end_col: 29,
                                 },
+                                written: Bare,
                             },
                         ],
                     ),

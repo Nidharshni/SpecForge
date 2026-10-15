@@ -11,7 +11,7 @@ use serde_json::{Map, Value, json};
 use specforge_common::SourceSpan;
 use specforge_common::find_close_match;
 use specforge_common::shape::{Definitions, Shape};
-use specforge_parser::{FieldEntry, FieldMap, FieldValue, SpannedRef};
+use specforge_parser::{FieldEntry, FieldMap, FieldValue, ListItem, Written};
 use specforge_protocol_types::FieldType;
 
 use crate::Graph;
@@ -29,12 +29,8 @@ pub enum ValueShape {
     Date,
     Integer,
     Boolean,
-    /// `["a", "b"]`.
-    Strings,
-    /// `[a, b]`.
-    References,
-    /// A list whose items have different shapes.
-    Mixed,
+    /// `[a, "b", 1]`: a list, however its items were written.
+    List,
     /// A variant list (`a | b` in a body).
     Variants,
     TypeUnion,
@@ -53,9 +49,7 @@ impl ValueShape {
             FieldValue::Date(_) => Self::Date,
             FieldValue::Integer(_) => Self::Integer,
             FieldValue::Boolean(_) => Self::Boolean,
-            FieldValue::StringList(_) => Self::Strings,
-            FieldValue::ReferenceList(_) => Self::References,
-            FieldValue::MixedList(_) => Self::Mixed,
+            FieldValue::List(_) => Self::List,
             FieldValue::VariantList(_) => Self::Variants,
             FieldValue::TypeUnion(_) => Self::TypeUnion,
             FieldValue::Block(_) => Self::Block,
@@ -63,12 +57,9 @@ impl ValueShape {
         }
     }
 
-    /// A list: of strings, references, mixed items or variants.
+    /// A list, or a variant list.
     pub fn is_list(self) -> bool {
-        matches!(
-            self,
-            Self::Strings | Self::References | Self::Mixed | Self::Variants
-        )
+        matches!(self, Self::List | Self::Variants)
     }
 }
 
@@ -132,10 +123,9 @@ impl FieldForm {
     /// cannot be the type is E061's); idempotent. `span` is the value's own,
     /// which a single reference keeps when it becomes a one-item list.
     ///
-    /// - `string_list`, `reference_list`: a bare word becomes the one-item
-    ///   reference list `field [id]` parses to; a string, integer, boolean
-    ///   or date the one-item string list of its text; a list mixing
-    ///   strings, integers and booleans the string list of its items' texts.
+    /// - `string_list`, `reference_list`: a list is stored as written; a
+    ///   bare word, string, integer, boolean or date becomes the one-item
+    ///   list `field [value]` parses to.
     /// - `integer`: a quoted integer becomes the integer.
     /// - `bool`: a quoted or bare `true` / `false` becomes the boolean.
     /// - `string`, `enum`: an integer or boolean becomes its text.
@@ -173,7 +163,7 @@ impl FieldForm {
     /// | `integer` | an integer |
     /// | `bool` | `true` or `false` |
     /// | `reference` | a bare word or a string |
-    /// | `string_list`, `reference_list` | a list of strings, references or variants |
+    /// | `string_list`, `reference_list` | a list, however its items were written |
     /// | `block` | a block |
     pub fn admit(&self, shape: ValueShape, text: &str) -> Result<(), Refusal> {
         let single_value = || Refusal::with("give a single value, not a list");
@@ -219,7 +209,7 @@ impl FieldForm {
                 _ => Err(Refusal::with("name one entity by its id")),
             },
             FieldType::StringList | FieldType::ReferenceList => match shape {
-                ValueShape::Strings | ValueShape::References | ValueShape::Variants => Ok(()),
+                ValueShape::List | ValueShape::Variants => Ok(()),
                 _ => Err(Refusal::with("write a list: [a, b]")),
             },
             FieldType::Block => match shape {
@@ -332,16 +322,35 @@ impl Reading<'_> {
         }
     }
 
-    /// What `entry`'s value references, in written order: every item of a
-    /// reference list, with its span.
+    /// What `entry`'s value references, in written order, each with its
+    /// span (ADR 0093). The one rule every reader asks:
+    ///
+    /// | reading | a single value | a list item |
+    /// |---|---|---|
+    /// | declared `reference` | the value, bare or quoted | none |
+    /// | declared `reference_list` | none (the build stores it as a list) | every item |
+    /// | declared `string_list` | none | a scheme ref ID |
+    /// | other declared types, a member | none | none |
+    /// | undeclared | none | a bare word or a scheme ref ID |
     pub fn references<'v>(&self, entry: &'v FieldEntry) -> Vec<Reference<'v>> {
-        match &entry.value {
-            FieldValue::ReferenceList(refs) => refs
+        let item = |item: &'v ListItem| Reference {
+            id: item.text.as_str(),
+            span: Some(&item.span),
+        };
+        match (self, &entry.value) {
+            (Self::Declared(form), FieldValue::List(items)) => match form.field_type() {
+                FieldType::ReferenceList => items.iter().map(item).collect(),
+                FieldType::StringList => items
+                    .iter()
+                    .filter(|i| i.written == Written::SchemeRef)
+                    .map(item)
+                    .collect(),
+                _ => Vec::new(),
+            },
+            (Self::Undeclared, FieldValue::List(items)) => items
                 .iter()
-                .map(|r| Reference {
-                    id: r.id.as_str(),
-                    span: Some(&r.span),
-                })
+                .filter(|i| matches!(i.written, Written::Bare | Written::SchemeRef))
+                .map(item)
                 .collect(),
             _ => Vec::new(),
         }
@@ -354,30 +363,22 @@ impl Reading<'_> {
     }
 }
 
-/// The list a single written value, or a list of scalars, is stored as on a
-/// `string_list` / `reference_list` field.
+/// The one-item list a single written value is stored as on a
+/// `string_list` / `reference_list` field; a list is stored as written.
 fn coerce_list(value: &FieldValue, span: Option<&SourceSpan>) -> Option<FieldValue> {
-    let one = |text: String| Some(FieldValue::StringList(vec![text]));
-    match value {
-        FieldValue::String(s) | FieldValue::Date(s) => one(s.clone()),
-        FieldValue::Integer(n) => one(n.to_string()),
-        FieldValue::Boolean(b) => one(b.to_string()),
-        FieldValue::Identifier(id) => Some(FieldValue::ReferenceList(vec![SpannedRef {
-            id: id.clone(),
-            span: span?.clone(),
-        }])),
-        FieldValue::MixedList(items) => items
-            .iter()
-            .map(|item| match item {
-                FieldValue::String(s) => Some(s.clone()),
-                FieldValue::Integer(n) => Some(n.to_string()),
-                FieldValue::Boolean(b) => Some(b.to_string()),
-                _ => None,
-            })
-            .collect::<Option<Vec<_>>>()
-            .map(FieldValue::StringList),
-        _ => None,
-    }
+    let (text, written) = match value {
+        FieldValue::String(s) => (s.clone(), Written::Quoted),
+        FieldValue::Identifier(id) => (id.clone(), Written::Bare),
+        FieldValue::Date(s) => (s.clone(), Written::Literal),
+        FieldValue::Integer(n) => (n.to_string(), Written::Literal),
+        FieldValue::Boolean(b) => (b.to_string(), Written::Literal),
+        _ => return None,
+    };
+    Some(FieldValue::List(vec![ListItem {
+        text,
+        span: span?.clone(),
+        written,
+    }]))
 }
 
 impl Graph {
@@ -437,8 +438,7 @@ impl Shape for FieldJson {
 /// joined by `" | "`; an expression group as its conjuncts, each in its
 /// display form, joined by `"\n"` (the string form the prove pass reads, one
 /// comparison per line, ADR 0009); an integer and a boolean as JSON scalars;
-/// a reference, string or variant list as an array of strings; a mixed list
-/// as an array of its items; a block
+/// a list or variant list as an array of its items' text; a block
 /// as an object of its entries, each written by this function. Never the
 /// parser's tree, never a position.
 pub fn write(value: &FieldValue) -> FieldJson {
@@ -456,10 +456,13 @@ pub fn write(value: &FieldValue) -> FieldJson {
         ),
         FieldValue::Integer(n) => Value::Number((*n).into()),
         FieldValue::Boolean(b) => Value::Bool(*b),
-        FieldValue::ReferenceList(refs) => {
-            Value::Array(refs.iter().map(|r| Value::String(r.id.clone())).collect())
-        }
-        FieldValue::VariantList(items) | FieldValue::StringList(items) => {
+        FieldValue::List(items) => Value::Array(
+            items
+                .iter()
+                .map(|item| Value::String(item.text.clone()))
+                .collect(),
+        ),
+        FieldValue::VariantList(items) => {
             Value::Array(items.iter().cloned().map(Value::String).collect())
         }
         FieldValue::Block(inner) => Value::Object(
@@ -468,9 +471,6 @@ pub fn write(value: &FieldValue) -> FieldJson {
                 .map(|(key, written)| (key, written.0))
                 .collect::<Map<_, _>>(),
         ),
-        FieldValue::MixedList(items) => {
-            Value::Array(items.iter().map(|item| write(item).0).collect())
-        }
     })
 }
 

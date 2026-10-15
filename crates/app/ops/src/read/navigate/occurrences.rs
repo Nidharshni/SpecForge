@@ -5,7 +5,7 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{SourceSpan, Sym};
-use specforge_graph::{DerivedFrom, Edge, FieldForms, Node};
+use specforge_graph::{DerivedFrom, Edge, FieldForms, Node, type_expressions};
 use specforge_parser::FieldValue;
 
 use super::references::reference_edges;
@@ -289,16 +289,9 @@ impl<F: Fn(&str) -> Option<String>> Navigator<'_, F> {
         match derived {
             Some(DerivedFrom::TypeExpressions) => {
                 for entry in holder.fields.entries() {
-                    let single = forms
-                        .reading(kind, entry.key.as_str())
-                        .is_single_reference();
-                    let typed = matches!(
-                        entry.value,
-                        FieldValue::Identifier(_)
-                            | FieldValue::TypeUnion(_)
-                            | FieldValue::VariantList(_)
-                    );
-                    if let (false, true, Some(span)) = (single, typed, &entry.value_span) {
+                    let reading = forms.reading(kind, entry.key.as_str());
+                    let typed = !type_expressions(&reading, &entry.value).is_empty();
+                    if let (true, Some(span)) = (typed, &entry.value_span) {
                         spans.extend(tokens_named(text, span, target));
                     }
                 }

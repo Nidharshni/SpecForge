@@ -7,6 +7,7 @@ use serde_json::Value;
 use specforge_ops::analysis::analyze::AnalyzeOptions;
 use specforge_ops::analysis::check::CheckOptions;
 use specforge_project::CompiledProject;
+use specforge_test_macros::test as specforge_test;
 
 /// A project enabling `extensions`, `spec` as its one file under `spec/`.
 fn compile(extensions: &[&str], spec: &str) -> (TestProject, CompiledProject) {
@@ -52,8 +53,10 @@ fn has_edge(edges: &[(String, String, String)], source: &str, label: &str, targe
     edges.contains(&(source.into(), label.into(), target.into()))
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "link_entity_references",
+    verify = "a string list's items reference nothing but scheme ref IDs"
+)]
 fn numbers_on_a_string_list_reference_nothing() {
     let (_p, compiled) = product(
         "term t1 \"T1\" { definition \"one\" see_also [t2] }\n\
@@ -63,8 +66,10 @@ fn numbers_on_a_string_list_reference_nothing() {
     assert_eq!(with_code(&diags, "E003"), Vec::<&Value>::new(), "{diags:?}");
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "link_entity_references",
+    verify = "a string list's items reference nothing but scheme ref IDs"
+)]
 fn a_bare_word_on_a_string_list_references_nothing() {
     let (_p, compiled) = product(
         "term t1 \"T1\" { definition \"one\" see_also [t4] }\n\
@@ -90,8 +95,10 @@ fn a_bare_word_on_a_string_list_references_nothing() {
     );
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "link_entity_references",
+    verify = "a string list's items reference nothing but scheme ref IDs"
+)]
 fn booleans_and_bare_words_on_a_string_list_reference_nothing() {
     let (_p, compiled) = product(
         "feature f1 \"F1\" { status proposed contributors [alice, bob] }\n\
@@ -101,8 +108,10 @@ fn booleans_and_bare_words_on_a_string_list_reference_nothing() {
     assert_eq!(with_code(&diags, "E003"), Vec::<&Value>::new(), "{diags:?}");
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "link_entity_references",
+    verify = "a quoted id on a reference list field is a reference"
+)]
 fn a_quoted_id_on_a_reference_list_links() {
     let (_p, compiled) = product(
         "term t1 \"T1\" { definition \"one\" }\n\
@@ -118,8 +127,10 @@ fn a_quoted_id_on_a_reference_list_links() {
     );
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "link_entity_references",
+    verify = "a quoted id on a reference list field is a reference"
+)]
 fn quoted_unknown_ids_on_a_reference_list_are_e003() {
     let (_p, compiled) = product(
         "persona dev \"Dev\" { description \"d\" }\n\
@@ -134,8 +145,10 @@ fn quoted_unknown_ids_on_a_reference_list_are_e003() {
     }
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "link_entity_references",
+    verify = "a string list's items reference nothing but scheme ref IDs"
+)]
 fn a_mixed_list_on_a_string_list_is_no_error() {
     let (_p, compiled) = product("term t1 \"T1\" { definition \"one\" aliases [\"a\", b] }\n");
     let diags = diagnostics(&compiled);
@@ -151,8 +164,10 @@ fn a_mixed_list_on_a_string_list_is_no_error() {
     assert_eq!(node["fields"]["aliases"], serde_json::json!(["a", "b"]));
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "link_entity_references",
+    verify = "an open-fields kind's undeclared field references nothing"
+)]
 fn an_open_kinds_undeclared_list_references_nothing() {
     let (_p, compiled) = product(
         "type Level \"Level\" { levels [critical, high] }\n\

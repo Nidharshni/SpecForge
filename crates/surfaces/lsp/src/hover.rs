@@ -8,7 +8,7 @@ use specforge_common::Diagnostic;
 use specforge_graph::Node;
 use specforge_ops::OpError;
 use specforge_ops::read::inspect::{EntityCoverage, EntityFacts};
-use specforge_parser::FieldValue;
+use specforge_parser::{FieldValue, ListItem, Written};
 use specforge_registry::FieldRegistry;
 use std::collections::BTreeMap;
 use tower_lsp::lsp_types::Position;
@@ -393,35 +393,25 @@ fn format_field_value(fv: &FieldValue) -> String {
         FieldValue::Integer(n) => n.to_string(),
         FieldValue::Boolean(b) => b.to_string(),
         FieldValue::Date(d) => d.clone(),
-        FieldValue::ReferenceList(refs) => {
-            format!(
-                "[{}]",
-                refs.iter()
-                    .map(|r| r.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        }
-        FieldValue::StringList(items) => {
-            if items.len() <= 5 {
+        FieldValue::List(items) => {
+            // Every item as written: a quoted one in quotes. A list of only
+            // quoted strings shows its first five.
+            let shown = |item: &ListItem| match item.written {
+                Written::Quoted => format!("\"{}\"", item.text),
+                _ => item.text.clone(),
+            };
+            let all_quoted = items.iter().all(|item| item.written == Written::Quoted);
+            if all_quoted && items.len() > 5 {
+                let first: Vec<_> = items[..5].iter().map(shown).collect();
+                format!("[{}, … +{}]", first.join(", "), items.len() - 5)
+            } else {
                 format!(
                     "[{}]",
-                    items
-                        .iter()
-                        .map(|s| format!("\"{}\"", s))
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                    items.iter().map(shown).collect::<Vec<_>>().join(", ")
                 )
-            } else {
-                let shown: Vec<_> = items[..5].iter().map(|s| format!("\"{}\"", s)).collect();
-                format!("[{}, … +{}]", shown.join(", "), items.len() - 5)
             }
         }
         FieldValue::VariantList(variants) => format!("[{}]", variants.join(" | ")),
-        FieldValue::MixedList(items) => {
-            let formatted: Vec<_> = items.iter().map(format_field_value).collect();
-            format!("[{}]", formatted.join(", "))
-        }
         FieldValue::Block(map) => {
             let count = map.entries().len();
             format!("{{…}} ({} fields)", count)

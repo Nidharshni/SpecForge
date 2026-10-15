@@ -179,7 +179,7 @@ impl EntityRecord {
             text: items.join(", "),
             annotations: Vec::new(),
             items: Some(items.iter().map(|item| item.to_string()).collect()),
-            shape: ValueShape::Strings,
+            shape: ValueShape::List,
             value_span: None,
         });
         self
@@ -334,7 +334,7 @@ mod tests {
         // A list keeps its items unjoined beside the (lossy) joined text.
         let tags = record.fields.iter().find(|f| f.key == "tags").unwrap();
         assert_eq!(tags.text, "x, y, z");
-        assert_eq!(tags.shape, ValueShape::Strings);
+        assert_eq!(tags.shape, ValueShape::List);
         assert_eq!(
             tags.items.as_deref(),
             Some(&["x, y".to_string(), "z".to_string()][..])

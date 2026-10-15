@@ -16,11 +16,9 @@ fn texts(source: &str) -> Vec<(String, &'static str, String)> {
                 FieldValue::Date(_) => "Date",
                 FieldValue::Integer(_) => "Integer",
                 FieldValue::Boolean(_) => "Boolean",
-                FieldValue::StringList(_) => "StringList",
-                FieldValue::ReferenceList(_) => "ReferenceList",
+                FieldValue::List(_) => "List",
                 FieldValue::VariantList(_) => "VariantList",
                 FieldValue::TypeUnion(_) => "TypeUnion",
-                FieldValue::MixedList(_) => "MixedList",
                 FieldValue::Expression(_) => "Expression",
                 FieldValue::Block(_) => "Block",
             };
@@ -76,20 +74,16 @@ fn every_variant_has_a_value_shape() {
             ("due", ValueShape::Date),
             ("count", ValueShape::Integer),
             ("active", ValueShape::Boolean),
-            ("labels", ValueShape::Strings),
-            ("needs", ValueShape::References),
-            ("values", ValueShape::Variants),
+            ("labels", ValueShape::List),
+            ("needs", ValueShape::List),
+            ("values", ValueShape::List),
             ("shape", ValueShape::TypeUnion),
-            ("mix", ValueShape::Mixed),
+            ("mix", ValueShape::List),
             ("metric", ValueShape::Expression),
             ("ensures", ValueShape::Block),
         ]
     );
-    for shape in [
-        ValueShape::Strings,
-        ValueShape::References,
-        ValueShape::Mixed,
-    ] {
+    for shape in [ValueShape::List, ValueShape::Variants] {
         assert!(shape.is_list());
     }
     assert!(!ValueShape::Block.is_list());
@@ -111,7 +105,7 @@ fn every_variant_has_a_value_shape() {
 
 #[specforge_test(
     behavior = "snapshot_entities_once",
-    verify = "a variant list or type union is its members joined by ' | ', a mixed list or expression group its items joined by ', '"
+    verify = "a variant list or type union is its members joined by ' | ', a list or expression group its items joined by ', '"
 )]
 fn field_text_of_every_variant() {
     let source = r#"item x "X" {
@@ -140,11 +134,11 @@ fn field_text_of_every_variant() {
         ("due", "Date", "2026-10-06"),
         ("count", "Integer", "42"),
         ("active", "Boolean", "true"),
-        ("labels", "StringList", "a, b, c"),
-        ("needs", "ReferenceList", "y, z"),
-        ("values", "VariantList", "low | high"),
+        ("labels", "List", "a, b, c"),
+        ("needs", "List", "y, z"),
+        ("values", "List", "low, high"),
         ("shape", "TypeUnion", "string | string[]"),
-        ("mix", "MixedList", "1, true, two"),
+        ("mix", "List", "1, true, two"),
         ("metric", "Expression", "latency < 10ms, load > 5"),
         ("ensures", "Block", "done, kept"),
     ];
@@ -193,8 +187,8 @@ fn an_empty_value_has_empty_text() {
     assert_eq!(
         actual,
         [
-            ("values".to_string(), "VariantList", String::new()),
-            ("tags".to_string(), "ReferenceList", String::new()),
+            ("values".to_string(), "List", String::new()),
+            ("tags".to_string(), "List", String::new()),
             ("requires".to_string(), "Block", String::new()),
         ]
     );

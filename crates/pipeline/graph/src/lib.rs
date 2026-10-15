@@ -12,7 +12,7 @@ pub use delta::{
     moved_nodes,
 };
 mod derive;
-pub use derive::{DerivedFrom, DerivedReference};
+pub use derive::{DerivedFrom, DerivedReference, type_expressions};
 mod graph;
 mod link;
 mod obligations;

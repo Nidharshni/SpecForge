@@ -149,8 +149,8 @@ behavior parse_all_block_types "Parse All Block Types" {
     FieldEntry,
     FieldValue,
     StringValue,
-    ReferenceList,
-    StringList,
+    ListValue,
+    ListItem,
     Block,
     VerifyStatement,
     VerifyKind,
@@ -190,11 +190,11 @@ behavior parse_all_block_types "Parse All Block Types" {
   verify unit "a type field named kind is an ordinary field"
   verify contract "Parse All Block Types: block type parsing holds — source_parser_available, generic_blocks_parsed, unknown_keywords_accepted"
   verify unit "field annotations are extracted into FieldEntry"
-  verify unit "homogeneous reference list is not MixedList"
-  verify unit "homogeneous string list is not MixedList"
+  verify unit "a list of bare words keeps each item bare"
+  verify unit "a list of quoted strings keeps each item quoted"
   verify unit "integer overflow produces parse error instead of silent 0"
-  verify unit "mixed list with strings and integers preserves both"
-  verify unit "mixed-type list preserves per-item types"
+  verify unit "a list mixing quoted strings and bare words is no parse error"
+  verify unit "a list keeps each item's text, span and how it was written"
   verify unit "multiple annotations on a single field are all extracted"
   verify unit "negative integer parsed as field value"
   verify unit "negative integer parsed as field value with larger magnitude"

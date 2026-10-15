@@ -28,7 +28,7 @@ pub(super) fn paths<'a>(record: &'a EntityRecord, fields: &FieldRegistry) -> Vec
             continue;
         };
         match field.shape {
-            ValueShape::Strings => paths.extend(field.items.iter().flatten().map(String::as_str)),
+            ValueShape::List => paths.extend(field.items.iter().flatten().map(String::as_str)),
             ValueShape::String if !field.text.is_empty() => paths.push(field.text.as_str()),
             _ => {}
         }

@@ -5,7 +5,7 @@
 use specforge_common::shape::{self, Definitions};
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::field_form::{self, FieldForm, FieldJson, ValueShape};
-use specforge_parser::{FieldMap, FieldValue, SpannedRef, parse_expression};
+use specforge_parser::{FieldMap, FieldValue, ListItem, Written, parse_expression};
 use specforge_protocol_types::FieldType;
 use specforge_test_macros::test as specforge_test;
 
@@ -19,10 +19,11 @@ fn span() -> SourceSpan {
     }
 }
 
-fn reference(id: &str) -> SpannedRef {
-    SpannedRef {
-        id: id.to_string(),
+fn item(text: &str, written: Written) -> ListItem {
+    ListItem {
+        text: text.to_string(),
         span: span(),
+        written,
     }
 }
 
@@ -50,10 +51,20 @@ fn samples() -> Vec<FieldValue> {
         FieldValue::Date("2026-10-13".into()),
         FieldValue::Integer(3),
         FieldValue::Boolean(false),
-        FieldValue::StringList(vec!["s".into(), "t".into()]),
-        FieldValue::ReferenceList(vec![reference("x"), reference("y")]),
-        FieldValue::MixedList(vec![FieldValue::Integer(1), FieldValue::String("a".into())]),
-        FieldValue::MixedList(vec![FieldValue::Boolean(true), FieldValue::Integer(2)]),
+        FieldValue::List(vec![item("s", Written::Quoted), item("t", Written::Quoted)]),
+        FieldValue::List(vec![item("x", Written::Bare), item("y", Written::Bare)]),
+        FieldValue::List(vec![
+            item("1", Written::Literal),
+            item("a", Written::Quoted),
+        ]),
+        FieldValue::List(vec![
+            item("true", Written::Literal),
+            item("2", Written::Literal),
+        ]),
+        FieldValue::List(vec![
+            item("gh.issue:7", Written::SchemeRef),
+            item("a", Written::Bare),
+        ]),
         FieldValue::VariantList(vec!["a".into(), "b".into()]),
         FieldValue::TypeUnion(vec!["string".into(), "string[]".into()]),
         FieldValue::Block(block),
@@ -158,40 +169,41 @@ fn the_written_form_never_holds_a_parse_tree() {
 }
 
 #[test]
-fn a_scalar_or_scalar_list_on_a_list_field_is_stored_as_a_list() {
+fn a_scalar_on_a_list_field_is_stored_as_a_one_item_list() {
     let span = span();
     let list_form = FieldForm::new(FieldType::ReferenceList, Vec::new());
-    // Compared by their debug form: a parsed value has no equality.
-    let strings = |items: &[&str]| {
-        format!(
-            "{:?}",
-            Some(FieldValue::StringList(
-                items.iter().map(|s| s.to_string()).collect(),
-            ))
-        )
+    let one = |value: FieldValue| match list_form.coerce(&value, Some(&span)) {
+        Some(FieldValue::List(items)) => {
+            assert_eq!(items.len(), 1);
+            assert_eq!(items[0].span, span);
+            (items[0].text.clone(), items[0].written)
+        }
+        other => panic!("expected a one-item list, got {other:?}"),
     };
-    let list = |value: FieldValue| {
-        format!(
-            "{:?}",
-            FieldForm::new(FieldType::ReferenceList, Vec::new()).coerce(&value, Some(&span))
-        )
-    };
-    assert_eq!(list(FieldValue::Integer(5)), strings(&["5"]));
-    assert_eq!(list(FieldValue::Boolean(true)), strings(&["true"]));
+    assert_eq!(one(FieldValue::Integer(5)), ("5".into(), Written::Literal));
     assert_eq!(
-        list(FieldValue::Date("2026-10-13".into())),
-        strings(&["2026-10-13"])
+        one(FieldValue::Boolean(true)),
+        ("true".into(), Written::Literal)
     );
     assert_eq!(
-        list(FieldValue::MixedList(vec![
-            FieldValue::String("a".into()),
-            FieldValue::Integer(7)
-        ])),
-        strings(&["a", "7"])
+        one(FieldValue::Date("2026-10-13".into())),
+        ("2026-10-13".into(), Written::Literal)
+    );
+    assert_eq!(
+        one(FieldValue::String("a".into())),
+        ("a".into(), Written::Quoted)
     );
     // A bare word keeps its span and links like `field [id]`.
-    let coerced = list_form
-        .coerce(&FieldValue::Identifier("inv1".into()), Some(&span))
-        .unwrap();
-    assert_eq!(ValueShape::of(&coerced), ValueShape::References);
+    assert_eq!(
+        one(FieldValue::Identifier("inv1".into())),
+        ("inv1".into(), Written::Bare)
+    );
+    // A list is stored as written.
+    assert_eq!(
+        list_form.coerce(
+            &FieldValue::List(vec![item("a", Written::Bare)]),
+            Some(&span)
+        ),
+        None
+    );
 }
