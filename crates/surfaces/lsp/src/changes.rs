@@ -8,9 +8,7 @@
 use std::path::{Path, PathBuf};
 
 use specforge_common::ProjectRoot;
-use specforge_project::{
-    Buffer, Changes, CheckMode, ProjectSession, SourceChange, Update, UpdateKind,
-};
+use specforge_project::{Buffer, Changes, CheckMode, ProjectSession, Update, UpdateKind};
 use tower_lsp::lsp_types::{FileEvent, Url};
 
 use crate::LspState;
@@ -157,7 +155,7 @@ impl Plan {
     /// Apply the plan to `session`. Blocking: it reads files and runs the
     /// checks. The watched changes first (`ProjectSession::apply`), then the
     /// released buffer (`ProjectSession::release`), then every buffer as one
-    /// update (`SourceChange::Hold`).
+    /// update (`ProjectSession::hold_with`).
     pub fn apply(self, session: &mut ProjectSession) -> Applied {
         let opened = self.root.is_some();
         let mut applied = Applied {
@@ -183,10 +181,7 @@ impl Plan {
         if !self.held.is_empty() {
             // The syntax-only fast path (C4-07): no checks while an edited
             // file does not parse.
-            let update = session.update_with(
-                SourceChange::Hold(&self.held),
-                CheckMode::SyntaxOnlyIfParseErrors,
-            );
+            let update = session.hold_with(&self.held, CheckMode::SyntaxOnlyIfParseErrors);
             applied.record(update);
             applied.touched.extend(
                 self.held

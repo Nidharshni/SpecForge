@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use specforge_common::Diagnostic;
 use specforge_graph::Graph;
-use specforge_project::testing::TestProject;
-use specforge_project::{Buffer, CheckMode, ProjectSession, SourceChange, UpdateKind};
+use specforge_project::testing::{TestProject, disk_changed};
+use specforge_project::{Buffer, CheckMode, ProjectSession, UpdateKind};
 use specforge_test::prelude::*;
 use tempfile::TempDir;
 
@@ -80,10 +80,6 @@ fn w113(diagnostics: &[Diagnostic]) -> Vec<String> {
         .collect()
 }
 
-fn changed(paths: &[&str]) -> Vec<String> {
-    paths.iter().map(|p| p.to_string()).collect()
-}
-
 /// Edits that add and remove imports, a duplicate ID that moves between
 /// files, a missing import and a deleted file: after each, the session's
 /// graph and diagnostics are those of a fresh compile.
@@ -145,7 +141,7 @@ fn every_update_leaves_what_a_fresh_compile_builds() {
             Some(text) => write(root, path, text),
             None => fs::remove_file(root.join(path)).unwrap(),
         }
-        let update = session.update(SourceChange::Disk(&changed(&[path])));
+        let update = disk_changed(&mut session, &[path]).unwrap();
         assert_eq!(update.verification, Some(Ok(())), "after {path}");
         assert_eq!(update.diagnostics[..], session.project().diagnostics()[..]);
         assert_matches_a_fresh_compile(&session, &dir);
@@ -184,7 +180,7 @@ fn an_edited_format_version_header_is_reported_as_a_fresh_compile_reports_it() {
         ("", vec![]),
     ] {
         write(root, "a.spec", &format!("{header}{BODY}"));
-        let update = session.update(SourceChange::Disk(&changed(&["a.spec"])));
+        let update = disk_changed(&mut session, &["a.spec"]).unwrap();
         assert_eq!(update.verification, Some(Ok(())), "after {header:?}");
         assert_eq!(codes(&session), expected, "after {header:?}");
         assert_matches_a_fresh_compile(&session, &dir);
@@ -218,7 +214,7 @@ fn an_incremental_rebuild_reports_define_blocks_as_a_fresh_compile() {
             Some(text) => write(root, "b.spec", text),
             None => fs::remove_file(root.join("b.spec")).unwrap(),
         }
-        let update = session.update(SourceChange::Disk(&changed(&["b.spec"])));
+        let update = disk_changed(&mut session, &["b.spec"]).unwrap();
         assert_eq!(update.verification, Some(Ok(())));
         assert_matches_a_fresh_compile(&session, &dir);
         let w143 = session
@@ -255,7 +251,7 @@ fn an_edit_that_closes_an_import_cycle_reports_it() {
         "a.spec",
         "use \"b\"\nbehavior foo \"Foo\" { contract \"x\" }\n",
     );
-    let update = session.update(SourceChange::Disk(&changed(&["a.spec"])));
+    let update = disk_changed(&mut session, &["a.spec"]).unwrap();
 
     assert_eq!(
         w113(&update.diagnostics),
@@ -289,7 +285,7 @@ fn an_edit_that_breaks_an_import_cycle_clears_it() {
     );
 
     write(root, "a.spec", "behavior foo \"Foo\" { contract \"x\" }\n");
-    let update = session.update(SourceChange::Disk(&changed(&["a.spec"])));
+    let update = disk_changed(&mut session, &["a.spec"]).unwrap();
 
     assert!(
         w113(&update.diagnostics).is_empty(),
@@ -344,7 +340,7 @@ fn imports_of_every_kind_stay_resolved_across_updates() {
     // The directory appears: `models` now names models/index.spec, though
     // sub/main.spec (its importer) is not re-parsed.
     write(root, "models/index.spec", "type Model {\n  id string\n}\n");
-    let update = session.update(SourceChange::Disk(&changed(&["models/index.spec"])));
+    let update = disk_changed(&mut session, &["models/index.spec"]).unwrap();
     assert_eq!(update.rebuilt_files, ["models/index.spec"]);
     assert_eq!(update.verification, Some(Ok(())));
     assert!(
@@ -357,7 +353,7 @@ fn imports_of_every_kind_stay_resolved_across_updates() {
     // The relative target goes away: E025 on the importer, again without
     // re-parsing it.
     fs::remove_file(root.join("types.spec")).unwrap();
-    let update = session.update(SourceChange::Disk(&changed(&["types.spec"])));
+    let update = disk_changed(&mut session, &["types.spec"]).unwrap();
     assert_eq!(update.rebuilt_files, ["types.spec"]);
     assert_eq!(
         e025(&update.diagnostics),
@@ -394,7 +390,7 @@ fn an_added_import_is_resolved_on_the_next_update() {
             "main.spec",
             &format!("{text}type Main {{\n  id string\n}}\n"),
         );
-        let update = session.update(SourceChange::Disk(&changed(&["main.spec"])));
+        let update = disk_changed(&mut session, &["main.spec"]).unwrap();
         assert_eq!(e025(&update.diagnostics).len(), e025s, "{text}");
         let i004 = update
             .diagnostics
@@ -423,7 +419,7 @@ fn a_removed_import_no_longer_reports() {
     assert_eq!(e025(&session.project().diagnostics()).len(), 1);
 
     write(root, "main.spec", "type Main {\n  id string\n}\n");
-    let update = session.update(SourceChange::Disk(&changed(&["main.spec"])));
+    let update = disk_changed(&mut session, &["main.spec"]).unwrap();
     assert!(e025(&update.diagnostics).is_empty());
 }
 
@@ -449,7 +445,7 @@ fn resolve_imports_on_update_contract() {
         "b.spec",
         "use \"a\"\nbehavior bar \"Bar\" { contract \"y\" }\n",
     );
-    let update = session.update(SourceChange::Disk(&changed(&["b.spec"])));
+    let update = disk_changed(&mut session, &["b.spec"]).unwrap();
     assert!(w113(&update.diagnostics).is_empty(), "no cycle yet");
 
     // subgraph_invalidated_fired: editing a.spec re-parses a.spec alone,
@@ -461,7 +457,7 @@ fn resolve_imports_on_update_contract() {
         "a.spec",
         "use \"b\"\nbehavior foo \"Foo\" { contract \"x\" }\n",
     );
-    let update = session.update(SourceChange::Disk(&changed(&["a.spec"])));
+    let update = disk_changed(&mut session, &["a.spec"]).unwrap();
     assert_eq!(update.rebuilt_files, ["a.spec"]);
     assert_eq!(
         w113(&update.diagnostics),
@@ -470,7 +466,7 @@ fn resolve_imports_on_update_contract() {
 
     // Removing the import clears the cycle on the next update.
     write(root, "b.spec", "behavior bar \"Bar\" { contract \"y\" }\n");
-    let update = session.update(SourceChange::Disk(&changed(&["b.spec"])));
+    let update = disk_changed(&mut session, &["b.spec"]).unwrap();
     assert!(w113(&update.diagnostics).is_empty(), "cycle must be gone");
     assert_matches_a_fresh_compile(&session, &dir);
 }
@@ -506,12 +502,7 @@ fn excluded_files_stay_out_of_the_compile_and_the_session() {
 
     let mut session = dir.session();
     write(root, "spec/drafts/draft.spec", "term beta \"Beta\" {\n}\n");
-    let update = session.update(SourceChange::Disk(&changed(&["drafts/draft.spec"])));
-    assert!(
-        update.rebuilt_files.is_empty(),
-        "{:?}",
-        update.rebuilt_files
-    );
+    assert!(disk_changed(&mut session, &["drafts/draft.spec"]).is_none());
     assert!(session.project().graph().node("beta").is_none());
     assert_eq!(session.project().file_count(), 1);
 }
@@ -548,10 +539,10 @@ fn a_nested_projects_files_are_not_compiled() {
 
     let mut session = ProjectSession::open(&project_root);
     let held = root.join("sub/b.spec");
-    let update = session.update(SourceChange::Hold(&[Buffer::new(
+    let update = session.hold(&[Buffer::new(
         held.to_str().unwrap(),
         "term login_flow \"Held\" {\n}\n",
-    )]));
+    )]);
     assert!(
         update.rebuilt_files.is_empty(),
         "{:?}",
@@ -594,10 +585,10 @@ fn a_nested_project_appearing_takes_its_files_out_and_its_removal_puts_them_back
 
     // A buffer released while the marker exists leaves the graph.
     let path = root.join("sub/c.spec");
-    session.update(SourceChange::Hold(&[Buffer::new(
+    session.hold(&[Buffer::new(
         path.to_str().unwrap(),
         "term sub_only \"S\" {\n}\n",
-    )]));
+    )]);
     write(root, "sub/specforge.json", "{}");
     session.release(std::slice::from_ref(&path));
     assert!(session.project().graph().node("sub_only").is_none());
@@ -732,7 +723,7 @@ fn only_the_changed_files_are_re_parsed() {
     write(root, "types.spec", &behavior("alpha2", ""));
     write(root, "c.spec", &behavior("delta2", ""));
 
-    let update = session.update(SourceChange::Disk(&changed(&["types.spec", "c.spec"])));
+    let update = disk_changed(&mut session, &["types.spec", "c.spec"]).unwrap();
 
     assert_eq!(update.rebuilt_files, ["c.spec", "types.spec"]);
     assert_matches_a_fresh_compile(&session, &dir);
@@ -762,7 +753,7 @@ fn an_importer_of_a_changed_file_is_not_re_parsed() {
     // alpha goes away: beta (a.spec) now has an unresolved reference, and
     // neither a.spec nor main.spec (which imports it in turn) is re-parsed.
     write(root, "types.spec", &behavior("other", ""));
-    let update = session.update(SourceChange::Disk(&changed(&["types.spec"])));
+    let update = disk_changed(&mut session, &["types.spec"]).unwrap();
     assert_eq!(update.rebuilt_files, ["types.spec"]);
     assert_eq!(update.verification, Some(Ok(())));
     assert!(
@@ -784,7 +775,7 @@ fn unrelated_files_are_not_re_parsed() {
     let mut session = dir.session();
     write(root, "c.spec", &behavior("delta", "  invariants [alpha]\n"));
 
-    let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
+    let update = disk_changed(&mut session, &["c.spec"]).unwrap();
 
     assert_eq!(update.rebuilt_files, ["c.spec"]);
     assert_matches_a_fresh_compile(&session, &dir);
@@ -800,7 +791,7 @@ fn deleted_file_entities_are_removed_from_the_graph() {
     let mut session = dir.session();
     fs::remove_file(root.join("types.spec")).unwrap();
 
-    let update = session.update(SourceChange::Disk(&changed(&["types.spec"])));
+    let update = disk_changed(&mut session, &["types.spec"]).unwrap();
 
     assert!(session.project().graph().node("alpha").is_none());
     assert_eq!(ids(&update.delta.removed_nodes), ["alpha"]);
@@ -823,7 +814,7 @@ fn new_file_entities_are_added_to_the_graph() {
         &behavior("epsilon", "  invariants [alpha]\n"),
     );
 
-    let update = session.update(SourceChange::Disk(&changed(&["nested/new.spec"])));
+    let update = disk_changed(&mut session, &["nested/new.spec"]).unwrap();
 
     assert!(session.project().graph().node("epsilon").is_some());
     assert_eq!(ids(&update.delta.added_nodes), ["epsilon"]);
@@ -847,12 +838,7 @@ fn invalidate_changed_files_contract() {
     write(root, "a.spec", &behavior("beta", ""));
     fs::remove_file(root.join("c.spec")).unwrap();
     write(root, "d.spec", &behavior("zeta", ""));
-    let update = session.update(SourceChange::Disk(&changed(&[
-        "a.spec",
-        "c.spec",
-        "d.spec",
-        "never.spec",
-    ])));
+    let update = disk_changed(&mut session, &["a.spec", "c.spec", "d.spec", "never.spec"]).unwrap();
 
     // invalidation_set_computed, subgraph_invalidated_emitted: exactly the
     // changed files; unrelated_files_untouched: types.spec and main.spec
@@ -874,7 +860,7 @@ fn stale_nodes_are_removed() {
     let mut session = dir.session();
     write(root, "c.spec", &behavior("renamed", ""));
 
-    let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
+    let update = disk_changed(&mut session, &["c.spec"]).unwrap();
 
     assert!(session.project().graph().node("delta").is_none());
     assert_eq!(ids(&update.delta.removed_nodes), ["delta"]);
@@ -896,7 +882,7 @@ fn new_nodes_are_added() {
         ),
     );
 
-    let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
+    let update = disk_changed(&mut session, &["c.spec"]).unwrap();
 
     assert!(session.project().graph().node("extra").is_some());
     assert_eq!(ids(&update.delta.added_nodes), ["extra"]);
@@ -927,10 +913,7 @@ fn buffer_edits_leave_what_a_fresh_compile_builds() {
         behavior("beta", "  invariants [alpha]\n"),
     ];
     for text in &texts {
-        let update = session.update(SourceChange::Hold(&[Buffer::new(
-            root.join("a.spec"),
-            text,
-        )]));
+        let update = session.hold(&[Buffer::new(root.join("a.spec"), text)]);
         assert_eq!(update.rebuilt_files, ["a.spec"]);
         assert_eq!(update.verification, Some(Ok(())), "{text}");
         write(root, "a.spec", text);
@@ -969,10 +952,7 @@ fn the_session_keeps_the_text_each_file_was_built_from() {
     // A buffer the disk does not hold yet: the build, and so the text, is
     // the buffer's.
     let buffer = behavior("beta", "  invariants [alpha]\n");
-    session.update(SourceChange::Hold(&[Buffer::new(
-        root.join("a.spec"),
-        buffer.clone(),
-    )]));
+    session.hold(&[Buffer::new(root.join("a.spec"), buffer.clone())]);
     assert_eq!(
         session.project().source_text("a.spec").as_deref(),
         Some(&*buffer)
@@ -1017,7 +997,7 @@ fn several_buffers_are_one_update() {
             behavior("beta", "  invariants [omega]\n"),
         ),
     ];
-    let update = session.update_with(SourceChange::Hold(&buffers), CheckMode::Full);
+    let update = session.hold_with(&buffers, CheckMode::Full);
     assert_eq!(update.rebuilt_files, ["a.spec", "b.spec"]);
     assert_eq!(update.verification, Some(Ok(())));
     assert!(
@@ -1034,7 +1014,7 @@ fn several_buffers_are_one_update() {
 
     // Files discovery would not find are held and build nothing.
     let ignored = [Buffer::new(root.join("notes.txt"), "x")];
-    let update = session.update(SourceChange::Hold(&ignored));
+    let update = session.hold(&ignored);
     assert!(update.rebuilt_files.is_empty());
     assert_matches_a_fresh_compile(&session, &dir);
 }
@@ -1060,7 +1040,7 @@ fn a_parse_error_in_any_edited_buffer_skips_the_checks() {
             "behavior beta \"B\" {\n  contract \"\n",
         ),
     ];
-    let full = session.update_with(SourceChange::Hold(&buffers), CheckMode::Full);
+    let full = session.hold_with(&buffers, CheckMode::Full);
 
     // The same buffers again change nothing: b.spec gets one more line, still
     // unclosed.
@@ -1071,10 +1051,7 @@ fn a_parse_error_in_any_edited_buffer_skips_the_checks() {
             "behavior beta \"B\" {\n  contract \"\n\n",
         ),
     ];
-    let fast = session.update_with(
-        SourceChange::Hold(&more),
-        CheckMode::SyntaxOnlyIfParseErrors,
-    );
+    let fast = session.hold_with(&more, CheckMode::SyntaxOnlyIfParseErrors);
     let codes: Vec<&str> = fast.diagnostics.iter().map(|d| d.code.as_str()).collect();
     assert!(
         codes.contains(&"E001"),
@@ -1092,10 +1069,7 @@ fn a_parse_error_in_any_edited_buffer_skips_the_checks() {
         Buffer::new(root.join("a.spec"), behavior("alpha", "")),
         Buffer::new(root.join("b.spec"), behavior("beta", "")),
     ];
-    let update = session.update_with(
-        SourceChange::Hold(&parses),
-        CheckMode::SyntaxOnlyIfParseErrors,
-    );
+    let update = session.hold_with(&parses, CheckMode::SyntaxOnlyIfParseErrors);
     assert!(!update.diagnostics.iter().any(|d| d.code == "E001"));
 }
 
@@ -1109,12 +1083,12 @@ fn verify_incremental_compares_each_update_with_a_cold_rebuild() {
     let mut session = dir.session();
     session.set_verify_incremental(false);
     write(root, "c.spec", &behavior("renamed", ""));
-    let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
+    let update = disk_changed(&mut session, &["c.spec"]).unwrap();
     assert_eq!(update.verification, None, "off when turned off");
 
     session.set_verify_incremental(true);
     write(root, "c.spec", &behavior("delta", ""));
-    let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
+    let update = disk_changed(&mut session, &["c.spec"]).unwrap();
     assert_eq!(update.verification, Some(Ok(())));
 }
 
@@ -1134,7 +1108,7 @@ fn rebuild_affected_subgraph_contract() {
     let before = untouched(&session);
 
     write(root, "types.spec", &behavior("omega", ""));
-    let update = session.update(SourceChange::Disk(&changed(&["types.spec"])));
+    let update = disk_changed(&mut session, &["types.spec"]).unwrap();
 
     // stale_removed, new_added, graph_reflects_reparse.
     assert!(session.project().graph().node("alpha").is_none());
@@ -1163,7 +1137,7 @@ fn diagnostics_from_changed_files_are_refreshed() {
         &behavior("delta", "  invariants [nowhere]\n"),
     );
 
-    let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
+    let update = disk_changed(&mut session, &["c.spec"]).unwrap();
 
     assert!(
         update
@@ -1201,7 +1175,7 @@ fn diagnostics_from_unchanged_files_are_preserved() {
         "c.spec",
         &behavior("delta", "  invariants [also_nowhere]\n"),
     );
-    let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
+    let update = disk_changed(&mut session, &["c.spec"]).unwrap();
 
     assert_eq!(
         in_file(&session.project().diagnostics(), "main.spec"),
@@ -1237,7 +1211,7 @@ fn file_change_to_diagnostics_within_100ms() {
     );
 
     let start = std::time::Instant::now();
-    let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
+    let update = disk_changed(&mut session, &["c.spec"]).unwrap();
     let elapsed = start.elapsed();
 
     assert!(elapsed.as_millis() < 100, "took {}ms", elapsed.as_millis());
@@ -1264,7 +1238,7 @@ fn emit_incremental_diagnostics_contract() {
         "c.spec",
         &behavior("delta", "  invariants [also_nowhere]\n"),
     );
-    let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
+    let update = disk_changed(&mut session, &["c.spec"]).unwrap();
 
     // Refreshed for the changed file, preserved for the others, and the
     // whole set is a fresh compile's.
@@ -1298,7 +1272,7 @@ fn the_delta_check_runs_only_when_asked_for() {
     // A release build verifies only when asked (`--verify-incremental`).
     session.set_verify_incremental(false);
     write(root, "c.spec", &behavior("renamed", ""));
-    let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
+    let update = disk_changed(&mut session, &["c.spec"]).unwrap();
     assert_eq!(update.rebuilt_files, ["c.spec"], "the rebuild itself ran");
     assert_eq!(update.verification, None);
 }
@@ -1315,7 +1289,7 @@ fn a_rebuild_that_passes_the_check_is_reported_as_passed() {
     // Edges change outside the edited file: beta's reference to alpha
     // breaks, so beta is modified through its edges.
     write(root, "types.spec", &behavior("omega", ""));
-    let update = session.update(SourceChange::Disk(&changed(&["types.spec"])));
+    let update = disk_changed(&mut session, &["types.spec"]).unwrap();
     assert_eq!(update.verification, Some(Ok(())));
     let beta = update
         .delta
@@ -1337,7 +1311,7 @@ fn an_update_reports_its_delta_and_the_files_it_affects() {
     let mut session = dir.session();
     write(root, "types.spec", &behavior("omega", ""));
 
-    let update = session.update(SourceChange::Disk(&changed(&["types.spec"])));
+    let update = disk_changed(&mut session, &["types.spec"]).unwrap();
 
     assert_eq!(ids(&update.delta.added_nodes), ["omega"]);
     assert_eq!(ids(&update.delta.removed_nodes), ["alpha"]);
@@ -1354,9 +1328,8 @@ fn notify_delta_subscribers_contract() {
     let root = dir.root();
     let mut session = dir.session();
 
-    // An update that changes nothing reports an empty delta.
-    let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
-    assert!(update.delta.is_empty(), "{:?}", update.delta);
+    // A path whose file is as the session read it is no update at all.
+    assert!(disk_changed(&mut session, &["c.spec"]).is_none());
 
     // A reload reports the delta between the two projects it replaces.
     write(root, "c.spec", &behavior("renamed", ""));
@@ -1504,27 +1477,26 @@ fn random_updates_leave_what_a_fresh_compile_builds() {
             let previous = session.project().graph().clone();
             let update = match &buffer {
                 Some((path, text)) => {
-                    let update = session.update(SourceChange::Hold(&[Buffer::new(
-                        spec.join(path),
-                        text.clone(),
-                    )]));
+                    let update = session.hold(&[Buffer::new(spec.join(path), text.clone())]);
                     // Saved, so released to nothing: the next disk steps apply.
                     assert!(session.release(&[spec.join(path)]).is_none());
-                    update
+                    Some(update)
                 }
-                None => session.update(SourceChange::Disk(&touched)),
+                None => disk_changed(&mut session, &touched),
             };
             let context = format!("seed {seed:#x} step {step}");
-            assert!(
-                matches!(update.verification, None | Some(Ok(()))),
-                "{context}: {:?}",
-                update.verification
-            );
-            assert_eq!(
-                update.delta,
-                specforge_project::compute_graph_delta(&previous, session.project().graph()),
-                "{context}"
-            );
+            if let Some(update) = &update {
+                assert!(
+                    matches!(update.verification, None | Some(Ok(()))),
+                    "{context}: {:?}",
+                    update.verification
+                );
+                assert_eq!(
+                    update.delta,
+                    specforge_project::compute_graph_delta(&previous, session.project().graph()),
+                    "{context}"
+                );
+            }
             let runtime = dir.runtime();
             let fresh = dir.compile_in(runtime.clone());
             assert_eq!(
@@ -1562,7 +1534,7 @@ fn an_update_reports_the_diagnostics_it_added_and_removed() {
     };
 
     write(root, "c.spec", &broken);
-    let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
+    let update = disk_changed(&mut session, &["c.spec"]).unwrap();
     let delta = update.diagnostics_delta();
     let added = e003(&delta.added.0);
     assert_eq!(added.len(), 1, "{:?}", delta.added);
@@ -1571,7 +1543,7 @@ fn an_update_reports_the_diagnostics_it_added_and_removed() {
 
     // The same error two lines lower: removed where it was, added where it is.
     write(root, "c.spec", &format!("\n\n{broken}"));
-    let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
+    let update = disk_changed(&mut session, &["c.spec"]).unwrap();
     let delta = update.diagnostics_delta();
     let (removed, added_now) = (e003(&delta.removed.0), e003(&delta.added.0));
     assert_eq!(removed.len(), 1, "{delta:?}");
@@ -1580,8 +1552,8 @@ fn an_update_reports_the_diagnostics_it_added_and_removed() {
 
     // Written again unchanged: nothing is added or removed.
     write(root, "c.spec", &format!("\n\n{broken}"));
-    let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
-    assert!(update.diagnostics_delta().is_empty());
+    let update = disk_changed(&mut session, &["c.spec"]);
+    assert!(update.is_none_or(|update| update.diagnostics_delta().is_empty()));
 }
 
 #[test]
@@ -1621,7 +1593,7 @@ fn a_diagnostic_without_a_span_is_unchanged_when_only_its_entities_move() {
     assert_eq!(w061(&session.project().diagnostics()), 1);
 
     write(root, "cycle.spec", &format!("\n\n{CYCLE}"));
-    let update = session.update(SourceChange::Disk(&changed(&["cycle.spec"])));
+    let update = disk_changed(&mut session, &["cycle.spec"]).unwrap();
     assert_eq!(w061(&update.diagnostics), 1, "still reported");
     let delta = update.diagnostics_delta();
     assert_eq!(w061(&delta.added.0), 0, "{delta:?}");
@@ -1724,7 +1696,7 @@ fn a_session_reports_what_a_fresh_compile_reports_in_order() {
                     let text = fs::read_to_string(spec.join(from)).unwrap();
                     fs::remove_file(spec.join(from)).unwrap();
                     write(&spec, to, &text);
-                    Some(session.update(SourceChange::Disk(&changed(&[from, to]))))
+                    disk_changed(&mut session, &[from, to])
                 }
                 1 => {
                     let path = rng.pick(PATHS);
@@ -1732,16 +1704,13 @@ fn a_session_reports_what_a_fresh_compile_reports_in_order() {
                         continue;
                     }
                     fs::remove_file(spec.join(path)).unwrap();
-                    Some(session.update(SourceChange::Disk(&changed(&[path]))))
+                    disk_changed(&mut session, &[path])
                 }
                 // One editor buffer, saved so the fresh compile sees it.
                 2 => {
                     let (path, text) = (rng.pick(PATHS), random_spec(&mut rng));
                     write(&spec, path, &text);
-                    let update = session.update(SourceChange::Hold(&[Buffer::new(
-                        spec.join(path),
-                        text.clone(),
-                    )]));
+                    let update = session.hold(&[Buffer::new(spec.join(path), text.clone())]);
                     assert!(session.release(&[spec.join(path)]).is_none());
                     Some(update)
                 }
@@ -1759,7 +1728,7 @@ fn a_session_reports_what_a_fresh_compile_reports_in_order() {
                         .iter()
                         .map(|(path, text)| Buffer::new(spec.join(path), text.clone()))
                         .collect();
-                    let update = session.update(SourceChange::Hold(&held));
+                    let update = session.hold(&held);
                     let paths: Vec<_> = held.iter().map(|b| b.path.clone()).collect();
                     assert!(session.release(&paths).is_none());
                     Some(update)
@@ -2139,7 +2108,7 @@ fn an_update_starts_a_fresh_coverage_memo() {
         "b.spec",
         "behavior b \"B\" {\n  contract \"The system MUST b\"\n}\n",
     );
-    session.update(SourceChange::Disk(&changed(&["b.spec"])));
+    disk_changed(&mut session, &["b.spec"]).unwrap();
     let updated = coverage(&session);
     assert!(!std::sync::Arc::ptr_eq(&first, &updated));
     assert!(updated.is_unverified("b"));
@@ -2223,7 +2192,7 @@ fn a_sessions_snapshot_follows_every_update() {
         "a.spec",
         "item gizmo \"Gizmo\" {\n  verify unit \"x\"\n}\n",
     );
-    session.update(SourceChange::Disk(&changed(&["a.spec"])));
+    disk_changed(&mut session, &["a.spec"]).unwrap();
     let standing = session.project().entities().standing("gizmo").unwrap();
     assert_eq!(standing.declared, 1);
     assert!(standing.counts() && standing.reported_by().is_none());
@@ -2277,10 +2246,8 @@ fn an_update_that_skips_the_checks_still_scores_its_own_graph() {
     // seeded the memo. What the session scores is still its own graph's
     // snapshot, taken once, in its environment (the spec root included).
     write(root, "b.spec", "behavior b \"B\" {\n  contract \"\n");
-    session.update_with(
-        SourceChange::Disk(&changed(&["b.spec"])),
-        CheckMode::SyntaxOnlyIfParseErrors,
-    );
+    let broken = Buffer::new(root.join("b.spec"), "behavior b \"B\" {\n  contract \"\n");
+    session.hold_with(&[broken], CheckMode::SyntaxOnlyIfParseErrors);
     let entities = session.project().entities();
     assert!(!std::ptr::eq(entities, &*before), "a fresh memo per update");
     assert_eq!(
@@ -2489,7 +2456,7 @@ fn an_unreadable_source_is_reported_after_an_update_of_another_file() {
     assert_eq!(e025_messages(&session.project().diagnostics()), [message]);
 
     write(root, "a.spec", &behavior("alpha", "  invariants []\n"));
-    session.update(SourceChange::Disk(&changed(&["a.spec"])));
+    disk_changed(&mut session, &["a.spec"]).unwrap();
 
     assert_eq!(e025_messages(&session.project().diagnostics()), [message]);
     let fresh = dir.compile_in(runtime.clone());
@@ -2505,7 +2472,7 @@ fn a_source_that_becomes_readable_joins_the_build() {
     assert!(session.project().graph().node("beta").is_none());
 
     write(root, "bad.spec", "term beta \"B\" {\n}\n");
-    let update = session.update(SourceChange::Disk(&changed(&["bad.spec"])));
+    let update = disk_changed(&mut session, &["bad.spec"]).unwrap();
 
     assert_eq!(update.rebuilt_files, ["bad.spec"]);
     assert!(session.project().graph().node("beta").is_some());
@@ -2514,7 +2481,7 @@ fn a_source_that_becomes_readable_joins_the_build() {
 
     // And unreadable again: out of the graph, reported once more.
     fs::write(root.join("bad.spec"), b"term beta \"B\xff\" {\n}\n").unwrap();
-    session.update(SourceChange::Disk(&changed(&["bad.spec"])));
+    disk_changed(&mut session, &["bad.spec"]).unwrap();
     assert!(session.project().graph().node("beta").is_none());
     assert_eq!(e025_messages(&session.project().diagnostics()).len(), 1);
     assert_matches_a_fresh_compile(&session, &dir);
@@ -2574,7 +2541,7 @@ fn duplicates_across_files_and_kinds_stay_what_a_fresh_compile_reports() {
             Some(text) => write(root, path, text),
             None => fs::remove_file(root.join(path)).unwrap(),
         }
-        let update = session.update(SourceChange::Disk(&changed(&[path])));
+        let update = disk_changed(&mut session, &[path]).unwrap();
         assert_eq!(update.verification, Some(Ok(())), "after {path}");
         assert_matches_a_fresh_compile(&session, &dir);
     }
@@ -2625,7 +2592,7 @@ fn a_session_verifies_its_updates_in_a_debug_build() {
     let mut session = dir.session();
     for name in ["renamed", "again"] {
         write(root, "c.spec", &behavior(name, ""));
-        let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
+        let update = disk_changed(&mut session, &["c.spec"]).unwrap();
         assert_eq!(update.verification.is_some(), cfg!(debug_assertions));
         if let Some(verification) = update.verification {
             assert_eq!(verification, Ok(()));
@@ -2634,7 +2601,7 @@ fn a_session_verifies_its_updates_in_a_debug_build() {
     // A reloaded session verifies too.
     session.reload_environment();
     write(root, "c.spec", &behavior("reloaded", ""));
-    let update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
+    let update = disk_changed(&mut session, &["c.spec"]).unwrap();
     assert_eq!(update.verification.is_some(), cfg!(debug_assertions));
 }
 
@@ -2647,7 +2614,7 @@ fn a_session_verifies_its_updates_in_a_debug_build() {
 fn a_divergence_is_the_failed_verification() {
     let dir = three_files();
     let mut session = dir.session();
-    let mut update = session.update(SourceChange::Disk(&changed(&["c.spec"])));
+    let mut update = session.reload_environment();
     for (verification, divergence) in [
         (Some(Err("nodes differ".to_string())), Some("nodes differ")),
         (Some(Ok(())), None),
@@ -2829,7 +2796,7 @@ fn an_import_names_an_unsaved_buffer() {
     assert_eq!(e025(&session.project().diagnostics()).len(), 1);
 
     let buffers = [Buffer::new(root.join("b.spec"), "term b \"B\" {\n}\n")];
-    let update = session.update(SourceChange::Hold(&buffers));
+    let update = session.hold(&buffers);
 
     assert!(
         e025(&update.diagnostics).is_empty(),
@@ -2872,16 +2839,10 @@ fn an_update_naming_only_files_discovery_does_not_find_changes_nothing() {
 
     write(root, "drafts/d.spec", "term d \"D\" {\n}\n");
     write(root, "build/f.spec", "term f \"F\" {\n}\n");
-    let update = session.update(SourceChange::Disk(&changed(&[
-        "drafts/d.spec",
-        "build/f.spec",
-    ])));
+    let update = disk_changed(&mut session, &["drafts/d.spec", "build/f.spec"]);
 
-    assert_eq!(update.kind, UpdateKind::Sources);
-    assert!(update.rebuilt_files.is_empty());
-    assert_eq!(update.delta, specforge_project::GraphDelta::default());
-    assert!(!update.inputs_changed);
-    assert_eq!(update.diagnostics[..], before[..]);
+    assert!(update.is_none(), "{update:?}");
+    assert_eq!(session.project().diagnostics()[..], before[..]);
 }
 
 #[specforge_test(
@@ -3080,7 +3041,7 @@ fn an_update_lists_the_nodes_it_moved() {
     assert!(session.project().graph().node("alpha").is_some());
 
     write(root, "main.spec", &format!("\n\n\n{alpha}"));
-    let update = session.update(SourceChange::Disk(&changed(&["main.spec"])));
+    let update = disk_changed(&mut session, &["main.spec"]).unwrap();
 
     assert!(update.delta.is_empty());
     assert_eq!(update.moved.len(), 1);

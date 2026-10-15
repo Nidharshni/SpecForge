@@ -79,7 +79,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   changed meanwhile, MCP asks it to be fresh before every request that reads the project (ADR 0014,
   ADR 0030, ADR 0035). In a debug build it checks every update against a cold rebuild, whichever
   surface holds it, and each surface reports a divergence where it reports (ADR 0035). The LSP gives it its open documents as **held buffers**, each batch of edits as one update
-  (`SourceChange::Hold`), and releases a closed document's buffer (`ProjectSession::release`); what an open
+  (`ProjectSession::hold_with`), and releases a closed document's buffer (`ProjectSession::release`); what an open
   buffer is to its file is the session's to say (ADR 0023, ADR 0046). After every update that runs the
   checks, its compiled project reports exactly what a fresh compile of the same sources reports, in the
   same order (an editor update that skips the checks while a file does not parse is the one exception).

@@ -4,7 +4,7 @@
 use specforge_lsp::LspState;
 use specforge_lsp::publish::{FilePublication, Publication};
 use specforge_project::testing::TestProject;
-use specforge_project::{Buffer, CheckMode, SourceChange};
+use specforge_project::{Buffer, CheckMode};
 use specforge_test_macros::test as spec;
 use std::path::Path;
 use tower_lsp::lsp_types::{DiagnosticTag, Url};
@@ -180,8 +180,8 @@ fn a_publish_clears_files_whose_diagnostics_are_gone() {
 
     // The reference is fixed: the file is sent an empty list, once.
     let fixed = "behavior alpha \"A\" {\n  contract \"x\"\n  category command\n}\n";
-    state.session_mut().unwrap().update_with(
-        SourceChange::Hold(&[Buffer::new(dir.root().join("a.spec"), fixed)]),
+    state.session_mut().unwrap().hold_with(
+        &[Buffer::new(dir.root().join("a.spec"), fixed)],
         CheckMode::Full,
     );
     let publication = Publication::of(&state, None, &[]);
