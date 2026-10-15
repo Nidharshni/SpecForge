@@ -103,3 +103,42 @@ pub fn normalized(value: &Value, root: &Path) -> String {
     let text = without_hashes(&serde_json::to_string_pretty(&redacted(value)).unwrap());
     normalized_text(&text, root)
 }
+
+/// What one surface answered for a request: its document, normalized, or a refusal.
+#[derive(Debug, PartialEq)]
+pub enum Outcome {
+    /// The surface answered with this document.
+    Answered(Value),
+    /// The surface refused the request (a usage error, an operation's refusal, an `isError` result).
+    Refused,
+}
+
+/// A CLI run's outcome: exit 2 (clap), or a nonzero exit that prints `{error, code}` or nothing parseable, is a
+/// refusal; otherwise the document on stdout, normalized under `root`.
+pub fn cli_outcome(run: &crate::support::Run, root: &Path) -> Outcome {
+    if run.code == 2 {
+        return Outcome::Refused;
+    }
+    match serde_json::from_str::<Value>(&run.stdout) {
+        Ok(doc) if doc.get("error").is_some() && doc.get("code").is_some() => Outcome::Refused,
+        Ok(doc) => Outcome::Answered(normalized_json(&doc, root)),
+        Err(_) if run.code != 0 => Outcome::Refused,
+        Err(e) => panic!(
+            "a command that answered printed no JSON ({e}): {}",
+            run.stdout
+        ),
+    }
+}
+
+/// An MCP result as [`mcp_calls`] returns it: an `isError` or `error` result is a refusal; otherwise the content,
+/// normalized under `root`.
+pub fn mcp_outcome(result: &Value, root: &Path) -> Outcome {
+    if result.get("isError").is_some() || result.get("error").is_some() {
+        return Outcome::Refused;
+    }
+    Outcome::Answered(normalized_json(result, root))
+}
+
+fn normalized_json(value: &Value, root: &Path) -> Value {
+    serde_json::from_str(&normalized(value, root)).expect("normalizing keeps the JSON")
+}

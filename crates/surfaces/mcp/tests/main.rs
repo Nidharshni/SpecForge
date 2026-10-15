@@ -27,6 +27,7 @@ mod prompt_pins;
 mod prompts;
 mod protocol;
 mod refusal_arguments;
+mod request_meaning;
 mod resources;
 mod revision;
 mod schema_reflection;
