@@ -126,3 +126,31 @@ fn each_method_is_served_in_its_revisions() {
         }
     }
 }
+
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a request that reads nothing of the project, such as server/discover, serves nothing; the next request that reads it serves the project created at the root"
+)]
+fn a_stateless_discover_serves_nothing() {
+    let root = tempfile::TempDir::new().unwrap();
+    let mut server = McpServer::with_project_root(root.path().to_path_buf());
+    let reply = send(&mut server, "server/discover", stateless("server/discover"));
+    assert!(reply.is_some_and(|reply| reply["error"].is_null()));
+    // The project is created after the server started, before the discover.
+    let created = project();
+    for file in ["specforge.json", "main.spec"] {
+        std::fs::copy(created.path().join(file), root.path().join(file)).unwrap();
+    }
+    let reply = send(&mut server, "server/discover", stateless("server/discover"));
+    assert!(reply.is_some_and(|reply| reply["error"].is_null()));
+    assert_eq!(server.state().project_root(), None);
+
+    let mut call = stateless("tools/call");
+    call["name"] = "specforge.stats".into();
+    let stats = send(&mut server, "tools/call", call).unwrap();
+    assert_eq!(
+        stats["result"]["structuredContent"]["entity_count"], 1,
+        "{stats}"
+    );
+    assert!(server.state().project_root().is_some());
+}

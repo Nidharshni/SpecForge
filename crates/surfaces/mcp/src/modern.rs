@@ -4,8 +4,9 @@
 //! A request whose `_meta` names a protocol version is served on its own:
 //! no `initialize` before it, and nothing a prior request said changes how
 //! it is answered. It never changes what the server serves: that follows
-//! the server's root on disk ([`McpState::follow_root`]). Its result carries `resultType`, the server's identity
-//! in `_meta`, and on a list or a read the caching hints. A request without
+//! the server's root on disk, which the router brings up to date before
+//! every session method ([`McpState::follow_root`], ADR 0103 D6). Its result
+//! carries `resultType`, the server's identity in `_meta`, and on a list or a read the caching hints. A request without
 //! that `_meta` keeps the handshake rules of the revision `initialize`
 //! negotiated.
 
@@ -61,11 +62,6 @@ pub fn handle(
             "Server shutting down",
         ));
     }
-    // What is served follows the server's root before the request is read:
-    // while none is served, the project at or above it is served once one
-    // exists there. The request itself never changes it (ADR 0077).
-    state.follow_root();
-
     let revision = Revision::Stateless(version);
     let response = crate::protocol::router::route(state, revision, method, params, id);
     response.map(|response| decorate(response, method))
