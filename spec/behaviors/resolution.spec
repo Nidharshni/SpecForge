@@ -141,7 +141,7 @@ behavior link_entity_references "Link Entity References" {
     all_files_parsed     "All .spec files have been parsed"
   }
   ensures {
-    all_references_resolved "Every reference list entry either resolves to a declared entity or emits an E003 diagnostic"
+    all_references_resolved "Every reference a field's declared type reads, a list item or a single reference, resolves to a declared entity or emits E003 (I004 when its target kind's extension is not enabled)"
     no_silent_ignoring      "No reference is silently ignored"
   }
   contract   """
@@ -155,6 +155,8 @@ behavior link_entity_references "Link Entity References" {
   verify unit "reference list IDs create graph edges"
   verify unit "unresolvable reference produces E003"
   verify unit "close match triggers did-you-mean suggestion"
+  verify unit "a single reference that resolves to nothing is E003"
+  verify unit "a quoted single reference is a reference"
   verify unit "a string list's items reference nothing but scheme ref IDs"
   verify unit "a quoted id on a reference list field is a reference"
   verify unit "an open-fields kind's undeclared field references nothing"

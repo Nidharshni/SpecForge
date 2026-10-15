@@ -177,8 +177,10 @@ fn an_open_kinds_undeclared_list_references_nothing() {
     assert_eq!(with_code(&diags, "E003"), Vec::<&Value>::new(), "{diags:?}");
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "link_entity_references",
+    verify = "a single reference that resolves to nothing is E003"
+)]
 fn an_unresolved_single_reference_is_e003() {
     for spec in [
         "channel cli \"CLI\" { description \"c\" }\n\
@@ -204,8 +206,10 @@ fn an_unresolved_single_reference_is_e003() {
     }
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "link_entity_references",
+    verify = "a quoted single reference is a reference"
+)]
 fn a_quoted_single_reference_links() {
     let (_p, compiled) = product(
         "persona dev \"Dev\" { description \"d\" }\n\
@@ -222,8 +226,10 @@ fn a_quoted_single_reference_links() {
     );
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "check_entities_in_one_order",
+    verify = "a single reference to an existing entity of another kind than its field's target kind is E022"
+)]
 fn a_single_reference_to_the_wrong_kind_is_e022() {
     let (_p, compiled) = product(
         "channel cli \"CLI\" { description \"c\" }\n\
@@ -239,8 +245,10 @@ fn a_single_reference_to_the_wrong_kind_is_e022() {
     }
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "report_entities_without_contract_obligations",
+    verify = "a single contract reference is a contract obligation"
+)]
 fn a_single_contract_reference_is_a_contract_obligation() {
     let (_p, compiled) = compile(
         &["@specforge/governance", "@specforge/software"],

@@ -338,6 +338,14 @@ impl Reading<'_> {
             span: Some(&item.span),
         };
         match (self, &entry.value) {
+            (Self::Declared(form), FieldValue::Identifier(id) | FieldValue::String(id))
+                if form.field_type() == FieldType::Reference =>
+            {
+                vec![Reference {
+                    id: id.as_str(),
+                    span: entry.value_span.as_ref(),
+                }]
+            }
             (Self::Declared(form), FieldValue::List(items)) => match form.field_type() {
                 FieldType::ReferenceList => items.iter().map(item).collect(),
                 FieldType::StringList => items

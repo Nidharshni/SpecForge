@@ -4,7 +4,6 @@
 //! parser's shape (ADR 0093).
 
 use specforge_common::{Diagnostic, DiagnosticData, Sym, codes, find_close_match};
-use specforge_parser::FieldValue;
 use std::collections::HashMap;
 
 use crate::{Edge, FieldForms, Graph};
@@ -34,23 +33,7 @@ impl Graph {
             let kind = node.kind.raw.as_str();
             for entry in node.fields.entries() {
                 let reading = forms.reading(kind, entry.key.as_str());
-                if let (true, FieldValue::Identifier(id)) =
-                    (reading.is_single_reference(), &entry.value)
-                {
-                    // Single refs don't emit E003 yet: the value might be a
-                    // valid enum/identifier rather than a broken ref.
-                    let target = Sym::new(id.as_str());
-                    if self.nodes.contains_key(&target) {
-                        edges.push((
-                            Edge {
-                                source: node.id.raw,
-                                target,
-                                label: entry.key,
-                            },
-                            true,
-                        ));
-                    }
-                }
+                let single = reading.is_single_reference();
                 for reference in reading.references(entry) {
                     let target = Sym::new(reference.id);
                     if self.nodes.contains_key(&target) {
@@ -60,7 +43,7 @@ impl Graph {
                                 target,
                                 label: entry.key,
                             },
-                            false,
+                            single,
                         ));
                     } else if let Some(target_kind) =
                         absent_targets.get(&(kind.to_string(), entry.key.as_str().to_string()))

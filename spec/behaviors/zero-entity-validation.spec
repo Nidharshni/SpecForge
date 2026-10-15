@@ -331,6 +331,7 @@ behavior check_entities_in_one_order "Check the Entities in One Order" {
   verify unit "an entity ID equal to a structural keyword or a registered kind's keyword is E013"
   verify unit "an entity ID shorter than 2 or longer than 60 characters is E014"
   verify unit "a reference to an existing entity of another kind than its field's target kind is E022"
+  verify unit "a single reference to an existing entity of another kind than its field's target kind is E022"
   verify unit "the files the checks read are those file_reference fields name and those file_exists rules read"
   verify integration "a compile reports the structural checks in the order the registry build runs them"
 }
