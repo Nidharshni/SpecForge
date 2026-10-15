@@ -5,7 +5,7 @@
     "crates/app/ops/tests/operations/navigate.rs": 1751,
     "crates/app/ops/tests/operations/query.rs": 910,
     "crates/app/ops/tests/operations/schema.rs": 1152,
-    "crates/app/ops/tests/operations/writes.rs": 1115,
+    "crates/app/ops/tests/operations/writes.rs": 1049,
     "crates/kernel/common/tests/present.rs": 1082,
     "crates/kernel/parser/tests/parse_test.rs": 2605,
     "crates/pipeline/emitter/tests/contracts.rs": 884,

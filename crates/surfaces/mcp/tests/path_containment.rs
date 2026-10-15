@@ -303,8 +303,10 @@ fn init_with_nothing_served_stays_inside_the_servers_root() {
 
 /// `init` reads a relative local specifier from the project it creates, as `add_extension` reads
 /// one from the project's root (ADR 0092 D7), wherever the server runs.
-#[test]
-#[ignore = "flipped by T6"]
+#[specforge_test(
+    behavior = "provide_mcp_init_tool",
+    verify = "a relative local path in extensions is read from the directory init creates, wherever the server runs"
+)]
 fn init_reads_a_relative_local_specifier_from_the_project_it_creates() {
     let scene = Scene::new();
     let root = scene.dir.path().join("workspace");

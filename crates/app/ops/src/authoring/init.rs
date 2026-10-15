@@ -67,7 +67,8 @@ pub struct Request<'a> {
     /// The project version (`specforge init --version`; [`DEFAULT_VERSION`]
     /// unless given).
     pub version: &'a str,
-    /// Extension specifiers; an entry may hold several, comma-separated.
+    /// Extension specifiers; an entry may hold several, comma-separated. A relative local path is
+    /// read from `dir`.
     pub extensions: &'a [String],
 }
 
@@ -170,9 +171,21 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     let wanted = if specifiers.is_empty() {
         Vec::new()
     } else {
-        extension::specified(&specifiers).map_err(|refusal| {
+        let specified = extension::specified(&specifiers).map_err(|refusal| {
             refusal.map_subject(|AddField::Extensions| Some(InitField::Extensions))
-        })?
+        })?;
+        // A relative local path is read from the directory init creates (ADR 0098). It may not
+        // exist yet, so a `..` is resolved by name: the file system cannot step out of it.
+        specified
+            .into_iter()
+            .map(|specified| {
+                let mut specified = specified.relative_to(req.dir);
+                if let Source::Local(path) = &mut specified.source {
+                    *path = without_parent_steps(path);
+                }
+                specified
+            })
+            .collect()
     };
     let several = wanted.len() > 1;
     let named = |at: usize, error: OpError| {
@@ -301,6 +314,26 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
         extensions,
         writes: done.writes,
     })
+}
+
+/// `path` with each `..` resolved against the name before it.
+fn without_parent_steps(path: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut resolved = PathBuf::new();
+    for part in path.components() {
+        match part {
+            Component::ParentDir
+                if matches!(
+                    resolved.components().next_back(),
+                    Some(Component::Normal(_))
+                ) =>
+            {
+                resolved.pop();
+            }
+            other => resolved.push(other),
+        }
+    }
+    resolved
 }
 
 /// Create the starter file with `text`.
