@@ -232,6 +232,11 @@ impl<'s> Call<'s> {
         }
     }
 
+    /// The directory the paths this request names must resolve inside.
+    pub(crate) fn bound(&self) -> Option<Containment> {
+        Containment::of(self.state)
+    }
+
     /// The directory `init` creates its project in.
     pub(crate) fn new_project_dir(&self) -> Option<&Path> {
         match &self.target {

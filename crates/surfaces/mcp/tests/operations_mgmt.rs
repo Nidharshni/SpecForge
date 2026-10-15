@@ -449,7 +449,7 @@ const GREET: &str = "@sdk/greet";
 fn server_with_product() -> (Served, std::path::PathBuf) {
     let mut server = test_server();
     let root = server.root().to_path_buf();
-    let blob = specforge_component::committed::GREET.path();
+    let blob = crate::support::blob_in(&root, specforge_component::committed::GREET.path());
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",

@@ -31,11 +31,12 @@ expression: snapshot
         "specforge.json",
         "specforge.lock"
       ],
-      "source": "local:[BLOB]",
+      "source": "local:greet.wasm",
       "stranded": [],
       "version": "0.1.0"
     },
     "files": {
+      "greet.wasm": "<binary>",
       "spec/main.spec": "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n",
       "specforge.lock": "{\n  \"lockfile_version\": 1,\n  \"entries\": []\n}"
     },

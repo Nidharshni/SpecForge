@@ -78,9 +78,9 @@ fn find<'a>(items: &'a Value, key: &str, value: &str) -> &'a Value {
         .unwrap_or_else(|| panic!("no item with {key} = {value} in {items}"))
 }
 
-/// The vendored product extension blob, installable offline.
-fn product_wasm() -> PathBuf {
-    specforge_component::committed::GREET.path()
+/// The vendored product extension blob, copied into the project at `root`.
+fn product_wasm(root: &Path) -> PathBuf {
+    blob_in(root, specforge_component::committed::GREET.path())
 }
 
 /// A project on disk with `config` as its specforge.json and one spec file.
@@ -2130,7 +2130,7 @@ fn contract_doctor() {
     let installed = tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifiers": [product_wasm().to_str().unwrap()]}),
+        json!({"specifiers": [product_wasm(&dir).to_str().unwrap()]}),
     );
     assert_eq!(installed["added"][0]["action"], "installed", "{installed}");
 
@@ -2150,15 +2150,15 @@ fn contract_doctor() {
     assert_eq!(report["extensions_ok"], false, "{report}");
     assert_eq!(report["cache_status"], "stale");
     // resolution_steps_provided: a deterministic step for the issue. A
-    // local install reinstalls from the path it was installed from.
+    // local install reinstalls from the path it was installed from (the
+    // project's own, so relative to it).
     let finding = find(&report["findings"], "code", "stale_hash");
     assert_eq!(finding["status"], "error");
+    let local = product_wasm(&dir);
+    let local = local.strip_prefix(&dir).unwrap().display();
     assert_eq!(
         finding["remediation"],
-        format!(
-            "run `specforge add {}` to reinstall it",
-            product_wasm().display()
-        )
+        format!("run `specforge add {local}` to reinstall it")
     );
     assert_eq!(tool(&mut server, "specforge.doctor", json!({})), report);
 
@@ -2838,7 +2838,7 @@ fn contract_add_extension() {
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
     // Real offline install of the vendored product blob.
-    let blob = product_wasm();
+    let blob = product_wasm(&dir);
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",

@@ -67,6 +67,17 @@ pub fn path_tool_calls() -> Vec<(&'static str, Value)> {
     ]
 }
 
+/// `blob` copied into `project_root` under its own file name (a local
+/// install names the extension after that stem), and that copy's path: a
+/// path a request names stays inside the served project.
+pub fn blob_in(project_root: &std::path::Path, blob: std::path::PathBuf) -> std::path::PathBuf {
+    let to = project_root.join(blob.file_name().expect("a blob has a file name"));
+    if !to.exists() {
+        std::fs::copy(&blob, &to).expect("copy the blob into the project");
+    }
+    to
+}
+
 /// A project a test built in a directory of its own, moved inside the
 /// project a server serves: a call may name only projects there (ADR 0092).
 pub struct Nested(std::path::PathBuf);

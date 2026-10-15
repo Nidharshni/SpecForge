@@ -7,7 +7,7 @@ use specforge_mcp::McpServer;
 use specforge_test::prelude::*;
 
 use crate::fake_extension::{self, FakeExtension};
-use crate::support::{TestProject, call, call_tool, files_under, z3_ready};
+use crate::support::{TestProject, blob_in, call, call_tool, files_under, z3_ready};
 use crate::tool_errors::mcp_error;
 
 const GREET: &str = "@sdk/greet";
@@ -53,10 +53,11 @@ fn greet_blob() -> std::path::PathBuf {
 fn server_with_greet_installed() -> (McpServer, tempfile::TempDir) {
     let (mut server, root) =
         server_over(json!({"name": "t", "version": "0.1.0", "extensions": []}));
+    let blob = blob_in(root.path(), greet_blob());
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifiers": [greet_blob().to_str().unwrap()]}),
+        json!({"specifiers": [blob.to_str().unwrap()]}),
     );
     assert_eq!(resp["result"]["isError"], false, "install failed: {resp}");
     assert!(

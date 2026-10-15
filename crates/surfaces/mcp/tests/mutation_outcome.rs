@@ -34,8 +34,8 @@ fn greet_blob() -> PathBuf {
     specforge_component::committed::GREET.path()
 }
 
-fn greet() -> String {
-    greet_blob().to_str().expect("a UTF-8 path").to_string()
+fn greet(root: &std::path::Path) -> PathBuf {
+    crate::support::blob_in(root, greet_blob())
 }
 
 const GREET: &str = "@sdk/greet";
@@ -183,7 +183,7 @@ fn enabled(root: &Path) -> Vec<Value> {
 fn a_duplicate_add_emits_was_duplicate() {
     let mut server = empty_components();
     let root = server.root().to_path_buf();
-    for specifier in [PRODUCT.to_string(), greet()] {
+    for specifier in [json!(PRODUCT), json!(greet(&root))] {
         for _ in 0..2 {
             assert_ok(&call_tool(
                 &mut server,
@@ -199,7 +199,7 @@ fn a_duplicate_add_emits_was_duplicate() {
         .iter()
         .map(|e| (&e["extensionSpecifier"], &e["wasDuplicate"]))
         .collect();
-    let (product, blob) = (json!(PRODUCT), json!(greet()));
+    let (product, blob) = (json!(PRODUCT), json!(greet(&root)));
     assert_eq!(
         duplicates,
         [
@@ -236,7 +236,7 @@ fn installing_and_removing_a_local_extension_write_three_files() {
         &mut server,
         &root,
         "specforge.add_extension",
-        json!({"specifiers": [greet()]}),
+        json!({"specifiers": [greet(&root)]}),
     );
     assert_ok(&reply);
     assert_eq!(installed, three);
@@ -273,7 +273,7 @@ fn init_with_a_local_extension_writes_five_files() {
         &mut server,
         &dir,
         "specforge.init",
-        json!({"path": dir.to_str().unwrap(), "name": "newone", "extensions": [greet()]}),
+        json!({"path": dir.to_str().unwrap(), "name": "newone", "extensions": [greet_blob()]}),
     );
 
     assert_ok(&reply);
@@ -468,9 +468,9 @@ fn previews_are_no_mutation() {
         .file("old.spec", OLD)
         .serve_components();
     let root = server.root().to_path_buf();
+    let blob = greet(&root);
     let before = files_under(&root);
     let generation = server.state().session_generation();
-
     for (tool, arguments) in [
         ("specforge.format", json!({"check": true})),
         ("specforge.format", json!({"diff": true})),
@@ -485,7 +485,7 @@ fn previews_are_no_mutation() {
         ),
         (
             "specforge.add_extension",
-            json!({"specifiers": [greet()], "dry_run": true}),
+            json!({"specifiers": [blob], "dry_run": true}),
         ),
         (
             "specforge.remove_extension",
@@ -628,16 +628,15 @@ fn extension_added_names_the_specifier_and_the_total() {
         [json!({"extensionSpecifier": PRODUCT, "totalExtensions": total, "wasDuplicate": false})]
     );
 
-    // A local blob: the specifier as the call gave it, not the name it
-    // declares.
+    // A local blob: the specifier as the call gave it, not its declared name.
     assert_ok(&call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifiers": [greet()]}),
+        json!({"specifiers": [greet(&root)]}),
     ));
     assert_eq!(
         events(&server, "extension_added")[1],
-        json!({"extensionSpecifier": greet(), "totalExtensions": total + 1, "wasDuplicate": false})
+        json!({"extensionSpecifier": greet(&root), "totalExtensions": total + 1, "wasDuplicate": false})
     );
 }
 
@@ -648,12 +647,12 @@ fn extension_added_names_the_specifier_and_the_total() {
 fn add_extension_adds_every_specifier_as_one_change() {
     let mut server = empty_components();
     let root = server.root().to_path_buf();
-
+    let blob = greet(&root);
     let (reply, changed) = wrote(
         &mut server,
         &root,
         "specforge.add_extension",
-        json!({"specifiers": [PRODUCT, greet(), PRODUCT]}),
+        json!({"specifiers": [PRODUCT, blob, PRODUCT]}),
     );
 
     assert_ok(&reply);
@@ -665,7 +664,7 @@ fn add_extension_adds_every_specifier_as_one_change() {
         .collect();
     assert_eq!(actions, ["enabled", "installed", "duplicate"], "{payload}");
     let specifiers: Vec<Value> = added.iter().map(|a| a["specifier"].clone()).collect();
-    assert_eq!(specifiers, [json!(PRODUCT), json!(greet()), json!(PRODUCT)]);
+    assert_eq!(specifiers, [json!(PRODUCT), json!(blob), json!(PRODUCT)]);
     assert_eq!(added[2]["duplicate_of"], PRODUCT, "{payload}");
     let three = [
         ".specforge/extensions/@sdk/greet/extension.wasm",
@@ -679,7 +678,7 @@ fn add_extension_adds_every_specifier_as_one_change() {
         events(&server, "extension_added"),
         [
             json!({"extensionSpecifier": PRODUCT, "totalExtensions": total, "wasDuplicate": false}),
-            json!({"extensionSpecifier": greet(), "totalExtensions": total, "wasDuplicate": false}),
+            json!({"extensionSpecifier": blob, "totalExtensions": total, "wasDuplicate": false}),
             json!({"extensionSpecifier": PRODUCT, "totalExtensions": total, "wasDuplicate": true}),
         ]
     );
@@ -742,7 +741,7 @@ fn project_initialized_counts_the_extensions() {
 
     // A builtin and a local blob: product (and the builtin peers it
     // requires), and @sdk/greet.
-    let some = initialized("newtwo", json!([PRODUCT, greet()]));
+    let some = initialized("newtwo", json!([PRODUCT, greet_blob()]));
     assert_eq!(some[0]["projectName"], "newtwo");
     let count = some[0]["extensionCount"].as_u64().unwrap();
     assert!(count >= 2, "{some:?}");
@@ -871,7 +870,8 @@ fn every_mutation_reply_lists_what_it_wrote() {
     lists_what_it_wrote(&mut server, &root, remove, json!({"name": PRODUCT}));
 
     // Install a local extension, then remove it: module, lock, config.
-    let installed = lists_what_it_wrote(&mut server, &root, add, json!({"specifiers": [greet()]}));
+    let blob = greet(&root);
+    let installed = lists_what_it_wrote(&mut server, &root, add, json!({"specifiers": [blob]}));
     assert_eq!(files_written(&installed).len(), 3);
     lists_what_it_wrote(&mut server, &root, remove, json!({"name": GREET}));
 
@@ -884,7 +884,7 @@ fn every_mutation_reply_lists_what_it_wrote() {
         &mut unserved(),
         &n1,
         init,
-        json!({"path": n1.to_str().unwrap(), "name": "newone", "extensions": [greet()]}),
+        json!({"path": n1.to_str().unwrap(), "name": "newone", "extensions": [greet_blob()]}),
     );
     assert_eq!(files_written(&first).len(), 5);
     let n2 = scratch.path().join("n2");

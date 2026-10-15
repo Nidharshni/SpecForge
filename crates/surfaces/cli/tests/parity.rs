@@ -149,9 +149,9 @@ fn project_with_product_enabled(proj: &TestProject) {
 }
 
 fn project_with_greet_installed(proj: &TestProject) {
-    let _root = proj.root();
     project(proj);
-    let out = cli(proj).run(&["add", greet_blob().to_str().unwrap(), "--format", "json"]);
+    let blob = pairing::copied_into(proj.root(), &greet_blob());
+    let out = cli(proj).run(&["add", blob.to_str().unwrap(), "--format", "json"]);
     assert_eq!(
         out.code, 0,
         "setup install failed: {}{}",
@@ -259,17 +259,17 @@ const SCENARIOS: &[Scenario] = &[
         cli: |root| {
             args(&[
                 "add",
-                &s(&greet_blob()),
+                &s(&pairing::copied_into(root, &greet_blob())),
                 "--path",
                 &s(root),
                 "--format",
                 "json",
             ])
         },
-        mcp: |_| {
+        mcp: |root| {
             (
                 "specforge.add_extension",
-                json!({"specifiers": [s(&greet_blob())]}),
+                json!({"specifiers": [s(&pairing::copied_into(root, &greet_blob()))]}),
             )
         },
         mcp_rooted: true,
@@ -280,17 +280,17 @@ const SCENARIOS: &[Scenario] = &[
         cli: |root| {
             args(&[
                 "add",
-                &s(&greet_blob()),
+                &s(&pairing::copied_into(root, &greet_blob())),
                 "--path",
                 &s(root),
                 "--format",
                 "json",
             ])
         },
-        mcp: |_| {
+        mcp: |root| {
             (
                 "specforge.add_extension",
-                json!({"specifiers": [s(&greet_blob())]}),
+                json!({"specifiers": [s(&pairing::copied_into(root, &greet_blob()))]}),
             )
         },
         mcp_rooted: true,

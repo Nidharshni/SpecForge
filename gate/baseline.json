@@ -43,7 +43,7 @@
     "crates/surfaces/mcp/tests/lifecycle.rs": 881,
     "crates/surfaces/mcp/tests/mutation_outcome.rs": 1153,
     "crates/surfaces/mcp/tests/operations_mgmt.rs": 833,
-    "crates/surfaces/mcp/tests/operations_mutation.rs": 2391,
+    "crates/surfaces/mcp/tests/operations_mutation.rs": 2390,
     "crates/surfaces/mcp/tests/prompts.rs": 985,
     "crates/surfaces/mcp/tests/subscriptions.rs": 1044,
     "crates/surfaces/mcp/tests/surface_call.rs": 995,

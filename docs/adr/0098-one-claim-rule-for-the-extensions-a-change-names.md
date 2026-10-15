@@ -43,5 +43,15 @@ root (ADR 0092 D7), MCP `init` read it from the server process's working directo
 
 ## What would reopen it
 
-An operation that names extensions and is neither `add` nor `init`; a decision that MCP installs only from inside the
-project (ADR 0092 D7, left open by this round: developing an extension means installing it from a sibling directory).
+An operation that names extensions and is neither `add` nor `init`; a decision that MCP may install from outside the
+project again (see "Closing ADR 0092 D7"; developing an extension means installing it from a sibling directory, which the CLI still does).
+
+## Closing ADR 0092 D7 (2026-10-15)
+
+This ADR left D7 open because installing from a sibling directory is how extensions are developed. The user closed it
+after the round: over MCP a local `.wasm` an `add_extension` or `init` call names must resolve inside the project the
+call installs into (for `init`, the served project, or the server's root while none is served), or the call is
+`invalid_input` on `specifiers` / `extensions`, nothing installed. The check is the surface's, in
+`specforge_mcp::containment::refuse_local_outside`, because MCP owns containment (ADR 0092); the shared resolver and
+the CLI are unchanged (ADR 0092 D6), so developing an extension from a sibling directory still works with the CLI.
+Consequence: an MCP client installs a vendored blob by copying it into the project first.

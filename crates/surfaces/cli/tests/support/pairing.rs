@@ -142,3 +142,13 @@ pub fn mcp_outcome(result: &Value, root: &Path) -> Outcome {
 fn normalized_json(value: &Value, root: &Path) -> Value {
     serde_json::from_str(&normalized(value, root)).expect("normalizing keeps the JSON")
 }
+
+/// `blob` copied into `root` under its own file name, and where it is: MCP installs a local file
+/// only from inside the project (ADR 0098), so a scenario that installs one names that copy.
+pub(crate) fn copied_into(root: &std::path::Path, blob: &std::path::Path) -> std::path::PathBuf {
+    let to = root.join(blob.file_name().expect("a blob has a file name"));
+    if !to.exists() {
+        std::fs::copy(blob, &to).expect("copy the blob into the project");
+    }
+    to
+}

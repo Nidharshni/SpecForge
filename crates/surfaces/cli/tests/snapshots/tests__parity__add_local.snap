@@ -31,8 +31,8 @@ expression: snapshot
           "extension": "@sdk/greet",
           "peers_enabled": [],
           "sha256": "[SHA256]",
-          "source": "local:[BLOB]",
-          "specifier": "[BLOB]",
+          "source": "local:greet.wasm",
+          "specifier": "[ROOT]/greet.wasm",
           "version": "0.1.0"
         }
       ],
@@ -44,8 +44,9 @@ expression: snapshot
     },
     "files": {
       ".specforge/extensions/@sdk/greet/extension.wasm": "<binary>",
+      "greet.wasm": "<binary>",
       "spec/main.spec": "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n",
-      "specforge.lock": "{\n  \"lockfile_version\": 1,\n  \"entries\": [\n    {\n      \"name\": \"@sdk/greet\",\n      \"version\": \"0.1.0\",\n      \"source\": \"local:[BLOB]\",\n      \"wasm_hash\": \"[SHA256]\"\n    }\n  ]\n}"
+      "specforge.lock": "{\n  \"lockfile_version\": 1,\n  \"entries\": [\n    {\n      \"name\": \"@sdk/greet\",\n      \"version\": \"0.1.0\",\n      \"source\": \"local:greet.wasm\",\n      \"wasm_hash\": \"[SHA256]\"\n    }\n  ]\n}"
     },
     "ok": true
   },

@@ -207,7 +207,9 @@ behavior provide_mcp_init_tool "Provide MCP Init Tool" {
     be added to the config and their manifests validated. A relative
     local path among them is read from the directory the call creates, as
     specforge init reads it from the directory it runs in and
-    add_extension from the project's root (ADR 0092 D7). MCP init is always
+    add_extension from the project's root (ADR 0092 D7). A local path that
+    resolves outside the served project (the server's root while none is
+    served) MUST be refused as invalid_input on extensions. MCP init is always
     non-interactive — extension selection is provided via the extensions
     parameter. Interactive extension selection (TTY prompting) is only
     available via the CLI init command. The tool MUST scaffold what
@@ -223,6 +225,7 @@ behavior provide_mcp_init_tool "Provide MCP Init Tool" {
   verify unit "init inside the served project is refused by the call target as a conflict on path, before anything is written"
   verify unit "init refuses a directory whose starter file exists, writing nothing"
   verify unit "a relative local path in extensions is read from the directory init creates, wherever the server runs"
+  verify unit "a local extension path in extensions that resolves outside the served project is refused as invalid_input on extensions"
   verify unit "invalid project name returns error"
   verify unit "unknown extension returns error with diagnostic"
   verify unit "version parameter overrides default 0.1.0"
@@ -278,7 +281,10 @@ behavior provide_mcp_add_extension_tool "Provide MCP Add Extension Tool" {
     repeating an earlier one; a dry run emits none. Its reply is the add
     document specforge add --format json prints (McpAddExtensionResult: one
     entry per specifier under added), plus a note saying whether the server
-    serves the extensions from the next call on, absent for a preview. A registry specifier with no registry configured in
+    serves the extensions from the next call on, absent for a preview. A local
+    .wasm path that resolves outside the project the call installs into MUST be
+    refused as invalid_input on specifiers, nothing installed (ADR 0092 D7, closed
+    by ADR 0098). A registry specifier with no registry configured in
     specforge.json MUST make no network call and MUST return an E063 error
     whose suggestion names the registries key. The tool MUST run the add
     specforge add runs: a builtin is enabled offline with its required
@@ -300,6 +306,7 @@ behavior provide_mcp_add_extension_tool "Provide MCP Add Extension Tool" {
   verify integration "a builtin is enabled with no registry and no network"
   verify integration "a version diamond with a locked peer is refused with R-RES-006, as specforge add refuses it"
   verify unit "after add_extension the server serves the extension it installed"
+  verify unit "a local extension path in specifiers that resolves outside the project is refused as invalid_input on specifiers"
 }
 
 behavior provide_mcp_remove_extension_tool "Provide MCP Remove Extension Tool" {
