@@ -207,9 +207,12 @@ pub fn write_all() -> Vec<Observed> {
     // The project a collect names lies inside the served one (ADR 0092), so
     // it is built for the call, not before the server.
     let fill = |arguments: &str, served: &Served| {
-        let arguments = arguments
-            .replace("<elsewhere>", elsewhere.path().to_str().expect("UTF-8"))
-            .replace("<greet>", greet.to_str().expect("UTF-8"));
+        let mut arguments =
+            arguments.replace("<elsewhere>", elsewhere.path().to_str().expect("UTF-8"));
+        if arguments.contains("<greet>") {
+            let inside = super::blob_in(served.root(), greet.clone());
+            arguments = arguments.replace("<greet>", inside.to_str().expect("UTF-8"));
+        }
         if arguments.contains("<collected>") {
             let collected = super::within(served.root(), collected());
             return arguments.replace("<collected>", collected.path().to_str().expect("UTF-8"));

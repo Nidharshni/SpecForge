@@ -1,4 +1,5 @@
 use super::{Call, ProjectRef, Reach, TargetError, TargetSpec, WithoutProject};
+use crate::containment::Containment;
 use crate::tool::McpError;
 use specforge_ops::view::ProjectView;
 use specforge_project::SharedRuntime;
@@ -58,6 +59,8 @@ pub struct NewProjectDir<'c> {
     pub dir: &'c Path,
     /// The runtime its extensions' declarations are read in: the call's.
     pub runtime: SharedRuntime,
+    /// Where a local file the call installs from must lie: the request's bound.
+    pub(crate) bound: Option<Containment>,
 }
 
 impl Input for Unscoped {
@@ -102,6 +105,7 @@ impl Input for NewProject {
             Some(dir) => Ok(NewProjectDir {
                 dir,
                 runtime: call.runtime(),
+                bound: call.bound(),
             }),
             // The call target refused a call without a path.
             None => Err(Box::new(McpError::from(TargetError::PathRequired))),

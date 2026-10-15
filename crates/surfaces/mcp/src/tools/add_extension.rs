@@ -1,5 +1,6 @@
 //! `specforge.add_extension`: install extensions (`specforge_ops::extension::add`).
 
+use crate::containment::{self, Containment};
 use crate::refusal::ArgumentOf;
 use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
@@ -90,11 +91,18 @@ impl CoreTool for Tool {
         let root = project.root;
         // A relative local path is read from the project's root: the server has no working
         // directory of its own to mean it.
-        let extensions = extension::specified(&args.specifiers.0)
+        let extensions: Vec<_> = extension::specified(&args.specifiers.0)
             .map_err(Self::failed)?
             .into_iter()
             .map(|specified| specified.relative_to(root.dir()))
             .collect();
+        // A local file installs only from inside the project it installs into.
+        containment::refuse_local_outside(
+            &Containment::at(root.dir()),
+            root.dir(),
+            &extensions,
+            "specifiers",
+        )?;
 
         let registry =
             specforge_ops_registry::ConfiguredRegistry::for_project(root, "add_extension");

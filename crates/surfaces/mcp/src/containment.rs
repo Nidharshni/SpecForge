@@ -17,6 +17,7 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::state::McpState;
 use crate::tool::{ErrorCode, McpError};
+use specforge_ops::extension::{Source, Specified};
 
 /// A directory the paths a request names must resolve inside.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -117,6 +118,26 @@ impl Outside {
         )
         .with_file(file)
     }
+}
+
+/// The local `.wasm` files `specifiers` name, each read against `base` when relative, must resolve
+/// inside `bound`: `invalid_input` on `argument` for the first that does not (ADR 0092 D7, closed
+/// by ADR 0098). A builtin, a package and a git specifier name no local file.
+pub(crate) fn refuse_local_outside(
+    bound: &Containment,
+    base: &Path,
+    specifiers: &[Specified],
+    argument: &str,
+) -> Result<(), Box<McpError>> {
+    for specified in specifiers {
+        if let Source::Local(path) = &specified.source {
+            let named = base.join(path);
+            bound
+                .resolve(&named)
+                .map_err(|outside| Box::new(outside.refusal(argument)))?;
+        }
+    }
+    Ok(())
 }
 
 /// `path` made absolute and resolved component by component: `..` leaves

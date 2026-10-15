@@ -12,6 +12,7 @@ mod failure_kinds;
 mod fake_extension;
 mod invariants;
 mod lifecycle;
+mod local_specifier_containment;
 mod management_view;
 mod message_spec;
 mod methods;

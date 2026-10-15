@@ -1068,7 +1068,7 @@ fn add_extension_returns_result() {
     let mut server = TestProject::new().serve_components();
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
-    let blob = specforge_component::committed::GREET.path();
+    let blob = blob_in(&dir, specforge_component::committed::GREET.path());
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
@@ -1101,7 +1101,7 @@ fn listed_hint(server: &mut McpServer, tool: &str, key: &str) -> Value {
 fn add_extension_overwrites_a_changed_module() {
     let mut server = components_server();
     let root = server.root().to_path_buf();
-    let blob = specforge_component::committed::GREET.path();
+    let blob = blob_in(&root, specforge_component::committed::GREET.path());
     let add = |server: &mut McpServer| {
         let resp = call_tool(
             server,
@@ -1232,10 +1232,8 @@ fn add_extension_reads_the_candidate_in_the_host_runtime() {
         .enabling(&[])
         .serve_in(runtime.clone() as specforge_project::SharedRuntime);
     let root = server.root().to_path_buf();
-    let files = tempfile::tempdir().unwrap();
-    let greet = files.path().join("greet.wasm");
+    let greet = root.join("greet.wasm");
     std::fs::write(&greet, specforge_ops::testing::GREET).unwrap();
-
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
@@ -1285,10 +1283,11 @@ const GREET: &str = "@sdk/greet";
 fn server_with_product() -> (Served, std::path::PathBuf) {
     let mut server = components_server();
     let root = server.root().to_path_buf();
+    let blob = blob_in(&root, greet_blob());
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifiers": [greet_blob().to_str().unwrap()]}),
+        json!({"specifiers": [blob.to_str().unwrap()]}),
     );
     assert!(resp["result"].is_object(), "install failed: {resp}");
     (server, root)
@@ -1313,12 +1312,12 @@ fn config_extensions(root: &Path) -> Vec<String> {
 fn add_extension_dry_run_writes_nothing() {
     let mut server = components_server();
     let root = server.root().to_path_buf();
+    let blob = blob_in(&root, greet_blob());
     let before = files_under(&root);
-
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifiers": [greet_blob().to_str().unwrap()], "dry_run": true}),
+        json!({"specifiers": [blob.to_str().unwrap()], "dry_run": true}),
     );
 
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
@@ -1521,7 +1520,7 @@ fn add_extension_already_installed_placeholder() {
     let mut server = TestProject::new().serve_components();
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
-    let blob = specforge_component::committed::GREET.path();
+    let blob = blob_in(&dir, specforge_component::committed::GREET.path());
     let first = call_tool(
         &mut server,
         "specforge.add_extension",
@@ -1693,7 +1692,7 @@ fn add_extension_dry_run() {
     let mut server = TestProject::new().serve_components();
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
-    let blob = specforge_component::committed::GREET.path();
+    let blob = blob_in(&dir, specforge_component::committed::GREET.path());
     let resp = call_tool(
         &mut server,
         "specforge.add_extension",
@@ -1711,7 +1710,7 @@ fn remove_extension_dry_run() {
     let mut server = TestProject::new().serve_components();
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
-    let blob = specforge_component::committed::GREET.path();
+    let blob = blob_in(&dir, specforge_component::committed::GREET.path());
     let _install = call_tool(
         &mut server,
         "specforge.add_extension",
@@ -1786,7 +1785,7 @@ fn add_extension_adds_the_extension_to_config() {
     let added = tool(
         &mut server,
         "specforge.add_extension",
-        json!({"specifiers": [greet_blob().to_str().unwrap()]}),
+        json!({"specifiers": [blob_in(&root, greet_blob()).to_str().unwrap()]}),
     );
 
     // One specifier, one entry in `added`.
@@ -1812,8 +1811,8 @@ fn add_extension_contract() {
     // component runtime so the installed module loads.
     let mut server = components_server();
     let root = server.root().to_path_buf();
+    let specifier = json!(blob_in(&root, greet_blob()).to_str().unwrap());
     let before = files_under(&root);
-    let specifier = json!(greet_blob().to_str().unwrap());
 
     // dry_run_safe: a preview, nothing written, no extension added.
     let resp = call_tool(
@@ -1864,7 +1863,7 @@ fn remove_extension_contract() {
     let mut server = TestProject::new().serve_components();
     let dir = server.root().to_path_buf();
     assert!(dir.join("specforge.json").is_file());
-    let blob = specforge_component::committed::GREET.path();
+    let blob = blob_in(&dir, specforge_component::committed::GREET.path());
     let _install = call_tool(
         &mut server,
         "specforge.add_extension",

@@ -58,7 +58,7 @@ Every argument of a tool, prompt or resource that names a file or directory, and
 - **D6. The CLI keeps outside paths.** `specforge format ../x`, `check --path`, `render --out-dir` act for a user
   who is already at the file system. Only MCP, where a client the user did not type names the path, is
   bounded. The LSP names files by the editor's own URIs and is not changed.
-- **D7. Left open, by decision.** A local extension (`.wasm` or crate directory) a client names in
+- **D7. Closed by ADR 0098 (2026-10-15); left open, by decision, until then.** A local extension (`.wasm` or crate directory) a client names in
   `add_extension` or `init` is read from where it is (a relative one from the project root); it is never
   written, and its bytes are checked and run in the sandbox. Installing from a sibling directory is how
   extensions are developed. Whether MCP may install from outside the project, and from `git+`, is a separate
@@ -78,3 +78,5 @@ Every argument of a tool, prompt or resource that names a file or directory, and
 - The invariant `mcp_served_project_consistency` states the rule; its tests are `tests/path_containment.rs`.
 
 **Amended by ADR 0098 (2026-10-15):** D7: `init` reads a relative local specifier from the directory it creates (the CLI's working directory, over MCP the directory the call names), as `add_extension` reads it from the project's root. Whether MCP may install from outside the project stays open.
+
+**Amended by ADR 0098 (2026-10-15), second part:** D7 is closed: over MCP, a local `.wasm` that `add_extension` or `init` names must resolve inside the project (the served project, or the server's root while none is served); a path that leaves it is `invalid_input` on `specifiers` or `extensions`. The CLI is unchanged (D6). `git+` stays unsupported.
