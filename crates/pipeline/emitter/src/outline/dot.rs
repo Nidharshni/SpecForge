@@ -79,8 +79,10 @@ pub(super) fn render_dot(outline: &OutlineIntermediate, options: &OutlineOptions
 
         // Enhancement edges (dashed)
         for enh in &outline.enhancements {
+            // No edge to a kind no declaration declares.
+            let Some(owner) = &enh.owner else { continue };
             let from_id = sanitize_id(&enh.enhancer);
-            let to_id = sanitize_id(&enh.owner);
+            let to_id = sanitize_id(owner);
             writeln!(
                 out,
                 "    {} -> {} [label=\"enhances {} (+{})\", style=dashed, color=\"#999999\"];",

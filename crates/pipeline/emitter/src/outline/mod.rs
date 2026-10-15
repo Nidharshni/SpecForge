@@ -176,7 +176,9 @@ pub(crate) struct OutlineDependency {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct OutlineEnhancement {
     pub enhancer: String,
-    pub owner: String,
+    /// The extension that declares `target_kind`; `None` (JSON `null`) when
+    /// no declaration does (ADR 0096).
+    pub owner: Option<String>,
     pub target_kind: String,
     pub field_count: usize,
     pub field_names: Vec<String>,

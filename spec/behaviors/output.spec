@@ -137,6 +137,7 @@ behavior render_extension_outline "Render the Extension Outline" {
   verify unit "the builtins' outline is unchanged in every format"
   verify unit "each extension's card names the describe categories it declares, and providers when its handshake says so"
   verify unit "the dependencies every format shows, json included, are the ones --deps selects"
+  verify unit "an enhancement of a kind no extension declares names no owner"
   verify contract "Render the Extension Outline: outline rendering holds — declarations_loaded, one_card_per_extension, declared_text_contained, deps_selected"
 }
 
@@ -180,6 +181,7 @@ behavior compute_traceability_chain "Compute Traceability Chain" {
   verify unit "an expected link declared from the other side, through an inverse field of the target kind, is not missing"
   verify unit "trace output includes schema version"
   verify unit "tracing an entity the graph lacks is E003 naming the closest entity"
+  verify unit "a reference field another extension adds to a kind is not an expected link"
   verify contract "Compute Traceability Chain: traceability chain computation holds — validation_complete_fired, full_chain_traversed, missing_links_flagged, trace_chain_computed_emitted"
 }
 

@@ -14,6 +14,7 @@ mod emit_matrix;
 mod emitter_error;
 mod model;
 mod outline;
+mod outline_owner;
 mod schema;
 mod scope;
 mod stress;

@@ -198,7 +198,7 @@ fn sides(c: &mut ContributionsBuilder) {
     c.kind("e", |k| {
         k.description("enhanced");
     });
-    c.enhance("e", "@probe/sides", |e| {
+    c.enhance("e", |e| {
         e.field("pins", |f| {
             f.field_type(FieldType::ReferenceList)
                 .edge("Pins")

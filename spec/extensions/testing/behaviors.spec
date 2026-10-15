@@ -11,17 +11,17 @@ behavior te_contribute_testability "Contribute Testability to Owned Kinds" {
   types      [TestingVerifyKind]
   contract   """
     @specforge/testing MUST contribute testability as entity enhancements
-    carrying verify kinds, one per testable kind, each naming the kind's
-    owner. Applying such an enhancement marks the target kind testable
-    with exactly those verify kinds. An enhancement whose owner the
-    project does not use is skipped silently.
+    carrying verify kinds, one per testable kind, each kind declared by an
+    optional peer of @specforge/testing. Applying such an enhancement marks
+    the target kind testable with exactly those verify kinds. An
+    enhancement of a kind no loaded extension declares is skipped silently.
   """
   requires {
     kinds_registered "the owning extensions' kinds are registered before enhancements apply"
   }
   ensures {
     kinds_testable "each table kind is testable with the table's verify kinds"
-    owner_optional "a kind whose owner is not loaded produces no diagnostic"
+    owner_optional "a kind whose extension is not loaded produces no diagnostic"
   }
   verify unit "testing makes software and governance kinds testable with their verify kinds"
   verify unit "an enhancement with verify kinds makes its target kind testable"

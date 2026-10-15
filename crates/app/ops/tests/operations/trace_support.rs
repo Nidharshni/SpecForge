@@ -73,7 +73,7 @@ fn build_with(required_parent: bool) -> RegistryBuild {
     });
     let mut formal = ContributionsBuilder::new(ExtensionMeta::new("@t/formal", "1.0.0"));
     formal.meta.peer_dependencies = vec![peer("@t/soft")];
-    formal.enhance("behavior", "@t/formal", |e| {
+    formal.enhance("behavior", |e| {
         e.field("satisfies", |f| {
             f.field_type(FieldType::ReferenceList)
                 .edge("behavior_satisfies")

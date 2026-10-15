@@ -532,7 +532,7 @@ fn a_shared_or_enhancement_fields_undeclared_edge_label_is_w021() {
                 .edge("SeeAlso")
                 .target_kind("task");
         });
-        c.enhance("task", "@test/ext", |e| {
+        c.enhance("task", |e| {
             e.field("pins", |f| {
                 f.field_type(FieldType::ReferenceList)
                     .edge("Pins")

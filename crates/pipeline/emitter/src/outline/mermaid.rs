@@ -72,8 +72,10 @@ pub(super) fn render_mermaid(outline: &OutlineIntermediate, options: &OutlineOpt
 
         // Enhancement edges (dotted)
         for enh in &outline.enhancements {
+            // No edge to a kind no declaration declares.
+            let Some(owner) = &enh.owner else { continue };
             let from_id = sanitize_id(&enh.enhancer);
-            let to_id = sanitize_id(&enh.owner);
+            let to_id = sanitize_id(owner);
             writeln!(
                 out,
                 "    {} -.->|\"enhances {}\"| {}",
@@ -92,7 +94,8 @@ pub(super) fn render_mermaid(outline: &OutlineIntermediate, options: &OutlineOpt
                 outline
                     .enhancements
                     .iter()
-                    .flat_map(|e| [e.enhancer.clone(), e.owner.clone()]),
+                    .filter_map(|e| e.owner.clone().map(|owner| [e.enhancer.clone(), owner]))
+                    .flatten(),
             )
             .collect();
         let orphans: Vec<_> = outline

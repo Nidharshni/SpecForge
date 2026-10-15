@@ -157,13 +157,10 @@ type EdgeTypeDescriptor {
 // Fields and verify kinds one extension adds to an entity kind
 // another extension declares.
 type EntityEnhancementDescriptor {
-  target_kind      string            @readonly
-  // The extension that owns the target kind: an enhancement of a kind whose
-  // owner is not loaded is skipped silently
-  source_extension string            @readonly
-  fields           FieldDescriptor[] @optional
+  target_kind  string            @readonly
+  fields       FieldDescriptor[] @optional
   // Makes the target kind testable with exactly these verify kinds (ADR 0002)
-  verify_kinds     string[]          @optional
+  verify_kinds string[]          @optional
   verify unit "EntityEnhancementDescriptor schema is valid"
 }
 
@@ -308,6 +305,7 @@ type FieldRegistryEntry {
   /// canonically; its enum values and proof role are the descriptor's.
   field_type          FieldType              @readonly
   enum_values         string[]               @optional
+  // The extension that declared the field: the kind's own, its shared field's or an enhancement's
   source_extension    string                 @readonly
   edge                string                 @optional
   target_kind         string                 @optional

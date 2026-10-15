@@ -13,7 +13,7 @@ fn project() -> Project {
         c.kind("feature", |k| {
             k.keyword("feature");
         });
-        c.enhance("behavior", "@t/soft", |e| {
+        c.enhance("behavior", |e| {
             e.field("abstract", |f| {
                 f.field_type(FieldType::Bool).exempts_obligations();
             });

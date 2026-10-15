@@ -49,6 +49,7 @@ behavior build_model_intermediate "Build Model Intermediate Representation" {
   """
   verify unit "every schema entity kind maps to a ModelEntity"
   verify unit "a field's type is named as its extension declares it; DBML writes its own column type"
+  verify unit "a field an entity enhancement adds names the extension that declared it"
   verify unit "synthetic id field is first field with primary_key=true"
   verify unit "reference field produces ManyToOne cardinality"
   verify unit "reference_list field produces ManyToMany cardinality"

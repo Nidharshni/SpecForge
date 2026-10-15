@@ -13,6 +13,7 @@ mod coverage;
 mod cross_extension;
 mod determinism;
 mod diagnostics_json;
+mod enhancement_credit;
 mod errors;
 mod explore;
 mod export_cache;

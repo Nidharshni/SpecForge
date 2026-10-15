@@ -238,10 +238,9 @@ impl EdgeBuilder {
 pub struct EnhancementBuilder(pub(crate) EntityEnhancementDescriptor);
 
 impl EnhancementBuilder {
-    pub(crate) fn new(target_kind: &str, source_extension: &str) -> Self {
+    pub(crate) fn new(target_kind: &str) -> Self {
         Self(EntityEnhancementDescriptor {
             target_kind: target_kind.to_string(),
-            source_extension: source_extension.to_string(),
             fields: Vec::new(),
             verify_kinds: None,
         })
