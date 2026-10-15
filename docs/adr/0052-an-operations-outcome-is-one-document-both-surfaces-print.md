@@ -2,6 +2,7 @@
 
 **Status:** accepted (2026-10-11). Amends ADR 0015 D6 and ADR 0004 D1-c; extends the list in
 ADR 0048 D2. D5 extended by ADR 0058 to watch's lines.
+ADR 0102: every file a document names follows one rule.
 
 ADR 0048 typed every MCP reply, and its round typed the documents both surfaces already shared
 (analyze, collect, providers, doctor, progress, gaps, trace's chain, schema). Six other outcomes
