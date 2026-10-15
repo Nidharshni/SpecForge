@@ -105,12 +105,13 @@ type SchemaEntityKind {
 }
 
 type SchemaField {
-  name          string    @readonly
-  field_type    FieldType @readonly
-  required      boolean
-  target_kind   string    @optional
-  enum_values   string[]  @optional
-  default_value string    @optional
+  name             string    @readonly
+  field_type       FieldType @readonly
+  required         boolean
+  target_kind      string    @optional
+  enum_values      string[]  @optional
+  default_value    string    @optional
+  source_extension string    @readonly // the extension that declared the field
   verify unit "SchemaField schema is valid"
 }
 

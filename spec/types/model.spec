@@ -33,6 +33,7 @@ type ModelField {
   enum_values    string[]  @readonly @optional
   is_primary_key boolean   @readonly
   references     string    @readonly @optional // target entity name
+  contributed_by string    @readonly @optional // the extension an entity enhancement's field comes from
   verify unit "ModelField schema is valid"
 }
 

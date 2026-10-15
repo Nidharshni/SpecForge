@@ -27,7 +27,6 @@ fn outline_of_software_alone(format: OutlineFormat) -> String {
     behavior = "render_extension_outline",
     verify = "an enhancement of a kind no extension declares names no owner"
 )]
-#[ignore = "flipped by T4"]
 fn an_enhancement_of_a_kind_no_declaration_declares_has_no_owner() {
     let json: Value =
         serde_json::from_str(&outline_of_software_alone(OutlineFormat::Json)).unwrap();
