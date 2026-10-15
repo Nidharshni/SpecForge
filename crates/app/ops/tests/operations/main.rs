@@ -19,6 +19,7 @@ mod explore;
 mod export_cache;
 mod extension_calls;
 mod failures;
+mod field_references;
 mod field_types;
 mod formal_diagnostics;
 mod graph_edges;

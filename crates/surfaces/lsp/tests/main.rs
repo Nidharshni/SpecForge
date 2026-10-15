@@ -12,6 +12,7 @@ mod contracts;
 mod cursor;
 mod document;
 mod e2e;
+mod field_references;
 mod follow;
 mod hover;
 mod hover_obligations;
