@@ -3128,6 +3128,22 @@ Owner: core
 Level: warning
 ```
 
+## W158
+
+```
+W158: Verify statements on a kind that accepts none
+
+An entity declares `verify` statements, but its kind accepts none: no extension
+made the kind testable (`supports_verify`). `verify` is reserved syntax; what an
+obligation means comes from an extension, so a kind takes statements only once
+one enables them (ADR 0002, ADR 0094). The statements are not fields, so this is
+not W020. Enable an extension that makes the kind testable (for software kinds,
+`specforge add @specforge/testing`), or remove the statements.
+
+Owner: core
+Level: warning
+```
+
 ## Retired codes
 
 These codes are no longer emitted, and are never reused for another meaning.

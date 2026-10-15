@@ -733,4 +733,7 @@ catalog! {
     W156: Warning core,
         "Publisher key re-pinned",
         "A registry package is signed with a different key than the one pinned for it, the change was accepted (`--yes`, a yes at the prompt, or the new key on `trusted_keys`), and the install was written, so the new key is now pinned. It is reported when the pin is saved: an install that is refused or fails pins nothing and reports none. That is what a key rotation looks like, and also what a compromised publisher looks like: confirm the change with the publisher if you did not expect it. The message names both key ids.";
+    W158: Warning core,
+        "Verify statements on a kind that accepts none",
+        "An entity declares `verify` statements, but its kind accepts none: no extension made the kind testable (`supports_verify`). `verify` is reserved syntax; what an obligation means comes from an extension, so a kind takes statements only once one enables them (ADR 0002, ADR 0094). The statements are not fields, so this is not W020. Enable an extension that makes the kind testable (for software kinds, `specforge add @specforge/testing`), or remove the statements.";
 }

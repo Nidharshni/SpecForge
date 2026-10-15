@@ -18,12 +18,10 @@ pub(crate) enum Check {
     NoIncomingEdges(EdgeScope),
     NoOutgoingEdges(EdgeScope),
     NoEdges,
-    /// `missing_field_when_flag_set` (`skip_owing_nothing` when the field is
-    /// `verify`: an entity that owes no statements is not missing them) and
-    /// `missing_required_field`.
+    /// `missing_field_when_flag_set` and `missing_required_field`; a
+    /// `verify` field builds [`Check::NoVerifyStatements`] instead.
     MissingField {
         field: String,
-        skip_owing_nothing: bool,
     },
     FieldValue {
         field: String,
@@ -193,15 +191,7 @@ fn evaluate(
             record.edges(Direction::Incoming, None) == 0
                 && record.edges(Direction::Outgoing, None) == 0,
         ),
-        Check::MissingField {
-            field,
-            skip_owing_nothing,
-        } => {
-            // An entity that owes no obligations (a union, which has no
-            // body to hold them, one an extension's flag exempts, or one
-            // whose kind accepts no `verify`) is not missing `verify`.
-            violated(!(*skip_owing_nothing && record.exempts_statements()) && !record.writes(field))
-        }
+        Check::MissingField { field } => violated(!record.writes(field)),
         Check::FieldValue { field, constraint } => violated(
             // A field that is not written breaks no constraint.
             record.field(field).is_some_and(|value| match constraint {

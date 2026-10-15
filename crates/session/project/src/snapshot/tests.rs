@@ -85,7 +85,6 @@ fn every_variant_has_a_value_shape() {
             ("mix", ValueShape::Mixed),
             ("metric", ValueShape::Expression),
             ("ensures", ValueShape::Block),
-            ("verify", ValueShape::Verify),
         ]
     );
     for shape in [

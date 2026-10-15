@@ -474,6 +474,8 @@ fn record(
         span: node.source_span.clone(),
         fields: entries
             .iter()
+            // Temporary (until T8): the parser still writes the statements as a field.
+            .filter(|entry| !matches!(entry.value, FieldValue::VerifyList(_)))
             .map(|entry| FieldRecord {
                 key: entry.key.to_string(),
                 text: field_text(&entry.value),

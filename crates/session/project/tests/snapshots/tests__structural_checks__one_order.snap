@@ -28,6 +28,10 @@ expression: found
     "unrecognized field 'bogus' on entity 'g_bogus' of kind 'gadget' at a.spec"
   ],
   [
+    "W158",
+    "entity 'g_bogus' of kind 'gadget' declares verify statements, which its kind does not accept"
+  ],
+  [
     "E022",
     "reference 'w_one' in field 'parts' of gadget 'g_parts' targets a widget, but this field expects gadget"
   ],
