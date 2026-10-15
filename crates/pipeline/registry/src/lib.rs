@@ -29,8 +29,8 @@ pub use specforge_protocol_types::PeerDependency;
 
 // --- The surfaces registry ---
 pub use surface::{
-    CommandArgType, SurfaceRegistryEntry, SurfaceType, refuse_malformed_tool_schemas,
-    register_surface_contributions,
+    CommandArgType, CommandRoute, CommandRoutes, ShadowedRoute, SurfaceRegistryEntry, SurfaceType,
+    refuse_malformed_tool_schemas, register_surface_contributions,
 };
 
 // --- What the checks after the graph build read about an entity (ADR 0019) ---

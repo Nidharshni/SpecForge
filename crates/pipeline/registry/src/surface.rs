@@ -1,9 +1,13 @@
-//! The surfaces registry: which extension owns each declared command, MCP
-//! tool and MCP resource (first registration wins).
+//! The surfaces registry: routes the commands and registers each declared
+//! MCP tool and MCP resource (first registration wins).
+
+mod routes;
 
 use specforge_common::{Diagnostic, codes};
-use specforge_protocol_types::SurfaceDescriptor;
+use specforge_protocol_types::{ExtensionDeclaration, SurfaceDescriptor};
 use std::collections::HashMap;
+
+pub use routes::{CommandRoute, CommandRoutes, ShadowedRoute};
 
 /// The protocol's own type: one wire shape (`"string"`, `{"enum":
 /// {"values": [..]}}`, ...) for every declared command argument.
@@ -11,7 +15,6 @@ pub use specforge_protocol_types::CommandArgType;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SurfaceType {
-    Command,
     McpTool,
     McpResource,
 }
@@ -58,37 +61,24 @@ pub fn refuse_malformed_tool_schemas(
     diagnostics
 }
 
-/// Register the declared surfaces, extension by extension in load order
-/// (first registration wins). Detects duplicate command IDs, MCP tool
-/// names and MCP resource names across extensions (E039).
+/// Route the commands and register the MCP tools and resources, extension
+/// by extension in load order (first registration wins). A command that a
+/// command routed under its name shadows, and an MCP tool or resource name
+/// an earlier extension registered, is E039.
 pub fn register_surface_contributions(
-    declared: &[(String, SurfaceDescriptor)],
-) -> (Vec<SurfaceRegistryEntry>, Vec<Diagnostic>) {
+    declarations: &[ExtensionDeclaration],
+) -> (CommandRoutes, Vec<SurfaceRegistryEntry>, Vec<Diagnostic>) {
+    let mut routes = CommandRoutes::default();
     let mut entries = Vec::new();
     let mut diagnostics = Vec::new();
-    let mut seen_commands: HashMap<String, String> = HashMap::new();
     let mut seen_tools: HashMap<String, String> = HashMap::new();
     let mut seen_resources: HashMap<String, String> = HashMap::new();
 
-    for (ext_name, surfaces) in declared {
+    for declaration in declarations {
+        let ext_name = declaration.name();
+        let surfaces = &declaration.surfaces;
         for cmd in &surfaces.commands {
-            if let Some(first_ext) = seen_commands.get(&cmd.id) {
-                diagnostics.push(Diagnostic::new(
-                    codes::E039,
-                    format!(
-                        "duplicate surface command ID '{}': extension '{}' conflicts with '{}'",
-                        cmd.id, ext_name, first_ext
-                    ),
-                ));
-            } else {
-                seen_commands.insert(cmd.id.clone(), ext_name.clone());
-                entries.push(SurfaceRegistryEntry {
-                    surface_type: SurfaceType::Command,
-                    contribution_name: cmd.id.clone(),
-                    extension_name: ext_name.clone(),
-                    export_name: cmd.export.clone(),
-                });
-            }
+            diagnostics.extend(routes.add(declaration, cmd));
         }
 
         for tool in &surfaces.mcp_tools {
@@ -101,11 +91,11 @@ pub fn register_surface_contributions(
                     ),
                 ));
             } else {
-                seen_tools.insert(tool.name.clone(), ext_name.clone());
+                seen_tools.insert(tool.name.clone(), ext_name.to_string());
                 entries.push(SurfaceRegistryEntry {
                     surface_type: SurfaceType::McpTool,
                     contribution_name: tool.name.clone(),
-                    extension_name: ext_name.clone(),
+                    extension_name: ext_name.to_string(),
                     export_name: tool.export.clone(),
                 });
             }
@@ -121,16 +111,16 @@ pub fn register_surface_contributions(
                     ),
                 ));
             } else {
-                seen_resources.insert(resource.name.clone(), ext_name.clone());
+                seen_resources.insert(resource.name.clone(), ext_name.to_string());
                 entries.push(SurfaceRegistryEntry {
                     surface_type: SurfaceType::McpResource,
                     contribution_name: resource.name.clone(),
-                    extension_name: ext_name.clone(),
+                    extension_name: ext_name.to_string(),
                     export_name: resource.export.clone(),
                 });
             }
         }
     }
 
-    (entries, diagnostics)
+    (routes, entries, diagnostics)
 }

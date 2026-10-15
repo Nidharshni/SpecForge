@@ -13,6 +13,208 @@ expression: "digest(&load(&runtime, &all))"
       "name": "analysis_available"
     }
   ],
+  "commands": [
+    {
+      "export": "cmd__product_features",
+      "extension": "@specforge/product",
+      "route": "product features"
+    },
+    {
+      "export": "cmd__product_journeys",
+      "extension": "@specforge/product",
+      "route": "product journeys"
+    },
+    {
+      "export": "cmd__product_deliverables",
+      "extension": "@specforge/product",
+      "route": "product deliverables"
+    },
+    {
+      "export": "cmd__product_milestones",
+      "extension": "@specforge/product",
+      "route": "product milestones"
+    },
+    {
+      "export": "cmd__product_modules",
+      "extension": "@specforge/product",
+      "route": "product modules"
+    },
+    {
+      "export": "cmd__product_terms",
+      "extension": "@specforge/product",
+      "route": "product terms"
+    },
+    {
+      "export": "cmd__product_personas",
+      "extension": "@specforge/product",
+      "route": "product personas"
+    },
+    {
+      "export": "cmd__product_channels",
+      "extension": "@specforge/product",
+      "route": "product channels"
+    },
+    {
+      "export": "cmd__product_releases",
+      "extension": "@specforge/product",
+      "route": "product releases"
+    },
+    {
+      "export": "cmd__product_milestone_completion",
+      "extension": "@specforge/product",
+      "route": "product milestone-completion"
+    },
+    {
+      "export": "cmd__product_journey_coverage",
+      "extension": "@specforge/product",
+      "route": "product journey-coverage"
+    },
+    {
+      "export": "cmd__product_feature_impact",
+      "extension": "@specforge/product",
+      "route": "product feature-impact"
+    },
+    {
+      "export": "cmd__product_feature_dependents",
+      "extension": "@specforge/product",
+      "route": "product feature-dependents"
+    },
+    {
+      "export": "cmd__product_persona_features",
+      "extension": "@specforge/product",
+      "route": "product persona-features"
+    },
+    {
+      "export": "cmd__product_channel_features",
+      "extension": "@specforge/product",
+      "route": "product channel-features"
+    },
+    {
+      "export": "cmd__product_deliverable_traceability",
+      "extension": "@specforge/product",
+      "route": "product deliverable-traceability"
+    },
+    {
+      "export": "cmd__product_feature_deliverables",
+      "extension": "@specforge/product",
+      "route": "product feature-deliverables"
+    },
+    {
+      "export": "cmd__product_persona_channels",
+      "extension": "@specforge/product",
+      "route": "product persona-channels"
+    },
+    {
+      "export": "cmd__product_deliverable_personas",
+      "extension": "@specforge/product",
+      "route": "product deliverable-personas"
+    },
+    {
+      "export": "cmd__product_deliverable_completion",
+      "extension": "@specforge/product",
+      "route": "product deliverable-completion"
+    },
+    {
+      "export": "cmd__product_release_completion",
+      "extension": "@specforge/product",
+      "route": "product release-completion"
+    },
+    {
+      "export": "cmd__product_deliverable_priority",
+      "extension": "@specforge/product",
+      "route": "product deliverable-priority"
+    },
+    {
+      "export": "cmd__product_unscheduled_features",
+      "extension": "@specforge/product",
+      "route": "product unscheduled-features"
+    },
+    {
+      "export": "cmd__product_owner_workload",
+      "extension": "@specforge/product",
+      "route": "product owner-workload"
+    },
+    {
+      "export": "cmd__product_feature_ordering",
+      "extension": "@specforge/product",
+      "route": "product feature-ordering"
+    },
+    {
+      "export": "cmd__product_critical_path",
+      "extension": "@specforge/product",
+      "route": "product critical-path"
+    },
+    {
+      "export": "cmd__product_module_depth",
+      "extension": "@specforge/product",
+      "route": "product module-depth"
+    },
+    {
+      "export": "cmd__product_module_coupling",
+      "extension": "@specforge/product",
+      "route": "product module-coupling"
+    },
+    {
+      "export": "cmd__product_deliverable_dependents",
+      "extension": "@specforge/product",
+      "route": "product deliverable-dependents"
+    },
+    {
+      "export": "cmd__product_coverage_matrix",
+      "extension": "@specforge/product",
+      "route": "product coverage-matrix"
+    },
+    {
+      "export": "cmd__product_channel_coverage_matrix",
+      "extension": "@specforge/product",
+      "route": "product channel-coverage-matrix"
+    },
+    {
+      "export": "cmd__product_feature_overlap",
+      "extension": "@specforge/product",
+      "route": "product feature-overlap"
+    },
+    {
+      "export": "cmd__product_term_graph",
+      "extension": "@specforge/product",
+      "route": "product term-graph"
+    },
+    {
+      "export": "cmd__product_term_clusters",
+      "extension": "@specforge/product",
+      "route": "product term-clusters"
+    },
+    {
+      "export": "cmd__product_term_density",
+      "extension": "@specforge/product",
+      "route": "product term-density"
+    },
+    {
+      "export": "cmd__product_milestone_timeline",
+      "extension": "@specforge/product",
+      "route": "product milestone-timeline"
+    },
+    {
+      "export": "cmd__product_milestone_velocity",
+      "extension": "@specforge/product",
+      "route": "product milestone-velocity"
+    },
+    {
+      "export": "cmd__product_weighted_milestone_completion",
+      "extension": "@specforge/product",
+      "route": "product weighted-milestone-completion"
+    },
+    {
+      "export": "cmd__product_bulk_status",
+      "extension": "@specforge/product",
+      "route": "product bulk-status"
+    },
+    {
+      "export": "cmd__product_health",
+      "extension": "@specforge/product",
+      "route": "product health"
+    }
+  ],
   "diagnostics": [],
   "edges": {
     "AxiomAssumesInvariant": {
@@ -8179,246 +8381,6 @@ expression: "digest(&load(&runtime, &all))"
       "wasm_function": null
     }
   ],
-  "surfaces": [
-    {
-      "export": "cmd__product_features",
-      "extension": "@specforge/product",
-      "name": "features",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_journeys",
-      "extension": "@specforge/product",
-      "name": "journeys",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_deliverables",
-      "extension": "@specforge/product",
-      "name": "deliverables",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_milestones",
-      "extension": "@specforge/product",
-      "name": "milestones",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_modules",
-      "extension": "@specforge/product",
-      "name": "modules",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_terms",
-      "extension": "@specforge/product",
-      "name": "terms",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_personas",
-      "extension": "@specforge/product",
-      "name": "personas",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_channels",
-      "extension": "@specforge/product",
-      "name": "channels",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_releases",
-      "extension": "@specforge/product",
-      "name": "releases",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_milestone_completion",
-      "extension": "@specforge/product",
-      "name": "milestone_completion",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_journey_coverage",
-      "extension": "@specforge/product",
-      "name": "journey_coverage",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_feature_impact",
-      "extension": "@specforge/product",
-      "name": "feature_impact",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_feature_dependents",
-      "extension": "@specforge/product",
-      "name": "feature_dependents",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_persona_features",
-      "extension": "@specforge/product",
-      "name": "persona_features",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_channel_features",
-      "extension": "@specforge/product",
-      "name": "channel_features",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_deliverable_traceability",
-      "extension": "@specforge/product",
-      "name": "deliverable_traceability",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_feature_deliverables",
-      "extension": "@specforge/product",
-      "name": "feature_deliverables",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_persona_channels",
-      "extension": "@specforge/product",
-      "name": "persona_channels",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_deliverable_personas",
-      "extension": "@specforge/product",
-      "name": "deliverable_personas",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_deliverable_completion",
-      "extension": "@specforge/product",
-      "name": "deliverable_completion",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_release_completion",
-      "extension": "@specforge/product",
-      "name": "release_completion",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_deliverable_priority",
-      "extension": "@specforge/product",
-      "name": "deliverable_priority",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_unscheduled_features",
-      "extension": "@specforge/product",
-      "name": "unscheduled_features",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_owner_workload",
-      "extension": "@specforge/product",
-      "name": "owner_workload",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_feature_ordering",
-      "extension": "@specforge/product",
-      "name": "feature_ordering",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_critical_path",
-      "extension": "@specforge/product",
-      "name": "critical_path",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_module_depth",
-      "extension": "@specforge/product",
-      "name": "module_depth",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_module_coupling",
-      "extension": "@specforge/product",
-      "name": "module_coupling",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_deliverable_dependents",
-      "extension": "@specforge/product",
-      "name": "deliverable_dependents",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_coverage_matrix",
-      "extension": "@specforge/product",
-      "name": "coverage_matrix",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_channel_coverage_matrix",
-      "extension": "@specforge/product",
-      "name": "channel_coverage_matrix",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_feature_overlap",
-      "extension": "@specforge/product",
-      "name": "feature_overlap",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_term_graph",
-      "extension": "@specforge/product",
-      "name": "term_graph",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_term_clusters",
-      "extension": "@specforge/product",
-      "name": "term_clusters",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_term_density",
-      "extension": "@specforge/product",
-      "name": "term_density",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_milestone_timeline",
-      "extension": "@specforge/product",
-      "name": "milestone_timeline",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_milestone_velocity",
-      "extension": "@specforge/product",
-      "name": "milestone_velocity",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_weighted_milestone_completion",
-      "extension": "@specforge/product",
-      "name": "weighted_milestone_completion",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_bulk_status",
-      "extension": "@specforge/product",
-      "name": "bulk_status",
-      "surface_type": "Command"
-    },
-    {
-      "export": "cmd__product_health",
-      "extension": "@specforge/product",
-      "name": "health",
-      "surface_type": "Command"
-    }
-  ]
+  "shadowed": 0,
+  "surfaces": []
 }

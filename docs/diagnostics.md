@@ -460,9 +460,13 @@ Level: error
 ```
 E039: Duplicate surface contribution
 
-Two extensions register the same CLI surface command ID, the same MCP tool name,
-or the same MCP resource name. Rename one extension's contribution so the
-identifier is unique across installed extensions.
+Two contributions claim one name. Two commands route under one name, `specforge
+<short> <command>`: one short name, and ids that spell one command name (`_` and
+`-` alike), whether from two extensions or declared twice by one; the first in
+load order is routed and the later runs on no surface. Or two extensions
+register one MCP tool name, or one MCP resource name. One command id under two
+short names is two names, not a collision. Rename the later contribution, or
+give its extension another short name (`ext_short`; the SDK's `short`).
 
 Owner: core
 Level: error
@@ -1130,9 +1134,10 @@ or an earlier extension's tool; a resource whose URIs a core resource or an
 earlier extension resource already serves; a command whose tool name an explicit
 tool (or a core tool) already has; a command the host refuses (an arg taking
 `--path`, `--format` or `--help`, two args spelling one option, or a default its
-declaration contradicts); a command another extension of the same short name
-routes first. Only MCP reports it, so `specforge check` does not. Rename the
-contribution if the collision is unintended; otherwise no action is needed.
+declaration contradicts); a command another command routes first under its name
+(`specforge check` reports that one as E039). I017 itself only MCP reports.
+Rename the contribution if the collision is unintended; otherwise no action is
+needed.
 
 Owner: core
 Level: info

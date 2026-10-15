@@ -4,6 +4,13 @@ expression: "digest(&load(&runtime, &[\"@sdk/greet\"]))"
 ---
 {
   "check_passes": [],
+  "commands": [
+    {
+      "export": "cmd__hello",
+      "extension": "@sdk/greet",
+      "route": "greet hello"
+    }
+  ],
   "diagnostics": [],
   "edges": {},
   "ext_short": {
@@ -121,12 +128,6 @@ expression: "digest(&load(&runtime, &[\"@sdk/greet\"]))"
       "wasm_function": null
     }
   ],
-  "surfaces": [
-    {
-      "export": "cmd__hello",
-      "extension": "@sdk/greet",
-      "name": "hello",
-      "surface_type": "Command"
-    }
-  ]
+  "shadowed": 0,
+  "surfaces": []
 }

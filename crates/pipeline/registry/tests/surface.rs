@@ -4,7 +4,8 @@ use specforge_protocol_types::{
     McpResourceDescriptor, McpToolDescriptor, SurfaceDescriptor,
 };
 use specforge_registry::{
-    CommandArgType, SurfaceRegistryEntry, SurfaceType, register_surface_contributions,
+    CommandArgType, CommandRoutes, SurfaceRegistryEntry, SurfaceType,
+    register_surface_contributions,
 };
 use specforge_test_macros::test as specforge_test;
 
@@ -18,6 +19,25 @@ fn make_surfaces(
         mcp_tools: tools,
         mcp_resources: resources,
     }
+}
+
+/// The declarations of `(name, short, surfaces)`, in order.
+fn declarations(
+    extensions: Vec<(&str, Option<&str>, SurfaceDescriptor)>,
+) -> Vec<ExtensionDeclaration> {
+    extensions
+        .into_iter()
+        .map(|(name, short, surfaces)| ExtensionDeclaration {
+            handshake: specforge_protocol_types::HandshakeResponse {
+                name: name.into(),
+                version: "1.0.0".into(),
+                ext_short: short.map(str::to_string),
+                ..Default::default()
+            },
+            surfaces,
+            ..Default::default()
+        })
+        .collect()
 }
 
 fn make_command(id: &str, export: &str) -> CommandDescriptor {
@@ -127,9 +147,10 @@ fn test_all_command_arg_type_variants_deserialize() {
     assert_eq!(args[4].arg_type, CommandArgType::Integer);
 }
 
-/// The registry entries of one declaration, parsed from its JSON, whose
-/// `surfaces` category declares a command, an MCP tool and an MCP resource.
-fn registered_from_manifest() -> Vec<SurfaceRegistryEntry> {
+/// The routes and registry entries of one declaration, parsed from its
+/// JSON, whose `surfaces` category declares a command, an MCP tool and an
+/// MCP resource.
+fn registered_from_manifest() -> (CommandRoutes, Vec<SurfaceRegistryEntry>) {
     let declaration = declared_with(Some(serde_json::json!({
         "commands": [{
             "id": "analyze",
@@ -150,13 +171,10 @@ fn registered_from_manifest() -> Vec<SurfaceRegistryEntry> {
             "mime_type": "application/json"
         }]
     })));
-    let (entries, diags) = register_surface_contributions(&[(
-        declaration.name().to_string(),
-        declaration.surfaces.clone(),
-    )]);
+    let (routes, entries, diags) = register_surface_contributions(&[declaration]);
     assert!(diags.is_empty(), "{diags:?}");
-    assert_eq!(entries.len(), 3);
-    entries
+    assert_eq!(entries.len(), 2);
+    (routes, entries)
 }
 
 /// `(name, export)` of every registered entry of `surface_type`.
@@ -176,11 +194,19 @@ fn of_type(entries: &[SurfaceRegistryEntry], surface_type: SurfaceType) -> Vec<(
     verify = "commands parsed from manifest surfaces field"
 )]
 fn a_manifests_commands_are_registered() {
-    let entries = registered_from_manifest();
-    assert_eq!(
-        of_type(&entries, SurfaceType::Command),
-        [("analyze", "cmd__analyze")]
-    );
+    let (routes, _) = registered_from_manifest();
+    let routed: Vec<(&str, &str, &str)> = routes
+        .routed()
+        .iter()
+        .map(|r| {
+            (
+                r.declaration().id.as_str(),
+                r.cli_name(),
+                r.declaration().export.as_str(),
+            )
+        })
+        .collect();
+    assert_eq!(routed, [("analyze", "analyze", "cmd__analyze")]);
 }
 
 #[specforge_test(
@@ -188,7 +214,7 @@ fn a_manifests_commands_are_registered() {
     verify = "MCP tools parsed from manifest surfaces field"
 )]
 fn a_manifests_mcp_tools_are_registered() {
-    let entries = registered_from_manifest();
+    let (_, entries) = registered_from_manifest();
     assert_eq!(
         of_type(&entries, SurfaceType::McpTool),
         [("search", "mcp__search")]
@@ -200,7 +226,7 @@ fn a_manifests_mcp_tools_are_registered() {
     verify = "MCP resources parsed from manifest surfaces field"
 )]
 fn a_manifests_mcp_resources_are_registered() {
-    let entries = registered_from_manifest();
+    let (_, entries) = registered_from_manifest();
     assert_eq!(
         of_type(&entries, SurfaceType::McpResource),
         [("graph", "mcp__graph")]
@@ -209,9 +235,9 @@ fn a_manifests_mcp_resources_are_registered() {
 
 #[specforge_test(
     behavior = "register_surface_contributions",
-    verify = "duplicate command ID across extensions produces E039"
+    verify = "two extensions of one short name routing one CLI name produce E039"
 )]
-fn test_register_duplicate_command_id_e039() {
+fn two_extensions_of_one_short_name_routing_one_name_is_e039() {
     let s1 = make_surfaces(
         vec![make_command("analyze", "cmd__analyze")],
         vec![],
@@ -223,11 +249,16 @@ fn test_register_duplicate_command_id_e039() {
         vec![],
     );
 
-    let manifests = vec![("@ext/a".to_string(), s1), ("@ext/b".to_string(), s2)];
-    let (_, diags) = register_surface_contributions(&manifests);
+    let manifests = declarations(vec![
+        ("@ext/a", Some("ext"), s1),
+        ("@ext/b", Some("ext"), s2),
+    ]);
+    let (routes, _, diags) = register_surface_contributions(&manifests);
     assert_eq!(diags.len(), 1);
     assert_eq!(diags[0].code, "E039");
     assert!(diags[0].message.contains("analyze"));
+    assert_eq!(routes.routed().len(), 1);
+    assert_eq!(routes.shadowed().len(), 1);
 }
 
 #[specforge_test(
@@ -238,8 +269,8 @@ fn test_register_duplicate_mcp_tool_e039() {
     let s1 = make_surfaces(vec![], vec![make_tool("search", "mcp__search")], vec![]);
     let s2 = make_surfaces(vec![], vec![make_tool("search", "mcp__search_v2")], vec![]);
 
-    let manifests = vec![("@ext/a".to_string(), s1), ("@ext/b".to_string(), s2)];
-    let (_, diags) = register_surface_contributions(&manifests);
+    let manifests = declarations(vec![("@ext/a", None, s1), ("@ext/b", None, s2)]);
+    let (_, _, diags) = register_surface_contributions(&manifests);
     assert_eq!(diags.len(), 1);
     assert_eq!(diags[0].code, "E039");
     assert!(diags[0].message.contains("search"));
@@ -261,10 +292,11 @@ fn test_register_no_duplicates_clean() {
         vec![make_resource("graph", "mcp__graph")],
     );
 
-    let manifests = vec![("@ext/a".to_string(), s1), ("@ext/b".to_string(), s2)];
-    let (entries, diags) = register_surface_contributions(&manifests);
+    let manifests = declarations(vec![("@ext/a", None, s1), ("@ext/b", None, s2)]);
+    let (routes, entries, diags) = register_surface_contributions(&manifests);
     assert!(diags.is_empty());
-    assert_eq!(entries.len(), 4);
+    assert_eq!(routes.routed().len(), 2);
+    assert_eq!(entries.len(), 2);
 }
 
 // B:register_surface_contributions — verify contract
@@ -277,24 +309,29 @@ fn test_register_surface_contributions_contract() {
         vec![make_tool("query", "mcp__query")],
         vec![make_resource("spec", "mcp__spec")],
     );
-    let manifests = vec![("@ext/a".to_string(), surfaces)];
-    let (entries, diags) = register_surface_contributions(&manifests);
+    let manifests = declarations(vec![("@ext/a", None, surfaces)]);
+    let (routes, entries, diags) = register_surface_contributions(&manifests);
     assert!(diags.is_empty());
-    assert_eq!(entries.len(), 3);
+    assert_eq!(routes.routed().len(), 1);
+    assert_eq!(entries.len(), 2);
     assert!(entries.iter().all(|e| e.extension_name == "@ext/a"));
 
     // ensures: empty surfaces register nothing
-    let manifests2 = vec![("@ext/b".to_string(), SurfaceDescriptor::default())];
-    let (entries2, diags2) = register_surface_contributions(&manifests2);
+    let manifests2 = declarations(vec![("@ext/b", None, SurfaceDescriptor::default())]);
+    let (routes2, entries2, diags2) = register_surface_contributions(&manifests2);
+    assert!(routes2.routed().is_empty());
     assert!(entries2.is_empty());
     assert!(diags2.is_empty());
 
     // ensures: duplicates produce E039
     let s1 = make_surfaces(vec![make_command("x", "cmd__x")], vec![], vec![]);
     let s2 = make_surfaces(vec![make_command("x", "cmd__x2")], vec![], vec![]);
-    let manifests3 = vec![("@ext/a".to_string(), s1), ("@ext/b".to_string(), s2)];
-    let (_, diags3) = register_surface_contributions(&manifests3);
-    assert!(diags3.iter().all(|d| d.code == "E039"));
+    let manifests3 = declarations(vec![
+        ("@ext/a", Some("ext"), s1),
+        ("@ext/b", Some("ext"), s2),
+    ]);
+    let (_, _, diags3) = register_surface_contributions(&manifests3);
+    assert!(!diags3.is_empty() && diags3.iter().all(|d| d.code == "E039"));
 }
 
 /// The registry build over one extension contributing `tools`: the tools

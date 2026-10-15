@@ -244,6 +244,12 @@ fn digest(env: &Environment) -> Value {
         "edges": edges,
         "rules": rules,
         "graph_inputs": graph_inputs(env),
+        "commands": r.commands().routed().iter().map(|c| json!({
+            "extension": c.extension(),
+            "route": format!("{} {}", c.short(), c.cli_name()),
+            "export": c.declaration().export,
+        })).collect::<Vec<_>>(),
+        "shadowed": r.commands().shadowed().len(),
         "surfaces": r.surfaces().iter().map(|s| json!({
             "surface_type": format!("{:?}", s.surface_type),
             "name": s.contribution_name,

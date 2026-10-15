@@ -19,8 +19,8 @@ use super::populate::populate;
 use super::validate::validate_extension_testability;
 use crate::rules::{CustomVerdicts, Registries, Rules};
 use crate::{
-    EdgeRegistry, FieldRegistry, KindRegistry, SurfaceRegistryEntry, refuse_malformed_tool_schemas,
-    register_surface_contributions,
+    CommandRoutes, EdgeRegistry, FieldRegistry, KindRegistry, SurfaceRegistryEntry,
+    refuse_malformed_tool_schemas, register_surface_contributions,
 };
 
 /// The phase a pass declares to run with every compile instead of under
@@ -117,7 +117,10 @@ pub struct RegistryBuild {
     /// the registries) plus the host-generated E006 rules for required
     /// fields, each with its origin (ADR 0020).
     pub(crate) rules: Rules,
-    /// Registered surface contributions (first registration wins).
+    /// The extensions' commands as the CLI and MCP route them; a shadowed
+    /// one is E039 (ADR 0097).
+    pub(crate) commands: CommandRoutes,
+    /// Registered MCP tools and resources (first registration wins).
     pub(crate) surfaces: Vec<SurfaceRegistryEntry>,
     /// Every declared pass with its extension: extension by extension in
     /// load order, each extension's in its after/before order.
@@ -166,7 +169,14 @@ impl RegistryBuild {
         &self.passes
     }
 
-    /// The surface contributions registered (first registration wins; a
+    /// The extensions' commands as the CLI and MCP route them, each under
+    /// `(short name, CLI name)`: the first in load order runs, a later one
+    /// of that name is shadowed and E039 (ADR 0097).
+    pub fn commands(&self) -> &CommandRoutes {
+        &self.commands
+    }
+
+    /// The MCP tools and resources registered (first registration wins; a
     /// later duplicate is E039).
     pub fn surfaces(&self) -> &[SurfaceRegistryEntry] {
         &self.surfaces
@@ -303,11 +313,7 @@ pub fn build_registries(declarations: Vec<ExtensionDeclaration>) -> RegistryBuil
         Rules::duplicate_codes(&declarations),
     ));
 
-    let surface_inputs: Vec<(String, _)> = declarations
-        .iter()
-        .map(|d| (d.name().to_string(), d.surfaces.clone()))
-        .collect();
-    let (surfaces, duplicates) = register_surface_contributions(&surface_inputs);
+    let (commands, surfaces, duplicates) = register_surface_contributions(&declarations);
     surface_diagnostics.extend(about(BuildPart::Collision, duplicates));
 
     RegistryBuild {
@@ -316,6 +322,7 @@ pub fn build_registries(declarations: Vec<ExtensionDeclaration>) -> RegistryBuil
         fields,
         edges,
         rules,
+        commands,
         surfaces,
         passes,
         declaration_diagnostics,

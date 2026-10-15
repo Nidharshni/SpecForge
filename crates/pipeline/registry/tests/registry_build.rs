@@ -102,9 +102,9 @@ fn two_extensions_populate_without_collision() {
         "@test/product"
     );
     // No kind, field or edge collides (no E026, W018): the declarations'
-    // own W021s (targets nobody declares), and the extensions' commands
-    // collide (E039).
-    assert_eq!(codes(&build), ["W021", "W021", "E039"]);
+    // own W021s (targets nobody declares); the two `hello`s are two
+    // routes, one per short name.
+    assert_eq!(codes(&build), ["W021", "W021"]);
 }
 
 #[test]
@@ -175,7 +175,8 @@ fn surface_conflicts_come_last_in_the_builds_diagnostics() {
         "E039 comes last, after the registries' diagnostics: {reported:?}"
     );
     assert_eq!(reported.iter().filter(|c| **c == "E039").count(), 1);
-    assert_eq!(build.surfaces().len(), 1, "first registration wins");
+    assert_eq!(build.commands().routed().len(), 1, "first route wins");
+    assert_eq!(build.commands().shadowed().len(), 1);
     assert_eq!(
         build
             .declarations()
@@ -237,6 +238,7 @@ fn no_declarations_build_empty_registries() {
     assert!(build.edges().get("enforces").is_none());
     assert_eq!(build.edges().iter().count(), 0);
     assert!(build.rules().is_empty());
+    assert!(build.commands().routed().is_empty());
     assert!(build.surfaces().is_empty());
     assert!(build.passes().is_empty());
     assert_eq!(build.graph_inputs(), GraphInputs::default());

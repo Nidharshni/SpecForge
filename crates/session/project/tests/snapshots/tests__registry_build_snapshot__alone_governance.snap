@@ -4,6 +4,7 @@ expression: "digest(&load(&runtime, &[name]))"
 ---
 {
   "check_passes": [],
+  "commands": [],
   "diagnostics": [],
   "edges": {
     "ConstraintConstrainsBehavior": {
@@ -1192,5 +1193,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "wasm_function": null
     }
   ],
+  "shadowed": 0,
   "surfaces": []
 }

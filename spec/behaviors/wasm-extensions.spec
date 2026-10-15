@@ -49,8 +49,8 @@ behavior load_extension_manifest "Load Extension Manifest" {
       2. describe — every declared category, once
       3. build_registries_from_declarations — validate the declarations
          and populate the kind, field and edge registries and the rules
-      4. register_surface_contributions — populate SurfaceRegistry (CLI
-         commands, MCP tools, MCP resources)
+      4. register_surface_contributions — route the CLI commands and
+         register the MCP tools and MCP resources
     Steps 1-2 run per extension in entry order (the extension load); step 3
     puts the declarations in load order (registry_build_load_order) before
     anything registers; steps 3-4 run once over every loaded declaration,

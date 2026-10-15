@@ -129,7 +129,7 @@ fn registry_diagnostics_keep_their_order() {
         // Both extensions declare rule W900 (05·R4 wired W023, after the
         // rule-parse diagnostics).
         "<W023>: warning[W023]: validation rule code 'W900' from '@test/beta' duplicates code from '@test/alpha'",
-        "<E039>: error[E039]: duplicate surface command ID 'hello': extension '@test/beta' conflicts with '@test/alpha'",
+        "<E039>: error[E039]: command 'hello' of '@test/beta' is not routed: '@test/alpha' routes `specforge gadgets hello` first\n  help: rename one of the commands, or give one extension another short name (ext_short; the SDK's #[extension(short = \"...\")])",
         "main.spec:3:1: error[E002]: duplicate entity ID 'widget' (first declared at main.spec:1:1)\n  help: rename one of the entities to avoid the collision",
     ];
 

@@ -4,6 +4,7 @@ expression: "digest(&load(&runtime, &[name]))"
 ---
 {
   "check_passes": [],
+  "commands": [],
   "diagnostics": [
     {
       "code": "E027",
@@ -31,5 +32,6 @@ expression: "digest(&load(&runtime, &[name]))"
   "kinds": {},
   "manifest_surfaces": [],
   "rules": [],
+  "shadowed": 0,
   "surfaces": []
 }

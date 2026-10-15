@@ -1250,25 +1250,20 @@ fn contract_auto_promote_commands() {
 
     // surfaces_registered: the compile registered the
     // extension's contributions, commands included.
-    let entries = |ty: SurfaceType| -> Vec<(String, String)> {
-        server
-            .state()
-            .registries()
-            .surfaces()
-            .iter()
-            .filter(|e| e.surface_type == ty)
-            .map(|e| (e.contribution_name.clone(), e.export_name.clone()))
-            .collect()
-    };
+    let registries = server.state().registries();
     let pair = |a: &str, b: &str| (a.to_string(), b.to_string());
+    let routed: Vec<_> = (registries.commands().routed().iter())
+        .map(|c| pair(&c.declaration().id, &c.declaration().export))
+        .collect();
     assert_eq!(
-        entries(SurfaceType::Command),
+        routed,
         [pair("report", "cmd__report"), pair("check", "cmd__check")]
     );
-    assert_eq!(
-        entries(SurfaceType::McpTool),
-        [pair("specforge.cmds.check", "mcp__check")]
-    );
+    let tools: Vec<_> = (registries.surfaces().iter())
+        .filter(|e| e.surface_type == SurfaceType::McpTool)
+        .map(|e| pair(&e.contribution_name, &e.export_name))
+        .collect();
+    assert_eq!(tools, [pair("specforge.cmds.check", "mcp__check")]);
 
     // all_commands_promoted + naming_convention_enforced: every command
     // becomes specforge.cmds.<id> unless an explicit tool has the name.
