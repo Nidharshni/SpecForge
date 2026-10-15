@@ -202,7 +202,10 @@ behavior provide_mcp_init_tool "Provide MCP Init Tool" {
     (conflict), as specforge init refuses it. The tool MUST create
     a new specforge.json project configuration file and scaffold the spec
     directory at the specified path. If extensions are specified, they MUST
-    be added to the config and their manifests validated. MCP init is always
+    be added to the config and their manifests validated. A relative
+    local path among them is read from the directory the call creates, as
+    specforge init reads it from the directory it runs in and
+    add_extension from the project's root (ADR 0092 D7). MCP init is always
     non-interactive — extension selection is provided via the extensions
     parameter. Interactive extension selection (TTY prompting) is only
     available via the CLI init command. The tool MUST scaffold what
@@ -217,6 +220,7 @@ behavior provide_mcp_init_tool "Provide MCP Init Tool" {
   verify unit "path inside current project returns error"
   verify unit "init inside the served project is refused by the call target as a conflict on path, before anything is written"
   verify unit "init refuses a directory whose starter file exists, writing nothing"
+  verify unit "a relative local path in extensions is read from the directory init creates, wherever the server runs"
   verify unit "invalid project name returns error"
   verify unit "unknown extension returns error with diagnostic"
   verify unit "version parameter overrides default 0.1.0"

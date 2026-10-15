@@ -69,7 +69,8 @@ impl CoreTool for Tool {
         let (path, runtime) = (new.dir, &new.runtime);
         use specforge_ops::authoring::init;
 
-        // The directory the target names (as given: init creates it).
+        // The directory the target names (as given: init creates it); the operation reads a
+        // relative local extension path from it, wherever the server runs (ADR 0098).
         let extensions = &args.extensions;
 
         // The scaffold `specforge init` writes. The call target refused a

@@ -207,11 +207,14 @@ behavior non_interactive_init "Non-Interactive Init" {
     (parse_extension_specifier: E054, R-RES-003, E040, the same messages
     and suggestions): init enables, before each extension it enables or
     installs, the builtins that extension requires (its non-optional peers
-    that are builtins, and theirs), as add does. Init is one lock-plan
-    change (ADR 0041): the project's peer set is judged once, before any
-    file is written, so it never writes an entry specforge check cannot
-    load or a project whose check reports an E027 for an extension it
-    enabled; then its modules, specforge.lock, specforge.json, .gitignore
+    that are builtins, and theirs), as add does. Two specifiers naming one
+    extension are claimed as add claims them: the same way, it is enabled
+    once; differently (other bytes, another version), the init is refused
+    with extension_conflict naming both, before anything is written.
+    Init is one lock-plan change (ADR 0041): the project's peer set is
+    judged once, before any file is written, so it never writes an entry
+    specforge check cannot load or a project whose check reports an E027
+    for an extension it enabled; then its modules, specforge.lock, specforge.json, .gitignore
     and starter are written as one change, put back together on failure.
     A registry package MUST be rejected with E063 (a new project has no
     registry configured; the suggestion names the specforge add to run
@@ -225,6 +228,7 @@ behavior non_interactive_init "Non-Interactive Init" {
   verify unit "non-interactive init with --extensions populates extensions list"
   verify unit "init enables a builtin after the builtins it requires, as add does"
   verify unit "init refuses local extensions the lock plan refuses before it writes anything"
+  verify unit "init enables an extension two of its specifiers name the same way once, and refuses two that add it differently with extension_conflict, as add does"
   verify unit "init reads its extension specifiers as add reads them, with add's codes"
   verify unit "init enables the builtins a local file requires before it"
   verify integration "init with a builtin that requires another passes check"

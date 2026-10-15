@@ -3,8 +3,9 @@
 use super::Origin;
 use super::candidate::LocalFile;
 use super::lock_plan::{Ask, Asked, Fetching, Install, LockPlan, Purpose};
+use super::{Claimed, Claims};
 use crate::registry::{Publisher, Registry, Trust};
-use crate::{OpError, OpErrorKind, Refusal, Writes};
+use crate::{OpError, Refusal, Writes};
 use specforge_installed::Installed;
 use specforge_package::{PackageName, PackageRef};
 use specforge_wasm::WasmRuntime;
@@ -166,18 +167,16 @@ pub fn add(
         installed: &installed,
         registry,
         runtime,
-        claims: Vec::new(),
+        claims: Claims::default(),
     };
     let mut steps = Vec::with_capacity(req.extensions.len());
-    for (at, wanted) in req.extensions.iter().enumerate() {
-        let step = resolver
-            .step(&req.extensions[..at], wanted)
-            .map_err(|error| match error {
-                Resolved::Refused(error) => {
-                    named(several, &wanted.specifier, error).about(AddField::Extensions)
-                }
-                Resolved::Conflict(error) => error.about(AddField::Extensions),
-            })?;
+    for wanted in &req.extensions {
+        let step = resolver.step(wanted).map_err(|error| match error {
+            Resolved::Refused(error) => {
+                named(several, &wanted.specifier, error).about(AddField::Extensions)
+            }
+            Resolved::Conflict(error) => error.about(AddField::Extensions),
+        })?;
         steps.push(step);
     }
     apply(req, &config, plan, steps)
@@ -193,17 +192,6 @@ enum Step<'a> {
     Local(Install<'a>),
     /// A registry package to fetch and install.
     Fetch(PackageName, specforge_package::Version),
-}
-
-/// An extension a specifier of the add names, and how it adds it.
-struct Claim {
-    name: String,
-    /// What makes two specifiers add it the same way: `builtin`, the registry version, or the
-    /// local file's SHA-256.
-    key: String,
-    /// How the refusal of a conflict says it: `builtin`, `<version> from <source>`.
-    shown: String,
-    specifier: String,
 }
 
 /// Why a specifier can't be resolved: refused on its own (named when the add has several), or in
@@ -226,62 +214,29 @@ struct Resolver<'r, 'a> {
     installed: &'r Installed,
     registry: &'a dyn Registry,
     runtime: &'a dyn WasmRuntime,
-    claims: Vec<Claim>,
+    claims: Claims,
 }
 
 impl<'a> Resolver<'_, 'a> {
-    /// What the add does for `wanted`, given the specifiers before it.
-    fn step(&mut self, before: &[Specified], wanted: &Specified) -> Result<Step<'a>, Resolved> {
+    /// What the add does for `wanted`.
+    fn step(&mut self, wanted: &Specified) -> Result<Step<'a>, Resolved> {
+        // The same source again resolves the same way: nothing is read or asked.
+        if let Some(duplicate) = self.claims.repeated(wanted).and_then(duplicate) {
+            return Ok(duplicate);
+        }
         match &wanted.source {
             Source::Builtin(name) => self.builtin(wanted, name),
             Source::Local(path) => {
                 let local = LocalFile::read(self.runtime, path)?;
                 self.local(wanted, Install::local(self.req.root.dir(), local)?)
             }
-            Source::Registry(package) => self.package(before, wanted, package),
+            Source::Registry(package) => self.package(wanted, package),
             Source::Git { url } => Err(Resolved::Refused(git_not_supported(url))),
         }
     }
 
-    /// `name` claimed by `wanted` as `key`: `None` the first time, the duplicate when an earlier
-    /// specifier claimed it the same way, the conflict when differently.
-    fn claim(
-        &mut self,
-        wanted: &Specified,
-        name: &str,
-        key: String,
-        shown: String,
-    ) -> Result<Option<Step<'a>>, Resolved> {
-        match self.claims.iter().find(|claim| claim.name == name) {
-            Some(first) if first.key == key => Ok(Some(Step::Unchanged(AddOutcome::Duplicate {
-                name: name.to_string(),
-                first: first.specifier.clone(),
-            }))),
-            Some(first) => Err(Resolved::Conflict(
-                OpError::new(
-                    OpErrorKind::Conflict,
-                    "extension_conflict",
-                    format!(
-                        "'{}' and '{}' both add '{name}', as {} and as {shown}",
-                        first.specifier, wanted.specifier, first.shown
-                    ),
-                )
-                .with_suggestion(format!("add '{name}' once")),
-            )),
-            None => {
-                self.claims.push(Claim {
-                    name: name.to_string(),
-                    key,
-                    shown,
-                    specifier: wanted.specifier.clone(),
-                });
-                Ok(None)
-            }
-        }
-    }
-
     fn builtin(&mut self, wanted: &Specified, name: &'static str) -> Result<Step<'a>, Resolved> {
-        if let Some(duplicate) = self.claim(wanted, name, "builtin".into(), "builtin".into())? {
+        if let Some(duplicate) = claimed(self.claims.builtin(wanted, name))? {
             return Ok(duplicate);
         }
         // An already-enabled extension is left exactly as it is, a dry run included.
@@ -296,11 +251,8 @@ impl<'a> Resolver<'_, 'a> {
     }
 
     fn local(&mut self, wanted: &Specified, install: Install<'a>) -> Result<Step<'a>, Resolved> {
-        let shown = format!("{} from {}", install.version(), install.source());
         let name = install.name().clone();
-        if let Some(duplicate) =
-            self.claim(wanted, name.as_str(), install.sha256().to_string(), shown)?
-        {
+        if let Some(duplicate) = claimed(self.claims.local(wanted, &install))? {
             return Ok(duplicate);
         }
         if let Some(present) = already_present(self.installed, self.config, &name, |e| {
@@ -311,25 +263,9 @@ impl<'a> Resolver<'_, 'a> {
         Ok(Step::Local(install))
     }
 
-    fn package(
-        &mut self,
-        before: &[Specified],
-        wanted: &Specified,
-        package: &PackageRef,
-    ) -> Result<Step<'a>, Resolved> {
-        let name = package.name.as_str();
-        // The same package reference again resolves the same way: nothing is asked.
-        if before.iter().any(|earlier| earlier.source == wanted.source)
-            && let Some(first) = self.claims.iter().find(|claim| claim.name == name)
-        {
-            return Ok(Step::Unchanged(AddOutcome::Duplicate {
-                name: name.to_string(),
-                first: first.specifier.clone(),
-            }));
-        }
+    fn package(&mut self, wanted: &Specified, package: &PackageRef) -> Result<Step<'a>, Resolved> {
         let version = super::resolve(self.registry, package)?;
-        let shown = format!("{version} from registry");
-        if let Some(duplicate) = self.claim(wanted, name, format!("registry {version}"), shown)? {
+        if let Some(duplicate) = claimed(self.claims.registry(wanted, &package.name, &version))? {
             return Ok(duplicate);
         }
         if let Some(present) = already_present(self.installed, self.config, &package.name, |e| {
@@ -338,6 +274,21 @@ impl<'a> Resolver<'_, 'a> {
             return Ok(Step::Unchanged(present));
         }
         Ok(Step::Fetch(package.name.clone(), version))
+    }
+}
+
+/// A claim as a resolution: the duplicate it found, or the conflict it is.
+fn claimed<'a>(claimed: Result<Claimed, OpError>) -> Result<Option<Step<'a>>, Resolved> {
+    claimed.map(duplicate).map_err(Resolved::Conflict)
+}
+
+/// The step that adds nothing for a duplicate; `None` for the first claim.
+fn duplicate<'a>(claimed: Claimed) -> Option<Step<'a>> {
+    match claimed {
+        Claimed::First => None,
+        Claimed::Duplicate { name, first } => {
+            Some(Step::Unchanged(AddOutcome::Duplicate { name, first }))
+        }
     }
 }
 

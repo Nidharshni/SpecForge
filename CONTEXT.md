@@ -242,6 +242,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   checked and not committed: it answers what the operation would, its refusal included, and writes,
   pins and downloads nothing; a registry package is judged by its published manifest
   (`Registry::published`).
+- **Claim**: what one specifier of an `add` or `init` asks for an extension name: a second specifier naming it the
+  same way is a duplicate, another way `extension_conflict` (`specforge_ops::extension::claims`, ADR 0098).
 - **Project peer set**: the extensions a project's `specforge.json` entries load, as the peer rule reads
   them: a builtin by the declaration this specforge embeds, an installed extension by its lock entry, a
   `.wasm` file entry by its file's declaration, each entry resolved by the extension load's one rule
