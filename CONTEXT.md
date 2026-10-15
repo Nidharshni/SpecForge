@@ -933,7 +933,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **LSP reaction**: what the LSP does after the client reports a change (a workspace opened, documents
   opened, edited or closed, files changed on disk): apply it to the project session as one update,
   publish what the project reports (a closed document's file always, as the project reports it),
-  announce a reload, follow the session's inputs and catch up, ask the editor to refresh its
+  announce a reload, follow the session's inputs and catch up (the follow loop watch shares, ADR 0099), ask the editor to refresh its
   highlighting. It runs one change at a time, synchronously, and tells the editor everything through
   one port (`specforge_lsp::reaction::Reaction` over `specforge_lsp::editor::Editor`; ADR 0035,
   ADR 0043).

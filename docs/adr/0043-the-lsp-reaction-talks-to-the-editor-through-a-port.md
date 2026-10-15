@@ -75,6 +75,7 @@ the reaction sends, through JSON-RPC, several of them waiting seconds for messag
 - **Sharing `specforge_watch::Watchers`.** It watches directories for watch's own loop; ADR 0035
   rejected a session-driven loop over a watcher trait. The LSP keeps its loop; only its client moved
   behind the port.
+  *(ADR 0099: the loop is shared over `Follower`; `Watchers` still is not.)*
 - **The recorder behind a `testing` feature.** Only this crate's tests use it.
 - **The document store inside the reaction.** A request would see a closed or stale buffer while an
   update runs; what the session makes of buffers is ADR 0046's.
