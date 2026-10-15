@@ -27,10 +27,15 @@ pub struct FormatVersion {
 /// Current format version. All new spec files are at this version.
 pub const CURRENT_FORMAT_VERSION: FormatVersion = FormatVersion { major: 1, minor: 0 };
 
-/// Minimum supported format version for migration.
-pub const MIN_SUPPORTED_VERSION: FormatVersion = FormatVersion { major: 1, minor: 0 };
+/// The oldest format version a file may declare: the previous major's first
+/// (`migration.spec`: "the current and previous major format versions"). A file
+/// below [`CURRENT_FORMAT_VERSION`] reports I007.
+pub const MIN_SUPPORTED_VERSION: FormatVersion = FormatVersion {
+    major: CURRENT_FORMAT_VERSION.major.saturating_sub(1),
+    minor: 0,
+};
 
-/// Maximum supported target version.
+/// Maximum supported version (a file's, or a migration target's).
 pub const MAX_SUPPORTED_VERSION: FormatVersion = FormatVersion { major: 1, minor: 0 };
 
 /// What a format version header starts with. Private: the header is this module's.
@@ -72,11 +77,11 @@ impl FromStr for FormatVersion {
 /// and what the header reports. A file with no header is at
 /// [`CURRENT_FORMAT_VERSION`] and reports nothing.
 ///
-/// - an older version than the minimum supported: I007, "migration available";
+/// - an older version than the current: I007, "migration available";
 /// - a version newer than the maximum supported: E019, with the range this
 ///   build supports;
 /// - a header that is not `MAJOR.MINOR`: E019, with the expected shape (the
-///   version is then [`MIN_SUPPORTED_VERSION`]).
+///   version is then [`CURRENT_FORMAT_VERSION`]).
 ///
 /// Each diagnostic is spanned on the header line, so it sits where the file
 /// declares the version.
@@ -108,7 +113,7 @@ pub fn detect_format_version(content: &str, file: &str) -> (FormatVersion, Vec<D
             ));
             (version, vec![diagnostic])
         }
-        Ok(version) if version < MIN_SUPPORTED_VERSION => {
+        Ok(version) if version < CURRENT_FORMAT_VERSION => {
             let diagnostic = Diagnostic::new(
                 codes::I007,
                 format!(
@@ -129,7 +134,7 @@ pub fn detect_format_version(content: &str, file: &str) -> (FormatVersion, Vec<D
             .with_suggestion(format!(
                 "Expected `// specforge-format: MAJOR.MINOR` (e.g., `// specforge-format: {CURRENT_FORMAT_VERSION}`)."
             ));
-            (MIN_SUPPORTED_VERSION, vec![diagnostic])
+            (CURRENT_FORMAT_VERSION, vec![diagnostic])
         }
     }
 }

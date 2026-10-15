@@ -13,7 +13,6 @@ const BODY: &str = "behavior foo \"Foo\" {\n  contract \"x\"\n}\n";
     behavior = "detect_format_version_mismatch",
     verify = "unsupported format version produces E019 with upgrade guidance"
 )]
-#[ignore = "flipped by T6"]
 fn the_e019_hint_names_the_versions_a_file_may_declare() {
     let (_, diagnostics) =
         detect_format_version(&format!("// specforge-format: 99.0\n{BODY}"), "a.spec");

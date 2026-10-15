@@ -49,7 +49,7 @@ exit 1
 -- stdout:
 -- stderr:
 error[E019]: unsupported target version 9.9 (max supported: 1.0)
-  hint: Use a format version between 1.0 and 1.0.
+  hint: Use a format version between 0.0 and 1.0.
 
 C7 | specforge migrate --target-version 9.9 --format json
 exit 1
@@ -57,7 +57,7 @@ exit 1
 {
   "error": "unsupported target version 9.9 (max supported: 1.0)",
   "code": "E019",
-  "suggestion": "Use a format version between 1.0 and 1.0."
+  "suggestion": "Use a format version between 0.0 and 1.0."
 }
 -- stderr:
 
