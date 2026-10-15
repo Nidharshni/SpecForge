@@ -110,3 +110,18 @@ fn the_header_written_is_the_header_read() {
         panic!("{failure}");
     }
 }
+
+#[test]
+#[ignore = "flipped by T9"]
+fn a_header_after_a_byte_order_mark_is_read_and_rewritten() {
+    let text = "\u{feff}// specforge-format: 0.9\nB";
+    let (version, diagnostics) = detect_format_version(text, "a.spec");
+    assert_eq!((version.major, version.minor), (0, 9));
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(diagnostics[0].code, "I007");
+    assert_eq!(diagnostics[0].span.as_ref().unwrap().start_line, 1);
+    assert_eq!(
+        with_format_version(text, &CURRENT_FORMAT_VERSION),
+        "\u{feff}// specforge-format: 1.0\nB"
+    );
+}
