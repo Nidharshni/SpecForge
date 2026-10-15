@@ -22,7 +22,7 @@ use specforge_ops::read::model::{
     DEPS, GROUP_BY, MODEL_FIELDS, MODEL_FORMAT, OUTLINE_FIELDS, OUTLINE_FORMAT,
 };
 
-use crate::coverage_corpus::{mcp_calls, served};
+use crate::support::pairing::{mcp_calls, normalized_text, served};
 use crate::support::{Cli, TestProject};
 
 /// A scratch copy of `fixtures/read_views/rv1`.
@@ -270,7 +270,7 @@ fn mcp_outcome(result: &Value, root: &Path) -> String {
     {
         write!(text, " (available_renderers: {renderers})").unwrap();
     }
-    text.replace(root.to_str().unwrap(), "[ROOT]")
+    normalized_text(&text, root)
 }
 
 /// Which of `names` gave what the absent argument gave.

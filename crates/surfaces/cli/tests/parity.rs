@@ -31,6 +31,7 @@ use specforge_mcp::testing::{rooted_server, rpc};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use crate::support::pairing;
 use crate::support::{Cli, TestProject};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -658,58 +659,9 @@ fn observe(
     }
 }
 
-/// `value` with the parts that churn for reasons outside this harness
-/// redacted: the embedded Graph Protocol schema (any extension change moves
-/// it).
-fn redacted(value: &Value) -> Value {
-    match value {
-        Value::Object(map) => Value::Object(
-            map.iter()
-                .map(|(k, v)| {
-                    let v = match k.as_str() {
-                        "schema" if v.is_object() => json!("[SCHEMA]"),
-                        _ => redacted(v),
-                    };
-                    (k.clone(), v)
-                })
-                .collect(),
-        ),
-        Value::Array(items) => Value::Array(items.iter().map(redacted).collect()),
-        other => other.clone(),
-    }
-}
-
-/// `text` with every 64-digit hex run (a SHA-256: blob hashes move whenever
-/// an extension is rebuilt) replaced by `[SHA256]`.
-fn without_hashes(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut run = String::new();
-    for c in text.chars().chain(std::iter::once(' ')) {
-        if c.is_ascii_hexdigit() {
-            run.push(c);
-            continue;
-        }
-        if run.len() == 64 {
-            out.push_str("[SHA256]");
-        } else {
-            out.push_str(&run);
-        }
-        run.clear();
-        out.push(c);
-    }
-    out.pop();
-    out
-}
-
-/// `value` as pretty JSON with the machine-specific parts replaced.
+/// [`pairing::normalized`], with the greet blob's path replaced.
 pub(crate) fn normalized(value: &Value, root: &Path) -> String {
-    let mut text = without_hashes(&serde_json::to_string_pretty(&redacted(value)).unwrap());
-    let blob = s(&greet_blob());
-    text = text.replace(&blob, "[BLOB]");
-    let canonical = s(&root.canonicalize().unwrap());
-    text = text.replace(&canonical, "[ROOT]");
-    text = text.replace(&s(root), "[ROOT]");
-    text
+    pairing::normalized(value, root).replace(&s(&greet_blob()), "[BLOB]")
 }
 
 /// `value` with the machine-specific parts replaced ([`normalized`]), as

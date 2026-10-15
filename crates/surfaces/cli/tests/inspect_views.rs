@@ -19,10 +19,11 @@ use serde_json::{Value, json};
 use specforge_mcp::testing::Served;
 use std::path::Path;
 
-use crate::coverage_corpus::{mcp_calls, project, served};
+use crate::coverage_corpus::project;
 use crate::parity::normalized;
 use crate::support::TestProject;
 use crate::support::lsp::Client;
+use crate::support::pairing::{mcp_calls, served};
 
 /// The entities of fx1 the views are pinned on.
 const FX1: [&str; 6] = [

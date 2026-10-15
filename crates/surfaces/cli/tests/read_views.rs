@@ -18,8 +18,10 @@ use serde_json::{Value, json};
 use specforge_mcp::testing::Served;
 use std::path::{Path, PathBuf};
 
-use crate::coverage_corpus::{mcp_calls, mcp_responses, project, served};
-use crate::parity::normalized;
+use crate::coverage_corpus::project;
+use crate::support::pairing::{
+    mcp_calls, mcp_responses, normalized, normalized_text, served, without_hashes,
+};
 use crate::support::{Cli, TestProject};
 
 /// A scratch copy of `fixtures/read_views/rv1`.
@@ -55,13 +57,6 @@ fn cli_json(served: &Served, args: &[&str]) -> Value {
     let run = cli(served, args);
     serde_json::from_str(&run.stdout)
         .unwrap_or_else(|e| panic!("{args:?} is not JSON ({e}): {}{}", run.stdout, run.stderr))
-}
-
-/// `text` with the machine-specific parts of `root` replaced.
-fn normalized_text(text: &str, root: &Path) -> String {
-    let canonical = root.canonicalize().unwrap();
-    text.replace(s(&canonical), "[ROOT]")
-        .replace(s(root), "[ROOT]")
 }
 
 /// The text content of each MCP tool call's result, as the server wrote it.
@@ -912,27 +907,6 @@ fn node_ids(document: &str) -> Vec<String> {
         .iter()
         .map(|n| n["id"].as_str().unwrap().to_string())
         .collect()
-}
-
-/// `text` with every run of 64 hexadecimal digits (a SHA-256) replaced by
-/// `[SHA256]`.
-fn without_hashes(text: &str) -> String {
-    let mut out = String::new();
-    let mut run = String::new();
-    let flush = |run: &mut String, out: &mut String| {
-        out.push_str(if run.len() == 64 { "[SHA256]" } else { run });
-        run.clear();
-    };
-    for ch in text.chars() {
-        if ch.is_ascii_hexdigit() {
-            run.push(ch);
-        } else {
-            flush(&mut run, &mut out);
-            out.push(ch);
-        }
-    }
-    flush(&mut run, &mut out);
-    out
 }
 
 fn mcp_query(arguments: Value) -> Value {
