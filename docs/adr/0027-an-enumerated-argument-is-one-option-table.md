@@ -66,3 +66,5 @@ outline's default was markdown on the CLI and json on MCP, said only in a descri
 
 A third surface whose argument syntax cannot be built from a name list (positional words, a
 free-form grammar), or an enumerated argument whose names depend on the project.
+
+Extended by ADR 0101: every rule a request's values follow is the operation's.
