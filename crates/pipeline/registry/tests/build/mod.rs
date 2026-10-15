@@ -2,6 +2,7 @@
 //! (`support::declare`), a `RegistryBuild` out (`support::build`).
 
 mod consistency;
+mod credit;
 mod diagnostics;
 mod edges;
 mod enhancements;

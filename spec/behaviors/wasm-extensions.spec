@@ -94,6 +94,8 @@ behavior register_entity_enhancements "Register Entity Enhancements" {
   verify unit "unknown target kind produces I004 info diagnostic"
   verify unit "enhancement of a kind owned by an extension that is not loaded is skipped silently"
   verify unit "an enhancement with verify kinds makes its target kind testable"
+  verify unit "an enhancement's fields are credited to the extension that declares the enhancement"
+  verify unit "an enhancement of an unknown kind is skipped silently when its extension declares an optional peer the project does not load"
   verify unit "enhanced reference fields create graph edges"
   verify unit "enhanced data fields participate in type validation"
   verify unit "registration order follows extensions array"
