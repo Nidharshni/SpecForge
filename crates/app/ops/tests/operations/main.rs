@@ -24,6 +24,7 @@ mod graph_edges;
 mod groups;
 mod infer;
 mod infer_guide;
+mod init_specifiers;
 mod inspect;
 mod kinds;
 mod management;
