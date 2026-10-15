@@ -307,6 +307,7 @@ behavior parse_verify_statements "Parse Verify Statements" {
   verify unit "verify parsed in spec block"
   verify unit "verify parsed in define block"
   verify unit "verify kind and description extracted correctly"
+  verify unit "a field named verify is exported beside the entity's verify statements"
   verify contract "Parse Verify Statements: verify statement parsing holds — source_parser_available, verify_statements_extracted, all_block_types_supported, semantic_validation_deferred"
 }
 

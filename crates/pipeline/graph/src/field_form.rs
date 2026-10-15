@@ -395,6 +395,8 @@ pub fn write_fields(fields: &FieldMap) -> BTreeMap<String, FieldJson> {
     fields
         .entries()
         .iter()
+        // Temporary (until T8): the parser still writes the statements as a field.
+        .filter(|entry| !matches!(entry.value, FieldValue::VerifyList(_)))
         .map(|entry| (entry.key.to_string(), write(&entry.value)))
         .collect()
 }

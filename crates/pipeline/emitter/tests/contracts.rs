@@ -36,14 +36,6 @@ fn testable_node(id: &str) -> Node {
         Sym::new("contract"),
         FieldValue::String("The system MUST work".to_string()),
     );
-    // Temporary (until T8): the parser still writes the statements as a field too.
-    fields.push(
-        Sym::new("verify"),
-        FieldValue::VerifyList(vec![VerifyStatement {
-            kind: "unit".to_string(),
-            description: "it works".to_string(),
-        }]),
-    );
     Node {
         title: Some(format!("Title {}", id)),
         fields,
@@ -299,9 +291,12 @@ fn graph_format_contract_finalized_graph_produces_full_output() {
         d["fields"],
         serde_json::json!({
             "contract": "The system MUST work",
-            "verify": [{ "kind": "unit", "description": "it works" }],
             "description": "Long prose that explains the entity at length",
         })
+    );
+    assert_eq!(
+        d["verify"],
+        serde_json::json!([{ "kind": "unit", "description": "it works" }])
     );
     assert_eq!(parsed["nodes"][0]["fields"]["status"], "planned");
     assert_eq!(

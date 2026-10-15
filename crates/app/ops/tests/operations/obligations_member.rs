@@ -4,6 +4,7 @@
 use super::compiled_support::{TestProject, exported, published};
 use serde_json::json;
 use specforge_ops::read::export::Format;
+use specforge_test_macros::test as specforge_test;
 
 const BOTH: &str = "type Payload \"Payload\" {\n  verify string @optional\n  name   string\n  verify unit \"Payload schema is valid\"\n}\n";
 const FIELD_ONLY: &str =
@@ -16,8 +17,10 @@ fn project(source: &str) -> specforge_project::CompiledProject {
         .compile()
 }
 
-#[test]
-#[ignore = "flipped by T7"]
+#[specforge_test(
+    behavior = "parse_verify_statements",
+    verify = "a field named verify is exported beside the entity's verify statements"
+)]
 fn a_field_named_verify_is_exported_beside_the_statements() {
     let p = project(BOTH);
     let document = exported(&p);
@@ -36,8 +39,10 @@ fn a_field_named_verify_is_exported_beside_the_statements() {
     );
 }
 
-#[test]
-#[ignore = "flipped by T7"]
+#[specforge_test(
+    behavior = "publish_schema_specification",
+    verify = "an export holding a field named verify meets its published schema"
+)]
 fn an_export_with_a_field_named_verify_meets_its_published_schema() {
     let p = project(FIELD_ONLY);
     let violations =

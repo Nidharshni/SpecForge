@@ -23,11 +23,10 @@ behavior parse_input "Parse Input" {
     let nodes = parsed["nodes"].as_array().unwrap();
     let parse_input = nodes.iter().find(|n| n["id"] == "parse_input").unwrap();
 
-    let fields = &parse_input["fields"];
     assert!(
-        fields.get("verify").is_some(),
-        "behavior with verify should have verify in fields: {:?}",
-        fields,
+        parse_input.get("verify").is_some(),
+        "behavior with verify should have verify on its node: {:?}",
+        parse_input,
     );
 }
 
@@ -50,7 +49,7 @@ behavior emit_output "Emit Output" {
     let nodes = parsed["nodes"].as_array().unwrap();
     let node = nodes.iter().find(|n| n["id"] == "emit_output").unwrap();
     assert_eq!(
-        node["fields"]["verify"],
+        node["verify"],
         serde_json::json!([
             {"kind": "integration", "description": "emitter produces valid JSON"}
         ])
@@ -75,7 +74,7 @@ behavior graph_build "Graph Build" {
     let parsed = exported(&compiled);
     let nodes = parsed["nodes"].as_array().unwrap();
     let node = nodes.iter().find(|n| n["id"] == "graph_build").unwrap();
-    assert!(node["fields"].get("verify").is_some());
+    assert!(node.get("verify").is_some());
 }
 
 #[specforge_test(
@@ -99,7 +98,7 @@ behavior parse_input "Parse Input" {
     let nodes = parsed["nodes"].as_array().unwrap();
     let node = nodes.iter().find(|n| n["id"] == "parse_input").unwrap();
 
-    let verify = &node["fields"]["verify"];
+    let verify = &node["verify"];
     assert!(
         verify.is_array(),
         "multiple verify statements should produce an array"
@@ -183,7 +182,7 @@ invariant graph_acyclic "Graph Acyclicity" {
     let nodes = parsed["nodes"].as_array().unwrap();
     let node = nodes.iter().find(|n| n["id"] == "graph_acyclic").unwrap();
     assert!(
-        node["fields"].get("verify").is_some(),
+        node.get("verify").is_some(),
         "invariant should accept verify declarations"
     );
 }
@@ -192,7 +191,7 @@ invariant graph_acyclic "Graph Acyclicity" {
     behavior = "export_agent_graph_format",
     verify = "graph format includes all fields and metadata"
 )]
-fn graph_export_includes_verify_in_fields() {
+fn graph_export_includes_verify_beside_fields() {
     let (_project, compiled) = built(&[(
         "main.spec",
         r#"
@@ -225,8 +224,8 @@ feature fast_parsing "Fast Parsing" {
                 "contract": "The system MUST parse all valid input",
                 "status": "done",
                 "features": ["fast_parsing"],
-                "verify": [{"kind": "unit", "description": "handles empty input"}],
             },
+            "verify": [{"kind": "unit", "description": "handles empty input"}],
         })
     );
 }

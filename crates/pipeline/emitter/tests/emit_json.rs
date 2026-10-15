@@ -1,8 +1,6 @@
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
-use specforge_parser::{
-    EntityId, EntityKind, FieldMap, FieldValue, SpannedRef, VerifyStatement, parse_expression,
-};
+use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue, SpannedRef, parse_expression};
 use specforge_test::prelude::*;
 
 fn span() -> SourceSpan {
@@ -374,13 +372,6 @@ fn every_other_value_is_written_as_today() {
         Sym::new("strings"),
         FieldValue::StringList(vec!["s".into()]),
     );
-    fields.push(
-        Sym::new("verify"),
-        FieldValue::VerifyList(vec![VerifyStatement {
-            kind: "unit".into(),
-            description: "d".into(),
-        }]),
-    );
     fields.push(Sym::new("block"), FieldValue::Block(block));
     fields.push(
         Sym::new("mixed"),
@@ -399,7 +390,6 @@ fn every_other_value_is_written_as_today() {
             "references": ["x", "y"],
             "variants": ["a", "b"],
             "strings": ["s"],
-            "verify": [{"kind": "unit", "description": "d"}],
             "block": {"k": "v", "n": {"m": 1}},
             "mixed": [1, "a"],
         })

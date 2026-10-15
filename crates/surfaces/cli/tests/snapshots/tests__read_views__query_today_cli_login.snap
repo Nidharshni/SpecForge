@@ -4,5 +4,5 @@ expression: without_hashes(&text)
 ---
 exit: Some(0)
 stdout:
-{"format_version":"2.0","schema_version":"1.0.0","schema_ref":{"url":"https://specforge.dev/schema/graph-protocol-v1.0.0.json","content_hash":"[SHA256]"},"nodes":[{"id":"login","kind":"behavior","title":"Log in","file":"main.spec","line":1,"fields":{"contract":"The system MUST let a known user log in","features":["signin"],"verify":[{"description":"a known user logs in","kind":"unit"}]}},{"id":"signin","kind":"feature","title":"Sign in","file":"main.spec","line":23,"fields":{"problem":"Users cannot reach their data","solution":"Let them log in"}}],"edges":[{"source":"login","target":"signin","label":"features"}]}
+{"format_version":"2.0","schema_version":"1.0.0","schema_ref":{"url":"https://specforge.dev/schema/graph-protocol-v1.0.0.json","content_hash":"[SHA256]"},"nodes":[{"id":"login","kind":"behavior","title":"Log in","file":"main.spec","line":1,"fields":{"contract":"The system MUST let a known user log in","features":["signin"]},"verify":[{"kind":"unit","description":"a known user logs in"}]},{"id":"signin","kind":"feature","title":"Sign in","file":"main.spec","line":23,"fields":{"problem":"Users cannot reach their data","solution":"Let them log in"}}],"edges":[{"source":"login","target":"signin","label":"features"}]}
 stderr:

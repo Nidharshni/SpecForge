@@ -435,7 +435,7 @@ note doc \"Doc\" {\n  verify unit \"read\"\n}\n";
         "{header}"
     );
     assert!(!one.contains("`contract` ="), "Fields skips it:\n{one}");
-    assert!(one.contains("- `verify` = unit: it does"), "{one}");
+    assert!(one.contains("**Obligations**\n- unit: it does"), "{one}");
 
     let three = project.hover_on("main.spec", "three").unwrap();
     let header = three.split("\n\n---\n\n").next().unwrap();

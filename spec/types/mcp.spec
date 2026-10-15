@@ -212,7 +212,8 @@ type McpInspectResult {
   /// The field the entity's extension declares headline and normative (a
   /// behavior's contract); absent when its kind declares none.
   contract            string     @optional
-  /// Every field the entity declares, by name.
+  /// Every field the entity declares, by name (its verify statements are
+  /// `verify_declarations`).
   fields              object
   /// The entities that reference this one (incoming), distinct, sorted.
   referenced_by       string[]
