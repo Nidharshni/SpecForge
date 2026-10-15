@@ -1,0 +1,159 @@
+//! What a core resource read returned, and the one place that turns it into
+//! a `resources/read` reply: the resource-side twin of [`crate::tool`] and
+//! [`crate::prompt`].
+//!
+//! Each core resource is one module implementing [`CoreResource`] (ADR 0049
+//! D1, applied to resources by ADR 0103): its URI, name, description, MIME
+//! type, what it changes with and its read are stated there once.
+//! [`ResourceSpec`] is what the listing, the resources adapter, the
+//! subscriptions and the reflection tests read of it. [`resource_envelope`]
+//! alone builds the `contents` of a read and the error of a refused one.
+
+use serde_json::{Value, json};
+
+use crate::protocol::{JsonRpcError, JsonRpcResponse};
+use crate::registry::Listed;
+use crate::subscriptions::Watched;
+use crate::target::TargetSpec;
+use crate::tool::{ErrorCode, McpError};
+use specforge_ops::view::ProjectView;
+
+/// One core resource, stated once in its own module under `resources/`.
+pub trait CoreResource: Sync + 'static {
+    /// Its URI, or an RFC 6570 template (`specforge://graph/{entity_id}`).
+    const URI: &'static str;
+    /// Its name as the listing gives it.
+    const NAME: &'static str;
+    const DESCRIPTION: &'static str;
+    const MIME_TYPE: &'static str = "application/json";
+    /// What its content changes with (`subscriptions::Watched`): which
+    /// updates notify its subscribers.
+    const CHANGES_WITH: Watched;
+    /// Read the resource at a URI it [names](ResourceSpec::names), over the
+    /// project view it is given: the served project's, brought up to date,
+    /// or the empty session's when nothing is served.
+    fn read(view: ProjectView<'_>, uri: &str) -> ReadOutcome;
+}
+
+/// What a resource read returned: its MIME type and text. The URI is the one
+/// the envelope writes.
+pub struct ResourceText {
+    pub mime_type: String,
+    pub text: String,
+}
+
+impl ResourceText {
+    pub fn json(text: impl Into<String>) -> Self {
+        Self {
+            mime_type: "application/json".into(),
+            text: text.into(),
+        }
+    }
+}
+
+/// What a resource read produced, or why it was refused (ADR 0024 D4).
+pub type ReadOutcome = Result<ResourceText, Box<McpError>>;
+
+/// What the listing, the resources adapter, the subscriptions and the
+/// reflection tests read of a core resource; implemented once for every
+/// [`CoreResource`].
+pub trait ResourceSpec: Sync {
+    fn uri(&self) -> &'static str;
+    fn name(&self) -> &'static str;
+    fn description(&self) -> &'static str;
+    fn mime_type(&self) -> &'static str;
+    /// What its content changes with ([`CoreResource::CHANGES_WITH`]).
+    fn changes_with(&self) -> Watched;
+    /// Read the resource at a URI it [names](Self::names).
+    fn read(&self, view: ProjectView<'_>, uri: &str) -> ReadOutcome;
+
+    /// How it reaches its project: every core resource reads the served
+    /// project's view ([`TargetSpec::SERVED_VIEW`]).
+    fn target(&self) -> TargetSpec {
+        TargetSpec::SERVED_VIEW
+    }
+
+    /// The resource as `resources/list` (or `resources/templates/list`)
+    /// describes it.
+    fn descriptor(&self) -> Listed {
+        Listed::of(
+            self.uri(),
+            self.name(),
+            Some(self.description()),
+            self.mime_type(),
+        )
+    }
+
+    /// Whether `uri` names this resource, by the one rule extension
+    /// resources follow too ([`crate::uri_template::names`]).
+    fn names(&self, uri: &str) -> bool {
+        crate::uri_template::names(self.uri(), uri)
+    }
+}
+
+impl<T: CoreResource> ResourceSpec for T {
+    fn uri(&self) -> &'static str {
+        T::URI
+    }
+
+    fn name(&self) -> &'static str {
+        T::NAME
+    }
+
+    fn description(&self) -> &'static str {
+        T::DESCRIPTION
+    }
+
+    fn mime_type(&self) -> &'static str {
+        T::MIME_TYPE
+    }
+
+    fn changes_with(&self) -> Watched {
+        T::CHANGES_WITH
+    }
+
+    fn read(&self, view: ProjectView<'_>, uri: &str) -> ReadOutcome {
+        T::read(view, uri)
+    }
+}
+
+/// The `resources/read` reply: the only place that builds `contents` or a
+/// resource's error. Its `uri` is the one given. A refusal is a JSON-RPC
+/// error whose data is its McpError ([`McpError::into_rpc_error`]); one
+/// that says the entity a read names does not exist is *not found*, and
+/// carries `not_found`, the code of the revision the request speaks.
+pub(crate) fn resource_envelope(
+    outcome: ReadOutcome,
+    uri: &str,
+    not_found: i64,
+    id: Option<Value>,
+) -> JsonRpcResponse {
+    match outcome {
+        Ok(text) => JsonRpcResponse::success(
+            id,
+            json!({
+                "contents": [{
+                    "uri": uri,
+                    "mimeType": text.mime_type,
+                    "text": text.text,
+                }]
+            }),
+        ),
+        Err(refusal) => {
+            let missing = refusal.code == ErrorCode::EntityNotFound;
+            let mut error = refusal.into_rpc_error();
+            if missing {
+                error.code = not_found;
+            }
+            JsonRpcResponse::from_error(id, error)
+        }
+    }
+}
+
+/// A read of a URI no core resource and no extension serves: a lookup
+/// failure, like "Unknown tool", so it carries no McpError, but it is *not
+/// found* in the revision of the request (`not_found`) and names the URI.
+pub(crate) fn unknown_resource(not_found: i64, uri: &str) -> JsonRpcError {
+    JsonRpcError::new(not_found, format!("Unknown resource URI: {uri}"))
+        .with_data(json!({ "uri": uri }))
+}

@@ -1259,7 +1259,7 @@ fn core_shadowed_resource() -> Value {
 fn extension_listings(server: &mut McpServer) -> Value {
     let core_uris: Vec<&str> = specforge_mcp::resources::CORE_RESOURCES
         .iter()
-        .map(|r| r.uri)
+        .map(|r| r.uri())
         .collect();
     let tools: Vec<Value> = call(server, "tools/list", json!({}))["result"]["tools"]
         .as_array()

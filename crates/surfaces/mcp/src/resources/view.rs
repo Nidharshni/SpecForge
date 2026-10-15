@@ -1,12 +1,12 @@
 //! The graph views the core resources serve (ADR 0024 D4): `graph`,
 //! `context`, `brief` (whole or scoped) and `graph/{entity_id}` are
 //! `specforge export` over the call's project view, through the same
-//! function; the entity list and the diagnostics read what `specforge.list`
-//! and `specforge.validate` read. Nothing here reads the server's state.
+//! function. The resource modules read their query through this one.
+//! Nothing here reads the server's state.
 
 use specforge_ops::read::export::{ExportField, Format, Request};
 
-use crate::resources::{ReadOutcome, ResourceText};
+use crate::resource::{ReadOutcome, ResourceText};
 use crate::tool::{ErrorCode, McpError};
 use specforge_ops::view::ProjectView;
 
@@ -31,13 +31,14 @@ pub(crate) struct ViewQuery {
 }
 
 impl ViewQuery {
-    /// The query of `uri`; `template` is the prefix before a `{placeholder}`
-    /// (`"specforge://context/"`), whose value is the scope.
+    /// The query of `uri`; `template` is the resource's template
+    /// (`"specforge://context/{entity_id}"`), whose placeholder's value is the
+    /// scope.
     pub fn parse(uri: &str, template: Option<&str>) -> Result<Self, Box<McpError>> {
         let (path, query) = uri.split_once('?').unwrap_or((uri, ""));
         let mut parsed = ViewQuery::default();
-        if let Some(prefix) = template {
-            let placeholder = path.strip_prefix(prefix).unwrap_or_default();
+        if let Some(template) = template {
+            let placeholder = path.strip_prefix(prefix(template)).unwrap_or_default();
             parsed.scope = Some(decode("entity_id", placeholder)?);
             parsed.scope_key = "entity_id";
         }
@@ -143,6 +144,11 @@ impl ViewQuery {
     }
 }
 
+/// The text of `template` before its first `{placeholder}`.
+pub(super) fn prefix(template: &str) -> &str {
+    template.split_once('{').map_or(template, |(head, _)| head)
+}
+
 /// A query the resource cannot read: `invalid_input` naming `key`.
 fn refuse(key: &str, message: String) -> Box<McpError> {
     Box::new(McpError::new(ErrorCode::InvalidInput, message).with_argument(key))
@@ -150,7 +156,7 @@ fn refuse(key: &str, message: String) -> Box<McpError> {
 
 /// `text` with its percent-escapes decoded (RFC 3986 §2.1); `what` names it
 /// when the escapes are malformed or decode to no UTF-8.
-fn decode(what: &str, text: &str) -> Result<String, Box<McpError>> {
+pub(super) fn decode(what: &str, text: &str) -> Result<String, Box<McpError>> {
     let malformed = || refuse(what, format!("'{text}' is not valid percent-encoded UTF-8"));
     let bytes = text.as_bytes();
     let mut decoded = Vec::with_capacity(bytes.len());
@@ -169,7 +175,7 @@ fn decode(what: &str, text: &str) -> Result<String, Box<McpError>> {
 }
 
 /// A resource that takes no query: any is refused naming its first key.
-fn no_query(uri: &str) -> Result<(), Box<McpError>> {
+pub(super) fn no_query(uri: &str) -> Result<(), Box<McpError>> {
     match uri.split_once('?') {
         Some((_, query)) if !query.is_empty() => {
             let key = query.split(['&', '=']).next().unwrap_or_default();
@@ -199,21 +205,9 @@ pub(crate) fn export_view(
     exported(view, &query, format)
 }
 
-/// `specforge://graph/{entity_id}`: the entity and its neighbours, the
-/// scoped graph export at depth 1 (a `depth` query widens it). A malformed
-/// ID is `invalid_input` (the 400 case); a well-formed one that names no
-/// entity is the export's `entity_not_found` with its E003 (the 404 case).
-pub(crate) fn entity_view(view: ProjectView<'_>, uri: &str) -> ReadOutcome {
-    let mut query = ViewQuery::parse(uri, Some("specforge://graph/"))?;
-    check_entity_id(query.scope.as_deref().unwrap_or_default())?;
-    // The entity and its immediate neighbors, not everything reachable.
-    query.depth.get_or_insert(1);
-    exported(view, &query, Format::Graph)
-}
-
 /// An entity ID the URI template names: told apart, when it cannot be one
 /// (the 400 case), from a well-formed one that names no entity (the 404).
-fn check_entity_id(entity_id: &str) -> Result<(), Box<McpError>> {
+pub(super) fn check_entity_id(entity_id: &str) -> Result<(), Box<McpError>> {
     if entity_id.is_empty() {
         return Err(refuse(
             "entity_id",
@@ -234,52 +228,10 @@ fn check_entity_id(entity_id: &str) -> Result<(), Box<McpError>> {
     Ok(())
 }
 
-fn exported(view: ProjectView<'_>, query: &ViewQuery, format: Format) -> ReadOutcome {
+pub(super) fn exported(view: ProjectView<'_>, query: &ViewQuery, format: Format) -> ReadOutcome {
     specforge_ops::read::export::export(&view, &query.request(format))
         .map(ResourceText::json)
         .map_err(|refusal| Box::new(McpError::refused(refusal, |field| query.argument(field))))
-}
-
-/// `specforge://entities/{kind}`: what `specforge.list {kind}` lists, the
-/// same rows from the same read view and presenter
-/// ([`specforge_ops::read::query::list`], [`crate::tools::list::rows`]), as a bare
-/// array (a resource is not a tool result).
-pub(crate) fn entities_view(view: ProjectView<'_>, uri: &str) -> ReadOutcome {
-    let (path, _) = uri.split_once('?').unwrap_or((uri, ""));
-    no_query(uri)?;
-    let kind = decode(
-        "kind",
-        path.strip_prefix("specforge://entities/")
-            .unwrap_or_default(),
-    )?;
-    // A resource has no `_meta`: the listing's notices (an unknown kind)
-    // are not carried.
-    let listing = specforge_ops::read::query::list(
-        &view,
-        &specforge_ops::read::query::ListRequest {
-            kind: Some(&kind),
-            ..Default::default()
-        },
-    );
-    let text = serde_json::to_string(&crate::tools::list::rows(&listing))
-        .map_err(|error| Box::new(McpError::new(ErrorCode::InternalError, error.to_string())))?;
-    Ok(ResourceText::json(text))
-}
-
-/// `specforge://diagnostics`: what the server reports for the call's
-/// project, as `specforge check --format json` writes it.
-pub(crate) fn diagnostics_view(view: ProjectView<'_>, uri: &str) -> ReadOutcome {
-    no_query(uri)?;
-    Ok(ResourceText::json(specforge_common::serialize_diagnostics(
-        &view.reported(),
-    )))
-}
-
-/// `specforge://schema`: the GraphProtocolSchema a full export embeds, the
-/// same document `specforge.schema` returns unfiltered.
-pub(crate) fn schema_view(view: ProjectView<'_>, uri: &str) -> ReadOutcome {
-    no_query(uri)?;
-    crate::resources::schema::read(&view)
 }
 
 #[cfg(test)]
@@ -298,7 +250,10 @@ mod tests {
         assert_eq!(key("specforge://graph?root=ghost", None), Some("root"));
         assert_eq!(key("specforge://graph?scope=ghost", None), Some("scope"));
         assert_eq!(
-            key("specforge://graph/ghost", Some("specforge://graph/")),
+            key(
+                "specforge://graph/ghost",
+                Some("specforge://graph/{entity_id}")
+            ),
             Some("entity_id")
         );
         let query = ViewQuery::parse("specforge://graph?max_tokens=5", None).unwrap();

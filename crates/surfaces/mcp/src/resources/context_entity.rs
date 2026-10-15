@@ -1,0 +1,19 @@
+use specforge_ops::read::export::Format;
+use specforge_ops::view::ProjectView;
+
+use crate::resource::{CoreResource, ReadOutcome};
+use crate::subscriptions::Watched;
+
+/// `specforge://context/{entity_id}`: the context export rooted at an entity.
+pub struct Resource;
+
+impl CoreResource for Resource {
+    const URI: &'static str = "specforge://context/{entity_id}";
+    const NAME: &'static str = "context_entity";
+    const DESCRIPTION: &'static str = "Context-optimized subgraph rooted at an entity";
+    const CHANGES_WITH: Watched = Watched::Content;
+
+    fn read(view: ProjectView<'_>, uri: &str) -> ReadOutcome {
+        super::view::export_view(view, uri, Format::Context, Some(Self::URI))
+    }
+}

@@ -25,7 +25,7 @@ use specforge_registry::RegistryBuild;
 
 use crate::lifecycle::Revision;
 use crate::registry::{Listed, ToolDescriptor};
-use crate::resources::ResourceSpec;
+use crate::resource::ResourceSpec;
 use crate::tool::{Category, ToolGroup, ToolSpec, read_only_annotations};
 
 /// The code reporting an extension contribution MCP does not serve under
@@ -157,7 +157,7 @@ impl ExtensionSurfaceTable {
     pub fn build(
         registries: &RegistryBuild,
         core_tools: &[&dyn ToolSpec],
-        core_resources: &[ResourceSpec],
+        core_resources: &[&dyn ResourceSpec],
     ) -> Self {
         let mut table = ExtensionSurfaceTable::default();
         for declaration in registries.declarations() {
@@ -199,7 +199,7 @@ impl ExtensionSurfaceTable {
                 let shadow = core_resources
                     .iter()
                     .find(|core| core.names(&probe))
-                    .map(|core| format!("the core resource '{}' serves its URIs", core.uri))
+                    .map(|core| format!("the core resource '{}' serves its URIs", core.uri()))
                     .or_else(|| {
                         table
                             .resources

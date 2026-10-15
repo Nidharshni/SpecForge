@@ -40,14 +40,11 @@ pub enum Watched {
 
 impl Watched {
     /// What `uri`'s content changes with: the core resource that names it
-    /// says ([`crate::resources::ResourceSpec::changes_with`]); an extension resource changes
+    /// says ([`crate::resource::ResourceSpec::changes_with`]); an extension resource changes
     /// with the graph's content. `uri` is one the server serves (the
     /// requests check it first).
     pub fn of(uri: &str) -> Self {
-        crate::resources::CORE_RESOURCES
-            .iter()
-            .find(|spec| spec.names(uri))
-            .map_or(Watched::Content, |spec| spec.changes_with)
+        crate::resources::core_resource(uri).map_or(Watched::Content, |spec| spec.changes_with())
     }
 }
 

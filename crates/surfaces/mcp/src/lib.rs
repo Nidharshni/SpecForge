@@ -18,6 +18,7 @@ pub mod protocol;
 mod refusal;
 pub mod registry;
 pub mod reply;
+pub mod resource;
 pub mod resources;
 pub mod state;
 pub mod stdio;
