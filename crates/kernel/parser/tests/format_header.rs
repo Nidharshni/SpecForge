@@ -1,6 +1,10 @@
 //! The format header's rule: where it stands, what it may declare, and how it is rewritten.
 
-use specforge_parser::detect_format_version;
+use proptest::test_runner::TestRunner;
+use specforge_parser::testing::{edited_corpus, property_config};
+use specforge_parser::{
+    CURRENT_FORMAT_VERSION, FormatVersion, detect_format_version, with_format_version,
+};
 use specforge_test_macros::test as specforge_test;
 
 const BODY: &str = "behavior foo \"Foo\" {\n  contract \"x\"\n}\n";
@@ -23,4 +27,87 @@ fn the_e019_hint_names_the_versions_a_file_may_declare() {
     assert_eq!((version.major, version.minor), (0, 1));
     assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
     assert_eq!(diagnostics[0].code, "I007");
+}
+
+#[test]
+fn the_header_is_rewritten_where_the_parser_reads_it() {
+    let cases = [
+        ("// specforge-format: 0.9\nB", "// specforge-format: 1.0\nB"),
+        (
+            "\n\n// specforge-format: 0.9\nB",
+            "\n\n// specforge-format: 1.0\nB",
+        ),
+        (
+            "// specforge-format: 0.9  \nB",
+            "// specforge-format: 1.0\nB",
+        ),
+        ("// specforge-format: abc\nB", "// specforge-format: 1.0\nB"),
+        ("B", "// specforge-format: 1.0\nB"),
+        ("", "// specforge-format: 1.0\n"),
+        (
+            "// a note\n// specforge-format: 0.9\nB",
+            "// specforge-format: 1.0\n// a note\n// specforge-format: 0.9\nB",
+        ),
+    ];
+    for (input, expected) in cases {
+        assert_eq!(
+            with_format_version(input, &CURRENT_FORMAT_VERSION),
+            expected,
+            "{input:?}"
+        );
+    }
+}
+
+#[test]
+fn a_crlf_file_keeps_its_line_endings() {
+    assert_eq!(
+        with_format_version("// specforge-format: 0.9\r\nB\r\n", &CURRENT_FORMAT_VERSION),
+        "// specforge-format: 1.0\r\nB\r\n"
+    );
+    assert_eq!(
+        with_format_version("B\r\n", &CURRENT_FORMAT_VERSION),
+        "// specforge-format: 1.0\r\nB\r\n"
+    );
+}
+
+/// The lines of `text` without its header line (the first non-blank line, when it is a header),
+/// and whether there was one.
+fn without_header(text: &str) -> (Vec<&str>, bool) {
+    let mut lines: Vec<&str> = text.lines().collect();
+    match lines.iter().position(|l| !l.trim().is_empty()) {
+        Some(at) if lines[at].starts_with("// specforge-format: ") => {
+            lines.remove(at);
+            (lines, true)
+        }
+        _ => (lines, false),
+    }
+}
+
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "the header migrate writes is the header the parser reads"
+)]
+fn the_header_written_is_the_header_read() {
+    let mut runner = TestRunner::new(property_config());
+    let result = runner.run(&edited_corpus(), |case| {
+        for v in [FormatVersion { major: 0, minor: 9 }, CURRENT_FORMAT_VERSION] {
+            let w = with_format_version(&case.edited, &v);
+            proptest::prop_assert_eq!(detect_format_version(&w, "p.spec").0, v.clone());
+            let (rest, had) = without_header(&case.edited);
+            let (written, wrote) = without_header(&w);
+            proptest::prop_assert!(wrote);
+            let kept: Vec<&str> = if had {
+                written
+            } else {
+                // No header before: the one written is the added first line.
+                w.lines().skip(1).collect()
+            };
+            proptest::prop_assert_eq!(kept, rest);
+            proptest::prop_assert_eq!(with_format_version(&w, &v), w);
+        }
+        Ok(())
+    });
+    if let Err(failure) = result {
+        panic!("{failure}");
+    }
 }
