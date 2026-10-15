@@ -287,6 +287,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   edge type outside its declared ends is W021 and writes none. A graph edge's label is the field that wrote it; its
   edge type is read from the field, once, in the entity snapshot. Rules count by it, the schema prints its ends,
   trace names it (ADR 0060).
+- **Entity enhancement**: fields and verify kinds one extension declares on an entity kind another extension declares
+  (`c.enhance(kind, ..)`). Its fields are the declaring extension's: trace treats them as opt-in for the kind, and
+  the model and schema name their extension. The kind stays its declarer's. An enhancement of a kind no loaded
+  extension declares is skipped silently when its extension declares an optional peer the project does not load, and
+  is I004 otherwise (ADR 0096).
 - **Rule set**: the extensions' declared validation rules plus the host's E006 rules for required
   fields, each turned once per registry build into a typed rule that carries only what its check
   reads, resolved against the registries (a compiled regex, an edge rule's edge type and the fields that
