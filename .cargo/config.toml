@@ -1,2 +1,7 @@
 [alias]
 gate = "run --quiet --package gate --"
+
+[build]
+# No incremental caches: with hundreds of test binaries they grew the target
+# directory to tens of GB. The agent briefs already build this way.
+incremental = false
