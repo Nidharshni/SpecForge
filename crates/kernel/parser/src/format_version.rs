@@ -3,9 +3,11 @@
 //! the file was written against, and is distinct from the Graph Protocol's
 //! schema version. A file with no header is at the current version.
 //!
-//! [`detect_format_version`] is the one reader: the parser attaches what it
-//! reports to every file it parses (so `check`, watch, the LSP and MCP show it
-//! as a compile diagnostic), and `specforge migrate` reads files through it.
+//! [`detect_format_version`] reads the header and [`with_format_version`]
+//! rewrites it, both through one placement rule: the first non-blank line.
+//! The parser attaches what the reader reports to every file it parses (so
+//! `check`, watch, the LSP and MCP show it as a compile diagnostic), and
+//! `specforge migrate` reads and rewrites files through the two.
 
 use std::fmt;
 use std::str::FromStr;
@@ -25,14 +27,19 @@ pub struct FormatVersion {
 /// Current format version. All new spec files are at this version.
 pub const CURRENT_FORMAT_VERSION: FormatVersion = FormatVersion { major: 1, minor: 0 };
 
-/// Minimum supported format version for migration.
-pub const MIN_SUPPORTED_VERSION: FormatVersion = FormatVersion { major: 1, minor: 0 };
+/// The oldest format version a file may declare: the previous major's first
+/// (`migration.spec`: "the current and previous major format versions"). A file
+/// below [`CURRENT_FORMAT_VERSION`] reports I007.
+pub const MIN_SUPPORTED_VERSION: FormatVersion = FormatVersion {
+    major: CURRENT_FORMAT_VERSION.major.saturating_sub(1),
+    minor: 0,
+};
 
-/// Maximum supported target version.
+/// Maximum supported version (a file's, or a migration target's).
 pub const MAX_SUPPORTED_VERSION: FormatVersion = FormatVersion { major: 1, minor: 0 };
 
-/// What a format version header starts with.
-pub const FORMAT_HEADER_PREFIX: &str = "// specforge-format: ";
+/// What a format version header starts with. Private: the header is this module's.
+const HEADER_PREFIX: &str = "// specforge-format: ";
 
 impl fmt::Display for FormatVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -70,31 +77,26 @@ impl FromStr for FormatVersion {
 /// and what the header reports. A file with no header is at
 /// [`CURRENT_FORMAT_VERSION`] and reports nothing.
 ///
-/// - an older version than the minimum supported: I007, "migration available";
+/// - an older version than the current: I007, "migration available";
 /// - a version newer than the maximum supported: E019, with the range this
 ///   build supports;
 /// - a header that is not `MAJOR.MINOR`: E019, with the expected shape (the
-///   version is then [`MIN_SUPPORTED_VERSION`]).
+///   version is then [`CURRENT_FORMAT_VERSION`]).
 ///
 /// Each diagnostic is spanned on the header line, so it sits where the file
 /// declares the version.
 pub fn detect_format_version(content: &str, file: &str) -> (FormatVersion, Vec<Diagnostic>) {
-    let first_line = content
-        .lines()
-        .enumerate()
-        .find(|(_, line)| !line.trim().is_empty());
-    let Some((index, line)) = first_line else {
+    let Some(header) = header_line(content) else {
         return (CURRENT_FORMAT_VERSION, Vec::new());
     };
-    let Some(version_str) = line.strip_prefix(FORMAT_HEADER_PREFIX) else {
-        return (CURRENT_FORMAT_VERSION, Vec::new());
-    };
+    let version_str = &header.text[HEADER_PREFIX.len()..];
+    let index = header.index;
     let span = SourceSpan {
         file: Sym::new(file),
         start_line: index + 1,
         start_col: 1,
         end_line: index + 1,
-        end_col: line.chars().count() + 1,
+        end_col: header.text.chars().count() + 1,
     };
     let version_str = version_str.trim();
     match FormatVersion::from_str(version_str) {
@@ -111,7 +113,7 @@ pub fn detect_format_version(content: &str, file: &str) -> (FormatVersion, Vec<D
             ));
             (version, vec![diagnostic])
         }
-        Ok(version) if version < MIN_SUPPORTED_VERSION => {
+        Ok(version) if version < CURRENT_FORMAT_VERSION => {
             let diagnostic = Diagnostic::new(
                 codes::I007,
                 format!(
@@ -132,7 +134,68 @@ pub fn detect_format_version(content: &str, file: &str) -> (FormatVersion, Vec<D
             .with_suggestion(format!(
                 "Expected `// specforge-format: MAJOR.MINOR` (e.g., `// specforge-format: {CURRENT_FORMAT_VERSION}`)."
             ));
-            (MIN_SUPPORTED_VERSION, vec![diagnostic])
+            (CURRENT_FORMAT_VERSION, vec![diagnostic])
+        }
+    }
+}
+
+/// The file's header line: its first non-blank line, when that starts with the prefix.
+struct HeaderLine<'a> {
+    /// 0-based line index.
+    index: usize,
+    /// Byte range of the line in the content, its line ending excluded.
+    range: std::ops::Range<usize>,
+    /// The line's text (the content at `range`).
+    text: &'a str,
+}
+
+/// The one placement rule: the first line whose `trim()` is non-empty, if it
+/// starts with the prefix. Lines split as `str::lines` splits them (on `\n`,
+/// a preceding `\r` dropped), with byte offsets, after one leading byte-order mark.
+fn header_line(content: &str) -> Option<HeaderLine<'_>> {
+    let mut offset = 0;
+    for (index, raw) in content.split_inclusive('\n').enumerate() {
+        let line = match raw.strip_suffix('\n') {
+            Some(line) => line.strip_suffix('\r').unwrap_or(line),
+            None => raw,
+        };
+        // One leading byte-order mark is not part of the first line's text.
+        let bom = if index == 0 && line.starts_with('\u{feff}') {
+            '\u{feff}'.len_utf8()
+        } else {
+            0
+        };
+        let text = &line[bom..];
+        if !text.trim().is_empty() {
+            return text.starts_with(HEADER_PREFIX).then(|| HeaderLine {
+                index,
+                range: offset + bom..offset + bom + text.len(),
+                text,
+            });
+        }
+        offset += raw.len();
+    }
+    None
+}
+
+/// `content` declaring `version`: the header line [`header_line`] finds is
+/// replaced in place, its line ending kept; a file with none gets
+/// `// specforge-format: <version>` as its first line, ended like the file's
+/// first line (`\r\n` when that ends so, else `\n`). No other byte changes.
+pub fn with_format_version(content: &str, version: &FormatVersion) -> String {
+    let header = format!("{HEADER_PREFIX}{version}");
+    match header_line(content) {
+        Some(found) => format!(
+            "{}{header}{}",
+            &content[..found.range.start],
+            &content[found.range.end..]
+        ),
+        None => {
+            let ending = match content.find('\n') {
+                Some(at) if content[..at].ends_with('\r') => "\r\n",
+                _ => "\n",
+            };
+            format!("{header}{ending}{content}")
         }
     }
 }

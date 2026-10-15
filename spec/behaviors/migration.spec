@@ -110,6 +110,10 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
     read, so a save made while the migration runs is never split between
     them.
 
+    The header is rewritten where the parser reads it, the file's first
+    non-blank line; a file with none gets one as its first line. No other
+    line changes.
+
     The system MUST report the number of files migrated, failed, and
     skipped via MigrationSummary. Skipped files are those already at the
     target version — this ensures migration idempotency: running migrate
@@ -156,6 +160,8 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
   verify unit "a specforge.json that does not say which files are the project's sources refuses the migration, dry run included, and nothing is written"
   verify unit "a problem in specforge.json the migration goes around is an E069 in its document and fails it"
   verify unit "the preview and the migration rewrite the same sources, read once"
+  verify unit "a header below leading blank lines is rewritten where it stands"
+  verify property "the header migrate writes is the header the parser reads"
   verify integration "migrate leaves a nested project's files alone"
 }
 

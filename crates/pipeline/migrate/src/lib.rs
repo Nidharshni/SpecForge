@@ -8,7 +8,7 @@ use specforge_common::shape::Shape;
 use specforge_common::{Diagnostic, ProjectRoot, Severity, codes};
 use specforge_formatter::unified_diff;
 use specforge_graph::{EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect};
-use specforge_parser::{FORMAT_HEADER_PREFIX, FormatVersion, detect_format_version};
+use specforge_parser::{FormatVersion, detect_format_version, with_format_version};
 use std::path::{Path, PathBuf};
 
 // ---------------------------------------------------------------------------
@@ -184,28 +184,10 @@ impl MigrationRecord {
 // Transform Functions (pure)
 // ---------------------------------------------------------------------------
 
-/// Update the format version header in a spec file's content.
-/// If no header exists, prepend one. If a header exists, replace it.
-fn set_format_version_header(content: &str, version: &FormatVersion) -> String {
-    let new_header = format!("{FORMAT_HEADER_PREFIX}{version}");
-
-    if let Some(line) = content
-        .lines()
-        .next()
-        .filter(|l| l.starts_with(FORMAT_HEADER_PREFIX))
-    {
-        let rest = &content[line.len()..];
-        return format!("{new_header}{rest}");
-    }
-
-    // Prepend header
-    format!("{new_header}\n{content}")
-}
-
 /// Transform content to version `to`.
 /// Currently v1 is the only version, so this just ensures the header is set.
 fn transform_content(content: &str, to: &FormatVersion) -> String {
-    set_format_version_header(content, to)
+    with_format_version(content, to)
 }
 
 // ---------------------------------------------------------------------------
