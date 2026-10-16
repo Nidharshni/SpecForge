@@ -1,6 +1,5 @@
 //! The files inference covers, over a served project (ADR 0113): none outside the project is read
-//! or listed. The `#[ignore]`d tests pin today's defects; the ticket named in each reason flips
-//! one.
+//! or listed.
 
 use crate::support::*;
 use serde_json::{Value, json};

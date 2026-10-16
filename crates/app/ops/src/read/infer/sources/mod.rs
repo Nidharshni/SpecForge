@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use sha2::{Digest, Sha256};
-use specforge_common::walk_files;
+use specforge_common::{ProjectRoot, walk_files};
 use specforge_protocol_types::ExtensionDeclaration;
 
 use super::manifest::{InferenceManifest, SourceFileEntry};
@@ -320,7 +320,7 @@ fn walk(files: &ProjectFiles, analyzers: &Analyzers, roots: &[String]) -> Vec<So
                     .and_then(|name| name.to_str())
                     .is_some_and(|name| !name.starts_with('.') && analyzers.claim(name).is_some())
             },
-            |_| false,
+            ProjectRoot::is_root,
         );
         for path in walked.files {
             let a_link = path.symlink_metadata().is_ok_and(|m| m.is_symlink());

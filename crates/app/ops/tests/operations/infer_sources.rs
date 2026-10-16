@@ -1,6 +1,5 @@
 //! The files inference covers (ADR 0113): walked by the shared discovery policy, held inside the
-//! project root, listed once. The `#[ignore]`d tests pin today's defects; the ticket named in
-//! each reason flips one.
+//! project root, listed once.
 
 use std::path::Path;
 
@@ -203,7 +202,6 @@ fn an_indexed_path_outside_the_project_is_deleted_and_never_read() {
     behavior = "discover_inference_sources",
     verify = "a nested project's files are not the outer project's inference sources"
 )]
-#[ignore = "flipped by T8"]
 fn a_nested_projects_files_are_no_inference_sources() {
     let project = project();
     write(project.root(), "sub/specforge.json", "{}");
