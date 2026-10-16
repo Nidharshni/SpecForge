@@ -93,7 +93,8 @@ impl CompiledProject {
     }
 
     /// [`Self::environment`], shared: it stays valid after a session
-    /// replaces this project.
+    /// replaces this project. Tests build an unread copy from it.
+    #[cfg(feature = "testing")]
     pub fn shared_environment(&self) -> Arc<Environment> {
         Arc::clone(&self.env)
     }
