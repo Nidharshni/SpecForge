@@ -41,7 +41,7 @@ impl RegistryBuild {
     pub fn check(&self, input: &RuleInput<'_>, verdicts: &dyn CustomVerdicts) -> Vec<Diagnostic> {
         let entities = input.entities;
         let mut diagnostics = refs::unreferenced(entities); // W012
-        diagnostics.extend(files::missing(entities, &self.fields, input.spec_root)); // E016
+        diagnostics.extend(files::missing(input, &self.fields)); // E016
         if self.structural_only() {
             // W151: extensions are loaded but none declares a kind.
             diagnostics.extend(kinds::unchecked(entities, !self.declarations().is_empty()));

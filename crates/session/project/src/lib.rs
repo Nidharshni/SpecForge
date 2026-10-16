@@ -50,7 +50,7 @@ use specforge_common::{
 use specforge_graph::{Graph, GraphBuild, GraphConfig};
 use specforge_installed::{Builtins, Installed};
 use specforge_registry::{
-    RegistryBuild, build_registries,
+    Disk, RegistryBuild, build_registries,
     rules::{CustomVerdicts, NoVerdicts},
 };
 use specforge_wasm::WasmRuntime;
@@ -368,8 +368,14 @@ impl Environment {
     /// snapshot `entities`: the registry build's checks (the structural
     /// checks and the extensions' rules, in the order
     /// [`RegistryBuild::check`] runs them), then the check-phase passes;
-    /// the custom verdicts and the passes run in [`Self::runtime`].
-    pub fn run_checks(&self, graph: &Graph, entities: &EntitySnapshot) -> Vec<Diagnostic> {
+    /// the custom verdicts and the passes run in [`Self::runtime`]. Every file
+    /// a check reads goes through `disk` (ADR 0107).
+    pub fn run_checks(
+        &self,
+        graph: &Graph,
+        entities: &EntitySnapshot,
+        disk: &dyn Disk,
+    ) -> Vec<Diagnostic> {
         let runtime = self.runtime.as_deref();
         let mut diagnostics = Vec::new();
         let verdicts: Box<dyn CustomVerdicts + '_> = match runtime {
@@ -378,7 +384,7 @@ impl Environment {
         };
         diagnostics.extend(
             self.registries
-                .check(&entities.rule_input(), verdicts.as_ref()),
+                .check(&entities.rule_input(disk), verdicts.as_ref()),
         );
         if let Some(runtime) = runtime {
             diagnostics.extend(check_passes::run(self, graph, entities, runtime));

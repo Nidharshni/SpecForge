@@ -12,7 +12,7 @@ use specforge_graph::{
 };
 
 use crate::coverage::RecordedCoverage;
-use crate::ledger::{Reads, Unrecorded};
+use crate::ledger::{PlainDisk, Reads, Unrecorded};
 use crate::snapshot::EntitySnapshot;
 use crate::sources::{Read, SourceCache};
 use crate::{Environment, SharedRuntime, SourceBuild};
@@ -307,7 +307,9 @@ impl CompiledProject {
     /// in the environment's runtime; the memo starts again from that
     /// snapshot.
     fn check_over(&mut self, entities: Arc<EntitySnapshot>) {
-        self.check_diagnostics = self.env.run_checks(self.graph.graph(), &entities);
+        self.check_diagnostics = self
+            .env
+            .run_checks(self.graph.graph(), &entities, &PlainDisk);
         self.recorded = OnceLock::from(RecordedCoverage::of(entities));
         self.reported = OnceLock::new();
     }

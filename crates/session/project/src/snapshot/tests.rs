@@ -201,7 +201,7 @@ use specforge_protocol_types::{
     ValidationSeverity,
 };
 use specforge_registry::rules::NoVerdicts;
-use specforge_registry::{RegistryBuild, build_registries};
+use specforge_registry::{MemoryDisk, RegistryBuild, build_registries};
 
 fn graph_of(source: &str) -> Graph {
     let (graph, _) = specforge_graph::build_graph(&[specforge_parser::parse(source, "test.spec")]);
@@ -284,7 +284,7 @@ fn w004_ids(source: &str, abstract_behaviors: bool) -> Vec<String> {
     let snapshot = snapshot(source, &registries);
     let mut ids: Vec<String> = registries
         .rules()
-        .check(&snapshot.rule_input(), &NoVerdicts)
+        .check(&snapshot.rule_input(&MemoryDisk::new()), &NoVerdicts)
         .into_iter()
         .map(|d| d.message.split('\'').nth(1).unwrap().to_string())
         .collect();

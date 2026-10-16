@@ -414,7 +414,7 @@ fn missing_files(rule: &Rule, field: &str, input: &RuleInput<'_>) -> Vec<Diagnos
             .find(|f| f.key == field)
             .is_some_and(|f| f.items.is_some());
         for path in named_paths(record, field) {
-            if input.spec_root.join(path).exists() {
+            if input.disk.exists(&input.spec_root.join(path)) {
                 continue;
             }
             let violation = if listed {

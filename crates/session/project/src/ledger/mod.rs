@@ -15,6 +15,7 @@
 //! `ProjectSession::stale` and `changes`, and are taken before the read
 //! they describe, so a write that races the read is seen next time.
 
+mod disk;
 mod inputs;
 mod key;
 mod reach;
@@ -33,6 +34,7 @@ use crate::build_cache::BUILD_CACHE_FILE;
 use crate::snapshot::EntitySnapshot;
 use crate::sources::{self, Read};
 
+pub(crate) use disk::PlainDisk;
 pub use inputs::{SessionInputs, WatchRoot, Watched};
 pub use key::source_key;
 use stamps::{Entry, Scope, Stamps};
@@ -163,7 +165,7 @@ impl Reads for Ledger {
         if env.registries().check_passes().next().is_some() {
             run.read(CheckInput::File, &root.join(BUILD_CACHE_FILE), |_| ());
         }
-        for path in env.registries().files(&entities.rule_input()) {
+        for path in env.registries().files(&entities.rule_input(&PlainDisk)) {
             let exists = run.read(CheckInput::File, &path, Path::exists);
             if !exists && let Some(parent) = path.parent() {
                 run.read(CheckInput::Listing, parent, |_| ());
