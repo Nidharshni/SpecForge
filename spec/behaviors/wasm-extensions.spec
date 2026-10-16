@@ -389,7 +389,8 @@ behavior register_collector_contributions "Register Collector Contributions" {
     (`collect__<name>`), the project-root files that select it, the argv
     that runs its test runner (elements may contain the `{report}`
     placeholder) and the report file or directory the runner writes,
-    relative to the project root. A collector without a report location
+    relative to the project root, with no `..`; where it lands is the
+    request's containment. A collector without a report location
     reads `.specforge/reports/<name>.json`.
   """
   produces   [collector_registered]

@@ -127,7 +127,13 @@ fn step(
     project: &Assembled,
     step: SessionStep<'_>,
 ) -> Result<infer::SessionOutcome, specforge_ops::Refusal<infer::SessionField>> {
-    infer::session(&project.view(), step)
+    infer::session(
+        &project.view(),
+        &infer::SessionRequest {
+            step,
+            containment: &specforge_ops::Containment::unbounded(),
+        },
+    )
 }
 
 /// The sessions `specforge-infer.json` records at `project`'s root.
@@ -342,9 +348,12 @@ fn a_rootless_view_is_no_project() {
     let rootless = project.rootless_view();
     let error = infer::session(
         &rootless,
-        SessionStep::Start {
-            agent: None,
-            source_roots: None,
+        &infer::SessionRequest {
+            step: SessionStep::Start {
+                agent: None,
+                source_roots: None,
+            },
+            containment: &specforge_ops::Containment::unbounded(),
         },
     )
     .unwrap_err();
@@ -474,4 +483,29 @@ fn a_session_refusal_is_about_its_field() {
     );
     step(&project, end(&id)).unwrap();
     assert_eq!(subject(end(&id)), Some(SessionField::SessionId));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_bounded_session_refuses_a_manifest_that_leaves_the_project() {
+    let project = project(None, serde_json::json!({}));
+    let outside = tempfile::TempDir::new().unwrap();
+    let target = outside.path().join("m.json");
+    std::fs::write(&target, "ORIGINAL").unwrap();
+    std::os::unix::fs::symlink(&target, project.root().join("specforge-infer.json")).unwrap();
+
+    let error = infer::session(
+        &project.view(),
+        &infer::SessionRequest {
+            step: SessionStep::Start {
+                agent: None,
+                source_roots: None,
+            },
+            containment: &specforge_ops::Containment::within(project.root()),
+        },
+    )
+    .unwrap_err();
+
+    assert_eq!(error.error.code, specforge_ops::OUTSIDE_ROOT);
+    assert_eq!(std::fs::read_to_string(&target).unwrap(), "ORIGINAL");
 }

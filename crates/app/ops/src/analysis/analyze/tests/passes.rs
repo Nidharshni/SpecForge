@@ -249,7 +249,10 @@ fn analyze_states_which_field_a_refusal_is_about() {
     // A named results file that is not there is about the report; one that is unusable is a
     // refusal of the file, and so is an unusable recorded report.
     let report = |path: std::path::PathBuf| AnalyzeOptions {
-        report: ReportSource::File(path),
+        report: ReportSource::Named {
+            path,
+            containment: crate::Containment::unbounded(),
+        },
         ..Default::default()
     };
     let missing = project.assembled.root().join("missing.json");

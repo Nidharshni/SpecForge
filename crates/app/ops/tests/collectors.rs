@@ -176,6 +176,7 @@ fn collect_maps_results_to_the_views_entities() {
             mode: Mode::Reports(&reports),
             asking: Asking::Nobody,
             announce: &mut |_, _| panic!("nothing runs when reading reports"),
+            containment: &specforge_ops::Containment::unbounded(),
         },
     )
     .unwrap();

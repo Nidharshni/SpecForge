@@ -447,7 +447,7 @@ pub fn run(request: &Request) -> Result<Outcome, Refusal<FormatField>> {
                 continue;
             }
         };
-        let source = match std::fs::read_to_string(&held.real) {
+        let source = match held.read_to_string() {
             Ok(source) => source,
             Err(e) => {
                 outcome.failures.push(Failure::read(target, &e));
@@ -468,7 +468,7 @@ pub fn run(request: &Request) -> Result<Outcome, Refusal<FormatField>> {
             continue;
         }
         let written = match request.mode {
-            Mode::Write => match std::fs::write(&held.real, &formatted) {
+            Mode::Write => match held.write(&formatted) {
                 Ok(()) => true,
                 Err(e) => {
                     outcome.failures.push(Failure::write(target.clone(), &e));

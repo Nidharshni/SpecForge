@@ -65,7 +65,11 @@ behavior save_inference_manifest "Save Inference Manifest" {
     rest of the manifest. The source_index MUST be sorted by path
     for stable git diffs. The InferenceSummary MUST NOT be written.
     Write to a temporary file in the same directory, then atomically
-    rename to the target path. The JSON MUST be pretty-printed.
+    rename to the target path. The temporary file is created new: whatever
+    is at its name is removed first, a link and never its target, so
+    nothing is written through it. A manifest that is itself a link
+    leaving the project is unusable (E071) and is not read.
+    The JSON MUST be pretty-printed.
   """
   verify unit "save writes valid JSON that can be loaded back"
   verify unit "save does not include summary in JSON output"
@@ -241,7 +245,8 @@ behavior provide_mcp_infer_session_tool "Provide MCP Infer Session Tool" {
     - mark_analyzed: Call mark_source_file_analyzed with provided
       source_file path and entities_produced list.
     - end: Call end_inference_session with session_id and status.
-    All actions save the manifest atomically. On first write, creates
+    All actions read and save the manifest through the call's project,
+    atomically. On first write, creates
     specforge-infer.json if it does not exist.
   """
   verify unit "start action creates session and returns ID"

@@ -303,7 +303,7 @@ check leaves it as written.
 | `no_edges` | the entity has no edges in either direction | — | — | `edge_type`, `constraint`, `wasm_function` |
 | `missing_field_when_flag_set` | `field` is absent (when `field` is `verify`, the entity's `verify` statements; an entity owing none is exempt) | `field` | `field` | `edge_type`, `constraint`, `wasm_function` |
 | `missing_required_field` | `field` is absent | `field` | `field` | `edge_type`, `constraint`, `wasm_function` |
-| `file_exists` | the path in `field` (each item of a list field) does not exist, relative to the spec root | `field` | `field` | `edge_type`, `constraint`, `wasm_function` |
+| `file_exists` | a path `field` names (its text, or each item of a list; a block or an expression names none) does not exist, relative to the spec root; the diagnostic suggests a close sibling | `field` | `field` | `edge_type`, `constraint`, `wasm_function` |
 | `field_value_constraint` | `field`'s value breaks the constraint | `field`; a constraint `non_empty`, `one_of` with values, or `matches` with a `pattern` that compiles | the constraint | `edge_type`, `wasm_function`; `pattern` on `non_empty`/`one_of`; `values` on `non_empty`/`matches` |
 | `conditional_field_required` | `field` is absent or empty while the field named by `constraint.pattern` holds one of `constraint.values` | `field`; `constraint.pattern` and non-empty `constraint.values` | constraint kind `when_field_equals` | `edge_type`, `wasm_function`; any other constraint kind (read as `when_field_equals`) |
 | `cycle_detection` | the entity sits on a cycle of `edge_type` edges, following every field that writes it | `edge_type` | `target_kind` (unset: every entity) | `constraint`, `wasm_function` |

@@ -1,7 +1,7 @@
 # The registry build checks the entities; the validator crate is gone
 
 **Status:** accepted (2026-10-07). Amends ADR 0007 (crate roles) and reopens ADR 0019's "structured
-value" clause. D1's `RegistryBuild::files` sentence is reopened by [ADR 0107](0107-the-checks-read-through-the-disk-they-are-given.md): the session watches what the checks read. D1's tests sentence is completed by [ADR 0115](0115-the-entity-snapshot-is-made-in-the-registry.md): check tests start from `.spec` text through the build's own graph inputs. Amended by [ADR 0122](0122-the-builtins-vocabulary-is-generated-beside-them.md): the build carries a candidate vocabulary its checks read for suggestions only.
+value" clause. D1's `RegistryBuild::files` sentence is reopened by [ADR 0107](0107-the-checks-read-through-the-disk-they-are-given.md): the session watches what the checks read. D1's tests sentence is completed by [ADR 0115](0115-the-entity-snapshot-is-made-in-the-registry.md): check tests start from `.spec` text through the build's own graph inputs. D1's order and its rejected "structural checks as host rules" are reopened for E016 by [ADR 0118](0118-the-paths-a-field-names-are-read-once.md). Amended by [ADR 0122](0122-the-builtins-vocabulary-is-generated-beside-them.md): the build carries a candidate vocabulary its checks read for suggestions only.
 
 Every check that runs over a built graph's entities sat in one of three places:
 

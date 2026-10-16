@@ -150,7 +150,10 @@ fn a_locked_report_is_permission_denied() {
 fn analyze_calls_a_missing_named_report_file_not_found() {
     let project = project();
     let options = AnalyzeOptions {
-        report: ReportSource::File(project.root().join("none.json")),
+        report: ReportSource::Named {
+            path: project.root().join("none.json"),
+            containment: specforge_ops::Containment::unbounded(),
+        },
         ..Default::default()
     };
 

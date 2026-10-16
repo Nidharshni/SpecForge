@@ -1,7 +1,7 @@
-//! E016: a path a `file_reference` field names that does not exist, and the
-//! one set of files the checks read.
+//! E016, the host's `file_exists` rule for each `file_reference` field, and every `file_exists`
+//! rule's reading of the paths a field names (ADR 0118), run through `RegistryBuild::check`.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use specforge_common::Diagnostic;
 use specforge_extension_sdk::prelude::*;
@@ -11,6 +11,8 @@ use specforge_registry::rules::NoVerdicts;
 use specforge_registry::{Asked, MemoryDisk};
 use specforge_test_macros::test as spec;
 
+use super::{entity, messages, one, rule};
+use crate::support::written::checked_on;
 use crate::support::{build, coded_in, declare, span};
 
 /// `behavior`, with `gherkin` (a list of paths, a file reference) and
@@ -216,7 +218,7 @@ fn with_a_file_exists_rule() -> ExtensionDeclaration {
 
 #[spec(
     behavior = "check_entities_in_one_order",
-    verify = "the checks read only through their disk: the paths file_reference fields of the entity's kind name, the paths file_exists rules read, and the directory E016's suggestion lists"
+    verify = "the checks read only through their disk: the paths file_exists rules read, E016's among them, and the directory a missing path's suggestion lists"
 )]
 fn the_checks_read_only_through_their_disk() {
     let build = build([with_a_file_exists_rule()]);
@@ -243,15 +245,17 @@ fn the_checks_read_only_through_their_disk() {
     assert_eq!(
         disk.asked(),
         [
-            // E016, record by record: a missing path lists its directory.
+            // The extensions' `file_exists` rules by code, then the host's E016 rules by kind
+            // and field: F001 over `guide`, a missing path lists its directory.
+            exists("/spec/guide.md".into()),
+            list("/spec".into()),
+            // E016 over `note.docs`, entity by entity.
             exists("/spec/more/one.md".into()),
             list("/spec/more".into()),
             exists("/spec/a.md".into()),
             list("/spec".into()),
             exists("/spec/a.md".into()),
             list("/spec".into()),
-            // The `file_exists` rule over `guide`.
-            exists("/spec/guide.md".into()),
         ]
     );
 }
@@ -338,5 +342,210 @@ fn a_single_path_is_checked() {
     assert_eq!(
         exists,
         [std::path::Path::new("/nonexistent/spec").join("missing.md")]
+    );
+}
+
+/// `note` with `guide` (a single path, a file reference) and `docs` (a list of paths, a file
+/// reference), and the `file_exists` rule `F001` over `guide`.
+fn notes_with_a_guide() -> ExtensionDeclaration {
+    declare("@test/notes", |c| {
+        c.kind("Note", |k| {
+            k.keyword("note");
+            k.field("guide", |f| {
+                f.field_type(FieldType::String).file_reference();
+            });
+            k.field("docs", |f| {
+                f.field_type(FieldType::StringList).file_reference();
+            });
+        });
+        c.rule("F001", |r| {
+            r.check(CheckKind::FileExists)
+                .severity(ValidationSeverity::Warning)
+                .target_kind("note")
+                .field("guide")
+                .message_template("note '{id}': missing '{value}'");
+        });
+    })
+}
+
+/// The messages of `code` among the checks over `text`, written as one file, on `disk`.
+fn messages_of(code: &str, text: &str, disk: &MemoryDisk) -> Vec<String> {
+    let diagnostics = checked_on(&build([notes_with_a_guide()]), &[("t.spec", text)], disk);
+    coded_in(&diagnostics, code)
+        .into_iter()
+        .map(|d| d.message.clone())
+        .collect()
+}
+
+#[spec(
+    behavior = "validate_file_reference_paths",
+    verify = "a bare word on a file-reference field is a path"
+)]
+fn a_bare_word_on_a_file_reference_field_is_e016() {
+    let text = "note bare \"B\" {\n  guide README\n}\n";
+
+    assert_eq!(
+        messages_of("E016", text, &MemoryDisk::new()),
+        ["file reference 'README' in entity 'bare' does not exist"]
+    );
+    assert_eq!(
+        messages_of("F001", text, &MemoryDisk::new()),
+        ["note 'bare': missing 'README'"]
+    );
+}
+
+#[spec(
+    behavior = "execute_validation_pattern",
+    verify = "file_exists reads no path in a block, an expression group or an empty value"
+)]
+fn a_file_exists_rule_reads_no_path_in_a_block_or_an_empty_value() {
+    let text = "note block \"K\" {\n  guide {\n    README \"x\"\n  }\n}\n\
+                note empty \"E\" {\n  guide \"\"\n}\n";
+    let disk = MemoryDisk::new();
+
+    assert!(messages_of("F001", text, &disk).is_empty());
+    assert!(messages_of("E016", text, &disk).is_empty());
+    let asked_exists = disk
+        .asked()
+        .into_iter()
+        .filter(|asked| matches!(asked, Asked::Exists(_)))
+        .collect::<Vec<_>>();
+    assert!(asked_exists.is_empty(), "{asked_exists:?}");
+}
+
+#[spec(
+    behavior = "execute_validation_pattern",
+    verify = "a missing path a file_exists rule names suggests a close sibling"
+)]
+fn a_file_exists_rule_suggests_a_close_sibling() {
+    let text = "note quoted \"Q\" {\n  guide \"NOTES\"\n}\n";
+    let disk = MemoryDisk::new().with_file("/spec/NOTE", b"");
+
+    let diagnostics = checked_on(&build([notes_with_a_guide()]), &[("t.spec", text)], &disk);
+
+    let f001 = coded_in(&diagnostics, "F001");
+    assert_eq!(f001.len(), 1, "{diagnostics:?}");
+    assert_eq!(f001[0].suggestion.as_deref(), Some("did you mean 'NOTE'?"));
+    let asked = disk.asked();
+    let exists = asked
+        .iter()
+        .position(|a| *a == Asked::Exists("/spec/NOTES".into()))
+        .unwrap();
+    assert_eq!(asked.last(), Some(&Asked::List("/spec".into())));
+    assert!(exists < asked.len() - 1);
+}
+
+#[spec(
+    behavior = "execute_validation_pattern",
+    verify = "file_exists reports missing file-reference field targets"
+)]
+fn file_exists_reports_missing_file_reference_field_targets() {
+    let mut declared = rule("E101", "file_exists");
+    declared.severity = ValidationSeverity::Error;
+    declared.message_template = "{kind} '{id}' references missing file".to_string();
+    declared.field = Some("gherkin".to_string());
+    let built = one(declared);
+    let disk = MemoryDisk::new().with_file("/spec/features/login.feature", b"");
+    let naming = |id: &str, path: &str| entity(id, "behavior", 1, 0).with_field("gherkin", path);
+    let entities = [
+        naming("b1", "features/login.feature"),
+        naming("b2", "features/logout.feature"),
+        naming("b3", "/nonexistent/file.feature"),
+        naming("b4", "/spec/features/login.feature"),
+    ];
+
+    // Relative paths are the spec root's; absolute ones are checked as
+    // written.
+    let input = RuleInput {
+        entities: &entities,
+        edges: &[],
+        spec_root: Path::new("/spec"),
+        disk: &disk,
+    };
+    let diagnostics = built.rules.check(&input, &NoVerdicts);
+    assert_eq!(
+        messages(&diagnostics),
+        [
+            "behavior 'b2' references missing file",
+            "behavior 'b3' references missing file",
+        ]
+    );
+    assert!(diagnostics.iter().all(|d| d.code == "E101"));
+}
+
+#[spec(
+    behavior = "execute_validation_pattern",
+    verify = "file_exists resolves a relative path against the spec root, never the working directory"
+)]
+fn file_exists_resolves_against_the_spec_root_not_the_working_directory() {
+    let mut declared = rule("E101", "file_exists");
+    declared.field = Some("doc".to_string());
+    declared.message_template = "{id}: missing '{value}'".to_string();
+    let built = one(declared);
+    let entities = [entity("b1", "behavior", 0, 0).with_field("doc", "Cargo.toml")];
+    let beside = MemoryDisk::new().with_file("Cargo.toml", b"");
+    let input = RuleInput {
+        entities: &entities,
+        edges: &[],
+        spec_root: Path::new("/spec"),
+        disk: &beside,
+    };
+    assert_eq!(
+        messages(&built.rules.check(&input, &NoVerdicts)),
+        ["b1: missing 'Cargo.toml'"]
+    );
+    // The rule asks for the spec root's file, never the working directory's, and lists the spec
+    // root for the missing file's close sibling.
+    assert_eq!(
+        beside.asked(),
+        [
+            Asked::Exists("/spec/Cargo.toml".into()),
+            Asked::List("/spec".into())
+        ]
+    );
+}
+
+#[spec(
+    behavior = "execute_validation_pattern",
+    verify = "file_exists checks each item of a list field as its own path"
+)]
+fn file_exists_checks_each_item_of_a_list_field() {
+    let mut declared = rule("E102", "file_exists");
+    declared.field = Some("docs".to_string());
+    declared.message_template = "{id}: missing '{value}'".to_string();
+    let built = one(declared);
+    let root = Path::new("/spec");
+    let disk = MemoryDisk::new().with_file("/spec/a.md", b"");
+    let entities = [
+        entity("b1", "behavior", 0, 0).with_list("docs", &["a.md", "b.md"]),
+        // An empty list names no path.
+        entity("b2", "behavior", 0, 0).with_list("docs", &[]),
+        // A scalar is one path, as written.
+        entity("b3", "behavior", 0, 0).with_field("docs", "a.md, b.md"),
+    ];
+    let input = RuleInput {
+        entities: &entities,
+        edges: &[],
+        spec_root: root,
+        disk: &disk,
+    };
+
+    let diagnostics = built.rules.check(&input, &NoVerdicts);
+
+    assert_eq!(
+        messages(&diagnostics),
+        ["b1: missing 'b.md'", "b3: missing 'a.md, b.md'"]
+    );
+    // The rule asks about every item against the spec root, in entity order, and lists the
+    // directory of each missing one.
+    assert_eq!(
+        disk.asked(),
+        [
+            Asked::Exists(root.join("a.md")),
+            Asked::Exists(root.join("b.md")),
+            Asked::List(root.to_path_buf()),
+            Asked::Exists(root.join("a.md, b.md")),
+            Asked::List(root.to_path_buf()),
+        ]
     );
 }

@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use specforge_common::cycles::{CycleOptions, find_cycles};
 use specforge_common::{CustomRuleFailure, Diagnostic, DiagnosticData, codes};
 
+use super::files;
 use super::verdicts::{CustomCall, CustomVerdicts, Subject, Verdict, VerdictError};
 use super::{Origin, Rule};
 use crate::entity::{Direction, EntityRecord, RuleInput};
@@ -84,6 +85,8 @@ pub(crate) enum Obligations {
 struct Violation {
     field: Option<String>,
     value: Option<String>,
+    /// The help the diagnostic carries, when the check found one.
+    suggestion: Option<String>,
 }
 
 impl Violation {
@@ -91,6 +94,7 @@ impl Violation {
         Violation {
             field: None,
             value: Some(value.into()),
+            suggestion: None,
         }
     }
 }
@@ -237,7 +241,11 @@ fn evaluate(
             subject: Subject::Entity(record),
         })? {
             Verdict::Pass => Ok(None),
-            Verdict::Fail { field, value } => Ok(Some(Violation { field, value })),
+            Verdict::Fail { field, value } => Ok(Some(Violation {
+                field,
+                value,
+                suggestion: None,
+            })),
         },
     }
 }
@@ -275,7 +283,9 @@ fn report(rule: &Rule, record: &EntityRecord, violation: Violation) -> Diagnosti
         value,
         allowed.as_deref(),
     );
-    diagnostic(rule, message, record)
+    let mut diagnostic = diagnostic(rule, message, record);
+    diagnostic.suggestion = violation.suggestion;
+    diagnostic
 }
 
 /// What `rule` reports on `record`. A rule an extension declared names that
@@ -386,40 +396,16 @@ pub(super) fn probe(rule: &Rule, verdicts: &dyn CustomVerdicts) -> Option<Diagno
     }
 }
 
-/// The paths `record` names in `field`: each item of a list field, else
-/// the field's text (nothing when it does not write the field).
-fn named_paths<'r>(record: &'r EntityRecord, field: &str) -> Vec<&'r str> {
-    match record.fields.iter().rev().find(|f| f.key == field) {
-        Some(written) => match &written.items {
-            Some(items) => items.iter().map(String::as_str).collect(),
-            None => vec![written.text.as_str()],
-        },
-        None => Vec::new(),
-    }
-}
-
-/// A `file_exists` rule over `input`: each path an entity it applies to
-/// names in `field` that does not exist, by entity id then path order. A
-/// relative path is the spec root's; an absolute one is checked as written
-/// (`join` keeps it). A list field's items are each a path, reported on
-/// their own (`{value}` is the missing item).
+/// A `file_exists` rule over `input`: each path an entity it applies to names in `field` that
+/// does not exist, by entity id then path order, with a close sibling as the help
+/// ([`files::missing`], ADR 0118). `{value}` is the missing path.
 fn missing_files(rule: &Rule, field: &str, input: &RuleInput<'_>) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     for record in input.entities.iter().filter(|e| rule.applies_to(&e.kind)) {
-        let listed = record
-            .fields
-            .iter()
-            .rev()
-            .find(|f| f.key == field)
-            .is_some_and(|f| f.items.is_some());
-        for path in named_paths(record, field) {
-            if input.disk.exists(&input.spec_root.join(path)) {
-                continue;
-            }
-            let violation = if listed {
-                Violation::value(path)
-            } else {
-                Violation::default()
+        for missing in files::missing(record, field, input) {
+            let violation = Violation {
+                suggestion: missing.suggestion,
+                ..Violation::value(missing.path)
             };
             diagnostics.push(report(rule, record, violation));
         }

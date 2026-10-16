@@ -4,7 +4,6 @@
 
 mod candidates;
 mod fields;
-mod files;
 mod identifiers;
 mod kinds;
 mod obligations;

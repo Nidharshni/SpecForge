@@ -196,8 +196,11 @@ behavior validate_file_reference_paths "Validate File Reference Paths" {
     MUST reference an existing file relative to the spec root.
     Non-existent files MUST produce an E016 diagnostic. A field is a
     file reference on the kinds whose registry entry declares it so: a
-    field of the same name on another kind is not one. Its value is a
-    list of paths, or a single path.
+    field of the same name on another kind is not one. Its value names
+    its paths: a single value's text, quoted or a bare word, or each item of
+    a list; an empty value names none, and so do a block and an expression
+    group. E016 is a rule the host builds for each such field; it runs with
+    the rule set, after E006.
 
     Field-presence warnings (e.g., W018 for missing file-reference
     field on a supported kind) are NOT handled here — they are declared
@@ -210,6 +213,8 @@ behavior validate_file_reference_paths "Validate File Reference Paths" {
   verify unit "relative path resolved from the spec root"
   verify unit "a field another kind declares as a file reference is not one on this kind"
   verify unit "a single path on a file-reference field is checked like a one-item list"
+  verify unit "a bare word on a file-reference field is a path"
+  verify integration "a compile checks a bare word on a file-reference field as a path"
   verify contract "Validate File Reference Paths: file reference validation holds — graph_built_fired, filesystem_available, missing_files_diagnosed, existing_files_pass"
 }
 

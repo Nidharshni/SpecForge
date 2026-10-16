@@ -1,8 +1,10 @@
 //! The collectors runner extensions declare: what selects each, the command it runs, where its report
 //! lands.
 
+use crate::{Containment, Held, OpError, OpErrorKind};
+use specforge_common::codes;
 use specforge_protocol_types::ExtensionDeclaration;
-use std::path::{Component, Path, PathBuf};
+use std::path::Path;
 
 /// A collector contributed by an enabled extension.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,20 +90,25 @@ pub(super) fn wildcard(pattern: &str, name: &str) -> bool {
     true
 }
 
-/// The absolute report location. Extensions may only name paths inside the
-/// project: absolute paths and `..` are refused.
-pub(super) fn report_path(collector: &Collector, root: &Path) -> Result<PathBuf, String> {
-    let relative = Path::new(&collector.report);
-    let inside = relative
-        .components()
-        .all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
-    if !inside {
-        return Err(format!(
-            "collector '{}' of {} declares report path '{}' outside the project",
-            collector.name, collector.extension, collector.report
+/// The report location, held. An extension may only declare a relative name without `..`
+/// ([`crate::containment::declared`], E058); where the name lands is the request's containment
+/// (a symlink that leaves the project is `outside_root`).
+pub(super) fn report_path(
+    collector: &Collector,
+    root: &Path,
+    containment: &Containment,
+) -> Result<Held, OpError> {
+    let Some(relative) = crate::containment::declared(Path::new(&collector.report)) else {
+        return Err(OpError::coded(
+            OpErrorKind::PreconditionFailed,
+            codes::E058,
+            format!(
+                "collector '{}' of {} declares report path '{}' outside the project",
+                collector.name, collector.extension, collector.report
+            ),
         ));
-    }
-    Ok(root.join(relative))
+    };
+    Ok(containment.resolve(&root.join(relative))?)
 }
 
 /// Whether the collector keeps its command's standard output. Any value
@@ -117,21 +124,28 @@ pub(super) fn captures_stdout(collector: &Collector) -> Result<bool, String> {
     }
 }
 
-/// Where a captured standard output is kept: inside a report directory
+/// Where a captured standard output is kept, held: inside a report directory
 /// (a report path without an extension), else next to the report file.
-pub(super) fn capture_path(collector: &Collector, report: &Path) -> PathBuf {
-    if report.is_dir() || report.extension().is_none() {
-        return report.join(format!("{}.stdout.txt", collector.name));
-    }
-    let mut name = report.file_name().unwrap_or_default().to_os_string();
-    name.push(".stdout.txt");
-    report.with_file_name(name)
+pub(super) fn capture_path(
+    collector: &Collector,
+    report: &Held,
+    containment: &Containment,
+) -> Result<Held, OpError> {
+    let spelled = &report.spelled;
+    let named = if report.real.is_dir() || report.real.extension().is_none() {
+        spelled.join(format!("{}.stdout.txt", collector.name))
+    } else {
+        let mut name = spelled.file_name().unwrap_or_default().to_os_string();
+        name.push(".stdout.txt");
+        spelled.with_file_name(name)
+    };
+    Ok(containment.resolve(&named)?)
 }
 
-/// The captured standard output at `path`, if there is one. Runner output
+/// The captured standard output at `held`, if there is one. Runner output
 /// isn't always UTF-8 (tests print what they like), so it's read lossily.
-pub(super) fn read_capture(path: &Path) -> Option<String> {
-    std::fs::read(path)
+pub(super) fn read_capture(held: &Held) -> Option<String> {
+    held.read()
         .ok()
         .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
 }

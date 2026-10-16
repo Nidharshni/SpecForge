@@ -81,7 +81,7 @@ behavior classify_project_changes "Classify Project Changes" {
     environment inputs; every path the checks read is a check input:
     specforge-cache.json when a check-phase pass read it, every file a
     file_reference field or a file_exists rule names, which the checks
-    look for, and every directory E016's suggestion listed, and the
+    look for, and every directory a missing named file's suggestion listed, and the
     target of each of these that is a symlink; a specforge.json
     in a directory below the spec root marks a nested project, and its
     creation or deletion is a change to every source under that
@@ -116,7 +116,7 @@ behavior classify_project_changes "Classify Project Changes" {
   verify unit "specforge-cache.json re-runs the checks without re-parsing"
   verify unit "a file a file_reference field names re-runs the checks"
   verify unit "a file a file_exists rule names re-runs the checks"
-  verify unit "a file beside a missing file a file_exists rule names changes nothing"
+  verify unit "a file beside a missing file a file_exists rule names changes its suggestion"
   verify unit "a session's check inputs are the paths its checks read"
   verify unit "a check input that is a symlink is followed to its target"
   verify unit "an excluded or undiscovered .spec file changes nothing"
