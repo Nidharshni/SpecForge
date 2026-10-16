@@ -257,7 +257,7 @@ fn digest(build: &RegistryBuild) -> Value {
         "kinds": kinds,
         "fields": fields,
         "edges": edges,
-        "graph_inputs": graph_inputs(&build.graph_inputs()),
+        "graph_inputs": graph_inputs(build.graph_inputs()),
         "passes": build.passes().iter().map(|p| p.full_name()).collect::<Vec<_>>(),
     })
 }

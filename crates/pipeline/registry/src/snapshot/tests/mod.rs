@@ -21,7 +21,7 @@ use crate::snapshot::EntitySnapshot;
 /// is stored as the build coerced it (ADR 0115).
 fn graph_of(source: &str, registries: &RegistryBuild) -> Graph {
     let config = GraphConfig {
-        inputs: registries.graph_inputs(),
+        inputs: registries.graph_inputs().clone(),
         ..GraphConfig::default()
     };
     GraphBuild::of([specforge_parser::parse(source, "test.spec")], config)

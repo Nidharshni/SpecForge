@@ -238,7 +238,7 @@ fn no_declarations_build_empty_registries() {
     assert!(build.rules().is_empty());
     assert!(build.commands().routed().is_empty());
     assert!(build.passes().is_empty());
-    assert_eq!(build.graph_inputs(), GraphInputs::default());
+    assert_eq!(build.graph_inputs(), &GraphInputs::default());
     assert!(build.declarations().is_empty());
     assert!(build.diagnostics().next().is_none());
 }

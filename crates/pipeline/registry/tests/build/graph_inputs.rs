@@ -41,7 +41,8 @@ fn typed_fields() -> ExtensionDeclaration {
     verify = "a field's value coercion follows its registered type"
 )]
 fn a_fields_form_follows_its_registered_type() {
-    let inputs = build([typed_fields()]).graph_inputs();
+    let build = build([typed_fields()]);
+    let inputs = build.graph_inputs();
 
     let expected: HashMap<(String, String), FieldForm> = [
         ("a_string", FieldType::String),
@@ -107,7 +108,8 @@ fn a_derived_reference_needs_a_target_kind_and_a_known_source() {
             });
         });
     });
-    let inputs = build([declaration]).graph_inputs();
+    let build = build([declaration]);
+    let inputs = build.graph_inputs();
     let derived = &inputs.derived_references;
 
     let summary: Vec<(&str, &str, &str, DerivedFrom)> = derived
@@ -310,7 +312,7 @@ fn the_graph_inputs_contract_holds() {
     );
     // deterministic: the same declarations give the same inputs.
     assert_eq!(crate::support::build(declared()).graph_inputs(), inputs);
-    assert_ne!(inputs, GraphInputs::default());
+    assert_ne!(inputs, &GraphInputs::default());
 }
 
 #[spec(
@@ -333,7 +335,8 @@ fn the_field_forms_say_whether_each_target_kind_is_loaded() {
         });
     })])
     .graph_inputs()
-    .field_forms;
+    .field_forms
+    .clone();
     assert_eq!(forms.target("doc", "owner"), Some(Target::Absent("team")));
     assert_eq!(forms.target("doc", "parts"), Some(Target::Loaded("doc")));
     assert_eq!(forms.target("doc", "title"), None);
@@ -367,15 +370,16 @@ fn the_graph_inputs_name_each_absent_target_kinds_owner() {
     });
     let vocabulary = crate::support::candidates(&[product]);
 
-    let inputs = build([software.clone()])
-        .with_candidates(vocabulary)
-        .graph_inputs();
+    // A build never handed a vocabulary names no owner.
+    let unhanded = build([software]);
+    assert!(unhanded.graph_inputs().target_owners.is_empty());
+
+    // Handing it one derives the inputs again, with no order to call them in.
+    let handed = unhanded.with_candidates(vocabulary);
+    let inputs = handed.graph_inputs();
     assert_eq!(inputs.target_owners.len(), 1, "{:?}", inputs.target_owners);
     assert_eq!(inputs.target_owners["feature"], "@t/product");
     // `team` is owned by no one; `behavior` is loaded.
     assert!(!inputs.target_owners.contains_key("team"));
     assert!(!inputs.target_owners.contains_key("behavior"));
-
-    // A build never handed a vocabulary names no owner.
-    assert!(build([software]).graph_inputs().target_owners.is_empty());
 }

@@ -65,7 +65,7 @@ fn graph_of(build: &RegistryBuild, files: &[(&str, &str)]) -> GraphBuild {
     });
     let config = GraphConfig {
         known_provider_schemes: HashSet::new(),
-        inputs: build.graph_inputs(),
+        inputs: build.graph_inputs().clone(),
     };
     GraphBuild::of(parsed, config)
 }

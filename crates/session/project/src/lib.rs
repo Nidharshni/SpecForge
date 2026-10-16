@@ -371,7 +371,7 @@ impl Environment {
         let build = &self.registries;
         GraphConfig {
             known_provider_schemes: self.providers.schemes(),
-            inputs: build.graph_inputs(),
+            inputs: build.graph_inputs().clone(),
         }
     }
 
