@@ -258,6 +258,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Registry::published`).
 - **Claim**: what one specifier of an `add` or `init` asks for an extension name: a second specifier naming it the
   same way is a duplicate, another way `extension_conflict` (`specforge_ops::extension::claims`, ADR 0098).
+- **Extension names**: what one change's extension strings name, read once by `specforge_ops::extension::names`
+  (ADR 0105). Each string is one extension specifier; no operation splits one, and `init --extensions` spells several
+  to a flag on the command line. A relative local path is joined onto the change's base: add reads it from the project
+  root, or from the CLI's working directory; init from the directory it creates. The file is read within the change's
+  containment (ADR 0104), each specifier is claimed (ADR 0098), and a local file is read once. `add` and `init` both
+  take raw strings.
 - **Project peer set**: the extensions a project's `specforge.json` entries load, as the peer rule reads
   them: a builtin by the declaration this specforge embeds, an installed extension by its lock entry, a
   `.wasm` file entry by its file's declaration, each entry resolved by the extension load's one rule
@@ -477,7 +483,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   builtin's name, `git+` URL or package reference: a `.wasm` file, or an extension's crate directory,
   read as the component its crate builds: `specforge_ops::extension::binary_at`), a `git+` URL, or a
   package reference `@scope/name[@requirement]` (`PackageRef`; it starts with `@`), read once by
-  `specforge_ops::extension::parse`. An add takes one or more and adds them as one change, judged on
+  `specforge_ops::extension::names` (each string one specifier). An add takes one or more and adds them as one change, judged on
   the whole set (one lock plan, ADR 0041); a specifier naming an extension an earlier one of the same
   add names is a *duplicate* of it.
 - **Project view**: the compiled project as one surface sees it, borrowed: the graph, the
