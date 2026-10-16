@@ -156,7 +156,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Containment**: what a request may reach on disk: every path (the CLI, ADR 0092 D6) or the paths that land inside
   one directory (an MCP request's bound, or the call's project). Lent by the **Caller** in the operation's request and
   applied where the operation opens or writes the file (`specforge_ops::Containment`, ADR 0104). MCP's call's project
-  hands it to the tools (`ProjectRef::caller`, ADR 0112, ADR 0124).
+  hands it to the tools (`ProjectRef::caller`, ADR 0112, ADR 0124), and render's view input hands it the request's bound (ADR 0131).
 - **Caller**: what the surface that calls an operation lends it, one value (`specforge_ops::Caller`, ADR 0124): what the
   call may reach (**Containment**) and who can be asked (**Asking**). The CLI lends every path and its terminal when
   someone can answer; MCP lends the root of the call's project (init: the request's bound) and nobody. Every request
@@ -727,7 +727,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Graph export**: the project's graph, or the subgraph of a scope, written in one export format by
   `specforge_emitter::emit` through `specforge_ops::read::export::export`: graph (the Graph Protocol), context and brief (JSON
   documents whose schema the emitter derives from the types that write them, published by `specforge schema
-  --publish`), or DOT. It is text: the CLI prints it, MCP sends it as text or a file, an extension command receives it
+  --publish`), or DOT. It is text: the CLI prints it, MCP sends it as text or writes it into a directory of the project (`export::write_into`, as `<dir>/<format's file name>`, replaced atomically, ADR 0131), an extension command receives it
   spliced in its input; only `specforge.query` reads it back, into its structured result. A node carries its coverage
   status (`coverage_status`) when the export is given the verdicts, as a query with coverage is (ADR 0007).
 - **Project sources**: the `.spec` files under the spec root (`spec_root`, else the project root) that
