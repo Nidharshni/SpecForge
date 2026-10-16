@@ -1,6 +1,5 @@
 //! What a session's check inputs are: the reads its checks made (behavior
-//! `classify_project_changes`, ADR 0107). The pins here are ignored until the
-//! ticket that fixes them.
+//! `classify_project_changes`, ADR 0107).
 
 use std::fs;
 use std::sync::Arc;

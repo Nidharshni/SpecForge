@@ -1,8 +1,7 @@
 //! What a batch of changed paths is to a project session (behavior
 //! `classify_project_changes`): the comparison `stale` makes, narrowed to
 //! what the paths reach. These pins drive directory, symlink and
-//! unchanged-file events: the bug pins are ignored until the ticket that
-//! fixes them.
+//! unchanged-file events.
 
 use std::fs;
 use std::path::{Path, PathBuf};
