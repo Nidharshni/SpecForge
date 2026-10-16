@@ -53,10 +53,6 @@ impl<T> Noticed<T> {
     }
 
     /// The value, for a read in ops that renders it with its notices (`Noticed<Exploration>::document`).
-    #[allow(
-        dead_code,
-        reason = "the exploration renders its document from it in a later commit"
-    )]
     pub(crate) fn value(&self) -> &T {
         &self.value
     }

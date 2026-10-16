@@ -6,7 +6,6 @@
 //! kinds the project does not know (I020) and still drops them.
 
 use serde_json::{Map, Value, json};
-use specforge_common::Diagnostic;
 use specforge_graph::Node;
 
 use crate::read::export::{self, AGENT_FORMAT, ExportField, FORMAT, Format, Schema};
@@ -140,15 +139,9 @@ pub struct ListRequest<'a> {
     pub limit: Option<usize>,
 }
 
-/// What a listing answers: the entities sorted by id, paged.
-#[derive(Debug, Clone)]
-pub struct Listing<'v> {
-    pub entities: Vec<&'v Node>,
-    pub notices: Vec<Diagnostic>,
-}
-
-/// The entities `request` selects, sorted by id and paged.
-pub fn list<'v>(view: &ProjectView<'v>, request: &ListRequest) -> Listing<'v> {
+/// The entities `request` selects, sorted by id and paged, with I020 for a
+/// kind the project does not know.
+pub fn list<'v>(view: &ProjectView<'v>, request: &ListRequest) -> Noticed<Vec<&'v Node>> {
     let kind = request.kind.filter(|kind| !kind.is_empty());
     let notices = kind
         .map(|kind| view.kinds().unknown_in(&[kind]))
@@ -162,7 +155,7 @@ pub fn list<'v>(view: &ProjectView<'v>, request: &ListRequest) -> Listing<'v> {
         .skip(request.offset)
         .take(request.limit.unwrap_or(usize::MAX))
         .collect();
-    Listing { entities, notices }
+    Noticed::new(entities, notices)
 }
 
 /// Whether every field of `wanted` is one `node` holds, with that value.
@@ -208,16 +201,9 @@ pub struct Hit<'v> {
     pub snippet: Option<String>,
 }
 
-/// What a search answers.
-#[derive(Debug, Clone)]
-pub struct SearchOutcome<'v> {
-    /// Best first, at most the limit.
-    pub hits: Vec<Hit<'v>>,
-    pub notices: Vec<Diagnostic>,
-}
-
-/// The entities `request` finds.
-pub fn search<'v>(view: &ProjectView<'v>, request: &SearchRequest) -> SearchOutcome<'v> {
+/// The entities `request` finds, best first, at most the limit, with I020
+/// for a kind of the filter the project does not know.
+pub fn search<'v>(view: &ProjectView<'v>, request: &SearchRequest) -> Noticed<Vec<Hit<'v>>> {
     let notices = view.kinds().unknown_in(&request.kinds);
     let query = EntityQuery {
         text: request.text,
@@ -237,5 +223,5 @@ pub fn search<'v>(view: &ProjectView<'v>, request: &SearchRequest) -> SearchOutc
             Hit { found, snippet }
         })
         .collect();
-    SearchOutcome { hits, notices }
+    Noticed::new(hits, notices)
 }

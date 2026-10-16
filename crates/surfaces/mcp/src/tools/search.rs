@@ -107,10 +107,8 @@ impl CoreTool for Tool {
             referencing: args.references.as_deref(),
             limit: Some(args.limit),
         };
-        let outcome = search(&view, &request);
-        Ok(Answer::new(Reply {
-            results: outcome.hits.iter().map(Found::of).collect(),
-        })
-        .with_diagnostics(outcome.notices))
+        Ok(Answer::noticed(search(&view, &request).map(|hits| Reply {
+            results: hits.iter().map(Found::of).collect(),
+        })))
     }
 }

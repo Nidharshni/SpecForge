@@ -398,8 +398,7 @@ fn behaviors() -> Assembled {
 }
 
 fn listed(project: &Assembled, request: &ListRequest) -> Vec<String> {
-    list(&project.view(), request)
-        .entities
+    plain(list(&project.view(), request))
         .iter()
         .map(|n| n.id.raw.to_string())
         .collect()
@@ -471,11 +470,12 @@ fn list_reports_an_unknown_kind() {
             ..ListRequest::default()
         },
     );
-    assert!(listing.entities.is_empty());
-    assert_eq!(listing.notices.len(), 1);
-    assert_eq!(listing.notices[0].code, "I020");
+    let (entities, notices) = listing.into_value_and_notices();
+    assert!(entities.is_empty());
+    assert_eq!(notices.len(), 1);
+    assert_eq!(notices[0].code, "I020");
     assert_eq!(
-        listing.notices[0].suggestion.as_deref(),
+        notices[0].suggestion.as_deref(),
         Some("did you mean 'behavior'?")
     );
 }
@@ -491,15 +491,14 @@ fn search_defaults_to_twenty() {
     }
     let project = Assembled::over(Default::default()).graph(graph);
     let found = |limit| {
-        search(
+        plain(search(
             &project.view(),
             &SearchRequest {
                 text: "item",
                 limit,
                 ..SearchRequest::default()
             },
-        )
-        .hits
+        ))
         .len()
     };
     assert_eq!(DEFAULT_SEARCH_LIMIT, 20);
@@ -512,7 +511,7 @@ fn search_defaults_to_twenty() {
 fn search_filters_by_a_field_pair_and_snippets_the_match() {
     let project = behaviors();
     let view = project.view();
-    let outcome = search(
+    let hits = plain(search(
         &view,
         &SearchRequest {
             text: "",
@@ -522,9 +521,8 @@ fn search_filters_by_a_field_pair_and_snippets_the_match() {
             }),
             ..SearchRequest::default()
         },
-    );
-    let found: Vec<&str> = outcome
-        .hits
+    ));
+    let found: Vec<&str> = hits
         .iter()
         .map(|hit| hit.found.node.id.raw.as_str())
         .collect();
@@ -539,8 +537,8 @@ fn search_filters_by_a_field_pair_and_snippets_the_match() {
             ..SearchRequest::default()
         },
     );
-    assert_eq!(outcome.notices[0].code, "I020");
-    assert!(outcome.hits.is_empty());
+    assert_eq!(outcome.notices()[0].code, "I020");
+    assert!(plain(outcome).is_empty());
 }
 
 // The contract of query_graph_multi_resolution, over a view: a(feature) ->

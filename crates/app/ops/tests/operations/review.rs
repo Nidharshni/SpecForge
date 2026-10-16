@@ -169,7 +169,9 @@ fn the_exploration_and_the_review_share_one_neighbourhood() {
                 ..Default::default()
             },
         )
-        .unwrap();
+        .unwrap()
+        .into_value_and_notices()
+        .0;
         assert_eq!(
             explored.selected,
             reviewed(&project, Some("a"), depth),

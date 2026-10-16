@@ -1,6 +1,7 @@
 //! The exploration (plan 04, ADR 0015 "Prompt read views"): where to start
 //! reading a project's graph.
 
+use specforge_ops::Noticed;
 use specforge_ops::read::explore::{Exploration, ExplorationRequest, explore};
 use specforge_registry::RegistryBuild;
 use specforge_test::prelude::*;
@@ -13,9 +14,14 @@ fn r1() -> Assembled {
     Assembled::over(registries(&["behavior"], &["feature"])).source(R1_SOURCE)
 }
 
+/// The exploration `request` asks of `project`, with its notices.
+fn noticed(project: &Assembled, request: ExplorationRequest) -> Noticed<Exploration> {
+    explore(&project.view(), &request).unwrap()
+}
+
 /// The exploration `request` asks of `project`.
 fn explored(project: &Assembled, request: ExplorationRequest) -> Exploration {
-    explore(&project.view(), &request).unwrap()
+    noticed(project, request).into_value_and_notices().0
 }
 
 /// A project of `node` entities, each referencing the ones its edges name:
@@ -142,13 +148,15 @@ fn unconnected_lists_the_selection_s_unconnected() {
 )]
 fn paths_run_from_the_entity() {
     let project = Assembled::over(RegistryBuild::default()).source("node a \"a\" {\n  to [b]\n}\nnode b \"b\" {\n  next [c]\n}\nnode c \"c\" {\n  last [d]\n}\nnode d \"d\" {\n}\n");
-    let exploration = explored(
+    let noticed = noticed(
         &project,
         ExplorationRequest {
             entity_id: Some("a"),
             ..Default::default()
         },
     );
+    let json = serde_json::to_value(noticed.document()).unwrap();
+    let exploration = noticed.into_value_and_notices().0;
     let paths: Vec<(&str, Vec<&str>)> = exploration
         .paths
         .iter()
@@ -162,7 +170,6 @@ fn paths_run_from_the_entity() {
             ("d", vec!["to", "next", "last"]),
         ]
     );
-    let json = serde_json::to_value(exploration.document()).unwrap();
     assert_eq!(
         json["relationship_paths"][1],
         serde_json::json!({"from_entity": "a", "to_entity": "c", "edge_types": ["to", "next"], "path_length": 2})
@@ -175,22 +182,23 @@ fn paths_run_from_the_entity() {
 )]
 fn an_unknown_kind_is_a_notice() {
     let project = r1();
-    let exploration = explored(
+    let exploration = noticed(
         &project,
         ExplorationRequest {
             kind: Some("featur"),
             ..Default::default()
         },
     );
-    assert!(exploration.selected.is_empty());
-    assert_eq!(exploration.notices.len(), 1);
-    assert_eq!(exploration.notices[0].code, "I020");
+    let notices = exploration.notices();
+    assert_eq!(notices.len(), 1);
+    assert_eq!(notices[0].code, "I020");
     assert_eq!(
-        exploration.notices[0].suggestion.as_deref(),
+        notices[0].suggestion.as_deref(),
         Some("did you mean 'feature'?")
     );
     assert_eq!(
         serde_json::to_value(exploration.document()).unwrap()["notices"][0]["code"],
         "I020"
     );
+    assert!(exploration.into_value_and_notices().0.selected.is_empty());
 }
