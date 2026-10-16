@@ -143,7 +143,7 @@ fn extension_passes_run_without_a_root() {
     let project = Project::new();
     let options = AnalyzeOptions::default();
     let rooted = project.run(&options).unwrap();
-    let rootless = analyze(&project.view_at(None), &options).unwrap();
+    let rootless = analyze(&project.assembled.rootless_view(), &options).unwrap();
     assert_eq!(names(&rootless), names(&rooted));
     assert!(names(&rooted).contains(&"@t/x:scan"));
 }
@@ -252,13 +252,13 @@ fn analyze_states_which_field_a_refusal_is_about() {
         report: ReportSource::File(path),
         ..Default::default()
     };
-    let missing = project.dir.path().join("missing.json");
+    let missing = project.assembled.root().join("missing.json");
     assert_eq!(subject(report(missing)), Some(AnalyzeField::Report));
-    let unusable = project.dir.path().join("unusable.json");
+    let unusable = project.assembled.root().join("unusable.json");
     std::fs::write(&unusable, "{not json").unwrap();
     assert_eq!(subject(report(unusable)), None);
     std::fs::write(
-        project.dir.path().join("specforge-report.json"),
+        project.assembled.root().join("specforge-report.json"),
         "{not json",
     )
     .unwrap();

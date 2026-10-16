@@ -4,9 +4,10 @@ fn json_of(outcome: &AnalyzeOutcome) -> serde_json::Value {
 }
 
 use super::*;
-use crate::testing::ScriptedSolver;
+use crate::testing::{ScriptedSolver, Viewed};
 use serde_json::{Value, json};
 use specforge_extension_sdk::prelude::*;
+use specforge_project::testing::Assembled;
 use specforge_test_macros::test as specforge_test;
 use specforge_wasm::runtime::{WasmCallResult, WasmTrapInfo};
 use specforge_wasm::testing::InProcessRuntime;
@@ -39,10 +40,7 @@ fn proved_seen(runtime: &InProcessRuntime) -> Vec<Value> {
 }
 
 struct Project {
-    graph: Graph,
-    env: specforge_project::Environment,
-    recorded: std::sync::OnceLock<coverage::RecordedCoverage>,
-    dir: tempfile::TempDir,
+    assembled: Assembled,
     /// The runtime the environment loaded its extensions in: what it
     /// records is what a test then runs.
     runtime: std::sync::Arc<InProcessRuntime>,
@@ -55,36 +53,9 @@ impl Project {
     /// D3), with an empty graph. The runtime's calls are cleared after
     /// the load: what it records is what the test then runs.
     fn serving(runtime: InProcessRuntime, entries: &[&str]) -> Self {
-        let dir = tempfile::TempDir::new().unwrap();
-        std::fs::write(
-            dir.path().join("specforge.json"),
-            json!({ "extensions": entries }).to_string(),
-        )
-        .unwrap();
-        let entries: Vec<String> = entries.iter().map(|e| e.to_string()).collect();
-        specforge_installed::testing::install_enabled(
-            dir.path(),
-            &entries,
-            &specforge_project::builtins(),
-        );
         let runtime = std::sync::Arc::new(runtime);
-        let env = specforge_project::Environment::load(
-            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-            Some(runtime.clone()),
-        );
-        assert!(
-            env.diagnostics().all(|d| d.code != "E028"),
-            "{:?}",
-            env.diagnostics().collect::<Vec<_>>()
-        );
-        runtime.clear_calls();
-        Self {
-            graph: Graph::new(),
-            env,
-            recorded: std::sync::OnceLock::new(),
-            dir,
-            runtime,
-        }
+        let assembled = Assembled::assembling(|root| loaded_at(root, &runtime, entries));
+        Self { assembled, runtime }
     }
 
     /// `@t/x` alone, as most tests serve it.
@@ -93,24 +64,42 @@ impl Project {
     }
 
     fn view(&self) -> ProjectView<'_> {
-        self.view_at(Some(self.dir.path()))
-    }
-
-    /// The project's view rooted at `root`: what a view reads at its
-    /// root, never in an ancestor.
-    fn view_at<'a>(&'a self, root: Option<&'a std::path::Path>) -> ProjectView<'a> {
-        ProjectView::new(
-            &self.graph,
-            &self.env,
-            root,
-            self.recorded
-                .get_or_init(|| coverage::RecordedCoverage::over(&self.graph, &self.env)),
-        )
+        self.assembled.view()
     }
 
     fn run(&self, options: &AnalyzeOptions) -> Result<AnalyzeOutcome, AnalyzeError> {
         analyze(&self.view(), options)
     }
+}
+
+/// The environment of the project at `root` whose `specforge.json` enables
+/// `entries`, each loaded from `runtime` through the production load (a named
+/// entry that is no builtin installed first, ADR 0028 D3). The runtime's calls
+/// are cleared after the load: what it records is what a test then runs.
+fn loaded_at(
+    root: &std::path::Path,
+    runtime: &std::sync::Arc<InProcessRuntime>,
+    entries: &[&str],
+) -> specforge_project::Environment {
+    std::fs::create_dir_all(root).unwrap();
+    std::fs::write(
+        root.join("specforge.json"),
+        json!({ "extensions": entries }).to_string(),
+    )
+    .unwrap();
+    let entries: Vec<String> = entries.iter().map(|e| e.to_string()).collect();
+    specforge_installed::testing::install_enabled(root, &entries, &specforge_project::builtins());
+    let env = specforge_project::Environment::load(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(runtime.clone()),
+    );
+    assert!(
+        env.diagnostics().all(|d| d.code != "E028"),
+        "{:?}",
+        env.diagnostics().collect::<Vec<_>>()
+    );
+    runtime.clear_calls();
+    env
 }
 
 fn names(outcome: &AnalyzeOutcome) -> Vec<&str> {
@@ -159,7 +148,7 @@ fn write_report(project: &Project, ids: &[&str]) {
         })
         .collect();
     std::fs::write(
-        project.dir.path().join("specforge-report.json"),
+        project.assembled.root().join("specforge-report.json"),
         json!({"runner": "r", "results": results}).to_string(),
     )
     .unwrap();
@@ -182,23 +171,26 @@ fn add_entity_with(
     for (name, value) in fields {
         map.push(Sym::new(name), value);
     }
-    project.graph.add_node(specforge_graph::Node {
-        id: EntityId { raw: Sym::new(id) },
-        kind: EntityKind {
-            raw: Sym::new(kind),
-        },
-        title: None,
-        fields: map,
-        source_span: SourceSpan {
-            file: Sym::new("t.spec"),
-            start_line: 1,
-            start_col: 1,
-            end_line: 1,
-            end_col: 1,
-        },
-        methods: Vec::new(),
-        obligations: Vec::new(),
-    });
+    project
+        .assembled
+        .graph_mut()
+        .add_node(specforge_graph::Node {
+            id: EntityId { raw: Sym::new(id) },
+            kind: EntityKind {
+                raw: Sym::new(kind),
+            },
+            title: None,
+            fields: map,
+            source_span: SourceSpan {
+                file: Sym::new("t.spec"),
+                start_line: 1,
+                start_col: 1,
+                end_line: 1,
+                end_col: 1,
+            },
+            methods: Vec::new(),
+            obligations: Vec::new(),
+        });
 }
 
 mod gate;

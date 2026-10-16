@@ -2,6 +2,7 @@ use super::collector::{CAPTURE_STDOUT, wildcard};
 use super::consent::load_consent;
 use super::runner::REPORT_ENV;
 use super::*;
+use crate::testing::Viewed;
 use specforge_common::Severity;
 use specforge_protocol_types::{CollectEntityResult, CollectOutput, TestResult, TestStatus};
 use specforge_test_macros::test as specforge_test;
@@ -258,9 +259,9 @@ fn known_entities_are_the_snapshots_records() {
     use specforge_common::{SourceSpan, Sym};
     use specforge_parser::{EntityId, EntityKind, FieldMap, VerifyStatement};
 
-    let mut fixture = crate::view::testing::Fixture::new();
+    let mut graph = specforge_graph::Graph::new();
     let fields = FieldMap::new();
-    fixture.graph.add_node(specforge_graph::Node {
+    graph.add_node(specforge_graph::Node {
         id: EntityId {
             raw: Sym::new("widget"),
         },
@@ -288,6 +289,7 @@ fn known_entities_are_the_snapshots_records() {
             },
         ],
     });
+    let fixture = specforge_project::testing::Assembled::new().graph(graph);
     let view = fixture.view();
 
     let known = KnownEntities::of(view.entities());
@@ -414,7 +416,7 @@ fn skipped_tests_are_not_recorded() {
 
 #[test]
 fn collect_without_a_root_is_no_project() {
-    let fixture = crate::view::testing::Fixture::new();
+    let fixture = specforge_project::testing::Assembled::new();
 
     let error = collect(
         &fixture.rootless_view(),
@@ -429,7 +431,7 @@ fn collect_without_a_root_is_no_project() {
 
     assert_eq!(error.error.code, "no_project");
     assert!(
-        !fixture.dir.path().join("specforge-report.json").exists(),
+        !fixture.root().join("specforge-report.json").exists(),
         "nothing is written"
     );
 }

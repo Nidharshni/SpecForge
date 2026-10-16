@@ -246,6 +246,14 @@ impl Assembled {
         self.changed()
     }
 
+    /// The project's graph, to add nodes and edges to: what a test that builds its graph node by node edits. What
+    /// was made from the old graph ([`Self::compiled`], [`Self::detached`]) is made again.
+    pub fn graph_mut(&mut self) -> &mut Graph {
+        self.rooted = OnceLock::new();
+        self.detached = OnceLock::new();
+        &mut self.graph
+    }
+
     /// The project's graph, built from `text` as the one file `main.spec` (the default graph config).
     pub fn source(self, text: &str) -> Self {
         let (graph, _) =
