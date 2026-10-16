@@ -42,7 +42,9 @@ behavior format_spec_files "Format Spec Files" {
     The command MUST print the names of changed files and a summary count.
     A file that cannot be read or written, or that has a region left
     unformatted (format_with_parse_errors), MUST make the command exit with
-    code 1; every other file is still formatted and written.
+    code 1; every other file is still formatted and written. A file whose
+    write fails MUST be left as it was: each file is replaced whole or not
+    at all.
     Under --format json the command MUST print instead the format document
     specforge.format answers (McpFormatResult) with the files it wrote, its
     diagnostics and failures in the document, and nothing on stderr; the
@@ -60,6 +62,7 @@ behavior format_spec_files "Format Spec Files" {
   verify unit "changed files are printed to stdout"
   verify unit "summary count reflects actual changes"
   verify integration "formatting all files in spec/ directory succeeds"
+  verify integration "a file whose write fails part-way is left whole and is not in files_written"
   verify unit "a region left unformatted makes the run exit 1, the rest of the file still written"
   verify unit "the format document names each changed file, each failed file with its kind, and the run's verdict"
   verify unit "under --format json the run prints the format document on stdout and nothing on stderr"

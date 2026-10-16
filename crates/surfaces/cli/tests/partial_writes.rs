@@ -5,6 +5,7 @@
 //! so a text that must not fit is over 2048 bytes and one that must fit is under 1024.
 
 use crate::support::{Cli, TestProject, mcp_process};
+use specforge_test_macros::test as specforge_test;
 use std::fs;
 
 const LIMIT_BLOCKS: u32 = 2;
@@ -82,8 +83,10 @@ fn a_rename_that_cannot_put_a_file_back_names_it_in_files_written() {
 }
 
 #[cfg(unix)]
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test(
+    behavior = "format_spec_files",
+    verify = "a file whose write fails part-way is left whole and is not in files_written"
+)]
 fn a_format_whose_write_fails_part_way_leaves_the_source_whole() {
     let mut source = String::new();
     for n in 1..=60 {

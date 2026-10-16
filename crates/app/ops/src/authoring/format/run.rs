@@ -467,7 +467,7 @@ pub fn run(request: &Request) -> Result<Outcome, Refusal<FormatField>> {
             continue;
         }
         let written = match request.mode {
-            Mode::Write => match held.write(&formatted) {
+            Mode::Write => match held.replace(&formatted) {
                 Ok(()) => true,
                 Err(e) => {
                     outcome.failures.push(Failure::write(target.clone(), &e));
