@@ -89,24 +89,6 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
         1,
         "a held crate directory's Cargo.toml: only its name is read, and the binary it names is held",
     ),
-    (
-        "read/infer/lint.rs",
-        "fs::read_to_string(",
-        1,
-        "an inference source file: routed by plan 02 of round 12",
-    ),
-    (
-        "read/infer/scan/mod.rs",
-        "fs::read_to_string(",
-        1,
-        "an inference source file: routed by plan 02 of round 12",
-    ),
-    (
-        "read/infer/manifest.rs",
-        "fs::read(",
-        1,
-        "an inference source file's hash (`compute_content_hash`): routed by plan 02 of round 12",
-    ),
 ];
 
 /// Files and directories that are test support, or the module itself.

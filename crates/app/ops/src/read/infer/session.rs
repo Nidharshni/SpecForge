@@ -8,8 +8,8 @@ use std::path::Path;
 
 use super::manifest::{
     InferenceManifest, InferenceSession, MANIFEST_FILENAME, SessionStatus, SourceFileEntry,
-    compute_content_hash, source_path, source_root,
 };
+use super::sources::{ProjectFiles, SourceKey, SourceRead, content_hash};
 use crate::options::{Choice, OptionTable};
 use crate::view::ProjectView;
 use crate::{Containment, OpError, OpErrorKind, Refusal, Writes};
@@ -173,14 +173,7 @@ pub fn session(
         .resolve(&root.join(MANIFEST_FILENAME))
         .map_err(OpError::from)?;
     let mut manifest = InferenceManifest::at_held(&file)?;
-    let recorded = apply(
-        &mut manifest,
-        root,
-        request.containment,
-        step,
-        &now(),
-        new_session_id,
-    )?;
+    let recorded = apply(&mut manifest, root, step, &now(), new_session_id)?;
     let writes = manifest.write(&file)?;
     Ok(SessionOutcome { recorded, writes })
 }
@@ -206,7 +199,7 @@ enum Normalized<'a> {
         /// As the caller gave it: what a refusal names.
         given: &'a str,
         /// As the manifest records it.
-        path: String,
+        path: SourceKey,
         entities: &'a [String],
     },
     End {
@@ -229,14 +222,16 @@ impl<'a> Normalized<'a> {
                         roots
                             .iter()
                             .map(|root| {
-                                source_root(root).map_err(|_| {
-                                    outside_root(
-                                        SOURCE_ROOT_OUTSIDE_ROOT,
-                                        "source_roots entry",
-                                        root,
-                                    )
-                                    .about(SessionField::SourceRoots)
-                                })
+                                SourceKey::root(root)
+                                    .map(|key| key.as_str().to_string())
+                                    .map_err(|_| {
+                                        outside_root(
+                                            SOURCE_ROOT_OUTSIDE_ROOT,
+                                            "source_roots entry",
+                                            root,
+                                        )
+                                        .about(SessionField::SourceRoots)
+                                    })
                             })
                             .collect::<Result<Vec<_>, _>>()
                     })
@@ -247,7 +242,7 @@ impl<'a> Normalized<'a> {
                 entities,
             } => Normalized::Mark {
                 given: source_file,
-                path: source_path(source_file).map_err(|_| {
+                path: SourceKey::of(source_file).map_err(|_| {
                     outside_root(SOURCE_OUTSIDE_ROOT, "source_file", source_file)
                         .about(SessionField::SourceFile)
                 })?,
@@ -268,12 +263,21 @@ fn outside_root(code: &'static str, what: &str, given: &str) -> OpError {
     )
 }
 
+/// A marked file that cannot be read: `source_unreadable`, of the kind of the failure.
+fn unreadable(error: &std::io::Error, given: &str) -> Refusal<SessionField> {
+    OpError::new(
+        OpErrorKind::of_io(error),
+        SOURCE_UNREADABLE,
+        format!("failed to read {given}"),
+    )
+    .about(SessionField::SourceFile)
+}
+
 /// `step` applied to `manifest`, at time `now`: the rules, without disk
 /// (apart from the hash of a marked file).
 fn apply(
     manifest: &mut InferenceManifest,
     root: &Path,
-    containment: &Containment,
     step: Normalized<'_>,
     now: &str,
     new_id: impl FnOnce() -> String,
@@ -310,31 +314,32 @@ fn apply(
             path,
             entities,
         } => {
-            // A symlink that leaves the root is a path outside it (ADR 0092
-            // D8): its target is not read.
-            let Ok(held) = containment.resolve(&root.join(&path)) else {
-                return Err(outside_root(SOURCE_OUTSIDE_ROOT, "source_file", given)
-                    .about(SessionField::SourceFile));
+            // Held inside the project root (ADR 0092 D8): a symlink that leaves it is a path
+            // outside it, and its target is not read. The error names the path as the agent
+            // gave it: the absolute path would leak where the server's project lives.
+            let bytes = match ProjectFiles::at(root).read(&path) {
+                SourceRead::Bytes(bytes) => bytes,
+                SourceRead::Outside => {
+                    return Err(outside_root(SOURCE_OUTSIDE_ROOT, "source_file", given)
+                        .about(SessionField::SourceFile));
+                }
+                SourceRead::Missing => {
+                    return Err(unreadable(
+                        &std::io::Error::from(std::io::ErrorKind::NotFound),
+                        given,
+                    ));
+                }
+                SourceRead::Unreadable(e) => return Err(unreadable(&e, given)),
             };
-            // The file read is the one the check resolved. It is named as
-            // the agent did: the absolute path would leak where the
-            // server's project lives.
-            let content_hash = compute_content_hash(&held.real).map_err(|e| {
-                OpError::new(
-                    OpErrorKind::of_io(&e),
-                    SOURCE_UNREADABLE,
-                    format!("failed to read {given}"),
-                )
-                .about(SessionField::SourceFile)
-            })?;
+            let content_hash = content_hash(&bytes);
             manifest.upsert_source_entry(SourceFileEntry::new(
-                path.clone(),
+                path.as_str(),
                 content_hash,
                 entities.to_vec(),
                 now,
             ));
             Ok(Recorded::Marked {
-                source_file: path,
+                source_file: path.as_str().to_string(),
                 entities: entities.to_vec(),
             })
         }
