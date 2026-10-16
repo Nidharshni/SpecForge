@@ -37,7 +37,7 @@ use crate::{Environment, SharedRuntime, SourceBuild};
 #[derive(Clone)]
 pub struct CompiledProject {
     /// Shared, so a reader keeps the environment an update started from
-    /// while the session is out for it (the LSP's stand-in).
+    /// while the session is out for it (the LSP's copy).
     env: Arc<Environment>,
     /// The text of every source as read, the retained trees and the
     /// sources that could not be read.

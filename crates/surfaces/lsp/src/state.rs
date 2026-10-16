@@ -4,10 +4,9 @@ use crate::files::{Files, Findings, Publish};
 use crate::publish::Publication;
 use specforge_graph::Graph;
 use specforge_ops::view::ProjectView;
-use specforge_project::coverage::RecordedCoverage;
-use specforge_project::{Environment, ProjectSession};
+use specforge_project::{CompiledProject, Environment, ProjectSession};
 use specforge_registry::{FieldRegistry, KindRegistry, RegistryBuild};
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 use tower_lsp::lsp_types::{TextDocumentContentChangeEvent, Url};
@@ -34,26 +33,11 @@ pub struct LspState {
 /// The session, or what readers see while it is out for an update.
 enum Project {
     Held(Box<ProjectSession>),
-    /// The session is being updated off the async runtime: readers keep
-    /// its last complete graph and the environment it was built with, so
-    /// they never see a half-applied update.
-    Out(Box<StandIn>),
-}
-
-/// What readers see while the session is out for an update.
-struct StandIn {
-    graph: Graph,
-    env: Arc<Environment>,
-    /// The text the graph's spans are positions in
-    /// ([`ProjectSession::source_texts`]).
-    texts: HashMap<String, Arc<str>>,
-    /// The keys of the sources the graph was built from, parsed or
-    /// unreadable ([`CompiledProject::source_keys`]).
-    source_keys: BTreeSet<String>,
-    /// The recorded-coverage memo of this stand-in graph (it records
-    /// nothing: no root), seeded with the snapshot the session held for
-    /// that graph, so no stand-in reads the memo of another.
-    recorded: RecordedCoverage,
+    /// The session is being updated off the async runtime: readers see a
+    /// copy of its last complete compile ([`CompiledProject`]'s `Clone`:
+    /// the graph is copied, the rest shared), so they never see a
+    /// half-applied update (ADR 0100 D4, ADR 0108).
+    Out(Box<CompiledProject>),
 }
 
 impl Default for LspState {
@@ -180,11 +164,16 @@ impl LspState {
         self.files.close(uri);
     }
 
-    pub fn graph(&self) -> &Graph {
+    /// The compiled project readers see: the session's, or its copy while it is out.
+    fn project(&self) -> &CompiledProject {
         match &self.project {
-            Project::Held(session) => session.project().graph(),
-            Project::Out(stand_in) => &stand_in.graph,
+            Project::Held(session) => session.project(),
+            Project::Out(copy) => copy,
         }
+    }
+
+    pub fn graph(&self) -> &Graph {
+        self.project().graph()
     }
 
     /// The text the project was last compiled from for session file `key`:
@@ -194,31 +183,19 @@ impl LspState {
     /// compiled moves every position after it) nor the disk now. `None`
     /// for a file the compile does not hold.
     pub fn compiled_text(&self, key: &str) -> Option<Arc<str>> {
-        match &self.project {
-            Project::Held(session) => session.project().source_text(key),
-            Project::Out(stand_in) => stand_in.texts.get(key).cloned(),
-        }
+        self.project().source_text(key)
     }
 
     /// The project's environment: config, spec root, registries, rules.
     pub fn environment(&self) -> &Environment {
-        match &self.project {
-            Project::Held(session) => session.project().environment(),
-            Project::Out(stand_in) => &stand_in.env,
-        }
+        self.project().environment()
     }
 
     /// The project view reads take (navigation among them): the
     /// session's graph and registries, rooted at its project root; while
-    /// the session is out for an update, its last complete graph, with no
-    /// root.
+    /// the session is out for an update, those of its last complete compile.
     pub fn view(&self) -> ProjectView<'_> {
-        match &self.project {
-            Project::Held(session) => ProjectView::of(session.project()),
-            Project::Out(stand_in) => {
-                ProjectView::new(&stand_in.graph, &stand_in.env, None, &stand_in.recorded)
-            }
-        }
+        ProjectView::of(self.project())
     }
 
     /// The project session, unless it is out for an update.
@@ -248,22 +225,11 @@ impl LspState {
     /// [`LspState::set_session`], readers see its last complete graph and
     /// environment. `None` when it is already out.
     pub fn take_session(&mut self) -> Option<ProjectSession> {
-        let stand_in = match &self.project {
-            Project::Held(session) => Project::Out(Box::new(StandIn {
-                graph: session.project().graph().clone(),
-                env: session.project().shared_environment(),
-                texts: session.project().source_texts(),
-                source_keys: session
-                    .project()
-                    .source_keys()
-                    .into_iter()
-                    .map(str::to_string)
-                    .collect(),
-                recorded: RecordedCoverage::of(Arc::clone(session.project().recorded().entities())),
-            })),
+        let copy = match &self.project {
+            Project::Held(session) => Project::Out(Box::new(session.project().clone())),
             Project::Out(_) => return None,
         };
-        match std::mem::replace(&mut self.project, stand_in) {
+        match std::mem::replace(&mut self.project, copy) {
             Project::Held(session) => Some(*session),
             Project::Out(_) => None,
         }
@@ -274,16 +240,8 @@ impl LspState {
     /// environment (the kinds a keyword completion offers) is served before
     /// its sources are read. Nothing when the session is held.
     pub fn show_environment(&mut self, environment: Arc<Environment>) {
-        if let Project::Out(stand_in) = &mut self.project {
-            let graph = Graph::new();
-            let recorded = RecordedCoverage::over(&graph, &environment);
-            **stand_in = StandIn {
-                graph,
-                env: environment,
-                texts: HashMap::new(),
-                source_keys: BTreeSet::new(),
-                recorded,
-            };
+        if let Project::Out(copy) = &mut self.project {
+            **copy = CompiledProject::unread(environment);
             self.rekey();
         }
     }
@@ -317,10 +275,7 @@ impl LspState {
     /// open buffers included): what a `use` path may name. While the session
     /// is out for an update, its last complete compile's.
     pub fn source_keys(&self) -> BTreeSet<&str> {
-        match &self.project {
-            Project::Held(session) => session.project().source_keys(),
-            Project::Out(stand_in) => stand_in.source_keys.iter().map(String::as_str).collect(),
-        }
+        self.project().source_keys()
     }
 
     /// Where the project's `.spec` files live (empty with no project).

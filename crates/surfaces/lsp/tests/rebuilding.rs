@@ -32,3 +32,16 @@ fn hover_shows_the_last_compiles_coverage_while_the_session_is_out() {
     );
     assert_eq!(coverage_line(&out), coverage_line(&held));
 }
+
+#[test]
+fn the_view_while_out_is_rooted_where_the_session_is() {
+    let mut served = coverage_project("behavior done \"Done\" {\n}\n");
+    let held = served
+        .state()
+        .view()
+        .root()
+        .map(std::path::Path::to_path_buf);
+    let out = served.rebuilding(|state| state.view().root().map(std::path::Path::to_path_buf));
+    assert!(held.is_some());
+    assert_eq!(out, held);
+}

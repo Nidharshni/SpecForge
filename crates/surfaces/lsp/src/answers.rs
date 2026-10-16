@@ -1,6 +1,6 @@
 //! Every answer the server gives a request, decided synchronously over the
 //! LSP state: the open documents, the project as last compiled (the
-//! session, or its stand-in while it is out for an update), the
+//! session, or a copy of it while it is out for an update), the
 //! diagnostics last published and what the client declared. The backend
 //! takes the state's read lock, calls one of these and returns what it
 //! answers; it decides nothing (ADR 0023).
