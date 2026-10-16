@@ -426,7 +426,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   writes nothing: the decision is the package's `Publisher`, and the key is pinned when the lock plan that
   fetched it commits. Accepting an unsigned package (`--allow-unsigned`) is reported as W155 at fetch, a
   re-pin as W156 once it is saved. A known-keys store that can't be read refuses the fetch (R-TRUST-006). The
-  check writes nothing to the terminal: a key change is asked of the surface that can ask.
+  check writes nothing to the terminal: a key change is put to the policy's **Asking**.
 - **Key pin**: the publisher key id a package name is held to, kept per user in `~/.specforge/known-keys.json`
   (`pins`, beside the `trusted_keys` allowlist and the `denied_keys` deny list) and per project as the lock
   entry's `key_id`. The user's pin wins; the lock's stands in when the user has none. Pins are written only by
@@ -740,9 +740,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Terminal**: where a core CLI command writes and whom it asks: its stdout, its stderr, the input a
   prompt reads (or `specforge mcp` serves, byte for byte), whether each stream is coloured (`NO_COLOR`, then `CLICOLOR_FORCE`, then whether it is
   a terminal) and whether anyone can answer, fixed when `main` makes it from the process
-  (`specforge_cli::terminal::Terminal`); a test captures one. A publisher key change and a collector's
-  command are asked of it, nobody to ask being no; a reader that leaves stdout ends the output
+  (`specforge_cli::terminal::Terminal`); a test captures one. It is the CLI's **Asker**; nobody to ask is no; a reader that leaves stdout ends the output
   quietly (ADR 0029 D4b).
+- **Asking**: who can be asked to consent to what an operation would otherwise refuse (a publisher key change, a
+  collector's command): yes to everything (`--yes`), nobody (MCP, `--format json`, stdin that is no terminal), or an
+  `Asker` (the CLI's terminal, a test's script). A surface builds it once per command and hands it to add, update or
+  collect (`specforge_ops::asking`, ADR 0110).
 - **Diagnostic policy**: lint profiles (a closed set: `inferred`, `pedantic`) and strict promotion
   (`specforge_project::DiagnosticPolicy`). It is the only thing that changes a diagnostic's severity
   after the diagnostic is built. A profile's diagnostics come from the check that applies it

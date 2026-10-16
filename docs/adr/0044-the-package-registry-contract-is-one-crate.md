@@ -133,3 +133,8 @@ lock's key, and records pins through `pin`. The contract gains C8-C10, and C3 st
   without it is `InvalidReply` (R009) naming the address.
 - **D5.** E067 is no longer reported after the operation: an entry that can't be read refuses every registry
   operation before any request. W140 and I003 are reported as before.
+
+## Amendment (architecture round 11, plan 07)
+
+- **D4.** `MemoryRegistry` decides a key change through the policy's `asking`, as the real adapter does; the
+  contract's clause C11 pins it ([ADR 0110](0110-who-can-be-asked-is-one-value-handed-to-an-operation.md)).

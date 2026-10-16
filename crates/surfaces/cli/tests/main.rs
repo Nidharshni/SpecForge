@@ -4,6 +4,7 @@
 )]
 
 mod analyze;
+mod asking;
 mod build_cache;
 mod check_surfaces;
 mod cli;

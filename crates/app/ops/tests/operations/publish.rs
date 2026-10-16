@@ -4,8 +4,8 @@
 use std::path::{Path, PathBuf};
 
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
+use specforge_ops::asking::Asking;
 use specforge_ops::extension::{PublishReport, publish};
-use specforge_ops::registry::Trust;
 use specforge_ops::registry::testing::{Asked, MemoryRegistry};
 use specforge_ops::registry::{Registry, TrustPolicy, Unconfigured};
 use specforge_ops::testing::declaring;
@@ -228,7 +228,7 @@ fn a_publish_uploads_the_binary_and_the_declaration_read_from_it() {
     assert_eq!(outcome.published.registry, "in-memory");
 
     let held = registry
-        .fetch(&name, &version, TrustPolicy::new(false, Trust::Refuse))
+        .fetch(&name, &version, TrustPolicy::new(false, Asking::Nobody))
         .unwrap();
     assert_eq!(held.wasm, wasm);
     let declared = specforge_ops::extension::declare(&runtime, &wasm)
@@ -301,7 +301,7 @@ fn what_publish_uploads_is_what_add_installs() {
             extensions: vec!["@acme/greet@1.0.0".to_string()],
             base: None,
             allow_unsigned: false,
-            trust: Trust::Refuse,
+            asking: Asking::Nobody,
             dry_run: false,
             containment: &specforge_ops::Containment::unbounded(),
         },
@@ -324,7 +324,7 @@ fn what_publish_uploads_is_what_add_installs() {
         .fetch(
             &name,
             &Version::parse("1.0.0").unwrap(),
-            TrustPolicy::new(false, Trust::Refuse),
+            TrustPolicy::new(false, Asking::Nobody),
         )
         .unwrap()
         .declaration;

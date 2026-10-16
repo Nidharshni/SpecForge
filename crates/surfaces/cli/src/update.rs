@@ -42,8 +42,7 @@ impl Args {
             Ok(root) => root,
             Err(error) => return Refusal::of(format).report(terminal, &error),
         };
-        let registry =
-            ConfiguredRegistry::for_project(&root, "update").asking(crate::trust::asker(terminal));
+        let registry = ConfiguredRegistry::for_project(&root, "update");
         let runtime = specforge_component::ComponentRuntime::with_user_cache();
         let request = UpdateRequest {
             root: &root,
@@ -54,7 +53,7 @@ impl Args {
                 Reach::Compatible
             },
             allow_unsigned: self.allow_unsigned,
-            trust: format.trust(self.yes),
+            asking: crate::asking::of(self.yes, format, terminal),
             containment: &Containment::unbounded(),
         };
         let updated = extension::update(&request, &registry, &runtime);

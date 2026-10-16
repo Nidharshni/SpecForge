@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use specforge_ops::Writes;
+use specforge_ops::asking::Asking;
 use specforge_ops::extension::{self, AddOutcome, AddRequest, RemoveRequest, StrandedEntity};
-use specforge_ops::registry::Trust;
 use specforge_ops::testing::{self, declaring, serving_builtin};
 use specforge_ops::view::ProjectView;
 use specforge_project::CompiledProject;
@@ -124,7 +124,7 @@ pub(crate) fn add(
             extensions: vec![specifier.as_ref().display().to_string()],
             base: None,
             allow_unsigned: false,
-            trust: Trust::Refuse,
+            asking: Asking::Nobody,
             dry_run: false,
             containment: &specforge_ops::Containment::unbounded(),
         },

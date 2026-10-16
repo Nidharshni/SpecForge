@@ -5,9 +5,9 @@ use std::path::Path;
 
 use crate::writes::{candidates as writes_candidates, files_under, project};
 
+use specforge_ops::asking::Asking;
 use specforge_ops::authoring::init::{self, InitField};
 use specforge_ops::extension::{self, AddRequest};
-use specforge_ops::registry::Trust;
 use specforge_ops::testing::{candidates, declaring, serving_builtin};
 use specforge_ops::{OpErrorKind, Refusal};
 use specforge_wasm::testing::InProcessRuntime;
@@ -125,7 +125,7 @@ fn init_reads_its_specifiers_as_add_reads_them() {
                 // As init reads a relative path: from the directory it creates.
                 base: Some(&dir),
                 allow_unsigned: false,
-                trust: Trust::Refuse,
+                asking: Asking::Nobody,
                 dry_run: false,
                 containment: &specforge_ops::Containment::unbounded(),
             },
@@ -248,7 +248,7 @@ fn init_reads_a_dot_dot_after_a_symlink_as_add_does() {
             extensions: vec!["link/../a.wasm".to_string()],
             base: None,
             allow_unsigned: false,
-            trust: Trust::Refuse,
+            asking: Asking::Nobody,
             dry_run: false,
             containment: &specforge_ops::Containment::unbounded(),
         },

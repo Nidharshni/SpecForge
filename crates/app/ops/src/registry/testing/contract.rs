@@ -5,8 +5,10 @@ use specforge_installed::hex_sha256;
 use specforge_package::{PackageName, Version};
 use specforge_protocol_types::DeclaredCategory;
 
-use super::super::{KeyPin, Publisher, Registry, Trust, TrustPolicy, Upload};
+use super::super::{KeyPin, Publisher, Registry, TrustPolicy, Upload};
 use super::{Published, declaration};
+use crate::asking::testing::{Asked, Scripted};
+use crate::asking::{Asking, ExpectedFrom};
 
 /// The packages the contract runs over, the signed ones signed by `key_id`:
 /// `@contract/base` 1.0.0, 1.1.0 and 2.0.0-beta.1 (signed); `@contract/app` 1.0.0 (signed, a required peer
@@ -29,7 +31,7 @@ pub fn contract_packages(key_id: &str) -> Vec<Published> {
 
 /// The policy the contract fetches under: nobody consents to a key change, no key is locked.
 pub(super) fn refuse(allow_unsigned: bool) -> TrustPolicy<'static> {
-    TrustPolicy::new(allow_unsigned, Trust::Refuse)
+    TrustPolicy::new(allow_unsigned, Asking::Nobody)
 }
 
 /// The `Registry` contract (ADR 0044): what every adapter of the port does with `published` (built by
@@ -215,7 +217,7 @@ pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]
         .fetch(
             &app_name,
             &app_version,
-            TrustPolicy::new(false, Trust::AssumeYes),
+            TrustPolicy::new(false, Asking::Yes),
         )
         .unwrap_or_else(|e| panic!("C9: a consented key change fails: {e:?}"));
     assert_eq!(
@@ -232,6 +234,46 @@ pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]
     assert!(
         error.is(codes::R_TRUST_003),
         "C9: the consented fetch pinned nothing: {error:?}"
+    );
+
+    // C11: a key change is put to whoever can be asked, once, naming both keys
+    let declining = Scripted::answering(false);
+    let error = registry
+        .fetch(
+            &app_name,
+            &app_version,
+            TrustPolicy::new(false, Asking::Ask(&declining)),
+        )
+        .unwrap_err();
+    assert!(
+        error.is(codes::R_TRUST_003),
+        "C11: an asker that answers no refuses: {error:?}"
+    );
+    assert_eq!(
+        declining.asked(),
+        vec![Asked::KeyChange {
+            package: "@contract/app".to_string(),
+            expected: "contract-other".to_string(),
+            offered: app_signer.clone(),
+            from: ExpectedFrom::UserPin,
+        }],
+        "C11: the asker is put the one key change"
+    );
+    let accepting = Scripted::answering(true);
+    let accepted = registry
+        .fetch(
+            &app_name,
+            &app_version,
+            TrustPolicy::new(false, Asking::Ask(&accepting)),
+        )
+        .unwrap_or_else(|e| panic!("C11: an asker that answers yes fails: {e:?}"));
+    assert_eq!(
+        accepted.publisher,
+        Publisher::Repinned {
+            key_id: app_signer.clone(),
+            previous: "contract-other".to_string()
+        },
+        "C11: an asker that answers yes re-pins"
     );
 
     // C10: the lock's key is the pin when the user has none

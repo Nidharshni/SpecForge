@@ -11,7 +11,8 @@
 //! update that is not applied pins nothing (ADR 0059).
 
 use super::lock_plan::{Ask, Fetching, Install, LockPlan};
-use crate::registry::{Acceptance, NO_REGISTRY, Publisher, Registry, Trust};
+use crate::asking::Asking;
+use crate::registry::{Acceptance, NO_REGISTRY, Publisher, Registry};
 use crate::{Containment, OpError, OpErrorKind};
 use serde::Serialize;
 use specforge_common::shape::Shape;
@@ -35,7 +36,8 @@ pub struct UpdateRequest<'a> {
     pub reach: Reach,
     /// Accept a registry package with no publisher signature.
     pub allow_unsigned: bool,
-    pub trust: Trust,
+    /// Who can be asked about a publisher key change (ADR 0110).
+    pub asking: Asking<'a>,
     /// What the update may write (ADR 0104): a file it would write that lands outside, by a
     /// symlink in the project, refuses it. The CLI passes [`Containment::unbounded`].
     pub containment: &'a Containment,
@@ -338,7 +340,7 @@ pub fn update(
         Fetching {
             registry,
             allow_unsigned: req.allow_unsigned,
-            trust: req.trust,
+            asking: req.asking,
         },
     )?;
     let mut extensions = Vec::new();

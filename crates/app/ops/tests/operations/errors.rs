@@ -195,15 +195,15 @@ fn add_package(
     registry: &specforge_ops::registry::testing::MemoryRegistry,
     specifier: &str,
 ) -> specforge_ops::Refusal<specforge_ops::extension::AddField> {
+    use specforge_ops::asking::Asking;
     use specforge_ops::extension::{self, AddRequest};
-    use specforge_ops::registry::Trust;
     extension::add(
         &AddRequest {
             root: &specforge_common::ProjectRoot::of(dir).unwrap(),
             extensions: vec![specifier.to_string()],
             base: None,
             allow_unsigned: false,
-            trust: Trust::Refuse,
+            asking: Asking::Nobody,
             dry_run: false,
             containment: &specforge_ops::Containment::unbounded(),
         },
@@ -219,7 +219,7 @@ fn add_package(
 )]
 fn a_registry_refusal_is_never_an_internal_error() {
     use specforge_ops::OpErrorKind;
-    use specforge_ops::registry::Trust;
+    use specforge_ops::asking::Asking;
     use specforge_ops::registry::testing::{MemoryRegistry, Published, declaration};
     use specforge_ops::registry::{Registry, TrustPolicy};
     use specforge_package::{PackageName, Version};
@@ -244,7 +244,7 @@ fn a_registry_refusal_is_never_an_internal_error() {
         .fetch(
             &PackageName::parse("@acme/unsigned").unwrap(),
             &Version::parse("9.9.9").unwrap(),
-            TrustPolicy::new(true, Trust::Refuse),
+            TrustPolicy::new(true, Asking::Nobody),
         )
         .unwrap_err();
     assert_eq!(missing.code, "R006", "{missing:?}");

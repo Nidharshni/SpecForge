@@ -3,7 +3,8 @@
 //! from their view (ADR 0015, "Management operations").
 
 use specforge_common::Diagnostic;
-use specforge_ops::analysis::collect::{Consent, Mode, Request};
+use specforge_ops::analysis::collect::{Mode, Request};
+use specforge_ops::asking::Asking;
 use specforge_ops::extension::{self, RemoveRequest, Status};
 use specforge_ops::testing::ScriptedSolver;
 use specforge_ops::view::ProjectView;
@@ -144,7 +145,7 @@ fn management_operations_read_the_project_from_their_view() {
             Request {
                 runner: None,
                 mode: Mode::NoRun,
-                consent: Consent::Approved,
+                asking: Asking::Nobody,
                 announce: &mut |_, _| {},
             },
         )
@@ -254,7 +255,7 @@ fn collect_at_a_root_that_is_no_project_is_no_project() {
         Request {
             runner: None,
             mode: Mode::NoRun,
-            consent: Consent::Approved,
+            asking: Asking::Nobody,
             announce: &mut |_, _| {},
         },
     )

@@ -4,7 +4,8 @@ use super::Origin;
 use super::lock_plan::{Ask, Asked, Fetching, Install, LockPlan, Purpose};
 use super::names::no_specifier;
 use super::{Named, Names, Place};
-use crate::registry::{Publisher, Registry, Trust};
+use crate::asking::Asking;
+use crate::registry::{Publisher, Registry};
 use crate::{Containment, Refusal, Writes};
 use specforge_installed::Installed;
 use specforge_package::PackageName;
@@ -29,7 +30,8 @@ pub struct AddRequest<'a> {
     pub base: Option<&'a std::path::Path>,
     /// Accept a registry package with no publisher signature.
     pub allow_unsigned: bool,
-    pub trust: Trust,
+    /// Who can be asked about a publisher key change (ADR 0110).
+    pub asking: Asking<'a>,
     /// The add's lock plan judged and not committed: report what the add would do, or the refusal it
     /// would give; write, pin and download nothing. A registry package is judged by the
     /// declaration it was published with (its manifest). An extension already present answers as
@@ -164,7 +166,7 @@ pub fn add(
         Fetching {
             registry,
             allow_unsigned: req.allow_unsigned,
-            trust: req.trust,
+            asking: req.asking,
         },
         if req.dry_run {
             Purpose::Preview

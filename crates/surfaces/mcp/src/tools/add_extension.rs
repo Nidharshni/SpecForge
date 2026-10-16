@@ -83,8 +83,8 @@ impl CoreTool for Tool {
     type Returns = Mutation<Reply>;
 
     fn call(project: ProjectRef<'_>, args: Args) -> Mutation<Reply> {
+        use specforge_ops::asking::Asking;
         use specforge_ops::extension::{self, AddRequest};
-        use specforge_ops::registry::Trust;
 
         // The project the call installs into: the served one, or the one
         // `path` names.
@@ -100,7 +100,7 @@ impl CoreTool for Tool {
             // directory of its own to mean it.
             base: None,
             allow_unsigned: args.allow_unsigned,
-            trust: Trust::Refuse,
+            asking: Asking::Nobody,
             dry_run: args.dry_run,
             // A local file installs only from inside the project it installs into.
             containment: &Containment::within(root.dir()),

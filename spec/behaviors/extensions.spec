@@ -1017,12 +1017,14 @@ behavior pin_publisher_key "Pin Publisher Key" {
     as it was and reports no W156. A known-keys store that exists and can't
     be read refuses the install (R-TRUST-006) and is never overwritten. A
     re-pin is reported as W156 once it is saved; a first-use pin is part of
-    the outcome. The decision on a key change belongs to the surface: the
-    CLI asks on its terminal (y or yes, in any case, consents; any other
-    answer refuses), and a surface nobody can be asked on refuses.
+    the outcome. The decision on a key change belongs to the surface: it hands the
+    operation who can be asked (the CLI's terminal; nobody under
+    `--format json` or over MCP), and the CLI asks on its terminal (y or yes,
+    in any case, consents; any other answer refuses).
   """
   verify integration "the key of the first verified install is pinned and accepted again"
   verify integration "a package signed by another key than the pinned one is refused"
+  verify unit "a refused key change names the commands that can consent"
   verify integration "consent to a key change re-pins the new key"
   verify integration "a denied key is refused even with consent"
   verify integration "consent to a key change is reported as W156"

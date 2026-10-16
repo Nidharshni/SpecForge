@@ -175,7 +175,7 @@ usually a typo or a reworded statement, is A016.
   no spec declares, usually after a rename. Fix the annotation.
 - **`A016 tests name obligation(s) ... does not declare`:** the test's
   `verify` text differs from the spec's statement. Make them match exactly.
-- **`E059 ... needs your approval`:** you ran `collect` without a terminal.
+- **`E059 ... needs approval for this project`:** you ran `collect` without a terminal.
   Use `--yes` or `--no-run`.
 - **`E045 ... produced no report`:** the tests didn't build, so `cargo test`
   printed no results. The runner's output above the error says why.
