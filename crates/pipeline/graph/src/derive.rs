@@ -54,7 +54,7 @@ pub fn type_expressions<'v>(reading: &Reading, value: &'v FieldValue) -> Vec<&'v
         // A quoted union member is a literal, not a type.
         FieldValue::TypeUnion(members) | FieldValue::VariantList(members) => members
             .iter()
-            .filter(|m| !m.text.starts_with('"'))
+            .filter(|m| m.written != Written::Quoted)
             .map(|m| m.text.as_str())
             .collect(),
         FieldValue::List(items) if *reading == Reading::Member => items

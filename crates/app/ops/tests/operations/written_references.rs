@@ -4,6 +4,7 @@
 use crate::navigate::{SOFTWARE, compile, keys};
 use specforge_ops::authoring::rename;
 use specforge_ops::read::navigate::{Direction, ReferenceQuery};
+use specforge_test::prelude::*;
 
 const INCOMING: ReferenceQuery = ReferenceQuery {
     direction: Direction::Incoming,
@@ -70,8 +71,10 @@ fn a_rename_edits_signature_types_and_no_parameter_name() {
     assert_eq!(edits, [(1, 5, 9), (11, 9, 13), (12, 20, 24), (17, 20, 24)]);
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "link_derived_references",
+    verify = "a quoted union member derives no edge"
+)]
 fn a_quoted_union_variant_is_no_reference() {
     let p = compile(SOFTWARE, &[("level.spec", LEVEL)]);
 

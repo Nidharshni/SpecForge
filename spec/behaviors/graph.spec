@@ -75,7 +75,8 @@ behavior link_derived_references "Link Derived References" {
     - `method_signatures`: the names in the parameter and return types of
       the entity's methods.
 
-    A type expression reduces to the names inside it:
+    A quoted member of a union (`type Level = "Task" | Other`) is a literal, not a
+    type, and names nothing. A type expression reduces to the names inside it:
     `Result<TsProject, EmitterError>` names Result, TsProject and
     EmitterError; `TsClassMember[]` names TsClassMember. Each name that
     resolves to an entity of the field's target kind, other than the
@@ -94,6 +95,7 @@ behavior link_derived_references "Link Derived References" {
   verify unit "a primitive, a generic wrapper or an undeclared name creates no edge"
   verify unit "a name that resolves to an entity of another kind creates no edge"
   verify unit "quoted strings and single-reference fields derive no edge"
+  verify unit "a quoted union member derives no edge"
   verify unit "an entity naming itself creates no edge"
   verify unit "a recursive type derives no reference cycle"
   verify unit "a kind with no derived field derives no edge"
