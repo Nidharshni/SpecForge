@@ -25,6 +25,7 @@ mod output_schemas;
 mod path_containment;
 mod path_spelling;
 mod product_commands;
+mod project_file_containment;
 mod prompt_golden;
 mod prompt_infer;
 mod prompt_pins;

@@ -15,7 +15,10 @@ fn an_unusable_report_is_refused_as_e045() {
     assert_eq!(e.code, "E045");
 
     let missing = AnalyzeOptions {
-        report: ReportSource::File(project.assembled.root().join("absent.json")),
+        report: ReportSource::Named {
+            path: project.assembled.root().join("absent.json"),
+            containment: crate::Containment::unbounded(),
+        },
         ..Default::default()
     };
     assert!(matches!(

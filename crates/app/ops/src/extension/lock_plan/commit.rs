@@ -5,14 +5,17 @@ use std::path::{Path, PathBuf};
 
 use super::{Ask, Checked, Disabled, Purpose};
 use crate::registry::{KeyPin, Registry};
-use crate::{Containment, OpError, OpErrorKind, Writes};
+use crate::{Containment, Held, OpError, OpErrorKind, Writes};
+
+/// What writes an [`Also`] file, given the file it was resolved to.
+pub(crate) type WriteHeld<'f> = Box<dyn FnOnce(&Held) -> Result<(), OpError> + 'f>;
 
 /// A file the change's last step writes after `specforge.json`'s edit and before the pins (`init`'s
 /// config, `.gitignore` and starter). Put back, or removed when it was not there, when the change
-/// fails.
+/// fails. `write` is handed the file `path` resolved to (ADR 0112): it opens nothing else.
 pub(crate) struct Also<'f> {
     pub(crate) path: PathBuf,
-    pub(crate) write: Box<dyn FnOnce() -> Result<(), OpError> + 'f>,
+    pub(crate) write: WriteHeld<'f>,
 }
 
 /// What a finished plan did, or for a preview would do.
@@ -106,10 +109,16 @@ impl Checked<'_> {
             .collect();
         let edited_config = edits_config && (!names.is_empty() || !disabled.is_empty());
         let also_paths: Vec<PathBuf> = also.iter().map(|also| also.path.clone()).collect();
-        let mut written_by_change: Vec<PathBuf> = also_paths.clone();
-        if edited_config {
-            written_by_change.push(root.join(crate::config::CONFIG_FILE));
-        }
+        // Held before anything is written: what is written is what is checked here.
+        let also_held = also_paths
+            .iter()
+            .map(|path| containment.resolve(path))
+            .collect::<Result<Vec<Held>, _>>()?;
+        let config_path = root.join(crate::config::CONFIG_FILE);
+        let config_held = (edits_config || !disabled.is_empty())
+            .then(|| containment.resolve(&config_path))
+            .transpose()?;
+        let mut written_by_change: Vec<PathBuf> = Vec::new();
         if changes_lock {
             written_by_change.push(installed.lock_path());
         }
@@ -122,22 +131,34 @@ impl Checked<'_> {
         for path in &written_by_change {
             containment.resolve(path)?;
         }
+        let config_file = || {
+            config_held.as_ref().ok_or_else(|| {
+                OpError::new(
+                    OpErrorKind::Internal,
+                    "config_not_held",
+                    "the change edits specforge.json without holding it",
+                )
+            })
+        };
         let mut enabled = None;
         let mut writes = Writes::none();
         if purpose == Purpose::Commit {
-            let config_path = root.join(crate::config::CONFIG_FILE);
             let last = || -> Result<(), OpError> {
                 if edits_config && !names.is_empty() {
-                    enabled = Some(crate::config::enable(root, &names)?);
+                    enabled = Some(crate::config::enable(root, config_file()?, &names)?);
                 }
                 for dropped in &disabled {
                     edited(match dropped {
-                        Disabled::Named(name) => crate::config::remove_extension(root, name),
-                        Disabled::Entry(entry) => crate::config::remove_entry(root, entry),
+                        Disabled::Named(name) => {
+                            crate::config::remove_extension(root, config_file()?, name)
+                        }
+                        Disabled::Entry(entry) => {
+                            crate::config::remove_entry(root, config_file()?, entry)
+                        }
                     })?;
                 }
-                for file in also {
-                    (file.write)()?;
+                for (file, held) in also.into_iter().zip(&also_held) {
+                    (file.write)(held)?;
                 }
                 record(pins)
             };

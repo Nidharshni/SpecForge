@@ -147,6 +147,7 @@ fn management_operations_read_the_project_from_their_view() {
                 mode: Mode::NoRun,
                 asking: Asking::Nobody,
                 announce: &mut |_, _| {},
+                containment: &specforge_ops::Containment::unbounded(),
             },
         )
         .map(drop)
@@ -257,6 +258,7 @@ fn collect_at_a_root_that_is_no_project_is_no_project() {
             mode: Mode::NoRun,
             asking: Asking::Nobody,
             announce: &mut |_, _| {},
+            containment: &specforge_ops::Containment::unbounded(),
         },
     )
     .map(drop)

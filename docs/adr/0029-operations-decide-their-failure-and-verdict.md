@@ -56,6 +56,8 @@ nearest project, else the directory itself" on their own.
   for an entry that takes a `path`.
 - **D8. MCP resolves a relative `test_results` against the call's project root**, as the paths of
   `specforge.format`; the CLI keeps shell semantics (relative to the working directory).
+  *(ADR 0112: over MCP a `test_results`, relative or absolute, resolves inside the call's project; one that leaves it
+  is `invalid_input` before anything is read. The CLI's reading against the working directory stands.)*
 
 ## Consequences
 
