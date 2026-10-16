@@ -100,7 +100,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   sources are discovered (the spec root and `exclude`), its **environment inputs**
   (`specforge.json`, `specforge.lock`, the extension modules it loaded) and its **check inputs**
   (the check reads of the last check run: `specforge-cache.json` when a check pass read it, each path a check looked
-  for, each directory E016's suggestion listed, and the target of each that is a symlink, and where each symlinked
+  for, each directory a missing named file's suggestion listed, and the target of each that is a symlink, and where each symlinked
   source's text lies (its target)). One value per
   environment load, renewed each time the checks run (`specforge_project::SessionInputs`,
   `ProjectSession::inputs`). What a changed path reaches, which directories watch watches, which files
@@ -321,16 +321,18 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   extension declares is skipped silently when its extension declares an optional peer the project does not load, and
   is I004 otherwise (ADR 0096).
 - **Rule set**: the extensions' declared validation rules plus the host's E006 rules for required
-  fields, each turned once per registry build into a typed rule that carries only what its check
+  fields and E016 rules for file-reference fields, each turned once per registry build into a typed rule that carries only what its check
   reads, resolved against the registries (a compiled regex, an edge rule's edge type and the fields that
   write it). An edge rule counts the edges of its edge type; a cycle rule follows them. It runs itself over the entity snapshot's records (`RuleInput`, ADR
   0019), cycles included, and answers which rule applies to a kind, which the snapshot's standing
   reads (`specforge_registry::rules::Rules`, ADR 0020). A declared rule that cannot work is W112; a
   property its check does not read is W147.
+- **Named paths**: the paths an entity's field names: a scalar's text, or each item of a list, when not
+  empty; a block, an expression group, a variant list or a type union names none. Every `file_exists` rule,
+  E016 among them, reads them and suggests a close sibling of a missing one
+  (`specforge_registry::rules::files`, ADR 0118).
 - **Structural checks**: the host's own checks over the entity snapshot's records, run by the
-  registry build before the rule set, in this order: W012 (a `ref` nothing references), E016 (a
-  path a `file_reference` field of the entity's kind names that does not exist under the spec
-  root), then, unless the project is structural-only, E024, E013, E014, W020, E022 and E061
+  registry build before the rule set, in this order: W012 (a `ref` nothing references), then, unless the project is structural-only, E024, E013, E014, W020, E022 and E061
   (`specforge_registry`'s `checks`, ADR 0031). None reads a graph node. Whether every reference
   became an edge is the linker's own debug assertion, not a check.
 - **Structural-only**: no loaded extension declares an entity kind
