@@ -5,8 +5,13 @@ use specforge_parser::FieldValue;
 
 /// A field value's text: the one rule every reader after the graph build
 /// shares (ADR 0019). Scalars as written; lists joined by `", "`; variant lists and type unions by
-/// `" | "`; expressions by `", "` in their display form; verify statements'
-/// texts by `"; "`; a block's keys by `", "`. Empty values are `""`.
+/// `" | "`; expressions by `", "` in their display form; a block's keys by `", "`. Empty
+/// values are `""`.
+///
+/// The written value ([`specforge_graph::field_form::write`]) differs only for an expression
+/// group, written one conjunct per line (ADR 0064 D3): the field text is one string per field
+/// for rules, validators and passes; the written value is what every output writes and every
+/// input reads back.
 ///
 /// A joined list cannot be split back when an item itself contains the
 /// joiner (`["a, b", "c"]` is `"a, b, c"`); [`field_items`] keeps them.

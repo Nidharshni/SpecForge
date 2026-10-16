@@ -467,7 +467,8 @@ impl Shape for FieldJson {
 /// comparison per line, ADR 0009); an integer and a boolean as JSON scalars;
 /// a list or variant list as an array of its items' text; a block
 /// as an object of its entries, each written by this function. Never the
-/// parser's tree, never a position.
+/// parser's tree, never a position. The field text of the same value
+/// (`specforge_registry::snapshot::field_text`) joins an expression group with `", "`.
 pub fn write(value: &FieldValue) -> FieldJson {
     FieldJson(match value {
         FieldValue::String(s) | FieldValue::Identifier(s) | FieldValue::Date(s) => {

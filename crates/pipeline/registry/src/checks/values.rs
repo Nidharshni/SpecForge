@@ -9,7 +9,7 @@ use crate::{FieldRegistry, FieldRegistryEntry, KindRegistry};
 
 /// E061 for every registered field whose (coerced) value its field form
 /// refuses: a scalar that is not an integer, true/false or a declared enum
-/// value; a list on a single-value field; a block, verify statements or an
+/// value; a list on a single-value field; a block or an
 /// expression where the type never takes one (a reference or list field);
 /// a scalar on a block field. Unregistered kinds and fields are left to
 /// E024 / W020. Each is reported at the value's own

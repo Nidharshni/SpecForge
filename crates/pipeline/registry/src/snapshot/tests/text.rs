@@ -200,3 +200,21 @@ fn an_empty_value_has_empty_text() {
         ]
     );
 }
+
+#[test]
+fn an_expression_group_has_one_text_for_the_checks_and_another_for_the_outputs() {
+    let parsed = specforge_parser::parse(
+        "item x \"X\" {\n  metric expr { a < 1, b > 2 }\n}\n",
+        "t.spec",
+    );
+    assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
+    let value = &parsed.entities[0].fields.entries()[0].value;
+    // The checks, the rules, the validators and the passes read one string per field ...
+    assert_eq!(field_text(value), "a < 1, b > 2");
+    // ... every output writes one conjunct per line, which the prove pass reads back (ADR 0064 D3).
+    let written: serde_json::Value = specforge_graph::field_form::write(value).into();
+    assert_eq!(
+        written,
+        serde_json::Value::String("a < 1\nb > 2".to_string())
+    );
+}
