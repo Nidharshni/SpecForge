@@ -35,6 +35,14 @@ pub(crate) struct Args {
 
 impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
+        self.run_in(
+            std::sync::Arc::new(specforge_component::ComponentRuntime::with_user_cache()),
+            terminal,
+        )
+    }
+
+    /// [`Self::run`] over `runtime`: the extensions' hooks run in it (a test serves them in process).
+    fn run_in(self, runtime: specforge_project::SharedRuntime, terminal: &Terminal) -> Exit {
         let format = self.output.format;
         let root = match self.project.root() {
             Ok(root) => root,
@@ -62,8 +70,6 @@ impl Args {
 
         // The shared migration: migrate, run the extensions' hooks, then check
         // the graph kept its structure, rolling back when it didn't.
-        let runtime: specforge_project::SharedRuntime =
-            std::sync::Arc::new(specforge_component::ComponentRuntime::with_user_cache());
         let request = Request {
             root: &root,
             target,
@@ -186,3 +192,6 @@ fn print_migration(
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
