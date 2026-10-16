@@ -1,7 +1,8 @@
 use serde_json::Value;
 use specforge_emitter::model::{FieldLevel, ModelFormat, ModelOptions, ModelRoot};
+use specforge_ops::Noticed;
 use specforge_ops::OpErrorKind;
-use specforge_ops::read::model::{ModelOutcome, model};
+use specforge_ops::read::model::model;
 use specforge_protocol_types::{
     EdgeTypeDescriptor, EntityKindDescriptor, ExtensionDeclaration, FieldDescriptor,
     HandshakeResponse,
@@ -40,7 +41,8 @@ fn the_model_names_a_field_type_as_declared() {
         };
         model(&project.view(), &options)
             .expect("no refusal")
-            .document
+            .into_value_and_notices()
+            .0
     };
 
     let markdown = rendered(ModelFormat::Markdown);
@@ -103,7 +105,7 @@ fn two_extensions() -> Assembled {
 fn outcome_of(
     project: &Assembled,
     options: ModelOptions,
-) -> Result<ModelOutcome, specforge_ops::Refusal<specforge_ops::read::model::ModelField>> {
+) -> Result<Noticed<String>, specforge_ops::Refusal<specforge_ops::read::model::ModelField>> {
     model(
         &project.view(),
         &ModelOptions {
@@ -116,7 +118,7 @@ fn outcome_of(
 /// The JSON model `options` draws over `project`.
 fn json_model(project: &Assembled, options: ModelOptions) -> Value {
     let outcome = outcome_of(project, options).expect("no refusal");
-    serde_json::from_str(&outcome.document).expect("the json model parses")
+    serde_json::from_str(&outcome.into_value_and_notices().0).expect("the json model parses")
 }
 
 /// The kinds the JSON model lists, in order.
@@ -217,17 +219,15 @@ fn a_listed_kind_the_project_does_not_know_is_reported() {
         },
     )
     .expect("a kind filter does not refuse");
-    let json: Value = serde_json::from_str(&outcome.document).unwrap();
+    let (document, notices) = outcome.into_value_and_notices();
+    let json: Value = serde_json::from_str(&document).unwrap();
     assert_eq!(json["entities"].as_array().unwrap().len(), 1);
     assert_eq!(json["entities"][0]["name"], "event");
-    assert_eq!(outcome.notices.len(), 1);
-    assert_eq!(outcome.notices[0].code, "I020");
+    assert_eq!(notices.len(), 1);
+    assert_eq!(notices[0].code, "I020");
+    assert_eq!(notices[0].message, "unknown entity kind 'behaviour'");
     assert_eq!(
-        outcome.notices[0].message,
-        "unknown entity kind 'behaviour'"
-    );
-    assert_eq!(
-        outcome.notices[0].suggestion.as_deref(),
+        notices[0].suggestion.as_deref(),
         Some("did you mean 'behavior'?")
     );
 }
@@ -316,7 +316,7 @@ fn model_filtering_contract() {
             ..ModelOptions::default()
         })
         .unwrap()
-        .notices
+        .notices()
         .len(),
         1
     );

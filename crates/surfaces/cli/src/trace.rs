@@ -61,15 +61,15 @@ impl Args {
             Ask::Entity(entity) => Target::Entity(entity),
             Ask::Every | Ask::Plan(_) => Target::Every,
         };
-        let outcome = match specforge_ops::read::trace::trace(&ProjectView::of(&project), target) {
-            Ok(outcome) => outcome,
+        let traced = match specforge_ops::read::trace::trace(&ProjectView::of(&project), target) {
+            Ok(traced) => traced,
             Err(error) => {
                 return Refusal::of(self.format)
                     .report(terminal, &specforge_ops::OpError::from(error));
             }
         };
 
-        Notes::new(terminal, self.format).beside(&outcome.notices);
+        let outcome = Notes::new(terminal, self.format).noticed(traced);
         match self.format {
             OutputFormat::Human => out!(terminal, "{}", outcome.to_human()),
             OutputFormat::Json => terminal.json(&outcome),

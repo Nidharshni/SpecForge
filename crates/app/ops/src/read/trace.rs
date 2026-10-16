@@ -4,7 +4,6 @@
 
 use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
-use specforge_common::Diagnostic;
 use specforge_common::shape::Shape;
 use specforge_graph::Graph;
 use specforge_registry::RegistryBuild;
@@ -16,7 +15,7 @@ pub use ask::{Ask, ENTITY_WITH_PLAN, TraceField};
 
 use crate::read::plan::PlanGap;
 use crate::view::{EntityField, ProjectView};
-use crate::{OpError, Refusal};
+use crate::{Noticed, OpError, Refusal};
 
 #[derive(Debug, Serialize, Shape)]
 pub struct TraceChain {
@@ -198,9 +197,6 @@ pub struct TraceOutcome {
     schema_version: String,
     /// One entity was traced (else every one).
     single: bool,
-    /// What versioning the schema reported (I016, W053; ADR 0111). Not part
-    /// of the document.
-    pub notices: Vec<Diagnostic>,
 }
 
 impl Serialize for TraceOutcome {
@@ -309,8 +305,9 @@ impl From<TraceError> for Refusal<EntityField> {
 
 /// Trace `target` in the view's graph: each chain both ways, with every
 /// edge the registries lead the traced entity to have, and it lacks,
-/// flagged as missing.
-pub fn trace(view: &ProjectView, target: Target) -> Result<TraceOutcome, TraceError> {
+/// flagged as missing. Its notices are what versioning the schema reported
+/// (I016, W053; ADR 0111).
+pub fn trace(view: &ProjectView, target: Target) -> Result<Noticed<TraceOutcome>, TraceError> {
     let expectations = TraceExpectations::of(view.registries());
     let graph = view.graph();
     let versioned = view.versioned_schema();
@@ -319,12 +316,14 @@ pub fn trace(view: &ProjectView, target: Target) -> Result<TraceOutcome, TraceEr
         Target::Entity(entity_id) => {
             let chain = chain(graph, entity_id, &expectations)
                 .ok_or_else(|| entity_not_found(graph, entity_id))?;
-            Ok(TraceOutcome {
-                chains: vec![chain],
-                schema_version,
-                single: true,
-                notices: versioned.notices(),
-            })
+            Ok(Noticed::new(
+                TraceOutcome {
+                    chains: vec![chain],
+                    schema_version,
+                    single: true,
+                },
+                versioned.notices(),
+            ))
         }
         Target::Every => {
             let mut chains: Vec<TraceChain> = graph
@@ -333,12 +332,14 @@ pub fn trace(view: &ProjectView, target: Target) -> Result<TraceOutcome, TraceEr
                 .filter_map(|n| chain(graph, n.id.raw.as_str(), &expectations))
                 .collect();
             chains.sort_by(|a, b| a.entity_id.cmp(&b.entity_id));
-            Ok(TraceOutcome {
-                chains,
-                schema_version,
-                single: false,
-                notices: versioned.notices(),
-            })
+            Ok(Noticed::new(
+                TraceOutcome {
+                    chains,
+                    schema_version,
+                    single: false,
+                },
+                versioned.notices(),
+            ))
         }
     }
 }

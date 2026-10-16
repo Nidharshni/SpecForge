@@ -98,17 +98,17 @@ impl CoreTool for Tool {
                 )));
             }
         };
-        let mut outcome = specforge_ops::read::trace::trace(&view, Target::Entity(entity_id))
-            .map_err(|error| {
-                Self::refused(specforge_ops::Refusal::from(error)).with_entity(entity_id)
-            })?;
-        let notices = std::mem::take(&mut outcome.notices);
-        match outcome.into_chain() {
-            Some(chain) => Ok(Answer::new(Reply::Chain(chain)).with_diagnostics(notices)),
-            None => Err(Box::new(McpError::new(
-                ErrorCode::InternalError,
-                "trace of one entity answered no chain",
-            ))),
-        }
+        let traced = specforge_ops::read::trace::trace(&view, Target::Entity(entity_id)).map_err(
+            |error| Self::refused(specforge_ops::Refusal::from(error)).with_entity(entity_id),
+        )?;
+        let chain = traced.try_map(|outcome| {
+            outcome.into_chain().ok_or_else(|| {
+                Box::new(McpError::new(
+                    ErrorCode::InternalError,
+                    "trace of one entity answered no chain",
+                ))
+            })
+        })?;
+        Ok(Answer::noticed(chain.map(Reply::Chain)))
     }
 }

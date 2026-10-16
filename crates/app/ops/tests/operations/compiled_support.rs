@@ -120,6 +120,8 @@ pub fn query_document(
 pub fn traced(project: &CompiledProject, target: Target<'_>) -> TraceOutcome {
     trace::trace(&ProjectView::of(project), target)
         .unwrap_or_else(|e| panic!("trace refused: {e:?}"))
+        .into_value_and_notices()
+        .0
 }
 
 /// `specforge trace <entity> --format json`, parsed.

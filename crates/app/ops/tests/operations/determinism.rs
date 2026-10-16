@@ -1,4 +1,4 @@
-use crate::view_support::{Assembled, Viewed};
+use crate::view_support::{Assembled, Viewed, plain};
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
 use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue};
@@ -90,7 +90,7 @@ fn trace_output_is_deterministic() {
                 specforge_ops::read::trace::Target::Entity("alpha"),
             )
             .unwrap();
-            serde_json::to_string_pretty(&outcome).unwrap()
+            serde_json::to_string_pretty(&plain(outcome)).unwrap()
         })
         .collect();
     for output in &outputs[1..] {

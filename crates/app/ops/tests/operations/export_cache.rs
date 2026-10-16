@@ -1,7 +1,7 @@
 //! `specforge export` records the schema cache at the view's root, and a
 //! failed export leaves it alone.
 
-use crate::view_support::{Assembled, Viewed};
+use crate::view_support::{Assembled, Viewed, plain};
 use specforge_test::prelude::*;
 
 // ===========================================================================
@@ -143,7 +143,8 @@ fn the_model_names_the_versioned_schema() {
             },
         )
         .unwrap()
-        .document
+        .into_value_and_notices()
+        .0
     };
 
     let document: serde_json::Value = serde_json::from_str(&json(ModelFormat::Json)).unwrap();
@@ -202,7 +203,7 @@ fn every_document_names_the_versioned_schema() {
     ] {
         assert_eq!(version(request), "2.0.0", "{what}");
     }
-    let traced = serde_json::to_value(trace(&view, Target::Every).unwrap()).unwrap();
+    let traced = serde_json::to_value(plain(trace(&view, Target::Every).unwrap())).unwrap();
     assert!(
         traced.to_string().contains("\"schema_version\":\"2.0.0\""),
         "{traced}"
@@ -217,10 +218,10 @@ fn a_trace_carries_the_projects_schema_version() {
     use specforge_ops::read::trace::{Target, trace};
     let project = project_at_two();
     let view = project.view();
-    let entity = serde_json::to_value(trace(&view, Target::Entity("b")).unwrap()).unwrap();
+    let entity = serde_json::to_value(plain(trace(&view, Target::Entity("b")).unwrap())).unwrap();
     assert_eq!(entity["schema_version"], "2.0.0", "{entity}");
-    let chain = trace(&view, Target::Entity("b")).unwrap().into_chain();
+    let chain = plain(trace(&view, Target::Entity("b")).unwrap()).into_chain();
     assert_eq!(chain.unwrap().schema_version, "2.0.0");
-    let every = serde_json::to_value(trace(&view, Target::Every).unwrap()).unwrap();
+    let every = serde_json::to_value(plain(trace(&view, Target::Every).unwrap())).unwrap();
     assert_eq!(every["schema_version"], "2.0.0", "{every}");
 }

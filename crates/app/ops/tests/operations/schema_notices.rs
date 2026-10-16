@@ -1,7 +1,7 @@
 //! Every read outcome that names the schema's version carries what
 //! versioning it against the root's record found (I016, W053; ADR 0111).
 
-use crate::view_support::{Assembled, Viewed};
+use crate::view_support::{Assembled, Viewed, plain};
 use specforge_common::Diagnostic;
 use specforge_ops::read::export::{Request, export, export_recorded};
 use specforge_ops::read::query::{QueryRequest, query};
@@ -113,19 +113,19 @@ fn a_trace_and_the_model_carry_the_records_notices() {
     let view = project.view();
 
     let traced = trace(&view, Target::Entity("b")).unwrap();
-    assert_eq!(codes(&traced.notices), ["I016"]);
-    let document = serde_json::to_value(&traced).unwrap();
+    assert_eq!(codes(traced.notices()), ["I016"]);
+    let document = serde_json::to_value(plain(traced)).unwrap();
     assert!(document.get("notices").is_none(), "{document}");
 
     let modelled = model(&view, &ModelOptions::default()).unwrap();
-    assert_eq!(codes(&modelled.notices), ["I016"]);
+    assert_eq!(codes(modelled.notices()), ["I016"]);
     let filtered = ModelOptions {
         kinds: vec!["ghost".into()],
         ..ModelOptions::default()
     };
     // The schema's notices come before the request's (D7).
     assert_eq!(
-        codes(&model(&view, &filtered).unwrap().notices),
+        codes(model(&view, &filtered).unwrap().notices()),
         ["I016", "I020"]
     );
 }

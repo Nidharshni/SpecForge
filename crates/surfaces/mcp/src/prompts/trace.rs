@@ -81,8 +81,10 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
             }
             Ask::Entity(entity_id) => {
                 // As the trace tool traces it: its chain and missing links.
-                let outcome = trace(&view, Target::Entity(entity_id))
-                    .map_err(|error| Prompt::refused(specforge_ops::Refusal::from(error)))?;
+                // ADR 0111 D6: the trace prompt's payload has no `_meta`, so it reports no notices.
+                let (outcome, _unreported) = trace(&view, Target::Entity(entity_id))
+                    .map_err(|error| Prompt::refused(specforge_ops::Refusal::from(error)))?
+                    .into_value_and_notices();
                 let gaps = outcome.gaps().iter().map(Gap::of).collect();
                 (
                     vec![entity_id.to_string()],
