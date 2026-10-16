@@ -238,6 +238,24 @@ fn measuring_commands_exit_two_on_refusal() {
     assert_eq!(run_in(&project, &["stats"], None).code, 0);
 }
 
+/// `review` is a read view: an unreadable report exits 1, as `query --include-coverage` does.
+#[test]
+#[ignore = "flipped by T11"]
+fn review_refuses_as_query_does_when_the_report_cannot_be_read() {
+    let broken = rv1(Some("{"));
+
+    let review = run_in(&broken, &["review"], None);
+    assert_eq!(review.code, 1, "{}", review.stderr);
+    assert!(
+        review.stderr.starts_with("error[E045]"),
+        "{}",
+        review.stderr
+    );
+
+    let query = run_in(&broken, &["query", "alpha", "--include-coverage"], None);
+    assert_eq!(query.code, 1, "{}", query.stderr);
+}
+
 #[specforge_test_macros::test(
     behavior = "report_command_outcome",
     verify = "a command run outside any project refuses with no_project"
