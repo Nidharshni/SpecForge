@@ -110,6 +110,7 @@ behavior load_extension_manifests "Load Extension Manifests" {
   verify unit "the extension load and the lock plan resolve an entry by one rule"
   verify integration "a .wasm file entry that is missing, is not a component, names another extension or repeats a loaded one produces E028 naming the entry"
   verify unit "an entry whose declaration can't be read is E028 saying so and naming what failed"
+  verify unit "a .wasm file entry that cannot be read is E028 saying it cannot be read"
   verify unit "missing extension produces diagnostic"
   verify unit "every builtin is listed once, by the directory its crate lives in"
   verify unit "every fixture crate is listed once, by its directory under fixtures/"

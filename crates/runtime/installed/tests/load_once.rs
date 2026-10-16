@@ -114,8 +114,10 @@ fn a_file_entry_is_handshaken_once() {
     assert_eq!(handshakes, 1);
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test_macros::test(
+    behavior = "load_extension_manifests",
+    verify = "a .wasm file entry that cannot be read is E028 saying it cannot be read"
+)]
 fn a_file_entry_that_cannot_be_read_says_so() {
     let dir = TempDir::new().unwrap();
     std::fs::create_dir(dir.path().join("d.wasm")).unwrap();

@@ -530,18 +530,30 @@ impl Installed {
         })
     }
 
-    /// `entry`'s module, read once, when it is the one the entry pins.
-    pub(crate) fn check_module(&self, entry: &LockFileEntry) -> Result<Module, LoadProblem> {
-        let path = self.module_path(&entry.name);
-        let module = Module::read(&path).map_err(|error| {
+    /// The module at `path`, read once and never statted first: the crate's
+    /// one module read. A file that is not there is `missing(path)`; any
+    /// other read error (a permission, a directory) is `ModuleUnreadable`.
+    pub(crate) fn read_module(
+        &self,
+        path: &Path,
+        missing: impl FnOnce(PathBuf) -> LoadProblem,
+    ) -> Result<Module, LoadProblem> {
+        Module::read(path).map_err(|error| {
             if error.kind() == std::io::ErrorKind::NotFound {
-                LoadProblem::ModuleMissing { path: path.clone() }
+                missing(path.to_path_buf())
             } else {
                 LoadProblem::ModuleUnreadable {
-                    path: path.clone(),
+                    path: path.to_path_buf(),
                     reason: error.to_string(),
                 }
             }
+        })
+    }
+
+    /// `entry`'s module, read once, when it is the one the entry pins.
+    pub(crate) fn check_module(&self, entry: &LockFileEntry) -> Result<Module, LoadProblem> {
+        let module = self.read_module(&self.module_path(&entry.name), |path| {
+            LoadProblem::ModuleMissing { path }
         })?;
         if !entry.wasm_hash.is_empty() && entry.wasm_hash != module.digest() {
             return Err(LoadProblem::Changed {
@@ -561,14 +573,7 @@ impl Installed {
         runtime: &dyn WasmRuntime,
     ) -> Result<(String, Done), LoadProblem> {
         let (key, file) = (entry.key, entry.file.as_path());
-        if !file.is_file() {
-            return Err(LoadProblem::FileMissing {
-                path: file.to_path_buf(),
-            });
-        }
-        let module = Module::read(file).map_err(|error| LoadProblem::NotAComponent {
-            reason: format!("cannot read it: {error}"),
-        })?;
+        let module = self.read_module(file, |path| LoadProblem::FileMissing { path })?;
         // Loaded under the entry until its handshake says what it is.
         runtime
             .load(key, module.bytes())
