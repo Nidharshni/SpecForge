@@ -6,7 +6,7 @@ use std::path::Path;
 
 use specforge_common::ProjectRoot;
 
-use crate::ledger::{CheckInput, Ledger};
+use crate::ledger::{CheckInput, Ledger, Reads};
 use crate::sources::Read;
 
 const CONFIG: &str = "{\"name\":\"d\",\"version\":\"0.1.0\",\"extensions\":[]}\n";
@@ -63,7 +63,9 @@ fn a_source_that_is_no_source_any_more_leaves_the_record() {
     let mut ledger = Ledger::opening();
     let read = ledger.config(&root);
     ledger.before_load(&root, &read.config);
-    assert_eq!(ledger.discover().len(), 1);
+    let sources = read.config.sources(root.dir());
+    assert_eq!(ledger.discover(&sources), ["sub/c.spec"]);
+    ledger.source(sources.dir(), "sub/c.spec");
     assert!(ledger.stale().is_empty());
 
     // A nested project took it.

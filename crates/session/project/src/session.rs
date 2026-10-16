@@ -211,13 +211,12 @@ impl OpeningProject {
     /// in place of its file by the one cold build, so the checks run once.
     fn finish_holding(self, buffers: Vec<Buffer>) -> ProjectSession {
         let mut ledger = self.ledger;
-        let discovered = ledger.discover();
         // Keys as this environment gives them: the spec root may have moved.
         let held = Held::keyed(buffers, |path| self.env.source_key(path));
         // What was stamped is what is read, except a held file: its buffer
         // is read in its place.
         let texts = held.sources(|key| !ledger.excludes(key));
-        let mut project = CompiledProject::read(self.env, &discovered, &texts);
+        let mut project = CompiledProject::read(self.env, &texts, &mut ledger);
         project.set_verify(cfg!(debug_assertions));
         let mut session = ProjectSession {
             project,
@@ -270,10 +269,9 @@ impl ProjectSession {
         // before its one read, the lock and the modules before the runtime
         // and the environment read them, the sources by `finish`.
         let mut ledger = Ledger::opening();
-        let read = ledger.config(root);
-        ledger.before_load(root, &read.config);
-        let runtime = source.runtime_for(root.dir(), &read.config);
-        let env = Environment::from_read(root, read, runtime);
+        let env = Environment::read_through(&mut ledger, root, |config| {
+            source.runtime_for(root.dir(), config)
+        });
         OpeningProject {
             env: Arc::new(env),
             source,
@@ -576,11 +574,6 @@ impl ProjectSession {
     /// stamped first: whether the session's inputs changed.
     fn check(&mut self) -> bool {
         self.checks_skipped = false;
-        let entities = self.project.snapshot_now();
-        let changed = self
-            .ledger
-            .before_checks(self.project.environment(), &entities);
-        self.project.check_over(entities);
-        changed
+        self.project.check(&mut self.ledger)
     }
 }

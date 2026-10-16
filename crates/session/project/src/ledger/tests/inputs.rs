@@ -88,7 +88,6 @@ fn detached_inputs_reach_nothing() {
     assert_eq!(inputs.spec_root(), None);
     assert!(inputs.watch_roots().is_empty());
     assert!(inputs.watched().is_empty());
-    assert!(inputs.discover().is_empty());
     assert!(!inputs.excludes("target/x.spec"));
     let reach = inputs.reach([Path::new("/x/a.spec"), Path::new("/x/specforge.json")]);
     assert!(reach.regions.is_empty() && reach.inputs.is_empty() && reach.pending.is_empty());

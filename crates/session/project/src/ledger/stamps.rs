@@ -28,7 +28,6 @@ use std::time::{Duration, SystemTime};
 
 use super::Changes;
 use super::inputs::{Kind, SessionInputs};
-use super::key::discovered as walked_key;
 use super::reach::Reach;
 
 /// Coarse filesystems record modification times to the second (some to
@@ -130,19 +129,18 @@ impl Stamps {
         }
     }
 
-    /// Stamp every source `discovered` under the spec root, before the
-    /// sources are read.
-    pub(super) fn stamp_all_sources(&mut self, inputs: &SessionInputs, discovered: &[PathBuf]) {
-        let Some(spec_root) = inputs.spec_root() else {
-            return;
+    /// No source is stamped: discovery starts the record of the sources again,
+    /// each stamped as it is read.
+    pub(super) fn forget_sources(&mut self) {
+        self.sources.clear();
+    }
+
+    /// Stamp source `key` (its file is `path`), before it is read.
+    pub(super) fn stamp_source(&mut self, key: &str, path: &Path) {
+        match Entry::stamp(path) {
+            Some(entry) => self.sources.insert(key.to_string(), entry),
+            None => self.sources.remove(key),
         };
-        self.sources = discovered
-            .iter()
-            .filter_map(|path| {
-                let entry = Entry::stamp(path)?;
-                Some((walked_key(spec_root, path), entry))
-            })
-            .collect();
     }
 
     /// Stamp the sources `keys` names, before they are read again: the

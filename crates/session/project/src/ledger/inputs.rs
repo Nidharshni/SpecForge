@@ -329,13 +329,6 @@ impl SessionInputs {
             .map(PathBuf::as_path)
     }
 
-    /// The `.spec` files discovery finds now (none when detached).
-    pub(crate) fn discover(&self) -> Vec<PathBuf> {
-        self.disk()
-            .map(|disk| disk.sources.files())
-            .unwrap_or_default()
-    }
-
     /// The symlinked sources among `discovered` (every source found) are
     /// now the links: nothing else of the value changes.
     pub(super) fn set_links(&mut self, discovered: &[PathBuf]) {

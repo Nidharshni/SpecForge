@@ -26,7 +26,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use specforge_common::{ConfigRead, ProjectConfig, ProjectRoot, read_project_config};
+use specforge_common::{ConfigRead, ProjectConfig, ProjectRoot, SourceRoot, read_project_config};
 
 use crate::Environment;
 use crate::build_cache::BUILD_CACHE_FILE;
@@ -34,7 +34,6 @@ use crate::snapshot::EntitySnapshot;
 use crate::sources::{self, Read};
 
 pub use inputs::{SessionInputs, WatchRoot, Watched};
-pub(crate) use key::discovered;
 pub use key::source_key;
 use stamps::{Entry, Scope, Stamps};
 
@@ -59,6 +58,118 @@ impl Changes {
     /// Nothing the session is built from changed.
     pub fn is_empty(&self) -> bool {
         self.sources.is_empty() && self.environment.is_empty() && self.check_inputs.is_empty()
+    }
+}
+
+/// How a compile reads the disk (ADR 0106). A project session reads through its
+/// [`Ledger`], which stamps each file in the call that reads it and records it as
+/// an input; a one-shot compile reads through [`Unrecorded`], which only reads.
+/// Both run the same steps in the same order: the config once, the lock and
+/// modules before the extension load, the sources after discovery, the check
+/// inputs before the checks. A step never fails: an unreadable file is in what it
+/// returns (a `ConfigRead` with its problems, `Read::Unreadable`, `Read::Gone`).
+pub(crate) trait Reads {
+    /// `specforge.json` at `root`, read once (`read_project_config`).
+    fn config(&mut self, root: &ProjectRoot) -> ConfigRead;
+    /// Before the extension runtime and the environment read them: the lock and
+    /// the module of every extension `config` enables (a prediction until a
+    /// reader reaches the installed crate, ADR 0030 D3).
+    fn before_load(&mut self, root: &ProjectRoot, config: &ProjectConfig);
+    /// The keys of the sources discovery finds under `sources` now, sorted.
+    fn discover(&mut self, sources: &SourceRoot) -> Vec<String>;
+    /// Source `key` under `spec_root`: its text, its E025, or gone.
+    fn source(&mut self, spec_root: &Path, key: &str) -> Read;
+    /// Before the checks over `entities` run in `env`: the files they read.
+    /// Whether the session's inputs moved (always `false` unrecorded). Plan 04
+    /// replaces this with a reader handed to the checks.
+    fn before_checks(&mut self, env: &Environment, entities: &EntitySnapshot) -> bool;
+}
+
+/// A one-shot compile's reads: the same steps, nothing recorded, no stamp (ADR
+/// 0030, ADR 0047 D1).
+pub(crate) struct Unrecorded;
+
+impl Reads for Unrecorded {
+    fn config(&mut self, root: &ProjectRoot) -> ConfigRead {
+        read_project_config(root.dir())
+    }
+
+    fn before_load(&mut self, _root: &ProjectRoot, _config: &ProjectConfig) {}
+
+    fn discover(&mut self, sources: &SourceRoot) -> Vec<String> {
+        walked_keys(sources)
+    }
+
+    fn source(&mut self, spec_root: &Path, key: &str) -> Read {
+        sources::read(spec_root, key)
+    }
+
+    fn before_checks(&mut self, _env: &Environment, _entities: &EntitySnapshot) -> bool {
+        false
+    }
+}
+
+/// The keys of the files discovery finds under `sources`, in its order.
+fn walked_keys(sources: &SourceRoot) -> Vec<String> {
+    sources
+        .files()
+        .iter()
+        .map(|path| key::discovered(sources.dir(), path))
+        .collect()
+}
+
+impl Reads for Ledger {
+    /// Stamped, then read once. A config rewritten after this is seen next
+    /// time, whatever the rest was read from. Starts the environment record
+    /// again.
+    fn config(&mut self, root: &ProjectRoot) -> ConfigRead {
+        self.stamps.stamp_config(&root.config_file());
+        read_project_config(root.dir())
+    }
+
+    /// Records the inputs of the environment `config` names, and stamps the
+    /// lock and each extension module.
+    fn before_load(&mut self, root: &ProjectRoot, config: &ProjectConfig) {
+        self.inputs = SessionInputs::opened(root.dir(), config);
+        self.stamps.stamp_environment(&self.inputs);
+    }
+
+    /// Records the keys and each symlink's target, and forgets the stamps of
+    /// the sources: each is stamped when it is read ([`Self::source`]).
+    fn discover(&mut self, sources: &SourceRoot) -> Vec<String> {
+        let files = sources.files();
+        self.stamps.forget_sources();
+        self.inputs.set_links(&files);
+        files
+            .iter()
+            .map(|path| key::discovered(sources.dir(), path))
+            .collect()
+    }
+
+    /// Stamped, then read: a source written after its stamp is seen next time.
+    fn source(&mut self, spec_root: &Path, key: &str) -> Read {
+        self.source_with(spec_root, key, |_| sources::read(spec_root, key))
+    }
+
+    /// Reads the files the checks will read (the build cache when the
+    /// environment has check-phase passes, then each file a `file_reference`
+    /// field or `file_exists` rule names, and the directory of each missing
+    /// one), each stamped and recorded.
+    fn before_checks(&mut self, env: &Environment, entities: &EntitySnapshot) -> bool {
+        let Some(root) = self.inputs.root().map(Path::to_path_buf) else {
+            return false;
+        };
+        let run = self.checks();
+        if env.registries().check_passes().next().is_some() {
+            run.read(CheckInput::File, &root.join(BUILD_CACHE_FILE), |_| ());
+        }
+        for path in env.registries().files(&entities.rule_input()) {
+            let exists = run.read(CheckInput::File, &path, Path::exists);
+            if !exists && let Some(parent) = path.parent() {
+                run.read(CheckInput::Listing, parent, |_| ());
+            }
+        }
+        run.finish()
     }
 }
 
@@ -97,32 +208,6 @@ impl Ledger {
         self.inputs.excludes(key)
     }
 
-    /// `specforge.json` at `root`: stamped, then read once. A config
-    /// rewritten after this is seen next time, whatever the rest was read
-    /// from. Starts the environment record again.
-    pub(crate) fn config(&mut self, root: &ProjectRoot) -> ConfigRead {
-        self.stamps.stamp_config(&root.config_file());
-        read_project_config(root.dir())
-    }
-
-    /// Before the extension runtime and the environment read them: record the
-    /// inputs of the environment `config` names, and stamp the lock and each
-    /// extension module (a prediction until a reader reaches the installed
-    /// crate, ADR 0030 D3).
-    pub(crate) fn before_load(&mut self, root: &ProjectRoot, config: &ProjectConfig) {
-        self.inputs = SessionInputs::opened(root.dir(), config);
-        self.stamps.stamp_environment(&self.inputs);
-    }
-
-    /// The `.spec` files discovery finds now: every one stamped, and each
-    /// symlink read, before the sources are read.
-    pub(crate) fn discover(&mut self) -> Vec<PathBuf> {
-        let discovered = self.inputs.discover();
-        self.stamps.stamp_all_sources(&self.inputs, &discovered);
-        self.inputs.set_links(&discovered);
-        discovered
-    }
-
     /// Read the sources `keys` names again, each stamped, its link read,
     /// then read. A key that is no source any more reads as gone and its
     /// stamp and link are forgotten (so its return is seen). Each key's
@@ -150,29 +235,6 @@ impl Ledger {
         (reads, moved)
     }
 
-    /// Before the checks over `entities` run in `env`: read the files they
-    /// will read (the build cache when the environment has check-phase
-    /// passes, then each file a `file_reference` field or `file_exists` rule
-    /// names, and the directory of each missing one), each stamped and
-    /// recorded. Whether the inputs moved. Plan 04 replaces this prediction
-    /// with a reader handed to the checks.
-    pub(crate) fn before_checks(&mut self, env: &Environment, entities: &EntitySnapshot) -> bool {
-        let Some(root) = self.inputs.root().map(Path::to_path_buf) else {
-            return false;
-        };
-        let run = self.checks();
-        if env.registries().check_passes().next().is_some() {
-            run.read(CheckInput::File, &root.join(BUILD_CACHE_FILE), |_| ());
-        }
-        for path in env.registries().files(&entities.rule_input()) {
-            let exists = run.read(CheckInput::File, &path, Path::exists);
-            if !exists && let Some(parent) = path.parent() {
-                run.read(CheckInput::Listing, parent, |_| ());
-            }
-        }
-        run.finish()
-    }
-
     /// One run of the checks' reads: each is stamped and recorded as a check
     /// input when the run finishes (ADR 0106 D4).
     pub(crate) fn checks(&mut self) -> CheckRun<'_> {
@@ -180,6 +242,22 @@ impl Ledger {
             ledger: self,
             read: RefCell::new(Vec::new()),
         }
+    }
+
+    /// Stamp source `key`, then run `read` on its file (the read the caller
+    /// performs): the one place a source is stamped for the cold read. The
+    /// test hook of [`Reads::source`].
+    pub(crate) fn source_with(
+        &mut self,
+        spec_root: &Path,
+        key: &str,
+        read: impl FnOnce(&Path) -> Read,
+    ) -> Read {
+        let path = spec_root.join(key);
+        if self.inputs.root().is_some() {
+            self.stamps.stamp_source(key, &path);
+        }
+        read(&path)
     }
 
     /// A ledger over `inputs`, nothing stamped.
