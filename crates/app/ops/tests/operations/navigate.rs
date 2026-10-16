@@ -1003,7 +1003,7 @@ fn the_verify_stub_lands_inside_the_block() {
 }
 
 /// A view of `p`'s graph with `registries` instead of its extensions'.
-fn with_registries<'a>(
+fn navigator_over<'a>(
     p: &Compiled,
     project: &'a CompiledProject,
 ) -> Navigator<'a, impl Fn(&str) -> Option<String> + 'a> {
@@ -1043,7 +1043,7 @@ fn the_verify_stub_uses_the_kinds_first_allowed_verify_kind() {
     );
     let project = Assembled::over(verifiable(&["invariant"], &["property", "unit"]))
         .graph(p.project.graph().clone());
-    let fixes = with_registries(&p, project.detached()).fixes(&[], &FixQuery::default());
+    let fixes = navigator_over(&p, project.detached()).fixes(&[], &FixQuery::default());
     assert_eq!(
         titles(&fixes),
         ["Add verify stub for unique_ids"],
@@ -1206,7 +1206,7 @@ fn no_stub_without_a_target_kind() {
     let p = compile(TESTING, &[("auth.spec", DANGLING)]);
     let diagnostics = p.project.diagnostics();
     let project = Assembled::over(invariants_field(None)).graph(p.project.graph().clone());
-    let fixes = with_registries(&p, project.detached()).fixes(&diagnostics, &FixQuery::default());
+    let fixes = navigator_over(&p, project.detached()).fixes(&diagnostics, &FixQuery::default());
     assert!(
         fixes.iter().all(|f| f.source != FixSource::CreateStub),
         "{:?}",
@@ -1214,7 +1214,7 @@ fn no_stub_without_a_target_kind() {
     );
     let targeted =
         Assembled::over(invariants_field(Some("invariant"))).graph(p.project.graph().clone());
-    let fixes = with_registries(&p, targeted.detached()).fixes(&diagnostics, &FixQuery::default());
+    let fixes = navigator_over(&p, targeted.detached()).fixes(&diagnostics, &FixQuery::default());
     assert!(fixes.iter().any(|f| f.source == FixSource::CreateStub));
 }
 

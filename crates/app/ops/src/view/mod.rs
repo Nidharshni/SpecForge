@@ -1,14 +1,20 @@
 //! The project view: what every operation over a compiled project reads
 //! (CONTEXT.md "Project view", ADR 0015).
 //!
-//! A surface builds one from the compiled project it holds (a one-shot
-//! compile in the CLI, a project session's in MCP and the LSP,
-//! `ProjectSession::project`) and hands it to an operation; the operation returns a typed outcome the
-//! surface only renders. The view borrows the environment the project was
-//! compiled in and says what its surface reports for the project. It owns
-//! the project's recorded test report and the coverage computed from it,
-//! both read at the root the project was compiled from and never in an
-//! ancestor directory.
+//! A surface builds one from the compiled project it holds and hands it to
+//! an operation; the operation returns a typed outcome the surface only
+//! renders. `ProjectView::of` is the only constructor, and the view holds
+//! the compiled project it reads. A compiled project is one of four things:
+//! - a one-shot compile (the CLI: `CompiledProject::compile`);
+//! - a project session's, kept current (MCP, watch, the LSP:
+//!   `ProjectSession::project`);
+//! - a copy of a session's, which the LSP holds while the session is out for
+//!   an update (`CompiledProject`'s `Clone`);
+//! - one a test assembled in memory (`specforge_project::testing::Assembled`).
+//!
+//! The view says what its surface reports for the project. The project's
+//! recorded test report and the coverage computed from it are read at the
+//! root the project was compiled from and never in an ancestor directory.
 
 mod connectivity;
 mod entity;
@@ -21,7 +27,7 @@ use specforge_common::Diagnostic;
 use specforge_emitter::{GraphProtocolSchema, generate_schema};
 use specforge_graph::Graph;
 use specforge_installed::{Installed, LockState};
-use specforge_project::coverage::{ProjectCoverage, Recorded, RecordedCoverage, TestReport};
+use specforge_project::coverage::{ProjectCoverage, Recorded, TestReport};
 use specforge_project::snapshot::EntitySnapshot;
 use specforge_project::{CompiledProject, Environment, SharedRuntime};
 use specforge_registry::RegistryBuild;
@@ -40,75 +46,43 @@ use crate::schema_version::{SchemaCache, VersionedSchema};
 /// `root` is the root the project was compiled from: the recorded test
 /// report, the schema cache, `specforge.lock`, the installed binaries and
 /// the source files are read there, never in an ancestor. Without a root
-/// (a graph built in memory) there is no report, no schema cache, no
-/// extension pass, and an operation that reads or writes the project on
-/// disk refuses with `no_project` ([`Self::project_root`]).
+/// (a detached project, one assembled in memory) there is no report, no
+/// schema cache, no extension pass, and an operation that reads or writes
+/// the project on disk refuses with `no_project` ([`Self::project_root`]).
 #[derive(Clone, Copy)]
 pub struct ProjectView<'a> {
-    graph: &'a Graph,
-    env: &'a Environment,
-    root: Option<&'a Path>,
-    /// The memo of the graph's entity snapshot, the recorded report and the
-    /// coverage, owned by whoever owns `graph`.
-    recorded: &'a RecordedCoverage,
-    /// Where what the surface reports for the project comes from.
-    reported: Reported<'a>,
+    project: &'a CompiledProject,
+    /// What the surface reports in place of what the compile reported (the
+    /// LSP hover, MCP's context prompt).
+    listed: Option<&'a [Diagnostic]>,
     /// What the surface reports after what the compile reported (MCP's
     /// I017 notices).
     also_reported: &'a [Diagnostic],
 }
 
-/// Where a view's reported diagnostics come from: its owner, asked when
-/// an operation needs them.
-#[derive(Clone, Copy)]
-enum Reported<'a> {
-    /// A compiled project, one-shot or a session's: what `specforge check`
-    /// reports for it.
-    Compiled(&'a CompiledProject),
-    /// A listed slice: a graph built in memory, a test.
-    Listed(&'a [Diagnostic]),
-}
-
 impl<'a> ProjectView<'a> {
-    /// The view of `graph`, compiled in `env`, rooted at `root`. `recorded`
-    /// must belong to the owner of `graph` (`RecordedCoverage::over(graph,
-    /// env)` for a graph assembled in a test). It reports nothing until
-    /// [`Self::reporting`].
-    pub fn new(
-        graph: &'a Graph,
-        env: &'a Environment,
-        root: Option<&'a Path>,
-        recorded: &'a RecordedCoverage,
-    ) -> Self {
+    /// The view of a compiled project: a one-shot compile, a session's
+    /// `ProjectSession::project`, the copy the LSP holds while its session
+    /// is out, or an assembled project in a test. The only constructor: its
+    /// graph, environment, root and memo agree because they are the
+    /// project's (ADR 0108). Rooted where it was compiled (none for a
+    /// detached project); it reports what `specforge check` reports for it.
+    pub fn of(project: &'a CompiledProject) -> Self {
         ProjectView {
-            graph,
-            env,
-            root,
-            recorded,
-            reported: Reported::Listed(&[]),
+            project,
+            listed: None,
             also_reported: &[],
         }
     }
 
-    /// The view of a compiled project (a one-shot compile, or a session's
-    /// `ProjectSession::project`), rooted where it was compiled (none for
-    /// a detached project); it reports what `specforge check` reports for
-    /// it.
-    pub fn of(project: &'a CompiledProject) -> Self {
-        ProjectView {
-            reported: Reported::Compiled(project),
-            ..Self::new(
-                project.graph(),
-                project.environment(),
-                project.root(),
-                project.recorded(),
-            )
-        }
+    /// The compiled project this view reads.
+    pub fn project(&self) -> &'a CompiledProject {
+        self.project
     }
 
     /// The project's graph.
     pub fn graph(&self) -> &'a Graph {
-        self.graph
+        self.project.graph()
     }
 
     /// What `specforge.json` and the loaded extensions gave the compile:
@@ -116,27 +90,27 @@ impl<'a> ProjectView<'a> {
     /// the registry build. Operations read them here, never from disk
     /// again.
     pub fn env(&self) -> &'a Environment {
-        self.env
+        self.project.environment()
     }
 
     /// The runtime the view's extensions were loaded in (its environment's):
     /// every operation that calls an extension over the view calls it there.
     /// None: the environment loaded no extension.
     pub fn runtime(&self) -> Option<&'a SharedRuntime> {
-        self.env.runtime()
+        self.env().runtime()
     }
 
     /// The registry build of the environment: kinds, fields, edges, rules,
     /// the extension declarations and their ordered passes. The one way to
     /// reach it (`env().registries()` is the same value).
     pub fn registries(&self) -> &'a RegistryBuild {
-        self.env.registries()
+        self.env().registries()
     }
 
-    /// The root the project was compiled from; `None` for a graph built in
-    /// memory ([`Self::project_root`] refuses instead).
+    /// The root the project was compiled from; `None` for a detached
+    /// project ([`Self::project_root`] refuses instead).
     pub fn root(&self) -> Option<&'a Path> {
-        self.root
+        self.project.root()
     }
 
     /// What `specforge.lock` held when the compile read the environment:
@@ -152,17 +126,17 @@ impl<'a> ProjectView<'a> {
     /// has no project on disk to have installed anything.
     pub fn installed(&self) -> &'a Installed {
         static NONE: Installed = Installed::none();
-        match self.root {
-            Some(_) => self.env.installed(),
+        match self.root() {
+            Some(_) => self.env().installed(),
             None => &NONE,
         }
     }
 
-    /// This view, reporting `diagnostics` in place of its owner's (a graph
-    /// built in memory, a test).
+    /// This view, reporting `diagnostics` in place of its compile's (the
+    /// LSP hover reports what it published; a test).
     pub fn reporting(self, diagnostics: &'a [Diagnostic]) -> Self {
         ProjectView {
-            reported: Reported::Listed(diagnostics),
+            listed: Some(diagnostics),
             ..self
         }
     }
@@ -180,10 +154,10 @@ impl<'a> ProjectView<'a> {
     /// reports for the compile behind the view, in its order, then what
     /// the surface added ([`Self::also_reporting`]).
     pub fn reported(&self) -> Vec<Diagnostic> {
-        let mut diagnostics = match self.reported {
-            Reported::Compiled(project) => project.diagnostics(),
-            Reported::Listed(listed) => listed.to_vec(),
-        };
+        let mut diagnostics = self
+            .listed
+            .map(<[Diagnostic]>::to_vec)
+            .unwrap_or_else(|| self.project.diagnostics());
         diagnostics.extend(self.also_reported.iter().cloned());
         diagnostics
     }
@@ -191,7 +165,7 @@ impl<'a> ProjectView<'a> {
     /// The root, for an operation that reads or writes the project on
     /// disk: `no_project` without one.
     pub fn project_root(&self) -> Result<&'a Path, OpError> {
-        self.root.ok_or_else(|| {
+        self.root().ok_or_else(|| {
             OpError::no_project(
                 "this operation needs the project on disk, and this project has none",
             )
@@ -202,8 +176,9 @@ impl<'a> ProjectView<'a> {
     /// `Ok(None)` without a root or a file; an error (E045) when it is there
     /// but unusable.
     pub fn test_report(&self) -> Result<Option<Arc<TestReport>>, OpError> {
-        self.recorded
-            .report(self.root)
+        self.project
+            .recorded()
+            .report(self.root())
             .map_err(crate::report::unusable)
     }
 
@@ -217,7 +192,10 @@ impl<'a> ProjectView<'a> {
     /// from it ([`Self::coverage`]), read together: one read of the report
     /// file for a view that needs both.
     pub fn recorded(&self) -> Result<Recorded, OpError> {
-        self.recorded.at(self.root).map_err(crate::report::unusable)
+        self.project
+            .recorded()
+            .at(self.root())
+            .map_err(crate::report::unusable)
     }
 
     /// The graph's entity snapshot (ADR 0019): every entity with what it
@@ -225,7 +203,7 @@ impl<'a> ProjectView<'a> {
     /// the one the view's memo was made with: its owner's, so the view
     /// cannot read another graph's.
     pub fn entities(&self) -> &'a EntitySnapshot {
-        self.recorded.entities()
+        self.project.entities()
     }
 
     /// The Graph Protocol schema the loaded extensions produce, unversioned
@@ -246,7 +224,7 @@ impl<'a> ProjectView<'a> {
 
     /// The schema record at `<root>/.specforge/`; `None` without a root.
     pub(crate) fn schema_cache(&self) -> Option<SchemaCache> {
-        self.root.map(SchemaCache::of_root)
+        self.root().map(SchemaCache::of_root)
     }
 }
 
