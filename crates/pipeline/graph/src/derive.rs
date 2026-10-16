@@ -44,31 +44,6 @@ pub struct DerivedReference {
     pub from: DerivedFrom,
 }
 
-/// The type expressions a field's value writes, as the derived walk reads
-/// them: a bare word, a union's or variant list's unquoted members, and a
-/// bare item of a list under a member of an open-fields kind (`values
-/// [critical, high]`). A single reference names an entity, not a type.
-pub fn type_expressions<'v>(reading: &Reading, value: &'v FieldValue) -> Vec<&'v str> {
-    if reading.is_single_reference() {
-        return Vec::new();
-    }
-    match value {
-        FieldValue::Identifier(expr) => vec![expr.as_str()],
-        // A quoted union member is a literal, not a type.
-        FieldValue::TypeUnion(members) | FieldValue::VariantList(members) => members
-            .iter()
-            .filter(|m| m.written != Written::Quoted)
-            .map(|m| m.text.as_str())
-            .collect(),
-        FieldValue::List(items) if *reading == Reading::Member => items
-            .iter()
-            .filter(|item| item.written == Written::Bare)
-            .map(|item| item.text.as_str())
-            .collect(),
-        _ => Vec::new(),
-    }
-}
-
 /// One type expression an entity writes, and where it starts: what the derived walk reads names from.
 #[derive(Clone, Copy)]
 pub(crate) struct TypeExpression<'v> {

@@ -35,8 +35,10 @@ fn columns(plan: &rename::RenamePlan) -> Vec<(usize, usize, usize)> {
         .collect()
 }
 
-#[test]
-#[ignore = "flipped by T7"]
+#[specforge_test(
+    behavior = "find_all_references",
+    verify = "a name written in a field and in a method signature is one location each"
+)]
 fn a_name_written_in_the_field_and_in_a_signature_is_one_occurrence_each() {
     let p = compile(SOFTWARE, &[("store.spec", STORE)]);
 
@@ -49,8 +51,10 @@ fn a_name_written_in_the_field_and_in_a_signature_is_one_occurrence_each() {
     );
 }
 
-#[test]
-#[ignore = "flipped by T7"]
+#[specforge_test(
+    behavior = "find_all_references",
+    verify = "a parameter's name is not a reference to the type it spells"
+)]
 fn a_parameters_name_is_no_occurrence() {
     let p = compile(SOFTWARE, &[("store.spec", STORE)]);
 
@@ -60,8 +64,10 @@ fn a_parameters_name_is_no_occurrence() {
     );
 }
 
-#[test]
-#[ignore = "flipped by T7"]
+#[specforge_test(
+    behavior = "rename_entity_id",
+    verify = "rename edits a type named in a method signature and no parameter name"
+)]
 fn a_rename_edits_signature_types_and_no_parameter_name() {
     let p = compile(SOFTWARE, &[("store.spec", STORE)]);
 
