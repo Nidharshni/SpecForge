@@ -28,11 +28,6 @@ impl Held {
         std::fs::read_to_string(&self.real)
     }
 
-    /// Overwrite `real` in place (format, rename: a source edited where it lands).
-    pub fn write(&self, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
-        std::fs::write(&self.real, contents)
-    }
-
     /// Create `real`, refusing one that exists (`AlreadyExists`); never through a link at the name.
     pub fn create_new(&self, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
         let mut file = std::fs::OpenOptions::new()

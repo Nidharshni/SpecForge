@@ -58,7 +58,7 @@ defects, reproduced with a file-size limit (`ulimit -f` with `SIGXFSZ` ignored, 
   whole.
 - Init's starter that appears between the check and the write reports `file_changed` instead of `starter_exists`
   (the pre-check still answers `starter_exists`). A non-UTF-8 `.gitignore` is appended to, never overwritten.
-- `Held::write` has no caller left in ops; render's is plan 09's to move to `replace`, after which `write` goes.
+- `Held::write` is deleted: format and rename moved to `replace` here, and render moved with ADR 0131, so no caller is left.
 - Render's read-only output file is refused with `permission_denied` once render replaces (one `replace`, one rule).
 
 ## Reopen when
