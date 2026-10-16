@@ -124,7 +124,7 @@ impl CoreTool for Tool {
             return Ok(Mutated::new(reply, Written::nothing()));
         }
         // A failed write restores what it wrote: nothing is left written.
-        let writes = rename::apply(&plan, &spec_root, project.containment())?;
+        let writes = rename::apply(&plan, &spec_root, project.caller())?;
         // The reply's `diagnostics` are what `specforge check` reports for the
         // project as it is on disk now, edits made since the last call
         // included (`FreshDiagnostics`, filled in once the target is brought up

@@ -3,7 +3,7 @@ use specforge_graph::{Edge, Graph, Node};
 use specforge_ops::read::trace::{Target, TraceExpectations, TraceLinkStatus};
 use specforge_registry::RegistryBuild;
 
-use crate::view_support::{Assembled, Viewed, chain, chain_in, every_chain};
+use crate::view_support::{Assembled, Viewed, chain, chain_in, every_chain, plain};
 use specforge_parser::{EntityId, EntityKind, FieldMap};
 use specforge_test::prelude::*;
 
@@ -115,7 +115,7 @@ fn trace_serializes_to_json() {
     let graph = build_chain();
     let project = Assembled::over(RegistryBuild::default()).graph(graph);
     let outcome = specforge_ops::read::trace::trace(&project.view(), Target::Entity("b")).unwrap();
-    let json = serde_json::to_string_pretty(&outcome).unwrap();
+    let json = serde_json::to_string_pretty(&plain(outcome)).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
     assert_eq!(parsed["entity_id"], "b");
@@ -370,7 +370,7 @@ fn trace_human_output_marks_missing_links() {
     let project = Assembled::over(crate::trace_support::build()).graph(graph);
     let outcome = specforge_ops::read::trace::trace(&project.view(), Target::Entity("b")).unwrap();
     assert_eq!(
-        outcome.to_human(),
+        plain(outcome).to_human(),
         concat!(
             "b [behavior]\n",
             "  upstream:\n",

@@ -14,6 +14,7 @@ use serde::Serialize;
 use serde_json::{Map, Value, json};
 use specforge_common::Diagnostic;
 pub use specforge_common::shape::{Object, Shape};
+use specforge_ops::Noticed;
 
 use crate::tool::{ErrorCode, McpError, Payload, ToolOutcome};
 
@@ -39,6 +40,13 @@ impl<R> Answer<R> {
     pub fn with_diagnostics(mut self, extra: Vec<Diagnostic>) -> Self {
         self.diagnostics.extend(extra);
         self
+    }
+
+    /// The answer to a read that noticed: its value as the reply, its notices in `_meta.diagnostics` (ADR 0111 D2,
+    /// ADR 0130).
+    pub fn noticed(read: Noticed<R>) -> Self {
+        let (reply, notices) = read.into_value_and_notices();
+        Answer::new(reply).with_diagnostics(notices)
     }
 
     /// The same answer with `value` under `key` in its `_meta`.
@@ -165,6 +173,21 @@ pub(crate) fn conforming(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use specforge_common::codes;
+
+    #[specforge_test_macros::test(
+        behavior = "compute_schema_version",
+        verify = "every reader of the schema reports the notices export reports for the same record"
+    )]
+    fn a_noticed_read_answers_with_its_notices() {
+        let i016 = Diagnostic::new(codes::I016, "the schema cache could not be read");
+        let read = Noticed::new(Text("x".into()), vec![i016]);
+        let ToolOutcome::Done { diagnostics, .. } = text(Ok(Answer::noticed(read))) else {
+            panic!("a noticed read answers");
+        };
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].code, "I016");
+    }
 
     #[specforge_test_macros::test(
         behavior = "follow_negotiated_mcp_revision",

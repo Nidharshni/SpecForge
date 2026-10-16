@@ -289,7 +289,7 @@ fn without_project_names_the_file_from_the_refusal() {
 }
 
 #[test]
-fn a_projects_containment_is_its_root() {
+fn a_projects_caller_reaches_its_root_and_asks_nobody() {
     let dir = tempfile::TempDir::new().unwrap();
     std::fs::write(
         dir.path().join("specforge.json"),
@@ -304,7 +304,9 @@ fn a_projects_containment_is_its_root() {
     state.serve(&root);
     let served = Call::new(&mut state, CallTarget::Served);
     let project = served.project().unwrap();
-    assert_eq!(project.containment().root(), Some(canonical.as_path()));
+    let caller = project.caller();
+    assert_eq!(caller.containment().root(), Some(canonical.as_path()));
+    assert_eq!(format!("{:?}", caller.asking()), "Nobody");
     drop(project);
 
     // Another project a call names.
@@ -312,5 +314,7 @@ fn a_projects_containment_is_its_root() {
     let session = Box::new(other.open(&root));
     let call = Call::new(&mut other, CallTarget::Other(session));
     let project = call.project().unwrap();
-    assert_eq!(project.containment().root(), Some(canonical.as_path()));
+    let caller = project.caller();
+    assert_eq!(caller.containment().root(), Some(canonical.as_path()));
+    assert_eq!(format!("{:?}", caller.asking()), "Nobody");
 }

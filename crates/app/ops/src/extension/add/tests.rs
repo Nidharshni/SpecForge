@@ -28,18 +28,14 @@ fn project_with(config: &str) -> tempfile::TempDir {
 
 const EMPTY_PROJECT: &str = r#"{"name": "p", "version": "0.1.0", "extensions": []}"#;
 
-/// What a request with no bound carries.
-static UNBOUNDED: crate::Containment = crate::Containment::unbounded();
-
 fn local_request<'a>(root: &'a specforge_common::ProjectRoot, file: &Path) -> AddRequest<'a> {
     AddRequest {
         root,
         extensions: vec![Source::Local(file.to_path_buf()).into()],
         base: None,
         allow_unsigned: false,
-        asking: Asking::Nobody,
         dry_run: false,
-        containment: &UNBOUNDED,
+        caller: crate::testing::caller(),
     }
 }
 
@@ -57,9 +53,8 @@ fn add_greet(root: &Path, registry: &MemoryRegistry) -> Result<AddOutcome, Refus
             ],
             base: None,
             allow_unsigned: true,
-            asking: Asking::Nobody,
             dry_run: false,
-            containment: &UNBOUNDED,
+            caller: crate::testing::caller(),
         },
         registry,
         &runtime(),
@@ -85,9 +80,8 @@ fn several(
         extensions,
         base: None,
         allow_unsigned: true,
-        asking: Asking::Nobody,
         dry_run,
-        containment: &UNBOUNDED,
+        caller: crate::testing::caller(),
     }
 }
 

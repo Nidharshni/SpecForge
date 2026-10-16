@@ -10,7 +10,7 @@
 //! afterwards with `specforge add`.
 
 use crate::extension::{self, Also, Ask, Candidate, LockPlan, Named, Names, Place};
-use crate::{Containment, Held, OpError, OpErrorKind, Refusal, Writes};
+use crate::{Caller, Containment, Held, OpError, OpErrorKind, Refusal, Writes};
 use serde::Serialize;
 use serde_json::{Value, json};
 use specforge_common::shape::Shape;
@@ -68,9 +68,9 @@ pub struct Request<'a> {
     /// Extension specifiers, one per string (nothing splits a string); a relative local path is
     /// read from `dir`.
     pub extensions: &'a [String],
-    /// The bound local extensions are read in (ADR 0104): the CLI passes
-    /// [`Containment::unbounded`], MCP its request's bound.
-    pub containment: &'a Containment,
+    /// What the init may reach: a local extension is read, every file written, through
+    /// `caller.containment()` (ADR 0104). Init asks nobody.
+    pub caller: Caller<'a>,
 }
 
 /// What init wrote.
@@ -171,7 +171,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
         Place {
             root: req.dir,
             base: req.dir,
-            containment: req.containment,
+            containment: req.caller.containment(),
         },
     )
     .map_err(about)?;
@@ -202,7 +202,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     // enabling software enables it too; the project's test runners get the extensions that
     // collect their results.
     plan.accompany("@specforge/software", "@specforge/testing");
-    for runner in detected_runners(req.dir, &req.containment.narrowed(req.dir)) {
+    for runner in detected_runners(req.dir, &req.caller.containment().narrowed(req.dir)) {
         plan.accompany("@specforge/testing", runner);
     }
     let checked = plan.check().map_err(|refused| {
@@ -266,7 +266,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
             }),
         },
     ];
-    let done = checked.finish(dir, files, &req.containment.narrowed(dir))?;
+    let done = checked.finish(dir, files, &req.caller.containment().narrowed(dir))?;
 
     Ok(Outcome {
         root: dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf()),
@@ -456,15 +456,13 @@ mod tests {
         (scratch, extensions, dir)
     }
 
-    static UNBOUNDED: Containment = Containment::unbounded();
-
     fn request<'a>(dir: &'a Path, extensions: &'a [String]) -> Request<'a> {
         Request {
             dir,
             name: Some("demo"),
             version: DEFAULT_VERSION,
             extensions,
-            containment: &UNBOUNDED,
+            caller: crate::testing::caller(),
         }
     }
 
@@ -556,7 +554,7 @@ mod tests {
                 name,
                 version: DEFAULT_VERSION,
                 extensions,
-                containment: &crate::Containment::unbounded(),
+                caller: crate::testing::caller(),
             };
             let refusal = init(&request, &runtime()).unwrap_err();
             (refusal.error.code.to_string(), refusal.subject)

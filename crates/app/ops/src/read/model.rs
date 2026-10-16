@@ -10,23 +10,12 @@ pub use specforge_emitter::outline::{
     DependencyDepth, OutlineDetail, OutlineFormat, OutlineOptions,
 };
 
-use specforge_common::{Diagnostic, find_close_match};
+use specforge_common::find_close_match;
 use specforge_protocol_types::ExtensionDeclaration;
 
 use crate::options::{Choice, OptionTable};
 use crate::view::ProjectView;
-use crate::{OpError, OpErrorKind, Refusal};
-
-/// What `specforge model` and `specforge.model` show.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ModelOutcome {
-    /// The model, drawn in the requested format.
-    pub document: String,
-    /// What versioning the schema reported (I016, W053; ADR 0111), then I020
-    /// for each kind of `ModelOptions::kinds` the project does not know
-    /// (ADR 0015 Q3); the filter still drops it.
-    pub notices: Vec<Diagnostic>,
-}
+use crate::{Noticed, OpError, OpErrorKind, Refusal};
 
 /// The field of a model request a refusal can be about (ADR 0072).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,7 +47,11 @@ pub fn root(
     }
 }
 
-/// The logical data model of the view's extensions, as `options` asks.
+/// The logical data model of the view's extensions, as `options` asks, drawn
+/// in the requested format. Its notices are what versioning the schema
+/// reported (I016, W053; ADR 0111), then I020 for each kind of
+/// `ModelOptions::kinds` the project does not know (ADR 0015 Q3); the filter
+/// still drops it.
 ///
 /// Err:
 /// - `extension_not_found` (`ExtensionNotFound`) when `options.extension`
@@ -70,7 +63,7 @@ pub fn root(
 pub fn model(
     view: &ProjectView,
     options: &ModelOptions,
-) -> Result<ModelOutcome, Refusal<ModelField>> {
+) -> Result<Noticed<String>, Refusal<ModelField>> {
     let declarations = view.registries().declarations();
     if let Some(extension) = &options.extension {
         loaded(declarations, extension).map_err(|error| error.about(ModelField::Extension))?;
@@ -83,12 +76,11 @@ pub fn model(
     }
     let filter: Vec<&str> = options.kinds.iter().map(String::as_str).collect();
     let versioned = view.versioned_schema();
-    let mut notices = versioned.notices();
-    notices.extend(kinds.unknown_in(&filter));
-    Ok(ModelOutcome {
-        notices,
-        document: specforge_emitter::model::export(versioned.schema(), declarations, options),
-    })
+    Ok(Noticed::new(
+        specforge_emitter::model::export(versioned.schema(), declarations, options),
+        versioned.notices(),
+    )
+    .and_notices(kinds.unknown_in(&filter)))
 }
 
 /// `Ok` when an extension the project loads is named `name`; else

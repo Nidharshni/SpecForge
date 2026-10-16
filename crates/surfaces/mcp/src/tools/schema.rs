@@ -57,8 +57,10 @@ impl CoreTool for Tool {
             edges: args.include_edges,
             validation_rules: args.include_validation_rules,
         };
-        let outcome =
-            specforge_ops::read::schema::schema(&view, &request).map_err(Self::refused)?;
-        Ok(Answer::new(outcome.document()).with_diagnostics(outcome.notices))
+        Ok(Answer::noticed(
+            specforge_ops::read::schema::schema(&view, &request)
+                .map_err(Self::refused)?
+                .map(|outcome| outcome.document()),
+        ))
     }
 }

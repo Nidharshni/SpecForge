@@ -49,11 +49,15 @@ impl Args {
         };
         let view = ProjectView::of(&project);
         match explore(&view, &self.request()) {
-            Ok(exploration) => {
-                Notes::new(terminal, format).carried(&exploration.notices);
+            Ok(explored) => {
+                // The JSON document carries the notices; under human output they go beside it.
                 match format {
-                    OutputFormat::Json => terminal.json(&exploration.document()),
-                    OutputFormat::Human => print_human(&exploration, &view, terminal),
+                    OutputFormat::Json => terminal.json(&explored.document()),
+                    OutputFormat::Human => print_human(
+                        &Notes::new(terminal, format).noticed(explored),
+                        &view,
+                        terminal,
+                    ),
                 }
                 Exit::Passed
             }

@@ -114,12 +114,11 @@ impl CoreTool for Tool {
 
         // With out_dir the rendering lands on disk; without it, inline.
         let Some(out_dir) = args.out_dir.as_deref() else {
-            return Ok(Answer::new(Reply {
+            return Ok(Answer::noticed(exported.map(|document| Reply {
                 format: name.to_string(),
-                output: Some(exported.document),
+                output: Some(document),
                 output_files: Vec::new(),
-            })
-            .with_diagnostics(exported.notices));
+            })));
         };
         // Inside the call's project, as every path a request names is
         // (ADR 0092); with no project served there is nothing to be inside.
@@ -146,20 +145,21 @@ impl CoreTool for Tool {
         let held = bound
             .resolve(&path)
             .map_err(|outside| Box::new(containment::refusal(&outside, "out_dir")))?;
-        let written = held
-            .create_parent()
-            .and_then(|()| held.write(exported.document));
-        if let Err(e) = written {
-            return Err(Box::new(McpError::new(
-                ErrorCode::InternalError,
-                format!("failed to write {}: {e}", path.display()),
-            )));
-        }
-        Ok(Answer::new(Reply {
-            format: name.to_string(),
-            output: None,
-            output_files: vec![ProjectPath::of(root, &path)],
-        })
-        .with_diagnostics(exported.notices))
+        let reply = exported.try_map(|document| -> Result<Reply, Box<McpError>> {
+            held.create_parent()
+                .and_then(|()| held.write(document))
+                .map_err(|e| {
+                    Box::new(McpError::new(
+                        ErrorCode::InternalError,
+                        format!("failed to write {}: {e}", path.display()),
+                    ))
+                })?;
+            Ok(Reply {
+                format: name.to_string(),
+                output: None,
+                output_files: vec![ProjectPath::of(root, &path)],
+            })
+        })?;
+        Ok(Answer::noticed(reply))
     }
 }

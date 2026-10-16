@@ -30,7 +30,7 @@ use runner::run;
 
 use crate::asking::{Asking, Question};
 use crate::view::ProjectView;
-use crate::{Containment, Held, OpError, OpErrorKind, Refusal};
+use crate::{Caller, Held, OpError, OpErrorKind, Refusal};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{Code, Diagnostic, DiagnosticList, ProjectPath, codes};
@@ -59,15 +59,14 @@ pub struct Request<'a> {
     /// Collector name or extension; detected from project files when absent.
     pub runner: Option<&'a str>,
     pub mode: Mode<'a>,
-    /// Who can be asked whether a collector's command may run; the consent store is read first
-    /// (ADR 0110).
-    pub asking: Asking<'a>,
     /// Told just before a collector's command runs.
     pub announce: &'a mut dyn FnMut(&Collector, &[String]),
-    /// What every file the collect reads or writes must land inside (ADR 0104 D3, ADR 0112 D2):
-    /// the report, a collector's report files and its captured output. A name that lands outside
-    /// is refused before any command runs.
-    pub containment: &'a Containment,
+    /// What the collect may reach and who can be asked. Every file it reads or writes must land
+    /// inside `caller.containment()` (ADR 0104 D3, ADR 0112 D2): the report, a collector's
+    /// report files and its captured output; a name that lands outside is refused before any
+    /// command runs. `caller.asking()` decides whether a collector's command may run; the consent
+    /// store is read first (ADR 0110).
+    pub caller: Caller<'a>,
 }
 
 /// Whether `collector`'s command `argv` may run in `root`, with the approvals in `store`: `--yes`
@@ -185,10 +184,10 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, Refusal<
     let Request {
         runner,
         mode,
-        asking,
         announce,
-        containment,
+        caller,
     } = request;
+    let (asking, containment) = (caller.asking(), caller.containment());
     let known = &KnownEntities::of(view.entities());
     let available = collectors(view.registries().declarations());
     let parse_only = !matches!(mode, Mode::Run(_));

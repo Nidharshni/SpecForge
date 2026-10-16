@@ -58,9 +58,9 @@ impl Args {
             Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
         };
         match query(&ProjectView::of(&project), &self.request()) {
-            Ok(outcome) => {
-                Notes::new(terminal, OutputFormat::Human).beside(&outcome.notices);
-                outln!(terminal, "{}", outcome.document);
+            Ok(document) => {
+                let document = Notes::new(terminal, OutputFormat::Human).noticed(document);
+                outln!(terminal, "{}", document);
                 Exit::Passed
             }
             Err(error) => Refusal::of(OutputFormat::Human).report(terminal, &error),

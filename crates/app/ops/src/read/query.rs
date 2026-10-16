@@ -6,15 +6,14 @@
 //! kinds the project does not know (I020) and still drops them.
 
 use serde_json::{Map, Value, json};
-use specforge_common::Diagnostic;
 use specforge_graph::Node;
 
-use crate::Refusal;
 use crate::read::export::{self, AGENT_FORMAT, ExportField, FORMAT, Format, Schema};
 use crate::read::navigate::{
     EntityMatch, EntityQuery, MatchScope, MatchedOn, find_entities, snippet,
 };
 use crate::view::ProjectView;
+use crate::{Noticed, Refusal};
 
 /// Hops from the queried entity when a query names none: its direct
 /// neighbours. `specforge query --depth` and `specforge.query`'s `depth`
@@ -53,28 +52,20 @@ pub struct QueryRequest<'a> {
     pub include_coverage: bool,
 }
 
-/// What a query answers.
-#[derive(Debug, Clone, PartialEq)]
-pub struct QueryOutcome {
-    /// The export of the entity's subgraph (`export::export` of the scoped
-    /// request under the export schema policy: a graph-format query
-    /// references the published schema, Graph Protocol 2.0); with
-    /// `include_coverage`, each node carrying its `coverage_status`, written
-    /// by the export.
-    pub document: String,
-    /// What versioning the schema reported (ADR 0111), then I020 for each
-    /// kind of the filter the project does not know.
-    pub notices: Vec<Diagnostic>,
-}
-
-/// The query `request` over the view. An entity the graph lacks is
+/// The query `request` over the view: the export of the entity's subgraph
+/// (`export::export` of the scoped request under the export schema policy: a
+/// graph-format query references the published schema, Graph Protocol 2.0);
+/// with `include_coverage`, each node carrying its `coverage_status`, written
+/// by the export. Its notices are what versioning the schema reported
+/// (ADR 0111), then I020 for each kind of the filter the project does not
+/// know. An entity the graph lacks is
 /// [`crate::view::not_found`] (E003, did-you-mean), refused before the
 /// recorded report is read; a recorded report that cannot be read, when
 /// coverage is asked for, is its E045 failure.
 pub fn query(
     view: &ProjectView,
     request: &QueryRequest,
-) -> Result<QueryOutcome, Refusal<QueryField>> {
+) -> Result<Noticed<String>, Refusal<QueryField>> {
     let format = request
         .format
         .or(AGENT_FORMAT.default)
@@ -117,12 +108,7 @@ pub fn query(
             | ExportField::Schema => None,
         })
     })?;
-    let mut notices = exported.notices;
-    notices.extend(unknown);
-    Ok(QueryOutcome {
-        document: exported.document,
-        notices,
-    })
+    Ok(exported.and_notices(unknown))
 }
 
 /// The JSON Schema of the document [`query`] answers: the export document of
@@ -153,15 +139,9 @@ pub struct ListRequest<'a> {
     pub limit: Option<usize>,
 }
 
-/// What a listing answers: the entities sorted by id, paged.
-#[derive(Debug, Clone)]
-pub struct Listing<'v> {
-    pub entities: Vec<&'v Node>,
-    pub notices: Vec<Diagnostic>,
-}
-
-/// The entities `request` selects, sorted by id and paged.
-pub fn list<'v>(view: &ProjectView<'v>, request: &ListRequest) -> Listing<'v> {
+/// The entities `request` selects, sorted by id and paged, with I020 for a
+/// kind the project does not know.
+pub fn list<'v>(view: &ProjectView<'v>, request: &ListRequest) -> Noticed<Vec<&'v Node>> {
     let kind = request.kind.filter(|kind| !kind.is_empty());
     let notices = kind
         .map(|kind| view.kinds().unknown_in(&[kind]))
@@ -175,7 +155,7 @@ pub fn list<'v>(view: &ProjectView<'v>, request: &ListRequest) -> Listing<'v> {
         .skip(request.offset)
         .take(request.limit.unwrap_or(usize::MAX))
         .collect();
-    Listing { entities, notices }
+    Noticed::new(entities, notices)
 }
 
 /// Whether every field of `wanted` is one `node` holds, with that value.
@@ -221,16 +201,9 @@ pub struct Hit<'v> {
     pub snippet: Option<String>,
 }
 
-/// What a search answers.
-#[derive(Debug, Clone)]
-pub struct SearchOutcome<'v> {
-    /// Best first, at most the limit.
-    pub hits: Vec<Hit<'v>>,
-    pub notices: Vec<Diagnostic>,
-}
-
-/// The entities `request` finds.
-pub fn search<'v>(view: &ProjectView<'v>, request: &SearchRequest) -> SearchOutcome<'v> {
+/// The entities `request` finds, best first, at most the limit, with I020
+/// for a kind of the filter the project does not know.
+pub fn search<'v>(view: &ProjectView<'v>, request: &SearchRequest) -> Noticed<Vec<Hit<'v>>> {
     let notices = view.kinds().unknown_in(&request.kinds);
     let query = EntityQuery {
         text: request.text,
@@ -250,5 +223,5 @@ pub fn search<'v>(view: &ProjectView<'v>, request: &SearchRequest) -> SearchOutc
             Hit { found, snippet }
         })
         .collect();
-    SearchOutcome { hits, notices }
+    Noticed::new(hits, notices)
 }

@@ -12,8 +12,7 @@
 use crate::options::{Choice, OptionTable};
 use crate::schema_version::{NotAdmitted, VersionedSchema};
 use crate::view::{ProjectView, not_found};
-use crate::{OpError, OpErrorKind, Refusal};
-use specforge_common::Diagnostic;
+use crate::{Noticed, OpError, OpErrorKind, Refusal};
 use specforge_emitter::{EmitFormat, EmitOptions, EmitterError, SchemaVersion, emit};
 use specforge_project::coverage::ProjectCoverage;
 use std::path::PathBuf;
@@ -182,24 +181,18 @@ pub enum ExportField {
     Schema,
 }
 
-/// A read-only export: the document, and what versioning its schema reported
-/// against the view root's record (I016, W053; ADR 0111), whatever the format.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Exported {
-    pub document: String,
-    pub notices: Vec<Diagnostic>,
-}
-
-/// The export of the view's project for `request`. A schema it carries is
-/// the view's versioned schema (`specforge export`'s version, computed
-/// against the root's schema cache, which this only reads).
-pub fn export(view: &ProjectView, request: &Request) -> Result<Exported, Refusal<ExportField>> {
+/// The export of the view's project for `request`, with what versioning its
+/// schema reported against the view root's record (I016, W053; ADR 0111),
+/// whatever the format. A schema it carries is the view's versioned schema
+/// (`specforge export`'s version, computed against the root's schema cache,
+/// which this only reads).
+pub fn export(
+    view: &ProjectView,
+    request: &Request,
+) -> Result<Noticed<String>, Refusal<ExportField>> {
     let versioned = view.versioned_schema();
     let document = export_versioned(view, &versioned, request)?;
-    Ok(Exported {
-        document,
-        notices: versioned.notices(),
-    })
+    Ok(Noticed::new(document, versioned.notices()))
 }
 
 fn export_versioned(
@@ -250,13 +243,12 @@ fn export_versioned(
     emit(view.graph(), &options).map_err(|error| failure(view, error))
 }
 
-/// What `specforge export` did: the export, what versioning reports against
-/// the view root's record (I016, W053; found before the export ran, and
-/// reported even when the export fails), and what became of the record.
+/// What `specforge export` did: the export, and what became of the record.
+/// Its notices (what versioning reports against the view root's record: I016,
+/// W053) are found before the export ran, and reported even when it fails.
 #[derive(Debug)]
 pub struct RecordedExport {
     pub export: Result<String, Refusal<ExportField>>,
-    pub notices: Vec<Diagnostic>,
     pub cache: CacheWrite,
 }
 
@@ -277,7 +269,7 @@ pub enum CacheWrite {
 /// the extensions produce with the cache at the view's root, export it
 /// carrying the cached version bumped by what changed, and record it after
 /// a successful export. MCP never calls it.
-pub fn export_recorded(view: &ProjectView, request: &Request) -> RecordedExport {
+pub fn export_recorded(view: &ProjectView, request: &Request) -> Noticed<RecordedExport> {
     let versioned = view.versioned_schema();
     let notices = versioned.notices();
     let export = export_versioned(view, &versioned, request);
@@ -291,11 +283,7 @@ pub fn export_recorded(view: &ProjectView, request: &Request) -> RecordedExport 
         },
         _ => CacheWrite::NotWritten,
     };
-    RecordedExport {
-        export,
-        notices,
-        cache,
-    }
+    Noticed::new(RecordedExport { export, cache }, notices)
 }
 
 /// The emitter's failure as the operation's: the kind by variant, the code

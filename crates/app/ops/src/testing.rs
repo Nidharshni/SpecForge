@@ -19,8 +19,23 @@ use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
 use specforge_protocol_types::PeerDependency;
 use specforge_wasm::testing::InProcessRuntime;
 
+use crate::asking::Asking;
 use crate::solver::{Availability, SolveFailure, Solver, Z3};
 use crate::view::ProjectView;
+use crate::{Caller, Containment};
+
+/// Every path, for the fixtures below (ADR 0092 D6: the CLI's reach).
+static UNBOUNDED: Containment = Containment::unbounded();
+
+/// The caller most tests lend: every path, nobody to ask (the CLI's reach without a terminal).
+pub fn caller() -> Caller<'static> {
+    Caller::new(&UNBOUNDED, Asking::Nobody)
+}
+
+/// A caller bounded by `containment`, nobody to ask (MCP's).
+pub fn bounded(containment: &Containment) -> Caller<'_> {
+    Caller::new(containment, Asking::Nobody)
+}
 
 #[path = "../../../../fixtures/greet-extension/src/contributions.rs"]
 mod greet;

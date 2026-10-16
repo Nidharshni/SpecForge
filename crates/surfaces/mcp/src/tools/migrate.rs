@@ -81,7 +81,7 @@ impl CoreTool for Tool {
             target,
             dry_run,
             no_backup,
-            containment: project.containment(),
+            caller: project.caller(),
         };
         let outcome = specforge_ops::authoring::migrate::run(&request, Some(runtime.clone()))?;
         // A failed run's report rides in `data`, and what it left written (its

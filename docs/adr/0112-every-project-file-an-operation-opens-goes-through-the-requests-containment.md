@@ -1,7 +1,7 @@
 # Every project file an operation opens goes through the request's containment
 
 **Status:** accepted (2026-10-16, architecture round 12, plan 01). Amends ADR 0104 D2, ADR 0092 (the audit table and D2)
-and ADR 0029 D8.
+and ADR 0029 D8. D2 (collect's request and `SessionRequest`) and D4 (`ProjectRef::caller`) amended by [ADR 0124](0124-what-the-caller-lends-an-operation-is-one-value.md); its Rejected line stands.
 
 ADR 0104 applied containment at an enumerated list of sites, so every reader or writer of a project file left off the
 list still opened the file by name, through whatever symlink was there. Eight commits in three days (`4a75cee8`,

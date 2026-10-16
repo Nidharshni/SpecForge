@@ -99,9 +99,8 @@ impl Args {
         // earlier exports, and `.specforge/` holds extensions and the watch
         // snapshot too, so nothing here shows the project was exported
         // before.
-        let recorded = export::export_recorded(&view, &request);
         let notes = Notes::new(terminal, OutputFormat::Human);
-        notes.beside(&recorded.notices);
+        let recorded = notes.noticed(export::export_recorded(&view, &request));
         let output = match recorded.export {
             Ok(output) => output,
             Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
@@ -174,21 +173,22 @@ impl SchemaArgs {
         let view = ProjectView::of(&project);
         let output = if self.publish {
             specforge_ops::read::schema::json_schema(&view, self.format).map(|published| {
-                let text = serde_json::to_string_pretty(&published.schema)
-                    .expect("a published schema serializes");
-                (text, published.notices)
+                published.map(|schema| {
+                    serde_json::to_string_pretty(&schema).expect("a published schema serializes")
+                })
             })
         } else {
             specforge_ops::read::schema::schema(&view, &self.request())
                 .map(|outcome| {
-                    let text = serde_json::to_string_pretty(&outcome).expect("a schema serializes");
-                    (text, outcome.notices)
+                    outcome.map(|outcome| {
+                        serde_json::to_string_pretty(&outcome).expect("a schema serializes")
+                    })
                 })
                 .map_err(specforge_ops::Refusal::into_error)
         };
         match output {
-            Ok((text, notices)) => {
-                Notes::new(terminal, OutputFormat::Human).beside(&notices);
+            Ok(text) => {
+                let text = Notes::new(terminal, OutputFormat::Human).noticed(text);
                 outln!(terminal, "{text}");
                 Exit::Passed
             }

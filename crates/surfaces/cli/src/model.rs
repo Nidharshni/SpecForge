@@ -81,9 +81,9 @@ impl Args {
             Err(refusal) => return Refusal::of(OutputFormat::Human).report(terminal, &refusal),
         };
         match specforge_ops::read::model::model(&ProjectView::of(&project), &options) {
-            Ok(outcome) => {
-                Notes::new(terminal, OutputFormat::Human).beside(&outcome.notices);
-                out!(terminal, "{}", outcome.document);
+            Ok(document) => {
+                let document = Notes::new(terminal, OutputFormat::Human).noticed(document);
+                out!(terminal, "{}", document);
                 Exit::Passed
             }
             Err(error) => Refusal::of(OutputFormat::Human).report(terminal, &error),

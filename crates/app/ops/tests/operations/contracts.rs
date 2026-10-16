@@ -1,4 +1,4 @@
-use crate::view_support::{Assembled, Viewed};
+use crate::view_support::{Assembled, Viewed, plain};
 use specforge_common::{Diagnostic, Severity, SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
 use specforge_ops::read::plan::PlanGapKind;
@@ -183,7 +183,7 @@ fn trace_contract_entity_in_graph_produces_chain() {
         specforge_ops::read::trace::Target::Entity("c"),
     )
     .unwrap();
-    let json = serde_json::to_value(&outcome).unwrap();
+    let json = serde_json::to_value(plain(outcome)).unwrap();
     assert_eq!(json["schema_version"], "1.0.0");
     assert_eq!(json["missing"][0]["status"], "missing");
     assert_eq!(json["upstream"][0]["status"], "resolved");

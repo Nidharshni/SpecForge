@@ -95,7 +95,7 @@ impl CoreTool for Tool {
             &project.view(),
             &infer::SessionRequest {
                 step,
-                containment: project.containment(),
+                caller: project.caller(),
             },
         )
         .map_err(Self::failed)?;

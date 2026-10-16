@@ -70,7 +70,10 @@ impl CoreTool for Tool {
             coverage: None,
         };
 
-        let exported = export::export(&view, &request).map_err(Self::refused)?;
-        Ok(Answer::new(Text(exported.document)).with_diagnostics(exported.notices))
+        Ok(Answer::noticed(
+            export::export(&view, &request)
+                .map_err(Self::refused)?
+                .map(Text),
+        ))
     }
 }

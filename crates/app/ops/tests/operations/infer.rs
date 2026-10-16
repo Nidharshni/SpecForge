@@ -131,7 +131,7 @@ fn step(
         &project.view(),
         &infer::SessionRequest {
             step,
-            containment: &specforge_ops::Containment::unbounded(),
+            caller: specforge_ops::testing::caller(),
         },
     )
 }
@@ -353,7 +353,7 @@ fn a_rootless_view_is_no_project() {
                 agent: None,
                 source_roots: None,
             },
-            containment: &specforge_ops::Containment::unbounded(),
+            caller: specforge_ops::testing::caller(),
         },
     )
     .unwrap_err();
@@ -501,7 +501,9 @@ fn a_bounded_session_refuses_a_manifest_that_leaves_the_project() {
                 agent: None,
                 source_roots: None,
             },
-            containment: &specforge_ops::Containment::within(project.root()),
+            caller: specforge_ops::testing::bounded(&specforge_ops::Containment::within(
+                project.root(),
+            )),
         },
     )
     .unwrap_err();

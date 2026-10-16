@@ -127,7 +127,6 @@ fn cargo_test_reports_plain_tests_as_unlinked() {
 )]
 fn collect_maps_results_to_the_views_entities() {
     use specforge_ops::analysis::collect::{Mode, Request, collect};
-    use specforge_ops::asking::Asking;
     use specforge_ops::view::ProjectView;
 
     let runtime: specforge_project::SharedRuntime = std::sync::Arc::new(wasm_runtime_for(&[
@@ -170,9 +169,8 @@ fn collect_maps_results_to_the_views_entities() {
         Request {
             runner: Some("cargo-test"),
             mode: Mode::Reports(&reports),
-            asking: Asking::Nobody,
             announce: &mut |_, _| panic!("nothing runs when reading reports"),
-            containment: &specforge_ops::Containment::unbounded(),
+            caller: specforge_ops::testing::caller(),
         },
     )
     .unwrap();

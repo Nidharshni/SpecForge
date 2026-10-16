@@ -3,7 +3,8 @@ use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use specforge_common::shape::Shape;
-use specforge_ops::read::query::{ListRequest, Listing, list};
+use specforge_graph::Node;
+use specforge_ops::read::query::{ListRequest, list};
 
 use crate::args::Arguments;
 use crate::reply::{Answer, Answered};
@@ -41,9 +42,8 @@ pub struct Listed {
 
 /// The rows of a listing: the one presenter of it, the tool's and
 /// `specforge://entities/{kind}`'s (which answers the bare array).
-pub(crate) fn rows(listing: &Listing) -> Vec<Listed> {
-    listing
-        .entities
+pub(crate) fn rows(entities: &[&Node]) -> Vec<Listed> {
+    entities
         .iter()
         .map(|node| Listed {
             id: node.id.raw.to_string(),
@@ -80,10 +80,10 @@ impl CoreTool for Tool {
             offset: args.offset.unwrap_or(0),
             limit: args.limit,
         };
-        let listing = list(&view, &request);
-        Ok(Answer::new(Reply {
-            entities: rows(&listing),
-        })
-        .with_diagnostics(listing.notices))
+        Ok(Answer::noticed(list(&view, &request).map(|entities| {
+            Reply {
+                entities: rows(&entities),
+            }
+        })))
     }
 }

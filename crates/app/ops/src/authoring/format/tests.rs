@@ -23,14 +23,12 @@ fn project() -> tempfile::TempDir {
     dir
 }
 
-static UNBOUNDED: crate::Containment = crate::Containment::unbounded();
-
 fn request(root: &ProjectRoot, mode: Mode) -> Request<'_> {
     Request {
         root,
         paths: &[],
         mode,
-        containment: &UNBOUNDED,
+        caller: crate::testing::caller(),
     }
 }
 
@@ -74,7 +72,7 @@ fn check_paths(root: &Path, paths: &[&str]) -> Outcome {
         root: &specforge_common::ProjectRoot::of(root).unwrap(),
         paths: &paths,
         mode: Mode::Check,
-        containment: &crate::Containment::unbounded(),
+        caller: crate::testing::caller(),
     })
 }
 

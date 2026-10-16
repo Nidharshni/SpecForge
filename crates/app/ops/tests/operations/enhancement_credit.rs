@@ -49,7 +49,8 @@ fn the_model_names_the_extension_that_added_a_field() {
         ..ModelOptions::default()
     };
     let outcome = model(&ProjectView::of(&compiled), &options).expect("no refusal");
-    let json: Value = serde_json::from_str(&outcome.document).expect("the json model parses");
+    let json: Value =
+        serde_json::from_str(&outcome.into_value_and_notices().0).expect("the json model parses");
     let module = json["entities"]
         .as_array()
         .unwrap()

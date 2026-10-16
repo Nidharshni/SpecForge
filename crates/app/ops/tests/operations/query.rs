@@ -12,7 +12,7 @@ use specforge_ops::read::query::{
 use specforge_ops::read::{export::Format, schema::json_schema};
 use specforge_test::prelude::*;
 
-use crate::view_support::{Assembled, Viewed, registries};
+use crate::view_support::{Assembled, Viewed, plain, registries};
 
 fn node(id: &str, kind: &str) -> Node {
     Node {
@@ -64,7 +64,7 @@ fn document(project: &Assembled, entity: &str, depth: usize, kinds: &[&str]) -> 
         },
     )
     .unwrap();
-    serde_json::from_str(&outcome.document).unwrap()
+    serde_json::from_str(&outcome.into_value_and_notices().0).unwrap()
 }
 
 fn ids(document: &Value) -> Vec<&str> {
@@ -100,7 +100,7 @@ fn depth_1_returns_direct_neighbors() {
         },
     )
     .unwrap();
-    let default: Value = serde_json::from_str(&outcome.document).unwrap();
+    let default: Value = serde_json::from_str(&outcome.into_value_and_notices().0).unwrap();
     assert_eq!(default, document(&project, "b", 1, &[]));
 }
 
@@ -241,7 +241,7 @@ fn query_reports_an_unknown_kind() {
         },
     )
     .unwrap();
-    let notice = &outcome.notices[0];
+    let notice = &outcome.notices()[0];
     assert_eq!(notice.code, "I020");
     assert_eq!(notice.message, "unknown entity kind 'behaviour'");
     assert_eq!(
@@ -249,7 +249,7 @@ fn query_reports_an_unknown_kind() {
         Some("did you mean 'behavior'?")
     );
     // The filter still drops the unknown kind: the root alone remains.
-    let document: Value = serde_json::from_str(&outcome.document).unwrap();
+    let document: Value = serde_json::from_str(&outcome.into_value_and_notices().0).unwrap();
     assert_eq!(ids(&document), ["login"]);
 }
 
@@ -271,7 +271,7 @@ fn query_with_coverage_marks_each_node() {
             },
         )
         .unwrap();
-        let document: Value = serde_json::from_str(&outcome.document).unwrap();
+        let document: Value = serde_json::from_str(&outcome.into_value_and_notices().0).unwrap();
         document["nodes"][0]["coverage_status"].clone()
     };
     assert_eq!(status("login", true), "covered");
@@ -300,8 +300,8 @@ fn queried(project: &Assembled, entity: &str, format: Format, include_coverage: 
             ..QueryRequest::default()
         },
     )
+    .map(|read| read.into_value_and_notices().0)
     .unwrap()
-    .document
 }
 
 #[specforge_test(
@@ -312,7 +312,7 @@ fn a_query_with_coverage_conforms_to_the_published_schema() {
     use specforge_common::shape::{unchecked_keywords, violations};
     let project = covered();
     for format in [Format::Graph, Format::Context, Format::Brief] {
-        let published = json_schema(&project.view(), format).unwrap().schema;
+        let published = plain(json_schema(&project.view(), format).unwrap());
         assert!(unchecked_keywords(&published).is_empty(), "{format:?}");
         let document: Value =
             serde_json::from_str(&queried(&project, "login", format, true)).unwrap();
@@ -398,8 +398,7 @@ fn behaviors() -> Assembled {
 }
 
 fn listed(project: &Assembled, request: &ListRequest) -> Vec<String> {
-    list(&project.view(), request)
-        .entities
+    plain(list(&project.view(), request))
         .iter()
         .map(|n| n.id.raw.to_string())
         .collect()
@@ -471,11 +470,12 @@ fn list_reports_an_unknown_kind() {
             ..ListRequest::default()
         },
     );
-    assert!(listing.entities.is_empty());
-    assert_eq!(listing.notices.len(), 1);
-    assert_eq!(listing.notices[0].code, "I020");
+    let (entities, notices) = listing.into_value_and_notices();
+    assert!(entities.is_empty());
+    assert_eq!(notices.len(), 1);
+    assert_eq!(notices[0].code, "I020");
     assert_eq!(
-        listing.notices[0].suggestion.as_deref(),
+        notices[0].suggestion.as_deref(),
         Some("did you mean 'behavior'?")
     );
 }
@@ -491,15 +491,14 @@ fn search_defaults_to_twenty() {
     }
     let project = Assembled::over(Default::default()).graph(graph);
     let found = |limit| {
-        search(
+        plain(search(
             &project.view(),
             &SearchRequest {
                 text: "item",
                 limit,
                 ..SearchRequest::default()
             },
-        )
-        .hits
+        ))
         .len()
     };
     assert_eq!(DEFAULT_SEARCH_LIMIT, 20);
@@ -512,7 +511,7 @@ fn search_defaults_to_twenty() {
 fn search_filters_by_a_field_pair_and_snippets_the_match() {
     let project = behaviors();
     let view = project.view();
-    let outcome = search(
+    let hits = plain(search(
         &view,
         &SearchRequest {
             text: "",
@@ -522,9 +521,8 @@ fn search_filters_by_a_field_pair_and_snippets_the_match() {
             }),
             ..SearchRequest::default()
         },
-    );
-    let found: Vec<&str> = outcome
-        .hits
+    ));
+    let found: Vec<&str> = hits
         .iter()
         .map(|hit| hit.found.node.id.raw.as_str())
         .collect();
@@ -539,8 +537,8 @@ fn search_filters_by_a_field_pair_and_snippets_the_match() {
             ..SearchRequest::default()
         },
     );
-    assert_eq!(outcome.notices[0].code, "I020");
-    assert!(outcome.hits.is_empty());
+    assert_eq!(outcome.notices()[0].code, "I020");
+    assert!(plain(outcome).is_empty());
 }
 
 // The contract of query_graph_multi_resolution, over a view: a(feature) ->
@@ -756,8 +754,8 @@ mod compiled {
             },
         )
         .unwrap();
-        let stderr: String = outcome
-            .notices
+        let (document, notices) = outcome.into_value_and_notices();
+        let stderr: String = notices
             .iter()
             .map(|notice| format!("{}\n", specforge_common::render_plain(notice)))
             .collect();
@@ -765,7 +763,7 @@ mod compiled {
             stderr,
             "info[I020]: unknown entity kind 'behaviour'\n  = help: did you mean 'behavior'?\n"
         );
-        let parsed: serde_json::Value = serde_json::from_str(&outcome.document).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&document).unwrap();
         let ids: Vec<&str> = parsed["nodes"]
             .as_array()
             .unwrap()

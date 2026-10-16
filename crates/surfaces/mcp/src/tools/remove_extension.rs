@@ -67,7 +67,7 @@ impl CoreTool for Tool {
             name: &args.name,
             force: args.force,
             dry_run: args.dry_run,
-            containment: project.containment(),
+            caller: project.caller(),
         };
         let outcome =
             specforge_ops::extension::remove(&project.view(), &request).map_err(Self::failed)?;
