@@ -42,6 +42,7 @@ mod project_from_path;
 mod publish;
 mod query;
 mod read_views;
+mod refusal_wire;
 mod registry;
 mod request_pairs;
 mod schema_cache;

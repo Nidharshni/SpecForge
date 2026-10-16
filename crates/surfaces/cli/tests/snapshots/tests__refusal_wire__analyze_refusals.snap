@@ -1,0 +1,130 @@
+---
+source: crates/surfaces/cli/tests/refusal_wire.rs
+expression: out
+---
+$ specforge analyze contrakts
+[exit 2]
+[stdout]
+[stderr]
+error[unknown_pass]: Unknown analysis pass 'contrakts' (available: all, coverage, contracts, @specforge/testing:coverage)
+  hint: did you mean 'contracts'?
+
+$ specforge analyze contrakts --format json
+[exit 2]
+[stdout]
+{
+  "error": "Unknown analysis pass 'contrakts' (available: all, coverage, contracts, @specforge/testing:coverage)",
+  "code": "unknown_pass",
+  "suggestion": "did you mean 'contracts'?"
+}
+[stderr]
+
+$ specforge analyze zzzzzz --format json
+[exit 2]
+[stdout]
+{
+  "error": "Unknown analysis pass 'zzzzzz' (available: all, coverage, contracts, @specforge/testing:coverage)",
+  "code": "unknown_pass"
+}
+[stderr]
+
+$ specforge analyze --min 150
+[exit 2]
+[stdout]
+[stderr]
+error[invalid_min]: min must be a percentage between 0 and 100, got 150
+
+$ specforge analyze --min 150 --format json
+[exit 2]
+[stdout]
+{
+  "error": "min must be a percentage between 0 and 100, got 150",
+  "code": "invalid_min"
+}
+[stderr]
+
+$ specforge analyze --min 50
+[exit 2]
+[stdout]
+[stderr]
+error[E068]: a proof-coverage minimum needs the coverage pass of @specforge/testing (pass coverage or all)
+  hint: enable it with `specforge add @specforge/testing`
+
+$ specforge analyze --min 50 --format json
+[exit 2]
+[stdout]
+{
+  "error": "a proof-coverage minimum needs the coverage pass of @specforge/testing (pass coverage or all)",
+  "code": "E068",
+  "suggestion": "enable it with `specforge add @specforge/testing`"
+}
+[stderr]
+
+$ specforge analyze --min 50
+[exit 2]
+[stdout]
+[stderr]
+error[no_test_results]: --min needs test results: run `specforge collect` or pass --test-results
+
+$ specforge analyze --min 50 --format json
+[exit 2]
+[stdout]
+{
+  "error": "--min needs test results: run `specforge collect` or pass --test-results",
+  "code": "no_test_results"
+}
+[stderr]
+
+$ specforge analyze --test-results none.json
+[exit 2]
+[stdout]
+[stderr]
+error[E045]: cannot read test results none.json: No such file or directory (os error 2)
+  hint: check the path: the named test report does not exist
+
+$ specforge analyze --test-results none.json --format json
+[exit 2]
+[stdout]
+{
+  "error": "cannot read test results none.json: No such file or directory (os error 2)",
+  "code": "E045",
+  "suggestion": "check the path: the named test report does not exist"
+}
+[stderr]
+
+$ specforge analyze --test-results bad.json --format json
+[exit 2]
+[stdout]
+{
+  "error": "invalid test results bad.json: key must be a string at line 1 column 2 (expected the RES-15 specforge-report.json shape)",
+  "code": "E045",
+  "suggestion": "run `specforge collect` again to rewrite the report, or fix or remove the file"
+}
+[stderr]
+
+$ specforge analyze
+[exit 2]
+[stdout]
+[stderr]
+error[E045]: invalid test results <root>/specforge-report.json: key must be a string at line 1 column 2 (expected the RES-15 specforge-report.json shape)
+  hint: run `specforge collect` again to rewrite the report, or fix or remove the file
+
+$ specforge analyze --format json
+[exit 2]
+[stdout]
+{
+  "error": "invalid test results <root>/specforge-report.json: key must be a string at line 1 column 2 (expected the RES-15 specforge-report.json shape)",
+  "code": "E045",
+  "suggestion": "run `specforge collect` again to rewrite the report, or fix or remove the file"
+}
+[stderr]
+
+$ specforge analyze contrakts --min 150 --format json
+[exit 2]
+[stdout]
+{
+  "error": "Unknown analysis pass 'contrakts' (available: all, coverage, contracts, @specforge/testing:coverage)",
+  "code": "unknown_pass",
+  "suggestion": "did you mean 'contracts'?"
+}
+[stderr]
