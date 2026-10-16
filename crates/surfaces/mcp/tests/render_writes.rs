@@ -110,6 +110,41 @@ fn render_into_a_directory_it_cannot_write_is_permission_denied() {
     assert!(!rodir.join("brief.json.tmp").exists());
 }
 
+/// An output file the user may not write is `permission_denied`, and it is left as it was.
+#[cfg(unix)]
+#[test]
+fn render_over_a_read_only_output_file_is_permission_denied() {
+    use std::os::unix::fs::PermissionsExt;
+    let project = plain_project();
+    let out = project.path().join("ro");
+    fs::create_dir_all(&out).unwrap();
+    let file = out.join("brief.json");
+    fs::write(&file, "ORIGINAL").unwrap();
+    fs::set_permissions(&file, fs::Permissions::from_mode(0o444)).unwrap();
+    // A process that may write there anyway (root) cannot show the refusal.
+    if fs::OpenOptions::new().write(true).open(&file).is_ok() {
+        return;
+    }
+    let mut server = serve(project.path());
+
+    let reply = call_tool(
+        &mut server,
+        "specforge.render",
+        json!({"format": "brief", "out_dir": "ro"}),
+    );
+
+    assert_eq!(
+        refusal(&reply),
+        ("permission_denied".to_string(), None),
+        "{reply}"
+    );
+    assert_eq!(fs::read_to_string(&file).unwrap(), "ORIGINAL");
+    assert_eq!(
+        fs::metadata(&file).unwrap().permissions().mode() & 0o777,
+        0o444
+    );
+}
+
 /// An `out_dir` that is, or goes through, a file is invalid input about `out_dir`.
 #[specforge_test(
     behavior = "provide_mcp_render_tool",
