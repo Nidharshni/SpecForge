@@ -606,6 +606,13 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   ended as completed or paused; at most one is active (`SessionStatus`). Its steps (start, mark a
   source file analyzed, end) are one management operation, `specforge_ops::read::infer::session`; MCP's
   `specforge.infer_session` is its adapter.
+- **Inference sources**: the files inference covers: under the inference manifest's source roots (the project
+  root when none), each file an enabled analyzer claims by its extension, keyed by the source path rule
+  (root-relative, `/`-separated, no `..`). They are walked by the shared discovery policy
+  (`specforge_common::walk_files`): no symlinked directory, no hidden name, no nested project, and the default
+  skipped directories united with any analyzer's `excluded_dirs`. A source root, a file or an indexed path that lands
+  outside the project root is none of them and is never read. Progress, gaps, the `inferred` lint and the mark read
+  them through one module (`specforge_ops::read::infer::sources`, ADR 0113).
 - **Anchors manifest**: `<root>/specforge-anchors.json`, which source item each entity is anchored
   to. Navigation reads it (`specforge_ops::read::navigate::source_anchors`): the anchors of a source file
   and of an entity; E071 when it cannot be used.
