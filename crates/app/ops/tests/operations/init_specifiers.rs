@@ -219,3 +219,48 @@ fn init_reads_each_string_as_one_specifier() {
     assert_eq!(error.subject, Some(InitField::Extensions));
     assert!(!dir.exists(), "nothing was written");
 }
+
+/// `link/../a.wasm`, `link` a symlink to `elsewhere/sub`: `add` and `init` both read the file beside
+/// the link's target, and the lock records it (ADR 0104 D6 made init resolve what it reads).
+#[cfg(unix)]
+#[test]
+fn init_reads_a_dot_dot_after_a_symlink_as_add_does() {
+    let scratch = TempDir::new().unwrap();
+    let elsewhere = scratch.path().join("elsewhere");
+    std::fs::create_dir_all(elsewhere.join("sub")).unwrap();
+    std::fs::write(elsewhere.join("a.wasm"), A_ONE).unwrap();
+    let link = |dir: &Path| {
+        std::fs::create_dir_all(dir).unwrap();
+        std::os::unix::fs::symlink(elsewhere.join("sub"), dir.join("link")).unwrap();
+    };
+
+    let dir = scratch.path().join("demo");
+    link(&dir);
+    let outcome = init_with(&dir, &["link/../a.wasm".to_string()], &runtime()).unwrap();
+    assert_eq!(outcome.extensions, ["@x/a"]);
+    let lock = std::fs::read_to_string(dir.join("specforge.lock")).unwrap();
+    assert!(lock.contains("elsewhere/a.wasm"), "{lock}");
+
+    let existing = project(&[], &[]);
+    link(existing.path());
+    let extensions = extension::specified(&["link/../a.wasm"])
+        .unwrap()
+        .into_iter()
+        .map(|specified| specified.relative_to(existing.path()))
+        .collect();
+    extension::add(
+        &AddRequest {
+            root: &specforge_common::ProjectRoot::of(existing.path()).unwrap(),
+            extensions,
+            allow_unsigned: false,
+            trust: Trust::Refuse,
+            dry_run: false,
+            containment: &specforge_ops::Containment::unbounded(),
+        },
+        &specforge_ops::registry::Unconfigured("add"),
+        &runtime(),
+    )
+    .unwrap();
+    let lock = std::fs::read_to_string(existing.path().join("specforge.lock")).unwrap();
+    assert!(lock.contains("elsewhere/a.wasm"), "{lock}");
+}
