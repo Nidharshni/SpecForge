@@ -79,7 +79,6 @@ fn retarget(link: &Path, to: &Path) {
     behavior = "classify_project_changes",
     verify = "a symlinked source is reached by each hop its read followed"
 )]
-#[ignore = "flipped by T5"]
 fn a_sources_middle_hop_pointed_elsewhere_changes_that_source() {
     let (_dir, mut session, chain) = chained(true);
     retarget(&chain.hop, &chain.other);
@@ -95,7 +94,6 @@ fn a_sources_middle_hop_pointed_elsewhere_changes_that_source() {
     behavior = "classify_project_changes",
     verify = "a symlinked source is reached by each hop its read followed"
 )]
-#[ignore = "flipped by T5"]
 fn a_hop_that_is_itself_a_source_changes_both() {
     let (dir, _, chain) = chained(true);
     // `b.spec` is a link to the real file and `a.spec` a link to `b.spec`.
@@ -116,7 +114,6 @@ fn a_hop_that_is_itself_a_source_changes_both() {
     behavior = "classify_project_changes",
     verify = "a session's watch roots and the LSP's watchers cover every symlinked source's target"
 )]
-#[ignore = "flipped by T5"]
 fn each_hop_of_a_symlinked_source_is_watched() {
     let (_dir, session, chain) = chained(false);
     let hops = chain.hop.parent().unwrap().to_path_buf();

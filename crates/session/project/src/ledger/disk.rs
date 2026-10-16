@@ -1,5 +1,6 @@
-//! The disk the checks read through in a project (ADR 0107): the file system
-//! through the recording run.
+//! The disk a project session reads through: the environment load, the sources
+//! and the checks (ADR 0107, ADR 0114, ADR 0129): the file system through the
+//! recording run.
 
 use std::io;
 use std::path::Path;
@@ -8,8 +9,8 @@ use specforge_registry::{Disk, PlainDisk};
 
 use super::{Reading, Run};
 
-/// The checks' disk in a project session: each read goes through the check
-/// run, which stamps the path first and records it as a check input.
+/// The recording disk in a project session: each read goes through the recording
+/// run, which stamps the path first and records it as an input.
 pub(super) struct RunDisk<'r, 'l>(pub(super) &'r Run<'l>);
 
 impl Disk for RunDisk<'_, '_> {
@@ -37,7 +38,7 @@ const MAX_LINK_HOPS: usize = 40;
 impl RunDisk<'_, '_> {
     /// A read of `path` follows it when it is a symlink: the target is read
     /// too, so a change to it (it appears, goes, or changes) is a change to
-    /// the check. Each hop is recorded, stamped first, and a dangling link
+    /// what read it. Each hop is recorded, stamped first, and a dangling link
     /// still names its target (ADR 0107).
     fn record_link_targets(&self, path: &Path) {
         let mut current = path.to_path_buf();

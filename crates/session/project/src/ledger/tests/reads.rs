@@ -46,6 +46,8 @@ fn a_source_written_between_its_stamp_and_its_read_is_seen_next_time() {
         Vec::new(),
     ));
     let (read, _) = ledger.read_source(spec_root, "a.spec", |disk| {
+        // The file is stamped when it is first asked about, before the write.
+        assert!(disk.exists(&spec_root.join("a.spec")));
         fs::write(spec_root.join("a.spec"), NEW).unwrap();
         sources::read(disk, spec_root, "a.spec")
     });

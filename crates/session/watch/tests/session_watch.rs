@@ -444,7 +444,6 @@ fn a_symlinked_sources_target_is_watched() {
     behavior = "classify_project_changes",
     verify = "a symlinked source is reached by each hop its read followed"
 )]
-#[ignore = "flipped by T5"]
 fn a_sources_middle_hop_pointed_elsewhere_is_seen() {
     let fixture = Fixture::new(PLAIN);
     let real = fixture.parent.join("real");

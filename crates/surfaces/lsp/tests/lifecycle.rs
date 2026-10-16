@@ -660,7 +660,6 @@ fn the_watchers_cover_a_symlinked_sources_target() {
     behavior = "classify_project_changes",
     verify = "a session's watch roots and the LSP's watchers cover every symlinked source's target"
 )]
-#[ignore = "flipped by T5"]
 fn the_watchers_cover_each_hop_of_a_symlinked_source() {
     use tower_lsp::lsp_types::GlobPattern;
 

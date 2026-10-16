@@ -3,7 +3,8 @@
 //! `bring_session_up_to_date`).
 //!
 //! A session is built from its sources (the `.spec` files discovery finds
-//! under the spec root), its environment inputs (the files the environment
+//! under the spec root, each read through the recording run, each link hop
+//! included, ADR 0129), its environment inputs (the files the environment
 //! load read: `specforge.json`, `specforge.lock`, the extension modules, and
 //! each hop of a symlink among them, ADR 0114) and
 //! its check inputs (files the checks read but no parse does: the build
@@ -144,19 +145,17 @@ impl Reads for Ledger {
         environment
     }
 
-    /// Records the keys and each symlink's target, and forgets the stamps of
-    /// the sources: each is stamped when it is read ([`Self::source`]).
+    /// Starts the record of the sources again: no source is stamped and no
+    /// link hop recorded until it is read ([`Self::source`]); a held source is
+    /// never read here (ADR 0106 D2, ADR 0129).
     fn discover(&mut self, sources: &SourceRoot) -> Vec<String> {
-        let files = sources.files();
         self.stamps.forget_sources();
-        self.inputs.set_links(&files);
-        files
-            .iter()
-            .map(|path| key::discovered(sources.dir(), path))
-            .collect()
+        self.inputs.forget_hops();
+        walked_keys(sources)
     }
 
-    /// Stamped, then read: a source written after its stamp is seen next time.
+    /// Stamped, then read, each link hop included: a source written after its
+    /// stamp is seen next time.
     fn source(&mut self, spec_root: &Path, key: &str) -> Read {
         self.read_source(spec_root, key, |disk| sources::read(disk, spec_root, key))
             .0
@@ -217,13 +216,13 @@ impl Ledger {
                 false,
             );
         };
-        let mut moved = self.inputs.relink(keys);
+        let mut moved = false;
         let reads = keys
             .iter()
             .map(|key| {
                 let read = if self.inputs.excludes(key) {
-                    // No source (any more): a stamp kept would hide its return.
-                    self.forget_source(key);
+                    // No source (any more): a record kept would hide its return.
+                    moved |= self.forget_source(key);
                     Read::Gone
                 } else {
                     let (read, hops_moved) = self
@@ -240,6 +239,11 @@ impl Ledger {
     /// One run of the checks' reads: each is stamped and recorded as a check
     /// input when the run finishes (ADR 0106 D4).
     pub(crate) fn checks(&mut self) -> Run<'_> {
+        self.run()
+    }
+
+    /// One run of reads, recorded when the ledger has a root.
+    fn run(&mut self) -> Run<'_> {
         Run {
             records: self.inputs.root().is_some(),
             ledger: self,
@@ -248,7 +252,8 @@ impl Ledger {
     }
 
     /// One run of the environment load's reads: each is stamped and recorded
-    /// as an environment input when the run finishes (ADR 0114).
+    /// as an environment input when the run finishes (ADR 0114). The inputs
+    /// are still detached when it starts, so it records regardless.
     fn environment_run(&mut self) -> Run<'_> {
         Run {
             records: true,
@@ -258,26 +263,31 @@ impl Ledger {
     }
 
     /// The one read of source `key` a session makes, for the cold read and
-    /// every reread: its file is stamped, then `read` runs on the disk it is
-    /// to read through (the test hook: a write between the stamp and the
-    /// read is seen next time). A detached ledger records nothing. The read,
-    /// and whether the session's inputs moved.
+    /// every reread (ADR 0129): `read` runs on the recording run's disk,
+    /// which stamps each link hop the read follows, then the file, before
+    /// reading it; the source's stamp (by key) and its hops are then exactly
+    /// what this read saw. A detached ledger records nothing. `read` is a
+    /// parameter so a test can write between the stamp and the read. The
+    /// read, and whether the session's inputs moved (a hop appeared, went or
+    /// points elsewhere).
     pub(crate) fn read_source(
         &mut self,
         spec_root: &Path,
         key: &str,
         read: impl FnOnce(&dyn Disk) -> Read,
     ) -> (Read, bool) {
-        if self.inputs.root().is_some() {
-            self.stamps
-                .set_source(key, Entry::stamp(&spec_root.join(key)));
-        }
-        (read(&PlainDisk), false)
+        let path = spec_root.join(key);
+        let run = self.run();
+        let text = read(&RunDisk(&run));
+        let moved = run.finish_source(key, &path);
+        (text, moved)
     }
 
-    /// Source `key` is no source (any more): its stamp is forgotten.
-    fn forget_source(&mut self, key: &str) {
+    /// Source `key` is no source (any more): its stamp and hops are
+    /// forgotten. Whether the inputs moved.
+    fn forget_source(&mut self, key: &str) -> bool {
         self.stamps.set_source(key, None);
+        self.inputs.set_hops(key, Vec::new())
     }
 
     /// A ledger over `inputs`, nothing stamped.
@@ -353,6 +363,37 @@ impl Run<'_> {
         }
         ledger.inputs = SessionInputs::opened(root, config, files);
         ledger.stamps.set_environment(stamps);
+    }
+
+    /// Source `key` (its file `path`) is now recorded as this run read it: the
+    /// file's stamp, taken before its read, by key, and each link hop the read
+    /// followed, in read order, each once (ADR 0129). Nothing else in the
+    /// record changes. Whether the session's inputs moved.
+    pub(crate) fn finish_source(self, key: &str, path: &Path) -> bool {
+        let Run {
+            ledger,
+            records,
+            read,
+        } = self;
+        if !records {
+            return false;
+        }
+        // The file's first stamp, as for every other input.
+        let mut stamp = None;
+        let mut stamped = false;
+        let mut hops: Vec<PathBuf> = Vec::new();
+        for (_, read_path, entry) in read.into_inner() {
+            if read_path == path {
+                if !stamped {
+                    stamp = entry;
+                    stamped = true;
+                }
+            } else if !hops.contains(&read_path) {
+                hops.push(read_path);
+            }
+        }
+        ledger.stamps.set_source(key, stamp);
+        ledger.inputs.set_hops(key, hops)
     }
 
     /// The check inputs are now exactly what this run read (ADR 0030 D2: renewed each time the checks run). Their canonical
