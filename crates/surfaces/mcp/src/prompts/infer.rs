@@ -54,7 +54,7 @@ impl CorePrompt for Prompt {
 /// `specforge://prompts/infer`'s arguments.
 #[derive(Debug, Arguments)]
 pub struct Args {
-    /// Scope: omit for overview, 'kind:{name}' for focused guide, 'file:{path}' for file deduplication
+    /// Scope: omit for every kind's guide (or 'overview'), 'kind:{name}' for one kind's guide, 'file:{path}' for what a source file already has, 'plan' for the inference plan, 'workflow' for the step-by-step protocol
     scope: Option<String>,
     /// Directory where generated .spec files are written (scope "plan")
     target_spec_directory: Option<String>,
@@ -63,12 +63,15 @@ pub struct Args {
     cursor: usize,
 }
 
+/// The scopes the prompt knows, as its refusal names them.
+const SCOPES: &str = "omit it (or give overview) for every kind's guide, or give kind:<name>, file:<path>, plan or workflow";
+
 /// What the prompt is about: the `scope` argument read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Scope {
-    /// No scope, or one the prompt does not know: every kind's guide.
+    /// No scope, or `overview`: every kind's guide.
     Overview,
-    /// `kind:<name>`, the name lowercased.
+    /// `kind:<name>`, the name as written (an undeclared kind is refused by `infer::kind_guide`).
     Kind(String),
     /// `file:<path>`.
     File(String),
@@ -79,29 +82,31 @@ enum Scope {
 }
 
 impl Scope {
-    /// The scope `scope` names. An empty kind or file is invalid input.
+    /// The scope `scope` names. An empty kind or file, and a scope the prompt does not know, are invalid
+    /// input on `scope` (ADR 0101 D2, amended by round 13, plan 12).
     fn parse(scope: Option<&str>) -> Result<Scope, Box<McpError>> {
-        let invalid = |message: &str| {
+        let invalid = |message: String| {
             Box::new(McpError::new(ErrorCode::InvalidInput, message).with_argument("scope"))
         };
         Ok(match scope {
+            None | Some("") | Some("overview") => Scope::Overview,
             Some("plan") => Scope::Plan,
             Some("workflow") => Scope::Workflow,
             Some(s) if s.starts_with("kind:") => {
                 let kind = s["kind:".len()..].to_string();
                 if kind.is_empty() {
-                    return Err(invalid("Empty kind name in scope 'kind:'"));
+                    return Err(invalid("Empty kind name in scope 'kind:'".to_string()));
                 }
                 Scope::Kind(kind)
             }
             Some(s) if s.starts_with("file:") => {
                 let file = &s["file:".len()..];
                 if file.is_empty() {
-                    return Err(invalid("Empty file path in scope 'file:'"));
+                    return Err(invalid("Empty file path in scope 'file:'".to_string()));
                 }
                 Scope::File(file.to_string())
             }
-            _ => Scope::Overview,
+            Some(other) => return Err(invalid(format!("unknown scope '{other}': {SCOPES}"))),
         })
     }
 }

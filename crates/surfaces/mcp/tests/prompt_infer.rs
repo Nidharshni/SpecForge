@@ -128,17 +128,11 @@ fn the_overview_renders_the_guide() {
     assert!(content["validation"].is_string(), "{content}");
 }
 
-#[test]
-fn unknown_scope_prefix_returns_overview() {
-    let mut state = make_state_with_kind("behavior", Some("guide text"));
-    let resp = infer(&mut state, json!({"scope": "unknown:value"}));
-    let content: Value = prompt_payload(&resp);
-    assert!(content.get("installed_extensions").is_some());
-}
-
 /// A scope the prompt does not know is refused on `scope`, naming the five it knows.
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "read_infer_prompt_scope",
+    verify = "a scope the prompt does not know is refused on scope, naming the scopes it knows"
+)]
 fn an_unknown_scope_is_refused_on_scope() {
     let mut state = make_state_with_kind("behavior", Some("guide text"));
     for scope in [
@@ -165,7 +159,10 @@ fn an_unknown_scope_is_refused_on_scope() {
 }
 
 /// No scope, an empty scope and `overview` each answer every kind's guide.
-#[test]
+#[specforge_test(
+    behavior = "read_infer_prompt_scope",
+    verify = "no scope, an empty scope or scope overview renders every kind's guide"
+)]
 fn the_overview_is_no_scope_or_its_own_name() {
     let mut state = make_state_with_kind("behavior", Some("guide text"));
     for arguments in [
