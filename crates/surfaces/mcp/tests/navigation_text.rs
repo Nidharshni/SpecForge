@@ -7,7 +7,6 @@ use specforge_test::prelude::*;
 
 /// A file that is not one of the project's sources is `file_not_found`
 /// though it exists: a config file, the root, a directory, an excluded file.
-#[ignore = "flipped by T8"]
 #[specforge_test(
     behavior = "provide_mcp_outline_tool",
     verify = "a file that is not one of the project's sources is file_not_found, though it exists"

@@ -120,7 +120,22 @@ pub struct OutlineMethod {
 /// The outline of spec file `file` (its path, canonical separators): its
 /// entities in line order, each with its method members, each entry
 /// selecting its name. The LSP's document symbols and MCP's outline.
-pub fn outline(nav: &Navigator<'_>, file: &str) -> Vec<OutlineEntry> {
+///
+/// `None` when `file` names none of the compile's sources
+/// ([`CompiledProject::source_keys`](specforge_project::CompiledProject::source_keys), under
+/// [`match_file`]'s rule: `./a.spec` is `a.spec`): a file that does not exist, a directory,
+/// `specforge.json` or any non-`.spec` file, one `exclude` leaves out. A source with no entity,
+/// or one that could not be read (E025), has an empty outline (ADR 0116).
+pub fn outline(nav: &Navigator<'_>, file: &str) -> Option<Vec<OutlineEntry>> {
+    let is_source = nav
+        .view
+        .project()
+        .source_keys()
+        .iter()
+        .any(|key| match_file(file, key) == FileMatch::Exact);
+    if !is_source {
+        return None;
+    }
     let graph = nav.view.graph();
     let mut nodes: Vec<&Node> = graph
         .nodes()
@@ -131,7 +146,7 @@ pub fn outline(nav: &Navigator<'_>, file: &str) -> Vec<OutlineEntry> {
         let s = &n.source_span;
         (s.start_line, s.start_col, n.id.raw)
     });
-    nodes
+    let entries = nodes
         .into_iter()
         .map(|node| {
             let definition = nav.definition_of(node);
@@ -170,7 +185,8 @@ pub fn outline(nav: &Navigator<'_>, file: &str) -> Vec<OutlineEntry> {
                 children,
             }
         })
-        .collect()
+        .collect();
+    Some(entries)
 }
 
 impl Navigator<'_> {

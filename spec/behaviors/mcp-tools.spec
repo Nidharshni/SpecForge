@@ -662,8 +662,12 @@ behavior provide_mcp_outline_tool "Provide MCP Outline Tool" {
     range, the range of its name, and any nested children (an entity's
     method members). LSP equivalence: this tool mirrors
     textDocument/documentSymbol, returning the same outline structure an IDE
-    shows in its symbol navigator but over the MCP transport. If the file
-    does not exist, the tool MUST return an error. With no project served, no
+    shows in its symbol navigator but over the MCP transport. A file that is
+    not one of the project's sources as the compile read them (one that does
+    not exist, a directory, specforge.json or any file that is not a .spec
+    source, one an exclude entry leaves out) MUST be refused as
+    file_not_found, naming it; a source with no entity has an empty outline.
+    With no project served, no
     file is a project's: the tool MUST return the no-project refusal
     (precondition_failed), whatever the server's working directory holds.
   """

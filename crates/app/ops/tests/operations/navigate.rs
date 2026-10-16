@@ -1527,12 +1527,12 @@ fn the_outline_lists_the_files_entities() {
             ("other.spec", "event c \"C\" {\n}\n"),
         ],
     );
-    let entries = outline(&p.navigator(), "test.spec");
+    let entries = outline(&p.navigator(), "test.spec").expect("a source");
     let ids: Vec<&str> = entries.iter().map(|e| e.id.as_str()).collect();
     assert_eq!(ids, ["b", "a"], "in line order, other files left out");
-    assert_eq!(outline(&p.navigator(), "./test.spec").len(), 2);
+    assert_eq!(outline(&p.navigator(), "./test.spec").unwrap().len(), 2);
     assert!(
-        outline(&p.navigator(), "est.spec").is_empty(),
+        outline(&p.navigator(), "est.spec").is_none(),
         "a file is a file"
     );
 }
@@ -1549,7 +1549,7 @@ fn the_outline_shows_kind_id_title_and_name() {
             "type Item \"Item\" {\n  name string\n}\n\nport store \"Store\" {\n  direction outbound\n  method save(item: Item, note?: string) -> Item\n}\n",
         )],
     );
-    let entries = outline(&p.navigator(), "store.spec");
+    let entries = outline(&p.navigator(), "store.spec").expect("a source");
     assert_eq!(entries.len(), 2);
     let store = &entries[1];
     assert_eq!((store.id.as_str(), store.kind.as_str()), ("store", "port"));
