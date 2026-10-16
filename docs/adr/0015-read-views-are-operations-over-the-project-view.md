@@ -299,6 +299,7 @@ view's (section "Management operations"): MCP's view reports its call target's, 
 what it published (`ProjectView::reporting`), so the hover's dedupe against the cursor's
 diagnostics compares the same copies. While the LSP's session is out for an update, the hover says
 coverage is unavailable rather than reading a stand-in view with no root.
+*ADR 0108: while the session is out, hover shows the last compile's coverage.*
 
 ## Query
 
