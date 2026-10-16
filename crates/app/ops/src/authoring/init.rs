@@ -115,6 +115,37 @@ pub struct InitDocument {
     pub extensions_installed: Vec<String>,
 }
 
+/// The extensions an init of `dir` names, as init reads them: each entry split on commas, a
+/// relative local path joined onto `dir` and its `..` resolved by name (the directory may not exist
+/// yet, so the file system cannot do it). A surface that bounds what init may read checks the local
+/// paths of what this returns: they are the paths init reads.
+pub fn specified(
+    dir: &Path,
+    extensions: &[String],
+) -> Result<Vec<extension::Specified>, Refusal<InitField>> {
+    let specifiers: Vec<&str> = extensions
+        .iter()
+        .flat_map(|specifier| specifier.split(','))
+        .map(str::trim)
+        .collect();
+    if specifiers.is_empty() {
+        return Ok(Vec::new());
+    }
+    let specified = extension::specified(&specifiers).map_err(|refusal| {
+        refusal.map_subject(|AddField::Extensions| Some(InitField::Extensions))
+    })?;
+    Ok(specified
+        .into_iter()
+        .map(|specified| {
+            let mut specified = specified.relative_to(dir);
+            if let Source::Local(path) = &mut specified.source {
+                *path = without_parent_steps(path);
+            }
+            specified
+        })
+        .collect())
+}
+
 /// Scaffold the project `req` describes: validated first, its extension specifiers read as `add`
 /// reads them (E054, R-RES-003, E040; a registry package is E063 and a git source E064, both
 /// before anything is written) and claims them as `add` does (the same way twice is enabled
@@ -162,31 +193,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     }
     let version = req.version.to_string();
 
-    let specifiers: Vec<&str> = req
-        .extensions
-        .iter()
-        .flat_map(|specifier| specifier.split(','))
-        .map(str::trim)
-        .collect();
-    let wanted = if specifiers.is_empty() {
-        Vec::new()
-    } else {
-        let specified = extension::specified(&specifiers).map_err(|refusal| {
-            refusal.map_subject(|AddField::Extensions| Some(InitField::Extensions))
-        })?;
-        // A relative local path is read from the directory init creates (ADR 0098). It may not
-        // exist yet, so a `..` is resolved by name: the file system cannot step out of it.
-        specified
-            .into_iter()
-            .map(|specified| {
-                let mut specified = specified.relative_to(req.dir);
-                if let Source::Local(path) = &mut specified.source {
-                    *path = without_parent_steps(path);
-                }
-                specified
-            })
-            .collect()
-    };
+    let wanted = specified(req.dir, req.extensions)?;
     let several = wanted.len() > 1;
     let named = |at: usize, error: OpError| {
         let error = match wanted.get(at) {

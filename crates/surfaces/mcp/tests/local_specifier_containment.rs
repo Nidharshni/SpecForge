@@ -134,8 +134,10 @@ fn workspace_server(scene: &Scene) -> (McpServer, PathBuf) {
     (server, root)
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test(
+    behavior = "provide_mcp_init_tool",
+    verify = "each local specifier in extensions is held to the server's root as init reads it, a crate directory included"
+)]
 fn init_refuses_a_local_file_named_after_a_comma() {
     let scene = Scene::new();
     let (mut server, root) = workspace_server(&scene);
@@ -148,8 +150,10 @@ fn init_refuses_a_local_file_named_after_a_comma() {
     assert!(!root.join("created").exists());
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test(
+    behavior = "provide_mcp_init_tool",
+    verify = "each local specifier in extensions is held to the server's root as init reads it, a crate directory included"
+)]
 fn init_refuses_a_crate_directory_named_after_a_comma() {
     let scene = Scene::new();
     let ext = scene.dir.path().join("outside/ext");
@@ -171,8 +175,10 @@ fn init_refuses_a_crate_directory_named_after_a_comma() {
 }
 
 #[cfg(unix)]
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test(
+    behavior = "provide_mcp_init_tool",
+    verify = "each local specifier in extensions is held to the server's root as init reads it, a crate directory included"
+)]
 fn init_refuses_a_local_file_reached_through_a_symlink_and_dot_dots() {
     let scene = Scene::new();
     fs::copy(scene.outside_blob(), scene.dir.path().join("greet.wasm")).unwrap();

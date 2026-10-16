@@ -6,7 +6,6 @@ use crate::target::TargetArgument;
 use crate::target::{NewProject, NewProjectDir};
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 use specforge_ops::authoring::init::InitField;
-use specforge_ops::extension;
 
 use crate::args::Arguments;
 use crate::events::ProjectInitialized;
@@ -75,11 +74,14 @@ impl CoreTool for Tool {
         // relative local extension path from it, wherever the server runs (ADR 0098).
         let extensions = &args.extensions;
         // A local file installs only from inside the request's bound: the served project, or the
-        // server's root while none is served (ADR 0092 D7, closed by ADR 0098).
+        // server's root while none is served (ADR 0092 D7, closed by ADR 0098). The paths checked
+        // are the ones `init` reads: `init::specified` is its own reading of `extensions` (each
+        // entry split, a relative path joined onto `path`). A reading that fails here is the one
+        // `init` refuses with next.
         if let Some(bound) = &new.bound
-            && let Ok(specified) = extension::specified(extensions)
+            && let Ok(wanted) = init::specified(path, extensions)
         {
-            containment::refuse_local_outside(bound, path, &specified, "extensions")?;
+            containment::refuse_local_outside(bound, path, &wanted, "extensions")?;
         }
 
         // The scaffold `specforge init` writes. The call target refused a

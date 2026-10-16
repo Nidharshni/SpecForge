@@ -209,7 +209,8 @@ behavior provide_mcp_init_tool "Provide MCP Init Tool" {
     specforge init reads it from the directory it runs in and
     add_extension from the project's root (ADR 0092 D7). A local path that
     resolves outside the served project (the server's root while none is
-    served) MUST be refused as invalid_input on extensions. MCP init is always
+    served), as init reads it (each specifier of an entry, its .. and
+    symlinks included), MUST be refused as invalid_input on extensions. MCP init is always
     non-interactive — extension selection is provided via the extensions
     parameter. Interactive extension selection (TTY prompting) is only
     available via the CLI init command. The tool MUST scaffold what
@@ -226,6 +227,7 @@ behavior provide_mcp_init_tool "Provide MCP Init Tool" {
   verify unit "init refuses a directory whose starter file exists, writing nothing"
   verify unit "a relative local path in extensions is read from the directory init creates, wherever the server runs"
   verify unit "a local extension path in extensions that resolves outside the served project is refused as invalid_input on extensions"
+  verify unit "each local specifier in extensions is held to the server's root as init reads it, a crate directory included"
   verify unit "invalid project name returns error"
   verify unit "unknown extension returns error with diagnostic"
   verify unit "version parameter overrides default 0.1.0"
