@@ -1,19 +1,27 @@
-//! E013 and E014: the identifier contract of entity IDs.
+//! E013 and E014: the identifier contract of entity IDs. Every test starts from `.spec` text
+//! (ADR 0115).
 
 use specforge_common::DiagnosticData;
-use specforge_registry::entity::EntityRecord;
 use specforge_test_macros::test as spec;
 
-use crate::support::{build, check, coded_in, software, span};
+use crate::support::written::checked;
+use crate::support::{build, coded_in, software};
+
+/// `behavior <id> "S" { }` for each id, in one file.
+fn behaviors(ids: &[&str]) -> String {
+    ids.iter()
+        .map(|id| format!("behavior {id} \"S\" {{\n}}\n\n"))
+        .collect()
+}
 
 #[spec(
     behavior = "check_entities_in_one_order",
     verify = "an entity ID equal to a structural keyword or a registered kind's keyword is E013"
 )]
 fn a_reserved_entity_id_produces_e013() {
-    let diags = check(
+    let diags = checked(
         &build([software()]),
-        &[EntityRecord::new("behavior", "behavior", span("t.spec"))],
+        &[("t.spec", &behaviors(&["behavior"]))],
     );
     let e013 = coded_in(&diags, "E013");
     assert_eq!(e013.len(), 1, "{diags:?}");
@@ -33,23 +41,15 @@ fn a_reserved_entity_id_produces_e013() {
 fn a_structural_keyword_is_reserved_wherever_kinds_are_checked() {
     let build = build([software()]);
     for keyword in ["spec", "ref", "use", "define"] {
-        let diags = check(
-            &build,
-            &[EntityRecord::new("behavior", keyword, span("t.spec"))],
-        );
+        let diags = checked(&build, &[("t.spec", &behaviors(&[keyword]))]);
         assert_eq!(coded_in(&diags, "E013").len(), 1, "{keyword}: {diags:?}");
     }
 }
 
 #[test]
 fn normal_identifiers_pass_the_reserved_check() {
-    let diags = check(
-        &build([software()]),
-        &[
-            EntityRecord::new("behavior", "login_flow", span("t.spec")),
-            EntityRecord::new("spec", "my_project", span("t.spec")),
-        ],
-    );
+    let text = format!("{}spec \"my_project\" {{\n}}\n", behaviors(&["login_flow"]));
+    let diags = checked(&build([software()]), &[("t.spec", &text)]);
     assert!(coded_in(&diags, "E013").is_empty(), "{diags:?}");
 }
 
@@ -59,29 +59,20 @@ fn normal_identifiers_pass_the_reserved_check() {
 )]
 fn identifier_length_bounds() {
     let build = build([software()]);
-    let short = check(
-        &build,
-        &[EntityRecord::new("behavior", "x", span("t.spec"))],
-    );
+    let short = checked(&build, &[("t.spec", &behaviors(&["x"]))]);
     assert_eq!(coded_in(&short, "E014").len(), 1, "{short:?}");
 
     let long_id = "a".repeat(61);
-    let long = check(
-        &build,
-        &[EntityRecord::new("behavior", &long_id, span("t.spec"))],
-    );
+    let long = checked(&build, &[("t.spec", &behaviors(&[&long_id]))]);
     assert_eq!(coded_in(&long, "E014").len(), 1, "{long:?}");
 }
 
 #[test]
 fn identifier_length_bounds_are_inclusive() {
     let sixty = "a".repeat(60);
-    let diags = check(
+    let diags = checked(
         &build([software()]),
-        &[
-            EntityRecord::new("behavior", "ab", span("t.spec")),
-            EntityRecord::new("behavior", &sixty, span("t.spec")),
-        ],
+        &[("t.spec", &behaviors(&["ab", &sixty]))],
     );
     assert!(coded_in(&diags, "E014").is_empty(), "{diags:?}");
 }

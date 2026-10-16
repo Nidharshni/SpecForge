@@ -16,7 +16,7 @@ pub(super) struct KnownEntities(BTreeMap<String, Vec<String>>);
 
 impl KnownEntities {
     /// Every entity of the view's entity snapshot, with its obligation texts.
-    pub(super) fn of(entities: &specforge_project::snapshot::EntitySnapshot) -> Self {
+    pub(super) fn of(entities: &specforge_registry::EntitySnapshot) -> Self {
         entities
             .records()
             .iter()

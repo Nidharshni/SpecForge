@@ -3,11 +3,11 @@
 //! what they report is the compile's (behavior `run_check_phase_passes`).
 
 use crate::passes::{AnalysisContext, pass_findings, pass_input};
-use crate::snapshot::EntitySnapshot;
 use specforge_common::Diagnostic;
 use specforge_graph::Graph;
 use specforge_protocol_types::PassBuildCache;
 use specforge_registry::Disk;
+use specforge_registry::EntitySnapshot;
 use specforge_wasm::{ExtensionCalls, WasmRuntime};
 
 use crate::Environment;

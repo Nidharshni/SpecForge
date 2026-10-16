@@ -1,0 +1,84 @@
+//! The checks over what a project writes, reached as production reaches them: each `(path, text)`
+//! parsed, the graph built with the registry build's own graph inputs
+//! (`RegistryBuild::graph_inputs`, as `Environment::graph_config` does), the entity snapshot taken
+//! with that build at the spec root `/spec`, and `RegistryBuild::check` run over it (ADR 0031 D1,
+//! ADR 0115).
+
+use std::collections::HashSet;
+use std::path::Path;
+
+use specforge_common::Diagnostic;
+use specforge_extension_sdk::prelude::*;
+use specforge_graph::{GraphBuild, GraphConfig};
+use specforge_protocol_types::ExtensionDeclaration;
+use specforge_registry::rules::NoVerdicts;
+use specforge_registry::{Disk, EntitySnapshot, RegistryBuild};
+
+use super::{NoDisk, declare};
+
+/// `ticket`: an enum, a bool, an integer, a string list, a string and a reference to another
+/// `ticket`.
+pub fn tickets() -> ExtensionDeclaration {
+    declare("@test/tickets", |c| {
+        c.kind("Ticket", |k| {
+            k.keyword("ticket");
+            k.field("priority", |f| {
+                f.vocabulary(&Vocabulary::new(&["low", "medium", "high"]));
+            });
+            k.field("urgent", |f| {
+                f.field_type(FieldType::Bool);
+            });
+            k.field("points", |f| {
+                f.field_type(FieldType::Integer);
+            });
+            k.field("labels", |f| {
+                f.field_type(FieldType::StringList);
+            });
+            k.field("summary", |f| {
+                f.field_type(FieldType::String);
+            });
+            k.field("blocker", |f| {
+                f.field_type(FieldType::Reference).target_kind("ticket");
+            });
+            k.field("details", |f| {
+                f.field_type(FieldType::Block);
+            });
+            k.field("watchers", |f| {
+                f.field_type(FieldType::ReferenceList).target_kind("ticket");
+            });
+        });
+    })
+}
+
+/// The snapshot of `files` read with `build`. Panics on a parse error: a test's text is valid
+/// `.spec`.
+pub fn snapshot_of(build: &RegistryBuild, files: &[(&str, &str)]) -> EntitySnapshot {
+    let parsed = files.iter().map(|(path, text)| {
+        let file = specforge_parser::parse(text, path);
+        assert!(file.errors.is_empty(), "{path}: {:?}", file.errors);
+        file
+    });
+    let config = GraphConfig {
+        known_provider_schemes: HashSet::new(),
+        inputs: build.graph_inputs(),
+    };
+    let graph = GraphBuild::of(parsed, config);
+    EntitySnapshot::of(graph.graph(), build, Path::new("/spec"))
+}
+
+/// What the checks report on `files`, in `RegistryBuild::check`'s order, with nothing on disk
+/// (`NoDisk`) and no custom verdicts. The graph build's own diagnostics (E003, I004, I005, W143,
+/// ...) are not included.
+pub fn checked(build: &RegistryBuild, files: &[(&str, &str)]) -> Vec<Diagnostic> {
+    checked_on(build, files, &NoDisk)
+}
+
+/// `checked`, reading files through `disk`.
+pub fn checked_on(
+    build: &RegistryBuild,
+    files: &[(&str, &str)],
+    disk: &dyn Disk,
+) -> Vec<Diagnostic> {
+    let snapshot = snapshot_of(build, files);
+    build.check(&snapshot.rule_input(disk), &NoVerdicts)
+}

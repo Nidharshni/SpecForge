@@ -13,9 +13,9 @@ use specforge_graph::{
 
 use crate::coverage::RecordedCoverage;
 use crate::ledger::{Reads, Unrecorded};
-use crate::snapshot::EntitySnapshot;
 use crate::sources::{Read, SourceCache};
 use crate::{Environment, SharedRuntime, SourceBuild};
+use specforge_registry::EntitySnapshot;
 
 /// A compiled project: an environment, the sources read in it, their graph
 /// build, what resolving their imports and running the checks reported, and

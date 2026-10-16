@@ -6,7 +6,7 @@ use specforge_protocol_types::ValidatorVerdict;
 use specforge_registry::rules::{CustomCall, CustomVerdicts, Subject, Verdict, VerdictError};
 use specforge_wasm::{ExtensionCalls, WasmRuntime};
 
-use crate::snapshot::EntitySnapshot;
+use specforge_registry::EntitySnapshot;
 
 /// Custom verdicts from the extension that declared each rule, called
 /// through [`ExtensionCalls::validate`] (ADR 0013) with the protocol's

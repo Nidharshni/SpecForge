@@ -7,6 +7,7 @@ mod custom;
 mod cycles;
 mod order;
 mod shape;
+mod written;
 
 use std::path::Path;
 
