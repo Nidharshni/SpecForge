@@ -67,7 +67,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   export` recorded, with its content hash (`specforge_ops::schema_version::SchemaCache`). Every reader of the
   project's schema versions against it; only export writes it, into the project it exports. One that cannot be
   read is I016 and the version starts again at 1.0.0. Every reader reports what versioning found, the I016 or one
-  W053 per breaking change, as its **schema notices** (`VersionedSchema::notices`, ADR 0111).
+  W053 per breaking change, as its **schema notices** (`VersionedSchema::notices`, ADR 0111), which only a noticed read
+  hands to a surface (ADR 0130).
 - **Migration record**: `<root>/.specforge/migration.json`, what `specforge migrate --rollback` undoes: the
   last kept migration made with backups, each file with its backup and the SHA-256 of the file as the migration
   left it (`specforge_migrate::MigrationRecord`). A rollback restores only a recorded file that still holds that
@@ -546,6 +547,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   affected and unverified entities), the plan check (`specforge_ops::read::plan::check`), and the inference guide and plan
   (`specforge_ops::read::infer::{guide, kind_guide, inference_plan}`). Each returns a typed outcome; the CLI,
   MCP (its tools and its prompts) and the LSP only render it.
+- **Noticed read**: a read view that reports what it noticed about the run beside its value: the schema notices and I020. It
+  returns `specforge_ops::Noticed<T>`, whose value is reached only with its notices, and only the surfaces' envelopes
+  open it: MCP's `Answer::noticed` and `ResourceText::noticed` (into `_meta.diagnostics`) and the CLI's
+  `Notes::noticed` (on stderr, before the document) (ADR 0130). export, query, list, search, the exploration, trace,
+  the schema and its publication, and the model are noticed reads; the others return their value.
 - **Entity facts**: what inspect returns for one entity: its node and kind entry, headline
   statement, standing and obligations (the snapshot's own, borrowed), references in both directions,
   and the reported diagnostics about it (`specforge_ops::read::inspect::EntityFacts`); its coverage is asked
@@ -784,7 +790,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   W140/I003/W155/W156) and **notes** (prose for a person: `note: …`, collect's announcement). One rule, by output
   format (`specforge_cli::notes::Notes`, ADR 0120): under human output both go on stderr; under `--format json` a
   note is never written, and a notice is written once, in the document when the document carries it, else on stderr
-  before the document.
+  before the document. A read's notices go through `Notes::noticed` (ADR 0130).
 - **Asking**: who can be asked to consent to what an operation would otherwise refuse (a publisher key change, a
   collector's command): yes to everything (`--yes`), nobody (MCP, `--format json`, stdin that is no terminal), or an
   `Asker` (the CLI's terminal, a test's script). A surface builds it once per command, inside its **Caller**, which add,
