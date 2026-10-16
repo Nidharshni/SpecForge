@@ -14,6 +14,15 @@ impl Held {
         std::fs::read(&self.real)
     }
 
+    /// The bytes at `real`, or `None` for a file that is not there (`NotFound`); any other error passes.
+    pub fn read_if_there(&self) -> std::io::Result<Option<Vec<u8>>> {
+        match std::fs::read(&self.real) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
     /// The text at `real`.
     pub fn read_to_string(&self) -> std::io::Result<String> {
         std::fs::read_to_string(&self.real)
@@ -43,7 +52,17 @@ impl Held {
     /// (a file left by a crash, or a link) is removed, a link and never its target, and the temp is
     /// created new (`create_new`, O_EXCL), so it is never written through a link. On failure the
     /// temp is removed and `real` is as it was.
+    ///
+    /// A file that is there keeps its permissions, and one the process may not write is refused
+    /// with the error of opening it for writing (`PermissionDenied`), as an in-place write would
+    /// have: its owner's read-only marker is not lifted by a rewrite. Ownership and extended
+    /// attributes are not carried over.
     pub fn replace(&self, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
+        let permissions = match std::fs::OpenOptions::new().write(true).open(&self.real) {
+            Ok(existing) => Some(existing.metadata()?.permissions()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e),
+        };
         let temp = self.temporary();
         match std::fs::remove_file(&temp) {
             Ok(()) => {}
@@ -56,6 +75,9 @@ impl Held {
             .open(&temp)
             .and_then(|mut file| {
                 file.write_all(contents.as_ref())?;
+                if let Some(permissions) = permissions {
+                    file.set_permissions(permissions)?;
+                }
                 file.sync_all()
             })
             .and_then(|()| std::fs::rename(&temp, &self.real));
@@ -75,6 +97,39 @@ impl Held {
         match self.real.parent() {
             Some(parent) => std::fs::create_dir_all(parent),
             None => Ok(()),
+        }
+    }
+
+    /// Create `real`'s missing parent directories one by one, shallowest first, pushing each onto
+    /// `created` as it is made: a failure part-way still tells the caller what to remove.
+    pub(crate) fn create_parents(&self, created: &mut Vec<PathBuf>) -> std::io::Result<()> {
+        let mut missing: Vec<&Path> = Vec::new();
+        let mut at = self.real.parent();
+        while let Some(dir) = at {
+            if dir.as_os_str().is_empty() || dir.exists() {
+                break;
+            }
+            missing.push(dir);
+            at = dir.parent();
+        }
+        for dir in missing.into_iter().rev() {
+            std::fs::create_dir(dir)?;
+            created.push(dir.to_path_buf());
+        }
+        Ok(())
+    }
+
+    /// Unlink `real` itself: a file a change created there. [`Self::remove`] unlinks `spelled`,
+    /// which for a file created through a link would delete the link and keep the file.
+    pub(crate) fn remove_created(&self) -> std::io::Result<()> {
+        std::fs::remove_file(&self.real)
+    }
+
+    /// Remove each of `dirs` that is empty, in the order given; a directory holding anything stays.
+    /// Never recursive.
+    pub(crate) fn remove_empty(dirs: &[PathBuf]) {
+        for dir in dirs {
+            let _ = std::fs::remove_dir(dir);
         }
     }
 

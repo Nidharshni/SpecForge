@@ -164,7 +164,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   machine are passed beside it, not in it. Not the **host** (the process that loads extensions).
 - **Project file**: a file of the project an operation reads or writes. It is opened only as a `Held`
   (`specforge_ops::Containment::resolve`): at where its name landed (`real`), named as given (`spelled`), and replaced
-  atomically through a temp created new beside it (ADR 0104, ADR 0112).
+  atomically through a temp created new beside it, keeping its permissions (ADR 0104, ADR 0112, ADR 0128).
+- **Project change**: several project files written as one change: each staged as a `Held` with what it holds and will
+  hold, checked, replaced in order, put back in reverse on any failure; what it could not put back is the operation's
+  writes (`specforge_ops::change::ProjectChange`, ADR 0128).
 - **Served project**: the project an MCP server serves to every call that names none: the nearest project (a
   directory holding `specforge.json`) at or above the server's root (the path `specforge mcp` was started with, or
   a handshake client's `projectRoot`), else nothing; while none is served, every request looks there again first
@@ -236,9 +239,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the one its entry pins (E070 otherwise; W149 when the entry pins no hash). A project's installed
   extensions are one value, its lock read once (`specforge_installed::Installed`); installing,
   updating and removing them is one **change** (`Installed::change`), written all at once or not at
-  all, with the files its last step writes (`specforge.json`; for `init` also `.gitignore` and the
-  starter) and the directories it created (ADR 0028); `add`, `update`, `init` and `remove` change
-  them through the **lock plan**.
+  all, its last step the operation's project change (ADR 0128) and the directories it created (ADR 0028);
+  `add`, `update`, `init` and `remove` change them through the **lock plan**.
 - **Extension load**: turning a project's `extensions` entries into loaded extensions and their
   declarations, once per environment load (`Installed::load`, over the `WasmRuntime` port): a
   builtin from its embedded binary, an installed extension from its pinned module, a `.wasm` file
@@ -705,7 +707,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Refusal<F>`, `F` one variant per field a refusal of it can be about: `AddField::Extensions`,
   `InitField::Dir`). Only a refusal that rejects a value the caller gave has one (invalid input, an entity, file or
   extension not there, a conflict); a refusal of the project or the environment has none. Each surface spells it:
-  MCP names the argument (`specifiers`, `path`), the CLI and the LSP print the error (ADR 0072).
+  MCP names the argument (`specifiers`, `path`), the CLI and the LSP print the error (ADR 0072). It is stated where the
+  operation fails, with the refusal: no operation keeps an error enum of its own to convert into one (ADR 0132).
 - **Mutation outcome**: what one MCP mutation call produced, typed: a run (`specforge_mcp::mutation::Mutated`:
   its reply and what it wrote — the files its operation changed, the entities it changed and the domain
   event it produces, `Written`) or a failure (`mutation::Failed`: its McpError and the files it left

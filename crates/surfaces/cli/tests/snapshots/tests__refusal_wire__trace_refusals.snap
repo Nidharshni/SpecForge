@@ -1,0 +1,35 @@
+---
+source: crates/surfaces/cli/tests/refusal_wire.rs
+expression: out
+---
+$ specforge trace logn
+[exit 1]
+[stdout]
+{
+  "error": "unresolved entity 'logn' — not found in graph",
+  "code": "E003",
+  "suggestion": "did you mean 'login'?"
+}
+[stderr]
+
+$ specforge trace logn --format human
+[exit 1]
+[stdout]
+[stderr]
+error[E003]: unresolved entity 'logn' — not found in graph
+  hint: did you mean 'login'?
+
+$ specforge trace zzzzzzzz
+[exit 1]
+[stdout]
+{
+  "error": "unresolved entity 'zzzzzzzz' — not found in graph",
+  "code": "E003"
+}
+[stderr]
+
+$ specforge trace zzzzzzzz --format human
+[exit 1]
+[stdout]
+[stderr]
+error[E003]: unresolved entity 'zzzzzzzz' — not found in graph

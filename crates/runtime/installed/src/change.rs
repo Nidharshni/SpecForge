@@ -1,14 +1,14 @@
-//! One change to what is installed: binaries, `specforge.lock` and the files
-//! the caller's last step writes (`specforge.json`; for `init` also `.gitignore`
-//! and the starter) written together or not at all (ADR 0028).
+//! One change to what is installed: binaries and `specforge.lock` written together or not at all
+//! (ADR 0028), and the caller's last step run inside it. The project's own files (`specforge.json`,
+//! `.gitignore`, the starter) are the caller's: its last step is a project change that puts back what
+//! it wrote and reports what it could not (ADR 0128).
 //!
 //! The change is staged in memory. Committing it moves every module aside
 //! under `.specforge/extensions/.staging` before it places the new one, so a
 //! previous binary is never deleted before its replacement is in place,
 //! writes the lock once (only when a step was staged), runs the caller's last
-//! step (the `specforge.json` edit, the publisher-key pins), and, on any
-//! failure, puts every file back as it was and removes the directories the
-//! change created.
+//! step, and, on any failure, puts every module and the lock back as it was
+//! and removes the directories the change created.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -56,16 +56,13 @@ enum Step {
 /// A change to what is installed, staged in memory until it is committed.
 pub struct Change<'a> {
     installed: &'a Installed,
-    /// The lock as the change will write it; `None` for a change that installs nothing
-    /// ([`Installed::change_entries`]).
-    lock: Option<LockFile>,
+    /// The lock as the change will write it.
+    lock: LockFile,
     steps: Vec<Step>,
-    /// The files the last step may write, put back when the change fails.
-    files: Vec<PathBuf>,
 }
 
 /// A committed change: the files whose bytes it changed or that it deleted
-/// (module files, `specforge.lock`, `specforge.json`), in path order.
+/// (module files and `specforge.lock`), in path order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Committed {
     pub changed: Vec<PathBuf>,
@@ -87,9 +84,8 @@ impl Installed {
     pub fn change(&self) -> Result<Change<'_>, Diagnostic> {
         Ok(Change {
             installed: self,
-            lock: Some(self.writable_lock()?),
+            lock: self.writable_lock()?,
             steps: Vec::new(),
-            files: Vec::new(),
         })
     }
 
@@ -106,34 +102,14 @@ impl Installed {
             )),
         }
     }
-
-    /// A change that installs nothing and writes no lock: only its last step's files. It accepts
-    /// any lock (ADR 0041 B4: a plan that only enables or disables entries).
-    ///
-    /// # Panics
-    /// [`Change::install`] and [`Change::uninstall`] on it.
-    pub fn change_entries(&self) -> Change<'_> {
-        Change {
-            installed: self,
-            lock: None,
-            steps: Vec::new(),
-            files: Vec::new(),
-        }
-    }
 }
 
 impl Change<'_> {
     /// Install `module` as `pin.name`: its binary and its lock entry,
     /// replacing what it had.
-    ///
-    /// # Panics
-    /// On a change made by [`Installed::change_entries`].
     pub fn install(&mut self, module: Module, pin: Pin) {
         let entry = pin.entry(module.digest());
-        self.lock
-            .as_mut()
-            .expect("a change that installs reads the lock")
-            .put(entry);
+        self.lock.put(entry);
         self.steps.push(Step::Install {
             name: pin.name,
             module,
@@ -142,26 +118,10 @@ impl Change<'_> {
 
     /// Uninstall `name`: its directory and its lock entry. A name the lock
     /// does not hold stages nothing.
-    ///
-    /// # Panics
-    /// On a change made by [`Installed::change_entries`].
     pub fn uninstall(&mut self, name: &PackageName) {
-        let lock = self
-            .lock
-            .as_mut()
-            .expect("a change that uninstalls reads the lock");
-        if lock.without(name) {
+        if self.lock.without(name) {
             self.steps.push(Step::Uninstall { name: name.clone() });
         }
-    }
-
-    /// The files the last step may write (`specforge.json`; for `init` also `.gitignore` and the
-    /// starter). When the change fails, each is put back to its bytes, or removed when it was not
-    /// there, and every directory the change created (for those files, `.specforge/extensions`
-    /// and its parents, the root itself) is removed again when empty.
-    pub fn files(mut self, paths: impl IntoIterator<Item = PathBuf>) -> Self {
-        self.files.extend(paths);
-        self
     }
 
     /// Write the change: every binary placed or moved aside, then the lock
@@ -175,10 +135,10 @@ impl Change<'_> {
     }
 
     /// Place every staged module, write the lock once (only when a step was staged), then `last`.
-    /// All or nothing: a failure at any step, `last`'s included, puts back every module, the
-    /// lock, every file named by [`Self::files`] and removes the directories the change created.
-    /// `last` must itself leave nothing outside those files when it fails. [`Committed::changed`]
-    /// lists each module, the lock and each named file whose bytes changed. E032 for a binary
+    /// All or nothing: a failure at any step, `last`'s included, puts back every module and the
+    /// lock and removes the directories the change created. `last` puts back the files it wrote
+    /// itself when it fails, and reports what it could not in its own error (ADR 0128).
+    /// [`Committed::changed`] lists each module and the lock whose bytes changed. E032 for a binary
     /// that can't be placed or moved aside, E033 for a lock that can't be written (as `own` makes
     /// them an `E`), `last`'s own error otherwise.
     pub fn commit_with<E>(
@@ -198,7 +158,6 @@ impl Change<'_> {
             installed,
             lock,
             steps,
-            files,
         } = self;
         let staging = installed.extensions_dir().join(STAGING);
         // A process killed mid-commit can leave modules here: sweep them.
@@ -206,16 +165,14 @@ impl Change<'_> {
 
         let lock_path = installed.lock_path();
         let lock_before = std::fs::read(&lock_path).ok();
-        let files_before: Vec<Option<Vec<u8>>> =
-            files.iter().map(|path| std::fs::read(path).ok()).collect();
-        let created = Absent::of(installed, &files);
+        let created = Absent::of(installed);
         let mut journal = Journal::default();
         let mut changed = BTreeSet::new();
 
         let placed = steps.iter().enumerate().try_for_each(|(i, step)| {
             apply_step(installed, &staging, i, step, &mut journal, &mut changed)
         });
-        let writes_lock = lock.filter(|_| !steps.is_empty());
+        let writes_lock = (!steps.is_empty()).then_some(lock);
         let outcome: Result<(), Cause<E>> = placed
             .map_err(Cause::Diagnostic)
             .and_then(|()| match &writes_lock {
@@ -226,11 +183,6 @@ impl Change<'_> {
 
         match outcome {
             Ok(()) => {
-                for (path, before) in files.iter().zip(&files_before) {
-                    if std::fs::read(path).ok() != *before {
-                        changed.insert(path.clone());
-                    }
-                }
                 if writes_lock.is_some() && std::fs::read(&lock_path).ok() != lock_before {
                     changed.insert(lock_path);
                 }
@@ -241,9 +193,6 @@ impl Change<'_> {
             }
             Err(cause) => {
                 let mut left = Vec::new();
-                for (path, before) in files.iter().zip(&files_before) {
-                    restore_bytes(path, before.as_deref(), &mut left);
-                }
                 if writes_lock.is_some() {
                     restore_bytes(&lock_path, lock_before.as_deref(), &mut left);
                 }
@@ -264,20 +213,15 @@ impl Change<'_> {
     }
 }
 
-/// The directories a change may create that did not exist when it began: the project root, the
-/// extensions directory and its parents, and the parents of the files its last step writes.
+/// The directories a change may create that did not exist when it began: the project root, and the
+/// extensions directory and its parents.
 struct Absent(Vec<PathBuf>);
 
 impl Absent {
-    fn of(installed: &Installed, files: &[PathBuf]) -> Absent {
+    fn of(installed: &Installed) -> Absent {
         let root = installed.root();
         let mut watched: BTreeSet<PathBuf> = BTreeSet::from([root.to_path_buf()]);
-        let starts = files
-            .iter()
-            .filter_map(|file| file.parent())
-            .map(Path::to_path_buf)
-            .chain([installed.extensions_dir()]);
-        for start in starts {
+        for start in [installed.extensions_dir()] {
             if !start.starts_with(root) {
                 watched.insert(start);
                 continue;
@@ -310,7 +254,7 @@ impl Absent {
 enum Cause<E> {
     /// A step of the change itself (E032, E033).
     Diagnostic(Diagnostic),
-    /// The caller's last step (the `specforge.json` edit, the pins).
+    /// The caller's last step (the project change and the pins).
     Last(E),
 }
 
@@ -381,7 +325,7 @@ fn remove_empty_scope(installed: &Installed, package_dir: &Path) {
     }
 }
 
-/// Put `path` back to `before`: its bytes, or gone when it was not there.
+/// Put the lock at `path` back to `before`: its bytes, or gone when it was not there.
 fn restore_bytes(path: &Path, before: Option<&[u8]>, left: &mut Vec<PathBuf>) {
     let now = std::fs::read(path).ok();
     if now.as_deref() == before {

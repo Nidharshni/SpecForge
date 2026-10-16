@@ -4,18 +4,22 @@
 use std::path::{Path, PathBuf};
 
 use super::{Ask, Checked, Disabled, Purpose};
+use crate::change::{Cause, ProjectChange};
 use crate::registry::{KeyPin, Registry};
 use crate::{Containment, Held, OpError, OpErrorKind, Writes};
 
-/// What writes an [`Also`] file, given the file it was resolved to.
-pub(crate) type WriteHeld<'f> = Box<dyn FnOnce(&Held) -> Result<(), OpError> + 'f>;
+/// What stages an [`Also`] file: the file it was resolved to, and the project change to stage it in.
+pub(crate) type StageHeld<'f> =
+    Box<dyn FnOnce(Held, &mut ProjectChange) -> Result<(), OpError> + 'f>;
 
-/// A file the change's last step writes after `specforge.json`'s edit and before the pins (`init`'s
-/// config, `.gitignore` and starter). Put back, or removed when it was not there, when the change
-/// fails. `write` is handed the file `path` resolved to (ADR 0112): it opens nothing else.
+/// A file the change writes after `specforge.json`'s edit and before the pins (`init`'s config,
+/// `.gitignore` and starter), in the same project change (ADR 0128): put back, or removed when it
+/// was not there, when the change fails. `stage` is handed the file `path` resolved to (ADR 0112):
+/// it reads and stages nothing else. `code` is the refusal of writing it.
 pub(crate) struct Also<'f> {
     pub(crate) path: PathBuf,
-    pub(crate) write: WriteHeld<'f>,
+    pub(crate) stage: StageHeld<'f>,
+    pub(crate) code: &'static str,
 }
 
 /// What a finished plan did, or for a preview would do.
@@ -50,12 +54,35 @@ impl Done {
     }
 }
 
-/// `result`, a missing `specforge.json` being nothing to edit: a project without one (an install
-/// only the lock knows) has no entry to drop.
-fn edited(result: Result<bool, OpError>) -> Result<(), OpError> {
-    match result {
-        Err(error) if error.code == "config_not_found" => Ok(()),
-        other => other.map(|_| ()),
+/// `specforge.json` as the plan leaves it: the names enabled and the entries dropped, applied to the
+/// array in memory, one read and one render (`None` when the file would be as it is). A missing
+/// `specforge.json` is nothing to edit for a plan that only drops entries: a project without one (an
+/// install only the lock knows) has no entry to drop. `enabled` is what enabling changed.
+fn config_edit(
+    root: &Path,
+    names: &[&str],
+    disabled: &[Disabled],
+    enabling: bool,
+    enabled: &mut Option<crate::config::Enabled>,
+) -> Result<Option<Vec<u8>>, OpError> {
+    let edit = crate::config::edit_extensions(root, |extensions| {
+        let mut changed = false;
+        if enabling {
+            let now = crate::config::enable(extensions, names);
+            changed |= !now.appended.is_empty();
+            *enabled = Some(now);
+        }
+        for dropped in disabled {
+            changed |= match dropped {
+                Disabled::Named(name) => crate::config::remove_extension(extensions, name),
+                Disabled::Entry(entry) => crate::config::remove_entry(extensions, entry),
+            };
+        }
+        changed
+    });
+    match edit {
+        Err(error) if error.code == "config_not_found" && !enabling => Ok(None),
+        other => other,
     }
 }
 
@@ -71,13 +98,14 @@ impl Checked<'_> {
             .collect()
     }
 
-    /// A preview answers without writing. A commit writes, all or nothing (ADR 0028 D4): each
-    /// staged module placed and each uninstalled one moved aside, the lock once (when a module
-    /// changed), then the last step: `specforge.json`'s edit (the appended entries, the dropped
-    /// ones) and last the publisher keys its fetches accepted (ADR 0059). A plan that stages no
-    /// module writes no lock. A failure at any step, the pins' included (R-TRUST-006), puts every
-    /// file back and pins nothing. The error's writes name what could not be put back (normally
-    /// nothing).
+    /// A preview answers without writing. A commit writes, all or nothing (ADR 0028 D4, ADR 0128):
+    /// each staged module placed and each uninstalled one moved aside, the lock once (when a module
+    /// changed), then, as the installed change's last step, the project change: `specforge.json`'s
+    /// edit (the appended entries, the dropped ones) and the `also` files written in order, and last
+    /// the publisher keys its fetches accepted (ADR 0059). A plan that stages no module writes no
+    /// lock and opens no installed change (ADR 0041 B4). A failure at any step, the pins' included
+    /// (R-TRUST-006), puts every file back and pins nothing. The error's writes name what could not
+    /// be put back (normally nothing).
     ///
     /// Before anything is written, and for a preview too, every file the change would write is
     /// resolved through `containment` (ADR 0104): the config, the `also` files, the lock and each
@@ -107,12 +135,10 @@ impl Checked<'_> {
             .iter()
             .map(|appended| appended.name.as_str())
             .collect();
-        let edited_config = edits_config && (!names.is_empty() || !disabled.is_empty());
-        let also_paths: Vec<PathBuf> = also.iter().map(|also| also.path.clone()).collect();
         // Held before anything is written: what is written is what is checked here.
-        let also_held = also_paths
+        let also_held = also
             .iter()
-            .map(|path| containment.resolve(path))
+            .map(|also| containment.resolve(&also.path))
             .collect::<Result<Vec<Held>, _>>()?;
         let config_path = root.join(crate::config::CONFIG_FILE);
         let config_held = (edits_config || !disabled.is_empty())
@@ -143,48 +169,66 @@ impl Checked<'_> {
         let mut enabled = None;
         let mut writes = Writes::none();
         if purpose == Purpose::Commit {
-            let last = || -> Result<(), OpError> {
-                if edits_config && !names.is_empty() {
-                    enabled = Some(crate::config::enable(root, config_file()?, &names)?);
-                }
-                for dropped in &disabled {
-                    edited(match dropped {
-                        Disabled::Named(name) => {
-                            crate::config::remove_extension(root, config_file()?, name)
-                        }
-                        Disabled::Entry(entry) => {
-                            crate::config::remove_entry(root, config_file()?, entry)
-                        }
-                    })?;
-                }
-                for (file, held) in also.into_iter().zip(&also_held) {
-                    (file.write)(held)?;
-                }
-                record(pins)
-            };
-            let mut change = if changes_lock {
-                installed
-                    .change()
-                    .map_err(|why| OpError::of(OpErrorKind::SchemaMismatch, why))?
-            } else {
-                installed.change_entries()
-            };
-            for (module, pin) in installs {
-                change.install(module, pin);
-            }
-            for name in &uninstalls {
-                change.uninstall(name);
-            }
-            let committed = change
-                .files(
-                    edited_config
-                        .then(|| config_path.clone())
-                        .into_iter()
-                        .chain(also_paths),
+            // The installed change opens first: an unreadable lock is E033 before anything is judged.
+            let change = if changes_lock {
+                Some(
+                    installed
+                        .change()
+                        .map_err(|why| OpError::of(OpErrorKind::SchemaMismatch, why))?,
                 )
-                .commit_with(last, |why| OpError::of(OpErrorKind::Internal, why))
-                .map_err(|failed| failed.error.with_writes(Writes::of(failed.left)))?;
-            writes = Writes::of(committed.changed);
+            } else {
+                None
+            };
+            let enabling = edits_config && !names.is_empty();
+            let config_after = if enabling || !disabled.is_empty() {
+                config_edit(root, &names, &disabled, enabling, &mut enabled)?
+            } else {
+                None
+            };
+            let mut files = ProjectChange::new();
+            if let Some(after) = config_after {
+                let held = config_file()?.clone();
+                let before = held.read_if_there().map_err(|e| unreadable(&held, &e))?;
+                files.stage(held, before, after);
+            }
+            let mut also_codes: Vec<(PathBuf, &'static str)> = Vec::new();
+            for (file, held) in also.into_iter().zip(also_held) {
+                also_codes.push((held.spelled.clone(), file.code));
+                (file.stage)(held, &mut files)?;
+            }
+            let config_spelled = config_held.as_ref().map(|held| held.spelled.clone());
+            let commit_files = |files: ProjectChange| -> Result<Writes, OpError> {
+                files.commit_then(|| record(pins)).map_err(|failed| {
+                    failed.error(|cause| refused(cause, config_spelled.as_deref(), &also_codes))
+                })
+            };
+            match change {
+                Some(mut change) => {
+                    for (module, pin) in installs {
+                        change.install(module, pin);
+                    }
+                    for name in &uninstalls {
+                        change.uninstall(name);
+                    }
+                    let mut project = Writes::none();
+                    let committed = change
+                        .commit_with(
+                            || {
+                                project = commit_files(files)?;
+                                Ok(())
+                            },
+                            |why| OpError::of(OpErrorKind::Internal, why),
+                        )
+                        .map_err(|failed| {
+                            let mut left = failed.error.writes.clone();
+                            left.merge(Writes::of(failed.left));
+                            failed.error.with_writes(left)
+                        })?;
+                    writes = Writes::of(committed.changed);
+                    writes.merge(project);
+                }
+                None => writes = commit_files(files)?,
+            }
         }
 
         let written = |name: &str| match purpose {
@@ -221,6 +265,54 @@ impl Checked<'_> {
             asked,
         })
     }
+}
+
+/// The refusal of a project change that failed: `config` is the spelled `specforge.json` the plan edited, and
+/// `also` the spelled files the caller staged with their codes.
+fn refused(
+    cause: Cause<OpError>,
+    config: Option<&Path>,
+    also: &[(PathBuf, &'static str)],
+) -> OpError {
+    match cause {
+        Cause::Changed { file } => OpError::new(
+            OpErrorKind::Conflict,
+            "file_changed",
+            format!(
+                "{} changed while the change was being written; nothing was written",
+                file.display()
+            ),
+        ),
+        Cause::Unreadable { file, error } => OpError::new(
+            OpErrorKind::of_io(&error),
+            "file_unreadable",
+            format!("failed to read {}: {error}", file.display()),
+        ),
+        Cause::Unwritable { file, error } => {
+            let code = if config == Some(file.as_path()) {
+                "config_write_failed"
+            } else {
+                also.iter()
+                    .find(|(path, _)| *path == file)
+                    .map_or("file_unreadable", |(_, code)| code)
+            };
+            OpError::new(
+                OpErrorKind::of_io(&error),
+                code,
+                format!("failed to write {}: {error}", file.display()),
+            )
+        }
+        Cause::Then(error) => error,
+    }
+}
+
+/// The refusal of reading `file`, which the change would write, to stage it.
+fn unreadable(file: &Held, error: &std::io::Error) -> OpError {
+    OpError::new(
+        OpErrorKind::of_io(error),
+        "file_unreadable",
+        format!("failed to read {}: {error}", file.spelled.display()),
+    )
 }
 
 /// Pin what a committed plan's fetches decided, through the port that fetched them.

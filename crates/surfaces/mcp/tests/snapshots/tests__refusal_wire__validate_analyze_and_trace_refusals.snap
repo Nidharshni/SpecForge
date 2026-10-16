@@ -1,0 +1,208 @@
+---
+source: crates/surfaces/mcp/tests/refusal_wire.rs
+expression: out
+---
+== specforge.validate {"severity_filter":"errors"}
+{
+  "argument": "severity_filter",
+  "code": "invalid_input",
+  "data": {
+    "suggestion": "did you mean 'error'?"
+  },
+  "message": "Unknown severity 'errors' (available: error, warning, info)",
+  "tool": "specforge.validate"
+}
+== specforge.validate {"lint":["pedantik"]}
+{
+  "argument": "lint",
+  "code": "invalid_input",
+  "data": {
+    "suggestion": "did you mean 'pedantic'?"
+  },
+  "message": "Unknown lint profile 'pedantik' (available: inferred, pedantic)",
+  "tool": "specforge.validate"
+}
+== specforge.analyze {"pass":"contrakts"}
+{
+  "argument": "pass",
+  "code": "invalid_input",
+  "data": {
+    "suggestion": "did you mean 'contracts'?"
+  },
+  "message": "Unknown analysis pass 'contrakts' (available: all, coverage, contracts, @specforge/testing:coverage)",
+  "tool": "specforge.analyze"
+}
+== specforge.analyze {"pass":"zzzzzz"}
+{
+  "argument": "pass",
+  "code": "invalid_input",
+  "message": "Unknown analysis pass 'zzzzzz' (available: all, coverage, contracts, @specforge/testing:coverage)",
+  "tool": "specforge.analyze"
+}
+== specforge.analyze {"min":150}
+{
+  "argument": "min",
+  "code": "invalid_input",
+  "message": "min must be a percentage between 0 and 100, got 150",
+  "tool": "specforge.analyze"
+}
+== specforge.analyze {"min":50}
+{
+  "code": "precondition_failed",
+  "message": "--min needs test results: run `specforge collect` or pass --test-results",
+  "tool": "specforge.analyze"
+}
+== specforge.analyze {"test_results":"none.json"}
+{
+  "argument": "test_results",
+  "code": "file_not_found",
+  "diagnostic": {
+    "code": "E045",
+    "column": null,
+    "file": null,
+    "line": null,
+    "message": "cannot read test results <root>/none.json: No such file or directory (os error 2)",
+    "severity": "Error",
+    "span": null,
+    "suggestion": "check the path: the named test report does not exist",
+    "title": "Invalid test report"
+  },
+  "message": "cannot read test results <root>/none.json: No such file or directory (os error 2)",
+  "tool": "specforge.analyze"
+}
+== specforge.analyze {"test_results":"bad.json"}
+{
+  "code": "schema_mismatch",
+  "diagnostic": {
+    "code": "E045",
+    "column": null,
+    "file": null,
+    "line": null,
+    "message": "invalid test results <root>/bad.json: key must be a string at line 1 column 2 (expected the RES-15 specforge-report.json shape)",
+    "severity": "Error",
+    "span": null,
+    "suggestion": "run `specforge collect` again to rewrite the report, or fix or remove the file",
+    "title": "Invalid test report"
+  },
+  "message": "invalid test results <root>/bad.json: key must be a string at line 1 column 2 (expected the RES-15 specforge-report.json shape)",
+  "tool": "specforge.analyze"
+}
+== specforge.trace {"entity_id":"logn"}
+{
+  "argument": "entity_id",
+  "code": "entity_not_found",
+  "diagnostic": {
+    "code": "E003",
+    "column": null,
+    "file": null,
+    "line": null,
+    "message": "unresolved entity 'logn' — not found in graph",
+    "severity": "Error",
+    "span": null,
+    "suggestion": "did you mean 'login'?",
+    "title": "Unresolved reference"
+  },
+  "entity_id": "logn",
+  "message": "unresolved entity 'logn' — not found in graph",
+  "tool": "specforge.trace"
+}
+== specforge.trace {"entity_id":"zzzzzzzz"}
+{
+  "argument": "entity_id",
+  "code": "entity_not_found",
+  "diagnostic": {
+    "code": "E003",
+    "column": null,
+    "file": null,
+    "line": null,
+    "message": "unresolved entity 'zzzzzzzz' — not found in graph",
+    "severity": "Error",
+    "span": null,
+    "suggestion": null,
+    "title": "Unresolved reference"
+  },
+  "entity_id": "zzzzzzzz",
+  "message": "unresolved entity 'zzzzzzzz' — not found in graph",
+  "tool": "specforge.trace"
+}
+== specforge://prompts/trace {"entity_id":"logn"}
+{
+  "code": -32602,
+  "data": {
+    "argument": "entity_id",
+    "code": "entity_not_found",
+    "diagnostic": {
+      "code": "E003",
+      "column": null,
+      "file": null,
+      "line": null,
+      "message": "unresolved entity 'logn' — not found in graph",
+      "severity": "Error",
+      "span": null,
+      "suggestion": "did you mean 'login'?",
+      "title": "Unresolved reference"
+    },
+    "entity_id": "logn",
+    "message": "unresolved entity 'logn' — not found in graph",
+    "prompt": "specforge://prompts/trace"
+  },
+  "message": "unresolved entity 'logn' — not found in graph"
+}
+== specforge.analyze {"test_results":"../r/specforge-report.json"}
+{
+  "argument": "test_results",
+  "code": "invalid_input",
+  "message": "'../r/specforge-report.json' resolves to <parent>/r/specforge-report.json, outside <root>, which bounds the request",
+  "tool": "specforge.analyze"
+}
+== specforge.analyze {"min":150,"pass":"contrakts"}
+{
+  "argument": "pass",
+  "code": "invalid_input",
+  "data": {
+    "suggestion": "did you mean 'contracts'?"
+  },
+  "message": "Unknown analysis pass 'contrakts' (available: all, coverage, contracts, @specforge/testing:coverage)",
+  "tool": "specforge.analyze"
+}
+== specforge.analyze {"min":150,"test_results":"none.json"}
+{
+  "argument": "min",
+  "code": "invalid_input",
+  "message": "min must be a percentage between 0 and 100, got 150",
+  "tool": "specforge.analyze"
+}
+== specforge.analyze {"min":50}
+{
+  "code": "precondition_failed",
+  "diagnostic": {
+    "code": "E068",
+    "column": null,
+    "file": null,
+    "line": null,
+    "message": "a proof-coverage minimum needs the coverage pass of @specforge/testing (pass coverage or all)",
+    "severity": "Error",
+    "span": null,
+    "suggestion": "enable it with `specforge add @specforge/testing`",
+    "title": "Coverage gate without a coverage figure"
+  },
+  "message": "a proof-coverage minimum needs the coverage pass of @specforge/testing (pass coverage or all)",
+  "tool": "specforge.analyze"
+}
+== specforge.analyze {"min":50}
+{
+  "code": "schema_mismatch",
+  "diagnostic": {
+    "code": "E045",
+    "column": null,
+    "file": null,
+    "line": null,
+    "message": "invalid test results <root>/specforge-report.json: key must be a string at line 1 column 2 (expected the RES-15 specforge-report.json shape)",
+    "severity": "Error",
+    "span": null,
+    "suggestion": "run `specforge collect` again to rewrite the report, or fix or remove the file",
+    "title": "Invalid test report"
+  },
+  "message": "invalid test results <root>/specforge-report.json: key must be a string at line 1 column 2 (expected the RES-15 specforge-report.json shape)",
+  "tool": "specforge.analyze"
+}

@@ -10,7 +10,7 @@
 //! afterwards with `specforge add`.
 
 use crate::extension::{self, Also, Ask, Candidate, LockPlan, Named, Names, Place};
-use crate::{Caller, Containment, Held, OpError, OpErrorKind, Refusal, Writes};
+use crate::{Caller, Containment, OpError, OpErrorKind, Refusal, Writes};
 use serde::Serialize;
 use serde_json::{Value, json};
 use specforge_common::shape::Shape;
@@ -24,6 +24,8 @@ pub const PROJECT_EXISTS: &str = "project_exists";
 /// The code an init refused with because the file it would write as the
 /// starter is already there.
 pub const STARTER_EXISTS: &str = "starter_exists";
+/// A file init creates cannot be written.
+const INIT_WRITE_FAILED: &str = "init_write_failed";
 /// The code for a project name init can't use.
 pub const INVALID_NAME: &str = "invalid_name";
 
@@ -232,38 +234,49 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     let write_error = |what: &str, e: std::io::Error| {
         OpError::new(
             OpErrorKind::of_io(&e),
-            "init_write_failed",
+            INIT_WRITE_FAILED,
             format!("cannot write {what}: {e}"),
         )
     };
     let files = vec![
         Also {
             path: dir.join(crate::config::CONFIG_FILE),
-            write: Box::new(move |file| {
-                file.create_parent()
-                    .map_err(|e| write_error("the project directory", e))?;
-                crate::config::write(file, &config)
+            stage: Box::new(move |file, change| {
+                let after = crate::config::render(&config)?;
+                let before = file
+                    .read_if_there()
+                    .map_err(|e| write_error(crate::config::CONFIG_FILE, e))?;
+                change.stage(file, before, after);
+                Ok(())
             }),
+            code: INIT_WRITE_FAILED,
         },
         Also {
             path: dir.join(".gitignore"),
-            write: Box::new(move |file| {
-                let existing = file.read_to_string().unwrap_or_default();
-                append_gitignore(file, &existing)
-                    .map(|_| ())
-                    .map_err(|e| write_error(".gitignore", e))
+            stage: Box::new(move |file, change| {
+                let before = file
+                    .read_if_there()
+                    .map_err(|e| write_error(".gitignore", e))?;
+                if let Some(after) = gitignore_with(before.as_deref().unwrap_or_default()) {
+                    change.stage(file, before, after);
+                }
+                Ok(())
             }),
+            code: INIT_WRITE_FAILED,
         },
         Also {
             path: dir.join(STARTER_FILE),
-            write: Box::new(move |file| {
-                file.create_parent()
-                    .map_err(|e| write_error("the spec directory", e))?;
-                file.create_new(&starter).map_err(|e| match e.kind() {
-                    std::io::ErrorKind::AlreadyExists => starter_exists(dir),
-                    _ => write_error(STARTER_FILE, e),
-                })
+            stage: Box::new(move |file, change| {
+                let there = file
+                    .read_if_there()
+                    .map_err(|e| write_error(STARTER_FILE, e))?;
+                if there.is_some() {
+                    return Err(starter_exists(dir));
+                }
+                change.stage(file, None, starter.into_bytes());
+                Ok(())
             }),
+            code: INIT_WRITE_FAILED,
         },
     ];
     let done = checked.finish(dir, files, &req.caller.containment().narrowed(dir))?;
@@ -370,25 +383,26 @@ spec "{project_name}" {{
     )
 }
 
-/// Append the missing [`GITIGNORE`] entries to `file`, whose text is
-/// `existing`.
-fn append_gitignore(file: &Held, existing: &str) -> std::io::Result<bool> {
+/// `.gitignore` with the missing [`GITIGNORE`] entries appended to `existing`, its bytes (a file that is not
+/// UTF-8 is appended to, never rewritten); `None` when it holds every entry.
+fn gitignore_with(existing: &[u8]) -> Option<Vec<u8>> {
+    let held = String::from_utf8_lossy(existing);
     let missing: Vec<&str> = GITIGNORE
         .into_iter()
-        .filter(|entry| !existing.lines().any(|l| l.trim() == *entry))
+        .filter(|entry| !held.lines().any(|l| l.trim() == *entry))
         .collect();
     if missing.is_empty() {
-        return Ok(false);
+        return None;
     }
-    let mut text = existing.to_string();
-    if !text.is_empty() && !text.ends_with('\n') {
-        text.push('\n');
+    let mut bytes = existing.to_vec();
+    if !bytes.is_empty() && !bytes.ends_with(b"\n") {
+        bytes.push(b'\n');
     }
     for entry in missing {
-        text.push_str(entry);
-        text.push('\n');
+        bytes.extend_from_slice(entry.as_bytes());
+        bytes.push(b'\n');
     }
-    file.write(text).map(|()| true)
+    Some(bytes)
 }
 
 /// Runner extensions for the test runners the project at `path` uses.

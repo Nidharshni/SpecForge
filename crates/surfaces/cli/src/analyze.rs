@@ -8,12 +8,12 @@ use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, outln};
 use specforge_common::{codes, diagnostic_summary, render_diagnostics, truncate_diagnostics};
+use specforge_ops::Caller;
 use specforge_ops::analysis::analyze::{
     AnalyzeOptions, AnalyzeOutcome, ReportSource, StrayRecord, analyze,
 };
 use specforge_ops::solver::{Solver, Z3};
 use specforge_ops::view::ProjectView;
-use specforge_ops::{Caller, OpError};
 use specforge_project::CompiledProject;
 use std::path::PathBuf;
 
@@ -101,9 +101,7 @@ impl Args {
         let caller = crate::caller::of(false, format, terminal);
         let outcome = match analyze(&ProjectView::of(&project), &self.options(&z3, caller)) {
             Ok(outcome) => outcome,
-            Err(error) => {
-                return Refusal::measuring(format).report(terminal, &OpError::from(error));
-            }
+            Err(refusal) => return Refusal::measuring(format).report(terminal, &refusal),
         };
         // D3: stray test records, on stderr before the reports under human
         // output; under `--format json` the document's `stray_records` say

@@ -1,6 +1,7 @@
 # Trust pins are written with the lock plan
 
 **Status:** accepted (2026-10-12). Amends ADR 0010, ADR 0028 D4, ADR 0041 (amendment A1), ADR 0044 D4.
+D2's `commit_with(config, last)` sentence amended by [ADR 0128](0128-one-project-change-over-held-files.md): `last` is the operation's project change (`specforge.json`, the `Also` files, then the pins); the change no longer names the files.
 
 The fetch policy pinned a publisher key while it checked the signature (`check_and_pin`), that is, while
 the lock plan was still building its installs and before its gate. An install the gate, the binary load or

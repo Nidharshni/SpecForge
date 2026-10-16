@@ -152,6 +152,8 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
     rename as config_invalid before anything is planned or written.
     The rename edits the project's sources only: a nested project's files
     are never edited, and an ID declared only there is not found.
+    A rename whose write fails MUST put back every file it wrote; a file it
+    cannot put back MUST be listed in the failure's files_written.
   """
   verify unit "specforge.rename renames entity and all references"
   verify unit "non-existent entity returns error response"
@@ -164,6 +166,7 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
   verify unit "a specforge.json that does not say which files are the project's sources fails the rename as config_invalid and writes nothing"
   verify unit "rename never edits a nested project's files"
   verify unit "a rename whose file changed on disk since the compile is refused as conflict, and nothing is written"
+  verify integration "a rename that cannot put a file back names it in files_written"
 }
 
 // MCP init creates a project at a specified path, not the current project.

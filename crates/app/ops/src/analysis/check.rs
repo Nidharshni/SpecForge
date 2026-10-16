@@ -8,7 +8,6 @@
 //! the verdict or the cache decision. Surfaces keep the choice of what was
 //! compiled (`reported`), rendering, exit codes and `isError` (ADR 0018).
 
-use std::fmt;
 use std::path::Path;
 
 use serde_json::{Value, json};
@@ -81,72 +80,6 @@ impl CheckOutcome {
     }
 }
 
-/// Why no check ran. Raised before anything is applied or written.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CheckError {
-    UnknownSeverity {
-        requested: String,
-    },
-    UnknownLintProfile {
-        requested: String,
-        available: Vec<&'static str>,
-    },
-    /// A lint profile or the cache needs the project root and the view has
-    /// none.
-    NoProjectRoot,
-}
-
-impl CheckError {
-    /// The closest valid name to an unknown one, as a "did you mean" hint.
-    pub fn suggestion(&self) -> Option<String> {
-        let (requested, names): (&str, &[&str]) = match self {
-            CheckError::UnknownSeverity { requested } => (requested, SEVERITY_NAMES),
-            CheckError::UnknownLintProfile {
-                requested,
-                available,
-            } => (requested, available),
-            CheckError::NoProjectRoot => return None,
-        };
-        let lowercase = requested.to_ascii_lowercase();
-        specforge_common::suggest::find_close_match(&lowercase, names.iter().copied())
-            .map(|close| format!("did you mean '{close}'?"))
-    }
-}
-
-impl fmt::Display for CheckError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            CheckError::UnknownSeverity { requested } => write!(
-                f,
-                "Unknown severity '{requested}' (available: {})",
-                SEVERITY_NAMES.join(", ")
-            ),
-            CheckError::UnknownLintProfile {
-                requested,
-                available,
-            } => write!(
-                f,
-                "Unknown lint profile '{requested}' (available: {})",
-                available.join(", ")
-            ),
-            CheckError::NoProjectRoot => f.write_str(
-                "a lint profile or the build cache needs a project root, and this project has none",
-            ),
-        }
-    }
-}
-
-impl std::error::Error for CheckError {}
-
-/// An unknown severity ([`UNKNOWN_SEVERITY`]) or lint profile
-/// ([`UNKNOWN_LINT_PROFILE`]) is invalid input, with the closest valid name
-/// as its suggestion; a missing root is `no_project`.
-impl From<CheckError> for OpError {
-    fn from(error: CheckError) -> Self {
-        Refusal::<CheckField>::from(error).into_error()
-    }
-}
-
 /// The field of a check request a refusal can be about (ADR 0072).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheckField {
@@ -154,32 +87,6 @@ pub enum CheckField {
     Severity,
     /// The lint profiles.
     LintProfiles,
-}
-
-/// [`OpError::from`], about the field the variant names; a missing root is about none.
-impl From<CheckError> for Refusal<CheckField> {
-    fn from(error: CheckError) -> Self {
-        let message = error.to_string();
-        let (op_error, field) = match error {
-            CheckError::NoProjectRoot => (OpError::no_project(message), None),
-            CheckError::UnknownSeverity { .. } => (
-                OpError::new(OpErrorKind::InvalidInput, UNKNOWN_SEVERITY, message),
-                Some(CheckField::Severity),
-            ),
-            CheckError::UnknownLintProfile { .. } => (
-                OpError::new(OpErrorKind::InvalidInput, UNKNOWN_LINT_PROFILE, message),
-                Some(CheckField::LintProfiles),
-            ),
-        };
-        let op_error = match error.suggestion() {
-            Some(suggestion) => op_error.with_suggestion(suggestion),
-            None => op_error,
-        };
-        match field {
-            Some(field) => op_error.about(field),
-            None => op_error.into(),
-        }
-    }
 }
 
 /// A severity filter naming no severity (`InvalidInput`).
@@ -190,42 +97,79 @@ pub const UNKNOWN_LINT_PROFILE: &str = "unknown_lint_profile";
 /// The severities a filter names, lowercase. Matched ignoring ASCII case.
 pub const SEVERITY_NAMES: &[&str] = &["error", "warning", "info"];
 
+/// Why `check` refuses a rootless view: a lint profile or the cache needs the
+/// root (`no_project`).
+const NO_ROOT: &str =
+    "a lint profile or the build cache needs a project root, and this project has none";
+
 /// The severity `name` names, ignoring ASCII case (`"Error"`, the
-/// payload's own spelling, is `error`).
-pub fn parse_severity(name: &str) -> Result<Severity, CheckError> {
+/// payload's own spelling, is `error`). Any other name is
+/// [`UNKNOWN_SEVERITY`], about the severity filter.
+pub fn parse_severity(name: &str) -> Result<Severity, Refusal<CheckField>> {
     match name.to_ascii_lowercase().as_str() {
         "error" => Ok(Severity::Error),
         "warning" => Ok(Severity::Warning),
         "info" => Ok(Severity::Info),
-        _ => Err(CheckError::UnknownSeverity {
-            requested: name.to_string(),
-        }),
+        _ => {
+            Err(unknown(UNKNOWN_SEVERITY, "severity", name, SEVERITY_NAMES)
+                .about(CheckField::Severity))
+        }
     }
 }
 
-/// The lint profiles `names` name; the first unknown one is refused.
-pub fn parse_lint_profiles<S: AsRef<str>>(names: &[S]) -> Result<Vec<LintProfile>, CheckError> {
+/// The lint profiles `names` name; the first unknown one is
+/// [`UNKNOWN_LINT_PROFILE`], about the lint profiles.
+pub fn parse_lint_profiles<S: AsRef<str>>(
+    names: &[S],
+) -> Result<Vec<LintProfile>, Refusal<CheckField>> {
     names
         .iter()
         .map(|name| {
-            name.as_ref()
-                .parse()
-                .map_err(|_| CheckError::UnknownLintProfile {
-                    requested: name.as_ref().to_string(),
-                    available: LINT_PROFILE_NAMES.to_vec(),
-                })
+            let name = name.as_ref();
+            name.parse().map_err(|_| {
+                unknown(
+                    UNKNOWN_LINT_PROFILE,
+                    "lint profile",
+                    name,
+                    LINT_PROFILE_NAMES,
+                )
+                .about(CheckField::LintProfiles)
+            })
         })
         .collect()
 }
 
+/// `Unknown {what} '{requested}' (available: {names})`, invalid input under
+/// `code`, with `did you mean '{closest}'?` when a name is close to
+/// `requested` in lowercase.
+fn unknown(code: &'static str, what: &str, requested: &str, names: &[&str]) -> OpError {
+    let error = OpError::new(
+        OpErrorKind::InvalidInput,
+        code,
+        format!(
+            "Unknown {what} '{requested}' (available: {})",
+            names.join(", ")
+        ),
+    );
+    match specforge_common::suggest::find_close_match(
+        &requested.to_ascii_lowercase(),
+        names.iter().copied(),
+    ) {
+        Some(close) => error.with_suggestion(format!("did you mean '{close}'?")),
+        None => error,
+    }
+}
+
 /// Report what the compile of `view` reported (`view.reported()`) under
 /// `options`: the policy applied, the verdict taken over all of it, and the
-/// build cache recorded when asked and the check passed.
-pub fn check(view: &ProjectView<'_>, options: &CheckOptions) -> Result<CheckOutcome, CheckError> {
+/// build cache recorded when asked and the check passed. The one refusal is
+/// of the project, so it is about no field: a lint profile or the cache on a
+/// view with no root.
+pub fn check(view: &ProjectView<'_>, options: &CheckOptions) -> Result<CheckOutcome, OpError> {
     let needs_root = options.record_cache || !options.lint_profiles.is_empty();
     let root = match view.root() {
         Some(root) => root,
-        None if needs_root => return Err(CheckError::NoProjectRoot),
+        None if needs_root => return Err(OpError::no_project(NO_ROOT)),
         None => Path::new(""),
     };
     let policy = DiagnosticPolicy {
@@ -484,10 +428,9 @@ mod tests {
                 ..CheckOptions::default()
             },
         ] {
-            assert_eq!(
-                check(&view, &options).unwrap_err(),
-                CheckError::NoProjectRoot
-            );
+            let refused = check(&view, &options).unwrap_err();
+            assert_eq!(refused.code, "no_project");
+            assert_eq!(refused.kind, OpErrorKind::PreconditionFailed);
         }
         // Nothing that needs the root: a rootless view checks fine.
         let outcome = check(&view, &CheckOptions::default()).unwrap();
@@ -519,22 +462,15 @@ mod tests {
         }
         let refused = parse_severity("errors").unwrap_err();
         assert_eq!(
-            refused,
-            CheckError::UnknownSeverity {
-                requested: "errors".into()
-            }
-        );
-        assert_eq!(
-            refused.to_string(),
+            refused.error.message,
             "Unknown severity 'errors' (available: error, warning, info)"
         );
+        assert_eq!(refused.error.code, UNKNOWN_SEVERITY);
         assert_eq!(
-            refused.suggestion().as_deref(),
+            refused.error.suggestion.as_deref(),
             Some("did you mean 'error'?")
         );
-        let op: OpError = refused.into();
-        assert_eq!(op.code, UNKNOWN_SEVERITY);
-        assert_eq!(op.suggestion.as_deref(), Some("did you mean 'error'?"));
+        assert_eq!(refused.subject, Some(CheckField::Severity));
         assert!(parse_severity("").is_err());
     }
 
@@ -543,14 +479,14 @@ mod tests {
         verify = "an unknown severity_filter or lint profile is invalid input"
     )]
     fn check_refusals_have_their_own_codes() {
-        let severity = OpError::from(parse_severity("errors").unwrap_err());
+        let severity = parse_severity("errors").unwrap_err().error;
         assert_eq!(severity.code, UNKNOWN_SEVERITY);
         assert_eq!(severity.kind, OpErrorKind::InvalidInput);
         assert_eq!(
             severity.suggestion.as_deref(),
             Some("did you mean 'error'?")
         );
-        let profile = OpError::from(parse_lint_profiles(&["pedantik"]).unwrap_err());
+        let profile = parse_lint_profiles(&["pedantik"]).unwrap_err().error;
         assert_eq!(profile.code, UNKNOWN_LINT_PROFILE);
         assert_eq!(profile.kind, OpErrorKind::InvalidInput);
         assert_eq!(
@@ -568,18 +504,11 @@ mod tests {
         assert_eq!(parse_lint_profiles::<&str>(&[]), Ok(vec![]));
         let refused = parse_lint_profiles(&["inferred", "pedantik", "nonsense"]).unwrap_err();
         assert_eq!(
-            refused,
-            CheckError::UnknownLintProfile {
-                requested: "pedantik".into(),
-                available: vec!["inferred", "pedantic"],
-            }
-        );
-        assert_eq!(
-            refused.to_string(),
+            refused.error.message,
             "Unknown lint profile 'pedantik' (available: inferred, pedantic)"
         );
         assert_eq!(
-            refused.suggestion().as_deref(),
+            refused.error.suggestion.as_deref(),
             Some("did you mean 'pedantic'?")
         );
     }
@@ -610,15 +539,13 @@ mod tests {
         verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
     )]
     fn check_states_which_field_a_refusal_is_about() {
-        let subject = |error: CheckError| Refusal::<CheckField>::from(error).subject;
         assert_eq!(
-            subject(parse_severity("errors").unwrap_err()),
+            parse_severity("errors").unwrap_err().subject,
             Some(CheckField::Severity)
         );
         assert_eq!(
-            subject(parse_lint_profiles(&["pedantik"]).unwrap_err()),
+            parse_lint_profiles(&["pedantik"]).unwrap_err().subject,
             Some(CheckField::LintProfiles)
         );
-        assert_eq!(subject(CheckError::NoProjectRoot), None);
     }
 }

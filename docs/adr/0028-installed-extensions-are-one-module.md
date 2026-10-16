@@ -1,6 +1,7 @@
 # Installed extensions are one module
 
 **Status:** accepted (2026-10-07)
+D4 amended by [ADR 0128](0128-one-project-change-over-held-files.md): the change places modules and writes the lock; the project files of its last step are a project change that puts back its own files.
 The round-7 D3's 'watched module paths (`Installed::modules`)' is replaced by [ADR 0114](0114-environment-inputs-are-recorded-as-read.md) (`Installed` reads through the disk it is handed).
 
 How a `specforge.json` entry becomes a loaded extension, and how `add`, `update` and `remove` change

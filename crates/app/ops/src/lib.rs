@@ -27,6 +27,7 @@ pub mod analysis;
 pub mod asking;
 pub mod authoring;
 mod caller;
+mod change;
 pub mod config;
 mod containment;
 mod error;

@@ -8,11 +8,9 @@ fn an_unusable_report_is_refused_as_e045() {
         "{not json",
     )
     .unwrap();
-    let AnalyzeError::UnusableReport(e) = project.run(&AnalyzeOptions::default()).unwrap_err()
-    else {
-        panic!("expected UnusableReport");
-    };
-    assert_eq!(e.code, "E045");
+    let refusal = project.run(&AnalyzeOptions::default()).unwrap_err();
+    assert_eq!(refusal.error.code, "E045");
+    assert_eq!(refusal.subject, None);
 
     let missing = AnalyzeOptions {
         report: ReportSource::Named {
@@ -21,10 +19,9 @@ fn an_unusable_report_is_refused_as_e045() {
         },
         ..Default::default()
     };
-    assert!(matches!(
-        project.run(&missing).unwrap_err(),
-        AnalyzeError::UnusableTestResults(_)
-    ));
+    let refusal = project.run(&missing).unwrap_err();
+    assert_eq!(refusal.error.code, "E045");
+    assert_eq!(refusal.subject, Some(AnalyzeField::Report));
 }
 
 #[test]
@@ -70,8 +67,8 @@ fn a_sub_path_does_not_read_the_ancestors_report() {
     };
     // The view rooted at the sub-path reads its root and nothing above.
     assert_eq!(
-        analyze(&view, &min).unwrap_err(),
-        AnalyzeError::MinNeedsTestResults
+        analyze(&view, &min).unwrap_err().error.code,
+        NO_TEST_RESULTS
     );
     assert!(analyze(&project.view(), &min).is_ok());
 }
@@ -88,19 +85,13 @@ fn min_needs_a_report_and_comes_after_the_other_checks() {
         min: Some(50.0),
         ..Default::default()
     };
-    assert_eq!(
-        project.run(&min).unwrap_err(),
-        AnalyzeError::MinNeedsTestResults
-    );
+    assert_eq!(project.run(&min).unwrap_err().error.code, NO_TEST_RESULTS);
 
     let both = AnalyzeOptions {
         pass: "nope".to_string(),
         ..min.clone()
     };
-    assert!(matches!(
-        project.run(&both).unwrap_err(),
-        AnalyzeError::UnknownPass { .. }
-    ));
+    assert_eq!(project.run(&both).unwrap_err().error.code, UNKNOWN_PASS);
 
     std::fs::write(
         project.assembled.root().join("specforge-report.json"),
@@ -294,9 +285,11 @@ fn a_minimum_without_the_coverage_pass_is_refused_before_any_pass_runs() {
         min: Some(10.0),
         ..pass("contracts")
     };
-    assert_eq!(
-        analyze(&project.view(), &options).unwrap_err(),
-        AnalyzeError::MinWithoutCoveragePass
+    assert!(
+        analyze(&project.view(), &options)
+            .unwrap_err()
+            .error
+            .is(codes::E068)
     );
     assert!(project.runtime.calls().is_empty(), "no pass ran");
 
@@ -306,11 +299,7 @@ fn a_minimum_without_the_coverage_pass_is_refused_before_any_pass_runs() {
         min: Some(10.0),
         ..Default::default()
     };
-    assert_eq!(
-        analyze(&project.view(), &all).unwrap_err(),
-        AnalyzeError::MinWithoutCoveragePass
-    );
-    let error = OpError::from(AnalyzeError::MinWithoutCoveragePass);
+    let error = analyze(&project.view(), &all).unwrap_err().error;
     assert_eq!(error.code, "E068");
 }
 
@@ -325,9 +314,9 @@ fn a_minimum_outside_0_to_100_is_invalid_input() {
             min: Some(min),
             ..Default::default()
         };
-        let error = project.run(&options).unwrap_err();
-        assert!(matches!(error, AnalyzeError::MinOutOfRange(_)), "{min}");
-        let error = OpError::from(error);
+        let refusal = project.run(&options).unwrap_err();
+        assert_eq!(refusal.subject, Some(AnalyzeField::Min), "{min}");
+        let error = refusal.error;
         assert_eq!(error.kind, OpErrorKind::InvalidInput);
         assert_eq!(error.code, INVALID_MIN);
     }

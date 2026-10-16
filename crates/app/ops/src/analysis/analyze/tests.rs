@@ -67,7 +67,7 @@ impl Project {
         self.assembled.view()
     }
 
-    fn run(&self, options: &AnalyzeOptions) -> Result<AnalyzeOutcome, AnalyzeError> {
+    fn run(&self, options: &AnalyzeOptions) -> Result<AnalyzeOutcome, Refusal<AnalyzeField>> {
         analyze(&self.view(), options)
     }
 }
@@ -195,4 +195,5 @@ fn add_entity_with(
 
 mod gate;
 mod passes;
+mod refusals;
 mod stray;
