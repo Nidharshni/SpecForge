@@ -5,7 +5,7 @@
 //! The plan check reads no report (plan.rs `the_plan_check_reads_no_recorded_report`).
 
 use crate::view_support::{Assembled, Viewed, registries};
-use specforge_ops::analysis::analyze::{AnalyzeError, AnalyzeOptions, ReportSource, analyze};
+use specforge_ops::analysis::analyze::{AnalyzeOptions, ReportSource, analyze};
 use specforge_ops::authoring::format::{Mode, Request, run};
 use specforge_ops::{OpError, OpErrorKind};
 use specforge_test::prelude::*;
@@ -61,10 +61,9 @@ fn every_view(project: &Assembled) -> Vec<(&'static str, OpError)> {
         ),
         (
             "analyze",
-            match analyze(&view, &AnalyzeOptions::default()).unwrap_err() {
-                AnalyzeError::UnusableReport(error) => error,
-                other => panic!("expected the report's failure: {other:?}"),
-            },
+            analyze(&view, &AnalyzeOptions::default())
+                .unwrap_err()
+                .error,
         ),
     ]
 }
@@ -157,11 +156,8 @@ fn analyze_calls_a_missing_named_report_file_not_found() {
         ..Default::default()
     };
 
-    let error = analyze(&project.view(), &options).unwrap_err();
+    let error = analyze(&project.view(), &options).unwrap_err().error;
 
-    let AnalyzeError::UnusableTestResults(error) = error else {
-        panic!("expected an unusable report: {error:?}");
-    };
     assert_eq!(error.kind, OpErrorKind::FileNotFound);
     assert_eq!(error.code, "E045");
 }

@@ -123,15 +123,14 @@ fn coverage_is_an_alias_for_the_testing_pass() {
 fn unknown_and_check_phase_passes_are_refused_with_the_available_ones() {
     for requested in ["nope", "@t/x:hidden", "@t/x:typo"] {
         let err = Project::new().run(&pass(requested)).unwrap_err();
+        assert_eq!(err.error.code, UNKNOWN_PASS);
         assert_eq!(
-            err,
-            AnalyzeError::UnknownPass {
-                requested: requested.to_string(),
-                available: ["all", "coverage", "contracts", "@t/x:scan"]
-                    .map(String::from)
-                    .to_vec(),
-            }
+            err.error.message,
+            format!(
+                "Unknown analysis pass '{requested}' (available: all, coverage, contracts, @t/x:scan)"
+            )
         );
+        assert_eq!(err.subject, Some(AnalyzeField::Pass));
     }
 }
 
@@ -237,9 +236,7 @@ fn a_claim_the_solver_entails_reaches_the_extension_passes() {
 )]
 fn analyze_states_which_field_a_refusal_is_about() {
     let project = Project::new();
-    let subject = |options: AnalyzeOptions| {
-        Refusal::<AnalyzeField>::from(project.run(&options).unwrap_err()).subject
-    };
+    let subject = |options: AnalyzeOptions| project.run(&options).unwrap_err().subject;
     assert_eq!(subject(pass("nope")), Some(AnalyzeField::Pass));
     let min = AnalyzeOptions {
         min: Some(150.0),
@@ -272,6 +269,6 @@ fn analyze_states_which_field_a_refusal_is_about() {
         report: ReportSource::None,
         ..Default::default()
     };
-    let refusal = Refusal::<AnalyzeField>::from(project.run(&no_report).unwrap_err());
+    let refusal = project.run(&no_report).unwrap_err();
     assert_eq!(refusal.subject, None, "{refusal:?}");
 }

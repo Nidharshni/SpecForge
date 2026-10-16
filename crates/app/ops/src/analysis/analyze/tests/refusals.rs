@@ -33,11 +33,8 @@ fn named(path: std::path::PathBuf) -> ReportSource {
     verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
 )]
 fn analyze_refusals_are_pinned_field_by_field() {
-    let refused = |project: &Project, options: AnalyzeOptions| {
-        line(&Refusal::<AnalyzeField>::from(
-            project.run(&options).unwrap_err(),
-        ))
-    };
+    let refused =
+        |project: &Project, options: AnalyzeOptions| line(&project.run(&options).unwrap_err());
     let project = Project::new();
     let serving = Project::serving(
         InProcessRuntime::new()
