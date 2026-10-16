@@ -266,3 +266,12 @@ iface Port {
 
     assert!(graph.edges().is_empty(), "{:?}", graph.edges());
 }
+
+#[test]
+#[ignore = "flipped by T4"]
+fn a_quoted_union_variant_derives_no_edge() {
+    let source = "shape Base {\n  id string\n}\nshape Wheel {\n  size number\n}\nshape Level = \"Base\" | Wheel\n";
+    let (graph, _) = build(source, derived());
+
+    assert_eq!(edges_from(&graph, "Level"), vec![edge("Wheel", "parts")]);
+}
