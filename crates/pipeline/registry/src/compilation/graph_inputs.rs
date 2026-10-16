@@ -78,7 +78,8 @@ pub(super) fn field_forms(kinds: &KindRegistry, fields: &FieldRegistry) -> Field
         .filter(|(_, entry)| entry.declared.open_fields)
         .map(|(name, _)| name.clone())
         .collect();
-    FieldForms::new(forms, member_kinds)
+    let declared = kinds.iter().map(|(name, _)| name.clone()).collect();
+    FieldForms::new(forms, member_kinds, declared)
 }
 
 /// The registered reference fields whose edges the host derives

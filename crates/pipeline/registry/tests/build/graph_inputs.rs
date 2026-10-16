@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use specforge_extension_sdk::prelude::*;
-use specforge_graph::{DerivedFrom, FieldForm, FieldForms, GraphInputs, Reading};
+use specforge_graph::{DerivedFrom, FieldForm, FieldForms, GraphInputs, Reading, Target};
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_test_macros::test as spec;
 
@@ -70,7 +70,11 @@ fn a_fields_form_follows_its_registered_type() {
     // stored as written (their form coerces nothing).
     assert_eq!(
         inputs.field_forms,
-        FieldForms::new(expected, Default::default())
+        FieldForms::new(
+            expected,
+            Default::default(),
+            ["thing".to_string()].into_iter().collect()
+        )
     );
 }
 
@@ -305,4 +309,30 @@ fn the_graph_inputs_contract_holds() {
     // deterministic: the same declarations give the same inputs.
     assert_eq!(crate::support::build(declared()).graph_inputs(), inputs);
     assert_ne!(inputs, GraphInputs::default());
+}
+
+#[spec(
+    behavior = "registry_build_graph_inputs",
+    verify = "a reference field's form says whether its target kind is loaded"
+)]
+fn the_field_forms_say_whether_each_target_kind_is_loaded() {
+    let forms = build([declare("@t/ext", |c| {
+        c.kind("Doc", |k| {
+            k.keyword("doc");
+            k.field("owner", |f| {
+                f.field_type(FieldType::Reference).target_kind("team");
+            });
+            k.field("parts", |f| {
+                f.field_type(FieldType::ReferenceList).target_kind("doc");
+            });
+            k.field("title", |f| {
+                f.field_type(FieldType::String);
+            });
+        });
+    })])
+    .graph_inputs()
+    .field_forms;
+    assert_eq!(forms.target("doc", "owner"), Some(Target::Absent("team")));
+    assert_eq!(forms.target("doc", "parts"), Some(Target::Loaded("doc")));
+    assert_eq!(forms.target("doc", "title"), None);
 }

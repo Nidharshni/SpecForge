@@ -537,6 +537,7 @@ behavior registry_build_graph_inputs "Registry Build Derives the Graph Inputs" {
   verify unit "the registry build derives every graph input from the declarations"
   verify unit "a field's value coercion follows its registered type"
   verify unit "a derived reference field is a graph input only with a target kind and a known source"
+  verify unit "a reference field's form says whether its target kind is loaded"
   verify unit "inverse pairs are written lesser first and sorted, whatever the registration order"
   verify unit "an inverse field is a field of the target kind: the one inverse_of names, and every one naming the field inverse_of"
   verify contract "Registry Build Derives the Graph Inputs: graph inputs hold — registries_populated, every_input_derived, registries_agree, deterministic"
