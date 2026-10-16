@@ -61,8 +61,10 @@ fn analyze_writes_a_stray_record_only_in_its_document() {
     assert_eq!(doc.stderr, "");
 }
 
-#[test]
-#[ignore = "flipped by T6"]
+#[specforge_test(
+    behavior = "report_command_outcome",
+    verify = "under --format json a note is never written and a notice is written once: in the document when it carries it, else on stderr"
+)]
 fn check_writes_no_note_beside_its_document() {
     let failing = bare("behavior parse_input \"A\" {\n}\nbehavior parse_input \"B\" {\n}\n");
     let run = Cli::on(&failing).run(&["check", "--cache", "--format", "json"]);
