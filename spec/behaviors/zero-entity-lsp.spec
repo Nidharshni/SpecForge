@@ -80,7 +80,7 @@ behavior provide_extension_entity_hover "Provide Extension Entity Hover" {
     declares headline and normative as a summary (whole, every line
     quoted), its coverage (status, proven obligations and recorded tests;
     or that it is exempt and why; or that the recorded report cannot be
-    read; or, while the project rebuilds, that coverage is unavailable),
+    read; while the project rebuilds, the last complete compile's coverage),
     the references to it grouped
     by referencing kind and field and the references it makes grouped by
     field, each with its count, every other field value (a long string cut
@@ -107,7 +107,7 @@ behavior provide_extension_entity_hover "Provide Extension Entity Hover" {
   verify unit "hover lists the entity's obligations apart from its fields"
   verify unit "hover lists the entity's diagnostics the cursor's do not already show"
   verify unit "a long field value is cut at a character boundary"
-  verify unit "hover never states a coverage fact it cannot read: while the project rebuilds it says so"
+  verify unit "hover shows the last complete compile's coverage while the project rebuilds"
   verify contract "Provide Extension Entity Hover: extension entity hover holds — kind_registry_populated, hover_content_from_registry, source_extension_shown"
 }
 

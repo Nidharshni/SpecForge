@@ -21,6 +21,7 @@ and compiled it their own way.
   (`session`). A directory a test builds apart from a fixture is compiled with `testing::compile_at`, and the
   production runtime comes from `testing::component_runtime`. No test writes a compile of its own with
   `CompiledProject::compile`, or builds the production runtime itself.
+  *ADR 0108: and `testing::Assembled` in memory.*
 - **D2. One driver per surface.** In process: the fixture's `compile`/`session`. MCP:
   `specforge_mcp::testing::Served` (`rooted`: as `specforge mcp <root>` serves it; `initialized`: an `initialize`
   naming the project). CLI: `crates/surfaces/cli/tests/support::Cli`, the one place the suite spells the binary, a

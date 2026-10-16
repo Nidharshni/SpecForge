@@ -12,7 +12,7 @@ use specforge_ops::read::query::{
 use specforge_ops::read::{export::Format, schema::json_schema};
 use specforge_test::prelude::*;
 
-use crate::view_support::{Project, registries};
+use crate::view_support::{Assembled, Viewed, registries};
 
 fn node(id: &str, kind: &str) -> Node {
     Node {
@@ -32,7 +32,7 @@ fn node(id: &str, kind: &str) -> Node {
 }
 
 /// a(feature) -> b(behavior) -> c(invariant) -> d(event)
-fn linear() -> Project {
+fn linear() -> Assembled {
     let mut graph = Graph::new();
     graph.add_node(node("a", "feature"));
     graph.add_node(node("b", "behavior"));
@@ -49,11 +49,11 @@ fn linear() -> Project {
             label: label.into(),
         });
     }
-    Project::of_graph(graph, Default::default())
+    Assembled::over(Default::default()).graph(graph)
 }
 
 /// The document `query` answers for `entity` at `depth`, filtered by `kinds`.
-fn document(project: &Project, entity: &str, depth: usize, kinds: &[&str]) -> Value {
+fn document(project: &Assembled, entity: &str, depth: usize, kinds: &[&str]) -> Value {
     let outcome = query(
         &project.view(),
         &QueryRequest {
@@ -192,7 +192,7 @@ fn query_of_a_missing_entity_is_e003() {
     let project = linear();
     let mut graph = Graph::new();
     graph.add_node(node("login", "behavior"));
-    let near = Project::of_graph(graph, Default::default());
+    let near = Assembled::over(Default::default()).graph(graph);
     let error = query(
         &near.view(),
         &QueryRequest {
@@ -227,14 +227,11 @@ fn query_of_a_missing_entity_is_e003() {
     verify = "an unknown --kind is reported with I020 and the closest kind"
 )]
 fn query_reports_an_unknown_kind() {
-    let project = Project::of_graph(
-        {
-            let mut graph = Graph::new();
-            graph.add_node(node("login", "behavior"));
-            graph
-        },
-        registries(&["behavior"], &[]),
-    );
+    let project = Assembled::over(registries(&["behavior"], &[])).graph({
+        let mut graph = Graph::new();
+        graph.add_node(node("login", "behavior"));
+        graph
+    });
     let outcome = query(
         &project.view(),
         &QueryRequest {
@@ -261,10 +258,7 @@ fn query_reports_an_unknown_kind() {
     verify = "--include-coverage gives each entity its coverage status"
 )]
 fn query_with_coverage_marks_each_node() {
-    let project = Project::new(
-        "behavior login \"Login\" {\n  verify unit \"logs in\"\n}\n\nbehavior logout \"Logout\" {\n  verify unit \"logs out\"\n}\n",
-        registries(&["behavior"], &[]),
-    );
+    let project = Assembled::over(registries(&["behavior"], &[])).source("behavior login \"Login\" {\n  verify unit \"logs in\"\n}\n\nbehavior logout \"Logout\" {\n  verify unit \"logs out\"\n}\n");
     project.record_passing(&[("login", "logs in")]);
     let status = |entity: &str, include_coverage: bool| -> Value {
         let outcome = query(
@@ -288,14 +282,14 @@ fn query_with_coverage_marks_each_node() {
 const COVERED_SOURCE: &str = "behavior login \"Login\" {\n  verify unit \"logs in\"\n}\n\nbehavior logout \"Logout\" {\n  verify unit \"logs out\"\n}\n";
 
 /// The `login`/`logout` project with `login`'s obligation proven.
-fn covered() -> Project {
-    let project = Project::new(COVERED_SOURCE, registries(&["behavior"], &[]));
+fn covered() -> Assembled {
+    let project = Assembled::over(registries(&["behavior"], &[])).source(COVERED_SOURCE);
     project.record_passing(&[("login", "logs in")]);
     project
 }
 
 /// The document `query` answers for `entity` at depth 0 in `format`.
-fn queried(project: &Project, entity: &str, format: Format, include_coverage: bool) -> String {
+fn queried(project: &Assembled, entity: &str, format: Format, include_coverage: bool) -> String {
     query(
         &project.view(),
         &QueryRequest {
@@ -355,8 +349,8 @@ fn a_query_with_coverage_is_the_export_with_one_key_per_node() {
     verify = "a non-existent entity is E003 naming the closest entity"
 )]
 fn an_unknown_entity_is_refused_before_the_report_is_read() {
-    let project = Project::new(COVERED_SOURCE, registries(&["behavior"], &[]));
-    std::fs::write(project.dir.path().join("specforge-report.json"), "{").unwrap();
+    let project = Assembled::over(registries(&["behavior"], &[])).source(COVERED_SOURCE);
+    std::fs::write(project.root().join("specforge-report.json"), "{").unwrap();
     let ask = |entity_id| {
         query(
             &project.view(),
@@ -399,14 +393,11 @@ fn query_refuses_dot() {
 }
 
 /// Three behaviors with a `contract` each, `b2` and `b3` sharing one.
-fn behaviors() -> Project {
-    Project::new(
-        "behavior b3 \"Three\" {\n  contract \"x\"\n}\n\nbehavior b1 \"One\" {\n  contract \"x\"\n}\n\nbehavior b2 \"Two\" {\n  contract \"y\"\n}\n",
-        registries(&["behavior"], &[]),
-    )
+fn behaviors() -> Assembled {
+    Assembled::over(registries(&["behavior"], &[])).source("behavior b3 \"Three\" {\n  contract \"x\"\n}\n\nbehavior b1 \"One\" {\n  contract \"x\"\n}\n\nbehavior b2 \"Two\" {\n  contract \"y\"\n}\n")
 }
 
-fn listed(project: &Project, request: &ListRequest) -> Vec<String> {
+fn listed(project: &Assembled, request: &ListRequest) -> Vec<String> {
     list(&project.view(), request)
         .entities
         .iter()
@@ -498,7 +489,7 @@ fn search_defaults_to_twenty() {
     for i in 0..30 {
         graph.add_node(node(&format!("item_{i:02}"), "behavior"));
     }
-    let project = Project::of_graph(graph, Default::default());
+    let project = Assembled::over(Default::default()).graph(graph);
     let found = |limit| {
         search(
             &project.view(),
@@ -575,7 +566,7 @@ fn query_contract_valid_entity_returns_subgraph() {
             label: label.into(),
         });
     }
-    let project = Project::of_graph(graph, Default::default());
+    let project = Assembled::over(Default::default()).graph(graph);
     let query = |depth: usize, kinds: &[&str]| document(&project, "a", depth, kinds);
 
     // depth_respected: exactly the entities within N hops.

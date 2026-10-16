@@ -303,17 +303,13 @@ mod tests {
         verify = "doctor reports conflicts with resolution suggestions"
     )]
     fn doctor_reports_conflicts_with_a_resolution_suggestion() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let graph = specforge_graph::Graph::new();
-        let env = specforge_project::Environment::with_registries(
+        let project = specforge_project::testing::Assembled::over(
             specforge_registry::build_registries(vec![
                 declaring_feature_and_uses("acme"),
                 declaring_feature_and_uses("@specforge/product"),
             ]),
-            None,
         );
-        let recorded = specforge_project::coverage::RecordedCoverage::over(&graph, &env);
-        let view = ProjectView::new(&graph, &env, Some(dir.path()), &recorded);
+        let view = ProjectView::of(project.compiled());
         let report = specforge_ops::analysis::doctor::diagnose(
             &view,
             &specforge_ops::testing::ScriptedSolver::ready(),

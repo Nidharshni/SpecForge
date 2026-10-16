@@ -154,6 +154,8 @@ read, and a reload keeps the held buffers in its one cold build instead of apply
   build for one reader.
   *(ADR 0100: the stand-in now copies the graph, the environment handle, the source texts, the source keys and
   the memo's snapshot; the rejection and its reopen condition stand.)*
+  *(ADR 0108: the stand-in is a copy of the compiled project (`CompiledProject: Clone`); the decision and its reopen
+  condition stand.)*
 - **Refusing every cursor request while the document is stale**: hover and F12 would be blank after
   every keystroke.
 - **One update per buffer with the checks deferred to the last**: one more check mode for what one

@@ -240,9 +240,10 @@ impl<'a> Inventory<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::view::testing::Fixture;
+    use crate::testing::Viewed;
     use specforge_common::{Diagnostic, codes};
     use specforge_installed::{LoadProblem, LockSource};
+    use specforge_project::testing::Assembled;
     use specforge_test_macros::test as specforge_test;
 
     /// What the load records for an entry it could not load.
@@ -316,7 +317,7 @@ mod tests {
             locked: "a".into(),
             actual: "b".into(),
         };
-        let fixture = Fixture::new()
+        let fixture = Assembled::new()
             .enabled(vec![
                 EnabledExtension::unloaded("@specforge/product"),
                 EnabledExtension::unloaded("@acme/locked"),
@@ -328,9 +329,9 @@ mod tests {
                 failing("@acme/changed", changed.clone()),
             ])
             .declarations(vec![
-                Fixture::declaration("@specforge/product", "1.0.0"),
-                Fixture::declaration("@acme/locked", "2.0.0"),
-                Fixture::declaration("@sdk/greet", "0.1.0"),
+                Assembled::declaration("@specforge/product", "1.0.0"),
+                Assembled::declaration("@acme/locked", "2.0.0"),
+                Assembled::declaration("@sdk/greet", "0.1.0"),
             ])
             .lock(&[
                 ("@acme/locked", "2.0.0", "registry"),
@@ -427,9 +428,9 @@ mod tests {
     )]
     fn an_extensions_source_is_where_the_load_takes_it() {
         // A builtin's name in the lock is a stray entry: the builtin loads.
-        let fixture = Fixture::new()
+        let fixture = Assembled::new()
             .config(&["@specforge/product"])
-            .declarations(vec![Fixture::declaration("@specforge/product", "1.0.0")])
+            .declarations(vec![Assembled::declaration("@specforge/product", "1.0.0")])
             .lock(&[("@specforge/product", "9.9.9", "registry")]);
         let rows = table(&fixture.view());
         assert_eq!(rows[0].origin, Origin::Builtin);
@@ -448,9 +449,9 @@ mod tests {
             vec![refused.clone(), named.clone()],
             vec![named.clone(), refused.clone()],
         ] {
-            let fixture = Fixture::new()
+            let fixture = Assembled::new()
                 .enabled(enabled)
-                .declarations(vec![Fixture::declaration("@sdk/greet", "0.1.0")])
+                .declarations(vec![Assembled::declaration("@sdk/greet", "0.1.0")])
                 .lock(&[("@sdk/greet", "0.1.0", "registry")]);
             assert_eq!(
                 table(&fixture.view())[0].origin,
@@ -463,7 +464,7 @@ mod tests {
 
     #[test]
     fn a_file_entry_that_did_not_load_has_no_version() {
-        let fixture = Fixture::new()
+        let fixture = Assembled::new()
             .enabled(vec![failing(
                 "@test/probe=nope.wasm",
                 LoadProblem::FileMissing {
@@ -487,7 +488,7 @@ mod tests {
 
     #[test]
     fn an_argument_selects_a_file_entry_a_name_or_both() {
-        let fixture = Fixture::new().enabled(vec![
+        let fixture = Assembled::new().enabled(vec![
             EnabledExtension::unloaded("@sdk/greet=greet.wasm"),
             EnabledExtension::unloaded("@sdk/twice=twice.wasm"),
             EnabledExtension::unloaded("@sdk/twice=twice.wasm"),

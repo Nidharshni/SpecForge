@@ -1,3 +1,4 @@
+use crate::view_support::{Assembled, Viewed};
 use specforge_common::{Severity, SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
 use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue, VerifyStatement};
@@ -296,10 +297,8 @@ fn debug_body(stats: &impl std::fmt::Debug) -> String {
 // stats operation, it must stay byte-identical. No spec obligation.
 #[test]
 fn stats_today_through_the_registries() {
-    let project = crate::view_support::Project::of_graph(
-        registries_graph(),
-        crate::view_support::registries(&["behavior"], &[]),
-    );
+    let project = Assembled::over(crate::view_support::registries(&["behavior"], &[]))
+        .graph(registries_graph());
     let diagnostics = vec![
         specforge_common::Diagnostic::new(specforge_common::codes::E001, "err"),
         specforge_common::Diagnostic::untyped("W002", Severity::Warning, "warn"),

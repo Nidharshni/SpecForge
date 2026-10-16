@@ -9,7 +9,7 @@ use specforge_protocol_types::{
 use specforge_registry::build_registries;
 use specforge_test::prelude::*;
 
-use crate::view_support::Project;
+use crate::view_support::{Assembled, Viewed};
 
 #[specforge_test(
     behavior = "build_model_intermediate",
@@ -30,7 +30,8 @@ fn the_model_names_a_field_type_as_declared() {
         }],
         ..Default::default()
     }];
-    let project = Project::new("", specforge_registry::build_registries(vec![declaration]));
+    let project =
+        Assembled::over(specforge_registry::build_registries(vec![declaration])).source("");
     let rendered = |format| {
         let options = ModelOptions {
             format,
@@ -62,7 +63,7 @@ fn the_model_names_a_field_type_as_declared() {
 
 /// `@t/soft` declares `behavior` (its `events` a reference list to `event`
 /// over `Triggers`) and `event`; `@t/test` is loaded and declares no kind.
-fn two_extensions() -> Project {
+fn two_extensions() -> Assembled {
     let declaration = |name: &str| ExtensionDeclaration {
         handshake: HandshakeResponse {
             name: name.into(),
@@ -95,12 +96,12 @@ fn two_extensions() -> Project {
         target_kind: Some("event".into()),
         ..EdgeTypeDescriptor::default()
     }];
-    Project::new("", build_registries(vec![soft, declaration("@t/test")]))
+    Assembled::over(build_registries(vec![soft, declaration("@t/test")])).source("")
 }
 
 /// The model operation over `project`, drawn as JSON.
 fn outcome_of(
-    project: &Project,
+    project: &Assembled,
     options: ModelOptions,
 ) -> Result<ModelOutcome, specforge_ops::Refusal<specforge_ops::read::model::ModelField>> {
     model(
@@ -113,13 +114,13 @@ fn outcome_of(
 }
 
 /// The JSON model `options` draws over `project`.
-fn json_model(project: &Project, options: ModelOptions) -> Value {
+fn json_model(project: &Assembled, options: ModelOptions) -> Value {
     let outcome = outcome_of(project, options).expect("no refusal");
     serde_json::from_str(&outcome.document).expect("the json model parses")
 }
 
 /// The kinds the JSON model lists, in order.
-fn kinds_of(project: &Project, options: ModelOptions) -> Vec<String> {
+fn kinds_of(project: &Assembled, options: ModelOptions) -> Vec<String> {
     json_model(project, options)["entities"]
         .as_array()
         .unwrap()
@@ -129,7 +130,7 @@ fn kinds_of(project: &Project, options: ModelOptions) -> Vec<String> {
 }
 
 /// Each extension of the JSON model: (name, entity_count, edge_count).
-fn counts_of(project: &Project, options: ModelOptions) -> Vec<(String, u64, u64)> {
+fn counts_of(project: &Assembled, options: ModelOptions) -> Vec<(String, u64, u64)> {
     json_model(project, options)["extensions"]
         .as_array()
         .unwrap()

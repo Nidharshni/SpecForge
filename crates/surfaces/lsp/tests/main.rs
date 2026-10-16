@@ -24,6 +24,7 @@ mod protocol;
 mod publish;
 mod published;
 mod reaction;
+mod rebuilding;
 mod recorder;
 mod registries;
 mod rename;

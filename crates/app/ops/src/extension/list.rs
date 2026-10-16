@@ -195,9 +195,10 @@ pub fn providers(view: &ProjectView) -> ProviderListing {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::view::testing::Fixture;
+    use crate::testing::Viewed;
     use serde_json::json;
     use specforge_project::EnabledExtension;
+    use specforge_project::testing::Assembled;
     use specforge_test_macros::test as specforge_test;
 
     #[specforge_test(
@@ -205,9 +206,9 @@ mod tests {
         verify = "the extensions listing reads the config entries from the view, never specforge.json again"
     )]
     fn the_listing_reads_the_config_from_the_view_not_from_disk() {
-        let fixture = Fixture::new().config(&["@acme/missing@1.2.0"]);
+        let fixture = Assembled::new().config(&["@acme/missing@1.2.0"]);
         std::fs::write(
-            fixture.dir.path().join("specforge.json"),
+            fixture.root().join("specforge.json"),
             r#"{"extensions": ["@other/x@9.9.9"]}"#,
         )
         .unwrap();
@@ -227,9 +228,9 @@ mod tests {
         verify = "list, doctor and remove read the lock the compile read, once"
     )]
     fn the_listing_reads_the_lock_the_compile_read_not_the_disk() {
-        let fixture = Fixture::new().lock(&[("@acme/locked", "1.0.0", "registry")]);
+        let fixture = Assembled::new().lock(&[("@acme/locked", "1.0.0", "registry")]);
         // The file changed after the compile read it.
-        std::fs::remove_file(specforge_installed::lock_path(fixture.dir.path())).unwrap();
+        std::fs::remove_file(specforge_installed::lock_path(fixture.root())).unwrap();
 
         let listing = list(&fixture.view());
 
@@ -247,7 +248,7 @@ mod tests {
         verify = "a .wasm file entry is listed under the name it declares, loaded, with source file:<path>"
     )]
     fn a_file_entry_is_listed_with_its_file_origin() {
-        let fixture = Fixture::new()
+        let fixture = Assembled::new()
             .enabled(vec![EnabledExtension {
                 entry: "greet.wasm".into(),
                 name: "@sdk/greet".into(),
@@ -255,7 +256,7 @@ mod tests {
                 failure: None,
                 warnings: Vec::new(),
             }])
-            .declarations(vec![Fixture::declaration("@sdk/greet", "0.1.0")]);
+            .declarations(vec![Assembled::declaration("@sdk/greet", "0.1.0")]);
 
         let listing = list(&fixture.view());
 
@@ -269,9 +270,9 @@ mod tests {
 
     #[test]
     fn a_rootless_view_lists_what_it_enabled_and_loaded() {
-        let fixture = Fixture::new()
+        let fixture = Assembled::new()
             .config(&["@specforge/product"])
-            .declarations(vec![Fixture::declaration("@acme/loaded", "2.0.0")])
+            .declarations(vec![Assembled::declaration("@acme/loaded", "2.0.0")])
             .lock(&[("@acme/locked", "1.0.0", "registry")]);
 
         let rootless = list(&fixture.rootless_view());
@@ -312,12 +313,12 @@ mod tests {
         verify = "list shows all configured providers"
     )]
     fn the_providers_listing_reads_the_registration_from_the_view() {
-        let fixture = Fixture::new().config_json(json!({
+        let fixture = Assembled::new().config_json(json!({
             "extensions": [],
             "providers": [{"scheme": "gh", "alias": "work", "extension": "@acme/issues"}],
         }));
         // What is on disk says something else: the view's registration is read.
-        std::fs::write(fixture.dir.path().join("specforge.json"), "{}").unwrap();
+        std::fs::write(fixture.root().join("specforge.json"), "{}").unwrap();
 
         let listing = providers(&fixture.view());
 

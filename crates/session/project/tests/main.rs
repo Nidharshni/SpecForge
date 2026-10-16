@@ -3,11 +3,13 @@
     reason = "a test's unwrap is its assertion: a None or an Err fails the test"
 )]
 
+mod assembled;
 mod buffers;
 mod builtins;
 mod changes;
 mod check_passes;
 mod compile;
+mod copy;
 mod custom_rules;
 mod delta;
 mod derived_references;

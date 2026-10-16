@@ -1,6 +1,6 @@
 //! Every answer the server gives a request, decided synchronously over the
 //! LSP state: the open documents, the project as last compiled (the
-//! session, or its stand-in while it is out for an update), the
+//! session, or a copy of it while it is out for an update), the
 //! diagnostics last published and what the client declared. The backend
 //! takes the state's read lock, calls one of these and returns what it
 //! answers; it decides nothing (ADR 0023).
@@ -106,8 +106,8 @@ fn entity_under_cursor(compiled: &Compiled, key: &str, position: Position) -> Op
 /// The hover at `position` of the open document `uri`: the published
 /// diagnostics under it (their ranges are positions in the compiled text)
 /// explained from the catalog, then what the cursor names: an entity's
-/// facts (the inspect read view reporting what was published; coverage
-/// unavailable while the project rebuilds) or a field's help. Sections are
+/// facts (the inspect read view reporting what was published; while the
+/// project rebuilds, the last complete compile's coverage) or a field's help. Sections are
 /// joined by a rule. `None` for a document that is not open or a position
 /// with neither.
 pub fn hover(state: &LspState, uri: &Url, position: Position) -> Option<Hover> {
@@ -133,7 +133,7 @@ pub fn hover(state: &LspState, uri: &Url, position: Position) -> Option<Hover> {
                 .ok()
                 .map(|facts| {
                     let coverage = specforge_ops::read::inspect::coverage(&view, id.as_str());
-                    hover::entity(&facts, &coverage, &shown, state.rebuilding())
+                    hover::entity(&facts, &coverage, &shown)
                 })
         }
         Some(Target::Field { kind, field }) => {

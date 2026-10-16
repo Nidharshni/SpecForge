@@ -81,7 +81,7 @@ fn one_operation_runs_a_command_over_the_view() {
     let runtime = std::sync::Arc::new(fake());
     let fixture = fixture(&runtime);
     std::fs::write(
-        fixture.dir.path().join("specforge-report.json"),
+        fixture.root().join("specforge-report.json"),
         r#"{"runner":"fixture","results":{}}"#,
     )
     .unwrap();
@@ -157,11 +157,11 @@ fn the_root_a_command_receives_is_canonical() {
     let dir = tempfile::TempDir::new().unwrap();
     std::fs::create_dir(dir.path().join("real")).unwrap();
     std::os::unix::fs::symlink(dir.path().join("real"), dir.path().join("link")).unwrap();
-    let fixture = fixture(&runtime);
-    let recorded =
-        specforge_project::coverage::RecordedCoverage::over(&fixture.graph, fixture.env());
     let linked = dir.path().join("link");
-    let view = ProjectView::new(&fixture.graph, fixture.env(), Some(&linked), &recorded);
+    let fixture = Assembled::at(&linked)
+        .runtime(runtime.clone())
+        .graph(graph());
+    let view = fixture.view();
 
     run(&view, &routed("ok"), &Map::new(), CommandFormat::Json).unwrap();
 
@@ -247,13 +247,13 @@ fn a_command_whose_output_is_not_a_command_output_is_an_extension_error() {
         br#"{}"#,
         br#"[1,2]"#,
     ] {
-        let fixture = {
-            let mut fixture = crate::view::testing::Fixture::new().runtime(std::sync::Arc::new(
-                fake().answer_raw(EXT, "cmd__ok", WasmCallResult::Ok(raw.to_vec())),
-            ));
-            fixture.graph = graph();
-            fixture
-        };
+        let fixture = Assembled::new()
+            .runtime(std::sync::Arc::new(fake().answer_raw(
+                EXT,
+                "cmd__ok",
+                WasmCallResult::Ok(raw.to_vec()),
+            )))
+            .graph(graph());
         let err = run(
             &fixture.view(),
             &routed("ok"),
@@ -394,11 +394,10 @@ fn an_export_the_guest_does_not_route_is_an_extension_error() {
 )]
 fn the_command_input_is_the_wire_golden() {
     let runtime = std::sync::Arc::new(fake());
-    let fixture = crate::view::testing::Fixture::new().runtime(runtime.clone());
-    let env = fixture.env();
-    let graph = graph();
-    let recorded = specforge_project::coverage::RecordedCoverage::over(&graph, env);
-    let view = ProjectView::new(&graph, env, Some(Path::new("/p")), &recorded);
+    let fixture = Assembled::at(Path::new("/p"))
+        .runtime(runtime.clone())
+        .graph(graph());
+    let view = fixture.view();
     let args = json!({"status": "done", "limit": 2, "all": true});
     run_on(
         &view,

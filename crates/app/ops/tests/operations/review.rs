@@ -5,22 +5,21 @@ use specforge_ops::read::explore::{ExplorationRequest, explore};
 use specforge_ops::read::review::{ReviewFinding, ReviewGap, ReviewRequest, review};
 use specforge_test::prelude::*;
 
-use crate::view_support::{Project, registries};
+use crate::view_support::{Assembled, Viewed, registries};
 
 /// `alpha <- beta -> delta`, and `gamma_orphan`, an invariant with no edge
 /// and no obligation. Behaviors and invariants owe obligations; `beta` is a
 /// feature, whose kind is unknown here, so it never counts toward coverage.
-fn project() -> Project {
-    Project::new(
+fn project() -> Assembled {
+    Assembled::over(registries(&["behavior", "invariant"], &[])).source(
         "behavior alpha \"Alpha\" {\n  verify unit \"test alpha\"\n}\n\n\
          feature beta \"Beta\" {\n  behaviors [alpha, delta]\n}\n\n\
          behavior delta \"Delta\" {\n  verify unit \"test delta\"\n}\n\n\
          invariant gamma_orphan \"Gamma\" {\n}\n",
-        registries(&["behavior", "invariant"], &[]),
     )
 }
 
-fn reviewed(project: &Project, entity_id: Option<&str>, depth: usize) -> Vec<String> {
+fn reviewed(project: &Assembled, entity_id: Option<&str>, depth: usize) -> Vec<String> {
     review(&project.view(), &ReviewRequest { entity_id, depth })
         .unwrap()
         .rows
@@ -126,10 +125,8 @@ fn review_defaults_to_one_hop() {
 )]
 fn a_review_of_nothing_testable_is_empty() {
     // Only a feature with no verify and no edges.
-    let project = Project::new(
-        "feature beta \"Beta\" {\n}\n",
-        registries(&["behavior"], &[]),
-    );
+    let project =
+        Assembled::over(registries(&["behavior"], &[])).source("feature beta \"Beta\" {\n}\n");
     let outcome = review(&project.view(), &ReviewRequest::default()).unwrap();
     assert!(outcome.rows.is_empty() && outcome.findings.is_empty());
 }
@@ -140,11 +137,7 @@ fn a_review_of_nothing_testable_is_empty() {
 )]
 fn an_unreadable_report_is_e045() {
     let project = project();
-    std::fs::write(
-        project.dir.path().join("specforge-report.json"),
-        "{not json",
-    )
-    .unwrap();
+    std::fs::write(project.root().join("specforge-report.json"), "{not json").unwrap();
     let error = review(&project.view(), &ReviewRequest::default()).unwrap_err();
     assert_eq!(error.error.code, "E045");
 }
@@ -166,7 +159,7 @@ fn the_exploration_and_the_review_share_one_neighbourhood() {
         format!("behavior {id} \"{id}\" {{\n  verify unit \"test {id}\"\n{next}}}\n")
     })
     .collect();
-    let project = Project::new(&chain, registries(&["behavior"], &[]));
+    let project = Assembled::over(registries(&["behavior"], &[])).source(&chain);
     for depth in 0..=3 {
         let explored = explore(
             &project.view(),

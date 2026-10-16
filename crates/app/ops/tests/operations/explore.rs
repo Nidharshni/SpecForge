@@ -5,22 +5,22 @@ use specforge_ops::read::explore::{Exploration, ExplorationRequest, explore};
 use specforge_registry::RegistryBuild;
 use specforge_test::prelude::*;
 
-use crate::view_support::{Project, R1_SOURCE, registries};
+use crate::view_support::{Assembled, R1_SOURCE, Viewed, registries};
 
 /// `R1_SOURCE` with `feature` and `behavior` declared, so the project knows
 /// both kinds.
-fn r1() -> Project {
-    Project::new(R1_SOURCE, registries(&["behavior"], &["feature"]))
+fn r1() -> Assembled {
+    Assembled::over(registries(&["behavior"], &["feature"])).source(R1_SOURCE)
 }
 
 /// The exploration `request` asks of `project`.
-fn explored(project: &Project, request: ExplorationRequest) -> Exploration {
+fn explored(project: &Assembled, request: ExplorationRequest) -> Exploration {
     explore(&project.view(), &request).unwrap()
 }
 
 /// A project of `node` entities, each referencing the ones its edges name:
 /// `edges` is `(from, [to, ...])`; every entity in `alone` references nothing.
-fn nodes(edges: &[(&str, &[&str])], alone: &[&str]) -> Project {
+fn nodes(edges: &[(&str, &[&str])], alone: &[&str]) -> Assembled {
     let mut source = String::new();
     for (from, to) in edges {
         source.push_str(&format!(
@@ -31,7 +31,7 @@ fn nodes(edges: &[(&str, &[&str])], alone: &[&str]) -> Project {
     for id in alone {
         source.push_str(&format!("node {id} \"{id}\" {{\n}}\n"));
     }
-    Project::new(&source, RegistryBuild::default())
+    Assembled::over(RegistryBuild::default()).source(&source)
 }
 
 #[specforge_test(
@@ -109,7 +109,7 @@ fn most_connected_count_edges_to_others() {
         ));
     }
     source.push_str("node n12 \"n12\" {\n}\nnode selfish \"selfish\" {\n  to [selfish]\n}\n");
-    let project = Project::new(&source, RegistryBuild::default());
+    let project = Assembled::over(RegistryBuild::default()).source(&source);
 
     let exploration = explored(&project, ExplorationRequest::default());
     // n02..n11 have two edges; n01 and n12 one: the cap cuts them. An entity
@@ -141,10 +141,7 @@ fn unconnected_lists_the_selection_s_unconnected() {
     verify = "relationship paths run from entity_id to each selected entity it reaches, nearest first, with their edge labels"
 )]
 fn paths_run_from_the_entity() {
-    let project = Project::new(
-        "node a \"a\" {\n  to [b]\n}\nnode b \"b\" {\n  next [c]\n}\nnode c \"c\" {\n  last [d]\n}\nnode d \"d\" {\n}\n",
-        RegistryBuild::default(),
-    );
+    let project = Assembled::over(RegistryBuild::default()).source("node a \"a\" {\n  to [b]\n}\nnode b \"b\" {\n  next [c]\n}\nnode c \"c\" {\n  last [d]\n}\nnode d \"d\" {\n}\n");
     let exploration = explored(
         &project,
         ExplorationRequest {

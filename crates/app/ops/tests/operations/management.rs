@@ -7,24 +7,23 @@ use specforge_ops::analysis::collect::{Consent, Mode, Request};
 use specforge_ops::extension::{self, RemoveRequest, Status};
 use specforge_ops::testing::ScriptedSolver;
 use specforge_ops::view::ProjectView;
-use specforge_project::coverage::RecordedCoverage;
 use specforge_project::testing::compile_at;
 use specforge_project::{EnabledExtension, Environment, ExtensionLoad, Loaded};
 use specforge_test::prelude::*;
 use specforge_wasm::testing::InProcessRuntime;
 
-use crate::view_support::{Project, config_read};
+use crate::view_support::{Assembled, Viewed, config_read};
 
 /// A project whose compile read `specforge.json` as enabling
 /// `@acme/missing@1.2.0` and configuring one provider, with one lock entry
 /// at its root, while the `specforge.json` on disk now says something
 /// else entirely.
-fn project() -> Project {
+fn project() -> Assembled {
     let config = serde_json::json!({
         "extensions": ["@acme/missing@1.2.0"],
         "providers": [{"scheme": "gh", "alias": "work", "extension": "@acme/issues"}],
     });
-    Project::assembled("behavior a \"A\" {\n}\n", |root| {
+    Assembled::assembling(|root| {
         let read = config_read(root, config);
         // The specforge.json on disk now says something else entirely, and
         // the lock holds one entry.
@@ -64,6 +63,7 @@ fn project() -> Project {
             },
         )
     })
+    .source("behavior a \"A\" {\n}\n")
 }
 
 #[specforge_test(
@@ -111,8 +111,7 @@ fn management_operations_read_the_project_from_their_view() {
 
     // ... and a view without one: the listings and doctor answer from what
     // the view enabled and loaded; the others refuse with no_project.
-    let recorded = RecordedCoverage::over(&project.graph, &project.env);
-    let rootless = ProjectView::new(&project.graph, &project.env, None, &recorded).reporting(&e028);
+    let rootless = project.rootless_view().reporting(&e028);
     let listing = extension::list(&rootless);
     assert!(listing.locked.is_empty());
     assert_eq!(listing.extensions.len(), 1);
@@ -153,7 +152,7 @@ fn management_operations_read_the_project_from_their_view() {
         .map_err(specforge_ops::Refusal::into_error),
     );
     assert!(
-        !project.dir.path().join("specforge-report.json").exists(),
+        !project.root().join("specforge-report.json").exists(),
         "nothing was written"
     );
 }
@@ -245,10 +244,10 @@ fn the_providers_listing_reads_the_registration() {
 fn collect_at_a_root_that_is_no_project_is_no_project() {
     let project = project();
     // A project whose environment found no specforge.json.
-    let env = specforge_project::Environment::empty();
-    let recorded = RecordedCoverage::over(&project.graph, &env);
-    let bare = tempfile::TempDir::new().unwrap();
-    let view = ProjectView::new(&project.graph, &env, Some(bare.path()), &recorded);
+    let bare = Assembled::new()
+        .without_config_file()
+        .graph(project.compiled().graph().clone());
+    let view = bare.view();
 
     let error = specforge_ops::analysis::collect::collect(
         &view,
@@ -268,7 +267,7 @@ fn collect_at_a_root_that_is_no_project_is_no_project() {
         "{error:?}"
     );
     assert_eq!(
-        std::fs::read_dir(bare.path()).unwrap().count(),
+        std::fs::read_dir(bare.root()).unwrap().count(),
         0,
         "nothing was written"
     );

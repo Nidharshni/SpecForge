@@ -42,6 +42,7 @@ pub(crate) fn read(spec_root: &Path, relative: &str) -> Read {
 
 /// The text each held source was parsed from, the retained trees, and the
 /// sources that could not be read.
+#[derive(Clone)]
 pub(crate) struct SourceCache {
     /// The text each held parse was made from: what a reader resolves a
     /// span of the graph against (a span is a position in this text), and
