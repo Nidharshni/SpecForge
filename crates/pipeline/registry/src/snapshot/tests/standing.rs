@@ -41,9 +41,8 @@ fn an_abstract_entity_owes_no_obligations_when_its_kind_declares_the_flag() {
 
 /// Production coerces a quoted `"false"` on a `bool` flag to `false` (the graph
 /// build's field forms), so it exempts nothing. Needs the graph built with the
-/// registry build's own inputs; the default-config graph keeps the string.
+/// registry build's own inputs, as `graph_of` does.
 #[test]
-#[ignore = "flipped by T4"]
 fn a_quoted_false_flag_exempts_nothing() {
     let source = "behavior q \"Q\" {\n  abstract \"false\"\n}\n\nbehavior t \"T\" {\n  abstract \"true\"\n}\n";
     let registries = declared(&[("behavior", true, true)], true, vec![w004("behavior")]);

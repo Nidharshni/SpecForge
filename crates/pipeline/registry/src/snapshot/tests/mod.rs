@@ -5,7 +5,7 @@ mod text;
 
 use std::path::Path;
 
-use specforge_graph::Graph;
+use specforge_graph::{Graph, GraphBuild, GraphConfig};
 use specforge_protocol_types::{
     EntityKindDescriptor, ExtensionDeclaration, FieldDescriptor, ValidationRuleDescriptor,
     ValidationSeverity,
@@ -16,9 +16,16 @@ use crate::disk::MemoryDisk;
 use crate::rules::NoVerdicts;
 use crate::snapshot::EntitySnapshot;
 
-fn graph_of(source: &str) -> Graph {
-    let (graph, _) = specforge_graph::build_graph(&[specforge_parser::parse(source, "test.spec")]);
-    graph
+/// `source` built with the graph inputs of `registries`: how the session pairs them, so a value
+/// is stored as the build coerced it (ADR 0115).
+fn graph_of(source: &str, registries: &RegistryBuild) -> Graph {
+    let config = GraphConfig {
+        inputs: registries.graph_inputs(),
+        ..GraphConfig::default()
+    };
+    GraphBuild::of([specforge_parser::parse(source, "test.spec")], config)
+        .into_parts()
+        .0
 }
 
 fn w004(kind: &str) -> ValidationRuleDescriptor {
@@ -82,7 +89,7 @@ fn declared(
 }
 
 fn snapshot(source: &str, registries: &RegistryBuild) -> EntitySnapshot {
-    EntitySnapshot::of(&graph_of(source), registries, Path::new(""))
+    EntitySnapshot::of(&graph_of(source, registries), registries, Path::new(""))
 }
 
 /// The ids W004 reports on `source` (rules on `behavior` and `type`).

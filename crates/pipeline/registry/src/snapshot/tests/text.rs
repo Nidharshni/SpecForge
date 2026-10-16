@@ -64,8 +64,9 @@ fn every_variant_has_a_value_shape() {
   verify unit "x works"
 }
 "#;
-    let (graph, _) = specforge_graph::build_graph(&[specforge_parser::parse(source, "t.spec")]);
-    let snapshot = EntitySnapshot::of(&graph, &RegistryBuild::default(), Path::new("."));
+    let registries = RegistryBuild::default();
+    let graph = super::graph_of(source, &registries);
+    let snapshot = EntitySnapshot::of(&graph, &registries, Path::new("."));
     let record = snapshot.records().iter().find(|r| r.id == "x").unwrap();
     let shapes: Vec<(&str, ValueShape)> = record
         .fields
