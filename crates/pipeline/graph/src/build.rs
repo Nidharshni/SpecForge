@@ -112,6 +112,19 @@ impl GraphBuild {
         }
     }
 
+    /// A build that holds `graph`, made elsewhere (a test assembled it node
+    /// by node). It holds no file and reports nothing. Its one invariant (the
+    /// cold build of its files) does not hold, so only a compiled project
+    /// that is never updated holds one
+    /// (`specforge_project::testing::Assembled`).
+    #[cfg(feature = "testing")]
+    pub fn holding(graph: Graph) -> Self {
+        GraphBuild {
+            graph,
+            ..GraphBuild::new(GraphConfig::default())
+        }
+    }
+
     /// The cold build: every one of `files` applied at once. Files are keyed
     /// by `SpecFile::path`; a later file with the same path replaces an
     /// earlier one. No delta is computed.

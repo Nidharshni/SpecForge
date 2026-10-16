@@ -215,6 +215,29 @@ impl CompiledProject {
         }
     }
 
+    /// A project a test assembled in memory: `graph` (made elsewhere), the
+    /// environment it was assembled in and `reported`, exactly (no check
+    /// runs). `rooted`: it is rooted where the environment is; otherwise it
+    /// has no root (ADR 0047 D4). Its memo is made over its own graph.
+    #[cfg(feature = "testing")]
+    pub(crate) fn assembled(
+        env: Arc<Environment>,
+        graph: Graph,
+        reported: Vec<Diagnostic>,
+        rooted: bool,
+    ) -> Self {
+        CompiledProject {
+            env,
+            sources: SourceCache::empty(),
+            graph: GraphBuild::holding(graph),
+            import_diagnostics: Vec::new(),
+            check_diagnostics: Vec::new(),
+            recorded: OnceLock::new(),
+            reported: OnceLock::from(Arc::<[Diagnostic]>::from(reported)),
+            on_disk: rooted,
+        }
+    }
+
     /// The cold read of `discovered` in `env` (ADR 0032's one cold
     /// pipeline, [`Environment::build_sources`]): sources read and parsed,
     /// the graph built, the imports resolved. The checks have not run. A

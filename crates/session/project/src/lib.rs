@@ -173,6 +173,25 @@ impl Environment {
         }
     }
 
+    /// A bare build for a project assembled in memory: a registry build made
+    /// there, the runtime its extension calls go to, if any, and the project
+    /// where `installed` is, so the root and the spec root agree. The default
+    /// config, nothing reported, no I002 (ADR 0108).
+    #[cfg(feature = "testing")]
+    pub(crate) fn bare(
+        installed: Installed,
+        registries: RegistryBuild,
+        runtime: Option<SharedRuntime>,
+    ) -> Self {
+        Environment {
+            sources: ConfigRead::default().config.sources(installed.root()),
+            installed,
+            registries,
+            runtime,
+            ..Environment::empty()
+        }
+    }
+
     /// Read the config of the project at `root` and load its extensions into
     /// `runtime` (none without one), which the environment then holds, then
     /// build the registries from them. The environment keeps `root`.
