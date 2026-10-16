@@ -315,10 +315,9 @@ fn an_absent_target_kinds_i004_names_the_extension_that_declares_it() {
 }
 
 #[specforge_test(
-    behavior = "check_entities_in_one_order",
-    verify = "a reference to an existing entity of another kind than its field's target kind is E022"
+    behavior = "link_entity_references",
+    verify = "a reference to an existing entity of another kind than its field's target kind is E022 at the reference"
 )]
-#[ignore = "flipped by T5"]
 fn a_wrong_kind_reference_to_an_absent_kind_is_e022_at_the_reference() {
     let project = TestProject::new()
         .enabling(&["@specforge/software"])

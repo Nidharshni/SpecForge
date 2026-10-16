@@ -8,7 +8,6 @@ mod identifiers;
 mod kinds;
 mod obligations;
 mod order;
-mod references;
 mod refs;
 mod values;
 mod written;

@@ -227,8 +227,8 @@ fn a_quoted_single_reference_links() {
 }
 
 #[specforge_test(
-    behavior = "check_entities_in_one_order",
-    verify = "a single reference to an existing entity of another kind than its field's target kind is E022"
+    behavior = "link_entity_references",
+    verify = "a single reference to an existing entity of another kind than its field's target kind is E022 at the reference"
 )]
 fn a_single_reference_to_the_wrong_kind_is_e022() {
     let (_p, compiled) = product(
@@ -296,10 +296,9 @@ fn an_undeclared_fields_bare_list_links() {
 }
 
 #[specforge_test(
-    behavior = "check_entities_in_one_order",
-    verify = "a single reference to an existing entity of another kind than its field's target kind is E022"
+    behavior = "link_entity_references",
+    verify = "a single reference to an existing entity of another kind than its field's target kind is E022 at the reference"
 )]
-#[ignore = "flipped by T5"]
 fn a_wrong_kind_reference_is_e022_at_the_reference_with_help() {
     let (_p, compiled) = product(
         "channel cli \"CLI\" { description \"c\" }\n\

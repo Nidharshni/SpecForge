@@ -116,3 +116,129 @@ fn an_id_of_the_absent_kind_links_silently() {
     assert_eq!(codes(&diagnostics), Vec::<&str>::new(), "{diagnostics:?}");
     assert_eq!(graph.edge_count(), 1);
 }
+
+const WRONG_KIND: &str = "behavior b1 \"B1\" {\n  features [b2]\n}\nbehavior b2 \"B2\" {\n}\n";
+
+#[specforge_test(
+    behavior = "link_entity_references",
+    verify = "a reference to an existing entity of another kind than its field's target kind is E022 at the reference"
+)]
+fn a_reference_to_another_kind_is_e022_at_the_reference_and_links() {
+    let (graph, diagnostics) = build(WRONG_KIND, &["behavior", "feature"], &[]);
+    assert_eq!(codes(&diagnostics), ["E022"], "{diagnostics:?}");
+    let span = diagnostics[0].span.as_ref().unwrap();
+    assert_eq!(
+        (span.start_line, span.start_col, span.end_col),
+        (2, 13, 15),
+        "the token"
+    );
+    assert_eq!(
+        graph.edge_count(),
+        1,
+        "it still links, so navigation reaches it"
+    );
+    assert_eq!(
+        diagnostics[0].message,
+        "reference 'b2' in field 'features' of behavior 'b1' targets a behavior, but this field expects feature"
+    );
+    assert_eq!(
+        diagnostics[0].suggestion.as_deref(),
+        Some("name a feature here, or drop the reference")
+    );
+}
+
+#[test]
+fn a_loaded_target_kind_suggests_a_close_id_of_that_kind() {
+    let (_, diagnostics) = build(
+        "behavior b1 \"B1\" {\n  features [f_one]\n}\nbehavior f_one \"B\" {\n}\nfeature f_on \"F\" {\n}\n",
+        &["behavior", "feature"],
+        &[],
+    );
+    assert_eq!(codes(&diagnostics), ["E022"], "{diagnostics:?}");
+    assert_eq!(
+        diagnostics[0].suggestion.as_deref(),
+        Some("did you mean 'f_on'?")
+    );
+}
+
+#[test]
+fn a_reference_to_its_target_kind_links_silently() {
+    let (graph, diagnostics) = build(
+        "behavior b1 \"B1\" { peers [b2] }\nbehavior b2 \"B2\" { }\n",
+        &["behavior"],
+        &[],
+    );
+    assert_eq!(codes(&diagnostics), Vec::<&str>::new(), "{diagnostics:?}");
+    assert_eq!(graph.edge_count(), 1);
+}
+
+#[test]
+fn a_field_without_a_target_kind_links_any_kind() {
+    let (graph, diagnostics) = build(
+        "behavior b1 \"B1\" { note [f1] }\nfeature f1 \"F\" { }\n",
+        &["behavior", "feature"],
+        &[],
+    );
+    assert_eq!(codes(&diagnostics), Vec::<&str>::new(), "{diagnostics:?}");
+    assert_eq!(graph.edge_count(), 1);
+}
+
+#[test]
+fn an_undeclared_kinds_field_has_no_target() {
+    let (graph, diagnostics) = build(
+        "gadget g1 \"G\" { features [b2] }\nbehavior b2 \"B2\" { }\n",
+        &["behavior", "feature"],
+        &[],
+    );
+    assert_eq!(codes(&diagnostics), Vec::<&str>::new(), "{diagnostics:?}");
+    assert_eq!(graph.edge_count(), 1);
+}
+
+#[test]
+fn each_wrong_kind_reference_is_its_own_e022_in_written_order() {
+    let (_, diagnostics) = build(
+        "behavior b1 \"B1\" { features [b3, b2] }\nbehavior b2 \"B2\" { }\nbehavior b3 \"B3\" { }\n",
+        &["behavior", "feature"],
+        &[],
+    );
+    assert_eq!(codes(&diagnostics), ["E022", "E022"], "{diagnostics:?}");
+    assert!(diagnostics[0].message.contains("'b3'"));
+    assert!(diagnostics[1].message.contains("'b2'"));
+}
+
+#[test]
+fn e022_names_the_target_the_field_the_kinds_and_the_source() {
+    let (_, diagnostics) = build(WRONG_KIND, &["behavior", "feature"], &[]);
+    let message = &diagnostics[0].message;
+    for word in ["b2", "features", "behavior", "feature", "b1"] {
+        assert!(message.contains(word), "{word}: {message}");
+    }
+}
+
+#[specforge_test(
+    behavior = "link_entity_references",
+    verify = "a reference to an existing entity of another kind than its field's target kind is E022 at the reference"
+)]
+fn a_wrong_kind_id_of_an_absent_kind_is_e022_naming_its_provider() {
+    let (graph, diagnostics) = build(
+        WRONG_KIND,
+        &["behavior"],
+        &[("feature", "@specforge/product")],
+    );
+    assert_eq!(codes(&diagnostics), ["E022"], "{diagnostics:?}");
+    assert_eq!(
+        diagnostics[0].suggestion.as_deref(),
+        Some(
+            "name a feature here (enable the extension that declares it with `specforge add @specforge/product`), or drop the reference"
+        )
+    );
+    assert_eq!(graph.edge_count(), 1);
+
+    let (_, diagnostics) = build(WRONG_KIND, &["behavior"], &[]);
+    assert_eq!(
+        diagnostics[0].suggestion.as_deref(),
+        Some(
+            "name a feature here (find an extension that declares it with `specforge search feature`), or drop the reference"
+        )
+    );
+}

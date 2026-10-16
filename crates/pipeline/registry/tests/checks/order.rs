@@ -38,14 +38,13 @@ fn shapes() -> ExtensionDeclaration {
 
 #[spec(
     behavior = "check_entities_in_one_order",
-    verify = "the structural checks run in one order: W012, E024, E013, E014, W020, W158, E022, E061, then the rule set, the host's E006 and E016 rules last"
+    verify = "the structural checks run in one order: W012, E024, E013, E014, W020, W158, E061, then the rule set, the host's E006 and E016 rules last"
 )]
 fn the_checks_run_in_one_order() {
     // One entity per check, written in an order that is not the checks'.
     let text = "ref gh.issue:1 \"R\"\n\n\
                 gadget g_docs \"D\" {\n  docs [\"no_such_file_04.md\"]\n}\n\n\
                 gadget g_size \"S\" {\n  size \"big\"\n}\n\n\
-                gadget g_parts \"P\" {\n  parts [w_one]\n}\n\n\
                 widget w_one \"W\" {\n}\n\n\
                 gadget g_bogus \"B\" {\n  bogus \"\"\n  verify unit \"x\"\n}\n\n\
                 gadget x \"X\" {\n}\n\n\
@@ -58,7 +57,7 @@ fn the_checks_run_in_one_order() {
     assert_eq!(
         codes,
         [
-            "W012", "E024", "E013", "E014", "W020", "W158", "E022", "E061", "W900", "E016"
+            "W012", "E024", "E013", "E014", "W020", "W158", "E061", "W900", "E016"
         ],
         "{diags:?}"
     );

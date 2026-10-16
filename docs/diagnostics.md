@@ -278,7 +278,9 @@ E022: Reference targets wrong kind
 
 A reference field is declared to only accept entities of a specific kind, but
 the target ID resolves to an entity of a different kind. Point the field at an
-entity of the expected kind.
+entity of the expected kind. It is reported at the reference, by the linker,
+whether or not an extension declares the expected kind; the suggestion names a
+close id of that kind, or the extension that declares it.
 
 Owner: core
 Level: error

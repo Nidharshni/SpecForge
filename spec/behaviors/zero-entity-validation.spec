@@ -306,7 +306,6 @@ behavior check_entities_in_one_order "Check the Entities in One Order" {
     unknown kinds (E024), reserved
     entity IDs (E013), the identifier length contract (E014), unknown
     fields (W020), verify statements on a kind that accepts none (W158),
-    references to an entity of the wrong kind (E022),
     field values that cannot be their declared type (E061), then the
     rule set: the extensions' rules by code, then the host's E006 rules
     and its E016 rules, which report a path a file-reference field names
@@ -315,7 +314,7 @@ behavior check_entities_in_one_order "Check the Entities in One Order" {
     order, and no check reads a graph node.
 
     When no loaded extension declares an entity kind, the project is
-    structural-only: E024, E013, E014, W020, W158, E022 and E061 MUST NOT run,
+    structural-only: E024, E013, E014, W020, W158 and E061 MUST NOT run,
     while W012 and the rules still do. With no extension loaded,
     I002 says so. With extensions loaded that declare no kind, one
     W151 MUST name how many entities, and of which kinds, are left
@@ -323,19 +322,21 @@ behavior check_entities_in_one_order "Check the Entities in One Order" {
 
     An entity ID equal to a structural keyword (spec, ref, use, define)
     or to a registered kind's keyword is E013. An ID shorter than 2 or
-    longer than 60 characters is E014. A reference whose field declares a
-    target kind, naming an existing entity of another kind, is E022.
+    longer than 60 characters is E014.
+
+    E022, a reference whose field declares a target kind and names an
+    existing entity of another kind, is the linker's (link_entity_references):
+    a compile reports it with the graph build's diagnostics, before these
+    checks.
 
     The checks read the file system only through the disk they are
     given; what they read there is the session's check inputs.
   """
-  verify unit "the structural checks run in one order: W012, E024, E013, E014, W020, W158, E022, E061, then the rule set, the host's E006 and E016 rules last"
-  verify unit "with no entity kind registered, E024, E013, E014, W020, W158, E022 and E061 do not run, and W012 and the rules still do"
+  verify unit "the structural checks run in one order: W012, E024, E013, E014, W020, W158, E061, then the rule set, the host's E006 and E016 rules last"
+  verify unit "with no entity kind registered, E024, E013, E014, W020, W158 and E061 do not run, and W012 and the rules still do"
   verify unit "extensions that load but declare no entity kind report one W151 naming the unchecked entities"
   verify unit "an entity ID equal to a structural keyword or a registered kind's keyword is E013"
   verify unit "an entity ID shorter than 2 or longer than 60 characters is E014"
-  verify unit "a reference to an existing entity of another kind than its field's target kind is E022"
-  verify unit "a single reference to an existing entity of another kind than its field's target kind is E022"
   verify unit "the checks read only through their disk: the paths file_exists rules read, E016's among them, and the directory a missing path's suggestion lists"
   verify integration "a compile reports the structural checks in the order the registry build runs them"
 }

@@ -141,7 +141,7 @@ catalog! {
         "A `.spec` file's `// specforge-format: MAJOR.MINOR` header declares a version newer than this build supports, or the header itself doesn't parse; `specforge migrate --target-version` reports the same for a target it can't parse or doesn't support. Lower the declared version or upgrade SpecForge.";
     E022: Error core,
         "Reference targets wrong kind",
-        "A reference field is declared to only accept entities of a specific kind, but the target ID resolves to an entity of a different kind. Point the field at an entity of the expected kind.";
+        "A reference field is declared to only accept entities of a specific kind, but the target ID resolves to an entity of a different kind. Point the field at an entity of the expected kind. It is reported at the reference, by the linker, whether or not an extension declares the expected kind; the suggestion names a close id of that kind, or the extension that declares it.";
     E024: Error core,
         "Unknown entity kind",
         "An entity block uses a kind keyword that neither the core grammar nor any installed extension declares. Install the extension that provides the keyword, or fix a typo in the kind name.";
