@@ -495,8 +495,10 @@ fn init_writes_no_file_through_a_symlink_that_leaves_its_directory() {
 /// `render` writes `out_dir/graph.json`: a file there that is a symlink leaving the project is
 /// not written through.
 #[cfg(unix)]
-#[test]
-#[ignore = "flipped by T9"]
+#[specforge_test(
+    behavior = "provide_mcp_render_tool",
+    verify = "render writes no file through a symlink in out_dir that leaves the project"
+)]
 fn render_writes_no_file_through_a_symlink_that_leaves_the_project() {
     let scene = Scene::new();
     fs::create_dir_all(scene.proj().join("out")).unwrap();

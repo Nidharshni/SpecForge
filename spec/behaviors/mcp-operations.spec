@@ -598,7 +598,9 @@ behavior provide_mcp_render_tool "Provide MCP Render Tool" {
     names a directory inside the call's project: a relative one is read
     against its root, wherever the server runs, and one that leaves the
     project (by .., an absolute name or a symlink) MUST be refused as invalid
-    input on out_dir, as MUST any out_dir with no project served.
+    input on out_dir, as MUST any out_dir with no project served; and the file
+    it writes there is not written through a symlink that leaves the project
+    (invalid input on out_dir).
     output_files lists the files written, each named from the project root.
     The renderers are the core graph engine's export formats (see P7
     justification in features/output.spec), named as `specforge export
@@ -619,6 +621,7 @@ behavior provide_mcp_render_tool "Provide MCP Render Tool" {
   verify unit "the render document names each output file from the project root"
   verify unit "a relative out_dir is written under the call's project root, wherever the server runs"
   verify unit "a relative out_dir with no project served is invalid input on out_dir"
+  verify unit "render writes no file through a symlink in out_dir that leaves the project"
   verify unit "registered renderer invoked for matching format"
   verify unit "unrecognized format returns error listing available renderers"
   verify unit "graph and its alias json select the full graph renderer"

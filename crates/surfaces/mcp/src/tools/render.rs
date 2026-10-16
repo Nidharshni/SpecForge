@@ -139,10 +139,19 @@ impl CoreTool for Tool {
             .resolve(given)
             .map_err(|outside| Box::new(containment::refusal(&outside, "out_dir")))?
             .spelled;
+        // The file too: `out/graph.json` may itself be a symlink that leaves the project, and
+        // what is written is where it lands (ADR 0092 D8, ADR 0104).
         let path = out_dir.join(file_name);
-        if let Err(e) =
-            std::fs::create_dir_all(&out_dir).and_then(|()| std::fs::write(&path, output))
-        {
+        let landed = bound
+            .resolve(&path)
+            .map_err(|outside| Box::new(containment::refusal(&outside, "out_dir")))?
+            .real;
+        let written = match landed.parent() {
+            Some(parent) => std::fs::create_dir_all(parent),
+            None => Ok(()),
+        }
+        .and_then(|()| std::fs::write(&landed, output));
+        if let Err(e) = written {
             return Err(Box::new(McpError::new(
                 ErrorCode::InternalError,
                 format!("failed to write {}: {e}", path.display()),
