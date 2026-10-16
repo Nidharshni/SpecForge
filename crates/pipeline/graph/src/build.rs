@@ -15,10 +15,11 @@ pub struct GraphInputs {
     /// two-hop cycle through both labels of one pair is a known
     /// bidirectional relationship, not a reference cycle.
     pub bidirectional_pairs: Vec<(String, String)>,
-    /// (kind, field) reference fields whose target kind no loaded extension
-    /// declares, mapped to that kind: an unresolved reference there is an
-    /// I004 hint (the kind's extension isn't enabled), not an E003.
-    pub absent_reference_targets: HashMap<(String, String), String>,
+    /// For each target kind no loaded extension declares, the extension that
+    /// owns it, where the registry build knows one (`kind_owner` of its
+    /// candidate vocabulary, ADR 0117): what I004 and E022 tell the user to
+    /// enable. Plain data: the graph names no registry type.
+    pub target_owners: BTreeMap<String, String>,
     /// Every registered field's form, and the kinds that take any field:
     /// the graph build stores each written value as its form coerces it,
     /// before references resolve, so a single reference on a reference_list
@@ -447,10 +448,7 @@ fn link_and_diagnose(graph: &mut Graph, config: &GraphConfig) -> Vec<Diagnostic>
 
     // Link references -> edges (E003, I004) and warn on reference cycles
     // (W061), which leave a declared single reference out.
-    let diagnostics = graph.link(
-        &config.inputs.field_forms,
-        &config.inputs.absent_reference_targets,
-    );
+    let diagnostics = graph.link(&config.inputs.field_forms, &config.inputs.target_owners);
 
     // Derived reference fields, after cycle detection: a recursive type is
     // not a reference cycle.

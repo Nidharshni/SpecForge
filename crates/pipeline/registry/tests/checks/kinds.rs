@@ -220,12 +220,12 @@ fn two_phase_validate_semantic_contract() {
     );
 }
 
-/// With no entity kind registered, E024, E013, E014, W020, W158, E022 and E061 do
+/// With no entity kind registered, E024, E013, E014, W020, W158 and E061 do
 /// not run; W012 and the rules still do (and W151 says what is unchecked). (E016 is a rule over a
 /// declared kind's `file_reference` field, so a build with no kind has none.)
 #[spec(
     behavior = "check_entities_in_one_order",
-    verify = "with no entity kind registered, E024, E013, E014, W020, W158, E022 and E061 do not run, and W012 and the rules still do"
+    verify = "with no entity kind registered, E024, E013, E014, W020, W158 and E061 do not run, and W012 and the rules still do"
 )]
 fn a_build_with_no_kind_checks_no_kind() {
     let records = "wibble x \"X\" {\n  bogus \"\"\n}\n\nbehavior define \"B\" {\n}\n\n";

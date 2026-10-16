@@ -30,6 +30,9 @@ pub struct EntitySnapshot {
     records: Vec<EntityRecord>,
     /// Parallel to `records`.
     standings: Vec<Standing>,
+    /// The ids each record references (unique, in written order, resolved or not), parallel to
+    /// `records`: what the custom validators' context reads.
+    references: Vec<Vec<String>>,
     index: HashMap<String, usize>,
     /// In graph order.
     edges: Vec<EdgeRecord>,
@@ -47,10 +50,10 @@ impl EntitySnapshot {
             .iter()
             .map(|n| (n.id.raw.as_str(), n.kind.raw.as_str()))
             .collect();
-        let records: Vec<EntityRecord> = nodes
+        let (records, references): (Vec<EntityRecord>, Vec<Vec<String>>) = nodes
             .iter()
             .map(|node| record::record(graph, &kind_of, node, registries))
-            .collect();
+            .unzip();
         let standings = records
             .iter()
             .map(|record| Standing::of(record, registries))
@@ -88,6 +91,7 @@ impl EntitySnapshot {
         EntitySnapshot {
             records,
             standings,
+            references,
             index,
             edges,
             declared_types,

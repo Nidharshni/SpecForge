@@ -1,8 +1,6 @@
 //! Adapters from the snapshot to fixed external shapes (ADR 0019, "Wire"): the pass input, the
 //! custom validators' context and the coverage rule's entities.
 
-use std::collections::HashSet;
-
 use specforge_protocol_types::{
     PassEdge, PassEntity, PassSpan, ValidatorContext, ValidatorEntity, ValidatorField,
     ValidatorMethod, ValidatorParam, ValidatorRef,
@@ -38,12 +36,8 @@ impl EntitySnapshot {
     /// host's primitives.
     pub fn validator_context(&self, id: &str) -> Option<ValidatorContext> {
         let (record, _) = self.get(id)?;
-        let mut seen = HashSet::new();
-        let referenced = record
-            .references
+        let referenced = self.references[self.index[id]]
             .iter()
-            .flat_map(|(_, targets)| targets)
-            .filter(|target| seen.insert(target.as_str()))
             .map(|target| ValidatorRef {
                 id: target.clone(),
                 kind: self.kind_of(target).map(str::to_string),

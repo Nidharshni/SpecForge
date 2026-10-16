@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use specforge_graph::{FieldForm, FieldForms, Reading};
+use specforge_graph::{FieldForm, FieldForms, Reading, Target};
 use specforge_protocol_types::FieldType;
 
 fn forms() -> FieldForms {
@@ -20,7 +20,11 @@ fn forms() -> FieldForms {
         )
     })
     .collect();
-    FieldForms::new(declared, ["open".to_string()].into_iter().collect())
+    FieldForms::new(
+        declared,
+        ["open".to_string()].into_iter().collect(),
+        Default::default(),
+    )
 }
 
 #[test]
@@ -107,6 +111,7 @@ fn single_references_are_not_in_cycles() {
             field_forms: FieldForms::new(
                 [single("alpha"), single("beta")].into_iter().collect(),
                 Default::default(),
+                Default::default(),
             ),
             ..Default::default()
         },
@@ -120,4 +125,69 @@ fn single_references_are_not_in_cycles() {
         "{diagnostics:?}"
     );
     assert_eq!(graph.edge_count(), 2, "both edges are linked");
+}
+
+/// `doc.owner` -> `team` (declared by a loaded extension), `doc.sponsor` -> `org` (declared by none),
+/// `doc.note` with no target, and a member kind.
+fn targeting_forms() -> FieldForms {
+    let declared = [
+        ("owner", Some("team")),
+        ("sponsor", Some("org")),
+        ("note", None),
+    ]
+    .into_iter()
+    .map(|(field, target)| {
+        let form = FieldForm::new(FieldType::Reference, vec![]);
+        let form = match target {
+            Some(kind) => form.targeting(kind),
+            None => form,
+        };
+        (("doc".to_string(), field.to_string()), form)
+    })
+    .collect();
+    FieldForms::new(
+        declared,
+        ["open".to_string()].into_iter().collect(),
+        ["doc".to_string(), "team".to_string()]
+            .into_iter()
+            .collect(),
+    )
+}
+
+#[test]
+fn a_declared_target_kind_is_loaded_when_a_loaded_extension_declares_it() {
+    assert_eq!(
+        targeting_forms().target("doc", "owner"),
+        Some(Target::Loaded("team"))
+    );
+}
+
+#[test]
+fn a_target_kind_no_loaded_extension_declares_is_absent() {
+    let forms = targeting_forms();
+    assert_eq!(forms.target("doc", "sponsor"), Some(Target::Absent("org")));
+    assert_eq!(
+        forms.targets(),
+        [
+            (("doc", "owner"), Target::Loaded("team")),
+            (("doc", "sponsor"), Target::Absent("org")),
+        ]
+    );
+}
+
+#[test]
+fn a_member_or_undeclared_field_has_no_target() {
+    let forms = targeting_forms();
+    assert_eq!(forms.target("doc", "note"), None, "no target kind declared");
+    assert_eq!(forms.target("open", "anything"), None, "a member");
+    assert_eq!(forms.target("doc", "missing"), None, "undeclared");
+    assert_eq!(FieldForms::default().target("doc", "owner"), None);
+}
+
+#[test]
+fn a_target_admits_only_its_own_kind() {
+    assert!(Target::Loaded("team").admits("team"));
+    assert!(Target::Absent("org").admits("org"));
+    assert!(!Target::Loaded("team").admits("doc"));
+    assert_eq!(Target::Absent("org").kind(), "org");
 }

@@ -865,8 +865,8 @@ expression: "digest(&load(&runtime, &[name]))"
     }
   },
   "graph_inputs": {
-    "absent_reference_targets": {
-      "behavior.features": "feature"
+    "absent_targets": {
+      "behavior.features": "feature (@specforge/product)"
     },
     "bidirectional_pairs": [],
     "derived_references": [

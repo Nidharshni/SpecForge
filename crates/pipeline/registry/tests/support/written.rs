@@ -53,6 +53,11 @@ pub fn tickets() -> ExtensionDeclaration {
 /// The snapshot of `files` read with `build`. Panics on a parse error: a test's text is valid
 /// `.spec`.
 pub fn snapshot_of(build: &RegistryBuild, files: &[(&str, &str)]) -> EntitySnapshot {
+    EntitySnapshot::of(graph_of(build, files).graph(), build, Path::new("/spec"))
+}
+
+/// The graph build of `files` with `build`'s own graph inputs.
+fn graph_of(build: &RegistryBuild, files: &[(&str, &str)]) -> GraphBuild {
     let parsed = files.iter().map(|(path, text)| {
         let file = specforge_parser::parse(text, path);
         assert!(file.errors.is_empty(), "{path}: {:?}", file.errors);
@@ -62,8 +67,13 @@ pub fn snapshot_of(build: &RegistryBuild, files: &[(&str, &str)]) -> EntitySnaps
         known_provider_schemes: HashSet::new(),
         inputs: build.graph_inputs(),
     };
-    let graph = GraphBuild::of(parsed, config);
-    EntitySnapshot::of(graph.graph(), build, Path::new("/spec"))
+    GraphBuild::of(parsed, config)
+}
+
+/// What the graph build reports on `files` (E003, I004, E022, ...), the linker's own: the
+/// registry's checks are not included.
+pub fn linked(build: &RegistryBuild, files: &[(&str, &str)]) -> Vec<Diagnostic> {
+    graph_of(build, files).diagnostics().to_vec()
 }
 
 /// What the checks report on `files`, in `RegistryBuild::check`'s order, with nothing on disk

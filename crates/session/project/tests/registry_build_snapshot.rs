@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 use specforge_common::Diagnostic;
 use specforge_component::ComponentRuntime;
 use specforge_component::builtins::BUILTIN_EXTENSIONS;
+use specforge_graph::Target;
 use specforge_project::Environment;
 use specforge_protocol_types::{FieldType, SurfaceDescriptor};
 use tempfile::TempDir;
@@ -98,10 +99,20 @@ fn graph_inputs(env: &Environment) -> Value {
             json!([a, b])
         })
         .collect();
-    let absent_reference_targets: BTreeMap<String, &String> = config
-        .absent_reference_targets
-        .iter()
-        .map(|((kind, field), target)| (format!("{kind}.{field}"), target))
+    let absent_targets: BTreeMap<String, String> = config
+        .field_forms
+        .targets()
+        .into_iter()
+        .filter_map(|((kind, field), target)| match target {
+            Target::Absent(target) => Some((
+                format!("{kind}.{field}"),
+                match config.target_owners.get(target) {
+                    Some(owner) => format!("{target} ({owner})"),
+                    None => target.to_string(),
+                },
+            )),
+            Target::Loaded(_) => None,
+        })
         .collect();
     let field_forms: BTreeMap<String, String> = config
         .field_forms
@@ -121,7 +132,7 @@ fn graph_inputs(env: &Environment) -> Value {
             json!({
                 "source_kind": d.source_kind,
                 "field": d.field,
-                "target_kind": d.target_kind,
+                "target_kind": config.field_forms.target(&d.source_kind, &d.field).map(|t| t.kind()),
                 "from": format!("{:?}", d.from),
             })
         })
@@ -129,7 +140,7 @@ fn graph_inputs(env: &Environment) -> Value {
     json!({
         "member_kinds": config.field_forms.member_kinds(),
         "bidirectional_pairs": sorted(bidirectional_pairs),
-        "absent_reference_targets": absent_reference_targets,
+        "absent_targets": absent_targets,
         "field_forms": field_forms,
         "derived_references": derived_references,
     })

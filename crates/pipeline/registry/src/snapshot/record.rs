@@ -1,6 +1,6 @@
 //! One graph node as its record, and the edge type of one edge (ADR 0019).
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use specforge_graph::{Graph, Node, ValueShape};
 use specforge_parser::{FieldValue, UNION_VARIANTS_FIELD};
@@ -26,14 +26,17 @@ pub(super) fn edge_type_of(
     Some(entry.label().to_string())
 }
 
-/// One node as its record: what it writes (as field text), its references,
-/// obligations, edge counts by edge type, methods, and what exempts it.
+/// One node as its record: what it writes (as field text), its
+/// obligations, edge counts by edge type, methods, and what exempts it; and,
+/// beside it, the ids it references (unique, in written order, resolved or
+/// not): only the custom validators' context reads them (E022 is the
+/// linker's, ADR 0117).
 pub(super) fn record(
     graph: &Graph,
     kind_of: &HashMap<&str, &str>,
     node: &Node,
     registries: &RegistryBuild,
-) -> EntityRecord {
+) -> (EntityRecord, Vec<String>) {
     let id = node.id.raw.as_str();
     // Edges in one direction, in total and by edge type.
     let counts = |types: Vec<Option<String>>| {
@@ -61,7 +64,19 @@ pub(super) fn record(
             .collect(),
     );
     let entries = node.fields.entries();
-    EntityRecord {
+    let mut seen = HashSet::new();
+    let referenced: Vec<String> = entries
+        .iter()
+        .flat_map(|entry| {
+            registries
+                .field_forms()
+                .reading(node.kind.raw.as_str(), entry.key.as_str())
+                .references(entry)
+        })
+        .filter(|reference| seen.insert(reference.id))
+        .map(|reference| reference.id.to_string())
+        .collect();
+    let record = EntityRecord {
         id: id.to_string(),
         kind: node.kind.raw.to_string(),
         span: node.source_span.clone(),
@@ -78,21 +93,6 @@ pub(super) fn record(
                 items: field_items(&entry.value),
                 shape: ValueShape::of(&entry.value),
                 value_span: entry.value_span.clone(),
-            })
-            .collect(),
-        references: entries
-            .iter()
-            .filter_map(|entry| {
-                let refs = registries
-                    .field_forms()
-                    .reading(node.kind.raw.as_str(), entry.key.as_str())
-                    .references(entry);
-                (!refs.is_empty()).then(|| {
-                    (
-                        entry.key.to_string(),
-                        refs.iter().map(|r| r.id.to_string()).collect(),
-                    )
-                })
             })
             .collect(),
         obligations: node
@@ -122,7 +122,8 @@ pub(super) fn record(
                 returns: m.returns.clone(),
             })
             .collect(),
-    }
+    };
+    (record, referenced)
 }
 
 /// What exempts an entity from obligations of its own, whatever it declares

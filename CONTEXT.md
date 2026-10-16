@@ -315,8 +315,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   caller reach it only through `build_registries` and that build's methods; its steps, its checks and
   its fields are private (ADR 0031).
 - **Graph inputs**: what the graph build reads of the loaded extensions (`specforge_graph::GraphInputs`):
-  the kinds whose bodies an extension parses, the absent-target reference fields, the
-  inverse field pairs (a reference field and its inverse fields, fields of its target kind), each field's form with the kinds that take any field (`FieldForms`) and the derived reference fields. Only the registry
+  the kinds whose bodies an extension parses, the extension that owns each target kind no loaded extension declares (`target_owners`), the
+  inverse field pairs (a reference field and its inverse fields, fields of its target kind), each field's form with the kinds that take any field (`FieldForms`, with each reference field's target, ADR 0117) and the derived reference fields. Only the registry
   build derives them (`RegistryBuild::graph_inputs`); with the provider schemes the environment
   registers they are every graph's `GraphConfig` (`Environment::graph_config`, ADR 0032).
 - **Edge type**: a relationship an extension declares (`edges`), or that fields name without one declaring it
@@ -343,8 +343,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   E016 among them, reads them and suggests a close sibling of a missing one
   (`specforge_registry::rules::files`, ADR 0118).
 - **Structural checks**: the host's own checks over the entity snapshot's records, run by the
-  registry build before the rule set, in this order: W012 (a `ref` nothing references), then, unless the project is structural-only, E024, E013, E014, W020, E022 and E061
-  (`specforge_registry`'s `checks`, ADR 0031). None reads a graph node. Whether every reference
+  registry build before the rule set, in this order: W012 (a `ref` nothing references), then, unless the project is structural-only, E024, E013, E014, W020 and E061
+  (`specforge_registry`'s `checks`, ADR 0031). E022 is the linker's (ADR 0117). None reads a graph node. Whether every reference
   became an edge is the linker's own debug assertion, not a check.
 - **Structural-only**: no loaded extension declares an entity kind
   (`RegistryBuild::structural_only`). The checks that read kinds, fields and identifiers do not
@@ -360,7 +360,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   - what it writes, as field text, with each value's shape (quoted, bare, a number, a list of
     strings or references, …) and span beside it for the host's own checks
     (`specforge_graph::ValueShape`);
-  - its references, obligations and methods;
+  - its obligations and methods;
   - its edge counts, in total and by edge type (each edge typed once, by the edge type its field writes from the
     kind it starts at);
   - what exempts it, if anything (a union body, an exempting flag, a kind that accepts no `verify`).
@@ -391,7 +391,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   writes the default into the graph. The extension's own readers (a list filter and its help, a sort, a lifecycle
   pass, a rollup, a conditional rule's value) read the same constant. An open set of standard values (a module's
   family) is not one: its field is a string, and an info rule names the standard values (`{allowed}`) (ADR 0071).
-- **Field form**: a field's declared type with an enum's values, read once
+- **Field form**: a field's declared type with an enum's values, its target kind, read once
   (`specforge_graph::FieldForm`, from `FieldRegistryEntry::form`; `FieldForms::reading(kind, field)` is a
   `Declared` form, a `Member` of an open-fields kind or `Undeclared`, and `Reading::references` is the one rule
   for what a written value references, ADR 0093): which
@@ -402,6 +402,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   expression group as its conjuncts one per line, lists as arrays, a block as
   an object; never a parse tree or a position. A value E061 admits is a value
   the published schema admits (ADR 0064).
+- **Reference target**: the kind a reference field's ids must name, from its declaration
+  (`FieldForm::target_kind`), and whether a loaded extension declares it (`FieldForms::target` gives a
+  `specforge_graph::Target`: `Loaded` or `Absent`; an absent kind's owner is `GraphInputs::target_owners`). The linker
+  decides each written reference against it once: an edge, E003, I004 (absent kind, missing id) or E022 (an entity of
+  another kind), each at the reference (ADR 0117).
 - **Standing**: how the obligation rule sees an entity (`specforge_registry::Standing`):
   - whether its kind is testable;
   - which `no_verify_statements` rule requires its kind to declare obligations (a rule without a

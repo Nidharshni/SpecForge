@@ -258,11 +258,11 @@ behavior register_extension_entity_types "Register Extension Entity Types" {
     consulted to determine which extension owns each entity type and
     whether soft resolution applies for cross-extension references.
     When a reference targets an entity kind from an uninstalled extension,
-    the compiler MUST emit I004 with the format:
-    "Unknown entity kind '{kind}' — install an extension that provides
-    it (e.g., `specforge add @specforge/{extension}`)." The message
-    MUST include the unresolved kind name and a suggested extension
-    when one can be inferred from the kind prefix.
+    the compiler MUST emit I004 at the reference, naming the reference,
+    the field and the kind ("reference 'x' in field 'f' of 'e' targets
+    kind 'k', which no enabled extension provides"), and suggesting the
+    extension that declares the kind when a builtin does
+    (`specforge add @specforge/{extension}`), the one E024 names.
   """
   verify unit "delegates to registry_build_kinds per extension"
   verify unit "unregistered type triggers soft resolution"
