@@ -5,11 +5,13 @@
 use std::fs;
 use std::sync::Arc;
 
+use serde_json::json;
 use specforge_project::testing::TestProject;
 use specforge_project::{ProjectSession, SharedRuntime, UpdateKind, Watched};
 use specforge_test::prelude::*;
 use tempfile::TempDir;
 
+use crate::changes::file_rule_extension;
 use crate::check_passes::{passes_extension, project as passes_project};
 
 fn e016(session: &ProjectSession) -> usize {
@@ -73,4 +75,42 @@ fn a_symlinked_check_inputs_target_reruns_the_checks() {
         .expect("the target of a symlinked check input went");
     assert_eq!(update.kind, UpdateKind::Checks);
     assert_eq!(e016(&session), 1, "{:?}", session.project().diagnostics());
+}
+
+/// Only E016's suggestion lists a directory: a `file_exists` rule asks
+/// whether its file exists, nothing more, so a file beside a missing one
+/// is nothing to the checks.
+#[ignore = "flipped by T6"]
+#[specforge_test(
+    behavior = "classify_project_changes",
+    verify = "a file beside a missing file a file_exists rule names changes nothing"
+)]
+fn a_file_beside_a_missing_file_exists_file_changes_nothing() {
+    let dir = TestProject::new()
+        .raw_config(
+            json!({"name": "c", "version": "0.1.0", "spec_root": "spec", "extensions": ["@test/files"]})
+                .to_string(),
+        )
+        .files(&[("spec/a.spec", "note n \"N\" {\n  doc \"guide.md\"\n}\n")]);
+    let root = dir.root();
+    specforge_installed::testing::install(root, &["@test/files"]);
+    let ext = Arc::new(file_rule_extension());
+    let session = ProjectSession::open_with_runtime(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(Arc::clone(&ext) as SharedRuntime),
+    );
+    assert!(
+        session
+            .project()
+            .diagnostics()
+            .iter()
+            .any(|d| d.code == "F001"),
+        "{:?}",
+        session.project().diagnostics()
+    );
+
+    let notes = root.join("spec/notes.txt");
+    fs::write(&notes, "notes\n").unwrap();
+    let changes = session.changes([notes.as_path()]);
+    assert!(changes.is_empty(), "{changes:?}");
 }

@@ -114,6 +114,7 @@ behavior classify_project_changes "Classify Project Changes" {
   verify unit "specforge-cache.json re-runs the checks without re-parsing"
   verify unit "a file a file_reference field names re-runs the checks"
   verify unit "a file a file_exists rule names re-runs the checks"
+  verify unit "a file beside a missing file a file_exists rule names changes nothing"
   verify unit "a check input that is a symlink is followed to its target"
   verify unit "an excluded or undiscovered .spec file changes nothing"
   verify unit "a session's watch roots cover every input it classifies"
