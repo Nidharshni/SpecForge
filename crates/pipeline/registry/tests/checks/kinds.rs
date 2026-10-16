@@ -6,7 +6,7 @@ use specforge_extension_sdk::prelude::*;
 use specforge_test_macros::test as spec;
 
 use crate::support::written::checked;
-use crate::support::{build, coded_in, declare, software};
+use crate::support::{build, candidates, coded_in, declare, product, software};
 
 /// An entity of `kind` named `id`, with an empty body.
 fn entity(kind: &str, id: &str) -> String {
@@ -78,9 +78,9 @@ fn detect_unknown_kinds_contract() {
     verify = "E024 for keyword in index suggests the providing extension"
 )]
 fn suggest_missing_ext_known_keyword() {
-    // `feature` is a builtin extension's keyword the bundled index knows.
+    // `feature` is a keyword the vocabulary the build is handed knows.
     let diags = checked(
-        &build([software()]),
+        &build([software()]).with_candidates(candidates(&[product()])),
         &[("test.spec", &entity("feature", "f1"))],
     );
     let e024 = coded_in(&diags, "E024");
@@ -116,11 +116,11 @@ fn suggest_missing_ext_unknown_keyword() {
 
 #[spec(
     behavior = "suggest_missing_extensions",
-    verify = "Suggest Missing Extensions: missing extension suggestions holds — e024_diagnostic_emitted, suggestion_provided, lazy_loading_enforced"
+    verify = "Suggest Missing Extensions: missing extension suggestions holds — e024_diagnostic_emitted, suggestion_provided, no_network"
 )]
 fn suggest_missing_ext_contract() {
-    let build = build([software()]);
-    // ensures: a keyword the index knows gets the extension suggestion.
+    let build = build([software()]).with_candidates(candidates(&[product()]));
+    // ensures: a keyword the vocabulary knows gets the extension suggestion.
     let d1 = checked(&build, &[("test.spec", &entity("feature", "f1"))]);
     assert!(
         d1[0]
@@ -259,7 +259,8 @@ fn a_build_with_no_kind_checks_no_kind() {
     verify = "extensions that load but declare no entity kind report one W151 naming the unchecked entities"
 )]
 fn kindless_extensions_report_one_w151() {
-    let kindless = build([declare("@test/kindless", |_| {})]);
+    let kindless =
+        build([declare("@test/kindless", |_| {})]).with_candidates(candidates(&[software()]));
     assert!(kindless.structural_only());
 
     // Two non-structural entities: one W151 naming how many and which kinds.
