@@ -37,7 +37,7 @@ fn local_request<'a>(root: &'a specforge_common::ProjectRoot, file: &Path) -> Ad
         extensions: vec![Source::Local(file.to_path_buf()).into()],
         base: None,
         allow_unsigned: false,
-        trust: Trust::Refuse,
+        asking: Asking::Nobody,
         dry_run: false,
         containment: &UNBOUNDED,
     }
@@ -57,7 +57,7 @@ fn add_greet(root: &Path, registry: &MemoryRegistry) -> Result<AddOutcome, Refus
             ],
             base: None,
             allow_unsigned: true,
-            trust: Trust::Refuse,
+            asking: Asking::Nobody,
             dry_run: false,
             containment: &UNBOUNDED,
         },
@@ -85,7 +85,7 @@ fn several(
         extensions,
         base: None,
         allow_unsigned: true,
-        trust: Trust::Refuse,
+        asking: Asking::Nobody,
         dry_run,
         containment: &UNBOUNDED,
     }

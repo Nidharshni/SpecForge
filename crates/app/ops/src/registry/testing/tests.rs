@@ -1,6 +1,7 @@
-use super::super::{KeyPin, Publisher, Registry, Trust, TrustPolicy, Upload};
+use super::super::{KeyPin, Publisher, Registry, TrustPolicy, Upload};
 use super::contract::refuse;
 use super::*;
+use crate::asking::Asking;
 use specforge_common::codes;
 use specforge_installed::hex_sha256;
 use specforge_package::{PackageName, Version};
@@ -187,7 +188,7 @@ fn it_decides_a_key_change_by_the_policy_and_pins_only_through_pin() {
     let refused = registry.fetch(&name, &version, refuse(false)).unwrap_err();
     assert!(refused.is(codes::R_TRUST_003), "{refused:?}");
     let consented = registry
-        .fetch(&name, &version, TrustPolicy::new(false, Trust::AssumeYes))
+        .fetch(&name, &version, TrustPolicy::new(false, Asking::Yes))
         .unwrap();
     assert_eq!(
         consented.publisher,

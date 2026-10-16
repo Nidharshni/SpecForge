@@ -42,15 +42,14 @@ impl Args {
         let path = root.dir();
         // A shell user names a relative path from where they stand.
         let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-        let registry =
-            ConfiguredRegistry::for_project(&root, "add").asking(crate::trust::asker(terminal));
+        let registry = ConfiguredRegistry::for_project(&root, "add");
         let runtime = specforge_component::ComponentRuntime::with_user_cache();
         let request = AddRequest {
             root: &root,
             extensions: self.specifiers,
             base: Some(&cwd),
             allow_unsigned: self.allow_unsigned,
-            trust: format.trust(self.yes),
+            asking: crate::asking::of(self.yes, format, terminal),
             dry_run: self.dry_run,
             containment: &Containment::unbounded(),
         };

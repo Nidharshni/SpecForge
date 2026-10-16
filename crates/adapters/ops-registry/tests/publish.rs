@@ -7,7 +7,7 @@
 )]
 
 use specforge_ops::OpErrorKind;
-use specforge_ops::registry::Trust;
+use specforge_ops::asking::Asking;
 use specforge_ops::registry::testing::declaration;
 use specforge_ops::registry::{Registry, TrustPolicy, Upload};
 use specforge_ops_registry::{ConfiguredRegistry, User};
@@ -299,7 +299,7 @@ fn publish_asks_the_registry_fetch_asks() {
         .fetch(
             &acme.name,
             &acme.version,
-            TrustPolicy::new(false, Trust::Refuse),
+            TrustPolicy::new(false, Asking::Nobody),
         )
         .unwrap();
     let other = pkg("@other/y", "1.0.0");

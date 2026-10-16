@@ -25,7 +25,8 @@ use specforge_protocol_types::ExtensionDeclaration;
 use specforge_wasm::WasmRuntime;
 
 use super::peer_set::Declarations;
-use crate::registry::{KeyPin, Publisher, Registry, Trust};
+use crate::asking::Asking;
+use crate::registry::{KeyPin, Publisher, Registry};
 use crate::{OpError, OpErrorKind};
 
 /// What a lock plan is for. It words the refusal of an install that a locked extension does not
@@ -97,12 +98,13 @@ impl Disabled {
 }
 
 /// Where a plan's registry installs come from, and how their publishers are accepted: the
-/// registry port and the caller's two trust choices.
+/// registry port and the caller's choices.
 #[derive(Clone, Copy)]
 pub(crate) struct Fetching<'a> {
     pub(crate) registry: &'a dyn Registry,
     pub(crate) allow_unsigned: bool,
-    pub(crate) trust: Trust,
+    /// Who can be asked about a publisher key change (ADR 0110).
+    pub(crate) asking: Asking<'a>,
 }
 
 /// One install a lock plan stages: a module (none for a preview's registry package, which has not

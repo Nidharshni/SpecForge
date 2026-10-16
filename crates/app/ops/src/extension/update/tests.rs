@@ -31,7 +31,7 @@ fn request(root: &specforge_common::ProjectRoot, reach: Reach) -> UpdateRequest<
         name: None,
         reach,
         allow_unsigned: true,
-        trust: Trust::Refuse,
+        asking: Asking::Nobody,
         containment: &UNBOUNDED,
     }
 }

@@ -9,10 +9,11 @@ use specforge_package::{PackageName, Version, VersionRequirement};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 
 use super::super::{
-    Found, KeyPin, Manifest, Package, Published as Receipt, Publisher, Registry, Searched, Trust,
+    Found, KeyPin, Manifest, Package, Published as Receipt, Publisher, Registry, Searched,
     TrustPolicy, Upload,
 };
 use crate::OpError;
+use crate::asking::{ExpectedFrom, Question};
 
 /// One version a [`MemoryRegistry`] publishes. Its name and version are its declaration's, so it can never
 /// describe another package (a reply the configured registry refuses before ops sees it).
@@ -173,8 +174,8 @@ impl MemoryRegistry {
     }
 
     /// The publisher of a package signed by `key_id`: held to the user's pin for `name`, else to the
-    /// key the project's lock records, else accepted on first use. A key change is consented to
-    /// under `Trust::AssumeYes` only.
+    /// key the project's lock records, else accepted on first use. A key change is put to the
+    /// policy's `asking`.
     fn decide(
         &self,
         name: &PackageName,
@@ -194,7 +195,17 @@ impl MemoryRegistry {
         if expected == key_id {
             return Ok(signed(from_lock));
         }
-        if policy.trust != Trust::AssumeYes {
+        let consents = policy.asking.answers(&Question::KeyChange {
+            package: name.as_str(),
+            expected: &expected,
+            offered: key_id,
+            from: if from_lock {
+                ExpectedFrom::Lock
+            } else {
+                ExpectedFrom::UserPin
+            },
+        });
+        if !consents {
             let what = if from_lock {
                 format!("specforge.lock records '{expected}'")
             } else {
@@ -286,8 +297,8 @@ impl Registry for MemoryRegistry {
     /// risk") when unsigned and `!allow_unsigned`; else its bytes, `hex_sha256(bytes)`, its declaration and
     /// publisher. A signed package's publisher is decided against the key expected for `name` (the
     /// user's pin, else `policy.locked_key`): first use without one, `first_use: false` when it
-    /// matches the user's pin, a key change otherwise (`Repinned` under `Trust::AssumeYes`, else
-    /// R-TRUST-003). Nothing is pinned: that is [`Registry::pin`].
+    /// matches the user's pin, a key change otherwise (`Repinned` when `policy.asking` consents,
+    /// else R-TRUST-003). Nothing is pinned: that is [`Registry::pin`].
     fn fetch(
         &self,
         name: &PackageName,

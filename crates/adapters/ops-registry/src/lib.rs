@@ -11,7 +11,7 @@ mod reports;
 
 use reports::PolicyReports;
 use specforge_common::{Code, Diagnostic, codes};
-use specforge_ops::registry::Trust;
+use specforge_ops::asking::{ExpectedFrom, Question};
 use specforge_ops::registry::{
     Found, KeyPin, METADATA_MISMATCH, Manifest, NO_REGISTRY, NO_REGISTRY_FOR_NAME,
     NOT_AUTHENTICATED, Package, Published, Publisher, Registry, Searched, TrustPolicy,
@@ -24,16 +24,13 @@ use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 use specforge_registry_client::credentials::{read_credentials, user_dir};
 use specforge_registry_client::signing::load_or_create_signing_key_at;
 use specforge_registry_client::{
-    Accepted, HttpRegistryClient, KeyChange, NewPin, PublishError, RegistryClient, RegistryConfig,
-    RegistryCredential, RegistryError, Retrying, SigningKey, parse_registries_from_config,
-    publish_to_registry, verify_registry_integrity,
+    Accepted, HttpRegistryClient, KeyChange, NewPin, PinSource, PublishError, RegistryClient,
+    RegistryConfig, RegistryCredential, RegistryError, Retrying, SigningKey,
+    parse_registries_from_config, publish_to_registry, verify_registry_integrity,
 };
 use specforge_registry_wire::{PackageMetadata, SearchQuery};
 use std::path::PathBuf;
 use std::sync::OnceLock;
-
-/// Whom a key change is asked of.
-type Asker = Box<dyn Fn(&KeyChange) -> bool + Send + Sync>;
 
 /// The environment variable whose token `publish` authenticates with, ahead
 /// of a stored credential.
@@ -243,8 +240,6 @@ pub struct ConfiguredRegistry {
     client: Box<dyn RegistryClient>,
     /// Whose registry files are read (pins, credentials, signing key).
     user: User,
-    /// Whom a key change is asked of when a fetch is `Trust::Prompt`ed; nobody by default.
-    asker: Option<Asker>,
     /// What the fetch policy reported (W155 at a fetch, W156 at a pin), in order.
     reported_by_policy: PolicyReports,
 }
@@ -259,7 +254,6 @@ impl ConfiguredRegistry {
             registries: OnceLock::new(),
             client: Box::new(Retrying::new(HttpRegistryClient::new())),
             user: User::current(),
-            asker: None,
             reported_by_policy: PolicyReports::default(),
         }
     }
@@ -277,13 +271,6 @@ impl ConfiguredRegistry {
         self
     }
 
-    /// Ask `ask` about a key change when a fetch is `Trust::Prompt`ed (the CLI's terminal). Without
-    /// one, such a key change is refused.
-    pub fn asking(mut self, ask: impl Fn(&KeyChange) -> bool + Send + Sync + 'static) -> Self {
-        self.asker = Some(Box::new(ask));
-        self
-    }
-
     /// What this registry reported, once an operation has asked it anything: the registry
     /// configuration's diagnostics (W140 for a duplicate alias, I003 when none is the
     /// default; nothing when reading failed outright, each call then failing with
@@ -296,15 +283,6 @@ impl ConfiguredRegistry {
         };
         reported.extend(self.reported_by_policy.all());
         reported
-    }
-
-    /// How a key change is decided for the way `add` was asked to.
-    fn decider(&self, trust: Trust) -> impl Fn(&KeyChange) -> bool + '_ {
-        move |change| match trust {
-            Trust::Refuse => false,
-            Trust::AssumeYes => true,
-            Trust::Prompt => self.asker.as_ref().is_some_and(|ask| ask(change)),
-        }
     }
 
     /// The configuration, read on the first call that needs it.
@@ -378,13 +356,24 @@ impl Registry for ConfiguredRegistry {
         verify_registry_integrity(&wasm, &metadata.sha256)
             .map_err(|why| OpError::of(OpErrorKind::SchemaMismatch, why))?; // 2
 
-        // Publisher signature and the TOFU pin policy.
+        // Publisher signature and the TOFU pin policy; a key change is put to the policy's asking.
+        let decide = |change: &KeyChange| {
+            policy.asking.answers(&Question::KeyChange {
+                package: &change.package,
+                expected: &change.pinned,
+                offered: &change.offered,
+                from: match change.source {
+                    PinSource::User => ExpectedFrom::UserPin,
+                    PinSource::Lock => ExpectedFrom::Lock,
+                },
+            })
+        };
         let trusted = specforge_registry_client::trust_flow::check(
             &metadata.name,
             &metadata,
             &wasm,
             policy.allow_unsigned,
-            &self.decider(policy.trust),
+            &decide,
             &self.user.known_keys(),
             policy.locked_key,
         )
@@ -773,7 +762,7 @@ mod tests {
             .fetch(
                 &sdk,
                 &Version::new(0, 1, 0),
-                TrustPolicy::new(false, Trust::Refuse),
+                TrustPolicy::new(false, specforge_ops::asking::Asking::Nobody),
             )
             .unwrap_err();
         assert!(error.is(specforge_ops::registry::NO_REGISTRY), "{error:?}");

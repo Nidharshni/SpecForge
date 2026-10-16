@@ -158,9 +158,9 @@ fn a_non_object_config_refuses_the_removal_before_any_write() {
     verify = "add, update and remove refuse an unusable specforge.json with one refusal, before they write"
 )]
 fn remove_refuses_as_add_and_update_do() {
+    use crate::asking::Asking;
     use crate::config::testing::UNUSABLE;
     use crate::extension::{AddRequest, UpdateRequest, add, update};
-    use crate::registry::Trust;
 
     for config in UNUSABLE {
         let fixture = installed(Assembled::new(), "@acme/x");
@@ -178,7 +178,7 @@ fn remove_refuses_as_add_and_update_do() {
                 extensions: vec!["@specforge/product".to_string()],
                 base: None,
                 allow_unsigned: false,
-                trust: Trust::Refuse,
+                asking: Asking::Nobody,
                 dry_run: false,
                 containment: &UNBOUNDED,
             },
@@ -192,7 +192,7 @@ fn remove_refuses_as_add_and_update_do() {
                 name: None,
                 reach: specforge_package::Reach::Compatible,
                 allow_unsigned: true,
-                trust: Trust::Refuse,
+                asking: Asking::Nobody,
                 containment: &UNBOUNDED,
             },
             &unconfigured,

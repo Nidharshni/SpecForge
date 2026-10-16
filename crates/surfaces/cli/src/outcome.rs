@@ -64,20 +64,6 @@ pub(crate) enum OutputFormat {
     Json,
 }
 
-impl OutputFormat {
-    /// How a publisher key change is decided for this output: `--yes`
-    /// accepts it; JSON output can't ask anyone, so it refuses; a terminal
-    /// is asked.
-    pub(crate) fn trust(self, assume_yes: bool) -> specforge_ops::registry::Trust {
-        use specforge_ops::registry::Trust;
-        match (assume_yes, self) {
-            (true, _) => Trust::AssumeYes,
-            (false, OutputFormat::Json) => Trust::Refuse,
-            (false, OutputFormat::Human) => Trust::Prompt,
-        }
-    }
-}
-
 /// The `--format human|json` flag every core command with a JSON form takes
 /// (`#[command(flatten)]`; `trace` declares its own, json by default).
 #[derive(clap::Args, Clone, Copy, Debug)]
@@ -212,15 +198,6 @@ mod tests {
     use crate::terminal::Facts;
     use specforge_common::codes;
     use specforge_ops::{RunVerdict, Writes};
-
-    #[test]
-    fn trust_is_yes_then_what_the_output_can_ask() {
-        use specforge_ops::registry::Trust;
-        assert_eq!(OutputFormat::Human.trust(true), Trust::AssumeYes);
-        assert_eq!(OutputFormat::Json.trust(true), Trust::AssumeYes);
-        assert_eq!(OutputFormat::Json.trust(false), Trust::Refuse);
-        assert_eq!(OutputFormat::Human.trust(false), Trust::Prompt);
-    }
 
     #[specforge_test_macros::test(
         behavior = "report_command_outcome",
