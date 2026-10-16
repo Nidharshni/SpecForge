@@ -613,6 +613,7 @@ behavior validate_delta_correctness "Validate Delta Correctness" {
   verify unit "delta applied to old graph equals new graph"
   verify unit "a discrepancy is reported with a message naming what differs"
   verify unit "check disabled in release builds"
+  verify unit "an environment reload keeps whether the session verifies its updates"
   verify integration "a debug build checks each rebuild without the flag"
   verify unit "the LSP and MCP check each rebuild in a debug build"
   verify unit "a rebuild that passes the check is reported as passed"

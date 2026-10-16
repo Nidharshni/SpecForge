@@ -143,6 +143,7 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
   verify unit "analyze notifies subscribers when the diagnostics it compiled changed"
   verify unit "validate with a path to another project leaves the served project in place"
   verify unit "a mutation tool that wrote files leaves the server serving what is on disk"
+  verify unit "initialize naming another project replaces the project a stateless request served"
   verify unit "with no project served, a read naming a file or an entity is the no-project refusal, an aggregate read answers over the empty session"
   verify unit "with no project served, every core tool, prompt and resource answers or refuses as its target declares"
   verify unit "with no project served, an entry that acts on the project is refused before its arguments are read"

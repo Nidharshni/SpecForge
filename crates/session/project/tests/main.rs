@@ -27,6 +27,7 @@ mod registered_fields;
 mod registry_build_snapshot;
 mod registry_fields;
 mod registry_order;
+mod reopen;
 mod rules;
 mod session;
 mod structural_checks;
