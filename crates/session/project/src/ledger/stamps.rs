@@ -3,9 +3,9 @@
 //!
 //! Every build records what it read: each source's size and modification
 //! time, the same for each environment input, and for each check input
-//! before the checks run. The config is stamped before its one read, the
-//! lock and the modules before the extension runtime and the environment
-//! read them. [`ProjectSession::stale`] compares that record
+//! before the checks run. Each environment input is stamped in the read
+//! that reads it (the config, the lock, each module, ADR 0114).
+//! [`ProjectSession::stale`] compares that record
 //! with disk. Stamps are taken *before* the read they describe, so a write
 //! that races the read is seen next time rather than lost.
 //!
@@ -110,23 +110,10 @@ pub(super) struct Stamps {
 }
 
 impl Stamps {
-    /// Stamp `specforge.json`, before its one read: a config rewritten after
-    /// this stamp is seen next time, whatever the rest was read from. Starts
-    /// the environment record again.
-    pub(super) fn stamp_config(&mut self, config: &Path) {
-        self.environment = BTreeMap::new();
-        self.environment
-            .insert(config.to_path_buf(), Entry::stamp(config));
-    }
-
-    /// Stamp the other environment inputs (the lock and each extension
-    /// module), before the extension runtime and the environment read
-    /// them.
-    pub(super) fn stamp_environment(&mut self, inputs: &SessionInputs) {
-        for path in inputs.environment_files() {
-            let entry = Entry::stamp(path);
-            self.environment.insert(path.to_path_buf(), entry);
-        }
+    /// The environment inputs are exactly `environment`, each stamped before
+    /// the environment load read it (ADR 0114).
+    pub(super) fn set_environment(&mut self, environment: BTreeMap<PathBuf, Option<Entry>>) {
+        self.environment = environment;
     }
 
     /// No source is stamped: discovery starts the record of the sources again,

@@ -4,7 +4,7 @@ use serde::Serialize;
 use specforge_common::SourceSpan;
 use specforge_common::shape::Shape;
 use specforge_ops::read::navigate::{
-    DIRECTION, Direction, Occurrence, Precision, ReferenceQuery, Role,
+    DIRECTION, Direction, Navigator, Occurrence, Precision, ReferenceQuery, Role,
 };
 
 use crate::args::Arguments;
@@ -90,7 +90,7 @@ impl CoreTool for Tool {
             direction: args.direction,
             include_declaration: args.include_declaration,
         };
-        let occurrences = super::navigator(view)
+        let occurrences = Navigator::new(view)
             .references(&args.entity_id, query)
             .map_err(Self::refused)?;
         Ok(Reply {

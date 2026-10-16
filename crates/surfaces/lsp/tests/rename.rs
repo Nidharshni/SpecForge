@@ -210,3 +210,26 @@ fn rename_rejects_duplicate() {
         "cannot rename 'auth_token': 'user_login' exists"
     );
 }
+
+/// All or nothing: a file the compile holds no text of refuses the whole rename.
+#[test]
+fn a_rename_without_a_files_text_is_refused_whole() {
+    let state = buffers(&[("/p/types.spec", TYPES), ("/p/auth.spec", AUTH)]);
+    let compiled = state.session().unwrap().project();
+    let without_auth = compiled.with_source_texts(
+        compiled
+            .source_texts()
+            .into_iter()
+            .filter(|(key, _)| key != "/p/auth.spec"),
+    );
+    let blind = specforge_ops::read::navigate::Navigator::new(
+        specforge_ops::view::ProjectView::of(&without_auth),
+    );
+
+    let refused = specforge_ops::authoring::rename::plan(&blind, "auth_token", "session_token");
+
+    assert_eq!(
+        refused.unwrap_err().error.code,
+        specforge_ops::authoring::rename::UNREADABLE
+    );
+}

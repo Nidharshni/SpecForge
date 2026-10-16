@@ -2,7 +2,7 @@
 
 **Status:** accepted (2026-10-14, structure round, plan 13). Amends ADR 0014 D4, D5 and D6 (what "another
 project" may be) and ADR 0029 D8 (`out_dir`). D1 and D8 amended by ADR 0104 (the rule is
-`specforge_ops::Containment`, applied where the operation opens or writes); the audit table and D2 amended by ADR 0112.
+`specforge_ops::Containment`, applied where the operation opens or writes); the audit table and D2 amended by ADR 0112. The outline row is closed by [ADR 0116](0116-navigation-reads-the-text-the-project-was-compiled-from.md): outline asks the compile's sources and reads no file.
 
 `specforge mcp .` in `proj/`, then `tools/call specforge.format {"path": "../outside"}`, answered `ok` and
 rewrote `outside/x.spec`. The server serves one project, and a client that can name any directory could read

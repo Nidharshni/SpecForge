@@ -16,7 +16,7 @@ pub mod snapshot;
 mod invariants;
 
 // --- What the checks see of the file system (ADR 0107) ---
-pub use disk::{Asked, Disk, MemoryDisk};
+pub use disk::{Asked, Disk, MemoryDisk, PlainDisk};
 
 // --- Core registries ---
 pub use registries::{
@@ -48,7 +48,9 @@ pub use entity::{
 pub use snapshot::{EntitySnapshot, Standing};
 
 // --- Registry compilation (plan 05): one build, and the graph checks ---
-pub use compilation::{BuildPart, CHECK_PHASE, DeclaredPass, RegistryBuild, build_registries};
+pub use compilation::{
+    BuildPart, CHECK_PHASE, CandidateVocabulary, DeclaredPass, RegistryBuild, build_registries,
+};
 
 // Module paths external code names directly (`specforge_registry::surface::`).
 pub mod surface;

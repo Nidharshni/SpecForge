@@ -19,6 +19,7 @@ mod management_view;
 mod message_spec;
 mod methods;
 mod mutation_outcome;
+mod navigation_text;
 mod operations_mgmt;
 mod operations_mutation;
 mod option_tables;

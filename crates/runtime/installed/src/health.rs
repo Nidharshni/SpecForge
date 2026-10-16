@@ -1,3 +1,5 @@
+use specforge_registry::PlainDisk;
+
 use crate::Installed;
 use crate::load::LoadProblem;
 use crate::lock::LockFileEntry;
@@ -30,7 +32,7 @@ impl Installed {
     /// load makes, so the two cannot disagree.
     fn module_health(&self, entry: &LockFileEntry) -> Option<Health> {
         let name = entry.name.to_string();
-        match self.check_module(entry) {
+        match self.check_module(entry, &PlainDisk) {
             Ok(_) => None,
             Err(LoadProblem::ModuleMissing { .. }) => Some(Health::MissingModule { name }),
             Err(LoadProblem::Changed { locked, actual }) => Some(Health::Changed {

@@ -1,31 +1,33 @@
-//! The disk the checks read through in a project (ADR 0107): the file system,
-//! and the one way a directory is listed.
+//! The disk the checks read through in a project (ADR 0107): the file system
+//! through the recording run.
 
 use std::io;
 use std::path::Path;
 
-use specforge_registry::Disk;
+use specforge_registry::{Disk, PlainDisk};
 
-use super::{CheckInput, CheckRun};
+use super::{Reading, Run};
 
 /// The checks' disk in a project session: each read goes through the check
 /// run, which stamps the path first and records it as a check input.
-pub(super) struct RunDisk<'r, 'l>(pub(super) &'r CheckRun<'l>);
+pub(super) struct RunDisk<'r, 'l>(pub(super) &'r Run<'l>);
 
 impl Disk for RunDisk<'_, '_> {
     fn exists(&self, path: &Path) -> bool {
         self.record_link_targets(path);
-        self.0.read(CheckInput::File, path, Path::exists)
+        self.0
+            .read(Reading::File, path, |path| PlainDisk.exists(path))
     }
 
     fn list(&self, dir: &Path) -> Option<Vec<String>> {
-        self.0.read(CheckInput::Listing, dir, list_names)
+        self.0
+            .read(Reading::Listing, dir, |dir| PlainDisk.list(dir))
     }
 
     fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
         self.record_link_targets(path);
         self.0
-            .read(CheckInput::File, path, |path| std::fs::read(path))
+            .read(Reading::File, path, |path| PlainDisk.read(path))
     }
 }
 
@@ -50,36 +52,7 @@ impl RunDisk<'_, '_> {
                 Some(dir) => dir.join(target),
                 None => target,
             };
-            self.0.read(CheckInput::File, &current, |_| ());
+            self.0.read(Reading::File, &current, |_| ());
         }
     }
-}
-
-/// The checks' disk of a one-shot compile: the file system, nothing recorded.
-pub(crate) struct PlainDisk;
-
-impl Disk for PlainDisk {
-    fn exists(&self, path: &Path) -> bool {
-        path.exists()
-    }
-
-    fn list(&self, dir: &Path) -> Option<Vec<String>> {
-        list_names(dir)
-    }
-
-    fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
-        std::fs::read(path)
-    }
-}
-
-/// The names of the entries directly in `dir`, sorted, those that are not
-/// UTF-8 left out; `None` when `dir` is not a directory that can be read.
-pub(super) fn list_names(dir: &Path) -> Option<Vec<String>> {
-    let mut names: Vec<String> = std::fs::read_dir(dir)
-        .ok()?
-        .filter_map(|entry| entry.ok())
-        .filter_map(|entry| entry.file_name().into_string().ok())
-        .collect();
-    names.sort();
-    Some(names)
 }

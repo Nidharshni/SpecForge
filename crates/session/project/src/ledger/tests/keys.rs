@@ -34,7 +34,7 @@ fn a_walked_path_and_its_spellings_have_one_key() {
     std::os::unix::fs::symlink(&real, &alias).unwrap();
 
     let config = specforge_common::ProjectConfig::default();
-    let inputs = SessionInputs::opened(&alias, &config);
+    let inputs = SessionInputs::opened(&alias, &config, Vec::new());
     let reach = inputs.reach([real.join("a.spec").as_path()]);
 
     assert_eq!(discovered(&alias, &alias.join("a.spec")), "a.spec");

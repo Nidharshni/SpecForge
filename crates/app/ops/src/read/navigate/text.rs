@@ -2,19 +2,21 @@
 //! 1-based byte columns, end exclusive), and the lexemes of a range, read
 //! by the language's one lexer (`specforge_parser::lex`, ADR 0023).
 
+use std::sync::Arc;
+
 use specforge_common::{SourceSpan, Sym};
 use specforge_parser::lex::{Lexeme, lex};
 
 /// A file's text and where each of its lines starts.
 #[derive(Debug)]
 pub(crate) struct SourceText {
-    text: String,
+    text: Arc<str>,
     /// Byte offset of each line's first byte.
     line_starts: Vec<usize>,
 }
 
 impl SourceText {
-    pub(crate) fn new(text: String) -> Self {
+    pub(crate) fn new(text: Arc<str>) -> Self {
         let mut line_starts = vec![0];
         line_starts.extend(text.match_indices('\n').map(|(i, _)| i + 1));
         SourceText { text, line_starts }
@@ -124,7 +126,7 @@ mod tests {
 
     #[test]
     fn positions_are_one_based_byte_columns() {
-        let text = SourceText::new("ab\n\"é\" cd\n".to_string());
+        let text = SourceText::new(Arc::from("ab\n\"é\" cd\n"));
         assert_eq!(text.offset(1, 1), Some(0));
         // Line 2 starts at byte 3; "é" is 2 bytes, so column 6 is byte 8.
         assert_eq!(text.offset(2, 6), Some(8));

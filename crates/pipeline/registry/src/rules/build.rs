@@ -1,6 +1,6 @@
 //! Declared descriptor → [`Rule`]: its shape checked (W112 for a rule that
 //! cannot work as declared), its references resolved against the
-//! registries, then the host's E006 rules. ([`duplicate_codes`] is W023, which the
+//! registries, then the host's E006 and E016 rules. ([`duplicate_codes`] is W023, which the
 //! registry build reports as a collision.)
 
 use std::collections::{HashMap, HashSet};
@@ -46,7 +46,7 @@ pub(super) fn build(
     // Code order (stable: a code declared for several kinds keeps its
     // declaration order).
     rules.sort_by(|a: &Rule, b: &Rule| a.code.cmp(&b.code));
-    rules.extend(required_field_rules(registries));
+    rules.extend(host_rules(registries));
     (Rules { rules }, diagnostics)
 }
 
@@ -455,6 +455,14 @@ fn resolve(mut rule: Rule, registries: Registries<'_>) -> Result<Option<Rule>, D
     Ok(Some(rule))
 }
 
+/// The host's rules, after the extensions': one E006 per `required` field, then one E016 per
+/// `file_reference` field, each by (kind, field).
+fn host_rules(registries: Registries<'_>) -> Vec<Rule> {
+    let mut rules = required_field_rules(registries);
+    rules.extend(file_reference_rules(registries));
+    rules
+}
+
 /// One E006 rule per `required` field, owned by the host, by (kind, field).
 fn required_field_rules(registries: Registries<'_>) -> Vec<Rule> {
     let mut required: Vec<(String, String)> = registries
@@ -475,6 +483,32 @@ fn required_field_rules(registries: Registries<'_>) -> Vec<Rule> {
             origin: Origin::Host,
             check_kind: CheckKind::MissingRequiredField,
             check: Check::MissingField { field },
+            declared: Declared::default(),
+        })
+        .collect()
+}
+
+/// One E016 rule per `file_reference` field, owned by the host, by (kind, field): a
+/// `file_exists` rule over the field (ADR 0118).
+fn file_reference_rules(registries: Registries<'_>) -> Vec<Rule> {
+    let mut referenced: Vec<(String, String)> = registries
+        .fields
+        .iter()
+        .filter(|(_, _, entry)| entry.declared().file_reference)
+        .map(|(kind, field, _)| (kind.to_string(), field.to_string()))
+        .collect();
+    referenced.sort();
+    referenced
+        .into_iter()
+        .map(|(kind, field)| Rule {
+            code: codes::E016.id().to_string(),
+            severity: Severity::of(codes::E016),
+            template: "file reference '{value}' in entity '{id}' does not exist".to_string(),
+            target: Some(kind),
+            message_field: Some(field.clone()),
+            origin: Origin::Host,
+            check_kind: CheckKind::FileExists,
+            check: Check::FileExists { field },
             declared: Declared::default(),
         })
         .collect()

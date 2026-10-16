@@ -144,9 +144,8 @@ feature zero_entity_bootstrap "Zero-Entity Bootstrap" {
     Unknown keywords produce E024 with help text suggesting which extension
     to install. Every entity kind comes from an extension: a define block
     in a .spec file is reported (W143) and ignored (ADR 0005).
-    suggest_missing_extensions consumes a bundled
-    KeywordExtensionIndex data file (data/keyword-index.json) that a test
-    keeps in step with the builtin extensions' declared kinds. With zero extensions, the compiler gracefully degrades to
+    suggest_missing_extensions consumes the candidate
+    vocabulary the registry build is handed (the builtins', generated with them, ADR 0122). With zero extensions, the compiler gracefully degrades to
     structural-only mode with an I002 info diagnostic. Export commands
     (specforge export) MUST still produce valid Graph Protocol JSON from
     the structural-only graph, with generic entity nodes and reference
