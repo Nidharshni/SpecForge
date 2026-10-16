@@ -19,6 +19,7 @@ specforge-protocol-types = { path = "../../leaf/protocol-types" }
 specforge-graph = { path = "../graph" }
 specforge-coverage = { path = "../../leaf/coverage" }
 specforge-parser = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 regex = { workspace = true }
 
