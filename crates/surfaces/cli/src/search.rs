@@ -1,3 +1,4 @@
+use crate::notes::Notes;
 use crate::options;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, outln};
@@ -34,13 +35,14 @@ impl Args {
         };
         let registry = ConfiguredRegistry::for_project(&root, "search");
         let searched = registry.search(query, contributes);
-        terminal.diagnostics(&registry.reported());
+        let notes = Notes::new(terminal, format);
+        notes.beside(&registry.reported());
         let searched = match searched {
             Ok(searched) => searched,
             Err(error) => return Refusal::of(format).report(terminal, &error),
         };
         // Each registry that failed, once.
-        terminal.diagnostics(&searched.failures);
+        notes.beside(&searched.failures);
         print_found(
             query,
             contributes,

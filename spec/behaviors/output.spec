@@ -598,7 +598,11 @@ behavior report_command_outcome "Report a Command's Outcome" {
     written; under --format json it MUST instead be the
     error document {error, code}, with suggestion when the refusal has one
     and files_written when files were left written, on stdout, with
-    nothing on stderr. A command run
+    nothing on stderr. Beside its document a command MUST write a note
+    for a person only under human output, and a notice once: in the
+    document when the document carries it, else on stderr as
+    severity[CODE]: message before the document, under every format.
+    A command run
     outside any project where it needs one MUST refuse with no_project.
     Every core command whose output has a human and a JSON form MUST take
     --format human|json (human by default; trace's is json); no core
@@ -621,6 +625,7 @@ behavior report_command_outcome "Report a Command's Outcome" {
   verify unit "stats, trace, analyze, migrate and init refuse with the error document under --format json"
   verify unit "a command run outside any project refuses with no_project"
   verify unit "every core command with a JSON form takes --format human|json, and none takes --json"
+  verify unit "under --format json a note is never written and a notice is written once: in the document when it carries it, else on stderr"
   verify unit "a closed stdout ends the output quietly and keeps the command's exit"
   verify integration "the CLI's exit code and MCP's ok agree for check, analyze, format and migrate"
   verify integration "the CLI's --format json and MCP's reply are one outcome document for every operation both surfaces run"
