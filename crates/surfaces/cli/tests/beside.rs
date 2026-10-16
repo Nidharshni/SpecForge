@@ -78,8 +78,10 @@ fn check_writes_no_note_beside_its_document() {
     assert_eq!(run.stderr, "");
 }
 
-#[test]
-#[ignore = "flipped by T7"]
+#[specforge_test(
+    behavior = "search_registry",
+    verify = "under --format json a failed registry is reported once, in the document's diagnostics, and not on stderr"
+)]
 fn search_reports_a_failed_registry_once() {
     let p = with_registries(serde_json::json!([
         {"alias": "down", "url": "http://127.0.0.1:9", "default_registry": true}

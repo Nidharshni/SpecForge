@@ -41,8 +41,8 @@ impl Args {
             Ok(searched) => searched,
             Err(error) => return Refusal::of(format).report(terminal, &error),
         };
-        // Each registry that failed, once.
-        notes.beside(&searched.failures);
+        // Each registry that failed, once: here for a person, in `diagnostics` for a JSON reader.
+        notes.carried(&searched.failures);
         print_found(
             query,
             contributes,
