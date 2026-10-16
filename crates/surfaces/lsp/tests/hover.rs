@@ -9,8 +9,7 @@ use specforge_common::{Severity, SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
 use specforge_lsp::LineIndex;
 use specforge_ops::view::ProjectView;
-use specforge_project::Environment;
-use specforge_project::coverage::RecordedCoverage;
+use specforge_project::testing::Assembled;
 use specforge_test_macros::test as spec;
 use tower_lsp::lsp_types::Position;
 
@@ -465,9 +464,8 @@ fn hover_lists_the_diagnostics_not_already_shown() {
         },
     );
     let reported = vec![cycle.clone(), third_party];
-    let env = Environment::empty();
-    let recorded = RecordedCoverage::over(&g, &env);
-    let view = ProjectView::new(&g, &env, None, &recorded).reporting(&reported);
+    let project = Assembled::new().graph(g);
+    let view = ProjectView::of(project.detached()).reporting(&reported);
     let facts = specforge_ops::read::inspect::inspect(&view, "beta").unwrap();
 
     let coverage = specforge_ops::read::inspect::coverage(&view, "beta");

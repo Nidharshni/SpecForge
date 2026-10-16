@@ -953,9 +953,8 @@ fn provide_semantic_tokens_contract() {
     let source = "behavior foo \"Foo\" {\n  contract \"\"\"\n    hello\n  \"\"\"\n}\n";
     let registries = verifiable(&["behavior"], &[]);
     let graph = Graph::new();
-    let env = specforge_project::Environment::with_registries(registries, None);
-    let recorded = specforge_project::coverage::RecordedCoverage::over(&graph, &env);
-    let view = specforge_ops::view::ProjectView::new(&graph, &env, None, &recorded);
+    let project = specforge_project::testing::Assembled::over(registries).graph(graph);
+    let view = specforge_ops::view::ProjectView::of(project.detached());
     let tokens = specforge_lsp::Document::new(source.into()).tokens(&view);
 
     assert!(!tokens.is_empty(), "must produce tokens");
@@ -991,10 +990,9 @@ fn code_action_create_entity_stub_contract() {
     let state = buffers(&[("/p/auth.spec", text)]);
     let diagnostics = state.session().unwrap().project().diagnostics();
     let fixes_with = |target_kind: Option<&str>| {
-        let env =
-            specforge_project::Environment::with_registries(invariants_field(target_kind), None);
-        let recorded = specforge_project::coverage::RecordedCoverage::over(state.graph(), &env);
-        let view = specforge_ops::view::ProjectView::new(state.graph(), &env, None, &recorded);
+        let project = specforge_project::testing::Assembled::over(invariants_field(target_kind))
+            .graph(state.graph().clone());
+        let view = specforge_ops::view::ProjectView::of(project.detached());
         let nav =
             specforge_ops::read::navigate::Navigator::new(view, |_: &str| Some(text.to_string()));
         nav.fixes(
@@ -1070,9 +1068,9 @@ fn code_actions_for_missing_verify_contract() {
     // Ensures: quickfix code action with verify stub targeting the .spec file
     let text = "\n\n\n\nbehavior my_behavior \"B\" {\n  contract \"c\"\n}\n";
     let state = buffers(&[("/p/a.spec", text)]);
-    let env = specforge_project::Environment::with_registries(verifiable(&["behavior"], &[]), None);
-    let recorded = specforge_project::coverage::RecordedCoverage::over(state.graph(), &env);
-    let view = specforge_ops::view::ProjectView::new(state.graph(), &env, None, &recorded);
+    let project = specforge_project::testing::Assembled::over(verifiable(&["behavior"], &[]))
+        .graph(state.graph().clone());
+    let view = specforge_ops::view::ProjectView::of(project.detached());
     let nav = specforge_ops::read::navigate::Navigator::new(view, |_: &str| Some(text.to_string()));
     let fixes = nav.fixes(&[], &specforge_ops::read::navigate::FixQuery::default());
 

@@ -5,7 +5,7 @@ use specforge_extension_sdk::prelude::FieldType;
 use specforge_graph::{Graph, Node};
 use specforge_lsp::{Document, MOD_REFERENCE};
 use specforge_ops::view::ProjectView;
-use specforge_project::coverage::RecordedCoverage;
+use specforge_project::testing::Assembled;
 
 use crate::registries::registries;
 use specforge_test_macros::test as specforge_test;
@@ -34,9 +34,8 @@ fn a_bare_word_on_a_string_list_is_no_reference_position() {
             end_col: 1,
         },
     ));
-    let env = specforge_project::Environment::with_registries(registries, None);
-    let recorded = RecordedCoverage::over(&graph, &env);
-    let view = ProjectView::new(&graph, &env, None, &recorded);
+    let project = Assembled::over(registries).graph(graph);
+    let view = ProjectView::of(project.detached());
     let tokens = Document::new("term t2 \"T2\" {\n  aliases [alpha]\n}\n".into()).tokens(&view);
     let modifiers = tokens
         .iter()
