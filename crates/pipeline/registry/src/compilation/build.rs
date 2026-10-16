@@ -187,12 +187,15 @@ impl RegistryBuild {
         &self.commands
     }
 
-    /// What the graph build reads of these declarations: absent-target
-    /// reference fields, inverse pairs, value coercions and
+    /// What the graph build reads of these declarations: the owners of the
+    /// absent target kinds (read from the candidate vocabulary, so call it
+    /// after `with_candidates`), inverse pairs, value coercions and
     /// derived references (ADR 0032, amended). The one place they are
     /// derived; `Environment::graph_config` adds the provider schemes.
     pub fn graph_inputs(&self) -> GraphInputs {
-        graph_inputs::derive(&self.kinds, &self.fields, &self.field_forms)
+        graph_inputs::derive(&self.fields, &self.field_forms, |kind| {
+            self.candidates().kind_owner(kind).map(str::to_string)
+        })
     }
 
     /// The build, suggesting from `candidates` (ADR 0122). Read when `check` runs (and when

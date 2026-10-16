@@ -983,11 +983,13 @@ I004: Extension not installed
 A reference field targets a kind no enabled extension declares, an extension
 enhances a kind no enabled extension declares, or a `.spec` file has an
 `@scope/name` extension import for a known but not-installed extension. Install
-the missing extension with `specforge add <name>` to resolve the reference. An
-entity whose keyword no enabled extension declares is an error instead (E024),
-whose suggestion names the extension to install. An extension's enhancement of a
-kind no enabled extension declares is skipped silently, not reported, when the
-extension declares an optional peer the project does not load.
+the missing extension with `specforge add <name>` to resolve the reference; for
+a reference field the suggestion names the builtin extension that declares the
+kind, as E024's does. An entity whose keyword no enabled extension declares is
+an error instead (E024), whose suggestion names the extension to install. An
+extension's enhancement of a kind no enabled extension declares is skipped
+silently, not reported, when the extension declares an optional peer the project
+does not load.
 
 Owner: core
 Level: info

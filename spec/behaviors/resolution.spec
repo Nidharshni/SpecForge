@@ -161,6 +161,9 @@ behavior link_entity_references "Link Entity References" {
   verify unit "a string list's items reference nothing but scheme ref IDs"
   verify unit "a quoted id on a reference list field is a reference"
   verify unit "an open-fields kind's undeclared field references nothing"
+  verify unit "an unresolved reference in a field whose target kind no extension declares is I004 naming the extension"
+  verify unit "an unresolved reference to a loaded or undeclared target kind is E003 alone"
+  verify unit "a reference naming an existing entity of the absent target kind links without a diagnostic"
   verify contract "Link Entity References: entity reference linking holds — registries_populated, all_files_parsed, all_references_resolved, no_silent_ignoring"
   verify unit "E003 span covers exactly the unresolved identifier token"
   verify unit "cross-file duplicate entity ID produces E002 naming the first declaration"
@@ -191,9 +194,10 @@ behavior resolve_soft_cross_extension_references "Resolve Soft Cross-Extension R
     keyword, the suggestion MUST name it ("install it with: specforge add
     X"). The keyword stays an error: a project that uses a kind without
     enabling its extension does not pass the check.
-    This is about entity declarations with unknown keywords, not reference
-    list entries — reference lists contain entity IDs (not keywords), so the
-    resolver cannot determine a target entity's kind from an unresolvable ID.
+    This is about entity declarations with unknown keywords. An unresolvable
+    ID in a field whose declared target kind no loaded extension declares is
+    I004 (link_entity_references), whose suggestion consults the same
+    catalog.
     When the extension IS installed and the target entity does not exist,
     normal E003 validation via link_entity_references MUST apply.
   """

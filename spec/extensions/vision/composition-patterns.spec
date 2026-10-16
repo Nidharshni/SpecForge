@@ -266,7 +266,8 @@ behavior cp_missing_product_from_software "Missing @specforge/product: Software 
     3. Emit I004 (info severity) naming the reference, the field, and the
        kind no enabled extension provides ("reference 'x' in field
        'features' of 'user_login' targets kind 'feature', which no enabled
-       extension provides"), suggesting to enable its extension.
+       extension provides"), suggesting `specforge add @specforge/product`,
+       the extension E024 names for the kind.
     4. Store the reference as unresolved — it is NOT discarded.
     5. NOT emit E003 (error) — the reference is soft, not hard.
 

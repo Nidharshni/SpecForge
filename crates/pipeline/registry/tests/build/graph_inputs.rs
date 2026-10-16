@@ -288,11 +288,8 @@ fn the_graph_inputs_contract_holds() {
             .is_single_reference()
     );
     assert_eq!(
-        inputs
-            .absent_reference_targets
-            .get(&("doc".to_string(), "owner".to_string()))
-            .map(String::as_str),
-        Some("team")
+        inputs.field_forms.target("doc", "owner"),
+        Some(Target::Absent("team"))
     );
     assert_eq!(
         inputs.bidirectional_pairs,
@@ -335,4 +332,45 @@ fn the_field_forms_say_whether_each_target_kind_is_loaded() {
     assert_eq!(forms.target("doc", "owner"), Some(Target::Absent("team")));
     assert_eq!(forms.target("doc", "parts"), Some(Target::Loaded("doc")));
     assert_eq!(forms.target("doc", "title"), None);
+}
+
+#[spec(
+    behavior = "registry_build_graph_inputs",
+    verify = "the graph inputs name the extension that owns each absent target kind"
+)]
+fn the_graph_inputs_name_each_absent_target_kinds_owner() {
+    let product = declare("@t/product", |c| {
+        c.kind("Feature", |k| {
+            k.keyword("feature");
+        });
+    });
+    let software = declare("@t/software", |c| {
+        c.kind("Behavior", |k| {
+            k.keyword("behavior");
+            k.field("features", |f| {
+                f.field_type(FieldType::ReferenceList)
+                    .target_kind("feature");
+            });
+            k.field("owner", |f| {
+                f.field_type(FieldType::Reference).target_kind("team");
+            });
+            k.field("peers", |f| {
+                f.field_type(FieldType::ReferenceList)
+                    .target_kind("behavior");
+            });
+        });
+    });
+    let vocabulary = crate::support::candidates(&[product]);
+
+    let inputs = build([software.clone()])
+        .with_candidates(vocabulary)
+        .graph_inputs();
+    assert_eq!(inputs.target_owners.len(), 1, "{:?}", inputs.target_owners);
+    assert_eq!(inputs.target_owners["feature"], "@t/product");
+    // `team` is owned by no one; `behavior` is loaded.
+    assert!(!inputs.target_owners.contains_key("team"));
+    assert!(!inputs.target_owners.contains_key("behavior"));
+
+    // A build never handed a vocabulary names no owner.
+    assert!(build([software]).graph_inputs().target_owners.is_empty());
 }

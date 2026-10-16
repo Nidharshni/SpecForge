@@ -11,4 +11,5 @@ mod field_form;
 mod graph;
 mod obligations;
 mod reading;
+mod resolution;
 mod stress;

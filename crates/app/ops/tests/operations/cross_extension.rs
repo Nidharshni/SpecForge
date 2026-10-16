@@ -296,7 +296,6 @@ behavior user_login "Log in" {
     behavior = "register_extension_entity_types",
     verify = "I004 message includes unresolved kind name and suggested extension"
 )]
-#[ignore = "flipped by T4"]
 fn an_absent_target_kinds_i004_names_the_extension_that_declares_it() {
     let project = TestProject::new()
         .enabling(&["@specforge/software"])

@@ -90,20 +90,21 @@ type GraphInputs {
   // A reference field and each of its inverse fields (fields of its target
   // kind), each pair written lesser label first, sorted: a two-hop cycle
   // through both labels of one pair is not a reference cycle
-  bidirectional_pairs      string[] @readonly
-  // kind.field of every reference field whose target kind no loaded
-  // extension declares, with that kind: an unresolved value there is I004
-  absent_reference_targets string[] @readonly
+  bidirectional_pairs string[] @readonly
+  // each target kind no loaded extension declares, with the extension that
+  // owns it (the candidate vocabulary's kind_owner): what I004 and E022
+  // suggest enabling
+  target_owners       string[] @readonly
   // kind.field of every registered field whose value is coerced to its
   // declared type: a list type to a list; integer, bool, string or enum to
   // that type; a single reference or a block is read as written
-  field_coercions          string[] @readonly
+  field_coercions     string[] @readonly
   // the kinds that take any field (open_fields): an undeclared field of one
   // is a member, which references nothing (ADR 0093)
-  member_kinds             string[] @readonly
+  member_kinds        string[] @readonly
   // kind.field of every reference field whose edges the host derives
   // (derived_from), with its target kind and source, sorted by kind and field
-  derived_references       string[] @readonly
+  derived_references  string[] @readonly
   verify unit "GraphInputs schema is valid"
 }
 

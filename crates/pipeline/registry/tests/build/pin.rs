@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use serde_json::{Value, json};
 use specforge_common::Diagnostic;
 use specforge_extension_sdk::prelude::*;
-use specforge_graph::GraphInputs;
+use specforge_graph::{GraphInputs, Target};
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::RegistryBuild;
 
@@ -165,10 +165,20 @@ fn graph_inputs(inputs: &GraphInputs) -> Value {
         .iter()
         .map(|(a, b)| json!([a, b]))
         .collect();
-    let absent_reference_targets: BTreeMap<String, &String> = inputs
-        .absent_reference_targets
-        .iter()
-        .map(|((kind, field), target)| (format!("{kind}.{field}"), target))
+    let absent_targets: BTreeMap<String, String> = inputs
+        .field_forms
+        .targets()
+        .into_iter()
+        .filter_map(|((kind, field), target)| match target {
+            Target::Absent(target) => Some((
+                format!("{kind}.{field}"),
+                match inputs.target_owners.get(target) {
+                    Some(owner) => format!("{target} ({owner})"),
+                    None => target.to_string(),
+                },
+            )),
+            Target::Loaded(_) => None,
+        })
         .collect();
     let field_forms: BTreeMap<String, String> = inputs
         .field_forms
@@ -196,7 +206,7 @@ fn graph_inputs(inputs: &GraphInputs) -> Value {
     json!({
         "member_kinds": inputs.field_forms.member_kinds(),
         "bidirectional_pairs": bidirectional_pairs,
-        "absent_reference_targets": absent_reference_targets,
+        "absent_targets": absent_targets,
         "field_forms": field_forms,
         "derived_references": derived_references,
     })

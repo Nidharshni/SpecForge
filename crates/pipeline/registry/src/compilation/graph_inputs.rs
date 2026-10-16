@@ -3,38 +3,38 @@
 //! and nowhere else. The grammar parses values generically; the field
 //! registry says what a field's value must be and which fields are edges.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
-use specforge_graph::{DerivedFrom, DerivedReference, FieldForms, GraphInputs};
+use specforge_graph::{DerivedFrom, DerivedReference, FieldForms, GraphInputs, Target};
 
 use crate::{FieldRegistry, KindRegistry};
 
 pub(super) fn derive(
-    kinds: &KindRegistry,
     fields: &FieldRegistry,
     forms: &FieldForms,
+    owner_of: impl Fn(&str) -> Option<String>,
 ) -> GraphInputs {
     GraphInputs {
         bidirectional_pairs: bidirectional_pairs(fields),
-        absent_reference_targets: absent_reference_targets(kinds, fields),
+        target_owners: target_owners(forms, owner_of),
         field_forms: forms.clone(),
         derived_references: derived_references(fields),
     }
 }
 
-/// Reference fields whose target kind `kinds` doesn't declare, as
-/// (kind, field) -> target kind: the kind's extension isn't enabled
-/// (e.g. software's `behavior.features` without @specforge/product).
-fn absent_reference_targets(
-    kinds: &KindRegistry,
-    fields: &FieldRegistry,
-) -> HashMap<(String, String), String> {
-    fields
-        .iter()
-        .filter_map(|(kind, field, entry)| {
-            let target = entry.declared().target_kind.as_ref()?;
-            (!kinds.contains(target))
-                .then(|| ((kind.to_string(), field.to_string()), target.clone()))
+/// For each target kind no loaded extension declares, the extension that owns it (`owner_of`, the
+/// lookup E024 reads), so I004 and E022 name the extension E024 names (ADR 0117). A kind nothing
+/// owns has no entry.
+fn target_owners(
+    forms: &FieldForms,
+    owner_of: impl Fn(&str) -> Option<String>,
+) -> BTreeMap<String, String> {
+    forms
+        .targets()
+        .into_iter()
+        .filter_map(|(_, target)| match target {
+            Target::Absent(kind) => Some((kind.to_string(), owner_of(kind)?)),
+            Target::Loaded(_) => None,
         })
         .collect()
 }
