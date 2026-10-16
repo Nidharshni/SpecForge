@@ -237,6 +237,16 @@ impl McpServer {
         self.state.solver = solver;
         self
     }
+
+    /// The same server, `specforge.collect` running commands and keeping approvals on `machine` instead of
+    /// the user's (`specforge_ops::testing::ScriptedMachine`, ADR 0125).
+    pub fn with_collector_machine(
+        mut self,
+        machine: std::sync::Arc<dyn specforge_ops::analysis::collect::CollectorMachine>,
+    ) -> Self {
+        self.state.collector_machine = machine;
+        self
+    }
 }
 
 fn serialize_response(response: &JsonRpcResponse) -> String {

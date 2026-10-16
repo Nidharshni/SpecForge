@@ -172,6 +172,7 @@ fn collect_maps_results_to_the_views_entities() {
             announce: &mut |_, _| panic!("nothing runs when reading reports"),
             caller: specforge_ops::testing::caller(),
         },
+        &specforge_ops::testing::ScriptedMachine::new(),
     )
     .unwrap();
 

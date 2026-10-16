@@ -9,24 +9,26 @@
 //! runs anything itself.
 //!
 //! The CLI and MCP are adapters: they hand the operation who can be asked
-//! (`crate::asking::Asking`) and present the [`Outcome`].
+//! (`crate::asking::Asking`) and the machine it runs on ([`CollectorMachine`], ADR 0125),
+//! and present the [`Outcome`].
 
 mod collector;
-mod consent;
 mod convention;
 mod dispatch;
+mod machine;
 mod merge;
-mod runner;
+mod process;
 
 pub use collector::{Collector, collectors};
 use collector::{capture_path, captures_stdout, command_line, detect, read_capture, report_path};
-use consent::{approve, consent_path, is_approved};
 pub use dispatch::dispatch;
 use dispatch::read_report;
+pub use machine::{
+    CollectorCommand, CollectorMachine, CommandApproval, REPORT_ENV, Ran, RunFailure, RunnerOutput,
+};
 pub use merge::MergeStats;
 use merge::{KnownEntities, merge};
-pub use runner::RunnerOutput;
-use runner::run;
+pub use process::ProcessMachine;
 
 use crate::asking::{Asking, Question};
 use crate::view::ProjectView;
@@ -69,13 +71,13 @@ pub struct Request<'a> {
     pub caller: Caller<'a>,
 }
 
-/// Whether `collector`'s command `argv` may run in `root`, with the approvals in `store`: `--yes`
+/// Whether `collector`'s command `argv` may run in `root`, with the approvals `machine` keeps: `--yes`
 /// first, then a command approved for this project before, then whoever can be asked (ADR 0002,
 /// ADR 0110). A yes from the asker is remembered. An approval that could not be remembered is
 /// noted in `unsaved`.
 fn allowed(
     asking: Asking<'_>,
-    store: &Path,
+    machine: &dyn CollectorMachine,
     collector: &Collector,
     argv: &[String],
     root: &Path,
@@ -83,7 +85,7 @@ fn allowed(
 ) -> bool {
     match asking {
         Asking::Yes => true,
-        _ if is_approved(store, collector, root) => true,
+        _ if machine.approved(&CommandApproval::of(collector, root)) => true,
         Asking::Nobody => false,
         Asking::Ask(asker) => {
             let question = Question::RunCommand {
@@ -94,7 +96,7 @@ fn allowed(
             if !asker.answer(&question) {
                 return false;
             }
-            if let Err(e) = approve(store, collector, root) {
+            if let Err(e) = machine.approve(&CommandApproval::of(collector, root)) {
                 unsaved.push(e);
             }
             true
@@ -172,7 +174,11 @@ pub enum CollectStatus {
 /// `asking` decides whether a collector's command may run; its `announce`
 /// is told just before it runs. Without a root, or at a root that holds no
 /// project: `no_project`.
-pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, Refusal<CollectField>> {
+pub fn collect(
+    view: &ProjectView,
+    request: Request,
+    machine: &dyn CollectorMachine,
+) -> Result<Outcome, Refusal<CollectField>> {
     let root = view.project_root()?;
     if !view.env().config_found() {
         return Err(OpError::no_project(format!(
@@ -215,7 +221,6 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, Refusal<
     let mut runners = Vec::new();
     let mut diagnostics = Vec::new();
     let mut unsaved_approvals = Vec::new();
-    let store = consent_path();
     for collector in selected {
         let report_at = report_path(collector, root, containment)?;
         let capturing = captures_stdout(collector)
@@ -232,7 +237,7 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, Refusal<
         if let Mode::Run(output) = mode {
             if !allowed(
                 asking,
-                &store,
+                machine,
                 collector,
                 &argv,
                 root,
@@ -253,11 +258,19 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, Refusal<
                 .into());
             }
             announce(collector, &argv);
-            let ran = run(collector, root, &report_at, capture.as_ref(), output)
-                .map_err(|m| fail(OpErrorKind::SchemaMismatch, codes::E045, m))?;
+            let ran = run_command(
+                machine,
+                collector,
+                root,
+                &report_at,
+                capture.as_ref(),
+                &argv,
+                output,
+            )
+            .map_err(|m| fail(OpErrorKind::SchemaMismatch, codes::E045, m))?;
             exit_code = ran.exit_code;
             since = Some(ran.started);
-            stdout = ran.stdout.as_ref().and_then(read_capture);
+            stdout = capture.as_ref().and_then(read_capture);
         } else if let Mode::NoRun = mode {
             stdout = capture.as_ref().and_then(read_capture);
         }
@@ -319,6 +332,61 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, Refusal<
         report,
         unsaved_approvals,
     })
+}
+
+/// Run the collector's declared command in the project root through `machine`. A report *file* left by
+/// an earlier run is removed first; a report *directory* is left alone (other tools may keep files
+/// there) and filtered by modification time when it's read. A captured standard output still reaches
+/// the chosen output as it's produced, and is also written to `capture`. Every file it removes,
+/// creates or writes is a held one.
+fn run_command(
+    machine: &dyn CollectorMachine,
+    collector: &Collector,
+    root: &Path,
+    report: &Held,
+    capture: Option<&Held>,
+    argv: &[String],
+    output: RunnerOutput,
+) -> Result<Ran, String> {
+    if argv.is_empty() {
+        return Err(format!(
+            "collector '{}' of {} declares no command; use --no-run with its report",
+            collector.name, collector.extension
+        ));
+    }
+    if report.real.is_file() {
+        report
+            .remove()
+            .map_err(|e| format!("{}: {e}", report.spelled.display()))?;
+    }
+    for file in std::iter::once(report).chain(capture) {
+        file.create_parent()
+            .map_err(|e| format!("{}: {e}", file.spelled.display()))?;
+    }
+    let mut kept = match capture {
+        Some(held) => Some(
+            held.create()
+                .map_err(|e| format!("{}: {e}", held.spelled.display()))?,
+        ),
+        None => None,
+    };
+    let command = CollectorCommand {
+        argv,
+        dir: root,
+        report: &report.spelled,
+        output,
+    };
+    machine
+        .run(
+            &command,
+            kept.as_mut().map(|f| f as &mut dyn std::io::Write),
+        )
+        .map_err(|failure| match (failure, capture) {
+            (RunFailure::Capture(e), Some(held)) => format!("{}: {e}", held.spelled.display()),
+            (RunFailure::Capture(e) | RunFailure::NotRun(e), _) => {
+                format!("failed to run `{}`: {e}", argv.join(" "))
+            }
+        })
 }
 
 /// The field of a collect request a refusal can be about (ADR 0072).

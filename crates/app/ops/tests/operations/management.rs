@@ -147,6 +147,7 @@ fn management_operations_read_the_project_from_their_view() {
                 announce: &mut |_, _| {},
                 caller: specforge_ops::testing::caller(),
             },
+            &specforge_ops::testing::ScriptedMachine::new(),
         )
         .map(drop)
         .map_err(specforge_ops::Refusal::into_error),
@@ -257,6 +258,7 @@ fn collect_at_a_root_that_is_no_project_is_no_project() {
             announce: &mut |_, _| {},
             caller: specforge_ops::testing::caller(),
         },
+        &specforge_ops::testing::ScriptedMachine::new(),
     )
     .map(drop)
     .unwrap_err();

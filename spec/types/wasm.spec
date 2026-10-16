@@ -89,6 +89,37 @@ type LockFile {
 
 // ── Collector Contribution Types ────────────────────────────
 
+// Where a collector command's own output goes (ADR 0125).
+type RunnerOutput = inherit | stderr | discard
+
+// One collector command to run to its end (port CollectorMachine).
+type CollectorCommand {
+  argv   string[]
+  dir    string
+  report string
+  output RunnerOutput
+  verify unit "CollectorCommand schema is valid"
+}
+
+// What running it produced: its exit code and a start time no later than any file it wrote.
+type CollectorRun {
+  exit_code integer @optional
+  started   string
+  verify unit "CollectorRun schema is valid"
+}
+
+// Why a command produced no run: it did not start, or its output could not be captured.
+type CollectorRunFailure = not_run | capture
+
+// One approval: this project may run this extension's collector with this command.
+type CommandApproval {
+  project   string
+  extension string
+  collector string
+  run       string[]
+  verify unit "CommandApproval schema is valid"
+}
+
 type CollectorDescriptor {
   name          string              @readonly
   input_formats string[]

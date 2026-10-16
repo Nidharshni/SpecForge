@@ -536,7 +536,7 @@ behavior provide_mcp_collect_tool "Provide MCP Collect Tool" {
   invariants [document_project_paths, diagnostic_determinism, mcp_structured_error_responses]
   category   query
   types      [McpCollectResult, McpCollectRunner, McpToolDescriptor]
-  ports      [McpProtocol, CompilerApi, FileSystem]
+  ports      [McpProtocol, CompilerApi, FileSystem, CollectorMachine]
   produces   [mcp_tool_invoked]
   requires {
     filesystem_available   "FileSystem port is available for reading test results and writing report"

@@ -440,7 +440,7 @@ behavior approve_collector_command "Approve Collector Command" {
   invariants [extension_isolation]
   category   validation
   types      [CollectorDescriptor]
-  ports      [FileSystem]
+  ports      [CollectorMachine]
   requires {
     command_declared "the selected collector declares a command"
   }
@@ -476,7 +476,7 @@ behavior run_collector_command "Run Collector Command" {
   invariants [extension_isolation]
   category   command
   types      [CollectorDescriptor]
-  ports      [FileSystem]
+  ports      [FileSystem, CollectorMachine]
   requires {
     command_approved "approve_collector_command allowed the command"
   }

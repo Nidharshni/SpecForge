@@ -9,6 +9,7 @@ use crate::tool::{ErrorCode, McpError};
 use serde_json::Value;
 use specforge_common::{Diagnostic, ProjectRoot};
 use specforge_graph::Graph;
+use specforge_ops::analysis::collect::CollectorMachine;
 use specforge_ops::asking::Asking;
 use specforge_ops::solver::Solver;
 use specforge_ops::view::ProjectView;
@@ -83,6 +84,8 @@ pub struct ProjectRef<'a> {
     pub runtime: &'a SharedRuntime,
     /// The host's SMT solver (the server's): what doctor checks.
     pub solver: &'a dyn Solver,
+    /// The host's collector machine (the server's): what `specforge.collect` runs commands on.
+    pub machine: &'a dyn CollectorMachine,
     /// The project view, built once for the call: rooted at the project
     /// root, reporting what the server reports for the project.
     view: ProjectView<'a>,
@@ -188,6 +191,7 @@ impl<'s> Call<'s> {
                     root,
                     runtime,
                     solver: &*self.state.solver,
+                    machine: &*self.state.collector_machine,
                     containment: Containment::within(root.dir()),
                     view,
                     served: true,
@@ -207,6 +211,7 @@ impl<'s> Call<'s> {
                     root,
                     runtime,
                     solver: &*self.state.solver,
+                    machine: &*self.state.collector_machine,
                     containment: Containment::within(root.dir()),
                     view,
                     served: false,

@@ -71,7 +71,7 @@ impl CoreTool for Tool {
             // project with `specforge collect` in a terminal.
             caller: project.caller(),
         };
-        collect::collect(&project.view(), request)
+        collect::collect(&project.view(), request, project.machine)
             .map(|outcome| outcome.document().into())
             .map_err(|refusal| Box::new(Self::refused(refusal)))
     }
