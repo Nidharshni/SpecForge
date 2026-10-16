@@ -6,6 +6,7 @@
 
 use serde::{Serialize, Serializer};
 use serde_json::Value;
+use specforge_common::Diagnostic;
 use specforge_common::shape::Shape;
 use specforge_emitter::{
     GraphProtocolSchema, SchemaEdgeType, SchemaEntityKind, SchemaExtensionInfo, SchemaVersion,
@@ -45,6 +46,9 @@ pub struct SchemaOutcome {
     pub edges: bool,
     /// Each loaded extension's rules, tagged `extension`, when asked for.
     pub validation_rules: Option<Vec<Value>>,
+    /// What versioning the schema reported (I016, W053; ADR 0111). Not part
+    /// of the document.
+    pub notices: Vec<Diagnostic>,
 }
 
 impl SchemaOutcome {
@@ -86,20 +90,30 @@ impl Serialize for SchemaOutcome {
     }
 }
 
+/// `specforge schema --publish`: the JSON Schema, and the notices of the
+/// versioned schema it is built from (ADR 0111).
+#[derive(Debug, Clone)]
+pub struct PublishedSchema {
+    pub schema: Value,
+    pub notices: Vec<Diagnostic>,
+}
+
 /// The standalone JSON Schema (draft 2020-12) a `format` export of the
 /// view's project conforms to, built from the versioned schema (`specforge
 /// schema --publish`). `dot` has none: refused as [`AGENT_FORMAT`] refuses
 /// it.
-pub fn json_schema(view: &ProjectView, format: export::Format) -> Result<Value, OpError> {
+pub fn json_schema(view: &ProjectView, format: export::Format) -> Result<PublishedSchema, OpError> {
     if !AGENT_FORMAT.admits(format) {
         return Err(AGENT_FORMAT
             .parse(FORMAT.name_of(format))
             .expect_err("a format the agent table does not admit is refused"));
     }
-    Ok(
-        specforge_emitter::publish(view.versioned_schema().schema(), format.emit_format())
+    let versioned = view.versioned_schema();
+    Ok(PublishedSchema {
+        schema: specforge_emitter::publish(versioned.schema(), format.emit_format())
             .expect("an agent format has a schema"),
-    )
+        notices: versioned.notices(),
+    })
 }
 
 /// The field of a schema request a refusal can be about (ADR 0072).
@@ -116,7 +130,9 @@ pub fn schema(
     view: &ProjectView,
     request: &SchemaRequest,
 ) -> Result<SchemaOutcome, Refusal<SchemaField>> {
-    let mut schema = view.versioned_schema().into_schema();
+    let versioned = view.versioned_schema();
+    let notices = versioned.notices();
+    let mut schema = versioned.into_schema();
     if let Some(kind) = request.kind {
         view.kinds()
             .declared(kind)
@@ -146,6 +162,7 @@ pub fn schema(
         schema,
         edges: request.edges,
         validation_rules,
+        notices,
     })
 }
 

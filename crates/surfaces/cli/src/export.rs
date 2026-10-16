@@ -174,16 +174,24 @@ impl SchemaArgs {
         };
         let view = ProjectView::of(&project);
         let output = if self.publish {
-            specforge_ops::read::schema::json_schema(&view, self.format).map(|schema| {
-                serde_json::to_string_pretty(&schema).expect("a published schema serializes")
+            specforge_ops::read::schema::json_schema(&view, self.format).map(|published| {
+                let text = serde_json::to_string_pretty(&published.schema)
+                    .expect("a published schema serializes");
+                (text, published.notices)
             })
         } else {
             specforge_ops::read::schema::schema(&view, &self.request())
-                .map(|outcome| serde_json::to_string_pretty(&outcome).expect("a schema serializes"))
+                .map(|outcome| {
+                    let text = serde_json::to_string_pretty(&outcome).expect("a schema serializes");
+                    (text, outcome.notices)
+                })
                 .map_err(specforge_ops::Refusal::into_error)
         };
         match output {
-            Ok(text) => {
+            Ok((text, notices)) => {
+                for notice in &notices {
+                    errln!(terminal, "{}", specforge_common::render_plain(notice));
+                }
                 outln!(terminal, "{text}");
                 Exit::Passed
             }

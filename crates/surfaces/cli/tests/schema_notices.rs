@@ -50,7 +50,6 @@ fn assert_reports_i016(dir: &TestProject, args: &[&str]) {
     behavior = "compute_schema_version",
     verify = "every reader of the schema reports the notices export reports for the same record"
 )]
-#[ignore = "flipped by T5"]
 fn schema_and_its_publication_report_an_unreadable_record() {
     let dir = project_with_unreadable_record();
     assert_reports_i016(&dir, &["schema"]);

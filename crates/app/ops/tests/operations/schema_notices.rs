@@ -80,3 +80,23 @@ fn an_export_and_a_query_carry_the_records_notices() {
         exported.notices
     );
 }
+
+#[specforge_test(
+    behavior = "compute_schema_version",
+    verify = "every reader of the schema reports the notices export reports for the same record"
+)]
+fn the_schema_and_its_publication_carry_the_records_notices() {
+    use specforge_ops::read::export::Format;
+    use specforge_ops::read::schema::{SchemaRequest, json_schema, schema};
+    let project = unreadable();
+    let view = project.view();
+
+    let outcome = schema(&view, &SchemaRequest::default()).unwrap();
+    assert_eq!(codes(&outcome.notices), ["I016"]);
+    let document = serde_json::to_value(&outcome).unwrap();
+    assert!(document.get("notices").is_none(), "{document}");
+    assert_eq!(
+        codes(&json_schema(&view, Format::Graph).unwrap().notices),
+        ["I016"]
+    );
+}
