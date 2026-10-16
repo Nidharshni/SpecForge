@@ -3,8 +3,10 @@
 // and a declaration is read once.
 
 use serde_json::json;
+use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
 use specforge_installed::testing::install_module;
 use specforge_installed::{Builtins, Installed, LoadProblem};
+use specforge_protocol_types::DeclaredCategory;
 use specforge_wasm::testing::InProcessRuntime;
 use specforge_wasm::{WasmCallResult, WasmRuntime, WasmTrapInfo};
 use tempfile::TempDir;
@@ -63,8 +65,10 @@ fn a_file_entry_whose_describe_fails_says_its_declaration_cannot_be_read() {
     assert!(!message.contains("handshake"), "{message}");
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test_macros::test(
+    behavior = "load_extension_manifests",
+    verify = "an entry refused at any step of its load leaves nothing loaded"
+)]
 fn a_named_entry_whose_declaration_cannot_be_read_is_not_left_loaded() {
     let dir = TempDir::new().unwrap();
     install_module(dir.path(), "@acme/a", b"\0asm a");
@@ -92,8 +96,10 @@ fn a_named_entry_whose_declaration_cannot_be_read_is_not_left_loaded() {
     assert!(!runtime.unload("@acme/b"));
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test_macros::test(
+    behavior = "load_extension_manifests",
+    verify = "an entry's declaration is read once, with one handshake"
+)]
 fn a_file_entry_is_handshaken_once() {
     let dir = TempDir::new().unwrap();
     file(dir.path(), "tool.wasm", b"\0asm tool");
@@ -143,5 +149,40 @@ fn a_file_entry_that_cannot_be_read_says_so() {
             .contains("readable"),
         "{:?}",
         failure.diagnostic
+    );
+}
+
+#[specforge_test_macros::test(
+    behavior = "load_extension_manifests",
+    verify = "a .wasm file entry's load warnings name the entry"
+)]
+fn a_file_entrys_load_warnings_name_the_entry() {
+    let dir = TempDir::new().unwrap();
+    file(dir.path(), "typo.wasm", b"\0asm typo");
+    let typo = || {
+        let mut builder = ContributionsBuilder::new(ExtensionMeta::new("@acme/typo", "0.1.0"));
+        builder.raw_category(
+            DeclaredCategory::Entities,
+            json!([{"name": "memo", "testabel": true}]),
+        );
+        builder
+    };
+    let runtime = InProcessRuntime::new().binary(b"\0asm typo", typo);
+
+    let loaded = load_with(dir.path(), &entries(&["typo.wasm"]), &runtime);
+
+    assert!(
+        loaded.enabled[0].failure.is_none(),
+        "{:?}",
+        loaded.enabled[0]
+    );
+    assert_eq!(loaded.enabled[0].name, "@acme/typo");
+    let warnings = &loaded.enabled[0].warnings;
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert_eq!(warnings[0].code, "W138");
+    assert!(
+        warnings[0].message.contains("extension 'typo.wasm'"),
+        "{:?}",
+        warnings[0]
     );
 }

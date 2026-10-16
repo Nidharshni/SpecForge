@@ -3,20 +3,22 @@
 //! installed extension from its pinned module, a `.wasm` file entry from its
 //! file under the name it declares. What does not load is a typed
 //! [`LoadFailure`] on its entry with one diagnostic; the runtime keeps no
-//! load state.
+//! load state. Each entry is loaded by one step: its bytes read once and
+//! loaded under its key, its declaration read once, the name it declares
+//! admitted or refused; a refused entry leaves nothing loaded.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use specforge_common::{Diagnostic, ExtensionEntry, codes};
 use specforge_protocol_types::ExtensionDeclaration;
+use specforge_wasm::WasmRuntime;
 use specforge_wasm::protocol::load_declaration;
-use specforge_wasm::{ExtensionCalls, WasmRuntime};
 
 use crate::Installed;
 use crate::lock::LockFileEntry;
 use crate::module::Module;
-use crate::resolve::{FileEntry, Resolved};
+use crate::resolve::Resolved;
 
 /// The builtin extensions the host embeds: name and component bytes.
 #[derive(Debug, Clone, Copy)]
@@ -367,10 +369,6 @@ impl Installed {
     /// load is a [`LoadFailure`] on its entry with its diagnostic, and what an
     /// entry reports though it loaded is on the entry too
     /// ([`Installed::load_diagnostics`] orders them).
-    #[expect(
-        clippy::result_large_err,
-        reason = "Failed<Diagnostic> / LoadFailure carry the whole diagnostic the surfaces present (clippy.toml admits a bare Diagnostic only)"
-    )]
     pub fn load(
         &self,
         entries: &[String],
@@ -385,29 +383,7 @@ impl Installed {
         let resolution = self.resolve(entries, builtins);
         let mut loaded_names = HashSet::new();
         for (i, resolved) in resolution.in_load_order() {
-            let outcome = match resolved {
-                Resolved::Builtin { name, bytes } => self
-                    .load_bytes(name, bytes, None, runtime)
-                    .map(|done| ((*name).to_string(), done)),
-                Resolved::Locked { name, entry } => self
-                    .check_module(entry)
-                    .map_err(|problem| self.failure(&Subject::Named(name), problem))
-                    .and_then(|module| self.load_bytes(name, module.bytes(), Some(entry), runtime))
-                    .map(|done| ((*name).to_string(), done)),
-                Resolved::Unloadable { name, problem } => {
-                    Err(self.failure(&Subject::Named(name), problem.clone()))
-                }
-                Resolved::File(file) => {
-                    let subject = Subject::File {
-                        key: file.key,
-                        file: &file.file,
-                        path: file.path,
-                    };
-                    self.load_file(file, &loaded_names, runtime)
-                        .map_err(|problem| self.failure(&subject, problem))
-                }
-                Resolved::Again { .. } => unreachable!("left out of the load order"),
-            };
+            let outcome = self.load_entry(resolved, &loaded_names, runtime);
             match outcome {
                 Ok((declared, done)) => {
                     if matches!(resolved, Resolved::File(_)) {
@@ -479,57 +455,6 @@ impl Installed {
         }
     }
 
-    /// Load the extension a named entry names from `bytes`: a builtin's embedded bytes, or the
-    /// pinned module of the lock `entry` it is installed by.
-    #[expect(
-        clippy::result_large_err,
-        reason = "Failed<Diagnostic> / LoadFailure carry the whole diagnostic the surfaces present (clippy.toml admits a bare Diagnostic only)"
-    )]
-    fn load_bytes(
-        &self,
-        name: &str,
-        bytes: &[u8],
-        entry: Option<&LockFileEntry>,
-        runtime: &dyn WasmRuntime,
-    ) -> Result<Done, LoadFailure> {
-        let fail = |problem: LoadProblem| self.failure(&Subject::Named(name), problem);
-        let mut notices = Vec::new();
-        if entry.is_some_and(|entry| entry.wasm_hash.is_empty()) {
-            notices.push(
-                Diagnostic::new(
-                    codes::W149,
-                    format!(
-                        "extension '{name}': its lock entry pins no hash, so its binary was loaded without being checked"
-                    ),
-                )
-                .with_suggestion(format!(
-                    "pin it by installing it again: {}",
-                    self.reinstall(name)
-                )),
-            );
-        }
-        runtime
-            .load(name, bytes)
-            .map_err(|reason| fail(LoadProblem::NotAComponent { reason }))?;
-        let loaded = load_declaration(runtime, name).map_err(|error| {
-            fail(LoadProblem::NoDeclaration {
-                reason: error.to_string(),
-            })
-        })?;
-        // An installed binary is the extension its lock entry names.
-        if entry.is_some() && loaded.declaration.name() != name {
-            runtime.unload(name);
-            return Err(fail(LoadProblem::NotItsLockEntry {
-                declared: loaded.declaration.name().to_string(),
-            }));
-        }
-        Ok(Done {
-            declaration: loaded.declaration,
-            notices,
-            warnings: loaded.warnings,
-        })
-    }
-
     /// The module at `path`, read once and never statted first: the crate's
     /// one module read. A file that is not there is `missing(path)`; any
     /// other read error (a permission, a directory) is `ModuleUnreadable`.
@@ -564,50 +489,99 @@ impl Installed {
         Ok(module)
     }
 
-    /// Load the component a `.wasm` file entry names under the name it
-    /// declares, which is returned with its declaration.
-    fn load_file(
+    /// Load one resolved entry: read its bytes once, load them under its key,
+    /// read its declaration once, then admit or refuse the name it declares
+    /// (`Resolved::admit`). Returns the name the extension is loaded under
+    /// (a named entry's name; a `.wasm` file entry's declared name) with what
+    /// it brings.
+    ///
+    /// When it returns `Err`, nothing this call loaded stays loaded; when it
+    /// returns `Ok`, the extension is loaded under that name only.
+    #[expect(
+        clippy::result_large_err,
+        reason = "Failed<Diagnostic> / LoadFailure carry the whole diagnostic the surfaces present (clippy.toml admits a bare Diagnostic only)"
+    )]
+    fn load_entry(
         &self,
-        entry: &FileEntry,
-        loaded_names: &HashSet<String>,
+        resolved: &Resolved,
+        loaded: &HashSet<String>,
         runtime: &dyn WasmRuntime,
-    ) -> Result<(String, Done), LoadProblem> {
-        let (key, file) = (entry.key, entry.file.as_path());
-        let module = self.read_module(file, |path| LoadProblem::FileMissing { path })?;
-        // Loaded under the entry until its handshake says what it is.
-        runtime
-            .load(key, module.bytes())
-            .map_err(|reason| LoadProblem::NotAComponent { reason })?;
-        let declared = match ExtensionCalls::new(runtime).handshake(key) {
-            Ok(handshake) => handshake.response.name,
-            Err(error) => {
-                runtime.unload(key);
-                return Err(LoadProblem::NoDeclaration {
-                    reason: error.to_string(),
-                });
-            }
+    ) -> Result<(String, Done), LoadFailure> {
+        let subject = match resolved {
+            Resolved::Builtin { name, .. }
+            | Resolved::Locked { name, .. }
+            | Resolved::Unloadable { name, .. } => Subject::Named(name),
+            Resolved::File(file) => Subject::File {
+                key: file.key,
+                file: &file.file,
+                path: file.path,
+            },
+            Resolved::Again { .. } => unreachable!("left out of the load order"),
         };
-        if let Err(problem) = entry.admit(&declared, |name| loaded_names.contains(name)) {
-            runtime.unload(key);
-            return Err(problem);
-        }
-        runtime.rename(key, &declared);
-        match load_declaration(runtime, &declared) {
-            Ok(loaded) => Ok((
-                declared,
-                Done {
-                    declaration: loaded.declaration,
-                    notices: Vec::new(),
-                    warnings: loaded.warnings,
-                },
-            )),
-            Err(error) => {
-                runtime.unload(&declared);
-                Err(LoadProblem::NoDeclaration {
-                    reason: error.to_string(),
-                })
+        let fail = |problem: LoadProblem| self.failure(&subject, problem);
+        let mut notices = Vec::new();
+        let module;
+        let (key, bytes): (&str, &[u8]) = match resolved {
+            Resolved::Builtin { name, bytes } => (name, bytes),
+            Resolved::Locked { name, entry } => {
+                module = self.check_module(entry).map_err(fail)?;
+                if entry.wasm_hash.is_empty() {
+                    notices.push(
+                        Diagnostic::new(
+                            codes::W149,
+                            format!(
+                                "extension '{name}': its lock entry pins no hash, so its binary was loaded without being checked"
+                            ),
+                        )
+                        .with_suggestion(format!(
+                            "pin it by installing it again: {}",
+                            self.reinstall(name)
+                        )),
+                    );
+                }
+                (name, module.bytes())
             }
+            Resolved::Unloadable { problem, .. } => return Err(fail(problem.clone())),
+            Resolved::File(file) => {
+                module = self
+                    .read_module(&file.file, |path| LoadProblem::FileMissing { path })
+                    .map_err(fail)?;
+                (file.key, module.bytes())
+            }
+            Resolved::Again { .. } => unreachable!("left out of the load order"),
+        };
+        runtime
+            .load(key, bytes)
+            .map_err(|reason| fail(LoadProblem::NotAComponent { reason }))?;
+        // From here on, a refusal leaves nothing loaded under the key.
+        let refuse = |problem: LoadProblem| {
+            runtime.unload(key);
+            fail(problem)
+        };
+        let read = load_declaration(runtime, key).map_err(|error| {
+            refuse(LoadProblem::NoDeclaration {
+                reason: error.to_string(),
+            })
+        })?;
+        let declared = read.declaration.name().to_string();
+        resolved
+            .admit(&declared, |name| loaded.contains(name))
+            .map_err(refuse)?;
+        let name = match resolved {
+            Resolved::File(_) => declared,
+            _ => key.to_string(),
+        };
+        if name != key {
+            runtime.rename(key, &name);
         }
+        Ok((
+            name,
+            Done {
+                declaration: read.declaration,
+                notices,
+                warnings: read.warnings,
+            },
+        ))
     }
 
     /// `name`'s lock entry when its module on disk is the one it pins (any
