@@ -172,21 +172,22 @@ mod tests {
     use super::super::gaps::gaps;
     use super::super::manifest::compute_content_hash;
     use super::*;
-    use crate::view::testing::Fixture;
+    use crate::testing::Viewed;
     use serde_json::json;
+    use specforge_project::testing::Assembled;
     use specforge_test_macros::test as specforge_test;
 
     /// A project with Rust sources under `src/`, one of them indexed,
     /// whose compile loaded a Rust analyzer.
-    fn project() -> Fixture {
-        let fixture = Fixture::new().declarations(rust_analyzer());
-        let dir = &fixture.dir;
-        std::fs::create_dir_all(dir.path().join("src/net")).unwrap();
-        std::fs::write(dir.path().join("src/lib.rs"), "pub fn alpha() {}\n").unwrap();
-        std::fs::write(dir.path().join("src/net/wire.rs"), "pub struct Wire;\n").unwrap();
-        let hash = compute_content_hash(&dir.path().join("src/lib.rs")).unwrap();
+    fn project() -> Assembled {
+        let fixture = Assembled::new().declarations(rust_analyzer());
+        let dir = fixture.root();
+        std::fs::create_dir_all(dir.join("src/net")).unwrap();
+        std::fs::write(dir.join("src/lib.rs"), "pub fn alpha() {}\n").unwrap();
+        std::fs::write(dir.join("src/net/wire.rs"), "pub struct Wire;\n").unwrap();
+        let hash = compute_content_hash(&dir.join("src/lib.rs")).unwrap();
         std::fs::write(
-            dir.path().join("specforge-infer.json"),
+            dir.join("specforge-infer.json"),
             json!({
                 "version": 1,
                 "source_roots": ["src"],
@@ -251,7 +252,7 @@ mod tests {
     )]
     fn progress_detects_a_changed_file() {
         let dir = project();
-        std::fs::write(dir.dir.path().join("src/lib.rs"), "pub fn beta() {}\n").unwrap();
+        std::fs::write(dir.root().join("src/lib.rs"), "pub fn beta() {}\n").unwrap();
         assert_eq!(progress(&dir.view()).unwrap().stale, ["src/lib.rs"]);
     }
 
@@ -261,7 +262,7 @@ mod tests {
     )]
     fn progress_without_a_manifest_counts_every_file_unanalyzed() {
         let dir = project();
-        std::fs::remove_file(dir.dir.path().join("specforge-infer.json")).unwrap();
+        std::fs::remove_file(dir.root().join("specforge-infer.json")).unwrap();
         let progress = progress(&dir.view()).unwrap();
         assert_eq!(progress.summary.files_analyzed, 0);
         assert!(progress.unanalyzed.contains(&"src/lib.rs".to_string()));
@@ -274,7 +275,7 @@ mod tests {
         assert!(none.recorded && none.sessions.is_empty());
 
         std::fs::write(
-            dir.dir.path().join("specforge-infer.json"),
+            dir.root().join("specforge-infer.json"),
             json!({
                 "version": 1,
                 "source_roots": ["src"],
@@ -299,7 +300,7 @@ mod tests {
         assert!(doc["sessions"][1].get("ended_at").is_none(), "{doc}");
 
         // Nothing recorded yet: no file.
-        std::fs::remove_file(dir.dir.path().join("specforge-infer.json")).unwrap();
+        std::fs::remove_file(dir.root().join("specforge-infer.json")).unwrap();
         let fresh = super::progress(&dir.view()).unwrap();
         assert!(!fresh.recorded && fresh.sessions.is_empty());
     }
@@ -310,9 +311,9 @@ mod tests {
     )]
     fn an_entry_recorded_as_dot_slash_counts_as_analyzed() {
         let dir = project();
-        let hash = compute_content_hash(&dir.dir.path().join("src/lib.rs")).unwrap();
+        let hash = compute_content_hash(&dir.root().join("src/lib.rs")).unwrap();
         std::fs::write(
-            dir.dir.path().join("specforge-infer.json"),
+            dir.root().join("specforge-infer.json"),
             json!({
                 "version": 1,
                 "source_roots": ["src"],
@@ -335,7 +336,7 @@ mod tests {
     )]
     fn an_invalid_manifest_is_e071() {
         let dir = project();
-        std::fs::write(dir.dir.path().join("specforge-infer.json"), "{ nope").unwrap();
+        std::fs::write(dir.root().join("specforge-infer.json"), "{ nope").unwrap();
         let error = progress(&dir.view()).unwrap_err();
         assert!(error.is(specforge_common::codes::E071), "{error:?}");
         assert_eq!(error.kind, crate::OpErrorKind::SchemaMismatch);
@@ -352,7 +353,7 @@ mod tests {
     #[test]
     fn an_unreadable_manifest_is_e071_of_its_io_kind() {
         let dir = project();
-        let path = dir.dir.path().join("specforge-infer.json");
+        let path = dir.root().join("specforge-infer.json");
         std::fs::remove_file(&path).unwrap();
         std::fs::create_dir(&path).unwrap();
         let error = progress(&dir.view()).unwrap_err();

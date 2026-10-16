@@ -200,18 +200,13 @@ fn persist_cache_contract() {
     verify = "the schema cache is the view root's, never an ancestor's"
 )]
 fn the_view_versions_against_its_root_cache() {
-    use crate::view::ProjectView;
+    use crate::testing::Viewed;
+    use specforge_project::testing::Assembled;
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let sub = root.join("sub");
     std::fs::create_dir(&sub).unwrap();
-    let graph = specforge_graph::Graph::new();
-    let env = specforge_project::Environment::with_registries(
-        specforge_registry::RegistryBuild::default(),
-        None,
-    );
-    let recorded = specforge_project::coverage::RecordedCoverage::over(&graph, &env);
-    let view_at = |root| ProjectView::new(&graph, &env, Some(root), &recorded);
+    let (at_root, at_sub) = (Assembled::at(root), Assembled::at(&sub));
 
     // The project's cache holds an older schema at 1.2.3 with a kind the
     // project no longer has: a breaking change since.
@@ -219,26 +214,26 @@ fn the_view_versions_against_its_root_cache() {
     cached.schema_version = SchemaVersion::new(1, 2, 3);
     SchemaCache::of_root(root).seed(&cached);
     assert_eq!(
-        view_at(root).schema_cache().unwrap().dir(),
+        at_root.view().schema_cache().unwrap().dir(),
         root.join(".specforge")
     );
     assert_eq!(
-        view_at(root).versioned_schema().version(),
+        at_root.view().versioned_schema().version(),
         &SchemaVersion::new(2, 0, 0)
     );
 
     // Rooted at the sub-path: no cache there, a first version.
     assert_eq!(
-        view_at(&sub).versioned_schema().version(),
+        at_sub.view().versioned_schema().version(),
         &SchemaVersion::new(1, 0, 0)
     );
     assert_eq!(
-        view_at(&sub).schema_cache().unwrap().dir(),
+        at_sub.view().schema_cache().unwrap().dir(),
         sub.join(".specforge")
     );
 
     // Without a root there is no cache.
-    let rootless = ProjectView::new(&graph, &env, None, &recorded);
+    let rootless = at_root.rootless_view();
     assert!(rootless.schema_cache().is_none());
 }
 

@@ -1,9 +1,11 @@
 use super::*;
+use crate::testing::Viewed;
 use serde_json::json;
 use specforge_common::{SourceSpan, Sym};
 use specforge_extension_sdk::prelude::*;
 use specforge_graph::{Graph, Node};
 use specforge_parser::{EntityId, EntityKind, FieldMap};
+use specforge_project::testing::Assembled;
 use specforge_test_macros::test as specforge_test;
 use specforge_wasm::runtime::WasmCallResult;
 use specforge_wasm::testing::InProcessRuntime;
@@ -165,16 +167,16 @@ fn ordered_ok() -> ExtensionCommand {
 }
 
 /// A fixture project whose graph is [`graph`].
-fn fixture(runtime: &std::sync::Arc<InProcessRuntime>) -> crate::view::testing::Fixture {
-    let mut fixture = crate::view::testing::Fixture::new().runtime(runtime.clone());
-    fixture.graph = graph();
-    fixture
+fn fixture(runtime: &std::sync::Arc<InProcessRuntime>) -> specforge_project::testing::Assembled {
+    specforge_project::testing::Assembled::new()
+        .runtime(runtime.clone())
+        .graph(graph())
 }
 
 /// The root a command is told for the fixture: its temp directory,
 /// canonical.
-fn canonical_root(fixture: &crate::view::testing::Fixture) -> String {
-    std::fs::canonicalize(fixture.dir.path())
+fn canonical_root(fixture: &specforge_project::testing::Assembled) -> String {
+    std::fs::canonicalize(fixture.root())
         .unwrap()
         .display()
         .to_string()

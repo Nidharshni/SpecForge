@@ -1,21 +1,20 @@
 //! `specforge export` records the schema cache at the view's root, and a
 //! failed export leaves it alone.
 
+use crate::view_support::{Assembled, Viewed};
 use specforge_test::prelude::*;
 
 // ===========================================================================
 // `specforge export` records the cache: the operation (plan 02, ADR 0029 D7)
 // ===========================================================================
 
-fn recorded_project() -> crate::view_support::Project {
-    crate::view_support::Project::new(
-        "behavior b \"B\" {\n  contract \"The system MUST work\"\n}\n",
-        crate::view_support::registries(&["behavior"], &[]),
-    )
+fn recorded_project() -> Assembled {
+    Assembled::over(crate::view_support::registries(&["behavior"], &[]))
+        .source("behavior b \"B\" {\n  contract \"The system MUST work\"\n}\n")
 }
 
-fn cache_file(project: &crate::view_support::Project) -> std::path::PathBuf {
-    project.dir.path().join(".specforge/schema-cache.json")
+fn cache_file(project: &Assembled) -> std::path::PathBuf {
+    project.root().join(".specforge/schema-cache.json")
 }
 
 #[specforge_test(
@@ -106,7 +105,7 @@ fn a_failed_export_leaves_the_cache() {
 
 /// A project whose versioned schema is 2.0.0: its cache recorded a kind the
 /// project no longer has, a breaking change not yet recorded over.
-fn project_at_two() -> crate::view_support::Project {
+fn project_at_two() -> Assembled {
     use specforge_ops::read::export::{Request, export_recorded};
     let project = recorded_project();
     assert!(

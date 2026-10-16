@@ -13,8 +13,8 @@ path = "tests/main.rs"
 
 [features]
 # `specforge_project::testing`: the project a test builds on disk (TestProject) and the sample sources the
-# surfaces' tests share. No production code reads it.
-testing = ["dep:tempfile", "specforge-installed/testing", "specforge-wasm/testing"]
+# surfaces' tests share, and `testing::Assembled`, a compiled project assembled in memory. No production code reads it.
+testing = ["dep:tempfile", "specforge-graph/testing", "specforge-installed/testing", "specforge-wasm/testing"]
 
 [dependencies]
 specforge-common = { workspace = true }

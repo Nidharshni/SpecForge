@@ -11,10 +11,16 @@
 //! `TestProject`; nothing else in a test writes `specforge.json`, picks a runtime or calls
 //! `CompiledProject::compile`.
 //!
+//! An [`Assembled`] project is the in-memory counterpart: a graph, an environment rooted where the project is and
+//! the diagnostics a test lists, as a compiled project (ADR 0108).
+//!
 //! [`disk_changed`] takes the files a test wrote as a watcher's batch: [`ProjectSession::changes`], then
 //! [`ProjectSession::apply`].
 
+pub mod assembled;
 pub mod specs;
+
+pub use assembled::Assembled;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

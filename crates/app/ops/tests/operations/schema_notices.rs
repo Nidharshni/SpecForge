@@ -1,24 +1,23 @@
 //! Every read outcome that names the schema's version carries what
 //! versioning it against the root's record found (I016, W053; ADR 0111).
 
+use crate::view_support::{Assembled, Viewed};
 use specforge_common::Diagnostic;
 use specforge_ops::read::export::{Request, export, export_recorded};
 use specforge_ops::read::query::{QueryRequest, query};
 use specforge_test::prelude::*;
 
-fn project() -> crate::view_support::Project {
-    crate::view_support::Project::new(
-        "behavior b \"B\" {\n  contract \"The system MUST work\"\n}\n",
-        crate::view_support::registries(&["behavior"], &[]),
-    )
+fn project() -> Assembled {
+    Assembled::over(crate::view_support::registries(&["behavior"], &[]))
+        .source("behavior b \"B\" {\n  contract \"The system MUST work\"\n}\n")
 }
 
-fn record(project: &crate::view_support::Project) -> std::path::PathBuf {
-    project.dir.path().join(".specforge/schema-cache.json")
+fn record(project: &Assembled) -> std::path::PathBuf {
+    project.root().join(".specforge/schema-cache.json")
 }
 
 /// A project whose record cannot be read.
-fn unreadable() -> crate::view_support::Project {
+fn unreadable() -> Assembled {
     let project = project();
     std::fs::create_dir_all(record(&project).parent().unwrap()).unwrap();
     std::fs::write(record(&project), r#"{"schema": {"#).unwrap();
@@ -27,7 +26,7 @@ fn unreadable() -> crate::view_support::Project {
 
 /// A project whose record holds a kind the project lacks: one W053 per
 /// breaking change.
-fn breaking() -> crate::view_support::Project {
+fn breaking() -> Assembled {
     let project = project();
     assert!(
         export_recorded(&project.view(), &Request::default())

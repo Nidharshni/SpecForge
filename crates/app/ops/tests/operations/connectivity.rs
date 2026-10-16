@@ -9,7 +9,7 @@ use specforge_parser::{EntityId, EntityKind, FieldMap};
 use specforge_registry::RegistryBuild;
 use specforge_test::prelude::*;
 
-use crate::view_support::{Project, R1_SOURCE};
+use crate::view_support::{Assembled, R1_SOURCE, Viewed};
 
 fn node(id: &str, kind: &str) -> Node {
     Node {
@@ -36,7 +36,7 @@ fn node(id: &str, kind: &str) -> Node {
     verify = "an entity is unconnected when no edge links it to another entity: a reference that does not resolve or names the entity itself links nothing"
 )]
 fn an_unresolved_or_self_reference_links_nothing() {
-    let project = Project::new(R1_SOURCE, RegistryBuild::default());
+    let project = Assembled::over(RegistryBuild::default()).source(R1_SOURCE);
     let connectivity = project.view().connectivity();
 
     assert_eq!(
@@ -77,7 +77,7 @@ fn entities_are_counted_by_kind() {
         label: Sym::new("needs"),
     });
 
-    let project = Project::of_graph(graph, RegistryBuild::default());
+    let project = Assembled::over(RegistryBuild::default()).graph(graph);
     let counts = project.view().entities_by_kind();
     assert_eq!(
         counts.into_iter().collect::<Vec<_>>(),

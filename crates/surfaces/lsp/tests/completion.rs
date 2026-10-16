@@ -11,7 +11,7 @@ use specforge_lsp::{CompletionSite, Document};
 use specforge_ops::view::ProjectView;
 use specforge_parser::{EntityId, EntityKind, FieldMap};
 use specforge_project::CompiledProject;
-use specforge_project::coverage::RecordedCoverage;
+use specforge_project::testing::Assembled;
 use specforge_project::testing::TestProject;
 use specforge_registry::RegistryBuild;
 use specforge_test_macros::test as spec;
@@ -124,10 +124,8 @@ fn registered_kinds_at_top_level() {
 )]
 fn use_is_suggested_and_define_never_is() {
     // With and without extensions.
-    let empty = specforge_project::Environment::with_registries(RegistryBuild::default(), None);
-    let graph = Graph::new();
-    let recorded = RecordedCoverage::over(&graph, &empty);
-    let bare = ProjectView::new(&graph, &empty, None, &recorded);
+    let empty = Assembled::over(RegistryBuild::default());
+    let bare = ProjectView::of(empty.detached());
     let found = complete("\n", 0, 0, &bare).1;
     assert_eq!(labels(&found), ["use"]);
     let found = complete_in_project("\n", 0, 0);
@@ -252,9 +250,7 @@ fn the_prefix_is_the_word_before_the_cursor() {
 /// reference `owner` (to kind `task`); a graph of `alpha`, a task, and
 /// `gh.issue:7`, a ref.
 struct Fixture {
-    env: specforge_project::Environment,
-    graph: Graph,
-    recorded: RecordedCoverage,
+    project: Assembled,
 }
 
 impl Fixture {
@@ -306,17 +302,13 @@ impl Fixture {
                 obligations: Vec::new(),
             });
         }
-        let env = specforge_project::Environment::with_registries(registries, None);
-        let recorded = RecordedCoverage::over(&graph, &env);
         Fixture {
-            env,
-            graph,
-            recorded,
+            project: Assembled::over(registries).graph(graph),
         }
     }
 
     fn view(&self) -> ProjectView<'_> {
-        ProjectView::new(&self.graph, &self.env, None, &self.recorded)
+        ProjectView::of(self.project.detached())
     }
 }
 

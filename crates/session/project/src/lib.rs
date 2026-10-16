@@ -103,7 +103,7 @@ pub struct Environment {
     /// reported as E069, first; with one that
     /// [`loads_nothing`](ConfigProblem::loads_nothing), no extension
     /// loaded), and whether the file exists at the root. No file was read
-    /// for [`Self::empty`] and [`Self::with_registries`].
+    /// for [`Self::empty`] and the bare build of a project assembled in memory.
     read: ConfigRead,
     /// The project's installed extensions: what `specforge.lock` held when
     /// the environment was read (absent, read, or unreadable with its
@@ -134,12 +134,12 @@ pub struct Environment {
     /// The runtime the extensions were loaded in: every extension call an
     /// operation makes over this project runs there, a custom rule's
     /// verdict and a check pass included. None: the environment was loaded
-    /// without one, so no extension loaded ([`Self::empty`] has none;
-    /// [`Self::with_registries`] has the one it is given).
+    /// without one, so no extension loaded ([`Self::empty`] has none; the
+    /// bare build of a project assembled in memory has the one it is given).
     runtime: Option<SharedRuntime>,
     /// The project root it was loaded from ([`Self::from_read`]); `None` for one
-    /// assembled in memory ([`Self::assemble`], [`Self::empty`],
-    /// [`Self::with_registries`]). For a loaded environment, [`Self::root`] is its
+    /// assembled in memory ([`Self::assemble`], [`Self::empty`], the bare
+    /// build of `testing::Assembled`). For a loaded environment, [`Self::root`] is its
     /// `dir()`.
     root: Option<ProjectRoot>,
 }
@@ -161,11 +161,19 @@ impl Environment {
         }
     }
 
-    /// No project, a registry build made in memory, and the runtime its
-    /// extension calls go to, if any: a bare build for a graph built in a
-    /// test (ADR 0015 "The view, completed"). Nothing reported, no I002.
-    pub fn with_registries(registries: RegistryBuild, runtime: Option<SharedRuntime>) -> Self {
+    /// A bare build for a project assembled in memory: a registry build made
+    /// there, the runtime its extension calls go to, if any, and the project
+    /// where `installed` is, so the root and the spec root agree. The default
+    /// config, nothing reported, no I002 (ADR 0108).
+    #[cfg(feature = "testing")]
+    pub(crate) fn bare(
+        installed: Installed,
+        registries: RegistryBuild,
+        runtime: Option<SharedRuntime>,
+    ) -> Self {
         Environment {
+            sources: ConfigRead::default().config.sources(installed.root()),
+            installed,
             registries,
             runtime,
             ..Environment::empty()

@@ -322,6 +322,7 @@ fn failure(view: &ProjectView, error: EmitterError) -> Refusal<ExportField> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::Viewed;
 
     fn request(format: Format) -> Request<'static> {
         Request {
@@ -362,7 +363,7 @@ mod tests {
     }
 
     fn failed(request: &Request) -> OpError {
-        let fixture = crate::view::testing::Fixture::new();
+        let fixture = specforge_project::testing::Assembled::new();
         export(&fixture.view(), request).unwrap_err().error
     }
 
@@ -379,7 +380,7 @@ mod tests {
         assert_eq!(error.code, DEPTH_WITHOUT_SCOPE);
 
         // With a scope it is a hop limit, and the export goes on.
-        let fixture = crate::view::testing::Fixture::new();
+        let fixture = specforge_project::testing::Assembled::new();
         let scoped = export(
             &fixture.view(),
             &Request {
@@ -455,7 +456,7 @@ mod tests {
         verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
     )]
     fn export_states_which_field_a_refusal_is_about() {
-        let fixture = crate::view::testing::Fixture::new();
+        let fixture = specforge_project::testing::Assembled::new();
         let subject = |request: Request| export(&fixture.view(), &request).unwrap_err().subject;
         let graph = || request(Format::Graph);
         assert_eq!(

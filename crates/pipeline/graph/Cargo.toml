@@ -11,6 +11,11 @@ autotests = false
 name = "tests"
 path = "tests/main.rs"
 
+[features]
+# `GraphBuild::holding`: a build around a graph a test assembled node by node
+# (`specforge_project::testing::Assembled`). No production code reads it.
+testing = []
+
 [dependencies]
 specforge-common = { workspace = true }
 specforge-parser = { workspace = true }

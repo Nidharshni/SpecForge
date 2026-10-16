@@ -1,6 +1,7 @@
 use super::*;
 use crate::testing::ScriptedSolver;
-use crate::view::testing::Fixture;
+use crate::testing::Viewed;
+use specforge_project::testing::Assembled;
 use specforge_test_macros::test as specforge_test;
 
 fn diag(code: &str, message: &str, suggestion: Option<&str>) -> Diagnostic {
@@ -11,7 +12,7 @@ fn diag(code: &str, message: &str, suggestion: Option<&str>) -> Diagnostic {
 
 /// A declaration of `name` that contributes the entity kind `keyword`.
 fn declaring_kind(name: &str, keyword: &str) -> specforge_protocol_types::ExtensionDeclaration {
-    let mut declaration = Fixture::declaration(name, "1.0.0");
+    let mut declaration = Assembled::declaration(name, "1.0.0");
     declaration.entities = vec![specforge_protocol_types::EntityKindDescriptor {
         name: keyword.into(),
         keyword: Some(keyword.into()),
@@ -22,7 +23,7 @@ fn declaring_kind(name: &str, keyword: &str) -> specforge_protocol_types::Extens
 
 /// A declaration of `name` that contributes the edge type `label`.
 fn declaring_edge(name: &str, label: &str) -> specforge_protocol_types::ExtensionDeclaration {
-    let mut declaration = Fixture::declaration(name, "1.0.0");
+    let mut declaration = Assembled::declaration(name, "1.0.0");
     declaration.edges = vec![specforge_protocol_types::EdgeTypeDescriptor {
         label: label.into(),
         ..Default::default()
@@ -38,7 +39,7 @@ fn enhancements_list_the_edge_types_their_fields_write() {
         edge: edge.map(str::to_string),
         ..Default::default()
     };
-    let mut declaration = Fixture::declaration("@acme/a", "1.0.0");
+    let mut declaration = Assembled::declaration("@acme/a", "1.0.0");
     declaration.enhancements = vec![EntityEnhancementDescriptor {
         target_kind: "behavior".into(),
         fields: vec![
@@ -49,7 +50,7 @@ fn enhancements_list_the_edge_types_their_fields_write() {
         ],
         ..Default::default()
     }];
-    let fixture = Fixture::new().declarations(vec![declaration]);
+    let fixture = Assembled::new().declarations(vec![declaration]);
 
     let report = diagnose(&fixture.view(), &ScriptedSolver::ready());
 
@@ -64,7 +65,7 @@ fn enhancements_list_the_edge_types_their_fields_write() {
 fn a_kind_registered_twice_is_one_conflict_naming_the_keyword() {
     // What the registry build reports for a kind two extensions declare:
     // the keyword is the diagnostic's data, not a word of its message.
-    let fixture = Fixture::new().declarations(vec![
+    let fixture = Assembled::new().declarations(vec![
         declaring_kind("@acme/a", "memo"),
         declaring_kind("@acme/b", "memo"),
     ]);
@@ -98,7 +99,7 @@ fn a_kind_registered_twice_is_one_conflict_naming_the_keyword() {
 
 #[test]
 fn a_non_shadowing_conflict_is_listed_but_not_shadowed() {
-    let fixture = Fixture::new()
+    let fixture = Assembled::new()
         .declarations(vec![
             declaring_edge("@acme/a", "uses"),
             declaring_edge("@acme/b", "uses"),
@@ -156,7 +157,7 @@ fn failing_entry(
 )]
 fn doctor_lists_the_extensions_the_listing_lists() {
     use specforge_installed::LoadProblem;
-    let fixture = Fixture::new()
+    let fixture = Assembled::new()
         .enabled(vec![
             specforge_project::EnabledExtension::unloaded("@specforge/product"),
             specforge_project::EnabledExtension {
@@ -175,9 +176,9 @@ fn doctor_lists_the_extensions_the_listing_lists() {
             ),
         ])
         .declarations(vec![
-            Fixture::declaration("@specforge/product", "1.0.0"),
-            Fixture::declaration("@sdk/greet", "0.1.0"),
-            Fixture::declaration("@acme/stray", "3.0.0"),
+            Assembled::declaration("@specforge/product", "1.0.0"),
+            Assembled::declaration("@sdk/greet", "0.1.0"),
+            Assembled::declaration("@acme/stray", "3.0.0"),
         ])
         .lock(&[
             ("@test/probe", "0.1.0", "local:/blobs/probe.wasm"),
@@ -243,11 +244,11 @@ fn doctor_lists_the_extensions_the_listing_lists() {
 
 #[test]
 fn doctor_lists_extensions_by_name() {
-    let fixture = Fixture::new()
+    let fixture = Assembled::new()
         .config(&["@z/z", "@a/a"])
         .declarations(vec![
-            Fixture::declaration("@z/z", "1.0.0"),
-            Fixture::declaration("@a/a", "1.0.0"),
+            Assembled::declaration("@z/z", "1.0.0"),
+            Assembled::declaration("@a/a", "1.0.0"),
         ])
         .lock(&[("@m/m", "1.0.0", "registry")]);
 
@@ -260,7 +261,7 @@ fn doctor_lists_extensions_by_name() {
 #[test]
 fn doctor_lists_load_failures_in_check_order() {
     use specforge_installed::LoadProblem;
-    let fixture = Fixture::new().enabled(vec![
+    let fixture = Assembled::new().enabled(vec![
         failing_entry("@z/z", LoadProblem::NotInstalled),
         failing_entry("@a/a", LoadProblem::NotInstalled),
     ]);
@@ -277,7 +278,7 @@ fn doctor_lists_load_failures_in_check_order() {
 )]
 fn a_finding_without_a_suggestion_quotes_the_catalogue() {
     use specforge_installed::LoadProblem;
-    let fixture = Fixture::new().enabled(vec![
+    let fixture = Assembled::new().enabled(vec![
         // No suggestion: the explanation of E028 is quoted.
         failed(
             "@acme/x",
@@ -332,7 +333,7 @@ fn an_entity_id_that_is_a_kind_keyword_is_shadowed_but_not_a_conflict() {
     }));
     let diagnostics = [e013];
 
-    let fixture = Fixture::new().reporting(diagnostics.to_vec());
+    let fixture = Assembled::new().reporting(diagnostics.to_vec());
     let report = diagnose(&fixture.view(), &ScriptedSolver::ready());
 
     assert_eq!(report.about(Part::Conflict).count(), 0);
@@ -352,7 +353,7 @@ fn an_entity_id_that_is_a_kind_keyword_is_shadowed_but_not_a_conflict() {
     verify = "doctor reports a solver that does not run as the W098 analyze --prove reports, as a toolchain warning"
 )]
 fn a_solver_that_does_not_run_is_the_w098_prove_reports_as_a_toolchain_warning() {
-    let report = diagnose(&Fixture::new().view(), &ScriptedSolver::not_found());
+    let report = diagnose(&Assembled::new().view(), &ScriptedSolver::not_found());
     assert_eq!(
         finding_codes(&report),
         [("I002", FindingStatus::Info), ("W098", FindingStatus::Warn)]
@@ -375,7 +376,7 @@ fn a_solver_that_does_not_run_is_the_w098_prove_reports_as_a_toolchain_warning()
 )]
 fn doctor_reads_the_diagnostics_its_view_reports() {
     let e028 = diag("E028", "extension '@acme/x' is not installed", None);
-    let failing = Fixture::new().enabled(vec![failed(
+    let failing = Assembled::new().enabled(vec![failed(
         "@acme/x",
         specforge_installed::LoadProblem::NotInstalled,
         e028,
@@ -385,7 +386,7 @@ fn doctor_reads_the_diagnostics_its_view_reports() {
     assert_eq!(failures, ["E028"]);
     assert!(!report.ok());
 
-    let clean = Fixture::new();
+    let clean = Assembled::new();
     let report = diagnose(&clean.view(), &ScriptedSolver::ready());
     assert_eq!(report.about(Part::Load).count(), 0);
     assert!(report.ok());
@@ -393,8 +394,8 @@ fn doctor_reads_the_diagnostics_its_view_reports() {
 
 #[test]
 fn a_rootless_view_skips_the_installation_checks() {
-    let fixture = Fixture::new()
-        .declarations(vec![Fixture::declaration("@acme/loaded", "2.0.0")])
+    let fixture = Assembled::new()
+        .declarations(vec![Assembled::declaration("@acme/loaded", "2.0.0")])
         .lock(&[("@acme/locked", "1.0.0", "registry")]);
 
     let report = diagnose(&fixture.rootless_view(), &ScriptedSolver::ready());
@@ -424,7 +425,7 @@ fn finding_codes(report: &DoctorReport) -> Vec<(&str, FindingStatus)> {
     verify = "doctor in a directory without specforge.json reports config_missing as a warning"
 )]
 fn doctor_without_specforge_json_says_so() {
-    let fixture = Fixture::new().without_config_file();
+    let fixture = Assembled::new().without_config_file();
 
     let report = diagnose(&fixture.view(), &ScriptedSolver::ready());
 
@@ -439,14 +440,14 @@ fn doctor_without_specforge_json_says_so() {
     assert!(
         report.findings[0]
             .check
-            .contains(&fixture.dir.path().display().to_string()),
+            .contains(&fixture.root().display().to_string()),
         "{:?}",
         report.findings[0]
     );
     assert!(report.findings[0].remediation.contains("specforge init"));
 
     // A project with specforge.json gets no such finding.
-    let found = Fixture::new();
+    let found = Assembled::new();
     assert_eq!(
         finding_codes(&diagnose(&found.view(), &ScriptedSolver::ready())),
         [("I002", FindingStatus::Info)]
@@ -458,7 +459,7 @@ fn doctor_without_specforge_json_says_so() {
     verify = "doctor in a directory without specforge.json reports config_missing as a warning"
 )]
 fn a_rootless_view_has_no_config_missing_finding() {
-    let fixture = Fixture::new().without_config_file();
+    let fixture = Assembled::new().without_config_file();
 
     let report = diagnose(&fixture.rootless_view(), &ScriptedSolver::ready());
 
@@ -582,10 +583,11 @@ fn doctor_reports_a_changed_binary_once() {
 )]
 fn an_unusable_config_is_an_error_finding() {
     // What the environment reports for a specforge.json that is not JSON.
-    let fixture = Fixture::new().config_problems(vec![specforge_common::ConfigProblem::NotJson {
-        path: "./specforge.json".into(),
-        error: "expected value at line 1 column 41".into(),
-    }]);
+    let fixture =
+        Assembled::new().config_problems(vec![specforge_common::ConfigProblem::NotJson {
+            path: "./specforge.json".into(),
+            error: "expected value at line 1 column 41".into(),
+        }]);
 
     let report = diagnose(&fixture.view(), &ScriptedSolver::ready());
 
@@ -614,12 +616,12 @@ fn an_unusable_config_is_an_error_finding() {
     verify = "doctor reports every diagnostic the environment reports as one finding, with the part of the setup it is about and the diagnostic's severity"
 )]
 fn a_load_warning_is_a_finding_but_leaves_extensions_ok() {
-    let fixture = Fixture::new()
+    let fixture = Assembled::new()
         .enabled(vec![specforge_project::EnabledExtension {
             warnings: vec![Diagnostic::new(codes::W153, "its sandbox asks for more")],
             ..specforge_project::EnabledExtension::unloaded("@acme/x")
         }])
-        .declarations(vec![Fixture::declaration("@acme/x", "1.0.0")]);
+        .declarations(vec![Assembled::declaration("@acme/x", "1.0.0")]);
 
     let report = diagnose(&fixture.view(), &ScriptedSolver::ready());
 
@@ -634,7 +636,7 @@ fn a_load_warning_is_a_finding_but_leaves_extensions_ok() {
 )]
 fn without_a_root_a_missing_module_is_a_load_finding() {
     use specforge_installed::LoadProblem;
-    let fixture = Fixture::new().enabled(vec![failing_entry(
+    let fixture = Assembled::new().enabled(vec![failing_entry(
         "@acme/gone",
         LoadProblem::ModuleMissing {
             path: "gone.wasm".into(),

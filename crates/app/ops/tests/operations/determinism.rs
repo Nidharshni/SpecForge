@@ -1,3 +1,4 @@
+use crate::view_support::{Assembled, Viewed};
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
 use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue};
@@ -83,7 +84,7 @@ fn trace_output_is_deterministic() {
     let graph = build_graph();
     let outputs: Vec<_> = (0..5)
         .map(|_| {
-            let project = crate::view_support::Project::of_graph(graph.clone(), Default::default());
+            let project = Assembled::over(Default::default()).graph(graph.clone());
             let outcome = specforge_ops::read::trace::trace(
                 &project.view(),
                 specforge_ops::read::trace::Target::Entity("alpha"),

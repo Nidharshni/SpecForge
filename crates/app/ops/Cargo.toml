@@ -9,8 +9,9 @@ repository.workspace = true
 [features]
 # `specforge_ops::testing`: extensions a test serves in process as
 # candidates (`@sdk/greet`, builtin look-alikes), and a package registry in
-# memory beside the Registry port with the contract of the port (ADR 0044).
-testing = ["dep:specforge-extension-sdk", "specforge-wasm/testing"]
+# memory beside the Registry port with the contract of the port (ADR 0044), and `Viewed`, the view of a project
+# assembled in memory (ADR 0108).
+testing = ["dep:specforge-extension-sdk", "specforge-project/testing", "specforge-wasm/testing"]
 
 [dependencies]
 serde = { workspace = true }
