@@ -1,7 +1,8 @@
 # A path an MCP request names resolves inside the served project
 
 **Status:** accepted (2026-10-14, structure round, plan 13). Amends ADR 0014 D4, D5 and D6 (what "another
-project" may be) and ADR 0029 D8 (`out_dir`).
+project" may be) and ADR 0029 D8 (`out_dir`). D1 and D8 amended by ADR 0104 (the rule is
+`specforge_ops::Containment`, applied where the operation opens or writes).
 
 `specforge mcp .` in `proj/`, then `tools/call specforge.format {"path": "../outside"}`, answered `ok` and
 rewrote `outside/x.spec`. The server serves one project, and a client that can name any directory could read
@@ -80,3 +81,5 @@ Every argument of a tool, prompt or resource that names a file or directory, and
 **Amended by ADR 0098 (2026-10-15):** D7: `init` reads a relative local specifier from the directory it creates (the CLI's working directory, over MCP the directory the call names), as `add_extension` reads it from the project's root. Whether MCP may install from outside the project stays open.
 
 **Amended by ADR 0098 (2026-10-15), second part:** D7 is closed: over MCP, a local `.wasm` that `add_extension` or `init` names must resolve inside the project (the served project, or the server's root while none is served); a path that leaves it is `invalid_input` on `specifiers` or `extensions`. The CLI is unchanged (D6). `git+` stays unsupported.
+
+**Amended by ADR 0104 (2026-10-16):** D1: the one resolver is `specforge_ops::Containment`; MCP builds the bound and resolves only what it targets or opens (the call's `path`, init's directory, outline's `file`, render's file). D8: the operations take the containment in their request and apply it where they open or write, so there is no `run_within` and no `resolves_outside`. D2-D7 stand, D6 included.

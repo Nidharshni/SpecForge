@@ -305,6 +305,7 @@ fn what_publish_uploads_is_what_add_installs() {
             allow_unsigned: false,
             trust: Trust::Refuse,
             dry_run: false,
+            containment: &specforge_ops::Containment::unbounded(),
         },
         &registry,
         &runtime,

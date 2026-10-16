@@ -33,11 +33,14 @@ fn text(path: PathBuf) -> String {
     String::from_utf8(std::fs::read(path).unwrap()).unwrap()
 }
 
+static UNBOUNDED: crate::Containment = crate::Containment::unbounded();
+
 fn removing(name: &str) -> RemoveRequest<'_> {
     RemoveRequest {
         name,
         force: false,
         dry_run: false,
+        containment: &UNBOUNDED,
     }
 }
 
@@ -136,6 +139,7 @@ fn a_non_object_config_refuses_the_removal_before_any_write() {
             name: "@acme/x",
             force: true,
             dry_run,
+            containment: &UNBOUNDED,
         };
         let error = remove(&fixture.view(), &request).unwrap_err();
 
@@ -174,6 +178,7 @@ fn remove_refuses_as_add_and_update_do() {
                 allow_unsigned: false,
                 trust: Trust::Refuse,
                 dry_run: false,
+                containment: &UNBOUNDED,
             },
             &unconfigured,
             &specforge_wasm::testing::InProcessRuntime::new(),
@@ -186,6 +191,7 @@ fn remove_refuses_as_add_and_update_do() {
                 reach: specforge_package::Reach::Compatible,
                 allow_unsigned: true,
                 trust: Trust::Refuse,
+                containment: &UNBOUNDED,
             },
             &unconfigured,
             &specforge_wasm::testing::InProcessRuntime::new(),
@@ -303,6 +309,7 @@ fn an_enabled_entry_that_is_not_installed_is_removed_by_its_name() {
         name: "@acme/missing",
         force: false,
         dry_run: true,
+        containment: &UNBOUNDED,
     };
     let planned = remove(&fixture.view(), &request).unwrap();
     assert_eq!(planned.origin, Origin::Unknown);
@@ -406,6 +413,7 @@ fn remove_selects_a_file_entry_by_its_text_its_path_or_its_name() {
             name: argument,
             force: false,
             dry_run: true,
+            containment: &UNBOUNDED,
         };
         let outcome = remove(&fixture.view(), &request).unwrap();
 

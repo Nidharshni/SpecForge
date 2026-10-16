@@ -209,7 +209,9 @@ behavior provide_mcp_init_tool "Provide MCP Init Tool" {
     specforge init reads it from the directory it runs in and
     add_extension from the project's root (ADR 0092 D7). A local path that
     resolves outside the served project (the server's root while none is
-    served) MUST be refused as invalid_input on extensions. MCP init is always
+    served), as init reads it (each specifier of an entry, its .. and
+    symlinks included, and the component a crate directory names), MUST be
+    refused as invalid_input on extensions. MCP init is always
     non-interactive — extension selection is provided via the extensions
     parameter. Interactive extension selection (TTY prompting) is only
     available via the CLI init command. The tool MUST scaffold what
@@ -226,6 +228,7 @@ behavior provide_mcp_init_tool "Provide MCP Init Tool" {
   verify unit "init refuses a directory whose starter file exists, writing nothing"
   verify unit "a relative local path in extensions is read from the directory init creates, wherever the server runs"
   verify unit "a local extension path in extensions that resolves outside the served project is refused as invalid_input on extensions"
+  verify unit "each local specifier in extensions is held to the server's root as init reads it, a crate directory included"
   verify unit "invalid project name returns error"
   verify unit "unknown extension returns error with diagnostic"
   verify unit "version parameter overrides default 0.1.0"
@@ -282,9 +285,10 @@ behavior provide_mcp_add_extension_tool "Provide MCP Add Extension Tool" {
     document specforge add --format json prints (McpAddExtensionResult: one
     entry per specifier under added), plus a note saying whether the server
     serves the extensions from the next call on, absent for a preview. A local
-    .wasm path that resolves outside the project the call installs into MUST be
-    refused as invalid_input on specifiers, nothing installed (ADR 0092 D7, closed
-    by ADR 0098). A registry specifier with no registry configured in
+    .wasm path, or the component a crate directory names, that resolves outside
+    the project the call installs into (through .., an absolute name or a
+    symlink) MUST be refused as invalid_input on specifiers, nothing installed
+    (ADR 0092 D7, closed by ADR 0098, applied where the file is read by ADR 0104). A registry specifier with no registry configured in
     specforge.json MUST make no network call and MUST return an E063 error
     whose suggestion names the registries key. The tool MUST run the add
     specforge add runs: a builtin is enabled offline with its required
@@ -307,6 +311,7 @@ behavior provide_mcp_add_extension_tool "Provide MCP Add Extension Tool" {
   verify integration "a version diamond with a locked peer is refused with R-RES-006, as specforge add refuses it"
   verify unit "after add_extension the server serves the extension it installed"
   verify unit "a local extension path in specifiers that resolves outside the project is refused as invalid_input on specifiers"
+  verify unit "a crate directory in specifiers whose built component resolves outside the project is refused as invalid_input on specifiers"
 }
 
 behavior provide_mcp_remove_extension_tool "Provide MCP Remove Extension Tool" {
@@ -593,7 +598,9 @@ behavior provide_mcp_render_tool "Provide MCP Render Tool" {
     names a directory inside the call's project: a relative one is read
     against its root, wherever the server runs, and one that leaves the
     project (by .., an absolute name or a symlink) MUST be refused as invalid
-    input on out_dir, as MUST any out_dir with no project served.
+    input on out_dir, as MUST any out_dir with no project served; and the file
+    it writes there is not written through a symlink that leaves the project
+    (invalid input on out_dir).
     output_files lists the files written, each named from the project root.
     The renderers are the core graph engine's export formats (see P7
     justification in features/output.spec), named as `specforge export
@@ -614,6 +621,7 @@ behavior provide_mcp_render_tool "Provide MCP Render Tool" {
   verify unit "the render document names each output file from the project root"
   verify unit "a relative out_dir is written under the call's project root, wherever the server runs"
   verify unit "a relative out_dir with no project served is invalid input on out_dir"
+  verify unit "render writes no file through a symlink in out_dir that leaves the project"
   verify unit "registered renderer invoked for matching format"
   verify unit "unrecognized format returns error listing available renderers"
   verify unit "graph and its alias json select the full graph renderer"

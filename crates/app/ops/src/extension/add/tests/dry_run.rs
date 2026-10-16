@@ -12,6 +12,7 @@ fn a_dry_run_of_a_present_extension_answers_as_the_add_would() {
             allow_unsigned: true,
             trust: Trust::Refuse,
             dry_run: true,
+            containment: &UNBOUNDED,
         }
     }
 
@@ -234,6 +235,7 @@ fn a_dry_run_judges_a_registry_package_by_its_published_declaration() {
         allow_unsigned: true,
         trust: Trust::Refuse,
         dry_run,
+        containment: &UNBOUNDED,
     };
 
     let real = add(&request(false), &published(), &runtime()).unwrap_err();

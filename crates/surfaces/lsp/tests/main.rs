@@ -14,6 +14,7 @@ mod document;
 mod e2e;
 mod field_references;
 mod follow;
+mod format_parity;
 mod hover;
 mod hover_obligations;
 mod identity;

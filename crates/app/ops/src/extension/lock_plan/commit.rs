@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use super::{Ask, Checked, Disabled, Purpose};
 use crate::registry::{KeyPin, Registry};
-use crate::{OpError, OpErrorKind, Writes};
+use crate::{Containment, OpError, OpErrorKind, Writes};
 
 /// A file the change's last step writes after `specforge.json`'s edit and before the pins (`init`'s
 /// config, `.gitignore` and starter). Put back, or removed when it was not there, when the change
@@ -75,7 +75,17 @@ impl Checked<'_> {
     /// module writes no lock. A failure at any step, the pins' included (R-TRUST-006), puts every
     /// file back and pins nothing. The error's writes name what could not be put back (normally
     /// nothing).
-    pub(crate) fn finish(self, root: &Path, also: Vec<Also<'_>>) -> Result<Done, OpError> {
+    ///
+    /// Before anything is written, and for a preview too, every file the change would write is
+    /// resolved through `containment` (ADR 0104): the config, the `also` files, the lock and each
+    /// installed or uninstalled module. One that lands outside it, by a symlink in the project,
+    /// refuses the change (`outside_root`), nothing written (ADR 0092 D8).
+    pub(crate) fn finish(
+        self,
+        root: &Path,
+        also: Vec<Also<'_>>,
+        containment: &Containment,
+    ) -> Result<Done, OpError> {
         let final_entries = self.entries();
         let Checked {
             installed,
@@ -96,6 +106,22 @@ impl Checked<'_> {
             .collect();
         let edited_config = edits_config && (!names.is_empty() || !disabled.is_empty());
         let also_paths: Vec<PathBuf> = also.iter().map(|also| also.path.clone()).collect();
+        let mut written_by_change: Vec<PathBuf> = also_paths.clone();
+        if edited_config {
+            written_by_change.push(root.join(crate::config::CONFIG_FILE));
+        }
+        if changes_lock {
+            written_by_change.push(installed.lock_path());
+        }
+        written_by_change.extend(
+            installs
+                .iter()
+                .map(|(_, pin)| installed.module_path(&pin.name)),
+        );
+        written_by_change.extend(uninstalls.iter().map(|name| installed.module_path(name)));
+        for path in &written_by_change {
+            containment.resolve(path)?;
+        }
         let mut enabled = None;
         let mut writes = Writes::none();
         if purpose == Purpose::Commit {

@@ -66,3 +66,5 @@ fifth kind of operation (one that writes the project's extensions and its source
 `authoring::format` and `authoring::migrate`. `migrate::SOURCE_OUTSIDE_ROOT` and the inference session's
 `SOURCE_OUTSIDE_ROOT` stay with their operations. `resolves_outside` is a write-side check shared by authoring and
 by `read::infer`, so it stays in the base beside `Writes` (`specforge_ops::resolves_outside`, a crate-root name).
+
+**Amended by ADR 0104:** `resolves_outside` and the `run_within`s are gone; `containment` is a base module (`specforge_ops::Containment`), and format, migrate and rename take it in their request.

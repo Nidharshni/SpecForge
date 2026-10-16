@@ -55,6 +55,7 @@ fn init_at(
         name,
         version,
         extensions,
+        containment: &specforge_ops::Containment::unbounded(),
     };
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
     let outcome = match init::init(&request, &runtime) {
