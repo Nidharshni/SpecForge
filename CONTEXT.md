@@ -251,6 +251,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   D7). A binary to install must load (E028) and must not declare a builtin's name; the lock plan
   enables the builtins an extension requires (CONTEXT "Lock plan"), and a builtin that does not load
   refuses the operation.
+- **Candidate vocabulary**: what the extensions a host could enable declare, read only for suggestions: each kind
+  keyword and each field an enhancement adds, with the extension that declares it
+  (`specforge_registry::CandidateVocabulary`, ADR 0122). The session hands the builtins' to the registry build;
+  `revendor` generates it from their pinned declarations
+  (`crates/runtime/component/data/builtin-vocabulary.json`). It never decides a diagnostic, only names the extension
+  to install.
 - **Lock plan**: the change one operation makes to what the project installs and enables (`add` its
   installs and builtins, `update` every upgrade, `init` its local files and builtins, `remove` its
   disabled entries and uninstall), staged as the operation leaves them: each package's lock entry

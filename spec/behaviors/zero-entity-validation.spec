@@ -366,8 +366,8 @@ behavior detect_unknown_entity_fields "Detect Unknown Entity Fields" {
     other name, `expression` included, MUST be checked like any field: the
     prove pass reads only fields an extension declares a proof role for
     (ADR 0009), so an undeclared `expression` is W020. When a builtin
-    extension's enhancement declares the field on that kind (the bundled
-    field index, e.g. an invariant's `expression` from @specforge/formal),
+    extension's enhancement declares the field on that kind (the candidate
+    vocabulary, e.g. an invariant's `expression` from @specforge/formal),
     the W020 MUST suggest installing that extension, as E024 does for a
     kind.
     `verify` statements are not fields (ADR 0094): a field named `verify`

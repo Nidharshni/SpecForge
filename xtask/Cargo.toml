@@ -26,6 +26,7 @@ specforge-repo-root = { path = "../crates/leaf/repo-root" }
 specforge-common = { workspace = true }
 specforge-coverage = { path = "../crates/leaf/coverage" }
 specforge-project = { workspace = true }
+specforge-registry = { workspace = true }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 strsim = { workspace = true }
 syn = { version = "2", features = ["full", "visit"] }

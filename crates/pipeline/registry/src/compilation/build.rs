@@ -12,6 +12,7 @@ use specforge_common::Diagnostic;
 use specforge_graph::{FieldForms, GraphInputs};
 use specforge_protocol_types::{CompilerPassDescriptor, ExtensionDeclaration};
 
+use super::candidates::CandidateVocabulary;
 use super::declaration::{consistency, order_passes, shape};
 use super::graph_inputs;
 use super::peers;
@@ -137,6 +138,9 @@ pub struct RegistryBuild {
     probe_diagnostics: Vec<Diagnostic>,
     /// Refused MCP tools (E055) and surface conflicts (E039).
     surface_diagnostics: Vec<Reported>,
+    /// The extensions the host could enable, for the checks' suggestions only (ADR 0122), set by
+    /// [`Self::with_candidates`]; empty until then.
+    pub(crate) candidates: CandidateVocabulary,
 }
 
 impl RegistryBuild {
@@ -189,6 +193,22 @@ impl RegistryBuild {
     /// derived; `Environment::graph_config` adds the provider schemes.
     pub fn graph_inputs(&self) -> GraphInputs {
         graph_inputs::derive(&self.kinds, &self.fields, &self.field_forms)
+    }
+
+    /// The build, suggesting from `candidates` (ADR 0122). Read when `check` runs (and when
+    /// `graph_inputs` names the owner of an absent kind); nothing `build_registries` derives
+    /// depends on it, and it changes no diagnostic but their suggestions. The session applies the
+    /// builtins' with the build; a build never handed one suggests `specforge search`.
+    #[must_use]
+    pub fn with_candidates(mut self, candidates: CandidateVocabulary) -> Self {
+        self.candidates = candidates;
+        self
+    }
+
+    /// What the checks' suggestions read: the extensions the host could enable, by kind keyword
+    /// and enhancement field.
+    pub fn candidates(&self) -> &CandidateVocabulary {
+        &self.candidates
     }
 
     /// Ask `verdicts` once for each `custom` rule's function, on an entity
@@ -331,5 +351,6 @@ pub fn build_registries(declarations: Vec<ExtensionDeclaration>) -> RegistryBuil
         registry_diagnostics,
         probe_diagnostics: Vec::new(),
         surface_diagnostics,
+        candidates: CandidateVocabulary::default(),
     }
 }
