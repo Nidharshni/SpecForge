@@ -15,7 +15,7 @@ use specforge_wasm::ExtensionCalls;
 use std::collections::HashSet;
 
 use crate::coverage::TestReport;
-use crate::snapshot::EntitySnapshot;
+use specforge_registry::EntitySnapshot;
 
 /// Everything a pass may inspect. Built once per analysis invocation.
 pub struct AnalysisContext<'a> {

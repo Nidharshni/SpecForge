@@ -7,8 +7,7 @@
 use specforge_common::Diagnostic;
 use specforge_graph::Node;
 use specforge_project::coverage::{Status, Verdict};
-use specforge_project::snapshot::{ObligationRecord, Standing};
-use specforge_registry::KindRegistryEntry;
+use specforge_registry::{KindRegistryEntry, ObligationRecord, Standing};
 
 use crate::read::navigate::{References, is_about};
 use crate::view::{EntityField, ProjectView, not_found};

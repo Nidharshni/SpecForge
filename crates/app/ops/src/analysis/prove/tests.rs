@@ -80,7 +80,7 @@ fn prove(graph: &Graph) -> ProveReport {
         graph,
         kind_registry: &kind_registry,
         field_registry: &field_registry,
-        entities: &specforge_project::snapshot::EntitySnapshot::default(),
+        entities: &specforge_registry::EntitySnapshot::default(),
         test_results: None,
         proved_claims: Some(&empty_proved),
     };
@@ -341,7 +341,7 @@ fn prove_with(graph: &Graph, solver: &dyn Solver) -> ProveReport {
         graph,
         kind_registry: &kind_registry,
         field_registry: &field_registry,
-        entities: &specforge_project::snapshot::EntitySnapshot::default(),
+        entities: &specforge_registry::EntitySnapshot::default(),
         test_results: None,
         proved_claims: Some(&empty_proved),
     };

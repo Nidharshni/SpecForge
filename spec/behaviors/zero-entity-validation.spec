@@ -213,7 +213,7 @@ behavior snapshot_entities_once "Snapshot the Entities Once per Compile" {
   types      [PassEntity, ValidatorContext, Diagnostic]
   consumes   [graph_built]
   requires {
-    graph_and_registries "the graph is built and the registry build it was built with is available"
+    graph_and_registries "the graph is built with the registry build's own graph inputs, and that build is available"
   }
   ensures {
     one_text_per_field "every field an entity writes has one text, the same for every reader"
@@ -239,14 +239,13 @@ behavior snapshot_entities_once "Snapshot the Entities Once per Compile" {
     boolean its literal; a list of strings or references its items
     joined by ", "; a variant list or a type union its members joined by
     " | "; a mixed list its items' texts joined by ", "; an expression
-    group its expressions joined by ", "; verify statements their texts
-    joined by "; "; a block its keys joined by ", ". An empty list or
+    group its expressions joined by ", "; a block its keys joined by ", ". An empty list or
     block is written and its text is empty. No written field is left
     out and no value is null. A name written twice has the last one's
     value. Beside its text, every written field keeps its value shape
     (a quoted string, a bare word, a date, an integer, a boolean, a list
     of strings, of references, mixed or of variants, a type union, a
-    block, verify statements, an expression) and the span of its value,
+    block, an expression) and the span of its value,
     for the host's own checks; neither crosses the protocol.
 
     Standing: an entity's kind is testable when its extension says so.

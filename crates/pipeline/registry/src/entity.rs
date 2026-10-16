@@ -1,7 +1,7 @@
 //! What every check after the graph build reads about one entity (ADR 0019):
-//! the records of the entity snapshot. Graph-free, so the registry checks and
-//! the rules read them without the graph; `specforge_project::snapshot`
-//! builds them, once per compile.
+//! the records of the entity snapshot. `crate::snapshot` makes them from a
+//! built graph, once per compile (ADR 0115); the registry checks and the rules
+//! read them.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -12,8 +12,8 @@ use specforge_graph::ValueShape;
 use crate::disk::Disk;
 
 /// One entity as the registry checks, the rules and the custom validators
-/// read it. Built by the project's entity snapshot; tests build it with the
-/// `with_*` methods.
+/// read it. Made by the entity snapshot (`crate::snapshot`); tests whose subject
+/// is the rule engine or the wire build it with the `with_*` methods.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntityRecord {
     pub id: String,

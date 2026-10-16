@@ -230,7 +230,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Installed::resolve`: a builtin's name before a lock entry, `.wasm` file entries after every named
   entry), and the lock plan reads the same decision. Its declarations come in entry order; the registry
   build puts them in load order. What does not load is a typed `LoadFailure` on its
-  entry with one diagnostic, and what an entry reports though it loaded (W149, W153, W138) is on the
+  entry with one diagnostic and leaves nothing loaded, and what an entry reports though it loaded (W149, W153, W138) is on the
   entry too; the runtime keeps none, and `Installed::load_diagnostics` orders them, entry by entry. Without a runtime nothing loads, and each entry
   enables what it names (`Loaded::unloaded`); what an environment is assembled from says which
   (`specforge_project::ExtensionLoad`: `NoRuntime`, or what was loaded `In` a runtime).
@@ -342,7 +342,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the `CustomVerdicts` port; the project's adapter calls the extension (`ExtensionCalls::validate`),
   tests answer with a closure. A function that cannot answer is W112 at load, W148 at check.
 - **Entity snapshot**: every entity of one built graph as every check after the build reads it, taken
-  once per compile and per session check (`specforge_project::snapshot::EntitySnapshot`, ADR 0019).
+  once per compile and per session check (`specforge_registry::EntitySnapshot`, ADR 0019), taken by the registry build that built its graph's inputs (ADR 0115).
   Each entity's record holds:
   - what it writes, as field text, with each value's shape (quoted, bare, a number, a list of
     strings or references, …) and span beside it for the host's own checks
@@ -359,7 +359,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Field text**: the one string a field value is to a rule, a custom validator and a compiler pass
   (ADR 0019): scalars as written; lists of strings or references and mixed lists joined by `", "`;
   variant lists and type unions by `" | "`; expressions by `", "`; a
-  block's keys by `", "`. An entity's `verify` statements are not a field and have no field text (ADR 0094). An empty value is `""`. Every written field has one, and none is null.
+  block's keys by `", "`. An entity's `verify` statements are not a field and have no field text (ADR 0094). An empty value is `""`. Every written field has one, and none is null. It differs from the written value (`field_form::write`) only for an expression group, which every output writes one conjunct per line (ADR 0064, ADR 0115).
 - **Field type**: how the host reads a field's value, one of eight names an extension declares:
   `string`, `integer`, `bool`, `enum` (its values are the declaration's `enum_values`, its absent value its `default_value`: a field
   vocabulary; an enum without values, or a default outside them, is W021), `string_list`,
@@ -389,7 +389,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   expression group as its conjuncts one per line, lists as arrays, a block as
   an object; never a parse tree or a position. A value E061 admits is a value
   the published schema admits (ADR 0064).
-- **Standing**: how the obligation rule sees an entity (`specforge_project::snapshot::Standing`):
+- **Standing**: how the obligation rule sees an entity (`specforge_registry::Standing`):
   - whether its kind is testable;
   - which `no_verify_statements` rule requires its kind to declare obligations (a rule without a
     target kind applies to every kind);

@@ -564,7 +564,7 @@ fn a_pass_finding_with_a_code_it_may_not_use_is_reported() {
         "@acme/squat",
         "audit",
         output,
-        &specforge_project::snapshot::EntitySnapshot::default(),
+        &specforge_registry::EntitySnapshot::default(),
     );
 
     let codes: Vec<_> = findings.iter().map(|d| d.code.as_str()).collect();

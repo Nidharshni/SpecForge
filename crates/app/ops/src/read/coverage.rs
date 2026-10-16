@@ -9,7 +9,7 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_project::coverage::{Status, Summary, Verdict};
-use specforge_project::snapshot::{EntityRecord, Standing};
+use specforge_registry::{EntityRecord, Standing};
 
 use crate::OpError;
 use crate::options::{Choice, OptionTable};

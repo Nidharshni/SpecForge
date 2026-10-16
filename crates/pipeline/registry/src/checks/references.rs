@@ -7,8 +7,8 @@ use specforge_common::{Diagnostic, codes};
 use crate::entity::EntityRecord;
 use crate::{FieldRegistry, KindRegistry};
 
-/// Reference list fields whose target entities exist but are of the wrong
-/// kind according to the field's declared `target_kind`.
+/// Reference fields (single or list) whose target entities exist but are of
+/// the wrong kind according to the field's declared `target_kind`.
 ///
 /// `entities` is the whole project: a target exists when one of them has
 /// its ID. For example, `features [some_behavior_id]` where

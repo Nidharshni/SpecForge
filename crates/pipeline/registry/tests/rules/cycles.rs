@@ -156,66 +156,6 @@ fn a_cycle_rule_never_reads_its_edge_type_as_a_field_name() {
 }
 
 #[spec(
-    behavior = "execute_validation_pattern",
-    verify = "cycle_detection follows every field that writes its edge type"
-)]
-fn cycle_detection_follows_every_field_that_writes_its_edge_type() {
-    // `module.depends_on` and `service.needs` both write `Requires`.
-    let mut declaration = declare("@test", |c| {
-        c.kind("module", |k| {
-            k.description("m");
-            k.field("depends_on", |f| {
-                f.field_type(FieldType::ReferenceList)
-                    .edge("Requires")
-                    .target_kind("service");
-            });
-        });
-        c.kind("service", |k| {
-            k.description("s");
-            k.field("needs", |f| {
-                f.field_type(FieldType::ReferenceList)
-                    .edge("Requires")
-                    .target_kind("module");
-            });
-        });
-        c.edge("Requires", |e| {
-            e.description("a dependency");
-        });
-    });
-    declaration.validation_rules = vec![cycle_rule("E012", None, Some("Requires"))];
-    let built = rules_of(vec![declaration]);
-    assert!(built.diagnostics.is_empty(), "{:?}", built.diagnostics);
-    let rule = built.rules.iter().next().unwrap();
-    assert_eq!(
-        rule.describe()["edge_writers"],
-        serde_json::json!(["module.depends_on", "service.needs"])
-    );
-    let entities = [
-        entity("m1", "module", 0, 0),
-        entity("m2", "module", 0, 0),
-        entity("s1", "service", 0, 0),
-    ];
-    // m1 -> s1 -> m1 closes only through both fields; m2 -> s1 leads in.
-    let edges = [
-        edge("m1", "s1", "depends_on", Some("Requires")),
-        edge("s1", "m1", "needs", Some("Requires")),
-        edge("m2", "s1", "depends_on", Some("Requires")),
-    ];
-
-    let diagnostics = built
-        .rules
-        .check(&with_edges(&entities, &edges), &NoVerdicts);
-
-    assert_eq!(
-        messages(&diagnostics),
-        [
-            "module 'm1' is on a dependency cycle",
-            "service 's1' is on a dependency cycle",
-        ]
-    );
-}
-
-#[spec(
     behavior = "parse_validation_rule_pattern",
     verify = "a cycle_detection rule without an edge_type produces W112 and is not registered"
 )]

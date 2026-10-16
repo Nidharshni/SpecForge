@@ -9,10 +9,10 @@
 //! (`ProjectView::entities`), which reads no report.
 
 use crate::Environment;
-use crate::snapshot::{EntitySnapshot, Standing};
 use serde::Deserialize;
 use specforge_graph::Graph;
 use specforge_protocol_types::{EntityTests, TestResult, TestResults};
+use specforge_registry::{EntitySnapshot, Standing};
 use std::collections::BTreeMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -344,10 +344,15 @@ mod tests {
     use specforge_registry::{RegistryBuild, build_registries};
     use specforge_test_macros::test as specforge_test;
 
-    fn graph_of(source: &str) -> Graph {
-        let (graph, _) =
-            specforge_graph::build_graph(&[specforge_parser::parse(source, "test.spec")]);
-        graph
+    /// `source` built with the graph inputs of `registries`, as the session builds it.
+    fn graph_of(source: &str, registries: &RegistryBuild) -> Graph {
+        let config = specforge_graph::GraphConfig {
+            inputs: registries.graph_inputs(),
+            ..Default::default()
+        };
+        specforge_graph::GraphBuild::of([specforge_parser::parse(source, "test.spec")], config)
+            .into_parts()
+            .0
     }
 
     /// The registry build of one extension declaring the testable `behavior`
@@ -398,6 +403,7 @@ mod tests {
                 graph: graph_of(
                     "behavior login \"Login\" {\n  verify unit \"logs in\"\n}\n\n\
                      behavior logout \"Logout\" {\n}\n",
+                    &registries,
                 ),
                 registries,
             }

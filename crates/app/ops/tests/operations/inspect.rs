@@ -8,7 +8,7 @@ use specforge_ops::read::inspect::inspect;
 use specforge_ops::read::navigate::Reference;
 use specforge_ops::view::ProjectView;
 use specforge_project::coverage::Status;
-use specforge_project::snapshot::Standing;
+use specforge_registry::Standing;
 use specforge_test::prelude::*;
 
 use crate::navigate::compile;
