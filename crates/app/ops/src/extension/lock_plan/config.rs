@@ -12,6 +12,9 @@ use crate::{Held, OpError, OpErrorKind};
 pub(crate) struct Opened {
     /// The file's document as read (`ProjectConfig::raw`); `None`: there was no file.
     found: Option<Value>,
+    /// The document the change writes its entries into when there was no file (`init`'s); `None` for every other
+    /// plan, which writes no `specforge.json` into a project that has none.
+    creating: Option<Value>,
     /// The `extensions` items as read, strings or not, in file order.
     items: Vec<Value>,
     /// Their strings: what the project peer set reads.
@@ -29,6 +32,7 @@ impl Opened {
             .cloned()
             .unwrap_or_else(|| config.extensions.iter().cloned().map(Value::from).collect());
         Opened {
+            creating: None,
             found: found.then(|| {
                 config
                     .raw
@@ -37,6 +41,16 @@ impl Opened {
             }),
             items,
             entries: config.extensions.clone(),
+        }
+    }
+
+    /// No file: the change creates `document` with the entries it leaves (`init`).
+    pub(crate) fn creating(document: Value) -> Opened {
+        Opened {
+            found: None,
+            creating: Some(document),
+            items: Vec::new(),
+            entries: Vec::new(),
         }
     }
 
@@ -64,19 +78,20 @@ impl Opened {
             .collect()
     }
 
-    /// Whether the plan opened a `specforge.json`: a change writes into the file it read, never into a project that
-    /// has none.
-    pub(super) fn opened_a_file(&self) -> bool {
-        self.found.is_some()
+    /// Whether the change writes a `specforge.json`: it opened one, or it creates one. Any other change writes none
+    /// into a project that has none.
+    pub(super) fn holds_a_file(&self) -> bool {
+        self.found.is_some() || self.creating.is_some()
     }
 
-    /// The document the change writes: the one read with `extensions` = `after`; `None` when `after` is the items
-    /// read, or when the plan opened no file.
+    /// The document the change writes: the one read (or the one to create) with `extensions` = `after`; `None` when
+    /// a file was read and `after` is the items read, or when the plan has neither a file nor a document to create.
     pub(super) fn written(&self, after: &[Value]) -> Option<Value> {
-        let mut document = self.found.clone()?;
-        if after == self.items {
-            return None;
-        }
+        let mut document = match &self.found {
+            Some(_) if after == self.items => return None,
+            Some(found) => found.clone(),
+            None => self.creating.clone()?,
+        };
         document
             .as_object_mut()?
             .insert("extensions".into(), Value::Array(after.to_vec()));

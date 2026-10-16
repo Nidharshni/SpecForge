@@ -19,7 +19,7 @@
 //! ask.
 
 use crate::view::ProjectView;
-use specforge_common::ProjectConfig;
+use serde_json::Value;
 use specforge_installed::{Installed, LockFile, LockState, Module, Pin};
 use specforge_package::PackageName;
 use specforge_protocol_types::ExtensionDeclaration;
@@ -238,17 +238,18 @@ impl<'a> LockPlan<'a> {
         )
     }
 
-    /// `init`'s plan: a project with no `specforge.json` yet, whose config the caller's [`Also`]
-    /// writes from [`Checked::entries`]. It installs local files only (no registry); `installs` as
+    /// `init`'s plan: a project with no `specforge.json` yet, which the commit creates from `document`
+    /// with the entries the change leaves. It installs local files only (no registry); `installs` as
     /// in [`Self::adding`].
     pub(crate) fn initializing(
         installed: &'a Installed,
         runtime: &'a dyn WasmRuntime,
         installs: bool,
+        document: Value,
     ) -> Result<LockPlan<'a>, OpError> {
         LockPlan::open(
             installed,
-            Opened::read(&ProjectConfig::default(), false),
+            Opened::creating(document),
             Some(runtime),
             Declarations::through(runtime),
             Verb::Install,

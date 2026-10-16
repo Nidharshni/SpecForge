@@ -14,7 +14,7 @@ use crate::{Containment, Held, OpError, OpErrorKind, Writes};
 pub(crate) type StageHeld<'f> =
     Box<dyn FnOnce(Held, &mut ProjectChange) -> Result<(), OpError> + 'f>;
 
-/// A file the change writes after `specforge.json`'s edit and before the pins (`init`'s config,
+/// A file the change writes after `specforge.json`'s edit and before the pins (`init`'s
 /// `.gitignore` and starter), in the same project change (ADR 0128): put back, or removed when it
 /// was not there, when the change fails. `stage` is handed the file `path` resolved to (ADR 0112):
 /// it reads and stages nothing else. `code` is the refusal of writing it.
@@ -119,7 +119,7 @@ impl Checked<'_> {
             .collect::<Result<Vec<Held>, _>>()?;
         let config_path = root.join(crate::config::CONFIG_FILE);
         let config_held = config
-            .opened_a_file()
+            .holds_a_file()
             .then(|| containment.resolve(&config_path))
             .transpose()?;
         let mut written_by_change: Vec<PathBuf> = Vec::new();

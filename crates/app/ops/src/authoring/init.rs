@@ -181,7 +181,13 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     // The lock plan the installs will be, `add`'s: an unreadable lock refuses here (E033), and the
     // project's peer set is judged before anything is written.
     let installed = Installed::at(req.dir);
-    let mut plan = LockPlan::initializing(&installed, runtime, names.installs())?;
+    let document = json!({
+        "$schema": "https://specforge.dev/schema/specforge.json",
+        "name": name,
+        "version": version,
+        "spec_root": SPEC_ROOT,
+    });
+    let mut plan = LockPlan::initializing(&installed, runtime, names.installs(), document)?;
     // A registry package needs a registry, which a project that doesn't exist yet can't have.
     let named = names
         .name_each(runtime, &mut |specifier, _| Err(no_registry(specifier)))
@@ -222,14 +228,6 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     // Whatever the extensions contribute, the file is written as the
     // formatter writes it, so `specforge format --check` accepts it.
     let starter = canonical(&starter, req.dir);
-    let config = json!({
-        "$schema": "https://specforge.dev/schema/specforge.json",
-        "name": name,
-        "version": version,
-        "spec_root": SPEC_ROOT,
-        "extensions": extensions,
-    });
-
     let dir = req.dir;
     let write_error = |what: &str, e: std::io::Error| {
         OpError::new(
@@ -239,18 +237,6 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
         )
     };
     let files = vec![
-        Also {
-            path: dir.join(crate::config::CONFIG_FILE),
-            stage: Box::new(move |file, change| {
-                let after = crate::config::render(&config)?;
-                let before = file
-                    .read_if_there()
-                    .map_err(|e| write_error(crate::config::CONFIG_FILE, e))?;
-                change.stage(file, before, after);
-                Ok(())
-            }),
-            code: INIT_WRITE_FAILED,
-        },
         Also {
             path: dir.join(".gitignore"),
             stage: Box::new(move |file, change| {
