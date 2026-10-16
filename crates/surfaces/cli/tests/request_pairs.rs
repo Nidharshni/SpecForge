@@ -66,6 +66,21 @@ const PAIRS: &[Pair] = &[
         arguments: || json!({"entity_id": "alpha", "plan": plan()}),
     },
     Pair {
+        label: "add_one_string_with_commas",
+        project: rv1,
+        cli: &[
+            "add",
+            "@specforge/product,@specforge/governance",
+            "--path",
+            "{root}",
+            "--format",
+            "json",
+        ],
+        exit: 1,
+        tool: "specforge.add_extension",
+        arguments: || json!({"specifiers": ["@specforge/product,@specforge/governance"]}),
+    },
+    Pair {
         label: "export_with_and_without_schema",
         project: rv1,
         cli: &[
@@ -268,6 +283,14 @@ fn pair(label: &str) -> (Outcome, Outcome) {
         row.tool
     );
     (cli, mcp)
+}
+
+#[specforge_test_macros::test(
+    behavior = "parse_extension_specifier",
+    verify = "a string holding commas is one extension specifier, for add and init alike"
+)]
+fn add_reads_one_string_with_commas_as_one_specifier() {
+    assert_eq!(pair("add_one_string_with_commas").0, Outcome::Refused);
 }
 
 #[test]

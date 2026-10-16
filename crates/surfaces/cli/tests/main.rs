@@ -4,6 +4,7 @@
 )]
 
 mod analyze;
+mod asking;
 mod build_cache;
 mod check_surfaces;
 mod cli;
@@ -43,6 +44,7 @@ mod read_views;
 mod registry;
 mod request_pairs;
 mod schema_cache;
+mod schema_notices;
 mod stats;
 mod support;
 mod surface_parity;

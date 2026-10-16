@@ -182,11 +182,24 @@ pub enum ExportField {
     Schema,
 }
 
-/// The export text of the view's project for `request`. A schema it
-/// carries is the view's versioned schema (`specforge export`'s version,
-/// computed against the root's schema cache, which this only reads).
-pub fn export(view: &ProjectView, request: &Request) -> Result<String, Refusal<ExportField>> {
-    export_versioned(view, &view.versioned_schema(), request)
+/// A read-only export: the document, and what versioning its schema reported
+/// against the view root's record (I016, W053; ADR 0111), whatever the format.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Exported {
+    pub document: String,
+    pub notices: Vec<Diagnostic>,
+}
+
+/// The export of the view's project for `request`. A schema it carries is
+/// the view's versioned schema (`specforge export`'s version, computed
+/// against the root's schema cache, which this only reads).
+pub fn export(view: &ProjectView, request: &Request) -> Result<Exported, Refusal<ExportField>> {
+    let versioned = view.versioned_schema();
+    let document = export_versioned(view, &versioned, request)?;
+    Ok(Exported {
+        document,
+        notices: versioned.notices(),
+    })
 }
 
 fn export_versioned(
@@ -238,12 +251,12 @@ fn export_versioned(
 }
 
 /// What `specforge export` did: the export, what versioning reports against
-/// the view root's record (W053, found before the export ran), and what
-/// became of the record.
+/// the view root's record (I016, W053; found before the export ran, and
+/// reported even when the export fails), and what became of the record.
 #[derive(Debug)]
 pub struct RecordedExport {
     pub export: Result<String, Refusal<ExportField>>,
-    pub diagnostics: Vec<Diagnostic>,
+    pub notices: Vec<Diagnostic>,
     pub cache: CacheWrite,
 }
 
@@ -266,7 +279,7 @@ pub enum CacheWrite {
 /// a successful export. MCP never calls it.
 pub fn export_recorded(view: &ProjectView, request: &Request) -> RecordedExport {
     let versioned = view.versioned_schema();
-    let diagnostics = versioned.diagnostics();
+    let notices = versioned.notices();
     let export = export_versioned(view, &versioned, request);
     let cache = match (&export, view.schema_cache()) {
         (Ok(_), Some(cache)) => match cache.record(&versioned) {
@@ -280,7 +293,7 @@ pub fn export_recorded(view: &ProjectView, request: &Request) -> RecordedExport 
     };
     RecordedExport {
         export,
-        diagnostics,
+        notices,
         cache,
     }
 }
@@ -309,6 +322,7 @@ fn failure(view: &ProjectView, error: EmitterError) -> Refusal<ExportField> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::Viewed;
 
     fn request(format: Format) -> Request<'static> {
         Request {
@@ -349,7 +363,7 @@ mod tests {
     }
 
     fn failed(request: &Request) -> OpError {
-        let fixture = crate::view::testing::Fixture::new();
+        let fixture = specforge_project::testing::Assembled::new();
         export(&fixture.view(), request).unwrap_err().error
     }
 
@@ -366,7 +380,7 @@ mod tests {
         assert_eq!(error.code, DEPTH_WITHOUT_SCOPE);
 
         // With a scope it is a hop limit, and the export goes on.
-        let fixture = crate::view::testing::Fixture::new();
+        let fixture = specforge_project::testing::Assembled::new();
         let scoped = export(
             &fixture.view(),
             &Request {
@@ -442,7 +456,7 @@ mod tests {
         verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
     )]
     fn export_states_which_field_a_refusal_is_about() {
-        let fixture = crate::view::testing::Fixture::new();
+        let fixture = specforge_project::testing::Assembled::new();
         let subject = |request: Request| export(&fixture.view(), &request).unwrap_err().subject;
         let graph = || request(Format::Graph);
         assert_eq!(

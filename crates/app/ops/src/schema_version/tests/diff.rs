@@ -128,7 +128,7 @@ fn diff_no_previous_schema_all_non_breaking() {
     let versioned = SchemaCache::in_dir(dir.path()).version(sample_schema());
 
     assert!(!breaking(versioned.changes()));
-    assert!(versioned.diagnostics().is_empty());
+    assert!(versioned.notices().is_empty());
     assert_eq!(versioned.version(), &SchemaVersion::new(1, 0, 0));
 }
 

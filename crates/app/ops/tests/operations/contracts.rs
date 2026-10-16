@@ -1,3 +1,4 @@
+use crate::view_support::{Assembled, Viewed};
 use specforge_common::{Diagnostic, Severity, SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
 use specforge_ops::read::plan::PlanGapKind;
@@ -176,7 +177,7 @@ fn trace_contract_entity_in_graph_produces_chain() {
     );
 
     // The JSON carries the Graph Protocol schema_version and the gaps.
-    let project = crate::view_support::Project::of_graph(graph, crate::trace_support::build());
+    let project = Assembled::over(crate::trace_support::build()).graph(graph);
     let outcome = specforge_ops::read::trace::trace(
         &project.view(),
         specforge_ops::read::trace::Target::Entity("c"),

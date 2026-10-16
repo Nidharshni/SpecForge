@@ -21,7 +21,7 @@ fn several_specifiers_are_added_as_one_change() {
     let dir = project_with(EMPTY_PROJECT);
     let (_files, wasm) = greet_file();
     let shown = wasm.display().to_string();
-    let extensions = specified(&["@specforge/product", shown.as_str()]).unwrap();
+    let extensions = vec!["@specforge/product".to_string(), shown.clone()];
 
     let added = add(
         &several(
@@ -79,12 +79,12 @@ fn a_refused_specifier_writes_nothing_and_is_named() {
 
     for extensions in [
         vec![
-            Specified::from(Source::Builtin("@specforge/product")),
-            Specified::from(Source::Local(missing.clone())),
+            Source::Builtin("@specforge/product").into(),
+            Source::Local(missing.clone()).into(),
         ],
         vec![
-            Specified::from(Source::Local(missing.clone())),
-            Specified::from(Source::Local(wasm.clone())),
+            Source::Local(missing.clone()).into(),
+            Source::Local(wasm.clone()).into(),
         ],
     ] {
         let error = add(
@@ -154,11 +154,8 @@ fn coupled_registry(runtime: &InProcessRuntime) -> MemoryRegistry {
         .serving(served(B2))
 }
 
-fn registry_specified(reference: &str) -> Specified {
-    Specified {
-        specifier: reference.to_string(),
-        source: Source::Registry(PackageRef::parse(reference).unwrap()),
-    }
+fn registry_specified(reference: &str) -> String {
+    reference.to_string()
 }
 
 #[specforge_test(
@@ -252,7 +249,10 @@ fn a_repeated_extension_is_a_duplicate_and_a_different_one_a_conflict() {
 
     // The same builtin twice, by two spellings: enabled once.
     let dir = project_with(EMPTY_PROJECT);
-    let extensions = specified(&["@specforge/product", "@specforge/product@latest"]).unwrap();
+    let extensions = vec![
+        "@specforge/product".to_string(),
+        "@specforge/product@latest".to_string(),
+    ];
     let added = add(
         &several(
             &specforge_common::ProjectRoot::of(dir.path()).unwrap(),

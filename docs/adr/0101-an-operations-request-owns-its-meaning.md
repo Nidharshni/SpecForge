@@ -60,3 +60,8 @@ strings, not catalogue diagnostics; over MCP the wire code stays the kind (`inva
 
 A third surface that spells requests (a REST surface, an LSP command taking these arguments), or an argument
 whose meaning depends on the project (then it is checked against the view, as ADR 0027 D6 does for passes).
+
+## Amendment (architecture round 11, plan 07)
+
+- **D1.** "How several flags combine into one choice" is stated once in ops for consent: `Asking::of`
+  ([ADR 0110](0110-who-can-be-asked-is-one-value-handed-to-an-operation.md)).

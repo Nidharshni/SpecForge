@@ -20,17 +20,18 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   registration and I002. `Environment::from_read` is its disk adapter: it reads the lock and runs
   the extension load. Its fields are private; it is read through accessors (ADR 0047). A session
   reads `specforge.json` once per load and builds its extension runtime and, holding it, its
-  environment from that read, after stamping every environment input (ADR 0030). It
-  opens in two steps (`ProjectSession::begin_open`, then `OpeningProject::finish`), so an editor
-  answers what needs only the environment (keyword completion) while the sources are still being
-  read.
+  environment from that read, after stamping every environment input (ADR 0030, ADR 0106). It
+  A project opened in a session's place loads its environment first and hands it over before any
+  source is read (`ProjectSession::reopen`), so an editor answers what needs only the environment
+  (keyword completion) while the sources are still being read.
 - **Compiled project**: an environment plus the sources it read, their graph build, what resolving their
   imports and running the checks reported, and the memo of its entity snapshot and coverage. Its
   diagnostics are, by definition, what `specforge check` reports under the default policy, in the one
   report order: the environment's, the imports', the graph build's, the checks', then surface conflicts
   (`specforge_project::CompiledProject`). A one-shot compile (every CLI command) is one and keeps no
   stamp; a project session holds one and keeps it current (`ProjectSession::project`, ADR 0047); it is
-  compiled from a project root (`CompiledProject::compile(&ProjectRoot, …)`).
+  compiled from a project root (`CompiledProject::compile(&ProjectRoot, …)`). A copy shares all but its graph
+  (`Clone`, ADR 0108).
 - **Project root**: the directory holding the `specforge.json` a path is in, located from any path inside the
   project (a subdirectory, a file) by walking up, the nearest winning
   (`specforge_common::ProjectRoot::of`, ADR 0053). Only `specforge.json` marks a project. With none at or
@@ -63,7 +64,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Schema record**: `<root>/.specforge/schema-cache.json`, the versioned schema the last successful `specforge
   export` recorded, with its content hash (`specforge_ops::schema_version::SchemaCache`). Every reader of the
   project's schema versions against it; only export writes it, into the project it exports. One that cannot be
-  read is I016 and the version starts again at 1.0.0.
+  read is I016 and the version starts again at 1.0.0. Every reader reports what versioning found, the I016 or one
+  W053 per breaking change, as its **schema notices** (`VersionedSchema::notices`, ADR 0111).
 - **Migration record**: `<root>/.specforge/migration.json`, what `specforge migrate --rollback` undoes: the
   last kept migration made with backups, each file with its backup and the SHA-256 of the file as the migration
   left it (`specforge_migrate::MigrationRecord`). A rollback restores only a recorded file that still holds that
@@ -87,15 +89,23 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   buffer is to its file is the session's to say (ADR 0023, ADR 0046). After every update that runs the
   checks, its compiled project reports exactly what a fresh compile of the same sources reports, in the
   same order (an editor update that skips the checks while a file does not parse is the one exception).
+- **Read ledger**: what a project session read and when (`specforge_project::ledger`, crate-private): its session
+  inputs and the stamp of each file, taken in the call that reads it. It does every disk read the session makes
+  (the config, the lock and modules, the sources, the check inputs), derives every source key, and answers `changes`
+  and `stale`. A one-shot compile runs the same steps through an adapter that records nothing (ADR 0106).
+- **Check reads**: every file-system read a check, a rule or a check pass makes, through the `Disk` in `RuleInput`
+  (`exists`, `list`, `read`; `specforge_registry::Disk`, ADR 0107). A project session's ledger stamps and records each
+  one; its check inputs are the reads its checks made the last time they ran. Tests give the checks a `MemoryDisk`.
 - **Session inputs**: everything a project session depends on besides its sources' text: where its
   sources are discovered (the spec root and `exclude`), its **environment inputs**
   (`specforge.json`, `specforge.lock`, the extension modules it loaded) and its **check inputs**
-  (`specforge-cache.json` when check-phase passes read it, each file a `file_reference` field or a
-  `file_exists` rule names, and the directory of each such file that is missing, and where each symlinked source's text
-  lies (its target)). One value per
+  (the check reads of the last check run: `specforge-cache.json` when a check pass read it, each path a check looked
+  for, each directory E016's suggestion listed, and the target of each that is a symlink, and where each symlinked
+  source's text lies (its target)). One value per
   environment load, renewed each time the checks run (`specforge_project::SessionInputs`,
   `ProjectSession::inputs`). What a changed path reaches, which directories watch watches, which files
-  the LSP asks its client to report and what the session stamps for freshness are all read from it;
+  the LSP asks its client to report and what the session stamps for freshness are all read from it; the
+  read ledger stamps each when it reads it (ADR 0106);
   a detached session's inputs are empty (ADR 0030). Nothing else: an import names one of the sources,
   never a file on disk (ADR 0055).
 - **Held buffer**: an editor buffer a project session holds (`specforge_project::Buffer`: the file's path, the
@@ -103,6 +113,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the session's freshness and classification leave it out, and an open or an environment reload builds it in
   place of its file. Releasing it reads the file through the session's one read. Diagnostics computed from it
   are published with its version. Only the LSP holds buffers (ADR 0046).
+- **Reopen**: opening the project at a root in a project session's place (`ProjectSession::reopen`). The
+  environment loads first and is handed to the caller before any `.spec` file is read; the one cold build reads
+  each held buffer in place of its file. Whether the session verifies its updates carries over; the update is
+  the replacement (every file rebuilt, the graph delta between the two). An environment reload is a reopen at
+  the session's own root; the LSP's open and MCP serving a project are reopens (ADR 0109).
 - **Open document**: a `.spec` buffer the editor has open in the LSP (`specforge_lsp::Document`: its text, its
   version, its line index and its syntax). Its identity is its file's session key (`Environment::source_key` of the
   path its URI names, percent-decoded): the document, the diagnostics published for its file and whether it is
@@ -126,7 +141,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   project, the new directory), never declared beside it: an entry whose handler acts on the project is refused as
   no project before it runs (ADR 0014, ADR 0024). The `path`, and every path an argument names, resolves inside
   the served project (while none is served, the server's root): one that leaves it is `invalid_input`, so
-  "another project" is one nested in the served one (`specforge_mcp::containment`, ADR 0092).
+  "another project" is one nested in the served one (`specforge_ops::Containment`, ADR 0092, ADR 0104).
+- **Containment**: what a request may reach on disk: every path (the CLI, ADR 0092 D6) or the paths that land inside
+  one directory (an MCP request's bound, or the call's project). Carried in the operation's request and applied where
+  the operation opens or writes the file (`specforge_ops::Containment`, ADR 0104).
 - **Served project**: the project an MCP server serves to every call that names none: the nearest project (a
   directory holding `specforge.json`) at or above the server's root (the path `specforge mcp` was started with, or
   a handshake client's `projectRoot`), else nothing; while none is served, every request looks there again first
@@ -249,6 +267,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Registry::published`).
 - **Claim**: what one specifier of an `add` or `init` asks for an extension name: a second specifier naming it the
   same way is a duplicate, another way `extension_conflict` (`specforge_ops::extension::claims`, ADR 0098).
+- **Extension names**: what one change's extension strings name, read once by `specforge_ops::extension::names`
+  (ADR 0105). Each string is one extension specifier; no operation splits one, and `init --extensions` spells several
+  to a flag on the command line. A relative local path is joined onto the change's base: add reads it from the project
+  root, or from the CLI's working directory; init from the directory it creates. The file is read within the change's
+  containment (ADR 0104), each specifier is claimed (ADR 0098), and a local file is read once. `add` and `init` both
+  take raw strings.
 - **Project peer set**: the extensions a project's `specforge.json` entries load, as the peer rule reads
   them: a builtin by the declaration this specforge embeds, an installed extension by its lock entry, a
   `.wasm` file entry by its file's declaration, each entry resolved by the extension load's one rule
@@ -271,7 +295,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   makes out, through the `CustomVerdicts` port, when the environment probes it in the runtime its
   extensions loaded in (`RegistryBuild::probe`). It also runs every check over a built graph's entity
   records, in one order behind one gate: the structural checks, then the rule set
-  (`RegistryBuild::check`), and says which files those checks read (`RegistryBuild::files`). Its
+  (`RegistryBuild::check`), reading the file system only through the disk in its input. Its
   outcomes are the `registry_build_*` behaviors and `check_entities_in_one_order`. Tests and every
   caller reach it only through `build_registries` and that build's methods; its steps, its checks and
   its fields are private (ADR 0031).
@@ -402,7 +426,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   writes nothing: the decision is the package's `Publisher`, and the key is pinned when the lock plan that
   fetched it commits. Accepting an unsigned package (`--allow-unsigned`) is reported as W155 at fetch, a
   re-pin as W156 once it is saved. A known-keys store that can't be read refuses the fetch (R-TRUST-006). The
-  check writes nothing to the terminal: a key change is asked of the surface that can ask.
+  check writes nothing to the terminal: a key change is put to the policy's **Asking**.
 - **Key pin**: the publisher key id a package name is held to, kept per user in `~/.specforge/known-keys.json`
   (`pins`, beside the `trusted_keys` allowlist and the `denied_keys` deny list) and per project as the lock
   entry's `key_id`. The user's pin wins; the lock's stands in when the user has none. Pins are written only by
@@ -468,7 +492,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   builtin's name, `git+` URL or package reference: a `.wasm` file, or an extension's crate directory,
   read as the component its crate builds: `specforge_ops::extension::binary_at`), a `git+` URL, or a
   package reference `@scope/name[@requirement]` (`PackageRef`; it starts with `@`), read once by
-  `specforge_ops::extension::parse`. An add takes one or more and adds them as one change, judged on
+  `specforge_ops::extension::names` (each string one specifier). An add takes one or more and adds them as one change, judged on
   the whole set (one lock plan, ADR 0041); a specifier naming an extension an earlier one of the same
   add names is a *duplicate* of it.
 - **Project view**: the compiled project as one surface sees it, borrowed: the graph, the
@@ -480,9 +504,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   command), so none takes a runtime of its own; its entity snapshot, through the per-compile
   memo (`ProjectView::entities`) (`specforge_ops::view::ProjectView`). It owns
   the project's recorded test report and its versioned schema, both read at that root and never an
-  ancestor's. The CLI builds one from its compiled project and the LSP from its session's
-  (`ProjectView::of`); MCP from its call target (`ProjectRef::view`: the served session's compiled
+  ancestor's. Built only from a compiled project (`ProjectView::of`): the CLI from its compiled project and the LSP
+  from its session's, or, while the session is out for an update, from a copy of it (ADR 0108); MCP from its call target (`ProjectRef::view`: the served session's compiled
   project with its I017 notices, or that of a session opened for one call) (ADR 0015, ADR 0047).
+- **Assembled project**: a compiled project a test builds in memory from a graph and an environment rooted at its
+  directory, reporting what the test lists; no check runs (`specforge_project::testing::Assembled`, ADR 0108).
 - **Read view**: an operation that only reads the project view: stats, trace, the coverage view, the
   model and outline diagrams, the versioned schema, inspect, query, list and search (the entities a
   selection over the view returns, `specforge_ops::read::query`), the exploration and the review
@@ -714,9 +740,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Terminal**: where a core CLI command writes and whom it asks: its stdout, its stderr, the input a
   prompt reads (or `specforge mcp` serves, byte for byte), whether each stream is coloured (`NO_COLOR`, then `CLICOLOR_FORCE`, then whether it is
   a terminal) and whether anyone can answer, fixed when `main` makes it from the process
-  (`specforge_cli::terminal::Terminal`); a test captures one. A publisher key change and a collector's
-  command are asked of it, nobody to ask being no; a reader that leaves stdout ends the output
+  (`specforge_cli::terminal::Terminal`); a test captures one. It is the CLI's **Asker**; nobody to ask is no; a reader that leaves stdout ends the output
   quietly (ADR 0029 D4b).
+- **Asking**: who can be asked to consent to what an operation would otherwise refuse (a publisher key change, a
+  collector's command): yes to everything (`--yes`), nobody (MCP, `--format json`, stdin that is no terminal), or an
+  `Asker` (the CLI's terminal, a test's script). A surface builds it once per command and hands it to add, update or
+  collect (`specforge_ops::asking`, ADR 0110).
 - **Diagnostic policy**: lint profiles (a closed set: `inferred`, `pedantic`) and strict promotion
   (`specforge_project::DiagnosticPolicy`). It is the only thing that changes a diagnostic's severity
   after the diagnostic is built. A profile's diagnostics come from the check that applies it

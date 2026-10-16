@@ -3,11 +3,14 @@
     reason = "a test's unwrap is its assertion: a None or an Err fails the test"
 )]
 
+mod assembled;
 mod buffers;
 mod builtins;
 mod changes;
 mod check_passes;
+mod check_reads;
 mod compile;
+mod copy;
 mod custom_rules;
 mod delta;
 mod derived_references;
@@ -27,6 +30,8 @@ mod registered_fields;
 mod registry_build_snapshot;
 mod registry_fields;
 mod registry_order;
+mod reopen;
 mod rules;
 mod session;
 mod structural_checks;
+mod symlinked_directory;

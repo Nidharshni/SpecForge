@@ -62,6 +62,32 @@ pub fn install_module(root: &Path, name: &str, bytes: &[u8]) {
     write_lock_file(&lock, &lock_path(root)).expect("the lock can be written");
 }
 
+/// `<root>/specforge.lock` locking each `(name, version, source)`, written as
+/// `specforge lock` writes it (the source as `LockSource::parse` reads it, the
+/// hash a placeholder): what a project assembled in memory says it installed.
+///
+/// # Panics
+/// A name that is no package name, or a lock that cannot be written.
+pub fn write_lock(root: &Path, entries: &[(&str, &str, &str)]) -> LockFile {
+    let lock = LockFile {
+        lockfile_version: 1,
+        entries: entries
+            .iter()
+            .map(|(name, version, source)| LockFileEntry {
+                name: PackageName::parse(name)
+                    .unwrap_or_else(|why| panic!("'{name}' cannot be locked in a test: {why}")),
+                version: version.to_string(),
+                source: crate::lock::LockSource::parse(source),
+                wasm_hash: format!("hash-{name}"),
+                key_id: None,
+                peer_dependencies: Vec::new(),
+            })
+            .collect(),
+    };
+    write_lock_file(&lock, &lock_path(root)).expect("the lock can be written");
+    lock
+}
+
 /// [`install`] each named entry of `entries` (a project's `extensions`)
 /// that is not a builtin and not a `.wasm` file: what loading the project
 /// with an in-process runtime serving them requires.

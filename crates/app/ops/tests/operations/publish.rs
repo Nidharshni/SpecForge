@@ -4,8 +4,8 @@
 use std::path::{Path, PathBuf};
 
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
+use specforge_ops::asking::Asking;
 use specforge_ops::extension::{PublishReport, publish};
-use specforge_ops::registry::Trust;
 use specforge_ops::registry::testing::{Asked, MemoryRegistry};
 use specforge_ops::registry::{Registry, TrustPolicy, Unconfigured};
 use specforge_ops::testing::declaring;
@@ -228,7 +228,7 @@ fn a_publish_uploads_the_binary_and_the_declaration_read_from_it() {
     assert_eq!(outcome.published.registry, "in-memory");
 
     let held = registry
-        .fetch(&name, &version, TrustPolicy::new(false, Trust::Refuse))
+        .fetch(&name, &version, TrustPolicy::new(false, Asking::Nobody))
         .unwrap();
     assert_eq!(held.wasm, wasm);
     let declared = specforge_ops::extension::declare(&runtime, &wasm)
@@ -280,7 +280,7 @@ fn publish_reads_the_binary_in_the_runtime_it_is_given() {
 )]
 fn what_publish_uploads_is_what_add_installs() {
     use specforge_installed::{Installed, read_lock_file};
-    use specforge_ops::extension::{AddOutcome, AddRequest, add, parse};
+    use specforge_ops::extension::{AddOutcome, AddRequest, add};
 
     let files = tempfile::tempdir().unwrap();
     let wasm = bytes("@acme/greet 1.0.0");
@@ -298,13 +298,12 @@ fn what_publish_uploads_is_what_add_installs() {
     let added = add(
         &AddRequest {
             root: &specforge_common::ProjectRoot::of(project.path()).unwrap(),
-            extensions: vec![specforge_ops::extension::Specified {
-                specifier: "@acme/greet@1.0.0".into(),
-                source: parse("@acme/greet@1.0.0").unwrap(),
-            }],
+            extensions: vec!["@acme/greet@1.0.0".to_string()],
+            base: None,
             allow_unsigned: false,
-            trust: Trust::Refuse,
+            asking: Asking::Nobody,
             dry_run: false,
+            containment: &specforge_ops::Containment::unbounded(),
         },
         &registry,
         &runtime,
@@ -325,7 +324,7 @@ fn what_publish_uploads_is_what_add_installs() {
         .fetch(
             &name,
             &Version::parse("1.0.0").unwrap(),
-            TrustPolicy::new(false, Trust::Refuse),
+            TrustPolicy::new(false, Asking::Nobody),
         )
         .unwrap()
         .declaration;

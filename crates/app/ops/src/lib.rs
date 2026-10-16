@@ -17,15 +17,17 @@
 //!
 //! | Group | Holds | May use |
 //! |---|---|---|
-//! | base | failures and verdicts, refusals, writes, option tables, `specforge.json`, the recorded report, the registry and solver ports, the versioned schema, the project view, test support | |
+//! | base | failures and verdicts, refusals, who can be asked (ADR 0110), writes, containment, option tables, `specforge.json`, the recorded report, the registry and solver ports, the versioned schema, the project view, test support | |
 //! | [`read`] | the read views over the project view (ADR 0015), navigation (ADR 0016), inference, explain | base |
 //! | [`extension`] | what a project installs, enables and lists, what an author publishes, the commands extensions declare | base |
 //! | [`analysis`] | check, analyze with its passes and the prove pass, collect, doctor | base, read, extension |
 //! | [`authoring`] | the operations that write a project's sources: init, format, rename, migrate | base, read, extension |
 
 pub mod analysis;
+pub mod asking;
 pub mod authoring;
 pub mod config;
+mod containment;
 mod error;
 pub mod extension;
 pub mod options;
@@ -41,7 +43,8 @@ mod verdict;
 pub mod view;
 mod writes;
 
+pub use containment::{Containment, Held, OUTSIDE_ROOT, Outside};
 pub use error::{OpError, OpErrorKind};
 pub use refusal::Refusal;
 pub use verdict::RunVerdict;
-pub use writes::{Writes, resolves_outside};
+pub use writes::Writes;

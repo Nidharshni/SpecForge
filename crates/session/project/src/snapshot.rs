@@ -14,7 +14,7 @@ use specforge_protocol_types::{
     PassEdge, PassEntity, PassSpan, ValidatorContext, ValidatorEntity, ValidatorField,
     ValidatorMethod, ValidatorParam, ValidatorRef,
 };
-use specforge_registry::{FieldRegistry, KindRegistry, RegistryBuild};
+use specforge_registry::{Disk, FieldRegistry, KindRegistry, RegistryBuild};
 
 pub use specforge_registry::entity::{
     Direction, EdgeCounts, EdgeRecord, EntityRecord, Exemption, FieldRecord, MethodRecord,
@@ -94,12 +94,13 @@ impl EntitySnapshot {
         &self.records
     }
 
-    /// What the rules run over.
-    pub fn rule_input(&self) -> RuleInput<'_> {
+    /// What the rules run over, reading files through `disk`.
+    pub fn rule_input<'a>(&'a self, disk: &'a dyn Disk) -> RuleInput<'a> {
         RuleInput {
             entities: &self.records,
             edges: &self.edges,
             spec_root: &self.spec_root,
+            disk,
         }
     }
 

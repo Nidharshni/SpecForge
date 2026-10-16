@@ -23,13 +23,16 @@ fn old(name: &str, version: &str) -> Published {
     Published::new(b"\0asm old".to_vec(), declaration(name, version, &[]))
 }
 
+static UNBOUNDED: crate::Containment = crate::Containment::unbounded();
+
 fn request(root: &specforge_common::ProjectRoot, reach: Reach) -> UpdateRequest<'_> {
     UpdateRequest {
         root,
         name: None,
         reach,
         allow_unsigned: true,
-        trust: Trust::Refuse,
+        asking: Asking::Nobody,
+        containment: &UNBOUNDED,
     }
 }
 

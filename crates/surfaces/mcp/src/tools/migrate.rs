@@ -81,12 +81,9 @@ impl CoreTool for Tool {
             target,
             dry_run,
             no_backup,
+            containment: &specforge_ops::Containment::within(path.dir()),
         };
-        let outcome = specforge_ops::authoring::migrate::run_within(
-            &request,
-            Some(runtime.clone()),
-            Some(path.dir()),
-        )?;
+        let outcome = specforge_ops::authoring::migrate::run(&request, Some(runtime.clone()))?;
         // A failed run's report rides in `data`, and what it left written (its
         // backups after a rollback, the files migrated before a failure) is
         // reported.

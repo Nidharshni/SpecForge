@@ -21,7 +21,7 @@ const ZETA: &str = "type zeta \"Z\" {}\n";
 
 /// An extension whose one check pass reports I990: each run of the checks is
 /// one call, and the session reports I990 exactly when the checks ran last.
-fn counting() -> Arc<InProcessRuntime> {
+pub(super) fn counting() -> Arc<InProcessRuntime> {
     Arc::new(InProcessRuntime::new().with(|| {
         let mut c = ContributionsBuilder::new(ExtensionMeta::new(EXT, "1.0.0"));
         c.pass("count", |p| {
@@ -37,7 +37,7 @@ fn counting() -> Arc<InProcessRuntime> {
     }))
 }
 
-fn check_runs(runtime: &InProcessRuntime) -> usize {
+pub(super) fn check_runs(runtime: &InProcessRuntime) -> usize {
     runtime
         .calls()
         .iter()
@@ -47,7 +47,7 @@ fn check_runs(runtime: &InProcessRuntime) -> usize {
 
 /// A project holding `a.spec` (alpha) that enables the counting extension,
 /// opened over `runtime`.
-fn opened(runtime: &Arc<InProcessRuntime>) -> (TestProject, ProjectSession) {
+pub(super) fn opened(runtime: &Arc<InProcessRuntime>) -> (TestProject, ProjectSession) {
     let dir = TestProject::new()
         .config(|c| c["name"] = "p".into())
         .enabling(&[EXT])
@@ -57,7 +57,7 @@ fn opened(runtime: &Arc<InProcessRuntime>) -> (TestProject, ProjectSession) {
     (dir, session)
 }
 
-fn has(session: &ProjectSession, id: &str) -> bool {
+pub(super) fn has(session: &ProjectSession, id: &str) -> bool {
     session.project().graph().node(id).is_some()
 }
 
@@ -223,14 +223,14 @@ fn opening_a_project_in_place_of_a_session_keeps_its_buffers() {
     let rt = counting();
     let (dir, session) = opened(&rt);
     drop(session);
-    let mut detached = ProjectSession::detached();
-    detached.hold(&[Buffer::new(dir.root().join("a.spec"), OMEGA).at_version(Some(4))]);
+    let mut session = ProjectSession::detached();
+    session.hold(&[Buffer::new(dir.root().join("a.spec"), OMEGA).at_version(Some(4))]);
     let before = check_runs(&rt);
-    let session = ProjectSession::begin_open(
+    session.reopen(
         &dir.project_root(),
         RuntimeSource::Fixed(Some(Arc::clone(&rt) as SharedRuntime)),
-    )
-    .finish_holding(detached.into_buffers());
+        |_| {},
+    );
     assert_eq!(check_runs(&rt) - before, 1);
     assert!(has(&session, "omega") && !has(&session, "alpha"));
     // Re-keyed relative to the spec root.

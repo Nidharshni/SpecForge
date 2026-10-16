@@ -8,14 +8,14 @@
 //! the project, then hands the report to the extension. `--no-run` and
 //! `--report` skip running and parse an existing report instead. The flow
 //! itself lives in [`specforge_ops::analysis::collect`], shared with MCP; this
-//! adapter only chooses the consent (a terminal prompt, `--yes`, or what
-//! was approved before) and presents the outcome.
+//! adapter only hands the operation who can be asked (`--yes`, the
+//! terminal, or nobody) and presents the outcome.
 
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
-use crate::terminal::{Facts, Terminal, errln, outln};
-use specforge_ops::analysis::collect::{self, Collector, Consent, Mode, Request, RunnerOutput};
+use crate::terminal::{Terminal, errln, outln};
+use specforge_ops::analysis::collect::{self, Collector, Mode, Request, RunnerOutput};
 use specforge_ops::view::ProjectView;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 // `specforge collect`'s command line.
 #[derive(clap::Args)]
@@ -69,14 +69,6 @@ fn collect_at(options: &Args, terminal: &Terminal) -> Exit {
     } else {
         Mode::Run(RunnerOutput::Inherit)
     };
-    let mut prompt = |collector: &Collector, argv: &[String]| {
-        terminal.ask(&question(collector, argv, root.dir()))
-    };
-    let consent = match asks(options.yes, format, terminal.facts()) {
-        Asks::Nobody => Consent::Yes,
-        Asks::ApprovedOnly => Consent::Approved,
-        Asks::Terminal => Consent::Prompt(&mut prompt),
-    };
     let mut announce = |collector: &Collector, argv: &[String]| {
         if format != OutputFormat::Json {
             errln!(
@@ -91,7 +83,7 @@ fn collect_at(options: &Args, terminal: &Terminal) -> Exit {
     let request = Request {
         runner: options.runner.as_deref(),
         mode,
-        consent,
+        asking: crate::asking::of(options.yes, format, terminal),
         announce: &mut announce,
     };
     // The view is rooted where the project compiled: the report lands where
@@ -141,70 +133,4 @@ fn collect_at(options: &Args, terminal: &Terminal) -> Exit {
         outln!(terminal, "report written: {}", outcome.report.display());
     }
     Exit::Passed
-}
-
-/// Who is asked whether a collector's command may run.
-#[derive(Debug, PartialEq, Eq)]
-enum Asks {
-    /// `--yes`: nobody; everything runs.
-    Nobody,
-    /// Nobody can be asked: only what was approved before runs.
-    ApprovedOnly,
-    /// The terminal is asked.
-    Terminal,
-}
-
-/// `--yes` runs everything; JSON output, or nobody to ask, runs only what
-/// was approved before; a terminal that can answer is asked.
-fn asks(yes: bool, format: OutputFormat, facts: Facts) -> Asks {
-    if yes {
-        Asks::Nobody
-    } else if format == OutputFormat::Json || !facts.interactive {
-        Asks::ApprovedOnly
-    } else {
-        Asks::Terminal
-    }
-}
-
-/// The question the terminal is asked about the collector's command.
-fn question(collector: &Collector, argv: &[String], root: &Path) -> String {
-    format!(
-        "{} wants to run this command in {}:\n  {}\nAllow it for this project? [y/N] ",
-        collector.extension,
-        root.display(),
-        argv.join(" ")
-    )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const INTERACTIVE: Facts = Facts {
-        color_out: false,
-        color_err: false,
-        interactive: true,
-    };
-
-    #[specforge_test_macros::test(
-        behavior = "approve_collector_command",
-        verify = "a terminal that can answer is asked; with nobody to ask, or under --format json, only an approved command runs"
-    )]
-    fn consent_asks_only_a_terminal_that_can_answer() {
-        for format in [OutputFormat::Human, OutputFormat::Json] {
-            assert_eq!(asks(true, format, Facts::PIPED), Asks::Nobody);
-        }
-        assert_eq!(
-            asks(false, OutputFormat::Json, INTERACTIVE),
-            Asks::ApprovedOnly
-        );
-        assert_eq!(
-            asks(false, OutputFormat::Human, Facts::PIPED),
-            Asks::ApprovedOnly
-        );
-        assert_eq!(
-            asks(false, OutputFormat::Human, INTERACTIVE),
-            Asks::Terminal
-        );
-    }
 }

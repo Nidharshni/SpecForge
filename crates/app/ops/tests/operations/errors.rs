@@ -1,3 +1,4 @@
+use crate::view_support::{Assembled, Viewed};
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
 use specforge_ops::read::trace::TraceError;
@@ -42,7 +43,7 @@ fn build_graph() -> Graph {
 // M2: trace for non-existent entity returns TraceError::EntityNotFound
 #[test]
 fn trace_nonexistent_returns_entity_not_found() {
-    let project = crate::view_support::Project::of_graph(build_graph(), Default::default());
+    let project = Assembled::over(Default::default()).graph(build_graph());
     let err = specforge_ops::read::trace::trace(
         &project.view(),
         specforge_ops::read::trace::Target::Entity("nonexistent"),
@@ -59,7 +60,7 @@ fn trace_nonexistent_returns_entity_not_found() {
     verify = "tracing an entity the graph lacks is E003 naming the closest entity"
 )]
 fn tracing_an_unknown_entity_is_e003_with_a_suggestion() {
-    let project = crate::view_support::Project::of_graph(build_graph(), Default::default());
+    let project = Assembled::over(Default::default()).graph(build_graph());
     let trace = |id| {
         specforge_ops::read::trace::trace(
             &project.view(),
@@ -97,7 +98,7 @@ fn a_missing_entity_is_one_refusal() {
     let mut graph = Graph::new();
     graph.add_node(node("login", "behavior"));
     graph.add_node(node("signin", "feature"));
-    let project = crate::view_support::Project::of_graph(graph, Default::default());
+    let project = Assembled::over(Default::default()).graph(graph);
     let view = project.view();
     let navigator = Navigator::new(view, |_: &str| None);
 
@@ -194,15 +195,17 @@ fn add_package(
     registry: &specforge_ops::registry::testing::MemoryRegistry,
     specifier: &str,
 ) -> specforge_ops::Refusal<specforge_ops::extension::AddField> {
+    use specforge_ops::asking::Asking;
     use specforge_ops::extension::{self, AddRequest};
-    use specforge_ops::registry::Trust;
     extension::add(
         &AddRequest {
             root: &specforge_common::ProjectRoot::of(dir).unwrap(),
-            extensions: vec![extension::parse(specifier).unwrap().into()],
+            extensions: vec![specifier.to_string()],
+            base: None,
             allow_unsigned: false,
-            trust: Trust::Refuse,
+            asking: Asking::Nobody,
             dry_run: false,
+            containment: &specforge_ops::Containment::unbounded(),
         },
         registry,
         &specforge_ops::testing::candidates(),
@@ -216,7 +219,7 @@ fn add_package(
 )]
 fn a_registry_refusal_is_never_an_internal_error() {
     use specforge_ops::OpErrorKind;
-    use specforge_ops::registry::Trust;
+    use specforge_ops::asking::Asking;
     use specforge_ops::registry::testing::{MemoryRegistry, Published, declaration};
     use specforge_ops::registry::{Registry, TrustPolicy};
     use specforge_package::{PackageName, Version};
@@ -241,7 +244,7 @@ fn a_registry_refusal_is_never_an_internal_error() {
         .fetch(
             &PackageName::parse("@acme/unsigned").unwrap(),
             &Version::parse("9.9.9").unwrap(),
-            TrustPolicy::new(true, Trust::Refuse),
+            TrustPolicy::new(true, Asking::Nobody),
         )
         .unwrap_err();
     assert_eq!(missing.code, "R006", "{missing:?}");

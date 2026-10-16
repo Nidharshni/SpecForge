@@ -16,7 +16,7 @@ Options:
           [default: 0.1.0]
 
       --extensions <EXTENSIONS>
-          Extensions to install
+          Extensions to install: builtins and local .wasm files, several to a flag separated by commas
 
       --format <FORMAT>
           Output format: human or json

@@ -10,14 +10,12 @@
 //! [`specforge_graph::GraphBuild`]'s.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use specforge_common::{Diagnostic, codes};
 use specforge_graph::{FileChange, GraphBuild};
 use specforge_parser::{Previous, SpecFile, parse_incremental};
-
-use crate::inputs::source_key;
 
 /// What reading one source gave.
 pub(crate) enum Read {
@@ -44,6 +42,7 @@ pub(crate) fn read(spec_root: &Path, relative: &str) -> Read {
 
 /// The text each held source was parsed from, the retained trees, and the
 /// sources that could not be read.
+#[derive(Clone)]
 pub(crate) struct SourceCache {
     /// The text each held parse was made from: what a reader resolves a
     /// span of the graph against (a span is a position in this text), and
@@ -66,8 +65,7 @@ impl SourceCache {
         }
     }
 
-    /// Read (through [`read`]) and parse `discovered` (paths under
-    /// `spec_root`, keyed by [`source_key`]): the cold read. An unreadable
+    /// Read (through `read`) and parse the sources `keys` names: the cold read. An unreadable
     /// one is recorded with its E025; no tree is kept (the first edit of a
     /// file parses it whole).
     ///
@@ -75,21 +73,20 @@ impl SourceCache {
     /// buffer holds is read. A held key discovery does not find (a new file
     /// not yet saved) is parsed too; the caller passes only source keys.
     pub fn read_all(
-        spec_root: &Path,
-        discovered: &[PathBuf],
+        keys: &[String],
         held: &BTreeMap<String, &str>,
+        mut read: impl FnMut(&str) -> Read,
     ) -> (Self, Vec<SpecFile>) {
         let mut cache = SourceCache::empty();
-        let mut files = Vec::with_capacity(discovered.len() + held.len());
-        let keys = discovered.iter().map(|path| source_key(spec_root, path));
+        let mut files = Vec::with_capacity(keys.len() + held.len());
         let mut seen = BTreeSet::new();
         for key in keys {
-            let read = match held.get(&key) {
+            let text = match held.get(key.as_str()) {
                 Some(text) => Read::Text((*text).to_string()),
-                None => read(spec_root, &key),
+                None => read(key),
             };
             seen.insert(key.clone());
-            cache.add(key, read, &mut files);
+            cache.add(key.clone(), text, &mut files);
         }
         for (key, text) in held {
             if !seen.contains(key) {
@@ -256,7 +253,8 @@ mod tests {
             ("a.spec".to_string(), "type held \"H\" {}\n"),
             ("new.spec".to_string(), "type fresh \"F\" {}\n"),
         ]);
-        let (cache, files) = SourceCache::read_all(dir.path(), &[dir.path().join("a.spec")], &held);
+        let (cache, files) =
+            SourceCache::read_all(&["a.spec".to_string()], &held, |key| read(dir.path(), key));
         assert_eq!(files.len(), 2);
         assert!(files.iter().all(|f| f.entities.len() == 1));
         assert!(cache.text("new.spec").is_some());

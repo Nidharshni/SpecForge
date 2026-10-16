@@ -4,7 +4,7 @@
 use specforge_common::Diagnostic;
 use specforge_graph::{Graph, build_graph_with_config};
 use specforge_parser::FieldValue;
-use specforge_project::Environment;
+use specforge_project::testing::Assembled;
 use specforge_protocol_types::{
     EntityKindDescriptor, ExtensionDeclaration, FieldDescriptor, HandshakeResponse,
 };
@@ -42,17 +42,17 @@ fn ticket_manifest() -> ExtensionDeclaration {
 
 /// Build and check `source` against the ticket extension's registries.
 fn build_and_check(source: &str) -> (Graph, Vec<Diagnostic>) {
-    let env = Environment::with_registries(
-        specforge_registry::build_registries(vec![ticket_manifest()]),
-        None,
-    );
+    let project = Assembled::over(specforge_registry::build_registries(
+        vec![ticket_manifest()],
+    ));
+    let env = project.compiled().environment();
     let pop_diags: Vec<_> = env.registries().diagnostics().collect();
     assert!(pop_diags.is_empty(), "{pop_diags:?}");
     let parsed = specforge_parser::parse(source, "main.spec");
     assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
     let (graph, mut diags) = build_graph_with_config(&[parsed], &env.graph_config());
     let entities = env.entity_snapshot(&graph);
-    diags.extend(env.run_checks(&graph, &entities));
+    diags.extend(env.run_checks(&graph, &entities, &specforge_registry::MemoryDisk::new()));
     (graph, diags)
 }
 

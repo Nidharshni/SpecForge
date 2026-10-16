@@ -677,6 +677,9 @@ asked at an interactive prompt and remembered per project, extension and
 command, in your user-level `~/.specforge/collector-consent.json`, never in the
 project. Without a terminal (CI, `--format json`) nothing is asked: pass `--yes`
 to run the command, or `--no-run` to parse a report the runner already wrote.
+The MCP server never asks: approve the command once with `specforge collect` in
+a terminal, or call `specforge.collect` without `run` to parse the existing
+report.
 
 Owner: core
 Level: error
@@ -1115,9 +1118,9 @@ I016: Schema cache unreadable
 
 `.specforge/schema-cache.json` exists but cannot be read: it is not JSON, not a
 recorded schema, or names a field type this host does not read. The schema is
-versioned as if no export had been made, at 1.0.0, and the export records a new
-cache. Agents that read earlier exports must not take the version as continuing
-theirs.
+versioned as if no export had been made, at 1.0.0, by every reader of the
+schema, until the next `specforge export` records a new cache. Agents that read
+earlier exports must not take the version as continuing theirs.
 
 Owner: core
 Level: info
@@ -1797,8 +1800,9 @@ R-TRUST-003: Publisher key changed
 The package is signed with a different key than the one expected for it: the key
 pinned for it when you first installed it (trust on first use), or, when you
 have no pin for it, the key the project's `specforge.lock` records. That can be
-a key rotation or a compromised publisher. If you trust the new key, re-run with
-`--yes` or add it to `trusted_keys`.
+a key rotation or a compromised publisher. If you trust the new key, accept it
+with `specforge add` or `specforge update` (yes at the prompt, or `--yes`), or
+add it to `trusted_keys`; the MCP server never accepts a key change.
 
 Owner: core
 Level: error

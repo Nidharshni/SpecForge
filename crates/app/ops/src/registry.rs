@@ -10,6 +10,7 @@
 //! `specforge_ops_registry::ConfiguredRegistry`, which only the surfaces that
 //! reach a registry (the CLI, MCP) link (ADR 0010).
 
+use crate::asking::Asking;
 use crate::options::{Choice, OptionTable};
 use crate::{OpError, OpErrorKind};
 use specforge_common::{Code, Diagnostic, codes};
@@ -85,43 +86,30 @@ pub struct Manifest {
     pub declaration: ExtensionDeclaration,
 }
 
-/// How a key change in a signed package is decided.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Trust {
-    /// Refuse it (MCP, `--format json`): nobody can be asked.
-    Refuse,
-    /// Accept it (`--yes`).
-    AssumeYes,
-    /// Ask on the terminal, refusing when there is none.
-    Prompt,
-}
-
 /// How a fetch decides a package's publisher: the caller's two choices, and the key the project
 /// already records for the name. The adapter applies it (ADR 0010, 0044, 0059) and writes nothing;
 /// what it decided is the package's [`Publisher`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub struct TrustPolicy<'a> {
     /// Accept a package with no publisher signature (reported as W155).
     pub allow_unsigned: bool,
-    /// How a key change is decided.
-    pub trust: Trust,
+    /// Who can be asked about a key change (ADR 0110).
+    pub asking: Asking<'a>,
     /// The publisher key `specforge.lock` records for the name's registry install
     /// (`specforge_installed::Installed::locked_key`): the pin when the user has none of their own.
     pub locked_key: Option<&'a str>,
 }
 
-impl TrustPolicy<'static> {
-    /// `allow_unsigned` and `trust`, with no key locked for the name.
-    pub const fn new(allow_unsigned: bool, trust: Trust) -> Self {
+impl<'a> TrustPolicy<'a> {
+    /// `allow_unsigned` and `asking`, with no key locked for the name.
+    pub const fn new(allow_unsigned: bool, asking: Asking<'a>) -> Self {
         TrustPolicy {
             allow_unsigned,
-            trust,
+            asking,
             locked_key: None,
         }
     }
-}
 
-impl<'a> TrustPolicy<'a> {
     /// This policy, expecting `key` as the lock's key for the name.
     pub fn locked(self, key: Option<&'a str>) -> TrustPolicy<'a> {
         TrustPolicy {
@@ -338,7 +326,7 @@ pub trait Registry {
     /// `name@version`, downloaded and integrity-checked, its publisher signature checked and its
     /// publisher decided under `policy`. A package with none is refused unless `allow_unsigned`.
     /// The expected key is the user's pin for the name, else `policy.locked_key`, else none (trust
-    /// on first use). Another key is a key change, decided by `trust` (R-TRUST-003 when refused).
+    /// on first use). Another key is a key change, put to `policy.asking` (R-TRUST-003 when it answers no).
     /// An answer for another package or version, or one whose manifest can't be read, is refused.
     /// **Writes nothing**: the decision is [`Package::publisher`], pinned by [`Registry::pin`] once
     /// the operation's lock plan commits.
@@ -460,7 +448,7 @@ mod tests {
         verify = "TrustPolicy is what a fetch decides a publisher by: the caller's choices and the key the lock records"
     )]
     fn a_trust_policy_names_the_lock_key_only_when_given() {
-        let policy = TrustPolicy::new(true, Trust::Refuse);
+        let policy = TrustPolicy::new(true, Asking::Nobody);
 
         assert_eq!(policy.locked_key, None);
         assert_eq!(policy.locked(Some("k")).locked_key, Some("k"));

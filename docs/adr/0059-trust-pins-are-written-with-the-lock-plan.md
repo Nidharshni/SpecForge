@@ -72,3 +72,8 @@ user didn't need.
   grow a decision call).
 - A registry the policy must trust per source (ADR 0044's reopening), which would add a third pin source.
 - Two processes changing one user's pins at once needing more than last-writer-wins.
+
+## Amendment (architecture round 11, plan 07)
+
+- **D6.** Consent is asked at fetch, of the policy's `asking` (`TrustPolicy.asking`); the adapter holds no asker
+  ([ADR 0110](0110-who-can-be-asked-is-one-value-handed-to-an-operation.md)).

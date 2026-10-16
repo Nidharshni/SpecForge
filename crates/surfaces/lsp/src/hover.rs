@@ -75,8 +75,8 @@ pub fn diagnostics(shown: &[&Diagnostic]) -> Option<String> {
 ///   and badges (`testable` is the standing inspect reports); the
 ///   statement its extension declares headline, quoted whole;
 /// - **Coverage**: its coverage, or why it does not count, or that the
-///   recorded report cannot be read; while the project rebuilds
-///   (`rebuilding`), that coverage is unavailable. None for an entity of a
+///   recorded report cannot be read. While the project rebuilds it is the
+///   last complete compile's. None for an entity of a
 ///   kind that is not testable and that declares no obligations;
 /// - **Refers to**: its references, grouped by field;
 /// - **Referenced by**: the references to it, grouped by the referencing
@@ -89,7 +89,6 @@ pub fn entity(
     facts: &EntityFacts,
     coverage: &Result<EntityCoverage, OpError>,
     shown: &[&Diagnostic],
-    rebuilding: bool,
 ) -> String {
     let node = facts.node;
     let title = node
@@ -126,7 +125,7 @@ pub fn entity(
     let mut sections: Vec<String> = vec![header_section];
 
     // Section 2: its coverage
-    if let Some(line) = coverage_line(facts, coverage, rebuilding) {
+    if let Some(line) = coverage_line(facts, coverage) {
         sections.push(format!("**Coverage** · {line}"));
     }
 
@@ -274,17 +273,11 @@ fn quoted(text: &str) -> String {
 fn coverage_line(
     facts: &EntityFacts,
     coverage: &Result<EntityCoverage, OpError>,
-    rebuilding: bool,
 ) -> Option<String> {
     let standing = facts.standing;
     let declares = standing.declares_obligations();
     if !standing.testable && !declares {
         return None;
-    }
-    // The stand-in view has no root: it cannot read the recorded report,
-    // and saying there is none would be false (panel D12).
-    if rebuilding {
-        return Some("unavailable while the project rebuilds".to_string());
     }
     if standing.exempt() {
         return Some(if standing.obligated() {

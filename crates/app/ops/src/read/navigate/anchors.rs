@@ -67,7 +67,8 @@ pub fn anchors_of_entity<'m>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::view::testing::Fixture;
+    use crate::testing::Viewed;
+    use specforge_project::testing::Assembled;
 
     fn sample_anchor(entity: &str, file: &str, line: usize) -> SourceAnchor {
         SourceAnchor {
@@ -104,7 +105,7 @@ mod tests {
 
     #[test]
     fn source_anchors_reads_the_file() {
-        let fixture = Fixture::new();
+        let fixture = Assembled::new();
         let m = AnchorManifest {
             anchors: vec![
                 sample_anchor("process_order", "src/orders.rs", 25),
@@ -113,7 +114,7 @@ mod tests {
             ..Default::default()
         };
         std::fs::write(
-            fixture.dir.path().join(ANCHORS_FILENAME),
+            fixture.root().join(ANCHORS_FILENAME),
             serde_json::to_string_pretty(&m).unwrap(),
         )
         .unwrap();
@@ -124,7 +125,7 @@ mod tests {
 
     #[test]
     fn source_anchors_is_empty_without_a_file_or_a_root() {
-        let fixture = Fixture::new();
+        let fixture = Assembled::new();
         assert!(source_anchors(&fixture.view()).unwrap().anchors.is_empty());
         assert!(
             source_anchors(&fixture.rootless_view())
@@ -136,8 +137,8 @@ mod tests {
 
     #[test]
     fn an_unusable_file_is_refused_by_why_not_by_text() {
-        let fixture = Fixture::new();
-        let path = fixture.dir.path().join(ANCHORS_FILENAME);
+        let fixture = Assembled::new();
+        let path = fixture.root().join(ANCHORS_FILENAME);
         std::fs::write(&path, r#"{"version":1,"anchors":[{"entity_id":"x"}]}"#).unwrap();
         let invalid = source_anchors(&fixture.view()).unwrap_err();
         assert_eq!(invalid.kind, crate::OpErrorKind::SchemaMismatch);

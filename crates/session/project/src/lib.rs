@@ -25,8 +25,7 @@ mod check_passes;
 mod compiled;
 pub mod coverage;
 mod diagnostics_delta;
-mod freshness;
-mod inputs;
+mod ledger;
 pub mod passes;
 mod policy;
 pub mod providers;
@@ -39,7 +38,7 @@ pub mod testing;
 mod verdicts;
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use sources::SourceCache;
@@ -47,12 +46,11 @@ use sources::SourceCache;
 use snapshot::EntitySnapshot;
 use specforge_common::{
     ConfigProblem, ConfigRead, Diagnostic, ProjectConfig, ProjectRoot, SourceRoot, codes,
-    read_project_config,
 };
 use specforge_graph::{Graph, GraphBuild, GraphConfig};
 use specforge_installed::{Builtins, Installed};
 use specforge_registry::{
-    RegistryBuild, build_registries,
+    Disk, RegistryBuild, build_registries,
     rules::{CustomVerdicts, NoVerdicts},
 };
 use specforge_wasm::WasmRuntime;
@@ -62,10 +60,11 @@ pub use buffers::Buffer;
 pub use build_cache::{BUILD_CACHE_FILE, BUILD_CACHE_FORMAT, BuildCache, CachedStatus};
 pub use compiled::CompiledProject;
 pub use diagnostics_delta::DiagnosticsDelta;
-pub use inputs::{Changes, SessionInputs, UpdateKind, WatchRoot, Watched, source_key};
+pub use ledger::{Changes, SessionInputs, WatchRoot, Watched, source_key};
+use ledger::{Reads, Unrecorded};
 pub use policy::{DiagnosticPolicy, LINT_PROFILE_NAMES, LintProfile, UnknownLintProfile};
 pub use providers::Providers;
-pub use session::{CheckMode, OpeningProject, ProjectSession, RuntimeSource, Update};
+pub use session::{CheckMode, ProjectSession, RuntimeSource, Update, UpdateKind};
 pub use setup::{SetupDiagnostic, SetupPart};
 pub use specforge_graph::{
     EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect, NodeChange, compute_graph_delta,
@@ -104,7 +103,7 @@ pub struct Environment {
     /// reported as E069, first; with one that
     /// [`loads_nothing`](ConfigProblem::loads_nothing), no extension
     /// loaded), and whether the file exists at the root. No file was read
-    /// for [`Self::empty`] and [`Self::with_registries`].
+    /// for [`Self::empty`] and the bare build of a project assembled in memory.
     read: ConfigRead,
     /// The project's installed extensions: what `specforge.lock` held when
     /// the environment was read (absent, read, or unreadable with its
@@ -135,12 +134,12 @@ pub struct Environment {
     /// The runtime the extensions were loaded in: every extension call an
     /// operation makes over this project runs there, a custom rule's
     /// verdict and a check pass included. None: the environment was loaded
-    /// without one, so no extension loaded ([`Self::empty`] has none;
-    /// [`Self::with_registries`] has the one it is given).
+    /// without one, so no extension loaded ([`Self::empty`] has none; the
+    /// bare build of a project assembled in memory has the one it is given).
     runtime: Option<SharedRuntime>,
     /// The project root it was loaded from ([`Self::from_read`]); `None` for one
-    /// assembled in memory ([`Self::assemble`], [`Self::empty`],
-    /// [`Self::with_registries`]). For a loaded environment, [`Self::root`] is its
+    /// assembled in memory ([`Self::assemble`], [`Self::empty`], the bare
+    /// build of `testing::Assembled`). For a loaded environment, [`Self::root`] is its
     /// `dir()`.
     root: Option<ProjectRoot>,
 }
@@ -162,11 +161,19 @@ impl Environment {
         }
     }
 
-    /// No project, a registry build made in memory, and the runtime its
-    /// extension calls go to, if any: a bare build for a graph built in a
-    /// test (ADR 0015 "The view, completed"). Nothing reported, no I002.
-    pub fn with_registries(registries: RegistryBuild, runtime: Option<SharedRuntime>) -> Self {
+    /// A bare build for a project assembled in memory: a registry build made
+    /// there, the runtime its extension calls go to, if any, and the project
+    /// where `installed` is, so the root and the spec root agree. The default
+    /// config, nothing reported, no I002 (ADR 0108).
+    #[cfg(feature = "testing")]
+    pub(crate) fn bare(
+        installed: Installed,
+        registries: RegistryBuild,
+        runtime: Option<SharedRuntime>,
+    ) -> Self {
         Environment {
+            sources: ConfigRead::default().config.sources(installed.root()),
+            installed,
             registries,
             runtime,
             ..Environment::empty()
@@ -177,7 +184,22 @@ impl Environment {
     /// `runtime` (none without one), which the environment then holds, then
     /// build the registries from them. The environment keeps `root`.
     pub fn load(root: &ProjectRoot, runtime: Option<SharedRuntime>) -> Self {
-        Self::from_read(root, read_project_config(root.dir()), runtime)
+        Self::read_through(&mut Unrecorded, root, |_| runtime)
+    }
+
+    /// The one environment load: the config read once, the lock and modules
+    /// recorded before the load reads them, the runtime built from the config
+    /// read, then [`Self::from_read`]. A session reads through its ledger
+    /// (stamping each input), a one-shot compile through [`Unrecorded`].
+    pub(crate) fn read_through(
+        reads: &mut impl Reads,
+        root: &ProjectRoot,
+        runtime: impl FnOnce(&ProjectConfig) -> Option<SharedRuntime>,
+    ) -> Self {
+        let read = reads.config(root);
+        reads.before_load(root, &read.config);
+        let runtime = runtime(&read.config);
+        Self::from_read(root, read, runtime)
     }
 
     /// The environment of the config `read`, the installed extensions
@@ -346,8 +368,14 @@ impl Environment {
     /// snapshot `entities`: the registry build's checks (the structural
     /// checks and the extensions' rules, in the order
     /// [`RegistryBuild::check`] runs them), then the check-phase passes;
-    /// the custom verdicts and the passes run in [`Self::runtime`].
-    pub fn run_checks(&self, graph: &Graph, entities: &EntitySnapshot) -> Vec<Diagnostic> {
+    /// the custom verdicts and the passes run in [`Self::runtime`]. Every file
+    /// a check reads goes through `disk` (ADR 0107).
+    pub fn run_checks(
+        &self,
+        graph: &Graph,
+        entities: &EntitySnapshot,
+        disk: &dyn Disk,
+    ) -> Vec<Diagnostic> {
         let runtime = self.runtime.as_deref();
         let mut diagnostics = Vec::new();
         let verdicts: Box<dyn CustomVerdicts + '_> = match runtime {
@@ -356,10 +384,10 @@ impl Environment {
         };
         diagnostics.extend(
             self.registries
-                .check(&entities.rule_input(), verdicts.as_ref()),
+                .check(&entities.rule_input(disk), verdicts.as_ref()),
         );
         if let Some(runtime) = runtime {
-            diagnostics.extend(check_passes::run(self, graph, entities, runtime));
+            diagnostics.extend(check_passes::run(self, graph, entities, runtime, disk));
         }
         diagnostics
     }
@@ -415,25 +443,25 @@ impl Environment {
             .map(|setup| setup.diagnostic)
     }
 
-    /// The project sources discovery finds now (`exclude` and the skipped
-    /// directories applied).
-    pub fn discover(&self) -> Vec<PathBuf> {
-        self.sources.files()
+    /// Where the project's sources are discovered.
+    pub(crate) fn sources(&self) -> &SourceRoot {
+        &self.sources
     }
 
-    /// Read and parse `discovered`, build their graph and resolve their
-    /// imports: the one cold build every compile and session open
-    /// starts from (ADR 0032).
+    /// Read and parse the sources `keys` names (each through `read`), build
+    /// their graph and resolve their imports: the one cold build every
+    /// compile and session open starts from (ADR 0032).
     ///
     /// A `held` text (by source key) is read in place of its file: the
     /// editor's buffers, which the session layer holds; the core stays
     /// buffer-agnostic.
     pub(crate) fn build_sources(
         &self,
-        discovered: &[PathBuf],
+        keys: &[String],
         held: &BTreeMap<String, &str>,
+        read: impl FnMut(&str) -> sources::Read,
     ) -> SourceBuild {
-        let (sources, files) = SourceCache::read_all(self.sources.dir(), discovered, held);
+        let (sources, files) = SourceCache::read_all(keys, held, read);
         let graph = GraphBuild::of(files, self.graph_config());
         let imports = sources.import_diagnostics(&graph);
         SourceBuild {

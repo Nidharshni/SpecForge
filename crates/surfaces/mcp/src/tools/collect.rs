@@ -2,7 +2,6 @@
 
 use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup, WriteHints};
-use specforge_common::codes;
 
 use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
@@ -50,7 +49,8 @@ impl CoreTool for Tool {
     type Returns = Answered<Reply>;
 
     fn call(project: ProjectRef<'_>, args: Args) -> Answered<Reply> {
-        use specforge_ops::analysis::collect::{self, Consent, Mode, Request, RunnerOutput};
+        use specforge_ops::analysis::collect::{self, Mode, Request, RunnerOutput};
+        use specforge_ops::asking::Asking;
 
         let runner = args.runner.as_deref();
         let run = args.run;
@@ -68,21 +68,11 @@ impl CoreTool for Tool {
             },
             // The server never prompts: a command runs only if the user already
             // approved it for this project with `specforge collect` in a terminal.
-            consent: Consent::Approved,
+            asking: Asking::Nobody,
             announce: &mut |_, _| {},
         };
-        match collect::collect(&project.view(), request) {
-            Ok(outcome) => Ok(outcome.document().into()),
-            Err(mut refusal) => {
-                if refusal.error.is(codes::E059) {
-                    refusal.error.message = format!(
-                        "the test command isn't approved for this project; run `specforge collect` \
-                     in a terminal once to approve it ({})",
-                        refusal.error.message
-                    );
-                }
-                Err(Box::new(Self::refused(refusal)))
-            }
-        }
+        collect::collect(&project.view(), request)
+            .map(|outcome| outcome.document().into())
+            .map_err(|refusal| Box::new(Self::refused(refusal)))
     }
 }

@@ -5,7 +5,8 @@
 //! Each test serves one package from an in-memory client (ADR 0044) and pins
 //! keys in a temporary store, never in `~/.specforge`.
 
-use specforge_ops::registry::Trust;
+use specforge_ops::asking::testing::{Asked, Scripted};
+use specforge_ops::asking::{Asking, ExpectedFrom};
 use specforge_ops::registry::{Publisher, Registry, TrustPolicy};
 use specforge_ops_registry::{ConfiguredRegistry, User};
 use specforge_package::PackageName;
@@ -135,12 +136,12 @@ impl Project {
     fn fetch(
         &self,
         allow_unsigned: bool,
-        trust: Trust,
+        asking: Asking<'_>,
     ) -> Result<specforge_ops::registry::Package, specforge_ops::OpError> {
         self.registry().fetch(
             &PackageName::parse(NAME).expect("a valid literal"),
             &Version::parse(VERSION).expect("a valid literal"),
-            TrustPolicy::new(allow_unsigned, trust),
+            TrustPolicy::new(allow_unsigned, asking),
         )
     }
 
@@ -164,7 +165,7 @@ fn an_unreadable_known_keys_file_refuses_the_fetch_and_is_left_as_it_was() {
     );
     std::fs::write(project.known_keys(), &broken).unwrap();
 
-    let error = project.fetch(false, Trust::Refuse).unwrap_err();
+    let error = project.fetch(false, Asking::Nobody).unwrap_err();
 
     assert_eq!(error.code, "R-TRUST-006", "{error:?}");
     assert!(
@@ -182,12 +183,12 @@ fn an_unreadable_known_keys_file_refuses_the_fetch_and_is_left_as_it_was() {
 fn fetch_through(
     registry: &ConfiguredRegistry,
     allow_unsigned: bool,
-    trust: Trust,
+    asking: Asking<'_>,
 ) -> Result<specforge_ops::registry::Package, specforge_ops::OpError> {
     registry.fetch(
         &PackageName::parse(NAME).expect("a valid literal"),
         &Version::parse(VERSION).expect("a valid literal"),
-        TrustPolicy::new(allow_unsigned, trust),
+        TrustPolicy::new(allow_unsigned, asking),
     )
 }
 
@@ -211,7 +212,7 @@ fn a_download_that_does_not_match_the_registry_sha256_is_refused() {
     let project = Project::on(served);
 
     // Neither --allow-unsigned nor --yes bypasses integrity.
-    let error = project.fetch(true, Trust::AssumeYes).unwrap_err();
+    let error = project.fetch(true, Asking::Yes).unwrap_err();
     assert_eq!(error.code, "R-OPS-002", "{error:?}");
     assert_eq!(
         project.pinned(),
@@ -231,7 +232,7 @@ fn a_registry_sha256_that_does_not_match_the_download_is_refused() {
     };
     let project = Project::on(served);
 
-    let error = project.fetch(true, Trust::AssumeYes).unwrap_err();
+    let error = project.fetch(true, Asking::Yes).unwrap_err();
     assert_eq!(error.code, "R-OPS-002", "{error:?}");
 }
 
@@ -242,7 +243,7 @@ fn a_registry_sha256_that_does_not_match_the_download_is_refused() {
 fn a_trust_refusal_is_permission_denied() {
     // Unsigned, without --allow-unsigned.
     let project = Project::on(Reply::unsigned());
-    let error = project.fetch(false, Trust::Refuse).unwrap_err();
+    let error = project.fetch(false, Asking::Nobody).unwrap_err();
     assert_eq!(error.code, "R-TRUST-001", "{error:?}");
     assert_eq!(error.kind, specforge_ops::OpErrorKind::PermissionDenied);
 
@@ -253,9 +254,7 @@ fn a_trust_refusal_is_permission_denied() {
         wasm: b"\0asm-evil".to_vec(),
         ..Reply::signed(&key)
     };
-    let error = Project::on(served)
-        .fetch(true, Trust::AssumeYes)
-        .unwrap_err();
+    let error = Project::on(served).fetch(true, Asking::Yes).unwrap_err();
     assert_eq!(error.code, "R-TRUST-002", "{error:?}");
     assert_eq!(error.kind, specforge_ops::OpErrorKind::PermissionDenied);
 }
@@ -276,7 +275,7 @@ fn a_signature_over_other_bytes_is_refused_even_with_allow_unsigned() {
     };
     let project = Project::on(served);
 
-    let error = project.fetch(true, Trust::AssumeYes).unwrap_err();
+    let error = project.fetch(true, Asking::Yes).unwrap_err();
     assert_eq!(error.code, "R-TRUST-002", "{error:?}");
     assert_eq!(project.pinned(), None);
 }
@@ -296,7 +295,7 @@ fn a_swapped_manifest_breaks_the_signature() {
     };
     let project = Project::on(served);
 
-    let error = project.fetch(true, Trust::AssumeYes).unwrap_err();
+    let error = project.fetch(true, Asking::Yes).unwrap_err();
     assert_eq!(error.code, "R-TRUST-002", "{error:?}");
 }
 
@@ -307,7 +306,7 @@ fn a_swapped_manifest_breaks_the_signature() {
 fn an_unsigned_package_is_refused_without_allow_unsigned() {
     let project = Project::on(Reply::unsigned());
 
-    let error = project.fetch(false, Trust::AssumeYes).unwrap_err();
+    let error = project.fetch(false, Asking::Yes).unwrap_err();
     assert_eq!(error.code, "R-TRUST-001", "{error:?}");
     assert!(
         error
@@ -326,7 +325,7 @@ fn an_unsigned_package_is_refused_without_allow_unsigned() {
 fn an_unsigned_package_is_accepted_with_allow_unsigned_and_pins_nothing() {
     let project = Project::on(Reply::unsigned());
 
-    let package = project.fetch(true, Trust::Refuse).unwrap();
+    let package = project.fetch(true, Asking::Nobody).unwrap();
     assert_eq!(package.wasm, WASM);
     assert_eq!(package.publisher, Publisher::Unsigned);
     assert_eq!(project.pinned(), None);
@@ -341,7 +340,7 @@ fn a_correctly_signed_package_is_accepted_and_its_key_pinned() {
     let project = Project::on(Reply::signed(&key));
     let registry = project.registry();
 
-    let package = fetch_through(&registry, false, Trust::Refuse).unwrap();
+    let package = fetch_through(&registry, false, Asking::Nobody).unwrap();
     assert_eq!(package.name.as_str(), NAME);
     assert_eq!(package.version.to_string(), VERSION);
     assert_eq!(package.wasm, WASM);
@@ -363,7 +362,7 @@ fn a_correctly_signed_package_is_accepted_and_its_key_pinned() {
     assert_eq!(project.pinned(), Some(key.key_id()));
 
     // A second install under the same pin is accepted as is.
-    let again = project.fetch(false, Trust::Refuse).unwrap();
+    let again = project.fetch(false, Asking::Nobody).unwrap();
     assert_eq!(
         again.publisher,
         Publisher::Signed {
@@ -384,14 +383,14 @@ fn a_fetch_pins_nothing() {
     let project = Project::on(Reply::signed(&other));
 
     // First use: no store is created.
-    project.fetch(false, Trust::Refuse).unwrap();
+    project.fetch(false, Asking::Nobody).unwrap();
     assert!(!project.known_keys().exists());
 
     // A consented key change: the store is as it was, byte for byte.
     project.pin(&pinned);
     let before = std::fs::read(project.known_keys()).unwrap();
-    project.fetch(false, Trust::AssumeYes).unwrap();
-    project.fetch(false, Trust::Refuse).unwrap_err();
+    project.fetch(false, Asking::Yes).unwrap();
+    project.fetch(false, Asking::Nobody).unwrap_err();
     assert_eq!(std::fs::read(project.known_keys()).unwrap(), before);
 }
 
@@ -400,7 +399,7 @@ fn a_pin_that_cannot_be_saved_is_r_trust_006() {
     let key = SigningKey::generate();
     let project = Project::on(Reply::signed(&key));
     let registry = project.registry();
-    let package = fetch_through(&registry, false, Trust::Refuse).unwrap();
+    let package = fetch_through(&registry, false, Asking::Nobody).unwrap();
     // The store's path is a directory: it can be neither read nor replaced.
     std::fs::create_dir_all(project.known_keys()).unwrap();
     let name = PackageName::parse(NAME).unwrap();
@@ -417,12 +416,12 @@ fn a_pin_that_cannot_be_saved_is_r_trust_006() {
 fn fetch_locked(
     registry: &ConfiguredRegistry,
     locked: &str,
-    trust: Trust,
+    asking: Asking<'_>,
 ) -> Result<specforge_ops::registry::Package, specforge_ops::OpError> {
     registry.fetch(
         &PackageName::parse(NAME).expect("a valid literal"),
         &Version::parse(VERSION).expect("a valid literal"),
-        TrustPolicy::new(false, trust).locked(Some(locked)),
+        TrustPolicy::new(false, asking).locked(Some(locked)),
     )
 }
 
@@ -436,7 +435,7 @@ fn a_users_pin_wins_over_the_locked_key() {
     // Signed by the user's pin: accepted as pinned, whatever the lock records.
     let project = Project::on(Reply::signed(&pinned));
     project.pin(&pinned);
-    let package = fetch_locked(&project.registry(), &locked.key_id(), Trust::Refuse).unwrap();
+    let package = fetch_locked(&project.registry(), &locked.key_id(), Asking::Nobody).unwrap();
     assert_eq!(
         package.publisher,
         Publisher::Signed {
@@ -448,7 +447,7 @@ fn a_users_pin_wins_over_the_locked_key() {
     // Signed by the lock's key: a change from the user's pin.
     let project = Project::on(Reply::signed(&locked));
     project.pin(&pinned);
-    let error = fetch_locked(&project.registry(), &locked.key_id(), Trust::Refuse).unwrap_err();
+    let error = fetch_locked(&project.registry(), &locked.key_id(), Asking::Nobody).unwrap_err();
     assert_eq!(error.code, "R-TRUST-003", "{error:?}");
     assert!(
         error.message.ends_with("(the key specforge.lock records)"),
@@ -462,7 +461,7 @@ fn with_no_pin_a_package_signed_by_the_locked_key_is_a_first_use() {
     let key = SigningKey::generate();
     let project = Project::on(Reply::signed(&key));
 
-    let package = fetch_locked(&project.registry(), &key.key_id(), Trust::Refuse).unwrap();
+    let package = fetch_locked(&project.registry(), &key.key_id(), Asking::Nobody).unwrap();
 
     assert_eq!(
         package.publisher,
@@ -484,12 +483,12 @@ fn a_package_signed_by_another_key_than_the_pinned_one_is_refused() {
     let project = Project::on(Reply::signed(&other));
     project.pin(&pinned);
 
-    let error = project.fetch(false, Trust::Refuse).unwrap_err();
+    let error = project.fetch(false, Asking::Nobody).unwrap_err();
     assert_eq!(error.code, "R-TRUST-003", "{error:?}");
     assert!(error.message.contains(&pinned.key_id()), "{error:?}");
     assert!(error.message.contains(&other.key_id()), "{error:?}");
     // --allow-unsigned is not consent to a key change either.
-    let error = project.fetch(true, Trust::Refuse).unwrap_err();
+    let error = project.fetch(true, Asking::Nobody).unwrap_err();
     assert_eq!(error.code, "R-TRUST-003", "{error:?}");
     assert_eq!(project.pinned(), Some(pinned.key_id()), "the pin stands");
 }
@@ -505,7 +504,7 @@ fn consent_to_a_key_change_re_pins_the_new_key() {
     project.pin(&pinned);
     let registry = project.registry();
 
-    let package = fetch_through(&registry, false, Trust::AssumeYes).unwrap();
+    let package = fetch_through(&registry, false, Asking::Yes).unwrap();
     assert_eq!(
         package.publisher,
         Publisher::Repinned {
@@ -537,7 +536,7 @@ fn a_denied_key_is_refused_even_with_consent() {
     known.denied_keys.push(key.key_id());
     save_known_keys_at(&project.known_keys(), &known).unwrap();
 
-    let error = project.fetch(true, Trust::AssumeYes).unwrap_err();
+    let error = project.fetch(true, Asking::Yes).unwrap_err();
     assert_eq!(error.code, "R-TRUST-005", "{error:?}");
 }
 
@@ -553,7 +552,7 @@ fn a_registry_answering_with_another_package_is_refused() {
     let project = Project::on(Reply::signed_over(&evil, "@evil/tool", WASM, MANIFEST));
     project.pin(&pinned);
 
-    let error = project.fetch(false, Trust::AssumeYes).unwrap_err();
+    let error = project.fetch(false, Asking::Yes).unwrap_err();
     assert_eq!(error.code, "R-TRUST-004", "{error:?}");
     assert!(error.message.contains("@evil/tool"), "{error:?}");
     assert_eq!(project.pinned(), Some(pinned.key_id()));
@@ -574,7 +573,7 @@ fn a_correctly_signed_package_carries_the_peers_its_manifest_declares() {
     let manifest = r#"{"handshake":{"protocol_version":"1.0.0","name":"@acme/tool","version":"1.0.0","peer_dependencies":[{"name":"@acme/base","version":"^1.0"}],"sandbox_policy":null}}"#;
     let project = Project::on(Reply::signed_over(&key, NAME, WASM, manifest));
 
-    let package = project.fetch(false, Trust::Refuse).unwrap();
+    let package = project.fetch(false, Asking::Nobody).unwrap();
     let peers = package.declaration.peers();
     assert_eq!(peers.len(), 1, "{peers:?}");
     assert_eq!(peers[0].name, "@acme/base");
@@ -592,7 +591,7 @@ fn a_manifest_that_cannot_be_read_is_refused_and_pins_nothing() {
     let manifest = r#"{"handshake":{"name":"@acme/tool","peer_dependencies":"not a list"}}"#;
     let project = Project::on(Reply::signed_over(&key, NAME, WASM, manifest));
 
-    let error = project.fetch(true, Trust::AssumeYes).unwrap_err();
+    let error = project.fetch(true, Asking::Yes).unwrap_err();
     assert_eq!(error.code, "R-OPS-004", "{error:?}");
     assert_eq!(project.pinned(), None, "nothing is pinned for it");
 }
@@ -608,7 +607,7 @@ fn a_package_served_without_a_manifest_is_refused() {
     };
     let project = Project::on(served);
 
-    let error = project.fetch(true, Trust::AssumeYes).unwrap_err();
+    let error = project.fetch(true, Asking::Yes).unwrap_err();
     assert_eq!(error.code, "R-OPS-004", "{error:?}");
     assert!(error.message.contains("served none"), "{error:?}");
 }
@@ -622,7 +621,7 @@ fn a_manifest_describing_another_package_is_refused() {
     let manifest = r#"{"handshake":{"protocol_version":"1.0.0","name":"@evil/tool","version":"1.0.0","peer_dependencies":[],"sandbox_policy":null}}"#;
     let project = Project::on(Reply::signed_over(&key, NAME, WASM, manifest));
 
-    let error = project.fetch(true, Trust::AssumeYes).unwrap_err();
+    let error = project.fetch(true, Asking::Yes).unwrap_err();
     assert_eq!(error.code, "R-TRUST-004", "{error:?}");
     assert!(error.message.contains("@evil/tool"), "{error:?}");
     assert_eq!(project.pinned(), None);
@@ -640,7 +639,7 @@ fn a_package_published_with_a_legacy_manifest_is_refused() {
         r#"{"name":"@acme/tool","version":"1.0.0","manifestVersion":2,"wasmPath":"tool.wasm"}"#;
     let project = Project::on(Reply::signed_over(&key, NAME, WASM, legacy));
 
-    let error = project.fetch(true, Trust::AssumeYes).unwrap_err();
+    let error = project.fetch(true, Asking::Yes).unwrap_err();
     assert_eq!(error.code, "R-OPS-004", "{error:?}");
     assert!(error.message.contains("manifest.json"), "{error:?}");
     let suggestion = error.suggestion.as_deref().unwrap_or_default();
@@ -662,7 +661,7 @@ fn a_download_that_misses_is_refused_and_pins_nothing() {
     };
     let project = Project::on(served);
 
-    let error = project.fetch(true, Trust::AssumeYes).unwrap_err();
+    let error = project.fetch(true, Asking::Yes).unwrap_err();
     assert_eq!(error.code, "R006", "{error:?}");
     assert_eq!(error.kind, specforge_ops::OpErrorKind::ExtensionNotFound);
     assert_eq!(project.pinned(), None, "nothing is pinned for it");
@@ -706,7 +705,7 @@ fn a_read_carries_the_stored_credential() {
         .fetch(
             &name,
             &Version::parse(VERSION).unwrap(),
-            TrustPolicy::new(true, Trust::Refuse),
+            TrustPolicy::new(true, Asking::Nobody),
         )
         .unwrap();
 
@@ -768,7 +767,7 @@ fn an_unsigned_fetch_is_reported_as_w155() {
         .fetch(
             &PackageName::parse(NAME).unwrap(),
             &Version::parse(VERSION).unwrap(),
-            TrustPolicy::new(true, Trust::Refuse),
+            TrustPolicy::new(true, Asking::Nobody),
         )
         .unwrap();
 
@@ -790,7 +789,7 @@ fn a_consented_key_change_is_reported_as_w156() {
     project.pin(&pinned);
     let registry = project.registry();
 
-    let package = fetch_through(&registry, false, Trust::AssumeYes).unwrap();
+    let package = fetch_through(&registry, false, Asking::Yes).unwrap();
 
     let name = PackageName::parse(NAME).unwrap();
     let w156_count = |registry: &ConfiguredRegistry| {
@@ -819,29 +818,28 @@ fn a_consented_key_change_is_reported_as_w156() {
 fn a_key_change_is_decided_by_the_asker() {
     let pinned = SigningKey::generate();
     let other = SigningKey::generate();
-    let (a, b) = (pinned.key_id(), other.key_id());
     let name = PackageName::parse(NAME).unwrap();
     let version = Version::parse(VERSION).unwrap();
 
     let project = Project::on(Reply::signed(&other));
     project.pin(&pinned);
-    let asked = project.registry().asking(move |change| {
-        assert_eq!(
-            (change.pinned.as_str(), change.offered.as_str()),
-            (a.as_str(), b.as_str())
-        );
-        true
-    });
-    asked
-        .fetch(&name, &version, TrustPolicy::new(false, Trust::Prompt))
+    let scripted = Scripted::answering(true);
+    project
+        .registry()
+        .fetch(
+            &name,
+            &version,
+            TrustPolicy::new(false, Asking::Ask(&scripted)),
+        )
         .expect("the asker said yes");
 
-    // Without an asker, a Prompt is a refusal.
-    let project = Project::on(Reply::signed(&other));
-    project.pin(&pinned);
-    let error = project
-        .registry()
-        .fetch(&name, &version, TrustPolicy::new(false, Trust::Prompt))
-        .unwrap_err();
-    assert_eq!(error.code, "R-TRUST-003", "{error:?}");
+    assert_eq!(
+        scripted.asked(),
+        vec![Asked::KeyChange {
+            package: NAME.to_string(),
+            expected: pinned.key_id(),
+            offered: other.key_id(),
+            from: ExpectedFrom::UserPin,
+        }]
+    );
 }

@@ -11,7 +11,7 @@ const TEST_SPEC: &str =
 /// A project that enables no extension, served with its own component
 /// runtime: what `specforge mcp <root>` serves over it. A call naming
 /// another project compiles that one with its own runtime too.
-fn test_server() -> Served {
+pub(crate) fn test_server() -> Served {
     TestProject::new()
         .file("test.spec", TEST_SPEC)
         .serve_components()
@@ -142,7 +142,7 @@ fn doctor_returns_report() {
 /// A project whose Rust tests `@specforge/cargo-test` collects, with a
 /// report already written by an earlier `cargo test`: the directory, which
 /// lives as long as the value.
-fn collect_project() -> tempfile::TempDir {
+pub(crate) fn collect_project() -> tempfile::TempDir {
     TestProject::new()
         .enabling(&[
             "@specforge/software",

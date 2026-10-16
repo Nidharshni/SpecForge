@@ -3,12 +3,12 @@ use specforge_ops::read::coverage::{CoverageQuery, CoverageRow, coverage, row};
 use specforge_project::coverage::Status;
 use specforge_test::prelude::*;
 
-use crate::view_support::{Project, registries_with};
+use crate::view_support::{Assembled, Viewed, registries_with};
 
 /// login (proven), logout (one unproven obligation), a union, an abstract
 /// behavior, a governance constraint that declares nothing and one that
 /// declares an obligation, and a feature (not testable).
-fn project() -> Project {
+fn project() -> Assembled {
     let build = registries_with(&["behavior", "type"], &["constraint"], |c| {
         c.kind("feature", |k| {
             k.keyword("feature");
@@ -19,7 +19,7 @@ fn project() -> Project {
             });
         });
     });
-    let project = Project::new(
+    let project = Assembled::over(build).source(
         r#"
 behavior login "Login" {
   verify unit "logs in"
@@ -46,7 +46,6 @@ feature signin "Sign in" {
   verify unit "a feature's statement"
 }
 "#,
-        build,
     );
     project.record_passing(&[("login", "logs in"), ("signin", "a feature's statement")]);
     project

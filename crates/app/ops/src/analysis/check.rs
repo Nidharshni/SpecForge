@@ -257,9 +257,7 @@ pub fn check(view: &ProjectView<'_>, options: &CheckOptions) -> Result<CheckOutc
 mod tests {
     use super::*;
     use specforge_common::codes;
-    use specforge_graph::Graph;
     use specforge_project::CompiledProject;
-    use specforge_project::coverage::RecordedCoverage;
     use specforge_registry::RegistryBuild;
     use specforge_test_macros::test as specforge_test;
     use tempfile::TempDir;
@@ -471,11 +469,10 @@ mod tests {
 
     #[test]
     fn no_root_with_cache_or_lint_is_refused() {
-        let graph = Graph::new();
-        let env = specforge_project::Environment::with_registries(RegistryBuild::default(), None);
-        let recorded = RecordedCoverage::over(&graph, &env);
         let reported = vec![Diagnostic::untyped("W002", Severity::Warning, "unused")];
-        let view = ProjectView::new(&graph, &env, None, &recorded).reporting(&reported);
+        let project = specforge_project::testing::Assembled::over(RegistryBuild::default())
+            .reporting(reported);
+        let view = crate::testing::Viewed::rootless_view(&project);
 
         for options in [
             CheckOptions {

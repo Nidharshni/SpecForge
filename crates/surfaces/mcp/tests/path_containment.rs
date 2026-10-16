@@ -443,3 +443,78 @@ fn rename_and_migrate_do_not_write_through_a_symlink_that_leaves_the_project() {
         );
     }
 }
+
+/// `src` is a symlink to `outside/`: a file named behind it that does not exist is outside the
+/// project all the same (not `file_not_found`).
+#[cfg(unix)]
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a path that leaves the project through a symlink is outside it, whether or not the file it names exists"
+)]
+fn infer_session_refuses_a_missing_file_behind_a_symlink_that_leaves_the_project() {
+    let scene = Scene::new();
+    std::os::unix::fs::symlink(scene.outside(), scene.proj().join("src")).unwrap();
+    let mut server = scene.serve();
+    let reply = call_tool(
+        &mut server,
+        "specforge.infer_session",
+        json!({"action": "mark_analyzed", "source_file": "src/missing.rs"}),
+    );
+    assert_refused(&reply, "source_file");
+}
+
+/// `init` into a directory whose `.gitignore` is a symlink that leaves the server's root appends
+/// to nothing outside it.
+#[cfg(unix)]
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a mutation reads and writes no file through a symlink that leaves the project"
+)]
+fn init_writes_no_file_through_a_symlink_that_leaves_its_directory() {
+    let scene = Scene::new();
+    let root = scene.dir.path().join("workspace");
+    let existing = root.join("existing");
+    fs::create_dir_all(&existing).unwrap();
+    let victim = scene.outside().join("victim");
+    fs::write(&victim, "outside-gitignore-original\n").unwrap();
+    std::os::unix::fs::symlink(&victim, existing.join(".gitignore")).unwrap();
+    let mut server = McpServer::with_project_root(root.clone());
+    let reply = call(&mut server, "initialize", json!({}));
+    assert!(reply["error"].is_null(), "{reply}");
+    let reply = call_tool(&mut server, "specforge.init", json!({"path": "existing"}));
+    assert_eq!(
+        fs::read_to_string(&victim).unwrap(),
+        "outside-gitignore-original\n",
+        "{reply}"
+    );
+    let error = crate::tool_errors::mcp_error(&reply);
+    assert_eq!(error["code"], "invalid_input", "{error}");
+    assert!(!existing.join("specforge.json").exists());
+}
+
+/// `render` writes `out_dir/graph.json`: a file there that is a symlink leaving the project is
+/// not written through.
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "provide_mcp_render_tool",
+    verify = "render writes no file through a symlink in out_dir that leaves the project"
+)]
+fn render_writes_no_file_through_a_symlink_that_leaves_the_project() {
+    let scene = Scene::new();
+    fs::create_dir_all(scene.proj().join("out")).unwrap();
+    fs::write(scene.outside().join("graph.json"), "outside-graph-original").unwrap();
+    std::os::unix::fs::symlink(
+        scene.outside().join("graph.json"),
+        scene.proj().join("out/graph.json"),
+    )
+    .unwrap();
+    let mut server = scene.serve();
+    let before = scene.outside_files();
+    let reply = call_tool(
+        &mut server,
+        "specforge.render",
+        json!({"format": "graph", "out_dir": "out"}),
+    );
+    assert_refused(&reply, "out_dir");
+    assert_eq!(scene.outside_files(), before, "outside/ changed: {reply}");
+}

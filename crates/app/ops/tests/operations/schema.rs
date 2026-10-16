@@ -14,13 +14,13 @@ use specforge_protocol_types::{
 use specforge_registry::build_registries;
 use specforge_test_macros::test as specforge_test;
 
-use crate::view_support::Project;
+use crate::view_support::{Assembled, Viewed};
 
 /// A project whose one extension, `@t/soft` 1.0.0, declares `behavior`
 /// (testable, a `contract` and a `features` reference), `feature` and
 /// `event`; `implements` runs behavior → feature, `emits` feature →
 /// event; one validation rule targets behavior.
-fn project() -> Project {
+fn project() -> Assembled {
     let field = |name: &str, field_type: &str| FieldDescriptor {
         name: name.into(),
         field_type: field_type.into(),
@@ -76,7 +76,7 @@ fn project() -> Project {
         }],
         ..ExtensionDeclaration::default()
     };
-    Project::new("", build_registries(vec![declaration]))
+    Assembled::over(build_registries(vec![declaration])).source("")
 }
 
 /// The labels of a document's edge types.
@@ -229,7 +229,7 @@ fn json_schema_refuses_dot() {
         "Unknown format: dot. Expected: graph, context, brief"
     );
 
-    let published: Value = json_schema(&project.view(), Format::Graph).unwrap();
+    let published: Value = json_schema(&project.view(), Format::Graph).unwrap().schema;
     assert_eq!(
         published["$schema"],
         "https://json-schema.org/draft/2020-12/schema"

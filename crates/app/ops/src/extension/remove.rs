@@ -3,7 +3,7 @@
 use super::lock_plan::{Ask, Disabled, LockPlan, Purpose};
 use super::{NOT_FOUND, Origin, ProjectExtension, Selection, not_installed};
 use crate::view::ProjectView;
-use crate::{OpError, OpErrorKind, Refusal, Writes};
+use crate::{Containment, OpError, OpErrorKind, Refusal, Writes};
 use serde::Serialize;
 use specforge_common::ExtensionEntry;
 use specforge_common::shape::Shape;
@@ -21,6 +21,9 @@ pub struct RemoveRequest<'a> {
     pub force: bool,
     /// Report what would be removed; change nothing.
     pub dry_run: bool,
+    /// What the removal may write (ADR 0104): a file it would write that lands outside, by a
+    /// symlink in the project, refuses it. The CLI passes [`Containment::unbounded`].
+    pub containment: &'a Containment,
 }
 
 /// What a removal reads of its project: the view, its root, its kinds and
@@ -30,6 +33,7 @@ struct Removing<'a> {
     root: &'a Path,
     force: bool,
     dry_run: bool,
+    containment: &'a Containment,
     kinds: &'a KindRegistry,
     graph: &'a Graph,
     /// The project's installed extensions, as the compile read them.
@@ -162,6 +166,7 @@ pub fn remove(
         root,
         force: req.force,
         dry_run: req.dry_run,
+        containment: req.containment,
         kinds: view.registries().kinds(),
         graph: view.graph(),
         installed: view.installed(),
@@ -285,7 +290,7 @@ fn change(
     let done = plan
         .check()
         .map_err(|refused| refused.decisive().1.about(RemoveField::Name))?
-        .finish(req.root, Vec::new())?;
+        .finish(req.root, Vec::new(), req.containment)?;
     Ok(done.writes)
 }
 

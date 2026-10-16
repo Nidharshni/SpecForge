@@ -84,11 +84,13 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
     served project (while none is served, inside the server's root): a
     relative path is read against that directory, never the process's, and
     a path that leaves it, by .., by an absolute name or by a symlink, is
-    refused as invalid_input on its argument, whatever tool, prompt or
+    refused as invalid_input on its argument (a path behind such a symlink
+    is outside whether or not the file exists), whatever tool, prompt or
     resource takes it and in either revision. A file or directory a tool
     argument names (format's paths, render's out_dir, outline's file)
     resolves inside the root of the project the call acts on, and no
-    mutation reads or writes through a symlink that leaves it. init creates
+    mutation reads or writes through a symlink that leaves it (init's
+    files, the lock and the installed modules included). init creates
     its project inside the server's root and never inside the served
     project. The CLI is not bounded: its user is already at the file system.
     A call
@@ -132,6 +134,7 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
   verify unit "a path an MCP request names resolves inside the served project, whatever its spelling"
   verify unit "a file or directory an MCP tool argument names resolves inside the call's project"
   verify unit "a mutation reads and writes no file through a symlink that leaves the project"
+  verify unit "a path that leaves the project through a symlink is outside it, whether or not the file it names exists"
   verify unit "init creates its project inside the server's root and never inside the served project"
   verify unit "a server whose root lies in no project serves nothing, and a handshake init then serves the project it creates"
   verify unit "a server started inside a project serves that project"
@@ -143,6 +146,7 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
   verify unit "analyze notifies subscribers when the diagnostics it compiled changed"
   verify unit "validate with a path to another project leaves the served project in place"
   verify unit "a mutation tool that wrote files leaves the server serving what is on disk"
+  verify unit "initialize naming another project replaces the project a stateless request served"
   verify unit "with no project served, a read naming a file or an entity is the no-project refusal, an aggregate read answers over the empty session"
   verify unit "with no project served, every core tool, prompt and resource answers or refuses as its target declares"
   verify unit "with no project served, an entry that acts on the project is refused before its arguments are read"

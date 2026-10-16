@@ -9,9 +9,11 @@ fn a_dry_run_of_a_present_extension_answers_as_the_add_would() {
         AddRequest {
             root,
             extensions: vec![source.into()],
+            base: None,
             allow_unsigned: true,
-            trust: Trust::Refuse,
+            asking: Asking::Nobody,
             dry_run: true,
+            containment: &UNBOUNDED,
         }
     }
 
@@ -110,9 +112,9 @@ fn a_dry_run_of_several_specifiers_previews_each() {
     let (_files, wasm) = greet_file();
     let before = files_under(dir.path());
     let extensions = vec![
-        Specified::from(Source::Builtin("@specforge/product")),
-        Specified::from(Source::Local(wasm.clone())),
-        Specified::from(Source::Builtin("@specforge/product")),
+        Source::Builtin("@specforge/product").into(),
+        Source::Local(wasm.clone()).into(),
+        Source::Builtin("@specforge/product").into(),
     ];
 
     let added = add(
@@ -231,9 +233,11 @@ fn a_dry_run_judges_a_registry_package_by_its_published_declaration() {
     let request = |dry_run| AddRequest {
         root: &root,
         extensions: vec![Source::Registry(PackageRef::parse("@acme/app@1.0.0").unwrap()).into()],
+        base: None,
         allow_unsigned: true,
-        trust: Trust::Refuse,
+        asking: Asking::Nobody,
         dry_run,
+        containment: &UNBOUNDED,
     };
 
     let real = add(&request(false), &published(), &runtime()).unwrap_err();

@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture round 11 report</title>
+<style>
+  :root { --bg:#fafafa; --fg:#1d2128; --muted:#5b6573; --card:#fff; --line:#d6dbe3; --accent:#2457d6; --ok:#177a3c; --bad:#b3261e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171c; --fg:#e6e9ee; --muted:#9aa4b2; --card:#1c2027; --line:#323a46; --accent:#7aa2ff; --ok:#5fd38a; --bad:#ff8a80; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 system-ui, sans-serif; }
+  main { max-width:1100px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { margin:0 0 4px; font-size:1.9rem; }
+  h2 { margin:40px 0 12px; font-size:1.3rem; border-bottom:1px solid var(--line); padding-bottom:6px; }
+  h3 { margin:0 0 4px; font-size:1.1rem; }
+  p.sub { color:var(--muted); margin:0 0 20px; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; }
+  .kpi b { display:block; font-size:1.6rem; color:var(--accent); }
+  .kpi span { color:var(--muted); font-size:.85rem; }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:8px; overflow:hidden; font-size:.92rem; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  .plan { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin:18px 0; }
+  .plan .tag { color:var(--muted); font-size:.85rem; }
+  .plan p { margin:6px 0; }
+  .plan .proof { color:var(--muted); font-size:.88rem; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:10px; }
+  .cols > div { min-width:0; overflow-x:auto; border:1px solid var(--line); border-radius:8px; padding:8px; }
+  .cols h4 { margin:0 0 6px; font-size:.85rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  @media (max-width:760px) { .cols { grid-template-columns:1fr; } }
+  .ok { color:var(--ok); font-weight:600; }
+  .bad { color:var(--bad); font-weight:600; }
+  code { font-size:.88em; }
+</style>
+</head>
+<body>
+<main>
+<h1>Architecture round 11</h1>
+<p class="sub">Eight plans, one branch (<code>refactor/architecture-2026-10-16</code>, base <code>63e4d7d9</code>). Each plan keeps its own commits; every commit carries boxed ASCII BEFORE/AFTER diagrams, and this page shows the same before and after per plan.</p>
+
+<div class="kpis">
+  <div class="kpi"><b>8</b><span>plans merged</span></div>
+  <div class="kpi"><b>65</b><span>non-merge commits (before this report)</span></div>
+  <div class="kpi"><b>8</b><span>new ADRs (0104–0111)</span></div>
+  <div class="kpi"><b>278</b><span>files changed (before this report)</span></div>
+  <div class="kpi"><b>+8,574 / −4,749</b><span>lines</span></div>
+  <div class="kpi"><b>5370 / 5370</b><span>workspace tests pass</span></div>
+  <div class="kpi"><b>22 / 22</b><span><code>cargo gate full</code> checks ok</span></div>
+  <div class="kpi"><b>0</b><span>re-vendors, 0 new diagnostic codes</span></div>
+</div>
+
+<h2>Defects found and closed</h2>
+<p>Every defect was reproduced with the debug binary before it was fixed; each is pinned by a failing test that the fixing commit flips.</p>
+<table><thead><tr><th>Plan</th><th>Defect</th><th>Closed by</th></tr></thead><tbody>
+<tr><td>01</td><td>MCP <code>init</code> installs a local file from outside the served project: a comma string (<code>"@specforge/software,../../x.wasm"</code>), the same through a crate directory, a symlink followed by <code>..</code>, and a <code>target/</code> symlink over <code>add_extension</code></td><td>T3 (minimal), T6</td></tr>
+<tr><td>01</td><td>MCP <code>init</code> appends to a <code>.gitignore</code> symlink that points outside; MCP <code>render</code> overwrites an <code>out/graph.json</code> symlink that points outside</td><td>T8, T9</td></tr>
+<tr><td>01</td><td>The two "outside" rules disagree on a missing file behind an escaping symlink</td><td>T5</td></tr>
+<tr><td>02</td><td><code>init --extensions a,b</code> means two extensions while <code>add a,b</code> is refused; one spelling with <code>..</code> reads two different files; a version requirement with a comma is split</td><td>T5, T6</td></tr>
+<tr><td>03</td><td>An editor buffer of a file reached through a symlinked directory makes the LSP show an E002 that <code>check</code> doesn't, and it stays after close</td><td>T2</td></tr>
+<tr><td>04</td><td><code>watch</code> misses a symlinked check input's target; a missing <code>file_exists</code> file over-watches its directory</td><td>T6, T8</td></tr>
+<tr><td>05</td><td>Hover reads "unavailable" for about 200 ms after every edit while the project rebuilds</td><td>T5</td></tr>
+<tr><td>07</td><td>MCP consent refusals tell the client to pass <code>--yes</code>, which MCP refuses as an unknown argument</td><td>T3</td></tr>
+<tr><td>08</td><td>With a corrupt schema record, every read except <code>export</code> quietly answers 1.0.0; only <code>export</code> reports I016 and W053</td><td>T3–T7</td></tr>
+</tbody></table>
+
+<h2>Plans at a glance</h2>
+<table id="summary"><thead><tr><th>Plan</th><th>What changes</th><th>ADR</th><th>Commits</th></tr></thead><tbody></tbody></table>
+
+<h2>Before and after, plan by plan</h2>
+<div id="plans"></div>
+
+<h2>Verification</h2>
+<p><span class="ok">✔</span> <code>cargo gate full</code>: 22 of 22 checks ok (pending-snapshots, rustfmt, spec-format, grammar, zero-entity, layers, file-size, crate-map, links, doc-links, root-layout, builtins, guests, audit, build, tests, clippy, doctests, published-schemas, specs, spec-modules, dogfood).<br><span class="ok">✔</span> <code>cargo nextest run --workspace</code>: 5370 tests run, 5370 passed, 12 skipped; <code>cargo clippy --workspace --all-targets -- -D warnings</code> clean.<br><span class="ok">✔</span> No re-vendor was needed: no plan touches the SDK, the protocol types or the builtin extensions, and <code>builtins</code> and <code>guests</code> pass unchanged.</p>
+
+<h2>Breaking changes</h2>
+<ul>
+  <li><strong>MCP:</strong> a comma string in <code>init</code>'s <code>extensions</code>, a local extension or write that resolves outside the served project (symlinks and <code>..</code> included) is refused as <code>invalid_input</code> (<code>outside_root</code>). A rename preview over an escaping symlink is no longer refused, since the check moved into <code>apply</code> and nothing is written.</li>
+  <li><strong>MCP replies:</strong> E059 is the operation's own message; the R-TRUST-003 suggestion text changes; tool results and resource reads carry I016, W053 and I020 in <code>_meta.diagnostics</code>.</li>
+  <li><strong>CLI:</strong> <code>init --extensions</code> takes a list through clap and resolves <code>..</code> the way the file system does; <code>add</code> names a missing relative file by its joined path; the read commands print I016 and W053 on stderr.</li>
+  <li><strong>LSP:</strong> no spurious E002 through a symlinked directory; hover shows the last compile's coverage while the project rebuilds; fewer <code>{dir}/*</code> watchers.</li>
+  <li><strong>Rust API:</strong> <code>Containment</code> is a required field of every request that reads or writes files; <code>AddRequest.extensions</code> is <code>Vec&lt;String&gt;</code>; <code>Trust</code> and <code>Consent</code> become <code>Asking</code>; <code>ProjectView::new</code>, <code>begin_open</code>, <code>replaced</code>, <code>into_buffers</code>, <code>Environment::discover</code>, <code>RegistryBuild::files</code> and <code>Rules::files</code> are gone; <code>RuleInput</code> gains <code>disk</code>.</li>
+</ul>
+
+<h2>Not in this PR</h2>
+<ul>
+  <li>A registry operation's outcome carrying <code>registry.reported()</code> (W140, I003, W155, W156): ADR 0044 D5 decided it, and the friction is small.</li>
+  <li>The versioned-schema memo: ADR 0015 D2 stands, and a call costs about 4 ms.</li>
+  <li>Routing the environment's module reads (<code>Installed::load</code>) through the checks' disk: no drift today.</li>
+  <li>About 20 CLI <code>analyze</code> tests that assert only the document belong in ops (ADR 0029 D9a).</li>
+</ul>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<script>
+const PLANS = [
+ { n:"01", t:"Containment is applied where the operation opens the file", adr:"0104", c:9,
+   problem:"MCP checked a path with one rule, then handed the raw name to ops, which read it another way: seven ways to read or write outside the served project.",
+   proof:"Pins: <code>local_specifier_containment</code> and <code>path_containment</code> (7 tests, flipped by T3, T5, T6, T8, T9).",
+   before:`flowchart LR
+  T[MCP tool] --> C["containment (reading A)"]
+  C -->|raw strings| O["ops init: split, join, drop .. by name"]
+  O --> L["LocalFile::read, binary_at"]
+  W["resolves_outside (reading B)"] --> F[format, migrate]
+  C -.->|parse fails: no check| O
+  style O fill:#fbb,stroke:#c00
+  style L fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  M["MCP: Containment::within(bound)"] --> R
+  CLI["CLI: Containment::unbounded()"] --> R
+  R["Containment::resolve (ops base)"] --> A[LocalFile::read]
+  R --> B[binary_at]
+  R --> C[format, migrate, rename]
+  R --> D[lock-plan writes, render]
+  style R fill:#bfe,stroke:#177a3c`},
+ { n:"02", t:"One reader for the extensions a change names", adr:"0105", c:6,
+   problem:"The steps for reading extension specifiers were written in five places, with two request shapes, and add and init disagreed.",
+   proof:"Pins: init reading a comma string as several specifiers, and <code>..</code> after a symlink read by name (flipped by T5, T6).",
+   before:`flowchart LR
+  CA[CLI add] --> P1[parse]
+  MA[MCP add] --> P2["parse + relative_to"]
+  MI[MCP init] --> P3[parse]
+  OI["ops init: split, parse, .., claim loop"]
+  OA["ops add: claim loop"]
+  P1 --> OA
+  P2 --> OA
+  P3 --> OI
+  style OI fill:#fbb,stroke:#c00
+  style OA fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  CA[CLI add] --> AR[add]
+  MA[MCP add] --> AR
+  CI[CLI init] --> IR[init]
+  MI[MCP init] --> IR
+  AR --> N["extension::names (one reader)"]
+  IR --> N
+  N --> LP[LockPlan asks]
+  style N fill:#bfe,stroke:#177a3c`},
+ { n:"03", t:"A project session reads the disk through one ledger", adr:"0106", c:8,
+   problem:"The rule 'stamp a file, then read it' was carried out by hand at six places, with six derivations of a source key.",
+   proof:"Pins: a path under a symlinked directory is no source (<code>symlinked_directory.rs</code>); stamp-order tests at the ledger (<code>stamp_order.rs</code>).",
+   before:`flowchart LR
+  S[ProjectSession] -->|stamp_config| D[DiskSnapshot]
+  S -->|stamp_sources + relink| D
+  S -->|stamp_checks| D
+  D --> I[SessionInputs]
+  S --> I
+  style S fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  S[ProjectSession] -->|read, changes| L["ledger/ (reads, stamps, keys)"]
+  O[one-shot compile] -->|Reads: Unrecorded| L
+  L --> W[watch roots, stale]
+  style L fill:#bfe,stroke:#177a3c`},
+ { n:"04", t:"The checks read through the disk they are given", adr:"0107", c:8,
+   problem:"Every disk read a check made had a twin elsewhere that predicted it for the session, and tests existed only to keep the twins in step.",
+   proof:"Pins: a symlinked check input is watched; a file beside a missing <code>file_exists</code> file no longer re-runs the checks (flipped by T6, T8).",
+   before:`flowchart LR
+  C["checks: fs::exists, read_dir"] -.-> D[(disk)]
+  F["files(): predicts the reads"] -.-> D
+  S[session] -->|stamp predicted set| F
+  A[agreement tests] --> C
+  A --> F
+  style F fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  C["checks (RuleInput.disk)"] -->|exists, list, read| P{{Disk port}}
+  P --> R["RunDisk: records and stamps"]
+  P --> M["MemoryDisk: tests"]
+  P --> U["PlainDisk: one-shot"]
+  style P fill:#bfe,stroke:#177a3c`},
+ { n:"05", t:"A project view comes only from a compiled project", adr:"0108", c:12,
+   problem:"ProjectView::new let every caller pair a graph, coverage and a root by hand; the LSP kept a cut-down copy of CompiledProject and lost coverage while rebuilding.",
+   proof:"Pin: <code>rebuilding.rs</code> (hover coverage while the session is out), flipped by T5; four test fixtures collapse into <code>Assembled</code>.",
+   before:`flowchart LR
+  LSP["LSP StandIn (Held/Out)"] --> N[ProjectView::new]
+  F1[Fixture] --> N
+  F2[view_support::Project] --> N
+  F3["hand-built RecordedCoverage"] --> N
+  CP[CompiledProject] --> OF[ProjectView::of]
+  style N fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  CP["CompiledProject (compiled, Assembled, copy)"] --> OF[ProjectView::of]
+  LSP["LSP: copy while the session is out"] --> CP
+  T[tests: Assembled + Viewed] --> CP
+  OF --> OPS[every operation]
+  style CP fill:#bfe,stroke:#177a3c`},
+ { n:"06", t:"Reopening a project in place is one session operation", adr:"0109", c:6,
+   problem:"Opening a project in a session's place was written three times (session, LSP, MCP), each carrying over a different set of things.",
+   proof:"Pins: <code>reopen.rs</code> (buffers and verify flag kept; the environment handed over before any source is read).",
+   before:`flowchart LR
+  R[reload_environment] --> S1["begin_open + finish_holding + replaced"]
+  L[LSP open] --> S2["begin_open + finish_holding"]
+  M[MCP serve] --> S3["open_from + mem::replace + replaced"]
+  style S2 fill:#fbb,stroke:#c00
+  style S3 fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  R[reload_environment] --> RE["ProjectSession::reopen(root, source, loaded) -> Update"]
+  L[LSP open] --> RE
+  M[MCP serve] --> RE
+  style RE fill:#bfe,stroke:#177a3c`},
+ { n:"07", t:"Who can be asked is one value handed to an operation", adr:"0110", c:6,
+   problem:"Trust, Consent and the adapter's asker spelled one idea three ways, and MCP rewrote an operation's refusal into advice it could not follow.",
+   proof:"Pins: the consent refusals that sent MCP to arguments it lacks (flipped by T3).",
+   before:`flowchart LR
+  CLI[CLI] --> T["Trust in request + .asking closure"]
+  CLI --> C["Consent::Prompt closure"]
+  MCP[MCP] --> H["Refuse / Approved, E059 rewritten"]
+  style H fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  CLI["CLI: terminal"] --> A
+  MCP["MCP: Nobody"] --> A
+  TST["tests: scripted"] --> A
+  A{{"Asking: Yes, Nobody, Ask(port)"}} --> ADD[add, update]
+  A --> COL[collect]
+  style A fill:#bfe,stroke:#177a3c`},
+ { n:"08", t:"Every reader of the versioned schema reports its notices", adr:"0111", c:8,
+   problem:"Only export reported I016 and W053; every other reader answered 1.0.0 silently over a corrupt record. A memo was considered and dropped: ADR 0015 D2 stands and a call costs about 4 ms.",
+   proof:"Pins: <code>schema_notices.rs</code> in ops, cli and mcp; <code>read_notices.rs</code> in mcp.",
+   before:`flowchart LR
+  E[export] -->|I016, W053| U[user]
+  S[schema] -.->|silent 1.0.0| U
+  T[trace] -.->|silent| U
+  M[model] -.->|silent| U
+  R[MCP resources] -.->|no _meta| U
+  style S fill:#fbb,stroke:#c00
+  style R fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  V["VersionedSchema.notices()"] --> E[export]
+  V --> S[schema]
+  V --> T[trace, model]
+  V --> R["MCP: _meta.diagnostics"]
+  style V fill:#bfe,stroke:#177a3c`}
+];
+
+const tbody = document.querySelector("#summary tbody");
+const host = document.getElementById("plans");
+PLANS.forEach(p => {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td>${p.n}</td><td>${p.t}</td><td>${p.adr}</td><td>${p.c}</td>`;
+  tbody.appendChild(tr);
+  const s = document.createElement("section");
+  s.className = "plan";
+  s.innerHTML = `<h3>Plan ${p.n}: ${p.t}</h3><div class="tag">ADR ${p.adr} · ${p.c} commit${p.c > 1 ? "s" : ""}</div>
+    <p>${p.problem}</p>
+    <div class="cols">
+      <div><h4>Before</h4><pre class="mermaid"></pre></div>
+      <div><h4>After</h4><pre class="mermaid"></pre></div>
+    </div>
+    <p class="proof">${p.proof}</p>`;
+  const pre = s.querySelectorAll("pre.mermaid");
+  pre[0].textContent = p.before;
+  pre[1].textContent = p.after;
+  host.appendChild(s);
+});
+const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "neutral", securityLevel: "strict" });
+mermaid.run({ querySelector: "pre.mermaid" });
+</script>
+</body>
+</html>

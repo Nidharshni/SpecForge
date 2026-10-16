@@ -202,8 +202,9 @@ behavior non_interactive_init "Non-Interactive Init" {
     with files_written.
     When --version is specified, it MUST override the default version
     (0.1.0) in the generated specforge.json.
-    --extensions takes builtins and local .wasm files, several to a flag
-    separated by commas, each read as add reads a specifier
+    --extensions takes builtins and local .wasm files; the command line
+    accepts several to a flag, separated by commas (its spelling of the
+    list), each read as add reads a specifier
     (parse_extension_specifier: E054, R-RES-003, E040, the same messages
     and suggestions): init enables, before each extension it enables or
     installs, the builtins that extension requires (its non-optional peers
@@ -211,6 +212,9 @@ behavior non_interactive_init "Non-Interactive Init" {
     extension are claimed as add claims them: the same way, it is enabled
     once; differently (other bytes, another version), the init is refused
     with extension_conflict naming both, before anything is written.
+    A relative local path is read from the directory init creates, its .. steps
+    resolved as the file system resolves them where the path exists and by
+    name beyond, as add resolves them.
     Init is one lock-plan change (ADR 0041): the project's peer set is
     judged once, before any file is written, so it never writes an entry
     specforge check cannot load or a project whose check reports an E027
@@ -230,6 +234,7 @@ behavior non_interactive_init "Non-Interactive Init" {
   verify unit "init refuses local extensions the lock plan refuses before it writes anything"
   verify unit "init enables an extension two of its specifiers name the same way once, and refuses two that add it differently with extension_conflict, as add does"
   verify unit "init reads its extension specifiers as add reads them, with add's codes"
+  verify unit "init resolves a .. in a relative local path as the file system does, as add resolves it"
   verify unit "init enables the builtins a local file requires before it"
   verify integration "init with a builtin that requires another passes check"
   verify unit "non-interactive init with unknown extension rejects with diagnostic and exit code 1"

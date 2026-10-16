@@ -11,8 +11,9 @@ use specforge_protocol_types::PeerDependency;
 use super::super::candidate::{Installable, LocalFile};
 use super::super::peer_set::{Declarations, ProjectPeers};
 use crate::OpError;
+use crate::asking::Asking;
+use crate::registry::METADATA_MISMATCH;
 use crate::registry::testing::{Asked, MemoryRegistry, Published, declaration};
-use crate::registry::{METADATA_MISMATCH, Trust};
 use crate::testing::declaring;
 use specforge_installed::{LockFile, LockFileEntry, LockState};
 use specforge_test_macros::test as specforge_test;
@@ -103,7 +104,7 @@ fn fetching(registry: &MemoryRegistry) -> Fetching<'_> {
     Fetching {
         registry,
         allow_unsigned: true,
-        trust: Trust::Refuse,
+        asking: Asking::Nobody,
     }
 }
 

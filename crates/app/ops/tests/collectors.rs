@@ -126,7 +126,8 @@ fn cargo_test_reports_plain_tests_as_unlinked() {
     verify = "collect maps test results to the entities of its view"
 )]
 fn collect_maps_results_to_the_views_entities() {
-    use specforge_ops::analysis::collect::{Consent, Mode, Request, collect};
+    use specforge_ops::analysis::collect::{Mode, Request, collect};
+    use specforge_ops::asking::Asking;
     use specforge_ops::view::ProjectView;
 
     let runtime: specforge_project::SharedRuntime = std::sync::Arc::new(wasm_runtime_for(&[
@@ -141,17 +142,20 @@ fn collect_maps_results_to_the_views_entities() {
     // The root holds a project: collect refuses a directory that holds none.
     let config = r#"{"name": "shop"}"#;
     std::fs::write(dir.path().join("specforge.json"), config).unwrap();
-    let env = specforge_project::Environment::assemble(
-        specforge_common::parse_project_config(&dir.path().join("specforge.json"), config),
-        specforge_installed::Installed::none(),
-        specforge_project::ExtensionLoad::In {
-            runtime,
-            loaded: specforge_project::Loaded {
-                enabled: Vec::new(),
-                declarations: vec![load_via_protocol("@specforge/cargo-test")],
+    let project = specforge_project::testing::Assembled::assembling_at(dir.path(), |root| {
+        specforge_project::Environment::assemble(
+            specforge_common::parse_project_config(&root.join("specforge.json"), config),
+            specforge_installed::Installed::unread(root),
+            specforge_project::ExtensionLoad::In {
+                runtime,
+                loaded: specforge_project::Loaded {
+                    enabled: Vec::new(),
+                    declarations: vec![load_via_protocol("@specforge/cargo-test")],
+                },
             },
-        },
-    );
+        )
+    })
+    .graph(graph);
     let report = dir.path().join("target/specforge/shop.json");
     std::fs::create_dir_all(report.parent().unwrap()).unwrap();
     std::fs::write(
@@ -162,8 +166,7 @@ fn collect_maps_results_to_the_views_entities() {
         ]}"#,
     )
     .unwrap();
-    let recorded = specforge_project::coverage::RecordedCoverage::over(&graph, &env);
-    let view = ProjectView::new(&graph, &env, Some(dir.path()), &recorded);
+    let view = ProjectView::of(project.compiled());
 
     let reports = [report];
     let outcome = collect(
@@ -171,7 +174,7 @@ fn collect_maps_results_to_the_views_entities() {
         Request {
             runner: Some("cargo-test"),
             mode: Mode::Reports(&reports),
-            consent: Consent::Approved,
+            asking: Asking::Nobody,
             announce: &mut |_, _| panic!("nothing runs when reading reports"),
         },
     )

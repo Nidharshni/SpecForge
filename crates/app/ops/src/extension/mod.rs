@@ -12,6 +12,7 @@ mod fixtures;
 mod inventory;
 mod list;
 mod lock_plan;
+mod names;
 mod peer_set;
 mod publish;
 mod remove;
@@ -20,10 +21,8 @@ mod update;
 
 pub use add::{
     AddDocument, AddField, AddOutcome, AddRequest, AddResult, Added, AddedExtension, BuiltinSource,
-    DuplicateSpecifier, EnabledBuiltin, InstalledPackage, PlannedAdd, PresentExtension, Source,
-    Specified, add, parse, specified,
+    DuplicateSpecifier, EnabledBuiltin, InstalledPackage, PlannedAdd, PresentExtension, add,
 };
-pub(crate) use add::{git_not_supported, named};
 pub use candidate::{Candidate, Installable, LocalFile, binary_at};
 pub use inventory::{Inventory, ProjectExtension, Selection, Status, inventory};
 pub use list::{
@@ -42,6 +41,7 @@ pub use update::{
 
 pub(crate) use claims::{Claimed, Claims};
 pub(crate) use lock_plan::{Also, Ask, Install, LockPlan};
+pub(crate) use names::{Named, Names, Place};
 
 use specforge_installed::LockSource;
 

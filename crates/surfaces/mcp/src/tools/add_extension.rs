@@ -1,11 +1,11 @@
 //! `specforge.add_extension`: install extensions (`specforge_ops::extension::add`).
 
-use crate::containment::{self, Containment};
 use crate::refusal::ArgumentOf;
 use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 use serde::Serialize;
 use specforge_common::shape::Shape;
+use specforge_ops::Containment;
 
 use crate::args::{Arguments, NonEmpty};
 use crate::events::ExtensionAdded;
@@ -83,37 +83,27 @@ impl CoreTool for Tool {
     type Returns = Mutation<Reply>;
 
     fn call(project: ProjectRef<'_>, args: Args) -> Mutation<Reply> {
+        use specforge_ops::asking::Asking;
         use specforge_ops::extension::{self, AddRequest};
-        use specforge_ops::registry::Trust;
 
         // The project the call installs into: the served one, or the one
         // `path` names.
         let root = project.root;
-        // A relative local path is read from the project's root: the server has no working
-        // directory of its own to mean it.
-        let extensions: Vec<_> = extension::specified(&args.specifiers.0)
-            .map_err(Self::failed)?
-            .into_iter()
-            .map(|specified| specified.relative_to(root.dir()))
-            .collect();
-        // A local file installs only from inside the project it installs into.
-        containment::refuse_local_outside(
-            &Containment::at(root.dir()),
-            root.dir(),
-            &extensions,
-            "specifiers",
-        )?;
-
         let registry =
             specforge_ops_registry::ConfiguredRegistry::for_project(root, "add_extension");
         // The shared operation `specforge add` runs. An agent can't be asked,
         // so a publisher key change is refused rather than re-pinned.
         let request = AddRequest {
             root,
-            extensions,
+            extensions: args.specifiers.0,
+            // A relative local path is read from the project's root: the server has no working
+            // directory of its own to mean it.
+            base: None,
             allow_unsigned: args.allow_unsigned,
-            trust: Trust::Refuse,
+            asking: Asking::Nobody,
             dry_run: args.dry_run,
+            // A local file installs only from inside the project it installs into.
+            containment: &Containment::within(root.dir()),
         };
         let added = extension::add(&request, &registry, project.runtime.as_ref());
         // What reading the registry configuration reported (W140, I003), once the add asked a

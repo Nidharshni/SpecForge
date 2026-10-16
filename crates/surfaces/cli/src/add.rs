@@ -1,6 +1,7 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, outln};
 use specforge_common::ProjectPath;
+use specforge_ops::Containment;
 use specforge_ops::extension::{self, AddOutcome, AddRequest, Added, AddedExtension, Origin};
 use specforge_ops_registry::ConfiguredRegistry;
 
@@ -39,21 +40,18 @@ impl Args {
             Err(error) => return Refusal::of(format).report(terminal, &error),
         };
         let path = root.dir();
-        let extensions = match extension::specified(&self.specifiers) {
-            Ok(extensions) => extensions,
-            Err(error) => {
-                return Refusal::of(format).report(terminal, &error);
-            }
-        };
-        let registry =
-            ConfiguredRegistry::for_project(&root, "add").asking(crate::trust::asker(terminal));
+        // A shell user names a relative path from where they stand.
+        let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let registry = ConfiguredRegistry::for_project(&root, "add");
         let runtime = specforge_component::ComponentRuntime::with_user_cache();
         let request = AddRequest {
             root: &root,
-            extensions,
+            extensions: self.specifiers,
+            base: Some(&cwd),
             allow_unsigned: self.allow_unsigned,
-            trust: format.trust(self.yes),
+            asking: crate::asking::of(self.yes, format, terminal),
             dry_run: self.dry_run,
+            containment: &Containment::unbounded(),
         };
         let added = extension::add(&request, &registry, &runtime);
         // What reading the registry configuration reported, once the add

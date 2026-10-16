@@ -196,7 +196,7 @@ async fn formatting_keeps_the_compile_diagnostics() {
 
 /// A project on disk (`specforge.json` = `{}`) with `files` written
 /// (path, text), its root canonical.
-fn format_project(files: &[(&str, &str)]) -> (tempfile::TempDir, std::path::PathBuf) {
+pub(crate) fn format_project(files: &[(&str, &str)]) -> (tempfile::TempDir, std::path::PathBuf) {
     let dir = tempfile::TempDir::new().unwrap();
     let root = dir.path().canonicalize().unwrap();
     std::fs::write(root.join("specforge.json"), "{}").unwrap();
@@ -210,7 +210,10 @@ fn format_project(files: &[(&str, &str)]) -> (tempfile::TempDir, std::path::Path
 
 /// A session over `root` with `file` (relative to it) open, its compile
 /// published; the file's URI.
-async fn open_in(root: &std::path::Path, file: &str) -> (crate::session::Session, String) {
+pub(crate) async fn open_in(
+    root: &std::path::Path,
+    file: &str,
+) -> (crate::session::Session, String) {
     use crate::session::{Session, uri_of};
     let path = root.join(file);
     let text = std::fs::read_to_string(&path).unwrap();
@@ -222,7 +225,7 @@ async fn open_in(root: &std::path::Path, file: &str) -> (crate::session::Session
 }
 
 /// `text` with LSP `edits` (UTF-16 columns) applied.
-fn apply_edits(text: &str, edits: &[serde_json::Value]) -> String {
+pub(crate) fn apply_edits(text: &str, edits: &[serde_json::Value]) -> String {
     let lines: Vec<&str> = text.split('\n').collect();
     let offset = |position: &serde_json::Value| {
         let line = position["line"].as_u64().unwrap() as usize;
@@ -276,139 +279,6 @@ async fn formatting_uses_the_project_format_config() {
     let edits = session.format(&uri).await;
     assert_eq!(edits, serde_json::json!([]));
 }
-
-#[specforge_test(
-    behavior = "load_format_config",
-    verify = "a file is formatted with the configuration of its own project"
-)]
-#[tokio::test]
-async fn the_cli_and_the_editor_agree_on_a_nested_project() {
-    let two = "behavior login \"Login\" {\n  contract \"The system MUST log in\"\n}\n";
-    let (_dir, root) = format_project(&[
-        (".specforgefmt.toml", "indent_width = 4\n"),
-        ("inner/specforge.json", "{}"),
-        ("inner/spec/a.spec", two),
-    ]);
-    let (mut session, uri) = open_in(&root.join("inner"), "spec/a.spec").await;
-
-    // The inner project has no configuration file: its defaults, not the
-    // outer project's, and not the editor's tabSize 4.
-    let edits = session.formatting(&uri, 4).await["result"].clone();
-    assert_eq!(edits, serde_json::json!([]));
-    let outcome =
-        specforge_ops::authoring::format::run(&specforge_ops::authoring::format::Request {
-            root: &specforge_common::ProjectRoot::of(&root).unwrap(),
-            paths: &[root.join("inner")],
-            mode: specforge_ops::authoring::format::Mode::Check,
-        })
-        .unwrap();
-    assert_eq!((outcome.checked, outcome.changes.len()), (1, 0));
-}
-
-#[specforge_test(
-    behavior = "lsp_format_document",
-    verify = "LSP format produces same result as CLI format"
-)]
-#[tokio::test]
-async fn lsp_format_matches_cli_format() {
-    let messy = "behavior login \"Connexion é\" {\n  contract   \"The system MUST log in\"\n      types [a, b]\n}\n";
-    let (_dir, root) = format_project(&[
-        (".specforgefmt.toml", "indent_width = 4\n"),
-        ("spec/a.spec", messy),
-    ]);
-    let (mut session, uri) = open_in(&root, "spec/a.spec").await;
-
-    let edits = session.format(&uri).await;
-    let edited = apply_edits(messy, edits.as_array().expect("an edit list"));
-
-    let outcome =
-        specforge_ops::authoring::format::run(&specforge_ops::authoring::format::Request {
-            root: &specforge_common::ProjectRoot::of(&root).unwrap(),
-            paths: &[],
-            mode: specforge_ops::authoring::format::Mode::Check,
-        })
-        .unwrap();
-    assert_eq!(edited, outcome.changes[0].after);
-    assert!(edited.contains("\n    contract"), "{edited}");
-}
-
-/// The round-7 probe rows (A-C1), as files of one project.
-const CONVERGE: [(&str, &str); 7] = [
-    (
-        "spec/body_blank.spec",
-        "behavior a \"A\" {\n\n  contract \"x\"\n}\n",
-    ),
-    (
-        "spec/between_blocks.spec",
-        "behavior a \"A\" {\n  contract \"x\"\n}\n\n\nbehavior b \"B\" {\n  contract \"y\"\n}\n",
-    ),
-    (
-        "spec/leading.spec",
-        "\n\n\nbehavior a \"A\" {\n  contract \"x\"\n}\n",
-    ),
-    (
-        "spec/trailing.spec",
-        "behavior a \"A\" {\n  contract \"x\"\n}\n\n\n",
-    ),
-    (
-        "spec/no_final_newline.spec",
-        "behavior a \"A\" {\n  contract \"x\"\n}",
-    ),
-    (
-        "spec/crlf.spec",
-        "behavior a \"A\" {\r\n  contract \"x\"\r\n}\r\n",
-    ),
-    (
-        "spec/misindented.spec",
-        "behavior a \"A\" {\n      contract \"x\"\n}\n",
-    ),
-];
-
-#[specforge_test(
-    behavior = "lsp_format_document",
-    verify = "editor formatting reaches the text specforge format writes in one pass: blank lines removed, final newline added, CRLF made LF"
-)]
-#[specforge_test(
-    invariant = "format_rule_determinism",
-    verify = "same input and config produce identical output across CLI and LSP"
-)]
-#[tokio::test]
-async fn editor_formatting_reaches_the_cli_text_in_one_pass() {
-    use crate::session::{Session, uri_of};
-    use specforge_ops::authoring::format::{Mode, Request, run};
-    let (_dir, root) = format_project(&CONVERGE);
-    let outcome = run(&Request {
-        root: &specforge_common::ProjectRoot::of(&root).unwrap(),
-        paths: &[],
-        mode: Mode::Check,
-    })
-    .unwrap();
-    let (mut session, _) = Session::start(Some(&root)).await;
-    for (path, text) in CONVERGE {
-        let file = root.join(path);
-        let uri = uri_of(&file);
-        session.open(&uri, text).await;
-        session.diagnostics(&uri).await;
-        let cli = &outcome
-            .changes
-            .iter()
-            .find(|c| c.path == file)
-            .unwrap_or_else(|| panic!("{path} would change"))
-            .after;
-
-        let edits = session.format(&uri).await;
-        let edited = apply_edits(text, edits.as_array().expect("an edit list"));
-        assert_eq!(&edited, cli, "{path}: {edits}");
-
-        // One pass: the result is canonical, so the next request has nothing to do.
-        session
-            .did_change(&uri, 2, vec![serde_json::json!({ "text": edited })])
-            .await;
-        session.diagnostics(&uri).await;
-        assert_eq!(session.format(&uri).await, serde_json::json!([]), "{path}");
-    }
-}
-
 #[specforge_test(
     behavior = "lsp_format_range",
     verify = "range formatting matches full formatting for affected blocks"
@@ -953,9 +823,8 @@ fn provide_semantic_tokens_contract() {
     let source = "behavior foo \"Foo\" {\n  contract \"\"\"\n    hello\n  \"\"\"\n}\n";
     let registries = verifiable(&["behavior"], &[]);
     let graph = Graph::new();
-    let env = specforge_project::Environment::with_registries(registries, None);
-    let recorded = specforge_project::coverage::RecordedCoverage::over(&graph, &env);
-    let view = specforge_ops::view::ProjectView::new(&graph, &env, None, &recorded);
+    let project = specforge_project::testing::Assembled::over(registries).graph(graph);
+    let view = specforge_ops::view::ProjectView::of(project.detached());
     let tokens = specforge_lsp::Document::new(source.into()).tokens(&view);
 
     assert!(!tokens.is_empty(), "must produce tokens");
@@ -991,10 +860,9 @@ fn code_action_create_entity_stub_contract() {
     let state = buffers(&[("/p/auth.spec", text)]);
     let diagnostics = state.session().unwrap().project().diagnostics();
     let fixes_with = |target_kind: Option<&str>| {
-        let env =
-            specforge_project::Environment::with_registries(invariants_field(target_kind), None);
-        let recorded = specforge_project::coverage::RecordedCoverage::over(state.graph(), &env);
-        let view = specforge_ops::view::ProjectView::new(state.graph(), &env, None, &recorded);
+        let project = specforge_project::testing::Assembled::over(invariants_field(target_kind))
+            .graph(state.graph().clone());
+        let view = specforge_ops::view::ProjectView::of(project.detached());
         let nav =
             specforge_ops::read::navigate::Navigator::new(view, |_: &str| Some(text.to_string()));
         nav.fixes(
@@ -1070,9 +938,9 @@ fn code_actions_for_missing_verify_contract() {
     // Ensures: quickfix code action with verify stub targeting the .spec file
     let text = "\n\n\n\nbehavior my_behavior \"B\" {\n  contract \"c\"\n}\n";
     let state = buffers(&[("/p/a.spec", text)]);
-    let env = specforge_project::Environment::with_registries(verifiable(&["behavior"], &[]), None);
-    let recorded = specforge_project::coverage::RecordedCoverage::over(state.graph(), &env);
-    let view = specforge_ops::view::ProjectView::new(state.graph(), &env, None, &recorded);
+    let project = specforge_project::testing::Assembled::over(verifiable(&["behavior"], &[]))
+        .graph(state.graph().clone());
+    let view = specforge_ops::view::ProjectView::of(project.detached());
     let nav = specforge_ops::read::navigate::Navigator::new(view, |_: &str| Some(text.to_string()));
     let fixes = nav.fixes(&[], &specforge_ops::read::navigate::FixQuery::default());
 

@@ -4,7 +4,7 @@ use specforge_ops::read::schema::{SchemaField, SchemaRequest};
 
 use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
-use crate::reply::Answered;
+use crate::reply::{Answer, Answered};
 
 /// `specforge.schema`'s reply: the document `specforge schema` prints.
 type Reply = specforge_ops::read::schema::SchemaDocument;
@@ -59,6 +59,6 @@ impl CoreTool for Tool {
         };
         let outcome =
             specforge_ops::read::schema::schema(&view, &request).map_err(Self::refused)?;
-        Ok(outcome.document().into())
+        Ok(Answer::new(outcome.document()).with_diagnostics(outcome.notices))
     }
 }

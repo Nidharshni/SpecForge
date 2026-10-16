@@ -8,8 +8,8 @@
 )]
 
 use sha2::{Digest, Sha256};
+use specforge_ops::asking::Asking;
 use specforge_ops::extension::resolve;
-use specforge_ops::registry::Trust;
 use specforge_ops::registry::{Registry, TrustPolicy};
 use specforge_ops_registry::{ConfiguredRegistry, User};
 use specforge_package::{PackageName, PackageRef, Version};
@@ -93,7 +93,7 @@ fn the_adapter_requests_these_paths() {
     let _ = registry.fetch(
         &name("@acme/tool"),
         &Version::new(1, 0, 0),
-        TrustPolicy::new(true, Trust::Refuse),
+        TrustPolicy::new(true, Asking::Nobody),
     );
     assert_eq!(
         served.requests().last().map(String::as_str),
@@ -103,7 +103,7 @@ fn the_adapter_requests_these_paths() {
     let _ = registry.fetch(
         &name("@acme/tool"),
         &build,
-        TrustPolicy::new(true, Trust::Refuse),
+        TrustPolicy::new(true, Asking::Nobody),
     );
     assert_eq!(
         served.requests().last().map(String::as_str),
@@ -129,7 +129,7 @@ fn the_adapter_asks_no_registry_for_a_name_none_serves() {
         .fetch(
             &name("@other/x"),
             &Version::new(1, 0, 0),
-            TrustPolicy::new(true, Trust::Refuse),
+            TrustPolicy::new(true, Asking::Nobody),
         )
         .unwrap_err();
     assert_eq!(error.code, "R-OPS-001", "{error:?}");
@@ -159,7 +159,7 @@ fn the_registry_is_chosen_once() {
         .fetch(
             &name("@acme/tool"),
             &Version::new(1, 0, 0),
-            TrustPolicy::new(true, Trust::Refuse),
+            TrustPolicy::new(true, Asking::Nobody),
         )
         .unwrap();
     assert_eq!(package.wasm, b"\0asm-acme-tool");

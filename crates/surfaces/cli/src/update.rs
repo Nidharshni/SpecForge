@@ -1,5 +1,6 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, errln, outln};
+use specforge_ops::Containment;
 use specforge_ops::extension::{self, UpdateRequest};
 use specforge_ops_registry::ConfiguredRegistry;
 use specforge_package::Reach;
@@ -41,8 +42,7 @@ impl Args {
             Ok(root) => root,
             Err(error) => return Refusal::of(format).report(terminal, &error),
         };
-        let registry =
-            ConfiguredRegistry::for_project(&root, "update").asking(crate::trust::asker(terminal));
+        let registry = ConfiguredRegistry::for_project(&root, "update");
         let runtime = specforge_component::ComponentRuntime::with_user_cache();
         let request = UpdateRequest {
             root: &root,
@@ -53,7 +53,8 @@ impl Args {
                 Reach::Compatible
             },
             allow_unsigned: self.allow_unsigned,
-            trust: format.trust(self.yes),
+            asking: crate::asking::of(self.yes, format, terminal),
+            containment: &Containment::unbounded(),
         };
         let updated = extension::update(&request, &registry, &runtime);
         terminal.diagnostics(&registry.reported());

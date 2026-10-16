@@ -7,6 +7,7 @@
 
 mod add;
 mod analyze;
+mod asking;
 mod check;
 mod collect;
 mod doctor;
@@ -38,7 +39,6 @@ mod search;
 mod stats;
 mod terminal;
 mod trace;
-mod trust;
 mod update;
 mod watch;
 

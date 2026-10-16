@@ -195,6 +195,15 @@ impl Served {
         self
     }
 
+    /// Open the workspace again, as a second `initialized` does: the session is reopened in
+    /// place. What that sent is appended to [`Self::opening`].
+    pub fn open_again(&mut self) {
+        let root = self.dir.path().to_path_buf();
+        self.reaction().open(Some(root));
+        let sent = self.editor.take();
+        self.opening.extend(sent);
+    }
+
     /// Documents the editor restores before the project opens (`initialized` has not run yet):
     /// each opened holding `text`, which need not be its file's, and applied as the debounce
     /// applies them. Call before `open`.
@@ -349,7 +358,7 @@ impl Served {
             .then(|| hover_text(&self.state(), &self.uri(file), self.position_of(file, id)))?
     }
 
-    /// `f` over the state while the session is out for an update (its stand-in).
+    /// `f` over the state while the session is out for an update (its copy).
     pub fn rebuilding<R>(&mut self, f: impl FnOnce(&LspState) -> R) -> R {
         let mut state = self.state.blocking_write();
         let session = state.take_session().expect("held");

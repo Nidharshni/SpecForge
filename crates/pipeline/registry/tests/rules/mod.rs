@@ -18,7 +18,7 @@ use specforge_registry::RegistryBuild;
 use specforge_registry::entity::{EdgeRecord, EntityRecord, RuleInput};
 use specforge_registry::rules::{NoVerdicts, Rules};
 
-use crate::support::{build, declare};
+use crate::support::{NoDisk, build, declare};
 
 /// What the build made of some declared rules: the rule set and the
 /// diagnostics its rules step reported (W112 and W147, then W023).
@@ -143,6 +143,7 @@ pub fn over(entities: &[EntityRecord]) -> RuleInput<'_> {
         entities,
         edges: &[],
         spec_root: Path::new(""),
+        disk: &NoDisk,
     }
 }
 
@@ -152,6 +153,7 @@ pub fn with_edges<'a>(entities: &'a [EntityRecord], edges: &'a [EdgeRecord]) -> 
         entities,
         edges,
         spec_root: Path::new(""),
+        disk: &NoDisk,
     }
 }
 

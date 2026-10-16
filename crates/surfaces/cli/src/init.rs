@@ -15,8 +15,8 @@ pub(crate) struct Args {
     #[arg(long, default_value = specforge_ops::authoring::init::DEFAULT_VERSION)]
     version: String,
 
-    /// Extensions to install
-    #[arg(long)]
+    /// Extensions to install: builtins and local .wasm files, several to a flag separated by commas
+    #[arg(long, value_delimiter = ',')]
     extensions: Vec<String>,
 
     #[command(flatten)]
@@ -55,6 +55,7 @@ fn init_at(
         name,
         version,
         extensions,
+        containment: &specforge_ops::Containment::unbounded(),
     };
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
     let outcome = match init::init(&request, &runtime) {

@@ -7,7 +7,7 @@
 //! The reaction is synchronous (ADR 0043, amending ADR 0023 D8): it reads files and runs the
 //! checks, so it runs on the blocking pool, one change at a time. It takes the state's lock
 //! only briefly, with the blocking accessors, and never holds it while it talks to the editor;
-//! readers meanwhile see the session's last complete graph (`LspState`'s stand-in). It must not
+//! readers meanwhile see a copy of the session's last complete compile. It must not
 //! be called from an async task.
 
 use std::path::PathBuf;
@@ -82,7 +82,14 @@ impl<E: Editor> Reaction<E> {
                 return;
             }
         };
-        let opened = self.react(Change::Open(root)).is_some();
+        let applied = self.react(Change::Open(root));
+        let opened = applied.is_some();
+        if applied.is_some_and(|applied| !applied.inputs_changed) {
+            // The open put the editor on the static watchers (above): follow the project's,
+            // whatever the update says about its inputs. When it did say they moved, `react`
+            // has followed already, and a refused set is asked for once per follow.
+            self.follow();
+        }
         let (ext_count, kind_count, file_count, spec_root) = {
             let st = self.state.blocking_read();
             (
@@ -150,8 +157,9 @@ impl<E: Editor> Reaction<E> {
     ///
     /// The session does synchronous file reads and whole-graph checks: it is taken out of the
     /// state (a brief write lock), updated without any lock held, and put back. Meanwhile
-    /// readers see its last complete graph and environment (C4-05). A project is opened in two
-    /// steps, its environment shown to readers between them (ADR 0023 D6).
+    /// readers see its last complete graph and environment (C4-05). A project is reopened in the
+    /// session's place, its environment shown to readers before the sources are read (ADR 0023
+    /// D6, ADR 0109).
     fn apply(&mut self, change: Change) -> Option<Applied> {
         let (session, plan) = {
             let mut st = self.state.blocking_write();
@@ -159,33 +167,19 @@ impl<E: Editor> Reaction<E> {
             (st.take_session()?, plan)
         };
 
-        // Opening a project loads its environment first and shows it to readers before the
-        // sources are read: the kinds and fields keyword completion offers need no `.spec`
-        // file, so they are answered while indexing runs (CONTEXT: Environment).
-        let opening = match plan.root().cloned() {
-            Some(root) => {
-                let runtime = self.runtime.clone();
-                match crate::unwind::unwinding(move || ProjectSession::begin_open(&root, runtime)) {
-                    Ok(opening) => {
-                        self.state
-                            .blocking_write()
-                            .show_environment(Arc::clone(opening.environment()));
-                        Some(opening)
-                    }
-                    Err(panic) => return self.lose_session(panic),
-                }
-            }
-            None => None,
-        };
-
+        // A project opened in the session's place loads its environment first and shows it to
+        // readers before the sources are read: the kinds and fields keyword completion offers
+        // need no `.spec` file, so they are answered while indexing runs (CONTEXT: Environment).
+        // Its buffers are carried over, built in its one cold build.
+        let state = Arc::clone(&self.state);
+        let runtime = self.runtime.clone();
         let updated = crate::unwind::unwinding(move || {
-            // The project opens in the place of the session the editor's buffers were
-            // given to (detached until now): it holds them, built in its one cold build.
-            let mut session = match opening {
-                Some(opening) => opening.finish_holding(session.into_buffers()),
-                None => session,
-            };
-            let applied = plan.apply(&mut session);
+            let mut session = session;
+            let applied = plan.apply(&mut session, runtime, |environment| {
+                state
+                    .blocking_write()
+                    .show_environment(Arc::clone(environment))
+            });
             (session, applied)
         });
         let (session, applied) = match updated {
@@ -208,7 +202,7 @@ impl<E: Editor> Reaction<E> {
     }
 
     /// An update panicked: the session is lost, so the state falls back to an empty one rather
-    /// than a stale stand-in.
+    /// than a stale copy.
     fn lose_session(&mut self, panic: String) -> Option<Applied> {
         self.state
             .blocking_write()

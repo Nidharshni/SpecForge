@@ -244,6 +244,7 @@ mod tests {
                 entities: &[record],
                 edges: &[],
                 spec_root: std::path::Path::new("."),
+                disk: &crate::MemoryDisk::new(),
             },
             &crate::rules::NoVerdicts,
         );

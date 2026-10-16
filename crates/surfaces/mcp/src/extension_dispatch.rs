@@ -193,6 +193,7 @@ fn resource_adapter(
             let text = ResourceText {
                 text: read.content,
                 mime_type: read.mime_type,
+                notices: Vec::new(),
             };
             (Ok(text), Some(event))
         }

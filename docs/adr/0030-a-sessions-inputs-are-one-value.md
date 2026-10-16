@@ -1,6 +1,6 @@
 # A session's inputs are one value
 
-**Status:** accepted (2026-10-07)
+**Status:** accepted (2026-10-07) Amended by [ADR 0107](0107-the-checks-read-through-the-disk-they-are-given.md) (check inputs are the checks' recorded reads, stamped at the read).
 
 ADR 0014 made the project session the one judge of what a changed path is. What the session
 depends on, though, was rebuilt in five places from the same three helpers: the stamp taken at open,
@@ -29,6 +29,7 @@ and five places.
   *(ADR 0073: `classify` and `SessionInputs::changes` are gone; `ProjectSession::changes(paths)` is
   the stamp comparison narrowed by the paths. The value also holds each symlinked source's
   target.)*
+  *(ADR 0106: the session stamps and discovers through its read ledger, `specforge_project::ledger`, which owns this value and the stamps.)*
   *(ADR 0055: complete. Import resolution reads no file, so a `.spec` file discovery does not find is no
   input of any kind.)*
 - **D2. When it changes.** It is made when the environment loads and renewed each time the checks
