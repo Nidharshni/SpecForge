@@ -195,7 +195,6 @@ fn add_package(
     registry: &specforge_ops::registry::testing::MemoryRegistry,
     specifier: &str,
 ) -> specforge_ops::Refusal<specforge_ops::extension::AddField> {
-    use specforge_ops::asking::Asking;
     use specforge_ops::extension::{self, AddRequest};
     extension::add(
         &AddRequest {
@@ -203,9 +202,8 @@ fn add_package(
             extensions: vec![specifier.to_string()],
             base: None,
             allow_unsigned: false,
-            asking: Asking::Nobody,
             dry_run: false,
-            containment: &specforge_ops::Containment::unbounded(),
+            caller: specforge_ops::testing::caller(),
         },
         registry,
         &specforge_ops::testing::candidates(),

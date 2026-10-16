@@ -131,7 +131,7 @@ fn management_operations_read_the_project_from_their_view() {
                 name: "@acme/missing",
                 force: false,
                 dry_run: true,
-                containment: &specforge_ops::Containment::unbounded(),
+                caller: specforge_ops::testing::caller(),
             },
         )
         .map(drop)

@@ -8,6 +8,7 @@
 mod add;
 mod analyze;
 mod asking;
+mod caller;
 mod check;
 mod collect;
 mod doctor;

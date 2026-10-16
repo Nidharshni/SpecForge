@@ -1,7 +1,6 @@
 use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, errln, outln};
-use specforge_ops::Containment;
 use specforge_ops::extension::{self, UpdateRequest};
 use specforge_ops_registry::ConfiguredRegistry;
 use specforge_package::Reach;
@@ -54,8 +53,7 @@ impl Args {
                 Reach::Compatible
             },
             allow_unsigned: self.allow_unsigned,
-            asking: crate::asking::of(self.yes, format, terminal),
-            containment: &Containment::unbounded(),
+            caller: crate::caller::of(self.yes, format, terminal),
         };
         let updated = extension::update(&request, &registry, &runtime);
         Notes::new(terminal, format).beside(&registry.reported());

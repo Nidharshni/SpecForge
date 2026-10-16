@@ -82,7 +82,6 @@ impl CoreTool for Tool {
     type Returns = Mutation<Reply>;
 
     fn call(project: ProjectRef<'_>, args: Args) -> Mutation<Reply> {
-        use specforge_ops::asking::Asking;
         use specforge_ops::extension::{self, AddRequest};
 
         // The project the call installs into: the served one, or the one
@@ -90,8 +89,8 @@ impl CoreTool for Tool {
         let root = project.root;
         let registry =
             specforge_ops_registry::ConfiguredRegistry::for_project(root, "add_extension");
-        // The shared operation `specforge add` runs. An agent can't be asked,
-        // so a publisher key change is refused rather than re-pinned.
+        // The shared operation `specforge add` runs. The call's caller asks nobody, so a publisher
+        // key change is refused rather than re-pinned.
         let request = AddRequest {
             root,
             extensions: args.specifiers.0,
@@ -99,10 +98,9 @@ impl CoreTool for Tool {
             // directory of its own to mean it.
             base: None,
             allow_unsigned: args.allow_unsigned,
-            asking: Asking::Nobody,
             dry_run: args.dry_run,
             // A local file installs only from inside the project it installs into.
-            containment: project.containment(),
+            caller: project.caller(),
         };
         let added = extension::add(&request, &registry, project.runtime.as_ref());
         // What reading the registry configuration reported (W140, I003), once the add asked a

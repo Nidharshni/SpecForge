@@ -26,9 +26,8 @@ fn an_unusable_config_is_refused_before_anything_is_installed() {
                     extensions: vec![source.clone().into()],
                     base: None,
                     allow_unsigned: false,
-                    asking: Asking::Nobody,
                     dry_run,
-                    containment: &crate::Containment::unbounded(),
+                    caller: crate::testing::caller(),
                 };
                 let error =
                     add(&request, &crate::registry::Unconfigured("add"), &runtime()).unwrap_err();
@@ -59,9 +58,8 @@ fn add_reinstalls_a_binary_that_changed() {
         extensions: vec![Source::Local(greet).into()],
         base: None,
         allow_unsigned: false,
-        asking: Asking::Nobody,
         dry_run: false,
-        containment: &crate::Containment::unbounded(),
+        caller: crate::testing::caller(),
     };
     let unconfigured = crate::registry::Unconfigured("add");
     add(&request, &unconfigured, &runtime()).unwrap();
@@ -362,9 +360,8 @@ fn a_missing_config_is_config_not_found_with_the_hint_to_init() {
         extensions: vec![Source::Builtin("@specforge/product").into()],
         base: None,
         allow_unsigned: false,
-        asking: Asking::Nobody,
         dry_run: false,
-        containment: &crate::Containment::unbounded(),
+        caller: crate::testing::caller(),
     };
 
     let error = add(&request, &crate::registry::Unconfigured("add"), &runtime()).unwrap_err();

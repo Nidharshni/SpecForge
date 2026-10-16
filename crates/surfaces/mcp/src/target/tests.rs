@@ -314,3 +314,34 @@ fn a_projects_containment_is_its_root() {
     let project = call.project().unwrap();
     assert_eq!(project.containment().root(), Some(canonical.as_path()));
 }
+
+#[test]
+fn a_projects_caller_reaches_its_root_and_asks_nobody() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::write(
+        dir.path().join("specforge.json"),
+        r#"{"name":"p","version":"0.1.0"}"#,
+    )
+    .unwrap();
+    let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+    let canonical = std::fs::canonicalize(dir.path()).unwrap();
+
+    // The served project.
+    let mut state = McpState::new();
+    state.serve(&root);
+    let served = Call::new(&mut state, CallTarget::Served);
+    let project = served.project().unwrap();
+    let caller = project.caller();
+    assert_eq!(caller.containment().root(), Some(canonical.as_path()));
+    assert_eq!(format!("{:?}", caller.asking()), "Nobody");
+    drop(project);
+
+    // Another project a call names.
+    let mut other = McpState::new();
+    let session = Box::new(other.open(&root));
+    let call = Call::new(&mut other, CallTarget::Other(session));
+    let project = call.project().unwrap();
+    let caller = project.caller();
+    assert_eq!(caller.containment().root(), Some(canonical.as_path()));
+    assert_eq!(format!("{:?}", caller.asking()), "Nobody");
+}

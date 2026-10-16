@@ -2,7 +2,6 @@ use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, outln};
 use specforge_common::ProjectPath;
-use specforge_ops::Containment;
 use specforge_ops::extension::{self, AddOutcome, AddRequest, Added, AddedExtension, Origin};
 use specforge_ops_registry::ConfiguredRegistry;
 
@@ -50,9 +49,8 @@ impl Args {
             extensions: self.specifiers,
             base: Some(&cwd),
             allow_unsigned: self.allow_unsigned,
-            asking: crate::asking::of(self.yes, format, terminal),
             dry_run: self.dry_run,
-            containment: &Containment::unbounded(),
+            caller: crate::caller::of(self.yes, format, terminal),
         };
         let added = extension::add(&request, &registry, &runtime);
         // What reading the registry configuration reported, once the add

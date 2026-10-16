@@ -4,9 +4,8 @@ use super::Origin;
 use super::lock_plan::{Ask, Asked, Fetching, Install, LockPlan, Purpose};
 use super::names::no_specifier;
 use super::{Named, Names, Place};
-use crate::asking::Asking;
 use crate::registry::{Publisher, Registry};
-use crate::{Containment, Refusal, Writes};
+use crate::{Caller, Refusal, Writes};
 use specforge_installed::Installed;
 use specforge_package::PackageName;
 use specforge_wasm::WasmRuntime;
@@ -30,16 +29,15 @@ pub struct AddRequest<'a> {
     pub base: Option<&'a std::path::Path>,
     /// Accept a registry package with no publisher signature.
     pub allow_unsigned: bool,
-    /// Who can be asked about a publisher key change (ADR 0110).
-    pub asking: Asking<'a>,
     /// The add's lock plan judged and not committed: report what the add would do, or the refusal it
     /// would give; write, pin and download nothing. A registry package is judged by the
     /// declaration it was published with (its manifest). An extension already present answers as
     /// the real add would (`AlreadyPresent`, or `Builtin { changed: false }`).
     pub dry_run: bool,
-    /// The bound a local extension is read in (ADR 0104): the CLI passes
-    /// [`Containment::unbounded`], MCP the project's.
-    pub containment: &'a Containment,
+    /// What the add may reach (a local extension is read, every file written, through
+    /// `caller.containment()`, ADR 0104) and who can be asked about a publisher key change
+    /// (`caller.asking()`, ADR 0110).
+    pub caller: Caller<'a>,
 }
 
 /// What an add did (or, on a dry run, would do) for one specifier.
@@ -154,7 +152,7 @@ pub fn add(
     let place = Place {
         root: req.root.dir(),
         base: req.base.unwrap_or(req.root.dir()),
-        containment: req.containment,
+        containment: req.caller.containment(),
     };
     let names = Names::read(&req.extensions, place).map_err(|e| e.about(AddField::Extensions))?;
     let installed = Installed::at(req.root.dir());
@@ -166,7 +164,7 @@ pub fn add(
         Fetching {
             registry,
             allow_unsigned: req.allow_unsigned,
-            asking: req.asking,
+            asking: req.caller.asking(),
         },
         if req.dry_run {
             Purpose::Preview
@@ -379,7 +377,7 @@ fn apply<'a>(
         .finish(
             req.root.dir(),
             Vec::new(),
-            &req.containment.narrowed(req.root.dir()),
+            &req.caller.containment().narrowed(req.root.dir()),
         )?;
     for (at, wanted) in asked {
         outcomes[at] = Some(wanted.outcome(done.asked(Ask(at)), req.dry_run));
