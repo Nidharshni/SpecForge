@@ -63,6 +63,9 @@ pub struct MethodDecl {
     pub name: String,
     pub params: Vec<Parameter>,
     pub returns: Option<String>,
+    /// Where `returns` is written; never serialized (a written form has no positions).
+    #[serde(skip)]
+    pub returns_span: Option<SourceSpan>,
     pub span: SourceSpan,
 }
 
@@ -71,6 +74,9 @@ pub struct MethodDecl {
 pub struct Parameter {
     pub name: String,
     pub ty: String,
+    /// Where `ty` is written; never serialized.
+    #[serde(skip)]
+    pub ty_span: Option<SourceSpan>,
     /// Declared `name?: Type`.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub optional: bool,
@@ -171,6 +177,29 @@ pub struct ListItem {
     pub written: Written,
 }
 
+/// One member of a union as written: a union field's (`kind Open | "none"`) or a union body's
+/// (`type Kind = A | B`). `text` is what the value held before members kept positions: a union
+/// field's quoted member keeps its quotes, a union body's string variant does not; `written` says
+/// which it was either way.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeMember {
+    pub text: String,
+    pub span: SourceSpan,
+    pub written: Written,
+}
+
+impl PartialEq<&str> for TypeMember {
+    fn eq(&self, other: &&str) -> bool {
+        self.text == *other
+    }
+}
+
+impl PartialEq<String> for TypeMember {
+    fn eq(&self, other: &String) -> bool {
+        &self.text == other
+    }
+}
+
 /// How a list item was written.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Written {
@@ -204,14 +233,14 @@ pub enum FieldValue {
     List(Vec<ListItem>),
     /// A union body's variants (`type X = a | b`), under
     /// [`UNION_VARIANTS_FIELD`] only.
-    VariantList(Vec<String>),
+    VariantList(Vec<TypeMember>),
     Block(FieldMap),
     /// First-class formal expressions: `metric expr { a < 10ms, b > 5 }`.
     /// Spans are absolute file positions.
     Expression(Vec<SpannedExpr>),
     /// Union-typed field declaration value: `query_scope string | string[]`.
     /// Each element is the declared type's source text. (RES-20 direction.)
-    TypeUnion(Vec<String>),
+    TypeUnion(Vec<TypeMember>),
     Integer(i64),
     Boolean(bool),
     Date(String),

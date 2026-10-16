@@ -1,7 +1,9 @@
 use crate::view_support::{Assembled, Viewed};
 use specforge_common::{Severity, SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
-use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue, VerifyStatement};
+use specforge_parser::{
+    EntityId, EntityKind, FieldMap, FieldValue, TypeMember, VerifyStatement, Written,
+};
 use specforge_test::prelude::*;
 
 fn span() -> SourceSpan {
@@ -11,6 +13,15 @@ fn span() -> SourceSpan {
         start_col: 0,
         end_line: 1,
         end_col: 0,
+    }
+}
+
+/// A union member written bare, at the fixed span.
+fn member(text: &str) -> TypeMember {
+    TypeMember {
+        text: text.to_string(),
+        span: span(),
+        written: Written::Bare,
     }
 }
 
@@ -219,7 +230,7 @@ fn stats_leaves_union_types_out_of_the_testable_count() {
     let mut status = node("Status", "type");
     status.fields.push(
         Sym::new("variants"),
-        FieldValue::VariantList(vec!["active".into(), "inactive".into()]),
+        FieldValue::VariantList(vec![member("active"), member("inactive")]),
     );
     // A struct member that is only named `variants` exempts nothing.
     let mut named = node("Named", "type");

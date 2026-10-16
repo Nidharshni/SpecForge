@@ -180,9 +180,8 @@ impl<'a> ParseContext<'a> {
             .child_by_field_name(field::NAME)
             .map(|n| self.text(n).to_string())
             .unwrap_or_default();
-        let returns = node
-            .child_by_field_name(field::RETURNS)
-            .map(|n| self.text(n).trim().to_string());
+        let returns_node = node.child_by_field_name(field::RETURNS);
+        let returns = returns_node.map(|n| self.text(n).trim().to_string());
         let mut params = Vec::new();
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -193,8 +192,8 @@ impl<'a> ParseContext<'a> {
                 .child_by_field_name(field::NAME)
                 .map(|n| self.text(n).to_string())
                 .unwrap_or_default();
-            let pty = child
-                .child_by_field_name(field::TYPE)
+            let ty_node = child.child_by_field_name(field::TYPE);
+            let pty = ty_node
                 .map(|n| self.text(n).trim().to_string())
                 .unwrap_or_default();
             let mut annotations = Vec::new();
@@ -207,6 +206,7 @@ impl<'a> ParseContext<'a> {
             params.push(Parameter {
                 name: pname,
                 ty: pty,
+                ty_span: ty_node.map(|n| self.span(n)),
                 optional: child.child_by_field_name(field::OPTIONAL).is_some(),
                 annotations,
             });
@@ -215,6 +215,7 @@ impl<'a> ParseContext<'a> {
             name,
             params,
             returns,
+            returns_span: returns_node.map(|n| self.span(n)),
             span: self.span(node),
         }
     }
@@ -232,7 +233,7 @@ impl<'a> ParseContext<'a> {
     }
 
     /// Collect the declared types of a union-typed field value.
-    fn parse_type_union(&self, node: Node<'a>) -> Vec<String> {
+    fn parse_type_union(&self, node: Node<'a>) -> Vec<TypeMember> {
         let mut types = Vec::new();
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -243,7 +244,15 @@ impl<'a> ParseContext<'a> {
                 | kind::UNIT_TYPE
                 | kind::FUNCTION_TYPE
                 | kind::STRING => {
-                    types.push(self.text(child).trim().to_string());
+                    types.push(TypeMember {
+                        text: self.text(child).trim().to_string(),
+                        span: self.span(child),
+                        written: if child.kind() == kind::STRING {
+                            Written::Quoted
+                        } else {
+                            Written::Bare
+                        },
+                    });
                 }
                 _ => {}
             }

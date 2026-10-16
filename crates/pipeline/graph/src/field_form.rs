@@ -544,7 +544,13 @@ pub fn write(value: &FieldValue) -> FieldJson {
         FieldValue::String(s) | FieldValue::Identifier(s) | FieldValue::Date(s) => {
             Value::String(s.clone())
         }
-        FieldValue::TypeUnion(types) => Value::String(types.join(" | ")),
+        FieldValue::TypeUnion(types) => Value::String(
+            types
+                .iter()
+                .map(|m| m.text.as_str())
+                .collect::<Vec<_>>()
+                .join(" | "),
+        ),
         FieldValue::Expression(conjuncts) => Value::String(
             conjuncts
                 .iter()
@@ -560,9 +566,12 @@ pub fn write(value: &FieldValue) -> FieldJson {
                 .map(|item| Value::String(item.text.clone()))
                 .collect(),
         ),
-        FieldValue::VariantList(items) => {
-            Value::Array(items.iter().cloned().map(Value::String).collect())
-        }
+        FieldValue::VariantList(items) => Value::Array(
+            items
+                .iter()
+                .map(|m| Value::String(m.text.clone()))
+                .collect(),
+        ),
         FieldValue::Block(inner) => Value::Object(
             write_fields(inner)
                 .into_iter()
