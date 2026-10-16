@@ -1,6 +1,6 @@
 //! Which extension each `specforge.json` `extensions` entry names, decided once (ADR 0028 D3): the
-//! extension load, the module paths a session watches and the lock plan's peer set read it, so they
-//! cannot disagree about what an entry enables.
+//! extension load and the lock plan's peer set read it, so they cannot disagree about what an
+//! entry enables.
 
 use std::collections::HashMap;
 use std::path::PathBuf;

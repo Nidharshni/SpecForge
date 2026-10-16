@@ -5,7 +5,6 @@
 
 mod fields;
 mod identifiers;
-mod index;
 mod kinds;
 mod obligations;
 mod references;
@@ -30,6 +29,9 @@ impl RegistryBuild {
     /// 3. the rule set ([`crate::rules::Rules::check`]), asking `verdicts`
     ///    for `custom` rules.
     ///
+    /// The suggestions of E024, W151 and W020 come from the build's candidate vocabulary
+    /// ([`Self::with_candidates`], ADR 0122); it changes no other part of a diagnostic.
+    ///
     /// Each check reports its entities in record (id) order. The rule set's
     /// `file_exists` rules, E016 among them (the host builds one per
     /// `file_reference` field), ask `input.disk` whether a path exists and
@@ -40,12 +42,21 @@ impl RegistryBuild {
         let mut diagnostics = refs::unreferenced(entities); // W012
         if self.structural_only() {
             // W151: extensions are loaded but none declares a kind.
-            diagnostics.extend(kinds::unchecked(entities, !self.declarations().is_empty()));
+            diagnostics.extend(kinds::unchecked(
+                entities,
+                !self.declarations().is_empty(),
+                &self.candidates,
+            ));
         } else {
-            diagnostics.extend(kinds::unknown(entities, &self.kinds)); // E024
+            diagnostics.extend(kinds::unknown(entities, &self.kinds, &self.candidates)); // E024
             diagnostics.extend(identifiers::reserved(entities, &self.kinds)); // E013
             diagnostics.extend(identifiers::length(entities)); // E014
-            diagnostics.extend(fields::unknown(entities, &self.kinds, &self.fields)); // W020
+            diagnostics.extend(fields::unknown(
+                entities,
+                &self.kinds,
+                &self.fields,
+                &self.candidates,
+            )); // W020
             diagnostics.extend(obligations::refused(entities, &self.kinds)); // W158
             diagnostics.extend(references::mistyped(entities, &self.kinds, &self.fields)); // E022
             diagnostics.extend(values::mistyped(entities, &self.kinds, &self.fields)); // E061

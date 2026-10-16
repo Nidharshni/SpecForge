@@ -369,7 +369,10 @@ fn file_watchers_follow_what_the_session_is_built_from() {
     .unwrap();
     let session = specforge_project::ProjectSession::open_with_runtime(
         &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        None,
+        Some(
+            std::sync::Arc::new(specforge_wasm::testing::InProcessRuntime::new())
+                as specforge_project::SharedRuntime,
+        ),
     );
     let root = dir.path().to_string_lossy().into_owned();
 

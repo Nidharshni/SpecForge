@@ -25,6 +25,29 @@ fn parsing_a_config_text_is_reading_it_from_its_file() {
 }
 
 #[test]
+fn a_config_is_parsed_from_what_its_read_returned() {
+    let path = Path::new("/p/specforge.json");
+    let missing = project_config_from(path, Err(std::io::ErrorKind::NotFound.into()));
+    assert!(!missing.found && missing.problems.is_empty());
+    let denied = project_config_from(path, Err(std::io::ErrorKind::PermissionDenied.into()));
+    assert!(matches!(
+        denied.problems.as_slice(),
+        [ConfigProblem::Unreadable { .. }]
+    ));
+    let binary = project_config_from(path, Ok(vec![0xff]));
+    assert!(matches!(
+        binary.problems.as_slice(),
+        [ConfigProblem::Unreadable { error, .. }] if error == "stream did not contain valid UTF-8"
+    ));
+    let text = "{\"name\":\"x\"}";
+    let ok = project_config_from(path, Ok(text.as_bytes().to_vec()));
+    assert_eq!(
+        format!("{ok:?}"),
+        format!("{:?}", parse_project_config(path, text))
+    );
+}
+
+#[test]
 fn sources_are_at_the_spec_root_or_the_root() {
     let root = Path::new("/p");
     let unset = ProjectConfig::default();

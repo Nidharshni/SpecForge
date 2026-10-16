@@ -299,9 +299,6 @@ fn every_containment_a_tool_uses_comes_from_the_call() {
         "tools/outline.rs", // the spec root bounds a file of the outline
         "tools/render.rs",  // a view tool that writes its own file
     ];
-    let fs_allowed = [
-        "tools/mod.rs", // the navigator's file text: plan 05 of round 12
-    ];
     let mut problems = Vec::new();
     for (name, text) in &files {
         if name.ends_with("tests.rs") || name.contains("/tests/") {
@@ -314,7 +311,7 @@ fn every_containment_a_tool_uses_comes_from_the_call() {
             if line.contains("Containment::within(") && !within.contains(&name.as_str()) {
                 problems.push(format!("src/{name}:{}: builds its own bound", number + 1));
             }
-            if line.contains("std::fs::") && !fs_allowed.contains(&name.as_str()) {
+            if line.contains("std::fs::") {
                 problems.push(format!("src/{name}:{}: opens a file itself", number + 1));
             }
         }

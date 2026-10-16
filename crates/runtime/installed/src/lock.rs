@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use specforge_common::{Diagnostic, codes};
 use specforge_package::PackageName;
+use specforge_registry::Disk;
 use std::path::Path;
 
 use crate::layout::lock_path;
@@ -201,9 +202,18 @@ pub enum LockState {
 impl LockState {
     /// Read the lock at the project root `root` ([`lock_path`]). A file
     /// that does not exist is [`Self::Absent`], not a problem.
-    pub(crate) fn at(root: &Path) -> LockState {
+    pub(crate) fn read(root: &Path, disk: &dyn Disk) -> LockState {
         let path = lock_path(root);
-        match std::fs::read_to_string(&path) {
+        let content = match disk.read(&path) {
+            Ok(bytes) => String::from_utf8(bytes).map_err(|_| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "stream did not contain valid UTF-8",
+                )
+            }),
+            Err(e) => Err(e),
+        };
+        match content {
             Ok(content) => match parse_lock_file(&path, &content) {
                 Ok(lock) => LockState::Read(lock),
                 Err(problem) => LockState::Unreadable(problem),
@@ -238,6 +248,7 @@ impl LockState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use specforge_registry::PlainDisk;
     use tempfile::TempDir;
 
     // -- write_lock_file + read_lock_file --
@@ -342,18 +353,18 @@ mod tests {
     #[test]
     fn a_lock_state_tells_absent_read_and_unreadable_apart() {
         let dir = TempDir::new().unwrap();
-        assert_eq!(LockState::at(dir.path()), LockState::Absent);
-        assert!(LockState::at(dir.path()).entries().is_empty());
-        assert!(LockState::at(dir.path()).problem().is_none());
+        assert_eq!(LockState::read(dir.path(), &PlainDisk), LockState::Absent);
+        assert!(LockState::read(dir.path(), &PlainDisk).entries().is_empty());
+        assert!(LockState::read(dir.path(), &PlainDisk).problem().is_none());
 
         let lock = LockFile::default();
         write_lock_file(&lock, &lock_path(dir.path())).unwrap();
-        let state = LockState::at(dir.path());
+        let state = LockState::read(dir.path(), &PlainDisk);
         assert_eq!(state, LockState::Read(lock));
         assert!(state.file().is_some() && state.problem().is_none());
 
         std::fs::write(lock_path(dir.path()), "not valid json {{{").unwrap();
-        let state = LockState::at(dir.path());
+        let state = LockState::read(dir.path(), &PlainDisk);
         let problem = state.problem().expect("a corrupt lock is a problem");
         assert_eq!(problem.code, "E033");
         assert!(problem.message.contains("corrupt lock file"));
@@ -363,7 +374,9 @@ mod tests {
         std::fs::remove_file(lock_path(dir.path())).unwrap();
         std::fs::create_dir(lock_path(dir.path())).unwrap();
         assert_eq!(
-            LockState::at(dir.path()).problem().map(|p| p.code.as_str()),
+            LockState::read(dir.path(), &PlainDisk)
+                .problem()
+                .map(|p| p.code.as_str()),
             Some("E033")
         );
     }
@@ -383,7 +396,7 @@ mod tests {
             let lock = format!(r#"{{"lockfile_version": 1, "entries": [{}]}}"#, entry(name));
             std::fs::write(lock_path(dir.path()), lock).unwrap();
 
-            let state = LockState::at(dir.path());
+            let state = LockState::read(dir.path(), &PlainDisk);
 
             let problem = state
                 .problem()
@@ -399,7 +412,9 @@ mod tests {
         );
         std::fs::write(lock_path(dir.path()), lock).unwrap();
         assert_eq!(
-            LockState::at(dir.path()).entries()[0].name.as_str(),
+            LockState::read(dir.path(), &PlainDisk).entries()[0]
+                .name
+                .as_str(),
             "@acme/tool"
         );
     }

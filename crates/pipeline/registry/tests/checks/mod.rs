@@ -2,6 +2,7 @@
 //! runs them: through `RegistryBuild::check`, behind its gate and in its
 //! order (ADR 0031). No test names a check.
 
+mod candidates;
 mod fields;
 mod identifiers;
 mod kinds;

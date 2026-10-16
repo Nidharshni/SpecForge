@@ -7,6 +7,7 @@ use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
 use specforge_installed::testing::install_module;
 use specforge_installed::{Builtins, Installed, LoadProblem};
 use specforge_protocol_types::DeclaredCategory;
+use specforge_registry::PlainDisk;
 use specforge_wasm::testing::InProcessRuntime;
 use specforge_wasm::{WasmCallResult, WasmRuntime, WasmTrapInfo};
 use tempfile::TempDir;
@@ -80,8 +81,12 @@ fn a_named_entry_whose_declaration_cannot_be_read_is_not_left_loaded() {
         &["@acme/a", "@acme/b"],
     );
 
-    let loaded =
-        Installed::at(dir.path()).load(&entries(&["@acme/a", "@acme/b"]), &builtins, &runtime);
+    let loaded = Installed::at(dir.path()).load(
+        &entries(&["@acme/a", "@acme/b"]),
+        &builtins,
+        &runtime,
+        &PlainDisk,
+    );
 
     for entry in &loaded.enabled {
         assert!(

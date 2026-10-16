@@ -142,41 +142,42 @@ behavior two_phase_validate_semantic "Two-Phase Validate: Semantic" {
   verify contract "Two-Phase Validate: Semantic: semantic validation holds — unknown_keywords_diagnosed"
 }
 
-// The KeywordExtensionIndex is a static JSON file (data/keyword-index.json)
-// mapping known entity keywords to their providing extension names, shipped
-// as a bundled data file. It does NOT require network access at runtime. It
-// is maintained by hand; a test checks it against every builtin extension's
-// declared entity kinds.
+// The candidate vocabulary names, for each kind keyword and enhancement field
+// the host could enable, the extension that declares it. The session hands the
+// builtins' vocabulary to the registry build; it is generated with the
+// builtins (ADR 0122) and needs no network.
 // suggest_missing_extensions is invoked inline by the diagnostic pipeline when
 // an E024 (unknown entity kind) is emitted — it is not event-driven. It enriches
-// the diagnostic help text with extension suggestions from the bundled index.
+// the diagnostic help text with extension suggestions from the candidate vocabulary.
 behavior suggest_missing_extensions "Suggest Missing Extensions" {
   features   [zero_entity_validation, zero_entity_bootstrap]
   invariants [zero_domain_knowledge_core]
   category   command
-  types      [KindRegistryEntry, UnknownKindError, KeywordExtensionIndex, KeywordExtensionMapping]
+  types      [KindRegistryEntry, UnknownKindError, CandidateVocabulary]
   requires {
     e024_diagnostic_emitted "An E024 (unknown entity kind) diagnostic has been emitted and requires help text enrichment"
   }
   ensures {
-    suggestion_provided   "Help text includes extension suggestion from bundled index or fallback to specforge search"
-    lazy_loading_enforced "KeywordExtensionIndex loaded lazily on first E024, not at startup"
+    suggestion_provided "Help text includes extension suggestion from the candidate vocabulary or fallback to specforge search"
+    no_network          "The vocabulary is data the host embeds, never fetched"
   }
   contract   """
     When an E024 (unknown entity kind) diagnostic is emitted, the help
     text MUST suggest which extension provides the unknown keyword, if known.
-    The suggestion MUST use a data-driven keyword-to-extension index shipped
-    as a bundled data file (not hardcoded in compiler source). The index maps
-    common keywords to their providing extensions. If no mapping exists for
-    the unknown keyword, the help text MUST suggest running specforge search.
-    Loading MUST be lazy — triggered on first E024 occurrence, not at startup.
-    If the bundled file is missing or malformed, the behavior MUST silently
-    fall back to suggesting specforge search for all unknown keywords.
+    The suggestion MUST use the candidate vocabulary the registry build is
+    handed (not compiler source or data). The vocabulary maps keywords to
+    their providing extensions. If no mapping exists for the unknown keyword,
+    the help text MUST suggest running specforge search. A build handed no
+    vocabulary suggests specforge search. If the vocabulary's text is
+    malformed, the behavior MUST silently fall back to suggesting specforge
+    search for all unknown keywords. The vocabulary changes only
+    suggestions, never which diagnostics are reported.
   """
   verify unit "E024 for keyword in index suggests the providing extension"
   verify unit "E024 for keyword not in index suggests specforge search"
-  verify unit "keyword-to-extension index is loaded from bundled data file"
-  verify contract "Suggest Missing Extensions: missing extension suggestions holds — e024_diagnostic_emitted, suggestion_provided, lazy_loading_enforced"
+  verify unit "the candidate vocabulary changes only suggestions, never which diagnostics a check reports"
+  verify unit "the builtin vocabulary is what the builtins' pinned declarations declare"
+  verify contract "Suggest Missing Extensions: missing extension suggestions holds — e024_diagnostic_emitted, suggestion_provided, no_network"
 }
 
 // detect_unknown_entity_kinds and suggest_missing_extensions live in the

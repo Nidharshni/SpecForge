@@ -111,10 +111,9 @@ feature zero_entity_validation "Zero-Entity Validation" {
     against the FieldRegistry (W020), two_phase_validate_semantic
     orchestrates the full Phase 2 semantic validation pass, and
     suggest_missing_extensions attaches help text to E024 diagnostics
-    using a bundled KeywordExtensionIndex data file
-    (data/keyword-index.json, kept in step with each builtin extension's
-    declared kinds by a test) that maps known keywords to their
-    providing extensions. These behaviors execute in Phase 2 after
+    using the candidate vocabulary the registry
+    build is handed (the builtins', generated with them, ADR 0122) that maps
+    known keywords to their providing extensions. These behaviors execute in Phase 2 after
     registries are populated (see dynamic_entity_registration in
     features/zero-entity-core.spec).
 

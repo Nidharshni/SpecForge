@@ -99,6 +99,25 @@ impl CompiledProject {
         Arc::clone(&self.env)
     }
 
+    /// This project with `texts` as the text each source was read as, and no other: the same graph,
+    /// environment, report and memo (shared, as `Clone` shares them). A test's way to give navigation
+    /// a text that disagrees with the graph (shifted) or none (left out); production never makes one.
+    #[cfg(feature = "testing")]
+    pub fn with_source_texts<K: Into<String>, T: Into<Arc<str>>>(
+        &self,
+        texts: impl IntoIterator<Item = (K, T)>,
+    ) -> Self {
+        CompiledProject {
+            sources: SourceCache::holding(
+                texts
+                    .into_iter()
+                    .map(|(key, text)| (key.into(), text.into()))
+                    .collect(),
+            ),
+            ..self.clone()
+        }
+    }
+
     /// The project root it was compiled from, as the environment holds it;
     /// `None` for a detached project.
     pub fn project_root(&self) -> Option<&ProjectRoot> {
@@ -224,11 +243,12 @@ impl CompiledProject {
         env: Arc<Environment>,
         graph: Graph,
         reported: Vec<Diagnostic>,
+        sources: SourceCache,
         rooted: bool,
     ) -> Self {
         CompiledProject {
             env,
-            sources: SourceCache::empty(),
+            sources,
             graph: GraphBuild::holding(graph),
             import_diagnostics: Vec::new(),
             check_diagnostics: Vec::new(),

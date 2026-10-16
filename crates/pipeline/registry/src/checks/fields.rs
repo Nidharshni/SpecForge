@@ -2,9 +2,8 @@
 
 use specforge_common::{Diagnostic, codes};
 
-use super::index::KeywordExtensionIndex;
 use crate::entity::EntityRecord;
-use crate::{FieldRegistry, KindRegistry};
+use crate::{CandidateVocabulary, FieldRegistry, KindRegistry};
 
 /// W020 for each field name not declared on a registered kind. `title` is
 /// structural and always valid; every other name, `expression` included, is
@@ -17,6 +16,7 @@ pub(super) fn unknown(
     entities: &[EntityRecord],
     kinds: &KindRegistry,
     fields: &FieldRegistry,
+    candidates: &CandidateVocabulary,
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
 
@@ -36,14 +36,11 @@ pub(super) fn unknown(
             if field_name == "title" || fields.contains(kind, field_name) {
                 continue;
             }
-            let suggestion = KeywordExtensionIndex::bundled_fields()
-                    .lookup(&format!("{kind}.{field_name}"))
-                    .map(|ext| {
-                        format!(
-                            "{ext} declares '{field_name}' on '{kind}': install it with: specforge add {ext}"
-                        )
-                    })
-;
+            let suggestion = candidates.field_owner(kind, field_name).map(|ext| {
+                format!(
+                    "{ext} declares '{field_name}' on '{kind}': install it with: specforge add {ext}"
+                )
+            });
             let mut diagnostic = Diagnostic::new(
                 codes::W020,
                 format!(

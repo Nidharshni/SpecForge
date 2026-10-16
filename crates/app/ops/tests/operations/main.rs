@@ -43,6 +43,7 @@ mod plan;
 mod project_files;
 mod publish;
 mod query;
+mod rename_text;
 mod review;
 mod schema;
 mod schema_notices;

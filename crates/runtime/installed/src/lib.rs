@@ -18,6 +18,7 @@ pub mod testing;
 use std::path::{Path, PathBuf};
 
 use specforge_package::PackageName;
+use specforge_registry::{Disk, PlainDisk};
 
 pub use change::{Change, Committed, Failed, Pin};
 pub use declare::declaration_of;
@@ -39,11 +40,18 @@ pub struct Installed {
 
 impl Installed {
     /// The installed extensions of the project at `root`: `specforge.lock`
-    /// read once (absent, read, or unreadable with its E033).
+    /// read once from the file system (absent, read, or unreadable with its
+    /// E033).
     pub fn at(root: &Path) -> Installed {
+        Installed::read(root, &PlainDisk)
+    }
+
+    /// The installed extensions of the project at `root`: `specforge.lock`
+    /// read once through `disk` (ADR 0114), as [`Self::at`] reads it.
+    pub fn read(root: &Path, disk: &dyn Disk) -> Installed {
         Installed {
             root: root.to_path_buf(),
-            lock: LockState::at(root),
+            lock: LockState::read(root, disk),
         }
     }
 
@@ -64,9 +72,9 @@ impl Installed {
         }
     }
 
-    /// The layout of the installed extensions at `root`, the lock not read
-    /// (absent): what the paths a session depends on are derived from
-    /// before anything is read.
+    /// The layout at `root`, the lock not read (absent): for deriving
+    /// `module_path`/`package_dir` and for an environment assembled in
+    /// memory.
     pub fn unread(root: &Path) -> Installed {
         Installed::with_lock(root, LockState::Absent)
     }
@@ -99,37 +107,6 @@ impl Installed {
     /// `<root>/.specforge/extensions`.
     pub(crate) fn extensions_dir(&self) -> PathBuf {
         layout::extensions_dir(&self.root)
-    }
-
-    /// The module each of `entries` (specforge.json's `extensions`) loads
-    /// from, in entry order: an installed extension's [`Self::module_path`],
-    /// a `.wasm` file entry's file (relative to the root); none for a
-    /// builtin or for a name that is no package name. The paths whose
-    /// change reloads an environment (plan 03).
-    pub fn modules(&self, entries: &[String], builtins: &Builtins) -> Vec<PathBuf> {
-        let resolution = self.resolve(entries, builtins);
-        let path = |resolved: &Resolved| match resolved {
-            Resolved::Builtin { .. }
-            | Resolved::Unloadable {
-                problem: LoadProblem::NotAPackageName { .. },
-                ..
-            } => None,
-            Resolved::Locked { entry, .. } => Some(self.module_path(&entry.name)),
-            Resolved::Unloadable { name, .. } => PackageName::parse(name)
-                .ok()
-                .map(|name| self.module_path(&name)),
-            Resolved::File(file) => Some(file.file.clone()),
-            Resolved::Again { .. } => None,
-        };
-        resolution
-            .entries()
-            .iter()
-            .filter_map(|resolved| match resolved {
-                // The same extension again names the same module.
-                Resolved::Again { first } => path(&resolution.entries()[*first]),
-                other => path(other),
-            })
-            .collect()
     }
 
     /// The command that reinstalls `name` as its lock entry records it:
@@ -181,29 +158,12 @@ mod tests {
     #[test]
     fn one_rule_names_every_installed_path() {
         let installed = Installed::with_lock(Path::new("/p"), LockState::Absent);
-        let builtins = Builtins(&[("@specforge/product", b"\0asm")]);
         let tool = PackageName::parse("@acme/tool").unwrap();
 
         assert_eq!(installed.lock_path(), Path::new("/p/specforge.lock"));
         assert_eq!(
             installed.module_path(&tool),
             Path::new("/p/.specforge/extensions/@acme/tool/extension.wasm")
-        );
-        let entries: Vec<String> = [
-            "@specforge/product",
-            "@acme/tool",
-            "tools/greet.wasm",
-            "../../outside",
-        ]
-        .map(String::from)
-        .to_vec();
-        assert_eq!(
-            installed.modules(&entries, &builtins),
-            [
-                PathBuf::from("/p/.specforge/extensions/@acme/tool/extension.wasm"),
-                PathBuf::from("/p/tools/greet.wasm"),
-            ],
-            "a builtin has no module and a name that is no package has none either"
         );
     }
 

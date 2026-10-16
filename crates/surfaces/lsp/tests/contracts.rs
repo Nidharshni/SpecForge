@@ -687,7 +687,7 @@ fn contract_prepare_rename() {
 fn rename_entity_id_contract() {
     // Requires: entity in graph with references from other entities + new name
     // Ensures: edits for the declaration and every reference, nothing
-    // else; a taken name, or a file the rename cannot read, is refused.
+    // else; a taken name is refused (a file it cannot read: rename.rs).
     let state = buffers(&[
         ("/p/types.spec", "type auth_token \"auth_token\" {\n}\n"),
         (
@@ -726,16 +726,6 @@ fn rename_entity_id_contract() {
     assert!(
         dup.message.contains("'user_login' exists"),
         "the plan's reason: {dup:?}"
-    );
-
-    // All or nothing: a file the rename cannot read refuses the whole.
-    let blind = specforge_ops::read::navigate::Navigator::new(state.view(), |file: &str| {
-        (file != "/p/auth.spec").then(|| "type auth_token \"auth_token\" {\n}\n".to_string())
-    });
-    let refused = specforge_ops::authoring::rename::plan(&blind, "auth_token", "session_token");
-    assert_eq!(
-        refused.unwrap_err().error.code,
-        specforge_ops::authoring::rename::UNREADABLE
     );
 }
 
@@ -862,9 +852,11 @@ fn code_action_create_entity_stub_contract() {
     let fixes_with = |target_kind: Option<&str>| {
         let project = specforge_project::testing::Assembled::over(invariants_field(target_kind))
             .graph(state.graph().clone());
-        let view = specforge_ops::view::ProjectView::of(project.detached());
-        let nav =
-            specforge_ops::read::navigate::Navigator::new(view, |_: &str| Some(text.to_string()));
+        let texts = project
+            .detached()
+            .with_source_texts(state.session().unwrap().project().source_texts());
+        let view = specforge_ops::view::ProjectView::of(&texts);
+        let nav = specforge_ops::read::navigate::Navigator::new(view);
         nav.fixes(
             &diagnostics,
             &specforge_ops::read::navigate::FixQuery::default(),
@@ -940,8 +932,11 @@ fn code_actions_for_missing_verify_contract() {
     let state = buffers(&[("/p/a.spec", text)]);
     let project = specforge_project::testing::Assembled::over(verifiable(&["behavior"], &[]))
         .graph(state.graph().clone());
-    let view = specforge_ops::view::ProjectView::of(project.detached());
-    let nav = specforge_ops::read::navigate::Navigator::new(view, |_: &str| Some(text.to_string()));
+    let texts = project
+        .detached()
+        .with_source_texts(state.session().unwrap().project().source_texts());
+    let view = specforge_ops::view::ProjectView::of(&texts);
+    let nav = specforge_ops::read::navigate::Navigator::new(view);
     let fixes = nav.fixes(&[], &specforge_ops::read::navigate::FixQuery::default());
 
     assert!(
