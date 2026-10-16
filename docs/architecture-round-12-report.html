@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture round 12 report</title>
+<style>
+  :root { --bg:#fafafa; --fg:#1d2128; --muted:#5b6573; --card:#fff; --line:#d6dbe3; --accent:#2457d6; --ok:#177a3c; --bad:#b3261e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171c; --fg:#e6e9ee; --muted:#9aa4b2; --card:#1c2027; --line:#323a46; --accent:#7aa2ff; --ok:#5fd38a; --bad:#ff8a80; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 system-ui, sans-serif; }
+  main { max-width:1100px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { margin:0 0 4px; font-size:1.9rem; }
+  h2 { margin:40px 0 12px; font-size:1.3rem; border-bottom:1px solid var(--line); padding-bottom:6px; }
+  h3 { margin:0 0 4px; font-size:1.1rem; }
+  p.sub { color:var(--muted); margin:0 0 20px; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; }
+  .kpi b { display:block; font-size:1.6rem; color:var(--accent); }
+  .kpi span { color:var(--muted); font-size:.85rem; }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:8px; overflow:hidden; font-size:.92rem; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  .plan { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin:18px 0; }
+  .plan .tag { color:var(--muted); font-size:.85rem; }
+  .plan p { margin:6px 0; }
+  .plan .proof { color:var(--muted); font-size:.88rem; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:10px; }
+  .cols > div { min-width:0; overflow-x:auto; border:1px solid var(--line); border-radius:8px; padding:8px; }
+  .cols h4 { margin:0 0 6px; font-size:.85rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  @media (max-width:760px) { .cols { grid-template-columns:1fr; } }
+  .ok { color:var(--ok); font-weight:600; }
+  .bad { color:var(--bad); font-weight:600; }
+  code { font-size:.88em; }
+</style>
+</head>
+<body>
+<main>
+<h1>Architecture round 12</h1>
+<p class="sub">Eleven plans, one branch (<code>refactor/architecture-2026-10-16-r12</code>, base <code>e0a1a015</code>). Each plan keeps its own commits behind a <code>Merge plan NN</code> commit; every commit carries boxed ASCII problem / solution / BEFORE / AFTER diagrams, and this page shows the same before and after per plan.</p>
+
+<div class="kpis">
+  <div class="kpi"><b>11</b><span>plans merged</span></div>
+  <div class="kpi"><b>84</b><span>non-merge commits (before this report)</span></div>
+  <div class="kpi"><b>10</b><span>new ADRs (0112–0118, 0120–0122; 0119 released)</span></div>
+  <div class="kpi"><b>311</b><span>files changed (before this report)</span></div>
+  <div class="kpi"><b>+10,734 / −5,220</b><span>lines</span></div>
+  <div class="kpi"><b>5483 / 5483</b><span>workspace tests pass</span></div>
+  <div class="kpi"><b>22 / 22</b><span><code>cargo gate full</code> checks ok</span></div>
+  <div class="kpi"><b>0</b><span>re-vendors, 0 new diagnostic codes</span></div>
+</div>
+
+<h2>Defects found and closed</h2>
+<p>Every defect was reproduced with a debug binary or a failing test before it was fixed; each is pinned by a test that the fixing commit flips.</p>
+<table><thead><tr><th>Plan</th><th>Defect</th><th>Closed by</th></tr></thead><tbody>
+<tr><td>01</td><td>MCP <code>collect</code> overwrites a file outside the project through a symlinked <code>specforge-report.json</code>, and reads a runner's captured output from outside</td><td>T5</td></tr>
+<tr><td>01</td><td>MCP <code>infer_session start</code> writes through a symlinked <code>specforge-infer.json.tmp</code> and installs that link as the manifest; <code>infer_progress</code> sends an outside manifest back to the client</td><td>T4</td></tr>
+<tr><td>01</td><td>MCP <code>analyze</code> reads <code>test_results</code> outside the project (<code>../</code>, absolute, symlink), and its E045 kinds tell the client whether a path exists and how it parses</td><td>T6</td></tr>
+<tr><td>01</td><td><code>migrate</code> writes <code>.spec.bak</code> and <code>.spec.tmp</code> through symlinks and turns the source into a link pointing outside</td><td>T7</td></tr>
+<tr><td>02</td><td>A <code>src/loop -> ..</code> cycle gives <code>files_total</code> 65 from 2 files; <code>src/ext -> ../../outside</code> is listed by <code>infer-status</code> and MCP <code>infer_gaps</code></td><td>T6, T7</td></tr>
+<tr><td>02</td><td>Declaring one exclude drops the default skips (rust-only scans <code>node_modules/</code> and <code>vendor/</code>); overlapping roots count a file twice; a nested project is counted by the outer one; a <code>..</code> manifest entry reads outside</td><td>T6, T7, T8</td></tr>
+<tr><td>03</td><td><code>watch</code> misses an edit behind a symlinked <code>.wasm</code> entry, <code>specforge.json</code> or <code>specforge.lock</code>; a link pointed at another file reaches nothing, in watch and in the LSP</td><td>T7, T8</td></tr>
+<tr><td>04</td><td>The E061 registry test asserts <code>but was given 3</code> while production prints <code>"3"</code>; a quoted <code>"false"</code> on an exempting flag reads as exempt in the snapshot tests; the same expression group shows two texts</td><td>T3–T10</td></tr>
+<tr><td>05</td><td>MCP <code>outline</code> answers <code>specforge.json</code>, <code>.</code>, a directory and an excluded file as an empty source</td><td>T8</td></tr>
+<tr><td>05</td><td>MCP navigation mixes the compile's spans with the disk's text; MCP <code>rename</code> reports success but leaves a reference behind</td><td>T5, T7</td></tr>
+<tr><td>06</td><td>One "kind not loaded" case gets I004 (placeholder name) and E022 (whole entity, no help); a wrong-kind reference still becomes an edge</td><td>T3–T5</td></tr>
+<tr><td>07</td><td>E016 misses a bare-word path; a <code>file_exists</code> rule reads a block's keys as paths and asks the disk about <code>""</code></td><td>T3, T4</td></tr>
+<tr><td>08</td><td>A file entry's E028 says "answers no handshake" when describe failed; an unreadable file entry and a directory are mis-worded; a refused entry stays loaded</td><td>T2–T4</td></tr>
+<tr><td>09</td><td><code>--format json</code> writes W097 (analyze), the <code>note:</code> lines (check), R005 twice (search), I020 twice (explore) and migrate's rollback lines on stderr; <code>review</code> exits 2 where <code>query</code> exits 1</td><td>T5–T11</td></tr>
+<tr><td>10</td><td>The assembled-project fixture roots at directories production never roots at; the I002 "no project" branch is dead</td><td>T2, T4</td></tr>
+<tr><td>11</td><td>The keyword test checks one direction only, so a removed kind stays in the hand-kept JSON; the spec misdescribes the file</td><td>T3, T5</td></tr>
+</tbody></table>
+
+<h2>Plans at a glance</h2>
+<table id="summary"><thead><tr><th>Plan</th><th>What changes</th><th>ADR</th><th>Commits</th></tr></thead><tbody></tbody></table>
+
+<h2>Before and after, plan by plan</h2>
+<div id="plans"></div>
+
+<h2>Decisions that changed an earlier round</h2>
+<ul>
+  <li><strong>07-U1:</strong> every <code>file_exists</code> rule suggests a close sibling, so a missing path's directory is a listing read again. This reverses ADR 0107 D5(2)'s outcome (round 11's 04-U2); a file created beside a missing path re-runs the checks.</li>
+  <li><strong>06-U2:</strong> E022 sits on the reference token, not the whole entity (ADR 0093 D9). Its edge is kept for a wrong-kind reference.</li>
+  <li><strong>09-U1:</strong> under <code>--format json</code> a note for a person is written under human output only; a notice is written once, in the document when it has a field for it, else on stderr. This reconciles ADR 0029 D3a, 0052 D8 and 0111 D2.</li>
+  <li><strong>04, 03, 05:</strong> ADR 0019 "Placement", ADR 0107's rejected option and ADR 0016 D1's parenthesis are reopened, each with its reason in the new ADR.</li>
+</ul>
+
+<h2>Verification</h2>
+<p><span class="ok">✔</span> <code>cargo gate full</code>: 22 of 22 checks ok on the integrated tip (pending-snapshots, rustfmt, spec-format, grammar, zero-entity, layers, file-size, crate-map, links, doc-links, root-layout, builtins, guests, audit, build, tests, clippy, doctests, published-schemas, specs, spec-modules, dogfood).<br><span class="ok">✔</span> <code>cargo nextest run --workspace</code>: 5483 tests run, 5483 passed, 12 skipped; <code>cargo clippy --workspace --all-targets -- -D warnings</code> clean; no <code>*.snap.new</code> remains.<br><span class="ok">✔</span> No re-vendor was needed: no plan touches the SDK, the protocol types or the builtin extensions (plan 11's generated vocabulary is written from the unchanged pinned declarations), and <code>builtins</code> and <code>guests</code> pass unchanged.</p>
+
+<h2>Breaking changes</h2>
+<ul>
+  <li><strong>MCP:</strong> <code>analyze</code> <code>test_results</code> outside the project is <code>invalid_input</code>; <code>collect</code> and <code>migrate</code> refuse files that leave the project through a symlink; manifest readers return E071 for a manifest linked outside; <code>rename</code> is bounded by the project root and over a file changed since the compile is <code>conflict</code>; <code>outline</code> of a non-source is <code>file_not_found</code>; <code>infer_*</code> counts and listings change (no symlinked directory entered).</li>
+  <li><strong>CLI:</strong> under <code>--format json</code> stderr loses analyze's W097, check's notes, search's R005, explore's I020 and migrate's rollback lines (stdout unchanged); <code>review</code> on an unreadable report exits 1, not 2; <code>watch</code> follows link targets and reacts to a retargeted link; <code>infer-status</code> and <code>check --lint inferred</code> give E071 for an outside-linked manifest.</li>
+  <li><strong>Diagnostics (CLI, MCP, LSP):</strong> E022 moves to the token, gains a suggestion and is reported earlier; I004 names the extension; E016 fires on bare words and comes after the rules; E028 wording changes.</li>
+  <li><strong>LSP:</strong> the watchers list each link and its targets, with no glob for a module the load did not read; the directory watcher for a missing <code>file_exists</code> path returns.</li>
+  <li><strong>Rust API:</strong> <code>Held</code>, <code>Containment::read</code> and a required <code>containment</code> on collect, analyze's named report and the inference session; <code>Navigator&lt;'a&gt;</code> without <code>text_of</code>; <code>specforge_project::snapshot</code> moves to <code>specforge-registry</code>; <code>Installed::read(root, disk)</code>, <code>load</code> takes a disk and <code>Installed::modules</code> is gone; <code>absent_reference_targets</code> becomes <code>target_owners</code>, <code>EntityRecord.references</code> and <code>DerivedReference.target_kind</code> are deleted; <code>CandidateVocabulary</code> replaces the registry's bundled JSON; <code>CompiledProject::project_root()</code> is gone; <code>walk_files</code> in <code>specforge-common</code>.</li>
+</ul>
+
+<h2>Not in this PR</h2>
+<ul>
+  <li>The recorded test report is read through a symlink in the session layer (<code>session/project/src/coverage.rs</code>), below where <code>Containment</code> lives.</li>
+  <li>An extension command's graph export drops I016 and W053 (a gap in ADR 0111 D1's list); no user-visible effect was reproduced.</li>
+  <li>From round 11: a registry operation's outcome carrying <code>registry.reported()</code> (ADR 0044 D5), and about 20 CLI <code>analyze</code> tests that belong in ops (ADR 0029 D9a).</li>
+  <li>09's one-shot read runner, if it is ever wanted (R1–R3 are sketched in the plan).</li>
+</ul>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<script>
+const PLANS = [
+ { n:"01", t:"Every project file an operation opens goes through the request's containment", adr:"0112", c:10,
+   problem:"Containment was applied at a listed set of sites; collect, the inference manifest, analyze's report and migrate's sidecars opened files by name through whatever symlink was there, and seven MCP tools built their own bound.",
+   proof:"Pins: six MCP escapes (R1–R6) in <code>project_file_containment.rs</code>, flipped by T4–T7; T9 fails on any <code>std::fs</code> open in ops outside the held-file module.",
+   before:`flowchart LR
+  T7["7 MCP tools: Containment::within each"] --> OPS["listed ops operations"]
+  AN[analyze test_results] -->|join, no bound| FS[(file system)]
+  CO[collect report] -->|fs::write by name| FS
+  IS[infer manifest tmp] -->|create + rename by name| FS
+  MG[migrate .bak .tmp] -->|by name| FS
+  OPS --> FS
+  style AN fill:#fbb,stroke:#c00
+  style CO fill:#fbb,stroke:#c00
+  style IS fill:#fbb,stroke:#c00
+  style MG fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  P["ProjectRef::containment()"] --> REQ["every request carries containment"]
+  REQ --> H["Held::read write replace remove"]
+  H -->|opens the real name, atomic tmp+rename| FS[(file system)]
+  G["T9 guard: no std::fs open outside Held"] -.-> H
+  style H fill:#bfe,stroke:#177a3c`},
+ { n:"02", t:"Inference sources are walked by the shared discovery policy", adr:"0113", c:9,
+   problem:"Inference had its own walker that followed symlinks and dropped its default skips, and six modules re-derived the file set and read by name.",
+   proof:"Pins in <code>infer_sources.rs</code> (ops and mcp), flipped by T6, T7 and T8.",
+   before:`flowchart LR
+  D["infer/discovery.rs: own walker, follows links"] --> G[gaps]
+  D --> P[progress]
+  D --> L[lint]
+  D --> S[scan]
+  C["common::discovery: no links, one skip list"] -.->|not used| D
+  G & P & L & S -->|root.join name| FS[(files)]
+  style D fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  W["common::walk_files(root, skip, keep, stop)"] --> I["InferenceSources: SourceKey, read + hash once"]
+  I --> G[gaps]
+  I --> P[progress]
+  I --> L[lint]
+  I --> S[scan]
+  style I fill:#bfe,stroke:#177a3c`},
+ { n:"03", t:"Environment inputs are recorded as read, not predicted", adr:"0114", c:8,
+   problem:"The ledger predicted which modules the load would read and watched a link's directory, while Installed read elsewhere: an edit behind a symlink, or a link pointed at another file, reached nothing.",
+   proof:"Pins in <code>environment_reads.rs</code> and the watch tests, flipped by T7 and T8.",
+   before:`flowchart TB
+  L[ledger] -->|1 predict Installed::unread().modules()| P["predicted path = the link"]
+  P -->|2 watch the link's directory| W[watch]
+  I["Installed::at / Module::read"] -->|3 real read follows the link| T[(link target)]
+  T -.->|edit: no event| W
+  style T fill:#fbb,stroke:#c00`,
+   after:`flowchart TB
+  L[ledger] -->|hands its Disk| I["Installed::read(root, disk)"]
+  I --> R["RunDisk records link and target as read"]
+  R --> FS[(file system)]
+  R --> W["watch, LSP, stale: keyed by own name"]
+  style R fill:#bfe,stroke:#177a3c`},
+ { n:"04", t:"The entity snapshot is made in the registry crate", adr:"0115", c:10,
+   problem:"Records were made in the session layer, two layers above the checks that read them, so 178 check-test sites built records no compile makes.",
+   proof:"Pins: the quoted-false exemption (T1); registry tests now start from <code>.spec</code> text via <code>tests/support/written.rs</code>.",
+   before:`flowchart TB
+  S["session/project: snapshot.rs makes EntityRecords"] --> R["pipeline/registry: checks read them"]
+  T["178 hand-built records in check tests"] -.->|shapes the graph never stores| R
+  style T fill:#fbb,stroke:#c00`,
+   after:`flowchart TB
+  G["pipeline/graph: field forms"] --> SN["registry/snapshot: record, text, standing, wire"]
+  SN --> C[checks]
+  X[".spec text"] -->|GraphBuild, the build's own inputs| SN
+  style SN fill:#bfe,stroke:#177a3c`},
+ { n:"05", t:"Navigation reads the text the project was compiled from", adr:"0116", c:8,
+   problem:"The navigator took a text_of closure: MCP passed the disk as it is now, the LSP passed the compile's text, and outline asked the disk whether a file is a source.",
+   proof:"Pins: outline, find_definition and rename in <code>mcp</code> and <code>ops</code> tests, flipped by T5, T7 and T8.",
+   before:`flowchart LR
+  MCP["MCP: disk now"] -.->|text_of| N["Navigator with a text_of closure"]
+  LSP["LSP: compiled_text"] -.->|text_of| N
+  TS["tests: |_| None"] -.->|text_of| N
+  V[ProjectView] --> N
+  style MCP fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  V["ProjectView over CompiledProject"] --> N["Navigator::new(view): the compile's text, source_keys"]
+  MCP2[MCP] --> N
+  LSP2[LSP] --> N
+  N --> RN["rename refuses over drift: conflict / file_changed"]
+  style N fill:#bfe,stroke:#177a3c`},
+ { n:"06", t:"A reference is decided in the linker", adr:"0117", c:8,
+   problem:"One reference had three deciders: the linker (E003, I004), a registry check (E022 over the whole entity) and the derived walk; a wrong-kind reference still became an edge.",
+   proof:"Pins: <code>I004</code> placeholder and <code>E022</code> without help, flipped by T4 and T5; an xtask reader of the removed field was fixed in T8.",
+   before:`flowchart TB
+  R(["features [b2, f_missing], feature kind not loaded"])
+  R --> LK["linker: E003 / I004 via absent map"]
+  R --> SN["snapshot references list"] --> E22["registry check: E022, entity span, no help"]
+  R --> DV["derive: own kind filter"]
+  LK --> O1["I004: placeholder name"]
+  style O1 fill:#fbb,stroke:#c00
+  style E22 fill:#fbb,stroke:#c00`,
+   after:`flowchart TB
+  FF["FieldForm: target kind + loaded?"] --> LS["linker, one step per reference: edge | E003 | I004 | E022"]
+  VO["CandidateVocabulary.kind_owner"] --> LS
+  LS --> G["graph + diagnostics, E022 at the token with a suggestion"]
+  style LS fill:#bfe,stroke:#177a3c`},
+ { n:"07", t:"The paths a field names are read once; E016 is a host rule", adr:"0118", c:5,
+   problem:"E016 and the file_exists rule read a field's paths two ways: E016 missed a bare-word path, and the rule read a block's keys as paths.",
+   proof:"Pins: three registry tests and one project test, flipped by T3 and T4.",
+   before:`flowchart LR
+  F[file_reference field] --> A["E016 reader: List, String only"]
+  F --> B["file_exists reader: any shape"]
+  A -->|misses 'guide README'| X[no diagnostic]
+  B -->|reads block keys, ''| Y[F001 noise]
+  style X fill:#fbb,stroke:#c00
+  style Y fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  F[file_reference field] --> R["rules/files.rs: the paths this field names + sibling suggestion"]
+  R --> E["host-built file_exists rule: E016"]
+  R --> U["extension file_exists rules"]
+  style R fill:#bfe,stroke:#177a3c`},
+ { n:"08", t:"One per-entry extension load", adr:"released (ADR 0028 D3)", c:4,
+   problem:"Named and file entries spelled the load twice: two handshakes, two message templates and an unload on only some refusals.",
+   proof:"Pins: four ignored tests in <code>runtime/installed/tests/load_once.rs</code>, flipped by T2–T4.",
+   before:`flowchart TB
+  N["load_bytes (named)"] --> D1[load_declaration]
+  D1 -->|Err| K1["stays loaded"]
+  F["load_file (file entry)"] --> H1["handshake #1"]
+  H1 --> D2["load_declaration: handshake #2"]
+  style K1 fill:#fbb,stroke:#c00`,
+   after:`flowchart TB
+  E["Installed::load_entry"] --> R["read_module (the only Module::read)"]
+  R --> D["declaration read once"]
+  D --> A["Resolved::admit"]
+  A -->|any refusal| U["unload"]
+  style E fill:#bfe,stroke:#177a3c`},
+ { n:"09", t:"What a CLI command says beside its document is said once", adr:"0120", c:11,
+   problem:"Each command chose its own stderr under --format json, so notes and notices were duplicated or leaked, and review exited differently from query.",
+   proof:"Pins: <code>tests/beside.rs</code> (analyze, check, search, explore, migrate), flipped by T5–T9; T10 scans <code>src</code> for stray renderers.",
+   before:`flowchart LR
+  A[analyze] -->|W097 on stderr and in the document| E[stderr]
+  C[check] -->|note: lines| E
+  S[search] -->|R005 twice| E
+  X[explore] -->|I020 twice| E
+  style E fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  A[analyze] --> N["cli/src/notes.rs: Notes person | carried | warning"]
+  C[check] --> N
+  S[search] --> N
+  X[explore] --> N
+  N -->|human: person lines. JSON: once, in the document or on stderr| O[output]
+  style N fill:#bfe,stroke:#177a3c`},
+ { n:"10", t:"Rooted or detached: two named facts", adr:"0121", c:6,
+   problem:"Where a project is rooted had five spellings; the assembled-project fixture produced a project (root Some, project root None) that production cannot make.",
+   proof:"Pins: four tests in <code>tests/rooted.rs</code> (T1); the I002 arm and <code>CompiledProject::project_root()</code> are deleted in T2 and T4.",
+   before:`flowchart TB
+  E1["Environment.root"] --- C1["CompiledProject.on_disk"]
+  C1 --- P1["project_root() fuses both"]
+  P1 --- S1["SessionInputs::root()"]
+  S1 --- I1["empty installed root = no project (dead branch)"]
+  style P1 fill:#fbb,stroke:#c00
+  style I1 fill:#fbb,stroke:#c00`,
+   after:`flowchart TB
+  F1["on_disk via root(): is the compile on disk"]
+  F2["Environment::project_root(): where it was loaded"]
+  F1 -.->|never fused| F2
+  style F1 fill:#bfe,stroke:#177a3c
+  style F2 fill:#bfe,stroke:#177a3c`},
+ { n:"11", t:"The builtins' vocabulary is generated and handed to the registry build", adr:"0122", c:5,
+   problem:"The core registry shipped a hand-kept JSON index of the builtins' kinds and fields, checked in one direction only, and the linker could not reach it.",
+   proof:"Tests: <code>checks/candidates.rs</code> (a vocabulary changes only suggestions; none means <code>specforge search</code>), plus the staleness test on the generated file.",
+   before:`flowchart LR
+  B[builtin declarations] -.->|test compares, one direction| J["hand-edited JSON in the core registry"]
+  J --> E["E024 / W151 / W020"]
+  J -.->|unreachable| LK["linker I004"]
+  style J fill:#fbb,stroke:#c00`,
+   after:`flowchart LR
+  B[builtin declarations] -->|revendor generates| V["builtin-vocabulary.json"]
+  V -->|session: with_candidates| R["RegistryBuild.candidates()"]
+  R --> E["E024 / W151 / W020"]
+  R --> LK["linker I004 via kind_owner"]
+  style V fill:#bfe,stroke:#177a3c`}
+];
+
+const tbody = document.querySelector("#summary tbody");
+const host = document.getElementById("plans");
+PLANS.forEach(p => {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td>${p.n}</td><td>${p.t}</td><td>${p.adr}</td><td>${p.c}</td>`;
+  tbody.appendChild(tr);
+  const s = document.createElement("section");
+  s.className = "plan";
+  s.innerHTML = `<h3>Plan ${p.n}: ${p.t}</h3><div class="tag">ADR ${p.adr} · ${p.c} commit${p.c > 1 ? "s" : ""}</div>
+    <p>${p.problem}</p>
+    <div class="cols">
+      <div><h4>Before</h4><pre class="mermaid"></pre></div>
+      <div><h4>After</h4><pre class="mermaid"></pre></div>
+    </div>
+    <p class="proof">${p.proof}</p>`;
+  const pre = s.querySelectorAll("pre.mermaid");
+  pre[0].textContent = p.before;
+  pre[1].textContent = p.after;
+  host.appendChild(s);
+});
+const dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "neutral", securityLevel: "strict" });
+mermaid.run({ querySelector: "pre.mermaid" });
+</script>
+</body>
+</html>
