@@ -82,12 +82,12 @@ gadget g_size { size \"big\" }
 ";
 
 const ORDER: [&str; 10] = [
-    "W012", "E016", "E024", "E013", "E014", "W020", "W158", "E022", "E061", "W900",
+    "E022", "W012", "E024", "E013", "E014", "W020", "W158", "E061", "W900", "E016",
 ];
 
-/// Every structural check reports, then the extension's rule: the order is
-/// W012, E016, E024, E013, E014, W020, W158, E022, E061, then the rules. It must
-/// stay byte-identical while the checks move (plan 04, T0..T12).
+/// E022 first, the linker's, reported with the graph build's diagnostics (ADR 0117); then every
+/// structural check, then the rules: W012, E024, E013, E014, W020, W158, E061, then the extension's
+/// rule, then E016, a host rule after the extension's (ADR 0118).
 #[specforge_test(
     behavior = "check_entities_in_one_order",
     verify = "a compile reports the structural checks in the order the registry build runs them"
@@ -223,4 +223,24 @@ fn a_single_path_on_a_file_reference_field_is_checked() {
 
     assert_eq!(found.len(), 1, "{found:#?}");
     assert!(found[0][1].contains("'missing.md'"), "{found:#?}");
+}
+
+/// A bare word on a `string` file-reference field is a path (ADR 0118); the graph stores it as an
+/// identifier, which the checks read as the one word it is.
+#[specforge_test(
+    behavior = "validate_file_reference_paths",
+    verify = "a compile checks a bare word on a file-reference field as a path"
+)]
+fn a_bare_word_on_a_file_reference_field_is_checked() {
+    let dir = project(&["@test/docs"], "doc d1 { guide README }\n");
+
+    let found = reported(docs(), &dir, &["E016"]);
+
+    assert_eq!(
+        found,
+        [[
+            "E016".to_string(),
+            "file reference 'README' in entity 'd1' does not exist".to_string()
+        ]]
+    );
 }

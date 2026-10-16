@@ -5,7 +5,6 @@ use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_ops::Containment;
 
 use crate::args::{Arguments, NonEmpty};
 use crate::events::ExtensionAdded;
@@ -103,7 +102,7 @@ impl CoreTool for Tool {
             asking: Asking::Nobody,
             dry_run: args.dry_run,
             // A local file installs only from inside the project it installs into.
-            containment: &Containment::within(root.dir()),
+            containment: project.containment(),
         };
         let added = extension::add(&request, &registry, project.runtime.as_ref());
         // What reading the registry configuration reported (W140, I003), once the add asked a

@@ -69,9 +69,18 @@ behavior load_extension_manifests "Load Extension Manifests" {
     declared one. Which extension each entry names is decided once (a
     builtin's name before a lock entry; .wasm file entries after every named
     entry), and the extension load and the lock plan of add, init and update
-    read that one decision. A file that does not exist, does not load as a component,
-    declares another name than the one written, or declares an extension
-    another entry already loads MUST produce E028 naming the entry. A
+    read that one decision. A file that does not exist, cannot be read, does not load as a
+    component, declares another name than the one written, or declares an
+    extension another entry already loads MUST produce E028 naming the entry.
+    An entry whose declaration can't be read (its handshake, a describe
+    category or its protocol major) MUST produce one E028 that says so and
+    names what failed, in the same words for every kind of entry. Each
+    entry's bytes are read once and loaded under one key, and its
+    declaration is read once (one handshake, then each describe category).
+    An entry refused at any step — its bytes not a component, its
+    declaration unreadable, or the name it declares not the one its entry
+    admits — MUST leave nothing loaded. A .wasm file entry's load warnings
+    (W153, W138) name the entry. A
     specforge.json that is there and is not used as written MUST produce
     the error E069 naming why, one per problem, before any other
     diagnostic. When the file is not readable, not JSON or not a JSON
@@ -106,6 +115,11 @@ behavior load_extension_manifests "Load Extension Manifests" {
   verify integration "an entry naming a .wasm file loads that component from disk under the name it declares"
   verify unit "the extension load and the lock plan resolve an entry by one rule"
   verify integration "a .wasm file entry that is missing, is not a component, names another extension or repeats a loaded one produces E028 naming the entry"
+  verify unit "an entry whose declaration can't be read is E028 saying so and naming what failed"
+  verify unit "a .wasm file entry that cannot be read is E028 saying it cannot be read"
+  verify unit "an entry refused at any step of its load leaves nothing loaded"
+  verify unit "an entry's declaration is read once, with one handshake"
+  verify unit "a .wasm file entry's load warnings name the entry"
   verify unit "missing extension produces diagnostic"
   verify unit "every builtin is listed once, by the directory its crate lives in"
   verify unit "every fixture crate is listed once, by its directory under fixtures/"
@@ -244,11 +258,11 @@ behavior register_extension_entity_types "Register Extension Entity Types" {
     consulted to determine which extension owns each entity type and
     whether soft resolution applies for cross-extension references.
     When a reference targets an entity kind from an uninstalled extension,
-    the compiler MUST emit I004 with the format:
-    "Unknown entity kind '{kind}' — install an extension that provides
-    it (e.g., `specforge add @specforge/{extension}`)." The message
-    MUST include the unresolved kind name and a suggested extension
-    when one can be inferred from the kind prefix.
+    the compiler MUST emit I004 at the reference, naming the reference,
+    the field and the kind ("reference 'x' in field 'f' of 'e' targets
+    kind 'k', which no enabled extension provides"), and suggesting the
+    extension that declares the kind when a builtin does
+    (`specforge add @specforge/{extension}`), the one E024 names.
   """
   verify unit "delegates to registry_build_kinds per extension"
   verify unit "unregistered type triggers soft resolution"
@@ -740,7 +754,8 @@ behavior search_registry "Search Registry" {
     registries, the first registry in specforge.json declaration order
     wins, and each result names that registry. Output MUST be
     deterministic — sorted by name, then version. Each registry that
-    fails MUST be reported once, with its code; the others are still
+    fails MUST be reported once, with its code (on stderr under human
+    output, in the document's diagnostics under --format json); the others are still
     asked, and the search fails only when every registry failed. Each
     registry is asked with the credential kept for it
     (support_private_registries).
@@ -757,6 +772,7 @@ behavior search_registry "Search Registry" {
   verify unit "filters by declared category"
   verify unit "a registry lists each package at the version add installs from it"
   verify unit "each failed registry is reported once, and search fails when every registry failed"
+  verify integration "under --format json a failed registry is reported once, in the document's diagnostics, and not on stderr"
   verify unit "deduplicates results across registries"
   verify unit "output is deterministic"
   verify unit "error from one registry does not abort search of others"

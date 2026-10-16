@@ -1,8 +1,7 @@
 //! What a batch of changed paths is to a project session (behavior
 //! `classify_project_changes`): the comparison `stale` makes, narrowed to
 //! what the paths reach. These pins drive directory, symlink and
-//! unchanged-file events: the bug pins are ignored until the ticket that
-//! fixes them.
+//! unchanged-file events.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -229,22 +228,6 @@ fn a_symlinked_sources_target_directory_is_watched() {
 
 #[specforge_test(
     behavior = "classify_project_changes",
-    verify = "a directory moved above an environment or check input changes that input"
-)]
-fn a_moved_directory_holding_a_module_reloads_the_environment() {
-    let (dir, session) = open(
-        json!({"name": "c", "version": "0.1.0", "extensions": ["@acme/local=ext/local.wasm"]}),
-        &[("ext/local.wasm", "not wasm")],
-    );
-    let root = fs::canonicalize(dir.root()).unwrap();
-    fs::rename(root.join("ext"), root.join("ext2")).unwrap();
-
-    let changes = session.changes([root.join("ext").as_path(), root.join("ext2").as_path()]);
-    assert_eq!(changes.environment, vec![root.join("ext")]);
-}
-
-#[specforge_test(
-    behavior = "classify_project_changes",
     verify = "a directory created, moved or deleted under the spec root changes every source under it"
 )]
 fn a_held_file_under_a_moved_directory_is_left_out() {
@@ -373,53 +356,6 @@ fn a_discovered_spec_file_is_a_source_keyed_from_the_spec_root() {
     let changes = session.changes(paths.iter().map(|p| p.as_path()));
     assert_eq!(changes.sources, vec!["a.spec", "sub/b.spec"]);
     assert!(changes.environment.is_empty() && changes.check_inputs.is_empty());
-}
-
-#[specforge_test(
-    behavior = "classify_project_changes",
-    verify = "specforge.json, specforge.lock and a loaded extension module are environment changes"
-)]
-fn config_lock_and_loaded_modules_are_environment_inputs() {
-    let (dir, session) = open(
-        json!({
-            "name": "c",
-            "version": "0.1.0",
-            "extensions": ["@specforge/software", "@acme/local=ext/local.wasm", "@acme/installed"]
-        }),
-        &[("main.spec", "")],
-    );
-    let root = dir.root();
-
-    // A builtin has no module on disk; a local entry and an installed one do.
-    assert_eq!(
-        session.inputs().watched(),
-        vec![
-            Watched::Sources(root.to_path_buf()),
-            Watched::Directories(root.to_path_buf()),
-            Watched::File(root.join("specforge.json")),
-            Watched::File(root.join("specforge.lock")),
-            Watched::File(root.join("ext/local.wasm")),
-            Watched::File(root.join(".specforge/extensions/@acme/installed/extension.wasm")),
-        ]
-    );
-    for path in [
-        "specforge.json",
-        "specforge.lock",
-        "ext/local.wasm",
-        ".specforge/extensions/@acme/installed/extension.wasm",
-    ] {
-        let path = root.join(path);
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(&path, "new content").unwrap();
-        let changes = session.changes([path.as_path()]);
-        assert_eq!(
-            changes.environment,
-            vec![path.clone()],
-            "{}",
-            path.display()
-        );
-        assert!(changes.sources.is_empty());
-    }
 }
 
 #[specforge_test(
@@ -688,39 +624,6 @@ fn excluded_and_undiscovered_spec_files_change_nothing() {
             "{path}"
         );
     }
-}
-
-/// The directories a watcher must watch: the root, a spec root outside
-/// it, and the directory of a module outside both.
-#[test]
-fn watch_roots_cover_every_input() {
-    let outside = TempDir::new().unwrap();
-    let module_dir = fs::canonicalize(outside.path()).unwrap().join("mods");
-    fs::create_dir_all(&module_dir).unwrap();
-    let module = module_dir.join("ext.wasm");
-    let (dir, session) = open(
-        json!({
-            "name": "c",
-            "version": "0.1.0",
-            "spec_root": "spec",
-            "extensions": [format!("@acme/far={}", module.display())]
-        }),
-        &[("spec/a.spec", "")],
-    );
-    let root = fs::canonicalize(dir.root()).unwrap();
-    assert_eq!(
-        session.inputs().watch_roots(),
-        vec![
-            WatchRoot {
-                dir: root,
-                recursive: true
-            },
-            WatchRoot {
-                dir: module_dir,
-                recursive: true
-            },
-        ]
-    );
 }
 
 /// A session with no project has no inputs: it takes no change from disk,

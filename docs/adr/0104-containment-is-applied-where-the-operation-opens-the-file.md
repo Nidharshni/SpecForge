@@ -1,7 +1,9 @@
 # Containment is applied where the operation opens the file
 
 **Status:** accepted (2026-10-16, architecture round 11, plan 01). Amends ADR 0092 D1 and D8, the closing note of ADR 0098
-and the placements of ADR 0086.
+and the placements of ADR 0086. D2 amended by ADR 0112 and by ADR 0113 (the inference mark reads through the
+inference sources, held within the project root). D4's outline entry amended by [ADR 0116](0116-navigation-reads-the-text-the-project-was-compiled-from.md): outline opens nothing; its containment check validates
+the argument.
 
 MCP checked a path a client named (`specforge_mcp::containment`), then handed the raw name to an operation that read it
 again its own way: it split it on commas, normalised `..` by name, followed a crate directory's `target/` symlink, or
@@ -59,3 +61,5 @@ in the surface while the read stayed in ops.
 
 A third surface that bounds requests differently, or an operation that must open a file through a handle (`openat`) to
 close check-then-open.
+
+**Amended by ADR 0112 (2026-10-16):** D2: the list of sites grows to every project file an operation opens or writes (collect's report and runner files, analyze's named report, the inference manifest, migrate's sidecars, the lock plan's config and `Also` files), opened through the `Held` they were checked as; a test holds it.

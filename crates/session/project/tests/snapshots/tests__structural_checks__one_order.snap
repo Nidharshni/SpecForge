@@ -4,12 +4,12 @@ expression: found
 ---
 [
   [
-    "W012",
-    "unreferenced ref 'gh.issue:1' has no incoming edges"
+    "E022",
+    "reference 'w_one' in field 'parts' of gadget 'g_parts' targets a widget, but this field expects gadget"
   ],
   [
-    "E016",
-    "file reference 'missing.md' in entity 'g_docs' does not exist"
+    "W012",
+    "unreferenced ref 'gh.issue:1' has no incoming edges"
   ],
   [
     "E024",
@@ -32,15 +32,15 @@ expression: found
     "entity 'g_bogus' of kind 'gadget' declares verify statements, which its kind does not accept"
   ],
   [
-    "E022",
-    "reference 'w_one' in field 'parts' of gadget 'g_parts' targets a widget, but this field expects gadget"
-  ],
-  [
     "E061",
     "field 'size' of gadget 'g_size' is declared integer, but was given \"big\""
   ],
   [
     "W900",
     "widget 'w_one' links nothing"
+  ],
+  [
+    "E016",
+    "file reference 'missing.md' in entity 'g_docs' does not exist"
   ]
 ]

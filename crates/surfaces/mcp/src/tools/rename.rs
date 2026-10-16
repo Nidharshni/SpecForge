@@ -9,8 +9,8 @@ use crate::args::Arguments;
 use crate::mutation::{FreshDiagnostics, Mutated, Mutation, MutationArgs, MutationReply, Written};
 use crate::refusal::ArgumentOf;
 use crate::target::ProjectRef;
-use specforge_ops::Containment;
 use specforge_ops::authoring::rename::RenameField;
+use specforge_ops::read::navigate::Navigator;
 
 /// `specforge.rename`'s arguments.
 #[derive(Debug, Arguments)]
@@ -92,7 +92,7 @@ impl CoreTool for Tool {
         // The operation decided what kind of failure it is, and which entity it
         // is about; an invalid new ID is the argument's fault.
         let plan = rename::plan(
-            &crate::tools::navigator(project.view()),
+            &Navigator::new(project.view()),
             &args.entity_id,
             &args.new_name,
         )
@@ -124,7 +124,7 @@ impl CoreTool for Tool {
             return Ok(Mutated::new(reply, Written::nothing()));
         }
         // A failed write restores what it wrote: nothing is left written.
-        let writes = rename::apply(&plan, &spec_root, &Containment::within(&spec_root))?;
+        let writes = rename::apply(&plan, &spec_root, project.containment())?;
         // The reply's `diagnostics` are what `specforge check` reports for the
         // project as it is on disk now, edits made since the last call
         // included (`FreshDiagnostics`, filled in once the target is brought up

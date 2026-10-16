@@ -740,12 +740,12 @@ fn the_watchers_cover_the_environment_inputs() {
         format!("{root}/specforge.json"),
         format!("{root}/specforge.lock"),
         format!("{root}/ext/local.wasm"),
-        format!("{root}/.specforge/extensions/@acme/installed/extension.wasm"),
     ] {
         assert!(globs.contains(&expected), "{expected} not in {globs:?}");
     }
-    // A .wasm no extension loads is not watched.
-    assert!(!globs.iter().any(|g| g == "**/*.wasm"), "{globs:?}");
+    // A .wasm the load did not read is not watched.
+    let wasm = |g: &String| g == "**/*.wasm" || g.ends_with("@acme/installed/extension.wasm");
+    assert!(!globs.iter().any(wasm), "{globs:?}");
 }
 
 /// A docref project (an extension whose `docs` field names files) whose `spec/a.spec` is

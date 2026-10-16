@@ -20,7 +20,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   registration and I002. `Environment::from_read` is its disk adapter: it reads the lock and runs
   the extension load. Its fields are private; it is read through accessors (ADR 0047). A session
   reads `specforge.json` once per load and builds its extension runtime and, holding it, its
-  environment from that read, after stamping every environment input (ADR 0030, ADR 0106). It
+  environment from that read, stamping each environment input in the read that reads it (ADR 0030, ADR 0106, ADR 0114). It
   A project opened in a session's place loads its environment first and hands it over before any
   source is read (`ProjectSession::reopen`), so an editor answers what needs only the environment
   (keyword completion) while the sources are still being read.
@@ -31,7 +31,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`specforge_project::CompiledProject`). A one-shot compile (every CLI command) is one and keeps no
   stamp; a project session holds one and keeps it current (`ProjectSession::project`, ADR 0047); it is
   compiled from a project root (`CompiledProject::compile(&ProjectRoot, …)`). A copy shares all but its graph
-  (`Clone`, ADR 0108).
+  (`Clone`, ADR 0108). Rooted or detached is its `root()` (a detached project has none and resolves no
+  import); the project root it was loaded at is its environment's (`Environment::project_root`), read to reopen
+  it and to hand an operation a project root (ADR 0121).
 - **Project root**: the directory holding the `specforge.json` a path is in, located from any path inside the
   project (a subdirectory, a file) by walking up, the nearest winning
   (`specforge_common::ProjectRoot::of`, ADR 0053). Only `specforge.json` marks a project. With none at or
@@ -91,17 +93,22 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   same order (an editor update that skips the checks while a file does not parse is the one exception).
 - **Read ledger**: what a project session read and when (`specforge_project::ledger`, crate-private): its session
   inputs and the stamp of each file, taken in the call that reads it. It does every disk read the session makes
-  (the config, the lock and modules, the sources, the check inputs), derives every source key, and answers `changes`
+  (the config, the lock and modules, the sources, the check inputs), the environment's each through the one recording adapter, derives every source key, and answers `changes`
   and `stale`. A one-shot compile runs the same steps through an adapter that records nothing (ADR 0106).
 - **Check reads**: every file-system read a check, a rule or a check pass makes, through the `Disk` in `RuleInput`
   (`exists`, `list`, `read`; `specforge_registry::Disk`, ADR 0107). A project session's ledger stamps and records each
   one; its check inputs are the reads its checks made the last time they ran. Tests give the checks a `MemoryDisk`.
+- **Environment reads**: every file-system read the environment load makes (`specforge.json`, `specforge.lock`, each
+  module the extension load reads) through the `Disk` it is handed (`Installed::read`, `Installed::load`; ADR 0114). A
+  project session's ledger stamps and records each one, each link hop included: its environment inputs are what its
+  last environment load read.
 - **Session inputs**: everything a project session depends on besides its sources' text: where its
   sources are discovered (the spec root and `exclude`), its **environment inputs**
-  (`specforge.json`, `specforge.lock`, the extension modules it loaded) and its **check inputs**
+  (the environment reads of its last load) and its **check inputs**
   (the check reads of the last check run: `specforge-cache.json` when a check pass read it, each path a check looked
-  for, each directory E016's suggestion listed, and the target of each that is a symlink, and where each symlinked
-  source's text lies (its target)). One value per
+  for, each directory a missing named file's suggestion listed, and the target of each that is a symlink, and where each symlinked
+  source's text lies (its target)). Every input is keyed by its own name (a symlink stays itself), and each link hop it
+  followed is an input of its own. One value per
   environment load, renewed each time the checks run (`specforge_project::SessionInputs`,
   `ProjectSession::inputs`). What a changed path reaches, which directories watch watches, which files
   the LSP asks its client to report and what the session stamps for freshness are all read from it; the
@@ -144,7 +151,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   "another project" is one nested in the served one (`specforge_ops::Containment`, ADR 0092, ADR 0104).
 - **Containment**: what a request may reach on disk: every path (the CLI, ADR 0092 D6) or the paths that land inside
   one directory (an MCP request's bound, or the call's project). Carried in the operation's request and applied where
-  the operation opens or writes the file (`specforge_ops::Containment`, ADR 0104).
+  the operation opens or writes the file (`specforge_ops::Containment`, ADR 0104). MCP's call's project hands it to
+  the tools (`ProjectRef::containment`, ADR 0112).
+- **Project file**: a file of the project an operation reads or writes. It is opened only as a `Held`
+  (`specforge_ops::Containment::resolve`): at where its name landed (`real`), named as given (`spelled`), and replaced
+  atomically through a temp created new beside it (ADR 0104, ADR 0112).
 - **Served project**: the project an MCP server serves to every call that names none: the nearest project (a
   directory holding `specforge.json`) at or above the server's root (the path `specforge mcp` was started with, or
   a handshake client's `projectRoot`), else nothing; while none is served, every request looks there again first
@@ -226,7 +237,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Installed::resolve`: a builtin's name before a lock entry, `.wasm` file entries after every named
   entry), and the lock plan reads the same decision. Its declarations come in entry order; the registry
   build puts them in load order. What does not load is a typed `LoadFailure` on its
-  entry with one diagnostic, and what an entry reports though it loaded (W149, W153, W138) is on the
+  entry with one diagnostic and leaves nothing loaded, and what an entry reports though it loaded (W149, W153, W138) is on the
   entry too; the runtime keeps none, and `Installed::load_diagnostics` orders them, entry by entry. Without a runtime nothing loads, and each entry
   enables what it names (`Loaded::unloaded`); what an environment is assembled from says which
   (`specforge_project::ExtensionLoad`: `NoRuntime`, or what was loaded `In` a runtime).
@@ -247,6 +258,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   D7). A binary to install must load (E028) and must not declare a builtin's name; the lock plan
   enables the builtins an extension requires (CONTEXT "Lock plan"), and a builtin that does not load
   refuses the operation.
+- **Candidate vocabulary**: what the extensions a host could enable declare, read only for suggestions: each kind
+  keyword and each field an enhancement adds, with the extension that declares it
+  (`specforge_registry::CandidateVocabulary`, ADR 0122). The session hands the builtins' to the registry build;
+  `revendor` generates it from their pinned declarations
+  (`crates/runtime/component/data/builtin-vocabulary.json`). It never decides a diagnostic, only names the extension
+  to install.
 - **Lock plan**: the change one operation makes to what the project installs and enables (`add` its
   installs and builtins, `update` every upgrade, `init` its local files and builtins, `remove` its
   disabled entries and uninstall), staged as the operation leaves them: each package's lock entry
@@ -300,8 +317,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   caller reach it only through `build_registries` and that build's methods; its steps, its checks and
   its fields are private (ADR 0031).
 - **Graph inputs**: what the graph build reads of the loaded extensions (`specforge_graph::GraphInputs`):
-  the kinds whose bodies an extension parses, the absent-target reference fields, the
-  inverse field pairs (a reference field and its inverse fields, fields of its target kind), each field's form with the kinds that take any field (`FieldForms`) and the derived reference fields. Only the registry
+  the kinds whose bodies an extension parses, the extension that owns each target kind no loaded extension declares (`target_owners`), the
+  inverse field pairs (a reference field and its inverse fields, fields of its target kind), each field's form with the kinds that take any field (`FieldForms`, with each reference field's target, ADR 0117) and the derived reference fields. Only the registry
   build derives them (`RegistryBuild::graph_inputs`); with the provider schemes the environment
   registers they are every graph's `GraphConfig` (`Environment::graph_config`, ADR 0032).
 - **Edge type**: a relationship an extension declares (`edges`), or that fields name without one declaring it
@@ -317,17 +334,19 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   extension declares is skipped silently when its extension declares an optional peer the project does not load, and
   is I004 otherwise (ADR 0096).
 - **Rule set**: the extensions' declared validation rules plus the host's E006 rules for required
-  fields, each turned once per registry build into a typed rule that carries only what its check
+  fields and E016 rules for file-reference fields, each turned once per registry build into a typed rule that carries only what its check
   reads, resolved against the registries (a compiled regex, an edge rule's edge type and the fields that
   write it). An edge rule counts the edges of its edge type; a cycle rule follows them. It runs itself over the entity snapshot's records (`RuleInput`, ADR
   0019), cycles included, and answers which rule applies to a kind, which the snapshot's standing
   reads (`specforge_registry::rules::Rules`, ADR 0020). A declared rule that cannot work is W112; a
   property its check does not read is W147.
+- **Named paths**: the paths an entity's field names: a scalar's text, or each item of a list, when not
+  empty; a block, an expression group, a variant list or a type union names none. Every `file_exists` rule,
+  E016 among them, reads them and suggests a close sibling of a missing one
+  (`specforge_registry::rules::files`, ADR 0118).
 - **Structural checks**: the host's own checks over the entity snapshot's records, run by the
-  registry build before the rule set, in this order: W012 (a `ref` nothing references), E016 (a
-  path a `file_reference` field of the entity's kind names that does not exist under the spec
-  root), then, unless the project is structural-only, E024, E013, E014, W020, E022 and E061
-  (`specforge_registry`'s `checks`, ADR 0031). None reads a graph node. Whether every reference
+  registry build before the rule set, in this order: W012 (a `ref` nothing references), then, unless the project is structural-only, E024, E013, E014, W020 and E061
+  (`specforge_registry`'s `checks`, ADR 0031). E022 is the linker's (ADR 0117). None reads a graph node. Whether every reference
   became an edge is the linker's own debug assertion, not a check.
 - **Structural-only**: no loaded extension declares an entity kind
   (`RegistryBuild::structural_only`). The checks that read kinds, fields and identifiers do not
@@ -338,12 +357,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the `CustomVerdicts` port; the project's adapter calls the extension (`ExtensionCalls::validate`),
   tests answer with a closure. A function that cannot answer is W112 at load, W148 at check.
 - **Entity snapshot**: every entity of one built graph as every check after the build reads it, taken
-  once per compile and per session check (`specforge_project::snapshot::EntitySnapshot`, ADR 0019).
+  once per compile and per session check (`specforge_registry::EntitySnapshot`, ADR 0019), taken by the registry build that built its graph's inputs (ADR 0115).
   Each entity's record holds:
   - what it writes, as field text, with each value's shape (quoted, bare, a number, a list of
     strings or references, …) and span beside it for the host's own checks
     (`specforge_graph::ValueShape`);
-  - its references, obligations and methods;
+  - its obligations and methods;
   - its edge counts, in total and by edge type (each edge typed once, by the edge type its field writes from the
     kind it starts at);
   - what exempts it, if anything (a union body, an exempting flag, a kind that accepts no `verify`).
@@ -355,7 +374,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Field text**: the one string a field value is to a rule, a custom validator and a compiler pass
   (ADR 0019): scalars as written; lists of strings or references and mixed lists joined by `", "`;
   variant lists and type unions by `" | "`; expressions by `", "`; a
-  block's keys by `", "`. An entity's `verify` statements are not a field and have no field text (ADR 0094). An empty value is `""`. Every written field has one, and none is null.
+  block's keys by `", "`. An entity's `verify` statements are not a field and have no field text (ADR 0094). An empty value is `""`. Every written field has one, and none is null. It differs from the written value (`field_form::write`) only for an expression group, which every output writes one conjunct per line (ADR 0064, ADR 0115).
 - **Field type**: how the host reads a field's value, one of eight names an extension declares:
   `string`, `integer`, `bool`, `enum` (its values are the declaration's `enum_values`, its absent value its `default_value`: a field
   vocabulary; an enum without values, or a default outside them, is W021), `string_list`,
@@ -374,7 +393,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   writes the default into the graph. The extension's own readers (a list filter and its help, a sort, a lifecycle
   pass, a rollup, a conditional rule's value) read the same constant. An open set of standard values (a module's
   family) is not one: its field is a string, and an info rule names the standard values (`{allowed}`) (ADR 0071).
-- **Field form**: a field's declared type with an enum's values, read once
+- **Field form**: a field's declared type with an enum's values, its target kind, read once
   (`specforge_graph::FieldForm`, from `FieldRegistryEntry::form`; `FieldForms::reading(kind, field)` is a
   `Declared` form, a `Member` of an open-fields kind or `Undeclared`, and `Reading::references` is the one rule
   for what a written value references, ADR 0093): which
@@ -385,7 +404,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   expression group as its conjuncts one per line, lists as arrays, a block as
   an object; never a parse tree or a position. A value E061 admits is a value
   the published schema admits (ADR 0064).
-- **Standing**: how the obligation rule sees an entity (`specforge_project::snapshot::Standing`):
+- **Reference target**: the kind a reference field's ids must name, from its declaration
+  (`FieldForm::target_kind`), and whether a loaded extension declares it (`FieldForms::target` gives a
+  `specforge_graph::Target`: `Loaded` or `Absent`; an absent kind's owner is `GraphInputs::target_owners`). The linker
+  decides each written reference against it once: an edge, E003, I004 (absent kind, missing id) or E022 (an entity of
+  another kind), each at the reference (ADR 0117).
+- **Standing**: how the obligation rule sees an entity (`specforge_registry::Standing`):
   - whether its kind is testable;
   - which `no_verify_statements` rule requires its kind to declare obligations (a rule without a
     target kind applies to every kind);
@@ -508,7 +532,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   from its session's, or, while the session is out for an update, from a copy of it (ADR 0108); MCP from its call target (`ProjectRef::view`: the served session's compiled
   project with its I017 notices, or that of a session opened for one call) (ADR 0015, ADR 0047).
 - **Assembled project**: a compiled project a test builds in memory from a graph and an environment rooted at its
-  directory, reporting what the test lists; no check runs (`specforge_project::testing::Assembled`, ADR 0108).
+  directory, reporting what the test lists; no check runs (`specforge_project::testing::Assembled`, ADR 0108). Its root is a
+  directory, not a project root: its environment was loaded from none (ADR 0121).
 - **Read view**: an operation that only reads the project view: stats, trace, the coverage view, the
   model and outline diagrams, the versioned schema, inspect, query, list and search (the entities a
   selection over the view returns, `specforge_ops::read::query`), the exploration and the review
@@ -602,6 +627,13 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   ended as completed or paused; at most one is active (`SessionStatus`). Its steps (start, mark a
   source file analyzed, end) are one management operation, `specforge_ops::read::infer::session`; MCP's
   `specforge.infer_session` is its adapter.
+- **Inference sources**: the files inference covers: under the inference manifest's source roots (the project
+  root when none), each file an enabled analyzer claims by its extension, keyed by the source path rule
+  (root-relative, `/`-separated, no `..`). They are walked by the shared discovery policy
+  (`specforge_common::walk_files`): no symlinked directory, no hidden name, no nested project, and the default
+  skipped directories united with any analyzer's `excluded_dirs`. A source root, a file or an indexed path that lands
+  outside the project root is none of them and is never read. Progress, gaps, the `inferred` lint and the mark read
+  them through one module (`specforge_ops::read::infer::sources`, ADR 0113).
 - **Anchors manifest**: `<root>/specforge-anchors.json`, which source item each entity is anchored
   to. Navigation reads it (`specforge_ops::read::navigate::source_anchors`): the anchors of a source file
   and of an entity; E071 when it cannot be used.
@@ -735,13 +767,19 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   does not match the lock, an unreadable lock). The CLI exits 0, 1 or 2 by it (`specforge_cli::outcome::Exit`, the only value a core
   command ends with); MCP returns it as `ok`
   (`specforge.validate`: `_meta["specforge/check"].ok`) and keeps `isError` for refusals (ADR 0004
-  D4-a). A refusal (`OpError`) is not a verdict; a measuring command's refusal exits 2. Not to be
+  D4-a). A refusal (`OpError`) is not a verdict; a measuring command's (stats, analyze) refusal exits 2. Not to be
   confused with an entity's coverage **Verdict** (ADR 0029).
 - **Terminal**: where a core CLI command writes and whom it asks: its stdout, its stderr, the input a
   prompt reads (or `specforge mcp` serves, byte for byte), whether each stream is coloured (`NO_COLOR`, then `CLICOLOR_FORCE`, then whether it is
   a terminal) and whether anyone can answer, fixed when `main` makes it from the process
   (`specforge_cli::terminal::Terminal`); a test captures one. It is the CLI's **Asker**; nobody to ask is no; a reader that leaves stdout ends the output
   quietly (ADR 0029 D4b).
+- **Command notes**: what a core CLI command writes on stderr beside its outcome document: **notices** (coded
+  diagnostics about the run: the schema notices, I020, W097, a failed registry's R005, the registry configuration's
+  W140/I003/W155/W156) and **notes** (prose for a person: `note: …`, collect's announcement). One rule, by output
+  format (`specforge_cli::notes::Notes`, ADR 0120): under human output both go on stderr; under `--format json` a
+  note is never written, and a notice is written once, in the document when the document carries it, else on stderr
+  before the document.
 - **Asking**: who can be asked to consent to what an operation would otherwise refuse (a publisher key change, a
   collector's command): yes to everything (`--yes`), nobody (MCP, `--format json`, stdin that is no terminal), or an
   `Asker` (the CLI's terminal, a test's script). A surface builds it once per command and hands it to add, update or
@@ -938,9 +976,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Navigation**: where an entity is declared, its references, entity lookup and ranking, which
   entities a diagnostic is about, and the fixes a diagnostic's data names. The LSP and MCP answer
   from one module (`specforge_ops::read::navigate`) in source spans. A span is a position in the text the
-  project was compiled from (`ProjectSession::source_text`), not in the buffer typed since nor the disk
-  now. The LSP converts spans to UTF-16 ranges through that text's line index (a file the compile holds
+  project was compiled from (`CompiledProject::source_text`), not in the buffer typed since nor the disk
+  now. The navigator reads it from its view's compiled project; no surface hands it a text, and outline answers
+  only for the compile's sources (ADR 0116). The LSP converts spans to UTF-16 ranges through that text's line index (a file the compile holds
   no text of has no range), MCP renders them as JSON (ADR 0016, ADR 0023).
+- **Rename plan**: the edits that rename one entity (`specforge_ops::authoring::rename::RenamePlan`):
+  the declaration's name and each incoming reference's token, positions in the text the project was compiled from,
+  which the plan keeps. MCP writes it only to files that still hold that text, refusing `conflict` otherwise; the LSP
+  hands it to the editor only over buffers that are that text (`ContentModified` otherwise; ADR 0116, ADR 0023 D3).
 - **Lexeme**: one token of a `.spec` text as the language's one lexer reads it without a parse
   (`specforge_parser::lex`): an identifier, a scheme ref ID (one lexeme), a number, a string (read as
   the grammar reads it, across lines; one the grammar would not close is marked unclosed and, if a

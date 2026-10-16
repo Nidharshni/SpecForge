@@ -28,9 +28,8 @@ use specforge_emitter::{GraphProtocolSchema, generate_schema};
 use specforge_graph::Graph;
 use specforge_installed::{Installed, LockState};
 use specforge_project::coverage::{ProjectCoverage, Recorded, TestReport};
-use specforge_project::snapshot::EntitySnapshot;
 use specforge_project::{CompiledProject, Environment, SharedRuntime};
-use specforge_registry::RegistryBuild;
+use specforge_registry::{EntitySnapshot, RegistryBuild};
 
 pub use connectivity::{Connectivity, Degree};
 pub(crate) use entity::unresolved;

@@ -4,8 +4,9 @@
 //! tool. This module is the CLI half: arguments in, rendering and exit
 //! codes out.
 
+use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
-use crate::terminal::{Terminal, err, errln, outln};
+use crate::terminal::{Terminal, outln};
 use specforge_common::{codes, diagnostic_summary, render_diagnostics, truncate_diagnostics};
 use specforge_ops::OpError;
 use specforge_ops::analysis::analyze::{
@@ -76,7 +77,10 @@ impl Args {
                 .unwrap_or_else(|| specforge_ops::analysis::analyze::EVERY_PASS.to_string()),
             strict: self.strict,
             report: match &self.test_results {
-                Some(path) => ReportSource::File(path.clone()),
+                Some(path) => ReportSource::Named {
+                    path: path.clone(),
+                    containment: specforge_ops::Containment::unbounded(),
+                },
                 None => ReportSource::Recorded,
             },
             min: self.min,
@@ -100,11 +104,13 @@ impl Args {
                 return Refusal::measuring(format).report(terminal, &OpError::from(error));
             }
         };
-        // D3: stray test records, on stderr before the reports. Exact
-        // matching is preserved; the warning only surfaces what was
-        // silently dropped before.
+        // D3: stray test records, on stderr before the reports under human
+        // output; under `--format json` the document's `stray_records` say
+        // them (ADR 0120). Exact matching is preserved; the warning only
+        // surfaces what was silently dropped before.
+        let notes = Notes::new(terminal, format);
         for stray in &outcome.stray_records {
-            errln!(terminal, "{}", stray_line(stray));
+            notes.person(format_args!("{}", stray_line(stray)));
         }
         match format {
             OutputFormat::Json => terminal.json(&outcome.document()),
@@ -114,8 +120,9 @@ impl Args {
         // The gate comes after the reports print, so the operator still
         // sees the full analysis. Under `--format json` the document carries where
         // it landed and nothing goes to stderr.
-        if let (OutputFormat::Human, Some(failure)) = (format, outcome.gate_failure()) {
-            err!(terminal, "{}", crate::outcome::error_lines(&failure, None));
+        if let Some(failure) = outcome.gate_failure() {
+            let lines = crate::outcome::error_lines(&failure, None);
+            notes.person(format_args!("{}", lines.trim_end()));
         }
         Exit::of(outcome.verdict())
     }
@@ -242,7 +249,7 @@ mod summary_tests {
         let asked = asked_args.options(&z3);
         assert_eq!(asked.pass, "coverage");
         assert!(
-            matches!(&asked.report, ReportSource::File(p) if p == std::path::Path::new("r.json"))
+            matches!(&asked.report, ReportSource::Named { path, .. } if path == std::path::Path::new("r.json"))
         );
         assert!(asked.prove.is_some() && asked.strict);
         assert_eq!(asked.min, Some(80.0));

@@ -1,5 +1,6 @@
 //! The validation rules a project's extensions declare, plus the host's E006
-//! rules for required fields, as one typed set that runs itself (ADR 0020).
+//! rules for required fields and E016 rules for file-reference fields, as one typed set that
+//! runs itself (ADR 0020, ADR 0118).
 //!
 //! [`Rules::build`] turns each declared descriptor into a [`Rule`] whose
 //! check carries exactly what that check reads, resolved once against the
@@ -14,6 +15,7 @@
 
 mod build;
 mod check;
+mod files;
 mod verdicts;
 
 use specforge_common::{Diagnostic, Severity};
@@ -40,7 +42,7 @@ pub(crate) struct Registries<'a> {
 pub enum Origin {
     /// An extension's declared rule (its name).
     Extension(String),
-    /// A rule the host generates: E006 for a `required` field.
+    /// A rule the host generates: E006 for a `required` field, E016 for a `file_reference` field.
     Host,
 }
 
@@ -166,7 +168,7 @@ impl Rule {
 
 /// Every registered rule, in execution order: the extensions' rules by code
 /// (declaration order within a code), then the host's E006 rules by kind
-/// and field.
+/// and field, then its E016 rules by kind and field.
 #[derive(Debug, Clone, Default)]
 pub struct Rules {
     rules: Vec<Rule>,
@@ -174,7 +176,8 @@ pub struct Rules {
 
 impl Rules {
     /// The rules `declarations` declare (load order), checked and resolved
-    /// against `registries`, plus an E006 rule for every `required` field.
+    /// against `registries`, plus an E006 rule for every `required` field and an E016 rule for every
+    /// `file_reference` field.
     ///
     /// Diagnostics, per extension and per rule in declaration order, W150,
     /// W147 or W112 (the rule cannot work as declared, not registered). Pure.

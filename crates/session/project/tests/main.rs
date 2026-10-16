@@ -5,6 +5,7 @@
 
 mod assembled;
 mod buffers;
+mod builtin_vocabulary;
 mod builtins;
 mod changes;
 mod check_passes;
@@ -20,6 +21,7 @@ mod e2e_pipeline;
 mod edge_types;
 mod entity_snapshot;
 mod environment;
+mod environment_reads;
 mod extension_calls;
 mod field_types;
 mod fixture;
@@ -31,6 +33,7 @@ mod registry_build_snapshot;
 mod registry_fields;
 mod registry_order;
 mod reopen;
+mod rooted;
 mod rules;
 mod session;
 mod structural_checks;

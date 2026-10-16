@@ -43,7 +43,7 @@ mod verdict;
 pub mod view;
 mod writes;
 
-pub use containment::{Containment, Held, OUTSIDE_ROOT, Outside};
+pub use containment::{Containment, Held, OUTSIDE_ROOT, Outside, ReadFailure};
 pub use error::{OpError, OpErrorKind};
 pub use refusal::Refusal;
 pub use verdict::RunVerdict;

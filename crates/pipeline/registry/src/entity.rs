@@ -1,7 +1,7 @@
 //! What every check after the graph build reads about one entity (ADR 0019):
-//! the records of the entity snapshot. Graph-free, so the registry checks and
-//! the rules read them without the graph; `specforge_project::snapshot`
-//! builds them, once per compile.
+//! the records of the entity snapshot. `crate::snapshot` makes them from a
+//! built graph, once per compile (ADR 0115); the registry checks and the rules
+//! read them.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -12,8 +12,8 @@ use specforge_graph::ValueShape;
 use crate::disk::Disk;
 
 /// One entity as the registry checks, the rules and the custom validators
-/// read it. Built by the project's entity snapshot; tests build it with the
-/// `with_*` methods.
+/// read it. Made by the entity snapshot (`crate::snapshot`); tests whose subject
+/// is the rule engine or the wire build it with the `with_*` methods.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntityRecord {
     pub id: String,
@@ -22,9 +22,6 @@ pub struct EntityRecord {
     /// Every field the entity writes, in source order (a name written twice
     /// appears twice), each with its field text.
     pub fields: Vec<FieldRecord>,
-    /// Each reference-list field with the ids it names, in source order
-    /// (resolved or not).
-    pub references: Vec<(String, Vec<String>)>,
     /// Its `verify` statements, in order: what it declares it will prove.
     pub obligations: Vec<ObligationRecord>,
     /// Edges into it, in total and by edge type.
@@ -163,7 +160,6 @@ impl EntityRecord {
             kind: kind.to_string(),
             span: span.clone(),
             fields: Vec::new(),
-            references: Vec::new(),
             obligations: Vec::new(),
             incoming: EdgeCounts::default(),
             outgoing: EdgeCounts::default(),
@@ -211,15 +207,6 @@ impl EntityRecord {
             shape,
             value_span: None,
         });
-        self
-    }
-
-    /// One more reference-list field naming `targets`.
-    pub fn with_reference(mut self, field: &str, targets: &[&str]) -> Self {
-        self.references.push((
-            field.to_string(),
-            targets.iter().map(|t| t.to_string()).collect(),
-        ));
         self
     }
 

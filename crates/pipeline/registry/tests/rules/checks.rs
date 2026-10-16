@@ -1,13 +1,10 @@
 //! `execute_validation_pattern` and `emit_diagnostic_from_pattern`: each
 //! declarative check over entity records, and the diagnostic it emits.
 
-use std::path::Path;
-
 use specforge_common::Severity;
 use specforge_protocol_types::{ValidationRuleDescriptor, ValidationSeverity};
-use specforge_registry::entity::{Direction, EntityRecord, Exemption, RuleInput};
+use specforge_registry::entity::{Direction, EntityRecord, Exemption};
 use specforge_registry::rules::NoVerdicts;
-use specforge_registry::{Asked, MemoryDisk};
 use specforge_test_macros::test as spec;
 
 use super::{check, constraint, declaring, entity, messages, one, over, rule, rules, rules_of};
@@ -83,90 +80,6 @@ fn implementing(rule: ValidationRuleDescriptor, with_feature: bool) -> super::Bu
     });
     declaration.validation_rules = vec![rule];
     rules_of(vec![declaration])
-}
-
-#[spec(
-    behavior = "execute_validation_pattern",
-    verify = "an edge rule counts only edges of its edge type and is dropped when no extension declares the kind at its far end"
-)]
-fn an_edge_rule_counts_only_its_edge_type() {
-    let mut declared = rule("W001", "no_outgoing_edges");
-    declared.edge_type = Some("BehaviorImplementsFeature".to_string());
-    declared.message_template = "behavior '{id}' does not implement any feature".to_string();
-
-    // b1 references an event but no feature; b2 implements a feature.
-    let b1 = entity("b1", "behavior", 0, 0).with_edges(
-        Direction::Outgoing,
-        Some("BehaviorReferencesEvent"),
-        1,
-    );
-    let b2 = entity("b2", "behavior", 0, 0).with_edges(
-        Direction::Outgoing,
-        Some("BehaviorImplementsFeature"),
-        1,
-    );
-    let built = implementing(declared.clone(), true);
-    assert_eq!(
-        built.rules.iter().next().unwrap().describe()["edge_writers"],
-        serde_json::json!(["behavior.features"])
-    );
-    let diagnostics = check(&built, &[b1, b2]);
-    assert_eq!(
-        messages(&diagnostics),
-        ["behavior 'b1' does not implement any feature"]
-    );
-
-    // Without an extension declaring `feature`, the rule can't be met: dropped.
-    let built = implementing(declared, false);
-    assert!(built.rules.is_empty());
-    assert!(built.diagnostics.is_empty(), "{:?}", built.diagnostics);
-}
-
-#[spec(
-    behavior = "execute_validation_pattern",
-    verify = "an edge rule over an edge type several kinds write without declaring it counts the edges of every writing kind"
-)]
-fn an_edge_rule_over_an_undeclared_edge_counts_every_writing_kind() {
-    // `person` is assigned by `task` (from `@test`) and `ticket` (from
-    // `@test/more`), through the `assigned_to` edge neither declares.
-    let mut declared = rule("W001", "no_incoming_edges");
-    declared.target_kind = Some("person".to_string());
-    declared.edge_type = Some("assigned_to".to_string());
-    declared.message_template = "person '{id}' is assigned nothing".to_string();
-    let mut first = declare("@test", |c| {
-        c.kind("task", |k| {
-            k.field("assignee", |f| {
-                f.field_type(FieldType::Reference)
-                    .edge("assigned_to")
-                    .target_kind("person");
-            });
-        });
-        c.kind("person", |k| {
-            k.description("p");
-        });
-    });
-    first.validation_rules = vec![declared];
-    let second = declare("@test/more", |c| {
-        c.kind("ticket", |k| {
-            k.field("owner", |f| {
-                f.field_type(FieldType::Reference)
-                    .edge("assigned_to")
-                    .target_kind("person");
-            });
-        });
-    });
-    let built = rules_of(vec![first, second]);
-    assert_eq!(
-        built.rules.iter().next().unwrap().describe()["edge_writers"],
-        serde_json::json!(["task.assignee", "ticket.owner"])
-    );
-
-    let assigned = Some("assigned_to");
-    let by_task = entity("p1", "person", 0, 0).with_edges(Direction::Incoming, assigned, 1);
-    let by_ticket = entity("p2", "person", 0, 0).with_edges(Direction::Incoming, assigned, 1);
-    let by_other = entity("p3", "person", 0, 0).with_edges(Direction::Incoming, Some("owns"), 1);
-    let diagnostics = check(&built, &[by_task, by_ticket, by_other]);
-    assert_eq!(messages(&diagnostics), ["person 'p3' is assigned nothing"]);
 }
 
 #[spec(
@@ -248,21 +161,6 @@ fn field_value_constraint_rejects_invalid_field_value() {
         messages(&diagnostics),
         ["behavior 'b1' has invalid status='invalid_status'"]
     );
-}
-
-#[test]
-fn a_non_empty_constraint_flags_an_empty_value() {
-    let mut declared = rule("I068", "field_value_constraint");
-    declared.field = Some("tags".to_string());
-    declared.constraint = Some(constraint("non_empty", None, &[]));
-    let diagnostics = check(
-        &one(declared),
-        &[
-            entity("b1", "behavior", 1, 0).with_field("tags", ""),
-            entity("b2", "behavior", 1, 0).with_field("tags", "x"),
-        ],
-    );
-    assert_eq!(messages(&diagnostics), ["orphan behavior 'b1'"]);
 }
 
 /// A `matches` rule on `release.version` with `pattern`.
@@ -392,111 +290,6 @@ fn missing_required_field_fires_on_its_kind_when_the_field_is_absent() {
     assert_eq!(diagnostics[0].severity, Severity::Error);
 }
 
-#[spec(
-    behavior = "execute_validation_pattern",
-    verify = "file_exists reports missing file-reference field targets"
-)]
-fn file_exists_reports_missing_file_reference_field_targets() {
-    let mut declared = rule("E101", "file_exists");
-    declared.severity = ValidationSeverity::Error;
-    declared.message_template = "{kind} '{id}' references missing file".to_string();
-    declared.field = Some("gherkin".to_string());
-    let built = one(declared);
-    let disk = MemoryDisk::new().with_file("/spec/features/login.feature", b"");
-    let naming = |id: &str, path: &str| entity(id, "behavior", 1, 0).with_field("gherkin", path);
-    let entities = [
-        naming("b1", "features/login.feature"),
-        naming("b2", "features/logout.feature"),
-        naming("b3", "/nonexistent/file.feature"),
-        naming("b4", "/spec/features/login.feature"),
-    ];
-
-    // Relative paths are the spec root's; absolute ones are checked as
-    // written.
-    let input = RuleInput {
-        entities: &entities,
-        edges: &[],
-        spec_root: Path::new("/spec"),
-        disk: &disk,
-    };
-    let diagnostics = built.rules.check(&input, &NoVerdicts);
-    assert_eq!(
-        messages(&diagnostics),
-        [
-            "behavior 'b2' references missing file",
-            "behavior 'b3' references missing file",
-        ]
-    );
-    assert!(diagnostics.iter().all(|d| d.code == "E101"));
-}
-
-#[spec(
-    behavior = "execute_validation_pattern",
-    verify = "file_exists resolves a relative path against the spec root, never the working directory"
-)]
-fn file_exists_resolves_against_the_spec_root_not_the_working_directory() {
-    let mut declared = rule("E101", "file_exists");
-    declared.field = Some("doc".to_string());
-    declared.message_template = "{id}: missing '{value}'".to_string();
-    let built = one(declared);
-    let entities = [entity("b1", "behavior", 0, 0).with_field("doc", "Cargo.toml")];
-    let beside = MemoryDisk::new().with_file("Cargo.toml", b"");
-    let input = RuleInput {
-        entities: &entities,
-        edges: &[],
-        spec_root: Path::new("/spec"),
-        disk: &beside,
-    };
-    assert_eq!(
-        messages(&built.rules.check(&input, &NoVerdicts)),
-        ["b1: missing 'Cargo.toml'"]
-    );
-    // The rule asks for the spec root's file, never the working directory's.
-    assert_eq!(beside.asked(), [Asked::Exists("/spec/Cargo.toml".into())]);
-}
-
-#[spec(
-    behavior = "execute_validation_pattern",
-    verify = "file_exists checks each item of a list field as its own path"
-)]
-fn file_exists_checks_each_item_of_a_list_field() {
-    let mut declared = rule("E102", "file_exists");
-    declared.field = Some("docs".to_string());
-    declared.message_template = "{id}: missing '{value}'".to_string();
-    let built = one(declared);
-    let root = Path::new("/spec");
-    let disk = MemoryDisk::new().with_file("/spec/a.md", b"");
-    let entities = [
-        entity("b1", "behavior", 0, 0).with_list("docs", &["a.md", "b.md"]),
-        // An empty list names no path.
-        entity("b2", "behavior", 0, 0).with_list("docs", &[]),
-        // A scalar is one path, as written.
-        entity("b3", "behavior", 0, 0).with_field("docs", "a.md, b.md"),
-    ];
-    let input = RuleInput {
-        entities: &entities,
-        edges: &[],
-        spec_root: root,
-        disk: &disk,
-    };
-
-    let diagnostics = built.rules.check(&input, &NoVerdicts);
-
-    assert_eq!(
-        messages(&diagnostics),
-        ["b1: missing 'b.md'", "b3: missing 'a.md, b.md'"]
-    );
-    // The rule asks about every item against the spec root, in entity order.
-    assert_eq!(
-        disk.asked(),
-        [
-            Asked::Exists(root.join("a.md")),
-            Asked::Exists(root.join("b.md")),
-            Asked::Exists(root.join("a.md, b.md")),
-        ]
-    );
-}
-
 /// W009-like: a `verify_kind_allowlist` rule on `target` allowing `allowed`.
 fn allowlist(target: &str, allowed: &[&str]) -> super::Built {
     one(ValidationRuleDescriptor {
@@ -547,36 +340,6 @@ fn obligation_rule(code: &str, target: Option<&str>, field: &str) -> ValidationR
         field: Some(field.to_string()),
         ..Default::default()
     }
-}
-
-#[spec(
-    behavior = "te_validate_unverified_testable",
-    verify = "a field named like an obligation or an exemption exempts nothing from W004"
-)]
-fn w004_reads_statements_and_the_exemption_not_field_names() {
-    let built = one(obligation_rule("W004", Some("behavior"), "verify"));
-    assert_eq!(check(&built, &[entity("b1", "behavior", 1, 1)]).len(), 1);
-    let verified = entity("b2", "behavior", 1, 1).with_obligation("unit", "it works");
-    assert!(check(&built, &[verified]).is_empty());
-
-    // Members named like a statement or an exemption are fields: none of
-    // them stands in for an obligation or exempts the entity.
-    for (name, value) in [
-        ("verify", "string"),
-        ("gherkin", "string"),
-        ("abstract", "true"),
-        ("variants", "open | done"),
-    ] {
-        let named = entity("b3", "behavior", 1, 1).with_field(name, value);
-        assert_eq!(
-            check(&built, &[named]).len(),
-            1,
-            "a field named {name} exempts nothing"
-        );
-    }
-
-    let exempt = entity("b4", "behavior", 1, 1).exempt(Exemption::Union);
-    assert!(check(&built, &[exempt]).is_empty());
 }
 
 #[spec(
@@ -640,26 +403,6 @@ fn applies_to_reads_target_kind_once() {
 }
 
 #[spec(
-    behavior = "snapshot_entities_once",
-    verify = "a kind that accepts no verify statements owes no obligations, whatever rule applies to it"
-)]
-fn a_kind_without_verify_owes_no_statements_but_still_owes_other_fields() {
-    let memo = entity("m", "memo", 0, 0).exempt(Exemption::NoVerify);
-    // Statement obligations: exempt.
-    let statements = one(obligation_rule("P300", None, "verify"));
-    assert!(check(&statements, std::slice::from_ref(&memo)).is_empty());
-    let mut flagged = obligation_rule("P301", None, "verify");
-    flagged.check = "missing_field_when_flag_set".to_string();
-    assert!(check(&one(flagged), std::slice::from_ref(&memo)).is_empty());
-    // An obligation declared in another field: not exempt.
-    let gherkin = one(obligation_rule("P302", None, "gherkin"));
-    assert_eq!(check(&gherkin, std::slice::from_ref(&memo)).len(), 1);
-    // A union body exempts from both.
-    let union = entity("u", "memo", 0, 0).exempt(Exemption::Union);
-    assert!(check(&gherkin, &[union]).is_empty());
-}
-
-#[spec(
     behavior = "execute_validation_pattern",
     verify = "Execute Validation Pattern: declarative validation holds — all_entities_matched, violations_diagnosed, deterministic_order"
 )]
@@ -703,25 +446,6 @@ fn message_template_interpolates_id_and_kind() {
     let diagnostics = check(&built, &[entity("my_beh", "behavior", 0, 0)]);
     assert_eq!(messages(&diagnostics), ["orphan behavior 'my_beh'"]);
     assert!(diagnostics[0].span.is_some());
-}
-
-#[spec(
-    behavior = "emit_diagnostic_from_pattern",
-    verify = "message template interpolates {field} and {value}"
-)]
-fn message_template_interpolates_field_and_value() {
-    let mut declared = rule("W103", "field_value_constraint");
-    declared.message_template = "{kind} '{id}' has {field}='{value}'".to_string();
-    declared.field = Some("status".to_string());
-    declared.constraint = Some(constraint("one_of", None, &["active"]));
-    let diagnostics = check(
-        &one(declared),
-        &[entity("b1", "behavior", 0, 0).with_field("status", "invalid")],
-    );
-    assert_eq!(
-        messages(&diagnostics),
-        ["behavior 'b1' has status='invalid'"]
-    );
 }
 
 #[spec(

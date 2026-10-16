@@ -1,7 +1,8 @@
 # Operations decide their failure and their verdict; a command ends in one place
 
 **Status:** accepted (2026-10-07). Amends ADR 0015 (I1, D8), ADR 0021 (D4) and ADR 0011 (the
-stdout/stderr bullet).
+stdout/stderr bullet). D3a's "under `--json` nothing goes to stderr" and D4's measuring list are restated by
+[ADR 0120](0120-what-a-cli-command-says-beside-its-document-is-said-once.md) (one rule for what a command says beside its document; review refuses as a read view).
 
 ADR 0024 D7 said operations fail with a kind decided where the failure is raised. The read views that
 read the recorded test report did not: they returned the project crate's `ReportError`, and MCP (a
@@ -56,6 +57,8 @@ nearest project, else the directory itself" on their own.
   for an entry that takes a `path`.
 - **D8. MCP resolves a relative `test_results` against the call's project root**, as the paths of
   `specforge.format`; the CLI keeps shell semantics (relative to the working directory).
+  *(ADR 0112: over MCP a `test_results`, relative or absolute, resolves inside the call's project; one that leaves it
+  is `invalid_input` before anything is read. The CLI's reading against the working directory stands.)*
 
 ## Consequences
 

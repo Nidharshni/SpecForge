@@ -1,5 +1,6 @@
 //! The compiled project a test assembles in memory (ADR 0108).
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
@@ -10,6 +11,7 @@ use specforge_protocol_types::{ExtensionDeclaration, HandshakeResponse};
 use specforge_registry::RegistryBuild;
 use tempfile::TempDir;
 
+use crate::sources::SourceCache;
 use crate::{CompiledProject, EnabledExtension, Environment, ExtensionLoad, Loaded, SharedRuntime};
 
 /// What the compile read and loaded, from which the environment is assembled at every builder call
@@ -51,7 +53,8 @@ impl Parts {
 /// (or a directory the test owns); only what the test writes is on disk. The in-memory counterpart of
 /// [`super::TestProject`].
 ///
-/// Invariants: `compiled().root() == Some(root())` and `compiled().environment().root() == root()`;
+/// Invariants: `compiled().root() == Some(root())`, `compiled().environment().root() == root()`
+/// and `compiled().environment().project_root() == None`;
 /// `detached().root() == None`; `compiled().diagnostics()` is exactly the `reporting` list (empty by default); its
 /// entity snapshot is taken over its own graph, in its own environment.
 ///
@@ -66,6 +69,8 @@ pub struct Assembled {
     env: Arc<Environment>,
     graph: Graph,
     reported: Vec<Diagnostic>,
+    /// The text each source was read as, by key: what `source` parsed, none for a graph made elsewhere.
+    texts: HashMap<String, Arc<str>>,
     rooted: OnceLock<CompiledProject>,
     detached: OnceLock<CompiledProject>,
 }
@@ -131,6 +136,7 @@ impl Assembled {
             env,
             graph: Graph::new(),
             reported: Vec::new(),
+            texts: HashMap::new(),
             rooted: OnceLock::new(),
             detached: OnceLock::new(),
         }
@@ -151,6 +157,7 @@ impl Assembled {
             env: Arc::new(env),
             graph: Graph::new(),
             reported: Vec::new(),
+            texts: HashMap::new(),
             rooted: OnceLock::new(),
             detached: OnceLock::new(),
         }
@@ -243,6 +250,7 @@ impl Assembled {
     /// The project's graph, made by the test.
     pub fn graph(mut self, graph: Graph) -> Self {
         self.graph = graph;
+        self.texts.clear();
         self.changed()
     }
 
@@ -251,14 +259,20 @@ impl Assembled {
     pub fn graph_mut(&mut self) -> &mut Graph {
         self.rooted = OnceLock::new();
         self.detached = OnceLock::new();
+        self.texts.clear();
         &mut self.graph
     }
 
     /// The project's graph, built from `text` as the one file `main.spec` (the default graph config).
+    /// The compile read `text` as `main.spec`'s text.
     pub fn source(self, text: &str) -> Self {
         let (graph, _) =
             specforge_graph::build_graph(&[specforge_parser::parse(text, "main.spec")]);
-        self.graph(graph)
+        let mut project = self.graph(graph);
+        project
+            .texts
+            .insert("main.spec".to_string(), Arc::from(text));
+        project
     }
 
     /// The project's compile reported `diagnostics`.
@@ -305,6 +319,7 @@ impl Assembled {
                 Arc::clone(&self.env),
                 self.graph.clone(),
                 self.reported.clone(),
+                SourceCache::holding(self.texts.clone()),
                 true,
             )
         })
@@ -318,6 +333,7 @@ impl Assembled {
                 Arc::clone(&self.env),
                 self.graph.clone(),
                 self.reported.clone(),
+                SourceCache::holding(self.texts.clone()),
                 false,
             )
         })

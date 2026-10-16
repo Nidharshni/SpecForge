@@ -16,7 +16,6 @@
 //! progress, paged file lists and the kinds in the order to write them) is
 //! the infer prompt's plan scope.
 
-mod discovery;
 mod gaps;
 mod guide;
 mod lint;
@@ -25,6 +24,7 @@ mod plan;
 mod progress;
 mod scan;
 mod session;
+mod sources;
 
 pub use gaps::{
     DirectoryGaps, GapItem, Gaps, GapsDocument, ScanFailureRow, SourceItem, directory_of, gaps,
@@ -50,5 +50,5 @@ pub use scan::ScanFailure;
 pub use session::{
     END_STATUS, EndStatus, Recorded, SESSION_ACTION, SESSION_ACTIVE, SESSION_NOT_ACTIVE,
     SOURCE_OUTSIDE_ROOT, SOURCE_ROOT_OUTSIDE_ROOT, SOURCE_UNREADABLE, SessionAction, SessionField,
-    SessionOutcome, SessionStep, UNKNOWN_SESSION, session,
+    SessionOutcome, SessionRequest, SessionStep, UNKNOWN_SESSION, session,
 };

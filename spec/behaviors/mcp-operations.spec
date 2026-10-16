@@ -130,7 +130,10 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
     boolean, default false) and path? (the project root; the served project
     when omitted; another project is planned, edited and brought up to date
     on its own, the served one untouched). The rename is planned on the project as
-    it is on disk. The tool MUST rename the entity and update all
+    it is on disk. Its edits are positions in the text the project was
+    compiled from: when a file the rename edits no longer holds that text on
+    disk, the tool MUST fail the rename as conflict before any file is
+    written. The tool MUST rename the entity and update all
     references across all spec files. The edits are exactly the entity's
     declaration name and its references, as find-references returns them;
     text in strings, comments and verify statements that mentions the ID
@@ -160,6 +163,7 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
   verify unit "rename's updated diagnostics follow a successful write only: a preview and a failure carry none"
   verify unit "a specforge.json that does not say which files are the project's sources fails the rename as config_invalid and writes nothing"
   verify unit "rename never edits a nested project's files"
+  verify unit "a rename whose file changed on disk since the compile is refused as conflict, and nothing is written"
 }
 
 // MCP init creates a project at a specified path, not the current project.
@@ -560,7 +564,10 @@ behavior provide_mcp_collect_tool "Provide MCP Collect Tool" {
     `specforge collect` in a terminal,
     and a missing collector or report is an error naming its code. The
     result lists each runner's counts, the W115 diagnostics and the path of
-    the written specforge-report.json, named from the project root.
+    the written specforge-report.json, named from the project root. Every
+    file it reads or writes (the report, a runner's report files and
+    captured output) resolves inside the call's project: one that leaves
+    it, by a symlink, is invalid_input before any command runs.
   """
   verify unit "specforge.collect parses test results and maps to entities"
   verify unit "the collect document names the report from the project root"
@@ -568,6 +575,7 @@ behavior provide_mcp_collect_tool "Provide MCP Collect Tool" {
   verify unit "specforge.collect refuses an unapproved command with the operation's own message"
   verify unit "specforge.collect of a directory that holds no project refuses with no_project"
   verify unit "a project without a collector returns an E058 error"
+  verify unit "specforge.collect reads and writes no file through a symlink that leaves the project"
   verify integration "specforge.collect reads runner as specforge collect --runner reads it"
   verify unit "a runner no collector answers to, auto included, is an E058 error on runner"
   verify contract "Provide MCP Collect Tool: MCP collect tool holds — filesystem_available, compiler_api_available, report_emitted, collector_delegated, never_prompts, tool_invoked_emitted"

@@ -1,7 +1,9 @@
 //! Every wasm component this repository commits, where each is built from, and what an SDK
 //! blob answers on the wire. Test support (feature `testing`): the declaration snapshots and
 //! their tests, `xtask build-blobs` and `xtask revendor` read it, and every test that loads
-//! a fixture blob names it here. No production code reads it.
+//! a fixture blob names it here. `revendor` and the vocabulary's drift test also read the
+//! builtins' pinned declarations from it ([`pinned_builtin_declarations`], ADR 0122). No
+//! production code reads it.
 //!
 //! A committed blob lives at `<crate_dir>/wasm/<artifact>`, beside the `inputs.json` that
 //! `build-blobs --install` records for it. `git ls-files '*.wasm'` is exactly [`COMMITTED`]
@@ -9,7 +11,8 @@
 
 use crate::builtins::BUILTINS;
 use specforge_protocol_types::{
-    DeclaredCategory, DescribeRequest, HandshakeRequest, PROTOCOL_VERSION,
+    DeclaredCategory, DescribeRequest, DescribeResponse, ExtensionDeclaration, HandshakeRequest,
+    HandshakeResponse, PROTOCOL_VERSION,
 };
 use specforge_wasm::runtime::{WasmCallResult, WasmRuntime};
 use std::path::PathBuf;
@@ -137,6 +140,49 @@ pub const COMMITTED: &[CommittedBlob] = &{
 /// Where the SDK blobs' wire answers are pinned: this crate's `tests/declarations/`.
 pub fn snapshots() -> PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/declarations")
+}
+
+/// The declaration of each builtin, in [`BUILTINS`] order, read from its pinned wire answers under
+/// [`snapshots`] (the snapshots equal the blobs' answers: `sdk_declarations_match_their_snapshots`).
+/// The error names the file.
+pub fn pinned_builtin_declarations() -> Result<Vec<ExtensionDeclaration>, String> {
+    let root = snapshots();
+    COMMITTED[..BUILTINS.len()]
+        .iter()
+        .map(|blob| {
+            let dir = root.join(blob.snapshot_dir());
+            let read = |file: &str| -> Result<String, String> {
+                let path = dir.join(file);
+                std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))
+            };
+            let parse = |file: &str| -> Result<serde_json::Value, String> {
+                let text = read(file)?;
+                serde_json::from_str(&text).map_err(|e| format!("{}: {file}: {e}", dir.display()))
+            };
+            let handshake: HandshakeResponse = serde_json::from_value(parse("handshake.json")?)
+                .map_err(|e| format!("{}: handshake.json: {e}", dir.display()))?;
+            ExtensionDeclaration::from_wire(
+                handshake,
+                |category| {
+                    let file = format!("describe_{}.json", category.name());
+                    let value = parse(&file).map_err(|reason| {
+                        specforge_protocol_types::ProtocolError::DescribeFailed {
+                            category: category.name().to_string(),
+                            reason,
+                        }
+                    })?;
+                    serde_json::from_value::<DescribeResponse>(value).map_err(|e| {
+                        specforge_protocol_types::ProtocolError::DescribeFailed {
+                            category: category.name().to_string(),
+                            reason: format!("{file}: {e}"),
+                        }
+                    })
+                },
+                |_| {},
+            )
+            .map_err(|e| format!("{}: {e}", blob.name))
+        })
+        .collect()
 }
 
 /// One wire answer: the file it is pinned in (`handshake.json`, `describe_<category>.json`)

@@ -1,4 +1,5 @@
 use super::*;
+use crate::read::infer::sources::InferenceSources;
 use serde_json::json;
 use specforge_component::ComponentRuntime;
 use specforge_protocol_types::{AnalyzerDescriptor, ExtensionDeclaration, HandshakeResponse};
@@ -50,13 +51,16 @@ fn scan_only_matching_extensions() {
 
     let runtime = rust_only_runtime();
     let manifests = vec![rust_manifest()];
-    let source_files = vec!["lib.rs".into(), "readme.md".into(), "app.txt".into()];
+    let source_files = vec!["lib.rs", "readme.md", "app.txt"];
 
     let ScanOutcome {
         items,
         scanners_used: scanners,
         ..
-    } = scan_source_files(Some(&runtime), &manifests, dir.path(), &source_files);
+    } = scan_source_files(
+        Some(&runtime),
+        &InferenceSources::with_keys(dir.path(), &manifests, &source_files),
+    );
 
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].name, "hello");
@@ -76,7 +80,10 @@ fn scan_empty_source_list() {
         items,
         scanners_used: scanners,
         ..
-    } = scan_source_files(Some(&runtime), &manifests, dir.path(), &[]);
+    } = scan_source_files(
+        Some(&runtime),
+        &InferenceSources::with_keys(dir.path(), &manifests, &[] as &[&str]),
+    );
 
     assert!(items.is_empty());
     assert!(scanners.is_empty());
@@ -88,13 +95,16 @@ fn scan_no_manifests_skips_all_files() {
     std::fs::write(dir.path().join("lib.rs"), "pub fn hello() {}").unwrap();
 
     let runtime = rust_only_runtime();
-    let source_files = vec!["lib.rs".into()];
+    let source_files = vec!["lib.rs"];
 
     let ScanOutcome {
         items,
         scanners_used: scanners,
         ..
-    } = scan_source_files(Some(&runtime), &[], dir.path(), &source_files);
+    } = scan_source_files(
+        Some(&runtime),
+        &InferenceSources::with_keys(dir.path(), &[], &source_files),
+    );
 
     assert!(items.is_empty());
     assert!(scanners.is_empty());
@@ -106,13 +116,16 @@ fn scan_missing_file_skipped_gracefully() {
 
     let runtime = rust_only_runtime();
     let manifests = vec![rust_manifest()];
-    let source_files = vec!["nonexistent.rs".into()];
+    let source_files = vec!["nonexistent.rs"];
 
     let ScanOutcome {
         items,
         scanners_used: scanners,
         ..
-    } = scan_source_files(Some(&runtime), &manifests, dir.path(), &source_files);
+    } = scan_source_files(
+        Some(&runtime),
+        &InferenceSources::with_keys(dir.path(), &manifests, &source_files),
+    );
 
     assert!(items.is_empty());
     assert!(scanners.is_empty());
@@ -129,13 +142,16 @@ fn default_runtime_scans_rust_files() {
 
     let runtime = wasm_runtime_for(&["@specforge/rust"]);
     let manifests = vec![rust_manifest()];
-    let source_files = vec!["main.rs".into()];
+    let source_files = vec!["main.rs"];
 
     let ScanOutcome {
         items,
         scanners_used: scanners,
         ..
-    } = scan_source_files(Some(&runtime), &manifests, dir.path(), &source_files);
+    } = scan_source_files(
+        Some(&runtime),
+        &InferenceSources::with_keys(dir.path(), &manifests, &source_files),
+    );
 
     assert_eq!(items.len(), 2);
     assert_eq!(items[0].name, "process_order");
@@ -182,19 +198,16 @@ fn multi_scanner_mixed_project() {
 
     let runtime = wasm_runtime_for(&["@specforge/rust", "@specforge/typescript"]);
     let manifests = vec![rust_manifest(), typescript_manifest()];
-    let source_files = vec![
-        "lib.rs".into(),
-        "app.ts".into(),
-        "component.tsx".into(),
-        "utils.js".into(),
-        "readme.md".into(),
-    ];
+    let source_files = vec!["lib.rs", "app.ts", "component.tsx", "utils.js", "readme.md"];
 
     let ScanOutcome {
         items,
         scanners_used: scanners,
         ..
-    } = scan_source_files(Some(&runtime), &manifests, dir.path(), &source_files);
+    } = scan_source_files(
+        Some(&runtime),
+        &InferenceSources::with_keys(dir.path(), &manifests, &source_files),
+    );
 
     assert_eq!(items.len(), 5);
 
@@ -244,9 +257,7 @@ fn a_scanner_that_fails_is_reported_not_dropped() {
         let runtime = InProcessRuntime::new().answer_raw("@specforge/rust", "scan__rust", answer);
         let outcome = scan_source_files(
             Some(&runtime),
-            &[rust_manifest()],
-            dir.path(),
-            &["a.rs".into(), "b.rs".into()],
+            &InferenceSources::with_keys(dir.path(), &[rust_manifest()], &["a.rs", "b.rs"]),
         );
         assert!(outcome.items.is_empty() && outcome.scanners_used.is_empty());
         let failed: Vec<&str> = outcome.failures.iter().map(|f| f.file.as_str()).collect();
@@ -354,7 +365,10 @@ fn the_scan_request_and_its_answer() {
         "scan__rust",
         WasmCallResult::Ok(answer.to_string().into_bytes()),
     );
-    let scanned = scan_source_files(Some(&runtime), &scanner(), dir.path(), &["a.rs".into()]);
+    let scanned = scan_source_files(
+        Some(&runtime),
+        &InferenceSources::with_keys(dir.path(), &scanner(), &["a.rs"]),
+    );
     golden("scan.input.json", &runtime.calls()[0].input);
     assert_eq!(scanned.items.len(), 1);
     assert_eq!(

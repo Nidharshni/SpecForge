@@ -90,20 +90,21 @@ type GraphInputs {
   // A reference field and each of its inverse fields (fields of its target
   // kind), each pair written lesser label first, sorted: a two-hop cycle
   // through both labels of one pair is not a reference cycle
-  bidirectional_pairs      string[] @readonly
-  // kind.field of every reference field whose target kind no loaded
-  // extension declares, with that kind: an unresolved value there is I004
-  absent_reference_targets string[] @readonly
+  bidirectional_pairs string[] @readonly
+  // each target kind no loaded extension declares, with the extension that
+  // owns it (the candidate vocabulary's kind_owner): what I004 and E022
+  // suggest enabling
+  target_owners       string[] @readonly
   // kind.field of every registered field whose value is coerced to its
   // declared type: a list type to a list; integer, bool, string or enum to
   // that type; a single reference or a block is read as written
-  field_coercions          string[] @readonly
+  field_coercions     string[] @readonly
   // the kinds that take any field (open_fields): an undeclared field of one
   // is a member, which references nothing (ADR 0093)
-  member_kinds             string[] @readonly
+  member_kinds        string[] @readonly
   // kind.field of every reference field whose edges the host derives
   // (derived_from), with its target kind and source, sorted by kind and field
-  derived_references       string[] @readonly
+  derived_references  string[] @readonly
   verify unit "GraphInputs schema is valid"
 }
 
@@ -353,13 +354,6 @@ type SchemeRegistryEntry {
   verify unit "SchemeRegistryEntry schema is valid"
 }
 
-type KeywordExtensionMapping {
-  keyword     string
-  extension   string
-  entity_kind string
-  verify unit "KeywordExtensionMapping schema is valid"
-}
-
 // One edge type as the registry build resolved it (registry_build_edges)
 type EdgeRegistryEntry {
   label            string             @readonly
@@ -385,10 +379,14 @@ type EdgeWriter {
   verify unit "EdgeWriter schema is valid"
 }
 
-type KeywordExtensionIndex {
-  _tag    "KeywordExtensionIndex" @literal
-  entries KeywordExtensionMapping[]
-  verify unit "KeywordExtensionIndex schema is valid"
+// What the extensions a host could enable declare, for suggestions only: kinds maps each kind
+// keyword to the extension that declares it; fields maps each kind to the fields an enhancement
+// adds to it, each to its extension (ADR 0122).
+type CandidateVocabulary {
+  _tag   "CandidateVocabulary" @literal
+  kinds  string
+  fields string
+  verify unit "CandidateVocabulary schema is valid"
 }
 
 type CompilerPassDeclaration {

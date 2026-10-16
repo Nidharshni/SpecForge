@@ -142,7 +142,7 @@ behavior link_entity_references "Link Entity References" {
     all_files_parsed     "All .spec files have been parsed"
   }
   ensures {
-    all_references_resolved "Every reference a field's declared type reads, a list item or a single reference, resolves to a declared entity or emits E003 (I004 when its target kind's extension is not enabled)"
+    all_references_resolved "Every reference a field's declared type reads, a list item or a single reference, resolves to a declared entity or emits E003 (I004 when its target kind's extension is not enabled); one that names an entity of another kind than its field's target kind is E022"
     no_silent_ignoring      "No reference is silently ignored"
   }
   contract   """
@@ -151,7 +151,10 @@ behavior link_entity_references "Link Entity References" {
     recorded as a pending edge (source, target, edge type) for the
     graph builder to materialize. Unresolvable references MUST produce
     an E003 diagnostic with a "did you mean?" suggestion when a close
-    match exists.
+    match exists. A reference whose field declares a target kind and that
+    names an existing entity of another kind MUST be E022 at the
+    reference, whether or not a loaded extension declares that kind; it
+    still links, so navigation and rename reach it.
   """
   verify unit "reference list IDs create graph edges"
   verify unit "unresolvable reference produces E003"
@@ -161,6 +164,11 @@ behavior link_entity_references "Link Entity References" {
   verify unit "a string list's items reference nothing but scheme ref IDs"
   verify unit "a quoted id on a reference list field is a reference"
   verify unit "an open-fields kind's undeclared field references nothing"
+  verify unit "an unresolved reference in a field whose target kind no extension declares is I004 naming the extension"
+  verify unit "an unresolved reference to a loaded or undeclared target kind is E003 alone"
+  verify unit "a reference naming an existing entity of the absent target kind links without a diagnostic"
+  verify unit "a reference to an existing entity of another kind than its field's target kind is E022 at the reference"
+  verify unit "a single reference to an existing entity of another kind than its field's target kind is E022 at the reference"
   verify contract "Link Entity References: entity reference linking holds — registries_populated, all_files_parsed, all_references_resolved, no_silent_ignoring"
   verify unit "E003 span covers exactly the unresolved identifier token"
   verify unit "cross-file duplicate entity ID produces E002 naming the first declaration"
@@ -191,9 +199,10 @@ behavior resolve_soft_cross_extension_references "Resolve Soft Cross-Extension R
     keyword, the suggestion MUST name it ("install it with: specforge add
     X"). The keyword stays an error: a project that uses a kind without
     enabling its extension does not pass the check.
-    This is about entity declarations with unknown keywords, not reference
-    list entries — reference lists contain entity IDs (not keywords), so the
-    resolver cannot determine a target entity's kind from an unresolvable ID.
+    This is about entity declarations with unknown keywords. An unresolvable
+    ID in a field whose declared target kind no loaded extension declares is
+    I004 (link_entity_references), whose suggestion consults the same
+    catalog.
     When the extension IS installed and the target entity does not exist,
     normal E003 validation via link_entity_references MUST apply.
   """

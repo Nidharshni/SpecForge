@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use specforge_common::ProjectConfig;
 
 use crate::ledger::inputs::*;
-use crate::ledger::{CheckInput, Ledger};
+use crate::ledger::{Ledger, Reading};
 
 fn config(extensions: &[&str]) -> ProjectConfig {
     ProjectConfig {
@@ -16,13 +16,14 @@ fn config(extensions: &[&str]) -> ProjectConfig {
 fn a_value_made_twice_from_the_same_config_is_equal() {
     let dir = tempfile::TempDir::new().unwrap();
     let config = config(&["@acme/local=ext/local.wasm"]);
+    let read = vec![dir.path().join("specforge.json")];
     assert_eq!(
-        SessionInputs::opened(dir.path(), &config),
-        SessionInputs::opened(dir.path(), &config)
+        SessionInputs::opened(dir.path(), &config, read.clone()),
+        SessionInputs::opened(dir.path(), &config, read.clone())
     );
     assert_ne!(
-        SessionInputs::opened(dir.path(), &config),
-        SessionInputs::opened(dir.path(), &self::config(&[]))
+        SessionInputs::opened(dir.path(), &config, read),
+        SessionInputs::opened(dir.path(), &config, Vec::new())
     );
 }
 
@@ -31,10 +32,10 @@ fn after_checks(inputs: SessionInputs, files: &[PathBuf]) -> SessionInputs {
     let mut ledger = Ledger::over(inputs);
     let run = ledger.checks();
     for file in files {
-        if !run.read(CheckInput::File, file, Path::exists)
+        if !run.read(Reading::File, file, Path::exists)
             && let Some(parent) = file.parent()
         {
-            run.read(CheckInput::Listing, parent, |_| ());
+            run.read(Reading::Listing, parent, |_| ());
         }
     }
     run.finish();
@@ -44,7 +45,7 @@ fn after_checks(inputs: SessionInputs, files: &[PathBuf]) -> SessionInputs {
 #[test]
 fn named_files_change_the_value() {
     let dir = tempfile::TempDir::new().unwrap();
-    let opened = SessionInputs::opened(dir.path(), &config(&[]));
+    let opened = SessionInputs::opened(dir.path(), &config(&[]), Vec::new());
     let named = vec![dir.path().join("docs/guide.md")];
     let with = after_checks(opened.clone(), &named);
     assert_ne!(opened, with);
@@ -66,7 +67,7 @@ fn classify_compares_canonical_forms() {
     std::os::unix::fs::symlink(&real, &link).unwrap();
     #[cfg(not(unix))]
     let link = real.clone();
-    let inputs = SessionInputs::opened(&link, &config(&[]));
+    let inputs = SessionInputs::opened(&link, &config(&[]), vec![link.join("specforge.json")]);
     std::fs::write(real.join("specforge.json"), "{}").unwrap();
 
     // The same file, however the directory is spelled.
@@ -106,7 +107,15 @@ fn watched_paths_are_spelled_from_the_root_as_opened() {
     };
     // Named as the checks join them: through `spec/..`.
     let inputs = after_checks(
-        SessionInputs::opened(root, &config),
+        SessionInputs::opened(
+            root,
+            &config,
+            vec![
+                root.join("specforge.json"),
+                root.join("specforge.lock"),
+                root.join("ext/local.wasm"),
+            ],
+        ),
         &[root.join("spec/../docs/guide.md")],
     );
 
@@ -132,7 +141,7 @@ fn a_watched_path_outside_the_root_is_canonical() {
     let outside = dir.path().join("outside");
     std::fs::create_dir_all(&outside).unwrap();
     let inputs = after_checks(
-        SessionInputs::opened(&root, &ProjectConfig::default()),
+        SessionInputs::opened(&root, &ProjectConfig::default(), Vec::new()),
         &[root.join("../outside/guide.md")],
     );
 
@@ -161,6 +170,7 @@ fn a_module_in_a_missing_directory_is_pending_as_an_environment_input() {
     let inputs = SessionInputs::opened(
         &root,
         &config(&[&format!("@acme/far={}", module.display())]),
+        vec![module.clone()],
     );
     let far = std::fs::canonicalize(&far).unwrap();
 
@@ -197,6 +207,7 @@ fn a_module_in_a_missing_directory_is_pending_as_an_environment_input() {
     let inputs = SessionInputs::opened(
         &root,
         &config(&[&format!("@acme/far={}", module.display())]),
+        vec![module.clone()],
     );
     assert!(
         inputs.watch_roots().contains(&WatchRoot {
@@ -211,7 +222,40 @@ fn a_module_in_a_missing_directory_is_pending_as_an_environment_input() {
 #[test]
 fn a_missing_root_has_no_watch_roots() {
     let dir = tempfile::TempDir::new().unwrap();
-    let inputs = SessionInputs::opened(&dir.path().join("nope"), &config(&[]));
+    let inputs = SessionInputs::opened(&dir.path().join("nope"), &config(&[]), Vec::new());
     assert!(inputs.watch_roots().is_empty());
     assert!(inputs.discover_at("").is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn an_input_is_reached_by_its_link_and_by_each_hop() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let root = dir.path().join("root");
+    let out = dir.path().join("out");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::create_dir_all(&out).unwrap();
+    std::fs::write(out.join("a.md"), "a").unwrap();
+    std::fs::write(out.join("b.md"), "b").unwrap();
+    std::os::unix::fs::symlink(out.join("a.md"), root.join("l.md")).unwrap();
+
+    // A check reads the link through the checks' disk, which records each hop.
+    let mut ledger = Ledger::over(SessionInputs::opened(&root, &config(&[]), Vec::new()));
+    let run = ledger.checks();
+    assert!(specforge_registry::Disk::exists(
+        &crate::ledger::disk::RunDisk(&run),
+        &root.join("l.md")
+    ));
+    run.finish();
+    let after = ledger.inputs().clone();
+
+    // The link, and the file it points to, each reach the check input.
+    for changed in [root.join("l.md"), out.join("a.md")] {
+        let reach = after.reach([changed.as_path()]);
+        assert_eq!(reach.inputs.len(), 1, "{changed:?}: {reach:?}");
+        assert_eq!(reach.inputs[0].1[0].0, Kind::Check, "{reach:?}");
+    }
+    // A sibling of the target is not an input.
+    let reach = after.reach([out.join("b.md").as_path()]);
+    assert!(reach.inputs.is_empty(), "{reach:?}");
 }

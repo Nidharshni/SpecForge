@@ -70,6 +70,8 @@ impl CoreTool for Tool {
             // approved it for this project with `specforge collect` in a terminal.
             asking: Asking::Nobody,
             announce: &mut |_, _| {},
+            // Every file the collect reads or writes lands inside the call's project.
+            containment: project.containment(),
         };
         collect::collect(&project.view(), request)
             .map(|outcome| outcome.document().into())

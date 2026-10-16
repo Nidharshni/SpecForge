@@ -30,7 +30,7 @@ use runner::run;
 
 use crate::asking::{Asking, Question};
 use crate::view::ProjectView;
-use crate::{OpError, OpErrorKind, Refusal};
+use crate::{Containment, Held, OpError, OpErrorKind, Refusal};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{Code, Diagnostic, DiagnosticList, ProjectPath, codes};
@@ -64,6 +64,10 @@ pub struct Request<'a> {
     pub asking: Asking<'a>,
     /// Told just before a collector's command runs.
     pub announce: &'a mut dyn FnMut(&Collector, &[String]),
+    /// What every file the collect reads or writes must land inside (ADR 0104 D3, ADR 0112 D2):
+    /// the report, a collector's report files and its captured output. A name that lands outside
+    /// is refused before any command runs.
+    pub containment: &'a Containment,
 }
 
 /// Whether `collector`'s command `argv` may run in `root`, with the approvals in `store`: `--yes`
@@ -183,6 +187,7 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, Refusal<
         mode,
         asking,
         announce,
+        containment,
     } = request;
     let known = &KnownEntities::of(view.entities());
     let available = collectors(view.registries().declarations());
@@ -203,17 +208,25 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, Refusal<
         .into());
     }
 
-    let mut report = load_report(root);
+    // Held before anything runs: what is read and what is written is the file checked here.
+    let report_file = containment
+        .resolve(&root.join(REPORT_FILE))
+        .map_err(OpError::from)?;
+    let mut report = load_report(&report_file);
     let mut runners = Vec::new();
     let mut diagnostics = Vec::new();
     let mut unsaved_approvals = Vec::new();
     let store = consent_path();
     for collector in selected {
-        let report_at = report_path(collector, root)
-            .map_err(|m| fail(OpErrorKind::PreconditionFailed, codes::E058, m))?;
+        let report_at = report_path(collector, root, containment)?;
         let capturing = captures_stdout(collector)
             .map_err(|m| fail(OpErrorKind::PreconditionFailed, codes::E058, m))?;
-        let argv = command_line(collector, &report_at);
+        let capture = if capturing {
+            Some(capture_path(collector, &report_at, containment)?)
+        } else {
+            None
+        };
+        let argv = command_line(collector, &report_at.spelled);
         let mut exit_code = None;
         let mut since = None;
         let mut stdout = None;
@@ -241,37 +254,34 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, Refusal<
                 .into());
             }
             announce(collector, &argv);
-            let ran = run(collector, root, &report_at, output)
+            let ran = run(collector, root, &report_at, capture.as_ref(), output)
                 .map_err(|m| fail(OpErrorKind::SchemaMismatch, codes::E045, m))?;
             exit_code = ran.exit_code;
             since = Some(ran.started);
-            stdout = ran.stdout.as_deref().and_then(read_capture);
-        } else if let Mode::NoRun = mode
-            && capturing
-        {
-            stdout = read_capture(&capture_path(collector, &report_at));
+            stdout = ran.stdout.as_ref().and_then(read_capture);
+        } else if let Mode::NoRun = mode {
+            stdout = capture.as_ref().and_then(read_capture);
         }
 
         let files = match mode {
             Mode::Reports(paths) => paths
                 .iter()
-                .map(|p| read_report(p, root, None))
-                .collect::<Result<Vec<_>, _>>()
+                .map(|p| read_report(&containment.resolve(p)?, root, None, containment))
+                .collect::<Result<Vec<_>, OpError>>()
                 .map(|files| files.into_iter().flatten().collect()),
-            _ => read_report(&report_at, root, since),
-        }
-        .map_err(|m| fail(OpErrorKind::SchemaMismatch, codes::E045, m))?;
+            _ => read_report(&report_at, root, since, containment),
+        }?;
         if files.is_empty() && stdout.as_deref().is_none_or(str::is_empty) {
             let message = match mode {
                 Mode::Run(_) => format!(
                     "{} produced no report at {} (did the tests build?)",
                     collector.name,
-                    report_at.display()
+                    report_at.spelled.display()
                 ),
                 Mode::NoRun => format!(
                     "no {} report at {}; run without --no-run to produce one",
                     collector.name,
-                    report_at.display()
+                    report_at.spelled.display()
                 ),
                 Mode::Reports(_) => "the --report files don't exist".to_string(),
             };
@@ -302,7 +312,7 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, Refusal<
         });
     }
 
-    let report = save_report(root, &report)?;
+    let report = save_report(&report_file, &report)?;
     Ok(Outcome {
         root: root.to_path_buf(),
         runners,
@@ -383,28 +393,26 @@ fn select<'a>(
 /// or an empty report when it's missing or unreadable. Unlike the readers
 /// that score coverage ([`specforge_project::coverage::read_report`]), collect is the
 /// writer: it replaces a report it cannot read.
-fn load_report(root: &Path) -> TestReport {
-    specforge_project::coverage::read_report(root)
+fn load_report(file: &Held) -> TestReport {
+    specforge_project::coverage::read_report_file(&file.real)
         .ok()
-        .flatten()
         .unwrap_or(TestReport {
             runner: None,
             results: BTreeMap::new(),
         })
 }
 
-/// Write `specforge-report.json`.
-fn save_report(root: &Path, report: &TestReport) -> Result<PathBuf, OpError> {
-    let path = root.join(REPORT_FILE);
+/// Write `specforge-report.json`, replacing it atomically where it is held.
+fn save_report(file: &Held, report: &TestReport) -> Result<PathBuf, OpError> {
     let json = serde_json::to_string_pretty(report).expect("report serialization cannot fail");
-    std::fs::write(&path, json).map_err(|e| {
+    file.replace(json).map_err(|e| {
         OpError::coded(
             OpErrorKind::of_io(&e),
             codes::E056,
-            format!("failed to write {}: {e}", path.display()),
+            format!("failed to write {}: {e}", file.spelled.display()),
         )
     })?;
-    Ok(path)
+    Ok(file.spelled.clone())
 }
 
 #[cfg(test)]

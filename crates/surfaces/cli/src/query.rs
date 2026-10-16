@@ -1,6 +1,7 @@
+use crate::notes::Notes;
 use crate::options;
 use crate::outcome::{Exit, OutputFormat, Refusal};
-use crate::terminal::{Terminal, errln, outln};
+use crate::terminal::{Terminal, outln};
 use specforge_ops::read::export::Format;
 use specforge_ops::read::query::{QueryRequest, query};
 use specforge_ops::view::ProjectView;
@@ -58,9 +59,7 @@ impl Args {
         };
         match query(&ProjectView::of(&project), &self.request()) {
             Ok(outcome) => {
-                for notice in &outcome.notices {
-                    errln!(terminal, "{}", specforge_common::render_plain(notice));
-                }
+                Notes::new(terminal, OutputFormat::Human).beside(&outcome.notices);
                 outln!(terminal, "{}", outcome.document);
                 Exit::Passed
             }

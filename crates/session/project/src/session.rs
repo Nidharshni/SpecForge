@@ -265,9 +265,9 @@ impl ProjectSession {
     /// environment loaded (config, extensions, registries; each load getting
     /// its runtime from `source`), no `.spec` file read.
     fn begin_open(root: &ProjectRoot, source: RuntimeSource) -> OpeningProject {
-        // The ledger stamps each input before anything reads it: the config
-        // before its one read, the lock and the modules before the runtime
-        // and the environment read them, the sources by `finish`.
+        // The ledger stamps each input in the read that reads it: the config,
+        // the lock and the modules in the environment load, the sources by
+        // `finish`.
         let mut ledger = Ledger::opening();
         let env = Environment::read_through(&mut ledger, root, |config| {
             source.runtime_for(root.dir(), config)
@@ -448,11 +448,8 @@ impl ProjectSession {
     /// and rebuild, from the sources on disk and the held buffers, in one
     /// cold build that runs the checks once.
     pub fn reload_environment(&mut self) -> Update {
-        if self.ledger.inputs().root().is_none() {
-            // Nothing on disk to load again.
-            return self.unchanged(UpdateKind::Environment, false);
-        }
-        // The session keeps the root it was opened at: it is never located again.
+        // The session keeps the root it was opened at: it is never located again. Nothing on disk
+        // to load again without one.
         let Some(root) = self.project.environment().project_root().cloned() else {
             return self.unchanged(UpdateKind::Environment, false);
         };
@@ -519,11 +516,11 @@ impl ProjectSession {
     pub fn apply(&mut self, changes: &Changes) -> Option<Update> {
         let mut sources = changes.sources.clone();
         self.held.leave_out(&mut sources);
-        if !changes.environment.is_empty() && self.ledger.inputs().root().is_some() {
+        if !changes.environment.is_empty() && self.project.root().is_some() {
             Some(self.reload_environment())
         } else if !sources.is_empty() {
             Some(self.reread(&sources))
-        } else if !changes.check_inputs.is_empty() && self.ledger.inputs().root().is_some() {
+        } else if !changes.check_inputs.is_empty() && self.project.root().is_some() {
             Some(self.recheck())
         } else {
             None

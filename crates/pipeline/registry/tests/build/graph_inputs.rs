@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use specforge_extension_sdk::prelude::*;
-use specforge_graph::{DerivedFrom, FieldForm, FieldForms, GraphInputs, Reading};
+use specforge_graph::{DerivedFrom, FieldForm, FieldForms, GraphInputs, Reading, Target};
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_test_macros::test as spec;
 
@@ -70,7 +70,11 @@ fn a_fields_form_follows_its_registered_type() {
     // stored as written (their form coerces nothing).
     assert_eq!(
         inputs.field_forms,
-        FieldForms::new(expected, Default::default())
+        FieldForms::new(
+            expected,
+            Default::default(),
+            ["thing".to_string()].into_iter().collect()
+        )
     );
 }
 
@@ -103,7 +107,8 @@ fn a_derived_reference_needs_a_target_kind_and_a_known_source() {
             });
         });
     });
-    let derived = build([declaration]).graph_inputs().derived_references;
+    let inputs = build([declaration]).graph_inputs();
+    let derived = &inputs.derived_references;
 
     let summary: Vec<(&str, &str, &str, DerivedFrom)> = derived
         .iter()
@@ -111,7 +116,11 @@ fn a_derived_reference_needs_a_target_kind_and_a_known_source() {
             (
                 d.source_kind.as_str(),
                 d.field.as_str(),
-                d.target_kind.as_str(),
+                inputs
+                    .field_forms
+                    .target(&d.source_kind, &d.field)
+                    .unwrap()
+                    .kind(),
                 d.from,
             )
         })
@@ -284,11 +293,8 @@ fn the_graph_inputs_contract_holds() {
             .is_single_reference()
     );
     assert_eq!(
-        inputs
-            .absent_reference_targets
-            .get(&("doc".to_string(), "owner".to_string()))
-            .map(String::as_str),
-        Some("team")
+        inputs.field_forms.target("doc", "owner"),
+        Some(Target::Absent("team"))
     );
     assert_eq!(
         inputs.bidirectional_pairs,
@@ -305,4 +311,71 @@ fn the_graph_inputs_contract_holds() {
     // deterministic: the same declarations give the same inputs.
     assert_eq!(crate::support::build(declared()).graph_inputs(), inputs);
     assert_ne!(inputs, GraphInputs::default());
+}
+
+#[spec(
+    behavior = "registry_build_graph_inputs",
+    verify = "a reference field's form says whether its target kind is loaded"
+)]
+fn the_field_forms_say_whether_each_target_kind_is_loaded() {
+    let forms = build([declare("@t/ext", |c| {
+        c.kind("Doc", |k| {
+            k.keyword("doc");
+            k.field("owner", |f| {
+                f.field_type(FieldType::Reference).target_kind("team");
+            });
+            k.field("parts", |f| {
+                f.field_type(FieldType::ReferenceList).target_kind("doc");
+            });
+            k.field("title", |f| {
+                f.field_type(FieldType::String);
+            });
+        });
+    })])
+    .graph_inputs()
+    .field_forms;
+    assert_eq!(forms.target("doc", "owner"), Some(Target::Absent("team")));
+    assert_eq!(forms.target("doc", "parts"), Some(Target::Loaded("doc")));
+    assert_eq!(forms.target("doc", "title"), None);
+}
+
+#[spec(
+    behavior = "registry_build_graph_inputs",
+    verify = "the graph inputs name the extension that owns each absent target kind"
+)]
+fn the_graph_inputs_name_each_absent_target_kinds_owner() {
+    let product = declare("@t/product", |c| {
+        c.kind("Feature", |k| {
+            k.keyword("feature");
+        });
+    });
+    let software = declare("@t/software", |c| {
+        c.kind("Behavior", |k| {
+            k.keyword("behavior");
+            k.field("features", |f| {
+                f.field_type(FieldType::ReferenceList)
+                    .target_kind("feature");
+            });
+            k.field("owner", |f| {
+                f.field_type(FieldType::Reference).target_kind("team");
+            });
+            k.field("peers", |f| {
+                f.field_type(FieldType::ReferenceList)
+                    .target_kind("behavior");
+            });
+        });
+    });
+    let vocabulary = crate::support::candidates(&[product]);
+
+    let inputs = build([software.clone()])
+        .with_candidates(vocabulary)
+        .graph_inputs();
+    assert_eq!(inputs.target_owners.len(), 1, "{:?}", inputs.target_owners);
+    assert_eq!(inputs.target_owners["feature"], "@t/product");
+    // `team` is owned by no one; `behavior` is loaded.
+    assert!(!inputs.target_owners.contains_key("team"));
+    assert!(!inputs.target_owners.contains_key("behavior"));
+
+    // A build never handed a vocabulary names no owner.
+    assert!(build([software]).graph_inputs().target_owners.is_empty());
 }

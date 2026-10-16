@@ -13,9 +13,9 @@ use specforge_graph::{
 
 use crate::coverage::RecordedCoverage;
 use crate::ledger::{Reads, Unrecorded};
-use crate::snapshot::EntitySnapshot;
 use crate::sources::{Read, SourceCache};
 use crate::{Environment, SharedRuntime, SourceBuild};
+use specforge_registry::EntitySnapshot;
 
 /// A compiled project: an environment, the sources read in it, their graph
 /// build, what resolving their imports and running the checks reported, and
@@ -61,6 +61,7 @@ pub struct CompiledProject {
     /// it as what the session reports now, and the next update as what it
     /// reported before (ADR 0074).
     reported: OnceLock<Arc<[Diagnostic]>>,
+    /// The one answer to rooted or detached ([`Self::root`], ADR 0047 D4, ADR 0121).
     /// `false` for a detached project (no project on disk: an editor with
     /// no workspace folder, MCP while nothing is served): it has no root,
     /// and imports are not resolved, with no spec root to resolve them
@@ -99,10 +100,23 @@ impl CompiledProject {
         Arc::clone(&self.env)
     }
 
-    /// The project root it was compiled from, as the environment holds it;
-    /// `None` for a detached project.
-    pub fn project_root(&self) -> Option<&ProjectRoot> {
-        self.on_disk.then(|| self.env.project_root()).flatten()
+    /// This project with `texts` as the text each source was read as, and no other: the same graph,
+    /// environment, report and memo (shared, as `Clone` shares them). A test's way to give navigation
+    /// a text that disagrees with the graph (shifted) or none (left out); production never makes one.
+    #[cfg(feature = "testing")]
+    pub fn with_source_texts<K: Into<String>, T: Into<Arc<str>>>(
+        &self,
+        texts: impl IntoIterator<Item = (K, T)>,
+    ) -> Self {
+        CompiledProject {
+            sources: SourceCache::holding(
+                texts
+                    .into_iter()
+                    .map(|(key, text)| (key.into(), text.into()))
+                    .collect(),
+            ),
+            ..self.clone()
+        }
     }
 
     /// The root it was compiled from; `None` for a detached project.
@@ -198,8 +212,8 @@ impl CompiledProject {
 
     /// The project of an environment whose sources are not read yet: no
     /// source, an empty graph, and it reports what its environment reports.
-    /// Rooted where the environment was loaded (none for one assembled in
-    /// memory).
+    /// Rooted where the environment was loaded from disk (an environment
+    /// assembled in memory makes a detached one).
     pub fn unread(env: Arc<Environment>) -> Self {
         let graph = GraphBuild::new(env.graph_config());
         let on_disk = env.project_root().is_some();
@@ -224,11 +238,12 @@ impl CompiledProject {
         env: Arc<Environment>,
         graph: Graph,
         reported: Vec<Diagnostic>,
+        sources: SourceCache,
         rooted: bool,
     ) -> Self {
         CompiledProject {
             env,
-            sources: SourceCache::empty(),
+            sources,
             graph: GraphBuild::holding(graph),
             import_diagnostics: Vec::new(),
             check_diagnostics: Vec::new(),

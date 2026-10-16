@@ -79,11 +79,20 @@ pub struct ProjectRef<'a> {
     /// The project view, built once for the call: rooted at the project
     /// root, reporting what the server reports for the project.
     view: ProjectView<'a>,
+    /// What a file the call reads or writes must land inside: the project's root
+    /// (ADR 0092 D2, ADR 0112 D4).
+    containment: Containment,
     /// Whether it is the served project (not one a `path` named).
     served: bool,
 }
 
 impl<'a> ProjectRef<'a> {
+    /// The bound of the project the call acts on: its root. A tool hands it to the operation's
+    /// request and builds none of its own.
+    pub fn containment(&self) -> &Containment {
+        &self.containment
+    }
+
     /// Whether it is the served project (not one a `path` named): the server
     /// serves what a call installs into it from the next call on.
     pub fn is_served(&self) -> bool {
@@ -162,15 +171,17 @@ impl<'s> Call<'s> {
                 // unreachable, and a server answers rather than panics).
                 let view = ProjectView::of(session.project())
                     .also_reporting(self.state.surfaces().diagnostics());
-                let (Some(root), Some(runtime)) =
-                    (session.project().project_root(), view.runtime())
-                else {
+                let (Some(root), Some(runtime)) = (
+                    session.project().environment().project_root(),
+                    view.runtime(),
+                ) else {
                     return Err(unreachable_no_project());
                 };
                 Ok(ProjectRef {
                     root,
                     runtime,
                     solver: &*self.state.solver,
+                    containment: Containment::within(root.dir()),
                     view,
                     served: true,
                 })
@@ -179,15 +190,17 @@ impl<'s> Call<'s> {
                 // `McpState::open` opens every project from disk, with a
                 // runtime (see above).
                 let view = ProjectView::of(session.project());
-                let (Some(root), Some(runtime)) =
-                    (session.project().project_root(), view.runtime())
-                else {
+                let (Some(root), Some(runtime)) = (
+                    session.project().environment().project_root(),
+                    view.runtime(),
+                ) else {
                     return Err(unreachable_no_project());
                 };
                 Ok(ProjectRef {
                     root,
                     runtime,
                     solver: &*self.state.solver,
+                    containment: Containment::within(root.dir()),
                     view,
                     served: false,
                 })

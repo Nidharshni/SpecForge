@@ -94,7 +94,9 @@ behavior execute_validation_pattern "Execute Validation Pattern" {
     of its edge type, whichever fields write them.
     file_exists MUST check that file-reference fields point to existing
     files, a relative path resolved against the spec root (never the
-    working directory). A list field's items are each a path. A rule without a target kind applies to entities
+    working directory). A list field's items are each a path, a scalar's text is one; an empty
+    value, a block, an expression group, a variant list or a type union names none. A missing
+    path's diagnostic suggests a close sibling in its directory. A rule without a target kind applies to entities
     of every kind. custom MUST dispatch to the Wasm function registered by
     register_custom_validation_patterns. Each pattern violation MUST
     produce a diagnostic with the configured code and severity.
@@ -115,6 +117,8 @@ behavior execute_validation_pattern "Execute Validation Pattern" {
   verify unit "file_exists reports missing file-reference field targets"
   verify unit "file_exists resolves a relative path against the spec root, never the working directory"
   verify unit "file_exists checks each item of a list field as its own path"
+  verify unit "file_exists reads no path in a block, an expression group or an empty value"
+  verify unit "a missing path a file_exists rule names suggests a close sibling"
   verify unit "custom pattern dispatches to registered Wasm function"
   verify unit "pattern violation produces diagnostic with configured code and severity"
   verify contract "Execute Validation Pattern: declarative validation holds — all_entities_matched, violations_diagnosed, deterministic_order"
@@ -213,7 +217,7 @@ behavior snapshot_entities_once "Snapshot the Entities Once per Compile" {
   types      [PassEntity, ValidatorContext, Diagnostic]
   consumes   [graph_built]
   requires {
-    graph_and_registries "the graph is built and the registry build it was built with is available"
+    graph_and_registries "the graph is built with the registry build's own graph inputs, and that build is available"
   }
   ensures {
     one_text_per_field "every field an entity writes has one text, the same for every reader"
@@ -239,14 +243,13 @@ behavior snapshot_entities_once "Snapshot the Entities Once per Compile" {
     boolean its literal; a list of strings or references its items
     joined by ", "; a variant list or a type union its members joined by
     " | "; a mixed list its items' texts joined by ", "; an expression
-    group its expressions joined by ", "; verify statements their texts
-    joined by "; "; a block its keys joined by ", ". An empty list or
+    group its expressions joined by ", "; a block its keys joined by ", ". An empty list or
     block is written and its text is empty. No written field is left
     out and no value is null. A name written twice has the last one's
     value. Beside its text, every written field keeps its value shape
     (a quoted string, a bare word, a date, an integer, a boolean, a list
     of strings, of references, mixed or of variants, a type union, a
-    block, verify statements, an expression) and the span of its value,
+    block, an expression) and the span of its value,
     for the host's own checks; neither crosses the protocol.
 
     Standing: an entity's kind is testable when its extension says so.
@@ -300,37 +303,41 @@ behavior check_entities_in_one_order "Check the Entities in One Order" {
   contract   """
     After the entity snapshot is taken, the registry build MUST run every
     check over its records, in this order: unreferenced refs (W012),
-    missing referenced files (E016), unknown kinds (E024), reserved
+    unknown kinds (E024), reserved
     entity IDs (E013), the identifier length contract (E014), unknown
     fields (W020), verify statements on a kind that accepts none (W158),
-    references to an entity of the wrong kind (E022),
     field values that cannot be their declared type (E061), then the
-    rule set. Check, watch, the LSP and MCP MUST report them in this
+    rule set: the extensions' rules by code, then the host's E006 rules
+    and its E016 rules, which report a path a file-reference field names
+    that does not exist (E016 is the host's file_exists rule for each
+    file-reference field, registry_build_rules). Check, watch, the LSP and MCP MUST report them in this
     order, and no check reads a graph node.
 
     When no loaded extension declares an entity kind, the project is
-    structural-only: E024, E013, E014, W020, W158, E022 and E061 MUST NOT run,
-    while W012, E016 and the rules still do. With no extension loaded,
+    structural-only: E024, E013, E014, W020, W158 and E061 MUST NOT run,
+    while W012 and the rules still do. With no extension loaded,
     I002 says so. With extensions loaded that declare no kind, one
     W151 MUST name how many entities, and of which kinds, are left
     unchecked, instead of nothing.
 
     An entity ID equal to a structural keyword (spec, ref, use, define)
     or to a registered kind's keyword is E013. An ID shorter than 2 or
-    longer than 60 characters is E014. A reference whose field declares a
-    target kind, naming an existing entity of another kind, is E022.
+    longer than 60 characters is E014.
+
+    E022, a reference whose field declares a target kind and names an
+    existing entity of another kind, is the linker's (link_entity_references):
+    a compile reports it with the graph build's diagnostics, before these
+    checks.
 
     The checks read the file system only through the disk they are
     given; what they read there is the session's check inputs.
   """
-  verify unit "the structural checks run in one order: W012, E016, E024, E013, E014, W020, W158, E022, E061, then the rule set"
-  verify unit "with no entity kind registered, E024, E013, E014, W020, W158, E022 and E061 do not run, and W012, E016 and the rules still do"
+  verify unit "the structural checks run in one order: W012, E024, E013, E014, W020, W158, E061, then the rule set, the host's E006 and E016 rules last"
+  verify unit "with no entity kind registered, E024, E013, E014, W020, W158 and E061 do not run, and W012 and the rules still do"
   verify unit "extensions that load but declare no entity kind report one W151 naming the unchecked entities"
   verify unit "an entity ID equal to a structural keyword or a registered kind's keyword is E013"
   verify unit "an entity ID shorter than 2 or longer than 60 characters is E014"
-  verify unit "a reference to an existing entity of another kind than its field's target kind is E022"
-  verify unit "a single reference to an existing entity of another kind than its field's target kind is E022"
-  verify unit "the checks read only through their disk: the paths file_reference fields of the entity's kind name, the paths file_exists rules read, and the directory E016's suggestion lists"
+  verify unit "the checks read only through their disk: the paths file_exists rules read, E016's among them, and the directory a missing path's suggestion lists"
   verify integration "a compile reports the structural checks in the order the registry build runs them"
 }
 
@@ -360,8 +367,8 @@ behavior detect_unknown_entity_fields "Detect Unknown Entity Fields" {
     other name, `expression` included, MUST be checked like any field: the
     prove pass reads only fields an extension declares a proof role for
     (ADR 0009), so an undeclared `expression` is W020. When a builtin
-    extension's enhancement declares the field on that kind (the bundled
-    field index, e.g. an invariant's `expression` from @specforge/formal),
+    extension's enhancement declares the field on that kind (the candidate
+    vocabulary, e.g. an invariant's `expression` from @specforge/formal),
     the W020 MUST suggest installing that extension, as E024 does for a
     kind.
     `verify` statements are not fields (ADR 0094): a field named `verify`

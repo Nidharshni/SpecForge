@@ -9,11 +9,9 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_protocol_types::ExtensionDeclaration;
 
-use super::discovery::source_files;
 use super::gaps::directory_of;
-use super::manifest::{
-    InferenceManifest, InferenceSession, InferenceSummary, detect_stale_entries,
-};
+use super::manifest::{InferenceManifest, InferenceSession, InferenceSummary};
+use super::sources::{IndexState, InferenceSources};
 use crate::OpError;
 use crate::view::ProjectView;
 
@@ -63,14 +61,23 @@ fn progress_under(
     manifest: &InferenceManifest,
     recorded: bool,
 ) -> Progress {
-    let files = source_files(root, declarations, manifest);
+    let sources = InferenceSources::of(root, declarations, manifest);
+    let files = sources.keys();
     let indexed = manifest.indexed_paths();
     let unanalyzed = files
         .iter()
-        .filter(|f| !indexed.contains(f.as_str()))
-        .cloned()
+        .filter(|key| !indexed.contains(key.as_str()))
+        .map(|key| key.as_str().to_string())
         .collect();
-    let (stale, deleted) = detect_stale_entries(root, manifest);
+    let mut stale = Vec::new();
+    let mut deleted = Vec::new();
+    for indexed in sources.files().indexed(manifest) {
+        match indexed.state {
+            IndexState::Changed { .. } => stale.push(indexed.entry.path.clone()),
+            IndexState::Deleted => deleted.push(indexed.entry.path.clone()),
+            IndexState::Current { .. } | IndexState::Unreadable => {}
+        }
+    }
     Progress {
         summary: manifest.compute_summary(files.len()),
         unanalyzed,
@@ -170,7 +177,7 @@ pub struct SessionRow {
 #[cfg(test)]
 mod tests {
     use super::super::gaps::gaps;
-    use super::super::manifest::compute_content_hash;
+    use super::super::sources::content_hash;
     use super::*;
     use crate::testing::Viewed;
     use serde_json::json;
@@ -185,7 +192,7 @@ mod tests {
         std::fs::create_dir_all(dir.join("src/net")).unwrap();
         std::fs::write(dir.join("src/lib.rs"), "pub fn alpha() {}\n").unwrap();
         std::fs::write(dir.join("src/net/wire.rs"), "pub struct Wire;\n").unwrap();
-        let hash = compute_content_hash(&dir.join("src/lib.rs")).unwrap();
+        let hash = content_hash(&std::fs::read(dir.join("src/lib.rs")).unwrap());
         std::fs::write(
             dir.join("specforge-infer.json"),
             json!({
@@ -311,7 +318,7 @@ mod tests {
     )]
     fn an_entry_recorded_as_dot_slash_counts_as_analyzed() {
         let dir = project();
-        let hash = compute_content_hash(&dir.root().join("src/lib.rs")).unwrap();
+        let hash = content_hash(&std::fs::read(dir.root().join("src/lib.rs")).unwrap());
         std::fs::write(
             dir.root().join("specforge-infer.json"),
             json!({

@@ -6,7 +6,9 @@
 )]
 
 use specforge_common::{ProjectPath, ProjectRoot};
-use specforge_migrate::{MigrationRecord, MigrationStatus, Original, migrate_project, restore};
+use specforge_migrate::{
+    MigrationRecord, MigrationStatus, Original, migrate_project, restore, written_beside,
+};
 use specforge_parser::CURRENT_FORMAT_VERSION;
 use specforge_test_macros::test as specforge_test;
 use tempfile::TempDir;
@@ -70,4 +72,17 @@ fn the_record_reads_a_backup_through_the_root() {
     let migrated = std::fs::read_to_string(dir.path().join("spec/a.spec")).unwrap();
     assert!(!migrated.contains("0.9"), "{migrated}");
     assert_eq!(record.files[0].sha256.len(), 64);
+}
+
+#[test]
+fn written_beside_names_the_backup_and_both_temporary_files() {
+    let names = written_beside(std::path::Path::new("spec/a.spec"));
+    assert_eq!(
+        names.map(|p| p.display().to_string()),
+        [
+            "spec/a.spec.bak",
+            "spec/a.spec.tmp",
+            "spec/a.spec.restore.tmp"
+        ]
+    );
 }

@@ -16,13 +16,11 @@ fn derived() -> Vec<DerivedReference> {
         DerivedReference {
             source_kind: "shape".to_string(),
             field: "parts".to_string(),
-            target_kind: "shape".to_string(),
             from: DerivedFrom::TypeExpressions,
         },
         DerivedReference {
             source_kind: "iface".to_string(),
             field: "uses".to_string(),
-            target_kind: "shape".to_string(),
             from: DerivedFrom::MethodSignatures,
         },
     ]
@@ -36,15 +34,34 @@ fn build(
         inputs: GraphInputs {
             derived_references: derived,
             field_forms: specforge_graph::FieldForms::new(
-                [(
-                    ("shape".to_string(), "base".to_string()),
-                    specforge_graph::FieldForm::new(
-                        specforge_protocol_types::FieldType::Reference,
-                        Vec::new(),
+                [
+                    (
+                        ("shape".to_string(), "base".to_string()),
+                        specforge_graph::FieldForm::new(
+                            specforge_protocol_types::FieldType::Reference,
+                            Vec::new(),
+                        ),
                     ),
-                )]
+                    (
+                        ("shape".to_string(), "parts".to_string()),
+                        specforge_graph::FieldForm::new(
+                            specforge_protocol_types::FieldType::ReferenceList,
+                            Vec::new(),
+                        )
+                        .targeting("shape"),
+                    ),
+                    (
+                        ("iface".to_string(), "uses".to_string()),
+                        specforge_graph::FieldForm::new(
+                            specforge_protocol_types::FieldType::ReferenceList,
+                            Vec::new(),
+                        )
+                        .targeting("shape"),
+                    ),
+                ]
                 .into_iter()
                 .collect(),
+                Default::default(),
                 Default::default(),
             ),
             ..Default::default()

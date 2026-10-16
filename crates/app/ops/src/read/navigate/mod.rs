@@ -47,21 +47,21 @@ pub use references::{Reference, References};
 
 use text::SourceText;
 
-/// What navigation reads: the project view and each spec file's text (an
-/// open buffer first for the LSP; the file under the spec root for MCP),
-/// by its key relative to the spec root, as spans name it. Each file is
-/// read at most once per navigator.
-pub struct Navigator<'a, F: Fn(&str) -> Option<String>> {
+/// What navigation reads: the project view, and each spec file's text as the
+/// view's compiled project read it (`CompiledProject::source_text`): the text
+/// its spans are positions in, by the key spans name it (relative to the spec
+/// root). Each file's text is indexed once per navigator. A file the compile
+/// holds no text of has none: its occurrences fall back to the holder's block
+/// (`Precision::Entity`). No surface hands it another text (ADR 0116).
+pub struct Navigator<'a> {
     view: ProjectView<'a>,
-    text_of: F,
     texts: RefCell<HashMap<Sym, Option<Rc<SourceText>>>>,
 }
 
-impl<'a, F: Fn(&str) -> Option<String>> Navigator<'a, F> {
-    pub fn new(view: ProjectView<'a>, text_of: F) -> Self {
+impl<'a> Navigator<'a> {
+    pub fn new(view: ProjectView<'a>) -> Self {
         Navigator {
             view,
-            text_of,
             texts: RefCell::new(HashMap::new()),
         }
     }
@@ -71,14 +71,23 @@ impl<'a, F: Fn(&str) -> Option<String>> Navigator<'a, F> {
         &self.view
     }
 
-    /// The text of `file`, read once.
+    /// The text of `file` as the compile read it, indexed once.
     fn text(&self, file: Sym) -> Option<Rc<SourceText>> {
         if let Some(text) = self.texts.borrow().get(&file) {
             return text.clone();
         }
-        let text = (self.text_of)(file.as_str()).map(|t| Rc::new(SourceText::new(t)));
+        let text = self
+            .view
+            .project()
+            .source_text(file.as_str())
+            .map(|t| Rc::new(SourceText::new(t)));
         self.texts.borrow_mut().insert(file, text.clone());
         text
+    }
+
+    /// The text of `file` a rename plan keeps: the text its edits are positions in.
+    pub(crate) fn source_text(&self, file: &str) -> Option<std::sync::Arc<str>> {
+        self.view.project().source_text(file)
     }
 
     /// The entity `id`, or [`not_found`].

@@ -12,4 +12,5 @@ mod kinds;
 mod order;
 mod peers;
 mod pin;
+mod references;
 mod rules;

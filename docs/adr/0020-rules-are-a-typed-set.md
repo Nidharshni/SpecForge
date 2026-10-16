@@ -1,6 +1,6 @@
 # Rules are a typed set that runs itself
 
-**Status:** accepted (2026-10-06). Supersedes ADR 0013 D13. Amended by [ADR 0107](0107-the-checks-read-through-the-disk-they-are-given.md) (`files(&input)` is gone; `RuleInput` carries the disk).
+**Status:** accepted (2026-10-06). Supersedes ADR 0013 D13. Amended by [ADR 0107](0107-the-checks-read-through-the-disk-they-are-given.md) (`files(&input)` is gone; `RuleInput` carries the disk). D1's order gains the host's E016 rules after E006 ([ADR 0118](0118-the-paths-a-field-names-are-read-once.md)).
 
 An extension's validation rule was parsed into `ValidationRulePattern`: ten fields, nine `Option`s
 counting its constraint. The parser checked, per check kind, what the rule needed, then built the

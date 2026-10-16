@@ -43,6 +43,7 @@ fn a_source_written_between_its_stamp_and_its_read_is_seen_next_time() {
     let mut ledger = Ledger::over(SessionInputs::opened(
         root.dir(),
         &specforge_common::ProjectConfig::default(),
+        Vec::new(),
     ));
     let read = ledger.source_with(spec_root, "a.spec", |path| {
         fs::write(path, NEW).unwrap();
@@ -58,12 +59,14 @@ fn the_unrecorded_reads_are_the_ledgers() {
     let (_dir, root) = project();
     let mut ledger = Ledger::opening();
     let mut unrecorded = Unrecorded;
-    let from_ledger = ledger.config(&root);
-    let from_unrecorded = unrecorded.config(&root);
-    assert_eq!(format!("{from_ledger:?}"), format!("{from_unrecorded:?}"));
-    ledger.before_load(&root, &from_ledger.config);
+    let from_ledger = Environment::read_through(&mut ledger, &root, |_| None);
+    let from_unrecorded = Environment::read_through(&mut unrecorded, &root, |_| None);
+    assert_eq!(
+        format!("{:?}", from_ledger.config()),
+        format!("{:?}", from_unrecorded.config())
+    );
 
-    let sources = from_ledger.config.sources(root.dir());
+    let sources = from_ledger.config().sources(root.dir());
     let keys = ledger.discover(&sources);
     assert_eq!(keys, unrecorded.discover(&sources));
     for key in &keys {

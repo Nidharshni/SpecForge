@@ -289,3 +289,60 @@ behavior user_login "Log in" {
         "the reference resolves once product is enabled: {graph}"
     );
 }
+
+// --- ADR 0117: the linker names the extension that declares an absent target kind ---
+
+#[specforge_test(
+    behavior = "register_extension_entity_types",
+    verify = "I004 message includes unresolved kind name and suggested extension"
+)]
+fn an_absent_target_kinds_i004_names_the_extension_that_declares_it() {
+    let project = TestProject::new()
+        .enabling(&["@specforge/software"])
+        .config(|c| c["spec_root"] = "spec".into())
+        .file(
+            "spec/main.spec",
+            "behavior user_login \"Log in\" {\n  contract \"c\"\n  features [user_authentication]\n}\n",
+        );
+    let diagnostics = check_document(&project.compile(), CheckOptions::default());
+    let i004: Vec<_> = diagnostics.iter().filter(|d| d["code"] == "I004").collect();
+    assert_eq!(i004.len(), 1, "{diagnostics:?}");
+    assert!(i004[0]["message"].as_str().unwrap().contains("'feature'"));
+    assert_eq!(
+        i004[0]["suggestion"],
+        "enable the extension that declares 'feature' with `specforge add @specforge/product`, or drop the field"
+    );
+}
+
+#[specforge_test(
+    behavior = "link_entity_references",
+    verify = "a reference to an existing entity of another kind than its field's target kind is E022 at the reference"
+)]
+fn a_wrong_kind_reference_to_an_absent_kind_is_e022_at_the_reference() {
+    let project = TestProject::new()
+        .enabling(&["@specforge/software"])
+        .config(|c| c["spec_root"] = "spec".into())
+        .file(
+            "spec/main.spec",
+            "behavior b1 \"B1\" {\n  contract \"x\"\n  features [b2, f_missing]\n}\nbehavior b2 \"B2\" {\n  contract \"y\"\n}\n",
+        );
+    let diagnostics = check_document(&project.compile(), CheckOptions::default());
+    let codes: Vec<&str> = diagnostics
+        .iter()
+        .map(|d| d["code"].as_str().unwrap())
+        .collect();
+    assert_eq!(&codes[..2], ["E022", "I004"], "{diagnostics:?}");
+    let span = &diagnostics[0]["span"];
+    let at = (
+        span["start_line"].as_u64(),
+        span["start_col"].as_u64(),
+        span["end_col"].as_u64(),
+    );
+    assert_eq!(at, (Some(3), Some(13), Some(15)), "{diagnostics:?}");
+    assert!(
+        diagnostics[0]["suggestion"]
+            .as_str()
+            .is_some_and(|s| s.contains("specforge add @specforge/product")),
+        "{diagnostics:?}"
+    );
+}

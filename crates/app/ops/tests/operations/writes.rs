@@ -221,9 +221,8 @@ fn rename_writes_are_the_files_it_edited() {
     );
     let root = dir.path();
     let project = compiled_with_builtins(root);
-    let read = |f: &str| std::fs::read_to_string(root.join(f)).ok();
     let plan = rename::plan(
-        &Navigator::new(ProjectView::of(&project), read),
+        &Navigator::new(ProjectView::of(&project)),
         "session_limit",
         "session_cap",
     )

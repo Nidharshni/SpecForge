@@ -11,11 +11,14 @@ use specforge_installed::{
     Builtins, Installed, LoadProblem, LoadSubject, LockState, hex_sha256, write_lock_file,
 };
 use specforge_package::PackageName;
+use specforge_registry::PlainDisk;
 use specforge_wasm::testing::InProcessRuntime;
 use specforge_wasm::{WasmCallResult, WasmRuntime};
 use tempfile::TempDir;
 
-fn extension(name: &'static str) -> impl Fn() -> ContributionsBuilder + Send + Sync + 'static {
+pub(crate) fn extension(
+    name: &'static str,
+) -> impl Fn() -> ContributionsBuilder + Send + Sync + 'static {
     move || ContributionsBuilder::new(ExtensionMeta::new(name, "1.0.0"))
 }
 
@@ -26,16 +29,16 @@ fn runtime() -> InProcessRuntime {
         .with(extension("@acme/b"))
 }
 
-fn entries(entries: &[&str]) -> Vec<String> {
+pub(crate) fn entries(entries: &[&str]) -> Vec<String> {
     entries.iter().map(|e| e.to_string()).collect()
 }
 
-fn load_with(
+pub(crate) fn load_with(
     root: &Path,
     entries: &[String],
     runtime: &dyn WasmRuntime,
 ) -> specforge_installed::Loaded {
-    Installed::at(root).load(entries, &Builtins::none(), runtime)
+    Installed::at(root).load(entries, &Builtins::none(), runtime, &PlainDisk)
 }
 
 fn package(name: &str) -> PackageName {
@@ -43,7 +46,7 @@ fn package(name: &str) -> PackageName {
 }
 
 /// What the load of `root` reported, in `load_diagnostics`' order.
-fn reported(root: &Path, loaded: &specforge_installed::Loaded) -> Vec<Diagnostic> {
+pub(crate) fn reported(root: &Path, loaded: &specforge_installed::Loaded) -> Vec<Diagnostic> {
     Installed::at(root)
         .load_diagnostics(&loaded.enabled)
         .into_iter()
@@ -247,7 +250,8 @@ fn a_project_that_enables_nothing_installed_does_not_report_its_lock() {
     std::fs::write(dir.path().join("specforge.lock"), "not a lock {{{").unwrap();
     let builtins = Builtins(&[("@acme/a", &b"\0asm builtin a"[..])]);
 
-    let loaded = Installed::at(dir.path()).load(&entries(&["@acme/a"]), &builtins, &runtime());
+    let loaded =
+        Installed::at(dir.path()).load(&entries(&["@acme/a"]), &builtins, &runtime(), &PlainDisk);
 
     assert_eq!(
         codes(dir.path(), &loaded),
@@ -317,7 +321,7 @@ fn the_bytes_compiled_are_the_bytes_hashed() {
 }
 
 /// `bytes` written as the `.wasm` file `name` under `dir`.
-fn file(dir: &Path, name: &str, bytes: &[u8]) {
+pub(crate) fn file(dir: &Path, name: &str, bytes: &[u8]) {
     std::fs::write(dir.join(name), bytes).unwrap();
 }
 

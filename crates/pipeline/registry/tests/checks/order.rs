@@ -1,13 +1,12 @@
 //! The order the checks run in: one fixed sequence behind one gate, the
-//! same on every surface.
+//! same on every surface. Written as `.spec` text (ADR 0115).
 
 use specforge_extension_sdk::prelude::*;
-use specforge_graph::ValueShape;
 use specforge_protocol_types::ExtensionDeclaration;
-use specforge_registry::entity::EntityRecord;
 use specforge_test_macros::test as spec;
 
-use crate::support::{build, check, declare, span};
+use crate::support::written::checked;
+use crate::support::{build, declare};
 
 /// `gadget` (an integer `size`, a reference list `parts` to gadgets),
 /// `widget`, and a rule that fires on a widget that links nothing.
@@ -39,32 +38,26 @@ fn shapes() -> ExtensionDeclaration {
 
 #[spec(
     behavior = "check_entities_in_one_order",
-    verify = "the structural checks run in one order: W012, E016, E024, E013, E014, W020, W158, E022, E061, then the rule set"
+    verify = "the structural checks run in one order: W012, E024, E013, E014, W020, W158, E061, then the rule set, the host's E006 and E016 rules last"
 )]
 fn the_checks_run_in_one_order() {
-    let s = span("a.spec");
-    // One record per check, written in an order that is not the checks'.
-    let records = vec![
-        EntityRecord::new("ref", "gh.issue:1", s),
-        EntityRecord::new("gadget", "g_docs", s).with_list("docs", &["no_such_file_04.md"]),
-        EntityRecord::new("gadget", "g_size", s).with_value("size", ValueShape::String, "big"),
-        EntityRecord::new("gadget", "g_parts", s).with_reference("parts", &["w_one"]),
-        EntityRecord::new("widget", "w_one", s),
-        EntityRecord::new("gadget", "g_bogus", s)
-            .with_fields(&["bogus"])
-            .with_obligation("unit", "x"),
-        EntityRecord::new("gadget", "x", s),
-        EntityRecord::new("gadget", "gadget", s),
-        EntityRecord::new("wibble", "wb_one", s),
-    ];
+    // One entity per check, written in an order that is not the checks'.
+    let text = "ref gh.issue:1 \"R\"\n\n\
+                gadget g_docs \"D\" {\n  docs [\"no_such_file_04.md\"]\n}\n\n\
+                gadget g_size \"S\" {\n  size \"big\"\n}\n\n\
+                widget w_one \"W\" {\n}\n\n\
+                gadget g_bogus \"B\" {\n  bogus \"\"\n  verify unit \"x\"\n}\n\n\
+                gadget x \"X\" {\n}\n\n\
+                gadget gadget \"G\" {\n}\n\n\
+                wibble wb_one \"Wb\" {\n}\n";
 
-    let diags = check(&build([shapes()]), &records);
+    let diags = checked(&build([shapes()]), &[("a.spec", text)]);
 
     let codes: Vec<&str> = diags.iter().map(|d| d.code.as_str()).collect();
     assert_eq!(
         codes,
         [
-            "W012", "E016", "E024", "E013", "E014", "W020", "W158", "E022", "E061", "W900"
+            "W012", "E024", "E013", "E014", "W020", "W158", "E061", "W900", "E016"
         ],
         "{diags:?}"
     );

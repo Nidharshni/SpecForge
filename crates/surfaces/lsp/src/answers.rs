@@ -179,9 +179,8 @@ pub fn definition(
     let key = state.key_of(uri);
     match compiled.target(&key, position) {
         Some(Target::Import { path }) => {
-            if state.spec_root().as_os_str().is_empty() {
-                return None;
-            }
+            // Detached: the compile resolves no import (ADR 0047 D4).
+            state.view().root()?;
             // The source the compile resolves the import to, from its
             // first line: no text needed.
             let sources = state.source_keys();
@@ -381,10 +380,7 @@ pub fn code_actions(state: &LspState, uri: &Url, range: Range) -> Option<CodeAct
 /// flat otherwise.
 pub fn document_symbols(state: &LspState, uri: &Url) -> Option<DocumentSymbolResponse> {
     let compiled = Compiled::new(state);
-    let entries = outline(&compiled.navigator(), &state.key_of(uri));
-    if entries.is_empty() {
-        return None;
-    }
+    let entries = outline(&compiled.navigator(), &state.key_of(uri)).filter(|e| !e.is_empty())?;
     Some(outline_to_document_symbols(
         &compiled,
         entries,

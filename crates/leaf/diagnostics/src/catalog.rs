@@ -141,7 +141,7 @@ catalog! {
         "A `.spec` file's `// specforge-format: MAJOR.MINOR` header declares a version newer than this build supports, or the header itself doesn't parse; `specforge migrate --target-version` reports the same for a target it can't parse or doesn't support. Lower the declared version or upgrade SpecForge.";
     E022: Error core,
         "Reference targets wrong kind",
-        "A reference field is declared to only accept entities of a specific kind, but the target ID resolves to an entity of a different kind. Point the field at an entity of the expected kind.";
+        "A reference field is declared to only accept entities of a specific kind, but the target ID resolves to an entity of a different kind. Point the field at an entity of the expected kind. It is reported at the reference, by the linker, whether or not an extension declares the expected kind; the suggestion names a close id of that kind, or the extension that declares it.";
     E024: Error core,
         "Unknown entity kind",
         "An entity block uses a kind keyword that neither the core grammar nor any installed extension declares. Install the extension that provides the keyword, or fix a typo in the kind name.";
@@ -267,7 +267,7 @@ catalog! {
         "The registry configuration has no `registries` array, or none of the configured registries is marked as the default. Add a `registries` entry and set `\"default_registry\": true` on one of them. Without a default, a package no `scope_filter` matches has no registry (R-OPS-001).";
     I004: Info core,
         "Extension not installed",
-        "A reference field targets a kind no enabled extension declares, an extension enhances a kind no enabled extension declares, or a `.spec` file has an `@scope/name` extension import for a known but not-installed extension. Install the missing extension with `specforge add <name>` to resolve the reference. An entity whose keyword no enabled extension declares is an error instead (E024), whose suggestion names the extension to install. An extension's enhancement of a kind no enabled extension declares is skipped silently, not reported, when the extension declares an optional peer the project does not load.";
+        "A reference field targets a kind no enabled extension declares, an extension enhances a kind no enabled extension declares, or a `.spec` file has an `@scope/name` extension import for a known but not-installed extension. Install the missing extension with `specforge add <name>` to resolve the reference; for a reference field the suggestion names the builtin extension that declares the kind, as E024's does. An entity whose keyword no enabled extension declares is an error instead (E024), whose suggestion names the extension to install. An extension's enhancement of a kind no enabled extension declares is skipped silently, not reported, when the extension declares an optional peer the project does not load.";
     I005: Info core,
         "Unknown provider scheme",
         "A `ref` entity's `scheme` field, or a `scheme:target` provider reference, doesn't match any provider scheme registered by an installed extension. Install an extension that contributes that provider, or configure it in `specforge.json`.";

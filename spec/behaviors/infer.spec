@@ -1,9 +1,9 @@
 // Inference workflow behaviors — AI agent spec inference from codebases
 //
-// 19 behaviors:
+// 20 behaviors:
 //   - Manifest I/O (3): load, save, compute summary
 //   - Session management (3): start, end, mark analyzed
-//   - Staleness detection (1): detect stale entries
+//   - Discovery and staleness (2): discover sources, detect stale entries
 //   - MCP tools (3): infer_progress, infer_session, infer_gaps
 //   - Guides (1): compute inference guide
 //   - MCP prompts (4): kind, plan, workflow and file scopes
@@ -65,7 +65,11 @@ behavior save_inference_manifest "Save Inference Manifest" {
     rest of the manifest. The source_index MUST be sorted by path
     for stable git diffs. The InferenceSummary MUST NOT be written.
     Write to a temporary file in the same directory, then atomically
-    rename to the target path. The JSON MUST be pretty-printed.
+    rename to the target path. The temporary file is created new: whatever
+    is at its name is removed first, a link and never its target, so
+    nothing is written through it. A manifest that is itself a link
+    leaving the project is unusable (E071) and is not read.
+    The JSON MUST be pretty-printed.
   """
   verify unit "save writes valid JSON that can be loaded back"
   verify unit "save does not include summary in JSON output"
@@ -85,8 +89,8 @@ behavior compute_inference_summary "Compute Inference Summary" {
   }
   contract """
     Compute the InferenceSummary by aggregating the source_index entries.
-    files_total is the count of discoverable source files across all
-    source_roots. files_analyzed is the count of entries in source_index.
+    files_total is the count of inference sources
+    (discover_inference_sources) across all source_roots. files_analyzed is the count of entries in source_index.
     entities_produced is the sum of all entities_produced arrays across
     source_index entries. needs_review counts entities that appear in
     source_index but have no corresponding entity in the compiled graph.
@@ -169,6 +173,42 @@ behavior mark_source_file_analyzed "Mark Source File as Analyzed" {
   verify unit "mark refuses a file outside the project root"
 }
 
+behavior discover_inference_sources "Discover Inference Sources" {
+  features [infer_progress_tracking]
+  types    [InferenceManifest, SourceFileEntry]
+  category computation
+  ensures {
+    claimed      "a source is a file an enabled analyzer claims by its extension, under a source root"
+    shared_walk  "no symlinked directory is entered, and a symlink is a source only when it resolves to a file inside the project root"
+    skips_united "the default skipped directories hold whatever the analyzers declare; their excluded_dirs add to them"
+    inside_root  "a source root, a file or an indexed path that lands outside the project root is never read"
+    one_key      "every source is keyed by the source path rule and listed once"
+    nested       "a nested project's files are its own project's sources"
+  }
+  contract """
+    The inference sources are the files under the inference manifest's
+    source_roots (the project root when there are none) that an enabled
+    analyzer claims by its file extension (the longest extension that
+    matches; for one extension, the first analyzer that declares it). The
+    walk is the shared discovery policy: no symlinked directory is
+    entered; a symlink is a source when it resolves to a file inside the
+    project root; no directory is entered whose name starts with a dot,
+    that the defaults skip (target, node_modules, dist, build, .git, .hg,
+    __pycache__, vendor), that an enabled analyzer's excluded_dirs names,
+    or that holds specforge.json below a source root. Each source is keyed
+    by the source path rule and listed once, whatever source roots reach
+    it. A source root, a file or an indexed path that lands outside the
+    project root, by .., an absolute name or a symlink, is not read: such
+    a root is not walked and such an indexed path is deleted.
+  """
+  verify unit "no symlinked directory is entered, so a symlink cycle adds no source"
+  verify unit "an analyzer's excluded_dirs add to the default skipped directories"
+  verify unit "a file two source roots reach is one source"
+  verify unit "no inference source lands outside the project root"
+  verify unit "an indexed path outside the project root is deleted, never read"
+  verify unit "a nested project's files are not the outer project's inference sources"
+}
+
 // ---------------------------------------------------------------------------
 // Staleness Detection
 // ---------------------------------------------------------------------------
@@ -187,6 +227,8 @@ behavior detect_stale_inference_entries "Detect Stale Inference Entries" {
     its current SHA-256 hash. If the hash differs from content_hash, the
     entry is stale. If the file no longer exists, the entry is deleted.
     Return both lists so the agent or user can decide to re-analyze.
+    An indexed path that is not a path inside the project root is deleted;
+    its file is never read.
   """
   verify unit "detects stale file when content changes"
   verify unit "detects deleted file"
@@ -241,7 +283,8 @@ behavior provide_mcp_infer_session_tool "Provide MCP Infer Session Tool" {
     - mark_analyzed: Call mark_source_file_analyzed with provided
       source_file path and entities_produced list.
     - end: Call end_inference_session with session_id and status.
-    All actions save the manifest atomically. On first write, creates
+    All actions read and save the manifest through the call's project,
+    atomically. On first write, creates
     specforge-infer.json if it does not exist.
   """
   verify unit "start action creates session and returns ID"

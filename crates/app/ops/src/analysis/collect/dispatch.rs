@@ -1,6 +1,8 @@
 //! Reading a runner's report and handing it to the extension's `collect__<name>` export.
 
 use super::collector::Collector;
+use crate::{Containment, Held, OpError, OpErrorKind};
+use specforge_common::codes;
 use specforge_protocol_types::{CollectInput, CollectOutput, CollectReportFile};
 use specforge_wasm::{CallError, CallFailure, ExtensionCalls, Operation};
 use std::path::{Path, PathBuf};
@@ -22,12 +24,15 @@ fn json_files(dir: &Path) -> Vec<PathBuf> {
 
 /// Read the report at `report`: the file itself, or every `*.json` file
 /// directly inside a directory, only those modified at or after `since`
-/// when given. Paths are reported relative to `root`.
+/// when given. Each file is held by `containment` before it is opened (one that
+/// lands outside is `outside_root`); a read that fails is E045. Paths are reported
+/// relative to `root`.
 pub(super) fn read_report(
-    report: &Path,
+    report: &Held,
     root: &Path,
     since: Option<SystemTime>,
-) -> Result<Vec<CollectReportFile>, String> {
+    containment: &Containment,
+) -> Result<Vec<CollectReportFile>, OpError> {
     let fresh = |path: &PathBuf| {
         since.is_none_or(|since| {
             std::fs::metadata(path)
@@ -35,19 +40,25 @@ pub(super) fn read_report(
                 .is_ok_and(|modified| modified >= since)
         })
     };
-    let paths = if report.is_dir() {
-        json_files(report).into_iter().filter(fresh).collect()
-    } else if report.is_file() {
-        vec![report.to_path_buf()]
-    } else {
-        Vec::new()
-    };
-    paths
-        .iter()
-        .map(|path| {
-            let content = std::fs::read_to_string(path)
-                .map_err(|e| format!("failed to read report {}: {e}", path.display()))?;
-            let shown = path.strip_prefix(root).unwrap_or(path);
+    let mut held = Vec::new();
+    if report.real.is_dir() {
+        for path in json_files(&report.real).into_iter().filter(fresh) {
+            let name = path.file_name().unwrap_or_default();
+            held.push(containment.resolve(&report.spelled.join(name))?);
+        }
+    } else if report.real.is_file() {
+        held.push(report.clone());
+    }
+    held.iter()
+        .map(|file| {
+            let content = file.read_to_string().map_err(|e| {
+                OpError::coded(
+                    OpErrorKind::SchemaMismatch,
+                    codes::E045,
+                    format!("failed to read report {}: {e}", file.spelled.display()),
+                )
+            })?;
+            let shown = file.spelled.strip_prefix(root).unwrap_or(&file.spelled);
             Ok(CollectReportFile {
                 path: shown.display().to_string(),
                 content,

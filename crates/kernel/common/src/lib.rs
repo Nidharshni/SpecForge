@@ -24,7 +24,7 @@ pub mod structural;
 pub mod suggest;
 
 pub use diagnostic::{CustomRuleFailure, Diagnostic, DiagnosticData, DiagnosticsExt, Severity};
-pub use discovery::{SourceRoot, Walked, walk_spec_files};
+pub use discovery::{SourceRoot, Walked, walk_files, walk_spec_files};
 pub use exclude::{Exclude, ExcludeEntry, ExcludeError};
 pub use interner::Sym;
 pub use present::{
@@ -34,7 +34,8 @@ pub use present::{
 };
 pub use project::{
     ConfigProblem, ConfigRead, ExtensionEntry, InferenceConfig, ProjectConfig,
-    extension_entry_name, parse_project_config, read_project_config, validate_project_name,
+    extension_entry_name, parse_project_config, project_config_from, read_project_config,
+    validate_project_name,
 };
 pub use project_path::ProjectPath;
 pub use project_root::{NoSuchPath, PROJECT_FILE, ProjectRoot};

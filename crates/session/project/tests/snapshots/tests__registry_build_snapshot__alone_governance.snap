@@ -977,16 +977,16 @@ expression: "digest(&load(&runtime, &[name]))"
     }
   },
   "graph_inputs": {
-    "absent_reference_targets": {
-      "constraint.constrains": "behavior",
-      "constraint.enforced_by": "behavior",
-      "constraint.governs_features": "feature",
-      "constraint.protects": "invariant",
-      "decision.affects_features": "feature",
-      "decision.invariants": "invariant",
-      "failure_mode.affected_behaviors": "behavior",
-      "failure_mode.invariant": "invariant",
-      "failure_mode.threatens_features": "feature"
+    "absent_targets": {
+      "constraint.constrains": "behavior (@specforge/software)",
+      "constraint.enforced_by": "behavior (@specforge/software)",
+      "constraint.governs_features": "feature (@specforge/product)",
+      "constraint.protects": "invariant (@specforge/software)",
+      "decision.affects_features": "feature (@specforge/product)",
+      "decision.invariants": "invariant (@specforge/software)",
+      "failure_mode.affected_behaviors": "behavior (@specforge/software)",
+      "failure_mode.invariant": "invariant (@specforge/software)",
+      "failure_mode.threatens_features": "feature (@specforge/product)"
     },
     "bidirectional_pairs": [],
     "derived_references": [],

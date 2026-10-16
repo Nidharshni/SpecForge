@@ -1,6 +1,6 @@
 //! Which extension each `specforge.json` `extensions` entry names, decided once (ADR 0028 D3): the
-//! extension load, the module paths a session watches and the lock plan's peer set read it, so they
-//! cannot disagree about what an entry enables.
+//! extension load and the lock plan's peer set read it, so they cannot disagree about what an
+//! entry enables.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -37,7 +37,7 @@ pub enum Resolved<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FileEntry<'a> {
     /// The entry as written, trimmed: what its diagnostics name, and the key its component loads
-    /// under until its handshake names it.
+    /// under until the name it declares is admitted.
     pub key: &'a str,
     /// The path as written.
     pub path: &'a str,
@@ -94,6 +94,28 @@ impl<'a> Resolution<'a> {
         indexed()
             .filter(move |(_, resolved)| !is_file(resolved))
             .chain(indexed().filter(move |(_, resolved)| is_file(resolved)))
+    }
+}
+
+impl Resolved<'_> {
+    /// Whether a component declaring `declared` is what this entry enables: the one place the
+    /// admit rules live. A builtin admits any name; a locked entry must declare its own name
+    /// (`NotItsLockEntry`); a `.wasm` file entry follows [`FileEntry::admit`]. `Unloadable` and
+    /// `Again` never reach a component, so they admit nothing to refuse.
+    pub(crate) fn admit(
+        &self,
+        declared: &str,
+        loaded: impl Fn(&str) -> bool,
+    ) -> Result<(), LoadProblem> {
+        match self {
+            Resolved::Locked { name, .. } if *name != declared => {
+                Err(LoadProblem::NotItsLockEntry {
+                    declared: declared.to_string(),
+                })
+            }
+            Resolved::File(file) => file.admit(declared, loaded),
+            _ => Ok(()),
+        }
     }
 }
 
@@ -294,6 +316,37 @@ mod tests {
             shadowed.resolve(&entries, &builtins).entries()[0],
             Resolved::Builtin { .. }
         ));
+    }
+
+    #[test]
+    fn a_named_entry_is_admitted_only_as_its_lock_entry() {
+        let entry = locked("@acme/a");
+        let builtin = Resolved::Builtin {
+            name: "@acme/x",
+            bytes: b"",
+        };
+        let installed = Resolved::Locked {
+            name: "@acme/a",
+            entry: &entry,
+        };
+        assert_eq!(builtin.admit("@acme/anything", |_| true), Ok(()));
+        assert_eq!(installed.admit("@acme/a", |_| true), Ok(()));
+        assert_eq!(
+            installed.admit("@acme/b", |_| false),
+            Err(LoadProblem::NotItsLockEntry {
+                declared: "@acme/b".to_string()
+            })
+        );
+        let file = FileEntry {
+            key: "g.wasm",
+            path: "g.wasm",
+            file: PathBuf::from("/p/g.wasm"),
+            written: Some("@acme/x"),
+        };
+        assert_eq!(
+            Resolved::File(file.clone()).admit("@acme/g", |_| false),
+            file.admit("@acme/g", |_| false)
+        );
     }
 
     #[test]

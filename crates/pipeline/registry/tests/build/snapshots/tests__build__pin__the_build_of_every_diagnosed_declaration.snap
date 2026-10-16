@@ -106,7 +106,7 @@ expression: digest(&build)
     "rule.limit: String"
   ],
   "graph_inputs": {
-    "absent_reference_targets": {
+    "absent_targets": {
       "behavior.owner": "nowhere"
     },
     "bidirectional_pairs": [],

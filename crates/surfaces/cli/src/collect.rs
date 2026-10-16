@@ -11,8 +11,9 @@
 //! adapter only hands the operation who can be asked (`--yes`, the
 //! terminal, or nobody) and presents the outcome.
 
+use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
-use crate::terminal::{Terminal, errln, outln};
+use crate::terminal::{Terminal, outln};
 use specforge_ops::analysis::collect::{self, Collector, Mode, Request, RunnerOutput};
 use specforge_ops::view::ProjectView;
 use std::path::PathBuf;
@@ -69,22 +70,22 @@ fn collect_at(options: &Args, terminal: &Terminal) -> Exit {
     } else {
         Mode::Run(RunnerOutput::Inherit)
     };
+    let notes = Notes::new(terminal, format);
     let mut announce = |collector: &Collector, argv: &[String]| {
-        if format != OutputFormat::Json {
-            errln!(
-                terminal,
-                "running {} ({}): {}",
-                collector.name,
-                collector.extension,
-                argv.join(" ")
-            );
-        }
+        notes.person(format_args!(
+            "running {} ({}): {}",
+            collector.name,
+            collector.extension,
+            argv.join(" ")
+        ));
     };
     let request = Request {
         runner: options.runner.as_deref(),
         mode,
         asking: crate::asking::of(options.yes, format, terminal),
         announce: &mut announce,
+        // The user is already at the file system (ADR 0092 D6).
+        containment: &specforge_ops::Containment::unbounded(),
     };
     // The view is rooted where the project compiled: the report lands where
     // every view over the project reads it.
@@ -95,7 +96,9 @@ fn collect_at(options: &Args, terminal: &Terminal) -> Exit {
         }
     };
     for why in &outcome.unsaved_approvals {
-        errln!(terminal, "warning: could not remember the approval: {why}");
+        notes.warning(format_args!(
+            "warning: could not remember the approval: {why}"
+        ));
     }
 
     if format == OutputFormat::Json {

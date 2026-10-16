@@ -2,6 +2,7 @@
 
 **Status:** accepted (2026-10-16, architecture round 11, plan 08). Amends ADR 0015 D10, ADR 0067 D5 and ADR 0103 D4;
 reaffirms ADR 0015 D2.
+D2 is a case of [ADR 0120](0120-what-a-cli-command-says-beside-its-document-is-said-once.md): the CLI writes on stderr the notices no document carries.
 
 Versioning the schema against `.specforge/schema-cache.json` reports I016 (a record that cannot be read: the version
 restarts at 1.0.0) and W053 (one per breaking change). Only `export_recorded` handed these notices to a surface. Eight

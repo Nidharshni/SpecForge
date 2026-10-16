@@ -129,7 +129,7 @@ fn sorted(mut occurrences: Vec<Occurrence>) -> Vec<Occurrence> {
     occurrences
 }
 
-impl<F: Fn(&str) -> Option<String>> Navigator<'_, F> {
+impl Navigator<'_> {
     /// The entity's block and its name token.
     pub fn definition(&self, id: &str) -> Result<Definition, Refusal<EntityField>> {
         let node = self

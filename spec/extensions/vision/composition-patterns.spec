@@ -266,14 +266,16 @@ behavior cp_missing_product_from_software "Missing @specforge/product: Software 
     3. Emit I004 (info severity) naming the reference, the field, and the
        kind no enabled extension provides ("reference 'x' in field
        'features' of 'user_login' targets kind 'feature', which no enabled
-       extension provides"), suggesting to enable its extension.
+       extension provides"), suggesting `specforge add @specforge/product`,
+       the extension E024 names for the kind.
     4. Store the reference as unresolved — it is NOT discarded.
     5. NOT emit E003 (error) — the reference is soft, not hard.
 
     The BehaviorImplementsFeature edge (behavior -> feature) is declared in software's
     manifest but its target_kind "feature" is unregistered. The edge
-    type is still loaded in the EdgeRegistry but no edges of this type
-    can be instantiated because the target kind does not exist.
+    type is still loaded in the EdgeRegistry, and no feature can be named:
+    an id naming an entity of another kind is E022 at the reference and
+    links as written.
 
     Software's entity_enhancements targeting product kinds (milestone gains
     behaviors, module gains ports and ports_defined) are silently
@@ -293,7 +295,7 @@ behavior cp_missing_product_from_software "Missing @specforge/product: Software 
     i004_emitted         "I004 info diagnostic emitted for unresolved feature kind"
     e003_not_emitted     "E003 error is NOT emitted for cross-extension soft references"
     enhancements_skipped "entity_enhancements targeting product kinds are silently ignored"
-    edge_type_loaded     "BehaviorImplementsFeature edge type exists in EdgeRegistry but no instances created"
+    edge_type_loaded     "BehaviorImplementsFeature edge type exists in EdgeRegistry; an id of another kind is E022 at the reference"
     future_resolution    "Installing @specforge/product resolves the references without .spec changes"
   }
   verify unit "features field parsed and stored when product not installed"

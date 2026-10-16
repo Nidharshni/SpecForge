@@ -1,6 +1,6 @@
 # A project view comes only from a compiled project
 
-**Status:** accepted (2026-10-16, architecture round 11, plan 05). Amends [ADR 0047](0047-the-compiled-project-is-the-sessions-core.md) (D5 and E5), [ADR 0078](0078-a-tests-project-is-one-fixture.md) (D1), [ADR 0019](0019-one-entity-snapshot-per-compile.md) (the memo), [ADR 0015](0015-read-views-are-operations-over-the-project-view.md) (hover while the session is out) and the wording of [ADR 0100](0100-a-session-takes-a-change-from-disk-only-as-changes.md) D4.
+**Status:** accepted (2026-10-16, architecture round 11, plan 05). Amends [ADR 0047](0047-the-compiled-project-is-the-sessions-core.md) (D5 and E5), [ADR 0078](0078-a-tests-project-is-one-fixture.md) (D1), [ADR 0019](0019-one-entity-snapshot-per-compile.md) (the memo), [ADR 0015](0015-read-views-are-operations-over-the-project-view.md) (hover while the session is out) and the wording of [ADR 0100](0100-a-session-takes-a-change-from-disk-only-as-changes.md) D4. D4 amended by [ADR 0121](0121-a-compiled-projects-root-answers-rooted-or-detached.md) (an assembled project is rooted at a directory, not a project root).
 
 `ProjectView::new(graph, env, root, recorded)` carried an invariant no type enforced: `recorded` had to be the memo of
 whoever owned `graph`, and `root` the root `env` was loaded at. Its one production caller, the LSP's hand-kept

@@ -91,8 +91,14 @@ impl CoreTool for Tool {
 
     fn call(project: ProjectRef<'_>, args: Args) -> Mutation<Reply> {
         let step = step(&args)?;
-        let SessionOutcome { recorded, writes } =
-            infer::session(&project.view(), step).map_err(Self::failed)?;
+        let SessionOutcome { recorded, writes } = infer::session(
+            &project.view(),
+            &infer::SessionRequest {
+                step,
+                containment: project.containment(),
+            },
+        )
+        .map_err(Self::failed)?;
         let written = match &recorded {
             Recorded::Marked { entities, .. } => {
                 Written::files(writes).with_entities(entities.clone())

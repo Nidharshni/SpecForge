@@ -1,3 +1,4 @@
+use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, err, errln};
 use clap::builder::{PossibleValuesParser, TypedValueParser};
@@ -85,11 +86,12 @@ fn run_in(
     options: &CheckOptions,
     terminal: &Terminal,
 ) -> Exit {
+    // Notes for a person: a JSON reader's stderr stays empty (ADR 0120).
+    let notes = Notes::new(terminal, format);
     if options.lint_profiles.contains(&LintProfile::Pedantic) {
-        errln!(
-            terminal,
+        notes.person(format_args!(
             "note: --lint pedantic is the default: info diagnostics are always reported"
-        );
+        ));
     }
     let compiled = match project.compile_in(runtime) {
         Ok(compiled) => compiled,
@@ -121,11 +123,10 @@ fn run_in(
 
     match &outcome.cache {
         CacheRecord::NotRequested | CacheRecord::Written => {}
-        CacheRecord::NotWritten => errln!(
-            terminal,
+        CacheRecord::NotWritten => notes.person(format_args!(
             "note: {} not written: the check failed",
             specforge_project::BUILD_CACHE_FILE
-        ),
+        )),
         CacheRecord::WriteFailed(e) => {
             return Refusal::of(format).report(
                 terminal,

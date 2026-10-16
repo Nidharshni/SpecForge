@@ -76,6 +76,8 @@ pub struct FieldForm {
     field_type: FieldType,
     /// Empty unless `field_type` is `Enum`.
     enum_values: Vec<String>,
+    /// The kind its references must name (the descriptor's `target_kind`), if it declares one.
+    target_kind: Option<String>,
 }
 
 /// Why a field does not take a value: the remedy E061 suggests, if any.
@@ -106,7 +108,20 @@ impl FieldForm {
         Self {
             field_type,
             enum_values,
+            target_kind: None,
         }
+    }
+
+    /// The same form, whose references must name `kind` entities (ADR 0117).
+    pub fn targeting(mut self, kind: &str) -> Self {
+        self.target_kind = Some(kind.to_string());
+        self
+    }
+
+    /// The kind its references must name, if its descriptor declares one. Whether a loaded
+    /// extension declares that kind is [`FieldForms::target`]'s answer.
+    pub fn target_kind(&self) -> Option<&str> {
+        self.target_kind.as_deref()
     }
 
     pub fn field_type(&self) -> FieldType {
@@ -250,19 +265,52 @@ impl FieldForm {
 pub struct FieldForms {
     forms: HashMap<(String, String), FieldForm>,
     member_kinds: BTreeSet<String>,
+    /// Every kind a loaded extension declares.
+    kinds: BTreeSet<String>,
 }
 
 impl FieldForms {
     /// `forms` maps (kind, field) to the field's form; `member_kinds` are
-    /// the kinds that declare `open_fields`.
+    /// the kinds that declare `open_fields`; `kinds` are every kind a loaded
+    /// extension declares (what makes a form's target [`Target::Loaded`]).
     pub fn new(
         forms: HashMap<(String, String), FieldForm>,
         member_kinds: BTreeSet<String>,
+        kinds: BTreeSet<String>,
     ) -> Self {
         Self {
             forms,
             member_kinds,
+            kinds,
         }
+    }
+
+    /// The kind `kind.field`'s references must name, and whether a loaded
+    /// extension declares it. `None` for a field with no declared target
+    /// kind, a member of an open-fields kind, or an undeclared field.
+    pub fn target(&self, kind: &str, field: &str) -> Option<Target<'_>> {
+        let Reading::Declared(form) = self.reading(kind, field) else {
+            return None;
+        };
+        let target = form.target_kind()?;
+        Some(if self.kinds.contains(target) {
+            Target::Loaded(target)
+        } else {
+            Target::Absent(target)
+        })
+    }
+
+    /// Every declared (kind, field) with a target, in (kind, field) order.
+    pub fn targets(&self) -> Vec<((&str, &str), Target<'_>)> {
+        let mut targets: Vec<_> = self
+            .forms
+            .keys()
+            .filter_map(|(kind, field)| {
+                Some(((kind.as_str(), field.as_str()), self.target(kind, field)?))
+            })
+            .collect();
+        targets.sort_by(|a, b| a.0.cmp(&b.0));
+        targets
     }
 
     /// How `kind`'s field `field` reads: its declared form, an undeclared
@@ -290,6 +338,28 @@ impl FieldForms {
     /// The kinds that take any field (`open_fields`).
     pub fn member_kinds(&self) -> &BTreeSet<String> {
         &self.member_kinds
+    }
+}
+
+/// The kind a reference field's ids must name (ADR 0117).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Target<'f> {
+    /// A loaded extension declares the kind.
+    Loaded(&'f str),
+    /// No loaded extension declares the kind.
+    Absent(&'f str),
+}
+
+impl<'f> Target<'f> {
+    pub fn kind(&self) -> &'f str {
+        match self {
+            Self::Loaded(kind) | Self::Absent(kind) => kind,
+        }
+    }
+
+    /// Whether an entity of `kind` is one this target takes: the target's own kind, loaded or not.
+    pub fn admits(&self, kind: &str) -> bool {
+        self.kind() == kind
     }
 }
 
@@ -467,7 +537,8 @@ impl Shape for FieldJson {
 /// comparison per line, ADR 0009); an integer and a boolean as JSON scalars;
 /// a list or variant list as an array of its items' text; a block
 /// as an object of its entries, each written by this function. Never the
-/// parser's tree, never a position.
+/// parser's tree, never a position. The field text of the same value
+/// (`specforge_registry::snapshot::field_text`) joins an expression group with `", "`.
 pub fn write(value: &FieldValue) -> FieldJson {
     FieldJson(match value {
         FieldValue::String(s) | FieldValue::Identifier(s) | FieldValue::Date(s) => {

@@ -142,41 +142,42 @@ behavior two_phase_validate_semantic "Two-Phase Validate: Semantic" {
   verify contract "Two-Phase Validate: Semantic: semantic validation holds — unknown_keywords_diagnosed"
 }
 
-// The KeywordExtensionIndex is a static JSON file (data/keyword-index.json)
-// mapping known entity keywords to their providing extension names, shipped
-// as a bundled data file. It does NOT require network access at runtime. It
-// is maintained by hand; a test checks it against every builtin extension's
-// declared entity kinds.
+// The candidate vocabulary names, for each kind keyword and enhancement field
+// the host could enable, the extension that declares it. The session hands the
+// builtins' vocabulary to the registry build; it is generated with the
+// builtins (ADR 0122) and needs no network.
 // suggest_missing_extensions is invoked inline by the diagnostic pipeline when
 // an E024 (unknown entity kind) is emitted — it is not event-driven. It enriches
-// the diagnostic help text with extension suggestions from the bundled index.
+// the diagnostic help text with extension suggestions from the candidate vocabulary.
 behavior suggest_missing_extensions "Suggest Missing Extensions" {
   features   [zero_entity_validation, zero_entity_bootstrap]
   invariants [zero_domain_knowledge_core]
   category   command
-  types      [KindRegistryEntry, UnknownKindError, KeywordExtensionIndex, KeywordExtensionMapping]
+  types      [KindRegistryEntry, UnknownKindError, CandidateVocabulary]
   requires {
     e024_diagnostic_emitted "An E024 (unknown entity kind) diagnostic has been emitted and requires help text enrichment"
   }
   ensures {
-    suggestion_provided   "Help text includes extension suggestion from bundled index or fallback to specforge search"
-    lazy_loading_enforced "KeywordExtensionIndex loaded lazily on first E024, not at startup"
+    suggestion_provided "Help text includes extension suggestion from the candidate vocabulary or fallback to specforge search"
+    no_network          "The vocabulary is data the host embeds, never fetched"
   }
   contract   """
     When an E024 (unknown entity kind) diagnostic is emitted, the help
     text MUST suggest which extension provides the unknown keyword, if known.
-    The suggestion MUST use a data-driven keyword-to-extension index shipped
-    as a bundled data file (not hardcoded in compiler source). The index maps
-    common keywords to their providing extensions. If no mapping exists for
-    the unknown keyword, the help text MUST suggest running specforge search.
-    Loading MUST be lazy — triggered on first E024 occurrence, not at startup.
-    If the bundled file is missing or malformed, the behavior MUST silently
-    fall back to suggesting specforge search for all unknown keywords.
+    The suggestion MUST use the candidate vocabulary the registry build is
+    handed (not compiler source or data). The vocabulary maps keywords to
+    their providing extensions. If no mapping exists for the unknown keyword,
+    the help text MUST suggest running specforge search. A build handed no
+    vocabulary suggests specforge search. If the vocabulary's text is
+    malformed, the behavior MUST silently fall back to suggesting specforge
+    search for all unknown keywords. The vocabulary changes only
+    suggestions, never which diagnostics are reported.
   """
   verify unit "E024 for keyword in index suggests the providing extension"
   verify unit "E024 for keyword not in index suggests specforge search"
-  verify unit "keyword-to-extension index is loaded from bundled data file"
-  verify contract "Suggest Missing Extensions: missing extension suggestions holds — e024_diagnostic_emitted, suggestion_provided, lazy_loading_enforced"
+  verify unit "the candidate vocabulary changes only suggestions, never which diagnostics a check reports"
+  verify unit "the builtin vocabulary is what the builtins' pinned declarations declare"
+  verify contract "Suggest Missing Extensions: missing extension suggestions holds — e024_diagnostic_emitted, suggestion_provided, no_network"
 }
 
 // detect_unknown_entity_kinds and suggest_missing_extensions live in the
@@ -513,7 +514,7 @@ behavior registry_build_graph_inputs "Registry Build Derives the Graph Inputs" {
     registries_populated "The build's kind and field registries hold every loaded declaration (registry_build_kinds, registry_build_fields)"
   }
   ensures {
-    every_input_derived "Every input the graph build reads of the extensions comes from the build: single and absent-target reference fields, inverse pairs, value coercions and derived references"
+    every_input_derived "Every input the graph build reads of the extensions comes from the build: single reference fields, the owners of absent target kinds, inverse pairs, value coercions and derived references"
     registries_agree    "Each input says what the build's declarations and field registry say, and nothing else"
     deterministic       "The same declarations give the same inputs, whatever order the registries hold them in"
   }
@@ -521,8 +522,8 @@ behavior registry_build_graph_inputs "Registry Build Derives the Graph Inputs" {
     The registry build MUST derive every input the graph build reads of the
     loaded extensions, and no caller derives one: every registered field of the
     reference type as a single reference field, none while no kind is
-    registered; every reference field whose target kind no loaded extension
-    declares, with that kind; every pair of a reference field and one of its
+    registered; the extension that owns each reference field's target kind no loaded
+    extension declares, where the candidate vocabulary names one; every pair of a reference field and one of its
     inverse fields (the field its inverse_of names, when its target kind
     registers it, and every field of its target kind naming it inverse_of),
     written lesser label first, the list sorted; how each registered field's value is coerced to
@@ -536,6 +537,8 @@ behavior registry_build_graph_inputs "Registry Build Derives the Graph Inputs" {
   verify unit "the registry build derives every graph input from the declarations"
   verify unit "a field's value coercion follows its registered type"
   verify unit "a derived reference field is a graph input only with a target kind and a known source"
+  verify unit "a reference field's form says whether its target kind is loaded"
+  verify unit "the graph inputs name the extension that owns each absent target kind"
   verify unit "inverse pairs are written lesser first and sorted, whatever the registration order"
   verify unit "an inverse field is a field of the target kind: the one inverse_of names, and every one naming the field inverse_of"
   verify contract "Registry Build Derives the Graph Inputs: graph inputs hold — registries_populated, every_input_derived, registries_agree, deterministic"
@@ -557,6 +560,7 @@ behavior registry_build_rules "Registry Build Collects Rules" {
     rules_collected        "Every declared rule that parses is in the build's rules with the extension that declared it, ordered by code"
     duplicates_warned      "A rule code two extensions declare is W023, and both rules are kept"
     required_enforced      "Every field registered as required has a host-generated E006 rule"
+    files_enforced         "Every field registered as a file reference has a host-generated E016 rule"
     unloaded_targets_inert "A rule whose target kind or edge type no loaded extension declares is not registered, so it reports nothing"
     rule_codes_checked     "A rule whose code its extension may not use is reported (W150) and still registered"
   }
@@ -581,7 +585,8 @@ behavior registry_build_rules "Registry Build Collects Rules" {
     undeclared kind (registry_build_declaration_consistency). After the
     extensions' rules,
     the rule set MUST contain a host-generated E006 rule, owned by no
-    extension, for every field registered as required.
+    extension, for every field registered as required, then an E016
+    file_exists rule for every field registered as a file reference.
 
     Each rule's code is checked against the diagnostic catalog when it
     is registered: an extension's rule uses its own catalogued code at
@@ -599,9 +604,10 @@ behavior registry_build_rules "Registry Build Collects Rules" {
   verify unit "a rule targeting a kind no loaded extension declares reports nothing"
   verify unit "extensions produce E006 rules for required fields"
   verify unit "E006 covers all required fields from builtin extensions"
+  verify unit "extensions produce E016 rules for file-reference fields"
   verify unit "a rule whose code the extension may not use is reported (W150) and still registered"
   verify unit "every builtin rule uses a code its extension owns, at the catalogued level"
-  verify contract "Registry Build Collects Rules: rule collection holds — declarations_in_load_order, rules_collected, duplicates_warned, required_enforced, unloaded_targets_inert, rule_codes_checked"
+  verify contract "Registry Build Collects Rules: rule collection holds — declarations_in_load_order, rules_collected, duplicates_warned, required_enforced, files_enforced, unloaded_targets_inert, rule_codes_checked"
 }
 
 behavior registry_build_declaration_consistency "Registry Build Checks Declaration Consistency" {
