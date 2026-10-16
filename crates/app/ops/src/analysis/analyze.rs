@@ -21,7 +21,7 @@ use specforge_common::{Diagnostic, DiagnosticList, Severity, codes};
 use specforge_graph::Graph;
 use specforge_project::coverage;
 use specforge_project::coverage::TestReport;
-use specforge_project::passes::{self, AnalysisContext};
+use specforge_project::passes::{self, PassContext};
 use specforge_registry::DeclaredPass;
 
 use crate::Containment;
@@ -353,34 +353,23 @@ pub fn analyze(
 
     let stray_records = stray_records(view.graph(), report.as_deref());
 
+    let graph = view.graph();
     let registries = view.registries();
-    let base = AnalysisContext {
-        graph: view.graph(),
-        kind_registry: registries.kinds(),
-        field_registry: registries.fields(),
-        entities: view.entities(),
-        test_results: report.as_deref(),
-        proved_claims: None,
-    };
 
     // The proof pass runs first: its entailment verdicts feed the coverage
     // discharge funnel (a proved claim discharges `verify property`
     // obligations without executable tests).
     let proved = options
         .prove
-        .map(|solver| crate::analysis::prove::run(&base, solver));
+        .map(|solver| crate::analysis::prove::run(graph, registries.fields(), solver));
     let proved_claims: std::collections::HashSet<String> = proved
         .as_ref()
         .map(|r| r.proved_claim_ids.iter().cloned().collect())
         .unwrap_or_default();
-    let input = AnalysisContext {
-        proved_claims: proved.as_ref().map(|_| &proved_claims),
-        ..base
-    };
 
     let mut passes_run: Vec<PassOutcome> = Vec::new();
     for name in &selection.builtins {
-        if let Some(r) = crate::analysis::builtin_passes::run_pass(&input, name) {
+        if let Some(r) = crate::analysis::builtin_passes::run_pass(graph, registries, name) {
             passes_run.push(PassOutcome {
                 name: r.name.to_string(),
                 description: r.description.to_string(),
@@ -390,6 +379,11 @@ pub fn analyze(
         }
     }
     if let Some(runtime) = view.runtime() {
+        let context = PassContext {
+            test_results: report.as_deref(),
+            proved_claims: proved.as_ref().map(|_| &proved_claims),
+            ..PassContext::of(view.entities())
+        };
         // Declared `after` constraints order a single extension's passes;
         // across extensions they are advisory.
         passes_run.extend(
@@ -397,7 +391,7 @@ pub fn analyze(
                 registries
                     .analyze_passes()
                     .filter(|p| selection.runs(&p.full_name())),
-                &input,
+                &context,
                 runtime.as_ref(),
             )
             .into_iter()

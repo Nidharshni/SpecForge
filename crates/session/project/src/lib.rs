@@ -46,7 +46,7 @@ use specforge_common::{
     ConfigProblem, ConfigRead, Diagnostic, ProjectConfig, ProjectRoot, SourceRoot, codes,
     project_config_from,
 };
-use specforge_graph::{Graph, GraphBuild, SpecFile};
+use specforge_graph::{GraphBuild, SpecFile};
 use specforge_installed::{Builtins, Installed};
 use specforge_registry::{
     CandidateVocabulary, Disk, EntitySnapshot, RegistryBuild, build_registries,
@@ -380,18 +380,13 @@ impl Environment {
         EntitySnapshot::of(graph, &self.registries, self.sources.dir())
     }
 
-    /// Every check a compile runs on a built graph, over its entity
-    /// snapshot `entities`: the registry build's checks (the structural
+    /// Every check a compile runs over the entity snapshot `entities` of a
+    /// built graph: the registry build's checks (the structural
     /// checks and the extensions' rules, in the order
     /// [`RegistryBuild::check`] runs them), then the check-phase passes;
     /// the custom verdicts and the passes run in [`Self::runtime`]. Every file
     /// a check reads goes through `disk` (ADR 0107).
-    pub fn run_checks(
-        &self,
-        graph: &Graph,
-        entities: &EntitySnapshot,
-        disk: &dyn Disk,
-    ) -> Vec<Diagnostic> {
+    pub fn run_checks(&self, entities: &EntitySnapshot, disk: &dyn Disk) -> Vec<Diagnostic> {
         let runtime = self.runtime.as_deref();
         let mut diagnostics = Vec::new();
         let verdicts: Box<dyn CustomVerdicts + '_> = match runtime {
@@ -403,7 +398,7 @@ impl Environment {
                 .check(&entities.rule_input(disk), verdicts.as_ref()),
         );
         if let Some(runtime) = runtime {
-            diagnostics.extend(check_passes::run(self, graph, entities, runtime, disk));
+            diagnostics.extend(check_passes::run(self, entities, runtime, disk));
         }
         diagnostics
     }

@@ -314,7 +314,7 @@ impl CompiledProject {
         let mut outcome = None;
         let moved = reads.run_checks(|disk| {
             let entities = Arc::new(env.entity_snapshot(graph));
-            outcome = Some((env.run_checks(graph.graph(), &entities, disk), entities));
+            outcome = Some((env.run_checks(&entities, disk), entities));
         });
         if let Some((diagnostics, entities)) = outcome {
             self.check_diagnostics = diagnostics;

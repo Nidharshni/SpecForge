@@ -2,10 +2,8 @@
 //! `phase: "check"` run with every compile, after the graph checks, and
 //! what they report is the compile's (behavior `run_check_phase_passes`).
 
-use crate::passes::{AnalysisContext, pass_findings, pass_input};
+use crate::passes::{PassContext, pass_findings, pass_input};
 use specforge_common::Diagnostic;
-use specforge_graph::Graph;
-use specforge_protocol_types::PassBuildCache;
 use specforge_registry::Disk;
 use specforge_registry::EntitySnapshot;
 use specforge_wasm::{ExtensionCalls, WasmRuntime};
@@ -13,13 +11,12 @@ use specforge_wasm::{ExtensionCalls, WasmRuntime};
 use crate::Environment;
 use crate::build_cache::BuildCache;
 
-/// Run `env`'s check passes over `graph` (its entity snapshot is
-/// `entities`), handing them the build cache as `previous` when the
+/// Run `env`'s check passes over the entity snapshot
+/// `entities`, handing them the build cache as `previous` when the
 /// project has one (W144 when it is invalid). A pass that fails (it traps,
 /// or answers output that does not parse) is E028; the others still run.
 pub(crate) fn run(
     env: &Environment,
-    graph: &Graph,
     entities: &EntitySnapshot,
     runtime: &dyn WasmRuntime,
     disk: &dyn Disk,
@@ -37,17 +34,10 @@ pub(crate) fn run(
             None
         }
     };
-    let registries = env.registries();
-    let mut input = pass_input(&AnalysisContext {
-        graph,
-        kind_registry: registries.kinds(),
-        field_registry: registries.fields(),
-        entities,
-        // A compile has no test results and no proof.
-        test_results: None,
-        proved_claims: None,
+    let input = pass_input(&PassContext {
+        previous: previous.as_ref(),
+        ..PassContext::of(entities)
     });
-    input.previous = previous.as_ref().map(PassBuildCache::from);
     let encoded = ExtensionCalls::encode(&input);
     let calls = ExtensionCalls::new(runtime);
     for declared in env.registries().check_passes() {

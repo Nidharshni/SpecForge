@@ -5,14 +5,14 @@
 use std::collections::HashMap;
 
 use specforge_common::{Diagnostic, Severity, codes};
-use specforge_graph::Reading;
-use specforge_project::passes::{AnalysisContext, Finding};
+use specforge_graph::{Graph, Reading};
+use specforge_registry::{FieldRegistry, KindRegistry, RegistryBuild};
 
 /// Result of one analysis pass.
 pub struct PassReport {
     pub name: &'static str,
     pub description: &'static str,
-    pub findings: Vec<Finding>,
+    pub findings: Vec<Diagnostic>,
     pub summary: serde_json::Value,
 }
 
@@ -31,9 +31,13 @@ pub const COVERAGE_PASS: &str = "@specforge/testing:coverage";
 /// `requires`/`ensures`/`maintains`) whose entities declare none of them is
 /// reported as unconstrained. Reference existence is already checked by the
 /// compiler (E003) and is not repeated here.
-pub fn pass_contracts(ctx: &AnalysisContext) -> (Vec<Finding>, serde_json::Value) {
+pub fn pass_contracts(
+    graph: &Graph,
+    kinds: &KindRegistry,
+    fields: &FieldRegistry,
+) -> (Vec<Diagnostic>, serde_json::Value) {
     let mut contract_fields: HashMap<&str, Vec<(&str, Reading)>> = HashMap::new();
-    for (kind, field, entry) in ctx.field_registry.iter() {
+    for (kind, field, entry) in fields.iter() {
         if !entry.field_type().is_reference() {
             continue;
         }
@@ -44,7 +48,7 @@ pub fn pass_contracts(ctx: &AnalysisContext) -> (Vec<Finding>, serde_json::Value
             .declared()
             .target_kind
             .as_deref()
-            .and_then(|t| ctx.kind_registry.get(t))
+            .and_then(|t| kinds.get(t))
             .is_some_and(|kind| kind.declared.contract_target)
         {
             contract_fields
@@ -65,7 +69,7 @@ pub fn pass_contracts(ctx: &AnalysisContext) -> (Vec<Finding>, serde_json::Value
     let mut obligation_refs = 0usize;
 
     // Sorted node order: findings must not depend on HashMap seeding (R-6).
-    let mut nodes: Vec<_> = ctx.graph.nodes();
+    let mut nodes: Vec<_> = graph.nodes();
     nodes.sort_by_key(|n| n.id.raw);
     for node in nodes {
         let Some(fields) = contract_fields.get(node.kind.raw.as_str()) else {
@@ -117,10 +121,11 @@ pub fn pass_contracts(ctx: &AnalysisContext) -> (Vec<Finding>, serde_json::Value
 }
 
 /// Run one named built-in pass. Returns `None` for unknown pass names.
-pub fn run_pass(ctx: &AnalysisContext, pass: &str) -> Option<PassReport> {
+pub fn run_pass(graph: &Graph, registries: &RegistryBuild, pass: &str) -> Option<PassReport> {
     let (name, description, findings, summary) = match pass {
         "contracts" => {
-            let (findings, summary) = pass_contracts(ctx);
+            let (findings, summary) =
+                pass_contracts(graph, registries.kinds(), registries.fields());
             (
                 "contracts",
                 "entities of contract-bearing kinds without requires/ensures/maintains obligations",

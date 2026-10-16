@@ -2,7 +2,7 @@ use super::*;
 use specforge_common::Sym;
 use specforge_graph::{FieldMap, Graph, Node};
 use specforge_parser::{EntityId, EntityKind, FieldValue};
-use specforge_registry::{FieldRegistry, FieldRegistryEntry, KindRegistry};
+use specforge_registry::{FieldRegistry, FieldRegistryEntry};
 use specforge_test_macros::test as specforge_test;
 
 fn span(file: &str) -> SourceSpan {
@@ -73,18 +73,7 @@ fn roles() -> FieldRegistry {
 }
 
 fn prove(graph: &Graph) -> ProveReport {
-    let kind_registry = KindRegistry::default();
-    let field_registry = roles();
-    let empty_proved = std::collections::HashSet::new();
-    let ctx = AnalysisContext {
-        graph,
-        kind_registry: &kind_registry,
-        field_registry: &field_registry,
-        entities: &specforge_registry::EntitySnapshot::default(),
-        test_results: None,
-        proved_claims: Some(&empty_proved),
-    };
-    run(&ctx, &crate::solver::real_z3())
+    run(graph, &roles(), &crate::solver::real_z3())
 }
 
 #[specforge_test(
@@ -334,18 +323,7 @@ fn an_axiom_style_bound_joins_the_bounds() {
 use crate::testing::ScriptedSolver;
 
 fn prove_with(graph: &Graph, solver: &dyn Solver) -> ProveReport {
-    let kind_registry = KindRegistry::default();
-    let field_registry = roles();
-    let empty_proved = std::collections::HashSet::new();
-    let ctx = AnalysisContext {
-        graph,
-        kind_registry: &kind_registry,
-        field_registry: &field_registry,
-        entities: &specforge_registry::EntitySnapshot::default(),
-        test_results: None,
-        proved_claims: Some(&empty_proved),
-    };
-    run(&ctx, solver)
+    run(graph, &roles(), solver)
 }
 
 #[specforge_test(
