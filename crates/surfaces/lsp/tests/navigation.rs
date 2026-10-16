@@ -137,6 +137,26 @@ fn goto_import_returns_none_for_missing() {
     assert_eq!(goto(&served, "sub/inside.spec"), None);
 }
 
+#[spec(
+    behavior = "goto_import_definition",
+    verify = "go-to-def on non-existent use path returns no result"
+)]
+fn goto_import_in_a_detached_workspace_is_none() {
+    // No workspace folder: the compile resolves no import (ADR 0047 D4), though both buffers
+    // are open.
+    let mut served = crate::served::Served::detached();
+    let (a, b) = (served.uri("a.spec"), served.uri("b.spec"));
+    served.open_document(&b, "term b \"B\" {}\n");
+    served.open_document(&a, "use \"b\"\n");
+
+    let definition = specforge_lsp::answers::definition(
+        &served.state(),
+        &a,
+        tower_lsp::lsp_types::Position::new(0, 1),
+    );
+    assert_eq!(definition, None);
+}
+
 // -- goto_import_definition (LSP dispatch integration) ------------------------
 
 #[spec(

@@ -179,9 +179,8 @@ pub fn definition(
     let key = state.key_of(uri);
     match compiled.target(&key, position) {
         Some(Target::Import { path }) => {
-            if state.spec_root().as_os_str().is_empty() {
-                return None;
-            }
+            // Detached: the compile resolves no import (ADR 0047 D4).
+            state.view().root()?;
             // The source the compile resolves the import to, from its
             // first line: no text needed.
             let sources = state.source_keys();
