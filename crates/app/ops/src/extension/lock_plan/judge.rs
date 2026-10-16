@@ -69,7 +69,7 @@ impl<'a> LockPlan<'a> {
             installed,
             lock,
             staged,
-            entries,
+            config,
             appended,
             wanted,
             fetching,
@@ -106,7 +106,7 @@ impl<'a> LockPlan<'a> {
             purpose,
             edits_config,
             pins: fetching.map(|fetching| (fetching.registry, pins)),
-            entries,
+            config,
             appended,
             wanted,
         })
@@ -137,8 +137,12 @@ impl<'a> LockPlan<'a> {
             asks: Vec::new(),
             staged: 0,
         };
-        let before = ProjectPeers::of(self.installed, &self.entries, &mut self.declarations)
-            .map_err(|error| Refused::of(&none(), error))?;
+        let before = ProjectPeers::of(
+            self.installed,
+            self.config.entries(),
+            &mut self.declarations,
+        )
+        .map_err(|error| Refused::of(&none(), error))?;
         let after = ProjectPeers::of(&self.view(), &self.entries_after(), &mut self.declarations)
             .map_err(|error| Refused::of(&none(), error))?;
         let mut names: Vec<String> = Vec::new();

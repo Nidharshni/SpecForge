@@ -10,7 +10,7 @@
 //! The publisher keys the update's fetches accepted are pinned with it, once it is written: an
 //! update that is not applied pins nothing (ADR 0059).
 
-use super::lock_plan::{Ask, Fetching, Install, LockPlan};
+use super::lock_plan::{Ask, Fetching, Install, LockPlan, Opened};
 use crate::registry::{Acceptance, NO_REGISTRY, Publisher, Registry};
 use crate::{Caller, OpError, OpErrorKind};
 use serde::Serialize;
@@ -333,7 +333,7 @@ pub fn update(
     // the whole update leaves it, whatever order the lock lists the extensions in.
     let mut plan = LockPlan::updating(
         &installed,
-        &config.extensions,
+        Opened::read(&config),
         runtime,
         Fetching {
             registry,

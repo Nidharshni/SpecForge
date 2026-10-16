@@ -395,6 +395,7 @@ fn a_builtin_named_by_a_stray_lock_entry_is_uninstalled_as_a_builtin() {
 )]
 fn remove_selects_a_file_entry_by_its_text_its_path_or_its_name() {
     let fixture = Assembled::new()
+        .config(&["@sdk/greet=greet.wasm"])
         .enabled(vec![EnabledExtension {
             entry: "@sdk/greet=greet.wasm".into(),
             name: "@sdk/greet".into(),

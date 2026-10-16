@@ -8,7 +8,7 @@ fn a_builtin_that_does_not_load_refuses_the_plan_e028() {
     let entries = ["@specforge/software".to_string()];
     let mut plan = LockPlan::adding(
         &installed,
-        &entries,
+        opened(&entries),
         &runtime,
         fetching(no_registry()),
         Purpose::Commit,
@@ -56,7 +56,7 @@ fn close_enables_required_builtins_dependencies_first() {
 
     let mut plan = LockPlan::adding(
         &installed,
-        &[],
+        opened::<&str>(&[]),
         &runtime,
         fetching(no_registry()),
         Purpose::Commit,
@@ -86,7 +86,7 @@ fn close_enables_required_builtins_dependencies_first() {
     // Asked in the wrong order, a builtin still comes after the builtin it requires.
     let mut plan = LockPlan::adding(
         &installed,
-        &[],
+        opened::<&str>(&[]),
         &runtime,
         fetching(no_registry()),
         Purpose::Commit,

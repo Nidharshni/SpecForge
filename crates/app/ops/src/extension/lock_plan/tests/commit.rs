@@ -192,7 +192,7 @@ fn each_ask_is_answered_with_the_builtins_its_extension_required() {
         let installed = Installed::at(dir.path());
         let mut plan = LockPlan::adding(
             &installed,
-            &[],
+            opened::<&str>(&[]),
             &runtime,
             fetching(no_registry()),
             Purpose::Commit,
@@ -337,7 +337,7 @@ fn an_entries_only_plan_accepts_an_unreadable_lock_and_puts_the_config_back() {
     let installed = Installed::at(dir.path());
     let mut plan = LockPlan::adding(
         &installed,
-        &[],
+        opened::<&str>(&[]),
         &runtime,
         fetching(no_registry()),
         Purpose::Commit,

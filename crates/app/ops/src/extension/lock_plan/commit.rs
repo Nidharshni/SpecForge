@@ -90,12 +90,11 @@ impl Checked<'_> {
     /// What `specforge.json` enables as the change leaves it, in order: the entries it held
     /// without the dropped ones, then the appended ones, dependencies first.
     pub(crate) fn entries(&self) -> Vec<String> {
-        self.entries
-            .iter()
-            .filter(|entry| !self.disabled.iter().any(|disabled| disabled.drops(entry)))
-            .cloned()
-            .chain(self.appended.iter().map(|appended| appended.name.clone()))
-            .collect()
+        let items = self.config.items_after(
+            |entry| self.disabled.iter().any(|disabled| disabled.drops(entry)),
+            &self.appended,
+        );
+        super::Opened::entries_of(&items)
     }
 
     /// A preview answers without writing. A commit writes, all or nothing (ADR 0028 D4, ADR 0128):

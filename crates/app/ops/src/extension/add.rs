@@ -1,7 +1,7 @@
 //! `specforge add` and `specforge.add_extension`.
 
 use super::Origin;
-use super::lock_plan::{Ask, Asked, Fetching, Install, LockPlan, Purpose};
+use super::lock_plan::{Ask, Asked, Fetching, Install, LockPlan, Opened, Purpose};
 use super::names::no_specifier;
 use super::{Named, Names, Place};
 use crate::registry::{Publisher, Registry};
@@ -159,7 +159,7 @@ pub fn add(
     // A specforge.lock that can't be read refuses before a file is read or a registry asked.
     let plan = LockPlan::adding(
         &installed,
-        &config.extensions,
+        Opened::read(&config),
         runtime,
         Fetching {
             registry,

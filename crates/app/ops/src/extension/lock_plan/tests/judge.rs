@@ -172,7 +172,7 @@ fn a_locked_extension_no_entry_enables_is_not_judged() {
     // No entry enables `@acme/other`: it is in the lock only.
     let mut plan = LockPlan::adding(
         &installed,
-        &[],
+        opened::<&str>(&[]),
         &runtime,
         fetching(no_registry()),
         Purpose::Commit,
@@ -324,7 +324,7 @@ fn a_builtin_peer_out_of_range_is_e027_naming_the_embedded_version() {
     let entries = ["@specforge/software".to_string()];
     let mut plan = LockPlan::adding(
         &installed,
-        &entries,
+        opened(&entries),
         &runtime,
         fetching(&registry),
         Purpose::Commit,
@@ -399,7 +399,7 @@ fn a_file_entry_is_a_member_both_ways() {
     let entries = ["dep.wasm".to_string()];
     let mut plan = LockPlan::adding(
         &installed,
-        &entries,
+        opened(&entries),
         &runtime,
         fetching(no_registry()),
         Purpose::Commit,
@@ -423,7 +423,7 @@ fn a_file_entry_is_a_member_both_ways() {
     let entries = ["base.wasm".to_string()];
     let mut plan = LockPlan::adding(
         &installed,
-        &entries,
+        opened(&entries),
         &runtime,
         fetching(no_registry()),
         Purpose::Commit,
