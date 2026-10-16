@@ -100,12 +100,6 @@ impl<'a> ProjectRef<'a> {
         lent(&self.containment)
     }
 
-    /// The bound of the project the call acts on: its root. A tool hands it to the operation's
-    /// request and builds none of its own.
-    pub fn containment(&self) -> &Containment {
-        &self.containment
-    }
-
     /// Whether it is the served project (not one a `path` named): the server
     /// serves what a call installs into it from the next call on.
     pub fn is_served(&self) -> bool {

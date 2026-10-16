@@ -8,12 +8,12 @@ use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, outln};
 use specforge_common::{codes, diagnostic_summary, render_diagnostics, truncate_diagnostics};
-use specforge_ops::OpError;
 use specforge_ops::analysis::analyze::{
     AnalyzeOptions, AnalyzeOutcome, ReportSource, StrayRecord, analyze,
 };
 use specforge_ops::solver::{Solver, Z3};
 use specforge_ops::view::ProjectView;
+use specforge_ops::{Caller, OpError};
 use specforge_project::CompiledProject;
 use std::path::PathBuf;
 
@@ -69,7 +69,7 @@ impl Args {
     /// project's, so the operation refuses one it does not run, exit 2 as
     /// clap refuses a flag's value), the report named or the one
     /// `specforge collect` last recorded.
-    fn options<'s>(&self, solver: &'s dyn Solver) -> AnalyzeOptions<'s> {
+    fn options<'s>(&self, solver: &'s dyn Solver, caller: Caller<'_>) -> AnalyzeOptions<'s> {
         AnalyzeOptions {
             pass: self
                 .pass
@@ -79,7 +79,7 @@ impl Args {
             report: match &self.test_results {
                 Some(path) => ReportSource::Named {
                     path: path.clone(),
-                    containment: specforge_ops::Containment::unbounded(),
+                    containment: caller.containment().clone(),
                 },
                 None => ReportSource::Recorded,
             },
@@ -98,7 +98,8 @@ impl Args {
         // project either way.
         let format = self.output.format;
         let z3 = self.solver();
-        let outcome = match analyze(&ProjectView::of(&project), &self.options(&z3)) {
+        let caller = crate::caller::of(false, format, terminal);
+        let outcome = match analyze(&ProjectView::of(&project), &self.options(&z3, caller)) {
             Ok(outcome) => outcome,
             Err(error) => {
                 return Refusal::measuring(format).report(terminal, &OpError::from(error));
@@ -215,6 +216,8 @@ fn summary_lines(value: &serde_json::Value, prefix: &str, out: &mut Vec<String>)
 #[cfg(test)]
 mod summary_tests {
     use super::{Args, ReportSource, Z3, summary_lines};
+    use crate::outcome::OutputFormat;
+    use crate::terminal::{Facts, Terminal};
     use clap::Parser;
 
     #[derive(Parser)]
@@ -232,7 +235,9 @@ mod summary_tests {
     #[test]
     fn the_flags_build_the_analysis_options() {
         let (plain_args, z3) = (args(&[]), super::Z3::default());
-        let plain = plain_args.options(&z3);
+        let (terminal, _) = Terminal::captured("", Facts::PIPED);
+        let caller = crate::caller::of(false, OutputFormat::Human, &terminal);
+        let plain = plain_args.options(&z3, caller);
         assert_eq!(plain.pass, specforge_ops::analysis::analyze::EVERY_PASS);
         assert!(matches!(plain.report, ReportSource::Recorded));
         assert!(plain.prove.is_none() && plain.min.is_none() && !plain.strict);
@@ -246,7 +251,7 @@ mod summary_tests {
             "80",
             "--strict",
         ]);
-        let asked = asked_args.options(&z3);
+        let asked = asked_args.options(&z3, caller);
         assert_eq!(asked.pass, "coverage");
         assert!(
             matches!(&asked.report, ReportSource::Named { path, .. } if path == std::path::Path::new("r.json"))

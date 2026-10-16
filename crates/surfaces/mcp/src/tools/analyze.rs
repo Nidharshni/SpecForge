@@ -70,7 +70,7 @@ impl CoreTool for Tool {
                 // an absolute name or a symlink, is refused before it is read.
                 Some(named) => ReportSource::Named {
                     path: PathBuf::from(named),
-                    containment: project.containment().clone(),
+                    containment: project.caller().containment().clone(),
                 },
                 None => ReportSource::Recorded,
             },
