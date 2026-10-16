@@ -1,7 +1,8 @@
-//! Shared `.spec` discovery policy (C14-16): one walker, one skip-list, one
+//! Shared discovery policy (C14-16): one walker, one skip-list, one
 //! symlink rule for every surface that scans a workspace (resolver, LSP,
 //! formatter, CLI). Divergent per-crate walkers made the same job run at
-//! three speeds with three results.
+//! three speeds with three results. `.spec` discovery and inference's
+//! sources both walk with it.
 
 use std::path::{Path, PathBuf};
 
@@ -15,26 +16,33 @@ const SKIP_DIRS: &[&str] = &["target", "node_modules", ".git", ".hg", "dist", "b
 /// What one walk of a directory found.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Walked {
-    /// The `.spec` files reached, sorted. Only files, through a symlink too: a
-    /// directory named like one, or a symlink to one, is not a source; nor is
-    /// a symlink that points nowhere.
+    /// The files reached that `keep` accepts, sorted. Only files, through a
+    /// symlink too: a directory named like one, or a symlink to one, is not a
+    /// source; nor is a symlink that points nowhere.
     pub files: Vec<PathBuf>,
     /// The directories below the root that the walk reached and did not
     /// enter because `stop` held for them, sorted.
     pub stopped: Vec<PathBuf>,
 }
 
-/// The one `.spec` walk, under the shared policy:
+/// The one walk, under the shared policy, for the files `keep` accepts:
 /// - `root` is entered whatever its name;
-/// - no [`SKIP_DIRS`] directory below it is entered;
+/// - below it, no [`SKIP_DIRS`] directory is entered, nor one whose (UTF-8)
+///   name `skip` holds for;
 /// - a symlink is not followed into a directory; one that resolves to a file
 ///   is reached as that file, one to a directory or to nothing is no source;
 /// - a directory below `root` for which `stop` holds is not entered but is
-///   listed in [`Walked::stopped`].
+///   listed in [`Walked::stopped`];
+/// - a reached file is listed when `keep` holds for its path.
 ///
 /// No `exclude` entry and no project boundary applies here; a project's
 /// sources are [`SourceRoot`].
-pub fn walk_spec_files(root: &Path, mut stop: impl FnMut(&Path) -> bool) -> Walked {
+pub fn walk_files(
+    root: &Path,
+    skip: impl Fn(&str) -> bool,
+    keep: impl Fn(&Path) -> bool,
+    mut stop: impl FnMut(&Path) -> bool,
+) -> Walked {
     let mut stopped: Vec<PathBuf> = Vec::new();
     let mut files: Vec<PathBuf> = walkdir::WalkDir::new(root)
         .follow_links(false) // symlink cycles and out-of-tree traversal are never wanted here
@@ -46,7 +54,7 @@ pub fn walk_spec_files(root: &Path, mut stop: impl FnMut(&Path) -> bool) -> Walk
             if entry
                 .file_name()
                 .to_str()
-                .is_some_and(|name| SKIP_DIRS.contains(&name))
+                .is_some_and(|name| SKIP_DIRS.contains(&name) || skip(name))
             {
                 return false;
             }
@@ -59,14 +67,23 @@ pub fn walk_spec_files(root: &Path, mut stop: impl FnMut(&Path) -> bool) -> Walk
         .filter_map(Result::ok)
         .filter(|entry| {
             let ft = entry.file_type();
-            is_source_entry(ft, entry.path())
-                && entry.path().extension().is_some_and(|ext| ext == "spec")
+            is_source_entry(ft, entry.path()) && keep(entry.path())
         })
         .map(walkdir::DirEntry::into_path)
         .collect();
     files.sort();
     stopped.sort();
     Walked { files, stopped }
+}
+
+/// [`walk_files`] for `.spec` files, skipping only [`SKIP_DIRS`].
+pub fn walk_spec_files(root: &Path, stop: impl FnMut(&Path) -> bool) -> Walked {
+    walk_files(
+        root,
+        |_| false,
+        |path| path.extension().is_some_and(|ext| ext == "spec"),
+        stop,
+    )
 }
 
 /// Whether an entry of a walk of type `ft` at `path` can be a source: not a
@@ -524,5 +541,44 @@ mod tests {
         assert!(held.holds("q/c.spec"));
         assert!(held.holds("p.spec"));
         assert!(held.holds("gone/x.spec"));
+    }
+
+    #[test]
+    fn walk_files_keeps_what_it_is_told_and_skips_what_it_is_told() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for file in ["a.rs", "a.spec", "gen/b.rs", "target/c.rs"] {
+            let path = root.join(file);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, "").unwrap();
+        }
+        let walked = walk_files(
+            root,
+            |name| name == "gen",
+            |path| path.extension() == Some("rs".as_ref()),
+            |_| false,
+        );
+        assert_eq!(walked.files, [root.join("a.rs")]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn walk_files_enters_no_symlinked_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("root");
+        let other = tmp.path().join("other");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(&other).unwrap();
+        fs::write(root.join("a.rs"), "").unwrap();
+        fs::write(other.join("x.rs"), "").unwrap();
+        std::os::unix::fs::symlink(".", root.join("loop")).unwrap();
+        std::os::unix::fs::symlink(&other, root.join("out")).unwrap();
+        let walked = walk_files(
+            &root,
+            |_| false,
+            |path| path.extension() == Some("rs".as_ref()),
+            |_| false,
+        );
+        assert_eq!(walked.files, [root.join("a.rs")]);
     }
 }
