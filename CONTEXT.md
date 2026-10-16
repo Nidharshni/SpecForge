@@ -701,7 +701,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Refusal<F>`, `F` one variant per field a refusal of it can be about: `AddField::Extensions`,
   `InitField::Dir`). Only a refusal that rejects a value the caller gave has one (invalid input, an entity, file or
   extension not there, a conflict); a refusal of the project or the environment has none. Each surface spells it:
-  MCP names the argument (`specifiers`, `path`), the CLI and the LSP print the error (ADR 0072).
+  MCP names the argument (`specifiers`, `path`), the CLI and the LSP print the error (ADR 0072). It is stated where the
+  operation fails, with the refusal: no operation keeps an error enum of its own to convert into one (ADR 0132).
 - **Mutation outcome**: what one MCP mutation call produced, typed: a run (`specforge_mcp::mutation::Mutated`:
   its reply and what it wrote — the files its operation changed, the entities it changed and the domain
   event it produces, `Written`) or a failure (`mutation::Failed`: its McpError and the files it left

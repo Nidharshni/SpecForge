@@ -1,7 +1,7 @@
 # An operation's refusal names the request field it is about
 
 **Status:** accepted (2026-10-13, architecture round 9, plan 02). Supersedes ADR 0033's round-8 amendment; amends
-ADR 0029 D2.
+ADR 0029 D2. D1's last sentence is superseded by ADR 0132: no operation decides a subject by variant.
 
 Round 8 had each core MCP tool declare which argument each refusal *code* of its operations is about
 (`CoreTool::REFUSAL_ARGUMENTS`), applied by the dispatcher, and a debug build panic on an `invalid_input` refusal
