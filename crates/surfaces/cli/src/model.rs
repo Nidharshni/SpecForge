@@ -1,6 +1,7 @@
+use crate::notes::Notes;
 use crate::options;
 use crate::outcome::{Exit, OutputFormat, Refusal};
-use crate::terminal::{Terminal, errln, out};
+use crate::terminal::{Terminal, out};
 use specforge_ops::read::model::{FieldLevel, GroupBy, ModelFormat, ModelOptions};
 use specforge_ops::view::ProjectView;
 
@@ -81,9 +82,7 @@ impl Args {
         };
         match specforge_ops::read::model::model(&ProjectView::of(&project), &options) {
             Ok(outcome) => {
-                for notice in &outcome.notices {
-                    errln!(terminal, "{}", specforge_common::render_plain(notice));
-                }
+                Notes::new(terminal, OutputFormat::Human).beside(&outcome.notices);
                 out!(terminal, "{}", outcome.document);
                 Exit::Passed
             }

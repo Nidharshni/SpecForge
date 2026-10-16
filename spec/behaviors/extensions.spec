@@ -754,7 +754,8 @@ behavior search_registry "Search Registry" {
     registries, the first registry in specforge.json declaration order
     wins, and each result names that registry. Output MUST be
     deterministic — sorted by name, then version. Each registry that
-    fails MUST be reported once, with its code; the others are still
+    fails MUST be reported once, with its code (on stderr under human
+    output, in the document's diagnostics under --format json); the others are still
     asked, and the search fails only when every registry failed. Each
     registry is asked with the credential kept for it
     (support_private_registries).
@@ -771,6 +772,7 @@ behavior search_registry "Search Registry" {
   verify unit "filters by declared category"
   verify unit "a registry lists each package at the version add installs from it"
   verify unit "each failed registry is reported once, and search fails when every registry failed"
+  verify integration "under --format json a failed registry is reported once, in the document's diagnostics, and not on stderr"
   verify unit "deduplicates results across registries"
   verify unit "output is deterministic"
   verify unit "error from one registry does not abort search of others"

@@ -2,15 +2,16 @@
 //! graph entity names (`specforge infer-status --gaps-detail`, the MCP
 //! `specforge.infer_gaps` tool).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
 use specforge_common::shape::Shape;
 
 use super::ScanFailure;
-use super::discovery::source_files;
 use super::manifest::InferenceManifest;
+use super::scan::ScanOutcome;
+use super::sources::InferenceSources;
 use crate::OpError;
 use crate::view::ProjectView;
 
@@ -39,73 +40,22 @@ pub struct SourceItem {
     pub scanner: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GapReport {
-    pub total_pub_items: usize,
-    pub covered_items: usize,
-    pub gaps: Vec<SourceItem>,
-    pub approximate: bool,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub scanners_used: Vec<String>,
-}
-
-pub fn compute_gap_report(
-    scanned_items: Vec<SourceItem>,
-    entity_ids: &[&str],
-    scanners_used: Vec<String>,
-) -> GapReport {
-    let total = scanned_items.len();
-    let entity_set: std::collections::HashSet<&str> = entity_ids.iter().copied().collect();
-
-    let gaps: Vec<SourceItem> = scanned_items
-        .into_iter()
-        .filter(|item| !entity_set.contains(item.name.as_str()))
-        .collect();
-
-    GapReport {
-        total_pub_items: total,
-        covered_items: total - gaps.len(),
-        scanners_used,
-        gaps,
-        approximate: false,
-    }
-}
-
 /// The public items of the view's source files that no entity of its
 /// graph names, scanned through its extensions' scanners in the view's
 /// runtime. Without a root: `no_project`.
 pub fn gaps(view: &ProjectView) -> Result<Gaps, OpError> {
     let root = view.project_root()?;
     let declarations = view.registries().declarations();
-    let files = source_files(root, declarations, &InferenceManifest::at(root)?);
-    let scanned = crate::read::infer::scan::scan_source_files(
-        view.runtime().map(|r| r.as_ref()),
-        declarations,
-        root,
-        &files,
-    );
-    let entity_ids: Vec<&str> = view
+    let sources = InferenceSources::of(root, declarations, &InferenceManifest::at(root)?);
+    let scanned =
+        crate::read::infer::scan::scan_source_files(view.runtime().map(|r| r.as_ref()), &sources);
+    let named: HashSet<&str> = view
         .graph()
         .nodes()
         .into_iter()
         .map(|n| n.id.raw.as_str())
         .collect();
-    let report = compute_gap_report(scanned.items, &entity_ids, scanned.scanners_used);
-    let mut by_directory: BTreeMap<String, Vec<SourceItem>> = BTreeMap::new();
-    for gap in report.gaps {
-        by_directory
-            .entry(directory_of(&gap.file).to_string())
-            .or_default()
-            .push(gap);
-    }
-    Ok(Gaps {
-        total_pub_items: report.total_pub_items,
-        covered_items: report.covered_items,
-        by_directory,
-        approximate: report.approximate || !scanned.failures.is_empty(),
-        scanners_used: report.scanners_used,
-        scan_failures: scanned.failures,
-    })
+    Ok(Gaps::of(scanned, &named))
 }
 
 /// The directory part of a project-relative path, `.` at the root.
@@ -114,6 +64,32 @@ pub fn directory_of(path: &str) -> &str {
 }
 
 impl Gaps {
+    /// What `scanned` found, less the items whose name some entity bears (`named`), by
+    /// directory. Approximate when a scanner failed on a file.
+    pub fn of(scanned: ScanOutcome, named: &HashSet<&str>) -> Gaps {
+        let total_pub_items = scanned.items.len();
+        let mut by_directory: BTreeMap<String, Vec<SourceItem>> = BTreeMap::new();
+        let mut uncovered = 0;
+        for item in scanned.items {
+            if named.contains(item.name.as_str()) {
+                continue;
+            }
+            uncovered += 1;
+            by_directory
+                .entry(directory_of(&item.file).to_string())
+                .or_default()
+                .push(item);
+        }
+        Gaps {
+            total_pub_items,
+            covered_items: total_pub_items - uncovered,
+            by_directory,
+            approximate: !scanned.failures.is_empty(),
+            scanners_used: scanned.scanners_used,
+            scan_failures: scanned.failures,
+        }
+    }
+
     /// How many items no entity names.
     pub fn gap_count(&self) -> usize {
         self.by_directory.values().map(Vec::len).sum()
@@ -203,52 +179,69 @@ pub struct GapItem {
 mod tests {
     use super::*;
 
-    #[test]
-    fn gap_report_identifies_uncovered_items() {
-        let items = vec![
-            SourceItem {
-                name: "hello".into(),
-                item_kind: "function".into(),
-                file: "src/lib.rs".into(),
-                line: 1,
-                scanner: Some("rust".into()),
-            },
-            SourceItem {
-                name: "config".into(),
-                item_kind: "struct".into(),
-                file: "src/lib.rs".into(),
-                line: 2,
-                scanner: Some("rust".into()),
-            },
-        ];
-        let report = compute_gap_report(items, &["hello"], vec!["rust".into()]);
-        assert_eq!(report.total_pub_items, 2);
-        assert_eq!(report.covered_items, 1);
-        assert_eq!(report.gaps.len(), 1);
-        assert_eq!(report.gaps[0].name, "config");
-        assert!(!report.approximate);
-        assert_eq!(report.scanners_used, vec!["rust"]);
-    }
-
-    #[test]
-    fn gap_report_all_covered() {
-        let items = vec![SourceItem {
-            name: "hello".into(),
-            item_kind: "function".into(),
+    fn item(name: &str, kind: &str, line: usize) -> SourceItem {
+        SourceItem {
+            name: name.into(),
+            item_kind: kind.into(),
             file: "src/lib.rs".into(),
-            line: 1,
+            line,
             scanner: Some("rust".into()),
-        }];
-        let report = compute_gap_report(items, &["hello"], vec!["rust".into()]);
-        assert_eq!(report.gaps.len(), 0);
-        assert_eq!(report.covered_items, 1);
+        }
+    }
+
+    fn scanned(items: Vec<SourceItem>) -> ScanOutcome {
+        ScanOutcome {
+            items,
+            scanners_used: vec!["rust".into()],
+            failures: Vec::new(),
+        }
     }
 
     #[test]
-    fn gap_report_empty_items() {
-        let report = compute_gap_report(vec![], &["hello"], vec![]);
-        assert_eq!(report.total_pub_items, 0);
-        assert_eq!(report.gaps.len(), 0);
+    fn gaps_keep_the_items_no_entity_names() {
+        let scanned = scanned(vec![
+            item("hello", "function", 1),
+            item("config", "struct", 2),
+        ]);
+        let gaps = Gaps::of(scanned, &HashSet::from(["hello"]));
+        assert_eq!(gaps.total_pub_items, 2);
+        assert_eq!(gaps.covered_items, 1);
+        assert_eq!(gaps.by_directory["src"].len(), 1);
+        assert_eq!(gaps.by_directory["src"][0].name, "config");
+        assert!(!gaps.approximate);
+        assert_eq!(gaps.scanners_used, vec!["rust"]);
+    }
+
+    #[test]
+    fn gaps_of_covered_items_are_empty() {
+        let gaps = Gaps::of(
+            scanned(vec![item("hello", "function", 1)]),
+            &HashSet::from(["hello"]),
+        );
+        assert_eq!(gaps.gap_count(), 0);
+        assert_eq!(gaps.covered_items, 1);
+    }
+
+    #[test]
+    fn gaps_of_no_items_count_nothing() {
+        let gaps = Gaps::of(ScanOutcome::default(), &HashSet::from(["hello"]));
+        assert_eq!(gaps.total_pub_items, 0);
+        assert_eq!(gaps.gap_count(), 0);
+    }
+
+    #[test]
+    fn a_scan_failure_makes_gaps_approximate() {
+        let mut outcome = ScanOutcome::default();
+        outcome.failures.push(ScanFailure {
+            file: "a.rs".into(),
+            error: specforge_wasm::CallError::new(
+                specforge_wasm::Operation::Scan,
+                "@specforge/rust",
+                "scan__rust",
+                specforge_wasm::CallFailure::NotLoaded,
+            ),
+        });
+        assert!(Gaps::of(outcome, &HashSet::new()).approximate);
     }
 
     #[test]

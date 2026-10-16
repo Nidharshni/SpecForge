@@ -26,6 +26,7 @@ mod mcp;
 mod migrate;
 mod model;
 mod new;
+mod notes;
 mod options;
 mod outcome;
 mod outline;

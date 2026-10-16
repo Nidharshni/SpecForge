@@ -624,6 +624,13 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   ended as completed or paused; at most one is active (`SessionStatus`). Its steps (start, mark a
   source file analyzed, end) are one management operation, `specforge_ops::read::infer::session`; MCP's
   `specforge.infer_session` is its adapter.
+- **Inference sources**: the files inference covers: under the inference manifest's source roots (the project
+  root when none), each file an enabled analyzer claims by its extension, keyed by the source path rule
+  (root-relative, `/`-separated, no `..`). They are walked by the shared discovery policy
+  (`specforge_common::walk_files`): no symlinked directory, no hidden name, no nested project, and the default
+  skipped directories united with any analyzer's `excluded_dirs`. A source root, a file or an indexed path that lands
+  outside the project root is none of them and is never read. Progress, gaps, the `inferred` lint and the mark read
+  them through one module (`specforge_ops::read::infer::sources`, ADR 0113).
 - **Anchors manifest**: `<root>/specforge-anchors.json`, which source item each entity is anchored
   to. Navigation reads it (`specforge_ops::read::navigate::source_anchors`): the anchors of a source file
   and of an entity; E071 when it cannot be used.
@@ -757,13 +764,19 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   does not match the lock, an unreadable lock). The CLI exits 0, 1 or 2 by it (`specforge_cli::outcome::Exit`, the only value a core
   command ends with); MCP returns it as `ok`
   (`specforge.validate`: `_meta["specforge/check"].ok`) and keeps `isError` for refusals (ADR 0004
-  D4-a). A refusal (`OpError`) is not a verdict; a measuring command's refusal exits 2. Not to be
+  D4-a). A refusal (`OpError`) is not a verdict; a measuring command's (stats, analyze) refusal exits 2. Not to be
   confused with an entity's coverage **Verdict** (ADR 0029).
 - **Terminal**: where a core CLI command writes and whom it asks: its stdout, its stderr, the input a
   prompt reads (or `specforge mcp` serves, byte for byte), whether each stream is coloured (`NO_COLOR`, then `CLICOLOR_FORCE`, then whether it is
   a terminal) and whether anyone can answer, fixed when `main` makes it from the process
   (`specforge_cli::terminal::Terminal`); a test captures one. It is the CLI's **Asker**; nobody to ask is no; a reader that leaves stdout ends the output
   quietly (ADR 0029 D4b).
+- **Command notes**: what a core CLI command writes on stderr beside its outcome document: **notices** (coded
+  diagnostics about the run: the schema notices, I020, W097, a failed registry's R005, the registry configuration's
+  W140/I003/W155/W156) and **notes** (prose for a person: `note: …`, collect's announcement). One rule, by output
+  format (`specforge_cli::notes::Notes`, ADR 0120): under human output both go on stderr; under `--format json` a
+  note is never written, and a notice is written once, in the document when the document carries it, else on stderr
+  before the document.
 - **Asking**: who can be asked to consent to what an operation would otherwise refuse (a publisher key change, a
   collector's command): yes to everything (`--yes`), nobody (MCP, `--format json`, stdin that is no terminal), or an
   `Asker` (the CLI's terminal, a test's script). A surface builds it once per command and hands it to add, update or

@@ -1,3 +1,4 @@
+use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, outln};
 use specforge_common::ProjectPath;
@@ -56,7 +57,7 @@ impl Args {
         let added = extension::add(&request, &registry, &runtime);
         // What reading the registry configuration reported, once the add
         // asked a registry.
-        terminal.diagnostics(&registry.reported());
+        Notes::new(terminal, format).beside(&registry.reported());
         match added {
             Ok(added) => {
                 present(&added, added.writes.named(Some(path)), format, terminal);
