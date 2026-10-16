@@ -21,6 +21,7 @@ behavior build_in_memory_graph "Build In-Memory Graph" {
     one_node_per_entity    "Graph contains exactly one node per declared entity"
     one_edge_per_reference "Graph contains one edge per resolved reference"
     no_dangling_edges      "No dangling edges exist (every edge connects two existing nodes)"
+    edges_written          "every edge the linker makes records where each of its references is written"
   }
   contract   """
     After resolution, the compiler MUST construct an in-memory directed
@@ -34,6 +35,8 @@ behavior build_in_memory_graph "Build In-Memory Graph" {
   verify unit "graph contains one edge per resolved reference"
   verify unit "edge types match relationship semantics"
   verify unit "every edge connects two existing nodes"
+  verify unit "an edge records the span of each reference it was linked from"
+  verify unit "an incremental build records what a cold build records"
   verify contract "Build In-Memory Graph: in-memory graph construction holds — resolution_complete, one_node_per_entity, one_edge_per_reference, no_dangling_edges"
   verify unit "Graph::with_bidirectional_pairs stores pairs for cycle suppression"
   verify unit "W060 carries actionable suggestion"

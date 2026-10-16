@@ -526,6 +526,13 @@ fn compare_graph_contents(incremental: &Graph, cold: &Graph) -> Result<(), Strin
             cold_nodes.get(id)
         ));
     }
+    let written = |g: &Graph| -> BTreeMap<delta::EdgeKey, Vec<SourceSpan>> {
+        g.edges()
+            .iter()
+            .map(|e| ((e.source, e.target, e.label), g.written(e).to_vec()))
+            .collect()
+    };
+    let (inc_at, cold_at) = (written(incremental), written(cold));
     let (inc, cold) = (delta::edge_keys(incremental), delta::edge_keys(cold));
     if let Some((s, t, l)) = inc.symmetric_difference(&cold).next() {
         let side = if inc.contains(&(*s, *t, *l)) {
@@ -535,6 +542,17 @@ fn compare_graph_contents(incremental: &Graph, cold: &Graph) -> Result<(), Strin
         };
         return Err(format!(
             "incremental/cold mismatch on edge {s} -{l}-> {t} ({side})"
+        ));
+    }
+    // Where each edge is written is part of the graph too (ADR 0127).
+    if let Some((s, t, l)) = inc_at
+        .keys()
+        .find(|key| inc_at.get(*key) != cold_at.get(*key))
+    {
+        return Err(format!(
+            "incremental/cold mismatch on where edge {s} -{l}-> {t} is written: incremental {:?}, cold {:?}",
+            inc_at.get(&(*s, *t, *l)),
+            cold_at.get(&(*s, *t, *l))
         ));
     }
     Ok(())

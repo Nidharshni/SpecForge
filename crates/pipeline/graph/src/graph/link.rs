@@ -3,7 +3,7 @@
 //! references is its [`Reading`](crate::Reading)'s answer, never the
 //! parser's shape (ADR 0093).
 
-use specforge_common::{Diagnostic, DiagnosticData, Sym, codes};
+use specforge_common::{Diagnostic, DiagnosticData, SourceSpan, Sym, codes};
 use std::collections::BTreeMap;
 
 use crate::{Edge, FieldForms, Graph};
@@ -13,6 +13,8 @@ mod reference;
 /// An edge as written, and whether a declared single reference wrote it.
 struct WrittenEdge {
     edge: Edge,
+    /// Where the reference is written.
+    at: Option<SourceSpan>,
     single: bool,
 }
 
@@ -23,6 +25,8 @@ impl Graph {
     /// target kind no loaded extension declares, naming the extension in
     /// `owners` that does. Then W061 over the edges but the declared single
     /// references': a single reference is never part of a reference cycle.
+    ///
+    /// Records where each edge is written (`Graph::written`, ADR 0127): the span of each reference it was linked from.
     ///
     /// Clears all existing edges first. Diagnostics come in node order
     /// (the graph's nodes are sorted), then the cycles'.
@@ -51,6 +55,7 @@ impl Graph {
                                 target: Sym::new(reference.id),
                                 label: entry.key,
                             },
+                            at: reference.span.cloned(),
                             single,
                         });
                     }
@@ -66,7 +71,7 @@ impl Graph {
         // The single references join, keeping the edges in written order.
         self.clear_edges();
         for written in edges {
-            self.add_edge(written.edge);
+            self.add_written(written.edge, written.at.as_ref());
         }
         diagnostics
     }
