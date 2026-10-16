@@ -190,11 +190,7 @@ fn resource_adapter(
                 mime_type: read.mime_type.clone(),
                 duration_ms: elapsed_ms(started),
             };
-            let text = ResourceText {
-                text: read.content,
-                mime_type: read.mime_type,
-                notices: Vec::new(),
-            };
+            let text = ResourceText::new(read.mime_type, read.content);
             (Ok(text), Some(event))
         }
         Err(error) => (Err(Box::new(failed_call(&error.diagnostic()))), None),

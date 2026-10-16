@@ -135,6 +135,21 @@ mod tests {
         }
     }
 
+    /// ADR 0130 D2: only the notes open a noticed read, so a command cannot print a read's
+    /// document without its notices.
+    #[test]
+    fn only_the_notes_open_a_noticed_read() {
+        let elsewhere: Vec<String> = sources()
+            .into_iter()
+            .filter(|(name, text)| name != "notes.rs" && text.contains("into_value_and_notices("))
+            .map(|(name, _)| name)
+            .collect();
+        assert!(
+            elsewhere.is_empty(),
+            "into_value_and_notices outside notes: {elsewhere:?}"
+        );
+    }
+
     #[test]
     fn a_notice_is_rendered_plain() {
         let notice = Diagnostic::new(codes::W140, "careful");

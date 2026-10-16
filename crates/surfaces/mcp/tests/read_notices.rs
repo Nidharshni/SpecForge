@@ -6,6 +6,7 @@
 use crate::support::*;
 use serde_json::{Value, json};
 use specforge_test::prelude::*;
+use std::path::Path;
 
 /// A served project over the builtin software extension, whose schema record
 /// cannot be read.
@@ -143,4 +144,53 @@ fn list_and_search_report_their_own_notices_only() {
         json!({"query": "act", "kinds": ["ghost"]}),
     );
     assert_eq!(codes(&searched), ["I020"], "{searched}");
+}
+
+/// Every `.rs` file under `dir` as `(path under src, text up to the test module)`.
+fn sources(dir: &Path, base: &Path, found: &mut Vec<(String, String)>) {
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            sources(&path, base, found);
+        } else if path.extension().is_some_and(|extension| extension == "rs") {
+            let name = path.strip_prefix(base).unwrap();
+            let text = std::fs::read_to_string(&path).unwrap();
+            let lines: Vec<&str> = text.lines().collect();
+            let end = (0..lines.len())
+                .find(|&at| {
+                    lines[at].starts_with("#[cfg(test)]")
+                        && lines.get(at + 1).is_some_and(|next| next.contains("mod "))
+                })
+                .unwrap_or(lines.len());
+            found.push((
+                name.to_string_lossy().replace('\\', "/"),
+                lines[..end].join("\n"),
+            ));
+        }
+    }
+}
+
+/// ADR 0130 D2: only the envelopes open a noticed read, so a reply cannot be built from one
+/// without its notices. `reply.rs` and `resource.rs` are the envelopes; `prompts/trace.rs`
+/// opens it to drop the notices (ADR 0111 D6: the trace prompt's payload has no `_meta`).
+#[test]
+fn only_the_envelopes_open_a_noticed_read() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    sources(&src, &src, &mut files);
+    let mut problems = Vec::new();
+    for (name, text) in &files {
+        if matches!(
+            name.as_str(),
+            "reply.rs" | "resource.rs" | "prompts/trace.rs"
+        ) {
+            continue;
+        }
+        for (number, line) in text.lines().enumerate() {
+            if !line.trim_start().starts_with("//") && line.contains("into_value_and_notices(") {
+                problems.push(format!("src/{name}:{}: opens a noticed read", number + 1));
+            }
+        }
+    }
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
 }

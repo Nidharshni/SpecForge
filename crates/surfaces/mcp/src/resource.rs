@@ -47,7 +47,7 @@ pub struct ResourceText {
     /// What the read noticed (I016, W053, I020; ADR 0111): sent as the
     /// result's `_meta.diagnostics`, the shape a tool result's has. The
     /// content stays text.
-    pub notices: Vec<Diagnostic>,
+    notices: Vec<Diagnostic>,
 }
 
 impl ResourceText {
@@ -76,11 +76,6 @@ impl ResourceText {
             text: text.into(),
             notices: Vec::new(),
         }
-    }
-
-    pub fn with_notices(mut self, notices: Vec<Diagnostic>) -> Self {
-        self.notices = notices;
-        self
     }
 }
 
@@ -211,12 +206,6 @@ mod tests {
 
     #[test]
     fn a_noticed_read_carries_its_notices_in_its_meta() {
-        let notice = Diagnostic::new(codes::I016, "the schema cache could not be read");
-
-        let with = result_of(ResourceText::json("{}").with_notices(vec![notice]));
-        assert_eq!(with["_meta"]["diagnostics"][0]["code"], "I016", "{with}");
-        assert_eq!(with["contents"][0]["text"], "{}");
-
         let noticed = result_of(ResourceText::noticed(Noticed::new(
             "{}".into(),
             vec![Diagnostic::new(
@@ -228,6 +217,7 @@ mod tests {
             noticed["_meta"]["diagnostics"][0]["code"], "I016",
             "{noticed}"
         );
+        assert_eq!(noticed["contents"][0]["text"], "{}");
 
         let without = result_of(ResourceText::json("{}"));
         assert!(without.get("_meta").is_none(), "{without}");
