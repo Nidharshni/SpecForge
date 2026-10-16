@@ -15,6 +15,7 @@
 //! `ProjectSession::stale` and `changes`, and are taken before the read
 //! they describe, so a write that races the read is seen next time.
 
+mod disk;
 mod inputs;
 mod key;
 mod reach;
@@ -27,12 +28,12 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use specforge_common::{ConfigRead, ProjectConfig, ProjectRoot, SourceRoot, read_project_config};
+use specforge_registry::Disk;
 
-use crate::Environment;
-use crate::build_cache::BUILD_CACHE_FILE;
-use crate::snapshot::EntitySnapshot;
 use crate::sources::{self, Read};
 
+pub(crate) use disk::PlainDisk;
+use disk::RunDisk;
 pub use inputs::{SessionInputs, WatchRoot, Watched};
 pub use key::source_key;
 use stamps::{Entry, Scope, Stamps};
@@ -79,10 +80,11 @@ pub(crate) trait Reads {
     fn discover(&mut self, sources: &SourceRoot) -> Vec<String>;
     /// Source `key` under `spec_root`: its text, its E025, or gone.
     fn source(&mut self, spec_root: &Path, key: &str) -> Read;
-    /// Before the checks over `entities` run in `env`: the files they read.
-    /// Whether the session's inputs moved (always `false` unrecorded). Plan 04
-    /// replaces this with a reader handed to the checks.
-    fn before_checks(&mut self, env: &Environment, entities: &EntitySnapshot) -> bool;
+    /// Run `check` (the checks over one snapshot) with the disk they read
+    /// through (ADR 0107): the ledger's records and stamps each read as a
+    /// check input; `Unrecorded`'s only reads. Whether the session's inputs
+    /// moved (always `false` unrecorded).
+    fn run_checks(&mut self, check: impl FnOnce(&dyn Disk)) -> bool;
 }
 
 /// A one-shot compile's reads: the same steps, nothing recorded, no stamp (ADR
@@ -104,7 +106,8 @@ impl Reads for Unrecorded {
         sources::read(spec_root, key)
     }
 
-    fn before_checks(&mut self, _env: &Environment, _entities: &EntitySnapshot) -> bool {
+    fn run_checks(&mut self, check: impl FnOnce(&dyn Disk)) -> bool {
+        check(&PlainDisk);
         false
     }
 }
@@ -151,24 +154,11 @@ impl Reads for Ledger {
         self.source_with(spec_root, key, |_| sources::read(spec_root, key))
     }
 
-    /// Reads the files the checks will read (the build cache when the
-    /// environment has check-phase passes, then each file a `file_reference`
-    /// field or `file_exists` rule names, and the directory of each missing
-    /// one), each stamped and recorded.
-    fn before_checks(&mut self, env: &Environment, entities: &EntitySnapshot) -> bool {
-        let Some(root) = self.inputs.root().map(Path::to_path_buf) else {
-            return false;
-        };
+    /// The checks' reads, each stamped and recorded as a check input when
+    /// the run finishes.
+    fn run_checks(&mut self, check: impl FnOnce(&dyn Disk)) -> bool {
         let run = self.checks();
-        if env.registries().check_passes().next().is_some() {
-            run.read(CheckInput::File, &root.join(BUILD_CACHE_FILE), |_| ());
-        }
-        for path in env.registries().files(&entities.rule_input()) {
-            let exists = run.read(CheckInput::File, &path, Path::exists);
-            if !exists && let Some(parent) = path.parent() {
-                run.read(CheckInput::Listing, parent, |_| ());
-            }
-        }
+        check(&RunDisk(&run));
         run.finish()
     }
 }
@@ -319,8 +309,7 @@ impl CheckRun<'_> {
         read(path)
     }
 
-    /// The check inputs are now exactly what this run read, in read order
-    /// (ADR 0030 D2: renewed each time the checks run). Their canonical
+    /// The check inputs are now exactly what this run read (ADR 0030 D2: renewed each time the checks run). Their canonical
     /// forms and missing directories are taken again; nothing else in the
     /// record changes. Whether the inputs moved.
     pub(crate) fn finish(self) -> bool {
@@ -342,6 +331,8 @@ impl CheckRun<'_> {
             }
             stamps.entry(path).or_insert(entry);
         }
+        // A set: the order the checks asked in is no change.
+        files.sort();
         listings.sort();
         ledger.inputs.set_checks(files, listings);
         ledger.stamps.set_checks(stamps);

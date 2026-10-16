@@ -52,7 +52,7 @@ fn build_and_check(source: &str) -> (Graph, Vec<Diagnostic>) {
     assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
     let (graph, mut diags) = build_graph_with_config(&[parsed], &env.graph_config());
     let entities = env.entity_snapshot(&graph);
-    diags.extend(env.run_checks(&graph, &entities));
+    diags.extend(env.run_checks(&graph, &entities, &specforge_registry::MemoryDisk::new()));
     (graph, diags)
 }
 

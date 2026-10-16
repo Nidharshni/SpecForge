@@ -3236,7 +3236,6 @@ dependencies = [
  "specforge-repo-root",
  "specforge-test",
  "specforge-test-macros",
- "tempfile",
 ]
 
 [[package]]

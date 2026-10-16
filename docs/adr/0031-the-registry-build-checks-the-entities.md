@@ -1,7 +1,7 @@
 # The registry build checks the entities; the validator crate is gone
 
 **Status:** accepted (2026-10-07). Amends ADR 0007 (crate roles) and reopens ADR 0019's "structured
-value" clause.
+value" clause. D1's `RegistryBuild::files` sentence is reopened by [ADR 0107](0107-the-checks-read-through-the-disk-they-are-given.md): the session watches what the checks read.
 
 Every check that runs over a built graph's entities sat in one of three places:
 

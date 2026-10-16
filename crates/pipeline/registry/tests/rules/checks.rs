@@ -1,10 +1,13 @@
 //! `execute_validation_pattern` and `emit_diagnostic_from_pattern`: each
 //! declarative check over entity records, and the diagnostic it emits.
 
+use std::path::Path;
+
 use specforge_common::Severity;
 use specforge_protocol_types::{ValidationRuleDescriptor, ValidationSeverity};
 use specforge_registry::entity::{Direction, EntityRecord, Exemption, RuleInput};
 use specforge_registry::rules::NoVerdicts;
+use specforge_registry::{Asked, MemoryDisk};
 use specforge_test_macros::test as spec;
 
 use super::{check, constraint, declaring, entity, messages, one, over, rule, rules, rules_of};
@@ -399,16 +402,13 @@ fn file_exists_reports_missing_file_reference_field_targets() {
     declared.message_template = "{kind} '{id}' references missing file".to_string();
     declared.field = Some("gherkin".to_string());
     let built = one(declared);
-    let root = tempfile::tempdir().unwrap();
-    std::fs::create_dir(root.path().join("features")).unwrap();
-    std::fs::write(root.path().join("features/login.feature"), "").unwrap();
+    let disk = MemoryDisk::new().with_file("/spec/features/login.feature", b"");
     let naming = |id: &str, path: &str| entity(id, "behavior", 1, 0).with_field("gherkin", path);
-    let present = root.path().join("features/login.feature");
     let entities = [
         naming("b1", "features/login.feature"),
         naming("b2", "features/logout.feature"),
         naming("b3", "/nonexistent/file.feature"),
-        naming("b4", present.to_str().unwrap()),
+        naming("b4", "/spec/features/login.feature"),
     ];
 
     // Relative paths are the spec root's; absolute ones are checked as
@@ -416,7 +416,8 @@ fn file_exists_reports_missing_file_reference_field_targets() {
     let input = RuleInput {
         entities: &entities,
         edges: &[],
-        spec_root: root.path(),
+        spec_root: Path::new("/spec"),
+        disk: &disk,
     };
     let diagnostics = built.rules.check(&input, &NoVerdicts);
     assert_eq!(
@@ -438,22 +439,20 @@ fn file_exists_resolves_against_the_spec_root_not_the_working_directory() {
     declared.field = Some("doc".to_string());
     declared.message_template = "{id}: missing '{value}'".to_string();
     let built = one(declared);
-    // `Cargo.toml` exists in the working directory of the test, not under
-    // the spec root.
-    assert!(std::path::Path::new("Cargo.toml").exists());
-    let root = tempfile::tempdir().unwrap();
     let entities = [entity("b1", "behavior", 0, 0).with_field("doc", "Cargo.toml")];
+    let beside = MemoryDisk::new().with_file("Cargo.toml", b"");
     let input = RuleInput {
         entities: &entities,
         edges: &[],
-        spec_root: root.path(),
+        spec_root: Path::new("/spec"),
+        disk: &beside,
     };
     assert_eq!(
         messages(&built.rules.check(&input, &NoVerdicts)),
         ["b1: missing 'Cargo.toml'"]
     );
-    std::fs::write(root.path().join("Cargo.toml"), "").unwrap();
-    assert!(built.rules.check(&input, &NoVerdicts).is_empty());
+    // The rule asks for the spec root's file, never the working directory's.
+    assert_eq!(beside.asked(), [Asked::Exists("/spec/Cargo.toml".into())]);
 }
 
 #[spec(
@@ -465,8 +464,8 @@ fn file_exists_checks_each_item_of_a_list_field() {
     declared.field = Some("docs".to_string());
     declared.message_template = "{id}: missing '{value}'".to_string();
     let built = one(declared);
-    let root = tempfile::tempdir().unwrap();
-    std::fs::write(root.path().join("a.md"), "").unwrap();
+    let root = Path::new("/spec");
+    let disk = MemoryDisk::new().with_file("/spec/a.md", b"");
     let entities = [
         entity("b1", "behavior", 0, 0).with_list("docs", &["a.md", "b.md"]),
         // An empty list names no path.
@@ -477,7 +476,8 @@ fn file_exists_checks_each_item_of_a_list_field() {
     let input = RuleInput {
         entities: &entities,
         edges: &[],
-        spec_root: root.path(),
+        spec_root: root,
+        disk: &disk,
     };
 
     let diagnostics = built.rules.check(&input, &NoVerdicts);
@@ -486,13 +486,13 @@ fn file_exists_checks_each_item_of_a_list_field() {
         messages(&diagnostics),
         ["b1: missing 'b.md'", "b3: missing 'a.md, b.md'"]
     );
-    // The files the rule reads: every item, once, against the spec root.
+    // The rule asks about every item against the spec root, in entity order.
     assert_eq!(
-        built.rules.files(&input),
+        disk.asked(),
         [
-            root.path().join("a.md"),
-            root.path().join("a.md, b.md"),
-            root.path().join("b.md"),
+            Asked::Exists(root.join("a.md")),
+            Asked::Exists(root.join("b.md")),
+            Asked::Exists(root.join("a.md, b.md")),
         ]
     );
 }
