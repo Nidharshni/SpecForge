@@ -100,8 +100,10 @@ fn collect_reads_no_captured_output_through_a_symlink_that_leaves_the_project() 
 
 /// R2: the manifest's temporary file is a link to a file outside.
 #[cfg(unix)]
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a mutation reads and writes no file through a symlink that leaves the project"
+)]
 fn infer_session_writes_no_manifest_through_a_temporary_file_that_leaves_the_project() {
     let project = plain_project();
     let outside = outside();
@@ -133,8 +135,10 @@ fn infer_session_writes_no_manifest_through_a_temporary_file_that_leaves_the_pro
 
 /// R5: the manifest itself is a link to a file outside.
 #[cfg(unix)]
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a file the project keeps at its root is read only from inside the project"
+)]
 fn infer_progress_reads_no_manifest_through_a_symlink_that_leaves_the_project() {
     let project = plain_project();
     let outside = outside();
