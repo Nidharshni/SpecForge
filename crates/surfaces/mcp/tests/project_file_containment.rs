@@ -171,7 +171,7 @@ fn analyze_test_results_outside_the_project_is_refused_before_it_is_read() {
     fs::write(elsewhere.join("r.json"), r#"{"results":{}}"#).unwrap();
     fs::write(elsewhere.join("bad.json"), "not json").unwrap();
 
-    #[allow(unused_mut)]
+    #[allow(unused_mut, reason = "only unix adds the symlink spelling")]
     let mut spellings: Vec<(&str, String)> = vec![
         ("relative", "../outside/r.json".to_string()),
         ("absolute", elsewhere.join("r.json").display().to_string()),

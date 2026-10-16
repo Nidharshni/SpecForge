@@ -287,3 +287,30 @@ fn without_project_names_the_file_from_the_refusal() {
         refused.message
     );
 }
+
+#[test]
+fn a_projects_containment_is_its_root() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::write(
+        dir.path().join("specforge.json"),
+        r#"{"name":"p","version":"0.1.0"}"#,
+    )
+    .unwrap();
+    let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+    let canonical = std::fs::canonicalize(dir.path()).unwrap();
+
+    // The served project.
+    let mut state = McpState::new();
+    state.serve(&root);
+    let served = Call::new(&mut state, CallTarget::Served);
+    let project = served.project().unwrap();
+    assert_eq!(project.containment().root(), Some(canonical.as_path()));
+    drop(project);
+
+    // Another project a call names.
+    let mut other = McpState::new();
+    let session = Box::new(other.open(&root));
+    let call = Call::new(&mut other, CallTarget::Other(session));
+    let project = call.project().unwrap();
+    assert_eq!(project.containment().root(), Some(canonical.as_path()));
+}
