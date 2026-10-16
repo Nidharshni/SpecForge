@@ -26,7 +26,6 @@ fn e016(session: &ProjectSession) -> usize {
 /// A `file_reference` path that is a symlink is read through the link: its
 /// target, created or deleted, must re-run the checks.
 #[cfg(unix)]
-#[ignore = "flipped by T8"]
 #[specforge_test(
     behavior = "classify_project_changes",
     verify = "a check input that is a symlink is followed to its target"

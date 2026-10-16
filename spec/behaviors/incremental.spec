@@ -81,8 +81,8 @@ behavior classify_project_changes "Classify Project Changes" {
     environment inputs; every path the checks read is a check input:
     specforge-cache.json when a check-phase pass read it, every file a
     file_reference field or a file_exists rule names, which the checks
-    look for, and every directory E016's suggestion listed; a
-    specforge.json
+    look for, and every directory E016's suggestion listed, and the
+    target of each of these that is a symlink; a specforge.json
     in a directory below the spec root marks a nested project, and its
     creation or deletion is a change to every source under that
     directory. Each is reached
