@@ -22,8 +22,9 @@ use crate::{OpError, OpErrorKind, Refusal};
 pub struct ModelOutcome {
     /// The model, drawn in the requested format.
     pub document: String,
-    /// I020 for each kind of `ModelOptions::kinds` the project does not
-    /// know (ADR 0015 Q3); the filter still drops it.
+    /// What versioning the schema reported (I016, W053; ADR 0111), then I020
+    /// for each kind of `ModelOptions::kinds` the project does not know
+    /// (ADR 0015 Q3); the filter still drops it.
     pub notices: Vec<Diagnostic>,
 }
 
@@ -81,13 +82,12 @@ pub fn model(
             .map_err(|error| error.about(ModelField::Root))?;
     }
     let filter: Vec<&str> = options.kinds.iter().map(String::as_str).collect();
+    let versioned = view.versioned_schema();
+    let mut notices = versioned.notices();
+    notices.extend(kinds.unknown_in(&filter));
     Ok(ModelOutcome {
-        notices: kinds.unknown_in(&filter),
-        document: specforge_emitter::model::export(
-            view.versioned_schema().schema(),
-            declarations,
-            options,
-        ),
+        notices,
+        document: specforge_emitter::model::export(versioned.schema(), declarations, options),
     })
 }
 

@@ -62,7 +62,6 @@ fn the_schema_tool_carries_an_unreadable_record() {
     behavior = "compute_schema_version",
     verify = "every reader of the schema reports the notices export reports for the same record"
 )]
-#[ignore = "flipped by T6"]
 fn trace_and_model_carry_an_unreadable_record() {
     let mut server = project_with_unreadable_record();
     assert_tool_carries_i016(&mut server, "specforge.trace", json!({"entity_id": "act"}));

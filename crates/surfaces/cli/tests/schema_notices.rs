@@ -60,7 +60,6 @@ fn schema_and_its_publication_report_an_unreadable_record() {
     behavior = "compute_schema_version",
     verify = "every reader of the schema reports the notices export reports for the same record"
 )]
-#[ignore = "flipped by T6"]
 fn trace_and_model_report_an_unreadable_record() {
     let dir = project_with_unreadable_record();
     assert_reports_i016(&dir, &["trace", "parse_input"]);
@@ -88,7 +87,6 @@ fn w053_lines(dir: &TestProject, args: &[&str]) -> Vec<String> {
     behavior = "compute_schema_version",
     verify = "every reader of the schema reports the notices export reports for the same record"
 )]
-#[ignore = "flipped by T6"]
 fn every_reader_reports_a_breaking_change_as_export_does() {
     let dir = software_project(SOFTWARE_AND_GOVERNANCE);
     stderr_of(&dir, &["export"]);

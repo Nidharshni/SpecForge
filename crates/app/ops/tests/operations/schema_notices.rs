@@ -100,3 +100,31 @@ fn the_schema_and_its_publication_carry_the_records_notices() {
         ["I016"]
     );
 }
+
+#[specforge_test(
+    behavior = "compute_schema_version",
+    verify = "every reader of the schema reports the notices export reports for the same record"
+)]
+fn a_trace_and_the_model_carry_the_records_notices() {
+    use specforge_ops::read::model::{ModelOptions, model};
+    use specforge_ops::read::trace::{Target, trace};
+    let project = unreadable();
+    let view = project.view();
+
+    let traced = trace(&view, Target::Entity("b")).unwrap();
+    assert_eq!(codes(&traced.notices), ["I016"]);
+    let document = serde_json::to_value(&traced).unwrap();
+    assert!(document.get("notices").is_none(), "{document}");
+
+    let modelled = model(&view, &ModelOptions::default()).unwrap();
+    assert_eq!(codes(&modelled.notices), ["I016"]);
+    let filtered = ModelOptions {
+        kinds: vec!["ghost".into()],
+        ..ModelOptions::default()
+    };
+    // The schema's notices come before the request's (D7).
+    assert_eq!(
+        codes(&model(&view, &filtered).unwrap().notices),
+        ["I016", "I020"]
+    );
+}
