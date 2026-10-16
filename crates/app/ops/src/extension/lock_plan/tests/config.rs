@@ -207,3 +207,101 @@ fn a_config_that_appeared_or_no_longer_parses_is_changed() {
     );
     assert!(opened_none.unchanged(&held, "add").is_ok());
 }
+
+#[specforge_test(
+    behavior = "add_extension_to_existing_project",
+    verify = "add extension appends to extensions list"
+)]
+fn an_entry_whose_name_prefixes_an_enabled_one_is_appended() {
+    let dir = project_with(r#"{"name":"p","extensions":["@specforge/software-ish@1.0.0"]}"#);
+    let (runtime, installed) = (software(), Installed::at(dir.path()));
+
+    let done = enabling(
+        &installed,
+        &runtime,
+        dir.path(),
+        Purpose::Commit,
+        &["@specforge/software"],
+    )
+    .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
+    .unwrap();
+
+    let written: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.path().join("specforge.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        written["extensions"],
+        serde_json::json!(["@specforge/software-ish@1.0.0", "@specforge/software"])
+    );
+    assert!(done.asked(Ask(0)).appended);
+}
+
+#[test]
+fn a_named_removal_drops_every_entry_naming_exactly_it() {
+    let read = specforge_common::parse_project_config(
+        Path::new("specforge.json"),
+        r#"{"name":"p","extensions":["@acme/foo@1.0.0","@acme/foobar","@acme/foo"]}"#,
+    );
+    let opened = Opened::read(&read.config, true);
+    let named = Disabled::Named("@acme/foo".into());
+
+    let items = opened.items_after(|entry| named.drops(entry), &[]);
+
+    assert_eq!(items, [serde_json::json!("@acme/foobar")]);
+}
+
+#[test]
+fn an_entry_removal_drops_only_the_entries_written_so() {
+    let read = specforge_common::parse_project_config(
+        Path::new("specforge.json"),
+        r#"{"extensions":["./ext/a.wasm"," ./ext/a.wasm ","./ext/a.wasm@1","@acme/foo"]}"#,
+    );
+    let opened = Opened::read(&read.config, true);
+    let entry = Disabled::Entry(" ./ext/a.wasm ".into());
+
+    let items = opened.items_after(|name| entry.drops(name), &[]);
+
+    assert_eq!(
+        items,
+        [
+            serde_json::json!("./ext/a.wasm@1"),
+            serde_json::json!("@acme/foo")
+        ]
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_config_write_goes_to_the_file_it_was_handed() {
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("real.json");
+    std::fs::write(&target, r#"{"name":"p","extensions":[]}"#).unwrap();
+    std::os::unix::fs::symlink(&target, dir.path().join("specforge.json")).unwrap();
+    let (runtime, installed) = (software(), Installed::at(dir.path()));
+
+    enabling(
+        &installed,
+        &runtime,
+        dir.path(),
+        Purpose::Commit,
+        &["@specforge/software"],
+    )
+    .finish(
+        dir.path(),
+        Vec::new(),
+        &crate::Containment::within(dir.path()),
+    )
+    .unwrap();
+
+    // The target is rewritten and the link is kept.
+    assert!(
+        std::fs::symlink_metadata(dir.path().join("specforge.json"))
+            .unwrap()
+            .is_symlink()
+    );
+    assert!(
+        std::fs::read_to_string(&target)
+            .unwrap()
+            .contains("@specforge/software")
+    );
+}
