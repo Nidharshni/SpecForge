@@ -8,9 +8,8 @@
 //! extension's answer into `specforge-report.json`. The extension never
 //! runs anything itself.
 //!
-//! The CLI and MCP are adapters: they choose the [`Consent`] (a terminal
-//! prompt, `--yes`, or only what was approved before) and present the
-//! [`Outcome`].
+//! The CLI and MCP are adapters: they hand the operation who can be asked
+//! (`crate::asking::Asking`) and present the [`Outcome`].
 
 mod collector;
 mod consent;
@@ -29,6 +28,7 @@ use merge::{KnownEntities, merge};
 pub use runner::RunnerOutput;
 use runner::run;
 
+use crate::asking::{Asking, Question};
 use crate::view::ProjectView;
 use crate::{OpError, OpErrorKind, Refusal};
 use serde::Serialize;
@@ -59,50 +59,42 @@ pub struct Request<'a> {
     /// Collector name or extension; detected from project files when absent.
     pub runner: Option<&'a str>,
     pub mode: Mode<'a>,
-    /// Who decides whether a collector's command may run.
-    pub consent: Consent<'a>,
+    /// Who can be asked whether a collector's command may run; the consent store is read first
+    /// (ADR 0110).
+    pub asking: Asking<'a>,
     /// Told just before a collector's command runs.
     pub announce: &'a mut dyn FnMut(&Collector, &[String]),
 }
 
-/// Who decides whether a collector's command may run (ADR 0002: consent is
-/// given per project, extension and command).
-pub enum Consent<'a> {
-    /// Every command may run (`--yes`, for CI).
-    Yes,
-    /// Only a command the user approved for this project before: MCP,
-    /// which never prompts, and a CLI with nobody to ask.
-    Approved,
-    /// A command not approved yet is put to `ask`; a yes is remembered in
-    /// the consent store (`consent_path`).
-    Prompt(&'a mut dyn FnMut(&Collector, &[String]) -> bool),
-}
-
-impl Consent<'_> {
-    /// Whether `collector`'s command `argv` may run in `root`, with the
-    /// approvals in `store`. An approval that could not be remembered is
-    /// noted in `unsaved`.
-    fn allows(
-        &mut self,
-        store: &Path,
-        collector: &Collector,
-        argv: &[String],
-        root: &Path,
-        unsaved: &mut Vec<String>,
-    ) -> bool {
-        match self {
-            Consent::Yes => true,
-            _ if is_approved(store, collector, root) => true,
-            Consent::Approved => false,
-            Consent::Prompt(ask) => {
-                if !ask(collector, argv) {
-                    return false;
-                }
-                if let Err(e) = approve(store, collector, root) {
-                    unsaved.push(e);
-                }
-                true
+/// Whether `collector`'s command `argv` may run in `root`, with the approvals in `store`: `--yes`
+/// first, then a command approved for this project before, then whoever can be asked (ADR 0002,
+/// ADR 0110). A yes from the asker is remembered. An approval that could not be remembered is
+/// noted in `unsaved`.
+fn allowed(
+    asking: Asking<'_>,
+    store: &Path,
+    collector: &Collector,
+    argv: &[String],
+    root: &Path,
+    unsaved: &mut Vec<String>,
+) -> bool {
+    match asking {
+        Asking::Yes => true,
+        _ if is_approved(store, collector, root) => true,
+        Asking::Nobody => false,
+        Asking::Ask(asker) => {
+            let question = Question::RunCommand {
+                extension: &collector.extension,
+                argv,
+                root,
+            };
+            if !asker.answer(&question) {
+                return false;
             }
+            if let Err(e) = approve(store, collector, root) {
+                unsaved.push(e);
+            }
+            true
         }
     }
 }
@@ -174,7 +166,7 @@ pub enum CollectStatus {
 /// select collectors among its declarations', run (in `runtime`) or read
 /// each one's report, map it through the extension to the view's entities
 /// and merge the answer into `<root>/specforge-report.json`. The request's
-/// `consent` decides whether a collector's command may run; its `announce`
+/// `asking` decides whether a collector's command may run; its `announce`
 /// is told just before it runs. Without a root, or at a root that holds no
 /// project: `no_project`.
 pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, Refusal<CollectField>> {
@@ -189,7 +181,7 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, Refusal<
     let Request {
         runner,
         mode,
-        mut consent,
+        asking,
         announce,
     } = request;
     let known = &KnownEntities::of(view.entities());
@@ -226,7 +218,14 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, Refusal<
         let mut since = None;
         let mut stdout = None;
         if let Mode::Run(output) = mode {
-            if !consent.allows(&store, collector, &argv, root, &mut unsaved_approvals) {
+            if !allowed(
+                asking,
+                &store,
+                collector,
+                &argv,
+                root,
+                &mut unsaved_approvals,
+            ) {
                 return Err(fail(
                     OpErrorKind::PermissionDenied,
                     codes::E059,

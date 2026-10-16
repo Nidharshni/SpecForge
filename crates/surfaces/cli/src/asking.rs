@@ -16,8 +16,7 @@ impl Asker for Terminal {
     fn answer(&self, question: &Question<'_>) -> bool {
         match question {
             Question::KeyChange { .. } => self.ask(&key_change(question)),
-            // `collect` is handed its asking in the next ticket of the plan.
-            Question::RunCommand { .. } => false,
+            Question::RunCommand { .. } => self.ask(&run_command(question)),
         }
     }
 }
@@ -41,6 +40,23 @@ fn key_change(question: &Question<'_>) -> String {
             "KEY CHANGE for '{package}': specforge.lock records '{expected}' but new package is signed '{offered}'\ntrust the new key and pin it? [y/N] "
         ),
     }
+}
+
+/// The run-command question as the terminal shows it (today's bytes).
+fn run_command(question: &Question<'_>) -> String {
+    let Question::RunCommand {
+        extension,
+        argv,
+        root,
+    } = question
+    else {
+        return String::new();
+    };
+    format!(
+        "{extension} wants to run this command in {}:\n  {}\nAllow it for this project? [y/N] ",
+        root.display(),
+        argv.join(" ")
+    )
 }
 
 #[cfg(test)]
@@ -88,6 +104,35 @@ mod tests {
         let (terminal, capture) = Terminal::captured("y\n", Facts::PIPED);
         assert!(!(&terminal as &dyn Asker).answer(&change(ExpectedFrom::UserPin)));
         assert_eq!(capture.stderr(), "", "nobody to ask: nothing is asked");
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "approve_collector_command",
+        verify = "a terminal that can answer is asked; with nobody to ask, or under --format json, only an approved command runs"
+    )]
+    fn a_collector_command_is_asked_of_a_terminal_that_can_answer() {
+        let argv = vec!["cargo".to_string(), "test".to_string()];
+        let question = Question::RunCommand {
+            extension: "@specforge/cargo-test",
+            argv: &argv,
+            root: std::path::Path::new("/p"),
+        };
+        let (terminal, capture) = Terminal::captured("y\n", INTERACTIVE);
+        assert!(of(false, OutputFormat::Human, &terminal).answers(&question));
+        assert_eq!(
+            capture.stderr(),
+            "@specforge/cargo-test wants to run this command in /p:\n  cargo test\nAllow it for this project? [y/N] "
+        );
+
+        let who = |yes, format, facts| {
+            let (terminal, _) = Terminal::captured("", facts);
+            format!("{:?}", of(yes, format, &terminal))
+        };
+        assert_eq!(who(false, OutputFormat::Json, INTERACTIVE), "Nobody");
+        assert_eq!(who(false, OutputFormat::Human, Facts::PIPED), "Nobody");
+        for format in [OutputFormat::Human, OutputFormat::Json] {
+            assert_eq!(who(true, format, Facts::PIPED), "Yes");
+        }
     }
 
     #[test]

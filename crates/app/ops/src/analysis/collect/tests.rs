@@ -2,6 +2,7 @@ use super::collector::{CAPTURE_STDOUT, wildcard};
 use super::consent::load_consent;
 use super::runner::REPORT_ENV;
 use super::*;
+use crate::asking::testing::{Asked, Scripted};
 use crate::testing::Viewed;
 use specforge_common::Severity;
 use specforge_protocol_types::{CollectEntityResult, CollectOutput, TestResult, TestStatus};
@@ -89,35 +90,35 @@ fn consent_is_keyed_by_project_extension_and_command() {
 }
 
 #[test]
-fn consent_yes_approved_and_prompt_decide_as_documented() {
+fn asking_yes_nobody_and_an_asker_decide_as_documented() {
     let dir = tempfile::TempDir::new().unwrap();
     let store = dir.path().join("consent.json");
     let c = collector("r.json");
     let argv = c.run.clone();
     let mut unsaved = Vec::new();
+    let mut allows = |asking| allowed(asking, &store, &c, &argv, dir.path(), &mut unsaved);
 
     // --yes runs it and remembers nothing.
-    assert!(Consent::Yes.allows(&store, &c, &argv, dir.path(), &mut unsaved));
+    assert!(allows(Asking::Yes));
     assert!(!is_approved(&store, &c, dir.path()));
-    // Nothing approved yet: refused without asking.
-    assert!(!Consent::Approved.allows(&store, &c, &argv, dir.path(), &mut unsaved));
-    // A prompt that says no is not remembered...
-    let mut no = |_: &Collector, _: &[String]| false;
-    assert!(!Consent::Prompt(&mut no).allows(&store, &c, &argv, dir.path(), &mut unsaved));
+    // Nothing approved yet: nobody to ask refuses.
+    assert!(!allows(Asking::Nobody));
+    // An asker that says no is not remembered...
+    let no = Scripted::answering(false);
+    assert!(!allows(Asking::Ask(&no)));
     assert!(!is_approved(&store, &c, dir.path()));
     // ...a yes is, and is not asked again.
-    let mut asked = 0;
-    let mut yes = |_: &Collector, _: &[String]| {
-        asked += 1;
-        true
-    };
-    {
-        let mut prompt = Consent::Prompt(&mut yes);
-        assert!(prompt.allows(&store, &c, &argv, dir.path(), &mut unsaved));
-        assert!(prompt.allows(&store, &c, &argv, dir.path(), &mut unsaved));
-    }
-    assert_eq!(asked, 1);
-    assert!(Consent::Approved.allows(&store, &c, &argv, dir.path(), &mut unsaved));
+    let yes = Scripted::answering(true);
+    assert!(allows(Asking::Ask(&yes)));
+    assert!(allows(Asking::Ask(&yes)));
+    assert_eq!(
+        yes.asked(),
+        vec![Asked::RunCommand {
+            extension: "@acme/runner".to_string(),
+            argv: argv.clone(),
+        }]
+    );
+    assert!(allows(Asking::Nobody));
     assert!(unsaved.is_empty(), "{unsaved:?}");
 }
 
@@ -423,7 +424,7 @@ fn collect_without_a_root_is_no_project() {
         Request {
             runner: None,
             mode: Mode::NoRun,
-            consent: Consent::Approved,
+            asking: Asking::Nobody,
             announce: &mut |_, _| {},
         },
     )
