@@ -798,7 +798,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Asking**: who can be asked to consent to what an operation would otherwise refuse (a publisher key change, a
   collector's command): yes to everything (`--yes`), nobody (MCP, `--format json`, stdin that is no terminal), or an
   `Asker` (the CLI's terminal, a test's script). A surface builds it once per command, inside its **Caller**, which add,
-  update and collect read it from (`specforge_ops::asking`, ADR 0110).
+  update and collect read it from (`specforge_ops::asking`, ADR 0110). Collect asks it only for a command the
+  **Collector machine** has no approval for.
 - **Diagnostic policy**: lint profiles (a closed set: `inferred`, `pedantic`) and strict promotion
   (`specforge_project::DiagnosticPolicy`). It is the only thing that changes a diagnostic's severity
   after the diagnostic is built. A profile's diagnostics come from the check that applies it
@@ -1055,6 +1056,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   Its adapters are z3 from PATH (`Z3`, which owns its timeouts and that W098) and a scripted solver
   (tests). `specforge analyze --prove` and doctor take it as an argument; doctor's toolchain finding is
   the W098 the prove pass reports. A test chooses the solver it sees (ADR 0079).
+- **Collector machine**: the machine collect runs on (`specforge_ops::analysis::collect::CollectorMachine`, port
+  `CollectorMachine`): it runs a collector's command (and answers when it started) and keeps the user's approvals of
+  commands. Its adapters are a child process with the user-level consent store (`ProcessMachine`) and a scripted
+  machine (tests). The caller passes it; collect decides every refusal that needs no run before the machine runs
+  anything (ADR 0125).
 - **Risk grading**: the coverage owner's policy for one kind: its entities' risk is tallied, and
   one with no obligations is A002, an error at the grading's error level
   (`specforge_coverage::RiskGrading`, supplied by `@specforge/testing`; ADR 0009).

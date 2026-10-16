@@ -1,6 +1,6 @@
 # Tests belong to extensions: `@specforge/testing` plus one extension per test runner
 
-**Status:** accepted. Amended by [ADR 0094](0094-obligations-are-an-entitys-own-member.md) (placement of `verify` statements; W158 for W020).
+**Status:** accepted. Amended by [ADR 0094](0094-obligations-are-an-entitys-own-member.md) (placement of `verify` statements; W158 for W020). Amended by [ADR 0125](0125-collects-machine-is-one-port-the-caller-passes.md) (Execution: the command and the consent store are one port the caller passes; every refusal that needs no run comes before any command runs).
 
 Test concepts are spread across the core compiler today. `verify` is core grammar. The `analyze`
 coverage pass, the `specforge-report.json` shape and the `collect` normalizer are hard-coded to
