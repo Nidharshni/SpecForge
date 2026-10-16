@@ -28,6 +28,7 @@ use std::time::{Duration, SystemTime};
 
 use super::Changes;
 use super::inputs::{Kind, SessionInputs};
+use super::key::discovered as walked_key;
 use super::reach::Reach;
 
 /// Coarse filesystems record modification times to the second (some to
@@ -139,7 +140,7 @@ impl Stamps {
             .iter()
             .filter_map(|path| {
                 let entry = Entry::stamp(path)?;
-                Some((key(spec_root, path), entry))
+                Some((walked_key(spec_root, path), entry))
             })
             .collect();
     }
@@ -270,12 +271,4 @@ fn changed_paths(table: &BTreeMap<PathBuf, Option<Entry>>) -> Vec<PathBuf> {
         .filter(|(path, entry)| !unchanged(path, entry.as_ref()))
         .map(|(path, _)| path.clone())
         .collect()
-}
-
-/// A discovered file's key, as the resolver names it.
-fn key(spec_root: &Path, path: &Path) -> String {
-    path.strip_prefix(spec_root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .into_owned()
 }

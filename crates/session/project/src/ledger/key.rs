@@ -34,6 +34,31 @@ pub fn source_key(spec_root: &Path, path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
+/// The key of a path discovery walked: relative to the spec root, lexically. A
+/// walk joins entry names onto the spec root, so the path is under it by
+/// construction; every other spelling goes through [`source_key`].
+pub(crate) fn discovered(spec_root: &Path, path: &Path) -> String {
+    debug_assert!(
+        path.starts_with(spec_root),
+        "{} is not under {}",
+        path.display(),
+        spec_root.display()
+    );
+    path.strip_prefix(spec_root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .into_owned()
+}
+
+/// The key of `canonical_path` under `canonical_root`, both canonical (a link
+/// target, or a path of a batch): `None` when it lies outside.
+pub(crate) fn relative_canonical(canonical_root: &Path, canonical_path: &Path) -> Option<String> {
+    canonical_path
+        .strip_prefix(canonical_root)
+        .ok()
+        .map(|relative| relative.to_string_lossy().into_owned())
+}
+
 /// `path` with its directory canonical and its own name kept: a symlink stays
 /// itself. `path` as given when it has no directory or no name.
 fn in_canonical_dir(path: &Path) -> PathBuf {

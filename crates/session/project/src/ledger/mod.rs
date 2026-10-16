@@ -29,6 +29,7 @@ use specforge_common::{ConfigRead, ProjectConfig, ProjectRoot, read_project_conf
 use crate::sources::{self, Read};
 
 pub use inputs::{SessionInputs, WatchRoot, Watched};
+pub(crate) use key::discovered;
 pub use key::source_key;
 use stamps::{Scope, Stamps};
 

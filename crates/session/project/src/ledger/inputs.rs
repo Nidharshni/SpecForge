@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use specforge_common::{ProjectConfig, SourceRoot};
 use specforge_installed::Installed;
 
-use super::key::canonical;
+use super::key::{canonical, discovered, relative_canonical};
 use crate::build_cache::BUILD_CACHE_FILE;
 use crate::builtins;
 
@@ -109,9 +109,8 @@ impl OnDisk {
         if !target.is_file() {
             return None;
         }
-        let key = path.strip_prefix(self.sources.dir()).ok()?;
         Some(Link {
-            key: key.to_string_lossy().into_owned(),
+            key: discovered(self.sources.dir(), path),
             target,
         })
     }
@@ -272,11 +271,8 @@ impl SessionInputs {
                 disk.links
                     .iter()
                     .filter(|link| {
-                        link.target
-                            .strip_prefix(&disk.canonical.spec_root)
-                            .map_or(true, |relative| {
-                                !disk.sources.holds(&relative.to_string_lossy())
-                            })
+                        relative_canonical(&disk.canonical.spec_root, &link.target)
+                            .is_none_or(|relative| !disk.sources.holds(&relative))
                     })
                     .map(|link| Watched::File(spelled(&link.target))),
             )
@@ -428,12 +424,7 @@ impl SessionInputs {
         disk.sources
             .files_at(&disk.sources.dir().join(key))
             .into_iter()
-            .map(|path| {
-                path.strip_prefix(disk.sources.dir())
-                    .unwrap_or(&path)
-                    .to_string_lossy()
-                    .into_owned()
-            })
+            .map(|path| discovered(disk.sources.dir(), &path))
             .collect()
     }
 

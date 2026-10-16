@@ -17,7 +17,7 @@ use specforge_common::{Diagnostic, codes};
 use specforge_graph::{FileChange, GraphBuild};
 use specforge_parser::{Previous, SpecFile, parse_incremental};
 
-use crate::ledger::source_key;
+use crate::ledger::discovered as walked_key;
 
 /// What reading one source gave.
 pub(crate) enum Read {
@@ -81,7 +81,7 @@ impl SourceCache {
     ) -> (Self, Vec<SpecFile>) {
         let mut cache = SourceCache::empty();
         let mut files = Vec::with_capacity(discovered.len() + held.len());
-        let keys = discovered.iter().map(|path| source_key(spec_root, path));
+        let keys = discovered.iter().map(|path| walked_key(spec_root, path));
         let mut seen = BTreeSet::new();
         for key in keys {
             let read = match held.get(&key) {

@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use specforge_common::PROJECT_FILE;
 
 use super::inputs::{Kind, SessionInputs};
-use super::key::canonical;
+use super::key::{canonical, relative_canonical};
 
 /// What a batch of changed paths reaches of what a session read
 /// ([`SessionInputs::reach`]).
@@ -50,7 +50,8 @@ impl SessionInputs {
             };
             if known.spec_root.starts_with(&canonical_path) {
                 regions.push(String::new());
-            } else if let Ok(relative) = in_dir.strip_prefix(&known.spec_root) {
+            } else if let Some(relative) = relative_canonical(&known.spec_root, &in_dir) {
+                let relative = Path::new(&relative);
                 // A nested project's `specforge.json` (below the spec root,
                 // not an input of this project) is every source under its
                 // directory.

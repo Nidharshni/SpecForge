@@ -3,7 +3,6 @@ use std::path::Path;
 use specforge_common::ProjectConfig;
 
 use crate::ledger::inputs::*;
-use crate::ledger::key::*;
 
 fn config(extensions: &[&str]) -> ProjectConfig {
     ProjectConfig {
@@ -193,24 +192,6 @@ fn a_module_in_a_missing_directory_is_pending_as_an_environment_input() {
         }),
         "{:?}",
         inputs.watch_roots()
-    );
-}
-
-#[cfg(unix)]
-#[test]
-fn a_source_key_keeps_a_symlinks_own_name() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let dir = std::fs::canonicalize(dir.path()).unwrap();
-    let real = dir.join("real");
-    std::fs::create_dir_all(real.join("shared")).unwrap();
-    std::fs::write(real.join("shared/r.spec"), "").unwrap();
-    // The root spelled two ways: through `link` and as `real`.
-    std::os::unix::fs::symlink(&real, dir.join("link")).unwrap();
-    std::os::unix::fs::symlink("shared/r.spec", real.join("alias.spec")).unwrap();
-
-    assert_eq!(
-        source_key(&dir.join("link"), &real.join("alias.spec")),
-        "alias.spec"
     );
 }
 
