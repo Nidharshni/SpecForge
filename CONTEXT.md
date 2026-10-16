@@ -31,7 +31,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`specforge_project::CompiledProject`). A one-shot compile (every CLI command) is one and keeps no
   stamp; a project session holds one and keeps it current (`ProjectSession::project`, ADR 0047); it is
   compiled from a project root (`CompiledProject::compile(&ProjectRoot, …)`). A copy shares all but its graph
-  (`Clone`, ADR 0108).
+  (`Clone`, ADR 0108). Rooted or detached is its `root()` (a detached project has none and resolves no
+  import); the project root it was loaded at is its environment's (`Environment::project_root`), read to reopen
+  it and to hand an operation a project root (ADR 0121).
 - **Project root**: the directory holding the `specforge.json` a path is in, located from any path inside the
   project (a subdirectory, a file) by walking up, the nearest winning
   (`specforge_common::ProjectRoot::of`, ADR 0053). Only `specforge.json` marks a project. With none at or
@@ -525,7 +527,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   from its session's, or, while the session is out for an update, from a copy of it (ADR 0108); MCP from its call target (`ProjectRef::view`: the served session's compiled
   project with its I017 notices, or that of a session opened for one call) (ADR 0015, ADR 0047).
 - **Assembled project**: a compiled project a test builds in memory from a graph and an environment rooted at its
-  directory, reporting what the test lists; no check runs (`specforge_project::testing::Assembled`, ADR 0108).
+  directory, reporting what the test lists; no check runs (`specforge_project::testing::Assembled`, ADR 0108). Its root is a
+  directory, not a project root: its environment was loaded from none (ADR 0121).
 - **Read view**: an operation that only reads the project view: stats, trace, the coverage view, the
   model and outline diagrams, the versioned schema, inspect, query, list and search (the entities a
   selection over the view returns, `specforge_ops::read::query`), the exploration and the review

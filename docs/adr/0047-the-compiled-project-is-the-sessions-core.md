@@ -1,7 +1,7 @@
 # The compiled project is the session's core
 
 **Status:** accepted (2026-10-09). Amends [ADR 0032](0032-one-graph-build.md) ("One cold pipeline"); notes in
-ADRs 0014, 0015 and 0019. D1: the core also memoizes its report (ADR 0074). D5 and E5 amended by [ADR 0108](0108-a-project-view-comes-only-from-a-compiled-project.md) (`of` is the only view constructor). D6 amended by [ADR 0109](0109-reopening-a-project-in-place-is-one-session-operation.md) (`McpState::source` is the one runtime rule; the served project is reopened in place). D3 amended by [ADR 0107](0107-the-checks-read-through-the-disk-they-are-given.md) (one `CompiledProject::check`).
+ADRs 0014, 0015 and 0019. D1: the core also memoizes its report (ADR 0074). D5 and E5 amended by [ADR 0108](0108-a-project-view-comes-only-from-a-compiled-project.md) (`of` is the only view constructor). D6 amended by [ADR 0109](0109-reopening-a-project-in-place-is-one-session-operation.md) (`McpState::source` is the one runtime rule; the served project is reopened in place). D3 amended by [ADR 0107](0107-the-checks-read-through-the-disk-they-are-given.md) (one `CompiledProject::check`). D4 amended by [ADR 0121](0121-a-compiled-projects-root-answers-rooted-or-detached.md) (`root()` is the one answer; the project root is the environment's).
 
 `specforge-project` had two types with the same six fields, the environment, the sources, the import
 diagnostics, the graph, the check diagnostics and the snapshot and coverage memo, held in different types
