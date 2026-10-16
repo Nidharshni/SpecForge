@@ -1,6 +1,6 @@
 [package]
 name = "specforge-registry"
-description = "The Registry build: extension declarations in load order turned into kind, field and edge registries, the rule set and pass order, and the checks over a built graph's entities (ADR 0031)"
+description = "The Registry build: extension declarations in load order turned into kind, field and edge registries, the rule set and pass order, the entity snapshot of a built graph and the checks over it (ADR 0019, ADR 0031)"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
@@ -17,6 +17,8 @@ specforge-diagnostics = { path = "../../leaf/diagnostics" }
 specforge-package = { path = "../../leaf/package" }
 specforge-protocol-types = { path = "../../leaf/protocol-types" }
 specforge-graph = { path = "../graph" }
+specforge-coverage = { path = "../../leaf/coverage" }
+specforge-parser = { workspace = true }
 serde_json = { workspace = true }
 regex = { workspace = true }
 

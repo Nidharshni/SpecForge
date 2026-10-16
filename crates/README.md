@@ -88,7 +88,7 @@ From parsed files to output: import resolution, the graph build, the Registry bu
 | [`formatter`](pipeline/formatter/) | `specforge-formatter` | The .spec formatter: a document, or the blocks a range touches, in canonical layout under its .specforgefmt.toml, a form it cannot read kept as written (ADR 0021, ADR 0063) |
 | [`graph`](pipeline/graph/) | `specforge-graph` | The typed entity graph: the graph build over parsed .spec files, its nodes and edges, the graph delta between two builds, field forms and verify obligations (ADR 0032) |
 | [`migrate`](pipeline/migrate/) | `specforge-migrate` | Format-version migration of a project's .spec files: the rewrite, its backups and rollback record, and the W054 report of what it changed in the graph |
-| [`registry`](pipeline/registry/) | `specforge-registry` | The Registry build: extension declarations in load order turned into kind, field and edge registries, the rule set and pass order, and the checks over a built graph's entities (ADR 0031) |
+| [`registry`](pipeline/registry/) | `specforge-registry` | The Registry build: extension declarations in load order turned into kind, field and edge registries, the rule set and pass order, the entity snapshot of a built graph and the checks over it (ADR 0019, ADR 0031) |
 | [`resolver`](pipeline/resolver/) | `specforge-resolver` | Import resolution over a compile's sources: an import names a source by its key, its path relative to the spec root; nothing here reads a file (ADR 0055) |
 
 ### `kernel`

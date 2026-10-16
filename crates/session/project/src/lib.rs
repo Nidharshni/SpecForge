@@ -31,7 +31,6 @@ mod policy;
 pub mod providers;
 mod session;
 mod setup;
-pub mod snapshot;
 mod sources;
 #[cfg(feature = "testing")]
 pub mod testing;
@@ -43,14 +42,13 @@ use std::sync::Arc;
 
 use sources::SourceCache;
 
-use snapshot::EntitySnapshot;
 use specforge_common::{
     ConfigProblem, ConfigRead, Diagnostic, ProjectConfig, ProjectRoot, SourceRoot, codes,
 };
 use specforge_graph::{Graph, GraphBuild, GraphConfig};
 use specforge_installed::{Builtins, Installed};
 use specforge_registry::{
-    Disk, RegistryBuild, build_registries,
+    Disk, EntitySnapshot, RegistryBuild, build_registries,
     rules::{CustomVerdicts, NoVerdicts},
 };
 use specforge_wasm::WasmRuntime;

@@ -9,10 +9,10 @@
 //! (`ProjectView::entities`), which reads no report.
 
 use crate::Environment;
-use crate::snapshot::{EntitySnapshot, Standing};
 use serde::Deserialize;
 use specforge_graph::Graph;
 use specforge_protocol_types::{EntityTests, TestResult, TestResults};
+use specforge_registry::{EntitySnapshot, Standing};
 use std::collections::BTreeMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};

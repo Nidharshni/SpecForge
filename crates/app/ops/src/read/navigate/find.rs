@@ -13,7 +13,7 @@
 use specforge_common::Sym;
 use specforge_graph::{Graph, Node};
 use specforge_parser::FieldValue;
-use specforge_project::snapshot::{field_items, field_text};
+use specforge_registry::snapshot::{field_items, field_text};
 
 /// The least Jaro-Winkler similarity, over the lowercase id or title, at
 /// which a text that matches no other way still finds an entity.
