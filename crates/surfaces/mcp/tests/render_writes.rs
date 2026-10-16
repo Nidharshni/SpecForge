@@ -4,6 +4,7 @@
 use crate::support::*;
 use serde_json::{Value, json};
 use specforge_mcp::McpServer;
+use specforge_test_macros::test as specforge_test;
 use std::fs;
 use std::path::Path;
 use tempfile::TempDir;
@@ -44,8 +45,10 @@ fn refusal(reply: &Value) -> (String, Option<String>) {
 
 /// A file outside the project that is a hard link at the output's name is not written through.
 #[cfg(unix)]
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "provide_mcp_render_tool",
+    verify = "render replaces its file and writes no file through a hard link to a file outside"
+)]
 fn render_writes_no_file_through_a_hard_link_to_a_file_outside() {
     let project = plain_project();
     let outside = TempDir::new().unwrap();
@@ -71,8 +74,10 @@ fn render_writes_no_file_through_a_hard_link_to_a_file_outside() {
 
 /// A directory the user cannot write is `permission_denied`, and nothing is left in it.
 #[cfg(unix)]
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "provide_mcp_render_tool",
+    verify = "an out_dir the user cannot write is permission_denied"
+)]
 fn render_into_a_directory_it_cannot_write_is_permission_denied() {
     use std::os::unix::fs::PermissionsExt;
     let project = plain_project();
@@ -97,7 +102,8 @@ fn render_into_a_directory_it_cannot_write_is_permission_denied() {
     fs::set_permissions(&rodir, fs::Permissions::from_mode(0o755)).unwrap();
     assert_eq!(
         refusal(&reply),
-        ("permission_denied".to_string(), Some("out_dir".to_string())),
+        // A permission is about the environment, not a value the caller gave: no argument.
+        ("permission_denied".to_string(), None),
         "{reply}"
     );
     assert!(!rodir.join("brief.json").exists());
@@ -105,8 +111,10 @@ fn render_into_a_directory_it_cannot_write_is_permission_denied() {
 }
 
 /// An `out_dir` that is, or goes through, a file is invalid input about `out_dir`.
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "provide_mcp_render_tool",
+    verify = "an out_dir that names a file is invalid input on out_dir"
+)]
 fn render_into_an_out_dir_that_is_a_file_is_invalid_input_on_out_dir() {
     let project = plain_project();
     let source = project.path().join("spec/main.spec");

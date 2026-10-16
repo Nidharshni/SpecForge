@@ -297,7 +297,6 @@ fn every_caller_a_tool_uses_comes_from_the_call() {
         "containment.rs",
         "target/call.rs",
         "tools/outline.rs", // the spec root bounds a file of the outline
-        "tools/render.rs",  // a view tool that writes its own file
     ];
     let mut problems = Vec::new();
     for (name, text) in &files {

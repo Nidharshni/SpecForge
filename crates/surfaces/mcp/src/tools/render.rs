@@ -1,7 +1,7 @@
 //! `specforge.render`: render the graph in an export format (`specforge_ops::read::export`).
 
 use crate::refusal::ArgumentOf;
-use crate::target::View;
+use crate::target::{OutputView, ViewToWrite};
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup, WriteHints};
 use specforge_ops::read::export::ExportField;
 use std::path::Path;
@@ -12,11 +12,8 @@ use specforge_common::ProjectPath;
 use specforge_common::shape::Shape;
 
 use crate::args::Arguments;
-use crate::containment;
 use crate::reply::{Answer, Answered};
-use crate::tool::{ErrorCode, McpError};
-use specforge_ops::Containment;
-use specforge_ops::view::ProjectView;
+use crate::tool::McpError;
 
 /// `specforge.render`'s arguments.
 #[derive(Debug, Arguments)]
@@ -52,12 +49,12 @@ impl ArgumentOf<ExportField> for Tool {
     fn argument(field: ExportField) -> Option<&'static str> {
         match field {
             ExportField::Scope => Some("scope"),
+            ExportField::Directory => Some("out_dir"),
             // Render sends none of the others.
             ExportField::Depth
             | ExportField::MaxTokens
             | ExportField::SchemaVersion
-            | ExportField::Schema
-            | ExportField::Directory => None,
+            | ExportField::Schema => None,
         }
     }
 }
@@ -75,11 +72,11 @@ impl CoreTool for Tool {
     };
     const SPEC: ReplySpec = ReplySpec::Type("McpRenderResult");
     type Args = Args;
-    type Input = View;
+    type Input = OutputView;
     type Returns = Answered<Reply>;
 
-    fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
-        use specforge_ops::read::export::{FORMAT, Format};
+    fn call(given: ViewToWrite<'_>, args: Args) -> Answered<Reply> {
+        use specforge_ops::read::export::{self as export, FORMAT};
 
         // The renderers are the export formats, named as `specforge export
         // --format` names them (ADR 0027 D8); `json` is `graph`'s alias, which
@@ -94,14 +91,6 @@ impl CoreTool for Tool {
                 return Err(Box::new(refusal.with_data(data)));
             }
         };
-        // The file each renderer writes into out_dir.
-        let file_name = match format {
-            Format::Graph => "graph.json",
-            Format::Dot => "graph.dot",
-            Format::Context => "context.json",
-            Format::Brief => "brief.json",
-        };
-        let name = FORMAT.name_of(format);
 
         // `graph` is the full graph export: Graph Protocol 2.0 with the schema,
         // as `specforge export --format graph` writes it.
@@ -110,57 +99,28 @@ impl CoreTool for Tool {
             scope: args.scope.as_deref(),
             ..specforge_ops::read::export::Request::default()
         };
-        let exported =
-            specforge_ops::read::export::export(&view, &request).map_err(Self::refused)?;
+        let name = FORMAT.name_of(format);
+        let reply = |output, output_files| Reply {
+            format: name.to_string(),
+            output,
+            output_files,
+        };
 
-        // With out_dir the rendering lands on disk; without it, inline.
-        let Some(out_dir) = args.out_dir.as_deref() else {
-            return Ok(Answer::noticed(exported.map(|document| Reply {
-                format: name.to_string(),
-                output: Some(document),
-                output_files: Vec::new(),
-            })));
+        // With out_dir the export operation writes the rendering into it; without it, inline.
+        let noticed = match args.out_dir.as_deref() {
+            None => export::export(&given.view, &request)
+                .map_err(Self::refused)?
+                .map(|document| reply(Some(document), Vec::new())),
+            Some(dir) => {
+                let directory = export::Directory {
+                    name: Path::new(dir),
+                    caller: given.caller(),
+                };
+                export::write_into(&given.view, &request, &directory)
+                    .map_err(Self::refused)?
+                    .map(|file| reply(None, vec![file]))
+            }
         };
-        // Inside the call's project, as every path a request names is
-        // (ADR 0092); with no project served there is nothing to be inside.
-        let Some(root) = view.root() else {
-            return Err(Box::new(
-                McpError::new(
-                    ErrorCode::InvalidInput,
-                    format!(
-                        "out_dir '{out_dir}' names a directory of the project, and no project is served to resolve it against"
-                    ),
-                )
-                .with_argument("out_dir"),
-            ));
-        };
-        let bound = Containment::within(root);
-        let given = Path::new(out_dir);
-        let out_dir = bound
-            .resolve(given)
-            .map_err(|outside| Box::new(containment::refusal(&outside, "out_dir")))?
-            .spelled;
-        // The file too: `out/graph.json` may itself be a symlink that leaves the project, and
-        // what is written is where it lands (ADR 0092 D8, ADR 0104).
-        let path = out_dir.join(file_name);
-        let held = bound
-            .resolve(&path)
-            .map_err(|outside| Box::new(containment::refusal(&outside, "out_dir")))?;
-        let reply = exported.try_map(|document| -> Result<Reply, Box<McpError>> {
-            held.create_parent()
-                .and_then(|()| held.write(document))
-                .map_err(|e| {
-                    Box::new(McpError::new(
-                        ErrorCode::InternalError,
-                        format!("failed to write {}: {e}", path.display()),
-                    ))
-                })?;
-            Ok(Reply {
-                format: name.to_string(),
-                output: None,
-                output_files: vec![ProjectPath::of(root, &path)],
-            })
-        })?;
-        Ok(Answer::noticed(reply))
+        Ok(Answer::noticed(noticed))
     }
 }

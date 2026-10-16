@@ -614,7 +614,11 @@ behavior provide_mcp_render_tool "Provide MCP Render Tool" {
     project (by .., an absolute name or a symlink) MUST be refused as invalid
     input on out_dir, as MUST any out_dir with no project served; and the file
     it writes there is not written through a symlink that leaves the project
-    (invalid input on out_dir).
+    (invalid input on out_dir). The file is replaced atomically where it
+    lands: a link that stays inside the project is followed, and a file
+    another name links to is not written through. An out_dir that names a
+    file is invalid input on out_dir, and a directory the user cannot write
+    is permission_denied.
     output_files lists the files written, each named from the project root.
     The renderers are the core graph engine's export formats (see P7
     justification in features/output.spec), named as `specforge export
@@ -636,6 +640,9 @@ behavior provide_mcp_render_tool "Provide MCP Render Tool" {
   verify unit "a relative out_dir is written under the call's project root, wherever the server runs"
   verify unit "a relative out_dir with no project served is invalid input on out_dir"
   verify unit "render writes no file through a symlink in out_dir that leaves the project"
+  verify unit "render replaces its file and writes no file through a hard link to a file outside"
+  verify unit "an out_dir that names a file is invalid input on out_dir"
+  verify unit "an out_dir the user cannot write is permission_denied"
   verify unit "registered renderer invoked for matching format"
   verify unit "unrecognized format returns error listing available renderers"
   verify unit "graph and its alias json select the full graph renderer"

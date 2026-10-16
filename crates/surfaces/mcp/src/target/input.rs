@@ -8,7 +8,7 @@ use std::path::Path;
 
 /// What a core tool's handler is given before its arguments, and so its
 /// call target (ADR 0024 A2: the handler's input is the target; ADR 0049).
-/// Four implementations: [`Unscoped`], [`View`], [`Project`], [`NewProject`].
+/// Five implementations: [`Unscoped`], [`View`], [`OutputView`], [`Project`], [`NewProject`].
 pub trait Input {
     /// The value handed to the handler, borrowing the call.
     type Given<'c>;
@@ -43,6 +43,25 @@ pub struct Unscoped;
 /// the empty session's (ADR 0025).
 /// `TargetSpec::Project { R::REACH, EmptySession }`.
 pub struct View<R = Served>(PhantomData<R>);
+
+/// Given the served project's view (with nothing served, the empty session's, as [`View`]) and what
+/// the call lends beside it: a view tool that writes an output file inside the project (render).
+/// `TargetSpec::Project { Served, EmptySession }`.
+pub struct OutputView;
+
+/// What [`OutputView`] hands its handler.
+pub struct ViewToWrite<'c> {
+    pub view: ProjectView<'c>,
+    /// Where the file the call writes must land: the request's bound.
+    containment: Containment,
+}
+
+impl ViewToWrite<'_> {
+    /// What the call lends the operation: the request's bound (ADR 0092 D7), nobody to ask.
+    pub fn caller(&self) -> Caller<'_> {
+        super::call::lent(&self.containment)
+    }
+}
 
 /// Given the project `R` reaches, on disk (its root, its runtime, its view):
 /// with nothing served and no project named, refused before it runs.
@@ -88,6 +107,21 @@ impl<R: Reaches> Input for View<R> {
 
     fn given<'c>(call: &'c Call<'_>) -> Result<ProjectView<'c>, Box<McpError>> {
         Ok(call.view())
+    }
+}
+
+impl Input for OutputView {
+    type Given<'c> = ViewToWrite<'c>;
+    const TARGET: TargetSpec = TargetSpec::Project {
+        reach: Reach::Served,
+        without: WithoutProject::EmptySession,
+    };
+
+    fn given<'c>(call: &'c Call<'_>) -> Result<ViewToWrite<'c>, Box<McpError>> {
+        Ok(ViewToWrite {
+            view: call.view(),
+            containment: call.bound(),
+        })
     }
 }
 
