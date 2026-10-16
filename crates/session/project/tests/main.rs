@@ -8,6 +8,7 @@ mod buffers;
 mod builtins;
 mod changes;
 mod check_passes;
+mod check_reads;
 mod compile;
 mod copy;
 mod custom_rules;

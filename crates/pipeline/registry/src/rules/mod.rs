@@ -16,8 +16,6 @@ mod build;
 mod check;
 mod verdicts;
 
-use std::path::PathBuf;
-
 use specforge_common::{Diagnostic, Severity};
 use specforge_protocol_types::{CheckKind, ConstraintKind, ExtensionDeclaration};
 
@@ -232,20 +230,6 @@ impl Rules {
     /// Whether some `no_verify_statements` rule applies to `kind`.
     pub fn obligates(&self, kind: &str) -> bool {
         self.verify_rule_for(kind).is_some()
-    }
-
-    /// The files `file_exists` rules read on `input` (each item of a list
-    /// field), resolved against `input.spec_root`, sorted and unique: check
-    /// inputs of a project session, so creating one re-runs the checks.
-    pub fn files(&self, input: &RuleInput<'_>) -> Vec<PathBuf> {
-        let mut files: Vec<PathBuf> = self
-            .rules
-            .iter()
-            .flat_map(|rule| check::files(rule, input))
-            .collect();
-        files.sort();
-        files.dedup();
-        files
     }
 
     pub fn iter(&self) -> std::slice::Iter<'_, Rule> {

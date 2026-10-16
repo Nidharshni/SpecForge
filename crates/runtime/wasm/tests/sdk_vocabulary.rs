@@ -6,9 +6,9 @@
 use specforge_common::{SourceSpan, Sym};
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta, prelude::*};
 use specforge_protocol_types::ExtensionDeclaration;
-use specforge_registry::build_registries;
 use specforge_registry::entity::{EntityRecord, RuleInput};
 use specforge_registry::rules::NoVerdicts;
+use specforge_registry::{Disk, build_registries};
 use specforge_wasm::protocol::load_declaration;
 use specforge_wasm::testing::InProcessRuntime;
 
@@ -80,12 +80,30 @@ fn entity(id: &str, fields: &[(&str, &str)]) -> EntityRecord {
     )
 }
 
-/// The rules' input over `entities`, with no edges and no spec root.
+/// A file system with nothing on it.
+struct NoDisk;
+
+impl Disk for NoDisk {
+    fn exists(&self, _: &std::path::Path) -> bool {
+        false
+    }
+
+    fn list(&self, _: &std::path::Path) -> Option<Vec<String>> {
+        None
+    }
+
+    fn read(&self, _: &std::path::Path) -> std::io::Result<Vec<u8>> {
+        Err(std::io::ErrorKind::NotFound.into())
+    }
+}
+
+/// The rules' input over `entities`, with no edges, no spec root and no files.
 fn rules_over(entities: &[EntityRecord]) -> RuleInput<'_> {
     RuleInput {
         entities,
         edges: &[],
         spec_root: std::path::Path::new(""),
+        disk: &NoDisk,
     }
 }
 

@@ -1,6 +1,6 @@
 # A session's inputs are one value
 
-**Status:** accepted (2026-10-07)
+**Status:** accepted (2026-10-07) Amended by [ADR 0107](0107-the-checks-read-through-the-disk-they-are-given.md) (check inputs are the checks' recorded reads, stamped at the read).
 
 ADR 0014 made the project session the one judge of what a changed path is. What the session
 depends on, though, was rebuilt in five places from the same three helpers: the stamp taken at open,

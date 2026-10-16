@@ -292,10 +292,10 @@ behavior check_entities_in_one_order "Check the Entities in One Order" {
     snapshot_taken "the entity snapshot of the built graph is taken with the registry build it was built with"
   }
   ensures {
-    one_order      "the structural checks and the rule set run in one fixed order, the same on every surface"
-    one_gate       "with no entity kind registered, the checks that read kinds, fields and identifiers do not run"
-    gate_announced "extensions that load but declare no entity kind leave one W151 naming the entities nobody checks"
-    one_file_set   "the files the checks read are one set: those file_reference fields name and those file_exists rules read"
+    one_order              "the structural checks and the rule set run in one fixed order, the same on every surface"
+    one_gate               "with no entity kind registered, the checks that read kinds, fields and identifiers do not run"
+    gate_announced         "extensions that load but declare no entity kind leave one W151 naming the entities nobody checks"
+    reads_through_the_disk "every check reads the file system only through the disk it is given"
   }
   contract   """
     After the entity snapshot is taken, the registry build MUST run every
@@ -320,9 +320,8 @@ behavior check_entities_in_one_order "Check the Entities in One Order" {
     longer than 60 characters is E014. A reference whose field declares a
     target kind, naming an existing entity of another kind, is E022.
 
-    The files the checks read, those a file_reference field names and
-    those a file_exists rule reads, resolved against the spec root, are
-    the session's check inputs.
+    The checks read the file system only through the disk they are
+    given; what they read there is the session's check inputs.
   """
   verify unit "the structural checks run in one order: W012, E016, E024, E013, E014, W020, W158, E022, E061, then the rule set"
   verify unit "with no entity kind registered, E024, E013, E014, W020, W158, E022 and E061 do not run, and W012, E016 and the rules still do"
@@ -331,7 +330,7 @@ behavior check_entities_in_one_order "Check the Entities in One Order" {
   verify unit "an entity ID shorter than 2 or longer than 60 characters is E014"
   verify unit "a reference to an existing entity of another kind than its field's target kind is E022"
   verify unit "a single reference to an existing entity of another kind than its field's target kind is E022"
-  verify unit "the files the checks read are those file_reference fields name and those file_exists rules read"
+  verify unit "the checks read only through their disk: the paths file_reference fields of the entity's kind name, the paths file_exists rules read, and the directory E016's suggestion lists"
   verify integration "a compile reports the structural checks in the order the registry build runs them"
 }
 

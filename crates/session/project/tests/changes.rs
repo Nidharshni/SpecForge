@@ -582,7 +582,7 @@ fn an_update_that_names_a_new_file_changes_the_inputs() {
 
 /// An extension whose `note` kind's `doc` (a string) and `docs` (a list)
 /// a `file_exists` rule `F001` reads.
-fn file_rule_extension() -> specforge_wasm::testing::InProcessRuntime {
+pub(crate) fn file_rule_extension() -> specforge_wasm::testing::InProcessRuntime {
     use specforge_extension_sdk::prelude::*;
     specforge_wasm::testing::InProcessRuntime::new().with(|| {
         let mut c = ContributionsBuilder::new(ExtensionMeta::new("@test/files", "1.0.0"));

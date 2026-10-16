@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use specforge_common::{Diagnostic, codes};
 use specforge_graph::Graph;
 use specforge_parser::FieldValue;
-use specforge_registry::KindRegistry;
+use specforge_registry::{Disk, KindRegistry};
 
 /// The cache's file name, beside `specforge.json`.
 pub const BUILD_CACHE_FILE: &str = "specforge-cache.json";
@@ -106,16 +106,17 @@ impl BuildCache {
         text
     }
 
-    /// Read the cache of the project at `root`: `Ok(None)` without the
+    /// Read, through `disk`, the cache of the project at `root`: `Ok(None)` without the
     /// file; W144 when it cannot be read, does not parse, or declares
     /// another format.
-    pub fn read(root: &Path) -> Result<Option<Self>, Diagnostic> {
-        let path = Self::path(root);
-        let text = match std::fs::read_to_string(&path) {
-            Ok(text) => text,
+    pub fn read(disk: &dyn Disk, root: &Path) -> Result<Option<Self>, Diagnostic> {
+        let bytes = match disk.read(&Self::path(root)) {
+            Ok(bytes) => bytes,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(invalid_cache(&format!("cannot be read: {e}"))),
         };
+        let text =
+            String::from_utf8(bytes).map_err(|e| invalid_cache(&format!("does not parse: {e}")))?;
         let cache: BuildCache = serde_json::from_str(&text)
             .map_err(|e| invalid_cache(&format!("does not parse: {e}")))?;
         if cache.format != BUILD_CACHE_FORMAT {
@@ -221,5 +222,20 @@ mod tests {
                 }
             )]
         );
+    }
+
+    #[test]
+    fn the_cache_is_read_through_the_disk() {
+        use specforge_registry::{Asked, MemoryDisk};
+
+        let path = Path::new("/p").join(BUILD_CACHE_FILE);
+        let broken = MemoryDisk::new().with_file(path.clone(), b"{ not json");
+        let invalid = BuildCache::read(&broken, Path::new("/p")).unwrap_err();
+        assert_eq!(invalid.code, "W144");
+        assert!(invalid.message.contains("does not parse"), "{invalid:?}");
+
+        let empty = MemoryDisk::new();
+        assert!(BuildCache::read(&empty, Path::new("/p")).unwrap().is_none());
+        assert_eq!(empty.asked(), [Asked::Read(path)]);
     }
 }

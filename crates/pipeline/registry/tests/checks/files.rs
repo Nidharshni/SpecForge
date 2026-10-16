@@ -8,8 +8,8 @@ use specforge_extension_sdk::prelude::*;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::entity::{EntityRecord, RuleInput};
 use specforge_registry::rules::NoVerdicts;
+use specforge_registry::{Asked, MemoryDisk};
 use specforge_test_macros::test as spec;
-use tempfile::TempDir;
 
 use crate::support::{build, coded_in, declare, span};
 
@@ -29,31 +29,31 @@ fn gherkin() -> ExtensionDeclaration {
     })
 }
 
+/// The spec root of the E016 tests.
+const ROOT: &str = "/spec";
+
 /// The E016s of the checks over a behavior `alpha` listing `paths` in its
-/// `gherkin`, with `root` as the spec root.
-fn e016(root: &std::path::Path, paths: &[&str]) -> Vec<Diagnostic> {
+/// `gherkin`, with `ROOT` as the spec root and `disk` as the file system.
+fn e016(disk: &MemoryDisk, paths: &[&str]) -> Vec<Diagnostic> {
     let records =
         [EntityRecord::new("behavior", "alpha", span("main.spec")).with_list("gherkin", paths)];
     let diags = build([gherkin()]).check(
         &RuleInput {
             entities: &records,
             edges: &[],
-            spec_root: root,
+            spec_root: std::path::Path::new(ROOT),
+            disk,
         },
         &NoVerdicts,
     );
     coded_in(&diags, "E016").into_iter().cloned().collect()
 }
 
-/// A spec root with `features/<name>` for each of `names`.
-fn root_with(names: &[&str]) -> TempDir {
-    let dir = TempDir::new().unwrap();
-    let features = dir.path().join("features");
-    std::fs::create_dir_all(&features).unwrap();
-    for name in names {
-        std::fs::write(features.join(name), "Feature").unwrap();
-    }
-    dir
+/// A disk with `features/<name>` under the spec root for each of `names`.
+fn root_with(names: &[&str]) -> MemoryDisk {
+    names.iter().fold(MemoryDisk::new(), |disk, name| {
+        disk.with_file(format!("{ROOT}/features/{name}"), b"Feature")
+    })
 }
 
 #[spec(
@@ -61,10 +61,7 @@ fn root_with(names: &[&str]) -> TempDir {
     verify = "non-existent file reference produces E016"
 )]
 fn a_missing_file_reference_produces_e016() {
-    let errors = e016(
-        std::path::Path::new("/nonexistent/project"),
-        &["features/alpha.feature"],
-    );
+    let errors = e016(&MemoryDisk::new(), &["features/alpha.feature"]);
     assert_eq!(errors.len(), 1, "missing file should produce E016");
     assert!(errors[0].message.contains("alpha.feature"));
     assert!(errors[0].span.is_some());
@@ -76,7 +73,7 @@ fn a_missing_file_reference_produces_e016() {
 )]
 fn an_existing_file_reference_passes() {
     let dir = root_with(&["alpha.feature"]);
-    let errors = e016(dir.path(), &["features/alpha.feature"]);
+    let errors = e016(&dir, &["features/alpha.feature"]);
     assert!(errors.is_empty(), "existing file should not produce E016");
 }
 
@@ -86,10 +83,7 @@ fn an_existing_file_reference_passes() {
 )]
 fn each_file_reference_of_an_entity_is_validated_independently() {
     let dir = root_with(&["alpha.feature"]);
-    let errors = e016(
-        dir.path(),
-        &["features/alpha.feature", "features/beta.feature"],
-    );
+    let errors = e016(&dir, &["features/alpha.feature", "features/beta.feature"]);
     assert_eq!(errors.len(), 1, "only the missing file should produce E016");
     assert!(errors[0].message.contains("beta.feature"));
 }
@@ -99,12 +93,9 @@ fn each_file_reference_of_an_entity_is_validated_independently() {
     verify = "relative path resolved from the spec root"
 )]
 fn a_relative_path_resolves_from_the_spec_root() {
-    let dir = TempDir::new().unwrap();
-    let nested = dir.path().join("sub").join("features");
-    std::fs::create_dir_all(&nested).unwrap();
-    std::fs::write(nested.join("alpha.feature"), "Feature: Alpha").unwrap();
+    let dir = MemoryDisk::new().with_file("/spec/sub/features/alpha.feature", b"Feature: Alpha");
 
-    let errors = e016(dir.path(), &["sub/features/alpha.feature"]);
+    let errors = e016(&dir, &["sub/features/alpha.feature"]);
 
     assert!(
         errors.is_empty(),
@@ -119,7 +110,7 @@ fn a_relative_path_resolves_from_the_spec_root() {
 fn e016_suggests_a_similar_filename() {
     let dir = root_with(&["alpha.feature"]);
     // A typo: "alpa.feature" for "alpha.feature".
-    let errors = e016(dir.path(), &["features/alpa.feature"]);
+    let errors = e016(&dir, &["features/alpa.feature"]);
     assert_eq!(errors.len(), 1);
     assert!(
         errors[0]
@@ -137,7 +128,7 @@ fn e016_suggests_a_similar_filename() {
 )]
 fn e016_suggests_nothing_when_no_file_is_similar() {
     let dir = root_with(&["zebra.feature"]);
-    let errors = e016(dir.path(), &["features/alpha.feature"]);
+    let errors = e016(&dir, &["features/alpha.feature"]);
     assert_eq!(errors.len(), 1);
     assert!(
         errors[0].suggestion.is_none(),
@@ -153,7 +144,7 @@ fn e016_suggests_nothing_when_no_file_is_similar() {
 fn the_suggestion_appears_in_the_rendered_help() {
     let dir = root_with(&["login.feature"]);
     // A typo: "logn.feature" for "login.feature".
-    let errors = e016(dir.path(), &["features/logn.feature"]);
+    let errors = e016(&dir, &["features/logn.feature"]);
     assert_eq!(errors.len(), 1);
 
     let source = "behavior alpha \"A\" {\n  gherkin [\"features/logn.feature\"]\n}\n";
@@ -178,11 +169,26 @@ fn the_file_reference_contract_holds() {
     let dir = root_with(&["exists.feature"]);
     // missing_files_diagnosed and existing_files_pass.
     let errors = e016(
-        dir.path(),
+        &dir,
         &["features/exists.feature", "features/missing.feature"],
     );
     assert_eq!(errors.len(), 1, "only the missing file should produce E016");
     assert!(errors[0].message.contains("missing.feature"));
+}
+
+#[test]
+fn e016_lists_the_directory_of_a_missing_file_only() {
+    let disk = root_with(&["alpha.feature"]);
+    let errors = e016(&disk, &["features/alpha.feature", "features/beta.feature"]);
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    assert_eq!(
+        disk.asked(),
+        [
+            Asked::Exists("/spec/features/alpha.feature".into()),
+            Asked::Exists("/spec/features/beta.feature".into()),
+            Asked::List("/spec/features".into()),
+        ]
+    );
 }
 
 /// A kind with `file_reference` fields and a `file_exists` rule over
@@ -210,30 +216,44 @@ fn with_a_file_exists_rule() -> ExtensionDeclaration {
 
 #[spec(
     behavior = "check_entities_in_one_order",
-    verify = "the files the checks read are those file_reference fields name and those file_exists rules read"
+    verify = "the checks read only through their disk: the paths file_reference fields of the entity's kind name, the paths file_exists rules read, and the directory E016's suggestion lists"
 )]
-fn the_files_the_checks_read_are_one_set() {
+fn the_checks_read_only_through_their_disk() {
     let build = build([with_a_file_exists_rule()]);
     let records = [
         EntityRecord::new("note", "n", span("main.spec"))
             .with_list("docs", &["more/one.md", "a.md"])
             .with_field("guide", "guide.md"),
-        // The same path twice is listed once.
+        // The same path twice is asked twice: the ledger dedups.
         EntityRecord::new("note", "m", span("main.spec")).with_list("docs", &["a.md"]),
     ];
-    let root = std::path::Path::new("/spec");
+    let disk = MemoryDisk::new();
 
-    let files = build.files(&RuleInput {
-        entities: &records,
-        edges: &[],
-        spec_root: root,
-    });
+    build.check(
+        &RuleInput {
+            entities: &records,
+            edges: &[],
+            spec_root: std::path::Path::new("/spec"),
+            disk: &disk,
+        },
+        &NoVerdicts,
+    );
 
-    let expected: Vec<PathBuf> = ["a.md", "guide.md", "more/one.md"]
-        .iter()
-        .map(|p| root.join(p))
-        .collect();
-    assert_eq!(files, expected);
+    let (exists, list) = (Asked::Exists, Asked::List);
+    assert_eq!(
+        disk.asked(),
+        [
+            // E016, record by record: a missing path lists its directory.
+            exists("/spec/more/one.md".into()),
+            list("/spec/more".into()),
+            exists("/spec/a.md".into()),
+            list("/spec".into()),
+            exists("/spec/a.md".into()),
+            list("/spec".into()),
+            // The `file_exists` rule over `guide`.
+            exists("/spec/guide.md".into()),
+        ]
+    );
 }
 
 /// `doc` has file-reference fields (`paths`, a list; `guide`, a single
@@ -258,17 +278,27 @@ fn docs_and_notes() -> ExtensionDeclaration {
     })
 }
 
-fn files_and_errors(records: &[EntityRecord]) -> (Vec<PathBuf>, Vec<Diagnostic>) {
+/// The paths the checks asked whether they exist, and their E016s.
+fn reads_and_errors(records: &[EntityRecord]) -> (Vec<PathBuf>, Vec<Diagnostic>) {
     let build = build([docs_and_notes()]);
-    let root = std::path::Path::new("/nonexistent/spec");
+    let disk = MemoryDisk::new();
     let input = RuleInput {
         entities: records,
         edges: &[],
-        spec_root: root,
+        spec_root: std::path::Path::new("/nonexistent/spec"),
+        disk: &disk,
     };
     let diags = build.check(&input, &NoVerdicts);
+    let exists = disk
+        .asked()
+        .into_iter()
+        .filter_map(|asked| match asked {
+            Asked::Exists(path) => Some(path),
+            _ => None,
+        })
+        .collect();
     (
-        build.files(&input),
+        exists,
         coded_in(&diags, "E016").into_iter().cloned().collect(),
     )
 }
@@ -278,7 +308,7 @@ fn files_and_errors(records: &[EntityRecord]) -> (Vec<PathBuf>, Vec<Diagnostic>)
     verify = "a field another kind declares as a file reference is not one on this kind"
 )]
 fn a_field_named_like_another_kinds_file_reference_is_not_one() {
-    let (files, errors) = files_and_errors(&[
+    let (exists, errors) = reads_and_errors(&[
         EntityRecord::new("doc", "d1", span("main.spec")).with_list("paths", &["missing.md"]),
         EntityRecord::new("note", "n1", span("main.spec")).with_list("paths", &["alpha", "beta"]),
     ]);
@@ -286,9 +316,9 @@ fn a_field_named_like_another_kinds_file_reference_is_not_one() {
     assert_eq!(errors.len(), 1, "{errors:?}");
     assert!(errors[0].message.contains("'missing.md'"), "{errors:?}");
     assert_eq!(
-        files,
+        exists,
         [std::path::Path::new("/nonexistent/spec").join("missing.md")],
-        "the note's tags are not watched"
+        "the note's tags are not read"
     );
 }
 
@@ -297,7 +327,7 @@ fn a_field_named_like_another_kinds_file_reference_is_not_one() {
     verify = "a single path on a file-reference field is checked like a one-item list"
 )]
 fn a_single_path_is_checked() {
-    let (files, errors) = files_and_errors(&[
+    let (exists, errors) = reads_and_errors(&[
         EntityRecord::new("doc", "d1", span("main.spec")).with_field("guide", "missing.md"),
         // An empty single value names no file.
         EntityRecord::new("doc", "d2", span("main.spec")).with_field("guide", ""),
@@ -306,7 +336,7 @@ fn a_single_path_is_checked() {
     assert_eq!(errors.len(), 1, "{errors:?}");
     assert!(errors[0].message.contains("'missing.md'"), "{errors:?}");
     assert_eq!(
-        files,
+        exists,
         [std::path::Path::new("/nonexistent/spec").join("missing.md")]
     );
 }

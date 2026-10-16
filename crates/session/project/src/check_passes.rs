@@ -7,6 +7,7 @@ use crate::snapshot::EntitySnapshot;
 use specforge_common::Diagnostic;
 use specforge_graph::Graph;
 use specforge_protocol_types::PassBuildCache;
+use specforge_registry::Disk;
 use specforge_wasm::{ExtensionCalls, WasmRuntime};
 
 use crate::Environment;
@@ -21,6 +22,7 @@ pub(crate) fn run(
     graph: &Graph,
     entities: &EntitySnapshot,
     runtime: &dyn WasmRuntime,
+    disk: &dyn Disk,
 ) -> Vec<Diagnostic> {
     if env.registries().check_passes().next().is_none() {
         return Vec::new();
@@ -28,7 +30,7 @@ pub(crate) fn run(
     let mut diagnostics = Vec::new();
     // The build cache is the check passes' declared input: read on every
     // compile that runs one, so a cache just written is seen.
-    let previous = match BuildCache::read(env.root()) {
+    let previous = match BuildCache::read(disk, env.root()) {
         Ok(previous) => previous,
         Err(invalid) => {
             diagnostics.push(invalid);

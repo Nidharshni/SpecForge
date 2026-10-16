@@ -78,14 +78,16 @@ behavior classify_project_changes "Classify Project Changes" {
     or a directory above it, reaches that source. specforge.json,
     specforge.lock and every extension module the environment loaded (an
     installed extension's extension.wasm, a local .wasm entry) are
-    environment inputs; specforge-cache.json, which check-phase passes
-    read, and every file a file_reference field or a file_exists rule
-    names, which the checks look for, are check inputs; a specforge.json
+    environment inputs; every path the checks read is a check input:
+    specforge-cache.json when a check-phase pass read it, every file a
+    file_reference field or a file_exists rule names, which the checks
+    look for, and every directory E016's suggestion listed, and the
+    target of each of these that is a symlink; a specforge.json
     in a directory below the spec root marks a nested project, and its
     creation or deletion is a change to every source under that
     directory. Each is reached
-    by its own path or by a directory above it, and a missing check
-    input's directory also by any file in it. A reached source or input
+    by its own path or by a directory above it, and a directory the
+    checks listed also by any file in it. A reached source or input
     is a change when it differs from what the session read (size and
     modification time, and the content when it was read within the
     timestamp granularity); a directory created on the way to a missing
@@ -114,6 +116,9 @@ behavior classify_project_changes "Classify Project Changes" {
   verify unit "specforge-cache.json re-runs the checks without re-parsing"
   verify unit "a file a file_reference field names re-runs the checks"
   verify unit "a file a file_exists rule names re-runs the checks"
+  verify unit "a file beside a missing file a file_exists rule names changes nothing"
+  verify unit "a session's check inputs are the paths its checks read"
+  verify unit "a check input that is a symlink is followed to its target"
   verify unit "an excluded or undiscovered .spec file changes nothing"
   verify unit "a session's watch roots cover every input it classifies"
   verify unit "the LSP's watchers cover every input the session classifies"

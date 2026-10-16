@@ -290,26 +290,23 @@ impl CompiledProject {
     }
 
     /// Every check on the current graph, over a snapshot of it taken now
-    /// (ADR 0019), `reads` told first: whether the inputs moved.
+    /// (ADR 0019), in the environment's runtime, reading the file system
+    /// through the disk `reads` gives them (ADR 0107); the memo starts again
+    /// from that snapshot. Whether the session's inputs moved.
     pub(crate) fn check(&mut self, reads: &mut impl Reads) -> bool {
-        let entities = self.snapshot_now();
-        let changed = reads.before_checks(&self.env, &entities);
-        self.check_over(entities);
-        changed
-    }
-
-    /// A snapshot of the current graph, taken now (ADR 0019).
-    fn snapshot_now(&self) -> Arc<EntitySnapshot> {
-        Arc::new(self.env.entity_snapshot(self.graph.graph()))
-    }
-
-    /// Run every check on the current graph over `entities`, its snapshot,
-    /// in the environment's runtime; the memo starts again from that
-    /// snapshot.
-    fn check_over(&mut self, entities: Arc<EntitySnapshot>) {
-        self.check_diagnostics = self.env.run_checks(self.graph.graph(), &entities);
-        self.recorded = OnceLock::from(RecordedCoverage::of(entities));
-        self.reported = OnceLock::new();
+        let env = Arc::clone(&self.env);
+        let graph = &self.graph;
+        let mut outcome = None;
+        let moved = reads.run_checks(|disk| {
+            let entities = Arc::new(env.entity_snapshot(graph.graph()));
+            outcome = Some((env.run_checks(graph.graph(), &entities, disk), entities));
+        });
+        if let Some((diagnostics, entities)) = outcome {
+            self.check_diagnostics = diagnostics;
+            self.recorded = OnceLock::from(RecordedCoverage::of(entities));
+            self.reported = OnceLock::new();
+        }
+        moved
     }
 
     /// The checks are skipped for this state: none is reported, and the

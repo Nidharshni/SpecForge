@@ -9,6 +9,8 @@ use std::path::Path;
 use specforge_common::SourceSpan;
 use specforge_graph::ValueShape;
 
+use crate::disk::Disk;
+
 /// One entity as the registry checks, the rules and the custom validators
 /// read it. Built by the project's entity snapshot; tests build it with the
 /// `with_*` methods.
@@ -133,12 +135,24 @@ pub enum Direction {
 }
 
 /// What the rules run over: the snapshot's records in id order, its edges
-/// in graph order, and the spec root relative paths resolve against.
-#[derive(Debug, Clone, Copy)]
+/// in graph order, the spec root relative paths resolve against, and the
+/// disk every file read goes through (ADR 0107).
+#[derive(Clone, Copy)]
 pub struct RuleInput<'a> {
     pub entities: &'a [EntityRecord],
     pub edges: &'a [EdgeRecord],
     pub spec_root: &'a Path,
+    pub disk: &'a dyn Disk,
+}
+
+impl std::fmt::Debug for RuleInput<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RuleInput")
+            .field("entities", &self.entities)
+            .field("edges", &self.edges)
+            .field("spec_root", &self.spec_root)
+            .finish_non_exhaustive()
+    }
 }
 
 impl EntityRecord {

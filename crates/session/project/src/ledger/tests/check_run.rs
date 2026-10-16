@@ -80,3 +80,20 @@ fn a_run_that_reads_what_the_last_read_moves_nothing() {
     assert!(!read(&mut ledger, &one));
     assert!(read(&mut ledger, &two));
 }
+
+#[test]
+fn a_run_that_reads_a_path_twice_moves_nothing() {
+    let (dir, mut ledger) = opened();
+    let one = dir.path().join("one.md");
+    let two = dir.path().join("two.md");
+    let run_of = |ledger: &mut Ledger, files: &[&std::path::Path]| {
+        let run = ledger.checks();
+        for file in files {
+            run.read(CheckInput::File, file, |_| ());
+        }
+        run.finish()
+    };
+    assert!(run_of(&mut ledger, &[&one, &two, &one]));
+    // The same set, asked in another order and with repeats: no change.
+    assert!(!run_of(&mut ledger, &[&two, &one, &two]));
+}
