@@ -3,9 +3,12 @@
 use crate::operations_mgmt::{collect_project, test_server};
 use crate::support::*;
 use serde_json::json;
+use specforge_test::prelude::*;
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test(
+    behavior = "provide_mcp_collect_tool",
+    verify = "specforge.collect refuses an unapproved command with the operation's own message"
+)]
 fn collect_refuses_an_unapproved_command_with_the_operations_own_message() {
     let mut server = test_server();
     let project = within(server.root(), collect_project());

@@ -62,7 +62,8 @@ impl KeyChange {
             ),
         };
         Diagnostic::new(codes::R_TRUST_003, message).with_suggestion(format!(
-            "if you trust the new key, re-run with --yes (or add '{}' to trusted_keys)",
+            "if you trust the new key, accept it with `specforge add` or `specforge update` in a \
+             terminal, or with --yes; or add '{}' to trusted_keys",
             self.offered
         ))
     }
@@ -697,8 +698,10 @@ mod tests {
         assert!(record(&[], Path::new("unused.json")).unwrap().is_empty());
     }
 
-    #[test]
-    #[ignore = "flipped by T3"]
+    #[specforge_test_macros::test(
+        behavior = "pin_publisher_key",
+        verify = "a refused key change names the commands that can consent"
+    )]
     fn a_refused_key_change_names_the_commands_that_can_consent() {
         let change = KeyChange {
             package: "@x/a".to_string(),

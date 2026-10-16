@@ -7,7 +7,6 @@ use crate::support::registry::{Package, greet_wasm, project_on, serve};
 use serde_json::json;
 
 #[test]
-#[ignore = "flipped by T3"]
 fn mcp_add_extension_refusing_a_key_change_names_the_commands_that_can_consent() {
     let pinned = specforge_registry_client::SigningKey::generate();
     let other = specforge_registry_client::SigningKey::generate();

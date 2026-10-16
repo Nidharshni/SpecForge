@@ -556,7 +556,8 @@ behavior provide_mcp_collect_tool "Provide MCP Collect Tool" {
     `specforge collect` in a terminal, and with its output discarded
     because the server owns stdio. A path that holds no project is a
     no_project refusal, as `specforge collect` refuses it. An unapproved
-    command is an E059 error,
+    command is collect's own E059 refusal, whose suggestion names
+    `specforge collect` in a terminal,
     and a missing collector or report is an error naming its code. The
     result lists each runner's counts, the W115 diagnostics and the path of
     the written specforge-report.json, named from the project root.
@@ -564,6 +565,7 @@ behavior provide_mcp_collect_tool "Provide MCP Collect Tool" {
   verify unit "specforge.collect parses test results and maps to entities"
   verify unit "the collect document names the report from the project root"
   verify unit "specforge.collect refuses to run an unapproved command"
+  verify unit "specforge.collect refuses an unapproved command with the operation's own message"
   verify unit "specforge.collect of a directory that holds no project refuses with no_project"
   verify unit "a project without a collector returns an E058 error"
   verify integration "specforge.collect reads runner as specforge collect --runner reads it"

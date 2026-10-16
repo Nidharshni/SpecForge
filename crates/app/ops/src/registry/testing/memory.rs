@@ -213,7 +213,8 @@ impl MemoryRegistry {
                 ),
             )
             .with_suggestion(format!(
-                "if you trust the new key, re-run with --yes (or add '{key_id}' to trusted_keys)"
+                "if you trust the new key, accept it with `specforge add` or `specforge update` in a \
+                 terminal, or with --yes; or add '{key_id}' to trusted_keys"
             )));
         }
         Ok(Publisher::Repinned {

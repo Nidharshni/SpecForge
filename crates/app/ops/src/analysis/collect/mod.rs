@@ -231,10 +231,13 @@ pub fn collect(view: &ProjectView, request: Request) -> Result<Outcome, Refusal<
                     OpErrorKind::PermissionDenied,
                     codes::E059,
                     format!(
-                        "running `{}` needs your approval: run `specforge collect` in a \
-                         terminal, pass --yes, or parse an existing report with --no-run",
+                        "running `{}` needs approval for this project",
                         argv.join(" ")
                     ),
+                )
+                .with_suggestion(
+                    "approve it once with `specforge collect` in a terminal, or run `specforge \
+                     collect --yes`; reading the report the runner already wrote needs no approval",
                 )
                 .into());
             }

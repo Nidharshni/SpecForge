@@ -2,7 +2,6 @@
 
 use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup, WriteHints};
-use specforge_common::codes;
 
 use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
@@ -71,18 +70,8 @@ impl CoreTool for Tool {
             consent: Consent::Approved,
             announce: &mut |_, _| {},
         };
-        match collect::collect(&project.view(), request) {
-            Ok(outcome) => Ok(outcome.document().into()),
-            Err(mut refusal) => {
-                if refusal.error.is(codes::E059) {
-                    refusal.error.message = format!(
-                        "the test command isn't approved for this project; run `specforge collect` \
-                     in a terminal once to approve it ({})",
-                        refusal.error.message
-                    );
-                }
-                Err(Box::new(Self::refused(refusal)))
-            }
-        }
+        collect::collect(&project.view(), request)
+            .map(|outcome| outcome.document().into())
+            .map_err(|refusal| Box::new(Self::refused(refusal)))
     }
 }
