@@ -4,12 +4,15 @@
 
 use specforge_project::Buffer;
 use specforge_project::testing::TestProject;
+use specforge_test::prelude::*;
 
 const ALPHA: &str = "behavior alpha \"A\" {\n}\n";
 
 #[cfg(unix)]
-#[test]
-#[ignore = "flipped by T2"]
+#[specforge_test(
+    behavior = "resolve_use_imports",
+    verify = "an editor buffer of a file inside a symlinked directory is no source"
+)]
 fn a_buffer_under_a_symlinked_directory_builds_nothing() {
     let dir = TestProject::new().files(&[("sub/a.spec", ALPHA)]);
     let root = dir.root().to_path_buf();

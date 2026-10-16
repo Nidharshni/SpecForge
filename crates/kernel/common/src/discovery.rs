@@ -183,9 +183,9 @@ impl SourceRoot {
     /// lists once the file exists:
     /// - a `.spec` path inside the spec root (no `..`, not absolute);
     /// - under no [`SKIP_DIRS`] directory;
-    /// - in no directory below the spec root that holds `specforge.json` now
-    ///   (it reads whether each directory on the way holds one, nothing
-    ///   else);
+    /// - in no directory below the spec root that is a symlink or holds
+    ///   `specforge.json` now (it reads whether each directory on the way is
+    ///   one or holds one, nothing else): the walk never enters either;
     /// - not left out by an `exclude` entry.
     ///
     /// A surface told about one changed path applies the walk's policy
@@ -209,7 +209,11 @@ impl SourceRoot {
                 .ancestors()
                 .skip(1)
                 .filter(|dir| !dir.as_os_str().is_empty())
-                .all(|dir| !ProjectRoot::is_root(&self.dir.join(dir)))
+                .all(|dir| {
+                    let at = self.dir.join(dir);
+                    !ProjectRoot::is_root(&at)
+                        && !std::fs::symlink_metadata(&at).is_ok_and(|m| m.file_type().is_symlink())
+                })
     }
 
     /// Whether no `exclude` entry leaves out `file`, a path under the spec root.
@@ -277,7 +281,6 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[ignore = "flipped by T2"]
     fn holds_refuses_a_path_under_a_symlinked_directory() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
