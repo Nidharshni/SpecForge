@@ -603,3 +603,42 @@ fn remove_and_check_agree_on_the_project_peer_set() {
         }
     }
 }
+
+/// R2 without the timing: a removal judged on the config the compile read must not write another.
+#[test]
+#[ignore = "flipped by T4"]
+fn a_removal_judged_on_the_compiled_config_never_writes_another() {
+    use specforge_ops::extension::{self, RemoveRequest};
+    use specforge_ops::testing::{NEEDS_SOFTWARE_1, probes};
+
+    let software_needs_1: Locked = (
+        "@probe/needs-software",
+        NEEDS_SOFTWARE_1,
+        "1.0.0",
+        &[("@specforge/software", "^1.0")],
+    );
+    let dir = removal_project(&["@specforge/software"], &[], &[software_needs_1]);
+    let root = dir.path();
+    let compiled = compile_at(root, Some(Arc::new(probes())));
+    // A hand edit after the compile: the removal judged software alone, and now a dependent is enabled.
+    std::fs::write(
+        root.join("specforge.json"),
+        r#"{"extensions": ["@specforge/software", "@probe/needs-software"], "name": "t", "version": "0.1.0"}"#,
+    )
+    .unwrap();
+    let before = snapshot(root);
+
+    let error = extension::remove(
+        &ProjectView::of(&compiled),
+        &RemoveRequest {
+            name: "@specforge/software",
+            force: false,
+            dry_run: false,
+            caller: specforge_ops::testing::caller(),
+        },
+    )
+    .unwrap_err();
+
+    assert_eq!(error.error.code, "file_changed", "{error:?}");
+    assert_eq!(snapshot(root), before, "nothing was written");
+}

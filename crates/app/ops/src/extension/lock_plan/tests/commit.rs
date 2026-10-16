@@ -408,3 +408,31 @@ fn a_failed_change_puts_back_every_project_file_and_the_directories_it_made() {
     );
     assert!(!installed.module_path(&app()).exists());
 }
+
+#[test]
+#[ignore = "flipped by T4"]
+fn an_add_over_a_config_changed_since_it_was_read_writes_nothing() {
+    let (runtime, registry) = (runtime(), app_registry(Some("k1")));
+    let dir = base_project();
+    let installed = Installed::at(dir.path());
+    let lock_file = specforge_installed::lock_path(dir.path());
+    let config = dir.path().join("specforge.json");
+    let module = installed.module_path(&app());
+    let lock_before = std::fs::read(&lock_file).unwrap();
+    let checked = stage_app(&registry, &runtime, &installed).check().unwrap();
+    // The base is disabled by hand after the plan judged on it.
+    std::fs::write(&config, "{\"extensions\":[]}").unwrap();
+
+    let error = checked
+        .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
+        .unwrap_err();
+
+    assert_eq!(error.code, "file_changed", "{error:?}");
+    assert_eq!(std::fs::read(&lock_file).unwrap(), lock_before);
+    assert_eq!(
+        std::fs::read_to_string(&config).unwrap(),
+        "{\"extensions\":[]}"
+    );
+    assert!(!module.exists());
+    assert!(registry.pins().is_empty());
+}

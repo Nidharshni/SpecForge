@@ -554,3 +554,43 @@ fn every_refusal_of_a_name_is_about_it() {
         ("no_project", None)
     );
 }
+
+#[test]
+#[ignore = "flipped by T4"]
+fn a_removal_over_a_config_changed_since_the_compile_writes_nothing() {
+    let fixture = Assembled::new().config(&["@specforge/product"]);
+    write_config(&fixture, r#"{"extensions": ["@specforge/product"]}"#);
+    let view = fixture.view();
+    write_config(
+        &fixture,
+        r#"{"extensions": ["@specforge/product", "@acme/other"]}"#,
+    );
+    let before = files_under(fixture.root());
+
+    let failed = remove(&view, &removing("@specforge/product")).unwrap_err();
+
+    assert_eq!(failed.error.code, "file_changed", "{failed:?}");
+    assert_eq!(failed.error.kind, OpErrorKind::Conflict);
+    assert!(failed.error.writes.is_empty());
+    assert_eq!(files_under(fixture.root()), before);
+}
+
+#[test]
+#[ignore = "flipped by T4"]
+fn a_removal_over_a_config_deleted_since_the_compile_writes_nothing() {
+    let fixture = installed(Assembled::new().config(&["@acme/x"]), "@acme/x");
+    write_config(&fixture, r#"{"extensions": ["@acme/x"]}"#);
+    let view = fixture.view();
+    std::fs::remove_file(fixture.root().join("specforge.json")).unwrap();
+    let before = files_under(fixture.root());
+
+    let failed = remove(&view, &removing("@acme/x")).unwrap_err();
+
+    assert_eq!(failed.error.code, "file_changed", "{failed:?}");
+    assert_eq!(files_under(fixture.root()), before);
+    assert!(
+        package_dir(fixture.root(), "@acme/x")
+            .join("extension.wasm")
+            .exists()
+    );
+}
