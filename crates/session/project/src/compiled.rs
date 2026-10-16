@@ -29,6 +29,12 @@ use crate::{Environment, SharedRuntime, SourceBuild};
 /// 0047). An editor update that skipped the checks
 /// ([`crate::CheckMode::SyntaxOnlyIfParseErrors`]) reports no check
 /// diagnostic until the next update that runs them.
+///
+/// A copy of this project as it is now: the graph is copied, everything else
+/// is shared. What a reader holds while the project's session is out for an
+/// update (the LSP, ADR 0100 D4, ADR 0108). A copy is never the session's:
+/// updating it is the session's alone.
+#[derive(Clone)]
 pub struct CompiledProject {
     /// Shared, so a reader keeps the environment an update started from
     /// while the session is out for it (the LSP's stand-in).
@@ -187,6 +193,25 @@ impl CompiledProject {
             recorded: OnceLock::new(),
             reported: OnceLock::new(),
             on_disk: false,
+        }
+    }
+
+    /// The project of an environment whose sources are not read yet: no
+    /// source, an empty graph, and it reports what its environment reports.
+    /// Rooted where the environment was loaded (none for one assembled in
+    /// memory).
+    pub fn unread(env: Arc<Environment>) -> Self {
+        let graph = GraphBuild::new(env.graph_config());
+        let on_disk = env.project_root().is_some();
+        CompiledProject {
+            env,
+            sources: SourceCache::empty(),
+            graph,
+            import_diagnostics: Vec::new(),
+            check_diagnostics: Vec::new(),
+            recorded: OnceLock::new(),
+            reported: OnceLock::new(),
+            on_disk,
         }
     }
 

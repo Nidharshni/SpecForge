@@ -8,6 +8,7 @@ mod builtins;
 mod changes;
 mod check_passes;
 mod compile;
+mod copy;
 mod custom_rules;
 mod delta;
 mod derived_references;

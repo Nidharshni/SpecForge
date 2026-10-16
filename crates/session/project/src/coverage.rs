@@ -238,6 +238,18 @@ pub struct Recorded {
     pub coverage: Arc<ProjectCoverage>,
 }
 
+/// A copy starts with the coverage already computed, and re-reads the report
+/// on its own when the report's bytes change (the memo is keyed on content).
+impl Clone for RecordedCoverage {
+    fn clone(&self) -> Self {
+        let memo = self.memo.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        RecordedCoverage {
+            entities: Arc::clone(&self.entities),
+            memo: Mutex::new(memo),
+        }
+    }
+}
+
 impl RecordedCoverage {
     /// A memo seeded with the snapshot its owner's checks read.
     pub fn of(entities: Arc<EntitySnapshot>) -> Self {
