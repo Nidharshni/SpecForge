@@ -14,10 +14,9 @@ use crate::builtins;
 /// where its sources are discovered (the spec root and `exclude`), the
 /// files its environment was loaded from (`specforge.json`,
 /// `specforge.lock`, each extension module it loaded) and the files its
-/// last checks read (the build cache its check-phase passes read, each
-/// file a `file_reference` field or a `file_exists` rule names, and the
-/// directory of each such file that was missing, whose listing the E016
-/// suggestion reads), and the target of each symlinked source (where its text
+/// last checks read (every path a check asked about, the build cache a
+/// check-phase pass read, and every directory E016's suggestion listed,
+/// recorded when read, ADR 0107), and the target of each symlinked source (where its text
 /// lies). Behavior `classify_project_changes`, ADR 0030.
 ///
 /// One value per environment load, renewed each time the checks run;
@@ -52,11 +51,10 @@ pub(super) struct OnDisk {
     /// the resolved path of a local `.wasm` entry.
     pub(super) modules: Vec<PathBuf>,
     /// The files the checks read, as they read them (OS resolution of `..`),
-    /// in the order they read them: the build cache first when the
-    /// environment has check-phase passes (they read it on every compile,
-    /// ADR 0009).
+    /// sorted: the paths a check asked `exists` or `read`, and the target of
+    /// each that is a symlink (ADR 0107).
     pub(super) check_files: Vec<PathBuf>,
-    /// The directories of `check_files` that were missing when the checks ran.
+    /// The directories the checks listed (E016's suggestion for a missing file).
     pub(super) listings: Vec<PathBuf>,
     /// The symlinked sources, by key (sorted): where each one's text lies.
     pub(super) links: Vec<Link>,
@@ -159,11 +157,9 @@ pub enum Watched {
     /// directory created, moved or deleted there reaches every source and
     /// input under it (ADR 0073).
     Directories(PathBuf),
-    /// This one file: the config, the lock, a module, the build cache, a
-    /// file the checks read.
+    /// This one file: the config, the lock, a module, a file the checks read.
     File(PathBuf),
-    /// Any file directly in this directory: the directory of a file the
-    /// checks read that is missing.
+    /// Any file directly in this directory: a directory the checks listed.
     Listing(PathBuf),
 }
 
@@ -243,8 +239,8 @@ impl SessionInputs {
 
     /// What an editor client must report: the spec root's `.spec` files, every
     /// entry created or deleted under the root (and under the spec root when
-    /// it lies outside it), then the config, the lock, each module, the build cache, each named
-    /// file and each missing named file's directory. Each path is canonical
+    /// it lies outside it), then the config, the lock, each module, each file the
+    /// checks read and each directory they listed. Each path is canonical
     /// (as the checks read it, `..` resolved), re-spelled from the root as
     /// the session was opened when it lies under it (the spelling the
     /// editor gave), absolute otherwise. Empty when detached.
@@ -361,8 +357,8 @@ impl SessionInputs {
         disk.links != before
     }
 
-    /// The check inputs are now `files` (in the order the checks read them)
-    /// and the `listings` of the directories of the missing ones: their
+    /// The check inputs are now `files` and the `listings` the checks
+    /// listed: their
     /// canonical forms and missing directories are taken again, nothing else
     /// changes.
     pub(super) fn set_checks(&mut self, files: Vec<PathBuf>, listings: Vec<PathBuf>) {
@@ -420,8 +416,8 @@ impl OnDisk {
             .collect()
     }
 
-    /// A missing referenced file's suggestion names a similar file in its
-    /// directory: a file created or deleted there changes it.
+    /// E016's suggestion for a missing file lists its directory: a file
+    /// created or deleted there changes it.
     fn canonical_listings(&self) -> BTreeMap<PathBuf, PathBuf> {
         self.listings
             .iter()

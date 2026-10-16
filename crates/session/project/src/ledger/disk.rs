@@ -6,6 +6,27 @@ use std::path::Path;
 
 use specforge_registry::Disk;
 
+use super::{CheckInput, CheckRun};
+
+/// The checks' disk in a project session: each read goes through the check
+/// run, which stamps the path first and records it as a check input.
+pub(super) struct RunDisk<'r, 'l>(pub(super) &'r CheckRun<'l>);
+
+impl Disk for RunDisk<'_, '_> {
+    fn exists(&self, path: &Path) -> bool {
+        self.0.read(CheckInput::File, path, Path::exists)
+    }
+
+    fn list(&self, dir: &Path) -> Option<Vec<String>> {
+        self.0.read(CheckInput::Listing, dir, list_names)
+    }
+
+    fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
+        self.0
+            .read(CheckInput::File, path, |path| std::fs::read(path))
+    }
+}
+
 /// The checks' disk of a one-shot compile: the file system, nothing recorded.
 pub(crate) struct PlainDisk;
 

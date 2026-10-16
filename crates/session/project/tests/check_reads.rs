@@ -80,7 +80,6 @@ fn a_symlinked_check_inputs_target_reruns_the_checks() {
 /// Only E016's suggestion lists a directory: a `file_exists` rule asks
 /// whether its file exists, nothing more, so a file beside a missing one
 /// is nothing to the checks.
-#[ignore = "flipped by T6"]
 #[specforge_test(
     behavior = "classify_project_changes",
     verify = "a file beside a missing file a file_exists rule names changes nothing"
@@ -113,4 +112,33 @@ fn a_file_beside_a_missing_file_exists_file_changes_nothing() {
     fs::write(&notes, "notes\n").unwrap();
     let changes = session.changes([notes.as_path()]);
     assert!(changes.is_empty(), "{changes:?}");
+}
+
+/// The inputs are the reads: each path asked, and the directory E016's
+/// suggestion listed for a missing one, nothing else.
+#[specforge_test(
+    behavior = "classify_project_changes",
+    verify = "a session's check inputs are the paths its checks read"
+)]
+fn the_check_inputs_are_the_paths_the_checks_asked() {
+    let dir = passes_project("gadget doc \"Doc\" {\n  docs [\"a.md\", \"missing/b.md\"]\n}\n");
+    let root = fs::canonicalize(dir.root()).unwrap();
+    fs::write(root.join("a.md"), "# a\n").unwrap();
+    let ext = Arc::new(passes_extension());
+    let session = ProjectSession::open_with_runtime(
+        &specforge_common::ProjectRoot::of(&root).unwrap(),
+        Some(Arc::clone(&ext) as SharedRuntime),
+    );
+    let watched = session.inputs().watched();
+    for expected in [
+        Watched::File(root.join("a.md")),
+        Watched::File(root.join("missing/b.md")),
+        Watched::Listing(root.join("missing")),
+    ] {
+        assert!(watched.contains(&expected), "{expected:?} in {watched:?}");
+    }
+    assert!(
+        !watched.contains(&Watched::Listing(root.clone())),
+        "{watched:?}"
+    );
 }
