@@ -12,22 +12,7 @@ use specforge_ops::authoring::migrate::{
 };
 use specforge_ops::{OpError, OpErrorKind};
 
-/// Every file under `root` with its bytes: what a refused run must leave as it was.
-fn files_under(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
-    let mut files = std::collections::BTreeMap::new();
-    let mut dirs = vec![root.to_path_buf()];
-    while let Some(dir) = dirs.pop() {
-        for entry in std::fs::read_dir(&dir).unwrap() {
-            let path = entry.unwrap().path();
-            if path.is_dir() {
-                dirs.push(path);
-            } else {
-                files.insert(path.clone(), std::fs::read(&path).unwrap());
-            }
-        }
-    }
-    files
-}
+pub(crate) use crate::writes::files_under;
 use specforge_parser::CURRENT_FORMAT_VERSION;
 use specforge_protocol_types::{ExtensionDeclaration, PeerDependency, SandboxPolicy};
 use specforge_registry::build_registries;
@@ -37,13 +22,13 @@ use specforge_wasm::testing::InProcessRuntime;
 
 /// A migration that is not refused: the tests that expect a refusal call
 /// `specforge_ops::authoring::migrate::run`.
-fn run(request: &Request, runtime: Option<specforge_project::SharedRuntime>) -> Outcome {
+pub(crate) fn run(request: &Request, runtime: Option<specforge_project::SharedRuntime>) -> Outcome {
     specforge_ops::authoring::migrate::run(request, runtime).unwrap()
 }
 
-const OLD: &str = "// specforge-format: 0.9\nbehavior alpha \"Alpha\" {\n}\n";
+pub(crate) const OLD: &str = "// specforge-format: 0.9\nbehavior alpha \"Alpha\" {\n}\n";
 
-fn project() -> tempfile::TempDir {
+pub(crate) fn project() -> tempfile::TempDir {
     let dir = tempfile::TempDir::new().unwrap();
     std::fs::write(
         dir.path().join("specforge.json"),
@@ -54,12 +39,13 @@ fn project() -> tempfile::TempDir {
     dir
 }
 
-fn request(root: &specforge_common::ProjectRoot) -> Request<'_> {
+pub(crate) fn request(root: &specforge_common::ProjectRoot) -> Request<'_> {
     Request {
         root,
         target: CURRENT_FORMAT_VERSION,
         dry_run: false,
         no_backup: false,
+        containment: &crate::writes::UNBOUNDED,
     }
 }
 
@@ -78,7 +64,7 @@ fn project_with_extension() -> tempfile::TempDir {
 /// `@acme/x`, served in process, declaring its migration hook
 /// `migrate_acme` with `handler`; the runtime records every export the host
 /// calls.
-fn hooked(
+pub(crate) fn hooked(
     handler: impl Fn(&MigrationInput) -> Result<(), String> + Clone + Send + Sync + 'static,
 ) -> InProcessRuntime {
     InProcessRuntime::new().with(move || {
@@ -409,47 +395,6 @@ fn nothing_pending_runs_nothing() {
 
 #[specforge_test(
     behavior = "migrate_spec_files_in_place",
-    verify = "a specforge.json that does not say which files are the project's sources refuses the migration, dry run included, and nothing is written"
-)]
-fn a_config_that_hides_the_sources_refuses_the_migration() {
-    let configs = [
-        r#"{"spec_root": "spec", "extensions": ["#,
-        "[1,2]",
-        r#"{"exclude": "vendor"}"#,
-        r#"{"spec_root": ["spec"]}"#,
-        r#"{"spec_root": "spec", "extensions": "@specforge/product"}"#,
-    ];
-    for config in configs {
-        for dry_run in [true, false] {
-            let dir = project();
-            std::fs::create_dir_all(dir.path().join("vendor")).unwrap();
-            std::fs::write(dir.path().join("vendor/v.spec"), OLD).unwrap();
-            std::fs::write(dir.path().join("specforge.json"), config).unwrap();
-            let before = files_under(dir.path());
-            let runtime = Arc::new(hooked(|_| Ok(())));
-
-            let refused = specforge_ops::authoring::migrate::run(
-                &Request {
-                    dry_run,
-                    ..request(&specforge_common::ProjectRoot::of(dir.path()).unwrap())
-                },
-                Some(runtime.clone()),
-            )
-            .unwrap_err();
-
-            assert_eq!(refused.code, "config_invalid", "{config}");
-            assert_eq!(
-                files_under(dir.path()),
-                before,
-                "{config}: no .bak, no record"
-            );
-            assert!(runtime.calls().is_empty(), "{config}: no compile, no hook");
-        }
-    }
-}
-
-#[specforge_test(
-    behavior = "migrate_spec_files_in_place",
     verify = "a problem in specforge.json the migration goes around is an E069 in its document and fails it"
 )]
 fn a_problem_the_migration_goes_around_fails_it_after_it_ran() {
@@ -486,55 +431,6 @@ fn a_target_newer_than_supported_or_malformed_is_e019() {
     assert_eq!(parse_target(Some("99.0")).unwrap_err().error.code, "E019");
     assert_eq!(parse_target(Some("latest")).unwrap_err().error.code, "E019");
     assert_eq!(parse_target(None).unwrap(), CURRENT_FORMAT_VERSION);
-}
-
-#[specforge_test(
-    behavior = "migrate_spec_files_in_place",
-    verify = "only the project's sources are migrated: under spec_root, without excluded files"
-)]
-fn migrate_reads_the_project_sources() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let root = dir.path();
-    std::fs::write(
-        root.join("specforge.json"),
-        r#"{"spec_root": "specs", "exclude": ["drafts"]}"#,
-    )
-    .unwrap();
-    for file in [
-        "specs/a.spec",
-        "specs/drafts/d.spec",
-        "spec/old.spec",
-        "fixtures/fx.spec",
-    ] {
-        std::fs::create_dir_all(root.join(file).parent().unwrap()).unwrap();
-        std::fs::write(root.join(file), OLD).unwrap();
-    }
-
-    let outcome = run(
-        &Request {
-            dry_run: true,
-            no_backup: true,
-            ..request(&specforge_common::ProjectRoot::of(root).unwrap())
-        },
-        None,
-    );
-
-    let visited: Vec<&str> = outcome
-        .summary
-        .results
-        .iter()
-        .map(|r| r.file_path.as_str())
-        .collect();
-    assert_eq!(visited.len(), 1, "{visited:?}");
-    assert_eq!(visited[0], "specs/a.spec", "{visited:?}");
-    // A dry run records nothing, so there is nothing to roll back.
-    let rollback = rollback(&specforge_common::ProjectRoot::of(root).unwrap()).summary;
-    assert!(rollback.results.is_empty(), "{rollback:?}");
-    assert_eq!(rollback.warnings.len(), 1, "{rollback:?}");
-    assert!(
-        rollback.warnings[0].contains("nothing to roll back"),
-        "{rollback:?}"
-    );
 }
 
 #[specforge_test(

@@ -6,9 +6,10 @@ use specforge_common::shape::Shape;
 use specforge_ops::read::navigate::{OutlineEntry, outline};
 
 use crate::args::Arguments;
-use crate::containment::Containment;
+use crate::containment;
 use crate::reply::Answered;
 use crate::tool::file_not_found;
+use specforge_ops::Containment;
 use specforge_ops::view::ProjectView;
 use std::path::Path;
 
@@ -105,9 +106,9 @@ impl CoreTool for Tool {
         // one that leaves it is refused before anything is read (ADR 0092).
         let spec_root = super::spec_root(&view);
         if let Some(spec_root) = spec_root {
-            Containment::at(spec_root)
+            Containment::within(spec_root)
                 .resolve(Path::new(file))
-                .map_err(|outside| Box::new(outside.refusal("file")))?;
+                .map_err(|outside| Box::new(containment::refusal(&outside, "file")))?;
         }
         let entries = outline(&super::navigator(view), file);
         // A file the graph has no entity from is either empty or not there:

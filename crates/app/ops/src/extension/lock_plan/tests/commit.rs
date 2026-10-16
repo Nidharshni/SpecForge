@@ -73,7 +73,9 @@ fn a_lock_plan_pins_what_its_fetches_decided_only_when_it_commits() {
 
     // Committed: pinned.
     let checked = stage_app(&registry, &runtime, &installed).check().unwrap();
-    checked.finish(dir.path(), Vec::new()).unwrap();
+    checked
+        .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
+        .unwrap();
     assert_eq!(registry.pins(), [(app(), "k1".to_string())].into());
 }
 
@@ -89,7 +91,7 @@ fn a_committed_registry_install_locks_its_hash_and_key_id() {
     stage_app(&registry, &runtime, &installed)
         .check()
         .unwrap()
-        .finish(dir.path(), Vec::new())
+        .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
         .unwrap();
 
     let lock =
@@ -126,7 +128,7 @@ fn a_pin_that_cannot_be_saved_puts_back_everything_the_install_wrote() {
     let error = stage_app(&registry, &runtime, &installed)
         .check()
         .unwrap()
-        .finish(dir.path(), Vec::new())
+        .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
         .unwrap_err();
 
     assert!(error.is(codes::R_TRUST_006), "{error:?}");
@@ -147,7 +149,7 @@ fn an_already_pinned_or_unsigned_install_pins_nothing() {
     stage_app(&registry, &runtime, &installed)
         .check()
         .unwrap()
-        .finish(dir.path(), Vec::new())
+        .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
         .unwrap();
     assert_eq!(registry.pins(), [(app(), "k1".to_string())].into());
 
@@ -158,7 +160,7 @@ fn an_already_pinned_or_unsigned_install_pins_nothing() {
     stage_app(&registry, &runtime, &installed)
         .check()
         .unwrap()
-        .finish(dir.path(), Vec::new())
+        .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
         .unwrap();
     assert!(registry.pins().is_empty());
 }
@@ -203,7 +205,7 @@ fn each_ask_is_answered_with_the_builtins_its_extension_required() {
         plan.check()
             .ok()
             .unwrap()
-            .finish(dir.path(), Vec::new())
+            .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
             .unwrap()
     };
 
@@ -217,4 +219,37 @@ fn each_ask_is_answered_with_the_builtins_its_extension_required() {
     let done = enabling(&["@specforge/formal"]);
     assert_eq!(done.asked(Ask(0)).peers_enabled, ["@specforge/software"]);
     assert_eq!(done.enabled, 2);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_change_whose_lock_is_a_symlink_that_leaves_the_project_writes_nothing() {
+    let (runtime, registry) = (runtime(), app_registry(Some("k1")));
+    let dir = base_project();
+    let outside = tempfile::tempdir().unwrap();
+    let elsewhere = outside.path().join("specforge.lock");
+    let lock = specforge_installed::lock_path(dir.path());
+    std::fs::copy(&lock, &elsewhere).unwrap();
+    std::fs::remove_file(&lock).unwrap();
+    std::os::unix::fs::symlink(&elsewhere, &lock).unwrap();
+    let before = std::fs::read(&elsewhere).unwrap();
+    let installed = Installed::at(dir.path());
+
+    let error = stage_app(&registry, &runtime, &installed)
+        .check()
+        .unwrap()
+        .finish(
+            dir.path(),
+            Vec::new(),
+            &crate::Containment::within(dir.path()),
+        )
+        .unwrap_err();
+
+    assert_eq!(error.code, crate::OUTSIDE_ROOT, "{error:?}");
+    assert_eq!(std::fs::read(&elsewhere).unwrap(), before);
+    assert!(registry.pins().is_empty(), "nothing is pinned either");
+    assert!(
+        !dir.path().join(".specforge/extensions/@acme/app").exists(),
+        "no module was placed"
+    );
 }

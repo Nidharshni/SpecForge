@@ -5,7 +5,7 @@ use super::candidate::LocalFile;
 use super::lock_plan::{Ask, Asked, Fetching, Install, LockPlan, Purpose};
 use super::{Claimed, Claims};
 use crate::registry::{Publisher, Registry, Trust};
-use crate::{OpError, Refusal, Writes};
+use crate::{Containment, OpError, Refusal, Writes};
 use specforge_installed::Installed;
 use specforge_package::{PackageName, PackageRef};
 use specforge_wasm::WasmRuntime;
@@ -31,6 +31,9 @@ pub struct AddRequest<'a> {
     /// declaration it was published with (its manifest). An extension already present answers as
     /// the real add would (`AlreadyPresent`, or `Builtin { changed: false }`).
     pub dry_run: bool,
+    /// The bound a local extension is read in (ADR 0104): the CLI passes
+    /// [`Containment::unbounded`], MCP the project's.
+    pub containment: &'a Containment,
 }
 
 /// What an add did (or, on a dry run, would do) for one specifier.
@@ -227,7 +230,7 @@ impl<'a> Resolver<'_, 'a> {
         match &wanted.source {
             Source::Builtin(name) => self.builtin(wanted, name),
             Source::Local(path) => {
-                let local = LocalFile::read(self.runtime, path)?;
+                let local = LocalFile::read(self.runtime, path, self.req.containment)?;
                 self.local(wanted, Install::local(self.req.root.dir(), local)?)
             }
             Source::Registry(package) => self.package(wanted, package),
@@ -432,7 +435,11 @@ fn apply<'a>(
             let (Ask(at), error) = refused.decisive();
             named(several, specifier(at), error).about(AddField::Extensions)
         })?
-        .finish(req.root.dir(), Vec::new())?;
+        .finish(
+            req.root.dir(),
+            Vec::new(),
+            &req.containment.narrowed(req.root.dir()),
+        )?;
     for (at, wanted) in asked {
         outcomes[at] = Some(wanted.outcome(done.asked(Ask(at)), req.dry_run));
     }

@@ -123,3 +123,111 @@ fn init_refuses_a_local_file_outside_the_servers_root() {
     assert_refused(&reply, "extensions");
     assert!(!root.join("created").exists());
 }
+
+/// A server rooted at `dir/workspace`, nothing served: the root bounds `init`.
+fn workspace_server(scene: &Scene) -> (McpServer, PathBuf) {
+    let root = scene.dir.path().join("workspace");
+    fs::create_dir_all(&root).unwrap();
+    let mut server = McpServer::with_project_root(root.clone());
+    let reply = call(&mut server, "initialize", json!({}));
+    assert!(reply["error"].is_null(), "{reply}");
+    (server, root)
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_init_tool",
+    verify = "each local specifier in extensions is held to the server's root as init reads it, a crate directory included"
+)]
+fn init_refuses_a_local_file_named_after_a_comma() {
+    let scene = Scene::new();
+    let (mut server, root) = workspace_server(&scene);
+    let reply = call_tool(
+        &mut server,
+        "specforge.init",
+        json!({"path": "created", "extensions": ["@specforge/software,../../outside/greet.wasm"]}),
+    );
+    assert_refused(&reply, "extensions");
+    assert!(!root.join("created").exists());
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_init_tool",
+    verify = "each local specifier in extensions is held to the server's root as init reads it, a crate directory included"
+)]
+fn init_refuses_a_crate_directory_named_after_a_comma() {
+    let scene = Scene::new();
+    let ext = scene.dir.path().join("outside/ext");
+    fs::create_dir_all(ext.join("target/wasm32-wasip2/release")).unwrap();
+    fs::write(ext.join("Cargo.toml"), "[package]\nname = \"greet\"\n").unwrap();
+    fs::copy(
+        scene.outside_blob(),
+        ext.join("target/wasm32-wasip2/release/greet.wasm"),
+    )
+    .unwrap();
+    let (mut server, root) = workspace_server(&scene);
+    let reply = call_tool(
+        &mut server,
+        "specforge.init",
+        json!({"path": "created", "extensions": ["@specforge/software,../../outside/ext"]}),
+    );
+    assert_refused(&reply, "extensions");
+    assert!(!root.join("created").exists());
+}
+
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "provide_mcp_init_tool",
+    verify = "each local specifier in extensions is held to the server's root as init reads it, a crate directory included"
+)]
+fn init_refuses_a_local_file_reached_through_a_symlink_and_dot_dots() {
+    let scene = Scene::new();
+    fs::copy(scene.outside_blob(), scene.dir.path().join("greet.wasm")).unwrap();
+    let (mut server, root) = workspace_server(&scene);
+    let deep = root.join("existing/d1/d2/d3");
+    fs::create_dir_all(&deep).unwrap();
+    std::os::unix::fs::symlink(&deep, root.join("existing/a")).unwrap();
+    let reply = call_tool(
+        &mut server,
+        "specforge.init",
+        json!({"path": "existing", "extensions": ["a/../../../greet.wasm"]}),
+    );
+    // After T3 the checked path is ops' lexical one (`invalid_input`); after T6 init reads what
+    // the OS reads, `existing/greet.wasm`, which is missing (`file_not_found`): either way an
+    // error on `extensions`, and nothing is installed from outside.
+    let error = crate::tool_errors::mcp_error(&reply);
+    assert_eq!(error["argument"], "extensions", "{error}");
+    assert!(!root.join("existing/specforge.json").exists());
+    let lock = fs::read_to_string(root.join("existing/specforge.lock")).unwrap_or_default();
+    assert!(!lock.contains("greet.wasm"), "{lock}");
+}
+
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "provide_mcp_add_extension_tool",
+    verify = "a crate directory in specifiers whose built component resolves outside the project is refused as invalid_input on specifiers"
+)]
+fn add_extension_refuses_a_crate_directory_whose_build_leaves_the_project() {
+    let scene = Scene::new();
+    let proj = scene.dir.path().join("proj");
+    let built = scene
+        .dir
+        .path()
+        .join("outside/target/wasm32-wasip2/release");
+    fs::create_dir_all(&built).unwrap();
+    fs::copy(scene.outside_blob(), built.join("greet.wasm")).unwrap();
+    fs::create_dir_all(proj.join("ext")).unwrap();
+    fs::write(proj.join("ext/Cargo.toml"), "[package]\nname = \"greet\"\n").unwrap();
+    std::os::unix::fs::symlink(
+        scene.dir.path().join("outside/target"),
+        proj.join("ext/target"),
+    )
+    .unwrap();
+    let mut server = scene.serve();
+    let reply = call_tool(
+        &mut server,
+        "specforge.add_extension",
+        json!({"specifiers": ["ext"]}),
+    );
+    assert_refused(&reply, "specifiers");
+    assert!(!scene.installed());
+}

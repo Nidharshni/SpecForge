@@ -1,7 +1,7 @@
 # One claim rule for the extensions a change names
 
 **Status:** accepted (2026-10-15, architecture round 10, plan 07). Amends ADR 0065 D4 (init claims its specifiers as
-add does) and ADR 0092 D7 (where init reads a relative local specifier).
+add does) and ADR 0092 D7 (where init reads a relative local specifier). Closing note amended by ADR 0104.
 
 `add` decides what two specifiers that name one extension mean: the same way is a duplicate, another way is
 `extension_conflict`. `init` had its own thinner loop that skipped a specifier only when its parsed `Source` equalled an
@@ -55,3 +55,5 @@ call installs into (for `init`, the served project, or the server's root while n
 `specforge_mcp::containment::refuse_local_outside`, because MCP owns containment (ADR 0092); the shared resolver and
 the CLI are unchanged (ADR 0092 D6), so developing an extension from a sibling directory still works with the CLI.
 Consequence: an MCP client installs a vendored blob by copying it into the project first.
+
+**Amended by ADR 0104:** the check is the read's, not the surface's: `LocalFile::read` resolves the name, and the binary a crate directory names, through the request's containment. MCP passes its bound, the CLI `Containment::unbounded()`.

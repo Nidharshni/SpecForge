@@ -80,6 +80,7 @@ pub fn schema_of(project: &CompiledProject, request: &SchemaRequest<'_>) -> Valu
 /// `specforge schema --publish --format <format>`.
 pub fn published(project: &CompiledProject, format: Format) -> Value {
     schema::json_schema(&ProjectView::of(project), format)
+        .map(|published| published.schema)
         .unwrap_or_else(|e| panic!("publish refused: {e:?}"))
 }
 

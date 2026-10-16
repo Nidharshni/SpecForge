@@ -56,10 +56,10 @@ const ASPECTS: [Aspect; 6] = [
 /// Where the CLI and MCP behave differently today, and why. Later steps of
 /// plan 03 delete rows; only spec-sanctioned differences should remain.
 const EXPECTED_DIVERGENCES: &[(&str, Aspect, &str)] = &[
-    // export: both surfaces export through `specforge_ops::read::export` (O2), but
-    // only the CLI keeps `.specforge/schema-cache.json` for its W053 check.
-    // The MCP export tool is a read-only query with nowhere to show W053: if
-    // it rewrote the cache, the next CLI export would miss the warning.
+    // export: both surfaces export through `specforge_ops::read::export` (O2) and
+    // report its notices, but only the CLI keeps `.specforge/schema-cache.json`.
+    // The MCP export tool is a read-only query: if it rewrote the cache, the
+    // next CLI export would miss its W053.
     (
         "export",
         Aspect::Files,

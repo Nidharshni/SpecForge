@@ -1,7 +1,8 @@
 # A core MCP resource is one module, and the methods are one table
 
 **Status:** accepted (2026-10-15, round 10, plan 12). Amends ADR 0049 D7 (who reads a placeholder's value) and ADR 0077
-D3 (where `follow_root` is called). Applies ADR 0049 D1 and ADR 0058 D6 to resources.
+D3 (where `follow_root` is called). Applies ADR 0049 D1 and ADR 0058 D6 to resources. Amended by ADR 0111 (D4: a read
+also carries notices).
 
 A core tool and a core prompt are each one module implementing a trait, but a core resource was a row of a closure
 table (`CORE_RESOURCES`). Each templated resource wrote its URI prefix twice (the row's `uri` and the reader's
@@ -27,6 +28,7 @@ names were written four times (the router's lifecycle arms and session arms, the
   still lists everything: it is an optional argument, not a URI segment.
 - **D4. Content stays text.** `ReadOutcome` is `ResourceText { mime_type, text }`: the graph views are the export's
   bytes (ADR 0024 D4), so only two of eight resources serialize a typed value.
+  *(ADR 0111: `ResourceText` also carries notices, sent as the read result's `_meta.diagnostics`.)*
 - **D5. The methods are one table.** `protocol::method::METHODS` names each method, the revisions that serve it and
   whether the stateless result is cacheable. The router dispatches from it and returns the one -32601.
 - **D6. `follow_root` is called once, by the router,** before every session method in both revisions. A stateless

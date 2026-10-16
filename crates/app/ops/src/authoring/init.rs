@@ -12,7 +12,7 @@
 use crate::extension::{
     self, AddField, Also, Ask, Candidate, Claimed, Claims, Install, LocalFile, LockPlan, Source,
 };
-use crate::{OpError, OpErrorKind, Refusal, Writes};
+use crate::{Containment, OpError, OpErrorKind, Refusal, Writes};
 use serde::Serialize;
 use serde_json::{Value, json};
 use specforge_common::shape::Shape;
@@ -70,6 +70,9 @@ pub struct Request<'a> {
     /// Extension specifiers; an entry may hold several, comma-separated. A relative local path is
     /// read from `dir`.
     pub extensions: &'a [String],
+    /// The bound local extensions are read in (ADR 0104): the CLI passes
+    /// [`Containment::unbounded`], MCP its request's bound.
+    pub containment: &'a Containment,
 }
 
 /// What init wrote.
@@ -113,6 +116,30 @@ pub struct InitDocument {
     /// The extensions enabled: builtins by name, local installs by the name
     /// they declare.
     pub extensions_installed: Vec<String>,
+}
+
+/// The extensions an init of `dir` names, as init reads them: each entry split on commas, a
+/// relative local path joined onto `dir`. The containment resolves the path when it is read, so a
+/// `..` lands the way the file system would (the directory may not exist yet: by name).
+fn specified(
+    dir: &Path,
+    extensions: &[String],
+) -> Result<Vec<extension::Specified>, Refusal<InitField>> {
+    let specifiers: Vec<&str> = extensions
+        .iter()
+        .flat_map(|specifier| specifier.split(','))
+        .map(str::trim)
+        .collect();
+    if specifiers.is_empty() {
+        return Ok(Vec::new());
+    }
+    let specified = extension::specified(&specifiers).map_err(|refusal| {
+        refusal.map_subject(|AddField::Extensions| Some(InitField::Extensions))
+    })?;
+    Ok(specified
+        .into_iter()
+        .map(|specified| specified.relative_to(dir))
+        .collect())
 }
 
 /// Scaffold the project `req` describes: validated first, its extension specifiers read as `add`
@@ -162,31 +189,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     }
     let version = req.version.to_string();
 
-    let specifiers: Vec<&str> = req
-        .extensions
-        .iter()
-        .flat_map(|specifier| specifier.split(','))
-        .map(str::trim)
-        .collect();
-    let wanted = if specifiers.is_empty() {
-        Vec::new()
-    } else {
-        let specified = extension::specified(&specifiers).map_err(|refusal| {
-            refusal.map_subject(|AddField::Extensions| Some(InitField::Extensions))
-        })?;
-        // A relative local path is read from the directory init creates (ADR 0098). It may not
-        // exist yet, so a `..` is resolved by name: the file system cannot step out of it.
-        specified
-            .into_iter()
-            .map(|specified| {
-                let mut specified = specified.relative_to(req.dir);
-                if let Source::Local(path) = &mut specified.source {
-                    *path = without_parent_steps(path);
-                }
-                specified
-            })
-            .collect()
-    };
+    let wanted = specified(req.dir, req.extensions)?;
     let several = wanted.len() > 1;
     let named = |at: usize, error: OpError| {
         let error = match wanted.get(at) {
@@ -220,7 +223,8 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
                 }
             }
             Source::Local(path) => {
-                let local = LocalFile::read(runtime, path).map_err(|e| named(at, e))?;
+                let local =
+                    LocalFile::read(runtime, path, req.containment).map_err(|e| named(at, e))?;
                 let candidate = local.binary.candidate();
                 let declared = (
                     candidate.name().to_string(),
@@ -305,7 +309,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
             }),
         },
     ];
-    let done = checked.finish(dir, files)?;
+    let done = checked.finish(dir, files, &req.containment.narrowed(dir))?;
 
     Ok(Outcome {
         root: dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf()),
@@ -314,26 +318,6 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
         extensions,
         writes: done.writes,
     })
-}
-
-/// `path` with each `..` resolved against the name before it.
-fn without_parent_steps(path: &Path) -> PathBuf {
-    use std::path::Component;
-    let mut resolved = PathBuf::new();
-    for part in path.components() {
-        match part {
-            Component::ParentDir
-                if matches!(
-                    resolved.components().next_back(),
-                    Some(Component::Normal(_))
-                ) =>
-            {
-                resolved.pop();
-            }
-            other => resolved.push(other),
-        }
-    }
-    resolved
 }
 
 /// Create the starter file with `text`.
@@ -523,12 +507,15 @@ mod tests {
         (scratch, extensions, dir)
     }
 
+    static UNBOUNDED: Containment = Containment::unbounded();
+
     fn request<'a>(dir: &'a Path, extensions: &'a [String]) -> Request<'a> {
         Request {
             dir,
             name: Some("demo"),
             version: DEFAULT_VERSION,
             extensions,
+            containment: &UNBOUNDED,
         }
     }
 
@@ -620,6 +607,7 @@ mod tests {
                 name,
                 version: DEFAULT_VERSION,
                 extensions,
+                containment: &crate::Containment::unbounded(),
             };
             let refusal = init(&request, &runtime()).unwrap_err();
             (refusal.error.code.to_string(), refusal.subject)

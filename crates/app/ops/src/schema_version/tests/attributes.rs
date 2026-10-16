@@ -406,7 +406,7 @@ fn every_attribute_change_moves_the_version() {
         };
         assert_eq!(versioned.version(), &expected, "{}", row.name);
         assert_eq!(
-            versioned.diagnostics().len(),
+            versioned.notices().len(),
             usize::from(row.bump == Bump::Major),
             "{}: a W053 exactly for a major change",
             row.name

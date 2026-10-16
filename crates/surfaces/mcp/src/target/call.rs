@@ -1,7 +1,7 @@
 use super::{
     NoProject, Reach, TargetArgument, TargetError, TargetSpec, WithoutProject, no_project,
 };
-use crate::containment::{self, Containment};
+use crate::containment;
 use crate::events::EventSink;
 use crate::lifecycle::Revision;
 use crate::state::McpState;
@@ -11,6 +11,7 @@ use specforge_common::{Diagnostic, ProjectRoot};
 use specforge_graph::Graph;
 use specforge_ops::solver::Solver;
 use specforge_ops::view::ProjectView;
+use specforge_ops::{Containment, Outside};
 use specforge_project::{ProjectSession, SharedRuntime};
 use std::path::{Path, PathBuf};
 
@@ -233,8 +234,8 @@ impl<'s> Call<'s> {
     }
 
     /// The directory the paths this request names must resolve inside.
-    pub(crate) fn bound(&self) -> Option<Containment> {
-        Containment::of(self.state)
+    pub(crate) fn bound(&self) -> Containment {
+        containment::bound(self.state)
     }
 
     /// The directory `init` creates its project in.
@@ -327,13 +328,14 @@ pub fn resolve(
             // Inside the request's bound, read against it (ADR 0092 D2, D4):
             // with a project served that is the project, and inside it is
             // refused below, so init creates the first project of a session.
-            if let Some(bound) = Containment::of(state) {
-                bound.resolve(&dir).map_err(TargetError::Outside)?;
-                dir = bound.spelled(&dir);
-            }
+            dir = containment::bound(state)
+                .resolve(&dir)
+                .map_err(TargetError::Outside)?
+                .spelled;
             if let Some(root) = state.project_root() {
-                let (inside, root) = (containment::resolved(&dir), containment::resolved(root));
-                if inside.starts_with(&root) {
+                let served = Containment::within(root);
+                if served.resolve(&dir).is_ok() {
+                    let root = containment::landed(root);
                     return Err(TargetError::InsideServed { dir, served: root });
                 }
             }
@@ -361,24 +363,18 @@ pub fn resolve(
     };
     // The project it names lies inside the request's bound, and so does the
     // path itself, which is read against it (ADR 0092 D2, D3).
-    let bound = Containment::of(state);
-    let named = match &bound {
-        Some(bound) => {
-            bound
-                .resolve(Path::new(path))
-                .map_err(TargetError::Outside)?;
-            bound.spelled(Path::new(path))
-        }
-        None => PathBuf::from(path),
-    };
+    let bound = containment::bound(state);
+    let named = bound
+        .resolve(Path::new(path))
+        .map_err(TargetError::Outside)?
+        .spelled;
     let root = project_at(&named)?;
-    if let Some(bound) = &bound
-        && !bound.holds(root.canonical())
-    {
-        let landed = root.canonical().to_path_buf();
-        return Err(TargetError::Outside(bound.outside(&named, landed)));
+    if let Err(outside) = bound.resolve(root.canonical()) {
+        // The project the name lands on is outside the bound: named as the call spelled it.
+        let outside = Outside::new(&named, outside.landed().to_path_buf(), outside.root());
+        return Err(TargetError::Outside(outside));
     }
-    let served_root = state.project_root().map(containment::resolved);
+    let served_root = state.project_root().map(containment::landed);
     if served_root.is_none()
         && serving == Serving::Adopts
         && reach != Reach::Served

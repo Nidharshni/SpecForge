@@ -203,6 +203,7 @@ fn add_package(
             allow_unsigned: false,
             trust: Trust::Refuse,
             dry_run: false,
+            containment: &specforge_ops::Containment::unbounded(),
         },
         registry,
         &specforge_ops::testing::candidates(),
