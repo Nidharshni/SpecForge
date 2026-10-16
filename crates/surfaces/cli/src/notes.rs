@@ -10,6 +10,7 @@
 use crate::outcome::OutputFormat;
 use crate::terminal::{Stream, Terminal};
 use specforge_common::Diagnostic;
+use specforge_ops::Noticed;
 use std::fmt;
 
 /// Where a command's notes and notices go: its terminal's stderr, by its output format.
@@ -34,6 +35,14 @@ impl<'t> Notes<'t> {
         for notice in notices {
             self.line(format_args!("{}", specforge_common::render_plain(notice)));
         }
+    }
+
+    /// A read's notices, which its document does not carry (ADR 0111 D1, ADR 0120 D1): each on stderr under every
+    /// format, before the document. The read's value, to print (ADR 0130).
+    pub(crate) fn noticed<T>(&self, read: Noticed<T>) -> T {
+        let (value, notices) = read.into_value_and_notices();
+        self.beside(&notices);
+        value
     }
 
     /// A warning no document carries and no code names (export's schema cache it could not write, collect's
@@ -103,6 +112,26 @@ mod tests {
                 );
                 assert_eq!(capture.stdout(), "", "{name}: nothing on stdout");
             }
+        }
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "report_command_outcome",
+        verify = "under --format json a note is never written and a notice is written once: in the document when it carries it, else on stderr"
+    )]
+    fn a_read_is_written_beside_and_handed_back() {
+        let notice = Diagnostic::new(codes::W053, "breaking");
+        for format in [OutputFormat::Human, OutputFormat::Json] {
+            let (terminal, capture) = Terminal::captured("", Facts::PIPED);
+            let value =
+                Notes::new(&terminal, format).noticed(Noticed::new(7, vec![notice.clone()]));
+            assert_eq!(value, 7);
+            assert_eq!(
+                capture.stderr(),
+                format!("{}\n", specforge_common::render_plain(&notice)),
+                "{format:?}"
+            );
+            assert_eq!(capture.stdout(), "");
         }
     }
 

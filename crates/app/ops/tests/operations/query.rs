@@ -64,7 +64,7 @@ fn document(project: &Assembled, entity: &str, depth: usize, kinds: &[&str]) -> 
         },
     )
     .unwrap();
-    serde_json::from_str(&outcome.document).unwrap()
+    serde_json::from_str(&outcome.into_value_and_notices().0).unwrap()
 }
 
 fn ids(document: &Value) -> Vec<&str> {
@@ -100,7 +100,7 @@ fn depth_1_returns_direct_neighbors() {
         },
     )
     .unwrap();
-    let default: Value = serde_json::from_str(&outcome.document).unwrap();
+    let default: Value = serde_json::from_str(&outcome.into_value_and_notices().0).unwrap();
     assert_eq!(default, document(&project, "b", 1, &[]));
 }
 
@@ -241,7 +241,7 @@ fn query_reports_an_unknown_kind() {
         },
     )
     .unwrap();
-    let notice = &outcome.notices[0];
+    let notice = &outcome.notices()[0];
     assert_eq!(notice.code, "I020");
     assert_eq!(notice.message, "unknown entity kind 'behaviour'");
     assert_eq!(
@@ -249,7 +249,7 @@ fn query_reports_an_unknown_kind() {
         Some("did you mean 'behavior'?")
     );
     // The filter still drops the unknown kind: the root alone remains.
-    let document: Value = serde_json::from_str(&outcome.document).unwrap();
+    let document: Value = serde_json::from_str(&outcome.into_value_and_notices().0).unwrap();
     assert_eq!(ids(&document), ["login"]);
 }
 
@@ -271,7 +271,7 @@ fn query_with_coverage_marks_each_node() {
             },
         )
         .unwrap();
-        let document: Value = serde_json::from_str(&outcome.document).unwrap();
+        let document: Value = serde_json::from_str(&outcome.into_value_and_notices().0).unwrap();
         document["nodes"][0]["coverage_status"].clone()
     };
     assert_eq!(status("login", true), "covered");
@@ -300,8 +300,8 @@ fn queried(project: &Assembled, entity: &str, format: Format, include_coverage: 
             ..QueryRequest::default()
         },
     )
+    .map(|read| read.into_value_and_notices().0)
     .unwrap()
-    .document
 }
 
 #[specforge_test(
@@ -756,8 +756,8 @@ mod compiled {
             },
         )
         .unwrap();
-        let stderr: String = outcome
-            .notices
+        let (document, notices) = outcome.into_value_and_notices();
+        let stderr: String = notices
             .iter()
             .map(|notice| format!("{}\n", specforge_common::render_plain(notice)))
             .collect();
@@ -765,7 +765,7 @@ mod compiled {
             stderr,
             "info[I020]: unknown entity kind 'behaviour'\n  = help: did you mean 'behavior'?\n"
         );
-        let parsed: serde_json::Value = serde_json::from_str(&outcome.document).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&document).unwrap();
         let ids: Vec<&str> = parsed["nodes"]
             .as_array()
             .unwrap()

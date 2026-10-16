@@ -9,12 +9,12 @@ use serde_json::{Map, Value, json};
 use specforge_common::Diagnostic;
 use specforge_graph::Node;
 
-use crate::Refusal;
 use crate::read::export::{self, AGENT_FORMAT, ExportField, FORMAT, Format, Schema};
 use crate::read::navigate::{
     EntityMatch, EntityQuery, MatchScope, MatchedOn, find_entities, snippet,
 };
 use crate::view::ProjectView;
+use crate::{Noticed, Refusal};
 
 /// Hops from the queried entity when a query names none: its direct
 /// neighbours. `specforge query --depth` and `specforge.query`'s `depth`
@@ -53,28 +53,20 @@ pub struct QueryRequest<'a> {
     pub include_coverage: bool,
 }
 
-/// What a query answers.
-#[derive(Debug, Clone, PartialEq)]
-pub struct QueryOutcome {
-    /// The export of the entity's subgraph (`export::export` of the scoped
-    /// request under the export schema policy: a graph-format query
-    /// references the published schema, Graph Protocol 2.0); with
-    /// `include_coverage`, each node carrying its `coverage_status`, written
-    /// by the export.
-    pub document: String,
-    /// What versioning the schema reported (ADR 0111), then I020 for each
-    /// kind of the filter the project does not know.
-    pub notices: Vec<Diagnostic>,
-}
-
-/// The query `request` over the view. An entity the graph lacks is
+/// The query `request` over the view: the export of the entity's subgraph
+/// (`export::export` of the scoped request under the export schema policy: a
+/// graph-format query references the published schema, Graph Protocol 2.0);
+/// with `include_coverage`, each node carrying its `coverage_status`, written
+/// by the export. Its notices are what versioning the schema reported
+/// (ADR 0111), then I020 for each kind of the filter the project does not
+/// know. An entity the graph lacks is
 /// [`crate::view::not_found`] (E003, did-you-mean), refused before the
 /// recorded report is read; a recorded report that cannot be read, when
 /// coverage is asked for, is its E045 failure.
 pub fn query(
     view: &ProjectView,
     request: &QueryRequest,
-) -> Result<QueryOutcome, Refusal<QueryField>> {
+) -> Result<Noticed<String>, Refusal<QueryField>> {
     let format = request
         .format
         .or(AGENT_FORMAT.default)
@@ -117,12 +109,7 @@ pub fn query(
             | ExportField::Schema => None,
         })
     })?;
-    let mut notices = exported.notices;
-    notices.extend(unknown);
-    Ok(QueryOutcome {
-        document: exported.document,
-        notices,
-    })
+    Ok(exported.and_notices(unknown))
 }
 
 /// The JSON Schema of the document [`query`] answers: the export document of

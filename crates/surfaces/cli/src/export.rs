@@ -99,9 +99,8 @@ impl Args {
         // earlier exports, and `.specforge/` holds extensions and the watch
         // snapshot too, so nothing here shows the project was exported
         // before.
-        let recorded = export::export_recorded(&view, &request);
         let notes = Notes::new(terminal, OutputFormat::Human);
-        notes.beside(&recorded.notices);
+        let recorded = notes.noticed(export::export_recorded(&view, &request));
         let output = match recorded.export {
             Ok(output) => output,
             Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),

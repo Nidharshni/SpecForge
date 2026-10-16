@@ -30,6 +30,8 @@ fn breaking() -> Assembled {
     let project = project();
     assert!(
         export_recorded(&project.view(), &Request::default())
+            .into_value_and_notices()
+            .0
             .export
             .is_ok()
     );
@@ -64,19 +66,19 @@ fn an_export_and_a_query_carry_the_records_notices() {
     let project = unreadable();
     let view = project.view();
     let exported = export(&view, &Request::default()).unwrap();
-    assert_eq!(codes(&exported.notices), ["I016"]);
-    assert_eq!(codes(&query(&view, &b()).unwrap().notices), ["I016"]);
+    assert_eq!(codes(exported.notices()), ["I016"]);
+    assert_eq!(codes(query(&view, &b()).unwrap().notices()), ["I016"]);
 
     let project = breaking();
     let view = project.view();
     let exported = export(&view, &Request::default()).unwrap();
     let queried = query(&view, &b()).unwrap();
-    assert_eq!(codes(&exported.notices), ["W053"]);
-    assert_eq!(queried.notices, exported.notices);
+    assert_eq!(codes(exported.notices()), ["W053"]);
+    assert_eq!(queried.notices(), exported.notices());
     // The recorded export reports the same, and records after.
     assert_eq!(
-        export_recorded(&view, &Request::default()).notices,
-        exported.notices
+        export_recorded(&view, &Request::default()).notices(),
+        exported.notices()
     );
 }
 

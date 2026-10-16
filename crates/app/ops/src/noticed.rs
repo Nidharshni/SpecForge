@@ -47,10 +47,6 @@ impl<T> Noticed<T> {
     }
 
     /// The same value, with `more` said after the notices it has (I020 after the schema's, ADR 0111 D8).
-    #[allow(
-        dead_code,
-        reason = "query and model compose with it from the next commit"
-    )]
     pub(crate) fn and_notices(mut self, more: Vec<Diagnostic>) -> Self {
         self.notices.extend(more);
         self
