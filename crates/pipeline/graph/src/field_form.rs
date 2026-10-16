@@ -350,8 +350,8 @@ pub enum Target<'f> {
     Absent(&'f str),
 }
 
-impl Target<'_> {
-    pub fn kind(&self) -> &str {
+impl<'f> Target<'f> {
+    pub fn kind(&self) -> &'f str {
         match self {
             Self::Loaded(kind) | Self::Absent(kind) => kind,
         }

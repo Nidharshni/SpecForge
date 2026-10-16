@@ -132,7 +132,7 @@ fn graph_inputs(env: &Environment) -> Value {
             json!({
                 "source_kind": d.source_kind,
                 "field": d.field,
-                "target_kind": d.target_kind,
+                "target_kind": config.field_forms.target(&d.source_kind, &d.field).map(|t| t.kind()),
                 "from": format!("{:?}", d.from),
             })
         })

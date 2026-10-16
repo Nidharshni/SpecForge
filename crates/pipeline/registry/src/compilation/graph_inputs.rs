@@ -91,10 +91,10 @@ fn derived_references(fields: &FieldRegistry) -> Vec<DerivedReference> {
         .iter()
         .filter(|(_, _, entry)| entry.field_type().is_reference())
         .filter_map(|(kind, field, entry)| {
+            entry.form().target_kind()?;
             Some(DerivedReference {
                 source_kind: kind.to_string(),
                 field: field.to_string(),
-                target_kind: entry.declared().target_kind.clone()?,
                 from: DerivedFrom::parse(entry.declared().derived_from.as_deref()?)?,
             })
         })

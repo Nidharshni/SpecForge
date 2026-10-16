@@ -107,7 +107,8 @@ fn a_derived_reference_needs_a_target_kind_and_a_known_source() {
             });
         });
     });
-    let derived = build([declaration]).graph_inputs().derived_references;
+    let inputs = build([declaration]).graph_inputs();
+    let derived = &inputs.derived_references;
 
     let summary: Vec<(&str, &str, &str, DerivedFrom)> = derived
         .iter()
@@ -115,7 +116,11 @@ fn a_derived_reference_needs_a_target_kind_and_a_known_source() {
             (
                 d.source_kind.as_str(),
                 d.field.as_str(),
-                d.target_kind.as_str(),
+                inputs
+                    .field_forms
+                    .target(&d.source_kind, &d.field)
+                    .unwrap()
+                    .kind(),
                 d.from,
             )
         })
