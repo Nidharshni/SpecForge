@@ -1,13 +1,10 @@
 //! `execute_validation_pattern` and `emit_diagnostic_from_pattern`: each
 //! declarative check over entity records, and the diagnostic it emits.
 
-use std::path::Path;
-
 use specforge_common::Severity;
 use specforge_protocol_types::{ValidationRuleDescriptor, ValidationSeverity};
-use specforge_registry::entity::{Direction, EntityRecord, Exemption, RuleInput};
+use specforge_registry::entity::{Direction, EntityRecord, Exemption};
 use specforge_registry::rules::NoVerdicts;
-use specforge_registry::{Asked, MemoryDisk};
 use specforge_test_macros::test as spec;
 
 use super::{check, constraint, declaring, entity, messages, one, over, rule, rules, rules_of};
@@ -291,111 +288,6 @@ fn missing_required_field_fires_on_its_kind_when_the_field_is_absent() {
         ["behavior 'my_beh' is missing required field 'contract'"]
     );
     assert_eq!(diagnostics[0].severity, Severity::Error);
-}
-
-#[spec(
-    behavior = "execute_validation_pattern",
-    verify = "file_exists reports missing file-reference field targets"
-)]
-fn file_exists_reports_missing_file_reference_field_targets() {
-    let mut declared = rule("E101", "file_exists");
-    declared.severity = ValidationSeverity::Error;
-    declared.message_template = "{kind} '{id}' references missing file".to_string();
-    declared.field = Some("gherkin".to_string());
-    let built = one(declared);
-    let disk = MemoryDisk::new().with_file("/spec/features/login.feature", b"");
-    let naming = |id: &str, path: &str| entity(id, "behavior", 1, 0).with_field("gherkin", path);
-    let entities = [
-        naming("b1", "features/login.feature"),
-        naming("b2", "features/logout.feature"),
-        naming("b3", "/nonexistent/file.feature"),
-        naming("b4", "/spec/features/login.feature"),
-    ];
-
-    // Relative paths are the spec root's; absolute ones are checked as
-    // written.
-    let input = RuleInput {
-        entities: &entities,
-        edges: &[],
-        spec_root: Path::new("/spec"),
-        disk: &disk,
-    };
-    let diagnostics = built.rules.check(&input, &NoVerdicts);
-    assert_eq!(
-        messages(&diagnostics),
-        [
-            "behavior 'b2' references missing file",
-            "behavior 'b3' references missing file",
-        ]
-    );
-    assert!(diagnostics.iter().all(|d| d.code == "E101"));
-}
-
-#[spec(
-    behavior = "execute_validation_pattern",
-    verify = "file_exists resolves a relative path against the spec root, never the working directory"
-)]
-fn file_exists_resolves_against_the_spec_root_not_the_working_directory() {
-    let mut declared = rule("E101", "file_exists");
-    declared.field = Some("doc".to_string());
-    declared.message_template = "{id}: missing '{value}'".to_string();
-    let built = one(declared);
-    let entities = [entity("b1", "behavior", 0, 0).with_field("doc", "Cargo.toml")];
-    let beside = MemoryDisk::new().with_file("Cargo.toml", b"");
-    let input = RuleInput {
-        entities: &entities,
-        edges: &[],
-        spec_root: Path::new("/spec"),
-        disk: &beside,
-    };
-    assert_eq!(
-        messages(&built.rules.check(&input, &NoVerdicts)),
-        ["b1: missing 'Cargo.toml'"]
-    );
-    // The rule asks for the spec root's file, never the working directory's.
-    assert_eq!(beside.asked(), [Asked::Exists("/spec/Cargo.toml".into())]);
-}
-
-#[spec(
-    behavior = "execute_validation_pattern",
-    verify = "file_exists checks each item of a list field as its own path"
-)]
-fn file_exists_checks_each_item_of_a_list_field() {
-    let mut declared = rule("E102", "file_exists");
-    declared.field = Some("docs".to_string());
-    declared.message_template = "{id}: missing '{value}'".to_string();
-    let built = one(declared);
-    let root = Path::new("/spec");
-    let disk = MemoryDisk::new().with_file("/spec/a.md", b"");
-    let entities = [
-        entity("b1", "behavior", 0, 0).with_list("docs", &["a.md", "b.md"]),
-        // An empty list names no path.
-        entity("b2", "behavior", 0, 0).with_list("docs", &[]),
-        // A scalar is one path, as written.
-        entity("b3", "behavior", 0, 0).with_field("docs", "a.md, b.md"),
-    ];
-    let input = RuleInput {
-        entities: &entities,
-        edges: &[],
-        spec_root: root,
-        disk: &disk,
-    };
-
-    let diagnostics = built.rules.check(&input, &NoVerdicts);
-
-    assert_eq!(
-        messages(&diagnostics),
-        ["b1: missing 'b.md'", "b3: missing 'a.md, b.md'"]
-    );
-    // The rule asks about every item against the spec root, in entity order.
-    assert_eq!(
-        disk.asked(),
-        [
-            Asked::Exists(root.join("a.md")),
-            Asked::Exists(root.join("b.md")),
-            Asked::Exists(root.join("a.md, b.md")),
-        ]
-    );
 }
 
 /// W009-like: a `verify_kind_allowlist` rule on `target` allowing `allowed`.

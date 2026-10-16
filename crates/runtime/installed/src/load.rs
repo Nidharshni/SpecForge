@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 
 use specforge_common::{Diagnostic, ExtensionEntry, codes};
 use specforge_protocol_types::ExtensionDeclaration;
+use specforge_registry::{Disk, PlainDisk};
 use specforge_wasm::WasmRuntime;
 use specforge_wasm::protocol::load_declaration;
 
@@ -374,6 +375,7 @@ impl Installed {
         entries: &[String],
         builtins: &Builtins,
         runtime: &dyn WasmRuntime,
+        disk: &dyn Disk,
     ) -> Loaded {
         let mut enabled = Loaded::unloaded(entries).enabled;
         let mut slots: Vec<Slot> = entries.iter().map(|_| Slot::Skipped).collect();
@@ -383,7 +385,7 @@ impl Installed {
         let resolution = self.resolve(entries, builtins);
         let mut loaded_names = HashSet::new();
         for (i, resolved) in resolution.in_load_order() {
-            let outcome = self.load_entry(resolved, &loaded_names, runtime);
+            let outcome = self.load_entry(resolved, &loaded_names, runtime, disk);
             match outcome {
                 Ok((declared, done)) => {
                     if matches!(resolved, Resolved::File(_)) {
@@ -460,10 +462,11 @@ impl Installed {
     /// other read error (a permission, a directory) is `ModuleUnreadable`.
     pub(crate) fn read_module(
         &self,
+        disk: &dyn Disk,
         path: &Path,
         missing: impl FnOnce(PathBuf) -> LoadProblem,
     ) -> Result<Module, LoadProblem> {
-        Module::read(path).map_err(|error| {
+        disk.read(path).map(Module::new).map_err(|error| {
             if error.kind() == std::io::ErrorKind::NotFound {
                 missing(path.to_path_buf())
             } else {
@@ -476,8 +479,12 @@ impl Installed {
     }
 
     /// `entry`'s module, read once, when it is the one the entry pins.
-    pub(crate) fn check_module(&self, entry: &LockFileEntry) -> Result<Module, LoadProblem> {
-        let module = self.read_module(&self.module_path(&entry.name), |path| {
+    pub(crate) fn check_module(
+        &self,
+        entry: &LockFileEntry,
+        disk: &dyn Disk,
+    ) -> Result<Module, LoadProblem> {
+        let module = self.read_module(disk, &self.module_path(&entry.name), |path| {
             LoadProblem::ModuleMissing { path }
         })?;
         if !entry.wasm_hash.is_empty() && entry.wasm_hash != module.digest() {
@@ -506,6 +513,7 @@ impl Installed {
         resolved: &Resolved,
         loaded: &HashSet<String>,
         runtime: &dyn WasmRuntime,
+        disk: &dyn Disk,
     ) -> Result<(String, Done), LoadFailure> {
         let subject = match resolved {
             Resolved::Builtin { name, .. }
@@ -524,7 +532,7 @@ impl Installed {
         let (key, bytes): (&str, &[u8]) = match resolved {
             Resolved::Builtin { name, bytes } => (name, bytes),
             Resolved::Locked { name, entry } => {
-                module = self.check_module(entry).map_err(fail)?;
+                module = self.check_module(entry, disk).map_err(fail)?;
                 if entry.wasm_hash.is_empty() {
                     notices.push(
                         Diagnostic::new(
@@ -544,7 +552,7 @@ impl Installed {
             Resolved::Unloadable { problem, .. } => return Err(fail(problem.clone())),
             Resolved::File(file) => {
                 module = self
-                    .read_module(&file.file, |path| LoadProblem::FileMissing { path })
+                    .read_module(disk, &file.file, |path| LoadProblem::FileMissing { path })
                     .map_err(fail)?;
                 (file.key, module.bytes())
             }
@@ -593,7 +601,7 @@ impl Installed {
             .entries()
             .iter()
             .find(|e| e.name.as_str() == name)?;
-        self.check_module(entry).ok().map(|_| entry)
+        self.check_module(entry, &PlainDisk).ok().map(|_| entry)
     }
 }
 

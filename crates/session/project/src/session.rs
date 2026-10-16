@@ -265,9 +265,9 @@ impl ProjectSession {
     /// environment loaded (config, extensions, registries; each load getting
     /// its runtime from `source`), no `.spec` file read.
     fn begin_open(root: &ProjectRoot, source: RuntimeSource) -> OpeningProject {
-        // The ledger stamps each input before anything reads it: the config
-        // before its one read, the lock and the modules before the runtime
-        // and the environment read them, the sources by `finish`.
+        // The ledger stamps each input in the read that reads it: the config,
+        // the lock and the modules in the environment load, the sources by
+        // `finish`.
         let mut ledger = Ledger::opening();
         let env = Environment::read_through(&mut ledger, root, |config| {
             source.runtime_for(root.dir(), config)

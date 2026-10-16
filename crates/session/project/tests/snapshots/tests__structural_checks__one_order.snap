@@ -8,10 +8,6 @@ expression: found
     "unreferenced ref 'gh.issue:1' has no incoming edges"
   ],
   [
-    "E016",
-    "file reference 'missing.md' in entity 'g_docs' does not exist"
-  ],
-  [
     "E024",
     "unknown entity kind 'wibble' for entity 'wb_one' at a.spec"
   ],
@@ -42,5 +38,9 @@ expression: found
   [
     "W900",
     "widget 'w_one' links nothing"
+  ],
+  [
+    "E016",
+    "file reference 'missing.md' in entity 'g_docs' does not exist"
   ]
 ]

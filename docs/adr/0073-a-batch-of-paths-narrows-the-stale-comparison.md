@@ -2,6 +2,7 @@
 
 **Status:** accepted (2026-10-13, architecture round 9, plan 03). Amends [ADR 0030](0030-a-sessions-inputs-are-one-value.md)
 D1 and D4 and [ADR 0014](0014-the-session-keeps-itself-current.md) D9.
+D5's keying is extended to every input by [ADR 0114](0114-environment-inputs-are-recorded-as-read.md).
 
 Watch and the LSP told the project session which paths changed, and the session classified each path by its spelling: a
 `.spec` file under the spec root was a source, a few named files were environment or check inputs, anything else was

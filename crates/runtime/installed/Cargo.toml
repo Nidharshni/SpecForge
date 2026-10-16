@@ -15,6 +15,7 @@ path = "tests/main.rs"
 specforge-common = { workspace = true }
 specforge-package = { path = "../../leaf/package" }
 specforge-protocol-types = { path = "../../leaf/protocol-types" }
+specforge-registry = { workspace = true }
 specforge-wasm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

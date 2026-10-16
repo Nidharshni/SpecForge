@@ -173,7 +173,13 @@ module specforge_extension_sdk_macros "specforge-extension-sdk-macros" {
 module specforge_installed "specforge-installed" {
   family      core
   description "A project's installed extensions: layout, specforge.lock, the hash pin, the extension load and the all-or-nothing change"
-  depends_on  [specforge_common, specforge_package, specforge_protocol_types, specforge_wasm]
+  depends_on  [
+    specforge_common,
+    specforge_package,
+    specforge_protocol_types,
+    specforge_registry,
+    specforge_wasm,
+  ]
   tags        ["runtime"]
 }
 

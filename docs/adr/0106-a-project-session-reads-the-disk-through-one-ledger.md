@@ -2,6 +2,7 @@
 
 **Status:** accepted (2026-10-16, architecture round 11, plan 03). Carries out ADR 0030 D1 and D3 and ADR 0073;
 amends ADR 0047 D3. Amended by [ADR 0107](0107-the-checks-read-through-the-disk-they-are-given.md) (`Reads::before_checks` is replaced by `Reads::run_checks`: the checks read through the run).
+D1's prediction is reversed by [ADR 0114](0114-environment-inputs-are-recorded-as-read.md) (the reader port into `specforge-installed`: the lock and the modules are stamped at their read; `before_load` is gone).
 
 ADR 0030 D3's rule is "stamp a file, then read it". It had no owner. `ProjectSession` carried it out by hand at six
 sites (the open, the cold read, a re-read, a release, the checks), with the stamps (`freshness::DiskSnapshot`) and the

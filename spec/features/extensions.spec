@@ -78,7 +78,7 @@ feature extension_registry "Extension Registry" {
     hashes and their publisher signatures, and the hash and key id are
     recorded in specforge.lock. First-use MUST NOT require network access —
     local path and git sources work offline; network registries are opt-in
-    configuration. At build/release time, a keyword-to-extension index is generated from the registry catalog and bundled as a data file. This index powers the suggest-missing-extensions diagnostic (E024 help text) for offline use.
+    configuration. The builtins' candidate vocabulary (keyword and field to declaring extension) is generated with them at re-vendor time and handed to the registry build. It powers the suggestions of E024, W151 and W020 for offline use (ADR 0122).
     The bundled keyword-to-extension index is a bootstrap convenience,
     regenerable from any configured registries. It confers no preferential
     status to any particular registry or set of extensions.

@@ -20,7 +20,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   registration and I002. `Environment::from_read` is its disk adapter: it reads the lock and runs
   the extension load. Its fields are private; it is read through accessors (ADR 0047). A session
   reads `specforge.json` once per load and builds its extension runtime and, holding it, its
-  environment from that read, after stamping every environment input (ADR 0030, ADR 0106). It
+  environment from that read, stamping each environment input in the read that reads it (ADR 0030, ADR 0106, ADR 0114). It
   A project opened in a session's place loads its environment first and hands it over before any
   source is read (`ProjectSession::reopen`), so an editor answers what needs only the environment
   (keyword completion) while the sources are still being read.
@@ -91,17 +91,22 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   same order (an editor update that skips the checks while a file does not parse is the one exception).
 - **Read ledger**: what a project session read and when (`specforge_project::ledger`, crate-private): its session
   inputs and the stamp of each file, taken in the call that reads it. It does every disk read the session makes
-  (the config, the lock and modules, the sources, the check inputs), derives every source key, and answers `changes`
+  (the config, the lock and modules, the sources, the check inputs), the environment's each through the one recording adapter, derives every source key, and answers `changes`
   and `stale`. A one-shot compile runs the same steps through an adapter that records nothing (ADR 0106).
 - **Check reads**: every file-system read a check, a rule or a check pass makes, through the `Disk` in `RuleInput`
   (`exists`, `list`, `read`; `specforge_registry::Disk`, ADR 0107). A project session's ledger stamps and records each
   one; its check inputs are the reads its checks made the last time they ran. Tests give the checks a `MemoryDisk`.
+- **Environment reads**: every file-system read the environment load makes (`specforge.json`, `specforge.lock`, each
+  module the extension load reads) through the `Disk` it is handed (`Installed::read`, `Installed::load`; ADR 0114). A
+  project session's ledger stamps and records each one, each link hop included: its environment inputs are what its
+  last environment load read.
 - **Session inputs**: everything a project session depends on besides its sources' text: where its
   sources are discovered (the spec root and `exclude`), its **environment inputs**
-  (`specforge.json`, `specforge.lock`, the extension modules it loaded) and its **check inputs**
+  (the environment reads of its last load) and its **check inputs**
   (the check reads of the last check run: `specforge-cache.json` when a check pass read it, each path a check looked
-  for, each directory E016's suggestion listed, and the target of each that is a symlink, and where each symlinked
-  source's text lies (its target)). One value per
+  for, each directory a missing named file's suggestion listed, and the target of each that is a symlink, and where each symlinked
+  source's text lies (its target)). Every input is keyed by its own name (a symlink stays itself), and each link hop it
+  followed is an input of its own. One value per
   environment load, renewed each time the checks run (`specforge_project::SessionInputs`,
   `ProjectSession::inputs`). What a changed path reaches, which directories watch watches, which files
   the LSP asks its client to report and what the session stamps for freshness are all read from it; the
@@ -251,6 +256,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   D7). A binary to install must load (E028) and must not declare a builtin's name; the lock plan
   enables the builtins an extension requires (CONTEXT "Lock plan"), and a builtin that does not load
   refuses the operation.
+- **Candidate vocabulary**: what the extensions a host could enable declare, read only for suggestions: each kind
+  keyword and each field an enhancement adds, with the extension that declares it
+  (`specforge_registry::CandidateVocabulary`, ADR 0122). The session hands the builtins' to the registry build;
+  `revendor` generates it from their pinned declarations
+  (`crates/runtime/component/data/builtin-vocabulary.json`). It never decides a diagnostic, only names the extension
+  to install.
 - **Lock plan**: the change one operation makes to what the project installs and enables (`add` its
   installs and builtins, `update` every upgrade, `init` its local files and builtins, `remove` its
   disabled entries and uninstall), staged as the operation leaves them: each package's lock entry
@@ -321,16 +332,18 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   extension declares is skipped silently when its extension declares an optional peer the project does not load, and
   is I004 otherwise (ADR 0096).
 - **Rule set**: the extensions' declared validation rules plus the host's E006 rules for required
-  fields, each turned once per registry build into a typed rule that carries only what its check
+  fields and E016 rules for file-reference fields, each turned once per registry build into a typed rule that carries only what its check
   reads, resolved against the registries (a compiled regex, an edge rule's edge type and the fields that
   write it). An edge rule counts the edges of its edge type; a cycle rule follows them. It runs itself over the entity snapshot's records (`RuleInput`, ADR
   0019), cycles included, and answers which rule applies to a kind, which the snapshot's standing
   reads (`specforge_registry::rules::Rules`, ADR 0020). A declared rule that cannot work is W112; a
   property its check does not read is W147.
+- **Named paths**: the paths an entity's field names: a scalar's text, or each item of a list, when not
+  empty; a block, an expression group, a variant list or a type union names none. Every `file_exists` rule,
+  E016 among them, reads them and suggests a close sibling of a missing one
+  (`specforge_registry::rules::files`, ADR 0118).
 - **Structural checks**: the host's own checks over the entity snapshot's records, run by the
-  registry build before the rule set, in this order: W012 (a `ref` nothing references), E016 (a
-  path a `file_reference` field of the entity's kind names that does not exist under the spec
-  root), then, unless the project is structural-only, E024, E013, E014, W020, E022 and E061
+  registry build before the rule set, in this order: W012 (a `ref` nothing references), then, unless the project is structural-only, E024, E013, E014, W020, E022 and E061
   (`specforge_registry`'s `checks`, ADR 0031). None reads a graph node. Whether every reference
   became an edge is the linker's own debug assertion, not a check.
 - **Structural-only**: no loaded extension declares an entity kind

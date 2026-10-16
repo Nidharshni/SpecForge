@@ -7,6 +7,7 @@
 //! registries, rules and passes, and the graph inputs it derives.
 
 mod build;
+mod candidates;
 mod declaration;
 mod edge_types;
 mod graph_inputs;
@@ -15,3 +16,4 @@ mod populate;
 mod validate;
 
 pub use build::{BuildPart, CHECK_PHASE, DeclaredPass, RegistryBuild, build_registries};
+pub use candidates::CandidateVocabulary;

@@ -76,14 +76,44 @@ fn a_symlinked_check_inputs_target_reruns_the_checks() {
     assert_eq!(e016(&session), 1, "{:?}", session.project().diagnostics());
 }
 
-/// Only E016's suggestion lists a directory: a `file_exists` rule asks
-/// whether its file exists, nothing more, so a file beside a missing one
-/// is nothing to the checks.
+/// A `file_reference` path that is a symlink and is pointed elsewhere is
+/// its own change: the link is keyed by its name, not by its old target.
+#[cfg(unix)]
 #[specforge_test(
     behavior = "classify_project_changes",
-    verify = "a file beside a missing file a file_exists rule names changes nothing"
+    verify = "an input that is a symlink pointed elsewhere is its change"
 )]
-fn a_file_beside_a_missing_file_exists_file_changes_nothing() {
+fn a_check_input_link_pointed_elsewhere_reruns_the_checks() {
+    let dir: TestProject = passes_project("gadget doc \"Doc\" {\n  docs [\"link.md\"]\n}\n");
+    let root = dir.root();
+    let outside = TempDir::new().unwrap();
+    let outside = fs::canonicalize(outside.path()).unwrap();
+    fs::write(outside.join("target.md"), "# target\n").unwrap();
+    let link = root.join("link.md");
+    std::os::unix::fs::symlink(outside.join("target.md"), &link).unwrap();
+    let ext = Arc::new(passes_extension());
+    let mut session = ProjectSession::open_with_runtime(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(Arc::clone(&ext) as SharedRuntime),
+    );
+    assert_eq!(e016(&session), 0, "{:?}", session.project().diagnostics());
+
+    fs::remove_file(&link).unwrap();
+    std::os::unix::fs::symlink(outside.join("missing.md"), &link).unwrap();
+    let update = session
+        .apply(&session.changes([link.as_path()]))
+        .expect("the link was pointed elsewhere");
+    assert_eq!(update.kind, UpdateKind::Checks);
+    assert_eq!(e016(&session), 1, "{:?}", session.project().diagnostics());
+}
+
+/// A `file_exists` rule's missing file lists its directory for the close-sibling help (ADR 0118),
+/// so a file created beside it re-runs the checks and changes that help.
+#[specforge_test(
+    behavior = "classify_project_changes",
+    verify = "a file beside a missing file a file_exists rule names changes its suggestion"
+)]
+fn a_file_beside_a_missing_file_exists_file_changes_its_suggestion() {
     let dir = TestProject::new()
         .raw_config(
             json!({"name": "c", "version": "0.1.0", "spec_root": "spec", "extensions": ["@test/files"]})
@@ -93,24 +123,33 @@ fn a_file_beside_a_missing_file_exists_file_changes_nothing() {
     let root = dir.root();
     specforge_installed::testing::install(root, &["@test/files"]);
     let ext = Arc::new(file_rule_extension());
-    let session = ProjectSession::open_with_runtime(
+    let mut session = ProjectSession::open_with_runtime(
         &specforge_common::ProjectRoot::of(root).unwrap(),
         Some(Arc::clone(&ext) as SharedRuntime),
     );
-    assert!(
+    let suggestion = |session: &ProjectSession| {
         session
             .project()
             .diagnostics()
             .iter()
-            .any(|d| d.code == "F001"),
-        "{:?}",
-        session.project().diagnostics()
-    );
+            .find(|d| d.code == "F001")
+            .unwrap_or_else(|| panic!("{:?}", session.project().diagnostics()))
+            .suggestion
+            .clone()
+    };
+    assert_eq!(suggestion(&session), None);
 
-    let notes = root.join("spec/notes.txt");
-    fs::write(&notes, "notes\n").unwrap();
-    let changes = session.changes([notes.as_path()]);
-    assert!(changes.is_empty(), "{changes:?}");
+    let near = root.join("spec/guid.md");
+    fs::write(&near, "notes\n").unwrap();
+    let changes = session.changes([near.as_path()]);
+    assert!(!changes.is_empty(), "{changes:?}");
+    session
+        .apply(&changes)
+        .expect("a file beside the missing one");
+    assert_eq!(
+        suggestion(&session).as_deref(),
+        Some("did you mean 'guid.md'?")
+    );
 }
 
 /// The inputs are the reads: each path asked, and the directory E016's

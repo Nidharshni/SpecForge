@@ -61,7 +61,7 @@ pub(crate) fn relative_canonical(canonical_root: &Path, canonical_path: &Path) -
 
 /// `path` with its directory canonical and its own name kept: a symlink stays
 /// itself. `path` as given when it has no directory or no name.
-fn in_canonical_dir(path: &Path) -> PathBuf {
+pub(crate) fn in_canonical_dir(path: &Path) -> PathBuf {
     match (path.parent(), path.file_name()) {
         (Some(parent), Some(name)) if !parent.as_os_str().is_empty() => {
             canonical(parent).join(name)

@@ -288,22 +288,32 @@ impl ConfigRead {
 /// missing file is the default config with no problem.
 pub fn read_project_config(project_root: &Path) -> ConfigRead {
     let path = project_root.join("specforge.json");
-    let unusable = |problem: ConfigProblem| ConfigRead {
+    let read = std::fs::read(&path);
+    project_config_from(&path, read)
+}
+
+/// The config at `path` from what reading its file returned (the host reads
+/// it, through whatever disk it holds): `NotFound` is the default config
+/// with no problem, any other error or bytes that are not UTF-8 are
+/// [`ConfigProblem::Unreadable`], and text is [`parse_project_config`]'s.
+pub fn project_config_from(path: &Path, read: std::io::Result<Vec<u8>>) -> ConfigRead {
+    let unusable = |error: String| ConfigRead {
         config: ProjectConfig::default(),
-        problems: vec![problem],
+        problems: vec![ConfigProblem::Unreadable {
+            path: path.to_path_buf(),
+            error,
+        }],
         found: true,
     };
-    let content = match std::fs::read_to_string(&path) {
-        Ok(content) => content,
+    let bytes = match read {
+        Ok(bytes) => bytes,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return ConfigRead::default(),
-        Err(e) => {
-            return unusable(ConfigProblem::Unreadable {
-                path,
-                error: e.to_string(),
-            });
-        }
+        Err(e) => return unusable(e.to_string()),
     };
-    parse_project_config(&path, &content)
+    match String::from_utf8(bytes) {
+        Ok(content) => parse_project_config(path, &content),
+        Err(_) => unusable("stream did not contain valid UTF-8".to_string()),
+    }
 }
 
 /// Parse `content`, the text of the `specforge.json` at `path` (named in
