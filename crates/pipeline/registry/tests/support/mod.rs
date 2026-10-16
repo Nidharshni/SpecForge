@@ -2,6 +2,8 @@
 //! and the one way they reach the registries: `build`, which is
 //! `build_registries`. No test names a step.
 
+pub mod written;
+
 use std::path::Path;
 
 use specforge_common::{Diagnostic, SourceSpan, Sym};

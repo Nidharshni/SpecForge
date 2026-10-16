@@ -2,47 +2,12 @@
 //! read from the record's value shape and span, never a graph node.
 
 use specforge_common::{SourceSpan, Sym};
-use specforge_extension_sdk::prelude::*;
 use specforge_graph::ValueShape;
-use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::entity::EntityRecord;
 use specforge_test_macros::test as spec;
 
-use crate::support::{build, check, coded_in, declare, span};
-
-/// `ticket`: an enum, a bool, an integer, a string list, a string and a
-/// reference to another `ticket`.
-fn tickets() -> ExtensionDeclaration {
-    declare("@test/tickets", |c| {
-        c.kind("Ticket", |k| {
-            k.keyword("ticket");
-            k.field("priority", |f| {
-                f.vocabulary(&Vocabulary::new(&["low", "medium", "high"]));
-            });
-            k.field("urgent", |f| {
-                f.field_type(FieldType::Bool);
-            });
-            k.field("points", |f| {
-                f.field_type(FieldType::Integer);
-            });
-            k.field("labels", |f| {
-                f.field_type(FieldType::StringList);
-            });
-            k.field("summary", |f| {
-                f.field_type(FieldType::String);
-            });
-            k.field("blocker", |f| {
-                f.field_type(FieldType::Reference).target_kind("ticket");
-            });
-            k.field("details", |f| {
-                f.field_type(FieldType::Block);
-            });
-            k.field("watchers", |f| {
-                f.field_type(FieldType::ReferenceList).target_kind("ticket");
-            });
-        });
-    })
-}
+use crate::support::written::tickets;
+use crate::support::{build, check, coded_in, span};
 
 /// The E061 messages of the checks over one `ticket` with `fields`.
 fn e061(fields: &[(&str, ValueShape, &str)]) -> Vec<(String, Option<String>)> {
