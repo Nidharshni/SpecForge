@@ -16,7 +16,7 @@ pub mod snapshot;
 mod invariants;
 
 // --- What the checks see of the file system (ADR 0107) ---
-pub use disk::{Asked, Disk, MemoryDisk};
+pub use disk::{Asked, Disk, MemoryDisk, PlainDisk};
 
 // --- Core registries ---
 pub use registries::{

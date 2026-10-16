@@ -81,7 +81,7 @@ pub struct FixQuery<'q> {
     pub within: Option<&'q SourceSpan>,
 }
 
-impl<F: Fn(&str) -> Option<String>> Navigator<'_, F> {
+impl Navigator<'_> {
     /// The fixes `diagnostics` (and the graph's entities missing verify
     /// statements) offer, filtered by `query`, sorted by where they apply
     /// then title. Every fix has at least one edit; a diagnostic whose

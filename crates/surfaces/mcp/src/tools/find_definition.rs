@@ -3,7 +3,7 @@ use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::SourceSpan;
 use specforge_common::shape::Shape;
-use specforge_ops::read::navigate::Precision;
+use specforge_ops::read::navigate::{Navigator, Precision};
 
 use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
@@ -61,7 +61,7 @@ impl CoreTool for Tool {
     type Returns = Answered<Reply>;
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
-        let definition = super::navigator(view)
+        let definition = Navigator::new(view)
             .definition(&args.entity_id)
             .map_err(Self::refused)?;
         Ok(Reply {

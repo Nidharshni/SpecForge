@@ -1,6 +1,7 @@
 # Installed extensions are one module
 
 **Status:** accepted (2026-10-07)
+The round-7 D3's 'watched module paths (`Installed::modules`)' is replaced by [ADR 0114](0114-environment-inputs-are-recorded-as-read.md) (`Installed` reads through the disk it is handed).
 
 How a `specforge.json` entry becomes a loaded extension, and how `add`, `update` and `remove` change
 what is installed, had no owner. `.specforge/extensions` was derived in four places; each compile read

@@ -1,7 +1,8 @@
 # Containment is applied where the operation opens the file
 
 **Status:** accepted (2026-10-16, architecture round 11, plan 01). Amends ADR 0092 D1 and D8, the closing note of ADR 0098
-and the placements of ADR 0086. D2 amended by ADR 0112.
+and the placements of ADR 0086. D2 amended by ADR 0112. D4's outline entry amended by [ADR 0116](0116-navigation-reads-the-text-the-project-was-compiled-from.md): outline opens nothing; its containment check validates
+the argument.
 
 MCP checked a path a client named (`specforge_mcp::containment`), then handed the raw name to an operation that read it
 again its own way: it split it on commas, normalised `..` by name, followed a crate directory's `target/` symlink, or

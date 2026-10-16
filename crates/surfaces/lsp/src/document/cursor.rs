@@ -376,11 +376,7 @@ impl<'d> Cursor<'d> {
 
     /// The declaration or reference token under the cursor, as navigation
     /// reads it: what prepareRename answers and rename may edit.
-    pub fn occurrence<F: Fn(&str) -> Option<String>>(
-        &self,
-        nav: &Navigator<'_, F>,
-        file: &str,
-    ) -> Option<Occurrence> {
+    pub fn occurrence(&self, nav: &Navigator<'_>, file: &str) -> Option<Occurrence> {
         let (line, col) = self.index.source_position(self.position)?;
         nav.occurrence_at(file, line, col)
     }
@@ -394,11 +390,7 @@ impl<'d> Cursor<'d> {
     /// comment, a kind keyword, a keyword and a value of a field typed as
     /// no reference name nothing. `file` is the document's session key (as
     /// spans name it).
-    pub fn target<F: Fn(&str) -> Option<String>>(
-        &self,
-        nav: &Navigator<'_, F>,
-        file: &str,
-    ) -> Option<Target> {
+    pub fn target(&self, nav: &Navigator<'_>, file: &str) -> Option<Target> {
         self.resolve(nav.view(), || self.occurrence(nav, file))
     }
 

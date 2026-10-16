@@ -1,6 +1,7 @@
 # Navigation is one module, answering in spans
 
-**Status:** accepted (2026-10-05)
+**Status:** accepted (2026-10-05). D1's parenthesis is reopened and D3's `Entity` wording amended by [ADR 0116](0116-navigation-reads-the-text-the-project-was-compiled-from.md): the navigator
+reads its view's compiled text.
 
 The LSP and MCP answer the same five questions about the same project: where an entity is declared,
 what references it, which entities match a text, which diagnostics are about an entity, and how a

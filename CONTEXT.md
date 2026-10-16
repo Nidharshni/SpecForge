@@ -20,7 +20,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   registration and I002. `Environment::from_read` is its disk adapter: it reads the lock and runs
   the extension load. Its fields are private; it is read through accessors (ADR 0047). A session
   reads `specforge.json` once per load and builds its extension runtime and, holding it, its
-  environment from that read, after stamping every environment input (ADR 0030, ADR 0106). It
+  environment from that read, stamping each environment input in the read that reads it (ADR 0030, ADR 0106, ADR 0114). It
   A project opened in a session's place loads its environment first and hands it over before any
   source is read (`ProjectSession::reopen`), so an editor answers what needs only the environment
   (keyword completion) while the sources are still being read.
@@ -91,17 +91,22 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   same order (an editor update that skips the checks while a file does not parse is the one exception).
 - **Read ledger**: what a project session read and when (`specforge_project::ledger`, crate-private): its session
   inputs and the stamp of each file, taken in the call that reads it. It does every disk read the session makes
-  (the config, the lock and modules, the sources, the check inputs), derives every source key, and answers `changes`
+  (the config, the lock and modules, the sources, the check inputs), the environment's each through the one recording adapter, derives every source key, and answers `changes`
   and `stale`. A one-shot compile runs the same steps through an adapter that records nothing (ADR 0106).
 - **Check reads**: every file-system read a check, a rule or a check pass makes, through the `Disk` in `RuleInput`
   (`exists`, `list`, `read`; `specforge_registry::Disk`, ADR 0107). A project session's ledger stamps and records each
   one; its check inputs are the reads its checks made the last time they ran. Tests give the checks a `MemoryDisk`.
+- **Environment reads**: every file-system read the environment load makes (`specforge.json`, `specforge.lock`, each
+  module the extension load reads) through the `Disk` it is handed (`Installed::read`, `Installed::load`; ADR 0114). A
+  project session's ledger stamps and records each one, each link hop included: its environment inputs are what its
+  last environment load read.
 - **Session inputs**: everything a project session depends on besides its sources' text: where its
   sources are discovered (the spec root and `exclude`), its **environment inputs**
-  (`specforge.json`, `specforge.lock`, the extension modules it loaded) and its **check inputs**
+  (the environment reads of its last load) and its **check inputs**
   (the check reads of the last check run: `specforge-cache.json` when a check pass read it, each path a check looked
   for, each directory a missing named file's suggestion listed, and the target of each that is a symlink, and where each symlinked
-  source's text lies (its target)). One value per
+  source's text lies (its target)). Every input is keyed by its own name (a symlink stays itself), and each link hop it
+  followed is an input of its own. One value per
   environment load, renewed each time the checks run (`specforge_project::SessionInputs`,
   `ProjectSession::inputs`). What a changed path reaches, which directories watch watches, which files
   the LSP asks its client to report and what the session stamps for freshness are all read from it; the
@@ -955,9 +960,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Navigation**: where an entity is declared, its references, entity lookup and ranking, which
   entities a diagnostic is about, and the fixes a diagnostic's data names. The LSP and MCP answer
   from one module (`specforge_ops::read::navigate`) in source spans. A span is a position in the text the
-  project was compiled from (`ProjectSession::source_text`), not in the buffer typed since nor the disk
-  now. The LSP converts spans to UTF-16 ranges through that text's line index (a file the compile holds
+  project was compiled from (`CompiledProject::source_text`), not in the buffer typed since nor the disk
+  now. The navigator reads it from its view's compiled project; no surface hands it a text, and outline answers
+  only for the compile's sources (ADR 0116). The LSP converts spans to UTF-16 ranges through that text's line index (a file the compile holds
   no text of has no range), MCP renders them as JSON (ADR 0016, ADR 0023).
+- **Rename plan**: the edits that rename one entity (`specforge_ops::authoring::rename::RenamePlan`):
+  the declaration's name and each incoming reference's token, positions in the text the project was compiled from,
+  which the plan keeps. MCP writes it only to files that still hold that text, refusing `conflict` otherwise; the LSP
+  hands it to the editor only over buffers that are that text (`ContentModified` otherwise; ADR 0116, ADR 0023 D3).
 - **Lexeme**: one token of a `.spec` text as the language's one lexer reads it without a parse
   (`specforge_parser::lex`): an identifier, a scheme ref ID (one lexeme), a number, a string (read as
   the grammar reads it, across lines; one the grammar would not close is marked unclosed and, if a

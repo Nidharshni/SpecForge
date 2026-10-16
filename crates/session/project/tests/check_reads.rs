@@ -76,6 +76,37 @@ fn a_symlinked_check_inputs_target_reruns_the_checks() {
     assert_eq!(e016(&session), 1, "{:?}", session.project().diagnostics());
 }
 
+/// A `file_reference` path that is a symlink and is pointed elsewhere is
+/// its own change: the link is keyed by its name, not by its old target.
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "classify_project_changes",
+    verify = "an input that is a symlink pointed elsewhere is its change"
+)]
+fn a_check_input_link_pointed_elsewhere_reruns_the_checks() {
+    let dir: TestProject = passes_project("gadget doc \"Doc\" {\n  docs [\"link.md\"]\n}\n");
+    let root = dir.root();
+    let outside = TempDir::new().unwrap();
+    let outside = fs::canonicalize(outside.path()).unwrap();
+    fs::write(outside.join("target.md"), "# target\n").unwrap();
+    let link = root.join("link.md");
+    std::os::unix::fs::symlink(outside.join("target.md"), &link).unwrap();
+    let ext = Arc::new(passes_extension());
+    let mut session = ProjectSession::open_with_runtime(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        Some(Arc::clone(&ext) as SharedRuntime),
+    );
+    assert_eq!(e016(&session), 0, "{:?}", session.project().diagnostics());
+
+    fs::remove_file(&link).unwrap();
+    std::os::unix::fs::symlink(outside.join("missing.md"), &link).unwrap();
+    let update = session
+        .apply(&session.changes([link.as_path()]))
+        .expect("the link was pointed elsewhere");
+    assert_eq!(update.kind, UpdateKind::Checks);
+    assert_eq!(e016(&session), 1, "{:?}", session.project().diagnostics());
+}
+
 /// A `file_exists` rule's missing file lists its directory for the close-sibling help (ADR 0118),
 /// so a file created beside it re-runs the checks and changes that help.
 #[specforge_test(

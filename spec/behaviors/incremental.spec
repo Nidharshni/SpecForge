@@ -76,9 +76,10 @@ behavior classify_project_changes "Classify Project Changes" {
     it, reaches every source. A source is keyed by its path relative to
     the spec root, a symlink by its own name; a symlinked source's target,
     or a directory above it, reaches that source. specforge.json,
-    specforge.lock and every extension module the environment loaded (an
+    specforge.lock and every module the extension load read (an
     installed extension's extension.wasm, a local .wasm entry) are
-    environment inputs; every path the checks read is a check input:
+    environment inputs, and the target of each of these that is a
+    symlink; every path the checks read is a check input:
     specforge-cache.json when a check-phase pass read it, every file a
     file_reference field or a file_exists rule names, which the checks
     look for, and every directory a missing named file's suggestion listed, and the
@@ -119,6 +120,8 @@ behavior classify_project_changes "Classify Project Changes" {
   verify unit "a file beside a missing file a file_exists rule names changes its suggestion"
   verify unit "a session's check inputs are the paths its checks read"
   verify unit "a check input that is a symlink is followed to its target"
+  verify unit "an environment input that is a symlink is followed to its target"
+  verify unit "an input that is a symlink pointed elsewhere is its change"
   verify unit "an excluded or undiscovered .spec file changes nothing"
   verify unit "a session's watch roots cover every input it classifies"
   verify unit "the LSP's watchers cover every input the session classifies"
@@ -160,9 +163,9 @@ behavior bring_session_up_to_date "Bring a Session Up to Date with Disk" {
     checks. Afterwards its graph and diagnostics MUST be those a fresh
     compile of the files on disk produces. specforge.json MUST be read
     once per environment load, the extension runtime and the environment
-    both built from that read, and every input MUST be stamped before
-    anything reads it, the extension runtime included, so a file written
-    while the session loads is seen next time. A surface that watches files
+    both built from that read, and every input MUST be stamped in the
+    call that reads it, before the read, so a file written while the
+    session loads is seen next time. A surface that watches files
     MUST do so each time its watchers move, for what was written while they
     did not watch; a file an editor buffer holds is not stale, whatever
     happened to it on disk (hold_editor_buffers).
@@ -172,7 +175,8 @@ behavior bring_session_up_to_date "Bring a Session Up to Date with Disk" {
   verify unit "a file rewritten within the timestamp granularity of the last build is still seen"
   verify unit "a specforge.lock change reloads the environment"
   verify unit "after bringing itself up to date a session matches a fresh compile"
-  verify unit "a specforge.json or module written while the extension runtime loads is seen next time"
+  verify unit "a specforge.json written while the extension runtime loads is seen next time"
+  verify unit "a module written before the extension load reads it is what the session read"
   verify unit "a source or check input written between its stamp and its read is seen next time"
   verify integration "after the LSP's watchers move, the session catches up on what changed while they did"
   verify integration "the LSP's catch-up keeps an open buffer"
