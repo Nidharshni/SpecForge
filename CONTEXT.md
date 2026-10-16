@@ -942,9 +942,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Navigation**: where an entity is declared, its references, entity lookup and ranking, which
   entities a diagnostic is about, and the fixes a diagnostic's data names. The LSP and MCP answer
   from one module (`specforge_ops::read::navigate`) in source spans. A span is a position in the text the
-  project was compiled from (`ProjectSession::source_text`), not in the buffer typed since nor the disk
-  now. The LSP converts spans to UTF-16 ranges through that text's line index (a file the compile holds
+  project was compiled from (`CompiledProject::source_text`), not in the buffer typed since nor the disk
+  now. The navigator reads it from its view's compiled project; no surface hands it a text, and outline answers
+  only for the compile's sources (ADR 0116). The LSP converts spans to UTF-16 ranges through that text's line index (a file the compile holds
   no text of has no range), MCP renders them as JSON (ADR 0016, ADR 0023).
+- **Rename plan**: the edits that rename one entity (`specforge_ops::authoring::rename::RenamePlan`):
+  the declaration's name and each incoming reference's token, positions in the text the project was compiled from,
+  which the plan keeps. MCP writes it only to files that still hold that text, refusing `conflict` otherwise; the LSP
+  hands it to the editor only over buffers that are that text (`ContentModified` otherwise; ADR 0116, ADR 0023 D3).
 - **Lexeme**: one token of a `.spec` text as the language's one lexer reads it without a parse
   (`specforge_parser::lex`): an identifier, a scheme ref ID (one lexeme), a number, a string (read as
   the grammar reads it, across lines; one the grammar would not close is marked unclosed and, if a
