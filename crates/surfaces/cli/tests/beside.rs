@@ -120,8 +120,10 @@ fn search_keeps_the_registry_configuration_beside_its_document() {
     assert!(!run.stdout.contains("W140"), "{}", run.stdout);
 }
 
-#[test]
-#[ignore = "flipped by T8"]
+#[specforge_test(
+    behavior = "provide_explore_cli",
+    verify = "under --format json the notices are the document's alone: nothing on stderr"
+)]
 fn explore_writes_its_notices_only_in_its_document() {
     let p = software();
 

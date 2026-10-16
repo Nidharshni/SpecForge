@@ -403,11 +403,13 @@ behavior provide_explore_cli "Provide CLI Explore Command" {
     explore prompt's payload is for the same arguments; human output lists
     the selection's size, the starting points, the most connected entities
     with their edge counts, the unconnected entities and, with ENTITY, the
-    paths from it. Notices go to stderr. An unknown ENTITY is E003 naming
+    paths from it. Notices go to stderr under human output; under --format
+    json the document carries them and stderr is empty. An unknown ENTITY is E003 naming
     the closest entity, exit 1.
   """
   verify integration "specforge explore --format json is the explore prompt's payload for the same arguments"
   verify integration "an unknown entity is E003 naming the closest entity, exit 1"
+  verify integration "under --format json the notices are the document's alone: nothing on stderr"
 }
 
 behavior provide_review_cli "Provide CLI Review Command" {
