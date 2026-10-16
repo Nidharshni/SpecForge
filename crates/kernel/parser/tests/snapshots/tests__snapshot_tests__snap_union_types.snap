@@ -17,13 +17,51 @@ expression: "parse_ok(source, \"test.spec\").entities"
                     key: Sym("variants"),
                     value: VariantList(
                         [
-                            "StringValue",
-                            "ReferenceList",
-                            "Block",
+                            TypeMember {
+                                text: "StringValue",
+                                span: SourceSpan {
+                                    file: Sym("test.spec"),
+                                    start_line: 2,
+                                    start_col: 19,
+                                    end_line: 2,
+                                    end_col: 30,
+                                },
+                                written: Bare,
+                            },
+                            TypeMember {
+                                text: "ReferenceList",
+                                span: SourceSpan {
+                                    file: Sym("test.spec"),
+                                    start_line: 2,
+                                    start_col: 33,
+                                    end_line: 2,
+                                    end_col: 46,
+                                },
+                                written: Bare,
+                            },
+                            TypeMember {
+                                text: "Block",
+                                span: SourceSpan {
+                                    file: Sym("test.spec"),
+                                    start_line: 2,
+                                    start_col: 49,
+                                    end_line: 2,
+                                    end_col: 54,
+                                },
+                                written: Bare,
+                            },
                         ],
                     ),
                     annotations: [],
-                    value_span: None,
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("test.spec"),
+                            start_line: 2,
+                            start_col: 19,
+                            end_line: 2,
+                            end_col: 54,
+                        },
+                    ),
                 },
             ],
         },
@@ -51,13 +89,51 @@ expression: "parse_ok(source, \"test.spec\").entities"
                     key: Sym("variants"),
                     value: VariantList(
                         [
-                            "invalid_input",
-                            "compilation_failed",
-                            "entity_not_found",
+                            TypeMember {
+                                text: "invalid_input",
+                                span: SourceSpan {
+                                    file: Sym("test.spec"),
+                                    start_line: 4,
+                                    start_col: 21,
+                                    end_line: 4,
+                                    end_col: 36,
+                                },
+                                written: Quoted,
+                            },
+                            TypeMember {
+                                text: "compilation_failed",
+                                span: SourceSpan {
+                                    file: Sym("test.spec"),
+                                    start_line: 4,
+                                    start_col: 39,
+                                    end_line: 4,
+                                    end_col: 59,
+                                },
+                                written: Quoted,
+                            },
+                            TypeMember {
+                                text: "entity_not_found",
+                                span: SourceSpan {
+                                    file: Sym("test.spec"),
+                                    start_line: 4,
+                                    start_col: 62,
+                                    end_line: 4,
+                                    end_col: 80,
+                                },
+                                written: Quoted,
+                            },
                         ],
                     ),
                     annotations: [],
-                    value_span: None,
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("test.spec"),
+                            start_line: 4,
+                            start_col: 21,
+                            end_line: 4,
+                            end_col: 80,
+                        },
+                    ),
                 },
             ],
         },
@@ -85,13 +161,51 @@ expression: "parse_ok(source, \"test.spec\").entities"
                     key: Sym("variants"),
                     value: VariantList(
                         [
-                            "-32700",
-                            "-32600",
-                            "-32601",
+                            TypeMember {
+                                text: "-32700",
+                                span: SourceSpan {
+                                    file: Sym("test.spec"),
+                                    start_line: 6,
+                                    start_col: 25,
+                                    end_line: 6,
+                                    end_col: 31,
+                                },
+                                written: Literal,
+                            },
+                            TypeMember {
+                                text: "-32600",
+                                span: SourceSpan {
+                                    file: Sym("test.spec"),
+                                    start_line: 6,
+                                    start_col: 34,
+                                    end_line: 6,
+                                    end_col: 40,
+                                },
+                                written: Literal,
+                            },
+                            TypeMember {
+                                text: "-32601",
+                                span: SourceSpan {
+                                    file: Sym("test.spec"),
+                                    start_line: 6,
+                                    start_col: 43,
+                                    end_line: 6,
+                                    end_col: 49,
+                                },
+                                written: Literal,
+                            },
                         ],
                     ),
                     annotations: [],
-                    value_span: None,
+                    value_span: Some(
+                        SourceSpan {
+                            file: Sym("test.spec"),
+                            start_line: 6,
+                            start_col: 25,
+                            end_line: 6,
+                            end_col: 49,
+                        },
+                    ),
                 },
             ],
         },

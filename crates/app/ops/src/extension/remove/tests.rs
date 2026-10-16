@@ -34,14 +34,12 @@ fn text(path: PathBuf) -> String {
     String::from_utf8(std::fs::read(path).unwrap()).unwrap()
 }
 
-static UNBOUNDED: crate::Containment = crate::Containment::unbounded();
-
 fn removing(name: &str) -> RemoveRequest<'_> {
     RemoveRequest {
         name,
         force: false,
         dry_run: false,
-        containment: &UNBOUNDED,
+        caller: crate::testing::caller(),
     }
 }
 
@@ -140,7 +138,7 @@ fn a_non_object_config_refuses_the_removal_before_any_write() {
             name: "@acme/x",
             force: true,
             dry_run,
-            containment: &UNBOUNDED,
+            caller: crate::testing::caller(),
         };
         let error = remove(&fixture.view(), &request).unwrap_err();
 
@@ -158,7 +156,6 @@ fn a_non_object_config_refuses_the_removal_before_any_write() {
     verify = "add, update and remove refuse an unusable specforge.json with one refusal, before they write"
 )]
 fn remove_refuses_as_add_and_update_do() {
-    use crate::asking::Asking;
     use crate::config::testing::UNUSABLE;
     use crate::extension::{AddRequest, UpdateRequest, add, update};
 
@@ -178,9 +175,8 @@ fn remove_refuses_as_add_and_update_do() {
                 extensions: vec!["@specforge/product".to_string()],
                 base: None,
                 allow_unsigned: false,
-                asking: Asking::Nobody,
                 dry_run: false,
-                containment: &UNBOUNDED,
+                caller: crate::testing::caller(),
             },
             &unconfigured,
             &specforge_wasm::testing::InProcessRuntime::new(),
@@ -192,8 +188,7 @@ fn remove_refuses_as_add_and_update_do() {
                 name: None,
                 reach: specforge_package::Reach::Compatible,
                 allow_unsigned: true,
-                asking: Asking::Nobody,
-                containment: &UNBOUNDED,
+                caller: crate::testing::caller(),
             },
             &unconfigured,
             &specforge_wasm::testing::InProcessRuntime::new(),
@@ -219,7 +214,7 @@ fn remove_refuses_as_add_and_update_do() {
 )]
 fn a_non_string_item_does_not_block_a_removal() {
     let fixture = Assembled::new()
-        .config(&["@specforge/product"])
+        .config_json(serde_json::json!({"extensions": ["@specforge/product", 42]}))
         .config_problems(vec![ConfigProblem::ItemNotAString {
             path: PathBuf::from("./specforge.json"),
             key: "extensions",
@@ -311,7 +306,7 @@ fn an_enabled_entry_that_is_not_installed_is_removed_by_its_name() {
         name: "@acme/missing",
         force: false,
         dry_run: true,
-        containment: &UNBOUNDED,
+        caller: crate::testing::caller(),
     };
     let planned = remove(&fixture.view(), &request).unwrap();
     assert_eq!(planned.origin, Origin::Unknown);
@@ -400,6 +395,7 @@ fn a_builtin_named_by_a_stray_lock_entry_is_uninstalled_as_a_builtin() {
 )]
 fn remove_selects_a_file_entry_by_its_text_its_path_or_its_name() {
     let fixture = Assembled::new()
+        .config(&["@sdk/greet=greet.wasm"])
         .enabled(vec![EnabledExtension {
             entry: "@sdk/greet=greet.wasm".into(),
             name: "@sdk/greet".into(),
@@ -415,7 +411,7 @@ fn remove_selects_a_file_entry_by_its_text_its_path_or_its_name() {
             name: argument,
             force: false,
             dry_run: true,
-            containment: &UNBOUNDED,
+            caller: crate::testing::caller(),
         };
         let outcome = remove(&fixture.view(), &request).unwrap();
 
@@ -557,5 +553,46 @@ fn every_refusal_of_a_name_is_about_it() {
     assert_eq!(
         (refusal.error.code.as_ref(), refusal.subject),
         ("no_project", None)
+    );
+}
+
+#[specforge_test(
+    behavior = "remove_extension",
+    verify = "a removal over a specforge.json changed since the compile writes nothing"
+)]
+fn a_removal_over_a_config_changed_since_the_compile_writes_nothing() {
+    let fixture = Assembled::new().config(&["@specforge/product"]);
+    write_config(&fixture, r#"{"extensions": ["@specforge/product"]}"#);
+    let view = fixture.view();
+    write_config(
+        &fixture,
+        r#"{"extensions": ["@specforge/product", "@acme/other"]}"#,
+    );
+    let before = files_under(fixture.root());
+
+    let failed = remove(&view, &removing("@specforge/product")).unwrap_err();
+
+    assert_eq!(failed.error.code, "file_changed", "{failed:?}");
+    assert_eq!(failed.error.kind, OpErrorKind::Conflict);
+    assert!(failed.error.writes.is_empty());
+    assert_eq!(files_under(fixture.root()), before);
+}
+
+#[test]
+fn a_removal_over_a_config_deleted_since_the_compile_writes_nothing() {
+    let fixture = installed(Assembled::new().config(&["@acme/x"]), "@acme/x");
+    write_config(&fixture, r#"{"extensions": ["@acme/x"]}"#);
+    let view = fixture.view();
+    std::fs::remove_file(fixture.root().join("specforge.json")).unwrap();
+    let before = files_under(fixture.root());
+
+    let failed = remove(&view, &removing("@acme/x")).unwrap_err();
+
+    assert_eq!(failed.error.code, "file_changed", "{failed:?}");
+    assert_eq!(files_under(fixture.root()), before);
+    assert!(
+        package_dir(fixture.root(), "@acme/x")
+            .join("extension.wasm")
+            .exists()
     );
 }

@@ -50,7 +50,6 @@ impl CoreTool for Tool {
 
     fn call(project: ProjectRef<'_>, args: Args) -> Answered<Reply> {
         use specforge_ops::analysis::collect::{self, Mode, Request, RunnerOutput};
-        use specforge_ops::asking::Asking;
 
         let runner = args.runner.as_deref();
         let run = args.run;
@@ -66,14 +65,13 @@ impl CoreTool for Tool {
             } else {
                 Mode::NoRun
             },
-            // The server never prompts: a command runs only if the user already
-            // approved it for this project with `specforge collect` in a terminal.
-            asking: Asking::Nobody,
             announce: &mut |_, _| {},
-            // Every file the collect reads or writes lands inside the call's project.
-            containment: project.containment(),
+            // Every file the collect reads or writes lands inside the call's project, and the
+            // server never prompts: a command runs only if the user already approved it for this
+            // project with `specforge collect` in a terminal.
+            caller: project.caller(),
         };
-        collect::collect(&project.view(), request)
+        collect::collect(&project.view(), request, project.machine)
             .map(|outcome| outcome.document().into())
             .map_err(|refusal| Box::new(Self::refused(refusal)))
     }

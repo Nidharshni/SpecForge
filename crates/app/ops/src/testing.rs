@@ -4,7 +4,8 @@
 //! embedded bytes (`InProcessRuntime::binary` serves whatever name the
 //! candidate is loaded under).
 //!
-//! It also holds `ScriptedSolver`, the SMT solver tests script (ADR 0079).
+//! It also holds `ScriptedSolver`, the SMT solver tests script (ADR 0079), and `ScriptedMachine`, the
+//! machine collect runs on (ADR 0125).
 //!
 //! Behind the `testing` feature; no production code reads it.
 #![allow(
@@ -13,14 +14,35 @@
 )]
 
 use std::collections::VecDeque;
+use std::io::Write;
+use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::{Duration, SystemTime};
 
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
 use specforge_protocol_types::PeerDependency;
 use specforge_wasm::testing::InProcessRuntime;
 
+use crate::asking::Asking;
+use crate::machine::{
+    CollectorCommand, CollectorMachine, CommandApproval, Ran, RunFailure, RunnerOutput,
+};
 use crate::solver::{Availability, SolveFailure, Solver, Z3};
 use crate::view::ProjectView;
+use crate::{Caller, Containment};
+
+/// Every path, for the fixtures below (ADR 0092 D6: the CLI's reach).
+static UNBOUNDED: Containment = Containment::unbounded();
+
+/// The caller most tests lend: every path, nobody to ask (the CLI's reach without a terminal).
+pub fn caller() -> Caller<'static> {
+    Caller::new(&UNBOUNDED, Asking::Nobody)
+}
+
+/// A caller bounded by `containment`, nobody to ask (MCP's).
+pub fn bounded(containment: &Containment) -> Caller<'_> {
+    Caller::new(containment, Asking::Nobody)
+}
 
 #[path = "../../../../fixtures/greet-extension/src/contributions.rs"]
 mod greet;
@@ -206,5 +228,177 @@ impl Solver for ScriptedSolver {
         self.answers.lock().unwrap().pop_front().unwrap_or_else(|| {
             panic!("the scripted solver was asked more than it was scripted to answer:\n{script}")
         })
+    }
+}
+
+/// What one scripted run does: the files it writes, what it prints, how it ends.
+#[derive(Debug, Clone, Default)]
+pub struct ScriptedRun {
+    /// Files it writes, each a path relative to the report location (`""` is the report file itself),
+    /// stamped one second after [`ScriptedMachine::started`].
+    pub files: Vec<(PathBuf, String)>,
+    /// What it prints to its standard output (written to the capture when there is one).
+    pub stdout: Option<String>,
+    /// Its exit code.
+    pub exit_code: Option<i32>,
+    /// It fails instead of ending.
+    pub fails: Option<ScriptedFailure>,
+}
+
+/// How a scripted run fails.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScriptedFailure {
+    /// The command could not be started.
+    NotRun,
+    /// Its standard output could not be written to the capture.
+    Capture,
+}
+
+/// A command a [`ScriptedMachine`] was asked to run.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RanCommand {
+    pub argv: Vec<String>,
+    pub dir: PathBuf,
+    pub report: PathBuf,
+    pub output: RunnerOutput,
+}
+
+/// A collector machine that does what a test scripts: it records each command line, writes the scripted
+/// report files and stdout, answers a fixed start time, and keeps approvals in memory (ADR 0125).
+pub struct ScriptedMachine {
+    every_command: bool,
+    unable_to_remember: Option<String>,
+    approved: Mutex<Vec<CommandApproval>>,
+    script: Mutex<VecDeque<ScriptedRun>>,
+    ran: Mutex<Vec<RanCommand>>,
+}
+
+impl Default for ScriptedMachine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ScriptedMachine {
+    /// The start time every scripted run answers (2 000 000 s after the epoch). Files a run writes are
+    /// stamped one second after it; a test stamps an earlier run's file one second before it.
+    pub fn started() -> SystemTime {
+        SystemTime::UNIX_EPOCH + Duration::from_secs(2_000_000)
+    }
+
+    /// Nothing approved, nothing scripted: a run panics, naming the command.
+    pub fn new() -> Self {
+        ScriptedMachine {
+            every_command: false,
+            unable_to_remember: None,
+            approved: Mutex::new(Vec::new()),
+            script: Mutex::new(VecDeque::new()),
+            ran: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// Also approving `approval`, as if the user approved it before.
+    pub fn approving(self, approval: CommandApproval) -> Self {
+        self.approved.lock().unwrap().push(approval);
+        self
+    }
+
+    /// Every command approved: what a test needs when it is not about consent.
+    pub fn approving_every_command(mut self) -> Self {
+        self.every_command = true;
+        self
+    }
+
+    /// `approve` fails with `why`.
+    pub fn unable_to_remember(mut self, why: &str) -> Self {
+        self.unable_to_remember = Some(why.to_string());
+        self
+    }
+
+    /// The next run does `run`.
+    pub fn answering(self, run: ScriptedRun) -> Self {
+        self.script.lock().unwrap().push_back(run);
+        self
+    }
+
+    /// The commands it ran, in order.
+    pub fn runs(&self) -> Vec<RanCommand> {
+        self.ran.lock().unwrap().clone()
+    }
+
+    /// What it holds approved now (scripted plus remembered).
+    pub fn approvals(&self) -> Vec<CommandApproval> {
+        self.approved.lock().unwrap().clone()
+    }
+}
+
+impl CollectorMachine for ScriptedMachine {
+    fn run(
+        &self,
+        command: &CollectorCommand<'_>,
+        capture: Option<&mut dyn Write>,
+    ) -> Result<Ran, RunFailure> {
+        self.ran.lock().unwrap().push(RanCommand {
+            argv: command.argv.to_vec(),
+            dir: command.dir.to_path_buf(),
+            report: command.report.to_path_buf(),
+            output: command.output,
+        });
+        let run = self.script.lock().unwrap().pop_front().unwrap_or_else(|| {
+            panic!(
+                "the scripted machine ran more than it was scripted to: {}",
+                command.argv.join(" ")
+            )
+        });
+        match run.fails {
+            Some(ScriptedFailure::NotRun) => {
+                return Err(RunFailure::NotRun(std::io::Error::other(
+                    "not scripted to start",
+                )));
+            }
+            Some(ScriptedFailure::Capture) => {
+                return Err(RunFailure::Capture(std::io::Error::other(
+                    "scripted capture failure",
+                )));
+            }
+            None => {}
+        }
+        for (relative, contents) in &run.files {
+            let at = if relative.as_os_str().is_empty() {
+                command.report.to_path_buf()
+            } else {
+                command.report.join(relative)
+            };
+            if let Some(dir) = at.parent() {
+                std::fs::create_dir_all(dir).unwrap();
+            }
+            let file = std::fs::File::create(&at).unwrap();
+            (&file).write_all(contents.as_bytes()).unwrap();
+            file.set_modified(Self::started() + Duration::from_secs(1))
+                .unwrap();
+        }
+        if let (Some(capture), Some(stdout)) = (capture, &run.stdout) {
+            capture
+                .write_all(stdout.as_bytes())
+                .map_err(RunFailure::Capture)?;
+        }
+        Ok(Ran {
+            exit_code: run.exit_code,
+            started: Self::started(),
+        })
+    }
+
+    fn approved(&self, approval: &CommandApproval) -> bool {
+        self.every_command || self.approved.lock().unwrap().contains(approval)
+    }
+
+    fn approve(&self, approval: &CommandApproval) -> Result<(), String> {
+        if let Some(why) = &self.unable_to_remember {
+            return Err(why.clone());
+        }
+        let mut approved = self.approved.lock().unwrap();
+        approved.retain(|a| !approval.replaces(a));
+        approved.push(approval.clone());
+        Ok(())
     }
 }

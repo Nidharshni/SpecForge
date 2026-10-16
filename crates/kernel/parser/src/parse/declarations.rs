@@ -104,25 +104,35 @@ impl<'a> ParseContext<'a> {
             .unwrap_or_else(|| Sym::new(""));
 
         let mut variants = Vec::new();
+        let variants_span = node
+            .child_by_field_name(field::VARIANTS)
+            .map(|n| self.span(n));
         if let Some(variants_node) = node.child_by_field_name(field::VARIANTS) {
             let mut cursor = variants_node.walk();
             for child in variants_node.children(&mut cursor) {
-                match child.kind() {
-                    kind::IDENTIFIER => variants.push(self.text(child).to_string()),
-                    kind::STRING => variants.push(self.unquote(child)),
+                let (text, written) = match child.kind() {
+                    kind::IDENTIFIER => (self.text(child).to_string(), Written::Bare),
+                    kind::STRING => (self.unquote(child), Written::Quoted),
                     kind::INTEGER | kind::NEGATIVE_INTEGER => {
-                        variants.push(self.text(child).to_string())
+                        (self.text(child).to_string(), Written::Literal)
                     }
-                    _ => {}
-                }
+                    _ => continue,
+                };
+                variants.push(TypeMember {
+                    text,
+                    span: self.span(child),
+                    written,
+                });
             }
         }
 
         let mut fields = FieldMap::new();
-        fields.push(
-            Sym::new(crate::ast::UNION_VARIANTS_FIELD),
-            FieldValue::VariantList(variants),
-        );
+        fields.push_entry(FieldEntry {
+            key: Sym::new(crate::ast::UNION_VARIANTS_FIELD),
+            value: FieldValue::VariantList(variants),
+            annotations: Vec::new(),
+            value_span: variants_span,
+        });
 
         self.entities.push(Entity {
             kind: EntityKind { raw: kind },

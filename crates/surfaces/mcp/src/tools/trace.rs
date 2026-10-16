@@ -10,6 +10,7 @@ use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
 use crate::reply::{Answer, Answered};
 use crate::tool::{ErrorCode, McpError};
+use specforge_ops::Refusal;
 use specforge_ops::view::EntityField;
 
 /// `specforge.trace`'s arguments.
@@ -72,6 +73,15 @@ impl ArgumentOf<TraceField> for Tool {
     }
 }
 
+/// The refusal of a trace of every entity, which MCP does not offer (ADR 0101 D4): the tool and the trace
+/// prompt answer it when neither `entity_id` nor `plan` is given.
+pub(crate) fn every_is_not_offered() -> Box<McpError> {
+    Box::new(McpError::invalid_input(
+        "entity_id",
+        "Missing required parameter: entity_id or plan",
+    ))
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.trace";
     const DESCRIPTION: &'static str = "Show traceability chain for an entity, or check an agent plan for gaps (entity_id or plan)";
@@ -90,25 +100,19 @@ impl CoreTool for Tool {
             Ask::Plan(plan) => {
                 return Ok(Reply::Plan(specforge_ops::read::plan::check(&view, plan)).into());
             }
-            Ask::Entity(entity_id) => entity_id,
-            Ask::Every => {
-                return Err(Box::new(McpError::invalid_input(
-                    "entity_id",
-                    "Missing required parameter: entity_id or plan",
-                )));
-            }
+            Ask::Trace(Target::Entity(entity_id)) => entity_id,
+            Ask::Trace(Target::Every) => return Err(every_is_not_offered()),
         };
-        let mut outcome = specforge_ops::read::trace::trace(&view, Target::Entity(entity_id))
-            .map_err(|error| {
-                Self::refused(specforge_ops::Refusal::from(error)).with_entity(entity_id)
-            })?;
-        let notices = std::mem::take(&mut outcome.notices);
-        match outcome.into_chain() {
-            Some(chain) => Ok(Answer::new(Reply::Chain(chain)).with_diagnostics(notices)),
-            None => Err(Box::new(McpError::new(
-                ErrorCode::InternalError,
-                "trace of one entity answered no chain",
-            ))),
-        }
+        let traced = specforge_ops::read::trace::trace(&view, Target::Entity(entity_id))
+            .map_err(|refusal: Refusal<EntityField>| Self::refused(refusal))?;
+        let chain = traced.try_map(|outcome| {
+            outcome.into_chain().ok_or_else(|| {
+                Box::new(McpError::new(
+                    ErrorCode::InternalError,
+                    "trace of one entity answered no chain",
+                ))
+            })
+        })?;
+        Ok(Answer::noticed(chain.map(Reply::Chain)))
     }
 }

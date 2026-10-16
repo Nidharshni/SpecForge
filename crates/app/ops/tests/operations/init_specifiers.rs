@@ -5,7 +5,6 @@ use std::path::Path;
 
 use crate::writes::{candidates as writes_candidates, files_under, project};
 
-use specforge_ops::asking::Asking;
 use specforge_ops::authoring::init::{self, InitField};
 use specforge_ops::extension::{self, AddRequest};
 use specforge_ops::testing::{candidates, declaring, serving_builtin};
@@ -38,7 +37,7 @@ fn init_with(
             name: Some("demo"),
             version: init::DEFAULT_VERSION,
             extensions,
-            containment: &specforge_ops::Containment::unbounded(),
+            caller: specforge_ops::testing::caller(),
         },
         runtime,
     )
@@ -125,9 +124,8 @@ fn init_reads_its_specifiers_as_add_reads_them() {
                 // As init reads a relative path: from the directory it creates.
                 base: Some(&dir),
                 allow_unsigned: false,
-                asking: Asking::Nobody,
                 dry_run: false,
-                containment: &specforge_ops::Containment::unbounded(),
+                caller: specforge_ops::testing::caller(),
             },
             &specforge_ops::registry::Unconfigured("add"),
             &writes_candidates(),
@@ -142,7 +140,7 @@ fn init_reads_its_specifiers_as_add_reads_them() {
             name: Some("demo"),
             version: init::DEFAULT_VERSION,
             extensions: &extensions,
-            containment: &specforge_ops::Containment::unbounded(),
+            caller: specforge_ops::testing::caller(),
         };
         let by_init = init::init(&request, &writes_candidates()).unwrap_err();
         assert_eq!(by_init.error.code, code, "{specifier}: init: {by_init:?}");
@@ -248,9 +246,8 @@ fn init_reads_a_dot_dot_after_a_symlink_as_add_does() {
             extensions: vec!["link/../a.wasm".to_string()],
             base: None,
             allow_unsigned: false,
-            asking: Asking::Nobody,
             dry_run: false,
-            containment: &specforge_ops::Containment::unbounded(),
+            caller: specforge_ops::testing::caller(),
         },
         &specforge_ops::registry::Unconfigured("add"),
         &runtime(),

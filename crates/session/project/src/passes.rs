@@ -3,25 +3,24 @@
 //! which order its passes run, is the registry build's
 //! (`specforge_registry::RegistryBuild::passes`). Check-phase passes run with
 //! every compile ([`crate::check_passes`]); the others under
-//! `specforge analyze` (`specforge_ops::analysis::analyze`). Findings are standard host
+//! `specforge analyze` (`specforge_ops::analysis::analyze`). Both phases run
+//! their passes through [`run_extension_passes`]. Findings are standard host
 //! diagnostics.
 
 use specforge_common::{Diagnostic, codes};
 use specforge_diagnostics::{Level, check_extension_code};
-use specforge_graph::Graph;
-use specforge_protocol_types::{PassInput, PassOutput, PassSeverity, TestResults};
-use specforge_registry::{FieldRegistry, KindRegistry};
+use specforge_protocol_types::{PassBuildCache, PassInput, PassOutput, PassSeverity, TestResults};
 use specforge_wasm::ExtensionCalls;
 use std::collections::HashSet;
 
+use crate::BuildCache;
 use crate::coverage::TestReport;
 use specforge_registry::EntitySnapshot;
 
-/// Everything a pass may inspect. Built once per analysis invocation.
-pub struct AnalysisContext<'a> {
-    pub graph: &'a Graph,
-    pub kind_registry: &'a KindRegistry,
-    pub field_registry: &'a FieldRegistry,
+/// What the passes of one run are given: the entity snapshot they read, and
+/// what the phase has beside it. Each field is read: by [`pass_input`], and
+/// `entities` also for the spans of findings.
+pub struct PassContext<'a> {
     /// The graph's entity snapshot (ADR 0019): what the passes receive,
     /// each entity with its standing (who is exempt).
     pub entities: &'a EntitySnapshot,
@@ -32,11 +31,24 @@ pub struct AnalysisContext<'a> {
     /// declared bounds (RES-25). `None` when the prove pass did not run;
     /// a proved claim discharges `verify property` obligations without
     /// executable tests.
-    pub proved_claims: Option<&'a std::collections::HashSet<String>>,
+    pub proved_claims: Option<&'a HashSet<String>>,
+    /// The build cache (check phase only, when `specforge-cache.json`
+    /// parses; ADR 0009 C).
+    pub previous: Option<&'a BuildCache>,
 }
 
-/// A diagnostic returned by an analysis pass, ready for host rendering.
-pub type Finding = Diagnostic;
+impl<'a> PassContext<'a> {
+    /// `entities`, and nothing beside them: what a compile has before it
+    /// reads the build cache.
+    pub fn of(entities: &'a EntitySnapshot) -> Self {
+        Self {
+            entities,
+            test_results: None,
+            proved_claims: None,
+            previous: None,
+        }
+    }
+}
 
 // ── Extension-owned compiler passes (WASM-only migration, Phase 4) ─────────
 
@@ -44,7 +56,7 @@ pub type Finding = Diagnostic;
 pub struct ExtensionPassReport {
     /// `<extension>:<pass>` identifier.
     pub name: String,
-    pub findings: Vec<Finding>,
+    pub findings: Vec<Diagnostic>,
     pub summary: serde_json::Value,
 }
 
@@ -55,13 +67,13 @@ pub struct ExtensionPassReport {
 /// its kind's flag (a kind that merely accepts `verify` statements, a
 /// formal `property`, does not count), and `owes_none` says it owes no
 /// obligations of its own (ADR 0004, D2-b), its standing's.
-pub fn pass_input(input: &AnalysisContext) -> PassInput {
+pub fn pass_input(input: &PassContext) -> PassInput {
     PassInput {
         entities: input.entities.pass_entities(),
         edges: input.entities.pass_edges(),
         test_results: input.test_results.map(TestResults::from),
         proved_claims: input.proved_claims.map(sorted_ids),
-        previous: None,
+        previous: input.previous.map(PassBuildCache::from),
     }
 }
 
@@ -126,15 +138,15 @@ fn code_misuse(extension: &str, pass: &str, output: &PassOutput) -> Vec<Diagnost
     diagnostics
 }
 
-/// Run `passes` (analyze-phase passes, in the order given: the registry
-/// build's; check-phase passes run with every compile instead) through the
-/// wasm runtime: each `__pass_<name>` export receives the entity snapshot
-/// and returns host diagnostics. A pass that fails (it traps, or answers
-/// what does not parse) has a report of its own with one E028 finding, so
-/// the analysis fails.
+/// Run `passes`, in the order given (the caller picks the phase:
+/// `check_passes` for a compile, `analyze_passes` for analyze), each on
+/// `context`'s input, encoded once: one report per pass. A pass that fails
+/// (it traps, answers what does not parse, or its input did not encode) has
+/// a report of its own with one E028 finding and `failed` in its summary;
+/// the others still run.
 pub fn run_extension_passes<'p>(
     passes: impl IntoIterator<Item = &'p specforge_registry::DeclaredPass>,
-    input: &AnalysisContext,
+    context: &PassContext,
     runtime: &dyn specforge_wasm::runtime::WasmRuntime,
 ) -> Vec<ExtensionPassReport> {
     let passes: Vec<&specforge_registry::DeclaredPass> = passes.into_iter().collect();
@@ -142,18 +154,13 @@ pub fn run_extension_passes<'p>(
         return Vec::new();
     }
 
-    let payload = pass_input(input);
+    let payload = pass_input(context);
     let entities_analyzed = payload.entities.len();
     let encoded = ExtensionCalls::encode(&payload);
     let calls = ExtensionCalls::new(runtime);
 
     let mut reports = Vec::new();
     for declared in passes {
-        debug_assert!(
-            !declared.is_check_phase(),
-            "{} is a check-phase pass",
-            declared.full_name()
-        );
         let report_name = declared.full_name();
         let pass = &declared.pass;
         let mut summary = serde_json::Map::new();
@@ -165,7 +172,7 @@ pub fn run_extension_passes<'p>(
             Ok(output) => {
                 let extra = output.summary.clone();
                 summary.extend(extra);
-                pass_findings(&declared.extension, &pass.name, output, input.entities)
+                pass_findings(&declared.extension, &pass.name, output, context.entities)
             }
             Err(error) => {
                 summary.insert("failed".into(), true.into());
@@ -180,6 +187,3 @@ pub fn run_extension_passes<'p>(
     }
     reports
 }
-
-/// Keys an extension pass adds to its report summary.
-pub type PassSummary = serde_json::Map<String, serde_json::Value>;

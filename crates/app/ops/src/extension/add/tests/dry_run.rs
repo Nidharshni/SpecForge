@@ -11,9 +11,8 @@ fn a_dry_run_of_a_present_extension_answers_as_the_add_would() {
             extensions: vec![source.into()],
             base: None,
             allow_unsigned: true,
-            asking: Asking::Nobody,
             dry_run: true,
-            containment: &UNBOUNDED,
+            caller: crate::testing::caller(),
         }
     }
 
@@ -235,9 +234,8 @@ fn a_dry_run_judges_a_registry_package_by_its_published_declaration() {
         extensions: vec![Source::Registry(PackageRef::parse("@acme/app@1.0.0").unwrap()).into()],
         base: None,
         allow_unsigned: true,
-        asking: Asking::Nobody,
         dry_run,
-        containment: &UNBOUNDED,
+        caller: crate::testing::caller(),
     };
 
     let real = add(&request(false), &published(), &runtime()).unwrap_err();

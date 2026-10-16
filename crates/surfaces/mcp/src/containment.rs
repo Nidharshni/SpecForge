@@ -3,7 +3,7 @@
 //! The rule is `specforge_ops::Containment`: it resolves a name the way the file system would and
 //! says whether it lands inside a directory. This module builds the bound of a request, and words
 //! the refusals MCP makes about a path it targets or opens itself (a call's `path`, init's
-//! directory, outline's `file`, render's file).
+//! directory, outline's `file`).
 
 use std::path::{Path, PathBuf};
 

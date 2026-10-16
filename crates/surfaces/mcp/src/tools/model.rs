@@ -60,8 +60,11 @@ impl CoreTool for Tool {
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Text> {
         let options = options(args)?;
-        let outcome = model::model(&view, &options).map_err(Self::refused)?;
-        Ok(Answer::new(Text(outcome.document)).with_diagnostics(outcome.notices))
+        Ok(Answer::noticed(
+            model::model(&view, &options)
+                .map_err(Self::refused)?
+                .map(Text),
+        ))
     }
 }
 

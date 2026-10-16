@@ -141,6 +141,10 @@ code must say more than passed, failed or unjudged.
 `Result<EntityCoverage, OpError>`, no longer a field of `EntityFacts`. D2: `PlanError` is gone — the plan check reads
 no report and a plan is refused where it is read (ADR 0076 D3).
 
+*(Superseded in part by ADR 0132, round 13, plan 10.)* D2: the typed errors are gone; check, analyze and trace
+build each refusal where they fail and state its subject there. D2's "the spelling of an argument is a surface's"
+stands (ADR 0072 D3).
+
 ## Amendment (architecture round 9, plan 08)
 
 - **D9a.** D9's process-level tests are the binary contract only: clap, the exit table, the streams, human

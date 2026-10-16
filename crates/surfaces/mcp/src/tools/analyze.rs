@@ -4,7 +4,6 @@ use crate::reply::Answered;
 use crate::target::ProjectRef;
 use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
-use specforge_ops::Refusal;
 use specforge_ops::analysis::analyze::{AnalyzeField, AnalyzeOptions, ReportSource, analyze};
 use std::path::PathBuf;
 
@@ -70,14 +69,14 @@ impl CoreTool for Tool {
                 // an absolute name or a symlink, is refused before it is read.
                 Some(named) => ReportSource::Named {
                     path: PathBuf::from(named),
-                    containment: project.containment().clone(),
+                    containment: project.caller().containment().clone(),
                 },
                 None => ReportSource::Recorded,
             },
             min: args.min,
             prove: None,
         };
-        let outcome = analyze(&view, &options).map_err(|e| Self::refused(Refusal::from(e)))?;
+        let outcome = analyze(&view, &options).map_err(Self::refused)?;
         Ok(outcome.document().into())
     }
 }

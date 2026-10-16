@@ -1,7 +1,11 @@
 //! A compiled project a test assembles in memory (`testing::Assembled`, ADR 0108).
 
 use specforge_common::{Diagnostic, Severity};
+use specforge_parser::FieldValue;
 use specforge_project::testing::Assembled;
+use specforge_protocol_types::{
+    EntityKindDescriptor, ExtensionDeclaration, FieldDescriptor, HandshakeResponse,
+};
 use specforge_registry::RegistryBuild;
 
 #[test]
@@ -89,4 +93,68 @@ fn a_copy_holds_the_texts_it_is_given() {
     let none = original.with_source_texts(Vec::<(String, String)>::new());
     assert_eq!(none.source_text("a.spec"), None);
     assert!(none.source_keys().is_empty());
+}
+
+/// A `ticket` kind with a `reference` field `blocker` (target `ticket`) and a `bool` field `urgent`.
+fn tickets() -> ExtensionDeclaration {
+    let field = |name: &str, field_type: &str, target_kind: Option<&str>| FieldDescriptor {
+        name: name.into(),
+        field_type: field_type.into(),
+        target_kind: target_kind.map(str::to_string),
+        ..FieldDescriptor::default()
+    };
+    ExtensionDeclaration {
+        handshake: HandshakeResponse {
+            name: "@test/tickets".into(),
+            version: "1.0.0".into(),
+            ..HandshakeResponse::default()
+        },
+        entities: vec![EntityKindDescriptor {
+            name: "Ticket".into(),
+            keyword: Some("ticket".into()),
+            fields: vec![
+                field("blocker", "reference", Some("ticket")),
+                field("urgent", "bool", None),
+            ],
+            ..EntityKindDescriptor::default()
+        }],
+        ..ExtensionDeclaration::default()
+    }
+}
+
+/// Assert `project` holds the graph a compile makes of `SOURCE`: the declared reference is an edge
+/// and the quoted `"false"` of a bool field is the boolean.
+fn assert_linked_as_a_compile_links_it(project: &Assembled) {
+    let graph = project.compiled().graph();
+    let edges = graph.edges_from("a");
+    assert_eq!(edges.len(), 1, "{edges:?}");
+    assert_eq!(edges[0].target, "b");
+    assert_eq!(edges[0].label, "blocker");
+    assert_eq!(
+        graph.node("a").unwrap().fields.get("urgent"),
+        Some(&FieldValue::Boolean(false))
+    );
+    assert!(
+        project
+            .compiled()
+            .entities()
+            .edges()
+            .iter()
+            .any(|e| e.source == "a" && e.target == "b" && e.label == "blocker")
+    );
+}
+
+const SOURCE: &str = "ticket a \"A\" {\n  blocker b\n  urgent \"false\"\n}\nticket b \"B\" {\n}\n";
+
+#[test]
+fn an_assembled_source_is_linked_as_a_compile_links_it() {
+    let project =
+        Assembled::over(specforge_registry::build_registries(vec![tickets()])).source(SOURCE);
+    assert_linked_as_a_compile_links_it(&project);
+
+    // A setter after `source` still applies: the order of the calls does not matter.
+    let late = Assembled::new()
+        .source(SOURCE)
+        .declarations(vec![tickets()]);
+    assert_linked_as_a_compile_links_it(&late);
 }

@@ -5,10 +5,11 @@
 //! document's paths reads the same here as it did on stdout.
 
 use serde_json::Value;
+use specforge_ops::Noticed;
 use specforge_ops::analysis::analyze::{AnalyzeOptions, analyze};
 use specforge_ops::analysis::check::{CheckOptions, CheckOutcome, check};
 use specforge_ops::read::export::{self, Format};
-use specforge_ops::read::query::{QueryOutcome, QueryRequest, query};
+use specforge_ops::read::query::{QueryRequest, query};
 use specforge_ops::read::schema::{self, SchemaRequest};
 use specforge_ops::read::stats::{self, Stats};
 use specforge_ops::read::trace::{self, Target, TraceOutcome};
@@ -45,7 +46,10 @@ pub fn exported_text(
     project: &CompiledProject,
     request: &export::Request<'_>,
 ) -> Result<String, specforge_ops::Refusal<export::ExportField>> {
-    export::export_recorded(&ProjectView::of(project), request).export
+    export::export_recorded(&ProjectView::of(project), request)
+        .into_value_and_notices()
+        .0
+        .export
 }
 
 /// [`exported_text`] of `format`, the schema as the command's default policy has it.
@@ -74,13 +78,13 @@ pub fn exported_with(project: &CompiledProject, request: &export::Request<'_>) -
 pub fn schema_of(project: &CompiledProject, request: &SchemaRequest<'_>) -> Value {
     let outcome = schema::schema(&ProjectView::of(project), request)
         .unwrap_or_else(|e| panic!("schema refused: {e:?}"));
-    serde_json::to_value(outcome).expect("a schema serializes")
+    serde_json::to_value(outcome.into_value_and_notices().0).expect("a schema serializes")
 }
 
 /// `specforge schema --publish --format <format>`.
 pub fn published(project: &CompiledProject, format: Format) -> Value {
     schema::json_schema(&ProjectView::of(project), format)
-        .map(|published| published.schema)
+        .map(|published| published.into_value_and_notices().0)
         .unwrap_or_else(|e| panic!("publish refused: {e:?}"))
 }
 
@@ -88,7 +92,7 @@ pub fn published(project: &CompiledProject, format: Format) -> Value {
 pub fn queried(
     project: &CompiledProject,
     request: &QueryRequest<'_>,
-) -> Result<QueryOutcome, specforge_ops::Refusal<specforge_ops::read::query::QueryField>> {
+) -> Result<Noticed<String>, specforge_ops::Refusal<specforge_ops::read::query::QueryField>> {
     query(&ProjectView::of(project), request)
 }
 
@@ -109,13 +113,15 @@ pub fn query_document(
         },
     )
     .unwrap_or_else(|e| panic!("query refused: {e:?}"));
-    parse(&outcome.document)
+    parse(&outcome.into_value_and_notices().0)
 }
 
 /// `specforge trace` (`cli/src/trace.rs`): the outcome.
 pub fn traced(project: &CompiledProject, target: Target<'_>) -> TraceOutcome {
     trace::trace(&ProjectView::of(project), target)
         .unwrap_or_else(|e| panic!("trace refused: {e:?}"))
+        .into_value_and_notices()
+        .0
 }
 
 /// `specforge trace <entity> --format json`, parsed.

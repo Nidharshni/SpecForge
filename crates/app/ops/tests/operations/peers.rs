@@ -308,7 +308,6 @@ fn add_cases() -> Vec<Case> {
     verify = "add and check agree: an add check would report E027 or E073 for is refused, and an add that passes leaves none"
 )]
 fn add_and_check_agree_on_the_project_peer_set() {
-    use specforge_ops::asking::Asking;
     use specforge_ops::extension::{self, AddRequest};
     use specforge_ops::testing::probes;
 
@@ -340,9 +339,8 @@ fn add_and_check_agree_on_the_project_peer_set() {
                 extensions: vec![source],
                 base: None,
                 allow_unsigned: false,
-                asking: Asking::Nobody,
                 dry_run: false,
-                containment: &specforge_ops::Containment::unbounded(),
+                caller: specforge_ops::testing::caller(),
             },
             &specforge_ops::registry::Unconfigured("test"),
             &probes(),
@@ -390,7 +388,6 @@ fn snapshot(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u
     verify = "a dry run answers what the add answers, refusals and the builtins it enables included, and writes nothing"
 )]
 fn a_dry_run_answers_what_the_add_answers() {
-    use specforge_ops::asking::Asking;
     use specforge_ops::extension::{self, AddRequest};
     use specforge_ops::testing::probes;
 
@@ -420,9 +417,8 @@ fn a_dry_run_answers_what_the_add_answers() {
                     extensions: vec![source.clone()],
                     base: None,
                     allow_unsigned: false,
-                    asking: Asking::Nobody,
                     dry_run,
-                    containment: &specforge_ops::Containment::unbounded(),
+                    caller: specforge_ops::testing::caller(),
                 },
                 &specforge_ops::registry::Unconfigured("test"),
                 &probes(),
@@ -574,7 +570,7 @@ fn remove_and_check_agree_on_the_project_peer_set() {
                 name,
                 force,
                 dry_run: false,
-                containment: &specforge_ops::Containment::unbounded(),
+                caller: specforge_ops::testing::caller(),
             },
         );
 
@@ -606,4 +602,45 @@ fn remove_and_check_agree_on_the_project_peer_set() {
             }
         }
     }
+}
+
+/// R2 without the timing: a removal judged on the config the compile read must not write another.
+#[specforge_test(
+    behavior = "remove_extension",
+    verify = "a removal judged on the compiled specforge.json never writes another"
+)]
+fn a_removal_judged_on_the_compiled_config_never_writes_another() {
+    use specforge_ops::extension::{self, RemoveRequest};
+    use specforge_ops::testing::{NEEDS_SOFTWARE_1, probes};
+
+    let software_needs_1: Locked = (
+        "@probe/needs-software",
+        NEEDS_SOFTWARE_1,
+        "1.0.0",
+        &[("@specforge/software", "^1.0")],
+    );
+    let dir = removal_project(&["@specforge/software"], &[], &[software_needs_1]);
+    let root = dir.path();
+    let compiled = compile_at(root, Some(Arc::new(probes())));
+    // A hand edit after the compile: the removal judged software alone, and now a dependent is enabled.
+    std::fs::write(
+        root.join("specforge.json"),
+        r#"{"extensions": ["@specforge/software", "@probe/needs-software"], "name": "t", "version": "0.1.0"}"#,
+    )
+    .unwrap();
+    let before = snapshot(root);
+
+    let error = extension::remove(
+        &ProjectView::of(&compiled),
+        &RemoveRequest {
+            name: "@specforge/software",
+            force: false,
+            dry_run: false,
+            caller: specforge_ops::testing::caller(),
+        },
+    )
+    .unwrap_err();
+
+    assert_eq!(error.error.code, "file_changed", "{error:?}");
+    assert_eq!(snapshot(root), before, "nothing was written");
 }

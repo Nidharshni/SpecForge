@@ -31,7 +31,8 @@ behavior watch_file_system_for_changes "Watch File System for Changes" {
     File creation, modification, and deletion MUST each trigger
     recompilation of affected files. A directory created, moved or
     deleted under the spec root changes every source under it, and an edit
-    to a symlinked source's target changes that source: the project
+    to a symlinked source's target, or one of its links pointed elsewhere,
+    changes that source: the project
     session turns each batch of changed paths into changes
     (classify_project_changes). After any update that
     changes the session's inputs (an environment reload, an edit that names
@@ -74,8 +75,8 @@ behavior classify_project_changes "Classify Project Changes" {
     every source discovery finds in it now and every source the session
     read from it; for a file, itself. The spec root, or a directory above
     it, reaches every source. A source is keyed by its path relative to
-    the spec root, a symlink by its own name; a symlinked source's target,
-    or a directory above it, reaches that source. specforge.json,
+    the spec root, a symlink by its own name; each hop a symlinked source's read followed
+    (its target included), or a directory above one, reaches that source. specforge.json,
     specforge.lock and every module the extension load read (an
     installed extension's extension.wasm, a local .wasm entry) are
     environment inputs, and the target of each of these that is a
@@ -102,8 +103,8 @@ behavior classify_project_changes "Classify Project Changes" {
     from one set of session inputs, renewed when the environment loads,
     when sources are read and each time the checks run. Watch's watch
     roots and the LSP's watchers MUST cover every input, every
-    specforge.json under the spec root included, and every symlinked
-    source's target (the LSP spelling each under the project root as
+    specforge.json under the spec root included, and each hop of every
+    symlinked source's read (the LSP spelling each under the project root as
     opened), the LSP MUST ask its client to report every entry
     created or deleted under the project root, and both MUST follow every
     update that changes the inputs. A set of watchers refused once is not
@@ -130,6 +131,7 @@ behavior classify_project_changes "Classify Project Changes" {
   verify integration "the LSP's watchers follow an edit that names a new file the checks read"
   verify unit "a directory created, moved or deleted under the spec root changes every source under it"
   verify unit "a symlinked source is keyed by its link and changes when its target does"
+  verify unit "a symlinked source is reached by each hop its read followed"
   verify unit "a path whose file is as the session last read it changes nothing"
   verify unit "a detached session takes no change from disk"
   verify unit "a directory moved above an environment or check input changes that input"

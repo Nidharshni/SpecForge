@@ -9,9 +9,8 @@ fn builtin_request<'a>(
         extensions: vec![Source::Builtin(name).into()],
         base: None,
         allow_unsigned: false,
-        asking: Asking::Nobody,
         dry_run: false,
-        containment: &UNBOUNDED,
+        caller: crate::testing::caller(),
     }
 }
 

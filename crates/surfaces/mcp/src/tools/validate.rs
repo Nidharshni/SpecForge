@@ -3,8 +3,7 @@ use crate::refusal::ArgumentOf;
 use crate::reply::{Answer, Answered, Text};
 use crate::target::ProjectRef;
 use crate::target::{AnyProject, Project};
-use crate::tool::{CoreTool, Effect, ToolGroup};
-use specforge_ops::Refusal;
+use crate::tool::{CoreTool, Effect, McpError, ToolGroup};
 use specforge_ops::analysis::check::{
     CheckField, CheckOptions, check, parse_lint_profiles, parse_severity,
 };
@@ -59,17 +58,15 @@ impl CoreTool for Tool {
             .as_deref()
             .map(parse_severity)
             .transpose()
-            .map_err(|e| Self::refused(Refusal::from(e)))?;
-        let lint_profiles =
-            parse_lint_profiles(&args.lint).map_err(|e| Self::refused(Refusal::from(e)))?;
+            .map_err(Self::refused)?;
+        let lint_profiles = parse_lint_profiles(&args.lint).map_err(Self::refused)?;
         let options = CheckOptions {
             strict: args.strict,
             lint_profiles,
             severity,
             record_cache: false,
         };
-        let outcome =
-            check(&project.view(), &options).map_err(|e| Self::refused(Refusal::from(e)))?;
+        let outcome = check(&project.view(), &options).map_err(McpError::from)?;
         let shown: Vec<specforge_common::Diagnostic> =
             outcome.shown().into_iter().cloned().collect();
         Ok(

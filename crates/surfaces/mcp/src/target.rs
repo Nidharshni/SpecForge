@@ -176,5 +176,6 @@ pub use call::{Call, CallTarget, ProjectRef, Serving, resolve};
 pub(crate) use error::refuse_without_project;
 pub use error::{TargetError, no_project};
 pub use input::{
-    AnyProject, Input, NewProject, NewProjectDir, Project, Reaches, Served, Unscoped, View,
+    AnyProject, Input, NewProject, NewProjectDir, OutputView, Project, Reaches, Served, Unscoped,
+    View, ViewToWrite,
 };

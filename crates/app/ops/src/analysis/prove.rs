@@ -30,8 +30,9 @@
 //! in the declared unit.
 
 use specforge_common::{Diagnostic, SourceSpan, Sym, codes};
+use specforge_graph::Graph;
 use specforge_parser::{SpannedExpr, parse_expression};
-use specforge_project::passes::AnalysisContext;
+use specforge_registry::FieldRegistry;
 use specforge_registry::ProofRole;
 
 use crate::solver::{Availability, SolveFailure, Solver};
@@ -129,7 +130,7 @@ fn note_failure(
 /// Run the prove pass over `solver`: consistency over declared bounds (E046
 /// with unsat cores) and entailment of declared claims with counterexample
 /// models (W139).
-pub(crate) fn run(ctx: &AnalysisContext, solver: &dyn Solver) -> ProveReport {
+pub(crate) fn run(graph: &Graph, fields: &FieldRegistry, solver: &dyn Solver) -> ProveReport {
     let mut findings = Vec::new();
     let mut skipped_prose_lines = 0usize;
     let mut entities_with_bounds = 0usize;
@@ -142,17 +143,13 @@ pub(crate) fn run(ctx: &AnalysisContext, solver: &dyn Solver) -> ProveReport {
     };
     let solver_available = solver_version.is_some();
 
-    for node in ctx.graph.nodes() {
+    for node in graph.nodes() {
         let kind = node.kind.raw.as_str();
         let mut has_bounds = false;
         for entry in node.fields.entries() {
             let name = entry.key.as_str();
             // Only fields an extension declares a proof role for are read.
-            let Some(role) = ctx
-                .field_registry
-                .get(kind, name)
-                .and_then(|field| field.proof_role())
-            else {
+            let Some(role) = fields.get(kind, name).and_then(|field| field.proof_role()) else {
                 continue;
             };
             let (mut conjuncts, skipped) = conjuncts_from_field(name, &entry.value);

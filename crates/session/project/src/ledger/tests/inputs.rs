@@ -259,3 +259,39 @@ fn an_input_is_reached_by_its_link_and_by_each_hop() {
     let reach = after.reach([out.join("b.md").as_path()]);
     assert!(reach.inputs.is_empty(), "{reach:?}");
 }
+
+#[cfg(unix)]
+#[test]
+fn a_source_is_reached_by_each_hop_its_read_followed() {
+    use crate::ledger::Reads;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let root = dir.path().join("root");
+    let out = dir.path().join("out");
+    std::fs::create_dir_all(root.join("links")).unwrap();
+    std::fs::create_dir_all(&out).unwrap();
+    std::fs::write(out.join("real.spec"), "term a_one \"A\" {}\n").unwrap();
+    std::fs::write(out.join("b.md"), "b").unwrap();
+    std::os::unix::fs::symlink(out.join("real.spec"), root.join("links/l1")).unwrap();
+    std::os::unix::fs::symlink("links/l1", root.join("a.spec")).unwrap();
+
+    let mut ledger = Ledger::over(SessionInputs::opened(&root, &config(&[]), Vec::new()));
+    ledger.source(&root, "a.spec");
+    let after = ledger.inputs().clone();
+
+    // Each hop, and a directory above one, reaches the source.
+    for changed in [
+        root.join("links/l1"),
+        out.join("real.spec"),
+        root.join("links"),
+    ] {
+        let reach = after.reach([changed.as_path()]);
+        assert_eq!(
+            reach.linked,
+            std::collections::BTreeSet::from(["a.spec".to_string()]),
+            "{changed:?}: {reach:?}"
+        );
+    }
+    // A sibling of the target is not a hop.
+    assert!(after.reach([out.join("b.md").as_path()]).linked.is_empty());
+}

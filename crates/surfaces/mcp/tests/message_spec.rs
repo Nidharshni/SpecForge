@@ -72,10 +72,10 @@ fn ty_of(value: &FieldValue) -> Ty {
     match value {
         FieldValue::Identifier(text) => name_or_list(text),
         FieldValue::String(literal) => Ty::Literal(literal.clone()),
-        FieldValue::TypeUnion(items) if items.iter().all(|i| i.starts_with('"')) => Ty::Union(
+        FieldValue::TypeUnion(items) if items.iter().all(|i| i.text.starts_with('"')) => Ty::Union(
             items
                 .iter()
-                .map(|i| i.trim_matches('"').to_string())
+                .map(|i| i.text.trim_matches('"').to_string())
                 .collect(),
         ),
         other => Ty::Unsupported(format!("{other:?}")),
@@ -117,7 +117,9 @@ fn declared() -> &'static Declared {
                     .fields
                     .get(specforge_parser::ast::UNION_VARIANTS_FIELD)
                 {
-                    Some(FieldValue::VariantList(members)) => SpecType::Alias(members.clone()),
+                    Some(FieldValue::VariantList(members)) => {
+                        SpecType::Alias(members.iter().map(|m| m.text.clone()).collect())
+                    }
                     _ => SpecType::Record(
                         entity
                             .fields

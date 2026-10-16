@@ -11,7 +11,7 @@ use specforge_test_macros::test as specforge_test;
 /// The kinds and fields these tests declare, standing in for an extension:
 /// `shape` derives `parts` (-> shape) from its field types and `iface`
 /// derives `uses` (-> shape) from its method signatures.
-fn derived() -> Vec<DerivedReference> {
+pub(crate) fn derived() -> Vec<DerivedReference> {
     vec![
         DerivedReference {
             source_kind: "shape".to_string(),
@@ -26,7 +26,7 @@ fn derived() -> Vec<DerivedReference> {
     ]
 }
 
-fn build(
+pub(crate) fn build(
     source: &str,
     derived: Vec<DerivedReference>,
 ) -> (Graph, Vec<specforge_graph::Diagnostic>) {
@@ -265,4 +265,15 @@ iface Port {
     let (graph, _) = build(source, Vec::new());
 
     assert!(graph.edges().is_empty(), "{:?}", graph.edges());
+}
+
+#[specforge_test(
+    behavior = "link_derived_references",
+    verify = "a quoted union member derives no edge"
+)]
+fn a_quoted_union_variant_derives_no_edge() {
+    let source = "shape Base {\n  id string\n}\nshape Wheel {\n  size number\n}\nshape Level = \"Base\" | Wheel\n";
+    let (graph, _) = build(source, derived());
+
+    assert_eq!(edges_from(&graph, "Level"), vec![edge("Wheel", "parts")]);
 }

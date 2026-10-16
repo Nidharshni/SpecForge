@@ -4,7 +4,6 @@
 
 use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
-use specforge_common::Diagnostic;
 use specforge_common::shape::Shape;
 use specforge_graph::Graph;
 use specforge_registry::RegistryBuild;
@@ -15,8 +14,8 @@ mod ask;
 pub use ask::{Ask, ENTITY_WITH_PLAN, TraceField};
 
 use crate::read::plan::PlanGap;
-use crate::view::{EntityField, ProjectView};
-use crate::{OpError, Refusal};
+use crate::view::{EntityField, ProjectView, not_found};
+use crate::{Noticed, OpError, Refusal};
 
 #[derive(Debug, Serialize, Shape)]
 pub struct TraceChain {
@@ -177,7 +176,7 @@ impl TraceExpectations {
     }
 }
 
-/// What to trace.
+/// What a trace request asks to trace (`Ask::Trace`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Target<'t> {
     /// One entity's chain.
@@ -198,9 +197,6 @@ pub struct TraceOutcome {
     schema_version: String,
     /// One entity was traced (else every one).
     single: bool,
-    /// What versioning the schema reported (I016, W053; ADR 0111). Not part
-    /// of the document.
-    pub notices: Vec<Diagnostic>,
 }
 
 impl Serialize for TraceOutcome {
@@ -266,51 +262,14 @@ impl TraceOutcome {
     }
 }
 
-/// Why a trace could not run.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TraceError {
-    /// The entity to trace is not in the graph; `near` is the closest id.
-    EntityNotFound {
-        entity_id: String,
-        near: Option<String>,
-    },
-}
-
-impl std::fmt::Display for TraceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TraceError::EntityNotFound { entity_id, .. } => {
-                write!(f, "unresolved entity '{entity_id}' — not found in graph")
-            }
-        }
-    }
-}
-
-impl std::error::Error for TraceError {}
-
-/// `view::not_found`: E003, its message, and a did-you-mean when an
-/// entity is close.
-impl From<TraceError> for OpError {
-    fn from(error: TraceError) -> Self {
-        Refusal::<EntityField>::from(error).into_error()
-    }
-}
-
-/// [`OpError::from`], about the entity traced.
-impl From<TraceError> for Refusal<EntityField> {
-    fn from(error: TraceError) -> Self {
-        match error {
-            TraceError::EntityNotFound { entity_id, near } => {
-                crate::view::unresolved(&entity_id, near.as_deref()).about(EntityField::EntityId)
-            }
-        }
-    }
-}
-
 /// Trace `target` in the view's graph: each chain both ways, with every
 /// edge the registries lead the traced entity to have, and it lacks,
-/// flagged as missing.
-pub fn trace(view: &ProjectView, target: Target) -> Result<TraceOutcome, TraceError> {
+/// flagged as missing. Its notices are what versioning the schema reported
+/// (I016, W053; ADR 0111).
+pub fn trace(
+    view: &ProjectView,
+    target: Target,
+) -> Result<Noticed<TraceOutcome>, Refusal<EntityField>> {
     let expectations = TraceExpectations::of(view.registries());
     let graph = view.graph();
     let versioned = view.versioned_schema();
@@ -318,13 +277,15 @@ pub fn trace(view: &ProjectView, target: Target) -> Result<TraceOutcome, TraceEr
     match target {
         Target::Entity(entity_id) => {
             let chain = chain(graph, entity_id, &expectations)
-                .ok_or_else(|| entity_not_found(graph, entity_id))?;
-            Ok(TraceOutcome {
-                chains: vec![chain],
-                schema_version,
-                single: true,
-                notices: versioned.notices(),
-            })
+                .ok_or_else(|| not_found(graph, entity_id).about(EntityField::EntityId))?;
+            Ok(Noticed::new(
+                TraceOutcome {
+                    chains: vec![chain],
+                    schema_version,
+                    single: true,
+                },
+                versioned.notices(),
+            ))
         }
         Target::Every => {
             let mut chains: Vec<TraceChain> = graph
@@ -333,25 +294,15 @@ pub fn trace(view: &ProjectView, target: Target) -> Result<TraceOutcome, TraceEr
                 .filter_map(|n| chain(graph, n.id.raw.as_str(), &expectations))
                 .collect();
             chains.sort_by(|a, b| a.entity_id.cmp(&b.entity_id));
-            Ok(TraceOutcome {
-                chains,
-                schema_version,
-                single: false,
-                notices: versioned.notices(),
-            })
+            Ok(Noticed::new(
+                TraceOutcome {
+                    chains,
+                    schema_version,
+                    single: false,
+                },
+                versioned.notices(),
+            ))
         }
-    }
-}
-
-/// The refusal for an entity the graph lacks, with its did-you-mean.
-fn entity_not_found(graph: &Graph, entity_id: &str) -> TraceError {
-    TraceError::EntityNotFound {
-        entity_id: entity_id.to_string(),
-        near: specforge_common::suggest::find_close_match(
-            entity_id,
-            graph.nodes().iter().map(|n| n.id.raw.as_str()),
-        )
-        .map(str::to_string),
     }
 }
 
@@ -368,7 +319,7 @@ pub struct Reach {
 
 /// The reach of `seeds` over `view`: each seed's chain as
 /// `trace(view, Target::Entity(seed))` computes it. A seed the graph lacks
-/// is the trace's refusal (`TraceError::EntityNotFound`, with its
+/// is `view::not_found` (E003, with its
 /// did-you-mean); a recorded report that cannot be used is the coverage
 /// view's (E045).
 pub fn reach<'s>(
@@ -379,8 +330,7 @@ pub fn reach<'s>(
     let graph = view.graph();
     let mut affected = BTreeSet::new();
     for seed in seeds {
-        let chain = chain(graph, seed, &expectations)
-            .ok_or_else(|| OpError::from(entity_not_found(graph, seed)))?;
+        let chain = chain(graph, seed, &expectations).ok_or_else(|| not_found(graph, seed))?;
         affected.extend(chain.reached().map(str::to_string));
     }
     let coverage = view.coverage()?;

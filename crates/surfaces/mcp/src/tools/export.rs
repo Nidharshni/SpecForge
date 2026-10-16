@@ -42,6 +42,8 @@ impl ArgumentOf<ExportField> for Tool {
             ExportField::MaxTokens => Some("max_tokens"),
             ExportField::SchemaVersion => Some("schema_version"),
             ExportField::Schema => Some("with_schema"),
+            // Export answers inline.
+            ExportField::Directory => None,
         }
     }
 }
@@ -70,7 +72,10 @@ impl CoreTool for Tool {
             coverage: None,
         };
 
-        let exported = export::export(&view, &request).map_err(Self::refused)?;
-        Ok(Answer::new(Text(exported.document)).with_diagnostics(exported.notices))
+        Ok(Answer::noticed(
+            export::export(&view, &request)
+                .map_err(Self::refused)?
+                .map(Text),
+        ))
     }
 }

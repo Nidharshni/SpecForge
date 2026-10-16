@@ -1,7 +1,7 @@
-# Containment is applied where the operation opens the file
+# Containment is applied where the operation opens the file **Amended by [ADR 0131](0131-an-export-is-written-into-the-project-by-the-export-operation.md):** D4: render's file is no longer MCP's to resolve; the export operation resolves and writes it.
 
 **Status:** accepted (2026-10-16, architecture round 11, plan 01). Amends ADR 0092 D1 and D8, the closing note of ADR 0098
-and the placements of ADR 0086. D2 amended by ADR 0112 and by ADR 0113 (the inference mark reads through the
+and the placements of ADR 0086. D3 amended by [ADR 0124](0124-what-the-caller-lends-an-operation-is-one-value.md) (the request carries the containment inside its `caller`). D2 amended by ADR 0112 and by ADR 0113 (the inference mark reads through the
 inference sources, held within the project root). D4's outline entry amended by [ADR 0116](0116-navigation-reads-the-text-the-project-was-compiled-from.md): outline opens nothing; its containment check validates
 the argument.
 

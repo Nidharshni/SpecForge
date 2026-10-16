@@ -1,6 +1,7 @@
 # Installed extensions are one module
 
 **Status:** accepted (2026-10-07)
+D4 amended by [ADR 0128](0128-one-project-change-over-held-files.md): the change places modules and writes the lock; the project files of its last step are a project change that puts back its own files.
 The round-7 D3's 'watched module paths (`Installed::modules`)' is replaced by [ADR 0114](0114-environment-inputs-are-recorded-as-read.md) (`Installed` reads through the disk it is handed).
 
 How a `specforge.json` entry becomes a loaded extension, and how `add`, `update` and `remove` change
@@ -169,3 +170,5 @@ the user's publisher-key pins. A failure there puts every file back; `config` is
 - **D8/D10:** the inventory no longer answers which extensions require a name (remove asks the lock plan).
 - **D9:** a row's origin is that of the entry the load loaded it by (`Origin::of` over `Installed::resolve`), else of
   its first entry in load order (ADR 0065 D5).
+
+**Amended by ADR 0126 (2026-10-16):** D4's last step writes the `specforge.json` entries the lock plan judged, after checking the file still holds what the plan opened with.

@@ -1,5 +1,6 @@
 use specforge_common::{Diagnostic, ProjectConfig, ProjectRoot};
 use specforge_graph::Graph;
+use specforge_ops::analysis::collect::{CollectorMachine, ProcessMachine};
 use specforge_ops::solver::{Solver, Z3};
 use specforge_project::{
     DiagnosticsDelta, ProjectSession, RuntimeSource, SharedRuntime, Update, UpdateKind,
@@ -57,6 +58,9 @@ pub struct McpState {
     /// The SMT solver doctor checks: z3 from PATH unless the host gave
     /// another ([`crate::McpServer::with_solver`]).
     pub(crate) solver: Arc<dyn Solver>,
+    /// The machine `specforge.collect` runs commands on and keeps approvals in: the user's unless the
+    /// host gave another ([`crate::McpServer::with_collector_machine`], ADR 0125).
+    pub(crate) collector_machine: Arc<dyn CollectorMachine>,
 }
 
 impl McpState {
@@ -72,6 +76,7 @@ impl McpState {
             subscriptions: Subscriptions::new(),
             extension_runtime: None,
             solver: Arc::new(Z3::default()),
+            collector_machine: Arc::new(ProcessMachine::user()),
         }
     }
 

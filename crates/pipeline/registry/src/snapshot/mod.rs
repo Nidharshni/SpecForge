@@ -13,7 +13,7 @@ mod wire;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use specforge_graph::Graph;
+use specforge_graph::GraphBuild;
 
 use crate::compilation::RegistryBuild;
 use crate::disk::Disk;
@@ -23,7 +23,7 @@ pub use standing::Standing;
 pub use text::{field_items, field_text};
 
 /// Every entity of one built graph, read with the registry build it was
-/// built with (ADR 0019): taken once per compile and per session check.
+/// built in (ADR 0019, ADR 0123): taken once per compile and per session check.
 #[derive(Debug, Clone, Default)]
 pub struct EntitySnapshot {
     /// In id order (the graph's node order).
@@ -42,9 +42,15 @@ pub struct EntitySnapshot {
 }
 
 impl EntitySnapshot {
-    /// The snapshot of `graph`, read with `registries`; relative file paths
-    /// in it resolve against `spec_root`.
-    pub fn of(graph: &Graph, registries: &RegistryBuild, spec_root: &Path) -> Self {
+    /// The snapshot of the graph `build` holds, read with `registries`, the
+    /// Registry build it was built in (`RegistryBuild::graph_of`, ADR 0123);
+    /// relative file paths in it resolve against `spec_root`.
+    pub fn of(build: &GraphBuild, registries: &RegistryBuild, spec_root: &Path) -> Self {
+        debug_assert!(
+            build.inputs() == registries.graph_inputs(),
+            "an entity snapshot reads only a graph built in its Registry build (RegistryBuild::graph_of, ADR 0123)"
+        );
+        let graph = build.graph();
         let nodes = graph.nodes();
         let kind_of: HashMap<&str, &str> = nodes
             .iter()

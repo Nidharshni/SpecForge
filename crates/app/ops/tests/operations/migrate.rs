@@ -45,7 +45,7 @@ pub(crate) fn request(root: &specforge_common::ProjectRoot) -> Request<'_> {
         target: CURRENT_FORMAT_VERSION,
         dry_run: false,
         no_backup: false,
-        containment: &crate::writes::UNBOUNDED,
+        caller: specforge_ops::testing::caller(),
     }
 }
 

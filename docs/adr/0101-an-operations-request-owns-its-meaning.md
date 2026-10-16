@@ -1,7 +1,7 @@
 # An operation's request owns its meaning; a surface only spells it
 
 **Status:** accepted (2026-10-15, round 10, plan 10). Extends ADR 0027 (option tables) and ADR 0033 D4 (one
-default) from names and defaults to every rule a request's values follow.
+default) from names and defaults to every rule a request's values follow. Amended by round 13, plan 12 (D1, D2).
 
 The CLI and MCP each build an operation's request by hand. Most of that is spelling: copying a field, reading a
 shared constant. Three times a surface decided what the arguments *mean*, and the two disagreed:
@@ -65,3 +65,12 @@ whose meaning depends on the project (then it is checked against the view, as AD
 
 - **D1.** "How several flags combine into one choice" is stated once in ops for consent: `Asking::of`
   ([ADR 0110](0110-who-can-be-asked-is-one-value-handed-to-an-operation.md)).
+
+## Amendment (architecture round 13, plan 12)
+
+- **D2.** It holds for an argument a surface owns, that picks which reader answers: the infer prompt's `scope`
+  names one of five (none or `overview`, `kind:<name>`, `file:<path>`, `plan`, `workflow`) and refuses any other
+  value as invalid input on `scope`, naming them; it is never read as the overview. An empty `scope` is no scope.
+  The grammar stays in the prompt: no other surface spells a scope (ADR 0101 "Rejected": one request decoder in ops).
+- **D1.** `trace::Ask` is `Trace(Target)` or `Plan(&AgentPlan)`: it carries the trace operation's own target, so no
+  surface maps one onto the other.

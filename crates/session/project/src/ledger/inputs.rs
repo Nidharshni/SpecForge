@@ -1,7 +1,7 @@
 //! [`SessionInputs`]: what a project session depends on, as one value
 //! (behavior `classify_project_changes`, ADR 0030).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use specforge_common::{ProjectConfig, SourceRoot};
@@ -15,8 +15,8 @@ use super::key::{canonical, discovered, in_canonical_dir, relative_canonical};
 /// ADR 0114) and the files its
 /// last checks read (every path a check asked about, the build cache a
 /// check-phase pass read, and every directory E016's suggestion listed,
-/// recorded when read, ADR 0107), and the target of each symlinked source (where its text
-/// lies). Behavior `classify_project_changes`, ADR 0030.
+/// recorded when read, ADR 0107), and the link hops each symlinked
+/// source's last read followed (its target included, ADR 0129). Behavior `classify_project_changes`, ADR 0030.
 ///
 /// One value per environment load, renewed each time the checks run;
 /// `Update::inputs_changed` says when it changed. Every answer to "what
@@ -53,21 +53,14 @@ pub(super) struct OnDisk {
     pub(super) check_files: Vec<PathBuf>,
     /// The directories the checks listed (E016's suggestion for a missing file).
     pub(super) listings: Vec<PathBuf>,
-    /// The symlinked sources, by key (sorted): where each one's text lies.
-    pub(super) links: Vec<Link>,
+    /// The link hops each symlinked source's last read followed, by key
+    /// (sorted), each as the read spelled it, in read order; the last is
+    /// where its text lies. A source that is no symlink has none (ADR 0129).
+    pub(super) hops: BTreeMap<String, Vec<PathBuf>>,
     /// Directories on the way to an input's missing directory outside the
     /// root, from their nearest existing ancestor.
     pub(super) pending: Vec<Pending>,
     pub(super) canonical: Canonical,
-}
-
-/// A source that is a symlink to a file: keyed by its own name, read through
-/// the link.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct Link {
-    pub(super) key: String,
-    /// Where the text lies (canonical).
-    pub(super) target: PathBuf,
 }
 
 /// An input whose directory does not exist yet, outside the root: what
@@ -89,26 +82,6 @@ pub(crate) enum Kind {
 }
 
 impl OnDisk {
-    /// The link `path` (a source under the spec root) is: it is a symlink
-    /// that resolves to a file.
-    pub(super) fn link_at(&self, path: &Path) -> Option<Link> {
-        if !std::fs::symlink_metadata(path)
-            .ok()?
-            .file_type()
-            .is_symlink()
-        {
-            return None;
-        }
-        let target = std::fs::canonicalize(path).ok()?;
-        if !target.is_file() {
-            return None;
-        }
-        Some(Link {
-            key: discovered(self.sources.dir(), path),
-            target,
-        })
-    }
-
     /// `path` canonical, re-spelled from the root as it was opened when it
     /// lies under it.
     fn respell(&self, path: &Path) -> PathBuf {
@@ -140,6 +113,9 @@ pub(super) struct Canonical {
     pub(super) environment: BTreeMap<PathBuf, PathBuf>,
     pub(super) checks: BTreeMap<PathBuf, PathBuf>,
     pub(super) listings: BTreeMap<PathBuf, PathBuf>,
+    /// Each source hop by its own name in its canonical directory (ADR 0114
+    /// D3), to the keys whose read followed it.
+    pub(super) hops: BTreeMap<PathBuf, BTreeSet<String>>,
 }
 
 /// A directory a file watcher watches.
@@ -203,12 +179,8 @@ impl SessionInputs {
                 disk.environment
                     .iter()
                     .chain(&disk.check_files)
-                    .filter_map(|path| path.parent().map(canonical))
-                    .chain(
-                        disk.links
-                            .iter()
-                            .filter_map(|link| link.target.parent().map(Path::to_path_buf)),
-                    ),
+                    .chain(disk.hops.values().flatten())
+                    .filter_map(|path| path.parent().map(canonical)),
             )
             .filter(|dir| dir.is_dir());
         let mut roots: Vec<PathBuf> = Vec::new();
@@ -256,6 +228,16 @@ impl SessionInputs {
             return Vec::new();
         };
         let spelled = |path: &Path| disk.respell(path);
+        // Each hop of a symlinked source, once, unless the sources glob covers it.
+        let mut source_hops: Vec<PathBuf> = Vec::new();
+        for hop in disk.hops.values().flatten() {
+            let covered = relative_canonical(&disk.canonical.spec_root, &in_canonical_dir(hop))
+                .is_some_and(|relative| disk.sources.holds(&relative));
+            let hop = disk.respell_file(hop);
+            if !covered && !source_hops.contains(&hop) {
+                source_hops.push(hop);
+            }
+        }
         let spec_root_apart = !disk.canonical.spec_root.starts_with(&disk.canonical.root);
         std::iter::once(Watched::Sources(spelled(disk.sources.dir())))
             .chain(std::iter::once(Watched::Directories(spelled(&disk.root))))
@@ -266,15 +248,7 @@ impl SessionInputs {
                     .chain(&disk.check_files)
                     .map(|path| Watched::File(disk.respell_file(path))),
             )
-            .chain(
-                disk.links
-                    .iter()
-                    .filter(|link| {
-                        relative_canonical(&disk.canonical.spec_root, &link.target)
-                            .is_none_or(|relative| !disk.sources.holds(&relative))
-                    })
-                    .map(|link| Watched::File(spelled(&link.target))),
-            )
+            .chain(source_hops.into_iter().map(Watched::File))
             .chain(
                 disk.listings
                     .iter()
@@ -310,42 +284,37 @@ impl SessionInputs {
             environment,
             check_files: Vec::new(),
             listings: Vec::new(),
-            links: Vec::new(),
+            hops: BTreeMap::new(),
             pending: Vec::new(),
             canonical: Canonical::empty(),
         })
     }
 
-    /// The symlinked sources among `discovered` (every source found) are
-    /// now the links: nothing else of the value changes.
-    pub(super) fn set_links(&mut self, discovered: &[PathBuf]) {
+    /// No source hop is recorded: discovery starts the record of the sources
+    /// again, each read recording its own (ADR 0129).
+    pub(super) fn forget_hops(&mut self) {
         let Some(disk) = self.disk_mut() else {
             return;
         };
-        disk.links = discovered
-            .iter()
-            .filter_map(|path| disk.link_at(path))
-            .collect();
-        disk.links.sort_by(|a, b| a.key.cmp(&b.key));
+        disk.hops.clear();
+        disk.canonical.hops.clear();
     }
 
-    /// The links of `keys` read again, the others kept: whether they moved
-    /// (a source became or stopped being a symlink, or points elsewhere).
-    pub(super) fn relink(&mut self, keys: &[String]) -> bool {
+    /// Source `key`'s hops are now `hops` (empty: none), and their canonical
+    /// forms are taken again. Whether the record changed.
+    pub(super) fn set_hops(&mut self, key: &str, hops: Vec<PathBuf>) -> bool {
         let Some(disk) = self.disk_mut() else {
             return false;
         };
-        let before = disk.links.clone();
-        disk.links.retain(|link| !keys.contains(&link.key));
-        let again: Vec<Link> = keys
-            .iter()
-            .filter(|key| disk.sources.holds(key))
-            .filter_map(|key| disk.link_at(&disk.sources.dir().join(key)))
-            .collect();
-        disk.links.extend(again);
-        disk.links.sort_by(|a, b| a.key.cmp(&b.key));
-        disk.links.dedup();
-        disk.links != before
+        let changed = if hops.is_empty() {
+            disk.hops.remove(key).is_some()
+        } else {
+            disk.hops.insert(key.to_string(), hops.clone()) != Some(hops)
+        };
+        if changed {
+            disk.canonical.hops = disk.canonical_hops();
+        }
+        changed
     }
 
     /// The check inputs are now `files` and the `listings` the checks
@@ -391,6 +360,7 @@ impl SessionInputs {
                 .collect(),
             checks: disk.canonical_checks(),
             listings: disk.canonical_listings(),
+            hops: BTreeMap::new(),
         };
         disk.pending = disk.pending_directories();
         SessionInputs {
@@ -405,6 +375,18 @@ impl OnDisk {
             .iter()
             .map(|path| (in_canonical_dir(path), path.clone()))
             .collect()
+    }
+
+    fn canonical_hops(&self) -> BTreeMap<PathBuf, BTreeSet<String>> {
+        let mut hops: BTreeMap<PathBuf, BTreeSet<String>> = BTreeMap::new();
+        for (key, followed) in &self.hops {
+            for hop in followed {
+                hops.entry(in_canonical_dir(hop))
+                    .or_default()
+                    .insert(key.clone());
+            }
+        }
+        hops
     }
 
     /// E016's suggestion for a missing file lists its directory: a file
@@ -476,6 +458,7 @@ impl Canonical {
             environment: BTreeMap::new(),
             checks: BTreeMap::new(),
             listings: BTreeMap::new(),
+            hops: BTreeMap::new(),
         }
     }
 }

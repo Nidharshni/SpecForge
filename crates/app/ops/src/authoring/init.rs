@@ -10,7 +10,7 @@
 //! afterwards with `specforge add`.
 
 use crate::extension::{self, Also, Ask, Candidate, LockPlan, Named, Names, Place};
-use crate::{Containment, Held, OpError, OpErrorKind, Refusal, Writes};
+use crate::{Caller, Containment, OpError, OpErrorKind, Refusal, Writes};
 use serde::Serialize;
 use serde_json::{Value, json};
 use specforge_common::shape::Shape;
@@ -24,6 +24,8 @@ pub const PROJECT_EXISTS: &str = "project_exists";
 /// The code an init refused with because the file it would write as the
 /// starter is already there.
 pub const STARTER_EXISTS: &str = "starter_exists";
+/// A file init creates cannot be written.
+const INIT_WRITE_FAILED: &str = "init_write_failed";
 /// The code for a project name init can't use.
 pub const INVALID_NAME: &str = "invalid_name";
 
@@ -68,9 +70,9 @@ pub struct Request<'a> {
     /// Extension specifiers, one per string (nothing splits a string); a relative local path is
     /// read from `dir`.
     pub extensions: &'a [String],
-    /// The bound local extensions are read in (ADR 0104): the CLI passes
-    /// [`Containment::unbounded`], MCP its request's bound.
-    pub containment: &'a Containment,
+    /// What the init may reach: a local extension is read, every file written, through
+    /// `caller.containment()` (ADR 0104). Init asks nobody.
+    pub caller: Caller<'a>,
 }
 
 /// What init wrote.
@@ -171,7 +173,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
         Place {
             root: req.dir,
             base: req.dir,
-            containment: req.containment,
+            containment: req.caller.containment(),
         },
     )
     .map_err(about)?;
@@ -179,7 +181,13 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     // The lock plan the installs will be, `add`'s: an unreadable lock refuses here (E033), and the
     // project's peer set is judged before anything is written.
     let installed = Installed::at(req.dir);
-    let mut plan = LockPlan::initializing(&installed, runtime, names.installs())?;
+    let document = json!({
+        "$schema": "https://specforge.dev/schema/specforge.json",
+        "name": name,
+        "version": version,
+        "spec_root": SPEC_ROOT,
+    });
+    let mut plan = LockPlan::initializing(&installed, runtime, names.installs(), document)?;
     // A registry package needs a registry, which a project that doesn't exist yet can't have.
     let named = names
         .name_each(runtime, &mut |specifier, _| Err(no_registry(specifier)))
@@ -202,7 +210,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     // enabling software enables it too; the project's test runners get the extensions that
     // collect their results.
     plan.accompany("@specforge/software", "@specforge/testing");
-    for runner in detected_runners(req.dir, &req.containment.narrowed(req.dir)) {
+    for runner in detected_runners(req.dir, &req.caller.containment().narrowed(req.dir)) {
         plan.accompany("@specforge/testing", runner);
     }
     let checked = plan.check().map_err(|refused| {
@@ -220,53 +228,44 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     // Whatever the extensions contribute, the file is written as the
     // formatter writes it, so `specforge format --check` accepts it.
     let starter = canonical(&starter, req.dir);
-    let config = json!({
-        "$schema": "https://specforge.dev/schema/specforge.json",
-        "name": name,
-        "version": version,
-        "spec_root": SPEC_ROOT,
-        "extensions": extensions,
-    });
-
     let dir = req.dir;
     let write_error = |what: &str, e: std::io::Error| {
         OpError::new(
             OpErrorKind::of_io(&e),
-            "init_write_failed",
+            INIT_WRITE_FAILED,
             format!("cannot write {what}: {e}"),
         )
     };
     let files = vec![
         Also {
-            path: dir.join(crate::config::CONFIG_FILE),
-            write: Box::new(move |file| {
-                file.create_parent()
-                    .map_err(|e| write_error("the project directory", e))?;
-                crate::config::write(file, &config)
-            }),
-        },
-        Also {
             path: dir.join(".gitignore"),
-            write: Box::new(move |file| {
-                let existing = file.read_to_string().unwrap_or_default();
-                append_gitignore(file, &existing)
-                    .map(|_| ())
-                    .map_err(|e| write_error(".gitignore", e))
+            stage: Box::new(move |file, change| {
+                let before = file
+                    .read_if_there()
+                    .map_err(|e| write_error(".gitignore", e))?;
+                if let Some(after) = gitignore_with(before.as_deref().unwrap_or_default()) {
+                    change.stage(file, before, after);
+                }
+                Ok(())
             }),
+            code: INIT_WRITE_FAILED,
         },
         Also {
             path: dir.join(STARTER_FILE),
-            write: Box::new(move |file| {
-                file.create_parent()
-                    .map_err(|e| write_error("the spec directory", e))?;
-                file.create_new(&starter).map_err(|e| match e.kind() {
-                    std::io::ErrorKind::AlreadyExists => starter_exists(dir),
-                    _ => write_error(STARTER_FILE, e),
-                })
+            stage: Box::new(move |file, change| {
+                let there = file
+                    .read_if_there()
+                    .map_err(|e| write_error(STARTER_FILE, e))?;
+                if there.is_some() {
+                    return Err(starter_exists(dir));
+                }
+                change.stage(file, None, starter.into_bytes());
+                Ok(())
             }),
+            code: INIT_WRITE_FAILED,
         },
     ];
-    let done = checked.finish(dir, files, &req.containment.narrowed(dir))?;
+    let done = checked.finish(dir, files, &req.caller.containment().narrowed(dir))?;
 
     Ok(Outcome {
         root: dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf()),
@@ -370,25 +369,26 @@ spec "{project_name}" {{
     )
 }
 
-/// Append the missing [`GITIGNORE`] entries to `file`, whose text is
-/// `existing`.
-fn append_gitignore(file: &Held, existing: &str) -> std::io::Result<bool> {
+/// `.gitignore` with the missing [`GITIGNORE`] entries appended to `existing`, its bytes (a file that is not
+/// UTF-8 is appended to, never rewritten); `None` when it holds every entry.
+fn gitignore_with(existing: &[u8]) -> Option<Vec<u8>> {
+    let held = String::from_utf8_lossy(existing);
     let missing: Vec<&str> = GITIGNORE
         .into_iter()
-        .filter(|entry| !existing.lines().any(|l| l.trim() == *entry))
+        .filter(|entry| !held.lines().any(|l| l.trim() == *entry))
         .collect();
     if missing.is_empty() {
-        return Ok(false);
+        return None;
     }
-    let mut text = existing.to_string();
-    if !text.is_empty() && !text.ends_with('\n') {
-        text.push('\n');
+    let mut bytes = existing.to_vec();
+    if !bytes.is_empty() && !bytes.ends_with(b"\n") {
+        bytes.push(b'\n');
     }
     for entry in missing {
-        text.push_str(entry);
-        text.push('\n');
+        bytes.extend_from_slice(entry.as_bytes());
+        bytes.push(b'\n');
     }
-    file.write(text).map(|()| true)
+    Some(bytes)
 }
 
 /// Runner extensions for the test runners the project at `path` uses.
@@ -456,15 +456,13 @@ mod tests {
         (scratch, extensions, dir)
     }
 
-    static UNBOUNDED: Containment = Containment::unbounded();
-
     fn request<'a>(dir: &'a Path, extensions: &'a [String]) -> Request<'a> {
         Request {
             dir,
             name: Some("demo"),
             version: DEFAULT_VERSION,
             extensions,
-            containment: &UNBOUNDED,
+            caller: crate::testing::caller(),
         }
     }
 
@@ -556,7 +554,7 @@ mod tests {
                 name,
                 version: DEFAULT_VERSION,
                 extensions,
-                containment: &crate::Containment::unbounded(),
+                caller: crate::testing::caller(),
             };
             let refusal = init(&request, &runtime()).unwrap_err();
             (refusal.error.code.to_string(), refusal.subject)

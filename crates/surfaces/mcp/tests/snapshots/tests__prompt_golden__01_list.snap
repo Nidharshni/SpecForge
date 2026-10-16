@@ -76,7 +76,7 @@ expression: "reply[\"result\"]"
     {
       "arguments": [
         {
-          "description": "Scope: omit for overview, 'kind:{name}' for focused guide, 'file:{path}' for file deduplication",
+          "description": "Scope: omit for every kind's guide (or 'overview'), 'kind:{name}' for one kind's guide, 'file:{path}' for what a source file already has, 'plan' for the inference plan, 'workflow' for the step-by-step protocol",
           "name": "scope",
           "required": false
         },

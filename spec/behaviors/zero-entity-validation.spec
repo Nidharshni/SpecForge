@@ -217,7 +217,7 @@ behavior snapshot_entities_once "Snapshot the Entities Once per Compile" {
   types      [PassEntity, ValidatorContext, Diagnostic]
   consumes   [graph_built]
   requires {
-    graph_and_registries "the graph is built with the registry build's own graph inputs, and that build is available"
+    graph_and_registries "the graph is built in the registry build that reads it (registry_build_graph_inputs)"
   }
   ensures {
     one_text_per_field "every field an entity writes has one text, the same for every reader"
@@ -273,6 +273,7 @@ behavior snapshot_entities_once "Snapshot the Entities Once per Compile" {
   verify unit "a kind that accepts no verify statements owes no obligations, whatever rule applies to it"
   verify unit "the checks, the check passes and the coverage of one compile read one snapshot"
   verify unit "a session's snapshot follows every update"
+  verify unit "a snapshot reads only a graph built in its registry build"
   verify unit "every written field keeps its value shape and value span beside its text"
   verify unit "the coverage rule reads each entity as the pass input carries it"
   verify unit "the standing counts an entity toward coverage exactly as the coverage rule counts the pass entity it sends"

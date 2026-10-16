@@ -45,9 +45,11 @@ fn a_source_written_between_its_stamp_and_its_read_is_seen_next_time() {
         &specforge_common::ProjectConfig::default(),
         Vec::new(),
     ));
-    let read = ledger.source_with(spec_root, "a.spec", |path| {
-        fs::write(path, NEW).unwrap();
-        sources::read(spec_root, "a.spec")
+    let (read, _) = ledger.read_source(spec_root, "a.spec", |disk| {
+        // The file is stamped when it is first asked about, before the write.
+        assert!(disk.exists(&spec_root.join("a.spec")));
+        fs::write(spec_root.join("a.spec"), NEW).unwrap();
+        sources::read(disk, spec_root, "a.spec")
     });
     assert_eq!(text(&read), Some(NEW));
     // The stamp is the old file's, so the next comparison catches up.

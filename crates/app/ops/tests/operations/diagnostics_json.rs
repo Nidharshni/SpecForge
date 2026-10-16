@@ -50,11 +50,7 @@ fn entity_without_contracts() -> Diagnostic {
         k.keyword("rule").contract_target();
     });
     let registries = build_registries(vec![c.declaration()]);
-    let (graph, _) = specforge_graph::build_graph(&[specforge_parser::parse(
-        "widget w \"W\" {\n}\n",
-        "main.spec",
-    )]);
-    let project = Assembled::over(registries).graph(graph);
+    let project = Assembled::over(registries).source("widget w \"W\" {\n}\n");
     let outcome = analyze(
         &project.view(),
         &AnalyzeOptions {

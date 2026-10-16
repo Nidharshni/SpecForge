@@ -5,8 +5,7 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{SourceSpan, Sym};
-use specforge_graph::{DerivedFrom, Edge, FieldForms, Node, type_expressions};
-use specforge_parser::FieldValue;
+use specforge_graph::{Edge, Node};
 
 use super::references::reference_edges;
 use super::text::SourceText;
@@ -221,13 +220,10 @@ impl Navigator<'_> {
         None
     }
 
-    /// The occurrences of `edge`'s target in its source: each token its
-    /// field holds (a reference list item, a single reference's value; for
-    /// a derived field, the names in the holder's type expressions or
-    /// method signatures). Without any, the target's tokens in the
-    /// holder's block. A token the text does not spell, or no token at
-    /// all, is one occurrence at the holder's block, with
-    /// [`Precision::Entity`]. `holder` is the edge's source.
+    /// The occurrences of `edge`'s target in its source: each place the graph records it is written
+    /// (`Graph::written`: a reference list item, a single reference's value, a name in a type expression a derived
+    /// field reads), when the text spells the target there. Without any, or with one the text does not spell, the
+    /// holder's block with [`Precision::Entity`]. `holder` is the edge's source.
     pub(crate) fn edge_occurrences(&self, holder: &Node, edge: &Edge) -> Vec<Occurrence> {
         let target = edge.target.as_str();
         let block = &holder.source_span;
@@ -244,24 +240,11 @@ impl Navigator<'_> {
             return entity();
         };
 
-        let mut spans = written_references(holder, edge, self.view.registries().field_forms());
-        if spans.is_empty() {
-            spans = self.derived_references(&text, holder, edge);
-        }
-        if spans.is_empty() {
-            // Unknown provenance (a graph built by hand): the target's
-            // tokens anywhere in the holder's block but its name.
-            let name = declaration_name(&text, block, holder.id.raw.as_str());
-            spans = tokens_named(&text, block, target)
-                .into_iter()
-                .filter(|span| Some(span) != name.as_ref())
-                .collect();
-        }
         let mut occurrences = Vec::new();
         let mut stale = false;
-        for span in spans {
-            if text.spells(&span, target) {
-                occurrences.push(occurrence(span, Precision::Token));
+        for span in self.view.graph().written(edge) {
+            if text.spells(span, target) {
+                occurrences.push(occurrence(span.clone(), Precision::Token));
             } else {
                 stale = true;
             }
@@ -271,89 +254,6 @@ impl Navigator<'_> {
         }
         occurrences
     }
-
-    /// The tokens a derived field's edge stands for: the target's names in
-    /// the holder's field values written as type syntax, or in its method
-    /// signatures (what `link_derived_references` read them from).
-    fn derived_references(&self, text: &SourceText, holder: &Node, edge: &Edge) -> Vec<SourceSpan> {
-        let registries = self.view.registries();
-        let kind = holder.kind.raw.as_str();
-        let derived = registries
-            .fields()
-            .get(kind, edge.label.as_str())
-            .and_then(|entry| entry.declared().derived_from.as_deref())
-            .and_then(DerivedFrom::parse);
-        let target = edge.target.as_str();
-        let forms = registries.field_forms();
-        let mut spans = Vec::new();
-        match derived {
-            Some(DerivedFrom::TypeExpressions) => {
-                for entry in holder.fields.entries() {
-                    let reading = forms.reading(kind, entry.key.as_str());
-                    let typed = !type_expressions(&reading, &entry.value).is_empty();
-                    if let (true, Some(span)) = (typed, &entry.value_span) {
-                        spans.extend(tokens_named(text, span, target));
-                    }
-                }
-            }
-            Some(DerivedFrom::MethodSignatures) => {
-                for method in &holder.methods {
-                    // The signature: what follows the method's name.
-                    let tokens = text.tokens(&method.span);
-                    let open = tokens
-                        .iter()
-                        .position(|t| t.is_punct('('))
-                        .unwrap_or(tokens.len());
-                    spans.extend(
-                        tokens[open..]
-                            .iter()
-                            .filter(|t| t.is_name() && text.token_text(t) == target)
-                            .map(|t| text.span(method.span.file, t.start, t.end)),
-                    );
-                }
-            }
-            None => {}
-        }
-        spans
-    }
-}
-
-/// The tokens `holder` writes for `edge` in the field the edge is labeled
-/// with: each reference-list item naming the target, or the value of a
-/// single-reference field naming it.
-fn written_references(holder: &Node, edge: &Edge, forms: &FieldForms) -> Vec<SourceSpan> {
-    let target = edge.target.as_str();
-    let reading = forms.reading(holder.kind.raw.as_str(), edge.label.as_str());
-    let mut spans = Vec::new();
-    for entry in holder
-        .fields
-        .entries()
-        .iter()
-        .filter(|e| e.key == edge.label)
-    {
-        spans.extend(
-            reading
-                .references(entry)
-                .iter()
-                .filter(|item| item.id == target)
-                .filter_map(|item| item.span.cloned()),
-        );
-        if let FieldValue::Identifier(value) = &entry.value
-            && value == target
-        {
-            spans.extend(entry.value_span.clone());
-        }
-    }
-    spans
-}
-
-/// The tokens spelling `word` in `span`, outside strings and comments.
-fn tokens_named(text: &SourceText, span: &SourceSpan, word: &str) -> Vec<SourceSpan> {
-    text.tokens(span)
-        .into_iter()
-        .filter(|t| t.is_name() && text.token_text(t) == word)
-        .map(|t| text.span(span.file, t.start, t.end))
-        .collect()
 }
 
 /// The entity's name in its declaration: the first token spelling `id` on

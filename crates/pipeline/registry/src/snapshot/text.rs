@@ -37,7 +37,9 @@ pub fn field_items(value: &FieldValue) -> Option<Vec<String>> {
         | FieldValue::Date(_)
         | FieldValue::Integer(_)
         | FieldValue::Boolean(_) => None,
-        FieldValue::VariantList(items) | FieldValue::TypeUnion(items) => Some(items.clone()),
+        FieldValue::VariantList(items) | FieldValue::TypeUnion(items) => {
+            Some(items.iter().map(|m| m.text.clone()).collect())
+        }
         FieldValue::List(items) => Some(items.iter().map(|item| item.text.clone()).collect()),
         FieldValue::Expression(exprs) => Some(exprs.iter().map(ToString::to_string).collect()),
         FieldValue::Block(block) => {

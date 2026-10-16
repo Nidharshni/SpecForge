@@ -47,6 +47,7 @@ pub struct Cli<'p> {
     cwd: PathBuf,
     env: Vec<(OsString, OsString)>,
     stdin: Vec<u8>,
+    size_limit: Option<u32>,
 }
 
 impl<'p> Cli<'p> {
@@ -57,7 +58,17 @@ impl<'p> Cli<'p> {
             cwd: project.root().to_path_buf(),
             env: Vec::new(),
             stdin: Vec::new(),
+            size_limit: None,
         }
+    }
+
+    /// Run under `ulimit -f <blocks>` with `SIGXFSZ` ignored: a write past the limit fails with `EFBIG` instead of
+    /// killing the process, so a write that fails part-way can be tested end to end. `blocks` is 512 bytes under
+    /// `sh` in POSIX mode and 1024 under bash; a test sizes its files to hold under both. Unix only.
+    #[cfg(unix)]
+    pub fn under_file_size_limit(mut self, blocks: u32) -> Self {
+        self.size_limit = Some(blocks);
+        self
     }
 
     /// Set `key` for this driver's runs (a proxy, `PATH`, `NO_COLOR`, `SPECFORGE_REGISTRY_TOKEN`, …).
@@ -155,9 +166,48 @@ impl<'p> Cli<'p> {
             .expect("spawn specforge")
     }
 
+    /// `specforge mcp <root>` fed exactly `requests` (one JSON-RPC line each), every line it wrote, parsed.
+    pub fn mcp_session(&self, requests: &[String]) -> Vec<serde_json::Value> {
+        let root = self
+            .project
+            .root()
+            .to_str()
+            .expect("a UTF-8 root")
+            .to_owned();
+        let mut child = self
+            .process(&["mcp", &root], false, &[])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn specforge mcp");
+        let mut stdin = child.stdin.take().expect("piped stdin");
+        for request in requests {
+            writeln!(stdin, "{request}").expect("write a request");
+        }
+        drop(stdin);
+        let output = child.wait_with_output().expect("wait for specforge mcp");
+        String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .filter_map(|line| serde_json::from_str(line).ok())
+            .collect()
+    }
+
     /// The command line: `args`, then `--path <root>` when `path` is set, then `after`.
     fn process(&self, args: &[&str], path: bool, after: &[&str]) -> Command {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_specforge"));
+        let mut command = match self.size_limit {
+            Some(blocks) => {
+                let mut command = Command::new("sh");
+                command
+                    .arg("-c")
+                    .arg(format!(
+                        "trap '' XFSZ; ulimit -f {blocks}; exec \"$0\" \"$@\""
+                    ))
+                    .arg(env!("CARGO_BIN_EXE_specforge"));
+                command
+            }
+            None => Command::new(env!("CARGO_BIN_EXE_specforge")),
+        };
         command.args(args);
         if path {
             command.arg("--path").arg(self.project.root());

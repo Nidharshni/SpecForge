@@ -5,6 +5,7 @@
     reason = "a test's unwrap is its assertion: a None or an Err fails the test"
 )]
 
+mod collect;
 mod compiled_support;
 mod connectivity;
 mod contracts;
@@ -17,6 +18,7 @@ mod enhancement_credit;
 mod errors;
 mod explore;
 mod export_cache;
+mod export_written;
 mod extension_calls;
 mod failures;
 mod field_references;
@@ -31,6 +33,7 @@ mod init_specifiers;
 mod init_writes;
 mod inspect;
 mod kinds;
+mod machine_reach;
 mod management;
 mod migrate;
 mod migrate_sources;
@@ -44,6 +47,7 @@ mod plan;
 mod project_files;
 mod publish;
 mod query;
+mod refusals;
 mod rename_text;
 mod review;
 mod schema;
@@ -55,3 +59,4 @@ mod trace_support;
 mod verify_statements;
 mod view_support;
 mod writes;
+mod written_references;

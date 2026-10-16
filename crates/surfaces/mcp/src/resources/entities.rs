@@ -27,9 +27,11 @@ impl CoreResource for EntitiesResource {
                 ..Default::default()
             },
         );
-        let text = serde_json::to_string(&crate::tools::list::rows(&listing)).map_err(|error| {
-            Box::new(McpError::new(ErrorCode::InternalError, error.to_string()))
-        })?;
-        Ok(ResourceText::json(text).with_notices(listing.notices))
+        let text = listing
+            .try_map(|entities| serde_json::to_string(&crate::tools::list::rows(&entities)))
+            .map_err(|error| {
+                Box::new(McpError::new(ErrorCode::InternalError, error.to_string()))
+            })?;
+        Ok(ResourceText::noticed(text))
     }
 }

@@ -7,7 +7,8 @@ use std::sync::Arc;
 
 /// What the graph build reads of the loaded extensions. Only the registry
 /// build derives it (`specforge_registry::RegistryBuild::graph_inputs`),
-/// from the declarations and the field registry; no caller assembles one.
+/// from the declarations and the field registry; no caller assembles one: a
+/// graph read with a Registry build is made by `RegistryBuild::graph_of`.
 /// The default is a project with no extension loaded.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct GraphInputs {
@@ -113,17 +114,19 @@ impl GraphBuild {
         }
     }
 
-    /// A build that holds `graph`, made elsewhere (a test assembled it node
-    /// by node). It holds no file and reports nothing. Its one invariant (the
-    /// cold build of its files) does not hold, so only a compiled project
-    /// that is never updated holds one
-    /// (`specforge_project::testing::Assembled`).
+    /// This empty build, holding `graph` made elsewhere (a test assembled it
+    /// node by node) under its own config, so a snapshot reads the graph with
+    /// the Registry build that made the build (`Environment::graph_of([])`).
+    /// It holds no file and reports nothing. Its one invariant (the cold
+    /// build of its files) does not hold, so only a compiled project that is
+    /// never updated holds one (`specforge_project::testing::Assembled`).
     #[cfg(feature = "testing")]
-    pub fn holding(graph: Graph) -> Self {
-        GraphBuild {
-            graph,
-            ..GraphBuild::new(GraphConfig::default())
-        }
+    pub fn holding(self, graph: Graph) -> Self {
+        debug_assert!(
+            self.files.is_empty(),
+            "only an empty build holds a graph made elsewhere"
+        );
+        GraphBuild { graph, ..self }
     }
 
     /// The cold build: every one of `files` applied at once. Files are keyed
@@ -212,6 +215,12 @@ impl GraphBuild {
     /// The graph-build diagnostics whose span is in `path`, in build order.
     pub fn file_diagnostics(&self, path: &str) -> &[Diagnostic] {
         self.by_file.get(path).map(Vec::as_slice).unwrap_or(&[])
+    }
+
+    /// The graph inputs it is built with: the Registry build's that made it
+    /// (`RegistryBuild::graph_of`).
+    pub fn inputs(&self) -> &GraphInputs {
+        &self.config.inputs
     }
 
     /// Every file the build holds, by path, in path order.
@@ -517,6 +526,13 @@ fn compare_graph_contents(incremental: &Graph, cold: &Graph) -> Result<(), Strin
             cold_nodes.get(id)
         ));
     }
+    let written = |g: &Graph| -> BTreeMap<delta::EdgeKey, Vec<SourceSpan>> {
+        g.edges()
+            .iter()
+            .map(|e| ((e.source, e.target, e.label), g.written(e).to_vec()))
+            .collect()
+    };
+    let (inc_at, cold_at) = (written(incremental), written(cold));
     let (inc, cold) = (delta::edge_keys(incremental), delta::edge_keys(cold));
     if let Some((s, t, l)) = inc.symmetric_difference(&cold).next() {
         let side = if inc.contains(&(*s, *t, *l)) {
@@ -526,6 +542,17 @@ fn compare_graph_contents(incremental: &Graph, cold: &Graph) -> Result<(), Strin
         };
         return Err(format!(
             "incremental/cold mismatch on edge {s} -{l}-> {t} ({side})"
+        ));
+    }
+    // Where each edge is written is part of the graph too (ADR 0127).
+    if let Some((s, t, l)) = inc_at
+        .keys()
+        .find(|key| inc_at.get(*key) != cold_at.get(*key))
+    {
+        return Err(format!(
+            "incremental/cold mismatch on where edge {s} -{l}-> {t} is written: incremental {:?}, cold {:?}",
+            inc_at.get(&(*s, *t, *l)),
+            cold_at.get(&(*s, *t, *l))
         ));
     }
     Ok(())

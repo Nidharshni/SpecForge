@@ -10,10 +10,9 @@
 //! The publisher keys the update's fetches accepted are pinned with it, once it is written: an
 //! update that is not applied pins nothing (ADR 0059).
 
-use super::lock_plan::{Ask, Fetching, Install, LockPlan};
-use crate::asking::Asking;
+use super::lock_plan::{Ask, Fetching, Install, LockPlan, Opened};
 use crate::registry::{Acceptance, NO_REGISTRY, Publisher, Registry};
-use crate::{Containment, OpError, OpErrorKind};
+use crate::{Caller, OpError, OpErrorKind};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{Code, codes};
@@ -36,11 +35,10 @@ pub struct UpdateRequest<'a> {
     pub reach: Reach,
     /// Accept a registry package with no publisher signature.
     pub allow_unsigned: bool,
-    /// Who can be asked about a publisher key change (ADR 0110).
-    pub asking: Asking<'a>,
-    /// What the update may write (ADR 0104): a file it would write that lands outside, by a
-    /// symlink in the project, refuses it. The CLI passes [`Containment::unbounded`].
-    pub containment: &'a Containment,
+    /// What the update may write (`caller.containment()`, ADR 0104: a file it would write that
+    /// lands outside, by a symlink in the project, refuses it) and who can be asked about a
+    /// publisher key change (`caller.asking()`, ADR 0110).
+    pub caller: Caller<'a>,
 }
 
 /// What became of one locked extension.
@@ -304,7 +302,8 @@ pub fn update(
 ) -> Result<UpdateOutcome, OpError> {
     // A project whose specforge.json cannot be used is refused before
     // anything is read or written, as `add` and `remove` refuse it.
-    let config = crate::config::usable(req.root.dir())?.config;
+    let read = crate::config::usable(req.root.dir())?;
+    let (config, found) = (read.config, read.found);
     let installed = Installed::at(req.root.dir());
     let lock = match installed.lock() {
         LockState::Read(lock) => lock.clone(),
@@ -335,12 +334,12 @@ pub fn update(
     // the whole update leaves it, whatever order the lock lists the extensions in.
     let mut plan = LockPlan::updating(
         &installed,
-        &config.extensions,
+        Opened::read(&config, found),
         runtime,
         Fetching {
             registry,
             allow_unsigned: req.allow_unsigned,
-            asking: req.asking,
+            asking: req.caller.asking(),
         },
     )?;
     let mut extensions = Vec::new();
@@ -396,7 +395,7 @@ pub fn update(
     if let Some(checked) =
         checked.filter(|_| outcome.applied() && outcome.updated().next().is_some())
     {
-        checked.finish(req.root.dir(), Vec::new(), req.containment)?;
+        checked.finish(req.root.dir(), Vec::new(), req.caller.containment())?;
     }
     Ok(outcome)
 }

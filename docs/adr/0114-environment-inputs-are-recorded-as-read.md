@@ -6,6 +6,7 @@
 reopen condition ("a reader port into `specforge-installed`"). Amends
 [ADR 0030](0030-a-sessions-inputs-are-one-value.md) D3 and D4, ADR 0106 D1, ADR 0107 D1 and D4, and
 [ADR 0028](0028-installed-extensions-are-one-module.md) D3 (round 7 amendment).
+D3 is completed for sources by [ADR 0129](0129-a-source-read-is-a-recorded-read.md): a source is read through the same `RunDisk`.
 
 ## Context
 

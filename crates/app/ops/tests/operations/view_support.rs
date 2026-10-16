@@ -145,7 +145,7 @@ pub fn chain_in(graph: &Graph, registries: RegistryBuild, entity_id: &str) -> Op
     let project = Assembled::over(registries).graph(graph.clone());
     specforge_ops::read::trace::trace(&project.view(), Target::Entity(entity_id))
         .ok()
-        .map(|outcome| outcome.chains.into_iter().next().unwrap())
+        .map(|outcome| plain(outcome).chains.into_iter().next().unwrap())
 }
 
 /// The chain of `entity_id` in `graph`, with no extension: nothing is
@@ -161,5 +161,19 @@ pub fn every_chain(
     registries: RegistryBuild,
 ) -> specforge_ops::read::trace::TraceOutcome {
     let project = Assembled::over(registries).graph(graph.clone());
-    specforge_ops::read::trace::trace(&project.view(), Target::Every).unwrap()
+    plain(specforge_ops::read::trace::trace(&project.view(), Target::Every).unwrap())
+}
+
+/// A noticed read's value, its notices let go: for a test of the value.
+pub fn plain<T>(read: specforge_ops::Noticed<T>) -> T {
+    read.into_value_and_notices().0
+}
+
+/// The document `specforge.schema` answers for `request` over `view`.
+pub fn schema_json(
+    view: &specforge_ops::view::ProjectView<'_>,
+    request: &specforge_ops::read::schema::SchemaRequest<'_>,
+) -> serde_json::Value {
+    let outcome = plain(specforge_ops::read::schema::schema(view, request).unwrap());
+    serde_json::to_value(outcome).expect("a schema serializes")
 }

@@ -4,6 +4,8 @@
 D3a and D4 (review), [ADR 0052](0052-an-operations-outcome-is-one-document-both-surfaces-print.md) D8 and
 [ADR 0111](0111-every-reader-of-the-versioned-schema-reports-its-notices.md) D2.
 
+D2's verbs gain `Notes::noticed`, the one way a read's notices reach stderr ([ADR 0130](0130-a-reads-notices-reach-the-reply-through-one-seam.md)).
+
 ## Context
 
 Every CLI command decided by itself what it writes on stderr beside its document. The command line had 62 production

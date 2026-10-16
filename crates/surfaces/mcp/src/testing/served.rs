@@ -17,10 +17,18 @@ fn z3_ready() -> Arc<dyn specforge_ops::solver::Solver> {
     Arc::new(specforge_ops::testing::ScriptedSolver::ready())
 }
 
+/// The machine every served test project's collect sees: nothing approved, nothing to run (ADR 0125), whatever
+/// is in the developer's home.
+fn no_approvals() -> Arc<dyn specforge_ops::analysis::collect::CollectorMachine> {
+    Arc::new(specforge_ops::testing::ScriptedMachine::new())
+}
+
 /// The server `specforge mcp <root>` builds (`McpServer::with_project_root`), its doctor seeing z3. For the tests
 /// that compare surfaces over one project on disk that the CLI also runs on (`Served` owns its project).
 pub fn rooted_server(root: &Path) -> McpServer {
-    McpServer::with_project_root(root.to_path_buf()).with_solver(z3_ready())
+    McpServer::with_project_root(root.to_path_buf())
+        .with_solver(z3_ready())
+        .with_collector_machine(no_approvals())
 }
 
 /// An initialized server over a [`TestProject`]: what a client of `specforge mcp <root>` talks to. Dereferences
@@ -73,12 +81,15 @@ impl Served {
             project,
             McpServer::new()
                 .with_solver(z3_ready())
+                .with_collector_machine(no_approvals())
                 .with_extension_runtime(runtime),
         )
     }
 
     fn server_for(project: &TestProject) -> McpServer {
-        let server = McpServer::new().with_solver(z3_ready());
+        let server = McpServer::new()
+            .with_solver(z3_ready())
+            .with_collector_machine(no_approvals());
         match project.served() {
             Some(served) => server.with_extension_runtime(Arc::clone(served) as SharedRuntime),
             None => server,

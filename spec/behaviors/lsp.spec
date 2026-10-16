@@ -248,6 +248,8 @@ behavior find_all_references "Find All References" {
   verify unit "find-refs excludes what the entity itself references"
   verify unit "find-refs omits the declaration when the request excludes it"
   verify unit "each reference is the identifier token as written"
+  verify unit "a parameter's name is not a reference to the type it spells"
+  verify unit "a name written in a field and in a method signature is one location each"
   verify unit "reference ranges are UTF-16 after multi-byte text"
   verify contract "Find All References: find all references holds — graph_available, all_references_returned, declaration_included"
 }
@@ -451,6 +453,7 @@ behavior rename_entity_id "Rename Entity ID" {
   """
   verify unit "rename updates declaration and all references"
   verify unit "rename leaves strings, comments and verify texts alone"
+  verify unit "rename edits a type named in a method signature and no parameter name"
   verify unit "rename is atomic — all or nothing"
   verify unit "rename is refused as content modified when a file it edits changed since the compile"
   verify unit "rename from a buffer typed since the compile is refused as content modified"

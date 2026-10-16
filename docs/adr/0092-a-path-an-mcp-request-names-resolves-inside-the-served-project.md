@@ -1,8 +1,8 @@
-# A path an MCP request names resolves inside the served project
+# A path an MCP request names resolves inside the served project **Noted by [ADR 0131](0131-an-export-is-written-into-the-project-by-the-export-operation.md):** D6's `render --out-dir` names no CLI command; the CLI's `export` prints to stdout.
 
 **Status:** accepted (2026-10-14, structure round, plan 13). Amends ADR 0014 D4, D5 and D6 (what "another
 project" may be) and ADR 0029 D8 (`out_dir`). D1 and D8 amended by ADR 0104 (the rule is
-`specforge_ops::Containment`, applied where the operation opens or writes); the audit table and D2 amended by ADR 0112. The outline row is closed by [ADR 0116](0116-navigation-reads-the-text-the-project-was-compiled-from.md): outline asks the compile's sources and reads no file.
+`specforge_ops::Containment`, applied where the operation opens or writes); the audit table and D2 amended by ADR 0112. D2's second bullet is carried by `ProjectRef::caller` ([ADR 0124](0124-what-the-caller-lends-an-operation-is-one-value.md)). The outline row is closed by [ADR 0116](0116-navigation-reads-the-text-the-project-was-compiled-from.md): outline asks the compile's sources and reads no file.
 
 `specforge mcp .` in `proj/`, then `tools/call specforge.format {"path": "../outside"}`, answered `ok` and
 rewrote `outside/x.spec`. The server serves one project, and a client that can name any directory could read

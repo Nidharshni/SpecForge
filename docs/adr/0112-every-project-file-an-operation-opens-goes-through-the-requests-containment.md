@@ -1,7 +1,8 @@
-# Every project file an operation opens goes through the request's containment
+# Every project file an operation opens goes through the request's containment **Amended by [ADR 0131](0131-an-export-is-written-into-the-project-by-the-export-operation.md):** D4: render builds no bound; outline's spec-root bound is the one exception left.
 
 **Status:** accepted (2026-10-16, architecture round 12, plan 01). Amends ADR 0104 D2, ADR 0092 (the audit table and D2)
-and ADR 0029 D8.
+and ADR 0029 D8. D2 (collect's request and `SessionRequest`) and D4 (`ProjectRef::caller`) amended by [ADR 0124](0124-what-the-caller-lends-an-operation-is-one-value.md); its Rejected line stands.
+D1 (`replace`) amended by [ADR 0128](0128-one-project-change-over-held-files.md): it keeps the file's permissions and refuses a file the process may not write.
 
 ADR 0104 applied containment at an enumerated list of sites, so every reader or writer of a project file left off the
 list still opened the file by name, through whatever symlink was there. Eight commits in three days (`4a75cee8`,

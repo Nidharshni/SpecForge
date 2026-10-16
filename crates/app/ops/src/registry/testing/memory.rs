@@ -116,6 +116,8 @@ pub struct MemoryRegistry {
     pins: Mutex<BTreeMap<PackageName, String>>,
     /// `pin` refuses with R-TRUST-006 and records nothing.
     refusing_pins: bool,
+    /// A file `pin` makes read-only before it refuses: a failed change that cannot put it back.
+    locking_on_refusal: Option<std::path::PathBuf>,
 }
 
 /// The publisher key id a [`MemoryRegistry`] signs what it accepts with.
@@ -170,6 +172,14 @@ impl MemoryRegistry {
     /// Every `pin` refused with R-TRUST-006, recording nothing: a known-keys store that can't be saved.
     pub fn refusing_pins(mut self) -> Self {
         self.refusing_pins = true;
+        self
+    }
+
+    /// [`Self::refusing_pins`], and the refusal first makes `file` read-only, so a change that wrote it
+    /// cannot put it back.
+    pub fn refusing_pins_after_locking(mut self, file: &std::path::Path) -> Self {
+        self.refusing_pins = true;
+        self.locking_on_refusal = Some(file.to_path_buf());
         self
     }
 
@@ -342,6 +352,13 @@ impl Registry for MemoryRegistry {
     /// refuse them.
     fn pin(&self, pins: &[KeyPin]) -> Result<(), OpError> {
         if self.refusing_pins {
+            if let Some(file) = &self.locking_on_refusal {
+                let mut permissions = std::fs::metadata(file)
+                    .expect("the file exists")
+                    .permissions();
+                permissions.set_readonly(true);
+                std::fs::set_permissions(file, permissions).expect("lock the file");
+            }
             return Err(OpError::coded(
                 crate::OpErrorKind::PermissionDenied,
                 codes::R_TRUST_006,

@@ -79,8 +79,10 @@ impl CoreTool for Tool {
             format: Some(args.format),
             include_coverage: args.include_coverage,
         };
-        let outcome = query(&view, &request).map_err(Self::refused)?;
-        let document: Value = serde_json::from_str(&outcome.document).expect("an export is JSON");
-        Ok(Answer::new(Reply(document)).with_diagnostics(outcome.notices))
+        Ok(Answer::noticed(
+            query(&view, &request)
+                .map_err(Self::refused)?
+                .map(|document| Reply(serde_json::from_str(&document).expect("an export is JSON"))),
+        ))
     }
 }

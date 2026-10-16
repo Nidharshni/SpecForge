@@ -1108,7 +1108,7 @@ type McpInferPromptResult = McpInferOverview
   | McpInferPlan
   | McpInferWorkflow
 
-type McpInferOverview "Infer prompt, no scope: every kind's guide" {
+type McpInferOverview "Infer prompt, no scope or scope overview: every kind's guide" {
   scope                "overview" @literal
   installed_extensions string[]
   /// Entities per kind, every kind entities are written with.

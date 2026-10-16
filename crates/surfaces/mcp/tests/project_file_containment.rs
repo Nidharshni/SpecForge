@@ -286,10 +286,10 @@ fn sources(dir: &Path, out: &mut Vec<(String, String)>, base: &Path) {
     }
 }
 
-/// A tool builds no bound of its own and opens no file: the call's project hands its containment
-/// (ADR 0112 D4). The exceptions say why.
+/// A tool builds no bound and no asker of its own and opens no file: the call's project hands its
+/// caller (ADR 0112 D4, ADR 0124). The exceptions say why.
 #[test]
-fn every_containment_a_tool_uses_comes_from_the_call() {
+fn every_caller_a_tool_uses_comes_from_the_call() {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut files = Vec::new();
     sources(&src, &mut files, &src);
@@ -297,7 +297,6 @@ fn every_containment_a_tool_uses_comes_from_the_call() {
         "containment.rs",
         "target/call.rs",
         "tools/outline.rs", // the spec root bounds a file of the outline
-        "tools/render.rs",  // a view tool that writes its own file
     ];
     let mut problems = Vec::new();
     for (name, text) in &files {
@@ -310,6 +309,15 @@ fn every_containment_a_tool_uses_comes_from_the_call() {
             }
             if line.contains("Containment::within(") && !within.contains(&name.as_str()) {
                 problems.push(format!("src/{name}:{}: builds its own bound", number + 1));
+            }
+            if line.contains("Asking::") && name != "target/call.rs" {
+                problems.push(format!("src/{name}:{}: names its own asker", number + 1));
+            }
+            if name.starts_with("tools/") && line.contains("project.containment(") {
+                problems.push(format!(
+                    "src/{name}:{}: reads the project's containment, not its caller",
+                    number + 1
+                ));
             }
             if line.contains("std::fs::") {
                 problems.push(format!("src/{name}:{}: opens a file itself", number + 1));

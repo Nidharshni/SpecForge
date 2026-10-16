@@ -1,3 +1,4 @@
+use specforge_ops::read::{self, schema::SchemaRequest};
 use specforge_ops::view::ProjectView;
 
 use crate::resource::{CoreResource, ReadOutcome, ResourceText};
@@ -17,13 +18,16 @@ impl CoreResource for SchemaResource {
 
     fn read(view: ProjectView<'_>, uri: &Matched<'_>) -> ReadOutcome {
         super::view::no_query(uri)?;
-        let schema = view.versioned_schema();
-        let schema_json = serde_json::to_string(schema.schema()).map_err(|err| {
-            Box::new(McpError::new(
-                ErrorCode::InternalError,
-                format!("schema serialization failed: {err}"),
-            ))
-        })?;
-        Ok(ResourceText::json(schema_json).with_notices(schema.notices()))
+        let schema = read::schema::schema(&view, &SchemaRequest::default())
+            .map_err(|refusal| Box::new(McpError::from(refusal.into_error())))?;
+        let text = schema
+            .try_map(|outcome| serde_json::to_string(&outcome))
+            .map_err(|err| {
+                Box::new(McpError::new(
+                    ErrorCode::InternalError,
+                    format!("schema serialization failed: {err}"),
+                ))
+            })?;
+        Ok(ResourceText::noticed(text))
     }
 }

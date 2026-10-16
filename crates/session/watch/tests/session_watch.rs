@@ -438,3 +438,42 @@ fn a_symlinked_sources_target_is_watched() {
     assert_eq!(events.len(), 1, "{events:?}");
     assert_eq!(applied(&events[0]).changed, ["link.spec"]);
 }
+
+#[cfg(unix)]
+#[spec(
+    behavior = "classify_project_changes",
+    verify = "a symlinked source is reached by each hop its read followed"
+)]
+fn a_sources_middle_hop_pointed_elsewhere_is_seen() {
+    let fixture = Fixture::new(PLAIN);
+    let real = fixture.parent.join("real");
+    fs::create_dir_all(&real).unwrap();
+    fs::write(
+        real.join("real.spec"),
+        PLAIN.replace("gadget_one", "gadget_three"),
+    )
+    .unwrap();
+    let hop = fixture.parent.join("outside/l1");
+    std::os::unix::fs::symlink(real.join("real.spec"), &hop).unwrap();
+    std::os::unix::fs::symlink(&hop, fixture.root.join("spec/link.spec")).unwrap();
+    let (mut watch, recorder) = fixture.watch();
+
+    assert!(
+        recorder.armed()[0].contains(&WatchRoot {
+            dir: fixture.parent.join("outside"),
+            recursive: true
+        }),
+        "{:?}",
+        recorder.armed()
+    );
+    fs::write(
+        real.join("other.spec"),
+        format!("{}\n", PLAIN.replace("gadget_one", "gadget_four")),
+    )
+    .unwrap();
+    fs::remove_file(&hop).unwrap();
+    std::os::unix::fs::symlink(real.join("other.spec"), &hop).unwrap();
+    let events = watch.changed(&[hop]);
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert_eq!(applied(&events[0]).changed, ["link.spec"]);
+}

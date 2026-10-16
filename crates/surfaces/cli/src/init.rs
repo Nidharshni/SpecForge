@@ -56,7 +56,7 @@ fn init_at(
         name,
         version,
         extensions,
-        containment: &specforge_ops::Containment::unbounded(),
+        caller: crate::caller::of(false, format, terminal),
     };
     let notes = Notes::new(terminal, format);
     let runtime = specforge_component::ComponentRuntime::with_user_cache();

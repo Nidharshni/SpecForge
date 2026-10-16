@@ -152,6 +152,8 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
     rename as config_invalid before anything is planned or written.
     The rename edits the project's sources only: a nested project's files
     are never edited, and an ID declared only there is not found.
+    A rename whose write fails MUST put back every file it wrote; a file it
+    cannot put back MUST be listed in the failure's files_written.
   """
   verify unit "specforge.rename renames entity and all references"
   verify unit "non-existent entity returns error response"
@@ -164,6 +166,7 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
   verify unit "a specforge.json that does not say which files are the project's sources fails the rename as config_invalid and writes nothing"
   verify unit "rename never edits a nested project's files"
   verify unit "a rename whose file changed on disk since the compile is refused as conflict, and nothing is written"
+  verify integration "a rename that cannot put a file back names it in files_written"
 }
 
 // MCP init creates a project at a specified path, not the current project.
@@ -536,7 +539,7 @@ behavior provide_mcp_collect_tool "Provide MCP Collect Tool" {
   invariants [document_project_paths, diagnostic_determinism, mcp_structured_error_responses]
   category   query
   types      [McpCollectResult, McpCollectRunner, McpToolDescriptor]
-  ports      [McpProtocol, CompilerApi, FileSystem]
+  ports      [McpProtocol, CompilerApi, FileSystem, CollectorMachine]
   produces   [mcp_tool_invoked]
   requires {
     filesystem_available   "FileSystem port is available for reading test results and writing report"
@@ -572,6 +575,7 @@ behavior provide_mcp_collect_tool "Provide MCP Collect Tool" {
   verify unit "specforge.collect parses test results and maps to entities"
   verify unit "the collect document names the report from the project root"
   verify unit "specforge.collect refuses to run an unapproved command"
+  verify unit "specforge.collect runs a command the user approved, its output discarded"
   verify unit "specforge.collect refuses an unapproved command with the operation's own message"
   verify unit "specforge.collect of a directory that holds no project refuses with no_project"
   verify unit "a project without a collector returns an E058 error"
@@ -613,7 +617,11 @@ behavior provide_mcp_render_tool "Provide MCP Render Tool" {
     project (by .., an absolute name or a symlink) MUST be refused as invalid
     input on out_dir, as MUST any out_dir with no project served; and the file
     it writes there is not written through a symlink that leaves the project
-    (invalid input on out_dir).
+    (invalid input on out_dir). The file is replaced atomically where it
+    lands: a link that stays inside the project is followed, and a file
+    another name links to is not written through. An out_dir that names a
+    file is invalid input on out_dir, and a directory the user cannot write
+    is permission_denied.
     output_files lists the files written, each named from the project root.
     The renderers are the core graph engine's export formats (see P7
     justification in features/output.spec), named as `specforge export
@@ -635,6 +643,9 @@ behavior provide_mcp_render_tool "Provide MCP Render Tool" {
   verify unit "a relative out_dir is written under the call's project root, wherever the server runs"
   verify unit "a relative out_dir with no project served is invalid input on out_dir"
   verify unit "render writes no file through a symlink in out_dir that leaves the project"
+  verify unit "render replaces its file and writes no file through a hard link to a file outside"
+  verify unit "an out_dir that names a file is invalid input on out_dir"
+  verify unit "an out_dir the user cannot write is permission_denied"
   verify unit "registered renderer invoked for matching format"
   verify unit "unrecognized format returns error listing available renderers"
   verify unit "graph and its alias json select the full graph renderer"

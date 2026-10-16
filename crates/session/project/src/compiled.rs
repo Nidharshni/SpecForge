@@ -7,9 +7,7 @@ use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
 use specforge_common::{Diagnostic, ProjectRoot, codes};
-use specforge_graph::{
-    Applied, FileChange, Graph, GraphBuild, GraphConfig, compute_graph_delta, moved_nodes,
-};
+use specforge_graph::{Applied, FileChange, Graph, GraphBuild, compute_graph_delta, moved_nodes};
 
 use crate::coverage::RecordedCoverage;
 use crate::ledger::{Reads, Unrecorded};
@@ -187,7 +185,7 @@ impl CompiledProject {
     /// the graph, memoized for this state of the project.
     pub fn recorded(&self) -> &RecordedCoverage {
         self.recorded
-            .get_or_init(|| RecordedCoverage::over(self.graph.graph(), &self.env))
+            .get_or_init(|| RecordedCoverage::over(&self.graph, &self.env))
     }
 }
 
@@ -196,10 +194,11 @@ impl CompiledProject {
     /// No project: the empty environment, no source, no file, nothing
     /// reported. Verifies its updates in a debug build.
     pub(crate) fn detached() -> Self {
-        let mut graph = GraphBuild::new(GraphConfig::default());
+        let env = Arc::new(Environment::empty());
+        let mut graph = env.graph_of([]);
         graph.set_verify(cfg!(debug_assertions));
         CompiledProject {
-            env: Arc::new(Environment::empty()),
+            env,
             sources: SourceCache::empty(),
             graph,
             import_diagnostics: Vec::new(),
@@ -215,7 +214,7 @@ impl CompiledProject {
     /// Rooted where the environment was loaded from disk (an environment
     /// assembled in memory makes a detached one).
     pub fn unread(env: Arc<Environment>) -> Self {
-        let graph = GraphBuild::new(env.graph_config());
+        let graph = env.graph_of([]);
         let on_disk = env.project_root().is_some();
         CompiledProject {
             env,
@@ -236,7 +235,7 @@ impl CompiledProject {
     #[cfg(feature = "testing")]
     pub(crate) fn assembled(
         env: Arc<Environment>,
-        graph: Graph,
+        graph: GraphBuild,
         reported: Vec<Diagnostic>,
         sources: SourceCache,
         rooted: bool,
@@ -244,7 +243,7 @@ impl CompiledProject {
         CompiledProject {
             env,
             sources,
-            graph: GraphBuild::holding(graph),
+            graph,
             import_diagnostics: Vec::new(),
             check_diagnostics: Vec::new(),
             recorded: OnceLock::new(),
@@ -314,8 +313,8 @@ impl CompiledProject {
         let graph = &self.graph;
         let mut outcome = None;
         let moved = reads.run_checks(|disk| {
-            let entities = Arc::new(env.entity_snapshot(graph.graph()));
-            outcome = Some((env.run_checks(graph.graph(), &entities, disk), entities));
+            let entities = Arc::new(env.entity_snapshot(graph));
+            outcome = Some((env.run_checks(&entities, disk), entities));
         });
         if let Some((diagnostics, entities)) = outcome {
             self.check_diagnostics = diagnostics;

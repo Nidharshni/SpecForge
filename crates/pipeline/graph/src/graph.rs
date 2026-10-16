@@ -62,6 +62,10 @@ pub struct Graph {
     /// compensation (C5-12).
     nodes: BTreeMap<Sym, Node>,
     edges: Vec<Edge>,
+    /// Where each edge is written, parallel to `edges` (index for index): the span of every reference and every
+    /// derived name the linker made it from, in the order it read them, no span twice. Empty for an edge added
+    /// with `add_edge` (a graph assembled by hand, an emitter's filtered copy) (ADR 0127).
+    written: Vec<Vec<SourceSpan>>,
     /// Index: source sym -> indices into `edges`
     source_index: HashMap<Sym, Vec<usize>>,
     /// Index: target sym -> indices into `edges`
@@ -84,6 +88,7 @@ impl Graph {
         Self {
             nodes: BTreeMap::new(),
             edges: Vec::new(),
+            written: Vec::new(),
             source_index: HashMap::new(),
             target_index: HashMap::new(),
             bidirectional_pairs: Vec::new(),
@@ -97,6 +102,7 @@ impl Graph {
         Self {
             nodes: BTreeMap::new(),
             edges: Vec::new(),
+            written: Vec::new(),
             source_index: HashMap::new(),
             target_index: HashMap::new(),
             bidirectional_pairs,
@@ -116,22 +122,52 @@ impl Graph {
     /// Insert an edge. Idempotent on the (source, target, label) triple —
     /// duplicate edges corrupted cycle reporting and inflated renderers
     /// (C5-09/C5-02).
+    ///
+    /// A new edge is written nowhere; [`Self::add_written`] is the linker's way in.
     pub fn add_edge(&mut self, edge: Edge) {
-        if self
-            .edges
-            .iter()
-            .any(|e| e.source == edge.source && e.target == edge.target && e.label == edge.label)
-        {
+        if self.index_of(&edge).is_some() {
             return;
         }
         let idx = self.edges.len();
         self.source_index.entry(edge.source).or_default().push(idx);
         self.target_index.entry(edge.target).or_default().push(idx);
         self.edges.push(edge);
+        self.written.push(Vec::new());
+    }
+
+    /// Insert `edge` if new, and record `at` where it is written, unless it is already recorded (the linker's and
+    /// the derived walk's one way in).
+    pub(crate) fn add_written(&mut self, edge: Edge, at: Option<&SourceSpan>) {
+        self.add_edge(edge);
+        let (Some(at), Some(index)) = (at, self.index_of(&edge)) else {
+            return;
+        };
+        let places = &mut self.written[index];
+        if !places.contains(at) {
+            places.push(at.clone());
+        }
+    }
+
+    /// Where `edge` is written, in written order: one span per reference token or derived name. Empty when the
+    /// graph does not know (an edge added by hand) or does not hold the edge. Spans are positions in the text
+    /// the graph was built from (ADR 0127).
+    pub fn written(&self, edge: &Edge) -> &[SourceSpan] {
+        self.index_of(edge)
+            .map_or(&[], |index| self.written[index].as_slice())
+    }
+
+    /// The index of the edge with `edge`'s (source, target, label), if the graph holds it.
+    fn index_of(&self, edge: &Edge) -> Option<usize> {
+        self.source_index
+            .get(&edge.source)?
+            .iter()
+            .copied()
+            .find(|&i| self.edges[i].target == edge.target && self.edges[i].label == edge.label)
     }
 
     fn clear_edges(&mut self) {
         self.edges.clear();
+        self.written.clear();
         self.source_index.clear();
         self.target_index.clear();
     }
@@ -287,9 +323,12 @@ impl Graph {
                 sub.add_node(node.clone());
             }
         }
-        for edge in &self.edges {
+        for (edge, places) in self.edges.iter().zip(&self.written) {
             if ids.contains(&edge.source) && ids.contains(&edge.target) {
                 sub.add_edge(*edge);
+                for place in places {
+                    sub.add_written(*edge, Some(place));
+                }
             }
         }
         sub

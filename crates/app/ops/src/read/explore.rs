@@ -6,12 +6,12 @@ use std::cmp::Reverse;
 use std::collections::BTreeSet;
 
 use serde::Serialize;
+use specforge_common::DiagnosticList;
 use specforge_common::shape::Shape;
-use specforge_common::{Diagnostic, DiagnosticList};
 use specforge_graph::Graph;
 
-use crate::Refusal;
 use crate::view::{EntityField, ProjectView};
+use crate::{Noticed, Refusal};
 
 /// How many starting points an exploration names.
 pub const STARTING_POINTS: usize = 5;
@@ -61,18 +61,17 @@ pub struct Exploration {
     pub most_connected: Vec<String>,
     /// The selected unconnected entities, in id order.
     pub unconnected: Vec<String>,
-    /// I020 for a kind the project does not know.
-    pub notices: Vec<Diagnostic>,
 }
 
-impl Exploration {
+impl Noticed<Exploration> {
     /// The exploration as the explore prompt's payload and `specforge
-    /// explore --format json` write it.
+    /// explore --format json` write it, its notices (I020) in `notices`.
     pub fn document(&self) -> ExplorationDocument {
-        let from = self.from.clone().unwrap_or_default();
+        let exploration = self.value();
+        let from = exploration.from.clone().unwrap_or_default();
         ExplorationDocument {
-            matching_entities: self.selected.clone(),
-            relationship_paths: self
+            matching_entities: exploration.selected.clone(),
+            relationship_paths: exploration
                 .paths
                 .iter()
                 .map(|path| PathDocument {
@@ -82,10 +81,10 @@ impl Exploration {
                     path_length: path.labels.len(),
                 })
                 .collect(),
-            starting_points: self.starting_points.clone(),
-            high_connectivity: self.most_connected.clone(),
-            unconnected: self.unconnected.clone(),
-            notices: DiagnosticList(self.notices.clone()),
+            starting_points: exploration.starting_points.clone(),
+            high_connectivity: exploration.most_connected.clone(),
+            unconnected: exploration.unconnected.clone(),
+            notices: DiagnosticList(self.notices().to_vec()),
         }
     }
 }
@@ -117,7 +116,7 @@ pub struct PathDocument {
 pub fn explore(
     view: &ProjectView,
     request: &ExplorationRequest,
-) -> Result<Exploration, Refusal<EntityField>> {
+) -> Result<Noticed<Exploration>, Refusal<EntityField>> {
     let graph = view.graph();
     let notices = request
         .kind
@@ -188,13 +187,15 @@ pub fn explore(
         })
         .unwrap_or_default();
 
-    Ok(Exploration {
-        from: request.entity_id.map(str::to_string),
-        selected: selection.into_iter().map(str::to_string).collect(),
-        paths,
-        starting_points,
-        most_connected,
-        unconnected,
+    Ok(Noticed::new(
+        Exploration {
+            from: request.entity_id.map(str::to_string),
+            selected: selection.into_iter().map(str::to_string).collect(),
+            paths,
+            starting_points,
+            most_connected,
+            unconnected,
+        },
         notices,
-    })
+    ))
 }

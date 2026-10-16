@@ -14,7 +14,7 @@ use specforge_protocol_types::{
 use specforge_registry::build_registries;
 use specforge_test_macros::test as specforge_test;
 
-use crate::view_support::{Assembled, Viewed};
+use crate::view_support::{Assembled, Viewed, plain, schema_json};
 
 /// A project whose one extension, `@t/soft` 1.0.0, declares `behavior`
 /// (testable, a `contract` and a `features` reference), `feature` and
@@ -97,7 +97,7 @@ fn labels(document: &Value) -> Vec<&str> {
 )]
 fn the_outcome_serializes_the_whole_schema() {
     let project = project();
-    let outcome = schema(&project.view(), &SchemaRequest::default()).unwrap();
+    let outcome = plain(schema(&project.view(), &SchemaRequest::default()).unwrap());
     let text = serde_json::to_string_pretty(&outcome).unwrap();
     let parsed: Value = serde_json::from_str(&text).unwrap();
 
@@ -154,7 +154,7 @@ fn a_kind_keeps_its_entry_and_the_edges_that_touch_it() {
             kind: Some(kind),
             ..SchemaRequest::default()
         };
-        let document = serde_json::to_value(schema(&project.view(), &request).unwrap()).unwrap();
+        let document = schema_json(&project.view(), &request);
         let entries = document["entity_kinds"].as_array().unwrap();
         assert_eq!(entries.len(), 1, "{kind}: {document}");
         assert_eq!(entries[0]["name"], kind);
@@ -187,7 +187,7 @@ fn serve_schema_contract() {
     let view = project.view();
 
     // ensures: full_schema_output
-    let full = serde_json::to_value(schema(&view, &SchemaRequest::default()).unwrap()).unwrap();
+    let full = schema_json(&view, &SchemaRequest::default());
     assert_eq!(full["entity_kinds"].as_array().unwrap().len(), 3);
     assert!(full["edge_types"].is_array());
 
@@ -196,7 +196,7 @@ fn serve_schema_contract() {
         kind: Some("behavior"),
         ..SchemaRequest::default()
     };
-    let filtered = serde_json::to_value(schema(&view, &request).unwrap()).unwrap();
+    let filtered = schema_json(&view, &request);
     assert_eq!(filtered["entity_kinds"][0]["name"], "behavior");
 
     // Without edges, with the rules: what include_edges and
@@ -206,7 +206,7 @@ fn serve_schema_contract() {
         validation_rules: true,
         ..SchemaRequest::default()
     };
-    let trimmed = serde_json::to_value(schema(&view, &request).unwrap()).unwrap();
+    let trimmed = schema_json(&view, &request);
     assert!(trimmed.get("edge_types").is_none(), "{trimmed}");
     assert_eq!(trimmed["validation_rules"][0]["code"], "W901");
     assert_eq!(trimmed["validation_rules"][0]["extension"], "@t/soft");
@@ -229,7 +229,7 @@ fn json_schema_refuses_dot() {
         "Unknown format: dot. Expected: graph, context, brief"
     );
 
-    let published: Value = json_schema(&project.view(), Format::Graph).unwrap().schema;
+    let published: Value = plain(json_schema(&project.view(), Format::Graph).unwrap());
     assert_eq!(
         published["$schema"],
         "https://json-schema.org/draft/2020-12/schema"

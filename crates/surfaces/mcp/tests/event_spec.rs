@@ -82,7 +82,10 @@ fn aliases() -> BTreeMap<String, BTreeSet<String>> {
             if let Some(FieldValue::VariantList(members)) =
                 entity.fields.get(specforge_parser::UNION_VARIANTS_FIELD)
             {
-                aliases.insert(entity.id.raw.to_string(), members.iter().cloned().collect());
+                aliases.insert(
+                    entity.id.raw.to_string(),
+                    members.iter().map(|m| m.text.clone()).collect(),
+                );
             }
         }
     }

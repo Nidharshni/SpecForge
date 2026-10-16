@@ -94,7 +94,7 @@ impl CoreTool for Tool {
             root: project_root,
             paths: &explicit,
             mode,
-            containment: project.containment(),
+            caller: project.caller(),
         })
         .map_err(Self::failed)?;
 

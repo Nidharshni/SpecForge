@@ -514,9 +514,10 @@ behavior registry_build_graph_inputs "Registry Build Derives the Graph Inputs" {
     registries_populated "The build's kind and field registries hold every loaded declaration (registry_build_kinds, registry_build_fields)"
   }
   ensures {
-    every_input_derived "Every input the graph build reads of the extensions comes from the build: single reference fields, the owners of absent target kinds, inverse pairs, value coercions and derived references"
-    registries_agree    "Each input says what the build's declarations and field registry say, and nothing else"
-    deterministic       "The same declarations give the same inputs, whatever order the registries hold them in"
+    every_input_derived      "Every input the graph build reads of the extensions comes from the build: single reference fields, the owners of absent target kinds, inverse pairs, value coercions and derived references"
+    registries_agree         "Each input says what the build's declarations and field registry say, and nothing else"
+    deterministic            "The same declarations give the same inputs, whatever order the registries hold them in"
+    graph_built_in_the_build "Every graph read with the build is built in it"
   }
   contract   """
     The registry build MUST derive every input the graph build reads of the
@@ -531,8 +532,9 @@ behavior registry_build_graph_inputs "Registry Build Derives the Graph Inputs" {
     bool, string and enum to that type, a single reference and a block read
     as written); and every reference field whose edges the host derives
     (derived_from naming a known source, with a target kind), sorted by kind
-    and field. With the provider schemes the environment registers, they are
-    the configuration every graph of the project is built with (ADR 0032).
+    and field. The registry build MUST build every graph that is read with it,
+    from its own inputs and the provider schemes it is handed (ADR 0123); no
+    caller builds such a graph with inputs of its own.
   """
   verify unit "the registry build derives every graph input from the declarations"
   verify unit "a field's value coercion follows its registered type"
@@ -541,7 +543,8 @@ behavior registry_build_graph_inputs "Registry Build Derives the Graph Inputs" {
   verify unit "the graph inputs name the extension that owns each absent target kind"
   verify unit "inverse pairs are written lesser first and sorted, whatever the registration order"
   verify unit "an inverse field is a field of the target kind: the one inverse_of names, and every one naming the field inverse_of"
-  verify contract "Registry Build Derives the Graph Inputs: graph inputs hold — registries_populated, every_input_derived, registries_agree, deterministic"
+  verify unit "a graph built in the registry build reads its own graph inputs and the provider schemes it is handed"
+  verify contract "Registry Build Derives the Graph Inputs: graph inputs hold — registries_populated, every_input_derived, registries_agree, deterministic, graph_built_in_the_build"
 }
 
 behavior registry_build_rules "Registry Build Collects Rules" {

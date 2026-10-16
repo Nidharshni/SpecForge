@@ -9,12 +9,15 @@
 //! `--report` skip running and parse an existing report instead. The flow
 //! itself lives in [`specforge_ops::analysis::collect`], shared with MCP; this
 //! adapter only hands the operation who can be asked (`--yes`, the
-//! terminal, or nobody) and presents the outcome.
+//! terminal, or nobody) and the machine it runs on (`ProcessMachine`, ADR 0125), and presents the
+//! outcome.
 
 use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, outln};
-use specforge_ops::analysis::collect::{self, Collector, Mode, Request, RunnerOutput};
+use specforge_ops::analysis::collect::{
+    self, Collector, Mode, ProcessMachine, Request, RunnerOutput,
+};
 use specforge_ops::view::ProjectView;
 use std::path::PathBuf;
 
@@ -82,19 +85,18 @@ fn collect_at(options: &Args, terminal: &Terminal) -> Exit {
     let request = Request {
         runner: options.runner.as_deref(),
         mode,
-        asking: crate::asking::of(options.yes, format, terminal),
         announce: &mut announce,
-        // The user is already at the file system (ADR 0092 D6).
-        containment: &specforge_ops::Containment::unbounded(),
+        caller: crate::caller::of(options.yes, format, terminal),
     };
     // The view is rooted where the project compiled: the report lands where
     // every view over the project reads it.
-    let outcome = match collect::collect(&ProjectView::of(&project), request) {
-        Ok(outcome) => outcome,
-        Err(e) => {
-            return Refusal::of(format).report(terminal, &e);
-        }
-    };
+    let outcome =
+        match collect::collect(&ProjectView::of(&project), request, &ProcessMachine::user()) {
+            Ok(outcome) => outcome,
+            Err(e) => {
+                return Refusal::of(format).report(terminal, &e);
+            }
+        };
     for why in &outcome.unsaved_approvals {
         notes.warning(format_args!(
             "warning: could not remember the approval: {why}"

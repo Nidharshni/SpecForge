@@ -517,3 +517,19 @@ fn e069_text_is_the_problem_s() {
         Some("fix specforge.json; `specforge explain E069` says what it must be")
     );
 }
+
+#[test]
+fn extension_entry_name_strips_only_a_version_suffix() {
+    assert_eq!(extension_entry_name("@acme/foo"), "@acme/foo");
+    assert_eq!(extension_entry_name("@acme/foo@1.2.0"), "@acme/foo");
+    assert_eq!(
+        extension_entry_name(" @specforge/formal@latest "),
+        "@specforge/formal"
+    );
+    assert_eq!(extension_entry_name("plain@0.0.0"), "plain");
+    assert_eq!(extension_entry_name("./ext/local.wasm"), "./ext/local.wasm");
+    assert_eq!(
+        extension_entry_name("./ext@2/local.wasm"),
+        "./ext@2/local.wasm"
+    );
+}

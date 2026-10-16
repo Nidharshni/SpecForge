@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SpecForge architecture round 13</title>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+</script>
+<style>
+  :root { --bg:#fafaf9; --fg:#0f172a; --mut:#64748b; --line:#e2e8f0; --card:#fff; --ok:#047857; --bad:#b91c1c; --warn:#b45309; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0b1020; --fg:#e5e7eb; --mut:#94a3b8; --line:#1f2937; --card:#111827; --ok:#34d399; --bad:#f87171; --warn:#fbbf24; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font: 700 2rem/1.2 Georgia, serif; margin: 0 0 4px; }
+  h2 { font: 600 1.4rem/1.3 Georgia, serif; margin: 0; }
+  .sub { color: var(--mut); margin: 0 0 24px; }
+  .kpis { display:grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin: 0 0 32px; }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+  .kpi b { display:block; font-size:1.6rem; }
+  .kpi span { color:var(--mut); font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; }
+  article { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:20px; margin: 0 0 28px; }
+  .head { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:baseline; justify-content:space-between; margin-bottom:6px; }
+  .tags span { font-size:.75rem; padding:2px 8px; border-radius:999px; border:1px solid var(--line); color:var(--mut); margin-left:6px; }
+  .cols { display:grid; grid-template-columns: 1fr 1fr; gap:14px; margin: 14px 0; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+  .col { border:1px solid var(--line); border-radius:8px; padding:12px; overflow-x:auto; }
+  .lbl { font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; color:var(--mut); margin-bottom:6px; }
+  .bad .lbl { color: var(--bad); } .good .lbl { color: var(--ok); }
+  ul { margin: 6px 0 0; padding-left: 20px; } li { margin: 2px 0; }
+  code { font: .85em ui-monospace, monospace; background: color-mix(in srgb, var(--mut) 15%, transparent); padding: 1px 5px; border-radius: 4px; }
+  .def { color: var(--bad); } .fix { color: var(--ok); }
+  table { border-collapse: collapse; width:100%; font-size:.9rem; } td,th { border:1px solid var(--line); padding:6px 8px; text-align:left; }
+</style>
+</head>
+<body>
+<main>
+<h1>SpecForge architecture, round 13</h1>
+<p class="sub">12 plans, one branch. Base <code>34844bd9</code>. Each card shows the problem and the solution as before / after diagrams. The boxed ASCII version of each is in the commit messages.</p>
+
+<div class="kpis">
+  <div class="kpi"><b>12</b><span>plans</span></div>
+  <div class="kpi"><b>80</b><span>commits</span></div>
+  <div class="kpi"><b>10</b><span>new ADRs (0123–0132)</span></div>
+  <div class="kpi"><b>15</b><span>defects reproduced</span></div>
+  <div class="kpi"><b>22/22</b><span>gate checks green</span></div>
+  <div class="kpi"><b>0</b><span>re-vendors</span></div>
+</div>
+
+<!-- 01 -->
+<article id="p01">
+  <div class="head"><h2>01 · A graph is read only with the Registry build it was built in</h2><div class="tags"><span>ADR 0123</span><span>7 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart LR
+  E["Environment"] -->|"graph_inputs()"| G1["build_graph"]
+  A["Assembled::source"] -->|"default config"| G2["build_graph"]
+  T["registry test support"] -->|"hand GraphConfig"| G3["build_graph"]
+  G1 --> S["EntitySnapshot::of(graph, registries)"]
+  G2 -.->|"mispaired"| S
+  G3 --> S
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class A,G2 leak
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart LR
+  E["Environment"] --> R
+  A["Assembled"] --> R
+  T["registry tests"] --> R
+  subgraph R["RegistryBuild · graph_of(files, schemes)"]
+    direction TB
+    i["graph inputs held"] --> l["link + coerce"] --> s["EntitySnapshot::of(&GraphBuild)"]
+  end
+  classDef deep fill:#0f172a,color:#f8fafc,stroke:#0f172a,stroke-width:3px;
+  class R deep
+    </pre></div>
+  </div>
+  <ul><li class="def">A graph linked with the default config could be read with a real Registry build.</li><li class="fix">One module pairs the graph and the build; a mispaired graph cannot be made.</li></ul>
+</article>
+
+<!-- 02 -->
+<article id="p02">
+  <div class="head"><h2>02 · What the caller lends an operation is one value</h2><div class="tags"><span>ADR 0124</span><span>7 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart LR
+  C["cli · unbounded ×8, asking"] --> R1["add.containment"]
+  C --> R2["collect.containment + asking"]
+  C --> R3["format / migrate / init / rename"]
+  M["mcp · project.containment() ×8"] --> R1
+  M --> R2
+  M --> R3
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class R1,R2,R3 leak
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart LR
+  C["cli caller::of"] --> K
+  M["mcp target::call::lent"] --> K
+  K["Caller · &Containment + Asking"] --> R["every ops request: caller"]
+  classDef deep fill:#0f172a,color:#f8fafc,stroke:#0f172a,stroke-width:3px;
+  class K deep
+    </pre></div>
+  </div>
+  <ul><li class="def">Eight requests each declared their own reach; three declared an asker.</li><li class="fix">Each surface builds the value once; structural tests keep it so.</li></ul>
+</article>
+
+<!-- 03 -->
+<article id="p03">
+  <div class="head"><h2>03 · Collect's machine is one port</h2><div class="tags"><span>ADR 0125</span><span>10 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart TB
+  S["cli / mcp"] --> C["collect()"]
+  C --> R["runner · std::process::Command"]
+  C --> K["consent · $HOME / env var"]
+  C --> N["SystemTime::now()"]
+  C -.->|"approved command runs,<br/>then a later refusal"| X["results thrown away"]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class R,K,N,X leak
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart TB
+  S["cli / mcp"] --> C["collect(view, req, machine)"]
+  C -.->|"seam"| P(["CollectorMachine"])
+  P --- A1["ProcessMachine"]
+  P --- A2["testing::ScriptedMachine"]
+  classDef deep fill:#0f172a,color:#f8fafc,stroke:#0f172a,stroke-width:3px;
+  class C deep
+    </pre></div>
+  </div>
+  <ul><li class="def">The whole flow ran only in subprocess tests; three MCP tests read the real consent file.</li><li class="fix">Every refusal that needs no run comes before any command runs; the flow is tested in process.</li></ul>
+</article>
+
+<!-- 04 -->
+<article id="p04">
+  <div class="head"><h2>04 · A lock plan writes the specforge.json entries it judged</h2><div class="tags"><span>ADR 0126</span><span>6 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart LR
+  P["LockPlan · judges entries"] --> J["peer-set judgement"]
+  W["commit"] -->|"re-reads by name"| D[("specforge.json on disk")]
+  W --> E["config::enable / remove_*<br/>own predicates"]
+  D -.->|"edited mid-run"| X["overwritten, check gives E027"]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class E,X leak
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart LR
+  O["Opened · document as read"] --> P["LockPlan.entries()"]
+  P --> J["peer-set judgement"]
+  P -->|"render(document)"| PC["ProjectChange"]
+  PC -->|"file unchanged since? else file_changed"| D[("specforge.json")]
+  classDef deep fill:#0f172a,color:#f8fafc,stroke:#0f172a,stroke-width:3px;
+  class P deep
+    </pre></div>
+  </div>
+  <ul><li class="def">CLI <code>remove</code> overwrote an edit made while it ran; over a deleted file it answered "removed".</li><li class="fix">The commit writes what the plan judged, or nothing; <code>config.rs</code> only reads and writes.</li></ul>
+</article>
+
+<!-- 05 -->
+<article id="p05">
+  <div class="head"><h2>05 · The linker records where each edge is written</h2><div class="tags"><span>ADR 0127</span><span>7 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart LR
+  L["linker · Reference.span"] -->|"span dropped"| ED["Edge {source, target, label}"]
+  ED --> N["navigation"]
+  N --> S1["written_references"]
+  N --> S2["derived_references"]
+  N --> S3["token-scan fallback"]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class S1,S2,S3 leak
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart LR
+  L["linker + derived walk"] --> ED["Edge"]
+  L -->|"Graph::written(edge)"| WS["written spans"]
+  WS --> N["navigation · reads them"]
+  classDef deep fill:#0f172a,color:#f8fafc,stroke:#0f172a,stroke-width:3px;
+  class L deep
+    </pre></div>
+  </div>
+  <ul><li class="def">Rename missed a type in a signature, renamed a parameter name, and refused a project over a quoted union value.</li><li class="fix">The parser keeps type, return and union-member spans; the block scan is deleted.</li></ul>
+</article>
+
+<!-- 06 -->
+<article id="p06">
+  <div class="head"><h2>06 · One all-or-nothing project change over held files</h2><div class="tags"><span>ADR 0128</span><span>9 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart TB
+  R["rename::apply"] -->|"Held.write ×N · let _ = restore"| F1["files cut off on failure"]
+  FM["format"] -->|"in place"| F1
+  L["lock_plan.finish"] --> I["installed::Change"]
+  I -->|"std::fs by name"| F2["specforge.json · .gitignore · starter"]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class R,FM,I leak
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart TB
+  R["rename"] --> P
+  FM["format"] --> P
+  L["lock plan"] --> P
+  P["ProjectChange · stage, check, replace, restore in reverse,<br/>Failed::error names the files left"] --> F["held files"]
+  L --> I["installed::Change · modules + lock"]
+  classDef deep fill:#0f172a,color:#f8fafc,stroke:#0f172a,stroke-width:3px;
+  class P deep
+    </pre></div>
+  </div>
+  <ul><li class="def">A failed rename left a truncated <code>.spec</code> (E001) and replied <code>files_written: []</code>; format had the same fault.</li><li class="fix"><code>Held::replace</code> keeps permissions and refuses a file the process may not write.</li></ul>
+</article>
+
+<!-- 07 -->
+<article id="p07">
+  <div class="head"><h2>07 · A source read is a recorded read</h2><div class="tags"><span>ADR 0129</span><span>5 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart LR
+  subgraph Run["Run · RunDisk records each hop"]
+    env["environment inputs"]
+    chk["check inputs"]
+  end
+  s1["Reads::source (cold)"] -->|"std::fs"| D[("disk")]
+  s2["Ledger::reread"] -->|"std::fs"| D
+  s1 --> LK["Link · relink"]
+  s2 --> ST["stamp_source(s)"]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class s1,s2,LK,ST leak
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart LR
+  subgraph Run["Run · env · sources · checks"]
+    direction TB
+    h["hop recording"] --> s["stamp at read"]
+  end
+  Run -->|"Disk"| D[("disk")]
+  classDef deep fill:#0f172a,color:#f8fafc,stroke:#0f172a,stroke-width:3px;
+  class Run deep
+    </pre></div>
+  </div>
+  <ul><li class="def">Repointing a middle symlink hop of a source was never seen by <code>watch</code> or the editor, while <code>check</code> gave E002.</li><li class="fix">One stamped read for the cold read and the reread; <code>Link</code>, <code>relink</code> and <code>stamp_source</code> are deleted.</li></ul>
+</article>
+
+<!-- 08 -->
+<article id="p08">
+  <div class="head"><h2>08 · A read's notices reach the reply through one seam</h2><div class="tags"><span>ADR 0130</span><span>8 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart TB
+  O["Outcome{notices}"] --> A["tool A .with_diagnostics"]
+  O --> B["tool B (forgot)"]
+  O --> C["cli Notes::beside"]
+  O --> D["resource .with_notices"]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class B leak
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart TB
+  O["ops read -> Noticed&lt;T&gt;"] -.->|"seam"| E1["Answer::noticed / ResourceText::noticed"]
+  O -.->|"seam"| E2["Notes::noticed"]
+  classDef deep fill:#0f172a,color:#f8fafc,stroke:#0f172a,stroke-width:3px;
+  class E1,E2 deep
+    </pre></div>
+  </div>
+  <ul><li class="def">Twelve MCP and six CLI forwards each had to remember the notices.</li><li class="fix">Only the envelopes open a <code>Noticed</code>; a scan test in each surface holds that.</li></ul>
+</article>
+
+<!-- 09 -->
+<article id="p09">
+  <div class="head"><h2>09 · Render's file is written by the export operation</h2><div class="tags"><span>ADR 0131</span><span>6 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart LR
+  R["mcp render"] --> X["ops export → text"]
+  R -->|"Containment::within · resolve · held.write"| D[("project files")]
+  D -.->|"hard link at out_dir/file"| O["file outside the project overwritten"]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class R,O leak
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart LR
+  R["mcp render · thin adapter"] --> X["ops export::write_into(dir, caller)"]
+  X -->|"Held::replace · caller's containment"| D[("project files")]
+  classDef deep fill:#0f172a,color:#f8fafc,stroke:#0f172a,stroke-width:3px;
+  class X deep
+    </pre></div>
+  </div>
+  <ul><li class="def">A hard link let render overwrite a file outside the project; error kinds were wrong.</li><li class="fix">Every project write is in ops, atomic and bounded; a read-only output file is <code>permission_denied</code>.</li></ul>
+</article>
+
+<!-- 10 -->
+<article id="p10">
+  <div class="head"><h2>10 · Check, analyze and trace refuse where they fail</h2><div class="tags"><span>ADR 0132</span><span>6 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart LR
+  F["fail point"] --> E["CheckError / AnalyzeError / TraceError"]
+  E -->|"From"| R["Refusal&lt;Field&gt;"]
+  E -->|"From"| O["OpError"]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class E leak
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart LR
+  F["fail point"] --> R["Refusal&lt;Field&gt;"]
+  classDef deep fill:#0f172a,color:#f8fafc,stroke:#0f172a,stroke-width:3px;
+  class R deep
+    </pre></div>
+  </div>
+  <ul><li class="def">About 250 lines only converted errors; no surface matched a variant.</li><li class="fix">The enums are deleted; the wire text is snapshot-pinned and unchanged.</li></ul>
+</article>
+
+<!-- 11 -->
+<article id="p11">
+  <div class="head"><h2>11 · One pass context, one pass loop</h2><div class="tags"><span>no ADR</span><span>2 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart LR
+  C["check_passes::run"] -->|"full AnalysisContext, reads 4 fields"| W["WasmRuntime"]
+  A["run_extension_passes"] --> W
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class C leak
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart LR
+  C["check phase"] --> P["run_extension_passes(PassContext)"]
+  A["analyze"] --> P
+  P --> W["WasmRuntime"]
+  classDef deep fill:#0f172a,color:#f8fafc,stroke:#0f172a,stroke-width:3px;
+  class P deep
+    </pre></div>
+  </div>
+  <ul><li class="def">The check phase built a whole analysis context to read four fields.</li><li class="fix">A four-field <code>PassContext</code>; the check phase uses the shared loop.</li></ul>
+</article>
+
+<!-- 12 -->
+<article id="p12">
+  <div class="head"><h2>12 · Trace's Ask has one shape; the infer prompt refuses an unknown scope</h2><div class="tags"><span>ADR 0101 amended</span><span>5 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart LR
+  A1["ops Ask::Every / Entity"] --- A2["Target::Every / Entity"]
+  T["mcp tool + prompt"] --> X1["'every' refusal ×2"]
+  I["infer prompt"] -->|"unknown scope"| OV["20 KB overview"]
+  classDef leak stroke:#dc2626,stroke-width:2px;
+  class A1,A2,X1,OV leak
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart LR
+  A["Ask::Trace(Target) | Plan"] --> T["tool + prompt"]
+  T --> X["every_is_not_offered()"]
+  I["infer prompt"] -->|"unknown scope"| R["invalid_input on scope"]
+  classDef deep fill:#0f172a,color:#f8fafc,stroke:#0f172a,stroke-width:3px;
+  class A,R deep
+    </pre></div>
+  </div>
+  <ul><li class="def">Duplicate variants; <code>Plan</code>, <code>workflows</code>, <code>Kind:x</code> all returned the overview.</li><li class="fix">One variant set, one refusal; an unknown scope names the valid five.</li></ul>
+</article>
+
+<article>
+  <h2>Defects fixed</h2>
+  <table>
+    <tr><th>Plan</th><th>Defect</th></tr>
+    <tr><td>09</td><td>Render overwrote a file outside the project through a hard link</td></tr>
+    <tr><td>06</td><td>Rename and format left a truncated <code>.spec</code> and replied <code>files_written: []</code></td></tr>
+    <tr><td>04</td><td>CLI <code>remove</code> overwrote a mid-run edit of <code>specforge.json</code></td></tr>
+    <tr><td>05</td><td>Rename missed signature types, renamed a parameter name, refused a project over a quoted union value</td></tr>
+    <tr><td>07</td><td><code>watch</code> and the editor missed a retargeted middle symlink hop</td></tr>
+    <tr><td>03</td><td>An approved collector ran before a later refusal; three tests read the real consent file</td></tr>
+    <tr><td>12</td><td>The infer prompt read any unknown scope as the overview</td></tr>
+  </table>
+</article>
+</main>
+</body>
+</html>

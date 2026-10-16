@@ -1,12 +1,12 @@
 // Inference workflow behaviors — AI agent spec inference from codebases
 //
-// 20 behaviors:
+// 21 behaviors:
 //   - Manifest I/O (3): load, save, compute summary
 //   - Session management (3): start, end, mark analyzed
 //   - Discovery and staleness (2): discover sources, detect stale entries
 //   - MCP tools (3): infer_progress, infer_session, infer_gaps
 //   - Guides (1): compute inference guide
-//   - MCP prompts (4): kind, plan, workflow and file scopes
+//   - MCP prompts (5): the scope read; kind, plan, workflow and file scopes
 //   - CLI (2): infer-status, infer-guide
 //   - Diagnostics (2): I200, I202
 
@@ -372,6 +372,25 @@ behavior compute_inference_guide "Compute Inference Guide" {
   verify unit "the guide's spec directory is the project's spec root, relative to its root"
   verify unit "the guide lists each loaded extension, every declared kind in declaration order, and the entities of every written kind"
   verify integration "every builtin kind's example parses and holds no value of the wrong type"
+}
+
+behavior read_infer_prompt_scope "Read Infer Prompt Scope" {
+  features [infer_plan_mode]
+  types    [McpInferPromptResult, McpInferOverview]
+  category mcp
+  ensures {
+    one_scope_one_guide "each scope the prompt knows names one guide; any other is refused on scope"
+  }
+  contract """
+    specforge://prompts/infer reads its scope argument as one of five: none,
+    an empty scope or overview (every kind's guide, McpInferOverview),
+    kind:<name>, file:<path>, plan and workflow. A kind: or file: with
+    nothing after it, and any other value, are refused as invalid input on
+    scope; the refusal of an unknown scope names the five. An unknown
+    scope is never read as the overview (ADR 0101 D2).
+  """
+  verify unit "a scope the prompt does not know is refused on scope, naming the scopes it knows"
+  verify unit "no scope, an empty scope or scope overview renders every kind's guide"
 }
 
 behavior provide_infer_kind_scope "Provide Infer Prompt Kind Scope" {

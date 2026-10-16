@@ -576,7 +576,7 @@ fn exported(root: &std::path::Path, request: &Request) -> String {
     let runtime = specforge_project::testing::component_runtime();
     let project = specforge_project::testing::compile_at(root, Some(runtime));
     let exported = export::export(&ProjectView::of(&project), request);
-    exported.unwrap().document
+    exported.unwrap().into_value_and_notices().0
 }
 
 #[specforge_test(

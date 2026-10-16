@@ -69,14 +69,14 @@ impl<'a> LockPlan<'a> {
             installed,
             lock,
             staged,
-            entries,
+            config,
             appended,
             wanted,
             fetching,
             purpose,
             disabled,
             uninstalled,
-            edits_config,
+            operation,
             ..
         } = self;
         for (i, s) in staged.iter().enumerate() {
@@ -104,9 +104,9 @@ impl<'a> LockPlan<'a> {
             uninstalls: uninstalled.into_iter().map(|(_, name)| name).collect(),
             disabled: disabled.into_iter().map(|(_, disabled)| disabled).collect(),
             purpose,
-            edits_config,
+            operation,
             pins: fetching.map(|fetching| (fetching.registry, pins)),
-            entries,
+            config,
             appended,
             wanted,
         })
@@ -137,8 +137,12 @@ impl<'a> LockPlan<'a> {
             asks: Vec::new(),
             staged: 0,
         };
-        let before = ProjectPeers::of(self.installed, &self.entries, &mut self.declarations)
-            .map_err(|error| Refused::of(&none(), error))?;
+        let before = ProjectPeers::of(
+            self.installed,
+            self.config.entries(),
+            &mut self.declarations,
+        )
+        .map_err(|error| Refused::of(&none(), error))?;
         let after = ProjectPeers::of(&self.view(), &self.entries_after(), &mut self.declarations)
             .map_err(|error| Refused::of(&none(), error))?;
         let mut names: Vec<String> = Vec::new();

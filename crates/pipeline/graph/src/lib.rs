@@ -12,7 +12,7 @@ pub use delta::{
     moved_nodes,
 };
 mod derive;
-pub use derive::{DerivedFrom, DerivedReference, type_expressions};
+pub use derive::{DerivedFrom, DerivedReference};
 mod graph;
 mod obligations;
 // The cycle walker lives in specforge-common (the registry's rules use it

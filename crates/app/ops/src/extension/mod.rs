@@ -111,7 +111,7 @@ impl Origin {
 /// The builtin `specifier` names (`@specforge/product`, optionally with an
 /// `@version` suffix, which is ignored: builtins track the binary).
 pub fn builtin_name(specifier: &str) -> Option<&'static str> {
-    let name = crate::config::entry_name(specifier);
+    let name = specforge_common::extension_entry_name(specifier);
     specforge_project::builtins()
         .names()
         .find(|builtin| *builtin == name)

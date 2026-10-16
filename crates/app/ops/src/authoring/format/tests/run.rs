@@ -108,7 +108,7 @@ fn clean_needs_every_file_read_and_canonical() {
         root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         paths: &missing,
         mode: Mode::Check,
-        containment: &crate::Containment::unbounded(),
+        caller: crate::testing::caller(),
     });
     assert!(!outcome.succeeded() && !outcome.clean());
     assert!(!outcome.found_nothing());
@@ -163,7 +163,7 @@ fn a_locked_or_missing_file_fails_with_the_kind_the_os_gave() {
         root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         paths: &named,
         mode: Mode::Check,
-        containment: &crate::Containment::unbounded(),
+        caller: crate::testing::caller(),
     });
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
 
@@ -282,7 +282,7 @@ fn a_config_that_hides_the_sources_refuses_the_run() {
                 root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
                 paths: &[],
                 mode,
-                containment: &crate::Containment::unbounded(),
+                caller: crate::testing::caller(),
             })
             .unwrap_err();
 
@@ -319,7 +319,7 @@ fn a_nested_projects_config_refuses_the_walk_that_reaches_it() {
         root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         paths: &[dir.path().join("ws")],
         mode: Mode::Write,
-        containment: &crate::Containment::unbounded(),
+        caller: crate::testing::caller(),
     })
     .unwrap_err();
 
@@ -348,7 +348,7 @@ fn a_problem_the_run_goes_around_is_e069_and_fails_ok() {
         root: &root,
         paths: &[],
         mode: Mode::Check,
-        containment: &crate::Containment::unbounded(),
+        caller: crate::testing::caller(),
     });
 
     let e069: Vec<_> = check
@@ -368,7 +368,7 @@ fn a_problem_the_run_goes_around_is_e069_and_fails_ok() {
         root: &root,
         paths: &[],
         mode: Mode::Write,
-        containment: &crate::Containment::unbounded(),
+        caller: crate::testing::caller(),
     });
     assert!(!write.ok());
     assert_eq!(
@@ -390,7 +390,7 @@ fn a_named_file_reads_no_config() {
         root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         paths: std::slice::from_ref(&file),
         mode: Mode::Write,
-        containment: &crate::Containment::unbounded(),
+        caller: crate::testing::caller(),
     })
     .unwrap();
 
@@ -418,7 +418,7 @@ fn a_symlink_that_leaves_the_bound_is_a_failure_and_nothing_is_written() {
         root: &root,
         paths: &[],
         mode: Mode::Write,
-        containment: &held,
+        caller: crate::testing::bounded(&held),
     };
 
     let bound = super::super::run(&bounded).unwrap();
@@ -436,7 +436,7 @@ fn a_symlink_that_leaves_the_bound_is_a_failure_and_nothing_is_written() {
 
     // Unbounded (the CLI): the user's own symlink is followed.
     let unbounded = super::super::run(&Request {
-        containment: &crate::Containment::unbounded(),
+        caller: crate::testing::caller(),
         ..bounded
     })
     .unwrap();
@@ -466,7 +466,7 @@ fn a_named_path_that_leaves_the_containment_is_refused_on_paths() {
             outside.path().join("x.spec"),
         ],
         mode: Mode::Write,
-        containment: &held,
+        caller: crate::testing::bounded(&held),
     })
     .unwrap_err();
 

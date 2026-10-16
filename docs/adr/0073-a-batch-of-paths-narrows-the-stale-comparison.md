@@ -4,6 +4,7 @@
 D1 and D4 and [ADR 0014](0014-the-session-keeps-itself-current.md) D9.
 D5's keying is extended to every input by [ADR 0114](0114-environment-inputs-are-recorded-as-read.md); D5 extended by
 ADR 0113 (inference sources: no symlinked directory is entered).
+D2's fourth bullet and D5's third bullet are amended by [ADR 0129](0129-a-source-read-is-a-recorded-read.md): each hop a symlinked source's read followed, not only its target, is an input that reaches it.
 
 Watch and the LSP told the project session which paths changed, and the session classified each path by its spelling: a
 `.spec` file under the spec root was a source, a few named files were environment or check inputs, anything else was

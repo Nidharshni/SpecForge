@@ -87,10 +87,10 @@ fn surfaces(s: &SurfaceDescriptor) -> Value {
     })
 }
 
-/// What every graph of the project is built with, as the environment answers it
-/// (`Environment::graph_config`), without the provider schemes.
+/// What every graph of the project is built with, as the Registry build holds it
+/// (`RegistryBuild::graph_inputs`), without the provider schemes.
 fn graph_inputs(env: &Environment) -> Value {
-    let config = env.graph_config().inputs;
+    let config = env.registries().graph_inputs();
     let bidirectional_pairs: Vec<Value> = config
         .bidirectional_pairs
         .iter()

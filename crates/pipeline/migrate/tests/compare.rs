@@ -351,6 +351,7 @@ fn graph_after(change: Option<Change>) -> Graph {
                     name: "run".into(),
                     params: Vec::new(),
                     returns: None,
+                    returns_span: None,
                     span: span(line + 1),
                 }]
             } else {

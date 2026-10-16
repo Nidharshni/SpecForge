@@ -314,6 +314,9 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     answers as the add would, whatever its source. specforge add --dry-run
     is that dry run on the command line.
     The system MUST NOT modify any other field in specforge.json.
+    An add writes the entries its lock plan judged into the specforge.json
+    it read; when the file changed since, the add MUST be refused
+    (file_changed) and write nothing.
     When adding an extension, the system MUST judge, by the one peer rule
     (ADR 0041) and before anything is installed, the project's peer set as
     the add leaves it: the extensions its specforge.json entries load,
@@ -361,6 +364,7 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   """
   verify unit "with no registry configured, add makes no network call and reports how to configure one"
   verify unit "add extension appends to extensions list"
+  verify unit "an add over a specforge.json changed since it was read writes nothing"
   verify integration "add --format json lists the files it wrote in files_written"
   verify integration "specforge add with several specifiers prints one entry per specifier and writes them as one change, or nothing"
   verify unit "the add document lists what the add did for each specifier by action, with source always and key_id only for a signed package"

@@ -192,7 +192,7 @@ fn each_ask_is_answered_with_the_builtins_its_extension_required() {
         let installed = Installed::at(dir.path());
         let mut plan = LockPlan::adding(
             &installed,
-            &[],
+            opened_at(dir.path()),
             &runtime,
             fetching(no_registry()),
             Purpose::Commit,
@@ -252,4 +252,189 @@ fn a_change_whose_lock_is_a_symlink_that_leaves_the_project_writes_nothing() {
         !dir.path().join(".specforge/extensions/@acme/app").exists(),
         "no module was placed"
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_pin_failure_whose_rollback_cannot_put_the_config_back_names_it() {
+    let (runtime, registry) = (runtime(), app_registry(Some("k1")));
+    let dir = base_project();
+    let config = dir.path().join("specforge.json");
+    let probe = dir.path().join("probe");
+    std::fs::write(&probe, "x").unwrap();
+    let mut readonly = std::fs::metadata(&probe).unwrap().permissions();
+    readonly.set_readonly(true);
+    std::fs::set_permissions(&probe, readonly).unwrap();
+    if std::fs::OpenOptions::new().write(true).open(&probe).is_ok() {
+        return; // permissions don't bind this user (root)
+    }
+    let registry = registry.refusing_pins_after_locking(&config);
+    let installed = Installed::at(dir.path());
+    let lock_file = specforge_installed::lock_path(dir.path());
+    let module = installed.module_path(&app());
+    let lock_before = std::fs::read(&lock_file).unwrap();
+
+    let error = stage_app(&registry, &runtime, &installed)
+        .check()
+        .unwrap()
+        .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
+        .unwrap_err();
+
+    assert!(error.is(codes::R_TRUST_006), "{error:?}");
+    assert_eq!(
+        error.writes.paths().collect::<Vec<_>>(),
+        [config.as_path()],
+        "the config the change wrote and could not put back is named"
+    );
+    assert!(
+        std::fs::read_to_string(&config)
+            .unwrap()
+            .contains("@acme/app"),
+        "left as the change wrote it, whole"
+    );
+    assert_eq!(std::fs::read(&lock_file).unwrap(), lock_before);
+    assert!(!module.exists(), "the placed module is taken away");
+}
+
+/// An [`Also`] that stages a new file `at` with `text`.
+fn staging(at: &Path, text: &'static str) -> Also<'static> {
+    Also {
+        path: at.to_path_buf(),
+        stage: Box::new(move |held, change| {
+            change.stage(held, None, text.as_bytes().to_vec());
+            Ok(())
+        }),
+        code: "init_write_failed",
+    }
+}
+
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "uninstall_wasm_extension",
+    verify = "rolls back on failure"
+)]
+fn an_entries_only_plan_accepts_an_unreadable_lock_and_puts_the_config_back() {
+    use std::os::unix::fs::PermissionsExt;
+    let runtime = crate::testing::serving_builtin(
+        runtime(),
+        "@specforge/software",
+        declaring("@specforge/software", "1.0.0", &[]),
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let config = dir.path().join("specforge.json");
+    let before = "{\"name\":\"p\",\"version\":\"0.1.0\",\"extensions\":[]}";
+    std::fs::write(&config, before).unwrap();
+    // A lock that cannot be read: a change that writes it is refused (E033), one that does not accepts it.
+    let lock = specforge_installed::lock_path(dir.path());
+    std::fs::create_dir_all(lock.parent().unwrap()).unwrap();
+    std::fs::write(&lock, "{ not a lock").unwrap();
+    let locked = dir.path().join("locked");
+    std::fs::create_dir(&locked).unwrap();
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+    if std::fs::write(locked.join("probe"), "x").is_ok() {
+        return; // permissions don't bind this user (root)
+    }
+    let installed = Installed::at(dir.path());
+    let mut plan = LockPlan::adding(
+        &installed,
+        opened_at(dir.path()),
+        &runtime,
+        fetching(no_registry()),
+        Purpose::Commit,
+        false,
+    )
+    .unwrap();
+    plan.enable(Ask(0), "@specforge/software");
+
+    // The second file cannot be created: the config the change wrote is put back.
+    let error = plan
+        .check()
+        .ok()
+        .unwrap()
+        .finish(
+            dir.path(),
+            vec![staging(&locked.join("new.txt"), "x")],
+            &crate::Containment::unbounded(),
+        )
+        .unwrap_err();
+
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(error.code, "init_write_failed", "{error:?}");
+    assert!(error.writes.is_empty(), "{error:?}");
+    assert_eq!(std::fs::read_to_string(&config).unwrap(), before);
+    assert_eq!(std::fs::read_to_string(&lock).unwrap(), "{ not a lock");
+}
+
+#[specforge_test(
+    invariant = "extension_operation_atomicity",
+    verify = "a failed change puts back every project file it wrote and removes the directories it created"
+)]
+fn a_failed_change_puts_back_every_project_file_and_the_directories_it_made() {
+    let (runtime, registry) = (runtime(), app_registry(Some("k1")).refusing_pins());
+    let dir = base_project();
+    let gitignore = dir.path().join(".gitignore");
+    std::fs::write(&gitignore, "target\n").unwrap();
+    let installed = Installed::at(dir.path());
+    let config_before = std::fs::read(dir.path().join("specforge.json")).unwrap();
+    let also = vec![
+        staging(&dir.path().join("made/deeper/starter.spec"), "spec"),
+        Also {
+            path: gitignore.clone(),
+            stage: Box::new(|held, change| {
+                let before = held.read_if_there().unwrap();
+                change.stage(held, before, b"target\n.specforge\n".to_vec());
+                Ok(())
+            }),
+            code: "init_write_failed",
+        },
+    ];
+
+    let error = stage_app(&registry, &runtime, &installed)
+        .check()
+        .unwrap()
+        .finish(dir.path(), also, &crate::Containment::unbounded())
+        .unwrap_err();
+
+    assert!(error.is(codes::R_TRUST_006), "{error:?}");
+    assert!(error.writes.is_empty(), "{error:?}");
+    assert_eq!(std::fs::read_to_string(&gitignore).unwrap(), "target\n");
+    assert_eq!(
+        std::fs::read(dir.path().join("specforge.json")).unwrap(),
+        config_before
+    );
+    assert!(
+        !dir.path().join("made").exists(),
+        "the directories it made are removed"
+    );
+    assert!(!installed.module_path(&app()).exists());
+}
+
+#[specforge_test(
+    behavior = "add_extension_to_existing_project",
+    verify = "an add over a specforge.json changed since it was read writes nothing"
+)]
+fn an_add_over_a_config_changed_since_it_was_read_writes_nothing() {
+    let (runtime, registry) = (runtime(), app_registry(Some("k1")));
+    let dir = base_project();
+    let installed = Installed::at(dir.path());
+    let lock_file = specforge_installed::lock_path(dir.path());
+    let config = dir.path().join("specforge.json");
+    let module = installed.module_path(&app());
+    let lock_before = std::fs::read(&lock_file).unwrap();
+    let checked = stage_app(&registry, &runtime, &installed).check().unwrap();
+    // The base is disabled by hand after the plan judged on it.
+    std::fs::write(&config, "{\"extensions\":[]}").unwrap();
+
+    let error = checked
+        .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
+        .unwrap_err();
+
+    assert_eq!(error.code, "file_changed", "{error:?}");
+    assert_eq!(std::fs::read(&lock_file).unwrap(), lock_before);
+    assert_eq!(
+        std::fs::read_to_string(&config).unwrap(),
+        "{\"extensions\":[]}"
+    );
+    assert!(!module.exists());
+    assert!(registry.pins().is_empty());
 }

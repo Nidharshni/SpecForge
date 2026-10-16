@@ -5,6 +5,7 @@
 
 mod asking;
 mod call_target;
+mod collect_machine;
 mod conformance;
 mod contracts;
 mod event_spec;
@@ -35,6 +36,8 @@ mod prompts;
 mod protocol;
 mod read_notices;
 mod refusal_arguments;
+mod refusal_wire;
+mod render_writes;
 mod request_meaning;
 mod resource_templates;
 mod resources;

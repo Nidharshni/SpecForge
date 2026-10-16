@@ -8,7 +8,7 @@ use specforge_common::Diagnostic;
 use specforge_graph::Node;
 use specforge_ops::OpError;
 use specforge_ops::read::inspect::{EntityCoverage, EntityFacts};
-use specforge_parser::{FieldValue, ListItem, Written};
+use specforge_parser::{FieldValue, ListItem, TypeMember, Written};
 use specforge_registry::FieldRegistry;
 use std::collections::BTreeMap;
 use tower_lsp::lsp_types::Position;
@@ -362,6 +362,15 @@ pub fn hover_field_info(
     Some(parts.join("  \n"))
 }
 
+/// A union's members as written, joined with ` | `.
+fn join_members(members: &[TypeMember]) -> String {
+    members
+        .iter()
+        .map(|m| m.text.as_str())
+        .collect::<Vec<_>>()
+        .join(" | ")
+}
+
 fn format_field_value(fv: &FieldValue) -> String {
     match fv {
         FieldValue::String(s) => {
@@ -375,7 +384,7 @@ fn format_field_value(fv: &FieldValue) -> String {
             format!("\"{}\"", truncated)
         }
         FieldValue::Identifier(s) => format!("`{}`", s),
-        FieldValue::TypeUnion(types) => types.join(" | "),
+        FieldValue::TypeUnion(types) => join_members(types),
         FieldValue::Expression(exprs) => {
             if exprs.len() == 1 {
                 format!("expr {{ {} }}", exprs[0])
@@ -404,7 +413,7 @@ fn format_field_value(fv: &FieldValue) -> String {
                 )
             }
         }
-        FieldValue::VariantList(variants) => format!("[{}]", variants.join(" | ")),
+        FieldValue::VariantList(variants) => format!("[{}]", join_members(variants)),
         FieldValue::Block(map) => {
             let count = map.entries().len();
             format!("{{…}} ({} fields)", count)

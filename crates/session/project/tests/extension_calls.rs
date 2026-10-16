@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 use specforge_common::{Diagnostic, Severity};
 use specforge_extension_sdk::prelude::*;
 use specforge_project::coverage::TestReport;
-use specforge_project::passes::{AnalysisContext, pass_input, run_extension_passes};
+use specforge_project::passes::{PassContext, pass_input, run_extension_passes};
 use specforge_project::testing::TestProject;
 use specforge_wasm::testing::InProcessRuntime;
 use specforge_wasm::{WasmCallResult, WasmTrapInfo};
@@ -150,14 +150,10 @@ fn c4_the_pass_input_of_an_analysis() {
     }))
     .unwrap();
     let proved: HashSet<String> = ["b".to_string(), "a".to_string()].into();
-    let registries = compiled.environment().registries();
-    let input = pass_input(&AnalysisContext {
-        graph: compiled.graph(),
-        kind_registry: registries.kinds(),
-        field_registry: registries.fields(),
-        entities: compiled.entities(),
+    let input = pass_input(&PassContext {
         test_results: Some(&report),
         proved_claims: Some(&proved),
+        ..PassContext::of(compiled.entities())
     });
     // flipped in T6, then by plan 08: a test's `runner` is the report's own
     // key and not sent; its name, status, `verify` and `duration_ms` are
@@ -310,14 +306,7 @@ fn c4_a_failing_analyze_pass_is_an_e028_finding_of_its_report() {
     let registries = compiled.environment().registries();
     let reports = run_extension_passes(
         registries.analyze_passes(),
-        &AnalysisContext {
-            graph: compiled.graph(),
-            kind_registry: registries.kinds(),
-            field_registry: registries.fields(),
-            entities: compiled.entities(),
-            test_results: None,
-            proved_claims: None,
-        },
+        &PassContext::of(compiled.entities()),
         runtime.as_ref(),
     );
     assert_eq!(reports.len(), 1);

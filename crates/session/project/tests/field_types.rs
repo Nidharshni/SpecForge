@@ -2,7 +2,7 @@
 //! the environment's checks every surface (check, watch, LSP) runs.
 
 use specforge_common::Diagnostic;
-use specforge_graph::{Graph, build_graph_with_config};
+use specforge_graph::Graph;
 use specforge_parser::FieldValue;
 use specforge_project::testing::Assembled;
 use specforge_protocol_types::{
@@ -50,10 +50,11 @@ fn build_and_check(source: &str) -> (Graph, Vec<Diagnostic>) {
     assert!(pop_diags.is_empty(), "{pop_diags:?}");
     let parsed = specforge_parser::parse(source, "main.spec");
     assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
-    let (graph, mut diags) = build_graph_with_config(&[parsed], &env.graph_config());
-    let entities = env.entity_snapshot(&graph);
-    diags.extend(env.run_checks(&graph, &entities, &specforge_registry::MemoryDisk::new()));
-    (graph, diags)
+    let build = env.graph_of([parsed]);
+    let entities = env.entity_snapshot(&build);
+    let mut diags = build.diagnostics().to_vec();
+    diags.extend(env.run_checks(&entities, &specforge_registry::MemoryDisk::new()));
+    (build.into_parts().0, diags)
 }
 
 fn e061(diags: &[Diagnostic]) -> Vec<&Diagnostic> {

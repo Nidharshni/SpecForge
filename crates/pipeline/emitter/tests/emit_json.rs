@@ -1,7 +1,7 @@
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
 use specforge_parser::{
-    EntityId, EntityKind, FieldMap, FieldValue, ListItem, Written, parse_expression,
+    EntityId, EntityKind, FieldMap, FieldValue, ListItem, TypeMember, Written, parse_expression,
 };
 use specforge_test::prelude::*;
 
@@ -12,6 +12,15 @@ fn span() -> SourceSpan {
         start_col: 0,
         end_line: 1,
         end_col: 0,
+    }
+}
+
+/// A union member written bare, at the fixed span.
+fn member(text: &str) -> TypeMember {
+    TypeMember {
+        text: text.to_string(),
+        span: span(),
+        written: Written::Bare,
     }
 }
 
@@ -359,7 +368,7 @@ fn every_other_value_is_written_as_today() {
     fields.push(Sym::new("date"), FieldValue::Date("2026-10-13".into()));
     fields.push(
         Sym::new("union"),
-        FieldValue::TypeUnion(vec!["a".into(), "b".into()]),
+        FieldValue::TypeUnion(vec![member("a"), member("b")]),
     );
     fields.push(Sym::new("integer"), FieldValue::Integer(3));
     fields.push(Sym::new("boolean"), FieldValue::Boolean(true));
@@ -369,7 +378,7 @@ fn every_other_value_is_written_as_today() {
     );
     fields.push(
         Sym::new("variants"),
-        FieldValue::VariantList(vec!["a".into(), "b".into()]),
+        FieldValue::VariantList(vec![member("a"), member("b")]),
     );
     fields.push(
         Sym::new("strings"),

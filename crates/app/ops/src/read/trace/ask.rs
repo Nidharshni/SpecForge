@@ -1,5 +1,6 @@
-//! What a trace request asks for (ADR 0101): one entity's chain, every chain, or an agent plan's check.
+//! What a trace request asks for (ADR 0101): a trace of one entity or of every entity, or an agent plan's check.
 
+use super::Target;
 use crate::read::plan::AgentPlan;
 use crate::{OpError, OpErrorKind, Refusal};
 
@@ -14,14 +15,13 @@ pub enum TraceField {
     Plan,
 }
 
-/// The trace a request asks for.
+/// The read a trace request asks for.
 #[derive(Debug, Clone, Copy)]
 pub enum Ask<'a> {
-    /// Every entity's chain (no entity, no plan). A surface may decline to offer it (MCP does).
-    Every,
-    /// One entity's chain.
-    Entity(&'a str),
-    /// The check of an agent plan against the graph.
+    /// The trace operation over `Target`: one entity's chain when an entity is given, every entity's when
+    /// neither an entity nor a plan is. A surface may decline to offer `Target::Every` (MCP does, ADR 0101 D4).
+    Trace(Target<'a>),
+    /// The check of an agent plan against the graph (`plan::check`).
     Plan(&'a AgentPlan),
 }
 
@@ -39,9 +39,9 @@ impl<'a> Ask<'a> {
                 "an entity and a plan are two traces: give one",
             )
             .about(TraceField::Plan)),
-            (Some(entity), None) => Ok(Ask::Entity(entity)),
+            (Some(entity), None) => Ok(Ask::Trace(Target::Entity(entity))),
             (None, Some(plan)) => Ok(Ask::Plan(plan)),
-            (None, None) => Ok(Ask::Every),
+            (None, None) => Ok(Ask::Trace(Target::Every)),
         }
     }
 }
@@ -73,9 +73,9 @@ mod tests {
         let plan = plan();
         assert!(matches!(
             Ask::of(Some("login"), None),
-            Ok(Ask::Entity("login"))
+            Ok(Ask::Trace(Target::Entity("login")))
         ));
         assert!(matches!(Ask::of(None, Some(&plan)), Ok(Ask::Plan(_))));
-        assert!(matches!(Ask::of(None, None), Ok(Ask::Every)));
+        assert!(matches!(Ask::of(None, None), Ok(Ask::Trace(Target::Every))));
     }
 }

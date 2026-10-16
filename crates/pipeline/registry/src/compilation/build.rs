@@ -8,8 +8,10 @@
 //! registers the surfaces. Callers read [`RegistryBuild`].
 //! It is pure: no I/O, no runtime.
 
+use std::collections::HashSet;
+
 use specforge_common::Diagnostic;
-use specforge_graph::{FieldForms, GraphInputs};
+use specforge_graph::{FieldForms, GraphBuild, GraphConfig, GraphInputs, SpecFile};
 use specforge_protocol_types::{CompilerPassDescriptor, ExtensionDeclaration};
 
 use super::candidates::CandidateVocabulary;
@@ -115,6 +117,10 @@ pub struct RegistryBuild {
     pub(crate) fields: FieldRegistry,
     /// Every field's form and the kinds that take any field, derived once.
     field_forms: FieldForms,
+    /// What every graph built in this build reads of its declarations (ADR 0032, ADR 0123):
+    /// derived by `build_registries` and again by `with_candidates`, so it always names the
+    /// owners the build's vocabulary knows.
+    graph_inputs: GraphInputs,
     pub(crate) edges: EdgeRegistry,
     /// The rule set: the extensions' rules (checked and resolved against
     /// the registries) plus the host-generated E006 rules for required
@@ -188,23 +194,47 @@ impl RegistryBuild {
     }
 
     /// What the graph build reads of these declarations: the owners of the
-    /// absent target kinds (read from the candidate vocabulary, so call it
-    /// after `with_candidates`), inverse pairs, value coercions and
-    /// derived references (ADR 0032, amended). The one place they are
-    /// derived; `Environment::graph_config` adds the provider schemes.
-    pub fn graph_inputs(&self) -> GraphInputs {
+    /// absent target kinds (from the candidate vocabulary the build holds
+    /// now), inverse pairs, value coercions and derived references
+    /// (ADR 0032, amended).
+    pub fn graph_inputs(&self) -> &GraphInputs {
+        &self.graph_inputs
+    }
+
+    /// The graph build of `files` in this build (ADR 0123): its own graph inputs, and `schemes`,
+    /// the provider schemes a `ref`'s scheme is checked against (empty: no I005). Files are taken
+    /// in path order; a later file with an earlier one's path replaces it; no files is the empty
+    /// build a session's updates fill. The one way to make a graph this build's entity snapshot
+    /// reads.
+    pub fn graph_of(
+        &self,
+        files: impl IntoIterator<Item = SpecFile>,
+        schemes: HashSet<String>,
+    ) -> GraphBuild {
+        GraphBuild::of(
+            files,
+            GraphConfig {
+                known_provider_schemes: schemes,
+                inputs: self.graph_inputs.clone(),
+            },
+        )
+    }
+
+    /// The graph inputs of these declarations and the vocabulary held now.
+    fn derived_graph_inputs(&self) -> GraphInputs {
         graph_inputs::derive(&self.fields, &self.field_forms, |kind| {
             self.candidates().kind_owner(kind).map(str::to_string)
         })
     }
 
-    /// The build, suggesting from `candidates` (ADR 0122). Read when `check` runs (and when
-    /// `graph_inputs` names the owner of an absent kind); nothing `build_registries` derives
+    /// The build, suggesting from `candidates` (ADR 0122), its graph inputs derived again from
+    /// them (they name the owner of an absent kind). Nothing else `build_registries` derives
     /// depends on it, and it changes no diagnostic but their suggestions. The session applies the
     /// builtins' with the build; a build never handed one suggests `specforge search`.
     #[must_use]
     pub fn with_candidates(mut self, candidates: CandidateVocabulary) -> Self {
         self.candidates = candidates;
+        self.graph_inputs = self.derived_graph_inputs();
         self
     }
 
@@ -341,11 +371,14 @@ pub fn build_registries(declarations: Vec<ExtensionDeclaration>) -> RegistryBuil
     surface_diagnostics.extend(about(BuildPart::Collision, duplicates));
 
     let field_forms = graph_inputs::field_forms(&kinds, &fields);
+    // A build handed no vocabulary owns nothing (`CandidateVocabulary::default()`).
+    let graph_inputs = graph_inputs::derive(&fields, &field_forms, |_| None);
     RegistryBuild {
         declarations,
         kinds,
         fields,
         field_forms,
+        graph_inputs,
         edges,
         rules,
         commands,

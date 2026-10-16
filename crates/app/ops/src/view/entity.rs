@@ -20,21 +20,13 @@ pub enum EntityField {
 /// is close. The one refusal for it: export's scope, inspect, the
 /// navigator, rename, trace, and every MCP tool and prompt.
 pub fn not_found(graph: &Graph, id: &str) -> OpError {
-    unresolved(
-        id,
-        find_close_match(id, graph.nodes().iter().map(|n| n.id.raw.as_str())),
-    )
-}
-
-/// [`not_found`] with the closest id already known (a `TraceError`).
-pub(crate) fn unresolved(id: &str, near: Option<&str>) -> OpError {
     let error = OpError::coded(
         OpErrorKind::EntityNotFound,
         codes::E003,
         format!("unresolved entity '{id}' — not found in graph"),
     )
     .with_entity(id);
-    match near {
+    match find_close_match(id, graph.nodes().iter().map(|n| n.id.raw.as_str())) {
         Some(near) => error.with_suggestion(format!("did you mean '{near}'?")),
         None => error,
     }

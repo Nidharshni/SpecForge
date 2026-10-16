@@ -1,6 +1,6 @@
 # The read views are operations over the project view
 
-**Status:** accepted (2026-10-05); P7: tools are named by their typed constants (ADR 0049). Amended by ADR 0111 (D2 reaffirmed with a measurement; D10: every reader reports the versioning's notices).
+**Status:** accepted (2026-10-05); P7: tools are named by their typed constants (ADR 0049). Amended by ADR 0111 (D2 reaffirmed with a measurement; D10: every reader reports the versioning's notices). Amended by ADR 0130 (the noticing reads return `Noticed<T>`; `QueryOutcome`, `Listing`, `SearchOutcome` and `ModelOutcome` are gone). D11: `TraceError` is gone (ADR 0132); trace refuses with `view::not_found` about `EntityField::EntityId`.
 
 `specforge-ops` handed the read views out as building blocks and each surface chained them on its
 own: the CLI's `stats` built a `CoverageRegistries` by hand and called `compute_project_stats`, MCP

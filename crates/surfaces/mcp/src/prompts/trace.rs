@@ -9,8 +9,9 @@ use specforge_ops::read::trace::{Ask, Target, TraceField, trace};
 use crate::args::Arguments;
 use crate::prompt::{CorePrompt, Prompted};
 use crate::refusal::ArgumentOf;
-use crate::tool::{ErrorCode, McpError};
-use crate::tools::trace::Gap;
+use crate::tool::McpError;
+use crate::tools::trace::{Gap, every_is_not_offered};
+use specforge_ops::Refusal;
 use specforge_ops::view::EntityField;
 use specforge_ops::view::ProjectView;
 
@@ -79,10 +80,12 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
                     .collect();
                 (outcome.entries, gaps, "the plan".to_string())
             }
-            Ask::Entity(entity_id) => {
+            Ask::Trace(Target::Entity(entity_id)) => {
                 // As the trace tool traces it: its chain and missing links.
-                let outcome = trace(&view, Target::Entity(entity_id))
-                    .map_err(|error| Prompt::refused(specforge_ops::Refusal::from(error)))?;
+                // ADR 0111 D6: the trace prompt's payload has no `_meta`, so it reports no notices.
+                let (outcome, _unreported) = trace(&view, Target::Entity(entity_id))
+                    .map_err(|refusal: Refusal<EntityField>| Prompt::refused(refusal))?
+                    .into_value_and_notices();
                 let gaps = outcome.gaps().iter().map(Gap::of).collect();
                 (
                     vec![entity_id.to_string()],
@@ -90,16 +93,7 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
                     format!("entity '{entity_id}'"),
                 )
             }
-            Ask::Every => {
-                // As the trace tool refuses it.
-                return Err(Box::new(
-                    McpError::new(
-                        ErrorCode::InvalidInput,
-                        "Missing required parameter: entity_id or plan",
-                    )
-                    .with_argument("entity_id"),
-                ));
-            }
+            Ask::Trace(Target::Every) => return Err(every_is_not_offered()),
         };
 
     // What the seeds' chains reach, and which of it is unverified.

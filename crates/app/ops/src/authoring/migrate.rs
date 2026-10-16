@@ -24,7 +24,7 @@ use specforge_registry::RegistryBuild;
 use specforge_wasm::WasmRuntime;
 use std::path::{Path, PathBuf};
 
-use crate::{Containment, OpError, OpErrorKind, Refusal, Writes};
+use crate::{Caller, OpError, OpErrorKind, Refusal, Writes};
 
 /// The field of a migration request a refusal can be about (ADR 0072).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,11 +72,10 @@ pub struct Request<'a> {
     pub dry_run: bool,
     /// Skip the `.bak` copy of each migrated file (nothing to roll back to).
     pub no_backup: bool,
-    /// What the migration may reach (ADR 0104): a source that lands outside it, by a symlink in
-    /// the project, refuses the run (`invalid_input`, nothing read or written; ADR 0092 D8). MCP
-    /// passes its bound; the CLI's user is already at the file system and passes
-    /// [`Containment::unbounded`].
-    pub containment: &'a Containment,
+    /// What the migration may reach (`caller.containment()`, ADR 0104): a source that lands
+    /// outside it, by a symlink in the project, refuses the run (`invalid_input`, nothing read or
+    /// written; ADR 0092 D8).
+    pub caller: Caller<'a>,
 }
 
 #[derive(Debug, Clone)]
@@ -334,7 +333,7 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
     let sources = read.config.sources(project.dir()).files();
     // Every file the migration writes is held before anything is: the sources, and (unless it
     // only previews) each source's backup and temporary files and the migration record.
-    if let Some(within) = request.containment.root() {
+    if let Some(within) = request.caller.containment().root() {
         let mut files: Vec<(String, PathBuf)> = Vec::new();
         for source in &sources {
             files.push((format!("source {}", source.display()), source.clone()));
@@ -361,7 +360,7 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
             ));
         }
         for (what, file) in &files {
-            if let Err(outside) = request.containment.resolve(file) {
+            if let Err(outside) = request.caller.containment().resolve(file) {
                 return Err(OpError::new(
                     OpErrorKind::InvalidInput,
                     SOURCE_OUTSIDE_ROOT,

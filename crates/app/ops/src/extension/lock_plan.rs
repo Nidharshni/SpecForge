@@ -19,6 +19,7 @@
 //! ask.
 
 use crate::view::ProjectView;
+use serde_json::Value;
 use specforge_installed::{Installed, LockFile, LockState, Module, Pin};
 use specforge_package::PackageName;
 use specforge_protocol_types::ExtensionDeclaration;
@@ -81,9 +82,9 @@ pub(crate) enum Purpose {
 /// Which `specforge.json` entries a removal drops.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Disabled {
-    /// Every entry naming this extension (`config::remove_extension`).
+    /// Every entry naming this extension.
     Named(String),
-    /// The entries written exactly so (a `.wasm` file entry; `config::remove_entry`).
+    /// The entries written exactly so (a `.wasm` file entry).
     Entry(String),
 }
 
@@ -165,8 +166,8 @@ pub(crate) struct LockPlan<'a> {
     /// lock: an unreadable one hides the installed extensions, as it hides them from the compile).
     lock: Option<LockFile>,
     staged: Vec<Staged<'a>>,
-    /// What `specforge.json` enables before the change.
-    entries: Vec<String>,
+    /// `specforge.json` as the plan opened it: what it enables before the change.
+    config: Opened,
     appended: Vec<Appended>,
     /// The extension each ask enables, in the order they were asked.
     wanted: Vec<(Ask, String)>,
@@ -178,8 +179,6 @@ pub(crate) struct LockPlan<'a> {
     purpose: Purpose,
     /// A removal is not judged (`remove --force`).
     force: bool,
-    /// Whether the change edits an existing `specforge.json`; `init` writes its own.
-    edits_config: bool,
     /// `(trigger, companion)`: the companion is enabled whenever the change leaves the trigger
     /// enabled.
     companions: Vec<(&'static str, &'static str)>,
@@ -200,7 +199,7 @@ impl<'a> LockPlan<'a> {
     /// registry asked. A preview fetches nothing: a registry package is judged by its [`Manifest`].
     pub(crate) fn adding(
         installed: &'a Installed,
-        entries: &[String],
+        config: Opened,
         runtime: &'a dyn WasmRuntime,
         fetching: Fetching<'a>,
         purpose: Purpose,
@@ -208,7 +207,7 @@ impl<'a> LockPlan<'a> {
     ) -> Result<LockPlan<'a>, OpError> {
         let mut plan = LockPlan::open(
             installed,
-            entries,
+            config,
             Some(runtime),
             Declarations::through(runtime),
             Verb::Install,
@@ -223,13 +222,13 @@ impl<'a> LockPlan<'a> {
     /// `update`'s plan: as [`Self::adding`], never enabling; E033 for an unreadable lock.
     pub(crate) fn updating(
         installed: &'a Installed,
-        entries: &[String],
+        config: Opened,
         runtime: &'a dyn WasmRuntime,
         fetching: Fetching<'a>,
     ) -> Result<LockPlan<'a>, OpError> {
         LockPlan::open(
             installed,
-            entries,
+            config,
             Some(runtime),
             Declarations::through(runtime),
             Verb::Update,
@@ -239,26 +238,25 @@ impl<'a> LockPlan<'a> {
         )
     }
 
-    /// `init`'s plan: a project with no `specforge.json` yet, whose config the caller's [`Also`]
-    /// writes from [`Checked::entries`]. It installs local files only (no registry); `installs` as
+    /// `init`'s plan: a project with no `specforge.json` yet, which the commit creates from `document`
+    /// with the entries the change leaves. It installs local files only (no registry); `installs` as
     /// in [`Self::adding`].
     pub(crate) fn initializing(
         installed: &'a Installed,
         runtime: &'a dyn WasmRuntime,
         installs: bool,
+        document: Value,
     ) -> Result<LockPlan<'a>, OpError> {
-        let mut plan = LockPlan::open(
+        LockPlan::open(
             installed,
-            &[],
+            Opened::creating(document),
             Some(runtime),
             Declarations::through(runtime),
             Verb::Install,
             None,
             "init",
             installs,
-        )?;
-        plan.edits_config = false;
-        Ok(plan)
+        )
     }
 
     /// `remove`'s plan over the compiled project `view`: its lock as the compile read it, its
@@ -271,15 +269,9 @@ impl<'a> LockPlan<'a> {
         force: bool,
         uninstalls: bool,
     ) -> Result<LockPlan<'a>, OpError> {
-        let entries: Vec<String> = view
-            .env()
-            .enabled()
-            .iter()
-            .map(|entry| entry.entry.clone())
-            .collect();
         let mut plan = LockPlan::open(
             view.installed(),
-            &entries,
+            Opened::read(view.env().config(), view.env().config_found()),
             view.runtime().map(|runtime| &**runtime),
             Declarations::loaded_by(view),
             Verb::Remove,
@@ -298,7 +290,7 @@ impl<'a> LockPlan<'a> {
     )]
     fn open(
         installed: &'a Installed,
-        entries: &[String],
+        config: Opened,
         runtime: Option<&'a dyn WasmRuntime>,
         declarations: Declarations<'a>,
         verb: Verb,
@@ -319,7 +311,7 @@ impl<'a> LockPlan<'a> {
             installed,
             lock,
             staged: Vec::new(),
-            entries: entries.to_vec(),
+            config,
             appended: Vec::new(),
             wanted: Vec::new(),
             declarations,
@@ -327,7 +319,6 @@ impl<'a> LockPlan<'a> {
             verb,
             purpose: Purpose::Commit,
             force: false,
-            edits_config: true,
             companions: Vec::new(),
             disabled: Vec::new(),
             uninstalled: Vec::new(),
@@ -383,7 +374,8 @@ impl<'a> LockPlan<'a> {
     pub(crate) fn enable(&mut self, ask: Ask, name: &str) {
         self.wanted.push((ask, name.to_string()));
         let enabled = self
-            .entries
+            .config
+            .entries()
             .iter()
             .chain(self.appended.iter().map(|appended| &appended.name))
             .any(|entry| specforge_common::extension_entry_name(entry) == name);
@@ -435,17 +427,15 @@ impl<'a> LockPlan<'a> {
 
     /// What `specforge.json` enables as the change leaves it.
     fn entries_after(&self) -> Vec<String> {
-        self.entries
-            .iter()
-            .filter(|entry| {
-                !self
-                    .disabled
+        let items = self.config.items_after(
+            |entry| {
+                self.disabled
                     .iter()
                     .any(|(_, disabled)| disabled.drops(entry))
-            })
-            .cloned()
-            .chain(self.appended.iter().map(|appended| appended.name.clone()))
-            .collect()
+            },
+            &self.appended,
+        );
+        Opened::entries_of(&items)
     }
 }
 
@@ -504,21 +494,24 @@ pub(crate) struct Checked<'a> {
     /// The `specforge.json` entries to drop.
     disabled: Vec<Disabled>,
     purpose: Purpose,
-    edits_config: bool,
+    /// The operation's name, for a refusal.
+    operation: &'static str,
     /// The pins its registry installs call for, and the registry port that pins them; none for a
     /// plan that fetches nothing.
     pins: Option<(&'a dyn Registry, Vec<KeyPin>)>,
-    /// What `specforge.json` enabled before the change.
-    entries: Vec<String>,
+    /// `specforge.json` as the plan opened it.
+    config: Opened,
     appended: Vec<Appended>,
     wanted: Vec<(Ask, String)>,
 }
 
 mod close;
 mod commit;
+mod config;
 mod install;
 mod judge;
 #[cfg(test)]
 mod tests;
 
 pub(crate) use commit::{Also, Asked};
+pub(crate) use config::Opened;

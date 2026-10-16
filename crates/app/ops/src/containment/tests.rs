@@ -182,6 +182,41 @@ fn a_failed_replace_leaves_the_file_and_no_temporary_file() {
 
 #[cfg(unix)]
 #[test]
+fn replace_keeps_the_files_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+    let (_dir, base) = scene();
+    let root = base.join("proj");
+    let file = root.join("x.json");
+    std::fs::write(&file, "old").unwrap();
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).unwrap();
+    held_in(&root, "x.json").replace("new").unwrap();
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "new");
+    let mode = std::fs::metadata(&file).unwrap().permissions().mode();
+    assert_eq!(mode & 0o777, 0o600);
+}
+
+#[cfg(unix)]
+#[test]
+fn replace_refuses_a_file_it_may_not_write_and_leaves_no_temporary_file() {
+    use std::os::unix::fs::PermissionsExt;
+    let (_dir, base) = scene();
+    let root = base.join("proj");
+    let file = root.join("x.json");
+    std::fs::write(&file, "old").unwrap();
+    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o444)).unwrap();
+    if std::fs::OpenOptions::new().write(true).open(&file).is_ok() {
+        return; // permissions don't bind this user (root)
+    }
+    let error = held_in(&root, "x.json").replace("new").unwrap_err();
+    assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "old");
+    let mode = std::fs::metadata(&file).unwrap().permissions().mode();
+    assert_eq!(mode & 0o777, 0o444);
+    assert!(!root.join("x.json.tmp").exists());
+}
+
+#[cfg(unix)]
+#[test]
 fn create_new_refuses_an_existing_file_and_a_link() {
     let (_dir, base) = scene();
     let root = base.join("proj");

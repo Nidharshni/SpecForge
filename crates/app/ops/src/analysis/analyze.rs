@@ -21,7 +21,7 @@ use specforge_common::{Diagnostic, DiagnosticList, Severity, codes};
 use specforge_graph::Graph;
 use specforge_project::coverage;
 use specforge_project::coverage::TestReport;
-use specforge_project::passes::{self, AnalysisContext};
+use specforge_project::passes::{self, PassContext};
 use specforge_registry::DeclaredPass;
 
 use crate::Containment;
@@ -55,6 +55,8 @@ pub const EVERY_PASS: &str = "all";
 pub const UNKNOWN_PASS: &str = "unknown_pass";
 /// A coverage minimum outside 0 to 100 (`InvalidInput`).
 pub const INVALID_MIN: &str = "invalid_min";
+/// A minimum with no test results to score (`PreconditionFailed`).
+pub const NO_TEST_RESULTS: &str = "no_test_results";
 
 /// What to run. `Default` is a plain `analyze all`.
 #[derive(Clone)]
@@ -303,160 +305,71 @@ pub enum AnalyzeField {
     Report,
 }
 
-/// Why no analysis ran. Raised before any pass runs, in this order.
-#[derive(Debug, Clone, PartialEq)]
-pub enum AnalyzeError {
-    UnknownPass {
-        requested: String,
-        available: Vec<String>,
-    },
-    /// `min` is not a percentage (0 to 100).
-    MinOutOfRange(f64),
-    /// `min` was set and the coverage pass will not run (not selected, its
-    /// extension not loaded, or no runtime): E068.
-    MinWithoutCoveragePass,
-    /// The recorded test report is there but cannot be used.
-    UnusableReport(OpError),
-    /// The test results file the request named cannot be used.
-    UnusableTestResults(OpError),
-    /// `min` was set and there is no report to score.
-    MinNeedsTestResults,
-}
-
-impl std::fmt::Display for AnalyzeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AnalyzeError::UnknownPass {
-                requested,
-                available,
-            } => write!(
-                f,
-                "Unknown analysis pass '{requested}' (available: {})",
-                available.join(", ")
-            ),
-            AnalyzeError::MinOutOfRange(min) => write!(
-                f,
-                "min must be a percentage between 0 and 100, got {min}"
-            ),
-            AnalyzeError::MinWithoutCoveragePass => f.write_str(
-                "a proof-coverage minimum needs the coverage pass of @specforge/testing (pass coverage or all)",
-            ),
-            AnalyzeError::UnusableReport(e) | AnalyzeError::UnusableTestResults(e) => e.fmt(f),
-            AnalyzeError::MinNeedsTestResults => f.write_str(
-                "--min needs test results: run `specforge collect` or pass --test-results",
-            ),
-        }
-    }
-}
-
-impl std::error::Error for AnalyzeError {}
-
-/// What each way of not running is, for every surface: an unknown pass is
-/// `invalid_input` (`unknown_pass`, with a did-you-mean when one is close),
-/// a minimum outside 0 to 100 is `invalid_input` (`invalid_min`), a minimum
-/// without the coverage pass is the classified E068, an unusable report is
-/// the classified E045, `--min` without a report is `precondition_failed`
-/// (`no_test_results`).
-impl From<AnalyzeError> for OpError {
-    fn from(error: AnalyzeError) -> Self {
-        Refusal::<AnalyzeField>::from(error).into_error()
-    }
-}
-
-/// [`OpError::from`], with the field the variant is about: an unknown pass is about `pass`, a
-/// minimum out of range about `min`, and a named results file that is not there about the
-/// report (by the kind rule an unusable one is a refusal of the file, not of the argument).
-impl From<AnalyzeError> for Refusal<AnalyzeField> {
-    fn from(error: AnalyzeError) -> Self {
-        let message = error.to_string();
-        match error {
-            AnalyzeError::UnknownPass {
-                requested,
-                available,
-            } => {
-                let close = specforge_common::suggest::find_close_match(
-                    &requested,
-                    available.iter().map(String::as_str),
-                );
-                let error = OpError::new(OpErrorKind::InvalidInput, UNKNOWN_PASS, message);
-                match close {
-                    Some(close) => error.with_suggestion(format!("did you mean '{close}'?")),
-                    None => error,
-                }
-                .about(AnalyzeField::Pass)
-            }
-            AnalyzeError::MinOutOfRange(_) => {
-                OpError::new(OpErrorKind::InvalidInput, INVALID_MIN, message)
-                    .about(AnalyzeField::Min)
-            }
-            AnalyzeError::MinWithoutCoveragePass => {
-                OpError::coded(OpErrorKind::PreconditionFailed, codes::E068, message)
-                    .with_suggestion("enable it with `specforge add @specforge/testing`")
-                    .into()
-            }
-            AnalyzeError::UnusableReport(error) => error.into(),
-            AnalyzeError::UnusableTestResults(error) => error.about(AnalyzeField::Report),
-            AnalyzeError::MinNeedsTestResults => {
-                OpError::new(OpErrorKind::PreconditionFailed, "no_test_results", message).into()
-            }
-        }
-    }
-}
-
 /// Run the selected passes over `view`; the extension passes in the view's
 /// runtime, when it has one. With `options.prove`, the prove step
 /// first, over that solver.
+///
+/// Refused before any pass runs, in this order: an unknown pass
+/// ([`UNKNOWN_PASS`], about `pass`), a minimum outside 0 to 100
+/// ([`INVALID_MIN`], about `min`), a minimum the coverage pass will not answer
+/// (E068), a report that cannot be used (E045; a named file that is not there
+/// is about `report`), a minimum with no report ([`NO_TEST_RESULTS`]).
 pub fn analyze(
     view: &ProjectView,
     options: &AnalyzeOptions<'_>,
-) -> Result<AnalyzeOutcome, AnalyzeError> {
+) -> Result<AnalyzeOutcome, Refusal<AnalyzeField>> {
     let selection = select(view, &options.pass)?;
     if let Some(min) = options.min {
         if !(0.0..=100.0).contains(&min) {
-            return Err(AnalyzeError::MinOutOfRange(min));
+            return Err(OpError::new(
+                OpErrorKind::InvalidInput,
+                INVALID_MIN,
+                format!("min must be a percentage between 0 and 100, got {min}"),
+            )
+            .about(AnalyzeField::Min));
         }
         let coverage_runs = selection.runs(COVERAGE_PASS)
             && declared_pass_names(view).iter().any(|n| n == COVERAGE_PASS)
             && view.runtime().is_some();
         if !coverage_runs {
-            return Err(AnalyzeError::MinWithoutCoveragePass);
+            return Err(OpError::coded(
+                OpErrorKind::PreconditionFailed,
+                codes::E068,
+                "a proof-coverage minimum needs the coverage pass of @specforge/testing (pass coverage or all)",
+            )
+            .with_suggestion("enable it with `specforge add @specforge/testing`")
+            .into());
         }
     }
     let report = read_report(view, &options.report)?;
     if options.min.is_some() && report.is_none() {
-        return Err(AnalyzeError::MinNeedsTestResults);
+        return Err(OpError::new(
+            OpErrorKind::PreconditionFailed,
+            NO_TEST_RESULTS,
+            "--min needs test results: run `specforge collect` or pass --test-results",
+        )
+        .into());
     }
 
     let stray_records = stray_records(view.graph(), report.as_deref());
 
+    let graph = view.graph();
     let registries = view.registries();
-    let base = AnalysisContext {
-        graph: view.graph(),
-        kind_registry: registries.kinds(),
-        field_registry: registries.fields(),
-        entities: view.entities(),
-        test_results: report.as_deref(),
-        proved_claims: None,
-    };
 
     // The proof pass runs first: its entailment verdicts feed the coverage
     // discharge funnel (a proved claim discharges `verify property`
     // obligations without executable tests).
     let proved = options
         .prove
-        .map(|solver| crate::analysis::prove::run(&base, solver));
+        .map(|solver| crate::analysis::prove::run(graph, registries.fields(), solver));
     let proved_claims: std::collections::HashSet<String> = proved
         .as_ref()
         .map(|r| r.proved_claim_ids.iter().cloned().collect())
         .unwrap_or_default();
-    let input = AnalysisContext {
-        proved_claims: proved.as_ref().map(|_| &proved_claims),
-        ..base
-    };
 
     let mut passes_run: Vec<PassOutcome> = Vec::new();
     for name in &selection.builtins {
-        if let Some(r) = crate::analysis::builtin_passes::run_pass(&input, name) {
+        if let Some(r) = crate::analysis::builtin_passes::run_pass(graph, registries, name) {
             passes_run.push(PassOutcome {
                 name: r.name.to_string(),
                 description: r.description.to_string(),
@@ -466,6 +379,11 @@ pub fn analyze(
         }
     }
     if let Some(runtime) = view.runtime() {
+        let context = PassContext {
+            test_results: report.as_deref(),
+            proved_claims: proved.as_ref().map(|_| &proved_claims),
+            ..PassContext::of(view.entities())
+        };
         // Declared `after` constraints order a single extension's passes;
         // across extensions they are advisory.
         passes_run.extend(
@@ -473,7 +391,7 @@ pub fn analyze(
                 registries
                     .analyze_passes()
                     .filter(|p| selection.runs(&p.full_name())),
-                &input,
+                &context,
                 runtime.as_ref(),
             )
             .into_iter()
@@ -555,7 +473,7 @@ impl Selection {
     }
 }
 
-fn select(view: &ProjectView, requested: &str) -> Result<Selection, AnalyzeError> {
+fn select(view: &ProjectView, requested: &str) -> Result<Selection, Refusal<AnalyzeField>> {
     if requested == EVERY_PASS {
         return Ok(Selection {
             builtins: PASS_NAMES.to_vec(),
@@ -585,10 +503,23 @@ fn select(view: &ProjectView, requested: &str) -> Result<Selection, AnalyzeError
     let mut available: Vec<String> = [EVERY_PASS, "coverage"].map(String::from).to_vec();
     available.extend(PASS_NAMES.iter().map(|n| n.to_string()));
     available.extend(declared);
-    Err(AnalyzeError::UnknownPass {
-        requested: requested.to_string(),
-        available,
-    })
+    let error = OpError::new(
+        OpErrorKind::InvalidInput,
+        UNKNOWN_PASS,
+        format!(
+            "Unknown analysis pass '{requested}' (available: {})",
+            available.join(", ")
+        ),
+    );
+    // The name as given: a pass name is matched exactly, never folded.
+    let error = match specforge_common::suggest::find_close_match(
+        requested,
+        available.iter().map(String::as_str),
+    ) {
+        Some(close) => error.with_suggestion(format!("did you mean '{close}'?")),
+        None => error,
+    };
+    Err(error.about(AnalyzeField::Pass))
 }
 
 /// `<extension>:<pass>` of every analyze-phase pass the extensions declare.
@@ -602,13 +533,15 @@ fn declared_pass_names(view: &ProjectView) -> Vec<String> {
 fn read_report(
     view: &ProjectView,
     source: &ReportSource,
-) -> Result<Option<Arc<TestReport>>, AnalyzeError> {
+) -> Result<Option<Arc<TestReport>>, Refusal<AnalyzeField>> {
     match source {
         ReportSource::None => Ok(None),
+        // A named file that is not there is about the report; an unusable one
+        // is a refusal of the file (ADR 0072 D2).
         ReportSource::Named { path, containment } => crate::report::named(path, containment)
             .map(Some)
-            .map_err(AnalyzeError::UnusableTestResults),
-        ReportSource::Recorded => view.test_report().map_err(AnalyzeError::UnusableReport),
+            .map_err(|error| error.about(AnalyzeField::Report)),
+        ReportSource::Recorded => Ok(view.test_report()?),
     }
 }
 

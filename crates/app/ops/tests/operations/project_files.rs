@@ -24,19 +24,19 @@ const NEEDLES: &[&str] = &[
 /// `(file under src/, needle, how many lines, why it is not a project file held by a containment)`.
 const ALLOWED: &[(&str, &str, usize, &str)] = &[
     (
-        "analysis/collect/consent.rs",
+        "analysis/collect/process.rs",
         "fs::read_to_string(",
         1,
         "the user's consent store, not a project file",
     ),
     (
-        "analysis/collect/consent.rs",
+        "analysis/collect/process.rs",
         "fs::create_dir_all(",
         1,
         "the user's consent store, not a project file",
     ),
     (
-        "analysis/collect/consent.rs",
+        "analysis/collect/process.rs",
         "fs::write(",
         1,
         "the user's consent store, not a project file",

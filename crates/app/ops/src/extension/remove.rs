@@ -3,7 +3,7 @@
 use super::lock_plan::{Ask, Disabled, LockPlan, Purpose};
 use super::{NOT_FOUND, Origin, ProjectExtension, Selection, not_installed};
 use crate::view::ProjectView;
-use crate::{Containment, OpError, OpErrorKind, Refusal, Writes};
+use crate::{Caller, Containment, OpError, OpErrorKind, Refusal, Writes};
 use serde::Serialize;
 use specforge_common::ExtensionEntry;
 use specforge_common::shape::Shape;
@@ -21,9 +21,9 @@ pub struct RemoveRequest<'a> {
     pub force: bool,
     /// Report what would be removed; change nothing.
     pub dry_run: bool,
-    /// What the removal may write (ADR 0104): a file it would write that lands outside, by a
-    /// symlink in the project, refuses it. The CLI passes [`Containment::unbounded`].
-    pub containment: &'a Containment,
+    /// What the removal may write (`caller.containment()`, ADR 0104): a file it would write that
+    /// lands outside, by a symlink in the project, refuses it.
+    pub caller: Caller<'a>,
 }
 
 /// What a removal reads of its project: the view, its root, its kinds and
@@ -166,7 +166,7 @@ pub fn remove(
         root,
         force: req.force,
         dry_run: req.dry_run,
-        containment: req.containment,
+        containment: req.caller.containment(),
         kinds: view.registries().kinds(),
         graph: view.graph(),
         installed: view.installed(),

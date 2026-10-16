@@ -27,7 +27,10 @@ async fn the_cli_and_the_editor_agree_on_a_nested_project() {
             root: &specforge_common::ProjectRoot::of(&root).unwrap(),
             paths: &[root.join("inner")],
             mode: specforge_ops::authoring::format::Mode::Check,
-            containment: &specforge_ops::Containment::unbounded(),
+            caller: specforge_ops::Caller::new(
+                &specforge_ops::Containment::unbounded(),
+                specforge_ops::asking::Asking::Nobody,
+            ),
         })
         .unwrap();
     assert_eq!((outcome.checked, outcome.changes.len()), (1, 0));
@@ -54,7 +57,10 @@ async fn lsp_format_matches_cli_format() {
             root: &specforge_common::ProjectRoot::of(&root).unwrap(),
             paths: &[],
             mode: specforge_ops::authoring::format::Mode::Check,
-            containment: &specforge_ops::Containment::unbounded(),
+            caller: specforge_ops::Caller::new(
+                &specforge_ops::Containment::unbounded(),
+                specforge_ops::asking::Asking::Nobody,
+            ),
         })
         .unwrap();
     assert_eq!(edited, outcome.changes[0].after);
@@ -110,7 +116,10 @@ async fn editor_formatting_reaches_the_cli_text_in_one_pass() {
         root: &specforge_common::ProjectRoot::of(&root).unwrap(),
         paths: &[],
         mode: Mode::Check,
-        containment: &specforge_ops::Containment::unbounded(),
+        caller: specforge_ops::Caller::new(
+            &specforge_ops::Containment::unbounded(),
+            specforge_ops::asking::Asking::Nobody,
+        ),
     })
     .unwrap();
     let (mut session, _) = Session::start(Some(&root)).await;

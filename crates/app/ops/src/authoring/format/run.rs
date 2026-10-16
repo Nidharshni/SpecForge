@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use super::document::{Configs, FormattedDocument, format_text};
 use super::targets::{Targets, targets};
-use crate::{Containment, OpError, OpErrorKind, Refusal};
+use crate::{Caller, OpError, OpErrorKind, Refusal};
 
 /// What the run does with a file whose formatting would change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -60,13 +60,11 @@ pub struct Request<'a> {
     /// entries leave out (D3).
     pub paths: &'a [PathBuf],
     pub mode: Mode,
-    /// What the run may reach (ADR 0104): a named path that leaves it is refused before anything
-    /// is read ([`FormatField::Paths`]); a target (a walked one, a symlinked source) that lands
-    /// outside it is neither read nor written but a failure of kind
-    /// [`OpErrorKind::InvalidInput`], and the other targets are formatted (ADR 0092 D8). MCP
-    /// passes its bound; the CLI's user is already at the file system and passes
-    /// [`Containment::unbounded`].
-    pub containment: &'a Containment,
+    /// What the run may reach (`caller.containment()`, ADR 0104): a named path that leaves it is
+    /// refused before anything is read ([`FormatField::Paths`]); a target (a walked one, a
+    /// symlinked source) that lands outside it is neither read nor written but a failure of kind
+    /// [`OpErrorKind::InvalidInput`], and the other targets are formatted (ADR 0092 D8).
+    pub caller: Caller<'a>,
 }
 
 /// The field of a format [`Request`] a refusal can be about.
@@ -415,7 +413,8 @@ pub fn run(request: &Request) -> Result<Outcome, Refusal<FormatField>> {
         .iter()
         .map(|path| {
             request
-                .containment
+                .caller
+                .containment()
                 .resolve(path)
                 .map(|held| held.spelled)
                 .map_err(|outside| OpError::from(outside).about(FormatField::Paths))
@@ -438,7 +437,7 @@ pub fn run(request: &Request) -> Result<Outcome, Refusal<FormatField>> {
     };
     for target in files {
         // What is read and written is what the containment resolved: the target, named as given.
-        let held = match request.containment.resolve(&target) {
+        let held = match request.caller.containment().resolve(&target) {
             Ok(held) => held,
             Err(outside) => {
                 outcome
@@ -468,7 +467,7 @@ pub fn run(request: &Request) -> Result<Outcome, Refusal<FormatField>> {
             continue;
         }
         let written = match request.mode {
-            Mode::Write => match held.write(&formatted) {
+            Mode::Write => match held.replace(&formatted) {
                 Ok(()) => true,
                 Err(e) => {
                     outcome.failures.push(Failure::write(target.clone(), &e));

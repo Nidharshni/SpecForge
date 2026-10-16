@@ -5,7 +5,7 @@
 use specforge_common::shape::{self, Definitions};
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::field_form::{self, FieldForm, FieldJson, ValueShape};
-use specforge_parser::{FieldMap, FieldValue, ListItem, Written, parse_expression};
+use specforge_parser::{FieldMap, FieldValue, ListItem, TypeMember, Written, parse_expression};
 use specforge_protocol_types::FieldType;
 use specforge_test_macros::test as specforge_test;
 
@@ -16,6 +16,15 @@ fn span() -> SourceSpan {
         start_col: 0,
         end_line: 1,
         end_col: 0,
+    }
+}
+
+/// A union member written bare, at the fixed span.
+fn member(text: &str) -> TypeMember {
+    TypeMember {
+        text: text.to_string(),
+        span: span(),
+        written: Written::Bare,
     }
 }
 
@@ -65,8 +74,8 @@ fn samples() -> Vec<FieldValue> {
             item("gh.issue:7", Written::SchemeRef),
             item("a", Written::Bare),
         ]),
-        FieldValue::VariantList(vec!["a".into(), "b".into()]),
-        FieldValue::TypeUnion(vec!["string".into(), "string[]".into()]),
+        FieldValue::VariantList(vec![member("a"), member("b")]),
+        FieldValue::TypeUnion(vec![member("string"), member("string[]")]),
         FieldValue::Block(block),
         expression(),
     ]

@@ -1,7 +1,7 @@
 //! Every read outcome that names the schema's version carries what
 //! versioning it against the root's record found (I016, W053; ADR 0111).
 
-use crate::view_support::{Assembled, Viewed};
+use crate::view_support::{Assembled, Viewed, plain};
 use specforge_common::Diagnostic;
 use specforge_ops::read::export::{Request, export, export_recorded};
 use specforge_ops::read::query::{QueryRequest, query};
@@ -30,6 +30,8 @@ fn breaking() -> Assembled {
     let project = project();
     assert!(
         export_recorded(&project.view(), &Request::default())
+            .into_value_and_notices()
+            .0
             .export
             .is_ok()
     );
@@ -64,19 +66,19 @@ fn an_export_and_a_query_carry_the_records_notices() {
     let project = unreadable();
     let view = project.view();
     let exported = export(&view, &Request::default()).unwrap();
-    assert_eq!(codes(&exported.notices), ["I016"]);
-    assert_eq!(codes(&query(&view, &b()).unwrap().notices), ["I016"]);
+    assert_eq!(codes(exported.notices()), ["I016"]);
+    assert_eq!(codes(query(&view, &b()).unwrap().notices()), ["I016"]);
 
     let project = breaking();
     let view = project.view();
     let exported = export(&view, &Request::default()).unwrap();
     let queried = query(&view, &b()).unwrap();
-    assert_eq!(codes(&exported.notices), ["W053"]);
-    assert_eq!(queried.notices, exported.notices);
+    assert_eq!(codes(exported.notices()), ["W053"]);
+    assert_eq!(queried.notices(), exported.notices());
     // The recorded export reports the same, and records after.
     assert_eq!(
-        export_recorded(&view, &Request::default()).notices,
-        exported.notices
+        export_recorded(&view, &Request::default()).notices(),
+        exported.notices()
     );
 }
 
@@ -91,11 +93,11 @@ fn the_schema_and_its_publication_carry_the_records_notices() {
     let view = project.view();
 
     let outcome = schema(&view, &SchemaRequest::default()).unwrap();
-    assert_eq!(codes(&outcome.notices), ["I016"]);
-    let document = serde_json::to_value(&outcome).unwrap();
+    assert_eq!(codes(outcome.notices()), ["I016"]);
+    let document = serde_json::to_value(outcome.into_value_and_notices().0).unwrap();
     assert!(document.get("notices").is_none(), "{document}");
     assert_eq!(
-        codes(&json_schema(&view, Format::Graph).unwrap().notices),
+        codes(json_schema(&view, Format::Graph).unwrap().notices()),
         ["I016"]
     );
 }
@@ -111,19 +113,19 @@ fn a_trace_and_the_model_carry_the_records_notices() {
     let view = project.view();
 
     let traced = trace(&view, Target::Entity("b")).unwrap();
-    assert_eq!(codes(&traced.notices), ["I016"]);
-    let document = serde_json::to_value(&traced).unwrap();
+    assert_eq!(codes(traced.notices()), ["I016"]);
+    let document = serde_json::to_value(plain(traced)).unwrap();
     assert!(document.get("notices").is_none(), "{document}");
 
     let modelled = model(&view, &ModelOptions::default()).unwrap();
-    assert_eq!(codes(&modelled.notices), ["I016"]);
+    assert_eq!(codes(modelled.notices()), ["I016"]);
     let filtered = ModelOptions {
         kinds: vec!["ghost".into()],
         ..ModelOptions::default()
     };
     // The schema's notices come before the request's (D7).
     assert_eq!(
-        codes(&model(&view, &filtered).unwrap().notices),
+        codes(model(&view, &filtered).unwrap().notices()),
         ["I016", "I020"]
     );
 }

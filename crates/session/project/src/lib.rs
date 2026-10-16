@@ -46,7 +46,7 @@ use specforge_common::{
     ConfigProblem, ConfigRead, Diagnostic, ProjectConfig, ProjectRoot, SourceRoot, codes,
     project_config_from,
 };
-use specforge_graph::{Graph, GraphBuild, GraphConfig};
+use specforge_graph::{GraphBuild, SpecFile};
 use specforge_installed::{Builtins, Installed};
 use specforge_registry::{
     CandidateVocabulary, Disk, EntitySnapshot, RegistryBuild, build_registries,
@@ -364,37 +364,29 @@ impl Environment {
         self.runtime.as_ref()
     }
 
-    /// The inputs every graph of this project is built with: every surface
-    /// that builds a graph (`check`, watch, the LSP) takes its `GraphConfig`
-    /// from here, so none can drift.
-    pub fn graph_config(&self) -> GraphConfig {
-        let build = &self.registries;
-        GraphConfig {
-            known_provider_schemes: self.providers.schemes(),
-            inputs: build.graph_inputs(),
-        }
+    /// The graph build of `files` in this environment: its Registry build's graph inputs and
+    /// its providers' schemes (ADR 0123). Every graph of the project is built here: a compile,
+    /// a session's open and reload, the unread and detached projects, and a test's assembled
+    /// project.
+    pub fn graph_of(&self, files: impl IntoIterator<Item = SpecFile>) -> GraphBuild {
+        self.registries.graph_of(files, self.providers.schemes())
     }
 
     /// The entity snapshot of `graph`, built in this environment: its
     /// registries decide each entity's standing and its spec root resolves
     /// the relative paths the rules read. The one place a snapshot is
     /// taken from an environment.
-    pub fn entity_snapshot(&self, graph: &Graph) -> EntitySnapshot {
+    pub fn entity_snapshot(&self, graph: &GraphBuild) -> EntitySnapshot {
         EntitySnapshot::of(graph, &self.registries, self.sources.dir())
     }
 
-    /// Every check a compile runs on a built graph, over its entity
-    /// snapshot `entities`: the registry build's checks (the structural
+    /// Every check a compile runs over the entity snapshot `entities` of a
+    /// built graph: the registry build's checks (the structural
     /// checks and the extensions' rules, in the order
     /// [`RegistryBuild::check`] runs them), then the check-phase passes;
     /// the custom verdicts and the passes run in [`Self::runtime`]. Every file
     /// a check reads goes through `disk` (ADR 0107).
-    pub fn run_checks(
-        &self,
-        graph: &Graph,
-        entities: &EntitySnapshot,
-        disk: &dyn Disk,
-    ) -> Vec<Diagnostic> {
+    pub fn run_checks(&self, entities: &EntitySnapshot, disk: &dyn Disk) -> Vec<Diagnostic> {
         let runtime = self.runtime.as_deref();
         let mut diagnostics = Vec::new();
         let verdicts: Box<dyn CustomVerdicts + '_> = match runtime {
@@ -406,7 +398,7 @@ impl Environment {
                 .check(&entities.rule_input(disk), verdicts.as_ref()),
         );
         if let Some(runtime) = runtime {
-            diagnostics.extend(check_passes::run(self, graph, entities, runtime, disk));
+            diagnostics.extend(check_passes::run(self, entities, runtime, disk));
         }
         diagnostics
     }
@@ -481,7 +473,7 @@ impl Environment {
         read: impl FnMut(&str) -> sources::Read,
     ) -> SourceBuild {
         let (sources, files) = SourceCache::read_all(keys, held, read);
-        let graph = GraphBuild::of(files, self.graph_config());
+        let graph = self.graph_of(files);
         let imports = sources.import_diagnostics(&graph);
         SourceBuild {
             sources,

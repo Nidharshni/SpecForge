@@ -13,3 +13,4 @@ mod obligations;
 mod reading;
 mod resolution;
 mod stress;
+mod written;

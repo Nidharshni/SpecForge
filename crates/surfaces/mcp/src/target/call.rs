@@ -9,9 +9,11 @@ use crate::tool::{ErrorCode, McpError};
 use serde_json::Value;
 use specforge_common::{Diagnostic, ProjectRoot};
 use specforge_graph::Graph;
+use specforge_ops::analysis::collect::CollectorMachine;
+use specforge_ops::asking::Asking;
 use specforge_ops::solver::Solver;
 use specforge_ops::view::ProjectView;
-use specforge_ops::{Containment, Outside};
+use specforge_ops::{Caller, Containment, Outside};
 use specforge_project::{ProjectSession, SharedRuntime};
 use std::path::{Path, PathBuf};
 
@@ -63,6 +65,12 @@ pub enum CallTarget {
     EmptySession(NoProject),
 }
 
+/// What MCP lends a call (ADR 0124): `containment` to reach, and nobody to ask. The server never prompts
+/// (ADR 0110 D5): an agent can't be asked, so a publisher key change is refused rather than re-pinned.
+pub(crate) fn lent(containment: &Containment) -> Caller<'_> {
+    Caller::new(containment, Asking::Nobody)
+}
+
 /// What every handler reads, from either adapter: the served session or the
 /// session opened for the call.
 pub struct ProjectRef<'a> {
@@ -76,6 +84,8 @@ pub struct ProjectRef<'a> {
     pub runtime: &'a SharedRuntime,
     /// The host's SMT solver (the server's): what doctor checks.
     pub solver: &'a dyn Solver,
+    /// The host's collector machine (the server's): what `specforge.collect` runs commands on.
+    pub machine: &'a dyn CollectorMachine,
     /// The project view, built once for the call: rooted at the project
     /// root, reporting what the server reports for the project.
     view: ProjectView<'a>,
@@ -87,10 +97,10 @@ pub struct ProjectRef<'a> {
 }
 
 impl<'a> ProjectRef<'a> {
-    /// The bound of the project the call acts on: its root. A tool hands it to the operation's
-    /// request and builds none of its own.
-    pub fn containment(&self) -> &Containment {
-        &self.containment
+    /// What the call lends the operation: the project's root (ADR 0112 D4), nobody to ask. A tool
+    /// hands it to the operation's request and builds none of its own.
+    pub fn caller(&self) -> Caller<'_> {
+        lent(&self.containment)
     }
 
     /// Whether it is the served project (not one a `path` named): the server
@@ -181,6 +191,7 @@ impl<'s> Call<'s> {
                     root,
                     runtime,
                     solver: &*self.state.solver,
+                    machine: &*self.state.collector_machine,
                     containment: Containment::within(root.dir()),
                     view,
                     served: true,
@@ -200,6 +211,7 @@ impl<'s> Call<'s> {
                     root,
                     runtime,
                     solver: &*self.state.solver,
+                    machine: &*self.state.collector_machine,
                     containment: Containment::within(root.dir()),
                     view,
                     served: false,

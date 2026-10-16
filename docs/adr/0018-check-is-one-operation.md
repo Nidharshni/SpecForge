@@ -1,6 +1,6 @@
 # Check is one operation
 
-**Status:** accepted (2026-10-05)
+**Status:** accepted (2026-10-05). Amended by ADR 0132: `check` returns `Result<CheckOutcome, OpError>`; `parse_severity` and `parse_lint_profiles` return `Refusal<CheckField>`.
 
 What `specforge check` reports was decided in two places. The CLI decided it in
 `cli/check.rs::run_in`, MCP in `tools/validate.rs::call`. Each built a `DiagnosticPolicy`, applied it
