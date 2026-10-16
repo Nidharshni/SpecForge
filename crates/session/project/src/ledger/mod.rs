@@ -226,8 +226,9 @@ impl Ledger {
 
     /// One run of the checks' reads: each is stamped and recorded as a check
     /// input when the run finishes (ADR 0106 D4).
-    pub(crate) fn checks(&mut self) -> CheckRun<'_> {
-        CheckRun {
+    pub(crate) fn checks(&mut self) -> Run<'_> {
+        Run {
+            records: self.inputs.root().is_some(),
             ledger: self,
             read: RefCell::new(Vec::new()),
         }
@@ -270,8 +271,8 @@ impl Ledger {
     }
 }
 
-/// What a read of a check input is (how a later change to it is reached).
-pub(crate) enum CheckInput {
+/// What a read the ledger records is (how a later change to it is reached).
+pub(crate) enum Reading {
     /// A file: its bytes or its existence (the build cache, a file a
     /// `file_reference` field or a `file_exists` rule names). Reached by its
     /// own path or a directory above it.
@@ -281,25 +282,23 @@ pub(crate) enum CheckInput {
     Listing,
 }
 
-/// One run of the checks' reads. Reading needs only `&self`, so a reader the
-/// checks hold by shared reference can record through it.
+/// One run of reads the ledger records (ADR 0106 D4, ADR 0114). Reading needs
+/// only `&self`, so a reader held by shared reference can record through it.
 #[must_use = "a run's reads are recorded only when it finishes"]
-pub(crate) struct CheckRun<'l> {
+pub(crate) struct Run<'l> {
     ledger: &'l mut Ledger,
-    read: RefCell<Vec<(CheckInput, PathBuf, Option<Entry>)>>,
+    /// Whether a read is stamped and kept: false for a detached ledger's run,
+    /// which still runs each read.
+    records: bool,
+    read: RefCell<Vec<(Reading, PathBuf, Option<Entry>)>>,
 }
 
-impl CheckRun<'_> {
+impl Run<'_> {
     /// Stamp `path`, then run `read` on it (the read the caller performs)
     /// and return its result. A detached ledger's run stamps nothing and
     /// still runs `read`.
-    pub(crate) fn read<T>(
-        &self,
-        input: CheckInput,
-        path: &Path,
-        read: impl FnOnce(&Path) -> T,
-    ) -> T {
-        if self.ledger.inputs.root().is_some() {
+    pub(crate) fn read<T>(&self, input: Reading, path: &Path, read: impl FnOnce(&Path) -> T) -> T {
+        if self.records {
             let entry = Entry::stamp(path);
             self.read
                 .borrow_mut()
@@ -312,7 +311,7 @@ impl CheckRun<'_> {
     /// forms and missing directories are taken again; nothing else in the
     /// record changes. Whether the inputs moved.
     pub(crate) fn finish(self) -> bool {
-        let CheckRun { ledger, read } = self;
+        let Run { ledger, read, .. } = self;
         if ledger.inputs.root().is_none() {
             return false;
         }
@@ -322,8 +321,8 @@ impl CheckRun<'_> {
         let mut stamps: BTreeMap<PathBuf, Option<Entry>> = BTreeMap::new();
         for (input, path, entry) in read.into_inner() {
             let list = match input {
-                CheckInput::File => &mut files,
-                CheckInput::Listing => &mut listings,
+                Reading::File => &mut files,
+                Reading::Listing => &mut listings,
             };
             if !list.contains(&path) {
                 list.push(path.clone());

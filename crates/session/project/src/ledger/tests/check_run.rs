@@ -7,7 +7,7 @@ use specforge_common::ProjectConfig;
 use specforge_registry::{Disk, PlainDisk};
 use specforge_test_macros::test as specforge_test;
 
-use crate::ledger::{CheckInput, Ledger, SessionInputs, Watched};
+use crate::ledger::{Ledger, Reading, SessionInputs, Watched};
 
 fn opened() -> (tempfile::TempDir, Ledger) {
     let dir = tempfile::TempDir::new().unwrap();
@@ -25,7 +25,7 @@ fn a_check_input_written_between_its_stamp_and_its_read_is_seen_next_time() {
     let doc = std::fs::canonicalize(dir.path()).unwrap().join("guide.md");
     fs::write(&doc, "old").unwrap();
     let run = ledger.checks();
-    run.read(CheckInput::File, &doc, |path| {
+    run.read(Reading::File, &doc, |path| {
         fs::write(path, "new, and longer").unwrap();
         fs::read(path).ok()
     });
@@ -40,8 +40,8 @@ fn a_missing_check_input_records_its_directory() {
     fs::create_dir_all(root.join("docs")).unwrap();
     let missing = root.join("docs/guide.md");
     let run = ledger.checks();
-    assert!(!run.read(CheckInput::File, &missing, std::path::Path::exists));
-    run.read(CheckInput::Listing, &root.join("docs"), |_| ());
+    assert!(!run.read(Reading::File, &missing, std::path::Path::exists));
+    run.read(Reading::Listing, &root.join("docs"), |_| ());
     run.finish();
     assert!(
         ledger
@@ -60,7 +60,7 @@ fn an_unfinished_check_run_records_nothing() {
     let doc = dir.path().join("guide.md");
     let before = ledger.inputs().clone();
     let run = ledger.checks();
-    run.read(CheckInput::File, &doc, |_| ());
+    run.read(Reading::File, &doc, |_| ());
     drop(run);
     assert_eq!(ledger.inputs(), &before);
 }
@@ -74,7 +74,7 @@ fn a_run_that_reads_what_the_last_read_moves_nothing() {
     fs::write(&two, "2").unwrap();
     let read = |ledger: &mut Ledger, file: &std::path::Path| {
         let run = ledger.checks();
-        run.read(CheckInput::File, file, |_| ());
+        run.read(Reading::File, file, |_| ());
         run.finish()
     };
     assert!(read(&mut ledger, &one));
@@ -90,7 +90,7 @@ fn a_run_that_reads_a_path_twice_moves_nothing() {
     let run_of = |ledger: &mut Ledger, files: &[&std::path::Path]| {
         let run = ledger.checks();
         for file in files {
-            run.read(CheckInput::File, file, |_| ());
+            run.read(Reading::File, file, |_| ());
         }
         run.finish()
     };

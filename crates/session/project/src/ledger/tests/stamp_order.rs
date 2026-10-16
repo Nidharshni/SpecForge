@@ -6,7 +6,7 @@ use std::path::Path;
 
 use specforge_common::ProjectRoot;
 
-use crate::ledger::{CheckInput, Ledger, Reads};
+use crate::ledger::{Ledger, Reading, Reads};
 use crate::sources::Read;
 
 const CONFIG: &str = "{\"name\":\"d\",\"version\":\"0.1.0\",\"extensions\":[]}\n";
@@ -89,7 +89,7 @@ fn a_detached_ledger_reads_every_key_as_gone_and_records_nothing() {
     assert!(ledger.stale().is_empty());
     assert!(ledger.changes([Path::new("/p/a.spec")]).is_empty());
     let run = ledger.checks();
-    assert!(run.read(CheckInput::File, Path::new("/p/x.md"), |_| true));
+    assert!(run.read(Reading::File, Path::new("/p/x.md"), |_| true));
     assert!(!run.finish());
     assert_eq!(ledger.inputs(), &crate::ledger::SessionInputs::detached());
 }

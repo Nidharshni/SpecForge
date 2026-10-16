@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use specforge_common::ProjectConfig;
 
 use crate::ledger::inputs::*;
-use crate::ledger::{CheckInput, Ledger};
+use crate::ledger::{Ledger, Reading};
 
 fn config(extensions: &[&str]) -> ProjectConfig {
     ProjectConfig {
@@ -31,10 +31,10 @@ fn after_checks(inputs: SessionInputs, files: &[PathBuf]) -> SessionInputs {
     let mut ledger = Ledger::over(inputs);
     let run = ledger.checks();
     for file in files {
-        if !run.read(CheckInput::File, file, Path::exists)
+        if !run.read(Reading::File, file, Path::exists)
             && let Some(parent) = file.parent()
         {
-            run.read(CheckInput::Listing, parent, |_| ());
+            run.read(Reading::Listing, parent, |_| ());
         }
     }
     run.finish();

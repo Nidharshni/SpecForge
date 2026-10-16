@@ -6,28 +6,28 @@ use std::path::Path;
 
 use specforge_registry::{Disk, PlainDisk};
 
-use super::{CheckInput, CheckRun};
+use super::{Reading, Run};
 
 /// The checks' disk in a project session: each read goes through the check
 /// run, which stamps the path first and records it as a check input.
-pub(super) struct RunDisk<'r, 'l>(pub(super) &'r CheckRun<'l>);
+pub(super) struct RunDisk<'r, 'l>(pub(super) &'r Run<'l>);
 
 impl Disk for RunDisk<'_, '_> {
     fn exists(&self, path: &Path) -> bool {
         self.record_link_targets(path);
         self.0
-            .read(CheckInput::File, path, |path| PlainDisk.exists(path))
+            .read(Reading::File, path, |path| PlainDisk.exists(path))
     }
 
     fn list(&self, dir: &Path) -> Option<Vec<String>> {
         self.0
-            .read(CheckInput::Listing, dir, |dir| PlainDisk.list(dir))
+            .read(Reading::Listing, dir, |dir| PlainDisk.list(dir))
     }
 
     fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
         self.record_link_targets(path);
         self.0
-            .read(CheckInput::File, path, |path| PlainDisk.read(path))
+            .read(Reading::File, path, |path| PlainDisk.read(path))
     }
 }
 
@@ -52,7 +52,7 @@ impl RunDisk<'_, '_> {
                 Some(dir) => dir.join(target),
                 None => target,
             };
-            self.0.read(CheckInput::File, &current, |_| ());
+            self.0.read(Reading::File, &current, |_| ());
         }
     }
 }
