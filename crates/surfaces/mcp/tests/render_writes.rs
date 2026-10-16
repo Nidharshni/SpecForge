@@ -130,7 +130,6 @@ fn render_into_an_out_dir_that_is_a_file_is_invalid_input_on_out_dir() {
 
 /// A directory reached through a missing one and back is named from the project root.
 #[test]
-#[ignore = "flipped by T3"]
 fn render_names_its_file_from_the_root_through_a_missing_directory() {
     let project = plain_project();
     let mut server = serve(project.path());

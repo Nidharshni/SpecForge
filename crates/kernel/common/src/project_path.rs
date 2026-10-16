@@ -13,7 +13,8 @@ pub struct ProjectPath(String);
 impl ProjectPath {
     /// `path` named from `root`. A path and a root that name one place through a symbolic link (`/var` and
     /// `/private/var`) are compared as their canonical forms, a removed file's through its nearest existing ancestor.
-    /// A relative `path` is read against the process's working directory, as the CLI's arguments are.
+    /// A relative `path` is read against the process's working directory, as the CLI's arguments are. A `..` is applied
+    /// where it stands: a path through a missing directory and back is named from the root.
     pub fn of(root: &Path, path: &Path) -> ProjectPath {
         if let Some(relative) = within(path, root) {
             return relative;
@@ -88,6 +89,18 @@ fn within(path: &Path, root: &Path) -> Option<ProjectPath> {
 /// with the rest.
 fn canonical(path: &Path) -> PathBuf {
     let path = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    // `..` leaves the real directory reached so far; past a name that does not exist (which is no link) it leaves
+    // that name. What remains has no `..`, so the walk up below can name every component.
+    let mut walked = PathBuf::new();
+    for component in path.components() {
+        if component == Component::ParentDir {
+            walked = std::fs::canonicalize(&walked).unwrap_or(walked);
+            walked.pop();
+        } else {
+            walked.push(component);
+        }
+    }
+    let path = walked;
     let mut existing = path.clone();
     let mut rest = Vec::new();
     while !existing.exists() {

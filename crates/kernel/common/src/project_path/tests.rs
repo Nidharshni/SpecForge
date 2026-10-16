@@ -79,7 +79,6 @@ fn a_file_outside_the_root_is_absolute_and_canonical() {
 }
 
 #[test]
-#[ignore = "flipped by T3"]
 fn a_name_through_a_missing_directory_and_back_is_named_from_the_root() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(dir.path().join("out")).unwrap();
