@@ -88,10 +88,7 @@ fn the_process_machine_keeps_the_port_contract() {
 }
 
 #[cfg(unix)]
-#[specforge_test(
-    behavior = "run_collector_command",
-    verify = "run ignores stale reports and sets the report env"
-)]
+#[test]
 fn run_sets_the_report_env_in_the_directory_and_dates_its_files_after_the_start() {
     let dir = tempfile::tempdir().unwrap();
     let report = dir.path().join("r.json");
