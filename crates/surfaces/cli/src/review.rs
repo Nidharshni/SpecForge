@@ -1,6 +1,5 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, outln};
-use specforge_ops::OpErrorKind;
 use specforge_ops::read::coverage::STATUS;
 use specforge_ops::read::review::{Review, ReviewRequest, review};
 use specforge_ops::view::ProjectView;
@@ -33,14 +32,14 @@ impl Args {
 
     /// `specforge review [ENTITY]`: the review read view over the project
     /// compiled at `path` (ADR 0015, "Prompt read views"), the document the
-    /// review prompt renders. An unknown entity is E003 (exit 1); a
-    /// recorded report that cannot be read is E045 (exit 2, as `stats`).
+    /// review prompt renders. An unknown entity is E003, a recorded report that
+    /// cannot be read E045; either exits 1, as every read view refuses.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
         let request = self.request();
         let project = match self.project.compile() {
             Ok(project) => project,
-            Err(error) => return Refusal::measuring(format).report(terminal, &error),
+            Err(error) => return Refusal::of(format).report(terminal, &error),
         };
         match review(&ProjectView::of(&project), &request) {
             Ok(review) => {
@@ -50,10 +49,7 @@ impl Args {
                 }
                 Exit::Passed
             }
-            Err(error) if error.error.kind == OpErrorKind::EntityNotFound => {
-                Refusal::of(format).report(terminal, &error)
-            }
-            Err(error) => Refusal::measuring(format).report(terminal, &error),
+            Err(error) => Refusal::of(format).report(terminal, &error),
         }
     }
 }

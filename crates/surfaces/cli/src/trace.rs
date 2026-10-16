@@ -1,5 +1,6 @@
+use crate::notes::Notes;
 use crate::outcome::{Exit, OutputFormat, Refusal};
-use crate::terminal::{Terminal, errln, out};
+use crate::terminal::{Terminal, out};
 use specforge_ops::read::plan::AgentPlan;
 use specforge_ops::read::trace::{Ask, Target};
 use specforge_ops::view::ProjectView;
@@ -68,9 +69,7 @@ impl Args {
             }
         };
 
-        for notice in &outcome.notices {
-            errln!(terminal, "{}", specforge_common::render_plain(notice));
-        }
+        Notes::new(terminal, self.format).beside(&outcome.notices);
         match self.format {
             OutputFormat::Human => out!(terminal, "{}", outcome.to_human()),
             OutputFormat::Json => terminal.json(&outcome),

@@ -1,5 +1,6 @@
 //! `specforge publish`: the publish operation, presented.
 
+use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, outln};
 use serde_json::json;
@@ -41,8 +42,9 @@ impl Args {
         let registry = ConfiguredRegistry::for_project(&root, "publish");
         let runtime = ComponentRuntime::with_user_cache();
         let report = publish(extension, &registry, &runtime);
-        terminal.diagnostics(&report.warnings);
-        terminal.diagnostics(&registry.reported());
+        let notes = Notes::new(terminal, format);
+        notes.beside(&report.warnings);
+        notes.beside(&registry.reported());
         match &report.result {
             Ok(outcome) => {
                 present(outcome, format, terminal);

@@ -1,5 +1,6 @@
+use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
-use crate::terminal::{Terminal, errln, outln};
+use crate::terminal::{Terminal, outln};
 use specforge_ops::read::explore::{Exploration, ExplorationRequest, explore};
 use specforge_ops::view::ProjectView;
 
@@ -37,8 +38,9 @@ impl Args {
     /// `specforge explore [ENTITY]`: the exploration read view over the
     /// project compiled at `path` (ADR 0015, "Prompt read views"), the
     /// document the explore prompt renders. The notices (I020) go to
-    /// stderr; a refusal (an unknown entity, E003) is `error[CODE]` with
-    /// the closest entity as its hint (exit 1).
+    /// stderr under human output and are the document's `notices` under
+    /// JSON; a refusal (an unknown entity, E003) is `error[CODE]` with the
+    /// closest entity as its hint (exit 1).
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
         let project = match self.project.compile() {
@@ -48,9 +50,7 @@ impl Args {
         let view = ProjectView::of(&project);
         match explore(&view, &self.request()) {
             Ok(exploration) => {
-                for notice in &exploration.notices {
-                    errln!(terminal, "{}", specforge_common::render_plain(notice));
-                }
+                Notes::new(terminal, format).carried(&exploration.notices);
                 match format {
                     OutputFormat::Json => terminal.json(&exploration.document()),
                     OutputFormat::Human => print_human(&exploration, &view, terminal),

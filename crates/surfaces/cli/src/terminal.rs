@@ -7,7 +7,6 @@
 //! `stderr`, `stdin` or `IsTerminal`.
 
 use serde::Serialize;
-use specforge_common::Diagnostic;
 use std::ffi::OsStr;
 use std::fmt;
 use std::io::{self, BufRead, BufReader, IsTerminal, Read, Write};
@@ -226,19 +225,6 @@ impl Terminal {
         self.write_line(Stream::Out, format_args!("{text}"));
     }
 
-    /// Each diagnostic as `severity[CODE]: message` on stderr, whatever the
-    /// output format, so JSON stdout stays one document (registry
-    /// configuration W140/I003, fetch policy W155/W156, publish's
-    /// declaration warnings).
-    pub(crate) fn diagnostics(&self, diagnostics: &[Diagnostic]) {
-        for diagnostic in diagnostics {
-            self.write_line(
-                Stream::Err,
-                format_args!("{}", specforge_common::render_plain(diagnostic)),
-            );
-        }
-    }
-
     /// Ask `question` (written to stderr as it is, then flushed) and read one
     /// line: yes when the trimmed answer is `y` or `yes` in any case, no
     /// otherwise, on end of input or a read error. With nobody to ask
@@ -427,7 +413,6 @@ impl Capture {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use specforge_common::{Diagnostic, codes};
     use std::ffi::OsString;
 
     #[specforge_test_macros::test(
@@ -588,7 +573,6 @@ mod tests {
         errln!(terminal, "to stderr");
         err!(terminal, "partial");
         terminal.json(&serde_json::json!({"a": 1}));
-        terminal.diagnostics(&[Diagnostic::new(codes::W140, "careful")]);
 
         assert_eq!(
             capture.stdout(),
@@ -599,11 +583,5 @@ mod tests {
             "{}",
             capture.stderr()
         );
-        assert!(
-            capture.stderr().ends_with("careful\n"),
-            "one warning line: {}",
-            capture.stderr()
-        );
-        assert!(capture.stderr().contains("W140"), "{}", capture.stderr());
     }
 }

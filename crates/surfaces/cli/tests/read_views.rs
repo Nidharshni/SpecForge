@@ -1141,12 +1141,12 @@ fn cli_and_prompt_review_are_one_document() {
 
 #[specforge_test_macros::test(
     behavior = "provide_review_cli",
-    verify = "a recorded report that cannot be read exits 2 with E045"
+    verify = "a recorded report that cannot be read is E045, exit 1"
 )]
 fn review_refuses_an_unreadable_report() {
     let tmp = served(rv1_with_a_malformed_report());
     let run = cli(&tmp, &["review", "--path", s(tmp.root())]);
-    assert_eq!(run.code, Some(2), "{}", run.stderr);
+    assert_eq!(run.code, Some(1), "{}", run.stderr);
     assert!(run.stderr.starts_with("error[E045]"), "{}", run.stderr);
 
     let clean = served(rv1());

@@ -1,6 +1,7 @@
+use crate::notes::Notes;
 use crate::options;
 use crate::outcome::{Exit, OutputFormat, Refusal};
-use crate::terminal::{Terminal, errln, outln};
+use crate::terminal::{Terminal, outln};
 use specforge_ops::read::export;
 use specforge_ops::read::schema::SchemaRequest;
 use specforge_ops::view::ProjectView;
@@ -99,9 +100,8 @@ impl Args {
         // snapshot too, so nothing here shows the project was exported
         // before.
         let recorded = export::export_recorded(&view, &request);
-        for diagnostic in &recorded.notices {
-            errln!(terminal, "{}", specforge_common::render_plain(diagnostic));
-        }
+        let notes = Notes::new(terminal, OutputFormat::Human);
+        notes.beside(&recorded.notices);
         let output = match recorded.export {
             Ok(output) => output,
             Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
@@ -109,11 +109,10 @@ impl Args {
         outln!(terminal, "{}", output);
 
         if let export::CacheWrite::WriteFailed { dir, error } = &recorded.cache {
-            errln!(
-                terminal,
+            notes.warning(format_args!(
                 "warning: could not write the schema cache in {}: {error}",
                 dir.display()
-            );
+            ));
         }
         Exit::Passed
     }
@@ -189,9 +188,7 @@ impl SchemaArgs {
         };
         match output {
             Ok((text, notices)) => {
-                for notice in &notices {
-                    errln!(terminal, "{}", specforge_common::render_plain(notice));
-                }
+                Notes::new(terminal, OutputFormat::Human).beside(&notices);
                 outln!(terminal, "{text}");
                 Exit::Passed
             }
