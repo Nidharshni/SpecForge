@@ -81,7 +81,7 @@ impl CoreTool for Tool {
             extensions,
             // A local file installs only from inside the request's bound: the served project, or
             // the server's root while none is served (ADR 0092 D7, ADR 0104).
-            containment: &new.containment,
+            caller: new.caller(),
         };
         let outcome = init::init(&request, runtime.as_ref()).map_err(Self::failed)?;
         let reply = outcome.document();

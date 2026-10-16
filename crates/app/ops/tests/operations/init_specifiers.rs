@@ -37,7 +37,7 @@ fn init_with(
             name: Some("demo"),
             version: init::DEFAULT_VERSION,
             extensions,
-            containment: &specforge_ops::Containment::unbounded(),
+            caller: specforge_ops::testing::caller(),
         },
         runtime,
     )
@@ -140,7 +140,7 @@ fn init_reads_its_specifiers_as_add_reads_them() {
             name: Some("demo"),
             version: init::DEFAULT_VERSION,
             extensions: &extensions,
-            containment: &specforge_ops::Containment::unbounded(),
+            caller: specforge_ops::testing::caller(),
         };
         let by_init = init::init(&request, &writes_candidates()).unwrap_err();
         assert_eq!(by_init.error.code, code, "{specifier}: init: {by_init:?}");

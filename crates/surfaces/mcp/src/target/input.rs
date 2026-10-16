@@ -1,7 +1,7 @@
 use super::{Call, ProjectRef, Reach, TargetError, TargetSpec, WithoutProject};
 use crate::tool::McpError;
-use specforge_ops::Containment;
 use specforge_ops::view::ProjectView;
+use specforge_ops::{Caller, Containment};
 use specforge_project::SharedRuntime;
 use std::marker::PhantomData;
 use std::path::Path;
@@ -61,6 +61,13 @@ pub struct NewProjectDir<'c> {
     pub runtime: SharedRuntime,
     /// Where a local file the call installs from must lie: the request's bound.
     pub(crate) containment: Containment,
+}
+
+impl NewProjectDir<'_> {
+    /// What the call lends init: the request's bound (ADR 0092 D7), nobody to ask.
+    pub fn caller(&self) -> Caller<'_> {
+        super::call::lent(&self.containment)
+    }
 }
 
 impl Input for Unscoped {
