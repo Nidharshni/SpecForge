@@ -40,6 +40,7 @@ mod obligations_member;
 mod options;
 mod peers;
 mod plan;
+mod project_files;
 mod publish;
 mod query;
 mod review;

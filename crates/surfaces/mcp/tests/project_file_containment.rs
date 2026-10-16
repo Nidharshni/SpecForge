@@ -260,3 +260,64 @@ fn migrate_writes_no_backup_or_temporary_file_through_a_symlink_that_leaves_the_
     assert!(fs::symlink_metadata(&source).unwrap().is_file());
     assert_eq!(fs::read_to_string(&source).unwrap(), old);
 }
+
+/// Every `.rs` file under `dir`, with its text up to the test module.
+fn sources(dir: &Path, out: &mut Vec<(String, String)>, base: &Path) {
+    for entry in fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            sources(&path, out, base);
+        } else if path.extension().is_some_and(|extension| extension == "rs") {
+            let name = path
+                .strip_prefix(base)
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/");
+            let text = fs::read_to_string(&path).unwrap();
+            let lines: Vec<&str> = text.lines().collect();
+            let end = (0..lines.len())
+                .find(|&i| {
+                    lines[i].starts_with("#[cfg(test)]")
+                        && lines.get(i + 1).is_some_and(|next| next.contains("mod "))
+                })
+                .unwrap_or(lines.len());
+            out.push((name, lines[..end].join("\n")));
+        }
+    }
+}
+
+/// A tool builds no bound of its own and opens no file: the call's project hands its containment
+/// (ADR 0112 D4). The exceptions say why.
+#[test]
+fn every_containment_a_tool_uses_comes_from_the_call() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    sources(&src, &mut files, &src);
+    let within = [
+        "containment.rs",
+        "target/call.rs",
+        "tools/outline.rs", // the spec root bounds a file of the outline
+        "tools/render.rs",  // a view tool that writes its own file
+    ];
+    let fs_allowed = [
+        "tools/mod.rs", // the navigator's file text: plan 05 of round 12
+    ];
+    let mut problems = Vec::new();
+    for (name, text) in &files {
+        if name.ends_with("tests.rs") || name.contains("/tests/") {
+            continue;
+        }
+        for (number, line) in text.lines().enumerate() {
+            if line.trim_start().starts_with("//") {
+                continue;
+            }
+            if line.contains("Containment::within(") && !within.contains(&name.as_str()) {
+                problems.push(format!("src/{name}:{}: builds its own bound", number + 1));
+            }
+            if line.contains("std::fs::") && !fs_allowed.contains(&name.as_str()) {
+                problems.push(format!("src/{name}:{}: opens a file itself", number + 1));
+            }
+        }
+    }
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
+}
