@@ -129,7 +129,7 @@ fn a_missing_record_reports_nothing() {
 
     let versioned = SchemaCache::in_dir(dir.path()).version(sample_schema());
 
-    assert!(versioned.diagnostics().is_empty());
+    assert!(versioned.notices().is_empty());
 }
 
 #[specforge_test(
@@ -158,7 +158,7 @@ fn detect_breaking_with_cached_schema() {
     );
     assert!(breaking(versioned.changes()));
     // The cache was found (no I016); the removal is one W053 warning.
-    let diagnostics = versioned.diagnostics();
+    let diagnostics = versioned.notices();
     let codes: Vec<&str> = diagnostics.iter().map(|d| d.code.as_str()).collect();
     assert_eq!(codes, vec!["W053"], "{diagnostics:?}");
     assert_eq!(diagnostics[0].severity, specforge_common::Severity::Warning);
@@ -286,7 +286,7 @@ fn a_cache_an_older_host_wrote_reads_its_bool_field_unchanged() {
     let versioned = SchemaCache::in_dir(dir.path()).version(current);
 
     assert!(versioned.changes().is_empty(), "{:?}", versioned.changes());
-    assert!(versioned.diagnostics().is_empty());
+    assert!(versioned.notices().is_empty());
     assert_eq!(versioned.version(), &SchemaVersion::new(1, 0, 0));
 }
 
@@ -321,10 +321,17 @@ fn an_unreadable_record_restarts_at_1_0_0_with_i016() {
 
         assert_eq!(versioned.version(), &SchemaVersion::new(1, 0, 0), "{cause}");
         assert!(versioned.changes().is_empty(), "{cause}");
-        let diagnostics = versioned.diagnostics();
+        let diagnostics = versioned.notices();
         assert_eq!(diagnostics.len(), 1, "{cause}: {diagnostics:?}");
         assert_eq!(diagnostics[0].code, "I016", "{cause}");
         assert_eq!(diagnostics[0].severity, specforge_common::Severity::Info);
+        assert!(
+            diagnostics[0]
+                .suggestion
+                .as_deref()
+                .is_some_and(|s| s.starts_with("The next `specforge export` records")),
+            "{cause}"
+        );
         let path = dir.path().join("schema-cache.json");
         assert!(
             diagnostics[0].message.starts_with(&format!(
@@ -357,7 +364,7 @@ fn the_w053_message_names_the_change_and_the_versions() {
 
     let versioned = cache.version(generated);
 
-    let diagnostics = versioned.diagnostics();
+    let diagnostics = versioned.notices();
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(diagnostics[0].code, "W053");
     assert_eq!(

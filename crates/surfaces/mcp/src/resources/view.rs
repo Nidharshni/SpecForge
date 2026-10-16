@@ -205,7 +205,7 @@ pub(super) fn check_entity_id(entity_id: &str) -> Result<(), Box<McpError>> {
 
 pub(super) fn exported(view: ProjectView<'_>, query: &ViewQuery, format: Format) -> ReadOutcome {
     specforge_ops::read::export::export(&view, &query.request(format))
-        .map(ResourceText::json)
+        .map(|exported| ResourceText::json(exported.document).with_notices(exported.notices))
         .map_err(|refusal| Box::new(McpError::refused(refusal, |field| query.argument(field))))
 }
 

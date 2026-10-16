@@ -1,5 +1,6 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, errln, outln};
+use specforge_ops::Containment;
 use specforge_ops::extension::{self, Origin, RemoveRequest};
 use specforge_ops::view::ProjectView;
 
@@ -40,6 +41,7 @@ impl Args {
             name: &self.name,
             force: self.force,
             dry_run: self.dry_run,
+            containment: &Containment::unbounded(),
         };
         let outcome = match extension::remove(&ProjectView::of(&project), &request) {
             Ok(outcome) => outcome,

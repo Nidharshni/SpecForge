@@ -20,8 +20,6 @@ impl CoreResource for EntitiesResource {
     fn read(view: ProjectView<'_>, uri: &Matched<'_>) -> ReadOutcome {
         super::view::no_query(uri)?;
         let kind = uri.value("kind").unwrap_or_default();
-        // A resource has no `_meta`: the listing's notices (an unknown kind)
-        // are not carried.
         let listing = specforge_ops::read::query::list(
             &view,
             &specforge_ops::read::query::ListRequest {
@@ -32,6 +30,6 @@ impl CoreResource for EntitiesResource {
         let text = serde_json::to_string(&crate::tools::list::rows(&listing)).map_err(|error| {
             Box::new(McpError::new(ErrorCode::InternalError, error.to_string()))
         })?;
-        Ok(ResourceText::json(text))
+        Ok(ResourceText::json(text).with_notices(listing.notices))
     }
 }

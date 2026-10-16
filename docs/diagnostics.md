@@ -1115,9 +1115,9 @@ I016: Schema cache unreadable
 
 `.specforge/schema-cache.json` exists but cannot be read: it is not JSON, not a
 recorded schema, or names a field type this host does not read. The schema is
-versioned as if no export had been made, at 1.0.0, and the export records a new
-cache. Agents that read earlier exports must not take the version as continuing
-theirs.
+versioned as if no export had been made, at 1.0.0, by every reader of the
+schema, until the next `specforge export` records a new cache. Agents that read
+earlier exports must not take the version as continuing theirs.
 
 Owner: core
 Level: info

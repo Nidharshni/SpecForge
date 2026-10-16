@@ -24,7 +24,7 @@ use specforge_registry::RegistryBuild;
 use specforge_wasm::WasmRuntime;
 use std::path::Path;
 
-use crate::{OpError, OpErrorKind, Refusal, Writes};
+use crate::{Containment, OpError, OpErrorKind, Refusal, Writes};
 
 /// The field of a migration request a refusal can be about (ADR 0072).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,6 +72,11 @@ pub struct Request<'a> {
     pub dry_run: bool,
     /// Skip the `.bak` copy of each migrated file (nothing to roll back to).
     pub no_backup: bool,
+    /// What the migration may reach (ADR 0104): a source that lands outside it, by a symlink in
+    /// the project, refuses the run (`invalid_input`, nothing read or written; ADR 0092 D8). MCP
+    /// passes its bound; the CLI's user is already at the file system and passes
+    /// [`Containment::unbounded`].
+    pub containment: &'a Containment,
 }
 
 #[derive(Debug, Clone)]
@@ -322,26 +327,15 @@ pub use specforge_protocol_types::MigrationInput;
 /// other problem is one E069 in [`Outcome::diagnostics`] and fails
 /// [`Outcome::ok`]. The preview and the migration rewrite the same sources.
 pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome, OpError> {
-    run_within(request, runtime, None)
-}
-
-/// [`run`], and with `within` (a directory) refused (`invalid_input`, nothing
-/// read or written) when a source resolves outside it, by a symlink in the
-/// project (ADR 0092 D8). MCP passes the project's root; the CLI's user is
-/// already at the file system and passes none.
-pub fn run_within(
-    request: &Request,
-    runtime: Option<SharedRuntime>,
-    within: Option<&Path>,
-) -> Result<Outcome, OpError> {
     // The project the files are migrated in and the one the hooks and the checks compile.
     let project = request.root;
     let target = &request.target;
     let read = crate::config::rewritable(project.dir())?;
     let sources = read.config.sources(project.dir()).files();
-    if let Some(within) = within {
+    if let Some(within) = request.containment.root() {
         for source in &sources {
-            if let Some(real) = crate::resolves_outside(source, within) {
+            if let Err(outside) = request.containment.resolve(source) {
+                let real = outside.landed();
                 return Err(OpError::new(
                     OpErrorKind::InvalidInput,
                     SOURCE_OUTSIDE_ROOT,

@@ -64,7 +64,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Schema record**: `<root>/.specforge/schema-cache.json`, the versioned schema the last successful `specforge
   export` recorded, with its content hash (`specforge_ops::schema_version::SchemaCache`). Every reader of the
   project's schema versions against it; only export writes it, into the project it exports. One that cannot be
-  read is I016 and the version starts again at 1.0.0.
+  read is I016 and the version starts again at 1.0.0. Every reader reports what versioning found, the I016 or one
+  W053 per breaking change, as its **schema notices** (`VersionedSchema::notices`, ADR 0111).
 - **Migration record**: `<root>/.specforge/migration.json`, what `specforge migrate --rollback` undoes: the
   last kept migration made with backups, each file with its backup and the SHA-256 of the file as the migration
   left it (`specforge_migrate::MigrationRecord`). A rollback restores only a recorded file that still holds that
@@ -132,7 +133,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   project, the new directory), never declared beside it: an entry whose handler acts on the project is refused as
   no project before it runs (ADR 0014, ADR 0024). The `path`, and every path an argument names, resolves inside
   the served project (while none is served, the server's root): one that leaves it is `invalid_input`, so
-  "another project" is one nested in the served one (`specforge_mcp::containment`, ADR 0092).
+  "another project" is one nested in the served one (`specforge_ops::Containment`, ADR 0092, ADR 0104).
+- **Containment**: what a request may reach on disk: every path (the CLI, ADR 0092 D6) or the paths that land inside
+  one directory (an MCP request's bound, or the call's project). Carried in the operation's request and applied where
+  the operation opens or writes the file (`specforge_ops::Containment`, ADR 0104).
 - **Served project**: the project an MCP server serves to every call that names none: the nearest project (a
   directory holding `specforge.json`) at or above the server's root (the path `specforge mcp` was started with, or
   a handshake client's `projectRoot`), else nothing; while none is served, every request looks there again first

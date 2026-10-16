@@ -27,6 +27,7 @@ fn an_unusable_config_is_refused_before_anything_is_installed() {
                     allow_unsigned: false,
                     trust: Trust::Refuse,
                     dry_run,
+                    containment: &crate::Containment::unbounded(),
                 };
                 let error =
                     add(&request, &crate::registry::Unconfigured("add"), &runtime()).unwrap_err();
@@ -58,6 +59,7 @@ fn add_reinstalls_a_binary_that_changed() {
         allow_unsigned: false,
         trust: Trust::Refuse,
         dry_run: false,
+        containment: &crate::Containment::unbounded(),
     };
     let unconfigured = crate::registry::Unconfigured("add");
     add(&request, &unconfigured, &runtime()).unwrap();
@@ -359,6 +361,7 @@ fn a_missing_config_is_config_not_found_with_the_hint_to_init() {
         allow_unsigned: false,
         trust: Trust::Refuse,
         dry_run: false,
+        containment: &crate::Containment::unbounded(),
     };
 
     let error = add(&request, &crate::registry::Unconfigured("add"), &runtime()).unwrap_err();

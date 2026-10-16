@@ -24,6 +24,6 @@ impl CoreResource for SchemaResource {
                 format!("schema serialization failed: {err}"),
             ))
         })?;
-        Ok(ResourceText::json(schema_json))
+        Ok(ResourceText::json(schema_json).with_notices(schema.notices()))
     }
 }

@@ -15,7 +15,7 @@ use specforge_protocol_types::{ExtensionDeclaration, PeerDependency};
 use specforge_wasm::WasmRuntime;
 
 use super::{NOT_FOUND, builtin_name};
-use crate::{OpError, OpErrorKind};
+use crate::{Containment, OpError, OpErrorKind};
 
 /// What an extension the project does not load yet declares, read from its
 /// binary once, as every environment loads an extension (under a candidate
@@ -170,17 +170,34 @@ impl LocalFile {
     /// component; "cannot read …: …" (E054) when the file cannot be read.
     /// `path` is the component read, so the lock records `local:<that
     /// component>`.
-    pub fn read(runtime: &dyn WasmRuntime, path: &Path) -> Result<LocalFile, OpError> {
-        if !path.exists() {
+    ///
+    /// `path` is read through `containment` (ADR 0104): the name, and the binary a crate
+    /// directory names (its `target/` may be a symlink), are resolved component by component and
+    /// what is opened is what landed, so a name that leaves the containment is `OUTSIDE_ROOT`
+    /// whichever way it is spelled. Messages and the recorded path name the joined path.
+    pub fn read(
+        runtime: &dyn WasmRuntime,
+        path: &Path,
+        containment: &Containment,
+    ) -> Result<LocalFile, OpError> {
+        let held = containment.resolve(path)?;
+        if !held.real.exists() {
             return Err(OpError::coded(
                 crate::OpErrorKind::FileNotFound,
                 codes::E054,
-                format!("file not found: {}", path.display()),
+                format!("file not found: {}", held.spelled.display()),
             )
             .with_suggestion(super::add::SPECIFIER_FORMS));
         }
-        let path = binary_at(path)?;
-        let module = Module::read(&path).map_err(|e| {
+        let built = binary_at(&held.real)?;
+        let binary = containment.resolve(&built)?;
+        // The component, named as the caller named its directory.
+        let path = match built.strip_prefix(&held.real) {
+            Ok(rest) if rest.as_os_str().is_empty() => held.spelled,
+            Ok(rest) => held.spelled.join(rest),
+            Err(_) => built,
+        };
+        let module = Module::read(&binary.real).map_err(|e| {
             OpError::coded(
                 crate::OpErrorKind::InvalidInput,
                 codes::E054,
@@ -298,5 +315,55 @@ mod tests {
         let file = release.join("other.wasm");
         assert_eq!(binary_at(&file).unwrap(), file);
         assert!(binary_at(&dir.path().join("missing.wasm")).is_err());
+    }
+}
+
+#[cfg(test)]
+mod containment_tests {
+    use super::*;
+    use crate::OUTSIDE_ROOT;
+    use crate::testing;
+
+    #[test]
+    fn a_local_file_is_read_only_inside_its_containment() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = std::fs::canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(base.join("proj")).unwrap();
+        std::fs::write(base.join("outside.wasm"), testing::GREET).unwrap();
+        std::fs::write(base.join("proj/inside.wasm"), testing::GREET).unwrap();
+        let runtime = testing::candidates();
+        let bound = Containment::within(&base.join("proj"));
+
+        let error = LocalFile::read(&runtime, &base.join("outside.wasm"), &bound).unwrap_err();
+        assert_eq!(error.code, OUTSIDE_ROOT, "{error:?}");
+        let error = LocalFile::read(&runtime, Path::new("../outside.wasm"), &bound).unwrap_err();
+        assert_eq!(error.code, OUTSIDE_ROOT, "{error:?}");
+        let inside = LocalFile::read(&runtime, Path::new("inside.wasm"), &bound).unwrap();
+        assert_eq!(inside.path, base.join("proj/inside.wasm"));
+        // Unbounded: the same outside file is read.
+        let unbounded = Containment::unbounded();
+        assert!(LocalFile::read(&runtime, &base.join("outside.wasm"), &unbounded).is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_crate_directory_whose_build_leaves_the_containment_is_outside() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = std::fs::canonicalize(dir.path()).unwrap();
+        let built = base.join("outside/target/wasm32-wasip2/release");
+        std::fs::create_dir_all(&built).unwrap();
+        std::fs::write(built.join("greet.wasm"), testing::GREET).unwrap();
+        let krate = base.join("proj/ext");
+        std::fs::create_dir_all(&krate).unwrap();
+        std::fs::write(krate.join("Cargo.toml"), "[package]\nname = \"greet\"\n").unwrap();
+        std::os::unix::fs::symlink(base.join("outside/target"), krate.join("target")).unwrap();
+        let runtime = testing::candidates();
+
+        // The binary is found through the link, which is all `binary_at` says.
+        assert!(binary_at(&krate).is_ok());
+        let bound = Containment::within(&base.join("proj"));
+        let error = LocalFile::read(&runtime, &krate, &bound).unwrap_err();
+        assert_eq!(error.code, OUTSIDE_ROOT, "{error:?}");
+        assert!(LocalFile::read(&runtime, &krate, &Containment::unbounded()).is_ok());
     }
 }

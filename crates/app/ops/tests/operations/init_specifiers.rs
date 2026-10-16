@@ -38,6 +38,7 @@ fn init_with(
             name: Some("demo"),
             version: init::DEFAULT_VERSION,
             extensions,
+            containment: &specforge_ops::Containment::unbounded(),
         },
         runtime,
     )
@@ -124,6 +125,7 @@ fn init_reads_its_specifiers_as_add_reads_them() {
                     allow_unsigned: false,
                     trust: Trust::Refuse,
                     dry_run: false,
+                    containment: &specforge_ops::Containment::unbounded(),
                 },
                 &specforge_ops::registry::Unconfigured("add"),
                 &writes_candidates(),
@@ -141,6 +143,7 @@ fn init_reads_its_specifiers_as_add_reads_them() {
             name: Some("demo"),
             version: init::DEFAULT_VERSION,
             extensions: &extensions,
+            containment: &specforge_ops::Containment::unbounded(),
         };
         let by_init = init::init(&request, &writes_candidates()).unwrap_err();
         assert_eq!(by_init.error.code, code, "{specifier}: init: {by_init:?}");
@@ -168,4 +171,27 @@ fn init_reads_its_specifiers_as_add_reads_them() {
         }
         assert!(!dir.exists(), "{specifier}: nothing written");
     }
+}
+
+/// `a/../x.wasm`, `a` a symlink to a directory elsewhere: the file beside `a`'s target, as every
+/// tool on the file system reads it (not the one beside `a`).
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    behavior = "non_interactive_init",
+    verify = "init reads its extension specifiers as add reads them, with add's codes"
+)]
+fn init_reads_a_local_path_through_its_symlinks_as_the_file_system_does() {
+    let scratch = TempDir::new().unwrap();
+    let dir = scratch.path().join("demo");
+    let deep = scratch.path().join("elsewhere/deep");
+    std::fs::create_dir_all(&deep).unwrap();
+    std::fs::create_dir_all(&dir).unwrap();
+    std::os::unix::fs::symlink(&deep, dir.join("a")).unwrap();
+    std::fs::write(scratch.path().join("elsewhere/x.wasm"), A_ONE).unwrap();
+    std::fs::write(dir.join("x.wasm"), A_TWO).unwrap();
+
+    init_with(&dir, &["a/../x.wasm".to_string()], &runtime()).unwrap();
+
+    let installed = std::fs::read(dir.join(".specforge/extensions/@x/a/extension.wasm")).unwrap();
+    assert_eq!(installed, A_ONE);
 }

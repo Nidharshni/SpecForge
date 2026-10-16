@@ -2,6 +2,7 @@ use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, errln, out, outln};
 use specforge_common::Diagnostic;
 use specforge_formatter::unified_diff;
+use specforge_ops::Containment;
 use specforge_ops::authoring::format::{self, Mode, Request};
 use specforge_ops::{OpError, OpErrorKind};
 use std::path::{Path, PathBuf};
@@ -71,6 +72,7 @@ impl Args {
             root: &project_root,
             paths: &self.paths,
             mode,
+            containment: &Containment::unbounded(),
         }) {
             Ok(outcome) => outcome,
             // A config that does not say which files are the sources:

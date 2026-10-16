@@ -206,6 +206,7 @@ fn hooks_run_for_the_project_a_sub_path_is_in() {
                 target: CURRENT_FORMAT_VERSION,
                 dry_run: false,
                 no_backup: true,
+                containment: &specforge_ops::Containment::unbounded(),
             },
             Some(runtime.clone()),
         )
@@ -234,6 +235,7 @@ fn format_verdict_inputs() {
         root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         paths: &[],
         mode: Mode::Check,
+        containment: &specforge_ops::Containment::unbounded(),
     })
     .unwrap();
     assert!(checked.succeeded() && checked.complete() && !checked.clean());
@@ -244,6 +246,7 @@ fn format_verdict_inputs() {
         root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         paths: &[],
         mode: Mode::Write,
+        containment: &specforge_ops::Containment::unbounded(),
     })
     .unwrap();
     assert!(written.succeeded() && written.complete() && !written.clean());

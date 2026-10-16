@@ -8,7 +8,7 @@ use specforge_ops::view::ProjectView;
 
 use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
-use crate::reply::Answered;
+use crate::reply::{Answer, Answered};
 use crate::tool::{ErrorCode, McpError};
 use specforge_ops::view::EntityField;
 
@@ -98,11 +98,13 @@ impl CoreTool for Tool {
                 )));
             }
         };
-        let outcome = specforge_ops::read::trace::trace(&view, Target::Entity(entity_id)).map_err(
-            |error| Self::refused(specforge_ops::Refusal::from(error)).with_entity(entity_id),
-        )?;
+        let mut outcome = specforge_ops::read::trace::trace(&view, Target::Entity(entity_id))
+            .map_err(|error| {
+                Self::refused(specforge_ops::Refusal::from(error)).with_entity(entity_id)
+            })?;
+        let notices = std::mem::take(&mut outcome.notices);
         match outcome.into_chain() {
-            Some(chain) => Ok(Reply::Chain(chain).into()),
+            Some(chain) => Ok(Answer::new(Reply::Chain(chain)).with_diagnostics(notices)),
             None => Err(Box::new(McpError::new(
                 ErrorCode::InternalError,
                 "trace of one entity answered no chain",

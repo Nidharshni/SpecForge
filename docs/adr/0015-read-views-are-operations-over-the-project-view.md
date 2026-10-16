@@ -1,6 +1,6 @@
 # The read views are operations over the project view
 
-**Status:** accepted (2026-10-05); P7: tools are named by their typed constants (ADR 0049).
+**Status:** accepted (2026-10-05); P7: tools are named by their typed constants (ADR 0049). Amended by ADR 0111 (D2 reaffirmed with a measurement; D10: every reader reports the versioning's notices).
 
 `specforge-ops` handed the read views out as building blocks and each surface chained them on its
 own: the CLI's `stats` built a `CoverageRegistries` by hand and called `compute_project_stats`, MCP
@@ -63,6 +63,7 @@ has one coverage-row presenter (`tools::coverage::row_json`) and one gap present
   memory, so no invalidation can be forgotten. Errors are never memoized. The versioned schema is
   not memoized: it is a function of the registries and one small file, and its formats are the
   emitter's (ADR 0007).
+  *(ADR 0111: measured, about 4 ms per read in a debug build with 22 kinds; still not memoized.)*
 - **D3. The unfiltered coverage view lists the entities that count toward coverage**, extending
   ADR 0004 D2-b to MCP's listing: `rows = stats' testable count`, covered rows = the proven count. An
   `entity_id` still reaches any entity; every row says whether it is `exempt` (a testable-kind
@@ -110,6 +111,7 @@ has one coverage-row presenter (`tools::coverage::row_json`) and one gap present
   *(Round 8 plan 11: every document that names a schema version names the view's versioned schema's: the
   export in every format, schema attached or not, trace, the model, and the graph an extension command
   receives. No output carries a hand-kept version constant: `SCHEMA_VERSION = "0.1.0"` is gone.)*
+  *(ADR 0111: every reader reports the versioning's notices, I016 and W053; only export records.)*
 - **D11. Trace errors are typed**: `TraceError::EntityNotFound { entity_id, near }` replaces the
   emitter error that carried `E003: …` in its message for MCP to re-parse. It converts to an
   `OpError` E003 with a did-you-mean; the CLI prints `error[E003]: …` with a help line.

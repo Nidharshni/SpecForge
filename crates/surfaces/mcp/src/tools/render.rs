@@ -12,9 +12,10 @@ use specforge_common::ProjectPath;
 use specforge_common::shape::Shape;
 
 use crate::args::Arguments;
-use crate::containment::Containment;
-use crate::reply::Answered;
+use crate::containment;
+use crate::reply::{Answer, Answered};
 use crate::tool::{ErrorCode, McpError};
+use specforge_ops::Containment;
 use specforge_ops::view::ProjectView;
 
 /// `specforge.render`'s arguments.
@@ -108,16 +109,17 @@ impl CoreTool for Tool {
             scope: args.scope.as_deref(),
             ..specforge_ops::read::export::Request::default()
         };
-        let output = specforge_ops::read::export::export(&view, &request).map_err(Self::refused)?;
+        let exported =
+            specforge_ops::read::export::export(&view, &request).map_err(Self::refused)?;
 
         // With out_dir the rendering lands on disk; without it, inline.
         let Some(out_dir) = args.out_dir.as_deref() else {
-            return Ok(Reply {
+            return Ok(Answer::new(Reply {
                 format: name.to_string(),
-                output: Some(output),
+                output: Some(exported.document),
                 output_files: Vec::new(),
-            }
-            .into());
+            })
+            .with_diagnostics(exported.notices));
         };
         // Inside the call's project, as every path a request names is
         // (ADR 0092); with no project served there is nothing to be inside.
@@ -132,26 +134,35 @@ impl CoreTool for Tool {
                 .with_argument("out_dir"),
             ));
         };
-        let bound = Containment::at(root);
+        let bound = Containment::within(root);
         let given = Path::new(out_dir);
-        bound
+        let out_dir = bound
             .resolve(given)
-            .map_err(|outside| Box::new(outside.refusal("out_dir")))?;
-        let out_dir = bound.spelled(given);
+            .map_err(|outside| Box::new(containment::refusal(&outside, "out_dir")))?
+            .spelled;
+        // The file too: `out/graph.json` may itself be a symlink that leaves the project, and
+        // what is written is where it lands (ADR 0092 D8, ADR 0104).
         let path = out_dir.join(file_name);
-        if let Err(e) =
-            std::fs::create_dir_all(&out_dir).and_then(|()| std::fs::write(&path, output))
-        {
+        let landed = bound
+            .resolve(&path)
+            .map_err(|outside| Box::new(containment::refusal(&outside, "out_dir")))?
+            .real;
+        let written = match landed.parent() {
+            Some(parent) => std::fs::create_dir_all(parent),
+            None => Ok(()),
+        }
+        .and_then(|()| std::fs::write(&landed, exported.document));
+        if let Err(e) = written {
             return Err(Box::new(McpError::new(
                 ErrorCode::InternalError,
                 format!("failed to write {}: {e}", path.display()),
             )));
         }
-        Ok(Reply {
+        Ok(Answer::new(Reply {
             format: name.to_string(),
             output: None,
             output_files: vec![ProjectPath::of(root, &path)],
-        }
-        .into())
+        })
+        .with_diagnostics(exported.notices))
     }
 }

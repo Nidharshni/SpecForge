@@ -12,7 +12,7 @@ use super::manifest::{
 };
 use crate::options::{Choice, OptionTable};
 use crate::view::ProjectView;
-use crate::{OpError, OpErrorKind, Refusal, Writes};
+use crate::{Containment, OpError, OpErrorKind, Refusal, Writes};
 
 /// A start while a session is active (`Conflict`).
 pub const SESSION_ACTIVE: &str = "session_active";
@@ -292,7 +292,7 @@ fn apply(
             // A symlink that leaves the root is a path outside it (ADR 0092
             // D8): its target is not read.
             let file = root.join(&path);
-            if crate::resolves_outside(&file, root).is_some() {
+            if Containment::within(root).resolve(Path::new(&path)).is_err() {
                 return Err(outside_root(SOURCE_OUTSIDE_ROOT, "source_file", given)
                     .about(SessionField::SourceFile));
             }
