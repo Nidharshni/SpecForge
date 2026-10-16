@@ -971,9 +971,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   none parses the message, which is presentation.
 - **Reference**: an id a field's declared type reads as a reference (a `reference` field's value, a
   `reference_list` field's items, a scheme ref ID in a `string_list`, ADR 0093), an occurrence of an entity's ID in another entity's field that resolves to it (one
-  edge, written where its token is). The references *to* an entity are incoming; what an entity
+  edge; where it is written is the edge's written span). The references *to* an entity are incoming; what an entity
   *refers to* are its outgoing references. "Find references" means incoming, with the declaration
   only on request (`specforge_ops::read::navigate`).
+- **Written span** (of an edge): where one of an edge's references is written: a reference's token (a list
+  item, a single reference's value) or a name inside a type expression a derived field reads (a parameter or
+  return type, a field written as a type, a union member). The linker records every edge's written spans, in
+  written order (`Graph::written`); navigation's occurrences, rename and the LSP read them and never re-derive
+  them. An edge added by hand has none (ADR 0127).
 - **Navigation**: where an entity is declared, its references, entity lookup and ranking, which
   entities a diagnostic is about, and the fixes a diagnostic's data names. The LSP and MCP answer
   from one module (`specforge_ops::read::navigate`) in source spans. A span is a position in the text the
