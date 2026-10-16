@@ -5,15 +5,14 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use specforge_common::{ProjectConfig, SourceRoot};
-use specforge_installed::Installed;
 
 use super::key::{canonical, discovered, relative_canonical};
-use crate::builtins;
 
 /// Everything a project session depends on besides its sources' text:
 /// where its sources are discovered (the spec root and `exclude`), the
-/// files its environment was loaded from (`specforge.json`,
-/// `specforge.lock`, each extension module it loaded) and the files its
+/// files its environment load read (`specforge.json`, `specforge.lock`, each
+/// extension module the load read, and each hop of a symlink among them,
+/// ADR 0114) and the files its
 /// last checks read (every path a check asked about, the build cache a
 /// check-phase pass read, and every directory E016's suggestion listed,
 /// recorded when read, ADR 0107), and the target of each symlinked source (where its text
@@ -44,12 +43,10 @@ enum Place {
 pub(super) struct OnDisk {
     pub(super) root: PathBuf,
     pub(super) sources: SourceRoot,
-    pub(super) config: PathBuf,
-    pub(super) lock: PathBuf,
-    /// The module of every enabled extension that is not built in:
-    /// `.specforge/extensions/<name>/extension.wasm` for an installed one,
-    /// the resolved path of a local `.wasm` entry.
-    pub(super) modules: Vec<PathBuf>,
+    /// The files the environment load read, in read order, each once:
+    /// `specforge.json`, `specforge.lock`, each module the extension load
+    /// read, and each hop of each that is a symlink (ADR 0114).
+    pub(super) environment: Vec<PathBuf>,
     /// The files the checks read, as they read them (OS resolution of `..`),
     /// sorted: the paths a check asked `exists` or `read`, and the target of
     /// each that is a symlink (ADR 0107).
@@ -194,7 +191,7 @@ impl SessionInputs {
         let candidates = [canonical(&disk.root), canonical(disk.sources.dir())]
             .into_iter()
             .chain(
-                disk.modules
+                disk.environment
                     .iter()
                     .chain(&disk.check_files)
                     .filter_map(|path| path.parent().map(canonical))
@@ -239,8 +236,9 @@ impl SessionInputs {
 
     /// What an editor client must report: the spec root's `.spec` files, every
     /// entry created or deleted under the root (and under the spec root when
-    /// it lies outside it), then the config, the lock, each module, each file the
-    /// checks read and each directory they listed. Each path is canonical
+    /// it lies outside it), then the files the environment load read (the config,
+    /// the lock, each module), each file the checks read and each directory they
+    /// listed. Each path is canonical
     /// (as the checks read it, `..` resolved), re-spelled from the root as
     /// the session was opened when it lies under it (the spelling the
     /// editor gave), absolute otherwise. Empty when detached.
@@ -254,9 +252,8 @@ impl SessionInputs {
             .chain(std::iter::once(Watched::Directories(spelled(&disk.root))))
             .chain(spec_root_apart.then(|| Watched::Directories(spelled(disk.sources.dir()))))
             .chain(
-                [&disk.config, &disk.lock]
-                    .into_iter()
-                    .chain(&disk.modules)
+                disk.environment
+                    .iter()
                     .chain(&disk.check_files)
                     .map(|path| Watched::File(spelled(path))),
             )
@@ -294,35 +291,20 @@ impl SessionInputs {
 
 // Crate-private: how the session builds, renews and reads it.
 impl SessionInputs {
-    /// The inputs an environment rooted at `root` with `config` is loaded
-    /// from, before it is: config, lock, the module of every enabled
-    /// extension that is not built in, the spec root and `exclude`.
-    pub(crate) fn opened(root: &Path, config: &ProjectConfig) -> Self {
-        // The paths, before anything is read: `Installed::at` reads the lock
-        // once the session has stamped it.
-        let installed = Installed::unread(root);
-        let modules = installed.modules(&config.extensions, &builtins());
+    /// The inputs of the environment rooted at `root` that was loaded from
+    /// `config`: the spec root and `exclude`, and the `environment` files the
+    /// load read, in read order (ADR 0114).
+    pub(crate) fn opened(root: &Path, config: &ProjectConfig, environment: Vec<PathBuf>) -> Self {
         Self::on_disk(OnDisk {
             root: root.to_path_buf(),
             sources: config.sources(root),
-            config: root.join("specforge.json"),
-            lock: installed.lock_path(),
-            modules,
+            environment,
             check_files: Vec::new(),
             listings: Vec::new(),
             links: Vec::new(),
             pending: Vec::new(),
             canonical: Canonical::empty(),
         })
-    }
-
-    /// The lock and the modules: stamped before the runtime and the
-    /// environment read them (the config is stamped before its one read).
-    pub(crate) fn environment_files(&self) -> impl Iterator<Item = &Path> {
-        self.disk()
-            .into_iter()
-            .flat_map(|disk| std::iter::once(&disk.lock).chain(&disk.modules))
-            .map(PathBuf::as_path)
     }
 
     /// The symlinked sources among `discovered` (every source found) are
@@ -393,9 +375,9 @@ impl SessionInputs {
         disk.canonical = Canonical {
             root: canonical(&disk.root),
             spec_root: canonical(disk.sources.dir()),
-            environment: [&disk.config, &disk.lock]
-                .into_iter()
-                .chain(&disk.modules)
+            environment: disk
+                .environment
+                .iter()
                 .map(|path| (canonical(path), path.clone()))
                 .collect(),
             checks: disk.canonical_checks(),
@@ -457,9 +439,9 @@ impl OnDisk {
         let mut pending: Vec<Pending> = Vec::new();
         let candidates = std::iter::once((self.sources.dir(), Kind::Environment))
             .chain(
-                self.modules
+                self.environment
                     .iter()
-                    .filter_map(|module| Some((module.parent()?, Kind::Environment))),
+                    .filter_map(|file| Some((file.parent()?, Kind::Environment))),
             )
             .chain(
                 self.check_files

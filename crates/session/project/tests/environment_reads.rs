@@ -6,7 +6,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use serde_json::json;
 use specforge_common::ProjectRoot;
+use specforge_project::testing::TestProject;
 use specforge_project::{ProjectSession, SharedRuntime, WatchRoot, Watched};
 use specforge_test::prelude::*;
 use specforge_wasm::testing::InProcessRuntime;
@@ -52,7 +54,6 @@ fn config_with_module(l: &Layout) {
 }
 
 #[cfg(unix)]
-#[ignore = "flipped by T7"]
 #[specforge_test(
     behavior = "classify_project_changes",
     verify = "an environment input that is a symlink is followed to its target"
@@ -79,7 +80,6 @@ fn a_symlinked_modules_target_is_watched() {
 }
 
 #[cfg(unix)]
-#[ignore = "flipped by T7"]
 #[specforge_test(
     behavior = "classify_project_changes",
     verify = "an environment input that is a symlink is followed to its target"
@@ -149,4 +149,161 @@ fn a_module_link_pointed_elsewhere_reloads_the_environment() {
     std::os::unix::fs::symlink(l.outside.join("other.wasm"), &link).unwrap();
     let changes = session.changes([link.as_path()]);
     assert_eq!(changes.environment, vec![link], "{changes:?}");
+}
+
+fn project(config: serde_json::Value, files: &[(&str, &str)]) -> TestProject {
+    TestProject::new()
+        .raw_config(config.to_string())
+        .files(files)
+}
+
+#[specforge_test(
+    behavior = "classify_project_changes",
+    verify = "a directory moved above an environment or check input changes that input"
+)]
+fn a_moved_directory_holding_a_module_reloads_the_environment() {
+    let dir = project(
+        json!({"name": "c", "version": "0.1.0", "extensions": ["@acme/local=ext/local.wasm"]}),
+        &[("ext/local.wasm", "not wasm")],
+    );
+    let session = loading(dir.root());
+    let root = fs::canonicalize(dir.root()).unwrap();
+    fs::rename(root.join("ext"), root.join("ext2")).unwrap();
+
+    let changes = session.changes([root.join("ext").as_path(), root.join("ext2").as_path()]);
+    assert_eq!(changes.environment, vec![root.join("ext")]);
+}
+
+#[specforge_test(
+    behavior = "classify_project_changes",
+    verify = "specforge.json, specforge.lock and a loaded extension module are environment changes"
+)]
+fn config_lock_and_loaded_modules_are_environment_inputs() {
+    let dir = project(
+        json!({
+            "name": "c",
+            "version": "0.1.0",
+            "extensions": ["@specforge/software", "@acme/local=ext/local.wasm", "@acme/installed"]
+        }),
+        &[("main.spec", "")],
+    );
+    let session = loading(dir.root());
+    let root = dir.root();
+
+    // A builtin has no module on disk; a local entry does. An installed entry
+    // with no lock entry is not loaded, so its module is read by no one.
+    assert_eq!(
+        session.inputs().watched(),
+        vec![
+            Watched::Sources(root.to_path_buf()),
+            Watched::Directories(root.to_path_buf()),
+            Watched::File(root.join("specforge.json")),
+            Watched::File(root.join("specforge.lock")),
+            Watched::File(root.join("ext/local.wasm")),
+        ]
+    );
+    for path in ["specforge.json", "specforge.lock", "ext/local.wasm"] {
+        let path = root.join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, "new content").unwrap();
+        let changes = session.changes([path.as_path()]);
+        assert_eq!(
+            changes.environment,
+            vec![path.clone()],
+            "{}",
+            path.display()
+        );
+        assert!(changes.sources.is_empty());
+    }
+    let unlocked = root.join(".specforge/extensions/@acme/installed/extension.wasm");
+    fs::create_dir_all(unlocked.parent().unwrap()).unwrap();
+    fs::write(&unlocked, "new content").unwrap();
+    assert!(
+        session.changes([unlocked.as_path()]).environment.is_empty(),
+        "the load did not read it"
+    );
+}
+
+/// The directories a watcher must watch: the root, a spec root outside
+/// it, and the directory of a module outside both.
+#[test]
+fn watch_roots_cover_every_input() {
+    let outside = TempDir::new().unwrap();
+    let module_dir = fs::canonicalize(outside.path()).unwrap().join("mods");
+    fs::create_dir_all(&module_dir).unwrap();
+    let module = module_dir.join("ext.wasm");
+    let dir = project(
+        json!({
+            "name": "c",
+            "version": "0.1.0",
+            "spec_root": "spec",
+            "extensions": [format!("@acme/far={}", module.display())]
+        }),
+        &[("spec/a.spec", "")],
+    );
+    let session = loading(dir.root());
+    let root = fs::canonicalize(dir.root()).unwrap();
+    assert_eq!(
+        session.inputs().watch_roots(),
+        vec![
+            WatchRoot {
+                dir: root,
+                recursive: true
+            },
+            WatchRoot {
+                dir: module_dir,
+                recursive: true
+            },
+        ]
+    );
+}
+
+#[test]
+fn an_entry_the_load_does_not_read_is_no_input() {
+    let dir = project(
+        json!({"name": "c", "version": "0.1.0", "extensions": ["@acme/unlocked"]}),
+        &[("a.spec", "")],
+    );
+    let session = loading(dir.root());
+    let root = dir.root();
+    let unlocked = root.join(".specforge/extensions/@acme/unlocked/extension.wasm");
+    assert!(
+        !session
+            .inputs()
+            .watched()
+            .contains(&Watched::File(unlocked)),
+        "{:?}",
+        session.inputs().watched()
+    );
+    // The lock is the input that changes it.
+    fs::write(
+        root.join("specforge.lock"),
+        r#"{"lockfile_version":1,"entries":[]}"#,
+    )
+    .unwrap();
+    let changes = session.changes([root.join("specforge.lock").as_path()]);
+    assert_eq!(changes.environment, vec![root.join("specforge.lock")]);
+}
+
+#[test]
+fn a_session_without_a_runtime_records_the_config_and_the_lock_only() {
+    let dir = project(
+        json!({"name": "c", "version": "0.1.0", "extensions": ["@acme/x=tools/ext.wasm"]}),
+        &[("a.spec", ""), ("tools/ext.wasm", "module")],
+    );
+    let session = dir.session_bare();
+    let root = dir.root();
+    let files: Vec<_> = session
+        .inputs()
+        .watched()
+        .into_iter()
+        .filter_map(|w| match w {
+            Watched::File(path) => Some(path),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        files,
+        vec![root.join("specforge.json"), root.join("specforge.lock")]
+    );
 }

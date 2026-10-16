@@ -3,8 +3,9 @@
 //! `bring_session_up_to_date`).
 //!
 //! A session is built from its sources (the `.spec` files discovery finds
-//! under the spec root), its environment inputs (`specforge.json`,
-//! `specforge.lock` and the extension modules the environment loads) and
+//! under the spec root), its environment inputs (the files the environment
+//! load read: `specforge.json`, `specforge.lock`, the extension modules, and
+//! each hop of a symlink among them, ADR 0114) and
 //! its check inputs (files the checks read but no parse does: the build
 //! cache check-phase passes read, the files `file_reference` fields and
 //! `file_exists` rules name). [`SessionInputs`] is that set as one value;
@@ -12,8 +13,8 @@
 //! (`ProjectSession::changes`), and watch and the LSP ask them which
 //! directories to watch and what to report. The stamps (what each input
 //! looked like when it was read) are compared with disk by
-//! `ProjectSession::stale` and `changes`, and are taken before the read
-//! they describe, so a write that races the read is seen next time.
+//! `ProjectSession::stale` and `changes`, and are taken in the call that
+//! reads it, before the read, so a write that races the read is seen next time.
 
 mod disk;
 mod inputs;
@@ -27,9 +28,10 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use specforge_common::{ConfigRead, ProjectConfig, ProjectRoot, SourceRoot, read_project_config};
+use specforge_common::{ProjectConfig, ProjectRoot, SourceRoot};
 use specforge_registry::{Disk, PlainDisk};
 
+use crate::Environment;
 use crate::sources::{self, Read};
 
 use disk::RunDisk;
@@ -64,17 +66,22 @@ impl Changes {
 /// How a compile reads the disk (ADR 0106). A project session reads through its
 /// [`Ledger`], which stamps each file in the call that reads it and records it as
 /// an input; a one-shot compile reads through [`Unrecorded`], which only reads.
-/// Both run the same steps in the same order: the config once, the lock and
-/// modules before the extension load, the sources after discovery, the check
+/// Both run the same steps in the same order: the environment load (the config
+/// once, the lock and modules after it), the sources after discovery, the check
 /// inputs before the checks. A step never fails: an unreadable file is in what it
 /// returns (a `ConfigRead` with its problems, `Read::Unreadable`, `Read::Gone`).
 pub(crate) trait Reads {
-    /// `specforge.json` at `root`, read once (`read_project_config`).
-    fn config(&mut self, root: &ProjectRoot) -> ConfigRead;
-    /// Before the extension runtime and the environment read them: the lock and
-    /// the module of every extension `config` enables (a prediction until a
-    /// reader reaches the installed crate, ADR 0030 D3).
-    fn before_load(&mut self, root: &ProjectRoot, config: &ProjectConfig);
+    /// Run `load` (the environment load: `specforge.json` read once, the
+    /// runtime built from it, the lock and the modules) with the disk it reads
+    /// through (ADR 0114): the ledger stamps each read and records it as an
+    /// environment input, each link hop included, and the session's inputs
+    /// become those of the environment `load` returns; `Unrecorded`'s only
+    /// reads (`PlainDisk`).
+    fn environment(
+        &mut self,
+        root: &ProjectRoot,
+        load: impl FnOnce(&dyn Disk) -> Environment,
+    ) -> Environment;
     /// The keys of the sources discovery finds under `sources` now, sorted.
     fn discover(&mut self, sources: &SourceRoot) -> Vec<String>;
     /// Source `key` under `spec_root`: its text, its E025, or gone.
@@ -91,11 +98,13 @@ pub(crate) trait Reads {
 pub(crate) struct Unrecorded;
 
 impl Reads for Unrecorded {
-    fn config(&mut self, root: &ProjectRoot) -> ConfigRead {
-        read_project_config(root.dir())
+    fn environment(
+        &mut self,
+        _root: &ProjectRoot,
+        load: impl FnOnce(&dyn Disk) -> Environment,
+    ) -> Environment {
+        load(&PlainDisk)
     }
-
-    fn before_load(&mut self, _root: &ProjectRoot, _config: &ProjectConfig) {}
 
     fn discover(&mut self, sources: &SourceRoot) -> Vec<String> {
         walked_keys(sources)
@@ -121,19 +130,18 @@ fn walked_keys(sources: &SourceRoot) -> Vec<String> {
 }
 
 impl Reads for Ledger {
-    /// Stamped, then read once. A config rewritten after this is seen next
-    /// time, whatever the rest was read from. Starts the environment record
-    /// again.
-    fn config(&mut self, root: &ProjectRoot) -> ConfigRead {
-        self.stamps.stamp_config(&root.config_file());
-        read_project_config(root.dir())
-    }
-
-    /// Records the inputs of the environment `config` names, and stamps the
-    /// lock and each extension module.
-    fn before_load(&mut self, root: &ProjectRoot, config: &ProjectConfig) {
-        self.inputs = SessionInputs::opened(root.dir(), config);
-        self.stamps.stamp_environment(&self.inputs);
+    /// Each file the load reads is stamped, then read, and is an environment
+    /// input; a file rewritten after its stamp is seen next time. Starts the
+    /// environment record, and the check inputs, again.
+    fn environment(
+        &mut self,
+        root: &ProjectRoot,
+        load: impl FnOnce(&dyn Disk) -> Environment,
+    ) -> Environment {
+        let run = self.environment_run();
+        let environment = load(&RunDisk(&run));
+        run.finish_environment(root.dir(), environment.config());
+        environment
     }
 
     /// Records the keys and each symlink's target, and forgets the stamps of
@@ -234,6 +242,16 @@ impl Ledger {
         }
     }
 
+    /// One run of the environment load's reads: each is stamped and recorded
+    /// as an environment input when the run finishes (ADR 0114).
+    fn environment_run(&mut self) -> Run<'_> {
+        Run {
+            records: true,
+            ledger: self,
+            read: RefCell::new(Vec::new()),
+        }
+    }
+
     /// Stamp source `key`, then run `read` on its file (the read the caller
     /// performs): the one place a source is stamped for the cold read. The
     /// test hook of [`Reads::source`].
@@ -305,6 +323,24 @@ impl Run<'_> {
                 .push((input, path.to_path_buf(), entry));
         }
         read(path)
+    }
+
+    /// The environment inputs are now exactly what this run read, in read
+    /// order, each once, each with its first stamp; the inputs are made anew
+    /// for `config` (nothing else of the record is kept, the check inputs
+    /// included). A listing folds into the files: nothing read is dropped.
+    pub(crate) fn finish_environment(self, root: &Path, config: &ProjectConfig) {
+        let Run { ledger, read, .. } = self;
+        let mut files: Vec<PathBuf> = Vec::new();
+        let mut stamps: BTreeMap<PathBuf, Option<Entry>> = BTreeMap::new();
+        for (_, path, entry) in read.into_inner() {
+            if !files.contains(&path) {
+                files.push(path.clone());
+            }
+            stamps.entry(path).or_insert(entry);
+        }
+        ledger.inputs = SessionInputs::opened(root, config, files);
+        ledger.stamps.set_environment(stamps);
     }
 
     /// The check inputs are now exactly what this run read (ADR 0030 D2: renewed each time the checks run). Their canonical

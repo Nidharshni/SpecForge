@@ -12,7 +12,11 @@ use crate::ledger::{Ledger, Reading, SessionInputs, Watched};
 fn opened() -> (tempfile::TempDir, Ledger) {
     let dir = tempfile::TempDir::new().unwrap();
     let dir_path = std::fs::canonicalize(dir.path()).unwrap();
-    let ledger = Ledger::over(SessionInputs::opened(&dir_path, &ProjectConfig::default()));
+    let ledger = Ledger::over(SessionInputs::opened(
+        &dir_path,
+        &ProjectConfig::default(),
+        Vec::new(),
+    ));
     (dir, ledger)
 }
 

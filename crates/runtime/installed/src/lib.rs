@@ -109,37 +109,6 @@ impl Installed {
         layout::extensions_dir(&self.root)
     }
 
-    /// The module each of `entries` (specforge.json's `extensions`) loads
-    /// from, in entry order: an installed extension's [`Self::module_path`],
-    /// a `.wasm` file entry's file (relative to the root); none for a
-    /// builtin or for a name that is no package name. The paths whose
-    /// change reloads an environment (plan 03).
-    pub fn modules(&self, entries: &[String], builtins: &Builtins) -> Vec<PathBuf> {
-        let resolution = self.resolve(entries, builtins);
-        let path = |resolved: &Resolved| match resolved {
-            Resolved::Builtin { .. }
-            | Resolved::Unloadable {
-                problem: LoadProblem::NotAPackageName { .. },
-                ..
-            } => None,
-            Resolved::Locked { entry, .. } => Some(self.module_path(&entry.name)),
-            Resolved::Unloadable { name, .. } => PackageName::parse(name)
-                .ok()
-                .map(|name| self.module_path(&name)),
-            Resolved::File(file) => Some(file.file.clone()),
-            Resolved::Again { .. } => None,
-        };
-        resolution
-            .entries()
-            .iter()
-            .filter_map(|resolved| match resolved {
-                // The same extension again names the same module.
-                Resolved::Again { first } => path(&resolution.entries()[*first]),
-                other => path(other),
-            })
-            .collect()
-    }
-
     /// The command that reinstalls `name` as its lock entry records it:
     /// `specforge add <path>` for a local install, `specforge add
     /// <name>@<version>` for a registry one (the name alone when the
@@ -189,29 +158,12 @@ mod tests {
     #[test]
     fn one_rule_names_every_installed_path() {
         let installed = Installed::with_lock(Path::new("/p"), LockState::Absent);
-        let builtins = Builtins(&[("@specforge/product", b"\0asm")]);
         let tool = PackageName::parse("@acme/tool").unwrap();
 
         assert_eq!(installed.lock_path(), Path::new("/p/specforge.lock"));
         assert_eq!(
             installed.module_path(&tool),
             Path::new("/p/.specforge/extensions/@acme/tool/extension.wasm")
-        );
-        let entries: Vec<String> = [
-            "@specforge/product",
-            "@acme/tool",
-            "tools/greet.wasm",
-            "../../outside",
-        ]
-        .map(String::from)
-        .to_vec();
-        assert_eq!(
-            installed.modules(&entries, &builtins),
-            [
-                PathBuf::from("/p/.specforge/extensions/@acme/tool/extension.wasm"),
-                PathBuf::from("/p/tools/greet.wasm"),
-            ],
-            "a builtin has no module and a name that is no package has none either"
         );
     }
 

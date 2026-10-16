@@ -2338,7 +2338,7 @@ fn source_writing(
 
 #[specforge_test(
     behavior = "bring_session_up_to_date",
-    verify = "a specforge.json or module written while the extension runtime loads is seen next time"
+    verify = "a specforge.json written while the extension runtime loads is seen next time"
 )]
 fn a_config_written_while_the_runtime_loads_is_seen_next_time() {
     let dir = project(V1, &[("a.spec", "")]);
@@ -2374,9 +2374,9 @@ fn a_config_written_while_the_runtime_loads_is_seen_next_time() {
 
 #[specforge_test(
     behavior = "bring_session_up_to_date",
-    verify = "a specforge.json or module written while the extension runtime loads is seen next time"
+    verify = "a module written before the extension load reads it is what the session read"
 )]
-fn a_module_rewritten_while_the_runtime_loads_is_seen_next_time() {
+fn a_module_written_before_the_load_reads_it_is_what_was_read() {
     let dir = project(
         r#"{"name":"s","version":"0.1.0","extensions":["@acme/local=ext/local.wasm"]}"#,
         &[("a.spec", ""), ("ext/local.wasm", "version one")],
@@ -2385,13 +2385,12 @@ fn a_module_rewritten_while_the_runtime_loads_is_seen_next_time() {
     let (source, _) =
         source_writing(|root| fs::write(root.join("ext/local.wasm"), "version two!").unwrap());
 
-    let mut session =
+    let session =
         ProjectSession::open_from(&specforge_common::ProjectRoot::of(root).unwrap(), source);
 
-    assert!(!session.stale().environment.is_empty());
-    let update = session.ensure_fresh().expect("the module changed");
-    assert_eq!(update.kind, UpdateKind::Environment);
     assert!(session.stale().environment.is_empty());
+    let enabled = session.project().environment().enabled();
+    assert!(enabled[0].failure.is_some());
 }
 
 #[test]
