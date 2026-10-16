@@ -572,6 +572,7 @@ behavior provide_mcp_collect_tool "Provide MCP Collect Tool" {
   verify unit "specforge.collect parses test results and maps to entities"
   verify unit "the collect document names the report from the project root"
   verify unit "specforge.collect refuses to run an unapproved command"
+  verify unit "specforge.collect runs a command the user approved, its output discarded"
   verify unit "specforge.collect refuses an unapproved command with the operation's own message"
   verify unit "specforge.collect of a directory that holds no project refuses with no_project"
   verify unit "a project without a collector returns an E058 error"

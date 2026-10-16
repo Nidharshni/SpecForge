@@ -5,6 +5,7 @@
 
 mod asking;
 mod call_target;
+mod collect_machine;
 mod conformance;
 mod contracts;
 mod event_spec;
