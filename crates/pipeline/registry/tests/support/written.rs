@@ -1,6 +1,6 @@
 //! The checks over what a project writes, reached as production reaches them: each `(path, text)`
 //! parsed, the graph built with the registry build's own graph inputs
-//! (`RegistryBuild::graph_inputs`, as `Environment::graph_config` does), the entity snapshot taken
+//! (`RegistryBuild::graph_of`, as `Environment::graph_of` does), the entity snapshot taken
 //! with that build at the spec root `/spec`, and `RegistryBuild::check` run over it (ADR 0031 D1,
 //! ADR 0115).
 
@@ -9,7 +9,7 @@ use std::path::Path;
 
 use specforge_common::Diagnostic;
 use specforge_extension_sdk::prelude::*;
-use specforge_graph::{GraphBuild, GraphConfig};
+use specforge_graph::GraphBuild;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::rules::NoVerdicts;
 use specforge_registry::{Disk, EntitySnapshot, RegistryBuild};
@@ -63,11 +63,7 @@ fn graph_of(build: &RegistryBuild, files: &[(&str, &str)]) -> GraphBuild {
         assert!(file.errors.is_empty(), "{path}: {:?}", file.errors);
         file
     });
-    let config = GraphConfig {
-        known_provider_schemes: HashSet::new(),
-        inputs: build.graph_inputs().clone(),
-    };
-    GraphBuild::of(parsed, config)
+    build.graph_of(parsed, HashSet::new())
 }
 
 /// What the graph build reports on `files` (E003, I004, E022, ...), the linker's own: the

@@ -7,7 +7,8 @@ use std::sync::Arc;
 
 /// What the graph build reads of the loaded extensions. Only the registry
 /// build derives it (`specforge_registry::RegistryBuild::graph_inputs`),
-/// from the declarations and the field registry; no caller assembles one.
+/// from the declarations and the field registry; no caller assembles one: a
+/// graph read with a Registry build is made by `RegistryBuild::graph_of`.
 /// The default is a project with no extension loaded.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct GraphInputs {
@@ -212,6 +213,12 @@ impl GraphBuild {
     /// The graph-build diagnostics whose span is in `path`, in build order.
     pub fn file_diagnostics(&self, path: &str) -> &[Diagnostic] {
         self.by_file.get(path).map(Vec::as_slice).unwrap_or(&[])
+    }
+
+    /// The graph inputs it is built with: the Registry build's that made it
+    /// (`RegistryBuild::graph_of`).
+    pub fn inputs(&self) -> &GraphInputs {
+        &self.config.inputs
     }
 
     /// Every file the build holds, by path, in path order.

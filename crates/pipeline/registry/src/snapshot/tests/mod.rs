@@ -4,9 +4,10 @@ mod standing;
 mod text;
 mod validator;
 
+use std::collections::HashSet;
 use std::path::Path;
 
-use specforge_graph::{Graph, GraphBuild, GraphConfig};
+use specforge_graph::Graph;
 use specforge_protocol_types::{
     EntityKindDescriptor, ExtensionDeclaration, FieldDescriptor, ValidationRuleDescriptor,
     ValidationSeverity,
@@ -20,11 +21,11 @@ use crate::snapshot::EntitySnapshot;
 /// `source` built with the graph inputs of `registries`: how the session pairs them, so a value
 /// is stored as the build coerced it (ADR 0115).
 fn graph_of(source: &str, registries: &RegistryBuild) -> Graph {
-    let config = GraphConfig {
-        inputs: registries.graph_inputs().clone(),
-        ..GraphConfig::default()
-    };
-    GraphBuild::of([specforge_parser::parse(source, "test.spec")], config)
+    registries
+        .graph_of(
+            [specforge_parser::parse(source, "test.spec")],
+            HashSet::new(),
+        )
         .into_parts()
         .0
 }

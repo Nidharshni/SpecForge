@@ -8,8 +8,10 @@
 //! registers the surfaces. Callers read [`RegistryBuild`].
 //! It is pure: no I/O, no runtime.
 
+use std::collections::HashSet;
+
 use specforge_common::Diagnostic;
-use specforge_graph::{FieldForms, GraphInputs};
+use specforge_graph::{FieldForms, GraphBuild, GraphConfig, GraphInputs, SpecFile};
 use specforge_protocol_types::{CompilerPassDescriptor, ExtensionDeclaration};
 
 use super::candidates::CandidateVocabulary;
@@ -197,6 +199,25 @@ impl RegistryBuild {
     /// (ADR 0032, amended).
     pub fn graph_inputs(&self) -> &GraphInputs {
         &self.graph_inputs
+    }
+
+    /// The graph build of `files` in this build (ADR 0123): its own graph inputs, and `schemes`,
+    /// the provider schemes a `ref`'s scheme is checked against (empty: no I005). Files are taken
+    /// in path order; a later file with an earlier one's path replaces it; no files is the empty
+    /// build a session's updates fill. The one way to make a graph this build's entity snapshot
+    /// reads.
+    pub fn graph_of(
+        &self,
+        files: impl IntoIterator<Item = SpecFile>,
+        schemes: HashSet<String>,
+    ) -> GraphBuild {
+        GraphBuild::of(
+            files,
+            GraphConfig {
+                known_provider_schemes: schemes,
+                inputs: self.graph_inputs.clone(),
+            },
+        )
     }
 
     /// The graph inputs of these declarations and the vocabulary held now.

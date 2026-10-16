@@ -346,11 +346,11 @@ mod tests {
 
     /// `source` built with the graph inputs of `registries`, as the session builds it.
     fn graph_of(source: &str, registries: &RegistryBuild) -> Graph {
-        let config = specforge_graph::GraphConfig {
-            inputs: registries.graph_inputs().clone(),
-            ..Default::default()
-        };
-        specforge_graph::GraphBuild::of([specforge_parser::parse(source, "test.spec")], config)
+        registries
+            .graph_of(
+                [specforge_parser::parse(source, "test.spec")],
+                std::collections::HashSet::new(),
+            )
             .into_parts()
             .0
     }

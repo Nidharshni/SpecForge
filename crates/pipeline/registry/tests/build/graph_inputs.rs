@@ -1,12 +1,14 @@
 //! What the registry build derives for the graph build: `graph_inputs()`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use specforge_extension_sdk::prelude::*;
 use specforge_graph::{DerivedFrom, FieldForm, FieldForms, GraphInputs, Reading, Target};
+use specforge_parser::FieldValue;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_test_macros::test as spec;
 
+use crate::support::written::tickets;
 use crate::support::{build, declare};
 
 /// A kind `thing` with one field per type.
@@ -253,7 +255,7 @@ fn inverse_fields_are_fields_of_the_target_kind() {
 
 #[spec(
     behavior = "registry_build_graph_inputs",
-    verify = "Registry Build Derives the Graph Inputs: graph inputs hold — registries_populated, every_input_derived, registries_agree, deterministic"
+    verify = "Registry Build Derives the Graph Inputs: graph inputs hold — registries_populated, every_input_derived, registries_agree, deterministic, graph_built_in_the_build"
 )]
 fn the_graph_inputs_contract_holds() {
     let declared = || {
@@ -382,4 +384,56 @@ fn the_graph_inputs_name_each_absent_target_kinds_owner() {
     // `team` is owned by no one; `behavior` is loaded.
     assert!(!inputs.target_owners.contains_key("team"));
     assert!(!inputs.target_owners.contains_key("behavior"));
+}
+
+#[spec(
+    behavior = "registry_build_graph_inputs",
+    verify = "a graph built in the registry build reads its own graph inputs and the provider schemes it is handed"
+)]
+fn a_graph_built_in_the_registry_build_reads_its_inputs_and_schemes() {
+    let build = build([tickets()]);
+    let source = "ticket a \"A\" {\n  blocker b\n  urgent \"false\"\n}\nticket b \"B\" {\n}\nref jira.issue:7 \"Seven\"\n";
+    let graph = build.graph_of(
+        [specforge_parser::parse(source, "main.spec")],
+        HashSet::from(["gh".to_string()]),
+    );
+
+    assert_eq!(graph.inputs(), build.graph_inputs());
+    let edges = graph.graph().edges_from("a");
+    assert_eq!(edges.len(), 1, "{edges:?}");
+    assert_eq!(
+        (edges[0].target.as_str(), edges[0].label.as_str()),
+        ("b", "blocker")
+    );
+    assert_eq!(
+        graph.graph().node("a").unwrap().fields.get("urgent"),
+        Some(&FieldValue::Boolean(false))
+    );
+    let unknown: Vec<_> = graph
+        .diagnostics()
+        .iter()
+        .filter(|d| d.code == "I005")
+        .collect();
+    assert_eq!(unknown.len(), 1, "{unknown:?}");
+    assert!(unknown[0].message.contains("jira"), "{unknown:?}");
+
+    // A handed build's graph carries the handed inputs.
+    let product = declare("@t/product", |c| {
+        c.kind("Feature", |k| {
+            k.keyword("feature");
+        });
+    });
+    let software = declare("@t/software", |c| {
+        c.kind("Behavior", |k| {
+            k.keyword("behavior");
+            k.field("features", |f| {
+                f.field_type(FieldType::ReferenceList)
+                    .target_kind("feature");
+            });
+        });
+    });
+    let handed =
+        crate::support::build([software]).with_candidates(crate::support::candidates(&[product]));
+    let empty = handed.graph_of([], HashSet::new());
+    assert_eq!(empty.inputs().target_owners["feature"], "@t/product");
 }
