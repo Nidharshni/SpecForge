@@ -515,11 +515,6 @@ fn structural_only_notice(
             "specforge.json could not be read — operating in structural-only mode".to_string(),
             format!("fix specforge.json ({} above)", codes::E069),
         )
-    } else if !found && root.as_os_str().is_empty() {
-        (
-            "no project — operating in structural-only mode".to_string(),
-            "create a project with: specforge init".to_string(),
-        )
     } else if !found {
         // A loose root: no specforge.json at or above the path.
         (
