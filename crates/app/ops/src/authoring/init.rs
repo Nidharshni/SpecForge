@@ -242,7 +242,9 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
             write: Box::new(move |file| {
                 file.create_parent()
                     .map_err(|e| write_error("the project directory", e))?;
-                crate::config::write(file, &config)
+                let bytes = crate::config::render(&config)?;
+                file.replace(bytes)
+                    .map_err(|e| crate::config::write_failed(file, &e))
             }),
         },
         Also {

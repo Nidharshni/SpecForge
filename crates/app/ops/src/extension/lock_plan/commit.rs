@@ -50,12 +50,35 @@ impl Done {
     }
 }
 
-/// `result`, a missing `specforge.json` being nothing to edit: a project without one (an install
-/// only the lock knows) has no entry to drop.
-fn edited(result: Result<bool, OpError>) -> Result<(), OpError> {
-    match result {
-        Err(error) if error.code == "config_not_found" => Ok(()),
-        other => other.map(|_| ()),
+/// `specforge.json` as the plan leaves it: the names enabled and the entries dropped, applied to the
+/// array in memory, one read and one render (`None` when the file would be as it is). A missing
+/// `specforge.json` is nothing to edit for a plan that only drops entries: a project without one (an
+/// install only the lock knows) has no entry to drop. `enabled` is what enabling changed.
+fn config_edit(
+    root: &Path,
+    names: &[&str],
+    disabled: &[Disabled],
+    enabling: bool,
+    enabled: &mut Option<crate::config::Enabled>,
+) -> Result<Option<Vec<u8>>, OpError> {
+    let edit = crate::config::edit_extensions(root, |extensions| {
+        let mut changed = false;
+        if enabling {
+            let now = crate::config::enable(extensions, names);
+            changed |= !now.appended.is_empty();
+            *enabled = Some(now);
+        }
+        for dropped in disabled {
+            changed |= match dropped {
+                Disabled::Named(name) => crate::config::remove_extension(extensions, name),
+                Disabled::Entry(entry) => crate::config::remove_entry(extensions, entry),
+            };
+        }
+        changed
+    });
+    match edit {
+        Err(error) if error.code == "config_not_found" && !enabling => Ok(None),
+        other => other,
     }
 }
 
@@ -143,19 +166,17 @@ impl Checked<'_> {
         let mut enabled = None;
         let mut writes = Writes::none();
         if purpose == Purpose::Commit {
+            let enabling = edits_config && !names.is_empty();
+            let config_after = if enabling || !disabled.is_empty() {
+                config_edit(root, &names, &disabled, enabling, &mut enabled)?
+            } else {
+                None
+            };
             let last = || -> Result<(), OpError> {
-                if edits_config && !names.is_empty() {
-                    enabled = Some(crate::config::enable(root, config_file()?, &names)?);
-                }
-                for dropped in &disabled {
-                    edited(match dropped {
-                        Disabled::Named(name) => {
-                            crate::config::remove_extension(root, config_file()?, name)
-                        }
-                        Disabled::Entry(entry) => {
-                            crate::config::remove_entry(root, config_file()?, entry)
-                        }
-                    })?;
+                if let Some(bytes) = &config_after {
+                    let file = config_file()?;
+                    file.replace(bytes)
+                        .map_err(|e| crate::config::write_failed(file, &e))?;
                 }
                 for (file, held) in also.into_iter().zip(&also_held) {
                     (file.write)(held)?;
