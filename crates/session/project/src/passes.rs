@@ -3,7 +3,8 @@
 //! which order its passes run, is the registry build's
 //! (`specforge_registry::RegistryBuild::passes`). Check-phase passes run with
 //! every compile ([`crate::check_passes`]); the others under
-//! `specforge analyze` (`specforge_ops::analysis::analyze`). Findings are standard host
+//! `specforge analyze` (`specforge_ops::analysis::analyze`). Both phases run
+//! their passes through [`run_extension_passes`]. Findings are standard host
 //! diagnostics.
 
 use specforge_common::{Diagnostic, codes};
@@ -137,12 +138,12 @@ fn code_misuse(extension: &str, pass: &str, output: &PassOutput) -> Vec<Diagnost
     diagnostics
 }
 
-/// Run `passes` (analyze-phase passes, in the order given: the registry
-/// build's; check-phase passes run with every compile instead) through the
-/// wasm runtime: each `__pass_<name>` export receives the entity snapshot
-/// and returns host diagnostics. A pass that fails (it traps, or answers
-/// what does not parse) has a report of its own with one E028 finding, so
-/// the analysis fails.
+/// Run `passes`, in the order given (the caller picks the phase:
+/// `check_passes` for a compile, `analyze_passes` for analyze), each on
+/// `context`'s input, encoded once: one report per pass. A pass that fails
+/// (it traps, answers what does not parse, or its input did not encode) has
+/// a report of its own with one E028 finding and `failed` in its summary;
+/// the others still run.
 pub fn run_extension_passes<'p>(
     passes: impl IntoIterator<Item = &'p specforge_registry::DeclaredPass>,
     context: &PassContext,
@@ -160,11 +161,6 @@ pub fn run_extension_passes<'p>(
 
     let mut reports = Vec::new();
     for declared in passes {
-        debug_assert!(
-            !declared.is_check_phase(),
-            "{} is a check-phase pass",
-            declared.full_name()
-        );
         let report_name = declared.full_name();
         let pass = &declared.pass;
         let mut summary = serde_json::Map::new();

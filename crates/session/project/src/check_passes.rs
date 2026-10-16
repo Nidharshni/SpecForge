@@ -1,12 +1,14 @@
 //! Check-phase extension passes: compiler passes an extension declares with
 //! `phase: "check"` run with every compile, after the graph checks, and
 //! what they report is the compile's (behavior `run_check_phase_passes`).
+//! They run through the one pass loop
+//! ([`crate::passes::run_extension_passes`]); a pass's summary is not read.
 
-use crate::passes::{PassContext, pass_findings, pass_input};
+use crate::passes::{PassContext, run_extension_passes};
 use specforge_common::Diagnostic;
 use specforge_registry::Disk;
 use specforge_registry::EntitySnapshot;
-use specforge_wasm::{ExtensionCalls, WasmRuntime};
+use specforge_wasm::WasmRuntime;
 
 use crate::Environment;
 use crate::build_cache::BuildCache;
@@ -34,24 +36,14 @@ pub(crate) fn run(
             None
         }
     };
-    let input = pass_input(&PassContext {
+    let context = PassContext {
         previous: previous.as_ref(),
         ..PassContext::of(entities)
-    });
-    let encoded = ExtensionCalls::encode(&input);
-    let calls = ExtensionCalls::new(runtime);
-    for declared in env.registries().check_passes() {
-        let pass = &declared.pass;
-        let answer = calls.run_pass(&declared.extension, &pass.name, &encoded);
-        match answer {
-            Ok(output) => diagnostics.extend(pass_findings(
-                &declared.extension,
-                &pass.name,
-                output,
-                entities,
-            )),
-            Err(error) => diagnostics.push(error.diagnostic()),
-        }
-    }
+    };
+    diagnostics.extend(
+        run_extension_passes(env.registries().check_passes(), &context, runtime)
+            .into_iter()
+            .flat_map(|report| report.findings),
+    );
     diagnostics
 }
