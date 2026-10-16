@@ -276,7 +276,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   installs and builtins, `update` every upgrade, `init` its local files and builtins, `remove` its
   disabled entries and uninstall), staged as the operation leaves them: each package's lock entry
   replaces its previous one, never sits beside it, each new `specforge.json` entry is appended, each
-  dropped one removed (`specforge_ops::extension::lock_plan::LockPlan`, ADR 0041, ADR 0065). An
+  dropped one removed; the change writes exactly those entries into the `specforge.json` it read, other keys
+  kept, and refuses (`file_changed`) when the file no longer holds what the plan opened with (ADR 0126)
+  (`specforge_ops::extension::lock_plan::LockPlan`, ADR 0041, ADR 0065). An
   operation names what it asks for, each an **ask**; refusals and outcomes are answered per ask.
   `add` and `init` first enable the builtins what they add requires, dependencies first;
   `update` enables nothing. The peer rule then judges the **project peer set** as the change leaves it,
