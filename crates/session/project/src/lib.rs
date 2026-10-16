@@ -143,10 +143,12 @@ pub struct Environment {
     /// without one, so no extension loaded ([`Self::empty`] has none; the
     /// bare build of a project assembled in memory has the one it is given).
     runtime: Option<SharedRuntime>,
-    /// The project root it was loaded from ([`Self::from_read`]); `None` for one
-    /// assembled in memory ([`Self::assemble`], [`Self::empty`], the bare
-    /// build of `testing::Assembled`). For a loaded environment, [`Self::root`] is its
-    /// `dir()`.
+    /// Where the environment was loaded: the project root [`Self::from_read`] was given; `None`
+    /// for one assembled in memory ([`Self::assemble`], [`Self::empty`], and so every
+    /// `testing::Assembled` environment, which is rooted at a directory, not a project root, ADR
+    /// 0121). Read to reopen a session and to hand an operation a project root; whether a
+    /// compiled project is on disk is [`CompiledProject::root`]. For a loaded environment,
+    /// [`Self::root`] is its `dir()`.
     root: Option<ProjectRoot>,
 }
 
@@ -300,7 +302,7 @@ impl Environment {
         }
     }
 
-    /// The project root it was loaded from; `None` for one assembled in memory.
+    /// The project root it was loaded at; `None` for one assembled in memory.
     pub fn project_root(&self) -> Option<&ProjectRoot> {
         self.root.as_ref()
     }

@@ -61,6 +61,7 @@ pub struct CompiledProject {
     /// it as what the session reports now, and the next update as what it
     /// reported before (ADR 0074).
     reported: OnceLock<Arc<[Diagnostic]>>,
+    /// The one answer to rooted or detached ([`Self::root`], ADR 0047 D4, ADR 0121).
     /// `false` for a detached project (no project on disk: an editor with
     /// no workspace folder, MCP while nothing is served): it has no root,
     /// and imports are not resolved, with no spec root to resolve them
@@ -116,12 +117,6 @@ impl CompiledProject {
             ),
             ..self.clone()
         }
-    }
-
-    /// The project root it was compiled from, as the environment holds it;
-    /// `None` for a detached project.
-    pub fn project_root(&self) -> Option<&ProjectRoot> {
-        self.on_disk.then(|| self.env.project_root()).flatten()
     }
 
     /// The root it was compiled from; `None` for a detached project.
@@ -217,8 +212,8 @@ impl CompiledProject {
 
     /// The project of an environment whose sources are not read yet: no
     /// source, an empty graph, and it reports what its environment reports.
-    /// Rooted where the environment was loaded (none for one assembled in
-    /// memory).
+    /// Rooted where the environment was loaded from disk (an environment
+    /// assembled in memory makes a detached one).
     pub fn unread(env: Arc<Environment>) -> Self {
         let graph = GraphBuild::new(env.graph_config());
         let on_disk = env.project_root().is_some();

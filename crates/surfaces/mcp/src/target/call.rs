@@ -171,9 +171,10 @@ impl<'s> Call<'s> {
                 // unreachable, and a server answers rather than panics).
                 let view = ProjectView::of(session.project())
                     .also_reporting(self.state.surfaces().diagnostics());
-                let (Some(root), Some(runtime)) =
-                    (session.project().project_root(), view.runtime())
-                else {
+                let (Some(root), Some(runtime)) = (
+                    session.project().environment().project_root(),
+                    view.runtime(),
+                ) else {
                     return Err(unreachable_no_project());
                 };
                 Ok(ProjectRef {
@@ -189,9 +190,10 @@ impl<'s> Call<'s> {
                 // `McpState::open` opens every project from disk, with a
                 // runtime (see above).
                 let view = ProjectView::of(session.project());
-                let (Some(root), Some(runtime)) =
-                    (session.project().project_root(), view.runtime())
-                else {
+                let (Some(root), Some(runtime)) = (
+                    session.project().environment().project_root(),
+                    view.runtime(),
+                ) else {
                     return Err(unreachable_no_project());
                 };
                 Ok(ProjectRef {
