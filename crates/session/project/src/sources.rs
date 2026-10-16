@@ -17,7 +17,7 @@ use specforge_common::{Diagnostic, codes};
 use specforge_graph::{FileChange, GraphBuild};
 use specforge_parser::{Previous, SpecFile, parse_incremental};
 
-use crate::inputs::source_key;
+use crate::ledger::source_key;
 
 /// What reading one source gave.
 pub(crate) enum Read {

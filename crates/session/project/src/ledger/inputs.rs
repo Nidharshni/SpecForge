@@ -1,59 +1,15 @@
-//! What a project session depends on, and what a changed path reaches of it
-//! (behavior `classify_project_changes`, ADR 0030, ADR 0073).
-//!
-//! A session is built from its sources (the `.spec` files discovery finds
-//! under the spec root), its environment inputs (`specforge.json`,
-//! `specforge.lock` and the extension modules the environment loads) and
-//! its check inputs (files the checks read but no parse does: the build
-//! cache check-phase passes read, the files `file_reference` fields and
-//! `file_exists` rules name). [`SessionInputs`] is that set as one value;
-//! the session asks its inputs what a changed path reaches
-//! (`ProjectSession::changes`), and watch and the LSP ask them which
-//! directories to watch and what to report.
+//! [`SessionInputs`]: what a project session depends on, as one value
+//! (behavior `classify_project_changes`, ADR 0030).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use specforge_common::{PROJECT_FILE, ProjectConfig, SourceRoot};
-
-use crate::build_cache::BUILD_CACHE_FILE;
-use crate::{Environment, builtins};
+use specforge_common::{ProjectConfig, SourceRoot};
 use specforge_installed::Installed;
 
-/// What a batch of changed paths, or the disk since the last read, means to
-/// a session: the input to [`crate::ProjectSession::apply`]. Produced only
-/// by [`crate::ProjectSession::changes`] and [`crate::ProjectSession::stale`].
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct Changes {
-    /// Changed sources, by key relative to the spec root: sorted, deduplicated.
-    pub sources: Vec<String>,
-    /// The environment must load again. Each path of the batch that reached
-    /// an environment input which changed, as the batch spelled it (for
-    /// `stale`, each changed input as the session recorded it): sorted,
-    /// deduplicated.
-    pub environment: Vec<PathBuf>,
-    /// The checks must run again: the paths that reached a changed check
-    /// input, named the same way.
-    pub check_inputs: Vec<PathBuf>,
-}
-
-impl Changes {
-    /// Nothing the session is built from changed.
-    pub fn is_empty(&self) -> bool {
-        self.sources.is_empty() && self.environment.is_empty() && self.check_inputs.is_empty()
-    }
-}
-
-/// What kind of change an [`crate::Update`] applied.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum UpdateKind {
-    /// Sources were re-parsed (and every check ran again).
-    Sources,
-    /// Only the checks ran again: a check input changed.
-    Checks,
-    /// The environment loaded again and the project was rebuilt from disk.
-    Environment,
-}
+use super::key::canonical;
+use crate::build_cache::BUILD_CACHE_FILE;
+use crate::builtins;
 
 /// Everything a project session depends on besides its sources' text:
 /// where its sources are discovered (the spec root and `exclude`), the
@@ -87,48 +43,48 @@ enum Place {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct OnDisk {
-    root: PathBuf,
-    sources: SourceRoot,
-    config: PathBuf,
-    lock: PathBuf,
+pub(super) struct OnDisk {
+    pub(super) root: PathBuf,
+    pub(super) sources: SourceRoot,
+    pub(super) config: PathBuf,
+    pub(super) lock: PathBuf,
     /// The module of every enabled extension that is not built in:
     /// `.specforge/extensions/<name>/extension.wasm` for an installed one,
     /// the resolved path of a local `.wasm` entry.
-    modules: Vec<PathBuf>,
+    pub(super) modules: Vec<PathBuf>,
     /// `<root>/specforge-cache.json` when the environment has check-phase
     /// passes (they read it on every compile, ADR 0009).
-    build_cache: Option<PathBuf>,
+    pub(super) build_cache: Option<PathBuf>,
     /// The files the checks read, as they read them (OS resolution of `..`).
-    named: Vec<PathBuf>,
+    pub(super) named: Vec<PathBuf>,
     /// The directories of `named` that were missing when the checks ran.
-    listings: Vec<PathBuf>,
+    pub(super) listings: Vec<PathBuf>,
     /// The symlinked sources, by key (sorted): where each one's text lies.
-    links: Vec<Link>,
+    pub(super) links: Vec<Link>,
     /// Directories on the way to an input's missing directory outside the
     /// root, from their nearest existing ancestor.
-    pending: Vec<Pending>,
-    canonical: Canonical,
+    pub(super) pending: Vec<Pending>,
+    pub(super) canonical: Canonical,
 }
 
 /// A source that is a symlink to a file: keyed by its own name, read through
 /// the link.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Link {
-    key: String,
+pub(super) struct Link {
+    pub(super) key: String,
     /// Where the text lies (canonical).
-    target: PathBuf,
+    pub(super) target: PathBuf,
 }
 
 /// An input whose directory does not exist yet, outside the root: what
 /// creating the next directory on the way to it is.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Pending {
+pub(super) struct Pending {
     /// The nearest existing ancestor of the missing directory (canonical).
-    ancestor: PathBuf,
+    pub(super) ancestor: PathBuf,
     /// The missing directory (canonical, as far as it can be).
-    toward: PathBuf,
-    kind: Kind,
+    pub(super) toward: PathBuf,
+    pub(super) kind: Kind,
 }
 
 /// Environment or check input.
@@ -138,27 +94,10 @@ pub(crate) enum Kind {
     Check,
 }
 
-/// What a batch of changed paths reaches of what a session read
-/// ([`SessionInputs::reach`]).
-#[derive(Debug, Default)]
-pub(crate) struct Reach {
-    /// Keys relative to the spec root whose sources (read, or found now) are
-    /// compared; "" is every source. Sorted; none lies under another.
-    pub(crate) regions: Vec<String>,
-    /// Each batch path that reached a recorded input, with the inputs it
-    /// reached, as recorded.
-    pub(crate) inputs: Vec<(PathBuf, Vec<(Kind, PathBuf)>)>,
-    /// Each batch path that is a directory created on the way to a missing
-    /// input's directory.
-    pub(crate) pending: Vec<(PathBuf, Kind)>,
-    /// Symlinked sources a path reached through their target, by key.
-    pub(crate) linked: std::collections::BTreeSet<String>,
-}
-
 impl OnDisk {
     /// The link `path` (a source under the spec root) is: it is a symlink
     /// that resolves to a file.
-    fn link_at(&self, path: &Path) -> Option<Link> {
+    pub(super) fn link_at(&self, path: &Path) -> Option<Link> {
         if !std::fs::symlink_metadata(path)
             .ok()?
             .file_type()
@@ -192,13 +131,13 @@ impl OnDisk {
 /// The canonical forms a changed path is compared with, taken when the
 /// value is made.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Canonical {
-    root: PathBuf,
-    spec_root: PathBuf,
+pub(super) struct Canonical {
+    pub(super) root: PathBuf,
+    pub(super) spec_root: PathBuf,
     /// Canonical form to the path as recorded.
-    environment: BTreeMap<PathBuf, PathBuf>,
-    checks: BTreeMap<PathBuf, PathBuf>,
-    listings: BTreeMap<PathBuf, PathBuf>,
+    pub(super) environment: BTreeMap<PathBuf, PathBuf>,
+    pub(super) checks: BTreeMap<PathBuf, PathBuf>,
+    pub(super) listings: BTreeMap<PathBuf, PathBuf>,
 }
 
 /// A directory a file watcher watches.
@@ -349,7 +288,7 @@ impl SessionInputs {
             .collect()
     }
 
-    fn disk(&self) -> Option<&OnDisk> {
+    pub(super) fn disk(&self) -> Option<&OnDisk> {
         match &self.place {
             Place::Detached => None,
             Place::Disk(disk) => Some(disk),
@@ -480,93 +419,6 @@ impl SessionInputs {
         }
     }
 
-    /// What `paths` (absolute, spelled as a watcher or an editor reports
-    /// them) reach of what the session read: the sources at or under each
-    /// (a region), and the environment and check inputs each is or lies
-    /// above. Detached: nothing.
-    pub(crate) fn reach<'p>(&self, paths: impl IntoIterator<Item = &'p Path>) -> Reach {
-        let Some(disk) = self.disk() else {
-            return Reach::default();
-        };
-        let known = &disk.canonical;
-        let mut parents: BTreeMap<PathBuf, PathBuf> = BTreeMap::new();
-        let mut regions: Vec<String> = Vec::new();
-        let mut reach = Reach::default();
-        for path in paths {
-            let canonical_path = canonical(path);
-            let in_dir = match (path.parent(), path.file_name()) {
-                (Some(parent), Some(name)) if !parent.as_os_str().is_empty() => parents
-                    .entry(parent.to_path_buf())
-                    .or_insert_with(|| canonical(parent))
-                    .join(name),
-                _ => path.to_path_buf(),
-            };
-            if known.spec_root.starts_with(&canonical_path) {
-                regions.push(String::new());
-            } else if let Ok(relative) = in_dir.strip_prefix(&known.spec_root) {
-                // A nested project's `specforge.json` (below the spec root,
-                // not an input of this project) is every source under its
-                // directory.
-                let marker = path.file_name() == Some(std::ffi::OsStr::new(PROJECT_FILE))
-                    && !known.environment.contains_key(&in_dir);
-                match relative.parent() {
-                    Some(directory) if marker && !directory.as_os_str().is_empty() => {
-                        regions.push(directory.to_string_lossy().into_owned());
-                    }
-                    _ => regions.push(relative.to_string_lossy().into_owned()),
-                }
-            }
-            let mut reached: Vec<(Kind, PathBuf)> = Vec::new();
-            for (known, recorded) in &known.environment {
-                if known.starts_with(&canonical_path) {
-                    reached.push((Kind::Environment, recorded.clone()));
-                }
-            }
-            for (known, recorded) in &known.checks {
-                if known.starts_with(&canonical_path) {
-                    reached.push((Kind::Check, recorded.clone()));
-                }
-            }
-            for (known, recorded) in &known.listings {
-                if known.starts_with(&canonical_path)
-                    || canonical_path.parent() == Some(known.as_path())
-                {
-                    reached.push((Kind::Check, recorded.clone()));
-                }
-            }
-            if !reached.is_empty() {
-                reach.inputs.push((path.to_path_buf(), reached));
-            }
-            // A symlinked source whose target is this path, or under it.
-            for link in &disk.links {
-                if link.target.starts_with(&canonical_path) {
-                    reach.linked.insert(link.key.clone());
-                }
-            }
-            // A directory created on the way to an input's missing directory.
-            for pending in &disk.pending {
-                if canonical_path.parent() == Some(pending.ancestor.as_path())
-                    && pending.toward.starts_with(&canonical_path)
-                {
-                    reach.pending.push((path.to_path_buf(), pending.kind));
-                }
-            }
-        }
-        regions.sort();
-        regions.dedup();
-        let mut kept: Vec<String> = Vec::new();
-        for region in regions {
-            if !kept
-                .iter()
-                .any(|outer| outer.is_empty() || Path::new(&region).starts_with(outer))
-            {
-                kept.push(region);
-            }
-        }
-        reach.regions = kept;
-        reach
-    }
-
     /// The sources discovery finds at `key` now (a directory: all under it; a
     /// source file: itself; else none), by key. "" is every source.
     pub(crate) fn discover_at(&self, key: &str) -> Vec<String> {
@@ -624,7 +476,7 @@ impl SessionInputs {
 impl OnDisk {
     /// The missing directories of the inputs outside the root, each with
     /// its nearest existing ancestor. A root that does not exist has none.
-    fn pending_directories(&self) -> Vec<Pending> {
+    pub(super) fn pending_directories(&self) -> Vec<Pending> {
         if !self.canonical.root.is_dir() {
             return Vec::new();
         }
@@ -678,62 +530,3 @@ impl Canonical {
         }
     }
 }
-
-impl Environment {
-    /// A `.spec` path's key: relative to the spec root when the file is
-    /// under it (as `specforge check` names it), else the path itself.
-    /// With no spec root (no project), every key is the path itself.
-    pub fn source_key(&self, path: &Path) -> String {
-        source_key(self.sources.dir(), path)
-    }
-}
-
-/// `path`'s key under `spec_root` (see [`Environment::source_key`]). The
-/// editor and the workspace may spell one directory differently (a
-/// symlinked temp dir), so when the plain forms differ the path is compared
-/// by its directory's canonical form and its own name: a symlinked file is
-/// keyed by its own name, never its target's, and a deleted file is keyed
-/// the same way.
-pub fn source_key(spec_root: &Path, path: &Path) -> String {
-    if spec_root.as_os_str().is_empty() {
-        return path.to_string_lossy().into_owned();
-    }
-    if let Ok(relative) = path.strip_prefix(spec_root) {
-        return relative.to_string_lossy().into_owned();
-    }
-    if let Ok(canonical_root) = std::fs::canonicalize(spec_root)
-        && let Ok(relative) = in_canonical_dir(path).strip_prefix(&canonical_root)
-    {
-        return relative.to_string_lossy().into_owned();
-    }
-    path.to_string_lossy().into_owned()
-}
-
-/// `path` with its directory canonical and its own name kept: a symlink stays
-/// itself. `path` as given when it has no directory or no name.
-fn in_canonical_dir(path: &Path) -> PathBuf {
-    match (path.parent(), path.file_name()) {
-        (Some(parent), Some(name)) if !parent.as_os_str().is_empty() => {
-            canonical(parent).join(name)
-        }
-        _ => path.to_path_buf(),
-    }
-}
-
-/// `path`, canonical when it can be: the path itself when it exists, else
-/// its directory's canonical form joined with its name (a deleted file),
-/// else as given.
-pub(crate) fn canonical(path: &Path) -> PathBuf {
-    if let Ok(canonical) = std::fs::canonicalize(path) {
-        return canonical;
-    }
-    match (path.parent(), path.file_name()) {
-        (Some(parent), Some(name)) if !parent.as_os_str().is_empty() => {
-            canonical(parent).join(name)
-        }
-        _ => path.to_path_buf(),
-    }
-}
-
-#[cfg(test)]
-mod tests;

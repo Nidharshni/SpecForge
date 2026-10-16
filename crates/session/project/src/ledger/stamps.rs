@@ -26,7 +26,9 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use crate::inputs::{Changes, Kind, Reach, SessionInputs};
+use super::Changes;
+use super::inputs::{Kind, SessionInputs};
+use super::reach::Reach;
 
 /// Coarse filesystems record modification times to the second (some to
 /// two); an entry modified this close to when it was stamped is racy.
@@ -98,7 +100,7 @@ fn content_hash(path: &Path) -> u64 {
 
 /// What a session last built from, as it was when read.
 #[derive(Debug, Default, Clone)]
-pub(crate) struct DiskSnapshot {
+pub(crate) struct Stamps {
     /// Every source, by key relative to the spec root.
     sources: BTreeMap<String, Entry>,
     /// Every environment input (absent ones recorded as `None`).
@@ -107,7 +109,7 @@ pub(crate) struct DiskSnapshot {
     checks: BTreeMap<PathBuf, Option<Entry>>,
 }
 
-impl DiskSnapshot {
+impl Stamps {
     /// Stamp `specforge.json`, before its one read: a config rewritten after
     /// this stamp is seen next time, whatever the rest was read from. Starts
     /// the environment record again.

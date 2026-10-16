@@ -9,8 +9,7 @@ use specforge_graph::{Applied, GraphDelta, NodeChange};
 use crate::buffers::{Buffer, Held};
 use crate::compiled::CompiledProject;
 use crate::diagnostics_delta::DiagnosticsDelta;
-use crate::freshness::{DiskSnapshot, Scope};
-use crate::inputs::{Changes, SessionInputs, UpdateKind};
+use crate::ledger::{Changes, Scope, SessionInputs, Stamps};
 use crate::sources::Read;
 use crate::{Environment, SharedRuntime};
 
@@ -57,6 +56,17 @@ pub enum CheckMode {
     /// evaluate garbage, so they are skipped, and only the parse layer is
     /// reported until an update runs them. Otherwise, [`Self::Full`].
     SyntaxOnlyIfParseErrors,
+}
+
+/// What kind of change an [`Update`] applied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpdateKind {
+    /// Sources were re-parsed (and every check ran again).
+    Sources,
+    /// Only the checks ran again: a check input changed.
+    Checks,
+    /// The environment loaded again and the project was rebuilt from disk.
+    Environment,
 }
 
 /// What one update of a session did.
@@ -163,7 +173,7 @@ pub struct ProjectSession {
     inputs: SessionInputs,
     /// What the session last built from, as it was when read: what
     /// [`Self::stale`] compares with disk.
-    snapshot: DiskSnapshot,
+    snapshot: Stamps,
     /// The editor buffers the session holds: each is the truth for its file
     /// until released (ADR 0046).
     held: Held,
@@ -183,7 +193,7 @@ struct OpeningProject {
     /// What the loaded environment depends on.
     inputs: SessionInputs,
     /// Stamped for the environment; the sources are stamped by `finish`.
-    snapshot: DiskSnapshot,
+    snapshot: Stamps,
 }
 
 impl OpeningProject {
@@ -235,7 +245,7 @@ impl ProjectSession {
             project: CompiledProject::detached(),
             source: RuntimeSource::Fixed(None),
             inputs: SessionInputs::detached(),
-            snapshot: DiskSnapshot::default(),
+            snapshot: Stamps::default(),
             held: Held::default(),
             checks_skipped: false,
         }
@@ -263,10 +273,10 @@ impl ProjectSession {
     /// environment loaded (config, extensions, registries; each load getting
     /// its runtime from `source`), no `.spec` file read.
     fn begin_open(root: &ProjectRoot, source: RuntimeSource) -> OpeningProject {
-        // Everything is stamped before anything reads it (crate::freshness):
+        // Everything is stamped before anything reads it (crate::ledger):
         // the config before its one read, the lock and the modules before
         // the runtime and the environment read them, the sources by `finish`.
-        let mut snapshot = DiskSnapshot::default();
+        let mut snapshot = Stamps::default();
         snapshot.stamp_config(&root.config_file());
         let read = read_project_config(root.dir());
         let inputs = SessionInputs::opened(root.dir(), &read.config);
@@ -320,7 +330,7 @@ impl ProjectSession {
     /// it: then it leaves the graph. Then every check runs.
     fn reread(&mut self, keys: &[String]) -> Update {
         let keys = keys.to_vec();
-        // Stamped before they are read again (crate::freshness).
+        // Stamped before they are read again (crate::ledger).
         self.snapshot.stamp_sources(&self.inputs, &keys);
         let moved = self.relink(&keys);
         let reads: Vec<(String, Read)> = keys
@@ -377,7 +387,7 @@ impl ProjectSession {
                 // No project: the buffer was the file's only text.
                 Read::Gone
             } else {
-                // Stamped before it is read (crate::freshness): a saved
+                // Stamped before it is read (crate::ledger): a saved
                 // buffer leaves nothing stale.
                 self.snapshot
                     .stamp_sources(&self.inputs, std::slice::from_ref(&key));
