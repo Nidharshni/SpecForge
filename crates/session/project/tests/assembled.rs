@@ -147,7 +147,6 @@ fn assert_linked_as_a_compile_links_it(project: &Assembled) {
 const SOURCE: &str = "ticket a \"A\" {\n  blocker b\n  urgent \"false\"\n}\nticket b \"B\" {\n}\n";
 
 #[test]
-#[ignore = "flipped by T6"]
 fn an_assembled_source_is_linked_as_a_compile_links_it() {
     let project =
         Assembled::over(specforge_registry::build_registries(vec![tickets()])).source(SOURCE);

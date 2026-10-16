@@ -235,7 +235,7 @@ impl CompiledProject {
     #[cfg(feature = "testing")]
     pub(crate) fn assembled(
         env: Arc<Environment>,
-        graph: Graph,
+        graph: GraphBuild,
         reported: Vec<Diagnostic>,
         sources: SourceCache,
         rooted: bool,
@@ -243,7 +243,7 @@ impl CompiledProject {
         CompiledProject {
             env,
             sources,
-            graph: GraphBuild::holding(graph),
+            graph,
             import_diagnostics: Vec::new(),
             check_diagnostics: Vec::new(),
             recorded: OnceLock::new(),

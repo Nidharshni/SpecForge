@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use specforge_common::{ConfigProblem, ConfigRead, Diagnostic};
-use specforge_graph::Graph;
+use specforge_graph::{Graph, GraphBuild};
 use specforge_installed::{Installed, LockState};
 use specforge_protocol_types::{ExtensionDeclaration, HandshakeResponse};
 use specforge_registry::RegistryBuild;
@@ -56,7 +56,8 @@ impl Parts {
 /// Invariants: `compiled().root() == Some(root())`, `compiled().environment().root() == root()`
 /// and `compiled().environment().project_root() == None`;
 /// `detached().root() == None`; `compiled().diagnostics()` is exactly the `reporting` list (empty by default); its
-/// entity snapshot is taken over its own graph, in its own environment.
+/// entity snapshot is taken over its own graph, in its own environment; a source is built as `check` builds it,
+/// in the environment the project ends with (ADR 0123).
 ///
 /// A parts setter after [`Self::over`], [`Self::over_in`] or [`Self::assembling`] panics: the environment was made
 /// whole. A setter called after [`Self::compiled`] starts a new project (builders take `self`).
@@ -67,7 +68,9 @@ pub struct Assembled {
     /// `None` after `over`, `over_in` and `assembling`.
     parts: Option<Parts>,
     env: Arc<Environment>,
-    graph: Graph,
+    /// A graph the test made ([`Self::graph`], [`Self::graph_mut`]); `None`: the project's graph is built from
+    /// `texts` in its environment when the project is compiled (ADR 0123).
+    made: Option<Graph>,
     reported: Vec<Diagnostic>,
     /// The text each source was read as, by key: what `source` parsed, none for a graph made elsewhere.
     texts: HashMap<String, Arc<str>>,
@@ -134,7 +137,7 @@ impl Assembled {
             root,
             parts: Some(parts),
             env,
-            graph: Graph::new(),
+            made: None,
             reported: Vec::new(),
             texts: HashMap::new(),
             rooted: OnceLock::new(),
@@ -155,7 +158,7 @@ impl Assembled {
             root,
             parts: None,
             env: Arc::new(env),
-            graph: Graph::new(),
+            made: None,
             reported: Vec::new(),
             texts: HashMap::new(),
             rooted: OnceLock::new(),
@@ -247,32 +250,47 @@ impl Assembled {
         self.with_parts(|parts, _| parts.read.problems = problems)
     }
 
-    /// The project's graph, made by the test.
+    /// The project's graph, made by the test: read as if built in the project's environment.
     pub fn graph(mut self, graph: Graph) -> Self {
-        self.graph = graph;
+        self.made = Some(graph);
         self.texts.clear();
         self.changed()
     }
 
     /// The project's graph, to add nodes and edges to: what a test that builds its graph node by node edits. What
-    /// was made from the old graph ([`Self::compiled`], [`Self::detached`]) is made again.
+    /// was made from the old graph ([`Self::compiled`], [`Self::detached`]) is made again. A source is built in the
+    /// environment first and its text dropped.
     pub fn graph_mut(&mut self) -> &mut Graph {
         self.rooted = OnceLock::new();
         self.detached = OnceLock::new();
+        let built = match self.made.take() {
+            Some(graph) => graph,
+            None => self.graph_build().into_parts().0,
+        };
         self.texts.clear();
-        &mut self.graph
+        self.made.insert(built)
     }
 
-    /// The project's graph, built from `text` as the one file `main.spec` (the default graph config).
-    /// The compile read `text` as `main.spec`'s text.
-    pub fn source(self, text: &str) -> Self {
-        let (graph, _) =
-            specforge_graph::build_graph(&[specforge_parser::parse(text, "main.spec")]);
-        let mut project = self.graph(graph);
-        project
-            .texts
-            .insert("main.spec".to_string(), Arc::from(text));
-        project
+    /// The project's graph is `text` as the one file `main.spec`, built in the project's environment as a compile
+    /// builds it ([`Environment::graph_of`]) when the project is compiled, so a setter called after it still
+    /// applies. The compile read `text` as `main.spec`'s text.
+    pub fn source(mut self, text: &str) -> Self {
+        self.made = None;
+        self.texts.clear();
+        self.texts.insert("main.spec".to_string(), Arc::from(text));
+        self.changed()
+    }
+
+    /// The project's graph build: the test's graph held in its environment's empty build, or the texts built there.
+    fn graph_build(&self) -> GraphBuild {
+        match &self.made {
+            Some(graph) => self.env.graph_of([]).holding(graph.clone()),
+            None => self.env.graph_of(
+                self.texts
+                    .iter()
+                    .map(|(key, text)| specforge_parser::parse(text, key)),
+            ),
+        }
     }
 
     /// The project's compile reported `diagnostics`.
@@ -317,7 +335,7 @@ impl Assembled {
         self.rooted.get_or_init(|| {
             CompiledProject::assembled(
                 Arc::clone(&self.env),
-                self.graph.clone(),
+                self.graph_build(),
                 self.reported.clone(),
                 SourceCache::holding(self.texts.clone()),
                 true,
@@ -331,7 +349,7 @@ impl Assembled {
         self.detached.get_or_init(|| {
             CompiledProject::assembled(
                 Arc::clone(&self.env),
-                self.graph.clone(),
+                self.graph_build(),
                 self.reported.clone(),
                 SourceCache::holding(self.texts.clone()),
                 false,

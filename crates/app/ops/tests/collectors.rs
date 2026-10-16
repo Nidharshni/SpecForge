@@ -134,10 +134,6 @@ fn collect_maps_results_to_the_views_entities() {
         "@specforge/testing",
         "@specforge/cargo-test",
     ]));
-    let (graph, _) = specforge_graph::build_graph(&[specforge_parser::parse(
-        "behavior a \"A\" {\n}\n",
-        "main.spec",
-    )]);
     let dir = tempfile::TempDir::new().unwrap();
     // The root holds a project: collect refuses a directory that holds none.
     let config = r#"{"name": "shop"}"#;
@@ -155,7 +151,7 @@ fn collect_maps_results_to_the_views_entities() {
             },
         )
     })
-    .graph(graph);
+    .source("behavior a \"A\" {\n}\n");
     let report = dir.path().join("target/specforge/shop.json");
     std::fs::create_dir_all(report.parent().unwrap()).unwrap();
     std::fs::write(
