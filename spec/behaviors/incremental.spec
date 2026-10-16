@@ -130,6 +130,7 @@ behavior classify_project_changes "Classify Project Changes" {
   verify integration "the LSP's watchers follow an edit that names a new file the checks read"
   verify unit "a directory created, moved or deleted under the spec root changes every source under it"
   verify unit "a symlinked source is keyed by its link and changes when its target does"
+  verify unit "a symlinked source is reached by each hop its read followed"
   verify unit "a path whose file is as the session last read it changes nothing"
   verify unit "a detached session takes no change from disk"
   verify unit "a directory moved above an environment or check input changes that input"

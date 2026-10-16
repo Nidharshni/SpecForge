@@ -653,6 +653,50 @@ fn the_watchers_cover_a_symlinked_sources_target() {
     );
 }
 
+/// A symlinked source behind a chain of links: the client is asked to report
+/// each hop, not only the file the chain ends at.
+#[cfg(unix)]
+#[spec(
+    behavior = "classify_project_changes",
+    verify = "a session's watch roots and the LSP's watchers cover every symlinked source's target"
+)]
+#[ignore = "flipped by T5"]
+fn the_watchers_cover_each_hop_of_a_symlinked_source() {
+    use tower_lsp::lsp_types::GlobPattern;
+
+    let outside = tempfile::TempDir::new().unwrap();
+    let outside_dir = std::fs::canonicalize(outside.path()).unwrap();
+    std::fs::write(outside_dir.join("real.spec"), "").unwrap();
+    std::fs::create_dir_all(outside_dir.join("hops")).unwrap();
+    std::os::unix::fs::symlink(outside_dir.join("real.spec"), outside_dir.join("hops/l1")).unwrap();
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::write(
+        dir.path().join("specforge.json"),
+        r#"{"name":"w","version":"0.1.0"}"#,
+    )
+    .unwrap();
+    std::os::unix::fs::symlink(outside_dir.join("hops/l1"), dir.path().join("link.spec")).unwrap();
+    let session = specforge_project::ProjectSession::open_with_runtime(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        None,
+    );
+
+    let globs: Vec<String> = specforge_lsp::watchers::file_watchers(session.inputs(), false)
+        .into_iter()
+        .map(|w| match w.glob_pattern {
+            GlobPattern::String(glob) => glob,
+            other => panic!("expected an absolute glob, got {other:?}"),
+        })
+        .collect();
+    for covered in ["hops/l1", "real.spec"] {
+        let path = outside_dir.join(covered).display().to_string();
+        assert!(
+            globs.iter().any(|glob| glob_matches(glob, &path)),
+            "{path} is matched by none of {globs:?}"
+        );
+    }
+}
+
 /// A folder moved or deleted sends no event for a `**/*.spec` glob: the
 /// client is asked for every entry created or deleted under the root.
 #[spec(
