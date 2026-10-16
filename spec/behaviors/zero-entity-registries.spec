@@ -176,6 +176,7 @@ behavior suggest_missing_extensions "Suggest Missing Extensions" {
   verify unit "E024 for keyword in index suggests the providing extension"
   verify unit "E024 for keyword not in index suggests specforge search"
   verify unit "keyword-to-extension index is loaded from bundled data file"
+  verify unit "the builtin vocabulary is what the builtins' pinned declarations declare"
   verify contract "Suggest Missing Extensions: missing extension suggestions holds — e024_diagnostic_emitted, suggestion_provided, lazy_loading_enforced"
 }
 
