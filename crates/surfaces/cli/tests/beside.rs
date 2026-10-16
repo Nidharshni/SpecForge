@@ -2,6 +2,7 @@
 //! carries is said once, in the document; a notice no document carries stays on stderr.
 
 use crate::support::{Cli, TestProject};
+use specforge_test_macros::test as specforge_test;
 
 /// A project whose registries are `registries`.
 fn with_registries(registries: serde_json::Value) -> TestProject {
@@ -30,8 +31,10 @@ fn bare(source: &str) -> TestProject {
         .file("spec/main.spec", source)
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "te_stray_test_records",
+    verify = "under --format json a stray test record is the document's alone: nothing on stderr"
+)]
 fn analyze_writes_a_stray_record_only_in_its_document() {
     let p = TestProject::new()
         .raw_config(

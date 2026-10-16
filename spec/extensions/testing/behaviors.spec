@@ -189,17 +189,20 @@ behavior te_stray_test_records "Stray Test Records" {
     is never reassigned to the near match. The operation returns these
     stray test records as data outside the pass reports, so `--strict`
     never promotes them and neither `ok` nor the exit code changes. The
-    CLI prints the W097 lines to stderr before the reports. The CLI's
-    `--format json` output and the MCP analyze result gain a top-level
+    CLI prints the W097 lines to stderr before the reports under human
+    output; under `--format json` they are the document's `stray_records`
+    alone, and nothing is written to stderr. The CLI's `--format json` output and the MCP analyze result gain a top-level
     `stray_records` list of `{entity_id, near}` only when it is
     non-empty; with none the output is unchanged.
   """
   ensures {
     warns_with_hint "an unknown entity in a test record warns W097 with a close-match hint and does not fail the run"
+    json_alone      "under --format json a stray test record is the document's alone: nothing on stderr"
     optional_field  "stray_records appear in the json output only when records exist"
     not_promoted    "strict neither promotes a stray record nor changes ok or the exit code"
   }
   verify unit "an unknown entity in a test record warns W097 with a close-match hint and does not fail the run"
+  verify unit "under --format json a stray test record is the document's alone: nothing on stderr"
   verify unit "stray_records appear in the json output only when records exist"
   verify unit "strict neither promotes a stray record nor changes ok or the exit code"
 }
