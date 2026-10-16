@@ -14,6 +14,15 @@ impl Held {
         std::fs::read(&self.real)
     }
 
+    /// The bytes at `real`, or `None` for a file that is not there (`NotFound`); any other error passes.
+    pub fn read_if_there(&self) -> std::io::Result<Option<Vec<u8>>> {
+        match std::fs::read(&self.real) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
     /// The text at `real`.
     pub fn read_to_string(&self) -> std::io::Result<String> {
         std::fs::read_to_string(&self.real)
@@ -88,6 +97,51 @@ impl Held {
         match self.real.parent() {
             Some(parent) => std::fs::create_dir_all(parent),
             None => Ok(()),
+        }
+    }
+
+    /// Create `real`'s missing parent directories one by one, shallowest first, pushing each onto
+    /// `created` as it is made: a failure part-way still tells the caller what to remove.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "used by rename in the next commit")
+    )]
+    pub(crate) fn create_parents(&self, created: &mut Vec<PathBuf>) -> std::io::Result<()> {
+        let mut missing: Vec<&Path> = Vec::new();
+        let mut at = self.real.parent();
+        while let Some(dir) = at {
+            if dir.as_os_str().is_empty() || dir.exists() {
+                break;
+            }
+            missing.push(dir);
+            at = dir.parent();
+        }
+        for dir in missing.into_iter().rev() {
+            std::fs::create_dir(dir)?;
+            created.push(dir.to_path_buf());
+        }
+        Ok(())
+    }
+
+    /// Unlink `real` itself: a file a change created there. [`Self::remove`] unlinks `spelled`,
+    /// which for a file created through a link would delete the link and keep the file.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "used by rename in the next commit")
+    )]
+    pub(crate) fn remove_created(&self) -> std::io::Result<()> {
+        std::fs::remove_file(&self.real)
+    }
+
+    /// Remove each of `dirs` that is empty, in the order given; a directory holding anything stays.
+    /// Never recursive.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "used by rename in the next commit")
+    )]
+    pub(crate) fn remove_empty(dirs: &[PathBuf]) {
+        for dir in dirs {
+            let _ = std::fs::remove_dir(dir);
         }
     }
 
