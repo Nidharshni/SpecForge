@@ -99,7 +99,7 @@ behavior state_mcp_messages_as_spec_types "State MCP Messages as Spec Types" {
     specforge/graphChanged and specforge/diagnosticsChanged params and the
     McpError a refusal carries. Every Mcp type of spec/types/mcp.spec MUST
     be one of them. A frame whose keys MCP fixes (the JSON-RPC envelope, a
-    tool result's content and _meta, a read's contents, a prompt's
+    tool result's content and _meta, a read's contents and _meta, a prompt's
     messages, notifications/resources/updated,
     notifications/subscriptions/acknowledged) follows MCP's schema and is
     not restated. A document's schema closes every object it holds but the

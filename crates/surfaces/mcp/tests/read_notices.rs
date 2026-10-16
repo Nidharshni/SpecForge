@@ -72,7 +72,6 @@ fn trace_and_model_carry_an_unreadable_record() {
     behavior = "compute_schema_version",
     verify = "every reader of the schema reports the notices export reports for the same record"
 )]
-#[ignore = "flipped by T7"]
 fn reads_carry_an_unreadable_record() {
     let mut server = project_with_unreadable_record();
     for uri in [
@@ -87,7 +86,6 @@ fn reads_carry_an_unreadable_record() {
 }
 
 #[test]
-#[ignore = "flipped by T7"]
 fn an_unknown_kind_read_carries_i020() {
     let mut server = project_with_unreadable_record();
     let response = read_resource(&mut server, "specforge://entities/ghost");
