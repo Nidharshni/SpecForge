@@ -4,7 +4,7 @@
 one set of files those checks read"). Amends ADR 0030 D1, D2 and D3 (check inputs are the recorded reads, stamped at
 the read), ADR 0047 D3 (one `CompiledProject::check`), ADR 0020 (`Rules::files` is gone), ADR 0019 (`RuleInput` carries
 the disk) and ADR 0106 D5 (the check inputs are what one check run read, read by the checks themselves rather than by
-`before_checks`).
+`before_checks`). D5(2) is amended by [ADR 0118](0118-the-paths-a-field-names-are-read-once.md): a missing `file_exists` file's directory is listed again, by the suggestion, as a real read.
 
 ## Context
 
