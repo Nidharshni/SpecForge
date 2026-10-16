@@ -202,8 +202,10 @@ fn init_refuses_a_local_file_reached_through_a_symlink_and_dot_dots() {
 }
 
 #[cfg(unix)]
-#[test]
-#[ignore = "flipped by T6"]
+#[specforge_test(
+    behavior = "provide_mcp_add_extension_tool",
+    verify = "a crate directory in specifiers whose built component resolves outside the project is refused as invalid_input on specifiers"
+)]
 fn add_extension_refuses_a_crate_directory_whose_build_leaves_the_project() {
     let scene = Scene::new();
     let proj = scene.dir.path().join("proj");

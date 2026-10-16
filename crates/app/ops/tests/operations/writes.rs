@@ -127,6 +127,7 @@ pub(crate) fn add(
             allow_unsigned: false,
             trust: Trust::Refuse,
             dry_run: false,
+            containment: &specforge_ops::Containment::unbounded(),
         },
         &specforge_ops::registry::Unconfigured("test"),
         &candidates(),

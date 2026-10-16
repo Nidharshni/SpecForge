@@ -210,7 +210,8 @@ behavior provide_mcp_init_tool "Provide MCP Init Tool" {
     add_extension from the project's root (ADR 0092 D7). A local path that
     resolves outside the served project (the server's root while none is
     served), as init reads it (each specifier of an entry, its .. and
-    symlinks included), MUST be refused as invalid_input on extensions. MCP init is always
+    symlinks included, and the component a crate directory names), MUST be
+    refused as invalid_input on extensions. MCP init is always
     non-interactive — extension selection is provided via the extensions
     parameter. Interactive extension selection (TTY prompting) is only
     available via the CLI init command. The tool MUST scaffold what
@@ -284,9 +285,10 @@ behavior provide_mcp_add_extension_tool "Provide MCP Add Extension Tool" {
     document specforge add --format json prints (McpAddExtensionResult: one
     entry per specifier under added), plus a note saying whether the server
     serves the extensions from the next call on, absent for a preview. A local
-    .wasm path that resolves outside the project the call installs into MUST be
-    refused as invalid_input on specifiers, nothing installed (ADR 0092 D7, closed
-    by ADR 0098). A registry specifier with no registry configured in
+    .wasm path, or the component a crate directory names, that resolves outside
+    the project the call installs into (through .., an absolute name or a
+    symlink) MUST be refused as invalid_input on specifiers, nothing installed
+    (ADR 0092 D7, closed by ADR 0098, applied where the file is read by ADR 0104). A registry specifier with no registry configured in
     specforge.json MUST make no network call and MUST return an E063 error
     whose suggestion names the registries key. The tool MUST run the add
     specforge add runs: a builtin is enabled offline with its required
@@ -309,6 +311,7 @@ behavior provide_mcp_add_extension_tool "Provide MCP Add Extension Tool" {
   verify integration "a version diamond with a locked peer is refused with R-RES-006, as specforge add refuses it"
   verify unit "after add_extension the server serves the extension it installed"
   verify unit "a local extension path in specifiers that resolves outside the project is refused as invalid_input on specifiers"
+  verify unit "a crate directory in specifiers whose built component resolves outside the project is refused as invalid_input on specifiers"
 }
 
 behavior provide_mcp_remove_extension_tool "Provide MCP Remove Extension Tool" {

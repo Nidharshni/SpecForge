@@ -10,6 +10,7 @@ fn builtin_request<'a>(
         allow_unsigned: false,
         trust: Trust::Refuse,
         dry_run: false,
+        containment: &UNBOUNDED,
     }
 }
 

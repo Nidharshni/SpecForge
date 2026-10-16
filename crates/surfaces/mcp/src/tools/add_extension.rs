@@ -1,6 +1,5 @@
 //! `specforge.add_extension`: install extensions (`specforge_ops::extension::add`).
 
-use crate::containment;
 use crate::refusal::ArgumentOf;
 use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
@@ -97,13 +96,6 @@ impl CoreTool for Tool {
             .into_iter()
             .map(|specified| specified.relative_to(root.dir()))
             .collect();
-        // A local file installs only from inside the project it installs into.
-        containment::refuse_local_outside(
-            &Containment::within(root.dir()),
-            root.dir(),
-            &extensions,
-            "specifiers",
-        )?;
 
         let registry =
             specforge_ops_registry::ConfiguredRegistry::for_project(root, "add_extension");
@@ -115,6 +107,8 @@ impl CoreTool for Tool {
             allow_unsigned: args.allow_unsigned,
             trust: Trust::Refuse,
             dry_run: args.dry_run,
+            // A local file installs only from inside the project it installs into.
+            containment: &Containment::within(root.dir()),
         };
         let added = extension::add(&request, &registry, project.runtime.as_ref());
         // What reading the registry configuration reported (W140, I003), once the add asked a

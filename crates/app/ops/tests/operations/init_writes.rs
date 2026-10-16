@@ -26,6 +26,7 @@ fn init(dir: &Path, extensions: &[String]) -> specforge_ops::authoring::init::Ou
         name: Some("demo"),
         version: init::DEFAULT_VERSION,
         extensions,
+        containment: &specforge_ops::Containment::unbounded(),
     };
     init::init(&request, &candidates()).unwrap()
 }
@@ -84,6 +85,7 @@ fn the_starter_states_the_project_version() {
             name: Some("demo"),
             version,
             extensions,
+            containment: &specforge_ops::Containment::unbounded(),
         };
         init::init(&request, &*runtime()).unwrap();
         let config: serde_json::Value =
@@ -151,6 +153,7 @@ fn init_refuses_a_directory_whose_starter_file_exists() {
         name: Some("demo"),
         version: init::DEFAULT_VERSION,
         extensions: &[],
+        containment: &specforge_ops::Containment::unbounded(),
     };
 
     let error = init::init(&request, &candidates()).unwrap_err();
@@ -178,6 +181,7 @@ fn init_refuses_local_extensions_over_an_unreadable_lock_before_writing() {
         name: Some("demo"),
         version: init::DEFAULT_VERSION,
         extensions: &extensions,
+        containment: &specforge_ops::Containment::unbounded(),
     };
 
     let error = init::init(&request, &candidates()).unwrap_err();
@@ -207,6 +211,7 @@ fn a_failed_init_puts_back_what_was_there() {
         name: Some("demo"),
         version: init::DEFAULT_VERSION,
         extensions: &extensions,
+        containment: &specforge_ops::Containment::unbounded(),
     };
 
     let error = init::init(&request, &candidates()).unwrap_err();
@@ -248,6 +253,7 @@ fn a_failed_init_leaves_an_empty_directory_empty() {
         name: Some("demo"),
         version: init::DEFAULT_VERSION,
         extensions: &extensions,
+        containment: &specforge_ops::Containment::unbounded(),
     };
 
     let error = init::init(&request, &candidates()).unwrap_err();
@@ -278,6 +284,7 @@ fn init_enables_a_builtin_after_the_builtins_it_requires() {
         name: Some("demo"),
         version: init::DEFAULT_VERSION,
         extensions: &extensions,
+        containment: &specforge_ops::Containment::unbounded(),
     };
 
     let outcome = init::init(&request, &*runtime()).unwrap();
@@ -309,6 +316,7 @@ fn init_enables_each_builtin_after_the_builtins_it_requires() {
             name: Some("demo"),
             version: init::DEFAULT_VERSION,
             extensions: &extensions,
+            containment: &specforge_ops::Containment::unbounded(),
         };
 
         let extensions = init::init(&request, &*runtime).unwrap().extensions;
@@ -353,6 +361,7 @@ fn init_refuses_a_local_binary_that_claims_a_builtins_name_before_writing() {
         name: Some("demo"),
         version: init::DEFAULT_VERSION,
         extensions: &extensions,
+        containment: &specforge_ops::Containment::unbounded(),
     };
 
     let error = init::init(&request, &impostor).unwrap_err();
@@ -381,6 +390,7 @@ fn init_reads_a_local_file_once() {
         name: Some("demo"),
         version: init::DEFAULT_VERSION,
         extensions: &extensions,
+        containment: &specforge_ops::Containment::unbounded(),
     };
     let runtime = candidates();
     let handshakes = |runtime: &InProcessRuntime| {
@@ -441,6 +451,7 @@ fn init_refuses_a_local_file_the_embedded_builtin_does_not_satisfy() {
         name: Some("demo"),
         version: init::DEFAULT_VERSION,
         extensions: &extensions,
+        containment: &specforge_ops::Containment::unbounded(),
     };
 
     let error = init::init(&request, &testing::probes()).unwrap_err();
@@ -473,6 +484,7 @@ fn init_enables_the_builtins_a_local_file_requires() {
         name: Some("demo"),
         version: init::DEFAULT_VERSION,
         extensions: &extensions,
+        containment: &specforge_ops::Containment::unbounded(),
     };
     let runtime = testing::probes();
 

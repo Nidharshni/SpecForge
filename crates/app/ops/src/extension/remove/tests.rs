@@ -174,6 +174,7 @@ fn remove_refuses_as_add_and_update_do() {
                 allow_unsigned: false,
                 trust: Trust::Refuse,
                 dry_run: false,
+                containment: &crate::Containment::unbounded(),
             },
             &unconfigured,
             &specforge_wasm::testing::InProcessRuntime::new(),

@@ -47,7 +47,7 @@ pub struct Outside {
 
 impl Containment {
     /// Every path: [`resolve`](Self::resolve) hands a name back as given and refuses nothing.
-    pub fn unbounded() -> Self {
+    pub const fn unbounded() -> Self {
         Containment { root: None }
     }
 
