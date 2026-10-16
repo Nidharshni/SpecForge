@@ -294,3 +294,27 @@ fn an_undeclared_fields_bare_list_links() {
     assert_eq!(with_code(&diags, "W020").len(), 1, "{diags:?}");
     assert!(has_edge(&edges(&compiled), "t1", "foo", "t2"));
 }
+
+#[specforge_test(
+    behavior = "check_entities_in_one_order",
+    verify = "a single reference to an existing entity of another kind than its field's target kind is E022"
+)]
+#[ignore = "flipped by T5"]
+fn a_wrong_kind_reference_is_e022_at_the_reference_with_help() {
+    let (_p, compiled) = product(
+        "channel cli \"CLI\" { description \"c\" }\n\
+         term glossary_term \"G\" { definition \"g\" }\n\
+         journey j1 \"J1\" { persona glossary_term channels [cli] flow \"f\" }\n",
+    );
+    let diags = diagnostics(&compiled);
+    let e022 = with_code(&diags, "E022");
+    assert_eq!(e022.len(), 1, "{diags:?}");
+    let span = &e022[0]["span"];
+    let line = "journey j1 \"J1\" { persona ";
+    assert_eq!(span["start_line"], 3, "{span}");
+    assert_eq!(span["start_col"], line.len() + 1, "{span}");
+    assert_eq!(
+        e022[0]["suggestion"], "name a persona here, or drop the reference",
+        "{span}"
+    );
+}
