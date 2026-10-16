@@ -224,8 +224,10 @@ fn analyze_test_results_outside_the_project_is_refused_before_it_is_read() {
 
 /// R6: the backup and the temporary file of a migrated source are links to files outside.
 #[cfg(unix)]
-#[test]
-#[ignore = "flipped by T7"]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a mutation reads and writes no file through a symlink that leaves the project"
+)]
 fn migrate_writes_no_backup_or_temporary_file_through_a_symlink_that_leaves_the_project() {
     let project = plain_project();
     let outside = outside();
