@@ -266,7 +266,7 @@ pub enum CacheWrite {
 /// a successful export. MCP never calls it.
 pub fn export_recorded(view: &ProjectView, request: &Request) -> RecordedExport {
     let versioned = view.versioned_schema();
-    let diagnostics = versioned.diagnostics();
+    let diagnostics = versioned.notices();
     let export = export_versioned(view, &versioned, request);
     let cache = match (&export, view.schema_cache()) {
         (Ok(_), Some(cache)) => match cache.record(&versioned) {
