@@ -56,11 +56,11 @@ fn line(error: &OpError, subject: Option<impl Debug>) -> String {
 )]
 fn check_and_trace_refusals_are_pinned_field_by_field() {
     let severity = |name: &str| {
-        let refusal = Refusal::<CheckField>::from(parse_severity(name).unwrap_err());
+        let refusal = parse_severity(name).unwrap_err();
         line(&refusal.error, refusal.subject)
     };
     let profiles = |names: &[&str]| {
-        let refusal = Refusal::<CheckField>::from(parse_lint_profiles(names).unwrap_err());
+        let refusal = parse_lint_profiles(names).unwrap_err();
         line(&refusal.error, refusal.subject)
     };
     let reported = vec![Diagnostic::untyped("W002", Severity::Warning, "unused")];
@@ -68,7 +68,7 @@ fn check_and_trace_refusals_are_pinned_field_by_field() {
         specforge_project::testing::Assembled::over(RegistryBuild::default()).reporting(reported);
     let rootless = rootless.rootless_view();
     let no_root = |options: CheckOptions| {
-        let error = OpError::from(check(&rootless, &options).unwrap_err());
+        let error = check(&rootless, &options).unwrap_err();
         line(&error, None::<CheckField>)
     };
 
