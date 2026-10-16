@@ -1,11 +1,10 @@
 {
   "file-size": {
     "crates/adapters/ops-registry/tests/fetch.rs": 847,
-    "crates/app/ops/tests/operations/migrate.rs": 1261,
+    "crates/app/ops/tests/operations/migrate.rs": 1171,
     "crates/app/ops/tests/operations/navigate.rs": 1751,
     "crates/app/ops/tests/operations/query.rs": 907,
     "crates/app/ops/tests/operations/schema.rs": 1149,
-    "crates/app/ops/tests/operations/writes.rs": 1049,
     "crates/kernel/common/tests/present.rs": 1082,
     "crates/kernel/parser/tests/parse_test.rs": 2456,
     "crates/pipeline/emitter/tests/contracts.rs": 874,
@@ -34,7 +33,7 @@
     "crates/surfaces/cli/tests/registry.rs": 1624,
     "crates/surfaces/cli/tests/surface_parity.rs": 840,
     "crates/surfaces/cli/tests/watch.rs": 960,
-    "crates/surfaces/lsp/tests/contracts.rs": 1250,
+    "crates/surfaces/lsp/tests/contracts.rs": 1120,
     "crates/surfaces/lsp/tests/hover.rs": 801,
     "crates/surfaces/lsp/tests/reaction.rs": 1000,
     "crates/surfaces/lsp/tests/semantic_tokens.rs": 820,
