@@ -89,21 +89,16 @@ impl CoreTool for Tool {
         // The project the call installs into: the served one, or the one
         // `path` names.
         let root = project.root;
-        // A relative local path is read from the project's root: the server has no working
-        // directory of its own to mean it.
-        let extensions: Vec<_> = extension::specified(&args.specifiers.0)
-            .map_err(Self::failed)?
-            .into_iter()
-            .map(|specified| specified.relative_to(root.dir()))
-            .collect();
-
         let registry =
             specforge_ops_registry::ConfiguredRegistry::for_project(root, "add_extension");
         // The shared operation `specforge add` runs. An agent can't be asked,
         // so a publisher key change is refused rather than re-pinned.
         let request = AddRequest {
             root,
-            extensions,
+            extensions: args.specifiers.0,
+            // A relative local path is read from the project's root: the server has no working
+            // directory of its own to mean it.
+            base: None,
             allow_unsigned: args.allow_unsigned,
             trust: Trust::Refuse,
             dry_run: args.dry_run,

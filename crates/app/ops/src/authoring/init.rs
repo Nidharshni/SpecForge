@@ -10,7 +10,7 @@
 //! afterwards with `specforge add`.
 
 use crate::extension::{
-    self, AddField, Also, Ask, Candidate, Claimed, Claims, Install, LocalFile, LockPlan, Source,
+    self, Also, Ask, Candidate, Claimed, Claims, Install, LocalFile, LockPlan, Source,
 };
 use crate::{Containment, OpError, OpErrorKind, Refusal, Writes};
 use serde::Serialize;
@@ -130,16 +130,24 @@ fn specified(
         .flat_map(|specifier| specifier.split(','))
         .map(str::trim)
         .collect();
-    if specifiers.is_empty() {
-        return Ok(Vec::new());
-    }
-    let specified = extension::specified(&specifiers).map_err(|refusal| {
-        refusal.map_subject(|AddField::Extensions| Some(InitField::Extensions))
-    })?;
-    Ok(specified
+    let several = specifiers.len() > 1;
+    specifiers
         .into_iter()
-        .map(|specified| specified.relative_to(dir))
-        .collect())
+        .map(|specifier| {
+            let mut source = extension::parse(specifier)
+                .map_err(|error| extension::named(several, specifier, error))
+                .map_err(|error| error.about(InitField::Extensions))?;
+            if let Source::Local(path) = &mut source
+                && path.is_relative()
+            {
+                *path = dir.join(&*path);
+            }
+            Ok(extension::Specified {
+                specifier: specifier.to_string(),
+                source,
+            })
+        })
+        .collect()
 }
 
 /// Scaffold the project `req` describes: validated first, its extension specifiers read as `add`

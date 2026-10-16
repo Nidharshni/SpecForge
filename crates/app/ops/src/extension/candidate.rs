@@ -187,7 +187,7 @@ impl LocalFile {
                 codes::E054,
                 format!("file not found: {}", held.spelled.display()),
             )
-            .with_suggestion(super::add::SPECIFIER_FORMS));
+            .with_suggestion(super::names::SPECIFIER_FORMS));
         }
         let built = binary_at(&held.real)?;
         let binary = containment.resolve(&built)?;

@@ -117,26 +117,25 @@ fn init_reads_its_specifiers_as_add_reads_them() {
     for (specifier, code) in cases {
         let existing = project(&[], &[]);
         let before = files_under(existing.path());
-        let by_add = extension::specified(&[specifier]).and_then(|extensions| {
-            extension::add(
-                &AddRequest {
-                    root: &specforge_common::ProjectRoot::of(existing.path()).unwrap(),
-                    extensions,
-                    allow_unsigned: false,
-                    trust: Trust::Refuse,
-                    dry_run: false,
-                    containment: &specforge_ops::Containment::unbounded(),
-                },
-                &specforge_ops::registry::Unconfigured("add"),
-                &writes_candidates(),
-            )
-            .map(|_| ())
-        });
+        let dir = scratch.path().join("fresh");
+        let by_add = extension::add(
+            &AddRequest {
+                root: &specforge_common::ProjectRoot::of(existing.path()).unwrap(),
+                extensions: vec![specifier.to_string()],
+                // As init reads a relative path: from the directory it creates.
+                base: Some(&dir),
+                allow_unsigned: false,
+                trust: Trust::Refuse,
+                dry_run: false,
+                containment: &specforge_ops::Containment::unbounded(),
+            },
+            &specforge_ops::registry::Unconfigured("add"),
+            &writes_candidates(),
+        );
         let by_add = by_add.unwrap_err();
         assert_eq!(by_add.error.code, code, "{specifier}: add: {by_add:?}");
         assert_eq!(files_under(existing.path()), before);
 
-        let dir = scratch.path().join("fresh");
         let extensions = [specifier.to_string()];
         let request = init::Request {
             dir: &dir,
@@ -148,13 +147,8 @@ fn init_reads_its_specifiers_as_add_reads_them() {
         let by_init = init::init(&request, &writes_candidates()).unwrap_err();
         assert_eq!(by_init.error.code, code, "{specifier}: init: {by_init:?}");
         if code != "E063" {
-            // A relative local path is read from the directory init creates, and named so.
-            let path = dir.join(specifier);
-            let want = by_add
-                .error
-                .message
-                .replace(specifier, &path.to_string_lossy());
-            assert_eq!(by_init.error.message, want, "{specifier}");
+            // The same message: add reads a relative path from the same base.
+            assert_eq!(by_init.error.message, by_add.error.message, "{specifier}");
             assert_eq!(
                 by_init.error.suggestion, by_add.error.suggestion,
                 "{specifier}"
@@ -243,15 +237,11 @@ fn init_reads_a_dot_dot_after_a_symlink_as_add_does() {
 
     let existing = project(&[], &[]);
     link(existing.path());
-    let extensions = extension::specified(&["link/../a.wasm"])
-        .unwrap()
-        .into_iter()
-        .map(|specified| specified.relative_to(existing.path()))
-        .collect();
     extension::add(
         &AddRequest {
             root: &specforge_common::ProjectRoot::of(existing.path()).unwrap(),
-            extensions,
+            extensions: vec!["link/../a.wasm".to_string()],
+            base: None,
             allow_unsigned: false,
             trust: Trust::Refuse,
             dry_run: false,

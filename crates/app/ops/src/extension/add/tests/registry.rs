@@ -27,6 +27,7 @@ fn add_one(
         &AddRequest {
             root: &root,
             extensions: vec![source.into()],
+            base: None,
             allow_unsigned: true,
             trust: Trust::Refuse,
             dry_run: false,
@@ -390,6 +391,7 @@ fn an_add_that_upgrades_a_locked_package_judges_its_peers_without_its_previous_e
         &AddRequest {
             root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
             extensions: vec![Source::Registry(PackageRef::parse("@x/a@2.0.0").unwrap()).into()],
+            base: None,
             allow_unsigned: true,
             trust: Trust::Refuse,
             dry_run: false,
@@ -484,6 +486,7 @@ fn a_fetched_binary_that_is_not_what_was_published_is_a_schema_mismatch() {
                 extensions: vec![
                     Source::Registry(PackageRef::parse("@sdk/greet@0.1.0").unwrap()).into(),
                 ],
+                base: None,
                 allow_unsigned: true,
                 trust: Trust::Refuse,
                 dry_run: false,

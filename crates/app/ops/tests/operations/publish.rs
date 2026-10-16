@@ -280,7 +280,7 @@ fn publish_reads_the_binary_in_the_runtime_it_is_given() {
 )]
 fn what_publish_uploads_is_what_add_installs() {
     use specforge_installed::{Installed, read_lock_file};
-    use specforge_ops::extension::{AddOutcome, AddRequest, add, parse};
+    use specforge_ops::extension::{AddOutcome, AddRequest, add};
 
     let files = tempfile::tempdir().unwrap();
     let wasm = bytes("@acme/greet 1.0.0");
@@ -298,10 +298,8 @@ fn what_publish_uploads_is_what_add_installs() {
     let added = add(
         &AddRequest {
             root: &specforge_common::ProjectRoot::of(project.path()).unwrap(),
-            extensions: vec![specforge_ops::extension::Specified {
-                specifier: "@acme/greet@1.0.0".into(),
-                source: parse("@acme/greet@1.0.0").unwrap(),
-            }],
+            extensions: vec!["@acme/greet@1.0.0".to_string()],
+            base: None,
             allow_unsigned: false,
             trust: Trust::Refuse,
             dry_run: false,

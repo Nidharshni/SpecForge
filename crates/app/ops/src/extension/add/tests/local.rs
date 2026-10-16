@@ -24,6 +24,7 @@ fn an_unusable_config_is_refused_before_anything_is_installed() {
                 let request = AddRequest {
                     root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
                     extensions: vec![source.clone().into()],
+                    base: None,
                     allow_unsigned: false,
                     trust: Trust::Refuse,
                     dry_run,
@@ -56,6 +57,7 @@ fn add_reinstalls_a_binary_that_changed() {
     let request = AddRequest {
         root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         extensions: vec![Source::Local(greet).into()],
+        base: None,
         allow_unsigned: false,
         trust: Trust::Refuse,
         dry_run: false,
@@ -358,6 +360,7 @@ fn a_missing_config_is_config_not_found_with_the_hint_to_init() {
     let request = AddRequest {
         root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         extensions: vec![Source::Builtin("@specforge/product").into()],
+        base: None,
         allow_unsigned: false,
         trust: Trust::Refuse,
         dry_run: false,

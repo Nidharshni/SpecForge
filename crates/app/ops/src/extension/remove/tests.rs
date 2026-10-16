@@ -175,6 +175,7 @@ fn remove_refuses_as_add_and_update_do() {
             &AddRequest {
                 root: &specforge_common::ProjectRoot::of(fixture.dir.path()).unwrap(),
                 extensions: vec![Source::Builtin("@specforge/product").into()],
+                base: None,
                 allow_unsigned: false,
                 trust: Trust::Refuse,
                 dry_run: false,

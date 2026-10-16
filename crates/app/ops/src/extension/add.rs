@@ -1,19 +1,19 @@
 //! `specforge add` and `specforge.add_extension`.
 
 use super::Origin;
-use super::candidate::LocalFile;
 use super::lock_plan::{Ask, Asked, Fetching, Install, LockPlan, Purpose};
-use super::{Claimed, Claims};
+use super::names::no_specifier;
+use super::{Named, Names, Place};
 use crate::registry::{Publisher, Registry, Trust};
-use crate::{Containment, OpError, Refusal, Writes};
+use crate::{Containment, Refusal, Writes};
 use specforge_installed::Installed;
-use specforge_package::{PackageName, PackageRef};
+use specforge_package::PackageName;
 use specforge_wasm::WasmRuntime;
 
 /// The field of an add's request a refusal can be about (ADR 0072).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AddField {
-    /// `AddRequest::extensions`: the specifiers to add, read by [`specified`].
+    /// `AddRequest::extensions`: the specifiers to add, read by `extension::names`.
     Extensions,
 }
 
@@ -21,8 +21,12 @@ pub enum AddField {
 #[derive(Debug, Clone)]
 pub struct AddRequest<'a> {
     pub root: &'a specforge_common::ProjectRoot,
-    /// The extensions to add, in the order given: one change.
-    pub extensions: Vec<Specified>,
+    /// The extensions to add, one specifier per string, in the order given: one change
+    /// (`extension::names`, ADR 0105).
+    pub extensions: Vec<String>,
+    /// What a relative local path is read from: the project's root when `None`. The CLI passes
+    /// its working directory.
+    pub base: Option<&'a std::path::Path>,
     /// Accept a registry package with no publisher signature.
     pub allow_unsigned: bool,
     pub trust: Trust,
@@ -145,7 +149,12 @@ pub fn add(
     if req.extensions.is_empty() {
         return Err(no_specifier().about(AddField::Extensions));
     }
-    let several = req.extensions.len() > 1;
+    let place = Place {
+        root: req.root.dir(),
+        base: req.base.unwrap_or(req.root.dir()),
+        containment: req.containment,
+    };
+    let names = Names::read(&req.extensions, place).map_err(|e| e.about(AddField::Extensions))?;
     let installed = Installed::at(req.root.dir());
     // A specforge.lock that can't be read refuses before a file is read or a registry asked.
     let plan = LockPlan::adding(
@@ -162,27 +171,16 @@ pub fn add(
         } else {
             Purpose::Commit
         },
-        req.extensions.iter().any(|e| e.source.installs()),
+        names.installs(),
     )?;
-    let mut resolver = Resolver {
-        req,
-        config: &config,
-        installed: &installed,
-        registry,
-        runtime,
-        claims: Claims::default(),
-    };
-    let mut steps = Vec::with_capacity(req.extensions.len());
-    for wanted in &req.extensions {
-        let step = resolver.step(wanted).map_err(|error| match error {
-            Resolved::Refused(error) => {
-                named(several, &wanted.specifier, error).about(AddField::Extensions)
-            }
-            Resolved::Conflict(error) => error.about(AddField::Extensions),
-        })?;
-        steps.push(step);
-    }
-    apply(req, &config, plan, steps)
+    let named = names
+        .name_each(runtime, &mut |_, package| super::resolve(registry, package))
+        .map_err(|e| e.about(AddField::Extensions))?;
+    let steps = named
+        .into_iter()
+        .map(|named| step(&config, &installed, named))
+        .collect();
+    apply(req, &names, &config, plan, steps)
 }
 
 /// What the add does for one specifier, once it is resolved.
@@ -197,100 +195,42 @@ enum Step<'a> {
     Fetch(PackageName, specforge_package::Version),
 }
 
-/// Why a specifier can't be resolved: refused on its own (named when the add has several), or in
-/// conflict with an earlier one (the refusal names both).
-enum Resolved {
-    Refused(OpError),
-    Conflict(OpError),
-}
-
-impl From<OpError> for Resolved {
-    fn from(error: OpError) -> Self {
-        Resolved::Refused(error)
-    }
-}
-
-/// Resolves each specifier in turn, remembering what the earlier ones claimed.
-struct Resolver<'r, 'a> {
-    req: &'r AddRequest<'r>,
-    config: &'r specforge_common::ProjectConfig,
-    installed: &'r Installed,
-    registry: &'a dyn Registry,
-    runtime: &'a dyn WasmRuntime,
-    claims: Claims,
-}
-
-impl<'a> Resolver<'_, 'a> {
-    /// What the add does for `wanted`.
-    fn step(&mut self, wanted: &Specified) -> Result<Step<'a>, Resolved> {
-        // The same source again resolves the same way: nothing is read or asked.
-        if let Some(duplicate) = self.claims.repeated(wanted).and_then(duplicate) {
-            return Ok(duplicate);
-        }
-        match &wanted.source {
-            Source::Builtin(name) => self.builtin(wanted, name),
-            Source::Local(path) => {
-                let local = LocalFile::read(self.runtime, path, self.req.containment)?;
-                self.local(wanted, Install::local(self.req.root.dir(), local)?)
+/// What the add does for what one specifier names: nothing when it is a duplicate, already enabled
+/// or already present (an already-enabled extension is left exactly as it is, a dry run included).
+fn step<'a>(
+    config: &specforge_common::ProjectConfig,
+    installed: &Installed,
+    named: Named<'a>,
+) -> Step<'a> {
+    match named {
+        Named::Duplicate { name, first } => Step::Unchanged(AddOutcome::Duplicate { name, first }),
+        Named::Builtin(name) => {
+            if super::enabled_builtins(config).contains(&name) {
+                Step::Unchanged(AddOutcome::Builtin {
+                    name,
+                    changed: false,
+                    peers_enabled: Vec::new(),
+                })
+            } else {
+                Step::Enable { name }
             }
-            Source::Registry(package) => self.package(wanted, package),
-            Source::Git { url } => Err(Resolved::Refused(git_not_supported(url))),
         }
-    }
-
-    fn builtin(&mut self, wanted: &Specified, name: &'static str) -> Result<Step<'a>, Resolved> {
-        if let Some(duplicate) = claimed(self.claims.builtin(wanted, name))? {
-            return Ok(duplicate);
+        Named::Local { install, .. } => {
+            let name = install.name().clone();
+            match already_present(installed, config, &name, |e| {
+                e.wasm_hash == install.sha256() && e.source.local_path().is_some()
+            }) {
+                Some(present) => Step::Unchanged(present),
+                None => Step::Local(*install),
+            }
         }
-        // An already-enabled extension is left exactly as it is, a dry run included.
-        if super::enabled_builtins(self.config).contains(&name) {
-            return Ok(Step::Unchanged(AddOutcome::Builtin {
-                name,
-                changed: false,
-                peers_enabled: Vec::new(),
-            }));
-        }
-        Ok(Step::Enable { name })
-    }
-
-    fn local(&mut self, wanted: &Specified, install: Install<'a>) -> Result<Step<'a>, Resolved> {
-        let name = install.name().clone();
-        if let Some(duplicate) = claimed(self.claims.local(wanted, &install))? {
-            return Ok(duplicate);
-        }
-        if let Some(present) = already_present(self.installed, self.config, &name, |e| {
-            e.wasm_hash == install.sha256() && e.source.local_path().is_some()
-        }) {
-            return Ok(Step::Unchanged(present));
-        }
-        Ok(Step::Local(install))
-    }
-
-    fn package(&mut self, wanted: &Specified, package: &PackageRef) -> Result<Step<'a>, Resolved> {
-        let version = super::resolve(self.registry, package)?;
-        if let Some(duplicate) = claimed(self.claims.registry(wanted, &package.name, &version))? {
-            return Ok(duplicate);
-        }
-        if let Some(present) = already_present(self.installed, self.config, &package.name, |e| {
-            e.version == version.to_string() && e.source.is_registry()
-        }) {
-            return Ok(Step::Unchanged(present));
-        }
-        Ok(Step::Fetch(package.name.clone(), version))
-    }
-}
-
-/// A claim as a resolution: the duplicate it found, or the conflict it is.
-fn claimed<'a>(claimed: Result<Claimed, OpError>) -> Result<Option<Step<'a>>, Resolved> {
-    claimed.map(duplicate).map_err(Resolved::Conflict)
-}
-
-/// The step that adds nothing for a duplicate; `None` for the first claim.
-fn duplicate<'a>(claimed: Claimed) -> Option<Step<'a>> {
-    match claimed {
-        Claimed::First => None,
-        Claimed::Duplicate { name, first } => {
-            Some(Step::Unchanged(AddOutcome::Duplicate { name, first }))
+        Named::Package { name, version } => {
+            match already_present(installed, config, &name, |e| {
+                e.version == version.to_string() && e.source.is_registry()
+            }) {
+                Some(present) => Step::Unchanged(present),
+                None => Step::Fetch(name, version),
+            }
         }
     }
 }
@@ -390,12 +330,11 @@ impl Wanted {
 /// nothing, its refusal naming the specifier when there are several (ADR 0041).
 fn apply<'a>(
     req: &AddRequest,
+    names: &Names<'_>,
     config: &specforge_common::ProjectConfig,
     mut plan: LockPlan<'a>,
     steps: Vec<Step<'a>>,
 ) -> Result<Added, Refusal<AddField>> {
-    let several = req.extensions.len() > 1;
-    let specifier = |at: usize| req.extensions[at].specifier.as_str();
     let mut outcomes: Vec<Option<AddOutcome>> = Vec::with_capacity(steps.len());
     // Each specifier that adds something, and what it asked for.
     let mut asked: Vec<(usize, Wanted)> = Vec::new();
@@ -413,9 +352,9 @@ fn apply<'a>(
                 plan.install(ask, install);
             }
             Step::Fetch(name, version) => {
-                let install = plan.fetch(&name, &version).map_err(|error| {
-                    named(several, specifier(at), error).about(AddField::Extensions)
-                })?;
+                let install = plan
+                    .fetch(&name, &version)
+                    .map_err(|error| names.named(at, error).about(AddField::Extensions))?;
                 asked.push((at, Wanted::of(&install)));
                 plan.install(ask, install);
             }
@@ -423,7 +362,7 @@ fn apply<'a>(
     }
     if asked.is_empty() {
         return Ok(Added {
-            added: added(req, outcomes),
+            added: added(names, outcomes),
             writes: Writes::none(),
             extensions_enabled: config.extensions.len(),
         });
@@ -433,7 +372,7 @@ fn apply<'a>(
         .check()
         .map_err(|refused| {
             let (Ask(at), error) = refused.decisive();
-            named(several, specifier(at), error).about(AddField::Extensions)
+            names.named(at, error).about(AddField::Extensions)
         })?
         .finish(
             req.root.dir(),
@@ -444,26 +383,25 @@ fn apply<'a>(
         outcomes[at] = Some(wanted.outcome(done.asked(Ask(at)), req.dry_run));
     }
     Ok(Added {
-        added: added(req, outcomes),
+        added: added(names, outcomes),
         extensions_enabled: done.enabled,
         writes: done.writes,
     })
 }
 
-/// Each specifier of `req` with its outcome.
-fn added(req: &AddRequest, outcomes: Vec<Option<AddOutcome>>) -> Vec<AddedExtension> {
-    req.extensions
-        .iter()
-        .zip(outcomes)
-        .map(|(wanted, outcome)| AddedExtension {
-            specifier: wanted.specifier.clone(),
+/// Each specifier of `names` with its outcome.
+fn added(names: &Names<'_>, outcomes: Vec<Option<AddOutcome>>) -> Vec<AddedExtension> {
+    outcomes
+        .into_iter()
+        .enumerate()
+        .map(|(at, outcome)| AddedExtension {
+            specifier: names.specifier(at).to_string(),
             outcome: outcome.expect("every specifier has an outcome"),
         })
         .collect()
 }
 
 mod document;
-mod specifier;
 #[cfg(test)]
 mod tests;
 
@@ -471,6 +409,3 @@ pub use document::{
     AddDocument, AddResult, BuiltinSource, DuplicateSpecifier, EnabledBuiltin, InstalledPackage,
     PlannedAdd, PresentExtension,
 };
-use specifier::no_specifier;
-pub(crate) use specifier::{SPECIFIER_FORMS, git_not_supported, named};
-pub use specifier::{Source, Specified, parse, specified};
