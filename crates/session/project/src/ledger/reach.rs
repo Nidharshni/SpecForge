@@ -65,13 +65,17 @@ impl SessionInputs {
                 }
             }
             let mut reached: Vec<(Kind, PathBuf)> = Vec::new();
+            // An input that is a symlink is keyed by its own name: pointing it
+            // elsewhere is the change of the name, not of its old target.
+            let reaches =
+                |known: &Path| known.starts_with(&canonical_path) || known.starts_with(&in_dir);
             for (known, recorded) in &known.environment {
-                if known.starts_with(&canonical_path) {
+                if reaches(known) {
                     reached.push((Kind::Environment, recorded.clone()));
                 }
             }
             for (known, recorded) in &known.checks {
-                if known.starts_with(&canonical_path) {
+                if reaches(known) {
                     reached.push((Kind::Check, recorded.clone()));
                 }
             }

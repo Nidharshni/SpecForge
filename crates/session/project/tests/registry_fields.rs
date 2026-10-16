@@ -10,7 +10,7 @@ fn no_spec_side_tests_field_is_registered() {
     let runtime = specforge_component::ComponentRuntime::new();
     let builtins = specforge_installed::Builtins(specforge_component::builtins::BUILTIN_EXTENSIONS);
     let declarations = specforge_installed::Installed::none()
-        .load(&exts, &builtins, &runtime)
+        .load(&exts, &builtins, &runtime, &specforge_registry::PlainDisk)
         .declarations;
     let build = specforge_registry::build_registries(declarations);
     let field_reg = build.fields();

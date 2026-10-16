@@ -44,6 +44,7 @@ use sources::SourceCache;
 
 use specforge_common::{
     ConfigProblem, ConfigRead, Diagnostic, ProjectConfig, ProjectRoot, SourceRoot, codes,
+    project_config_from,
 };
 use specforge_graph::{Graph, GraphBuild, GraphConfig};
 use specforge_installed::{Builtins, Installed};
@@ -192,19 +193,22 @@ impl Environment {
         Self::read_through(&mut Unrecorded, root, |_| runtime)
     }
 
-    /// The one environment load: the config read once, the lock and modules
-    /// recorded before the load reads them, the runtime built from the config
-    /// read, then [`Self::from_read`]. A session reads through its ledger
-    /// (stamping each input), a one-shot compile through [`Unrecorded`].
+    /// The one environment load: the config read once, the runtime built from
+    /// the config read, then [`Self::from_read`], every read through the disk
+    /// `reads` hands it. A session reads through its ledger (stamping each
+    /// input in the read that reads it, ADR 0114), a one-shot compile through
+    /// [`Unrecorded`].
     pub(crate) fn read_through(
         reads: &mut impl Reads,
         root: &ProjectRoot,
         runtime: impl FnOnce(&ProjectConfig) -> Option<SharedRuntime>,
     ) -> Self {
-        let read = reads.config(root);
-        reads.before_load(root, &read.config);
-        let runtime = runtime(&read.config);
-        Self::from_read(root, read, runtime)
+        reads.environment(root, |disk| {
+            let path = root.config_file();
+            let read = project_config_from(&path, disk.read(&path));
+            let runtime = runtime(&read.config);
+            Self::from_read(root, read, runtime, disk)
+        })
     }
 
     /// The environment of the config `read`, the installed extensions
@@ -266,19 +270,26 @@ impl Environment {
     }
 
     /// The environment of the config `read` (the one read of
-    /// `specforge.json`): the lock read at `root` once, the extensions
-    /// loaded into `runtime` through the production policy, then
+    /// `specforge.json`): the lock read at `root` once and the extensions
+    /// loaded into `runtime` through the production policy, both read through
+    /// `disk`, then
     /// [`Self::assemble`]d. The disk adapter of the assembly; the session's
     /// open and [`Self::load`] are its callers.
     pub(crate) fn from_read(
         root: &ProjectRoot,
         read: ConfigRead,
         runtime: Option<SharedRuntime>,
+        disk: &dyn Disk,
     ) -> Self {
-        let installed = Installed::at(root.dir());
+        let installed = Installed::read(root.dir(), disk);
         let load = match runtime {
             Some(runtime) => ExtensionLoad::In {
-                loaded: installed.load(&read.config.extensions, &builtins(), runtime.as_ref()),
+                loaded: installed.load(
+                    &read.config.extensions,
+                    &builtins(),
+                    runtime.as_ref(),
+                    disk,
+                ),
                 runtime,
             },
             None => ExtensionLoad::NoRuntime,

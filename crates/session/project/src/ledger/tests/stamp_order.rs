@@ -6,8 +6,13 @@ use std::path::Path;
 
 use specforge_common::ProjectRoot;
 
-use crate::ledger::{CheckInput, Ledger, Reads};
+use std::sync::Arc;
+
+use specforge_wasm::testing::InProcessRuntime;
+
+use crate::ledger::{Ledger, Reading, Reads};
 use crate::sources::Read;
+use crate::{Environment, SharedRuntime};
 
 const CONFIG: &str = "{\"name\":\"d\",\"version\":\"0.1.0\",\"extensions\":[]}\n";
 
@@ -28,8 +33,7 @@ fn rewrite(path: &Path, text: &str) {
 fn a_config_written_after_its_read_is_stale() {
     let (dir, root) = project(CONFIG);
     let mut ledger = Ledger::opening();
-    let read = ledger.config(&root);
-    ledger.before_load(&root, &read.config);
+    Environment::read_through(&mut ledger, &root, |_| None);
     assert!(ledger.stale().is_empty());
     rewrite(
         &dir.path().join("specforge.json"),
@@ -42,15 +46,17 @@ fn a_config_written_after_its_read_is_stale() {
 }
 
 #[test]
-fn a_module_written_before_the_load_reads_it_is_stale() {
+fn a_module_written_after_its_read_is_stale() {
     let (dir, root) = project(
         "{\"name\":\"d\",\"version\":\"0.1.0\",\"extensions\":[\"@acme/local=ext/local.wasm\"]}\n",
     );
     let module = dir.path().join("ext/local.wasm");
     rewrite(&module, "first");
     let mut ledger = Ledger::opening();
-    let read = ledger.config(&root);
-    ledger.before_load(&root, &read.config);
+    // The extension load runs (a runtime is given), so it reads the module.
+    Environment::read_through(&mut ledger, &root, |_| {
+        Some(Arc::new(InProcessRuntime::new()) as SharedRuntime)
+    });
     assert!(ledger.stale().is_empty());
     rewrite(&module, "second, longer");
     assert_eq!(ledger.stale().environment, [module]);
@@ -61,9 +67,8 @@ fn a_source_that_is_no_source_any_more_leaves_the_record() {
     let (dir, root) = project(CONFIG);
     rewrite(&dir.path().join("sub/c.spec"), "behavior c \"C\" {\n}\n");
     let mut ledger = Ledger::opening();
-    let read = ledger.config(&root);
-    ledger.before_load(&root, &read.config);
-    let sources = read.config.sources(root.dir());
+    let env = Environment::read_through(&mut ledger, &root, |_| None);
+    let sources = env.config().sources(root.dir());
     assert_eq!(ledger.discover(&sources), ["sub/c.spec"]);
     ledger.source(sources.dir(), "sub/c.spec");
     assert!(ledger.stale().is_empty());
@@ -89,7 +94,7 @@ fn a_detached_ledger_reads_every_key_as_gone_and_records_nothing() {
     assert!(ledger.stale().is_empty());
     assert!(ledger.changes([Path::new("/p/a.spec")]).is_empty());
     let run = ledger.checks();
-    assert!(run.read(CheckInput::File, Path::new("/p/x.md"), |_| true));
+    assert!(run.read(Reading::File, Path::new("/p/x.md"), |_| true));
     assert!(!run.finish());
     assert_eq!(ledger.inputs(), &crate::ledger::SessionInputs::detached());
 }

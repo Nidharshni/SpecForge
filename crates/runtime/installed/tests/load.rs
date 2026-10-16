@@ -11,6 +11,7 @@ use specforge_installed::{
     Builtins, Installed, LoadProblem, LoadSubject, LockState, hex_sha256, write_lock_file,
 };
 use specforge_package::PackageName;
+use specforge_registry::PlainDisk;
 use specforge_wasm::testing::InProcessRuntime;
 use specforge_wasm::{WasmCallResult, WasmRuntime};
 use tempfile::TempDir;
@@ -37,7 +38,7 @@ pub(crate) fn load_with(
     entries: &[String],
     runtime: &dyn WasmRuntime,
 ) -> specforge_installed::Loaded {
-    Installed::at(root).load(entries, &Builtins::none(), runtime)
+    Installed::at(root).load(entries, &Builtins::none(), runtime, &PlainDisk)
 }
 
 fn package(name: &str) -> PackageName {
@@ -249,7 +250,8 @@ fn a_project_that_enables_nothing_installed_does_not_report_its_lock() {
     std::fs::write(dir.path().join("specforge.lock"), "not a lock {{{").unwrap();
     let builtins = Builtins(&[("@acme/a", &b"\0asm builtin a"[..])]);
 
-    let loaded = Installed::at(dir.path()).load(&entries(&["@acme/a"]), &builtins, &runtime());
+    let loaded =
+        Installed::at(dir.path()).load(&entries(&["@acme/a"]), &builtins, &runtime(), &PlainDisk);
 
     assert_eq!(
         codes(dir.path(), &loaded),
