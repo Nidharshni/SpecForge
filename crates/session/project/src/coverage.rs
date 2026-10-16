@@ -10,7 +10,7 @@
 
 use crate::Environment;
 use serde::Deserialize;
-use specforge_graph::Graph;
+use specforge_graph::GraphBuild;
 use specforge_protocol_types::{EntityTests, TestResult, TestResults};
 use specforge_registry::{EntitySnapshot, Standing};
 use std::collections::BTreeMap;
@@ -261,7 +261,7 @@ impl RecordedCoverage {
     /// A memo over `graph`, built in `env` (a graph assembled in a test, a
     /// session's graph after an update that skipped the checks): its
     /// snapshot is taken now, with `env`'s registries and spec root.
-    pub(crate) fn over(graph: &Graph, env: &Environment) -> Self {
+    pub(crate) fn over(graph: &GraphBuild, env: &Environment) -> Self {
         Self::of(Arc::new(env.entity_snapshot(graph)))
     }
 
@@ -345,14 +345,11 @@ mod tests {
     use specforge_test_macros::test as specforge_test;
 
     /// `source` built with the graph inputs of `registries`, as the session builds it.
-    fn graph_of(source: &str, registries: &RegistryBuild) -> Graph {
-        registries
-            .graph_of(
-                [specforge_parser::parse(source, "test.spec")],
-                std::collections::HashSet::new(),
-            )
-            .into_parts()
-            .0
+    fn graph_of(source: &str, registries: &RegistryBuild) -> GraphBuild {
+        registries.graph_of(
+            [specforge_parser::parse(source, "test.spec")],
+            std::collections::HashSet::new(),
+        )
     }
 
     /// The registry build of one extension declaring the testable `behavior`
@@ -392,7 +389,7 @@ mod tests {
     /// A project whose `behavior` kind is testable and must declare
     /// obligations, with `login` (one obligation) and `logout` (none).
     struct Scored {
-        graph: Graph,
+        graph: GraphBuild,
         registries: RegistryBuild,
     }
 
@@ -483,7 +480,7 @@ mod tests {
             specforge_installed::Installed::unread(dir.path()),
             crate::ExtensionLoad::NoRuntime,
         );
-        let over = RecordedCoverage::over(&project.graph, &env);
+        let over = RecordedCoverage::over(&env.graph_of([]), &env);
         assert_eq!(over.entities().spec_root(), env.spec_root());
         assert!(Arc::ptr_eq(
             &over.at(None).unwrap().coverage.entities,

@@ -7,7 +7,7 @@ mod validator;
 use std::collections::HashSet;
 use std::path::Path;
 
-use specforge_graph::Graph;
+use specforge_graph::GraphBuild;
 use specforge_protocol_types::{
     EntityKindDescriptor, ExtensionDeclaration, FieldDescriptor, ValidationRuleDescriptor,
     ValidationSeverity,
@@ -20,14 +20,11 @@ use crate::snapshot::EntitySnapshot;
 
 /// `source` built with the graph inputs of `registries`: how the session pairs them, so a value
 /// is stored as the build coerced it (ADR 0115).
-fn graph_of(source: &str, registries: &RegistryBuild) -> Graph {
-    registries
-        .graph_of(
-            [specforge_parser::parse(source, "test.spec")],
-            HashSet::new(),
-        )
-        .into_parts()
-        .0
+fn graph_of(source: &str, registries: &RegistryBuild) -> GraphBuild {
+    registries.graph_of(
+        [specforge_parser::parse(source, "test.spec")],
+        HashSet::new(),
+    )
 }
 
 fn w004(kind: &str) -> ValidationRuleDescriptor {
@@ -112,4 +109,24 @@ fn w004_ids(source: &str, abstract_behaviors: bool) -> Vec<String> {
         .collect();
     ids.sort();
     ids
+}
+
+#[specforge_test_macros::test(
+    behavior = "snapshot_entities_once",
+    verify = "a snapshot reads only a graph built in its registry build"
+)]
+#[should_panic(expected = "an entity snapshot reads only a graph built in its Registry build")]
+fn a_graph_built_in_another_registry_build_is_not_read() {
+    let registries = declared(&[("behavior", true, true)], false, vec![]);
+    EntitySnapshot::of(
+        &RegistryBuild::default().graph_of(
+            [specforge_parser::parse(
+                "behavior a \"A\" {\n}\n",
+                "test.spec",
+            )],
+            HashSet::new(),
+        ),
+        &registries,
+        Path::new(""),
+    );
 }

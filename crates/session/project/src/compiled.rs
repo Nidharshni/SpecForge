@@ -185,7 +185,7 @@ impl CompiledProject {
     /// the graph, memoized for this state of the project.
     pub fn recorded(&self) -> &RecordedCoverage {
         self.recorded
-            .get_or_init(|| RecordedCoverage::over(self.graph.graph(), &self.env))
+            .get_or_init(|| RecordedCoverage::over(&self.graph, &self.env))
     }
 }
 
@@ -313,7 +313,7 @@ impl CompiledProject {
         let graph = &self.graph;
         let mut outcome = None;
         let moved = reads.run_checks(|disk| {
-            let entities = Arc::new(env.entity_snapshot(graph.graph()));
+            let entities = Arc::new(env.entity_snapshot(graph));
             outcome = Some((env.run_checks(graph.graph(), &entities, disk), entities));
         });
         if let Some((diagnostics, entities)) = outcome {

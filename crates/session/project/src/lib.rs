@@ -376,7 +376,7 @@ impl Environment {
     /// registries decide each entity's standing and its spec root resolves
     /// the relative paths the rules read. The one place a snapshot is
     /// taken from an environment.
-    pub fn entity_snapshot(&self, graph: &Graph) -> EntitySnapshot {
+    pub fn entity_snapshot(&self, graph: &GraphBuild) -> EntitySnapshot {
         EntitySnapshot::of(graph, &self.registries, self.sources.dir())
     }
 
