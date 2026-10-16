@@ -9,7 +9,7 @@ use specforge_graph::ValueShape;
 use crate::entity::{EntityRecord, RuleInput};
 
 /// One path a field names that does not exist under the spec root.
-pub(crate) struct Missing<'r> {
+pub(super) struct Missing<'r> {
     /// As the entity wrote it: the scalar's text, or the list item.
     pub path: &'r str,
     /// `did you mean '<dir>/<name>'?`: a close sibling in the missing path's directory.
@@ -19,7 +19,7 @@ pub(crate) struct Missing<'r> {
 /// The paths `record` names in `field`, in order, that `input.disk` says do not exist under
 /// `input.spec_root`. A relative path is the spec root's; an absolute one is checked as written
 /// (`join` keeps it). One `exists` per named path; only a missing one lists its directory.
-pub(crate) fn missing<'r>(
+pub(super) fn missing<'r>(
     record: &'r EntityRecord,
     field: &str,
     input: &RuleInput<'_>,

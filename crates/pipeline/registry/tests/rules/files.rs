@@ -1,5 +1,5 @@
-//! E016: a path a `file_reference` field names that does not exist, and the
-//! one set of files the checks read.
+//! E016, the host's `file_exists` rule for each `file_reference` field, and every `file_exists`
+//! rule's reading of the paths a field names (ADR 0118), run through `RegistryBuild::check`.
 
 use std::path::PathBuf;
 
@@ -217,7 +217,7 @@ fn with_a_file_exists_rule() -> ExtensionDeclaration {
 
 #[spec(
     behavior = "check_entities_in_one_order",
-    verify = "the checks read only through their disk: the paths file_reference fields of the entity's kind name, the paths file_exists rules read, and the directory E016's suggestion lists"
+    verify = "the checks read only through their disk: the paths file_exists rules read, E016's among them, and the directory a missing path's suggestion lists"
 )]
 fn the_checks_read_only_through_their_disk() {
     let build = build([with_a_file_exists_rule()]);
@@ -244,15 +244,16 @@ fn the_checks_read_only_through_their_disk() {
     assert_eq!(
         disk.asked(),
         [
-            // E016, record by record: a missing path lists its directory.
+            // The extensions' `file_exists` rules by code, then the host's E016 rules by kind
+            // and field: F001 over `guide`, a missing path lists its directory.
+            exists("/spec/guide.md".into()),
+            list("/spec".into()),
+            // E016 over `note.docs`, entity by entity.
             exists("/spec/more/one.md".into()),
             list("/spec/more".into()),
             exists("/spec/a.md".into()),
             list("/spec".into()),
             exists("/spec/a.md".into()),
-            list("/spec".into()),
-            // The `file_exists` rule over `guide`: a missing path lists its directory.
-            exists("/spec/guide.md".into()),
             list("/spec".into()),
         ]
     );

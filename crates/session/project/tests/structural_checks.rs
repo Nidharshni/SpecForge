@@ -82,12 +82,12 @@ gadget g_size { size \"big\" }
 ";
 
 const ORDER: [&str; 10] = [
-    "W012", "E016", "E024", "E013", "E014", "W020", "W158", "E022", "E061", "W900",
+    "W012", "E024", "E013", "E014", "W020", "W158", "E022", "E061", "W900", "E016",
 ];
 
-/// Every structural check reports, then the extension's rule: the order is
-/// W012, E016, E024, E013, E014, W020, W158, E022, E061, then the rules. It must
-/// stay byte-identical while the checks move (plan 04, T0..T12).
+/// Every structural check reports, then the rules: the order is W012, E024, E013, E014, W020,
+/// W158, E022, E061, then the extension's rule, then E016, a host rule after the extension's
+/// (ADR 0118).
 #[specforge_test(
     behavior = "check_entities_in_one_order",
     verify = "a compile reports the structural checks in the order the registry build runs them"

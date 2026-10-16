@@ -199,7 +199,8 @@ behavior validate_file_reference_paths "Validate File Reference Paths" {
     field of the same name on another kind is not one. Its value names
     its paths: a single value's text, quoted or a bare word, or each item of
     a list; an empty value names none, and so do a block and an expression
-    group.
+    group. E016 is a rule the host builds for each such field; it runs with
+    the rule set, after E006.
 
     Field-presence warnings (e.g., W018 for missing file-reference
     field on a supported kind) are NOT handled here — they are declared
