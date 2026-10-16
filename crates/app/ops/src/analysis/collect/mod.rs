@@ -32,7 +32,7 @@ pub use process::ProcessMachine;
 
 use crate::asking::{Asking, Question};
 use crate::view::ProjectView;
-use crate::{Caller, Held, OpError, OpErrorKind, Refusal};
+use crate::{Caller, Containment, Held, OpError, OpErrorKind, Refusal};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{Code, Diagnostic, DiagnosticList, ProjectPath, codes};
@@ -66,7 +66,7 @@ pub struct Request<'a> {
     /// What the collect may reach and who can be asked. Every file it reads or writes must land
     /// inside `caller.containment()` (ADR 0104 D3, ADR 0112 D2): the report, a collector's
     /// report files and its captured output; a name that lands outside is refused before any
-    /// command runs. `caller.asking()` decides whether a collector's command may run; the consent
+    /// command runs, for every collector. `caller.asking()` decides whether a collector's command may run; the consent
     /// store is read first (ADR 0110).
     pub caller: Caller<'a>,
 }
@@ -170,10 +170,12 @@ pub enum CollectStatus {
 /// Collect test results for the project the view was compiled from:
 /// select collectors among its declarations', run (in `runtime`) or read
 /// each one's report, map it through the extension to the view's entities
-/// and merge the answer into `<root>/specforge-report.json`. The request's
-/// `asking` decides whether a collector's command may run; its `announce`
-/// is told just before it runs. Without a root, or at a root that holds no
-/// project: `no_project`.
+/// and merge the answer into `<root>/specforge-report.json`. Every refusal that needs no run (a
+/// report location, a capture, a command, an approval) is decided for every selected collector
+/// before the first command runs (ADR 0125); the request's `caller.asking()` decides whether a
+/// collector's command may run, and its `announce` is told just before it runs. The machine runs
+/// the commands and keeps the approvals. Without a root, or at a root that holds no project:
+/// `no_project`.
 pub fn collect(
     view: &ProjectView,
     request: Request,
@@ -221,53 +223,36 @@ pub fn collect(
     let mut runners = Vec::new();
     let mut diagnostics = Vec::new();
     let mut unsaved_approvals = Vec::new();
-    for collector in selected {
-        let report_at = report_path(collector, root, containment)?;
-        let capturing = captures_stdout(collector)
-            .map_err(|m| fail(OpErrorKind::PreconditionFailed, codes::E058, m))?;
-        let capture = if capturing {
-            Some(capture_path(collector, &report_at, containment)?)
-        } else {
-            None
-        };
-        let argv = command_line(collector, &report_at.spelled);
+    // Decided for every collector before anything runs: a refusal that needs no run (a report
+    // location, a capture, a command, an approval) never follows an earlier collector's command.
+    let planned = selected
+        .into_iter()
+        .map(|collector| {
+            plan(
+                collector,
+                root,
+                mode,
+                asking,
+                containment,
+                machine,
+                &mut unsaved_approvals,
+            )
+        })
+        .collect::<Result<Vec<_>, OpError>>()?;
+    for Planned {
+        collector,
+        report_at,
+        capture,
+        argv,
+    } in planned
+    {
         let mut exit_code = None;
         let mut since = None;
         let mut stdout = None;
         if let Mode::Run(output) = mode {
-            if !allowed(
-                asking,
-                machine,
-                collector,
-                &argv,
-                root,
-                &mut unsaved_approvals,
-            ) {
-                return Err(fail(
-                    OpErrorKind::PermissionDenied,
-                    codes::E059,
-                    format!(
-                        "running `{}` needs approval for this project",
-                        argv.join(" ")
-                    ),
-                )
-                .with_suggestion(
-                    "approve it once with `specforge collect` in a terminal, or run `specforge \
-                     collect --yes`; reading the report the runner already wrote needs no approval",
-                )
-                .into());
-            }
             announce(collector, &argv);
-            let ran = run_command(
-                machine,
-                collector,
-                root,
-                &report_at,
-                capture.as_ref(),
-                &argv,
-                output,
-            )
-            .map_err(|m| fail(OpErrorKind::SchemaMismatch, codes::E045, m))?;
+            let ran = run_command(machine, root, &report_at, capture.as_ref(), &argv, output)
+                .map_err(|m| fail(OpErrorKind::SchemaMismatch, codes::E045, m))?;
             exit_code = ran.exit_code;
             since = Some(ran.started);
             stdout = capture.as_ref().and_then(read_capture);
@@ -334,6 +319,69 @@ pub fn collect(
     })
 }
 
+/// What one selected collector will do, decided before any collector's command runs.
+struct Planned<'a> {
+    collector: &'a Collector,
+    report_at: Held,
+    capture: Option<Held>,
+    argv: Vec<String>,
+}
+
+/// Decide `collector`'s part of the collect without running anything or writing a file: where its
+/// report and captured output land, its command line, and under [`Mode::Run`] that it has a command
+/// and that the command may run (asking whoever can be asked; E059 otherwise).
+fn plan<'a>(
+    collector: &'a Collector,
+    root: &Path,
+    mode: Mode<'_>,
+    asking: Asking<'_>,
+    containment: &Containment,
+    machine: &dyn CollectorMachine,
+    unsaved_approvals: &mut Vec<String>,
+) -> Result<Planned<'a>, OpError> {
+    let report_at = report_path(collector, root, containment)?;
+    let capturing = captures_stdout(collector)
+        .map_err(|m| fail(OpErrorKind::PreconditionFailed, codes::E058, m))?;
+    let capture = if capturing {
+        Some(capture_path(collector, &report_at, containment)?)
+    } else {
+        None
+    };
+    let argv = command_line(collector, &report_at.spelled);
+    if let Mode::Run(_) = mode {
+        if argv.is_empty() {
+            return Err(fail(
+                OpErrorKind::SchemaMismatch,
+                codes::E045,
+                format!(
+                    "collector '{}' of {} declares no command; use --no-run with its report",
+                    collector.name, collector.extension
+                ),
+            ));
+        }
+        if !allowed(asking, machine, collector, &argv, root, unsaved_approvals) {
+            return Err(fail(
+                OpErrorKind::PermissionDenied,
+                codes::E059,
+                format!(
+                    "running `{}` needs approval for this project",
+                    argv.join(" ")
+                ),
+            )
+            .with_suggestion(
+                "approve it once with `specforge collect` in a terminal, or run `specforge \
+                 collect --yes`; reading the report the runner already wrote needs no approval",
+            ));
+        }
+    }
+    Ok(Planned {
+        collector,
+        report_at,
+        capture,
+        argv,
+    })
+}
+
 /// Run the collector's declared command in the project root through `machine`. A report *file* left by
 /// an earlier run is removed first; a report *directory* is left alone (other tools may keep files
 /// there) and filtered by modification time when it's read. A captured standard output still reaches
@@ -341,19 +389,12 @@ pub fn collect(
 /// creates or writes is a held one.
 fn run_command(
     machine: &dyn CollectorMachine,
-    collector: &Collector,
     root: &Path,
     report: &Held,
     capture: Option<&Held>,
     argv: &[String],
     output: RunnerOutput,
 ) -> Result<Ran, String> {
-    if argv.is_empty() {
-        return Err(format!(
-            "collector '{}' of {} declares no command; use --no-run with its report",
-            collector.name, collector.extension
-        ));
-    }
     if report.real.is_file() {
         report
             .remove()

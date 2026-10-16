@@ -288,7 +288,7 @@ fn reports_mode_reads_the_named_files_and_runs_nothing() {
 
 #[specforge_test(
     behavior = "run_collector_command",
-    verify = "Run Collector Command: collector command execution holds — command_approved, report_inside_project, stale_report_ignored, report_path_exported, failing_tests_recorded"
+    verify = "Run Collector Command: collector command execution holds — command_approved, report_inside_project, stale_report_ignored, report_path_exported, failing_tests_recorded, refused_before_running"
 )]
 fn the_run_and_approval_contracts_hold() {
     // command_approved: an unapproved command with nobody to ask runs nothing (E059).
@@ -318,4 +318,13 @@ fn the_run_and_approval_contracts_hold() {
     assert_eq!(machine.runs()[0].report, fx.report_of("acme"));
     assert_eq!(fx.dispatched()[0].input["reports"][0]["content"], "{}");
     assert_eq!(outcome.runners[0].exit_code, Some(101));
+
+    // refused_before_running: with two collectors, the second's refusal runs nothing (order.rs).
+    let two = Fixture::new(vec![Runner::new("first"), Runner::new("second")]);
+    two.write("first.cfg", "");
+    two.write("second.cfg", "");
+    let machine = ScriptedMachine::new().approving(two.approval("first"));
+    let refusal = two.run(Asking::Nobody, &machine).unwrap_err();
+    assert_eq!(refusal.error.code, "E059");
+    assert!(machine.runs().is_empty());
 }

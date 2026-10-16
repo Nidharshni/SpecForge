@@ -461,7 +461,8 @@ behavior approve_collector_command "Approve Collector Command" {
     json`, nothing is asked: an unapproved command fails with E059, `--yes`
     runs it without recording an approval, and `--no-run` parses an
     existing report. The MCP server never prompts and runs only approved
-    commands.
+    commands. With several collectors, every approval is asked before any
+    command runs.
   """
   produces   []
   verify unit "consent is keyed by project, extension and command"
@@ -485,6 +486,7 @@ behavior run_collector_command "Run Collector Command" {
     stale_report_ignored   "an earlier run's report is never read: a report file is removed before the command starts, and only report-directory files written during the run are read"
     report_path_exported   "the command runs in the project root with SPECFORGE_REPORT set to the absolute report path and {report} expanded"
     failing_tests_recorded "a non-zero exit is not an error when a report was written; no report is E045"
+    refused_before_running "every refusal that needs no run (a report location, a capture, a command, an approval) is decided for every selected collector before the first command runs"
   }
   contract   """
     The host, not the extension, runs the approved command: extensions stay
@@ -503,7 +505,9 @@ behavior run_collector_command "Run Collector Command" {
     is produced, and is also written to `<collector>.stdout.txt` inside a
     report directory (next to a report file), which `--no-run` reads back.
     A captured output counts as a report. Any other `capture` value is
-    E058.
+    E058. With several collectors, every refusal that needs no run (a
+    report location, a capture, a command, an approval) is decided for all
+    of them before the first command runs.
   """
   produces   []
   verify unit "report path must stay inside the project"
@@ -511,7 +515,7 @@ behavior run_collector_command "Run Collector Command" {
   verify unit "command line expands the report placeholder"
   verify unit "a captured stdout is kept in every output mode"
   verify unit "an unknown capture is refused"
-  verify contract "Run Collector Command: collector command execution holds — command_approved, report_inside_project, stale_report_ignored, report_path_exported, failing_tests_recorded"
+  verify contract "Run Collector Command: collector command execution holds — command_approved, report_inside_project, stale_report_ignored, report_path_exported, failing_tests_recorded, refused_before_running"
 }
 
 behavior dispatch_collector "Dispatch Collector" {

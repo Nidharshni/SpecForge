@@ -27,7 +27,6 @@ fn first_runs() -> ScriptedMachine {
 }
 
 #[test]
-#[ignore = "flipped by T6"]
 fn no_command_runs_when_a_later_collector_is_not_approved() {
     let fx = two(Runner::new("second").proving("b", "t"));
     let approval = fx.approval("first");
@@ -53,7 +52,6 @@ fn no_command_runs_when_a_later_collector_is_not_approved() {
 }
 
 #[test]
-#[ignore = "flipped by T6"]
 fn no_command_runs_when_a_later_capture_is_unknown() {
     let fx = two(Runner::new("second").capturing("stderr"));
     let machine = first_runs().approving_every_command();
@@ -71,7 +69,6 @@ fn no_command_runs_when_a_later_capture_is_unknown() {
 
 #[cfg(unix)]
 #[test]
-#[ignore = "flipped by T6"]
 fn no_command_runs_when_a_later_report_location_leaves_the_project() {
     let fx = two(Runner::new("second").report("out2/second.json"));
     let outside = tempfile::tempdir().unwrap();
