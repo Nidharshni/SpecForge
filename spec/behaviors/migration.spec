@@ -307,7 +307,9 @@ behavior rollback_failed_migration "Rollback Failed Migration" {
     preserved (not auto-deleted) so the user can retry or inspect them.
     The system MUST report the number of files restored, skipped, and
     failed. It MUST report each file it restored as written
-    (files_written under --format json).
+    (files_written under --format json). Under --format json the document
+    (rolled_back, hook_failures, structural_differences) is the whole
+    report of an automatic rollback: nothing is written on stderr.
   """
   verify unit "restores migrated files from .bak backups"
   verify unit "missing .bak file produces warning and skips"
@@ -321,6 +323,7 @@ behavior rollback_failed_migration "Rollback Failed Migration" {
   verify unit "a rollback with no recorded migration restores nothing"
   verify unit "an automatic rollback restores only the files its run migrated"
   verify unit "an automatic rollback restores a run made without backups"
+  verify unit "under --format json a rolled-back migration writes nothing beside its document"
   verify contract "Rollback Failed Migration: migration rollback holds — migration_recorded, files_restored, edited_files_kept, rollback_event_emitted, backup_file_preservation"
 }
 

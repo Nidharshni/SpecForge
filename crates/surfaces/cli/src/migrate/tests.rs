@@ -54,8 +54,10 @@ fn migrate(format: &str) -> (Exit, String, String) {
     (exit, capture.stdout(), capture.stderr())
 }
 
-#[test]
-#[ignore = "flipped by T9"]
+#[specforge_test_macros::test(
+    behavior = "rollback_failed_migration",
+    verify = "under --format json a rolled-back migration writes nothing beside its document"
+)]
 fn a_rolled_back_migration_writes_nothing_beside_its_json_document() {
     let (exit, stdout, stderr) = migrate("json");
 

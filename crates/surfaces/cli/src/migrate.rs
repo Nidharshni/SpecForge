@@ -1,5 +1,6 @@
+use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
-use crate::terminal::{Terminal, errln, outln};
+use crate::terminal::{Terminal, outln};
 use specforge_common::ProjectPath;
 use specforge_ops::Containment;
 use specforge_ops::authoring::migrate::{
@@ -50,6 +51,7 @@ impl Args {
         };
         let path = root.dir();
         let (dry_run, no_backup) = (self.dry_run, self.no_backup);
+        let notes = Notes::new(terminal, format);
         // Handle rollback mode
         if self.rollback {
             let outcome = migrate::rollback(&root);
@@ -59,6 +61,7 @@ impl Args {
                 &outcome.writes.named(Some(path)),
                 format,
                 terminal,
+                &notes,
             );
             return Exit::of_verdict(outcome.ok());
         }
@@ -85,25 +88,24 @@ impl Args {
         };
         // Each migrated file and each backup (none for a dry run).
         let written = (!dry_run).then(|| outcome.writes.named(Some(path)));
-        print_migration(&outcome.document(), written, format, terminal);
+        print_migration(&outcome.document(), written, format, terminal, &notes);
 
         if outcome.summary.failed_count != 0 {
             return Exit::of_verdict(outcome.ok());
         }
+        // The document carries the hook failures and the structural differences; the restore is a person's line.
         for failure in &outcome.hook_failures {
-            errln!(terminal, "migration hook failure: {failure}");
+            notes.person(format_args!("migration hook failure: {failure}"));
         }
-        for d in outcome.structural_differences() {
-            errln!(terminal, "warning[{}]: {}", d.code, d.message);
-        }
+        let differences = outcome.structural_differences();
+        notes.carried(&differences);
         if outcome.rollback.is_some() {
             if outcome.hook_failures.is_empty() {
-                errln!(
-                    terminal,
+                notes.person(format_args!(
                     "migration changed the graph structure; files restored from backups"
-                );
+                ));
             } else {
-                errln!(terminal, "files restored from backups");
+                notes.person(format_args!("files restored from backups"));
             }
         }
 
@@ -118,6 +120,7 @@ fn print_rollback(
     files_written: &[ProjectPath],
     format: OutputFormat,
     terminal: &Terminal,
+    notes: &Notes<'_>,
 ) {
     match format {
         OutputFormat::Json => {
@@ -125,36 +128,31 @@ fn print_rollback(
         }
         OutputFormat::Human => {
             for w in &summary.warnings {
-                errln!(terminal, "warning: {w}");
+                notes.person(format_args!("warning: {w}"));
             }
             for r in &summary.results {
                 match r.status {
                     MigrationStatus::Restored => {
-                        errln!(
-                            terminal,
+                        notes.person(format_args!(
                             "  restored: {}",
                             r.file_path.under(root).display()
-                        );
+                        ));
                     }
                     MigrationStatus::Skipped => {}
                     MigrationStatus::Failed => {
-                        errln!(
-                            terminal,
+                        notes.person(format_args!(
                             "  failed: {} ({})",
                             r.file_path.under(root).display(),
                             r.error.as_deref().unwrap_or("unknown")
-                        );
+                        ));
                     }
                     _ => {}
                 }
             }
-            errln!(
-                terminal,
+            notes.person(format_args!(
                 "{} restored, {} skipped, {} failed",
-                summary.restored_count,
-                summary.skipped_count,
-                summary.failed_count
-            );
+                summary.restored_count, summary.skipped_count, summary.failed_count
+            ));
         }
     }
 }
@@ -166,6 +164,7 @@ fn print_migration(
     files_written: Option<Vec<ProjectPath>>,
     format: OutputFormat,
     terminal: &Terminal,
+    notes: &Notes<'_>,
 ) {
     match format {
         OutputFormat::Json => terminal.json(&Written {
@@ -179,16 +178,13 @@ fn print_migration(
                 }
             }
             for d in &document.diagnostics.0 {
-                errln!(terminal, "{}[{}]: {}", d.severity, d.code, d.message);
+                notes.person(format_args!("{}[{}]: {}", d.severity, d.code, d.message));
             }
 
-            errln!(
-                terminal,
+            notes.person(format_args!(
                 "{} migrated, {} skipped, {} failed",
-                document.files_migrated,
-                document.files_skipped,
-                document.files_failed
-            );
+                document.files_migrated, document.files_skipped, document.files_failed
+            ));
         }
     }
 }
