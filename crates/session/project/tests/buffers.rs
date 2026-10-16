@@ -21,7 +21,7 @@ const ZETA: &str = "type zeta \"Z\" {}\n";
 
 /// An extension whose one check pass reports I990: each run of the checks is
 /// one call, and the session reports I990 exactly when the checks ran last.
-fn counting() -> Arc<InProcessRuntime> {
+pub(super) fn counting() -> Arc<InProcessRuntime> {
     Arc::new(InProcessRuntime::new().with(|| {
         let mut c = ContributionsBuilder::new(ExtensionMeta::new(EXT, "1.0.0"));
         c.pass("count", |p| {
@@ -37,7 +37,7 @@ fn counting() -> Arc<InProcessRuntime> {
     }))
 }
 
-fn check_runs(runtime: &InProcessRuntime) -> usize {
+pub(super) fn check_runs(runtime: &InProcessRuntime) -> usize {
     runtime
         .calls()
         .iter()
@@ -47,7 +47,7 @@ fn check_runs(runtime: &InProcessRuntime) -> usize {
 
 /// A project holding `a.spec` (alpha) that enables the counting extension,
 /// opened over `runtime`.
-fn opened(runtime: &Arc<InProcessRuntime>) -> (TestProject, ProjectSession) {
+pub(super) fn opened(runtime: &Arc<InProcessRuntime>) -> (TestProject, ProjectSession) {
     let dir = TestProject::new()
         .config(|c| c["name"] = "p".into())
         .enabling(&[EXT])
@@ -57,7 +57,7 @@ fn opened(runtime: &Arc<InProcessRuntime>) -> (TestProject, ProjectSession) {
     (dir, session)
 }
 
-fn has(session: &ProjectSession, id: &str) -> bool {
+pub(super) fn has(session: &ProjectSession, id: &str) -> bool {
     session.project().graph().node(id).is_some()
 }
 

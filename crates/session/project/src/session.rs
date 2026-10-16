@@ -502,8 +502,33 @@ impl ProjectSession {
         let Some(root) = self.project.environment().project_root().cloned() else {
             return self.unchanged(UpdateKind::Environment, false);
         };
+        let source = self.source.clone();
+        self.reopen(&root, source, |_| {})
+    }
+
+    /// Open the project at `root` in this session's place, each environment load getting its runtime
+    /// from `source`: the environment loads first (config, lock, extensions; every input stamped before
+    /// it is read) and is handed to `loaded` before any `.spec` file is read; then one cold build reads
+    /// every source, each buffer this session holds in place of its file, and runs the checks once.
+    /// What carries over: the held buffers (keyed again by the new environment: the spec root may have
+    /// moved) and whether the session verifies its updates. Everything else is the new project's: its
+    /// inputs, stamps and runtime source (later reloads use `source`). The update is the replacement:
+    /// kind `Environment`, every file of the new graph rebuilt, the delta between the two graphs, the
+    /// inputs changed when they differ, no verification (nothing incremental ran).
+    ///
+    /// `loaded` runs once and must not touch the session: it gets only the environment. A root with no
+    /// `specforge.json` opens as a loose root. If the environment load or `loaded` panics, the session is
+    /// unchanged (the buffers are taken after both).
+    pub fn reopen(
+        &mut self,
+        root: &ProjectRoot,
+        source: RuntimeSource,
+        loaded: impl FnOnce(&Arc<Environment>),
+    ) -> Update {
+        let opening = Self::begin_open(root, source);
+        loaded(opening.environment());
         let buffers = std::mem::take(&mut self.held).into_buffers();
-        let mut next = Self::begin_open(&root, self.source.clone()).finish_holding(buffers);
+        let mut next = opening.finish_holding(buffers);
         next.project.set_verify(self.project.verifies());
         let previous = std::mem::replace(self, next);
         self.replaced(&previous)
