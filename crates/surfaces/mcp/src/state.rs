@@ -192,9 +192,9 @@ impl McpState {
     }
 
     /// Serve the project at `root` as it is on disk now, its config and
-    /// extensions included: the served session reloads its environment
-    /// and rebuilds from the sources (a fresh compile), or a session is
-    /// opened when `root` is not the project served. The graph,
+    /// extensions included: the served session is reopened at `root`
+    /// (`ProjectSession::reopen`), a fresh compile of what is on disk,
+    /// whether it was the project served or another. The graph,
     /// diagnostics, registries, config and runtime change together, with
     /// the session; the extension surface table is built again from this
     /// project's declarations, so nothing a previous load contributed
@@ -209,32 +209,24 @@ impl McpState {
             "only a project is served: {} holds no specforge.json",
             root.dir().display()
         );
-        // The served session reloads when it is the project on disk at
-        // `root`; any other root is opened.
-        let canonical = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
-        let reloads = self
-            .project_root()
-            .is_some_and(|served| canonical(served) == root.canonical());
-        let update = if reloads {
-            self.session.reload_environment()
-        } else {
-            let next = self.open(root);
-            let previous = std::mem::replace(&mut self.session, next);
-            self.session.replaced(&previous)
-        };
+        let update = self.session.reopen(root, self.source(), |_| {});
         self.applied(update);
     }
 
-    /// A session of the project at `root`, its extensions running in the
-    /// host's runtime when the server has one, else in the project's own,
-    /// built for each environment load (ADR 0030 D3): how the served project
-    /// and another project a call names are opened.
-    pub(crate) fn open(&self, root: &ProjectRoot) -> ProjectSession {
-        let source = match &self.extension_runtime {
+    /// Where a session MCP opens gets its extension runtime: the host's
+    /// when it gave one, else the project's own, built for each environment
+    /// load (ADR 0030 D3).
+    fn source(&self) -> RuntimeSource {
+        match &self.extension_runtime {
             Some(runtime) => RuntimeSource::Fixed(Some(Arc::clone(runtime))),
             None => RuntimeSource::project(),
-        };
-        ProjectSession::open_from(root, source)
+        }
+    }
+
+    /// A session of the project at `root`, its extensions running as
+    /// [`Self::source`] says: how another project a call names is opened.
+    pub(crate) fn open(&self, root: &ProjectRoot) -> ProjectSession {
+        ProjectSession::open_from(root, self.source())
     }
 
     /// Bring the served project up to date with disk (behavior

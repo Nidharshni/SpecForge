@@ -44,6 +44,7 @@ mod publish;
 mod query;
 mod review;
 mod schema;
+mod schema_notices;
 mod setup;
 mod stats;
 mod trace;

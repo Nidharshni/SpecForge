@@ -173,10 +173,10 @@ pub struct ProjectSession {
 }
 
 /// A project whose environment is loaded and whose sources are not read yet
-/// ([`ProjectSession::begin_open`]). Its environment is shared, so a reader
-/// can serve what needs only it (an editor's keyword completion) while
-/// [`Self::finish`] reads and builds the sources.
-pub struct OpeningProject {
+/// ([`ProjectSession::begin_open`]). [`ProjectSession::reopen`] hands its
+/// environment over (an editor's keyword completion is served from it) before
+/// [`Self::finish_holding`] reads and builds the sources.
+struct OpeningProject {
     env: Arc<Environment>,
     /// Where each environment load gets its runtime.
     source: RuntimeSource,
@@ -189,20 +189,20 @@ pub struct OpeningProject {
 impl OpeningProject {
     /// The loaded environment: what the finished session will have, until
     /// the environment is loaded again.
-    pub fn environment(&self) -> &Arc<Environment> {
+    fn environment(&self) -> &Arc<Environment> {
         &self.env
     }
 
     /// Read every source, build the graph and run the checks: the session
     /// [`ProjectSession::open`] returns. [`Self::finish_holding`] with no
     /// buffer.
-    pub fn finish(self) -> ProjectSession {
+    fn finish(self) -> ProjectSession {
         self.finish_holding(Vec::new())
     }
 
     /// [`Self::finish`], holding `buffers`: each held buffer's text is read
     /// in place of its file by the one cold build, so the checks run once.
-    pub fn finish_holding(self, buffers: Vec<Buffer>) -> ProjectSession {
+    fn finish_holding(self, buffers: Vec<Buffer>) -> ProjectSession {
         let mut snapshot = self.snapshot;
         let discovered = self.inputs.discover();
         snapshot.stamp_all_sources(&self.inputs, &discovered);
@@ -259,13 +259,10 @@ impl ProjectSession {
         Self::begin_open(root, source).finish()
     }
 
-    /// The first half of [`Self::open_from`]: the environment loaded
-    /// (config, extensions, registries; each load getting its runtime from
-    /// `source`), no `.spec` file read. What needs only the environment (the
-    /// kinds and fields a keyword completion offers) is served from
-    /// [`OpeningProject::environment`] while [`OpeningProject::finish`]
-    /// reads and builds the sources.
-    pub fn begin_open(root: &ProjectRoot, source: RuntimeSource) -> OpeningProject {
+    /// The first half of [`Self::open_from`] and [`Self::reopen`]: the
+    /// environment loaded (config, extensions, registries; each load getting
+    /// its runtime from `source`), no `.spec` file read.
+    fn begin_open(root: &ProjectRoot, source: RuntimeSource) -> OpeningProject {
         // Everything is stamped before anything reads it (crate::freshness):
         // the config before its one read, the lock and the modules before
         // the runtime and the environment read them, the sources by `finish`.
@@ -403,12 +400,6 @@ impl ProjectSession {
         self.held.get(key)
     }
 
-    /// Every buffer the session holds, given up: what a project opened in
-    /// this session's place holds next.
-    pub fn into_buffers(self) -> Vec<Buffer> {
-        self.held.into_buffers()
-    }
-
     /// What changed on disk among what `paths` reach (behavior
     /// `classify_project_changes`): the comparison [`Self::stale`] makes,
     /// narrowed to them. `paths` are absolute, spelled as a file watcher or
@@ -502,8 +493,33 @@ impl ProjectSession {
         let Some(root) = self.project.environment().project_root().cloned() else {
             return self.unchanged(UpdateKind::Environment, false);
         };
+        let source = self.source.clone();
+        self.reopen(&root, source, |_| {})
+    }
+
+    /// Open the project at `root` in this session's place, each environment load getting its runtime
+    /// from `source`: the environment loads first (config, lock, extensions; every input stamped before
+    /// it is read) and is handed to `loaded` before any `.spec` file is read; then one cold build reads
+    /// every source, each buffer this session holds in place of its file, and runs the checks once.
+    /// What carries over: the held buffers (keyed again by the new environment: the spec root may have
+    /// moved) and whether the session verifies its updates. Everything else is the new project's: its
+    /// inputs, stamps and runtime source (later reloads use `source`). The update is the replacement:
+    /// kind `Environment`, every file of the new graph rebuilt, the delta between the two graphs, the
+    /// inputs changed when they differ, no verification (nothing incremental ran).
+    ///
+    /// `loaded` runs once and must not touch the session: it gets only the environment. A root with no
+    /// `specforge.json` opens as a loose root. If the environment load or `loaded` panics, the session is
+    /// unchanged (the buffers are taken after both).
+    pub fn reopen(
+        &mut self,
+        root: &ProjectRoot,
+        source: RuntimeSource,
+        loaded: impl FnOnce(&Arc<Environment>),
+    ) -> Update {
+        let opening = Self::begin_open(root, source);
+        loaded(opening.environment());
         let buffers = std::mem::take(&mut self.held).into_buffers();
-        let mut next = Self::begin_open(&root, self.source.clone()).finish_holding(buffers);
+        let mut next = opening.finish_holding(buffers);
         next.project.set_verify(self.project.verifies());
         let previous = std::mem::replace(self, next);
         self.replaced(&previous)
@@ -511,7 +527,7 @@ impl ProjectSession {
 
     /// The update that replacing `previous` with this session amounts to:
     /// every file rebuilt, the delta between the two graphs.
-    pub fn replaced(&self, previous: &ProjectSession) -> Update {
+    fn replaced(&self, previous: &ProjectSession) -> Update {
         Update::of(
             UpdateKind::Environment,
             previous.inputs != self.inputs,

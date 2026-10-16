@@ -140,6 +140,50 @@ fn a_format_that_wrote_files_is_served() {
     assert_eq!(after, Some(on_disk.lines().count()));
 }
 
+/// A request before `initialize` serves the project at the server's root; `initialize` naming
+/// another project then replaces it whole (ADR 0109: the served session is reopened at the new
+/// root).
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "initialize naming another project replaces the project a stateless request served"
+)]
+fn initialize_naming_another_project_replaces_the_one_a_stateless_request_served() {
+    let a = project(&[], "behavior a \"A\" {\n");
+    let b = project(&[], "behavior b \"B\" {\n}\n");
+    let canonical = |dir: &TempDir| fs::canonicalize(dir.path()).unwrap();
+    let mut server = McpServer::with_project_root(a.path().to_path_buf());
+
+    let resp = call(
+        &mut server,
+        "tools/call",
+        json!({
+            "name": "specforge.validate",
+            "arguments": {},
+            "_meta": {
+                "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                "io.modelcontextprotocol/clientCapabilities": {}
+            }
+        }),
+    );
+    assert!(resp["error"].is_null(), "{resp}");
+    let state = server.state();
+    assert_eq!(
+        state.project_root().map(|p| fs::canonicalize(p).unwrap()),
+        Some(canonical(&a))
+    );
+    assert!(state.diagnostics().iter().any(|d| d.code == "E001"));
+
+    initialize(&mut server, b.path());
+    let state = server.state();
+    assert_eq!(
+        state.project_root().map(|p| fs::canonicalize(p).unwrap()),
+        Some(canonical(&b))
+    );
+    assert!(state.diagnostics().iter().all(|d| d.code != "E001"));
+    assert!(state.graph().node("b").is_some());
+    assert!(state.graph().node("a").is_none());
+}
+
 /// Shutdown stops serving the project whole: its graph, diagnostics,
 /// config and spec root go with its session.
 #[test]

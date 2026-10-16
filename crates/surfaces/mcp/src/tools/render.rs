@@ -13,7 +13,7 @@ use specforge_common::shape::Shape;
 
 use crate::args::Arguments;
 use crate::containment;
-use crate::reply::Answered;
+use crate::reply::{Answer, Answered};
 use crate::tool::{ErrorCode, McpError};
 use specforge_ops::Containment;
 use specforge_ops::view::ProjectView;
@@ -109,16 +109,17 @@ impl CoreTool for Tool {
             scope: args.scope.as_deref(),
             ..specforge_ops::read::export::Request::default()
         };
-        let output = specforge_ops::read::export::export(&view, &request).map_err(Self::refused)?;
+        let exported =
+            specforge_ops::read::export::export(&view, &request).map_err(Self::refused)?;
 
         // With out_dir the rendering lands on disk; without it, inline.
         let Some(out_dir) = args.out_dir.as_deref() else {
-            return Ok(Reply {
+            return Ok(Answer::new(Reply {
                 format: name.to_string(),
-                output: Some(output),
+                output: Some(exported.document),
                 output_files: Vec::new(),
-            }
-            .into());
+            })
+            .with_diagnostics(exported.notices));
         };
         // Inside the call's project, as every path a request names is
         // (ADR 0092); with no project served there is nothing to be inside.
@@ -150,18 +151,18 @@ impl CoreTool for Tool {
             Some(parent) => std::fs::create_dir_all(parent),
             None => Ok(()),
         }
-        .and_then(|()| std::fs::write(&landed, output));
+        .and_then(|()| std::fs::write(&landed, exported.document));
         if let Err(e) = written {
             return Err(Box::new(McpError::new(
                 ErrorCode::InternalError,
                 format!("failed to write {}: {e}", path.display()),
             )));
         }
-        Ok(Reply {
+        Ok(Answer::new(Reply {
             format: name.to_string(),
             output: None,
             output_files: vec![ProjectPath::of(root, &path)],
-        }
-        .into())
+        })
+        .with_diagnostics(exported.notices))
     }
 }

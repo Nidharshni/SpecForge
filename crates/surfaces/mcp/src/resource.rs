@@ -10,6 +10,7 @@
 //! alone builds the `contents` of a read and the error of a refused one.
 
 use serde_json::{Value, json};
+use specforge_common::Diagnostic;
 
 use crate::protocol::{JsonRpcError, JsonRpcResponse};
 use crate::registry::Listed;
@@ -42,6 +43,10 @@ pub trait CoreResource: Sync + 'static {
 pub struct ResourceText {
     pub mime_type: String,
     pub text: String,
+    /// What the read noticed (I016, W053, I020; ADR 0111): sent as the
+    /// result's `_meta.diagnostics`, the shape a tool result's has. The
+    /// content stays text.
+    pub notices: Vec<Diagnostic>,
 }
 
 impl ResourceText {
@@ -49,7 +54,13 @@ impl ResourceText {
         Self {
             mime_type: "application/json".into(),
             text: text.into(),
+            notices: Vec::new(),
         }
+    }
+
+    pub fn with_notices(mut self, notices: Vec<Diagnostic>) -> Self {
+        self.notices = notices;
+        self
     }
 }
 
@@ -133,16 +144,21 @@ pub(crate) fn resource_envelope(
     id: Option<Value>,
 ) -> JsonRpcResponse {
     match outcome {
-        Ok(text) => JsonRpcResponse::success(
-            id,
-            json!({
+        Ok(text) => {
+            let mut result = json!({
                 "contents": [{
                     "uri": uri,
                     "mimeType": text.mime_type,
                     "text": text.text,
                 }]
-            }),
-        ),
+            });
+            if !text.notices.is_empty() {
+                result["_meta"] = json!({
+                    "diagnostics": specforge_common::diagnostics_json(&text.notices),
+                });
+            }
+            JsonRpcResponse::success(id, result)
+        }
         Err(refusal) => {
             let missing = refusal.code == ErrorCode::EntityNotFound;
             let mut error = refusal.into_rpc_error();
@@ -160,4 +176,28 @@ pub(crate) fn resource_envelope(
 pub(crate) fn unknown_resource(not_found: i64, uri: &str) -> JsonRpcError {
     JsonRpcError::new(not_found, format!("Unknown resource URI: {uri}"))
         .with_data(json!({ "uri": uri }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use specforge_common::codes;
+
+    fn result_of(text: ResourceText) -> Value {
+        resource_envelope(Ok(text), "specforge://x", -32002, None)
+            .result
+            .expect("a read is a result")
+    }
+
+    #[test]
+    fn a_read_with_notices_carries_them_in_its_meta() {
+        let notice = Diagnostic::new(codes::I016, "the schema cache could not be read");
+
+        let with = result_of(ResourceText::json("{}").with_notices(vec![notice]));
+        assert_eq!(with["_meta"]["diagnostics"][0]["code"], "I016", "{with}");
+        assert_eq!(with["contents"][0]["text"], "{}");
+
+        let without = result_of(ResourceText::json("{}"));
+        assert!(without.get("_meta").is_none(), "{without}");
+    }
 }

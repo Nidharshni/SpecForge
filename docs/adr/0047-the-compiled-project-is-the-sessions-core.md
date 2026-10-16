@@ -1,7 +1,7 @@
 # The compiled project is the session's core
 
 **Status:** accepted (2026-10-09). Amends [ADR 0032](0032-one-graph-build.md) ("One cold pipeline"); notes in
-ADRs 0014, 0015 and 0019. D1: the core also memoizes its report (ADR 0074).
+ADRs 0014, 0015 and 0019. D1: the core also memoizes its report (ADR 0074). D6 amended by [ADR 0109](0109-reopening-a-project-in-place-is-one-session-operation.md) (`McpState::source` is the one runtime rule; the served project is reopened in place).
 
 `specforge-project` had two types with the same six fields, the environment, the sources, the import
 diagnostics, the graph, the check diagnostics and the snapshot and coverage memo, held in different types

@@ -191,7 +191,8 @@ behavior hold_editor_buffers "Hold Editor Buffers" {
     other file leaves the project; a release that changes nothing runs no
     check, unless the checks were skipped while the buffer did not parse.
     Opening a project in the place of a session and loading the environment
-    again keep every held buffer, read in place of its file by their one
+    again keep every held buffer and whether the session verifies its
+    updates, the buffers read in place of their file by their one
     cold build, so the checks run once. The session keeps each held
     buffer's version, so what is reported from it is labelled with the
     version it was computed from. Watch and MCP hold no buffer.
@@ -205,6 +206,7 @@ behavior hold_editor_buffers "Hold Editor Buffers" {
   verify unit "opening a project in place of a session keeps its buffers and runs the checks once"
   verify unit "an environment reload keeps the held buffers and runs the checks once"
   verify unit "a held buffer that a reload brings into the project is built from its text"
+  verify unit "a project opened in a session's place keeps its buffers and whether it verifies"
 }
 
 behavior invalidate_changed_files "Invalidate Changed Files" {
@@ -613,6 +615,7 @@ behavior validate_delta_correctness "Validate Delta Correctness" {
   verify unit "delta applied to old graph equals new graph"
   verify unit "a discrepancy is reported with a message naming what differs"
   verify unit "check disabled in release builds"
+  verify unit "an environment reload keeps whether the session verifies its updates"
   verify integration "a debug build checks each rebuild without the flag"
   verify unit "the LSP and MCP check each rebuild in a debug build"
   verify unit "a rebuild that passes the check is reported as passed"
