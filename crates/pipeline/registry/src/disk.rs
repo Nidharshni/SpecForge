@@ -1,15 +1,16 @@
-//! What the checks see of the file system (ADR 0107): the one way a check, a
-//! rule or a check pass reaches it. The checks never call `std::fs`; they ask
-//! the [`Disk`] in their [`crate::RuleInput`].
+//! What the checks and the environment load see of the file system (ADR 0107,
+//! ADR 0114): the one way a check, a rule, a check pass or the extension load
+//! reaches it. They never call `std::fs`; they ask the [`Disk`] they are
+//! given (the checks' in their [`crate::RuleInput`]).
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::path::{Path, PathBuf};
 
-/// The file system as the checks read it. Each call is one read; an adapter
-/// may record it (a project session's ledger stamps the path and records it
-/// as a check input).
+/// The file system as the checks and the environment load read it. Each call
+/// is one read; an adapter may record it (a project session's ledger stamps
+/// the path and records it as an input).
 pub trait Disk {
     /// Whether `path` names an existing file or directory, following
     /// symlinks (`Path::exists`): `false` when it does not exist or cannot
@@ -22,6 +23,37 @@ pub trait Disk {
     /// The bytes of the file at `path`; an error of kind `NotFound` when it
     /// does not exist.
     fn read(&self, path: &Path) -> io::Result<Vec<u8>>;
+}
+
+/// The file system, nothing recorded: what a one-shot compile and every
+/// operation outside a session read through.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PlainDisk;
+
+impl Disk for PlainDisk {
+    fn exists(&self, path: &Path) -> bool {
+        path.exists()
+    }
+
+    fn list(&self, dir: &Path) -> Option<Vec<String>> {
+        list_names(dir)
+    }
+
+    fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
+        std::fs::read(path)
+    }
+}
+
+/// The names of the entries directly in `dir`, sorted, those that are not
+/// UTF-8 left out; `None` when `dir` is not a directory that can be read.
+fn list_names(dir: &Path) -> Option<Vec<String>> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .ok()?
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .collect();
+    names.sort();
+    Some(names)
 }
 
 /// One read a [`MemoryDisk`] was asked for.

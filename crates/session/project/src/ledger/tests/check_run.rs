@@ -4,6 +4,7 @@
 use std::fs;
 
 use specforge_common::ProjectConfig;
+use specforge_registry::{Disk, PlainDisk};
 use specforge_test_macros::test as specforge_test;
 
 use crate::ledger::{CheckInput, Ledger, SessionInputs, Watched};
@@ -96,4 +97,21 @@ fn a_run_that_reads_a_path_twice_moves_nothing() {
     assert!(run_of(&mut ledger, &[&one, &two, &one]));
     // The same set, asked in another order and with repeats: no change.
     assert!(!run_of(&mut ledger, &[&two, &one, &two]));
+}
+
+#[test]
+fn the_plain_disk_reads_the_file_system() {
+    let dir = tempfile::TempDir::new().unwrap();
+    fs::write(dir.path().join("a.md"), "a").unwrap();
+    fs::create_dir(dir.path().join("sub")).unwrap();
+    let file = dir.path().join("a.md");
+    assert!(PlainDisk.exists(&file));
+    assert!(PlainDisk.exists(&dir.path().join("sub")));
+    assert_eq!(
+        PlainDisk.list(dir.path()),
+        Some(vec!["a.md".to_string(), "sub".to_string()])
+    );
+    assert_eq!(PlainDisk.read(&file).unwrap(), b"a".to_vec());
+    let missing = PlainDisk.read(&dir.path().join("none.md")).unwrap_err();
+    assert_eq!(missing.kind(), std::io::ErrorKind::NotFound);
 }

@@ -28,11 +28,10 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use specforge_common::{ConfigRead, ProjectConfig, ProjectRoot, SourceRoot, read_project_config};
-use specforge_registry::Disk;
+use specforge_registry::{Disk, PlainDisk};
 
 use crate::sources::{self, Read};
 
-pub(crate) use disk::PlainDisk;
 use disk::RunDisk;
 pub use inputs::{SessionInputs, WatchRoot, Watched};
 pub use key::source_key;
