@@ -424,10 +424,10 @@ behavior provide_review_cli "Provide CLI Review Command" {
     prompt's payload is for the same arguments; human output lists each
     row (entity, kind, status, proven obligations) and each finding. An
     unknown ENTITY is E003, exit 1; a recorded report that cannot be read
-    is E045, exit 2.
+    is E045, exit 1.
   """
   verify integration "specforge review --format json is the review prompt's payload for the same arguments"
-  verify integration "a recorded report that cannot be read exits 2 with E045"
+  verify integration "a recorded report that cannot be read is E045, exit 1"
 }
 
 // An enumerated argument is one option table (ADR 0027): the CLI's possible

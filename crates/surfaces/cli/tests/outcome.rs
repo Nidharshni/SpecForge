@@ -239,8 +239,10 @@ fn measuring_commands_exit_two_on_refusal() {
 }
 
 /// `review` is a read view: an unreadable report exits 1, as `query --include-coverage` does.
-#[test]
-#[ignore = "flipped by T11"]
+#[specforge_test_macros::test(
+    behavior = "provide_review_cli",
+    verify = "a recorded report that cannot be read is E045, exit 1"
+)]
 fn review_refuses_as_query_does_when_the_report_cannot_be_read() {
     let broken = rv1(Some("{"));
 
