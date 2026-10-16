@@ -274,7 +274,6 @@ impl ProjectSession {
         ledger.before_load(root, &read.config);
         let runtime = source.runtime_for(root.dir(), &read.config);
         let env = Environment::from_read(root, read, runtime);
-        ledger.with_check_passes(env.registries().check_passes().next().is_some());
         OpeningProject {
             env: Arc::new(env),
             source,
@@ -348,8 +347,8 @@ impl ProjectSession {
             self.held.release(&key);
             // Stamped, then read (the ledger): a saved buffer leaves nothing
             // stale. With no project the buffer was the file's only text.
-            let (mut read, relinked) = self.ledger.reread(std::slice::from_ref(&key));
-            moved |= relinked;
+            let (mut read, link_moved) = self.ledger.reread(std::slice::from_ref(&key));
+            moved |= link_moved;
             let read = read.pop().map_or(Read::Gone, |(_, read)| read);
             if !self.project.is_current(&key, &read) {
                 reads.push((key, read));
@@ -578,12 +577,9 @@ impl ProjectSession {
     fn check(&mut self) -> bool {
         self.checks_skipped = false;
         let entities = self.project.snapshot_now();
-        let changed = self.ledger.before_checks(
-            self.project
-                .environment()
-                .registries
-                .files(&entities.rule_input()),
-        );
+        let changed = self
+            .ledger
+            .before_checks(self.project.environment(), &entities);
         self.project.check_over(entities);
         changed
     }

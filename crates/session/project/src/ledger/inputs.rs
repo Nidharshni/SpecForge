@@ -8,7 +8,6 @@ use specforge_common::{ProjectConfig, SourceRoot};
 use specforge_installed::Installed;
 
 use super::key::{canonical, discovered, relative_canonical};
-use crate::build_cache::BUILD_CACHE_FILE;
 use crate::builtins;
 
 /// Everything a project session depends on besides its sources' text:
@@ -52,12 +51,12 @@ pub(super) struct OnDisk {
     /// `.specforge/extensions/<name>/extension.wasm` for an installed one,
     /// the resolved path of a local `.wasm` entry.
     pub(super) modules: Vec<PathBuf>,
-    /// `<root>/specforge-cache.json` when the environment has check-phase
-    /// passes (they read it on every compile, ADR 0009).
-    pub(super) build_cache: Option<PathBuf>,
-    /// The files the checks read, as they read them (OS resolution of `..`).
-    pub(super) named: Vec<PathBuf>,
-    /// The directories of `named` that were missing when the checks ran.
+    /// The files the checks read, as they read them (OS resolution of `..`),
+    /// in the order they read them: the build cache first when the
+    /// environment has check-phase passes (they read it on every compile,
+    /// ADR 0009).
+    pub(super) check_files: Vec<PathBuf>,
+    /// The directories of `check_files` that were missing when the checks ran.
     pub(super) listings: Vec<PathBuf>,
     /// The symlinked sources, by key (sorted): where each one's text lies.
     pub(super) links: Vec<Link>,
@@ -201,8 +200,7 @@ impl SessionInputs {
             .chain(
                 disk.modules
                     .iter()
-                    .chain(&disk.build_cache)
-                    .chain(&disk.named)
+                    .chain(&disk.check_files)
                     .filter_map(|path| path.parent().map(canonical))
                     .chain(
                         disk.links
@@ -263,8 +261,7 @@ impl SessionInputs {
                 [&disk.config, &disk.lock]
                     .into_iter()
                     .chain(&disk.modules)
-                    .chain(&disk.build_cache)
-                    .chain(&disk.named)
+                    .chain(&disk.check_files)
                     .map(|path| Watched::File(spelled(path))),
             )
             .chain(
@@ -290,6 +287,13 @@ impl SessionInputs {
             Place::Disk(disk) => Some(disk),
         }
     }
+
+    fn disk_mut(&mut self) -> Option<&mut OnDisk> {
+        match &mut self.place {
+            Place::Detached => None,
+            Place::Disk(disk) => Some(disk),
+        }
+    }
 }
 
 // Crate-private: how the session builds, renews and reads it.
@@ -308,45 +312,12 @@ impl SessionInputs {
             config: root.join("specforge.json"),
             lock: installed.lock_path(),
             modules,
-            build_cache: None,
-            named: Vec::new(),
+            check_files: Vec::new(),
             listings: Vec::new(),
             links: Vec::new(),
             pending: Vec::new(),
             canonical: Canonical::empty(),
         })
-    }
-
-    /// With the build cache, when the loaded environment declares
-    /// check-phase passes.
-    pub(crate) fn with_check_passes(self, check_passes: bool) -> Self {
-        match self.place {
-            Place::Detached => self,
-            Place::Disk(mut disk) => {
-                disk.build_cache = check_passes.then(|| disk.root.join(BUILD_CACHE_FILE));
-                Self::on_disk(*disk)
-            }
-        }
-    }
-
-    /// With `named`, the files the checks about to run read
-    /// ([`specforge_registry::RegistryBuild::files`]); the missing ones' directories are taken now.
-    pub(crate) fn with_named(&self, named: Vec<PathBuf>) -> Self {
-        match &self.place {
-            Place::Detached => self.clone(),
-            Place::Disk(disk) => {
-                let mut disk = (**disk).clone();
-                disk.listings = named
-                    .iter()
-                    .filter(|path| !path.exists())
-                    .filter_map(|path| path.parent().map(Path::to_path_buf))
-                    .collect();
-                disk.listings.sort();
-                disk.listings.dedup();
-                disk.named = named;
-                Self::on_disk(disk)
-            }
-        }
     }
 
     /// The lock and the modules: stamped before the runtime and the
@@ -358,20 +329,6 @@ impl SessionInputs {
             .map(PathBuf::as_path)
     }
 
-    /// Build cache, named files, missing files' directories: stamped
-    /// before the checks read them.
-    pub(crate) fn check_files(&self) -> impl Iterator<Item = &Path> {
-        self.disk()
-            .into_iter()
-            .flat_map(|disk| {
-                disk.build_cache
-                    .iter()
-                    .chain(&disk.named)
-                    .chain(&disk.listings)
-            })
-            .map(PathBuf::as_path)
-    }
-
     /// The `.spec` files discovery finds now (none when detached).
     pub(crate) fn discover(&self) -> Vec<PathBuf> {
         self.disk()
@@ -379,40 +336,49 @@ impl SessionInputs {
             .unwrap_or_default()
     }
 
-    /// With the symlinked sources among `discovered` (every source found).
-    pub(crate) fn linked(&self, discovered: &[PathBuf]) -> Self {
-        match &self.place {
-            Place::Detached => self.clone(),
-            Place::Disk(disk) => {
-                let mut disk = (**disk).clone();
-                disk.links = discovered
-                    .iter()
-                    .filter_map(|path| disk.link_at(path))
-                    .collect();
-                disk.links.sort_by(|a, b| a.key.cmp(&b.key));
-                Self::on_disk(disk)
-            }
-        }
+    /// The symlinked sources among `discovered` (every source found) are
+    /// now the links: nothing else of the value changes.
+    pub(super) fn set_links(&mut self, discovered: &[PathBuf]) {
+        let Some(disk) = self.disk_mut() else {
+            return;
+        };
+        disk.links = discovered
+            .iter()
+            .filter_map(|path| disk.link_at(path))
+            .collect();
+        disk.links.sort_by(|a, b| a.key.cmp(&b.key));
     }
 
-    /// With the links of `keys` read again, the others kept.
-    pub(crate) fn relinked(&self, keys: &[String]) -> Self {
-        match &self.place {
-            Place::Detached => self.clone(),
-            Place::Disk(disk) => {
-                let mut disk = (**disk).clone();
-                disk.links.retain(|link| !keys.contains(&link.key));
-                let again: Vec<Link> = keys
-                    .iter()
-                    .filter(|key| disk.sources.holds(key))
-                    .filter_map(|key| disk.link_at(&disk.sources.dir().join(key)))
-                    .collect();
-                disk.links.extend(again);
-                disk.links.sort_by(|a, b| a.key.cmp(&b.key));
-                disk.links.dedup();
-                Self::on_disk(disk)
-            }
-        }
+    /// The links of `keys` read again, the others kept: whether they moved
+    /// (a source became or stopped being a symlink, or points elsewhere).
+    pub(super) fn relink(&mut self, keys: &[String]) -> bool {
+        let Some(disk) = self.disk_mut() else {
+            return false;
+        };
+        let before = disk.links.clone();
+        disk.links.retain(|link| !keys.contains(&link.key));
+        let again: Vec<Link> = keys
+            .iter()
+            .filter(|key| disk.sources.holds(key))
+            .filter_map(|key| disk.link_at(&disk.sources.dir().join(key)))
+            .collect();
+        disk.links.extend(again);
+        disk.links.sort_by(|a, b| a.key.cmp(&b.key));
+        disk.links.dedup();
+        disk.links != before
+    }
+
+    /// The check inputs are now `files` (in the order the checks read them)
+    /// and the `listings` of the directories of the missing ones: their
+    /// canonical forms and missing directories are taken again, nothing else
+    /// changes.
+    pub(super) fn set_checks(&mut self, files: Vec<PathBuf>, listings: Vec<PathBuf>) {
+        let Some(disk) = self.disk_mut() else {
+            return;
+        };
+        disk.check_files = files;
+        disk.listings = listings;
+        disk.renew_checks();
     }
 
     /// The sources discovery finds at `key` now (a directory: all under it; a
@@ -443,19 +409,8 @@ impl SessionInputs {
                 .chain(&disk.modules)
                 .map(|path| (canonical(path), path.clone()))
                 .collect(),
-            checks: disk
-                .build_cache
-                .iter()
-                .chain(&disk.named)
-                .map(|path| (canonical(path), path.clone()))
-                .collect(),
-            // A missing referenced file's suggestion names a similar file
-            // in its directory: a file created or deleted there changes it.
-            listings: disk
-                .listings
-                .iter()
-                .map(|dir| (canonical(dir), dir.clone()))
-                .collect(),
+            checks: disk.canonical_checks(),
+            listings: disk.canonical_listings(),
         };
         disk.pending = disk.pending_directories();
         SessionInputs {
@@ -465,6 +420,30 @@ impl SessionInputs {
 }
 
 impl OnDisk {
+    fn canonical_checks(&self) -> BTreeMap<PathBuf, PathBuf> {
+        self.check_files
+            .iter()
+            .map(|path| (canonical(path), path.clone()))
+            .collect()
+    }
+
+    /// A missing referenced file's suggestion names a similar file in its
+    /// directory: a file created or deleted there changes it.
+    fn canonical_listings(&self) -> BTreeMap<PathBuf, PathBuf> {
+        self.listings
+            .iter()
+            .map(|dir| (canonical(dir), dir.clone()))
+            .collect()
+    }
+
+    /// The canonical forms of the check inputs and the missing directories
+    /// toward them, taken again.
+    fn renew_checks(&mut self) {
+        self.canonical.checks = self.canonical_checks();
+        self.canonical.listings = self.canonical_listings();
+        self.pending = self.pending_directories();
+    }
+
     /// The missing directories of the inputs outside the root, each with
     /// its nearest existing ancestor. A root that does not exist has none.
     pub(super) fn pending_directories(&self) -> Vec<Pending> {
@@ -494,9 +473,8 @@ impl OnDisk {
                     .filter_map(|module| Some((module.parent()?, Kind::Environment))),
             )
             .chain(
-                self.build_cache
+                self.check_files
                     .iter()
-                    .chain(&self.named)
                     .filter_map(|file| Some((file.parent()?, Kind::Check))),
             );
         for (dir, kind) in candidates {

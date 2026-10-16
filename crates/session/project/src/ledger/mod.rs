@@ -22,16 +22,21 @@ mod stamps;
 #[cfg(test)]
 mod tests;
 
+use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use specforge_common::{ConfigRead, ProjectConfig, ProjectRoot, read_project_config};
 
+use crate::Environment;
+use crate::build_cache::BUILD_CACHE_FILE;
+use crate::snapshot::EntitySnapshot;
 use crate::sources::{self, Read};
 
 pub use inputs::{SessionInputs, WatchRoot, Watched};
 pub(crate) use key::discovered;
 pub use key::source_key;
-use stamps::{Scope, Stamps};
+use stamps::{Entry, Scope, Stamps};
 
 /// What a batch of changed paths, or the disk since the last read, means to
 /// a session: the input to [`crate::ProjectSession::apply`]. Produced only
@@ -109,18 +114,12 @@ impl Ledger {
         self.stamps.stamp_environment(&self.inputs);
     }
 
-    /// With the build cache recorded, when the loaded environment declares
-    /// check-phase passes (temporary: folded into the check run).
-    pub(crate) fn with_check_passes(&mut self, check_passes: bool) {
-        self.inputs = self.inputs.clone().with_check_passes(check_passes);
-    }
-
     /// The `.spec` files discovery finds now: every one stamped, and each
     /// symlink read, before the sources are read.
     pub(crate) fn discover(&mut self) -> Vec<PathBuf> {
         let discovered = self.inputs.discover();
         self.stamps.stamp_all_sources(&self.inputs, &discovered);
-        self.inputs = self.inputs.linked(&discovered);
+        self.inputs.set_links(&discovered);
         discovered
     }
 
@@ -136,9 +135,7 @@ impl Ledger {
             );
         };
         self.stamps.stamp_sources(&self.inputs, keys);
-        let relinked = self.inputs.relinked(keys);
-        let moved = relinked != self.inputs;
-        self.inputs = relinked;
+        let moved = self.inputs.relink(keys);
         let reads = keys
             .iter()
             .map(|key| {
@@ -153,17 +150,45 @@ impl Ledger {
         (reads, moved)
     }
 
-    /// The files the checks about to run read, named: stamped, and recorded
-    /// (the missing ones' directories with them). Whether the inputs moved.
-    pub(crate) fn before_checks(&mut self, named: Vec<PathBuf>) -> bool {
-        if self.inputs.root().is_none() {
+    /// Before the checks over `entities` run in `env`: read the files they
+    /// will read (the build cache when the environment has check-phase
+    /// passes, then each file a `file_reference` field or `file_exists` rule
+    /// names, and the directory of each missing one), each stamped and
+    /// recorded. Whether the inputs moved. Plan 04 replaces this prediction
+    /// with a reader handed to the checks.
+    pub(crate) fn before_checks(&mut self, env: &Environment, entities: &EntitySnapshot) -> bool {
+        let Some(root) = self.inputs.root().map(Path::to_path_buf) else {
             return false;
+        };
+        let run = self.checks();
+        if env.registries().check_passes().next().is_some() {
+            run.read(CheckInput::File, &root.join(BUILD_CACHE_FILE), |_| ());
         }
-        let next = self.inputs.with_named(named);
-        let changed = next != self.inputs;
-        self.inputs = next;
-        self.stamps.stamp_checks(&self.inputs);
-        changed
+        for path in env.registries().files(&entities.rule_input()) {
+            let exists = run.read(CheckInput::File, &path, Path::exists);
+            if !exists && let Some(parent) = path.parent() {
+                run.read(CheckInput::Listing, parent, |_| ());
+            }
+        }
+        run.finish()
+    }
+
+    /// One run of the checks' reads: each is stamped and recorded as a check
+    /// input when the run finishes (ADR 0106 D4).
+    pub(crate) fn checks(&mut self) -> CheckRun<'_> {
+        CheckRun {
+            ledger: self,
+            read: RefCell::new(Vec::new()),
+        }
+    }
+
+    /// A ledger over `inputs`, nothing stamped.
+    #[cfg(test)]
+    pub(crate) fn over(inputs: SessionInputs) -> Self {
+        Ledger {
+            inputs,
+            stamps: Stamps::default(),
+        }
     }
 
     /// What changed on disk among what `paths` reach (ADR 0073).
@@ -175,5 +200,73 @@ impl Ledger {
     /// Everything that differs from what was read.
     pub(crate) fn stale(&self) -> Changes {
         self.stamps.changes(&self.inputs, Scope::Everything)
+    }
+}
+
+/// What a read of a check input is (how a later change to it is reached).
+pub(crate) enum CheckInput {
+    /// A file: its bytes or its existence (the build cache, a file a
+    /// `file_reference` field or a `file_exists` rule names). Reached by its
+    /// own path or a directory above it.
+    File,
+    /// A directory's entries (the E016 suggestion lists a missing file's
+    /// directory). Also reached by any file directly in it.
+    Listing,
+}
+
+/// One run of the checks' reads. Reading needs only `&self`, so a reader the
+/// checks hold by shared reference can record through it.
+#[must_use = "a run's reads are recorded only when it finishes"]
+pub(crate) struct CheckRun<'l> {
+    ledger: &'l mut Ledger,
+    read: RefCell<Vec<(CheckInput, PathBuf, Option<Entry>)>>,
+}
+
+impl CheckRun<'_> {
+    /// Stamp `path`, then run `read` on it (the read the caller performs)
+    /// and return its result. A detached ledger's run stamps nothing and
+    /// still runs `read`.
+    pub(crate) fn read<T>(
+        &self,
+        input: CheckInput,
+        path: &Path,
+        read: impl FnOnce(&Path) -> T,
+    ) -> T {
+        if self.ledger.inputs.root().is_some() {
+            let entry = Entry::stamp(path);
+            self.read
+                .borrow_mut()
+                .push((input, path.to_path_buf(), entry));
+        }
+        read(path)
+    }
+
+    /// The check inputs are now exactly what this run read, in read order
+    /// (ADR 0030 D2: renewed each time the checks run). Their canonical
+    /// forms and missing directories are taken again; nothing else in the
+    /// record changes. Whether the inputs moved.
+    pub(crate) fn finish(self) -> bool {
+        let CheckRun { ledger, read } = self;
+        if ledger.inputs.root().is_none() {
+            return false;
+        }
+        let before = ledger.inputs.clone();
+        let mut files: Vec<PathBuf> = Vec::new();
+        let mut listings: Vec<PathBuf> = Vec::new();
+        let mut stamps: BTreeMap<PathBuf, Option<Entry>> = BTreeMap::new();
+        for (input, path, entry) in read.into_inner() {
+            let list = match input {
+                CheckInput::File => &mut files,
+                CheckInput::Listing => &mut listings,
+            };
+            if !list.contains(&path) {
+                list.push(path.clone());
+            }
+            stamps.entry(path).or_insert(entry);
+        }
+        listings.sort();
+        ledger.inputs.set_checks(files, listings);
+        ledger.stamps.set_checks(stamps);
+        ledger.inputs != before
     }
 }

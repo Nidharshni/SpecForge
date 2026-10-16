@@ -165,12 +165,10 @@ impl Stamps {
         }
     }
 
-    /// Stamp every check input, before the checks read them.
-    pub(super) fn stamp_checks(&mut self, inputs: &SessionInputs) {
-        self.checks = inputs
-            .check_files()
-            .map(|path| (path.to_path_buf(), Entry::stamp(path)))
-            .collect();
+    /// The check inputs are exactly `checks`, each stamped before the run
+    /// that read it read it.
+    pub(super) fn set_checks(&mut self, checks: BTreeMap<PathBuf, Option<Entry>>) {
+        self.checks = checks;
     }
 
     /// What differs from what was read, among `scope`: the sources `inputs`
