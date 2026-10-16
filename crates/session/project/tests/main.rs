@@ -20,6 +20,7 @@ mod e2e_pipeline;
 mod edge_types;
 mod entity_snapshot;
 mod environment;
+mod environment_reads;
 mod extension_calls;
 mod field_types;
 mod fixture;
