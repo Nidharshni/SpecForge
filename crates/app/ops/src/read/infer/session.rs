@@ -12,7 +12,7 @@ use super::manifest::{
 use super::sources::{ProjectFiles, SourceKey, SourceRead, content_hash};
 use crate::options::{Choice, OptionTable};
 use crate::view::ProjectView;
-use crate::{Containment, OpError, OpErrorKind, Refusal, Writes};
+use crate::{Caller, OpError, OpErrorKind, Refusal, Writes};
 
 /// A start while a session is active (`Conflict`).
 pub const SESSION_ACTIVE: &str = "session_active";
@@ -151,7 +151,7 @@ pub struct SessionOutcome {
 #[derive(Debug, Clone, Copy)]
 pub struct SessionRequest<'a> {
     pub step: SessionStep<'a>,
-    pub containment: &'a Containment,
+    pub caller: Caller<'a>,
 }
 
 /// Record `request`'s step in the inference manifest at the view's root: one read,
@@ -169,7 +169,8 @@ pub fn session(
     let step = Normalized::of(request.step)?;
     // The manifest is held once: what is read is what is replaced.
     let file = request
-        .containment
+        .caller
+        .containment()
         .resolve(&root.join(MANIFEST_FILENAME))
         .map_err(OpError::from)?;
     let mut manifest = InferenceManifest::at_held(&file)?;

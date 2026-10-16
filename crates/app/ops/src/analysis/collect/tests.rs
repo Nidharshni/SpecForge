@@ -2,6 +2,7 @@ use super::collector::{CAPTURE_STDOUT, wildcard};
 use super::consent::load_consent;
 use super::runner::REPORT_ENV;
 use super::*;
+use crate::Containment;
 use crate::asking::testing::{Asked, Scripted};
 use crate::testing::Viewed;
 use specforge_common::Severity;
@@ -451,9 +452,8 @@ fn collect_without_a_root_is_no_project() {
         Request {
             runner: None,
             mode: Mode::NoRun,
-            asking: Asking::Nobody,
             announce: &mut |_, _| {},
-            containment: &Containment::unbounded(),
+            caller: crate::testing::caller(),
         },
     )
     .unwrap_err();
