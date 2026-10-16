@@ -133,3 +133,24 @@ fn a_captured_stdout_is_kept_in_every_output_mode() {
         assert_eq!(String::from_utf8(capture).unwrap(), "test a ... ok\n");
     }
 }
+
+#[specforge_test(
+    behavior = "approve_collector_command",
+    verify = "consent is keyed by project, extension and command"
+)]
+fn consent_is_keyed_by_project_extension_and_command() {
+    let dir = tempfile::tempdir().unwrap();
+    let machine = ProcessMachine::with_store(dir.path().join("consent.json"));
+    let root = dir.path();
+    let mut c = collector("r.json");
+    let approval = CommandApproval::of(&c, root);
+    assert!(!machine.approved(&approval));
+    machine.approve(&approval).unwrap();
+    assert!(machine.approved(&approval));
+    assert!(!machine.approved(&CommandApproval::of(&c, &root.join("other"))));
+    c.run.push("--extra".into());
+    let changed = CommandApproval::of(&c, root);
+    assert!(!machine.approved(&changed), "a changed command re-prompts");
+    machine.approve(&changed).unwrap();
+    assert_eq!(machine.load().approved.len(), 1, "approval replaced");
+}

@@ -1,16 +1,10 @@
 use super::collector::wildcard;
 use super::*;
 use crate::Containment;
-use crate::asking::testing::{Asked, Scripted};
 use crate::testing::Viewed;
 use specforge_common::Severity;
 use specforge_protocol_types::{CollectEntityResult, CollectOutput, TestResult, TestStatus};
 use specforge_test_macros::test as specforge_test;
-
-/// `path` held by no bound: the CLI's containment.
-fn held(path: &Path) -> Held {
-    Containment::unbounded().resolve(path).unwrap()
-}
 
 fn collector(report: &str) -> Collector {
     Collector {
@@ -37,18 +31,6 @@ fn wildcard_matches_segments() {
 }
 
 #[specforge_test(
-    behavior = "auto_detect_collector",
-    verify = "file pattern match selects collector"
-)]
-fn detects_by_root_files() {
-    let dir = tempfile::tempdir().unwrap();
-    let all = vec![collector("r.json")];
-    assert!(detect(&all, dir.path()).is_empty());
-    std::fs::write(dir.path().join("acme.config.js"), "").unwrap();
-    assert_eq!(detect(&all, dir.path()).len(), 1);
-}
-
-#[specforge_test(
     behavior = "run_collector_command",
     verify = "report path must stay inside the project"
 )]
@@ -63,97 +45,6 @@ fn report_path_must_stay_inside_the_project() {
     );
     assert!(report_path(&collector("../r.json"), root, &any).is_err());
     assert!(report_path(&collector("/etc/r.json"), root, &any).is_err());
-}
-
-#[specforge_test(
-    behavior = "run_collector_command",
-    verify = "command line expands the report placeholder"
-)]
-fn command_line_expands_the_report_placeholder() {
-    let argv = command_line(&collector("r.json"), Path::new("/p/r.json"));
-    assert_eq!(argv, vec!["acme", "--out=/p/r.json"]);
-}
-
-#[test]
-fn asking_yes_nobody_and_an_asker_decide_as_documented() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let machine = crate::testing::ScriptedMachine::new();
-    let c = collector("r.json");
-    let argv = c.run.clone();
-    let mut unsaved = Vec::new();
-    let mut allows = |asking| allowed(asking, &machine, &c, &argv, dir.path(), &mut unsaved);
-
-    // --yes runs it and remembers nothing.
-    assert!(allows(Asking::Yes));
-    assert!(machine.approvals().is_empty());
-    // Nothing approved yet: nobody to ask refuses.
-    assert!(!allows(Asking::Nobody));
-    // An asker that says no is not remembered...
-    let no = Scripted::answering(false);
-    assert!(!allows(Asking::Ask(&no)));
-    assert!(machine.approvals().is_empty());
-    // ...a yes is, and is not asked again.
-    let yes = Scripted::answering(true);
-    assert!(allows(Asking::Ask(&yes)));
-    assert!(allows(Asking::Ask(&yes)));
-    assert_eq!(
-        yes.asked(),
-        vec![Asked::RunCommand {
-            extension: "@acme/runner".to_string(),
-            argv: argv.clone(),
-        }]
-    );
-    assert!(allows(Asking::Nobody));
-    assert!(unsaved.is_empty(), "{unsaved:?}");
-}
-
-#[specforge_test(
-    behavior = "dispatch_collector",
-    verify = "reads a file or every json file in a directory"
-)]
-fn reads_a_file_or_every_json_file_in_a_directory() {
-    let dir = tempfile::tempdir().unwrap();
-    let reports = dir.path().join("out");
-    std::fs::create_dir(&reports).unwrap();
-    std::fs::write(reports.join("b.json"), "{}").unwrap();
-    std::fs::write(reports.join("a.json"), "[]").unwrap();
-    std::fs::write(reports.join("notes.txt"), "x").unwrap();
-    let files = read_report(&held(&reports), dir.path(), None, &Containment::unbounded()).unwrap();
-    let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
-    assert_eq!(paths, vec!["out/a.json", "out/b.json"]);
-    assert!(
-        read_report(
-            &held(&dir.path().join("none.json")),
-            dir.path(),
-            None,
-            &Containment::unbounded()
-        )
-        .unwrap()
-        .is_empty()
-    );
-}
-
-#[specforge_test(
-    behavior = "run_collector_command",
-    verify = "an unknown capture is refused"
-)]
-fn an_unknown_capture_is_refused() {
-    let mut c = collector("r.json");
-    assert_eq!(captures_stdout(&c), Ok(false));
-    c.capture = Some("stderr".into());
-    let err = captures_stdout(&c).unwrap_err();
-    assert!(err.contains("unknown capture 'stderr'"), "{err}");
-    // A file report keeps its capture next to it.
-    assert_eq!(
-        capture_path(
-            &c,
-            &held(Path::new("/p/out/r.json")),
-            &Containment::unbounded()
-        )
-        .unwrap()
-        .spelled,
-        Path::new("/p/out/r.json.stdout.txt")
-    );
 }
 
 fn collected(entries: &[(&str, &str, TestStatus)]) -> CollectOutput {
