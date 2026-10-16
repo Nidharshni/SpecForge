@@ -16,6 +16,6 @@ mod tests;
 
 pub use document::{ConfigSource, Edit, EditorOptions, FormattedDocument, Lines, Place, document};
 pub use run::{
-    Failure, FileChange, FileDiff, FileFailure, FormatDocument, Mode, Outcome, Request, UNREADABLE,
-    UNWRITABLE, run, run_within,
+    Failure, FileChange, FileDiff, FileFailure, FormatDocument, FormatField, Mode, Outcome,
+    Request, UNREADABLE, UNWRITABLE, run,
 };

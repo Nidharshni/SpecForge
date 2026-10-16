@@ -12,22 +12,7 @@ use specforge_ops::authoring::migrate::{
 };
 use specforge_ops::{OpError, OpErrorKind};
 
-/// Every file under `root` with its bytes: what a refused run must leave as it was.
-pub(crate) fn files_under(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
-    let mut files = std::collections::BTreeMap::new();
-    let mut dirs = vec![root.to_path_buf()];
-    while let Some(dir) = dirs.pop() {
-        for entry in std::fs::read_dir(&dir).unwrap() {
-            let path = entry.unwrap().path();
-            if path.is_dir() {
-                dirs.push(path);
-            } else {
-                files.insert(path.clone(), std::fs::read(&path).unwrap());
-            }
-        }
-    }
-    files
-}
+pub(crate) use crate::writes::files_under;
 use specforge_parser::CURRENT_FORMAT_VERSION;
 use specforge_protocol_types::{ExtensionDeclaration, PeerDependency, SandboxPolicy};
 use specforge_registry::build_registries;
@@ -60,6 +45,7 @@ pub(crate) fn request(root: &specforge_common::ProjectRoot) -> Request<'_> {
         target: CURRENT_FORMAT_VERSION,
         dry_run: false,
         no_backup: false,
+        containment: &crate::writes::UNBOUNDED,
     }
 }
 

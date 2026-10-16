@@ -40,17 +40,3 @@ pub(crate) fn refusal(outside: &Outside, argument: &str) -> McpError {
     )
     .with_argument(argument)
 }
-
-/// `invalid_input` on `file`, a file of the project (not an argument of the call): a source that
-/// is a symlink leaving the project.
-pub(crate) fn refusal_of_file(outside: &Outside, file: &str) -> McpError {
-    McpError::new(
-        ErrorCode::InvalidInput,
-        format!(
-            "{file} resolves to {}, outside {}: a symlink that leaves the project is not followed",
-            outside.landed().display(),
-            outside.root().display()
-        ),
-    )
-    .with_file(file)
-}

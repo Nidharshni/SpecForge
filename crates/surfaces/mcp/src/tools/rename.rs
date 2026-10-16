@@ -6,13 +6,11 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 
 use crate::args::Arguments;
-use crate::containment;
 use crate::mutation::{FreshDiagnostics, Mutated, Mutation, MutationArgs, MutationReply, Written};
 use crate::refusal::ArgumentOf;
 use crate::target::ProjectRef;
 use specforge_ops::Containment;
 use specforge_ops::authoring::rename::RenameField;
-use std::path::Path;
 
 /// `specforge.rename`'s arguments.
 #[derive(Debug, Arguments)]
@@ -100,15 +98,6 @@ impl CoreTool for Tool {
         )
         .map_err(Self::failed)?;
 
-        // Every file it edits is a file of the project: a source that is a
-        // symlink leaving it is not written through (ADR 0092 D8).
-        let bound = Containment::within(&spec_root);
-        for file in plan.affected_files() {
-            bound
-                .resolve(Path::new(file))
-                .map_err(|outside| Box::new(containment::refusal_of_file(&outside, file)))?;
-        }
-
         let mut reply = Reply {
             old_name: args.entity_id,
             new_name: args.new_name.clone(),
@@ -135,7 +124,7 @@ impl CoreTool for Tool {
             return Ok(Mutated::new(reply, Written::nothing()));
         }
         // A failed write restores what it wrote: nothing is left written.
-        let writes = rename::apply(&plan, &spec_root)?;
+        let writes = rename::apply(&plan, &spec_root, &Containment::within(&spec_root))?;
         // The reply's `diagnostics` are what `specforge check` reports for the
         // project as it is on disk now, edits made since the last call
         // included (`FreshDiagnostics`, filled in once the target is brought up

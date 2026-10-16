@@ -2,9 +2,9 @@
 
 use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use crate::containment;
+use crate::refusal::ArgumentOf;
 use specforge_ops::Containment;
 
 use crate::args::Arguments;
@@ -14,7 +14,7 @@ use crate::mutation::{
 use crate::target::ProjectRef;
 use crate::tool::{ErrorCode, McpError};
 use specforge_ops::OpErrorKind;
-use specforge_ops::authoring::format::{self, Request};
+use specforge_ops::authoring::format::{self, FormatField, Request};
 
 /// `specforge.format`'s arguments.
 #[derive(Debug, Arguments)]
@@ -54,6 +54,14 @@ type Reply = format::FormatDocument;
 
 pub(crate) struct Tool;
 
+impl ArgumentOf<FormatField> for Tool {
+    fn argument(field: FormatField) -> Option<&'static str> {
+        match field {
+            FormatField::Paths => Some("paths"),
+        }
+    }
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.format";
     const DESCRIPTION: &'static str = "Format spec files";
@@ -79,29 +87,17 @@ impl CoreTool for Tool {
         // what is formatted.
         let project_root = project.root;
 
-        // The run `specforge format` makes. Relative paths name files under
-        // the project root, and none leaves it (ADR 0092).
-        let bound = Containment::within(project_root.dir());
-        let explicit = args
-            .paths
-            .iter()
-            .map(|p| {
-                let named = Path::new(p);
-                bound
-                    .resolve(named)
-                    .map(|held| held.spelled)
-                    .map_err(|outside| Box::new(containment::refusal(&outside, "paths")))
-            })
-            .collect::<Result<Vec<PathBuf>, Box<McpError>>>()?;
-        // A source that is a symlink leaving the project is not followed.
-        let outcome = format::run_within(
-            &Request {
-                root: project_root,
-                paths: &explicit,
-                mode,
-            },
-            Some(project_root.dir()),
-        )?;
+        // The run `specforge format` makes. Relative paths name files under the project root, and
+        // none leaves it: the operation holds each to the containment (ADR 0092, ADR 0104), and a
+        // source that is a symlink leaving the project is not followed.
+        let explicit: Vec<PathBuf> = args.paths.iter().map(PathBuf::from).collect();
+        let outcome = format::run(&Request {
+            root: project_root,
+            paths: &explicit,
+            mode,
+            containment: &Containment::within(project_root.dir()),
+        })
+        .map_err(Self::failed)?;
 
         let reply = outcome.document(args.diff);
         if outcome.succeeded() {

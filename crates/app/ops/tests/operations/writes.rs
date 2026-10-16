@@ -183,6 +183,7 @@ fn format_writes_are_the_files_it_rewrote() {
         root: &specforge_common::ProjectRoot::of(root).unwrap(),
         paths: &[],
         mode: Mode::Write,
+        containment: &specforge_ops::Containment::unbounded(),
     })
     .unwrap();
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
@@ -197,6 +198,7 @@ fn format_writes_are_the_files_it_rewrote() {
         root: &specforge_common::ProjectRoot::of(root).unwrap(),
         paths: &[],
         mode: Mode::Check,
+        containment: &specforge_ops::Containment::unbounded(),
     })
     .unwrap();
     assert!(outcome.writes().is_empty());
@@ -228,7 +230,7 @@ fn rename_writes_are_the_files_it_edited() {
     .unwrap();
     let before = files_under(root);
 
-    let writes = rename::apply(&plan, root).unwrap();
+    let writes = rename::apply(&plan, root, &specforge_ops::Containment::unbounded()).unwrap();
 
     assert_eq!(listed(&writes, root), ["limit.spec", "login.spec"]);
     assert_eq!(changed_since(root, &before), ["limit.spec", "login.spec"]);
@@ -493,6 +495,9 @@ fn stranded_lists_the_entities_by_id() {
 
 const OLD: &str = "// specforge-format: 0.9\nbehavior gamma \"Gamma\" {\n}\n";
 
+/// What a request with no bound carries.
+pub(crate) static UNBOUNDED: specforge_ops::Containment = specforge_ops::Containment::unbounded();
+
 fn migration(
     root: &specforge_common::ProjectRoot,
     dry_run: bool,
@@ -502,6 +507,7 @@ fn migration(
         target: specforge_parser::CURRENT_FORMAT_VERSION,
         dry_run,
         no_backup: false,
+        containment: &UNBOUNDED,
     }
 }
 

@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use super::document::{Configs, FormattedDocument, format_text};
 use super::targets::{Targets, targets};
-use crate::{Containment, OpError, OpErrorKind};
+use crate::{Containment, OpError, OpErrorKind, Refusal};
 
 /// What the run does with a file whose formatting would change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -60,6 +60,20 @@ pub struct Request<'a> {
     /// entries leave out (D3).
     pub paths: &'a [PathBuf],
     pub mode: Mode,
+    /// What the run may reach (ADR 0104): a named path that leaves it is refused before anything
+    /// is read ([`FormatField::Paths`]); a target (a walked one, a symlinked source) that lands
+    /// outside it is neither read nor written but a failure of kind
+    /// [`OpErrorKind::InvalidInput`], and the other targets are formatted (ADR 0092 D8). MCP
+    /// passes its bound; the CLI's user is already at the file system and passes
+    /// [`Containment::unbounded`].
+    pub containment: &'a Containment,
+}
+
+/// The field of a format [`Request`] a refusal can be about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FormatField {
+    /// `Request::paths`: the files and directories to format.
+    Paths,
 }
 
 /// A file whose formatting differs from its content.
@@ -393,17 +407,25 @@ impl FileFailure {
 /// each other problem of those configs is one E069, first among the
 /// outcome's diagnostics, and fails [`Outcome::ok`]. A named `.spec` file
 /// selects no config: it is formatted all the same (ADR 0021 D3).
-pub fn run(request: &Request) -> Result<Outcome, OpError> {
-    run_within(request, None)
-}
-
-/// [`run`], and with `within` (a directory) a target that resolves outside
-/// it, by a symlink in the project, is neither read nor written: it is a
-/// failure of kind [`OpErrorKind::InvalidInput`] and the other targets are
-/// formatted (ADR 0092 D8). MCP passes the project's root; the CLI's user is
-/// already at the file system and passes none.
-pub fn run_within(request: &Request, within: Option<&Path>) -> Result<Outcome, OpError> {
-    let Targets { files, diagnostics } = targets(request.root.dir(), request.paths)?;
+pub fn run(request: &Request) -> Result<Outcome, Refusal<FormatField>> {
+    // Every named path is held to the containment before anything is read: relative ones are read
+    // against its root (bounded) or the process's directory (unbounded).
+    let named = request
+        .paths
+        .iter()
+        .map(|path| {
+            request
+                .containment
+                .resolve(path)
+                .map(|held| held.spelled)
+                .map_err(|outside| OpError::from(outside).about(FormatField::Paths))
+        })
+        .collect::<Result<Vec<PathBuf>, _>>()?;
+    let Targets { files, diagnostics } =
+        targets(request.root.dir(), &named).map_err(|error| Refusal {
+            error,
+            subject: None,
+        })?;
     // One set of configurations for the run: each file gets the one
     // `document(Place::File(file), ..)` gives it (no editor: the CLI and
     // MCP have none), and each configuration file is read once.
@@ -415,15 +437,17 @@ pub fn run_within(request: &Request, within: Option<&Path>) -> Result<Outcome, O
         ..Outcome::default()
     };
     for target in files {
-        if let Some(within) = within
-            && let Err(outside) = Containment::within(within).resolve(&target)
-        {
-            outcome
-                .failures
-                .push(Failure::outside(target, outside.landed(), within));
-            continue;
-        }
-        let source = match std::fs::read_to_string(&target) {
+        // What is read and written is what the containment resolved: the target, named as given.
+        let held = match request.containment.resolve(&target) {
+            Ok(held) => held,
+            Err(outside) => {
+                outcome
+                    .failures
+                    .push(Failure::outside(target, outside.landed(), outside.root()));
+                continue;
+            }
+        };
+        let source = match std::fs::read_to_string(&held.real) {
             Ok(source) => source,
             Err(e) => {
                 outcome.failures.push(Failure::read(target, &e));
@@ -444,7 +468,7 @@ pub fn run_within(request: &Request, within: Option<&Path>) -> Result<Outcome, O
             continue;
         }
         let written = match request.mode {
-            Mode::Write => match std::fs::write(&target, &formatted) {
+            Mode::Write => match std::fs::write(&held.real, &formatted) {
                 Ok(()) => true,
                 Err(e) => {
                     outcome.failures.push(Failure::write(target.clone(), &e));
