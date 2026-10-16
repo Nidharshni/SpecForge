@@ -21,9 +21,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the extension load. Its fields are private; it is read through accessors (ADR 0047). A session
   reads `specforge.json` once per load and builds its extension runtime and, holding it, its
   environment from that read, after stamping every environment input (ADR 0030). It
-  opens in two steps (`ProjectSession::begin_open`, then `OpeningProject::finish`), so an editor
-  answers what needs only the environment (keyword completion) while the sources are still being
-  read.
+  A project opened in a session's place loads its environment first and hands it over before any
+  source is read (`ProjectSession::reopen`), so an editor answers what needs only the environment
+  (keyword completion) while the sources are still being read.
 - **Compiled project**: an environment plus the sources it read, their graph build, what resolving their
   imports and running the checks reported, and the memo of its entity snapshot and coverage. Its
   diagnostics are, by definition, what `specforge check` reports under the default policy, in the one
@@ -103,6 +103,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the session's freshness and classification leave it out, and an open or an environment reload builds it in
   place of its file. Releasing it reads the file through the session's one read. Diagnostics computed from it
   are published with its version. Only the LSP holds buffers (ADR 0046).
+- **Reopen**: opening the project at a root in a project session's place (`ProjectSession::reopen`). The
+  environment loads first and is handed to the caller before any `.spec` file is read; the one cold build reads
+  each held buffer in place of its file. Whether the session verifies its updates carries over; the update is
+  the replacement (every file rebuilt, the graph delta between the two). An environment reload is a reopen at
+  the session's own root; the LSP's open and MCP serving a project are reopens (ADR 0109).
 - **Open document**: a `.spec` buffer the editor has open in the LSP (`specforge_lsp::Document`: its text, its
   version, its line index and its syntax). Its identity is its file's session key (`Environment::source_key` of the
   path its URI names, percent-decoded): the document, the diagnostics published for its file and whether it is
