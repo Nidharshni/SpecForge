@@ -71,13 +71,6 @@ impl LspState {
         self.client = client;
     }
 
-    /// Whether the session is out for an update: readers see its last
-    /// complete graph and cannot read what only a session holds (the
-    /// recorded coverage).
-    pub fn rebuilding(&self) -> bool {
-        matches!(self.project, Project::Out(_))
-    }
-
     /// Record that the editor is told `configuration` overrides its
     /// settings: true the first time this session, false after.
     pub fn first_format_notice(&mut self, configuration: &str) -> bool {

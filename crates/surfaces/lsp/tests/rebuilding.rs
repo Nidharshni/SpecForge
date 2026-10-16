@@ -3,6 +3,7 @@
 
 use crate::hover::coverage_project;
 use crate::served::hover_text;
+use specforge_test_macros::test as spec;
 
 /// The hover's Coverage line, if it has one.
 fn coverage_line(hover: &str) -> Option<String> {
@@ -12,8 +13,10 @@ fn coverage_line(hover: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[spec(
+    behavior = "provide_extension_entity_hover",
+    verify = "hover shows the last complete compile's coverage while the project rebuilds"
+)]
 fn hover_shows_the_last_compiles_coverage_while_the_session_is_out() {
     let mut project = coverage_project("behavior done \"Done\" {\n  verify unit \"first\"\n}\n");
     project.write(

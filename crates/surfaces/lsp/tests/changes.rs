@@ -247,13 +247,13 @@ fn readers_keep_the_last_graph_while_the_session_is_out() {
     let mut served = two_files();
     let (rebuilding, found) = served.rebuilding(|state| {
         (
-            state.rebuilding(),
+            state.session().is_none(),
             names(answers::workspace_symbols(state, "alpha")),
         )
     });
     assert!(rebuilding);
     assert_eq!(found, ["alpha"]);
-    assert!(!served.state().rebuilding());
+    assert!(served.state().session().is_some());
 }
 
 #[spec(

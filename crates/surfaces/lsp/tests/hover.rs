@@ -389,36 +389,6 @@ fn hover_shows_each_coverage_case() {
 
 #[spec(
     behavior = "provide_extension_entity_hover",
-    verify = "hover never states a coverage fact it cannot read: while the project rebuilds it says so"
-)]
-fn hover_says_coverage_is_unavailable_while_the_project_rebuilds() {
-    let mut project = coverage_project(COVERAGE);
-    project.write(
-        "specforge-report.json",
-        r#"{"results": {"done": {"tests": [{"name": "t", "status": "passed", "verify": "first"}]}}}"#,
-    );
-    let uri = project.uri("main.spec");
-    let hover_while_rebuilding = |project: &mut Served, id: &str| {
-        let position = project.position_of("main.spec", id);
-        project.rebuilding(|state| crate::served::hover_text(state, &uri, position))
-    };
-    for id in ["done", "U", "doc"] {
-        let hover = hover_while_rebuilding(&mut project, id).unwrap();
-        assert_eq!(
-            coverage(&hover).as_deref(),
-            Some("**Coverage** · unavailable while the project rebuilds"),
-            "{id}"
-        );
-    }
-    let plain = hover_while_rebuilding(&mut project, "plain").unwrap();
-    assert_eq!(coverage(&plain), None);
-    // The standing badges stay.
-    let done = hover_while_rebuilding(&mut project, "done").unwrap();
-    assert!(done.contains("`testable`"));
-}
-
-#[spec(
-    behavior = "provide_extension_entity_hover",
     verify = "hover shows the headline statement as its summary"
 )]
 fn hover_quotes_the_headline_and_fields_skip_it() {
@@ -501,7 +471,7 @@ fn hover_lists_the_diagnostics_not_already_shown() {
     let facts = specforge_ops::read::inspect::inspect(&view, "beta").unwrap();
 
     let coverage = specforge_ops::read::inspect::coverage(&view, "beta");
-    let text = specforge_lsp::hover::entity(&facts, &coverage, &[], false);
+    let text = specforge_lsp::hover::entity(&facts, &coverage, &[]);
     assert!(
         text.ends_with(
             "**Diagnostics** *(2)*\n\
@@ -513,13 +483,13 @@ fn hover_lists_the_diagnostics_not_already_shown() {
     );
 
     // What the cursor already shows is not listed again.
-    let text = specforge_lsp::hover::entity(&facts, &coverage, &[&cycle], false);
+    let text = specforge_lsp::hover::entity(&facts, &coverage, &[&cycle]);
     assert!(
         text.ends_with("**Diagnostics** *(1)*\n- **X900** acme says no"),
         "{text}"
     );
     let all = [&reported[0], &reported[1]];
-    let text = specforge_lsp::hover::entity(&facts, &coverage, &all, false);
+    let text = specforge_lsp::hover::entity(&facts, &coverage, &all);
     assert!(!text.contains("**Diagnostics**"), "{text}");
 }
 
