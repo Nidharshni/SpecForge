@@ -55,3 +55,9 @@ rather than nextest JUnit.
 it is the pure crate `specforge-coverage`, owned by `@specforge/testing` and linked both by its Wasm
 `coverage` pass and by host surfaces, which compute coverage status with no extension input (P2 in
 `provide_mcp_coverage_tool`, `spec/behaviors/mcp-tools.spec`).
+
+## Amendment (architecture round 11, plan 07)
+
+- **Execution.** Consent to run a collector's command is the operation's `Asking`: `--yes` is `Yes`, MCP is
+  `Nobody`, the CLI's terminal is the `Asker` ([ADR 0110](0110-who-can-be-asked-is-one-value-handed-to-an-operation.md)).
+  The consent store is still read first.

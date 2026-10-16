@@ -144,3 +144,9 @@ no report and a plan is refused where it is read (ADR 0076 D3).
   rendering, the environment, process life, and comparisons across surfaces. A test whose assertions are all facts
   of the compiled project or of an operation's document lives in the crate that owns that behaviour (ADR 0078
   D3). Every process test runs through `crates/surfaces/cli/tests/support::Cli`, under the project's own HOME.
+
+## Amendment (architecture round 11, plan 07)
+
+- **D4b.** The terminal is the CLI's `Asker`; who can be asked is `specforge_ops::asking::Asking`, built once per
+  command from `--yes`, the output format and whether anyone can answer ([ADR 0110](0110-who-can-be-asked-is-one-value-handed-to-an-operation.md)).
+  `Terminal::ask` keeps its guard: nobody to ask is no.
