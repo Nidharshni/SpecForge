@@ -568,6 +568,7 @@ behavior provide_mcp_find_definition_tool "Provide MCP Find Definition Tool" {
   verify unit "specforge.find_definition returns file, line, and column"
   verify unit "non-existent entity returns error response"
   verify contract "Provide MCP Find Definition Tool: MCP find definition tool holds — graph_available, source_location_returned, tool_invoked_emitted"
+  verify unit "a definition is a position in the text the project was compiled from, not the file on disk now"
 }
 
 behavior provide_mcp_find_references_tool "Provide MCP Find References Tool" {
