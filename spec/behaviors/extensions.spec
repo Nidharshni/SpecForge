@@ -69,9 +69,12 @@ behavior load_extension_manifests "Load Extension Manifests" {
     declared one. Which extension each entry names is decided once (a
     builtin's name before a lock entry; .wasm file entries after every named
     entry), and the extension load and the lock plan of add, init and update
-    read that one decision. A file that does not exist, does not load as a component,
-    declares another name than the one written, or declares an extension
-    another entry already loads MUST produce E028 naming the entry. A
+    read that one decision. A file that does not exist, cannot be read, does not load as a
+    component, declares another name than the one written, or declares an
+    extension another entry already loads MUST produce E028 naming the entry.
+    An entry whose declaration can't be read (its handshake, a describe
+    category or its protocol major) MUST produce one E028 that says so and
+    names what failed, in the same words for every kind of entry. A
     specforge.json that is there and is not used as written MUST produce
     the error E069 naming why, one per problem, before any other
     diagnostic. When the file is not readable, not JSON or not a JSON
@@ -106,6 +109,7 @@ behavior load_extension_manifests "Load Extension Manifests" {
   verify integration "an entry naming a .wasm file loads that component from disk under the name it declares"
   verify unit "the extension load and the lock plan resolve an entry by one rule"
   verify integration "a .wasm file entry that is missing, is not a component, names another extension or repeats a loaded one produces E028 naming the entry"
+  verify unit "an entry whose declaration can't be read is E028 saying so and naming what failed"
   verify unit "missing extension produces diagnostic"
   verify unit "every builtin is listed once, by the directory its crate lives in"
   verify unit "every fixture crate is listed once, by its directory under fixtures/"

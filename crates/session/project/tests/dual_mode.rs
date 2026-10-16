@@ -123,7 +123,9 @@ fn protocol_handshake_trap_produces_e028() {
         "E028 should mention extension name"
     );
     assert!(
-        e028[0].message.contains("protocol loading failed"),
+        e028[0]
+            .message
+            .contains("has no declaration the host can read"),
         "E028 should describe the error"
     );
 
@@ -174,7 +176,9 @@ fn protocol_version_mismatch_produces_e028() {
         "expected exactly 1 E028 for version mismatch"
     );
     assert!(
-        e028[0].message.contains("protocol loading failed"),
+        e028[0]
+            .message
+            .contains("has no declaration the host can read"),
         "E028 should describe error"
     );
     assert!(

@@ -185,9 +185,38 @@ enum Subject<'a> {
     },
 }
 
+impl Subject<'_> {
+    /// An E028 about the entry for a problem the per-entry step finds, in
+    /// the same words for every kind of entry: `what` says what failed.
+    fn says(&self, what: String) -> Diagnostic {
+        match self {
+            Subject::Named(name) => {
+                Diagnostic::new(codes::E028, format!("extension '{name}' {what}"))
+            }
+            Subject::File { key, file, .. } => Diagnostic::new(
+                codes::E028,
+                format!(
+                    "extension entry '{key}' in specforge.json: {} {what}",
+                    file.display()
+                ),
+            )
+            .with_suggestion("build it with specforge-extension-sdk for wasm32-wasip2"),
+        }
+    }
+}
+
 impl LoadProblem {
     /// The one diagnostic that reports this problem for `subject`.
     fn diagnostic(&self, subject: &Subject, installed: &Installed) -> Diagnostic {
+        match self {
+            LoadProblem::NotAComponent { reason } => {
+                return subject.says(format!("does not load as an extension component: {reason}"));
+            }
+            LoadProblem::NoDeclaration { reason } => {
+                return subject.says(format!("has no declaration the host can read: {reason}"));
+            }
+            _ => {}
+        }
         match subject {
             Subject::Named(name) => self.named(name, installed),
             Subject::File { key, file, path } => self.file(key, file, path),
@@ -253,18 +282,12 @@ impl LoadProblem {
                 "re-install it: {}",
                 installed.reinstall(name)
             )),
-            LoadProblem::NotAComponent { reason } => Diagnostic::new(
-                codes::E028,
-                format!("extension '{name}': failed to load Wasm module: {reason}"),
-            ),
-            LoadProblem::NoDeclaration { reason } => Diagnostic::new(
-                codes::E028,
-                format!("extension '{name}': protocol loading failed: {reason}"),
-            ),
             LoadProblem::FileMissing { .. }
             | LoadProblem::NotTheNameWritten { .. }
-            | LoadProblem::AlreadyLoaded { .. } => {
-                unreachable!("a named entry names no file")
+            | LoadProblem::AlreadyLoaded { .. }
+            | LoadProblem::NotAComponent { .. }
+            | LoadProblem::NoDeclaration { .. } => {
+                unreachable!("a named entry names no file, or the step's problem")
             }
         }
     }
@@ -277,23 +300,11 @@ impl LoadProblem {
             )
             .with_suggestion(suggestion)
         };
-        let build = "build it with specforge-extension-sdk for wasm32-wasip2".to_string();
         match self {
             LoadProblem::FileMissing { path: missing } => refused(
                 format!("the file {} does not exist", missing.display()),
                 "build the extension, or correct the path (a relative path is relative to the project root)"
                     .to_string(),
-            ),
-            LoadProblem::NotAComponent { reason } => refused(
-                format!(
-                    "{} does not load as an extension component: {reason}",
-                    file.display()
-                ),
-                build,
-            ),
-            LoadProblem::NoDeclaration { reason } => refused(
-                format!("{} answers no handshake: {reason}", file.display()),
-                build,
             ),
             LoadProblem::NotTheNameWritten { declared, written } => refused(
                 format!("{} declares '{declared}', not '{written}'", file.display()),
@@ -308,15 +319,18 @@ impl LoadProblem {
             ),
             LoadProblem::ModuleUnreadable { reason, .. } => refused(
                 format!("{} cannot be read: {reason}", file.display()),
-                build,
+                "make the file readable, or correct the path (a relative path is relative to the project root)"
+                    .to_string(),
             ),
             LoadProblem::NotInstalled
             | LoadProblem::LockUnreadable
             | LoadProblem::NotAPackageName { .. }
             | LoadProblem::ModuleMissing { .. }
             | LoadProblem::Changed { .. }
-            | LoadProblem::NotItsLockEntry { .. } => {
-                unreachable!("a file entry is not installed")
+            | LoadProblem::NotItsLockEntry { .. }
+            | LoadProblem::NotAComponent { .. }
+            | LoadProblem::NoDeclaration { .. } => {
+                unreachable!("a file entry is not installed, or the step's problem")
             }
         }
     }

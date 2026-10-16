@@ -31,8 +31,10 @@ fn describe_fails(mut runtime: InProcessRuntime, names: &[&str]) -> InProcessRun
     runtime
 }
 
-#[test]
-#[ignore = "flipped by T2"]
+#[specforge_test_macros::test(
+    behavior = "load_extension_manifests",
+    verify = "an entry whose declaration can't be read is E028 saying so and naming what failed"
+)]
 fn a_file_entry_whose_describe_fails_says_its_declaration_cannot_be_read() {
     let dir = TempDir::new().unwrap();
     file(dir.path(), "m.wasm", b"\0asm m");
