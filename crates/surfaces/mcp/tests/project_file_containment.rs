@@ -163,8 +163,10 @@ fn infer_progress_reads_no_manifest_through_a_symlink_that_leaves_the_project() 
 }
 
 /// R3: a `test_results` that resolves outside the project, in every spelling.
-#[test]
-#[ignore = "flipped by T6"]
+#[specforge_test_macros::test(
+    behavior = "provide_mcp_analyze_tool",
+    verify = "a test_results that resolves outside the call's project is refused before it is read"
+)]
 fn analyze_test_results_outside_the_project_is_refused_before_it_is_read() {
     let scene = TempDir::new().unwrap();
     let project = scene.path().join("proj");

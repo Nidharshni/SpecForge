@@ -214,3 +214,53 @@ fn migrate_names_files_and_backups_from_the_project_root() {
         "{document}"
     );
 }
+
+/// The CLI reads `--test-results` against its working directory (ADR 0029 D8, ADR 0092 D6): a relative
+/// name is the shell's, and a file outside the project is the user's to name.
+#[test]
+fn analyze_reads_a_relative_test_results_from_the_working_directory() {
+    let project = TestProject::new()
+        .raw_config(r#"{"extensions": ["@specforge/formal", "@specforge/testing"]}"#)
+        .file(
+            "main.spec",
+            "invariant held \"Held\" {\n  guarantee \"g\"\n  risk low\n  verify property \"holds\"\n}\n",
+        );
+    let elsewhere = tempfile::TempDir::new().unwrap();
+    fs::write(
+        elsewhere.path().join("r.json"),
+        r#"{"runner":"manual","results":{}}"#,
+    )
+    .unwrap();
+    let root = project.root().to_str().unwrap().to_string();
+
+    let found = Cli::on(&project).in_dir(elsewhere.path()).bare(&[
+        "analyze",
+        "coverage",
+        "--path",
+        &root,
+        "--format",
+        "json",
+        "--test-results",
+        "r.json",
+    ]);
+    let document = found.json();
+    assert_eq!(
+        document["passes"][0]["summary"]["test_results"]["runner"], "manual",
+        "{document}"
+    );
+
+    // Not under the project root: the same name from the project's own directory is not found.
+    Cli::on(&project)
+        .in_dir(project.root())
+        .bare(&[
+            "analyze",
+            "coverage",
+            "--path",
+            &root,
+            "--format",
+            "json",
+            "--test-results",
+            "r.json",
+        ])
+        .exits(2);
+}
