@@ -7,6 +7,8 @@
 //! export` writes it (ADR 0015 D10), after a successful export; every other
 //! reader (`specforge schema`, `specforge.schema`, `specforge://schema`, the
 //! MCP export and query tools, `schema --publish`) only versions against it.
+//! Every reader reports what versioning found: [`VersionedSchema::notices`]
+//! rides on each read outcome (ADR 0111).
 
 mod diff;
 
@@ -262,10 +264,11 @@ impl VersionedSchema {
         }
     }
 
-    /// What versioning reports before an export writes: one W053 per change
-    /// whose [`Bump`] is major, in [`Self::changes`] order, or the one I016
-    /// of an unreadable record. Empty otherwise.
-    pub fn diagnostics(&self) -> Vec<Diagnostic> {
+    /// What versioning found, for every read outcome that names the version
+    /// to carry (ADR 0111): one W053 per change whose [`Bump`] is major, in
+    /// [`Self::changes`] order, or the one I016 of an unreadable record.
+    /// Empty otherwise.
+    pub fn notices(&self) -> Vec<Diagnostic> {
         match &self.since {
             Since::NoRecord => Vec::new(),
             Since::Unreadable { path, reason } => vec![
@@ -278,8 +281,9 @@ impl VersionedSchema {
                     ),
                 )
                 .with_suggestion(
-                    "This export records a new cache; agents that read earlier exports must not \
-                     take the version as continuing theirs."
+                    "The next `specforge export` records a new cache over it; until then every \
+                     reader answers 1.0.0, and agents that read earlier exports must not take \
+                     the version as continuing theirs."
                         .to_string(),
                 ),
             ],

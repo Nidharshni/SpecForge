@@ -4,7 +4,7 @@ use specforge_ops::read::export::{self, ExportField, Format, Schema};
 
 use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
-use crate::reply::{Answered, Text};
+use crate::reply::{Answer, Answered, Text};
 use specforge_ops::view::ProjectView;
 
 /// `specforge.export`'s arguments.
@@ -70,7 +70,7 @@ impl CoreTool for Tool {
             coverage: None,
         };
 
-        let document = export::export(&view, &request).map_err(Self::refused)?;
-        Ok(Text(document).into())
+        let exported = export::export(&view, &request).map_err(Self::refused)?;
+        Ok(Answer::new(Text(exported.document)).with_diagnostics(exported.notices))
     }
 }

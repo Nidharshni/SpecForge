@@ -4,6 +4,7 @@
 
 use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
+use specforge_common::Diagnostic;
 use specforge_common::shape::Shape;
 use specforge_graph::Graph;
 use specforge_registry::RegistryBuild;
@@ -197,6 +198,9 @@ pub struct TraceOutcome {
     schema_version: String,
     /// One entity was traced (else every one).
     single: bool,
+    /// What versioning the schema reported (I016, W053; ADR 0111). Not part
+    /// of the document.
+    pub notices: Vec<Diagnostic>,
 }
 
 impl Serialize for TraceOutcome {
@@ -309,7 +313,8 @@ impl From<TraceError> for Refusal<EntityField> {
 pub fn trace(view: &ProjectView, target: Target) -> Result<TraceOutcome, TraceError> {
     let expectations = TraceExpectations::of(view.registries());
     let graph = view.graph();
-    let schema_version = view.versioned_schema().version().to_string();
+    let versioned = view.versioned_schema();
+    let schema_version = versioned.version().to_string();
     match target {
         Target::Entity(entity_id) => {
             let chain = chain(graph, entity_id, &expectations)
@@ -318,6 +323,7 @@ pub fn trace(view: &ProjectView, target: Target) -> Result<TraceOutcome, TraceEr
                 chains: vec![chain],
                 schema_version,
                 single: true,
+                notices: versioned.notices(),
             })
         }
         Target::Every => {
@@ -331,6 +337,7 @@ pub fn trace(view: &ProjectView, target: Target) -> Result<TraceOutcome, TraceEr
                 chains,
                 schema_version,
                 single: false,
+                notices: versioned.notices(),
             })
         }
     }
