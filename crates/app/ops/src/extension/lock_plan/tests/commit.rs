@@ -367,7 +367,7 @@ fn an_entries_only_plan_accepts_an_unreadable_lock_and_puts_the_config_back() {
 
 #[specforge_test(
     invariant = "extension_operation_atomicity",
-    verify = "a failed change puts back every file its last step wrote and removes the directories it created"
+    verify = "a failed change puts back every project file it wrote and removes the directories it created"
 )]
 fn a_failed_change_puts_back_every_project_file_and_the_directories_it_made() {
     let (runtime, registry) = (runtime(), app_registry(Some("k1")).refusing_pins());

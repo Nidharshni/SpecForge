@@ -191,7 +191,8 @@ invariant extension_operation_atomicity "Extension Operation Atomicity" {
   verify unit "failed install rolls back to previous state"
   verify unit "interrupted upgrade preserves original extension"
   verify unit "a pin that cannot be saved puts back everything the install wrote"
-  verify unit "a failed change puts back every file its last step wrote and removes the directories it created"
+  verify unit "a failed change puts back every project file it wrote and removes the directories it created"
+  verify unit "a failed change puts back the modules and the lock and removes the directories it made"
   verify integration "concurrent install and uninstall are serialized"
 }
 
