@@ -192,7 +192,7 @@ fn each_ask_is_answered_with_the_builtins_its_extension_required() {
         let installed = Installed::at(dir.path());
         let mut plan = LockPlan::adding(
             &installed,
-            opened::<&str>(&[]),
+            opened_at(dir.path()),
             &runtime,
             fetching(no_registry()),
             Purpose::Commit,
@@ -337,7 +337,7 @@ fn an_entries_only_plan_accepts_an_unreadable_lock_and_puts_the_config_back() {
     let installed = Installed::at(dir.path());
     let mut plan = LockPlan::adding(
         &installed,
-        opened::<&str>(&[]),
+        opened_at(dir.path()),
         &runtime,
         fetching(no_registry()),
         Purpose::Commit,
@@ -409,8 +409,10 @@ fn a_failed_change_puts_back_every_project_file_and_the_directories_it_made() {
     assert!(!installed.module_path(&app()).exists());
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "add_extension_to_existing_project",
+    verify = "an add over a specforge.json changed since it was read writes nothing"
+)]
 fn an_add_over_a_config_changed_since_it_was_read_writes_nothing() {
     let (runtime, registry) = (runtime(), app_registry(Some("k1")));
     let dir = base_project();

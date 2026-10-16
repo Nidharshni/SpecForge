@@ -605,8 +605,10 @@ fn remove_and_check_agree_on_the_project_peer_set() {
 }
 
 /// R2 without the timing: a removal judged on the config the compile read must not write another.
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "remove_extension",
+    verify = "a removal judged on the compiled specforge.json never writes another"
+)]
 fn a_removal_judged_on_the_compiled_config_never_writes_another() {
     use specforge_ops::extension::{self, RemoveRequest};
     use specforge_ops::testing::{NEEDS_SOFTWARE_1, probes};

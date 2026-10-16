@@ -214,7 +214,7 @@ fn remove_refuses_as_add_and_update_do() {
 )]
 fn a_non_string_item_does_not_block_a_removal() {
     let fixture = Assembled::new()
-        .config(&["@specforge/product"])
+        .config_json(serde_json::json!({"extensions": ["@specforge/product", 42]}))
         .config_problems(vec![ConfigProblem::ItemNotAString {
             path: PathBuf::from("./specforge.json"),
             key: "extensions",
@@ -556,8 +556,10 @@ fn every_refusal_of_a_name_is_about_it() {
     );
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "remove_extension",
+    verify = "a removal over a specforge.json changed since the compile writes nothing"
+)]
 fn a_removal_over_a_config_changed_since_the_compile_writes_nothing() {
     let fixture = Assembled::new().config(&["@specforge/product"]);
     write_config(&fixture, r#"{"extensions": ["@specforge/product"]}"#);
@@ -577,7 +579,6 @@ fn a_removal_over_a_config_changed_since_the_compile_writes_nothing() {
 }
 
 #[test]
-#[ignore = "flipped by T4"]
 fn a_removal_over_a_config_deleted_since_the_compile_writes_nothing() {
     let fixture = installed(Assembled::new().config(&["@acme/x"]), "@acme/x");
     write_config(&fixture, r#"{"extensions": ["@acme/x"]}"#);

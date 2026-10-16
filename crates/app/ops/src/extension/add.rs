@@ -145,7 +145,8 @@ pub fn add(
     // The project must exist, with a config the writer can edit, before
     // anything is installed into it: the refusal `update` and `remove`
     // give an unusable specforge.json too (`config_invalid`).
-    let config = crate::config::required(req.root.dir())?.config;
+    let read = crate::config::required(req.root.dir())?;
+    let (config, found) = (read.config, read.found);
     if req.extensions.is_empty() {
         return Err(no_specifier().about(AddField::Extensions));
     }
@@ -159,7 +160,7 @@ pub fn add(
     // A specforge.lock that can't be read refuses before a file is read or a registry asked.
     let plan = LockPlan::adding(
         &installed,
-        Opened::read(&config),
+        Opened::read(&config, found),
         runtime,
         Fetching {
             registry,

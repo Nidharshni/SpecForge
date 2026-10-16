@@ -426,7 +426,10 @@ behavior remove_extension "Remove Extension" {
     has is extension_not_found (E072 when it is no package name). Every
     refusal MUST be decided before anything is
     written, and a specforge.json the compile could not read refuses every
-    removal (config_invalid), changing nothing. A removal is all or
+    removal (config_invalid), changing nothing. A removal writes the
+    specforge.json entries it judged: when specforge.json no longer holds
+    what the compile read, it MUST be refused (file_changed) and write
+    nothing. A removal is all or
     nothing: a failure at any step leaves specforge.json, specforge.lock
     and the binary as they were.
     A removal is judged by the one peer rule over the project's peer set
@@ -470,6 +473,8 @@ behavior remove_extension "Remove Extension" {
   verify unit "remove and check agree: a removal check would report E027 for is refused, and a removal that passes leaves none"
   verify integration "a locked extension no specforge.json entry enables does not keep its peer from being removed"
   verify integration "a removal with an unreadable specforge.json is config_invalid and changes nothing"
+  verify unit "a removal over a specforge.json changed since the compile writes nothing"
+  verify integration "a removal judged on the compiled specforge.json never writes another"
 }
 
 // Read-only query. (produces [] declared below; no event of its own.)

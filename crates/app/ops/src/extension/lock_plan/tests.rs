@@ -128,7 +128,13 @@ fn opened<S: AsRef<str>>(entries: &[S]) -> Opened {
         Path::new("specforge.json"),
         &serde_json::json!({ "extensions": entries }).to_string(),
     );
-    Opened::read(&read.config)
+    Opened::read(&read.config, true)
+}
+
+/// The `specforge.json` at `root`, as an operation reads it before it plans.
+fn opened_at(root: &Path) -> Opened {
+    let read = crate::config::required(root).unwrap();
+    Opened::read(&read.config, read.found)
 }
 
 /// A plan over `installed` whose `specforge.json` enables every locked extension, fetching

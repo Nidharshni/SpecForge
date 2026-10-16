@@ -82,9 +82,9 @@ pub(crate) enum Purpose {
 /// Which `specforge.json` entries a removal drops.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Disabled {
-    /// Every entry naming this extension (`config::remove_extension`).
+    /// Every entry naming this extension.
     Named(String),
-    /// The entries written exactly so (a `.wasm` file entry; `config::remove_entry`).
+    /// The entries written exactly so (a `.wasm` file entry).
     Entry(String),
 }
 
@@ -179,8 +179,6 @@ pub(crate) struct LockPlan<'a> {
     purpose: Purpose,
     /// A removal is not judged (`remove --force`).
     force: bool,
-    /// Whether the change edits an existing `specforge.json`; `init` writes its own.
-    edits_config: bool,
     /// `(trigger, companion)`: the companion is enabled whenever the change leaves the trigger
     /// enabled.
     companions: Vec<(&'static str, &'static str)>,
@@ -248,18 +246,16 @@ impl<'a> LockPlan<'a> {
         runtime: &'a dyn WasmRuntime,
         installs: bool,
     ) -> Result<LockPlan<'a>, OpError> {
-        let mut plan = LockPlan::open(
+        LockPlan::open(
             installed,
-            Opened::read(&ProjectConfig::default()),
+            Opened::read(&ProjectConfig::default(), false),
             Some(runtime),
             Declarations::through(runtime),
             Verb::Install,
             None,
             "init",
             installs,
-        )?;
-        plan.edits_config = false;
-        Ok(plan)
+        )
     }
 
     /// `remove`'s plan over the compiled project `view`: its lock as the compile read it, its
@@ -274,7 +270,7 @@ impl<'a> LockPlan<'a> {
     ) -> Result<LockPlan<'a>, OpError> {
         let mut plan = LockPlan::open(
             view.installed(),
-            Opened::read(view.env().config()),
+            Opened::read(view.env().config(), view.env().config_found()),
             view.runtime().map(|runtime| &**runtime),
             Declarations::loaded_by(view),
             Verb::Remove,
@@ -322,7 +318,6 @@ impl<'a> LockPlan<'a> {
             verb,
             purpose: Purpose::Commit,
             force: false,
-            edits_config: true,
             companions: Vec::new(),
             disabled: Vec::new(),
             uninstalled: Vec::new(),
@@ -498,7 +493,8 @@ pub(crate) struct Checked<'a> {
     /// The `specforge.json` entries to drop.
     disabled: Vec<Disabled>,
     purpose: Purpose,
-    edits_config: bool,
+    /// The operation's name, for a refusal.
+    operation: &'static str,
     /// The pins its registry installs call for, and the registry port that pins them; none for a
     /// plan that fetches nothing.
     pins: Option<(&'a dyn Registry, Vec<KeyPin>)>,

@@ -38,7 +38,7 @@ fn a_non_string_item_is_kept_where_it_was() {
         Path::new("specforge.json"),
         r#"{"extensions": ["@acme/foo@1.0.0", 7, "@acme/gone"]}"#,
     );
-    let opened = Opened::read(&read.config);
+    let opened = Opened::read(&read.config, true);
 
     let items = opened.items_after(|entry| entry == "@acme/gone", &[]);
 
@@ -47,4 +47,163 @@ fn a_non_string_item_is_kept_where_it_was() {
         items,
         [serde_json::json!("@acme/foo@1.0.0"), serde_json::json!(7)]
     );
+}
+
+/// A plan over the `specforge.json` holding `config`, enabling `names`, checked.
+fn enabling<'a>(
+    installed: &'a Installed,
+    runtime: &'a InProcessRuntime,
+    root: &Path,
+    purpose: Purpose,
+    names: &[&str],
+) -> Checked<'a> {
+    let mut plan = LockPlan::adding(
+        installed,
+        opened_at(root),
+        runtime,
+        fetching(no_registry()),
+        purpose,
+        false,
+    )
+    .unwrap();
+    for (at, name) in names.iter().enumerate() {
+        plan.enable(Ask(at), name);
+    }
+    plan.check().ok().unwrap()
+}
+
+fn software() -> InProcessRuntime {
+    crate::testing::serving_builtin(
+        runtime(),
+        "@specforge/software",
+        declaring("@specforge/software", "1.0.0", &[]),
+    )
+}
+
+fn project_with(config: &str) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("specforge.json"), config).unwrap();
+    dir
+}
+
+#[specforge_test(
+    behavior = "add_extension_to_existing_project",
+    verify = "add extension appends to extensions list"
+)]
+fn a_commit_writes_the_entries_the_plan_judged_and_keeps_the_rest() {
+    let dir = project_with(
+        r#"{"name":"p","version":"0.1.0","spec_root":"spec","extensions":["@acme/foo@1.0.0",7]}"#,
+    );
+    let (runtime, installed) = (software(), Installed::at(dir.path()));
+    let checked = enabling(
+        &installed,
+        &runtime,
+        dir.path(),
+        Purpose::Commit,
+        &["@specforge/software"],
+    );
+    let judged = checked.entries();
+
+    let done = checked
+        .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
+        .unwrap();
+
+    let text = std::fs::read_to_string(dir.path().join("specforge.json")).unwrap();
+    let written: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(judged, ["@acme/foo@1.0.0", "@specforge/software"]);
+    assert_eq!(
+        written["extensions"],
+        serde_json::json!(["@acme/foo@1.0.0", 7, "@specforge/software"])
+    );
+    assert_eq!(written["name"], "p");
+    assert_eq!(written["spec_root"], "spec");
+    assert_eq!(
+        text,
+        String::from_utf8(crate::config::render(&written).unwrap()).unwrap()
+    );
+    assert_eq!(done.enabled, 2);
+    assert!(done.asked(Ask(0)).appended);
+}
+
+#[test]
+fn an_unchanged_set_of_entries_writes_nothing() {
+    let dir = project_with(r#"{"extensions":["@specforge/software@1.0.0"]}"#);
+    let (runtime, installed) = (software(), Installed::at(dir.path()));
+
+    let done = enabling(
+        &installed,
+        &runtime,
+        dir.path(),
+        Purpose::Commit,
+        &["@specforge/software"],
+    )
+    .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
+    .unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("specforge.json")).unwrap(),
+        r#"{"extensions":["@specforge/software@1.0.0"]}"#
+    );
+    assert!(done.writes.is_empty());
+    assert!(!done.asked(Ask(0)).appended);
+}
+
+#[test]
+fn a_preview_over_a_changed_config_answers_what_was_judged() {
+    let dir = project_with(r#"{"extensions":[]}"#);
+    let (runtime, installed) = (software(), Installed::at(dir.path()));
+    let checked = enabling(
+        &installed,
+        &runtime,
+        dir.path(),
+        Purpose::Preview,
+        &["@specforge/software"],
+    );
+    std::fs::write(
+        dir.path().join("specforge.json"),
+        r#"{"extensions":["@acme/x"]}"#,
+    )
+    .unwrap();
+
+    let done = checked
+        .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
+        .unwrap();
+
+    assert!(done.asked(Ask(0)).appended);
+    assert!(done.writes.is_empty());
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("specforge.json")).unwrap(),
+        r#"{"extensions":["@acme/x"]}"#
+    );
+}
+
+#[test]
+fn a_config_that_appeared_or_no_longer_parses_is_changed() {
+    let dir = project_with(r#"{"extensions":["@acme/x"]}"#);
+    let held = crate::Containment::unbounded()
+        .resolve(&dir.path().join("specforge.json"))
+        .unwrap();
+    let opened_none = Opened::read(&specforge_common::ProjectConfig::default(), false);
+    let opened_file = opened_at(dir.path());
+
+    // A file that was not there when the plan opened is changed.
+    assert_eq!(
+        opened_none.unchanged(&held, "add").unwrap_err().code,
+        crate::FILE_CHANGED
+    );
+    // Formatting is not a change; a document that no longer parses is.
+    std::fs::write(held.spelled.clone(), "{ \"extensions\" :\n [\"@acme/x\"] }").unwrap();
+    assert!(opened_file.unchanged(&held, "add").is_ok());
+    std::fs::write(held.spelled.clone(), "{").unwrap();
+    assert_eq!(
+        opened_file.unchanged(&held, "add").unwrap_err().code,
+        crate::FILE_CHANGED
+    );
+    // A file that went is changed; no file, when none was opened, is not.
+    std::fs::remove_file(held.spelled.clone()).unwrap();
+    assert_eq!(
+        opened_file.unchanged(&held, "add").unwrap_err().code,
+        crate::FILE_CHANGED
+    );
+    assert!(opened_none.unchanged(&held, "add").is_ok());
 }

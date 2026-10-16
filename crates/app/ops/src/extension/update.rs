@@ -302,7 +302,8 @@ pub fn update(
 ) -> Result<UpdateOutcome, OpError> {
     // A project whose specforge.json cannot be used is refused before
     // anything is read or written, as `add` and `remove` refuse it.
-    let config = crate::config::usable(req.root.dir())?.config;
+    let read = crate::config::usable(req.root.dir())?;
+    let (config, found) = (read.config, read.found);
     let installed = Installed::at(req.root.dir());
     let lock = match installed.lock() {
         LockState::Read(lock) => lock.clone(),
@@ -333,7 +334,7 @@ pub fn update(
     // the whole update leaves it, whatever order the lock lists the extensions in.
     let mut plan = LockPlan::updating(
         &installed,
-        Opened::read(&config),
+        Opened::read(&config, found),
         runtime,
         Fetching {
             registry,

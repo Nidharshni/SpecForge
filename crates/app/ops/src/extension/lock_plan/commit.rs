@@ -3,7 +3,9 @@
 
 use std::path::{Path, PathBuf};
 
-use super::{Ask, Checked, Disabled, Purpose};
+use serde_json::Value;
+
+use super::{Ask, Checked, Opened, Purpose};
 use crate::change::{Cause, ProjectChange};
 use crate::registry::{KeyPin, Registry};
 use crate::{Containment, Held, OpError, OpErrorKind, Writes};
@@ -36,8 +38,7 @@ pub(crate) struct Done {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct Asked {
     /// The entry of the extension it asked for was appended by this change (would be, for a
-    /// preview); `false` when an entry already enabled it, or another writer added it since the
-    /// plan read the file.
+    /// preview); `false` when an entry already enabled it.
     pub(crate) appended: bool,
     /// The builtins enabled because its extension requires them, dependencies first.
     pub(crate) peers_enabled: Vec<&'static str>,
@@ -54,57 +55,32 @@ impl Done {
     }
 }
 
-/// `specforge.json` as the plan leaves it: the names enabled and the entries dropped, applied to the
-/// array in memory, one read and one render (`None` when the file would be as it is). A missing
-/// `specforge.json` is nothing to edit for a plan that only drops entries: a project without one (an
-/// install only the lock knows) has no entry to drop. `enabled` is what enabling changed.
-fn config_edit(
-    root: &Path,
-    names: &[&str],
-    disabled: &[Disabled],
-    enabling: bool,
-    enabled: &mut Option<crate::config::Enabled>,
-) -> Result<Option<Vec<u8>>, OpError> {
-    let edit = crate::config::edit_extensions(root, |extensions| {
-        let mut changed = false;
-        if enabling {
-            let now = crate::config::enable(extensions, names);
-            changed |= !now.appended.is_empty();
-            *enabled = Some(now);
-        }
-        for dropped in disabled {
-            changed |= match dropped {
-                Disabled::Named(name) => crate::config::remove_extension(extensions, name),
-                Disabled::Entry(entry) => crate::config::remove_entry(extensions, entry),
-            };
-        }
-        changed
-    });
-    match edit {
-        Err(error) if error.code == "config_not_found" && !enabling => Ok(None),
-        other => other,
-    }
-}
-
 impl Checked<'_> {
-    /// What `specforge.json` enables as the change leaves it, in order: the entries it held
-    /// without the dropped ones, then the appended ones, dependencies first.
-    pub(crate) fn entries(&self) -> Vec<String> {
-        let items = self.config.items_after(
+    /// The `extensions` items the change leaves, in order: the items the plan opened with
+    /// without the dropped ones, then the appended ones, dependencies first (ADR 0126).
+    fn items(&self) -> Vec<Value> {
+        self.config.items_after(
             |entry| self.disabled.iter().any(|disabled| disabled.drops(entry)),
             &self.appended,
-        );
-        super::Opened::entries_of(&items)
+        )
+    }
+
+    /// What `specforge.json` enables as the change leaves it, in order.
+    pub(crate) fn entries(&self) -> Vec<String> {
+        Opened::entries_of(&self.items())
     }
 
     /// A preview answers without writing. A commit writes, all or nothing (ADR 0028 D4, ADR 0128):
     /// each staged module placed and each uninstalled one moved aside, the lock once (when a module
-    /// changed), then, as the installed change's last step, the project change: `specforge.json`'s
-    /// edit (the appended entries, the dropped ones) and the `also` files written in order, and last
+    /// changed), then, as the installed change's last step, the project change: `specforge.json` with
+    /// the entries the plan judged (ADR 0126) and the `also` files written in order, and last
     /// the publisher keys its fetches accepted (ADR 0059). A plan that stages no module writes no
     /// lock and opens no installed change (ADR 0041 B4). A failure at any step, the pins' included
     /// (R-TRUST-006), puts every file back and pins nothing. The error's writes name what could not
     /// be put back (normally nothing).
+    ///
+    /// Before anything is written, a commit refuses `file_changed` when `specforge.json` no longer
+    /// holds the document the plan opened with (ADR 0126); a preview writes nothing and is not checked.
     ///
     /// Before anything is written, and for a preview too, every file the change would write is
     /// resolved through `containment` (ADR 0104): the config, the `also` files, the lock and each
@@ -116,20 +92,22 @@ impl Checked<'_> {
         also: Vec<Also<'_>>,
         containment: &Containment,
     ) -> Result<Done, OpError> {
-        let final_entries = self.entries();
+        let items = self.items();
+        let final_entries = Opened::entries_of(&items);
         let Checked {
             installed,
             changes_lock,
             installs,
             uninstalls,
-            disabled,
             purpose,
-            edits_config,
+            operation,
+            config,
             pins,
             appended,
             wanted,
             ..
         } = self;
+        let document = config.written(&items);
         let names: Vec<&str> = appended
             .iter()
             .map(|appended| appended.name.as_str())
@@ -140,7 +118,8 @@ impl Checked<'_> {
             .map(|also| containment.resolve(&also.path))
             .collect::<Result<Vec<Held>, _>>()?;
         let config_path = root.join(crate::config::CONFIG_FILE);
-        let config_held = (edits_config || !disabled.is_empty())
+        let config_held = config
+            .opened_a_file()
             .then(|| containment.resolve(&config_path))
             .transpose()?;
         let mut written_by_change: Vec<PathBuf> = Vec::new();
@@ -156,18 +135,14 @@ impl Checked<'_> {
         for path in &written_by_change {
             containment.resolve(path)?;
         }
-        let config_file = || {
-            config_held.as_ref().ok_or_else(|| {
-                OpError::new(
-                    OpErrorKind::Internal,
-                    "config_not_held",
-                    "the change edits specforge.json without holding it",
-                )
-            })
-        };
-        let mut enabled = None;
         let mut writes = Writes::none();
         if purpose == Purpose::Commit {
+            // Nothing is written yet: a file that changed since the plan opened it refuses here (ADR 0126).
+            let config_before = config_held
+                .as_ref()
+                .map(|held| config.unchanged(held, operation))
+                .transpose()?
+                .flatten();
             // The installed change opens first: an unreadable lock is E033 before anything is judged.
             let change = if changes_lock {
                 Some(
@@ -178,17 +153,13 @@ impl Checked<'_> {
             } else {
                 None
             };
-            let enabling = edits_config && !names.is_empty();
-            let config_after = if enabling || !disabled.is_empty() {
-                config_edit(root, &names, &disabled, enabling, &mut enabled)?
-            } else {
-                None
-            };
             let mut files = ProjectChange::new();
-            if let Some(after) = config_after {
-                let held = config_file()?.clone();
-                let before = held.read_if_there().map_err(|e| unreadable(&held, &e))?;
-                files.stage(held, before, after);
+            if let (Some(document), Some(held)) = (&document, &config_held) {
+                files.stage(
+                    held.clone(),
+                    config_before,
+                    crate::config::render(document)?,
+                );
             }
             let mut also_codes: Vec<(PathBuf, &'static str)> = Vec::new();
             for (file, held) in also.into_iter().zip(also_held) {
@@ -230,13 +201,7 @@ impl Checked<'_> {
             }
         }
 
-        let written = |name: &str| match purpose {
-            Purpose::Commit if !edits_config => names.contains(&name),
-            Purpose::Commit => enabled
-                .as_ref()
-                .is_some_and(|enabled| enabled.appended.iter().any(|a| a == name)),
-            Purpose::Preview => names.contains(&name),
-        };
+        let written = |name: &str| names.contains(&name);
         let mut asked: Vec<(Ask, Asked)> = Vec::new();
         for (ask, name) in &wanted {
             if asked.iter().any(|(known, _)| known == ask) {
@@ -258,9 +223,7 @@ impl Checked<'_> {
         }
         Ok(Done {
             writes,
-            enabled: enabled
-                .as_ref()
-                .map_or(final_entries.len(), |enabled| enabled.total),
+            enabled: final_entries.len(),
             asked,
         })
     }
@@ -276,7 +239,7 @@ fn refused(
     match cause {
         Cause::Changed { file } => OpError::new(
             OpErrorKind::Conflict,
-            "file_changed",
+            crate::FILE_CHANGED,
             format!(
                 "{} changed while the change was being written; nothing was written",
                 file.display()
@@ -303,15 +266,6 @@ fn refused(
         }
         Cause::Then(error) => error,
     }
-}
-
-/// The refusal of reading `file`, which the change would write, to stage it.
-fn unreadable(file: &Held, error: &std::io::Error) -> OpError {
-    OpError::new(
-        OpErrorKind::of_io(error),
-        "file_unreadable",
-        format!("failed to read {}: {error}", file.spelled.display()),
-    )
 }
 
 /// Pin what a committed plan's fetches decided, through the port that fetched them.

@@ -76,7 +76,7 @@ impl<'a> LockPlan<'a> {
             purpose,
             disabled,
             uninstalled,
-            edits_config,
+            operation,
             ..
         } = self;
         for (i, s) in staged.iter().enumerate() {
@@ -104,7 +104,7 @@ impl<'a> LockPlan<'a> {
             uninstalls: uninstalled.into_iter().map(|(_, name)| name).collect(),
             disabled: disabled.into_iter().map(|(_, disabled)| disabled).collect(),
             purpose,
-            edits_config,
+            operation,
             pins: fetching.map(|fetching| (fetching.registry, pins)),
             config,
             appended,
