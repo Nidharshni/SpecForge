@@ -100,7 +100,7 @@ fn content_hash(path: &Path) -> u64 {
 
 /// What a session last built from, as it was when read.
 #[derive(Debug, Default, Clone)]
-pub(crate) struct Stamps {
+pub(super) struct Stamps {
     /// Every source, by key relative to the spec root.
     sources: BTreeMap<String, Entry>,
     /// Every environment input (absent ones recorded as `None`).
@@ -113,7 +113,7 @@ impl Stamps {
     /// Stamp `specforge.json`, before its one read: a config rewritten after
     /// this stamp is seen next time, whatever the rest was read from. Starts
     /// the environment record again.
-    pub(crate) fn stamp_config(&mut self, config: &Path) {
+    pub(super) fn stamp_config(&mut self, config: &Path) {
         self.environment = BTreeMap::new();
         self.environment
             .insert(config.to_path_buf(), Entry::stamp(config));
@@ -122,7 +122,7 @@ impl Stamps {
     /// Stamp the other environment inputs (the lock and each extension
     /// module), before the extension runtime and the environment read
     /// them.
-    pub(crate) fn stamp_environment(&mut self, inputs: &SessionInputs) {
+    pub(super) fn stamp_environment(&mut self, inputs: &SessionInputs) {
         for path in inputs.environment_files() {
             let entry = Entry::stamp(path);
             self.environment.insert(path.to_path_buf(), entry);
@@ -131,7 +131,7 @@ impl Stamps {
 
     /// Stamp every source `discovered` under the spec root, before the
     /// sources are read.
-    pub(crate) fn stamp_all_sources(&mut self, inputs: &SessionInputs, discovered: &[PathBuf]) {
+    pub(super) fn stamp_all_sources(&mut self, inputs: &SessionInputs, discovered: &[PathBuf]) {
         let Some(spec_root) = inputs.spec_root() else {
             return;
         };
@@ -147,7 +147,7 @@ impl Stamps {
     /// Stamp the sources `keys` names, before they are read again: the
     /// others keep what they recorded, so a change to one of them that
     /// this rebuild does not read is still seen next time.
-    pub(crate) fn stamp_sources(&mut self, inputs: &SessionInputs, keys: &[String]) {
+    pub(super) fn stamp_sources(&mut self, inputs: &SessionInputs, keys: &[String]) {
         let Some(spec_root) = inputs.spec_root() else {
             return;
         };
@@ -165,7 +165,7 @@ impl Stamps {
     }
 
     /// Stamp every check input, before the checks read them.
-    pub(crate) fn stamp_checks(&mut self, inputs: &SessionInputs) {
+    pub(super) fn stamp_checks(&mut self, inputs: &SessionInputs) {
         self.checks = inputs
             .check_files()
             .map(|path| (path.to_path_buf(), Entry::stamp(path)))
@@ -175,7 +175,7 @@ impl Stamps {
     /// What differs from what was read, among `scope`: the sources `inputs`
     /// discovers now (and those recorded) in each region, and the recorded
     /// inputs.
-    pub(crate) fn changes(&self, inputs: &SessionInputs, scope: Scope<'_>) -> Changes {
+    pub(super) fn changes(&self, inputs: &SessionInputs, scope: Scope<'_>) -> Changes {
         let Some(spec_root) = inputs.spec_root() else {
             return Changes::default();
         };
@@ -256,7 +256,7 @@ impl Stamps {
 }
 
 /// How much of what a session read a comparison covers.
-pub(crate) enum Scope<'r> {
+pub(super) enum Scope<'r> {
     /// Every source, every environment and check input.
     Everything,
     /// What a batch of changed paths reaches.

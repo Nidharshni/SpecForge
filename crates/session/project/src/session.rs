@@ -3,13 +3,13 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use specforge_common::{Diagnostic, ProjectConfig, ProjectRoot, read_project_config};
+use specforge_common::{Diagnostic, ProjectConfig, ProjectRoot};
 use specforge_graph::{Applied, GraphDelta, NodeChange};
 
 use crate::buffers::{Buffer, Held};
 use crate::compiled::CompiledProject;
 use crate::diagnostics_delta::DiagnosticsDelta;
-use crate::ledger::{Changes, Scope, SessionInputs, Stamps};
+use crate::ledger::{Changes, Ledger, SessionInputs};
 use crate::sources::Read;
 use crate::{Environment, SharedRuntime};
 
@@ -166,14 +166,12 @@ pub struct ProjectSession {
     /// Where each environment load gets its runtime: a built one is fresh
     /// for every load (the extensions' `.wasm` files may have changed).
     source: RuntimeSource,
-    /// What the session depends on (ADR 0030). Detached (an editor with no
-    /// workspace folder), files are buffers keyed by absolute path, with no
-    /// spec root to resolve their imports against and no environment to
-    /// reload.
-    inputs: SessionInputs,
-    /// What the session last built from, as it was when read: what
-    /// [`Self::stale`] compares with disk.
-    snapshot: Stamps,
+    /// What the session depends on (ADR 0030) and what it read of it, as it
+    /// was when read: what [`Self::stale`] compares with disk (ADR 0106).
+    /// Detached (an editor with no workspace folder), files are buffers keyed
+    /// by absolute path, with no spec root to resolve their imports against
+    /// and no environment to reload.
+    ledger: Ledger,
     /// The editor buffers the session holds: each is the truth for its file
     /// until released (ADR 0046).
     held: Held,
@@ -190,10 +188,9 @@ struct OpeningProject {
     env: Arc<Environment>,
     /// Where each environment load gets its runtime.
     source: RuntimeSource,
-    /// What the loaded environment depends on.
-    inputs: SessionInputs,
-    /// Stamped for the environment; the sources are stamped by `finish`.
-    snapshot: Stamps,
+    /// What the loaded environment depends on, stamped; the sources are
+    /// stamped by `finish`.
+    ledger: Ledger,
 }
 
 impl OpeningProject {
@@ -213,22 +210,19 @@ impl OpeningProject {
     /// [`Self::finish`], holding `buffers`: each held buffer's text is read
     /// in place of its file by the one cold build, so the checks run once.
     fn finish_holding(self, buffers: Vec<Buffer>) -> ProjectSession {
-        let mut snapshot = self.snapshot;
-        let discovered = self.inputs.discover();
-        snapshot.stamp_all_sources(&self.inputs, &discovered);
-        let inputs = self.inputs.linked(&discovered);
+        let mut ledger = self.ledger;
+        let discovered = ledger.discover();
         // Keys as this environment gives them: the spec root may have moved.
         let held = Held::keyed(buffers, |path| self.env.source_key(path));
         // What was stamped is what is read, except a held file: its buffer
         // is read in its place.
-        let texts = held.sources(|key| !self.inputs.excludes(key));
+        let texts = held.sources(|key| !ledger.excludes(key));
         let mut project = CompiledProject::read(self.env, &discovered, &texts);
         project.set_verify(cfg!(debug_assertions));
         let mut session = ProjectSession {
             project,
             source: self.source,
-            inputs,
-            snapshot,
+            ledger,
             held,
             checks_skipped: false,
         };
@@ -244,8 +238,7 @@ impl ProjectSession {
         ProjectSession {
             project: CompiledProject::detached(),
             source: RuntimeSource::Fixed(None),
-            inputs: SessionInputs::detached(),
-            snapshot: Stamps::default(),
+            ledger: Ledger::detached(),
             held: Held::default(),
             checks_skipped: false,
         }
@@ -273,22 +266,19 @@ impl ProjectSession {
     /// environment loaded (config, extensions, registries; each load getting
     /// its runtime from `source`), no `.spec` file read.
     fn begin_open(root: &ProjectRoot, source: RuntimeSource) -> OpeningProject {
-        // Everything is stamped before anything reads it (crate::ledger):
-        // the config before its one read, the lock and the modules before
-        // the runtime and the environment read them, the sources by `finish`.
-        let mut snapshot = Stamps::default();
-        snapshot.stamp_config(&root.config_file());
-        let read = read_project_config(root.dir());
-        let inputs = SessionInputs::opened(root.dir(), &read.config);
-        snapshot.stamp_environment(&inputs);
+        // The ledger stamps each input before anything reads it: the config
+        // before its one read, the lock and the modules before the runtime
+        // and the environment read them, the sources by `finish`.
+        let mut ledger = Ledger::opening();
+        let read = ledger.config(root);
+        ledger.before_load(root, &read.config);
         let runtime = source.runtime_for(root.dir(), &read.config);
         let env = Environment::from_read(root, read, runtime);
-        let inputs = inputs.with_check_passes(env.registries().check_passes().next().is_some());
+        ledger.with_check_passes(env.registries().check_passes().next().is_some());
         OpeningProject {
             env: Arc::new(env),
             source,
-            inputs,
-            snapshot,
+            ledger,
         }
     }
 
@@ -315,7 +305,7 @@ impl ProjectSession {
         for buffer in buffers {
             let key = self.source_key(&buffer.path);
             let read = Read::Text(buffer.text.clone());
-            if !self.excludes(&key) && !self.project.is_current(&key, &read) {
+            if !self.ledger.excludes(&key) && !self.project.is_current(&key, &read) {
                 reads.push((key.clone(), read));
             }
             self.held.hold(key, buffer.clone());
@@ -329,42 +319,15 @@ impl ProjectSession {
     /// skipped directory, not `.spec`, inside a nested project) changes nothing, unless the project holds
     /// it: then it leaves the graph. Then every check runs.
     fn reread(&mut self, keys: &[String]) -> Update {
-        let keys = keys.to_vec();
-        // Stamped before they are read again (crate::ledger).
-        self.snapshot.stamp_sources(&self.inputs, &keys);
-        let moved = self.relink(&keys);
-        let reads: Vec<(String, Read)> = keys
+        let (reads, moved) = self.ledger.reread(keys);
+        let reads: Vec<(String, Read)> = reads
             .into_iter()
-            .map(|key| {
-                let read = self.read_disk(&key);
-                (key, read)
-            })
             // A key that is no source and never was changes nothing.
             .filter(|(key, read)| {
                 !(matches!(read, Read::Gone) && self.project.is_current(key, read))
             })
             .collect();
         self.applied(reads, CheckMode::Full, moved)
-    }
-
-    /// What `key` is on disk to this session: its file's read, or gone when
-    /// it is no source (an `exclude` entry, a skipped directory, or a nested
-    /// project took it since it was read).
-    fn read_disk(&self, key: &str) -> Read {
-        if self.excludes(key) {
-            Read::Gone
-        } else {
-            self.project.read_source(key)
-        }
-    }
-
-    /// Read the links of `keys` again: whether the session's inputs moved
-    /// (a source became or stopped being a symlink, or points elsewhere).
-    fn relink(&mut self, keys: &[String]) -> bool {
-        let relinked = self.inputs.relinked(keys);
-        let moved = relinked != self.inputs;
-        self.inputs = relinked;
-        moved
     }
 
     /// The editor no longer holds the buffers of `paths` (absolute): each
@@ -383,17 +346,11 @@ impl ProjectSession {
         for path in paths {
             let key = self.source_key(path);
             self.held.release(&key);
-            let read = if self.inputs.root().is_none() {
-                // No project: the buffer was the file's only text.
-                Read::Gone
-            } else {
-                // Stamped before it is read (crate::ledger): a saved
-                // buffer leaves nothing stale.
-                self.snapshot
-                    .stamp_sources(&self.inputs, std::slice::from_ref(&key));
-                moved |= self.relink(std::slice::from_ref(&key));
-                self.read_disk(&key)
-            };
+            // Stamped, then read (the ledger): a saved buffer leaves nothing
+            // stale. With no project the buffer was the file's only text.
+            let (mut read, relinked) = self.ledger.reread(std::slice::from_ref(&key));
+            moved |= relinked;
+            let read = read.pop().map_or(Read::Gone, |(_, read)| read);
             if !self.project.is_current(&key, &read) {
                 reads.push((key, read));
             }
@@ -433,8 +390,7 @@ impl ProjectSession {
     /// Every file a buffer holds is left out. A detached session returns
     /// nothing: its sources are its buffers.
     pub fn changes<'p>(&self, paths: impl IntoIterator<Item = &'p Path>) -> Changes {
-        let reach = self.inputs.reach(paths);
-        let mut changes = self.snapshot.changes(&self.inputs, Scope::Reached(&reach));
+        let mut changes = self.ledger.changes(paths);
         self.held.leave_out(&mut changes.sources);
         changes
     }
@@ -495,7 +451,7 @@ impl ProjectSession {
     /// and rebuild, from the sources on disk and the held buffers, in one
     /// cold build that runs the checks once.
     pub fn reload_environment(&mut self) -> Update {
-        if self.inputs.root().is_none() {
+        if self.ledger.inputs().root().is_none() {
             // Nothing on disk to load again.
             return self.unchanged(UpdateKind::Environment, false);
         }
@@ -540,7 +496,7 @@ impl ProjectSession {
     fn replaced(&self, previous: &ProjectSession) -> Update {
         Update::of(
             UpdateKind::Environment,
-            previous.inputs != self.inputs,
+            previous.ledger.inputs() != self.ledger.inputs(),
             self.project.replacing(&previous.project),
             previous.project.reported(),
             self.project.reported(),
@@ -556,7 +512,7 @@ impl ProjectSession {
     /// What the session depends on now (ADR 0030): what a changed path is,
     /// which directories to watch, which files to report.
     pub fn inputs(&self) -> &SessionInputs {
-        &self.inputs
+        self.ledger.inputs()
     }
 
     /// Apply `changes`: the environment first (a reload rebuilds
@@ -566,11 +522,11 @@ impl ProjectSession {
     pub fn apply(&mut self, changes: &Changes) -> Option<Update> {
         let mut sources = changes.sources.clone();
         self.held.leave_out(&mut sources);
-        if !changes.environment.is_empty() && self.inputs.root().is_some() {
+        if !changes.environment.is_empty() && self.ledger.inputs().root().is_some() {
             Some(self.reload_environment())
         } else if !sources.is_empty() {
             Some(self.reread(&sources))
-        } else if !changes.check_inputs.is_empty() && self.inputs.root().is_some() {
+        } else if !changes.check_inputs.is_empty() && self.ledger.inputs().root().is_some() {
             Some(self.recheck())
         } else {
             None
@@ -583,7 +539,7 @@ impl ProjectSession {
     /// it read, every file a buffer holds left out, whatever happened to it.
     /// A session that was not opened from disk reports nothing.
     pub fn stale(&self) -> Changes {
-        let mut changes = self.snapshot.changes(&self.inputs, Scope::Everything);
+        let mut changes = self.ledger.stale();
         self.held.leave_out(&mut changes.sources);
         changes
     }
@@ -601,13 +557,6 @@ impl ProjectSession {
     /// environment's; none: no extension loads).
     pub fn runtime(&self) -> Option<&SharedRuntime> {
         self.project.environment().runtime()
-    }
-
-    /// Whether a changed file is outside the project. A session with no
-    /// project takes every buffer: it has no spec root to discover files
-    /// under.
-    fn excludes(&self, path: &str) -> bool {
-        self.inputs.excludes(path)
     }
 
     /// Run every check again on the current graph: a check input changed.
@@ -629,18 +578,12 @@ impl ProjectSession {
     fn check(&mut self) -> bool {
         self.checks_skipped = false;
         let entities = self.project.snapshot_now();
-        let mut changed = false;
-        if self.inputs.root().is_some() {
-            let next = self.inputs.with_named(
-                self.project
-                    .environment()
-                    .registries
-                    .files(&entities.rule_input()),
-            );
-            changed = next != self.inputs;
-            self.inputs = next;
-            self.snapshot.stamp_checks(&self.inputs);
-        }
+        let changed = self.ledger.before_checks(
+            self.project
+                .environment()
+                .registries
+                .files(&entities.rule_input()),
+        );
         self.project.check_over(entities);
         changed
     }

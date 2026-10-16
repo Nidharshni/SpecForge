@@ -13,7 +13,7 @@ use specforge_graph::{
 
 use crate::coverage::RecordedCoverage;
 use crate::snapshot::EntitySnapshot;
-use crate::sources::{self, Read, SourceCache};
+use crate::sources::{Read, SourceCache};
 use crate::{Environment, SharedRuntime, SourceBuild};
 
 /// A compiled project: an environment, the sources read in it, their graph
@@ -214,11 +214,6 @@ impl CompiledProject {
             reported: OnceLock::new(),
             on_disk: true,
         }
-    }
-
-    /// The one read of a source (`sources::read`) under its spec root.
-    pub(crate) fn read_source(&self, key: &str) -> Read {
-        sources::read(self.env.spec_root(), key)
     }
 
     /// Whether the project already holds the state `read` gives for `key`.
