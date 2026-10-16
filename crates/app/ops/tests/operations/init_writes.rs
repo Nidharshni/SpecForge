@@ -544,3 +544,42 @@ fn init_writes_no_file_through_a_gitignore_that_leaves_its_directory() {
     request(&dir, &Containment::unbounded()).unwrap();
     assert_ne!(std::fs::read_to_string(&outside).unwrap(), "one\n");
 }
+
+#[test]
+fn init_writes_the_entries_its_plan_judged() {
+    use specforge_ops::authoring::init;
+    let scratch = TempDir::new().unwrap();
+    let dir = scratch.path().join("formal");
+    let extensions = vec!["@specforge/formal".to_string()];
+    let request = init::Request {
+        dir: &dir,
+        name: Some("demo"),
+        version: init::DEFAULT_VERSION,
+        extensions: &extensions,
+        caller: specforge_ops::testing::caller(),
+    };
+
+    let outcome = init::init(&request, &*runtime()).unwrap();
+
+    let written: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("specforge.json")).unwrap())
+            .unwrap();
+    let expected = [
+        "@specforge/software",
+        "@specforge/formal",
+        "@specforge/testing",
+    ];
+    assert_eq!(outcome.extensions, expected);
+    assert_eq!(written["extensions"], serde_json::json!(expected));
+    let mut keys: Vec<&str> = written
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        ["$schema", "extensions", "name", "spec_root", "version"]
+    );
+}

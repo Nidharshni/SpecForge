@@ -170,3 +170,5 @@ the user's publisher-key pins. A failure there puts every file back; `config` is
 - **D8/D10:** the inventory no longer answers which extensions require a name (remove asks the lock plan).
 - **D9:** a row's origin is that of the entry the load loaded it by (`Origin::of` over `Installed::resolve`), else of
   its first entry in load order (ADR 0065 D5).
+
+**Amended by ADR 0126 (2026-10-16):** D4's last step writes the `specforge.json` entries the lock plan judged, after checking the file still holds what the plan opened with.

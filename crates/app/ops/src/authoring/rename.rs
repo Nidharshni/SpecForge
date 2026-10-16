@@ -29,8 +29,6 @@ pub const INVALID_ID: &str = "invalid_name";
 pub const TAKEN: &str = "entity_exists";
 /// A file the rename must edit cannot be read (or written).
 pub const UNREADABLE: &str = "file_unreadable";
-/// A file the rename edits no longer holds the text the plan was made on.
-pub const CHANGED: &str = "file_changed";
 
 /// The shortest and longest entity IDs (E014).
 pub const ID_LENGTH: std::ops::RangeInclusive<usize> = 2..=60;
@@ -241,7 +239,7 @@ pub fn apply(
         failed.error(|cause| match cause {
             Cause::Changed { file } => OpError::new(
                 OpErrorKind::Conflict,
-                CHANGED,
+                crate::FILE_CHANGED,
                 format!(
                     "cannot rename '{}': {} changed since the project was compiled; \
                      nothing was written",

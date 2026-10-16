@@ -54,3 +54,6 @@ pub use noticed::Noticed;
 pub use refusal::Refusal;
 pub use verdict::RunVerdict;
 pub use writes::Writes;
+
+/// A file an operation planned on no longer holds what it read: nothing was written.
+pub const FILE_CHANGED: &str = "file_changed";

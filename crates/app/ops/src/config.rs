@@ -1,9 +1,7 @@
-//! The one writer of `specforge.json`, and the one reader for the
-//! operations that run without a compile.
-//!
-//! Every surface that changes the project config goes through here, so the
-//! file always comes out in one style (pretty-printed, trailing newline)
-//! and an extension entry is matched by its exact name, never a prefix.
+//! The one reader and renderer of `specforge.json` for the operations that
+//! run without a compile. It edits nothing: the entries a change leaves are
+//! the lock plan's (ADR 0126), and the file always comes out in one style
+//! ([`render`]: pretty-printed, trailing newline).
 //!
 //! `add` and `update` run before or instead of a compile (ADR 0015, M8),
 //! so they read the config themselves, through `read_project_config`, the
@@ -16,19 +14,13 @@
 //! when a problem [`blocks_rewrites`](ConfigProblem::blocks_rewrites), and
 //! they report every other problem as its E069.
 
-use crate::{Held, OpError, OpErrorKind};
+use crate::{OpError, OpErrorKind};
 use serde_json::Value;
 use specforge_common::{ConfigProblem, ConfigRead, read_project_config};
 use std::path::Path;
 
 /// The config file's name, at the project root.
 pub const CONFIG_FILE: &str = "specforge.json";
-
-/// The extension an `extensions` entry names: `name` or `name@version`
-/// (`@acme/foo@1.2.0` names `@acme/foo`). A path entry is returned whole.
-pub fn entry_name(entry: &str) -> &str {
-    specforge_common::extension_entry_name(entry)
-}
 
 /// The refusal for a `specforge.json` that cannot be edited, from the
 /// reason the compile reports as E069 (`problem` is one that
@@ -100,355 +92,15 @@ pub fn render(config: &Value) -> Result<Vec<u8>, OpError> {
         .map_err(|e| OpError::new(OpErrorKind::SchemaMismatch, "config_invalid", e.to_string()))
 }
 
-/// The refusal of writing `file`, the project's `specforge.json`, with `error`.
-pub fn write_failed(file: &Held, error: &std::io::Error) -> OpError {
-    OpError::new(
-        OpErrorKind::of_io(error),
-        "config_write_failed",
-        format!("failed to write {}: {error}", file.spelled.display()),
-    )
-}
-
-/// Apply `edit` to the `extensions` array of the project's `specforge.json`, in memory (created
-/// empty when absent from a file that is there). `Some(bytes)` is the whole file as it would be
-/// written, when `edit` returned `true`; `None` when it changed nothing. Nothing is written: the
-/// caller stages the bytes in its project change (ADR 0128).
-pub fn edit_extensions(
-    root: &Path,
-    edit: impl FnOnce(&mut Vec<Value>) -> bool,
-) -> Result<Option<Vec<u8>>, OpError> {
-    // The file as the compile reads it: what blocks an edit is its E069.
-    let mut config = required(root)?
-        .config
-        .raw
-        .expect("a usable config that was found has its JSON");
-    let object = config
-        .as_object_mut()
-        .expect("a usable config is a JSON object");
-    let extensions = object
-        .entry("extensions")
-        .or_insert_with(|| Value::Array(Vec::new()))
-        .as_array_mut()
-        .expect("a usable config's extensions are an array");
-
-    if edit(extensions) {
-        render(&config).map(Some)
-    } else {
-        Ok(None)
-    }
-}
-
-/// Whether `extensions` has an entry naming exactly `name`.
-pub fn has_extension(extensions: &[Value], name: &str) -> bool {
-    extensions
-        .iter()
-        .any(|e| e.as_str().is_some_and(|s| entry_name(s) == name))
-}
-
-/// What enabling extensions changed in `specforge.json`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Enabled {
-    /// The names appended, in order: none an entry already named.
-    pub appended: Vec<String>,
-    /// How many extensions the file enables after the edit: its string
-    /// entries, as `read_project_config` counts them.
-    pub total: usize,
-}
-
-/// Append each of `names` that no entry names yet to `extensions`, in order, as one edit.
-pub fn enable(extensions: &mut Vec<Value>, names: &[&str]) -> Enabled {
-    let mut appended = Vec::new();
-    for name in names {
-        if !has_extension(extensions, name) {
-            extensions.push(Value::from(*name));
-            appended.push((*name).to_string());
-        }
-    }
-    let total = extensions.iter().filter(|e| e.is_string()).count();
-    Enabled { appended, total }
-}
-
-/// Drop every entry naming `name` from `extensions`. `false` when none did.
-pub fn remove_extension(extensions: &mut Vec<Value>, name: &str) -> bool {
-    let before = extensions.len();
-    extensions.retain(|e| e.as_str().is_none_or(|s| entry_name(s) != name));
-    extensions.len() != before
-}
-
-/// Drop the entries written exactly `entry` (surrounding whitespace ignored) from `extensions`.
-/// `false` when none was.
-pub fn remove_entry(extensions: &mut Vec<Value>, entry: &str) -> bool {
-    let entry = entry.trim();
-    let before = extensions.len();
-    extensions.retain(|e| e.as_str().is_none_or(|s| s.trim() != entry));
-    extensions.len() != before
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use specforge_test_macros::test as specforge_test;
 
-    /// The config of `root`, held by no bound.
-    fn held(root: &Path) -> Held {
-        crate::Containment::unbounded()
-            .resolve(&root.join(CONFIG_FILE))
-            .unwrap()
-    }
-
-    /// Edit `root`'s config in memory and write the bytes it gives, as the lock plan does: `true` when
-    /// the edit changed the file.
-    fn edited(root: &Path, edit: impl FnOnce(&mut Vec<Value>) -> bool) -> Result<bool, OpError> {
-        match edit_extensions(root, edit)? {
-            Some(bytes) => {
-                held(root).replace(bytes).unwrap();
-                Ok(true)
-            }
-            None => Ok(false),
-        }
-    }
-
-    fn enabled(root: &Path, names: &[&str]) -> Result<Enabled, OpError> {
-        let mut result = None;
-        edited(root, |extensions| {
-            let enabled = enable(extensions, names);
-            let changed = !enabled.appended.is_empty();
-            result = Some(enabled);
-            changed
-        })?;
-        Ok(result.expect("the edit ran"))
-    }
-
-    fn removed(root: &Path, name: &str) -> Result<bool, OpError> {
-        edited(root, |extensions| remove_extension(extensions, name))
-    }
-
-    fn removed_entry(root: &Path, entry: &str) -> Result<bool, OpError> {
-        edited(root, |extensions| remove_entry(extensions, entry))
-    }
-
     fn project(config: &str) -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join(CONFIG_FILE), config).unwrap();
         dir
-    }
-
-    fn extensions(root: &Path) -> Vec<String> {
-        let text = std::fs::read_to_string(root.join(CONFIG_FILE)).unwrap();
-        let config: Value = serde_json::from_str(&text).unwrap();
-        config["extensions"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|e| e.as_str().unwrap().to_string())
-            .collect()
-    }
-
-    #[specforge_test(
-        behavior = "add_extension_to_existing_project",
-        verify = "add extension appends to extensions list"
-    )]
-    fn add_appends_an_extension_whose_name_prefixes_an_enabled_one() {
-        let dir = project(r#"{"name":"p","extensions":["@acme/foobar@1.0.0"]}"#);
-
-        assert_eq!(
-            enabled(dir.path(), &["@acme/foo"]),
-            Ok(Enabled {
-                appended: vec!["@acme/foo".into()],
-                total: 2
-            })
-        );
-        assert_eq!(extensions(dir.path()), ["@acme/foobar@1.0.0", "@acme/foo"]);
-    }
-
-    #[test]
-    fn enable_appends_what_is_missing_in_one_edit() {
-        let dir = project(r#"{"name":"p","extensions":["@acme/foo@1.0.0", 7]}"#);
-
-        let enabled = enabled(dir.path(), &["@acme/foo", "@acme/bar", "@acme/baz"]).unwrap();
-
-        assert_eq!(enabled.appended, ["@acme/bar", "@acme/baz"]);
-        assert_eq!(enabled.total, 3, "string entries only");
-        let text = std::fs::read_to_string(dir.path().join(CONFIG_FILE)).unwrap();
-        let config: Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(
-            config["extensions"],
-            serde_json::json!(["@acme/foo@1.0.0", 7, "@acme/bar", "@acme/baz"])
-        );
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn a_config_edit_is_written_to_the_file_it_was_handed() {
-        let dir = tempfile::tempdir().unwrap();
-        let target = dir.path().join("real.json");
-        std::fs::write(&target, r#"{"name":"p","extensions":[]}"#).unwrap();
-        let link = dir.path().join(CONFIG_FILE);
-        std::os::unix::fs::symlink(&target, &link).unwrap();
-        let held = crate::Containment::within(dir.path())
-            .resolve(&link)
-            .unwrap();
-
-        let bytes = edit_extensions(dir.path(), |extensions| {
-            enable(extensions, &["@acme/foo"]);
-            true
-        })
-        .unwrap()
-        .unwrap();
-        held.replace(bytes).unwrap();
-
-        // The target is rewritten and the link is kept.
-        assert!(std::fs::symlink_metadata(&link).unwrap().is_symlink());
-        assert!(
-            std::fs::read_to_string(&target)
-                .unwrap()
-                .contains("@acme/foo")
-        );
-    }
-
-    #[test]
-    fn an_enable_and_a_removal_are_one_write() {
-        let dir = project(r#"{"name":"p","extensions":["@acme/old@1.0.0","@acme/keep"]}"#);
-        let mut enabled = None;
-
-        let bytes = edit_extensions(dir.path(), |extensions| {
-            enabled = Some(enable(extensions, &["@acme/new"]));
-            remove_extension(extensions, "@acme/old");
-            true
-        })
-        .unwrap()
-        .expect("one write for both edits");
-
-        assert_eq!(enabled.unwrap().appended, ["@acme/new"]);
-        let config: Value = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(
-            config["extensions"],
-            serde_json::json!(["@acme/keep", "@acme/new"])
-        );
-        assert_eq!(
-            std::fs::read_to_string(dir.path().join(CONFIG_FILE)).unwrap(),
-            r#"{"name":"p","extensions":["@acme/old@1.0.0","@acme/keep"]}"#,
-            "nothing is written by the edit"
-        );
-    }
-
-    #[test]
-    fn add_leaves_an_extension_already_enabled_alone() {
-        let dir = project(r#"{"name":"p","extensions":["@acme/foo@1.0.0"]}"#);
-        let before = std::fs::read(dir.path().join(CONFIG_FILE)).unwrap();
-
-        assert_eq!(
-            enabled(dir.path(), &["@acme/foo"]),
-            Ok(Enabled {
-                appended: Vec::new(),
-                total: 1
-            })
-        );
-        assert_eq!(std::fs::read(dir.path().join(CONFIG_FILE)).unwrap(), before);
-    }
-
-    #[test]
-    fn remove_drops_only_the_exact_name() {
-        let dir =
-            project(r#"{"name":"p","extensions":["@acme/foo@1.0.0","@acme/foobar","@acme/foo"]}"#);
-
-        assert_eq!(removed(dir.path(), "@acme/foo"), Ok(true));
-        assert_eq!(extensions(dir.path()), ["@acme/foobar"]);
-        assert_eq!(removed(dir.path(), "@acme/foo"), Ok(false));
-    }
-
-    #[test]
-    fn remove_entry_drops_only_the_entries_written_so() {
-        let dir = project(
-            r#"{"name":"p","extensions":["./ext/a.wasm"," ./ext/a.wasm ","./ext/a.wasm@1","@acme/foo"]}"#,
-        );
-
-        assert_eq!(removed_entry(dir.path(), "./ext/a.wasm"), Ok(true));
-        assert_eq!(extensions(dir.path()), ["./ext/a.wasm@1", "@acme/foo"]);
-        let before = std::fs::read(dir.path().join(CONFIG_FILE)).unwrap();
-        assert_eq!(removed_entry(dir.path(), " ./ext/a.wasm "), Ok(false));
-        assert_eq!(
-            std::fs::read(dir.path().join(CONFIG_FILE)).unwrap(),
-            before,
-            "no write when nothing matched"
-        );
-    }
-
-    #[test]
-    fn entry_name_strips_only_a_version_suffix() {
-        assert_eq!(entry_name("@acme/foo"), "@acme/foo");
-        assert_eq!(entry_name("@acme/foo@1.2.0"), "@acme/foo");
-        assert_eq!(
-            entry_name(" @specforge/formal@latest "),
-            "@specforge/formal"
-        );
-        assert_eq!(entry_name("plain@0.0.0"), "plain");
-        assert_eq!(entry_name("./ext/local.wasm"), "./ext/local.wasm");
-        assert_eq!(entry_name("./ext@2/local.wasm"), "./ext@2/local.wasm");
-    }
-
-    #[test]
-    fn edits_write_pretty_json_with_a_trailing_newline_and_keep_other_fields() {
-        let dir = project(r#"{"name":"p","version":"0.1.0","spec_root":"spec"}"#);
-
-        assert!(enabled(dir.path(), &["@acme/foo"]).is_ok());
-        let text = std::fs::read_to_string(dir.path().join(CONFIG_FILE)).unwrap();
-        assert_eq!(
-            text,
-            "{\n  \"extensions\": [\n    \"@acme/foo\"\n  ],\n  \"name\": \"p\",\n  \"spec_root\": \"spec\",\n  \"version\": \"0.1.0\"\n}\n"
-        );
-    }
-
-    #[test]
-    fn an_edit_without_a_project_says_to_init() {
-        let dir = tempfile::tempdir().unwrap();
-        let err = enabled(dir.path(), &["@acme/foo"]).unwrap_err();
-        assert_eq!(err.code, "config_not_found");
-        assert!(
-            err.suggestion
-                .as_deref()
-                .unwrap()
-                .contains("specforge init"),
-            "{err:?}"
-        );
-    }
-
-    #[test]
-    fn an_edit_refuses_a_config_whose_extensions_are_not_an_array() {
-        let dir = project(r#"{"name":"p","extensions":"@acme/foo"}"#);
-        let err = enabled(dir.path(), &["@acme/bar"]).unwrap_err();
-        assert_eq!(err.code, "config_invalid");
-    }
-
-    // The reason E069 names and the reason an edit refuses with are one
-    // text, so `remove` can refuse from the compile's reason without
-    // reading the file again.
-    #[test]
-    fn an_edit_refuses_with_the_reason_the_compile_reports() {
-        for config in [
-            r#"{ "extensions": ["@specforge/product",  }"#,
-            "[1,2]",
-            r#"{"name":"p","extensions":"@acme/foo"}"#,
-        ] {
-            let dir = project(config);
-            let read = specforge_common::read_project_config(dir.path());
-            let [problem] = read.problems.as_slice() else {
-                panic!("{config}: {:?}", read.problems);
-            };
-            assert!(problem.blocks_edits(), "{config}");
-
-            let err = removed(dir.path(), "@acme/foo").unwrap_err();
-
-            assert_eq!(err.code, "config_invalid", "{config}");
-            assert_eq!(err.message, problem.to_string(), "{config}");
-        }
-
-        // A problem that does not block an edit: the edit goes around it.
-        let dir = project(r#"{"extensions": ["@acme/foo", 42], "spec_root": 5}"#);
-        let read = specforge_common::read_project_config(dir.path());
-        assert_eq!(read.problems.len(), 2, "{:?}", read.problems);
-        assert!(read.problems.iter().all(|p| !p.blocks_edits()));
-        assert!(removed(dir.path(), "@acme/foo").unwrap());
     }
 
     #[specforge_test(
@@ -470,12 +122,54 @@ mod tests {
             // Whoever reads the file themselves gets the same refusal.
             assert_eq!(usable(dir.path()).unwrap_err(), refused, "{config}");
             assert_eq!(required(dir.path()).unwrap_err(), refused, "{config}");
-            assert_eq!(
-                enabled(dir.path(), &["@acme/foo"]).unwrap_err(),
-                refused,
-                "{config}"
-            );
         }
+    }
+
+    // The reason E069 names and the reason a refusal carries are one text, so `remove` can refuse from the
+    // compile's reason without reading the file again.
+    #[test]
+    fn a_refusal_is_the_reason_the_compile_reports() {
+        for config in [
+            r#"{ "extensions": ["@specforge/product",  }"#,
+            "[1,2]",
+            r#"{"name":"p","extensions":"@acme/foo"}"#,
+        ] {
+            let dir = project(config);
+            let read = specforge_common::read_project_config(dir.path());
+            let [problem] = read.problems.as_slice() else {
+                panic!("{config}: {:?}", read.problems);
+            };
+            assert!(problem.blocks_edits(), "{config}");
+
+            let err = required(dir.path()).unwrap_err();
+
+            assert_eq!(err.code, "config_invalid", "{config}");
+            assert_eq!(err.message, problem.to_string(), "{config}");
+        }
+    }
+
+    #[test]
+    fn a_project_without_a_config_is_told_to_init() {
+        let dir = tempfile::tempdir().unwrap();
+        let err = required(dir.path()).unwrap_err();
+        assert_eq!(err.code, "config_not_found");
+        assert!(
+            err.suggestion
+                .as_deref()
+                .unwrap()
+                .contains("specforge init"),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn a_config_is_rendered_pretty_with_a_trailing_newline() {
+        let config = serde_json::json!({"version":"0.1.0","name":"p","extensions":["@acme/foo"]});
+
+        assert_eq!(
+            String::from_utf8(render(&config).unwrap()).unwrap(),
+            "{\n  \"extensions\": [\n    \"@acme/foo\"\n  ],\n  \"name\": \"p\",\n  \"version\": \"0.1.0\"\n}\n"
+        );
     }
 
     #[specforge_test(

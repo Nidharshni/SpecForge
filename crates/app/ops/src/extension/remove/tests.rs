@@ -214,7 +214,7 @@ fn remove_refuses_as_add_and_update_do() {
 )]
 fn a_non_string_item_does_not_block_a_removal() {
     let fixture = Assembled::new()
-        .config(&["@specforge/product"])
+        .config_json(serde_json::json!({"extensions": ["@specforge/product", 42]}))
         .config_problems(vec![ConfigProblem::ItemNotAString {
             path: PathBuf::from("./specforge.json"),
             key: "extensions",
@@ -395,6 +395,7 @@ fn a_builtin_named_by_a_stray_lock_entry_is_uninstalled_as_a_builtin() {
 )]
 fn remove_selects_a_file_entry_by_its_text_its_path_or_its_name() {
     let fixture = Assembled::new()
+        .config(&["@sdk/greet=greet.wasm"])
         .enabled(vec![EnabledExtension {
             entry: "@sdk/greet=greet.wasm".into(),
             name: "@sdk/greet".into(),
@@ -552,5 +553,46 @@ fn every_refusal_of_a_name_is_about_it() {
     assert_eq!(
         (refusal.error.code.as_ref(), refusal.subject),
         ("no_project", None)
+    );
+}
+
+#[specforge_test(
+    behavior = "remove_extension",
+    verify = "a removal over a specforge.json changed since the compile writes nothing"
+)]
+fn a_removal_over_a_config_changed_since_the_compile_writes_nothing() {
+    let fixture = Assembled::new().config(&["@specforge/product"]);
+    write_config(&fixture, r#"{"extensions": ["@specforge/product"]}"#);
+    let view = fixture.view();
+    write_config(
+        &fixture,
+        r#"{"extensions": ["@specforge/product", "@acme/other"]}"#,
+    );
+    let before = files_under(fixture.root());
+
+    let failed = remove(&view, &removing("@specforge/product")).unwrap_err();
+
+    assert_eq!(failed.error.code, "file_changed", "{failed:?}");
+    assert_eq!(failed.error.kind, OpErrorKind::Conflict);
+    assert!(failed.error.writes.is_empty());
+    assert_eq!(files_under(fixture.root()), before);
+}
+
+#[test]
+fn a_removal_over_a_config_deleted_since_the_compile_writes_nothing() {
+    let fixture = installed(Assembled::new().config(&["@acme/x"]), "@acme/x");
+    write_config(&fixture, r#"{"extensions": ["@acme/x"]}"#);
+    let view = fixture.view();
+    std::fs::remove_file(fixture.root().join("specforge.json")).unwrap();
+    let before = files_under(fixture.root());
+
+    let failed = remove(&view, &removing("@acme/x")).unwrap_err();
+
+    assert_eq!(failed.error.code, "file_changed", "{failed:?}");
+    assert_eq!(files_under(fixture.root()), before);
+    assert!(
+        package_dir(fixture.root(), "@acme/x")
+            .join("extension.wasm")
+            .exists()
     );
 }

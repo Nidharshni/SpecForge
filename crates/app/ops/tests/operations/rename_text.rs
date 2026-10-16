@@ -22,7 +22,7 @@ fn apply_refuses_a_file_changed_since_the_plan() {
     let error = rename::apply(&plan, &root, specforge_ops::testing::caller()).unwrap_err();
 
     assert_eq!(error.kind, OpErrorKind::Conflict, "{error:?}");
-    assert_eq!(error.code, rename::CHANGED, "{error:?}");
+    assert_eq!(error.code, specforge_ops::FILE_CHANGED, "{error:?}");
     assert!(error.message.contains("login.spec"), "{}", error.message);
     assert!(crate::writes::changed_since(&root, &before).is_empty());
 }

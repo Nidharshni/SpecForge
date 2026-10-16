@@ -158,7 +158,7 @@ fn a_diamond_counts_a_file_entrys_range_among_the_requirers() {
     let entries = ["@acme/base".to_string(), "x.wasm".to_string()];
     let mut plan = LockPlan::adding(
         &installed,
-        &entries,
+        opened(&entries),
         &runtime,
         fetching(&registry),
         Purpose::Commit,

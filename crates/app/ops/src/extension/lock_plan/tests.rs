@@ -121,6 +121,22 @@ fn local(runtime: &InProcessRuntime, bytes: &[u8], file: &str) -> Install<'stati
     .unwrap()
 }
 
+/// A `specforge.json` enabling `entries`, as a plan opens it.
+fn opened<S: AsRef<str>>(entries: &[S]) -> Opened {
+    let entries: Vec<&str> = entries.iter().map(AsRef::as_ref).collect();
+    let read = specforge_common::parse_project_config(
+        Path::new("specforge.json"),
+        &serde_json::json!({ "extensions": entries }).to_string(),
+    );
+    Opened::read(&read.config, true)
+}
+
+/// The `specforge.json` at `root`, as an operation reads it before it plans.
+fn opened_at(root: &Path) -> Opened {
+    let read = crate::config::required(root).unwrap();
+    Opened::read(&read.config, read.found)
+}
+
 /// A plan over `installed` whose `specforge.json` enables every locked extension, fetching
 /// from `registry`.
 fn plan_from<'a>(
@@ -138,13 +154,15 @@ fn plan_from<'a>(
     match verb {
         Verb::Install => LockPlan::adding(
             installed,
-            &entries,
+            opened(&entries),
             runtime,
             fetching(registry),
             Purpose::Commit,
             true,
         ),
-        Verb::Update => LockPlan::updating(installed, &entries, runtime, fetching(registry)),
+        Verb::Update => {
+            LockPlan::updating(installed, opened(&entries), runtime, fetching(registry))
+        }
         Verb::Remove => unreachable!("a removal is planned over a compiled project"),
     }
     .unwrap()
@@ -181,7 +199,7 @@ fn an_enabling_plan_accepts_an_unreadable_lock() {
     // A plan that only enables opens no change: the lock hides the installed extensions.
     let mut enabling = LockPlan::adding(
         &installed,
-        &[],
+        opened::<&str>(&[]),
         &runtime,
         fetching(no_registry()),
         Purpose::Commit,
@@ -194,7 +212,7 @@ fn an_enabling_plan_accepts_an_unreadable_lock() {
     // One that installs refuses: writing a lock would drop what it records.
     let refused = LockPlan::adding(
         &installed,
-        &[],
+        opened::<&str>(&[]),
         &runtime,
         fetching(no_registry()),
         Purpose::Commit,
@@ -206,5 +224,6 @@ fn an_enabling_plan_accepts_an_unreadable_lock() {
 
 mod close;
 mod commit;
+mod config;
 mod diamond;
 mod judge;
