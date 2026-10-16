@@ -14,6 +14,7 @@
 
 mod build;
 mod check;
+pub(crate) mod files;
 mod verdicts;
 
 use specforge_common::{Diagnostic, Severity};

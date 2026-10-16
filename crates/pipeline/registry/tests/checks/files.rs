@@ -251,8 +251,9 @@ fn the_checks_read_only_through_their_disk() {
             list("/spec".into()),
             exists("/spec/a.md".into()),
             list("/spec".into()),
-            // The `file_exists` rule over `guide`.
+            // The `file_exists` rule over `guide`: a missing path lists its directory.
             exists("/spec/guide.md".into()),
+            list("/spec".into()),
         ]
     );
 }
@@ -378,7 +379,6 @@ fn messages_of(code: &str, text: &str, disk: &MemoryDisk) -> Vec<String> {
     behavior = "validate_file_reference_paths",
     verify = "a bare word on a file-reference field is a path"
 )]
-#[ignore = "flipped by T3"]
 fn a_bare_word_on_a_file_reference_field_is_e016() {
     let text = "note bare \"B\" {\n  guide README\n}\n";
 
@@ -396,7 +396,6 @@ fn a_bare_word_on_a_file_reference_field_is_e016() {
     behavior = "execute_validation_pattern",
     verify = "file_exists reads no path in a block, an expression group or an empty value"
 )]
-#[ignore = "flipped by T3"]
 fn a_file_exists_rule_reads_no_path_in_a_block_or_an_empty_value() {
     let text = "note block \"K\" {\n  guide {\n    README \"x\"\n  }\n}\n\
                 note empty \"E\" {\n  guide \"\"\n}\n";
@@ -416,7 +415,6 @@ fn a_file_exists_rule_reads_no_path_in_a_block_or_an_empty_value() {
     behavior = "execute_validation_pattern",
     verify = "a missing path a file_exists rule names suggests a close sibling"
 )]
-#[ignore = "flipped by T3"]
 fn a_file_exists_rule_suggests_a_close_sibling() {
     let text = "note quoted \"Q\" {\n  guide \"NOTES\"\n}\n";
     let disk = MemoryDisk::new().with_file("/spec/NOTE", b"");

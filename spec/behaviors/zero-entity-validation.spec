@@ -94,7 +94,9 @@ behavior execute_validation_pattern "Execute Validation Pattern" {
     of its edge type, whichever fields write them.
     file_exists MUST check that file-reference fields point to existing
     files, a relative path resolved against the spec root (never the
-    working directory). A list field's items are each a path. A rule without a target kind applies to entities
+    working directory). A list field's items are each a path, a scalar's text is one; an empty
+    value, a block, an expression group, a variant list or a type union names none. A missing
+    path's diagnostic suggests a close sibling in its directory. A rule without a target kind applies to entities
     of every kind. custom MUST dispatch to the Wasm function registered by
     register_custom_validation_patterns. Each pattern violation MUST
     produce a diagnostic with the configured code and severity.

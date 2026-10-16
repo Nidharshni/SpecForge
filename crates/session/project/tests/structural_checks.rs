@@ -231,7 +231,6 @@ fn a_single_path_on_a_file_reference_field_is_checked() {
     behavior = "validate_file_reference_paths",
     verify = "a compile checks a bare word on a file-reference field as a path"
 )]
-#[ignore = "flipped by T3"]
 fn a_bare_word_on_a_file_reference_field_is_checked() {
     let dir = project(&["@test/docs"], "doc d1 { guide README }\n");
 

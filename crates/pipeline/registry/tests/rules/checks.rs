@@ -352,8 +352,15 @@ fn file_exists_resolves_against_the_spec_root_not_the_working_directory() {
         messages(&built.rules.check(&input, &NoVerdicts)),
         ["b1: missing 'Cargo.toml'"]
     );
-    // The rule asks for the spec root's file, never the working directory's.
-    assert_eq!(beside.asked(), [Asked::Exists("/spec/Cargo.toml".into())]);
+    // The rule asks for the spec root's file, never the working directory's, and lists the spec
+    // root for the missing file's close sibling.
+    assert_eq!(
+        beside.asked(),
+        [
+            Asked::Exists("/spec/Cargo.toml".into()),
+            Asked::List("/spec".into())
+        ]
+    );
 }
 
 #[spec(
@@ -387,13 +394,16 @@ fn file_exists_checks_each_item_of_a_list_field() {
         messages(&diagnostics),
         ["b1: missing 'b.md'", "b3: missing 'a.md, b.md'"]
     );
-    // The rule asks about every item against the spec root, in entity order.
+    // The rule asks about every item against the spec root, in entity order, and lists the
+    // directory of each missing one.
     assert_eq!(
         disk.asked(),
         [
             Asked::Exists(root.join("a.md")),
             Asked::Exists(root.join("b.md")),
+            Asked::List(root.to_path_buf()),
             Asked::Exists(root.join("a.md, b.md")),
+            Asked::List(root.to_path_buf()),
         ]
     );
 }
