@@ -627,7 +627,10 @@ fn analyze_with_results(dir: &TestProject, report: Value) -> Vec<Finding> {
     analyze_over(
         dir,
         "coverage_tracking",
-        ReportSource::File(dir.root().join("report.json")),
+        ReportSource::Named {
+            path: dir.root().join("report.json"),
+            containment: specforge_ops::Containment::unbounded(),
+        },
     )
 }
 

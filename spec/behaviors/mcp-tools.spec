@@ -751,8 +751,11 @@ behavior provide_mcp_analyze_tool "Provide MCP Analyze Tool" {
     so proof coverage never silently drops. A test report that cannot be read
     or parsed, the project's own or the one `test_results` names, MUST be an
     isError result carrying an McpError, as the CLI exits 2 on it. A
-    test_results file that does not exist is file_not_found. A relative
-    test_results names a file under the project's root. The result MUST list each pass with its
+    test_results file that does not exist is file_not_found. A test_results is
+    read against the call's project: a relative one names a file under the project's
+    root, and one that resolves outside it, by `..`, an absolute name or a
+    symlink, is invalid_input on test_results and nothing is read, so the
+    error never says whether a file outside exists. The result MUST list each pass with its
     findings and summary, plus an `ok` flag that is false when any finding
     is an error or the coverage gate is below its minimum or unjudged,
     and, with `min`, a `gate` object saying where the gate landed. An extension pass that traps or answers what does not
@@ -774,6 +777,7 @@ behavior provide_mcp_analyze_tool "Provide MCP Analyze Tool" {
   verify unit "a malformed test report is an error result"
   verify unit "a test_results file that does not exist is a file_not_found error"
   verify unit "a relative test_results names a file under the project's root"
+  verify unit "a test_results that resolves outside the call's project is refused before it is read"
   verify unit "extension passes receive no proved claims, as specforge analyze without --prove"
   verify unit "an unknown or undeclared pass is an invalid-input error listing the available passes"
   verify unit "strict promotes warnings and clears ok"

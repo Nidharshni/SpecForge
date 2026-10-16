@@ -424,7 +424,7 @@ fn migrate_file(
 
     // Create backup
     let backup = if !no_backup {
-        let backup_path = path.with_extension("spec.bak");
+        let [backup_path, ..] = written_beside(path);
         if let Err(e) = std::fs::write(&backup_path, &content) {
             return FileMigration::of(
                 MigrationResult {
@@ -447,7 +447,7 @@ fn migrate_file(
     };
 
     // Atomic write: temp + rename
-    let tmp_path = path.with_extension("spec.tmp");
+    let [_, tmp_path, _] = written_beside(path);
     if let Err(e) = std::fs::write(&tmp_path, &transformed) {
         return FileMigration::of(
             MigrationResult {
@@ -496,9 +496,21 @@ fn migrate_file(
     }
 }
 
+/// The files a migration of `source` writes beside it, in the order it writes them: the backup
+/// (`.spec.bak`), the migration's temporary file (`.spec.tmp`) and the rollback's temporary file
+/// (`.spec.restore.tmp`). The one place these names are made, so a caller that holds the files a
+/// migration will write (ADR 0112) holds exactly these.
+pub fn written_beside(source: &Path) -> [PathBuf; 3] {
+    [
+        source.with_extension("spec.bak"),
+        source.with_extension("spec.tmp"),
+        source.with_extension("spec.restore.tmp"),
+    ]
+}
+
 /// Write `text` over `target` atomically (temp file, then rename).
 fn write_atomically(target: &Path, text: &str) -> Result<(), String> {
-    let tmp_path = target.with_extension("spec.restore.tmp");
+    let [_, _, tmp_path] = written_beside(target);
     std::fs::write(&tmp_path, text).map_err(|e| format!("failed to write restore temp: {e}"))?;
     if let Err(e) = std::fs::rename(&tmp_path, target) {
         let _ = std::fs::remove_file(&tmp_path);

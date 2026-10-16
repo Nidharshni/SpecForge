@@ -6,6 +6,7 @@ use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use specforge_ops::Refusal;
 use specforge_ops::analysis::analyze::{AnalyzeField, AnalyzeOptions, ReportSource, analyze};
+use std::path::PathBuf;
 
 /// `specforge.analyze`'s reply: the document `specforge analyze --format json`
 /// prints (`McpAnalyzeResult`).
@@ -65,8 +66,12 @@ impl CoreTool for Tool {
             strict: args.strict,
             report: match args.test_results {
                 // A relative path names a file under the call's project, as the
-                // paths of `specforge.format` do; an absolute one is itself.
-                Some(named) => ReportSource::File(project.root.dir().join(named)),
+                // paths of `specforge.format` do; one that resolves outside it, by `..`,
+                // an absolute name or a symlink, is refused before it is read.
+                Some(named) => ReportSource::Named {
+                    path: PathBuf::from(named),
+                    containment: project.containment().clone(),
+                },
                 None => ReportSource::Recorded,
             },
             min: args.min,

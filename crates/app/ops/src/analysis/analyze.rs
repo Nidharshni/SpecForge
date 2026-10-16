@@ -24,6 +24,7 @@ use specforge_project::coverage::TestReport;
 use specforge_project::passes::{self, AnalysisContext};
 use specforge_registry::DeclaredPass;
 
+use crate::Containment;
 use crate::solver::Solver;
 use crate::{OpError, OpErrorKind, Refusal, RunVerdict};
 
@@ -37,8 +38,12 @@ pub enum ReportSource {
     /// ancestor's: a sub-path does not inherit its parent's report).
     #[default]
     Recorded,
-    /// A named report file, which must exist.
-    File(PathBuf),
+    /// A named report file, which must exist. It is read through the bound it came with:
+    /// one that lands outside is refused before it is read (ADR 0112 D2).
+    Named {
+        path: PathBuf,
+        containment: Containment,
+    },
     /// No report.
     None,
 }
@@ -600,7 +605,7 @@ fn read_report(
 ) -> Result<Option<Arc<TestReport>>, AnalyzeError> {
     match source {
         ReportSource::None => Ok(None),
-        ReportSource::File(path) => crate::report::named(path)
+        ReportSource::Named { path, containment } => crate::report::named(path, containment)
             .map(Some)
             .map_err(AnalyzeError::UnusableTestResults),
         ReportSource::Recorded => view.test_report().map_err(AnalyzeError::UnusableReport),

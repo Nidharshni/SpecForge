@@ -7,7 +7,7 @@ use specforge_project::coverage::{self, ReportError, TestReport};
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::{OpError, OpErrorKind};
+use crate::{Containment, OpError, OpErrorKind};
 
 /// What to do about a report that is not a `specforge-report.json`, or
 /// cannot be read for a reason the OS gave no more specific advice for.
@@ -41,11 +41,29 @@ pub(crate) fn unusable(error: ReportError) -> OpError {
 }
 
 /// The report at `path` (`--test-results`, MCP `test_results`), which must
-/// exist.
-pub(crate) fn named(path: &Path) -> Result<Arc<TestReport>, OpError> {
-    coverage::read_report_file(path)
+/// exist, read through `containment`: a name that lands outside is `outside_root` and nothing
+/// is opened, so the error never says whether a file outside exists. Messages name `path` as
+/// the caller spelled it (joined onto the bound's root when bounded and relative).
+pub(crate) fn named(path: &Path, containment: &Containment) -> Result<Arc<TestReport>, OpError> {
+    let held = containment.resolve(path)?;
+    coverage::read_report_file(&held.real)
         .map(Arc::new)
-        .map_err(unusable)
+        .map_err(|error| unusable(spelled(error, &held.spelled)))
+}
+
+/// `error` about `path`, whatever file was opened to find out.
+fn spelled(error: ReportError, path: &Path) -> ReportError {
+    match error {
+        ReportError::Unreadable { io, detail, .. } => ReportError::Unreadable {
+            path: path.to_path_buf(),
+            io,
+            detail,
+        },
+        ReportError::Malformed { detail, .. } => ReportError::Malformed {
+            path: path.to_path_buf(),
+            detail,
+        },
+    }
 }
 
 #[cfg(test)]

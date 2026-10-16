@@ -109,7 +109,9 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
     from interrupted migrations. Each file MUST be read once: its backup,
     its diff and the text an automatic rollback restores are that one
     read, so a save made while the migration runs is never split between
-    them.
+    them. Over MCP, a source, its backup, either temporary file or the
+    migration record that would land outside the project, by a symlink,
+    refuses the whole call before anything is written.
 
     The header is rewritten where the parser reads it, the file's first
     non-blank line; a file with none gets one as its first line. No other
