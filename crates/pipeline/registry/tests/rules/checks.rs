@@ -486,13 +486,13 @@ fn file_exists_checks_each_item_of_a_list_field() {
         messages(&diagnostics),
         ["b1: missing 'b.md'", "b3: missing 'a.md, b.md'"]
     );
-    // The files the rule reads: every item, once, against the spec root.
+    // The rule asks about every item against the spec root, in entity order.
     assert_eq!(
-        built.rules.files(&input),
+        disk.asked(),
         [
-            root.join("a.md"),
-            root.join("a.md, b.md"),
-            root.join("b.md"),
+            Asked::Exists(root.join("a.md")),
+            Asked::Exists(root.join("b.md")),
+            Asked::Exists(root.join("a.md, b.md")),
         ]
     );
 }

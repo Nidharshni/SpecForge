@@ -216,31 +216,44 @@ fn with_a_file_exists_rule() -> ExtensionDeclaration {
 
 #[spec(
     behavior = "check_entities_in_one_order",
-    verify = "the files the checks read are those file_reference fields name and those file_exists rules read"
+    verify = "the checks read only through their disk: the paths file_reference fields of the entity's kind name, the paths file_exists rules read, and the directory E016's suggestion lists"
 )]
-fn the_files_the_checks_read_are_one_set() {
+fn the_checks_read_only_through_their_disk() {
     let build = build([with_a_file_exists_rule()]);
     let records = [
         EntityRecord::new("note", "n", span("main.spec"))
             .with_list("docs", &["more/one.md", "a.md"])
             .with_field("guide", "guide.md"),
-        // The same path twice is listed once.
+        // The same path twice is asked twice: the ledger dedups.
         EntityRecord::new("note", "m", span("main.spec")).with_list("docs", &["a.md"]),
     ];
-    let root = std::path::Path::new("/spec");
+    let disk = MemoryDisk::new();
 
-    let files = build.files(&RuleInput {
-        entities: &records,
-        edges: &[],
-        spec_root: root,
-        disk: &MemoryDisk::new(),
-    });
+    build.check(
+        &RuleInput {
+            entities: &records,
+            edges: &[],
+            spec_root: std::path::Path::new("/spec"),
+            disk: &disk,
+        },
+        &NoVerdicts,
+    );
 
-    let expected: Vec<PathBuf> = ["a.md", "guide.md", "more/one.md"]
-        .iter()
-        .map(|p| root.join(p))
-        .collect();
-    assert_eq!(files, expected);
+    let (exists, list) = (Asked::Exists, Asked::List);
+    assert_eq!(
+        disk.asked(),
+        [
+            // E016, record by record: a missing path lists its directory.
+            exists("/spec/more/one.md".into()),
+            list("/spec/more".into()),
+            exists("/spec/a.md".into()),
+            list("/spec".into()),
+            exists("/spec/a.md".into()),
+            list("/spec".into()),
+            // The `file_exists` rule over `guide`.
+            exists("/spec/guide.md".into()),
+        ]
+    );
 }
 
 /// `doc` has file-reference fields (`paths`, a list; `guide`, a single
@@ -265,18 +278,27 @@ fn docs_and_notes() -> ExtensionDeclaration {
     })
 }
 
-fn files_and_errors(records: &[EntityRecord]) -> (Vec<PathBuf>, Vec<Diagnostic>) {
+/// The paths the checks asked whether they exist, and their E016s.
+fn reads_and_errors(records: &[EntityRecord]) -> (Vec<PathBuf>, Vec<Diagnostic>) {
     let build = build([docs_and_notes()]);
-    let root = std::path::Path::new("/nonexistent/spec");
+    let disk = MemoryDisk::new();
     let input = RuleInput {
         entities: records,
         edges: &[],
-        spec_root: root,
-        disk: &MemoryDisk::new(),
+        spec_root: std::path::Path::new("/nonexistent/spec"),
+        disk: &disk,
     };
     let diags = build.check(&input, &NoVerdicts);
+    let exists = disk
+        .asked()
+        .into_iter()
+        .filter_map(|asked| match asked {
+            Asked::Exists(path) => Some(path),
+            _ => None,
+        })
+        .collect();
     (
-        build.files(&input),
+        exists,
         coded_in(&diags, "E016").into_iter().cloned().collect(),
     )
 }
@@ -286,7 +308,7 @@ fn files_and_errors(records: &[EntityRecord]) -> (Vec<PathBuf>, Vec<Diagnostic>)
     verify = "a field another kind declares as a file reference is not one on this kind"
 )]
 fn a_field_named_like_another_kinds_file_reference_is_not_one() {
-    let (files, errors) = files_and_errors(&[
+    let (exists, errors) = reads_and_errors(&[
         EntityRecord::new("doc", "d1", span("main.spec")).with_list("paths", &["missing.md"]),
         EntityRecord::new("note", "n1", span("main.spec")).with_list("paths", &["alpha", "beta"]),
     ]);
@@ -294,9 +316,9 @@ fn a_field_named_like_another_kinds_file_reference_is_not_one() {
     assert_eq!(errors.len(), 1, "{errors:?}");
     assert!(errors[0].message.contains("'missing.md'"), "{errors:?}");
     assert_eq!(
-        files,
+        exists,
         [std::path::Path::new("/nonexistent/spec").join("missing.md")],
-        "the note's tags are not watched"
+        "the note's tags are not read"
     );
 }
 
@@ -305,7 +327,7 @@ fn a_field_named_like_another_kinds_file_reference_is_not_one() {
     verify = "a single path on a file-reference field is checked like a one-item list"
 )]
 fn a_single_path_is_checked() {
-    let (files, errors) = files_and_errors(&[
+    let (exists, errors) = reads_and_errors(&[
         EntityRecord::new("doc", "d1", span("main.spec")).with_field("guide", "missing.md"),
         // An empty single value names no file.
         EntityRecord::new("doc", "d2", span("main.spec")).with_field("guide", ""),
@@ -314,7 +336,7 @@ fn a_single_path_is_checked() {
     assert_eq!(errors.len(), 1, "{errors:?}");
     assert!(errors[0].message.contains("'missing.md'"), "{errors:?}");
     assert_eq!(
-        files,
+        exists,
         [std::path::Path::new("/nonexistent/spec").join("missing.md")]
     );
 }

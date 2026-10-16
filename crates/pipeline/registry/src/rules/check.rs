@@ -3,7 +3,6 @@
 //! the input's edges.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
 
 use specforge_common::cycles::{CycleOptions, find_cycles};
 use specforge_common::{CustomRuleFailure, Diagnostic, DiagnosticData, codes};
@@ -426,19 +425,4 @@ fn missing_files(rule: &Rule, field: &str, input: &RuleInput<'_>) -> Vec<Diagnos
         }
     }
     diagnostics
-}
-
-/// The paths a `file_exists` rule reads on `input` (every item of a list
-/// field), against the spec root.
-pub(super) fn files(rule: &Rule, input: &RuleInput<'_>) -> Vec<PathBuf> {
-    let Check::FileExists { field } = &rule.check else {
-        return Vec::new();
-    };
-    input
-        .entities
-        .iter()
-        .filter(|e| rule.applies_to(&e.kind))
-        .flat_map(|e| named_paths(e, field))
-        .map(|path| input.spec_root.join(path))
-        .collect()
 }

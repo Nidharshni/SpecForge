@@ -1,7 +1,7 @@
 //! The host's checks over the entity snapshot's records (ADR 0019, ADR 0031):
 //! the structural checks, in one order behind one gate, then the rule set.
-//! Only [`RegistryBuild::check`] and [`RegistryBuild::files`] reach them; no
-//! check reads a graph node.
+//! Only [`RegistryBuild::check`] reaches them; no check reads a graph node,
+//! and none reaches the file system but through `input.disk` (ADR 0107).
 
 mod fields;
 mod files;
@@ -12,8 +12,6 @@ mod obligations;
 mod references;
 mod refs;
 mod values;
-
-use std::path::PathBuf;
 
 use specforge_common::Diagnostic;
 
@@ -36,8 +34,9 @@ impl RegistryBuild {
     ///    for `custom` rules.
     ///
     /// Each check reports its entities in record (id) order. E016 and the
-    /// rules' `file_exists` ask the file system whether a path exists;
-    /// nothing else does I/O.
+    /// rules' `file_exists` ask `input.disk` whether a path exists, and
+    /// E016's suggestion lists a missing path's directory there; nothing
+    /// else reads the file system.
     pub fn check(&self, input: &RuleInput<'_>, verdicts: &dyn CustomVerdicts) -> Vec<Diagnostic> {
         let entities = input.entities;
         let mut diagnostics = refs::unreferenced(entities); // W012
@@ -56,23 +55,6 @@ impl RegistryBuild {
         }
         diagnostics.extend(self.rules.check(input, verdicts));
         diagnostics
-    }
-
-    /// The files the checks read on `input`, resolved against
-    /// `input.spec_root`, sorted and unique: every path a `file_reference`
-    /// field names (E016) and every file a `file_exists` rule reads. A
-    /// project session's check inputs.
-    pub fn files(&self, input: &RuleInput<'_>) -> Vec<PathBuf> {
-        let mut paths: Vec<PathBuf> = input
-            .entities
-            .iter()
-            .flat_map(|record| files::paths(record, &self.fields))
-            .map(|path| input.spec_root.join(path))
-            .collect();
-        paths.extend(self.rules.files(input));
-        paths.sort();
-        paths.dedup();
-        paths
     }
 
     /// No loaded extension declares an entity kind: the checks that read

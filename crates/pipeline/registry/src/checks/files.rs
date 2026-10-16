@@ -14,7 +14,7 @@ use crate::entity::{EntityRecord, RuleInput};
 /// declares, in field-name order, each field's last occurrence: the items of
 /// a list of strings, or a single non-empty string. A field of the same name
 /// on another kind is no file reference here.
-pub(super) fn paths<'a>(record: &'a EntityRecord, fields: &FieldRegistry) -> Vec<&'a str> {
+fn paths<'a>(record: &'a EntityRecord, fields: &FieldRegistry) -> Vec<&'a str> {
     let mut names: Vec<&str> = fields
         .fields_for_kind(&record.kind)
         .into_iter()
