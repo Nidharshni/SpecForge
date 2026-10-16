@@ -28,8 +28,10 @@ fn warm(project: &TestProject) {
 }
 
 #[cfg(unix)]
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "provide_mcp_rename_tool",
+    verify = "a rename that cannot put a file back names it in files_written"
+)]
 fn a_rename_that_cannot_put_a_file_back_names_it_in_files_written() {
     use std::os::unix::fs::PermissionsExt;
     let old = referencing_source(ID);

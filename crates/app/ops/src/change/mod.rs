@@ -14,8 +14,6 @@
 //!    not is unlinked where it landed, and the directories the change made are removed when empty. A file that
 //!    cannot be put back is named in `left`, which is the failure's writes.
 
-#![expect(dead_code, reason = "rename commits through it in the next commit")]
-
 use std::convert::Infallible;
 use std::path::PathBuf;
 

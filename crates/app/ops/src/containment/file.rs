@@ -102,10 +102,6 @@ impl Held {
 
     /// Create `real`'s missing parent directories one by one, shallowest first, pushing each onto
     /// `created` as it is made: a failure part-way still tells the caller what to remove.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "used by rename in the next commit")
-    )]
     pub(crate) fn create_parents(&self, created: &mut Vec<PathBuf>) -> std::io::Result<()> {
         let mut missing: Vec<&Path> = Vec::new();
         let mut at = self.real.parent();
@@ -125,20 +121,12 @@ impl Held {
 
     /// Unlink `real` itself: a file a change created there. [`Self::remove`] unlinks `spelled`,
     /// which for a file created through a link would delete the link and keep the file.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "used by rename in the next commit")
-    )]
     pub(crate) fn remove_created(&self) -> std::io::Result<()> {
         std::fs::remove_file(&self.real)
     }
 
     /// Remove each of `dirs` that is empty, in the order given; a directory holding anything stays.
     /// Never recursive.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "used by rename in the next commit")
-    )]
     pub(crate) fn remove_empty(dirs: &[PathBuf]) {
         for dir in dirs {
             let _ = std::fs::remove_dir(dir);

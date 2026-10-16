@@ -6,6 +6,7 @@
 //! comments and verify statements that mentions the ID is not a reference,
 //! and is left alone (ADR 0016).
 
+use crate::change::{Cause, ProjectChange};
 use crate::read::navigate::{Direction, Navigator, Precision, ReferenceQuery};
 use crate::view::EntityField;
 use crate::{Caller, OpError, OpErrorKind, Refusal};
@@ -201,10 +202,9 @@ pub fn plan(
     })
 }
 
-/// Write `plan`'s edits to the files under `spec_root`: every file is
-/// read and edited first, then written; if a write fails, the files
-/// already written, and the one that failed part-way, get their old text
-/// back (and nothing is reported written). Returns the files it wrote.
+/// Write `plan`'s edits to the files under `spec_root` as one project change (ADR 0128): every file is checked
+/// against the text the plan was made on, then replaced; if a write fails, every file already written is put back,
+/// and one that cannot be is the error's writes. Returns the files it wrote.
 ///
 /// Every file is resolved through the caller's containment first (ADR 0104), and read and written where it
 /// landed: one that leaves it, by a symlink, refuses the rename (`outside_root`) before any file is
@@ -214,61 +214,54 @@ pub fn apply(
     spec_root: &Path,
     caller: Caller<'_>,
 ) -> Result<crate::Writes, OpError> {
-    let mut changes = Vec::new();
+    let mut change = ProjectChange::new();
     for file in plan.affected_files() {
         let held = caller.containment().resolve(&spec_root.join(file))?;
-        let old = held.read_to_string().map_err(|e| {
-            OpError::new(
-                OpErrorKind::of_io(&e),
-                UNREADABLE,
-                format!("failed to read {}: {e}", held.spelled.display()),
-            )
-        })?;
         // The edits are positions in the planned text: another text refuses the whole rename.
-        match plan.planned.get(file) {
-            Some(planned) if **planned == *old => {}
-            Some(_) => {
-                return Err(OpError::new(
-                    OpErrorKind::Conflict,
-                    CHANGED,
-                    format!(
-                        "cannot rename '{}': {file} changed since the project was compiled; \
-                         nothing was written",
-                        plan.old_id
-                    ),
-                ));
-            }
-            None => {
-                return Err(OpError::new(
-                    OpErrorKind::Internal,
-                    UNREADABLE,
-                    format!(
-                        "cannot rename '{}': no text was planned for {file}",
-                        plan.old_id
-                    ),
-                ));
-            }
-        }
-        let new = apply_edits(&old, plan.edits.iter().filter(|e| e.file == file));
-        changes.push((held, old, new));
-    }
-    for (i, (held, _, new)) in changes.iter().enumerate() {
-        if let Err(e) = held.write(new) {
-            for (written, old, _) in &changes[..=i] {
-                let _ = written.write(old);
-            }
+        let Some(planned) = plan.planned.get(file) else {
             return Err(OpError::new(
-                OpErrorKind::of_io(&e),
+                OpErrorKind::Internal,
                 UNREADABLE,
-                format!("failed to write {}: {e}", held.spelled.display()),
+                format!(
+                    "cannot rename '{}': no text was planned for {file}",
+                    plan.old_id
+                ),
             ));
-        }
+        };
+        let edited = apply_edits(planned, plan.edits.iter().filter(|e| e.file == file));
+        change.stage(held, Some(planned.as_bytes().to_vec()), edited.into_bytes());
     }
-    Ok(changes
-        .into_iter()
-        .filter(|(_, old, new)| old != new)
-        .map(|(held, _, _)| held.spelled)
-        .collect())
+    let named = |file: &Path| {
+        file.strip_prefix(spec_root)
+            .unwrap_or(file)
+            .display()
+            .to_string()
+    };
+    change.commit().map_err(|failed| {
+        failed.error(|cause| match cause {
+            Cause::Changed { file } => OpError::new(
+                OpErrorKind::Conflict,
+                CHANGED,
+                format!(
+                    "cannot rename '{}': {} changed since the project was compiled; \
+                     nothing was written",
+                    plan.old_id,
+                    named(&file)
+                ),
+            ),
+            Cause::Unreadable { file, error } => OpError::new(
+                OpErrorKind::of_io(&error),
+                UNREADABLE,
+                format!("failed to read {}: {error}", file.display()),
+            ),
+            Cause::Unwritable { file, error } => OpError::new(
+                OpErrorKind::of_io(&error),
+                UNREADABLE,
+                format!("failed to write {}: {error}", file.display()),
+            ),
+            Cause::Then(never) => match never {},
+        })
+    })
 }
 
 #[cfg(test)]
