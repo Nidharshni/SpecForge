@@ -58,8 +58,10 @@ fn link(target: &Path, at: &Path) {
 
 /// R1: `specforge-report.json` is a link to a file outside.
 #[cfg(unix)]
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test_macros::test(
+    behavior = "provide_mcp_collect_tool",
+    verify = "specforge.collect reads and writes no file through a symlink that leaves the project"
+)]
 fn collect_writes_no_report_through_a_symlink_that_leaves_the_project() {
     let project = crate::operations_mgmt::collect_project();
     let outside = outside();
@@ -76,8 +78,10 @@ fn collect_writes_no_report_through_a_symlink_that_leaves_the_project() {
 
 /// R4: a runner's captured output is a link to a file outside.
 #[cfg(unix)]
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test_macros::test(
+    behavior = "provide_mcp_collect_tool",
+    verify = "specforge.collect reads and writes no file through a symlink that leaves the project"
+)]
 fn collect_reads_no_captured_output_through_a_symlink_that_leaves_the_project() {
     let project = crate::operations_mgmt::collect_project();
     let outside = outside();
