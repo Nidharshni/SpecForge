@@ -223,14 +223,14 @@ fn opening_a_project_in_place_of_a_session_keeps_its_buffers() {
     let rt = counting();
     let (dir, session) = opened(&rt);
     drop(session);
-    let mut detached = ProjectSession::detached();
-    detached.hold(&[Buffer::new(dir.root().join("a.spec"), OMEGA).at_version(Some(4))]);
+    let mut session = ProjectSession::detached();
+    session.hold(&[Buffer::new(dir.root().join("a.spec"), OMEGA).at_version(Some(4))]);
     let before = check_runs(&rt);
-    let session = ProjectSession::begin_open(
+    session.reopen(
         &dir.project_root(),
         RuntimeSource::Fixed(Some(Arc::clone(&rt) as SharedRuntime)),
-    )
-    .finish_holding(detached.into_buffers());
+        |_| {},
+    );
     assert_eq!(check_runs(&rt) - before, 1);
     assert!(has(&session, "omega") && !has(&session, "alpha"));
     // Re-keyed relative to the spec root.

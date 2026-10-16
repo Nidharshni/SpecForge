@@ -65,7 +65,7 @@ pub use diagnostics_delta::DiagnosticsDelta;
 pub use inputs::{Changes, SessionInputs, UpdateKind, WatchRoot, Watched, source_key};
 pub use policy::{DiagnosticPolicy, LINT_PROFILE_NAMES, LintProfile, UnknownLintProfile};
 pub use providers::Providers;
-pub use session::{CheckMode, OpeningProject, ProjectSession, RuntimeSource, Update};
+pub use session::{CheckMode, ProjectSession, RuntimeSource, Update};
 pub use setup::{SetupDiagnostic, SetupPart};
 pub use specforge_graph::{
     EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect, NodeChange, compute_graph_delta,
