@@ -150,9 +150,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the served project (while none is served, the server's root): one that leaves it is `invalid_input`, so
   "another project" is one nested in the served one (`specforge_ops::Containment`, ADR 0092, ADR 0104).
 - **Containment**: what a request may reach on disk: every path (the CLI, ADR 0092 D6) or the paths that land inside
-  one directory (an MCP request's bound, or the call's project). Carried in the operation's request and applied where
-  the operation opens or writes the file (`specforge_ops::Containment`, ADR 0104). MCP's call's project hands it to
-  the tools (`ProjectRef::containment`, ADR 0112).
+  one directory (an MCP request's bound, or the call's project). Lent by the **Caller** in the operation's request and
+  applied where the operation opens or writes the file (`specforge_ops::Containment`, ADR 0104). MCP's call's project
+  hands it to the tools (`ProjectRef::caller`, ADR 0112, ADR 0124).
+- **Caller**: what the surface that calls an operation lends it, one value (`specforge_ops::Caller`, ADR 0124): what the
+  call may reach (**Containment**) and who can be asked (**Asking**). The CLI lends every path and its terminal when
+  someone can answer; MCP lends the root of the call's project (init: the request's bound) and nobody. Every request
+  that opens a project file or can ask carries it as `caller`. The runtime, the registry, the solver and collect's
+  machine are passed beside it, not in it. Not the **host** (the process that loads extensions).
 - **Project file**: a file of the project an operation reads or writes. It is opened only as a `Held`
   (`specforge_ops::Containment::resolve`): at where its name landed (`real`), named as given (`spelled`), and replaced
   atomically through a temp created new beside it (ADR 0104, ADR 0112).
@@ -782,8 +787,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   before the document.
 - **Asking**: who can be asked to consent to what an operation would otherwise refuse (a publisher key change, a
   collector's command): yes to everything (`--yes`), nobody (MCP, `--format json`, stdin that is no terminal), or an
-  `Asker` (the CLI's terminal, a test's script). A surface builds it once per command and hands it to add, update or
-  collect (`specforge_ops::asking`, ADR 0110).
+  `Asker` (the CLI's terminal, a test's script). A surface builds it once per command, inside its **Caller**, which add,
+  update and collect read it from (`specforge_ops::asking`, ADR 0110).
 - **Diagnostic policy**: lint profiles (a closed set: `inferred`, `pedantic`) and strict promotion
   (`specforge_project::DiagnosticPolicy`). It is the only thing that changes a diagnostic's severity
   after the diagnostic is built. A profile's diagnostics come from the check that applies it
