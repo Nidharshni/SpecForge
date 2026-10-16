@@ -20,6 +20,11 @@ impl SourceText {
         SourceText { text, line_starts }
     }
 
+    /// The whole text.
+    pub(crate) fn as_str(&self) -> &str {
+        &self.text
+    }
+
     /// The byte offset of 1-based (`line`, `col`); `None` past the line's
     /// end (its newline excluded) or the file's.
     pub(crate) fn offset(&self, line: usize, col: usize) -> Option<usize> {

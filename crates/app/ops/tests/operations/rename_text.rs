@@ -6,7 +6,6 @@ use specforge_ops::{Containment, OpErrorKind};
 const LIMIT: &str = "invariant session_limit \"Limit\" {\n  guarantee \"x\"\n}\n";
 const LOGIN: &str = "behavior login \"Login\" {\n  invariants [session_limit]\n}\n";
 
-#[ignore = "flipped by T5"]
 #[test]
 fn apply_refuses_a_file_changed_since_the_plan() {
     let p = crate::navigate::compile(
@@ -23,7 +22,7 @@ fn apply_refuses_a_file_changed_since_the_plan() {
     let error = rename::apply(&plan, &root, &Containment::unbounded()).unwrap_err();
 
     assert_eq!(error.kind, OpErrorKind::Conflict, "{error:?}");
-    assert_eq!(error.code, "file_changed", "{error:?}");
+    assert_eq!(error.code, rename::CHANGED, "{error:?}");
     assert!(error.message.contains("login.spec"), "{}", error.message);
     assert!(crate::writes::changed_since(&root, &before).is_empty());
 }

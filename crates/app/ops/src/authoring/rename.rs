@@ -9,8 +9,9 @@
 use crate::read::navigate::{Direction, Navigator, Precision, ReferenceQuery};
 use crate::view::EntityField;
 use crate::{Containment, OpError, OpErrorKind, Refusal};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+use std::sync::Arc;
 
 /// The field of a rename's request a refusal can be about (ADR 0072).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,6 +28,8 @@ pub const INVALID_ID: &str = "invalid_name";
 pub const TAKEN: &str = "entity_exists";
 /// A file the rename must edit cannot be read (or written).
 pub const UNREADABLE: &str = "file_unreadable";
+/// A file the rename edits no longer holds the text the plan was made on.
+pub const CHANGED: &str = "file_changed";
 
 /// The shortest and longest entity IDs (E014).
 pub const ID_LENGTH: std::ops::RangeInclusive<usize> = 2..=60;
@@ -97,6 +100,8 @@ pub struct RenamePlan {
     pub new_id: String,
     /// One per occurrence; files are relative to the spec root.
     pub edits: Vec<RenameEdit>,
+    /// Each affected file's text, as the plan read it: the text the edits are positions in.
+    planned: BTreeMap<String, Arc<str>>,
 }
 
 impl RenamePlan {
@@ -163,7 +168,10 @@ pub fn plan<F: Fn(&str) -> Option<String>>(
         return Err(OpError::new(
             OpErrorKind::Internal,
             UNREADABLE,
-            format!("cannot rename '{old_id}': cannot read {}", files.join(", ")),
+            format!(
+                "cannot rename '{old_id}': {} do not spell it where the graph says",
+                files.join(", ")
+            ),
         )
         .into());
     }
@@ -178,10 +186,18 @@ pub fn plan<F: Fn(&str) -> Option<String>>(
             new_text: new_id.to_string(),
         })
         .collect();
+    let planned = occurrences
+        .iter()
+        .filter_map(|o| {
+            let file = o.span.file.as_str();
+            Some((file.to_string(), nav.source_text(file)?))
+        })
+        .collect();
     Ok(RenamePlan {
         old_id: old_id.to_string(),
         new_id: new_id.to_string(),
         edits,
+        planned,
     })
 }
 
@@ -208,6 +224,31 @@ pub fn apply(
                 format!("failed to read {}: {e}", held.spelled.display()),
             )
         })?;
+        // The edits are positions in the planned text: another text refuses the whole rename.
+        match plan.planned.get(file) {
+            Some(planned) if **planned == *old => {}
+            Some(_) => {
+                return Err(OpError::new(
+                    OpErrorKind::Conflict,
+                    CHANGED,
+                    format!(
+                        "cannot rename '{}': {file} changed since the project was compiled; \
+                         nothing was written",
+                        plan.old_id
+                    ),
+                ));
+            }
+            None => {
+                return Err(OpError::new(
+                    OpErrorKind::Internal,
+                    UNREADABLE,
+                    format!(
+                        "cannot rename '{}': no text was planned for {file}",
+                        plan.old_id
+                    ),
+                ));
+            }
+        }
         let new = apply_edits(&old, plan.edits.iter().filter(|e| e.file == file));
         changes.push((held, old, new));
     }

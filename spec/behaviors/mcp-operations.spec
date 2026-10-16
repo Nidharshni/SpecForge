@@ -130,7 +130,10 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
     boolean, default false) and path? (the project root; the served project
     when omitted; another project is planned, edited and brought up to date
     on its own, the served one untouched). The rename is planned on the project as
-    it is on disk. The tool MUST rename the entity and update all
+    it is on disk. Its edits are positions in the text the project was
+    compiled from: when a file the rename edits no longer holds that text on
+    disk, the tool MUST fail the rename as conflict before any file is
+    written. The tool MUST rename the entity and update all
     references across all spec files. The edits are exactly the entity's
     declaration name and its references, as find-references returns them;
     text in strings, comments and verify statements that mentions the ID

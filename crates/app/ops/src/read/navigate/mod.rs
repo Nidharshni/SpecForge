@@ -81,6 +81,12 @@ impl<'a, F: Fn(&str) -> Option<String>> Navigator<'a, F> {
         text
     }
 
+    /// The text of `file` a rename plan keeps: the text its edits are positions in.
+    pub(crate) fn source_text(&self, file: &str) -> Option<std::sync::Arc<str>> {
+        let text = self.text(Sym::new(file))?;
+        Some(std::sync::Arc::from(text.as_str()))
+    }
+
     /// The entity `id`, or [`not_found`].
     fn node(&self, id: &str) -> Result<&'a specforge_graph::Node, OpError> {
         let graph = self.view.graph();
