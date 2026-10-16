@@ -11,6 +11,7 @@ use crate::prompt::{CorePrompt, Prompted};
 use crate::refusal::ArgumentOf;
 use crate::tool::{ErrorCode, McpError};
 use crate::tools::trace::Gap;
+use specforge_ops::Refusal;
 use specforge_ops::view::EntityField;
 use specforge_ops::view::ProjectView;
 
@@ -83,7 +84,7 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
                 // As the trace tool traces it: its chain and missing links.
                 // ADR 0111 D6: the trace prompt's payload has no `_meta`, so it reports no notices.
                 let (outcome, _unreported) = trace(&view, Target::Entity(entity_id))
-                    .map_err(|error| Prompt::refused(specforge_ops::Refusal::from(error)))?
+                    .map_err(|refusal: Refusal<EntityField>| Prompt::refused(refusal))?
                     .into_value_and_notices();
                 let gaps = outcome.gaps().iter().map(Gap::of).collect();
                 (

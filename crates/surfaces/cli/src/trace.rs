@@ -63,10 +63,7 @@ impl Args {
         };
         let traced = match specforge_ops::read::trace::trace(&ProjectView::of(&project), target) {
             Ok(traced) => traced,
-            Err(error) => {
-                return Refusal::of(self.format)
-                    .report(terminal, &specforge_ops::OpError::from(error));
-            }
+            Err(refusal) => return Refusal::of(self.format).report(terminal, &refusal),
         };
 
         let outcome = Notes::new(terminal, self.format).noticed(traced);

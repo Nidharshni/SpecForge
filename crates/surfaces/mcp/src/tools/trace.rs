@@ -10,6 +10,7 @@ use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
 use crate::reply::{Answer, Answered};
 use crate::tool::{ErrorCode, McpError};
+use specforge_ops::Refusal;
 use specforge_ops::view::EntityField;
 
 /// `specforge.trace`'s arguments.
@@ -98,9 +99,8 @@ impl CoreTool for Tool {
                 )));
             }
         };
-        let traced = specforge_ops::read::trace::trace(&view, Target::Entity(entity_id)).map_err(
-            |error| Self::refused(specforge_ops::Refusal::from(error)).with_entity(entity_id),
-        )?;
+        let traced = specforge_ops::read::trace::trace(&view, Target::Entity(entity_id))
+            .map_err(|refusal: Refusal<EntityField>| Self::refused(refusal))?;
         let chain = traced.try_map(|outcome| {
             outcome.into_chain().ok_or_else(|| {
                 Box::new(McpError::new(

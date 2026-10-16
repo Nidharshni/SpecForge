@@ -5,12 +5,11 @@
 use crate::view_support::{Assembled, Viewed};
 use specforge_common::{Diagnostic, Severity, SourceSpan, Sym};
 use specforge_graph::{Graph, Node};
+use specforge_ops::OpError;
 use specforge_ops::analysis::check::{
     CheckField, CheckOptions, check, parse_lint_profiles, parse_severity,
 };
 use specforge_ops::read::trace::{Target, reach, trace};
-use specforge_ops::view::EntityField;
-use specforge_ops::{OpError, Refusal};
 use specforge_parser::{EntityId, EntityKind, FieldMap};
 use specforge_project::LintProfile;
 use specforge_registry::RegistryBuild;
@@ -78,7 +77,7 @@ fn check_and_trace_refusals_are_pinned_field_by_field() {
     let project = Assembled::over(Default::default()).graph(graph);
     let view = project.view();
     let traced = |id: &str| {
-        let refusal = Refusal::<EntityField>::from(trace(&view, Target::Entity(id)).unwrap_err());
+        let refusal = trace(&view, Target::Entity(id)).unwrap_err();
         line(&refusal.error, refusal.subject)
     };
 

@@ -1,7 +1,6 @@
 use crate::view_support::{Assembled, Viewed};
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
-use specforge_ops::read::trace::TraceError;
 use specforge_parser::{EntityId, EntityKind, FieldMap};
 
 fn span() -> SourceSpan {
@@ -40,7 +39,7 @@ fn build_graph() -> Graph {
     graph
 }
 
-// M2: trace for non-existent entity returns TraceError::EntityNotFound
+// M2: trace for non-existent entity is an EntityNotFound refusal about the entity id
 #[test]
 fn trace_nonexistent_returns_entity_not_found() {
     let project = Assembled::over(Default::default()).graph(build_graph());
@@ -49,9 +48,10 @@ fn trace_nonexistent_returns_entity_not_found() {
         specforge_ops::read::trace::Target::Entity("nonexistent"),
     )
     .unwrap_err();
-    assert!(
-        matches!(err, TraceError::EntityNotFound { .. }),
-        "expected EntityNotFound, got: {err:?}"
+    assert_eq!(err.error.kind, specforge_ops::OpErrorKind::EntityNotFound);
+    assert_eq!(
+        err.subject,
+        Some(specforge_ops::view::EntityField::EntityId)
     );
 }
 
@@ -68,20 +68,13 @@ fn tracing_an_unknown_entity_is_e003_with_a_suggestion() {
         )
         .unwrap_err()
     };
-    let near = trace("bb");
-    assert_eq!(
-        near,
-        TraceError::EntityNotFound {
-            entity_id: "bb".into(),
-            near: Some("b".into()),
-        }
-    );
-    let error = specforge_ops::OpError::from(near);
+    let error = trace("bb").error;
+    assert_eq!(error.entity.as_deref(), Some("bb"));
     assert_eq!(error.code, "E003");
     assert_eq!(error.message, "unresolved entity 'bb' — not found in graph");
     assert_eq!(error.suggestion.as_deref(), Some("did you mean 'b'?"));
     // Nothing close: no suggestion.
-    let far = specforge_ops::OpError::from(trace("zzzzzzzz"));
+    let far = trace("zzzzzzzz").error;
     assert_eq!(far.suggestion, None);
 }
 
@@ -154,13 +147,12 @@ fn a_missing_entity_is_one_refusal() {
         ),
         (
             "trace",
-            OpError::from(
-                specforge_ops::read::trace::trace(
-                    &view,
-                    specforge_ops::read::trace::Target::Entity("logn"),
-                )
-                .unwrap_err(),
-            ),
+            specforge_ops::read::trace::trace(
+                &view,
+                specforge_ops::read::trace::Target::Entity("logn"),
+            )
+            .unwrap_err()
+            .error,
         ),
     ];
     for (surface, error) in &refusals {

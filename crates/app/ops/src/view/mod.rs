@@ -32,7 +32,6 @@ use specforge_project::{CompiledProject, Environment, SharedRuntime};
 use specforge_registry::{EntitySnapshot, RegistryBuild};
 
 pub use connectivity::{Connectivity, Degree};
-pub(crate) use entity::unresolved;
 pub use entity::{EntityField, not_found};
 pub use kinds::{KnownKinds, UNKNOWN_KIND};
 

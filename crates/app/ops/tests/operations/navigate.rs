@@ -1727,8 +1727,5 @@ fn a_read_view_about_one_entity_names_it() {
         &view,
         specforge_ops::read::trace::Target::Entity("ghost"),
     );
-    assert_eq!(
-        specforge_ops::Refusal::<EntityField>::from(traced.unwrap_err()).subject,
-        about
-    );
+    assert_eq!(traced.unwrap_err().subject, about);
 }
