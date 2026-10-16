@@ -25,8 +25,7 @@ mod check_passes;
 mod compiled;
 pub mod coverage;
 mod diagnostics_delta;
-mod freshness;
-mod inputs;
+mod ledger;
 pub mod passes;
 mod policy;
 pub mod providers;
@@ -39,7 +38,7 @@ pub mod testing;
 mod verdicts;
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use sources::SourceCache;
@@ -47,7 +46,6 @@ use sources::SourceCache;
 use snapshot::EntitySnapshot;
 use specforge_common::{
     ConfigProblem, ConfigRead, Diagnostic, ProjectConfig, ProjectRoot, SourceRoot, codes,
-    read_project_config,
 };
 use specforge_graph::{Graph, GraphBuild, GraphConfig};
 use specforge_installed::{Builtins, Installed};
@@ -62,10 +60,11 @@ pub use buffers::Buffer;
 pub use build_cache::{BUILD_CACHE_FILE, BUILD_CACHE_FORMAT, BuildCache, CachedStatus};
 pub use compiled::CompiledProject;
 pub use diagnostics_delta::DiagnosticsDelta;
-pub use inputs::{Changes, SessionInputs, UpdateKind, WatchRoot, Watched, source_key};
+pub use ledger::{Changes, SessionInputs, WatchRoot, Watched, source_key};
+use ledger::{Reads, Unrecorded};
 pub use policy::{DiagnosticPolicy, LINT_PROFILE_NAMES, LintProfile, UnknownLintProfile};
 pub use providers::Providers;
-pub use session::{CheckMode, ProjectSession, RuntimeSource, Update};
+pub use session::{CheckMode, ProjectSession, RuntimeSource, Update, UpdateKind};
 pub use setup::{SetupDiagnostic, SetupPart};
 pub use specforge_graph::{
     EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect, NodeChange, compute_graph_delta,
@@ -185,7 +184,22 @@ impl Environment {
     /// `runtime` (none without one), which the environment then holds, then
     /// build the registries from them. The environment keeps `root`.
     pub fn load(root: &ProjectRoot, runtime: Option<SharedRuntime>) -> Self {
-        Self::from_read(root, read_project_config(root.dir()), runtime)
+        Self::read_through(&mut Unrecorded, root, |_| runtime)
+    }
+
+    /// The one environment load: the config read once, the lock and modules
+    /// recorded before the load reads them, the runtime built from the config
+    /// read, then [`Self::from_read`]. A session reads through its ledger
+    /// (stamping each input), a one-shot compile through [`Unrecorded`].
+    pub(crate) fn read_through(
+        reads: &mut impl Reads,
+        root: &ProjectRoot,
+        runtime: impl FnOnce(&ProjectConfig) -> Option<SharedRuntime>,
+    ) -> Self {
+        let read = reads.config(root);
+        reads.before_load(root, &read.config);
+        let runtime = runtime(&read.config);
+        Self::from_read(root, read, runtime)
     }
 
     /// The environment of the config `read`, the installed extensions
@@ -423,25 +437,25 @@ impl Environment {
             .map(|setup| setup.diagnostic)
     }
 
-    /// The project sources discovery finds now (`exclude` and the skipped
-    /// directories applied).
-    pub fn discover(&self) -> Vec<PathBuf> {
-        self.sources.files()
+    /// Where the project's sources are discovered.
+    pub(crate) fn sources(&self) -> &SourceRoot {
+        &self.sources
     }
 
-    /// Read and parse `discovered`, build their graph and resolve their
-    /// imports: the one cold build every compile and session open
-    /// starts from (ADR 0032).
+    /// Read and parse the sources `keys` names (each through `read`), build
+    /// their graph and resolve their imports: the one cold build every
+    /// compile and session open starts from (ADR 0032).
     ///
     /// A `held` text (by source key) is read in place of its file: the
     /// editor's buffers, which the session layer holds; the core stays
     /// buffer-agnostic.
     pub(crate) fn build_sources(
         &self,
-        discovered: &[PathBuf],
+        keys: &[String],
         held: &BTreeMap<String, &str>,
+        read: impl FnMut(&str) -> sources::Read,
     ) -> SourceBuild {
-        let (sources, files) = SourceCache::read_all(self.sources.dir(), discovered, held);
+        let (sources, files) = SourceCache::read_all(keys, held, read);
         let graph = GraphBuild::of(files, self.graph_config());
         let imports = sources.import_diagnostics(&graph);
         SourceBuild {

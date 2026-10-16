@@ -26,7 +26,9 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use crate::inputs::{Changes, Kind, Reach, SessionInputs};
+use super::Changes;
+use super::inputs::{Kind, SessionInputs};
+use super::reach::Reach;
 
 /// Coarse filesystems record modification times to the second (some to
 /// two); an entry modified this close to when it was stamped is racy.
@@ -98,7 +100,7 @@ fn content_hash(path: &Path) -> u64 {
 
 /// What a session last built from, as it was when read.
 #[derive(Debug, Default, Clone)]
-pub(crate) struct DiskSnapshot {
+pub(super) struct Stamps {
     /// Every source, by key relative to the spec root.
     sources: BTreeMap<String, Entry>,
     /// Every environment input (absent ones recorded as `None`).
@@ -107,11 +109,11 @@ pub(crate) struct DiskSnapshot {
     checks: BTreeMap<PathBuf, Option<Entry>>,
 }
 
-impl DiskSnapshot {
+impl Stamps {
     /// Stamp `specforge.json`, before its one read: a config rewritten after
     /// this stamp is seen next time, whatever the rest was read from. Starts
     /// the environment record again.
-    pub(crate) fn stamp_config(&mut self, config: &Path) {
+    pub(super) fn stamp_config(&mut self, config: &Path) {
         self.environment = BTreeMap::new();
         self.environment
             .insert(config.to_path_buf(), Entry::stamp(config));
@@ -120,32 +122,31 @@ impl DiskSnapshot {
     /// Stamp the other environment inputs (the lock and each extension
     /// module), before the extension runtime and the environment read
     /// them.
-    pub(crate) fn stamp_environment(&mut self, inputs: &SessionInputs) {
+    pub(super) fn stamp_environment(&mut self, inputs: &SessionInputs) {
         for path in inputs.environment_files() {
             let entry = Entry::stamp(path);
             self.environment.insert(path.to_path_buf(), entry);
         }
     }
 
-    /// Stamp every source `discovered` under the spec root, before the
-    /// sources are read.
-    pub(crate) fn stamp_all_sources(&mut self, inputs: &SessionInputs, discovered: &[PathBuf]) {
-        let Some(spec_root) = inputs.spec_root() else {
-            return;
+    /// No source is stamped: discovery starts the record of the sources again,
+    /// each stamped as it is read.
+    pub(super) fn forget_sources(&mut self) {
+        self.sources.clear();
+    }
+
+    /// Stamp source `key` (its file is `path`), before it is read.
+    pub(super) fn stamp_source(&mut self, key: &str, path: &Path) {
+        match Entry::stamp(path) {
+            Some(entry) => self.sources.insert(key.to_string(), entry),
+            None => self.sources.remove(key),
         };
-        self.sources = discovered
-            .iter()
-            .filter_map(|path| {
-                let entry = Entry::stamp(path)?;
-                Some((key(spec_root, path), entry))
-            })
-            .collect();
     }
 
     /// Stamp the sources `keys` names, before they are read again: the
     /// others keep what they recorded, so a change to one of them that
     /// this rebuild does not read is still seen next time.
-    pub(crate) fn stamp_sources(&mut self, inputs: &SessionInputs, keys: &[String]) {
+    pub(super) fn stamp_sources(&mut self, inputs: &SessionInputs, keys: &[String]) {
         let Some(spec_root) = inputs.spec_root() else {
             return;
         };
@@ -162,18 +163,16 @@ impl DiskSnapshot {
         }
     }
 
-    /// Stamp every check input, before the checks read them.
-    pub(crate) fn stamp_checks(&mut self, inputs: &SessionInputs) {
-        self.checks = inputs
-            .check_files()
-            .map(|path| (path.to_path_buf(), Entry::stamp(path)))
-            .collect();
+    /// The check inputs are exactly `checks`, each stamped before the run
+    /// that read it read it.
+    pub(super) fn set_checks(&mut self, checks: BTreeMap<PathBuf, Option<Entry>>) {
+        self.checks = checks;
     }
 
     /// What differs from what was read, among `scope`: the sources `inputs`
     /// discovers now (and those recorded) in each region, and the recorded
     /// inputs.
-    pub(crate) fn changes(&self, inputs: &SessionInputs, scope: Scope<'_>) -> Changes {
+    pub(super) fn changes(&self, inputs: &SessionInputs, scope: Scope<'_>) -> Changes {
         let Some(spec_root) = inputs.spec_root() else {
             return Changes::default();
         };
@@ -254,7 +253,7 @@ impl DiskSnapshot {
 }
 
 /// How much of what a session read a comparison covers.
-pub(crate) enum Scope<'r> {
+pub(super) enum Scope<'r> {
     /// Every source, every environment and check input.
     Everything,
     /// What a batch of changed paths reaches.
@@ -268,12 +267,4 @@ fn changed_paths(table: &BTreeMap<PathBuf, Option<Entry>>) -> Vec<PathBuf> {
         .filter(|(path, entry)| !unchanged(path, entry.as_ref()))
         .map(|(path, _)| path.clone())
         .collect()
-}
-
-/// A discovered file's key, as the resolver names it.
-fn key(spec_root: &Path, path: &Path) -> String {
-    path.strip_prefix(spec_root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .into_owned()
 }

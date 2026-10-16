@@ -20,7 +20,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   registration and I002. `Environment::from_read` is its disk adapter: it reads the lock and runs
   the extension load. Its fields are private; it is read through accessors (ADR 0047). A session
   reads `specforge.json` once per load and builds its extension runtime and, holding it, its
-  environment from that read, after stamping every environment input (ADR 0030). It
+  environment from that read, after stamping every environment input (ADR 0030, ADR 0106). It
   A project opened in a session's place loads its environment first and hands it over before any
   source is read (`ProjectSession::reopen`), so an editor answers what needs only the environment
   (keyword completion) while the sources are still being read.
@@ -89,6 +89,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   buffer is to its file is the session's to say (ADR 0023, ADR 0046). After every update that runs the
   checks, its compiled project reports exactly what a fresh compile of the same sources reports, in the
   same order (an editor update that skips the checks while a file does not parse is the one exception).
+- **Read ledger**: what a project session read and when (`specforge_project::ledger`, crate-private): its session
+  inputs and the stamp of each file, taken in the call that reads it. It does every disk read the session makes
+  (the config, the lock and modules, the sources, the check inputs), derives every source key, and answers `changes`
+  and `stale`. A one-shot compile runs the same steps through an adapter that records nothing (ADR 0106).
 - **Session inputs**: everything a project session depends on besides its sources' text: where its
   sources are discovered (the spec root and `exclude`), its **environment inputs**
   (`specforge.json`, `specforge.lock`, the extension modules it loaded) and its **check inputs**
@@ -97,7 +101,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   lies (its target)). One value per
   environment load, renewed each time the checks run (`specforge_project::SessionInputs`,
   `ProjectSession::inputs`). What a changed path reaches, which directories watch watches, which files
-  the LSP asks its client to report and what the session stamps for freshness are all read from it;
+  the LSP asks its client to report and what the session stamps for freshness are all read from it; the
+  read ledger stamps each when it reads it (ADR 0106);
   a detached session's inputs are empty (ADR 0030). Nothing else: an import names one of the sources,
   never a file on disk (ADR 0055).
 - **Held buffer**: an editor buffer a project session holds (`specforge_project::Buffer`: the file's path, the

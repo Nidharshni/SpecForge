@@ -29,6 +29,7 @@ project was brought up to date with `ensure_fresh`. `OtherProject` also re-imple
 - **D3. The check pipeline is the core's, the stamps the session's.** The core takes a snapshot
   (`snapshot_now`) and runs the checks over it (`check_over`); the session renews and stamps its check
   inputs between the two (ADR 0030 D3), a one-shot compile does nothing between them.
+  *(ADR 0106: the core's check takes the compile's reads; a session's ledger records the check inputs, a one-shot's `Unrecorded` does nothing.)*
 - **D4. A detached project is a compiled project with no root** (`root()` is `None`, no import is
   resolved), so a view of it is rootless with no parameter (ADR 0030 D5).
 - **D5. One view constructor for a compiled project.** `ProjectView::of(&CompiledProject)` serves a

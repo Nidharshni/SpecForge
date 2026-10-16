@@ -88,6 +88,7 @@ behavior resolve_use_imports "Resolve Use Imports" {
   verify unit "a directory named like a .spec file is no source"
   verify unit "a .spec file inside a nested project below the spec root is no source"
   verify unit "a nested project's files are not compiled, an editor buffer of one included"
+  verify unit "an editor buffer of a file inside a symlinked directory is no source"
   verify unit "a symlink is a source only when it resolves to a file"
   verify unit "discovery at a path finds what the whole walk finds there"
   verify unit "an import of a file that is no project source produces E025"
