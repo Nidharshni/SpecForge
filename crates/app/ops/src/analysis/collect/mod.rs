@@ -15,17 +15,16 @@
 mod collector;
 mod convention;
 mod dispatch;
-mod machine;
 mod merge;
 mod process;
 
+pub use crate::machine::{
+    CollectorCommand, CollectorMachine, CommandApproval, REPORT_ENV, Ran, RunFailure, RunnerOutput,
+};
 pub use collector::{Collector, collectors};
 use collector::{capture_path, captures_stdout, command_line, detect, read_capture, report_path};
 pub use dispatch::dispatch;
 use dispatch::read_report;
-pub use machine::{
-    CollectorCommand, CollectorMachine, CommandApproval, REPORT_ENV, Ran, RunFailure, RunnerOutput,
-};
 pub use merge::MergeStats;
 use merge::{KnownEntities, merge};
 pub use process::ProcessMachine;
@@ -85,7 +84,7 @@ fn allowed(
 ) -> bool {
     match asking {
         Asking::Yes => true,
-        _ if machine.approved(&CommandApproval::of(collector, root)) => true,
+        _ if machine.approved(&collector.approval(root)) => true,
         Asking::Nobody => false,
         Asking::Ask(asker) => {
             let question = Question::RunCommand {
@@ -96,7 +95,7 @@ fn allowed(
             if !asker.answer(&question) {
                 return false;
             }
-            if let Err(e) = machine.approve(&CommandApproval::of(collector, root)) {
+            if let Err(e) = machine.approve(&collector.approval(root)) {
                 unsaved.push(e);
             }
             true

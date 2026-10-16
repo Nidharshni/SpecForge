@@ -16,6 +16,8 @@ unseen: an approved collector's command ran before a later collector's refusal w
 
 `specforge_ops::analysis::collect::CollectorMachine` (spec port `CollectorMachine`): `run`, `approved`, `approve`.
 Its adapters are `ProcessMachine` (production) and `testing::ScriptedMachine` (tests).
+The port is defined in the base module `machine` (as the solver's port is, so the test support can name it
+without reaching into the analysis group, ADR 0086) and re-exported by `analysis::collect`.
 
 ## D2. The caller passes it
 

@@ -1,6 +1,7 @@
 //! The collectors runner extensions declare: what selects each, the command it runs, where its report
 //! lands.
 
+use crate::machine::CommandApproval;
 use crate::{Containment, Held, OpError, OpErrorKind};
 use specforge_common::codes;
 use specforge_protocol_types::ExtensionDeclaration;
@@ -46,6 +47,13 @@ pub fn collectors(declarations: &[ExtensionDeclaration]) -> Vec<Collector> {
             })
         })
         .collect()
+}
+
+impl Collector {
+    /// The approval running this collector's declared command in `root` needs.
+    pub fn approval(&self, root: &Path) -> CommandApproval {
+        CommandApproval::new(&self.extension, &self.name, &self.run, root)
+    }
 }
 
 /// Collectors whose detection files are present at the project root.

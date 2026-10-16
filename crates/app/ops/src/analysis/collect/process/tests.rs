@@ -69,13 +69,13 @@ fn the_process_machine_keeps_the_port_contract() {
 
     let machine = ProcessMachine::with_store(dir.path().join("consent.json"));
     let mut c = collector("r.json");
-    let approval = CommandApproval::of(&c, dir.path());
+    let approval = c.approval(dir.path());
     assert!(!machine.approved(&approval));
     machine.approve(&approval).unwrap();
     assert!(machine.approved(&approval));
-    assert!(!machine.approved(&CommandApproval::of(&c, &dir.path().join("other"))));
+    assert!(!machine.approved(&c.approval(&dir.path().join("other"))));
     c.run.push("--extra".into());
-    let changed = CommandApproval::of(&c, dir.path());
+    let changed = c.approval(dir.path());
     assert!(!machine.approved(&changed), "a changed command re-prompts");
     machine.approve(&changed).unwrap();
     assert_eq!(machine.load().approved.len(), 1, "approval replaced");
@@ -143,13 +143,13 @@ fn consent_is_keyed_by_project_extension_and_command() {
     let machine = ProcessMachine::with_store(dir.path().join("consent.json"));
     let root = dir.path();
     let mut c = collector("r.json");
-    let approval = CommandApproval::of(&c, root);
+    let approval = c.approval(root);
     assert!(!machine.approved(&approval));
     machine.approve(&approval).unwrap();
     assert!(machine.approved(&approval));
-    assert!(!machine.approved(&CommandApproval::of(&c, &root.join("other"))));
+    assert!(!machine.approved(&c.approval(&root.join("other"))));
     c.run.push("--extra".into());
-    let changed = CommandApproval::of(&c, root);
+    let changed = c.approval(root);
     assert!(!machine.approved(&changed), "a changed command re-prompts");
     machine.approve(&changed).unwrap();
     assert_eq!(machine.load().approved.len(), 1, "approval replaced");

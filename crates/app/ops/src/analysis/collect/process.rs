@@ -1,7 +1,7 @@
 //! The collector machine on the user's machine (ADR 0125): a child process, and the user-level consent
 //! store. It is the only place collect reaches the process, the wall clock and the environment.
 
-use super::machine::{
+use crate::machine::{
     CollectorCommand, CollectorMachine, CommandApproval, REPORT_ENV, Ran, RunFailure, RunnerOutput,
 };
 use serde::{Deserialize, Serialize};

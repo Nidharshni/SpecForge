@@ -200,7 +200,7 @@ impl Fixture {
     /// The approval runner `name`'s command needs here.
     pub fn approval(&self, name: &str) -> CommandApproval {
         let collector = self.collectors.iter().find(|c| c.name == name).unwrap();
-        CommandApproval::of(collector, self.root())
+        collector.approval(self.root())
     }
 
     /// Where runner `name`'s report is, as the project spells it.

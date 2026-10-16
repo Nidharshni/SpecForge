@@ -23,10 +23,10 @@ use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
 use specforge_protocol_types::PeerDependency;
 use specforge_wasm::testing::InProcessRuntime;
 
-use crate::analysis::collect::{
+use crate::asking::Asking;
+use crate::machine::{
     CollectorCommand, CollectorMachine, CommandApproval, Ran, RunFailure, RunnerOutput,
 };
-use crate::asking::Asking;
 use crate::solver::{Availability, SolveFailure, Solver, Z3};
 use crate::view::ProjectView;
 use crate::{Caller, Containment};

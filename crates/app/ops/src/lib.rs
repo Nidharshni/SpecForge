@@ -17,7 +17,7 @@
 //!
 //! | Group | Holds | May use |
 //! |---|---|---|
-//! | base | failures and verdicts, refusals, who can be asked (ADR 0110), what a caller lends (ADR 0124), writes, containment, option tables, `specforge.json`, the recorded report, the registry and solver ports, the versioned schema, the project view, test support | |
+//! | base | failures and verdicts, refusals, who can be asked (ADR 0110), what a caller lends (ADR 0124), writes, containment, option tables, `specforge.json`, the recorded report, the registry, solver and collector machine ports, the versioned schema, the project view, test support | |
 //! | [`read`] | the read views over the project view (ADR 0015), navigation (ADR 0016), inference, explain | base |
 //! | [`extension`] | what a project installs, enables and lists, what an author publishes, the commands extensions declare | base |
 //! | [`analysis`] | check, analyze with its passes and the prove pass, collect, doctor | base, read, extension |
@@ -31,6 +31,7 @@ pub mod config;
 mod containment;
 mod error;
 pub mod extension;
+mod machine;
 mod noticed;
 pub mod options;
 pub mod read;

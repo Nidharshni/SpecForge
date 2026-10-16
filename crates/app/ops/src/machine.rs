@@ -1,8 +1,8 @@
 //! What collect asks the machine it runs on (ADR 0125): run a collector's command, and the user's approvals of
-//! commands. Two adapters: [`ProcessMachine`](super::ProcessMachine) (a child process and the user's consent
-//! store) and `specforge_ops::testing::ScriptedMachine` (tests).
+//! commands. Two adapters: [`ProcessMachine`](crate::analysis::collect::ProcessMachine) (a child process and the
+//! user's consent store) and `specforge_ops::testing::ScriptedMachine` (tests). A base module, as the solver's
+//! port is: the adapters and the test support name it without reaching into the analysis group.
 
-use super::collector::Collector;
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::Path;
@@ -66,14 +66,15 @@ pub struct CommandApproval {
 }
 
 impl CommandApproval {
-    /// The approval `collector`'s declared command needs in `root` (canonicalized).
-    pub fn of(collector: &Collector, root: &Path) -> Self {
+    /// The approval a collector of `extension` named `collector` needs to run `run` in `root`
+    /// (canonicalized).
+    pub fn new(extension: &str, collector: &str, run: &[String], root: &Path) -> Self {
         let project = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
         CommandApproval {
             project: project.display().to_string(),
-            extension: collector.extension.clone(),
-            collector: collector.name.clone(),
-            run: collector.run.clone(),
+            extension: extension.to_string(),
+            collector: collector.to_string(),
+            run: run.to_vec(),
         }
     }
 
