@@ -226,7 +226,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Installed::resolve`: a builtin's name before a lock entry, `.wasm` file entries after every named
   entry), and the lock plan reads the same decision. Its declarations come in entry order; the registry
   build puts them in load order. What does not load is a typed `LoadFailure` on its
-  entry with one diagnostic, and what an entry reports though it loaded (W149, W153, W138) is on the
+  entry with one diagnostic and leaves nothing loaded, and what an entry reports though it loaded (W149, W153, W138) is on the
   entry too; the runtime keeps none, and `Installed::load_diagnostics` orders them, entry by entry. Without a runtime nothing loads, and each entry
   enables what it names (`Loaded::unloaded`); what an environment is assembled from says which
   (`specforge_project::ExtensionLoad`: `NoRuntime`, or what was loaded `In` a runtime).

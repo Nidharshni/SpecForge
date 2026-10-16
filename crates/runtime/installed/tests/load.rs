@@ -15,7 +15,9 @@ use specforge_wasm::testing::InProcessRuntime;
 use specforge_wasm::{WasmCallResult, WasmRuntime};
 use tempfile::TempDir;
 
-fn extension(name: &'static str) -> impl Fn() -> ContributionsBuilder + Send + Sync + 'static {
+pub(crate) fn extension(
+    name: &'static str,
+) -> impl Fn() -> ContributionsBuilder + Send + Sync + 'static {
     move || ContributionsBuilder::new(ExtensionMeta::new(name, "1.0.0"))
 }
 
@@ -26,11 +28,11 @@ fn runtime() -> InProcessRuntime {
         .with(extension("@acme/b"))
 }
 
-fn entries(entries: &[&str]) -> Vec<String> {
+pub(crate) fn entries(entries: &[&str]) -> Vec<String> {
     entries.iter().map(|e| e.to_string()).collect()
 }
 
-fn load_with(
+pub(crate) fn load_with(
     root: &Path,
     entries: &[String],
     runtime: &dyn WasmRuntime,
@@ -43,7 +45,7 @@ fn package(name: &str) -> PackageName {
 }
 
 /// What the load of `root` reported, in `load_diagnostics`' order.
-fn reported(root: &Path, loaded: &specforge_installed::Loaded) -> Vec<Diagnostic> {
+pub(crate) fn reported(root: &Path, loaded: &specforge_installed::Loaded) -> Vec<Diagnostic> {
     Installed::at(root)
         .load_diagnostics(&loaded.enabled)
         .into_iter()
@@ -317,7 +319,7 @@ fn the_bytes_compiled_are_the_bytes_hashed() {
 }
 
 /// `bytes` written as the `.wasm` file `name` under `dir`.
-fn file(dir: &Path, name: &str, bytes: &[u8]) {
+pub(crate) fn file(dir: &Path, name: &str, bytes: &[u8]) {
     std::fs::write(dir.join(name), bytes).unwrap();
 }
 
