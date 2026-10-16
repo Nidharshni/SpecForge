@@ -642,7 +642,7 @@ fn assert_refused(output: &std::process::Output, dir: &TestProject, code: &str) 
     );
 }
 
-fn known_keys(home: &std::path::Path) -> std::path::PathBuf {
+pub(crate) fn known_keys(home: &std::path::Path) -> std::path::PathBuf {
     home.join(".specforge").join("known-keys.json")
 }
 

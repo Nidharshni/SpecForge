@@ -696,4 +696,22 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&store).unwrap(), "not json");
         assert!(record(&[], Path::new("unused.json")).unwrap().is_empty());
     }
+
+    #[test]
+    #[ignore = "flipped by T3"]
+    fn a_refused_key_change_names_the_commands_that_can_consent() {
+        let change = KeyChange {
+            package: "@x/a".to_string(),
+            pinned: "k1".to_string(),
+            offered: "k2".to_string(),
+            source: PinSource::User,
+        };
+
+        assert_eq!(
+            change.refused(None).suggestion.as_deref(),
+            Some(
+                "if you trust the new key, accept it with `specforge add` or `specforge update` in a terminal, or with --yes; or add 'k2' to trusted_keys"
+            )
+        );
+    }
 }
