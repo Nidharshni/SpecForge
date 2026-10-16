@@ -1,7 +1,7 @@
 # The entity snapshot is made in the registry crate
 
 **Status:** accepted (2026-10-16, architecture round 12, plan 04). Reopens [ADR 0019](0019-one-entity-snapshot-per-compile.md)
-"Placement"; completes [ADR 0031](0031-the-registry-build-checks-the-entities.md) D1's "Tests run them through the build".
+"Placement"; completes [ADR 0031](0031-the-registry-build-checks-the-entities.md) D1's "Tests run them through the build". D2 amended by [ADR 0123](0123-a-graph-is-read-only-with-the-registry-build-it-was-built-in.md): the pairing is checked by the snapshot, which reads a `GraphBuild` made by `RegistryBuild::graph_of`.
 
 ADR 0019 placed the maker of the entity records in the project crate because "the registry, which must not depend on
 the graph, reads it". The registry has depended on `specforge-graph` since 74cac053 (2026-10-11), and reads

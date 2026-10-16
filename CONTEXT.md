@@ -306,7 +306,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Registry build**: the pure result of putting extension declarations in load order and turning
   them into kind, field and edge registries (each edge type resolved once: every field that writes it, its
   ends, and the edge type each field writes; ADR 0060), the rule set, pass order, the graph inputs
-  (`RegistryBuild::graph_inputs`) and the diagnostics of those declarations, in one order
+  (`RegistryBuild::graph_inputs`) and every graph read with it (`RegistryBuild::graph_of`, with the provider schemes it is handed) and the diagnostics of those declarations, in one order
   (`RegistryBuild::reported`: the declarations' own, the registries', the custom rules' probes, the
   surfaces', each with the setup part it is about) (`specforge_registry::build_registries`). The custom rules' probe is the one call it
   makes out, through the `CustomVerdicts` port, when the environment probes it in the runtime its
@@ -319,8 +319,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Graph inputs**: what the graph build reads of the loaded extensions (`specforge_graph::GraphInputs`):
   the kinds whose bodies an extension parses, the extension that owns each target kind no loaded extension declares (`target_owners`), the
   inverse field pairs (a reference field and its inverse fields, fields of its target kind), each field's form with the kinds that take any field (`FieldForms`, with each reference field's target, ADR 0117) and the derived reference fields. Only the registry
-  build derives them (`RegistryBuild::graph_inputs`); with the provider schemes the environment
-  registers they are every graph's `GraphConfig` (`Environment::graph_config`, ADR 0032).
+  build derives them (`RegistryBuild::graph_inputs`), which holds them and builds every graph a snapshot reads with them
+  (`RegistryBuild::graph_of`, ADR 0123); with the provider schemes the environment registers they are every graph's
+  `GraphConfig` (`Environment::graph_of`, ADR 0032).
 - **Edge type**: a relationship an extension declares (`edges`), or that fields name without one declaring it
   (W021). The registry build resolves each once (`RegistryBuild::edges()`): its writers, every field that names it
   as its `edge` (a kind's own, shared and enhancement fields), its ends (the declared kind on a side it declares,
@@ -357,7 +358,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the `CustomVerdicts` port; the project's adapter calls the extension (`ExtensionCalls::validate`),
   tests answer with a closure. A function that cannot answer is W112 at load, W148 at check.
 - **Entity snapshot**: every entity of one built graph as every check after the build reads it, taken
-  once per compile and per session check (`specforge_registry::EntitySnapshot`, ADR 0019), taken by the registry build that built its graph's inputs (ADR 0115).
+  once per compile and per session check (`specforge_registry::EntitySnapshot`, ADR 0019), taken of a graph build made in its Registry build, and of no other (ADR 0115, ADR 0123).
   Each entity's record holds:
   - what it writes, as field text, with each value's shape (quoted, bare, a number, a list of
     strings or references, …) and span beside it for the host's own checks
