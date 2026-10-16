@@ -924,7 +924,7 @@ fn check_severity_shows_one_severity_and_keeps_the_exit_code() {
 
     // The filter does not decide the cache either: the check failed.
     let (_, _, stderr) = check_json(&dir, &["--severity", "info", "--cache"]);
-    assert!(stderr.contains("not written: the check failed"), "{stderr}");
+    assert_eq!(stderr, "", "a JSON reader gets no note (ADR 0120)");
     assert!(!dir.root().join("specforge-cache.json").exists());
 }
 
@@ -937,13 +937,7 @@ fn lint_pedantic_is_accepted_and_changes_nothing() {
     let plain = check_json(&dir, &[]);
     let (code, codes, stderr) = check_json(&dir, &["--lint", "pedantic"]);
     assert_eq!((code, &codes), (plain.0, &plain.1));
-    assert_eq!(
-        stderr
-            .matches("note: --lint pedantic is the default: info diagnostics are always reported")
-            .count(),
-        1,
-        "{stderr}"
-    );
+    assert_eq!(stderr, "", "a JSON reader gets no note (ADR 0120)");
     // With another profile in the same flag, pedantic is still a no-op.
     let (code, codes, _) = check_json(&dir, &["--lint=pedantic,inferred"]);
     assert_eq!((code, &codes), (plain.0, &plain.1));

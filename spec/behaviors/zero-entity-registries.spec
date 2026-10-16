@@ -514,7 +514,7 @@ behavior registry_build_graph_inputs "Registry Build Derives the Graph Inputs" {
     registries_populated "The build's kind and field registries hold every loaded declaration (registry_build_kinds, registry_build_fields)"
   }
   ensures {
-    every_input_derived "Every input the graph build reads of the extensions comes from the build: single and absent-target reference fields, inverse pairs, value coercions and derived references"
+    every_input_derived "Every input the graph build reads of the extensions comes from the build: single reference fields, the owners of absent target kinds, inverse pairs, value coercions and derived references"
     registries_agree    "Each input says what the build's declarations and field registry say, and nothing else"
     deterministic       "The same declarations give the same inputs, whatever order the registries hold them in"
   }
@@ -522,8 +522,8 @@ behavior registry_build_graph_inputs "Registry Build Derives the Graph Inputs" {
     The registry build MUST derive every input the graph build reads of the
     loaded extensions, and no caller derives one: every registered field of the
     reference type as a single reference field, none while no kind is
-    registered; every reference field whose target kind no loaded extension
-    declares, with that kind; every pair of a reference field and one of its
+    registered; the extension that owns each reference field's target kind no loaded
+    extension declares, where the candidate vocabulary names one; every pair of a reference field and one of its
     inverse fields (the field its inverse_of names, when its target kind
     registers it, and every field of its target kind naming it inverse_of),
     written lesser label first, the list sorted; how each registered field's value is coerced to
@@ -537,6 +537,8 @@ behavior registry_build_graph_inputs "Registry Build Derives the Graph Inputs" {
   verify unit "the registry build derives every graph input from the declarations"
   verify unit "a field's value coercion follows its registered type"
   verify unit "a derived reference field is a graph input only with a target kind and a known source"
+  verify unit "a reference field's form says whether its target kind is loaded"
+  verify unit "the graph inputs name the extension that owns each absent target kind"
   verify unit "inverse pairs are written lesser first and sorted, whatever the registration order"
   verify unit "an inverse field is a field of the target kind: the one inverse_of names, and every one naming the field inverse_of"
   verify contract "Registry Build Derives the Graph Inputs: graph inputs hold — registries_populated, every_input_derived, registries_agree, deterministic"

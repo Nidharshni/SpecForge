@@ -1,3 +1,4 @@
+use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, errln, outln};
 use specforge_ops::Containment;
@@ -57,7 +58,7 @@ impl Args {
             containment: &Containment::unbounded(),
         };
         let updated = extension::update(&request, &registry, &runtime);
-        terminal.diagnostics(&registry.reported());
+        Notes::new(terminal, format).beside(&registry.reported());
         let outcome = match updated {
             Ok(outcome) => outcome,
             Err(error) => {

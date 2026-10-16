@@ -38,8 +38,6 @@ pub struct DerivedReference {
     pub source_kind: String,
     /// The field's name, which labels its edges.
     pub field: String,
-    /// The kind a name must resolve to for an edge.
-    pub target_kind: String,
     pub from: DerivedFrom,
 }
 
@@ -84,6 +82,10 @@ impl Graph {
     ) {
         let mut edges: Vec<Edge> = Vec::new();
         for reference in derived {
+            // The kind a name must resolve to for an edge: the field's declared target.
+            let Some(target) = forms.target(&reference.source_kind, &reference.field) else {
+                continue;
+            };
             for node in self.nodes_by_kind(&reference.source_kind) {
                 let kind = node.kind.raw.as_str();
                 let mut expressions: Vec<&str> = Vec::new();
@@ -107,7 +109,7 @@ impl Graph {
                     }
                     let resolves = self
                         .node(name)
-                        .is_some_and(|target| target.kind.raw.as_str() == reference.target_kind);
+                        .is_some_and(|named| target.admits(named.kind.raw.as_str()));
                     if resolves {
                         edges.push(Edge {
                             source: node.id.raw,

@@ -715,10 +715,10 @@ expression: "digest(&load(&runtime, &[name]))"
     }
   },
   "graph_inputs": {
-    "absent_reference_targets": {
-      "axiom.assumes": "invariant",
-      "refinement.abstract_entity": "behavior",
-      "refinement.concrete_entity": "behavior"
+    "absent_targets": {
+      "axiom.assumes": "invariant (@specforge/software)",
+      "refinement.abstract_entity": "behavior (@specforge/software)",
+      "refinement.concrete_entity": "behavior (@specforge/software)"
     },
     "bidirectional_pairs": [],
     "derived_references": [],

@@ -43,6 +43,10 @@ impl FieldRegistryEntry {
         declared.field_type = field_type.as_str().to_string();
         let proof_role = declared.proof_role.as_deref().and_then(ProofRole::parse);
         let form = FieldForm::new(field_type, declared.enum_values.clone());
+        let form = match &declared.target_kind {
+            Some(target) => form.targeting(target),
+            None => form,
+        };
         Ok(Self {
             kind_name: kind_name.to_string(),
             source_extension: source_extension.to_string(),

@@ -403,11 +403,13 @@ behavior provide_explore_cli "Provide CLI Explore Command" {
     explore prompt's payload is for the same arguments; human output lists
     the selection's size, the starting points, the most connected entities
     with their edge counts, the unconnected entities and, with ENTITY, the
-    paths from it. Notices go to stderr. An unknown ENTITY is E003 naming
+    paths from it. Notices go to stderr under human output; under --format
+    json the document carries them and stderr is empty. An unknown ENTITY is E003 naming
     the closest entity, exit 1.
   """
   verify integration "specforge explore --format json is the explore prompt's payload for the same arguments"
   verify integration "an unknown entity is E003 naming the closest entity, exit 1"
+  verify integration "under --format json the notices are the document's alone: nothing on stderr"
 }
 
 behavior provide_review_cli "Provide CLI Review Command" {
@@ -422,10 +424,10 @@ behavior provide_review_cli "Provide CLI Review Command" {
     prompt's payload is for the same arguments; human output lists each
     row (entity, kind, status, proven obligations) and each finding. An
     unknown ENTITY is E003, exit 1; a recorded report that cannot be read
-    is E045, exit 2.
+    is E045, exit 1.
   """
   verify integration "specforge review --format json is the review prompt's payload for the same arguments"
-  verify integration "a recorded report that cannot be read exits 2 with E045"
+  verify integration "a recorded report that cannot be read is E045, exit 1"
 }
 
 // An enumerated argument is one option table (ADR 0027): the CLI's possible
@@ -598,7 +600,11 @@ behavior report_command_outcome "Report a Command's Outcome" {
     written; under --format json it MUST instead be the
     error document {error, code}, with suggestion when the refusal has one
     and files_written when files were left written, on stdout, with
-    nothing on stderr. A command run
+    nothing on stderr. Beside its document a command MUST write a note
+    for a person only under human output, and a notice once: in the
+    document when the document carries it, else on stderr as
+    severity[CODE]: message before the document, under every format.
+    A command run
     outside any project where it needs one MUST refuse with no_project.
     Every core command whose output has a human and a JSON form MUST take
     --format human|json (human by default; trace's is json); no core
@@ -621,6 +627,7 @@ behavior report_command_outcome "Report a Command's Outcome" {
   verify unit "stats, trace, analyze, migrate and init refuse with the error document under --format json"
   verify unit "a command run outside any project refuses with no_project"
   verify unit "every core command with a JSON form takes --format human|json, and none takes --json"
+  verify unit "under --format json a note is never written and a notice is written once: in the document when it carries it, else on stderr"
   verify unit "a closed stdout ends the output quietly and keeps the command's exit"
   verify integration "the CLI's exit code and MCP's ok agree for check, analyze, format and migrate"
   verify integration "the CLI's --format json and MCP's reply are one outcome document for every operation both surfaces run"

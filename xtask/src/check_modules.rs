@@ -74,10 +74,10 @@ fn declared(project: &CompiledProject) -> BTreeMap<String, Vec<Declared>> {
                 .find(|f| f.key == "description")
                 .map(|f| f.text.clone()),
             depends_on: record
-                .references
+                .fields
                 .iter()
-                .filter(|(field, _)| field == "depends_on")
-                .flat_map(|(_, ids)| ids.iter().cloned())
+                .filter(|f| f.key == "depends_on")
+                .flat_map(|f| f.items.iter().flatten().cloned())
                 .collect(),
         });
     }

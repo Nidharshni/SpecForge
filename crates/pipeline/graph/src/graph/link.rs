@@ -3,10 +3,12 @@
 //! references is its [`Reading`](crate::Reading)'s answer, never the
 //! parser's shape (ADR 0093).
 
-use specforge_common::{Diagnostic, DiagnosticData, Sym, codes, find_close_match};
-use std::collections::HashMap;
+use specforge_common::{Diagnostic, DiagnosticData, Sym, codes};
+use std::collections::BTreeMap;
 
 use crate::{Edge, FieldForms, Graph};
+
+mod reference;
 
 /// An edge as written, and whether a declared single reference wrote it.
 struct WrittenEdge {
@@ -16,19 +18,18 @@ struct WrittenEdge {
 
 impl Graph {
     /// Resolve every node's references into edges and report what does not
-    /// resolve: E003 (with a fuzzy-match suggestion when there is one), or
-    /// I004 for a field in `absent_targets` ((kind, field) -> target kind:
-    /// no loaded extension declares that kind, so the reference can't
-    /// resolve until its extension is enabled). Then W061 over the edges but
-    /// the declared single references': a single reference is never part of
-    /// a reference cycle.
+    /// resolve (`Graph::resolve` decides each, ADR 0117): E003 (with a
+    /// fuzzy-match suggestion when there is one), or I004 for a field whose
+    /// target kind no loaded extension declares, naming the extension in
+    /// `owners` that does. Then W061 over the edges but the declared single
+    /// references': a single reference is never part of a reference cycle.
     ///
     /// Clears all existing edges first. Diagnostics come in node order
     /// (the graph's nodes are sorted), then the cycles'.
     pub(crate) fn link(
         &mut self,
         forms: &FieldForms,
-        absent_targets: &HashMap<(String, String), String>,
+        owners: &BTreeMap<String, String>,
     ) -> Vec<Diagnostic> {
         self.clear_edges();
         let mut diagnostics = Vec::new();
@@ -40,55 +41,20 @@ impl Graph {
             for entry in node.fields.entries() {
                 let reading = forms.reading(kind, entry.key.as_str());
                 let single = reading.is_single_reference();
+                let target = forms.target(kind, entry.key.as_str());
                 for reference in reading.references(entry) {
-                    let target = Sym::new(reference.id);
-                    if self.nodes.contains_key(&target) {
+                    let resolution = self.resolve(target, owners, reference.id);
+                    if resolution.links() {
                         edges.push(WrittenEdge {
                             edge: Edge {
                                 source: node.id.raw,
-                                target,
+                                target: Sym::new(reference.id),
                                 label: entry.key,
                             },
                             single,
                         });
-                    } else if let Some(target_kind) =
-                        absent_targets.get(&(kind.to_string(), entry.key.as_str().to_string()))
-                    {
-                        diagnostics.push(
-                            Diagnostic::new(
-                                codes::I004,
-                                format!(
-                                    "reference '{}' in field '{}' of '{}' targets kind '{}', which no enabled extension provides",
-                                    reference.id, entry.key, node.id.raw, target_kind
-                                ),
-                            )
-                            .with_span(reference.span.unwrap_or(&node.source_span).clone())
-                            .with_suggestion(format!(
-                                "enable the extension that declares '{target_kind}' (e.g. `specforge add @specforge/<name>`), or drop the field"
-                            )),
-                        );
-                    } else {
-                        let suggestion =
-                            find_close_match(reference.id, self.nodes.keys().map(|s| s.as_str()));
-                        let mut diag = Diagnostic::new(
-                            codes::E003,
-                            format!(
-                                "unresolved reference '{}' in entity '{}'",
-                                reference.id, node.id.raw
-                            ),
-                        )
-                        .with_span(reference.span.unwrap_or(&node.source_span).clone())
-                        .with_data(DiagnosticData::UnresolvedReference {
-                            target: reference.id.to_string(),
-                            entity: node.id.raw.as_str().to_string(),
-                            field: entry.key.as_str().to_string(),
-                            did_you_mean: suggestion.map(str::to_string),
-                        });
-                        if let Some(s) = suggestion {
-                            diag = diag.with_suggestion(format!("did you mean '{}'?", s));
-                        }
-                        diagnostics.push(diag);
                     }
+                    diagnostics.extend(resolution.diagnostic(node, entry.key, &reference));
                 }
             }
         }
@@ -134,11 +100,15 @@ impl Graph {
             let edges = self.source_index.get(&source);
             let kind = node.kind.raw.as_str();
             for entry in node.fields.entries() {
+                let field_target = forms.target(kind, entry.key.as_str());
                 for reference in forms.reading(kind, entry.key.as_str()).references(entry) {
-                    let target = Sym::new(reference.id);
-                    if !self.nodes.contains_key(&target) {
+                    if !self
+                        .resolve(field_target, &BTreeMap::new(), reference.id)
+                        .links()
+                    {
                         continue;
                     }
+                    let target = Sym::new(reference.id);
                     let linked = edges.is_some_and(|indices| {
                         indices.iter().any(|&i| {
                             let edge = &self.edges[i];

@@ -22,9 +22,6 @@ pub struct EntityRecord {
     /// Every field the entity writes, in source order (a name written twice
     /// appears twice), each with its field text.
     pub fields: Vec<FieldRecord>,
-    /// Each reference-list field with the ids it names, in source order
-    /// (resolved or not).
-    pub references: Vec<(String, Vec<String>)>,
     /// Its `verify` statements, in order: what it declares it will prove.
     pub obligations: Vec<ObligationRecord>,
     /// Edges into it, in total and by edge type.
@@ -163,7 +160,6 @@ impl EntityRecord {
             kind: kind.to_string(),
             span: span.clone(),
             fields: Vec::new(),
-            references: Vec::new(),
             obligations: Vec::new(),
             incoming: EdgeCounts::default(),
             outgoing: EdgeCounts::default(),
@@ -211,15 +207,6 @@ impl EntityRecord {
             shape,
             value_span: None,
         });
-        self
-    }
-
-    /// One more reference-list field naming `targets`.
-    pub fn with_reference(mut self, field: &str, targets: &[&str]) -> Self {
-        self.references.push((
-            field.to_string(),
-            targets.iter().map(|t| t.to_string()).collect(),
-        ));
         self
     }
 

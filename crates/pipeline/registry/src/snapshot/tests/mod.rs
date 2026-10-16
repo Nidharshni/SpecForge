@@ -2,6 +2,7 @@
 
 mod standing;
 mod text;
+mod validator;
 
 use std::path::Path;
 

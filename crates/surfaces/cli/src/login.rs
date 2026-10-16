@@ -1,6 +1,7 @@
 //! `specforge login` and `specforge logout`: a registry credential, kept
 //! under the alias of the registry it is for (ADR 0045).
 
+use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::project::ProjectArg;
 use crate::terminal::{Terminal, outln};
@@ -123,7 +124,7 @@ fn login(
         Ok(configured) => configured,
         Err(error) => return refuse(&error),
     };
-    terminal.diagnostics(&configured.diagnostics);
+    Notes::new(terminal, format).beside(&configured.diagnostics);
     let registry = match configured.named(registry_alias) {
         Ok(registry) => registry.clone(),
         Err(error) => return refuse(&error),
@@ -227,7 +228,7 @@ fn logout(
             .and_then(|root| specforge_ops_registry::configured(&root, "logout"))
         {
             Ok(configured) => {
-                terminal.diagnostics(&configured.diagnostics);
+                Notes::new(terminal, format).beside(&configured.diagnostics);
                 match configured.named(None) {
                     Ok(registry) => registry.alias.clone(),
                     Err(error) => return refuse(&error),

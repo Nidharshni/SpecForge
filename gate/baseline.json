@@ -19,7 +19,7 @@
     "crates/session/project/tests/product_rules.rs": 1306,
     "crates/session/project/tests/session.rs": 3050,
     "crates/surfaces/cli/tests/analyze.rs": 1122,
-    "crates/surfaces/cli/tests/cli.rs": 1182,
+    "crates/surfaces/cli/tests/cli.rs": 1176,
     "crates/surfaces/cli/tests/export.rs": 844,
     "crates/surfaces/cli/tests/extensions.rs": 2268,
     "crates/surfaces/cli/tests/format.rs": 1025,

@@ -258,11 +258,11 @@ behavior register_extension_entity_types "Register Extension Entity Types" {
     consulted to determine which extension owns each entity type and
     whether soft resolution applies for cross-extension references.
     When a reference targets an entity kind from an uninstalled extension,
-    the compiler MUST emit I004 with the format:
-    "Unknown entity kind '{kind}' — install an extension that provides
-    it (e.g., `specforge add @specforge/{extension}`)." The message
-    MUST include the unresolved kind name and a suggested extension
-    when one can be inferred from the kind prefix.
+    the compiler MUST emit I004 at the reference, naming the reference,
+    the field and the kind ("reference 'x' in field 'f' of 'e' targets
+    kind 'k', which no enabled extension provides"), and suggesting the
+    extension that declares the kind when a builtin does
+    (`specforge add @specforge/{extension}`), the one E024 names.
   """
   verify unit "delegates to registry_build_kinds per extension"
   verify unit "unregistered type triggers soft resolution"
@@ -754,7 +754,8 @@ behavior search_registry "Search Registry" {
     registries, the first registry in specforge.json declaration order
     wins, and each result names that registry. Output MUST be
     deterministic — sorted by name, then version. Each registry that
-    fails MUST be reported once, with its code; the others are still
+    fails MUST be reported once, with its code (on stderr under human
+    output, in the document's diagnostics under --format json); the others are still
     asked, and the search fails only when every registry failed. Each
     registry is asked with the credential kept for it
     (support_private_registries).
@@ -771,6 +772,7 @@ behavior search_registry "Search Registry" {
   verify unit "filters by declared category"
   verify unit "a registry lists each package at the version add installs from it"
   verify unit "each failed registry is reported once, and search fails when every registry failed"
+  verify integration "under --format json a failed registry is reported once, in the document's diagnostics, and not on stderr"
   verify unit "deduplicates results across registries"
   verify unit "output is deterministic"
   verify unit "error from one registry does not abort search of others"

@@ -11,6 +11,7 @@ mod event_spec;
 mod events;
 mod failure_kinds;
 mod fake_extension;
+mod infer_sources;
 mod invariants;
 mod lifecycle;
 mod local_specifier_containment;

@@ -317,8 +317,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   caller reach it only through `build_registries` and that build's methods; its steps, its checks and
   its fields are private (ADR 0031).
 - **Graph inputs**: what the graph build reads of the loaded extensions (`specforge_graph::GraphInputs`):
-  the kinds whose bodies an extension parses, the absent-target reference fields, the
-  inverse field pairs (a reference field and its inverse fields, fields of its target kind), each field's form with the kinds that take any field (`FieldForms`) and the derived reference fields. Only the registry
+  the kinds whose bodies an extension parses, the extension that owns each target kind no loaded extension declares (`target_owners`), the
+  inverse field pairs (a reference field and its inverse fields, fields of its target kind), each field's form with the kinds that take any field (`FieldForms`, with each reference field's target, ADR 0117) and the derived reference fields. Only the registry
   build derives them (`RegistryBuild::graph_inputs`); with the provider schemes the environment
   registers they are every graph's `GraphConfig` (`Environment::graph_config`, ADR 0032).
 - **Edge type**: a relationship an extension declares (`edges`), or that fields name without one declaring it
@@ -345,8 +345,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   E016 among them, reads them and suggests a close sibling of a missing one
   (`specforge_registry::rules::files`, ADR 0118).
 - **Structural checks**: the host's own checks over the entity snapshot's records, run by the
-  registry build before the rule set, in this order: W012 (a `ref` nothing references), then, unless the project is structural-only, E024, E013, E014, W020, E022 and E061
-  (`specforge_registry`'s `checks`, ADR 0031). None reads a graph node. Whether every reference
+  registry build before the rule set, in this order: W012 (a `ref` nothing references), then, unless the project is structural-only, E024, E013, E014, W020 and E061
+  (`specforge_registry`'s `checks`, ADR 0031). E022 is the linker's (ADR 0117). None reads a graph node. Whether every reference
   became an edge is the linker's own debug assertion, not a check.
 - **Structural-only**: no loaded extension declares an entity kind
   (`RegistryBuild::structural_only`). The checks that read kinds, fields and identifiers do not
@@ -362,7 +362,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   - what it writes, as field text, with each value's shape (quoted, bare, a number, a list of
     strings or references, …) and span beside it for the host's own checks
     (`specforge_graph::ValueShape`);
-  - its references, obligations and methods;
+  - its obligations and methods;
   - its edge counts, in total and by edge type (each edge typed once, by the edge type its field writes from the
     kind it starts at);
   - what exempts it, if anything (a union body, an exempting flag, a kind that accepts no `verify`).
@@ -393,7 +393,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   writes the default into the graph. The extension's own readers (a list filter and its help, a sort, a lifecycle
   pass, a rollup, a conditional rule's value) read the same constant. An open set of standard values (a module's
   family) is not one: its field is a string, and an info rule names the standard values (`{allowed}`) (ADR 0071).
-- **Field form**: a field's declared type with an enum's values, read once
+- **Field form**: a field's declared type with an enum's values, its target kind, read once
   (`specforge_graph::FieldForm`, from `FieldRegistryEntry::form`; `FieldForms::reading(kind, field)` is a
   `Declared` form, a `Member` of an open-fields kind or `Undeclared`, and `Reading::references` is the one rule
   for what a written value references, ADR 0093): which
@@ -404,6 +404,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   expression group as its conjuncts one per line, lists as arrays, a block as
   an object; never a parse tree or a position. A value E061 admits is a value
   the published schema admits (ADR 0064).
+- **Reference target**: the kind a reference field's ids must name, from its declaration
+  (`FieldForm::target_kind`), and whether a loaded extension declares it (`FieldForms::target` gives a
+  `specforge_graph::Target`: `Loaded` or `Absent`; an absent kind's owner is `GraphInputs::target_owners`). The linker
+  decides each written reference against it once: an edge, E003, I004 (absent kind, missing id) or E022 (an entity of
+  another kind), each at the reference (ADR 0117).
 - **Standing**: how the obligation rule sees an entity (`specforge_registry::Standing`):
   - whether its kind is testable;
   - which `no_verify_statements` rule requires its kind to declare obligations (a rule without a
@@ -622,6 +627,13 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   ended as completed or paused; at most one is active (`SessionStatus`). Its steps (start, mark a
   source file analyzed, end) are one management operation, `specforge_ops::read::infer::session`; MCP's
   `specforge.infer_session` is its adapter.
+- **Inference sources**: the files inference covers: under the inference manifest's source roots (the project
+  root when none), each file an enabled analyzer claims by its extension, keyed by the source path rule
+  (root-relative, `/`-separated, no `..`). They are walked by the shared discovery policy
+  (`specforge_common::walk_files`): no symlinked directory, no hidden name, no nested project, and the default
+  skipped directories united with any analyzer's `excluded_dirs`. A source root, a file or an indexed path that lands
+  outside the project root is none of them and is never read. Progress, gaps, the `inferred` lint and the mark read
+  them through one module (`specforge_ops::read::infer::sources`, ADR 0113).
 - **Anchors manifest**: `<root>/specforge-anchors.json`, which source item each entity is anchored
   to. Navigation reads it (`specforge_ops::read::navigate::source_anchors`): the anchors of a source file
   and of an entity; E071 when it cannot be used.
@@ -755,13 +767,19 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   does not match the lock, an unreadable lock). The CLI exits 0, 1 or 2 by it (`specforge_cli::outcome::Exit`, the only value a core
   command ends with); MCP returns it as `ok`
   (`specforge.validate`: `_meta["specforge/check"].ok`) and keeps `isError` for refusals (ADR 0004
-  D4-a). A refusal (`OpError`) is not a verdict; a measuring command's refusal exits 2. Not to be
+  D4-a). A refusal (`OpError`) is not a verdict; a measuring command's (stats, analyze) refusal exits 2. Not to be
   confused with an entity's coverage **Verdict** (ADR 0029).
 - **Terminal**: where a core CLI command writes and whom it asks: its stdout, its stderr, the input a
   prompt reads (or `specforge mcp` serves, byte for byte), whether each stream is coloured (`NO_COLOR`, then `CLICOLOR_FORCE`, then whether it is
   a terminal) and whether anyone can answer, fixed when `main` makes it from the process
   (`specforge_cli::terminal::Terminal`); a test captures one. It is the CLI's **Asker**; nobody to ask is no; a reader that leaves stdout ends the output
   quietly (ADR 0029 D4b).
+- **Command notes**: what a core CLI command writes on stderr beside its outcome document: **notices** (coded
+  diagnostics about the run: the schema notices, I020, W097, a failed registry's R005, the registry configuration's
+  W140/I003/W155/W156) and **notes** (prose for a person: `note: …`, collect's announcement). One rule, by output
+  format (`specforge_cli::notes::Notes`, ADR 0120): under human output both go on stderr; under `--format json` a
+  note is never written, and a notice is written once, in the document when the document carries it, else on stderr
+  before the document.
 - **Asking**: who can be asked to consent to what an operation would otherwise refuse (a publisher key change, a
   collector's command): yes to everything (`--yes`), nobody (MCP, `--format json`, stdin that is no terminal), or an
   `Asker` (the CLI's terminal, a test's script). A surface builds it once per command and hands it to add, update or
