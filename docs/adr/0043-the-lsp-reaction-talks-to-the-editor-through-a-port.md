@@ -1,6 +1,6 @@
 # The LSP's reaction talks to the editor through a port
 
-**Status:** accepted (2026-10-08)
+**Status:** accepted (2026-10-08). D7 amended by [ADR 0109](0109-reopening-a-project-in-place-is-one-session-operation.md) (`ProjectSession::reopen` is the one way to open in two steps).
 
 ADR 0035 gave the LSP one reaction to a change: apply it to the project session, publish, follow the
 session's inputs and catch up, refresh the editor's highlighting. The reaction held tower-lsp's

@@ -112,3 +112,36 @@ fn a_reload_that_leaves_the_inputs_asks_for_no_watchers() {
         "{sent:?}"
     );
 }
+
+/// An open puts the editor back on the static watchers; a second `initialized` reopens the
+/// session at the same root, so its inputs do not change, and the editor still follows the
+/// project's watchers again (ADR 0109).
+#[test]
+fn a_second_open_follows_the_projects_watchers_again() {
+    let mut served = Served::new(&[("a.spec", ALPHA)]).open(&[]);
+    let first = served.opening().len();
+    served.open_again();
+
+    let second = &served.opening()[first..];
+    let last = second
+        .iter()
+        .rev()
+        .find(|s| matches!(s, Sent::Watched { accepted: true, .. }))
+        .unwrap_or_else(|| panic!("the second open sent no accepted watchers: {second:?}"));
+    let Sent::Watched { watchers, .. } = last else {
+        unreachable!()
+    };
+    assert_ne!(
+        watchers.as_slice(),
+        default_watchers().as_slice(),
+        "the last watchers are still the static ones: {second:?}"
+    );
+    let config = format!("{}/specforge.json", served.root().display());
+    assert!(
+        crate::recorder::watched(std::slice::from_ref(last))
+            .concat()
+            .iter()
+            .any(|glob| glob.ends_with("/specforge.json") || *glob == config),
+        "{second:?}"
+    );
+}

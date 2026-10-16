@@ -195,6 +195,15 @@ impl Served {
         self
     }
 
+    /// Open the workspace again, as a second `initialized` does: the session is reopened in
+    /// place. What that sent is appended to [`Self::opening`].
+    pub fn open_again(&mut self) {
+        let root = self.dir.path().to_path_buf();
+        self.reaction().open(Some(root));
+        let sent = self.editor.take();
+        self.opening.extend(sent);
+    }
+
     /// Documents the editor restores before the project opens (`initialized` has not run yet):
     /// each opened holding `text`, which need not be its file's, and applied as the debounce
     /// applies them. Call before `open`.
