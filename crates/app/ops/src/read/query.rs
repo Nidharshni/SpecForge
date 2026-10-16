@@ -101,11 +101,12 @@ pub fn query(
     .map_err(|refusal| {
         refusal.map_subject(|field| match field {
             ExportField::Scope => Some(QueryField::EntityId),
-            // A query always scopes and sends none of these.
+            // A query always scopes, sends none of these and writes nothing.
             ExportField::Depth
             | ExportField::MaxTokens
             | ExportField::SchemaVersion
-            | ExportField::Schema => None,
+            | ExportField::Schema
+            | ExportField::Directory => None,
         })
     })?;
     Ok(exported.and_notices(unknown))

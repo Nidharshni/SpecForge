@@ -42,6 +42,8 @@ impl ArgumentOf<ExportField> for Tool {
             ExportField::MaxTokens => Some("max_tokens"),
             ExportField::SchemaVersion => Some("schema_version"),
             ExportField::Schema => Some("with_schema"),
+            // Export answers inline.
+            ExportField::Directory => None,
         }
     }
 }

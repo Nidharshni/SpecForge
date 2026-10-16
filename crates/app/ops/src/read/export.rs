@@ -1,7 +1,8 @@
 //! Graph export: the one function behind `specforge export`, the MCP
 //! `specforge.export` tool, `specforge.render` and the `specforge://graph`,
 //! `context` and `brief` resources with their scoped forms and
-//! `specforge://graph/{entity_id}` (ADR 0004 D3-a, ADR 0024 D4).
+//! `specforge://graph/{entity_id}` (ADR 0004 D3-a, ADR 0024 D4). `specforge.render` also
+//! writes it into a directory of the project ([`write_into`]).
 //!
 //! Every caller gets the same Graph Protocol document for the same request,
 //! under the CLI's schema policy: a full `graph` export embeds the schema
@@ -9,13 +10,15 @@
 //! `brief` and any export under a token budget leave it out unless asked
 //! for it. `dot` never carries a schema.
 
+use crate::containment::Held;
 use crate::options::{Choice, OptionTable};
 use crate::schema_version::{NotAdmitted, VersionedSchema};
 use crate::view::{ProjectView, not_found};
-use crate::{Noticed, OpError, OpErrorKind, Refusal};
+use crate::{Caller, Noticed, OpError, OpErrorKind, Refusal};
+use specforge_common::ProjectPath;
 use specforge_emitter::{EmitFormat, EmitOptions, EmitterError, SchemaVersion, emit};
 use specforge_project::coverage::ProjectCoverage;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// An export format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +37,16 @@ impl Format {
             Self::Context => EmitFormat::Context,
             Self::Brief => EmitFormat::Brief,
             Self::Dot => EmitFormat::Dot,
+        }
+    }
+
+    /// The file this format is written to in a directory (`specforge.render`'s `out_dir`).
+    pub fn file_name(self) -> &'static str {
+        match self {
+            Self::Graph => "graph.json",
+            Self::Context => "context.json",
+            Self::Brief => "brief.json",
+            Self::Dot => "graph.dot",
         }
     }
 }
@@ -179,6 +192,23 @@ pub enum ExportField {
     SchemaVersion,
     /// `Request::schema`: the two schema flags.
     Schema,
+    /// `Directory::name`: where the export is written.
+    Directory,
+}
+
+/// A directory with no project on disk to read it against (`InvalidInput`).
+pub const DIRECTORY_WITHOUT_PROJECT: &str = "directory_without_project";
+/// A directory whose name is, or goes through, a file (`InvalidInput`).
+pub const NOT_A_DIRECTORY: &str = "not_a_directory";
+/// The file could not be written; the kind is the I/O error's ([`OpErrorKind::of_io`]).
+pub const EXPORT_WRITE_FAILED: &str = "export_write_failed";
+
+/// Where [`write_into`] writes: a directory of the view's project, named relative to its root or
+/// absolute, and the caller whose containment bounds it (ADR 0104 D3: required, no `Default`).
+#[derive(Debug, Clone, Copy)]
+pub struct Directory<'a> {
+    pub name: &'a Path,
+    pub caller: Caller<'a>,
 }
 
 /// The export of the view's project for `request`, with what versioning its
@@ -193,6 +223,65 @@ pub fn export(
     let versioned = view.versioned_schema();
     let document = export_versioned(view, &versioned, request)?;
     Ok(Noticed::new(document, versioned.notices()))
+}
+
+/// The export of the view's project for `request`, written into `directory` as
+/// `<directory>/<format.file_name()>` and replaced atomically where it lands (ADR 0112 D1). The
+/// file is named from the project root (ADR 0102) beside what versioning reported (ADR 0111).
+///
+/// The directory and the file are both held, through the caller's containment, before the export
+/// runs and before anything is created, so a refused call leaves nothing behind. Every refusal of
+/// the directory is about [`ExportField::Directory`]; the export's own keep their fields.
+pub fn write_into(
+    view: &ProjectView,
+    request: &Request,
+    directory: &Directory,
+) -> Result<Noticed<ProjectPath>, Refusal<ExportField>> {
+    let about = |error: OpError| error.about(ExportField::Directory);
+    let Some(root) = view.root() else {
+        return Err(about(OpError::new(
+            OpErrorKind::InvalidInput,
+            DIRECTORY_WITHOUT_PROJECT,
+            format!(
+                "'{}' names a directory of the project, and no project is served to resolve it against",
+                directory.name.display()
+            ),
+        )));
+    };
+    let containment = directory.caller.containment();
+    let dir = containment
+        .resolve(&root.join(directory.name))
+        .map_err(|outside| about(outside.into()))?;
+    // The file too: it may itself be a link that leaves the project, and what is written is where
+    // it lands (ADR 0092 D8, ADR 0104).
+    let file = containment
+        .resolve(&dir.spelled.join(request.format().file_name()))
+        .map_err(|outside| about(outside.into()))?;
+    let exported = export(view, request)?;
+    exported.try_map(|document| {
+        file.create_parent()
+            .and_then(|()| file.replace(document))
+            .map_err(|error| about(write_failure(root, &file, &error)))?;
+        Ok(ProjectPath::of(root, &file.spelled))
+    })
+}
+
+/// A failed write of `file`: a name that is, or goes through, a file is invalid input; any other
+/// failure is the I/O error's kind.
+fn write_failure(root: &Path, file: &Held, error: &std::io::Error) -> OpError {
+    let named = ProjectPath::of(root, &file.spelled);
+    match error.kind() {
+        std::io::ErrorKind::AlreadyExists | std::io::ErrorKind::NotADirectory => OpError::new(
+            OpErrorKind::InvalidInput,
+            NOT_A_DIRECTORY,
+            format!("cannot write {named}: its directory is, or goes through, a file"),
+        ),
+        _ => OpError::new(
+            OpErrorKind::of_io(error),
+            EXPORT_WRITE_FAILED,
+            format!("cannot write {named}: {error}"),
+        ),
+    }
 }
 
 fn export_versioned(
@@ -406,6 +495,15 @@ mod tests {
             error.message.starts_with("the token budget"),
             "{}",
             error.message
+        );
+    }
+
+    #[test]
+    fn every_format_names_its_file() {
+        let files: Vec<&str> = FORMAT.choices.iter().map(|c| c.value.file_name()).collect();
+        assert_eq!(
+            files,
+            ["graph.json", "context.json", "brief.json", "graph.dot"]
         );
     }
 

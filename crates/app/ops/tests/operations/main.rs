@@ -18,6 +18,7 @@ mod enhancement_credit;
 mod errors;
 mod explore;
 mod export_cache;
+mod export_written;
 mod extension_calls;
 mod failures;
 mod field_references;

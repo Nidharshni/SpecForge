@@ -56,7 +56,8 @@ impl ArgumentOf<ExportField> for Tool {
             ExportField::Depth
             | ExportField::MaxTokens
             | ExportField::SchemaVersion
-            | ExportField::Schema => None,
+            | ExportField::Schema
+            | ExportField::Directory => None,
         }
     }
 }
