@@ -373,8 +373,8 @@ behavior detect_breaking_schema_changes "Detect Breaking Schema Changes" {
     values, DOT colours, the testable flag, the extension that contributed
     a kind, field or edge type, extension versions and their load order are
     patch changes. When a field's type changes, its enum values are not
-    compared as well. Each breaking change is reported as one W053 warning
-    naming the change and the version the schema goes from and to; the
+    compared as well. Each breaking change is reported, by every reader of
+    the schema, as one W053 warning naming the change and the version the schema goes from and to; the
     export is still written. With no cache there is no previous schema and
     nothing is reported. A cache that exists but cannot be read (not JSON,
     not a schema, a field type this host does not read) MUST be reported as
@@ -440,7 +440,10 @@ behavior compute_schema_version "Compute Schema Version" {
     version MUST be attached to the GraphProtocolSchema before export, and
     every reader of the project's schema (specforge schema, specforge
     schema --publish, specforge.schema, specforge://schema, every export)
-    MUST report the same version for the same record. One schema version
+    MUST report the same version and the same notices for the same record:
+    I016 for a record that cannot be read, one W053 per breaking change
+    since it, each where the reader reports what it noticed (stderr, a
+    tool result's or a read's _meta.diagnostics). One schema version
     names one document: two schemas versioned against one record with the
     same version have the same content hash.
   """
@@ -457,6 +460,7 @@ behavior compute_schema_version "Compute Schema Version" {
   verify unit "removed field bumps major"
   verify unit "an extension's version changing is a patch"
   verify unit "one schema version names one document: equal versions have equal content hashes"
+  verify integration "every reader of the schema reports the notices export reports for the same record"
 }
 
 behavior publish_schema_specification "Publish Schema Specification" {
