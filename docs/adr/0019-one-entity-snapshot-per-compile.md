@@ -1,6 +1,6 @@
 # One entity snapshot per compile
 
-**Status:** accepted (2026-10-06). Amended by [ADR 0094](0094-obligations-are-an-entitys-own-member.md) (field text has no statement row) and [ADR 0093](0093-a-fields-declared-type-decides-what-its-value-references.md) (the field text of an open-fields kind's list).
+**Status:** accepted (2026-10-06). Amended by [ADR 0094](0094-obligations-are-an-entitys-own-member.md) (field text has no statement row) and [ADR 0093](0093-a-fields-declared-type-decides-what-its-value-references.md) (the field text of an open-fields kind's list). Amended by [ADR 0107](0107-the-checks-read-through-the-disk-they-are-given.md) (`RuleInput` carries the disk the checks read through).
 
 Every check that runs after the graph build read graph nodes its own way. Three walks flattened a
 node's fields: `entity_views` for the registry checks, `build_validation_entities` for the rules and

@@ -93,12 +93,15 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   inputs and the stamp of each file, taken in the call that reads it. It does every disk read the session makes
   (the config, the lock and modules, the sources, the check inputs), derives every source key, and answers `changes`
   and `stale`. A one-shot compile runs the same steps through an adapter that records nothing (ADR 0106).
+- **Check reads**: every file-system read a check, a rule or a check pass makes, through the `Disk` in `RuleInput`
+  (`exists`, `list`, `read`; `specforge_registry::Disk`, ADR 0107). A project session's ledger stamps and records each
+  one; its check inputs are the reads its checks made the last time they ran. Tests give the checks a `MemoryDisk`.
 - **Session inputs**: everything a project session depends on besides its sources' text: where its
   sources are discovered (the spec root and `exclude`), its **environment inputs**
   (`specforge.json`, `specforge.lock`, the extension modules it loaded) and its **check inputs**
-  (`specforge-cache.json` when check-phase passes read it, each file a `file_reference` field or a
-  `file_exists` rule names, and the directory of each such file that is missing, and where each symlinked source's text
-  lies (its target)). One value per
+  (the check reads of the last check run: `specforge-cache.json` when a check pass read it, each path a check looked
+  for, each directory E016's suggestion listed, and the target of each that is a symlink, and where each symlinked
+  source's text lies (its target)). One value per
   environment load, renewed each time the checks run (`specforge_project::SessionInputs`,
   `ProjectSession::inputs`). What a changed path reaches, which directories watch watches, which files
   the LSP asks its client to report and what the session stamps for freshness are all read from it; the
@@ -286,7 +289,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   makes out, through the `CustomVerdicts` port, when the environment probes it in the runtime its
   extensions loaded in (`RegistryBuild::probe`). It also runs every check over a built graph's entity
   records, in one order behind one gate: the structural checks, then the rule set
-  (`RegistryBuild::check`), and says which files those checks read (`RegistryBuild::files`). Its
+  (`RegistryBuild::check`), reading the file system only through the disk in its input. Its
   outcomes are the `registry_build_*` behaviors and `check_entities_in_one_order`. Tests and every
   caller reach it only through `build_registries` and that build's methods; its steps, its checks and
   its fields are private (ADR 0031).
