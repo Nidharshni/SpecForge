@@ -3,6 +3,7 @@ use crate::{Graph, Node};
 use specforge_common::{Diagnostic, SourceSpan, Sym, codes, structural};
 use specforge_parser::{Entity, FieldValue, REF_SCHEME_FIELD, SpecFile};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::sync::Arc;
 
 /// What the graph build reads of the loaded extensions. Only the registry
 /// build derives it (`specforge_registry::RegistryBuild::graph_inputs`),
@@ -85,10 +86,11 @@ pub struct Applied {
 /// Invariant: after any sequence of [`Self::apply`], [`Self::graph`] and
 /// [`Self::diagnostics`] are exactly those of [`Self::of`] over the files the
 /// build holds. Verification checks that invariant on every apply.
+#[derive(Clone)]
 pub struct GraphBuild {
     config: GraphConfig,
-    /// The parse of every file, by `SpecFile::path`.
-    files: BTreeMap<String, SpecFile>,
+    /// The parse of every file, by `SpecFile::path`. A copy of the build shares them.
+    files: BTreeMap<String, Arc<SpecFile>>,
     graph: Graph,
     /// The graph-build diagnostics in build order.
     diagnostics: Vec<Diagnostic>,
@@ -117,7 +119,7 @@ impl GraphBuild {
         let mut build = GraphBuild::new(config);
         build.files = files
             .into_iter()
-            .map(|file| (file.path.to_string(), file))
+            .map(|file| (file.path.to_string(), Arc::new(file)))
             .collect();
         build.rebuild(Ids::All);
         build
@@ -141,7 +143,7 @@ impl GraphBuild {
             match change {
                 FileChange::Parsed(spec) => {
                     ids.extend(spec.entities.iter().map(|e| e.id.raw));
-                    self.files.insert(path.clone(), spec);
+                    self.files.insert(path.clone(), Arc::new(spec));
                 }
                 FileChange::Removed(_) if self.files.remove(&path).is_none() => continue,
                 FileChange::Removed(_) => {}
@@ -200,7 +202,9 @@ impl GraphBuild {
 
     /// Every file the build holds, by path, in path order.
     pub fn files(&self) -> impl ExactSizeIterator<Item = (&str, &SpecFile)> {
-        self.files.iter().map(|(path, file)| (path.as_str(), file))
+        self.files
+            .iter()
+            .map(|(path, file)| (path.as_str(), file.as_ref()))
     }
 
     /// The graph and diagnostics, for a one-shot compile.
@@ -212,7 +216,7 @@ impl GraphBuild {
     /// the one sequence [`Self::of`] and [`Self::apply`] share. `ids` says
     /// which declarations are placed; the graph holds the others already.
     fn rebuild(&mut self, ids: Ids<'_>) {
-        let declared = declarations(self.files.values(), &self.config);
+        let declared = declarations(self.files.values().map(Arc::as_ref), &self.config);
         place(&mut self.graph, &declared.winners, ids);
         let mut diagnostics = declared.diagnostics;
         diagnostics.extend(link_and_diagnose(&mut self.graph, &self.config));
@@ -224,7 +228,10 @@ impl GraphBuild {
     /// diagnostics equal [`Self::of`]'s, and `delta` is the one a full
     /// comparison with `previous` gives and applies to it.
     fn verify(&self, previous: &Graph, delta: &GraphDelta) -> Result<(), String> {
-        let cold = GraphBuild::of(self.files.values().cloned(), self.config.clone());
+        let cold = GraphBuild::of(
+            self.files.values().map(|f| SpecFile::clone(f)),
+            self.config.clone(),
+        );
         compare_graph_contents(&self.graph, &cold.graph)?;
         let length = self.diagnostics.len().max(cold.diagnostics.len());
         for i in 0..length {
