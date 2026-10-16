@@ -31,3 +31,4 @@ mod reopen;
 mod rules;
 mod session;
 mod structural_checks;
+mod symlinked_directory;

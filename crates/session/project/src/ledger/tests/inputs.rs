@@ -1,4 +1,9 @@
-use super::*;
+use std::path::{Path, PathBuf};
+
+use specforge_common::ProjectConfig;
+
+use crate::ledger::inputs::*;
+use crate::ledger::{CheckInput, Ledger};
 
 fn config(extensions: &[&str]) -> ProjectConfig {
     ProjectConfig {
@@ -21,22 +26,34 @@ fn a_value_made_twice_from_the_same_config_is_equal() {
     );
 }
 
+/// `inputs` after one check run read `files` (a missing one records its directory).
+fn after_checks(inputs: SessionInputs, files: &[PathBuf]) -> SessionInputs {
+    let mut ledger = Ledger::over(inputs);
+    let run = ledger.checks();
+    for file in files {
+        if !run.read(CheckInput::File, file, Path::exists)
+            && let Some(parent) = file.parent()
+        {
+            run.read(CheckInput::Listing, parent, |_| ());
+        }
+    }
+    run.finish();
+    ledger.inputs().clone()
+}
+
 #[test]
 fn named_files_change_the_value() {
     let dir = tempfile::TempDir::new().unwrap();
     let opened = SessionInputs::opened(dir.path(), &config(&[]));
     let named = vec![dir.path().join("docs/guide.md")];
-    let with = opened.with_named(named.clone());
+    let with = after_checks(opened.clone(), &named);
     assert_ne!(opened, with);
-    assert_eq!(with, opened.with_named(named));
-    assert_eq!(with.with_named(Vec::new()), opened);
-    // The missing file's directory is stamped with it.
-    let files: Vec<&Path> = with.check_files().collect();
-    assert!(
-        files.contains(&dir.path().join("docs").as_path()),
-        "{files:?}"
-    );
-    assert!(files.contains(&dir.path().join("docs/guide.md").as_path()));
+    assert_eq!(with, after_checks(opened.clone(), &named));
+    assert_eq!(after_checks(with, &[]), opened);
+    // The missing file's directory is recorded with it.
+    let watched = after_checks(opened, &named).watched();
+    assert!(watched.contains(&Watched::Listing(dir.path().join("docs"))));
+    assert!(watched.contains(&Watched::File(dir.path().join("docs/guide.md"))));
 }
 
 #[test]
@@ -71,13 +88,9 @@ fn detached_inputs_reach_nothing() {
     assert_eq!(inputs.spec_root(), None);
     assert!(inputs.watch_roots().is_empty());
     assert!(inputs.watched().is_empty());
-    assert!(inputs.discover().is_empty());
     assert!(!inputs.excludes("target/x.spec"));
-    assert_eq!(inputs.environment_files().count(), 0);
-    assert_eq!(inputs.check_files().count(), 0);
     let reach = inputs.reach([Path::new("/x/a.spec"), Path::new("/x/specforge.json")]);
     assert!(reach.regions.is_empty() && reach.inputs.is_empty() && reach.pending.is_empty());
-    assert_eq!(inputs.with_named(vec!["/x/y".into()]), inputs);
 }
 
 #[test]
@@ -92,8 +105,10 @@ fn watched_paths_are_spelled_from_the_root_as_opened() {
         ..ProjectConfig::default()
     };
     // Named as the checks join them: through `spec/..`.
-    let inputs =
-        SessionInputs::opened(root, &config).with_named(vec![root.join("spec/../docs/guide.md")]);
+    let inputs = after_checks(
+        SessionInputs::opened(root, &config),
+        &[root.join("spec/../docs/guide.md")],
+    );
 
     assert_eq!(
         inputs.watched(),
@@ -116,8 +131,10 @@ fn a_watched_path_outside_the_root_is_canonical() {
     std::fs::create_dir_all(&root).unwrap();
     let outside = dir.path().join("outside");
     std::fs::create_dir_all(&outside).unwrap();
-    let inputs = SessionInputs::opened(&root, &ProjectConfig::default())
-        .with_named(vec![root.join("../outside/guide.md")]);
+    let inputs = after_checks(
+        SessionInputs::opened(&root, &ProjectConfig::default()),
+        &[root.join("../outside/guide.md")],
+    );
 
     let canonical_outside = std::fs::canonicalize(&outside).unwrap();
     let watched = inputs.watched();
@@ -188,24 +205,6 @@ fn a_module_in_a_missing_directory_is_pending_as_an_environment_input() {
         }),
         "{:?}",
         inputs.watch_roots()
-    );
-}
-
-#[cfg(unix)]
-#[test]
-fn a_source_key_keeps_a_symlinks_own_name() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let dir = std::fs::canonicalize(dir.path()).unwrap();
-    let real = dir.join("real");
-    std::fs::create_dir_all(real.join("shared")).unwrap();
-    std::fs::write(real.join("shared/r.spec"), "").unwrap();
-    // The root spelled two ways: through `link` and as `real`.
-    std::os::unix::fs::symlink(&real, dir.join("link")).unwrap();
-    std::os::unix::fs::symlink("shared/r.spec", real.join("alias.spec")).unwrap();
-
-    assert_eq!(
-        source_key(&dir.join("link"), &real.join("alias.spec")),
-        "alias.spec"
     );
 }
 
