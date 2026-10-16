@@ -9,8 +9,8 @@ use specforge_ops::read::trace::{Ask, Target, TraceField, trace};
 use crate::args::Arguments;
 use crate::prompt::{CorePrompt, Prompted};
 use crate::refusal::ArgumentOf;
-use crate::tool::{ErrorCode, McpError};
-use crate::tools::trace::Gap;
+use crate::tool::McpError;
+use crate::tools::trace::{Gap, every_is_not_offered};
 use specforge_ops::Refusal;
 use specforge_ops::view::EntityField;
 use specforge_ops::view::ProjectView;
@@ -93,16 +93,7 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
                     format!("entity '{entity_id}'"),
                 )
             }
-            Ask::Trace(Target::Every) => {
-                // As the trace tool refuses it.
-                return Err(Box::new(
-                    McpError::new(
-                        ErrorCode::InvalidInput,
-                        "Missing required parameter: entity_id or plan",
-                    )
-                    .with_argument("entity_id"),
-                ));
-            }
+            Ask::Trace(Target::Every) => return Err(every_is_not_offered()),
         };
 
     // What the seeds' chains reach, and which of it is unverified.

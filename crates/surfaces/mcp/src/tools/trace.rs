@@ -73,6 +73,15 @@ impl ArgumentOf<TraceField> for Tool {
     }
 }
 
+/// The refusal of a trace of every entity, which MCP does not offer (ADR 0101 D4): the tool and the trace
+/// prompt answer it when neither `entity_id` nor `plan` is given.
+pub(crate) fn every_is_not_offered() -> Box<McpError> {
+    Box::new(McpError::invalid_input(
+        "entity_id",
+        "Missing required parameter: entity_id or plan",
+    ))
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.trace";
     const DESCRIPTION: &'static str = "Show traceability chain for an entity, or check an agent plan for gaps (entity_id or plan)";
@@ -92,12 +101,7 @@ impl CoreTool for Tool {
                 return Ok(Reply::Plan(specforge_ops::read::plan::check(&view, plan)).into());
             }
             Ask::Trace(Target::Entity(entity_id)) => entity_id,
-            Ask::Trace(Target::Every) => {
-                return Err(Box::new(McpError::invalid_input(
-                    "entity_id",
-                    "Missing required parameter: entity_id or plan",
-                )));
-            }
+            Ask::Trace(Target::Every) => return Err(every_is_not_offered()),
         };
         let traced = specforge_ops::read::trace::trace(&view, Target::Entity(entity_id))
             .map_err(|refusal: Refusal<EntityField>| Self::refused(refusal))?;
