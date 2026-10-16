@@ -200,7 +200,8 @@ fn add_package(
     extension::add(
         &AddRequest {
             root: &specforge_common::ProjectRoot::of(dir).unwrap(),
-            extensions: vec![extension::parse(specifier).unwrap().into()],
+            extensions: vec![specifier.to_string()],
+            base: None,
             allow_unsigned: false,
             trust: Trust::Refuse,
             dry_run: false,

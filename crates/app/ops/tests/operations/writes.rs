@@ -5,9 +5,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use specforge_ops::Writes;
-use specforge_ops::extension::{
-    self, AddOutcome, AddRequest, RemoveRequest, Source, StrandedEntity,
-};
+use specforge_ops::extension::{self, AddOutcome, AddRequest, RemoveRequest, StrandedEntity};
 use specforge_ops::registry::Trust;
 use specforge_ops::testing::{self, declaring, serving_builtin};
 use specforge_ops::view::ProjectView;
@@ -118,12 +116,13 @@ pub(crate) const MODULE: &str = ".specforge/extensions/@sdk/greet/extension.wasm
 
 pub(crate) fn add(
     root: &Path,
-    source: Source,
+    specifier: impl AsRef<Path>,
 ) -> Result<extension::Added, specforge_ops::Refusal<extension::AddField>> {
     extension::add(
         &AddRequest {
             root: &specforge_common::ProjectRoot::of(root).unwrap(),
-            extensions: vec![source.into()],
+            extensions: vec![specifier.as_ref().display().to_string()],
+            base: None,
             allow_unsigned: false,
             trust: Trust::Refuse,
             dry_run: false,
@@ -244,7 +243,7 @@ fn enabling_a_builtin_writes_the_config_only() {
     let root = dir.path();
     let before = files_under(root);
 
-    let added = add(root, Source::Builtin("@specforge/product")).unwrap();
+    let added = add(root, "@specforge/product").unwrap();
 
     assert!(matches!(
         added.added[0].outcome,
@@ -268,7 +267,7 @@ fn enabling_an_enabled_builtin_writes_nothing() {
     let root = dir.path();
     let before = files_under(root);
 
-    let added = add(root, Source::Builtin("@specforge/product")).unwrap();
+    let added = add(root, "@specforge/product").unwrap();
 
     assert!(matches!(
         added.added[0].outcome,
@@ -286,7 +285,7 @@ fn installing_a_local_extension_writes_module_lock_and_config() {
     let root = dir.path();
     let before = files_under(root);
 
-    let added = add(root, Source::Local(blobs.greet())).unwrap();
+    let added = add(root, blobs.greet()).unwrap();
 
     assert!(matches!(
         added.added[0].outcome,
@@ -299,7 +298,7 @@ fn installing_a_local_extension_writes_module_lock_and_config() {
 
     // The same blob again: already present, nothing written.
     let before = files_under(root);
-    let again = add(root, Source::Local(blobs.greet())).unwrap();
+    let again = add(root, blobs.greet()).unwrap();
     assert!(matches!(
         again.added[0].outcome,
         AddOutcome::AlreadyPresent { .. }
@@ -321,7 +320,7 @@ fn an_add_that_fails_after_placing_its_module_writes_nothing() {
     std::fs::create_dir_all(root.join("specforge.lock.tmp")).unwrap();
     let before = files_under(root);
 
-    let error = add(root, Source::Local(blobs.greet())).unwrap_err();
+    let error = add(root, blobs.greet()).unwrap_err();
 
     assert_eq!(error.error.code, "E033", "{error:?}");
     assert!(
@@ -346,12 +345,12 @@ fn a_failed_add_over_an_install_keeps_the_pinned_binary() {
     let blobs = Blobs::new();
     let dir = project(&[], &[]);
     let root = dir.path();
-    add(root, Source::Local(blobs.greet())).unwrap();
+    add(root, blobs.greet()).unwrap();
     let variant = blobs.variant();
     let before = files_under(root);
     unwritable_lock(root);
 
-    let error = add(root, Source::Local(variant)).unwrap_err();
+    let error = add(root, variant).unwrap_err();
     std::fs::remove_dir(root.join("specforge.lock.tmp")).unwrap();
 
     assert_eq!(error.error.code, "E033", "{error:?}");
@@ -373,13 +372,13 @@ fn an_add_over_an_unreadable_lock_is_refused() {
     let blobs = Blobs::new();
     let dir = project(&[], &[]);
     let root = dir.path();
-    add(root, Source::Local(blobs.greet())).unwrap();
-    add(root, Source::Local(blobs.probe())).unwrap();
+    add(root, blobs.greet()).unwrap();
+    add(root, blobs.probe()).unwrap();
     std::fs::write(root.join("specforge.lock"), "not a lock {{{").unwrap();
     let variant = blobs.variant();
     let before = files_under(root);
 
-    let error = add(root, Source::Local(variant)).unwrap_err();
+    let error = add(root, variant).unwrap_err();
 
     assert_eq!(error.error.code, "E033", "{error:?}");
     assert!(error.error.writes.is_empty());
@@ -396,8 +395,8 @@ fn a_failed_remove_changes_nothing() {
     let blobs = Blobs::new();
     let dir = project(&[], &[]);
     let root = dir.path();
-    add(root, Source::Local(blobs.greet())).unwrap();
-    add(root, Source::Local(blobs.probe())).unwrap();
+    add(root, blobs.greet()).unwrap();
+    add(root, blobs.probe()).unwrap();
     unwritable_lock(root);
     let before = files_under(root);
     let project = compiled(root);
@@ -428,7 +427,7 @@ fn removing_an_install_writes_its_module_lock_and_config() {
     let blobs = Blobs::new();
     let dir = project(&[], &[]);
     let root = dir.path();
-    add(root, Source::Local(blobs.greet())).unwrap();
+    add(root, blobs.greet()).unwrap();
     let before = files_under(root);
 
     let outcome = remove(root, GREET, false);
@@ -472,7 +471,7 @@ fn stranded_lists_the_entities_by_id() {
         ],
     );
     let root = dir.path();
-    add(root, Source::Local(blobs.greet())).unwrap();
+    add(root, blobs.greet()).unwrap();
 
     let outcome = remove(root, GREET, true);
 

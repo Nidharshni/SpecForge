@@ -1,9 +1,11 @@
 use super::super::fixtures::{declaration_of, enabled_project, entry, greet, installed, project};
 use super::*;
 use crate::OpErrorKind;
+use crate::extension::names::{Source, parse};
 use crate::registry::testing::{MemoryRegistry, Published, declaration};
 use specforge_common::codes;
 use specforge_installed::LockFileEntry;
+use specforge_package::{PackageName, PackageRef};
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::PeerDependency;
 use specforge_test_macros::test as specforge_test;
@@ -33,6 +35,7 @@ fn local_request<'a>(root: &'a specforge_common::ProjectRoot, file: &Path) -> Ad
     AddRequest {
         root,
         extensions: vec![Source::Local(file.to_path_buf()).into()],
+        base: None,
         allow_unsigned: false,
         trust: Trust::Refuse,
         dry_run: false,
@@ -52,6 +55,7 @@ fn add_greet(root: &Path, registry: &MemoryRegistry) -> Result<AddOutcome, Refus
             extensions: vec![
                 Source::Registry(PackageRef::parse("@sdk/greet@0.1.0").unwrap()).into(),
             ],
+            base: None,
             allow_unsigned: true,
             trust: Trust::Refuse,
             dry_run: false,
@@ -73,12 +77,13 @@ fn outcomes(added: &Added) -> Vec<AddOutcome> {
 /// An add of `extensions` into `root`.
 fn several(
     root: &specforge_common::ProjectRoot,
-    extensions: Vec<Specified>,
+    extensions: Vec<String>,
     dry_run: bool,
 ) -> AddRequest<'_> {
     AddRequest {
         root,
         extensions,
+        base: None,
         allow_unsigned: true,
         trust: Trust::Refuse,
         dry_run,

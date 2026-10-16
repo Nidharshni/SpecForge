@@ -76,3 +76,5 @@ An operation that must judge something other than the project peer set (a builti
 protocol whose manifest is not the declaration the gate judges; a surface that previews an init.
 
 **Amended by ADR 0098 (2026-10-15):** D4: `init` also claims its specifiers through add's rule (`extension::claims`): two specifiers that add one extension differently are refused with `extension_conflict`.
+
+**Amended by ADR 0105 (2026-10-16):** D4 names `extension::specified`; init now reads its specifiers, as add does, through `extension::names`, and neither splits a string on commas.

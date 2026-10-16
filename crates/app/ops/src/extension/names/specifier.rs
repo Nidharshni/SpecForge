@@ -1,17 +1,15 @@
-//! What an `add` argument names (ADR 0036): read once, before any registry is asked.
+//! What one extension string names (ADR 0036), the reader's parse: read once, before any registry is asked.
 
 use super::super::builtin_name;
-use crate::{OpError, Refusal};
+use crate::OpError;
 use specforge_common::codes;
 use specforge_package::PackageRef;
 use specforge_package::SpecifierError;
 use std::path::PathBuf;
 
-use super::AddField;
-
 /// Where an extension to add comes from.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Source {
+pub(crate) enum Source {
     /// A builtin, embedded in the binary.
     Builtin(&'static str),
     /// A `.wasm` file on disk.
@@ -29,7 +27,7 @@ pub enum Source {
 /// is E054, a requirement that is none R-RES-003, and a path that names
 /// nothing is E054 when it is read ([`LocalFile::read`](super::super::candidate::LocalFile::read)). No registry is
 /// asked for either.
-pub fn parse(specifier: &str) -> Result<Source, OpError> {
+pub(crate) fn parse(specifier: &str) -> Result<Source, OpError> {
     let specifier = specifier.trim();
     if specifier.is_empty() {
         return Err(OpError::coded(
@@ -91,31 +89,16 @@ impl From<SpecifierError> for OpError {
 
 /// One extension to add: its specifier as the caller gave it, and the source it reads as.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Specified {
-    pub specifier: String,
-    pub source: Source,
+pub(crate) struct Specified {
+    pub(crate) specifier: String,
+    pub(crate) source: Source,
 }
 
-impl Specified {
-    /// This specifier with a relative local path read from `base`: a surface with no working
-    /// directory of its own (MCP) reads such a path from the project's root.
-    pub fn relative_to(mut self, base: &std::path::Path) -> Self {
-        if let Source::Local(path) = &mut self.source
-            && path.is_relative()
-        {
-            *path = base.join(&*path);
-        }
-        self
-    }
-}
-
-/// A source as its specifier would spell it.
-impl From<Source> for Specified {
+/// A source as its specifier would spell it: the tests build a request's strings from sources.
+#[cfg(test)]
+impl From<Source> for String {
     fn from(source: Source) -> Self {
-        Specified {
-            specifier: source.to_string(),
-            source,
-        }
+        source.to_string()
     }
 }
 
@@ -137,28 +120,6 @@ impl Source {
     }
 }
 
-/// Read each of `specifiers`, in order, as [`parse`] reads it. E054 when there is none; the
-/// first that can't be read refuses, named when there are several. Every refusal is about the
-/// specifiers.
-pub fn specified<S: AsRef<str>>(specifiers: &[S]) -> Result<Vec<Specified>, Refusal<AddField>> {
-    if specifiers.is_empty() {
-        return Err(no_specifier().about(AddField::Extensions));
-    }
-    let several = specifiers.len() > 1;
-    specifiers
-        .iter()
-        .map(|specifier| {
-            let specifier = specifier.as_ref();
-            parse(specifier)
-                .map(|source| Specified {
-                    specifier: specifier.to_string(),
-                    source,
-                })
-                .map_err(|error| named(several, specifier, error).about(AddField::Extensions))
-        })
-        .collect()
-}
-
 /// E064: a git source is not installable yet.
 pub(crate) fn git_not_supported(url: &str) -> OpError {
     OpError::coded(
@@ -169,7 +130,7 @@ pub(crate) fn git_not_supported(url: &str) -> OpError {
 }
 
 /// E054: an add with nothing to add.
-pub(super) fn no_specifier() -> OpError {
+pub(crate) fn no_specifier() -> OpError {
     OpError::coded(
         crate::OpErrorKind::InvalidInput,
         codes::E054,

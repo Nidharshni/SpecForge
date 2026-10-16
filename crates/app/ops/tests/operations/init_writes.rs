@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use specforge_ops::extension::{self, AddOutcome, Source};
+use specforge_ops::extension::{self, AddOutcome};
 use specforge_ops::testing::{self, declaring};
 use specforge_project::testing::compile_at;
 use tempfile::TempDir;
@@ -421,7 +421,7 @@ fn add_from_a_subdirectory_adds_to_the_project_it_is_in() {
     let before = files_under(root);
 
     // The project the sub-path is in is the one that gains the extension.
-    let added = add(&sub, Source::Builtin("@specforge/product")).unwrap();
+    let added = add(&sub, "@specforge/product").unwrap();
 
     assert!(matches!(
         added.added[0].outcome,

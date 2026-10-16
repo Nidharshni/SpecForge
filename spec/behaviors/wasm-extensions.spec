@@ -764,7 +764,9 @@ behavior parse_extension_specifier "Parse Extension Specifier" {
     and a path that names nothing, MUST be refused with E054 before any
     registry is asked; a requirement that is not one MUST be refused with
     R-RES-003 before any registry is asked. No other code may split
-    name@requirement.
+    name@requirement. Each string a change names (an add argument, an
+    add_extension specifier, an init extension) is one specifier: no
+    operation splits it, since a requirement may hold commas (>=1, <2).
   """
   produces   [extension_specifier_parsed]
   verify unit "@scope/name@version parsed as registry source"
@@ -772,6 +774,7 @@ behavior parse_extension_specifier "Parse Extension Specifier" {
   verify unit "git:url#ref parsed as git source"
   verify unit "invalid specifier produces ExtensionError"
   verify unit "each add argument reads as one extension source"
+  verify unit "a string holding commas is one extension specifier, for add and init alike"
   verify unit "a specifier that is no builtin's name, git+ URL or @scope/name reference is a local path, a bare crate directory included"
   verify unit "a package name is @scope/name or a local name, and always a relative path inside its directory"
   verify unit "a package name crosses a registry URL as one segment"

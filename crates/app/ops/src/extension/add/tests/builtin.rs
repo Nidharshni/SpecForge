@@ -7,6 +7,7 @@ fn builtin_request<'a>(
     AddRequest {
         root,
         extensions: vec![Source::Builtin(name).into()],
+        base: None,
         allow_unsigned: false,
         trust: Trust::Refuse,
         dry_run: false,

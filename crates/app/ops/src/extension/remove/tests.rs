@@ -159,7 +159,7 @@ fn a_non_object_config_refuses_the_removal_before_any_write() {
 )]
 fn remove_refuses_as_add_and_update_do() {
     use crate::config::testing::UNUSABLE;
-    use crate::extension::{AddRequest, Source, UpdateRequest, add, update};
+    use crate::extension::{AddRequest, UpdateRequest, add, update};
     use crate::registry::Trust;
 
     for config in UNUSABLE {
@@ -175,7 +175,8 @@ fn remove_refuses_as_add_and_update_do() {
         let added = add(
             &AddRequest {
                 root: &specforge_common::ProjectRoot::of(fixture.root()).unwrap(),
-                extensions: vec![Source::Builtin("@specforge/product").into()],
+                extensions: vec!["@specforge/product".to_string()],
+                base: None,
                 allow_unsigned: false,
                 trust: Trust::Refuse,
                 dry_run: false,

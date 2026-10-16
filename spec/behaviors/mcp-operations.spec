@@ -203,8 +203,10 @@ behavior provide_mcp_init_tool "Provide MCP Init Tool" {
     path, mcp_served_project_consistency). A directory whose starter file already exists is refused
     (conflict), as specforge init refuses it. The tool MUST create
     a new specforge.json project configuration file and scaffold the spec
-    directory at the specified path. If extensions are specified, they MUST
-    be added to the config and their manifests validated. A relative
+    directory at the specified path. If extensions are specified, each
+    string is one specifier, read as add_extension reads each of its
+    specifiers, and they MUST be added to the config and their manifests
+    validated. A relative
     local path among them is read from the directory the call creates, as
     specforge init reads it from the directory it runs in and
     add_extension from the project's root (ADR 0092 D7). A local path that
@@ -222,6 +224,7 @@ behavior provide_mcp_init_tool "Provide MCP Init Tool" {
   """
   verify unit "specforge.init creates specforge.json project"
   verify unit "extensions installed when specified"
+  verify unit "each string in extensions is one specifier, as add_extension reads each of specifiers"
   verify unit "default version is 0.1.0"
   verify unit "path inside current project returns error"
   verify unit "init inside the served project is refused by the call target as a conflict on path, before anything is written"

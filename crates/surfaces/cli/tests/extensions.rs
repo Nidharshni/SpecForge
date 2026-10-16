@@ -1051,9 +1051,9 @@ fn add_rejects_invalid_specifier() {
     Cli::on(&dir).command(&["add", "not-valid"])
         .assert()
         .code(1)
-        .stderr(predicates::str::contains(
-            "error[E054]: file not found: not-valid",
-        ))
+        .stderr(
+            predicates::str::is_match(r"error\[E054\]: file not found: .*not-valid").unwrap(),
+        )
         .stderr(predicates::str::contains(
             "use a builtin's name, './local/path.wasm', 'git+https://...', or '@scope/name[@version]'",
         ));
