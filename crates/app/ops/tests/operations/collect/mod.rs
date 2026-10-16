@@ -2,6 +2,7 @@
 //! answering each export, and a `ScriptedMachine` standing for the machine. Nothing here spawns a
 //! process, reads the environment or the wall clock.
 
+mod refusals;
 mod runs;
 
 use std::path::{Path, PathBuf};
@@ -21,7 +22,6 @@ use specforge_wasm::testing::{InProcessRuntime, RecordedCall};
 use specforge_wasm::{WasmCallResult, WasmTrapInfo};
 
 /// What a runner's export answers.
-#[allow(dead_code, reason = "Trap is used by refusals.rs")]
 enum Answer {
     Output(CollectOutput),
     Trap,
@@ -53,7 +53,6 @@ impl Runner {
         }
     }
 
-    #[allow(dead_code, reason = "used by refusals.rs")]
     pub fn run(mut self, argv: &[&str]) -> Self {
         self.run = argv.iter().map(|a| a.to_string()).collect();
         self
@@ -92,7 +91,6 @@ impl Runner {
     }
 
     /// Its export traps.
-    #[allow(dead_code, reason = "used by refusals.rs")]
     pub fn trapping(mut self) -> Self {
         self.answer = Answer::Trap;
         self
