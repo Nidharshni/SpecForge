@@ -7,9 +7,7 @@ use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
 use specforge_common::{Diagnostic, ProjectRoot, codes};
-use specforge_graph::{
-    Applied, FileChange, Graph, GraphBuild, GraphConfig, compute_graph_delta, moved_nodes,
-};
+use specforge_graph::{Applied, FileChange, Graph, GraphBuild, compute_graph_delta, moved_nodes};
 
 use crate::coverage::RecordedCoverage;
 use crate::ledger::{Reads, Unrecorded};
@@ -196,10 +194,11 @@ impl CompiledProject {
     /// No project: the empty environment, no source, no file, nothing
     /// reported. Verifies its updates in a debug build.
     pub(crate) fn detached() -> Self {
-        let mut graph = GraphBuild::new(GraphConfig::default());
+        let env = Arc::new(Environment::empty());
+        let mut graph = env.graph_of([]);
         graph.set_verify(cfg!(debug_assertions));
         CompiledProject {
-            env: Arc::new(Environment::empty()),
+            env,
             sources: SourceCache::empty(),
             graph,
             import_diagnostics: Vec::new(),
@@ -215,7 +214,7 @@ impl CompiledProject {
     /// Rooted where the environment was loaded from disk (an environment
     /// assembled in memory makes a detached one).
     pub fn unread(env: Arc<Environment>) -> Self {
-        let graph = GraphBuild::new(env.graph_config());
+        let graph = env.graph_of([]);
         let on_disk = env.project_root().is_some();
         CompiledProject {
             env,
