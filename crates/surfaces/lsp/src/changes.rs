@@ -6,9 +6,12 @@
 //! buffer is to its file is the session's to say (ADR 0046).
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use specforge_common::ProjectRoot;
-use specforge_project::{Buffer, Changes, CheckMode, ProjectSession, Update, UpdateKind};
+use specforge_project::{
+    Buffer, Changes, CheckMode, Environment, ProjectSession, RuntimeSource, Update, UpdateKind,
+};
 use tower_lsp::lsp_types::{FileEvent, Url};
 
 use crate::LspState;
@@ -18,8 +21,8 @@ use crate::uri;
 /// A change the client reports.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Change {
-    /// The workspace opened at this root (`initialized`); the project holds
-    /// the open buffers.
+    /// The workspace opened at this root (`initialized`): the session is
+    /// reopened there, holding its buffers.
     Open(ProjectRoot),
     /// These documents were opened or edited: everything the debounce
     /// coalesced. Each one still open has its buffer as the truth for its
@@ -144,29 +147,32 @@ impl Plan {
         })
     }
 
-    /// The root a project opens at (`Change::Open`). The caller opens it
-    /// (`ProjectSession::begin_open`, showing its environment to readers,
-    /// then `OpeningProject::finish`) and passes the opened session to
-    /// [`Plan::apply`].
-    pub fn root(&self) -> Option<&ProjectRoot> {
-        self.root.as_ref()
-    }
-
     /// Apply the plan to `session`. Blocking: it reads files and runs the
-    /// checks. The watched changes first (`ProjectSession::apply`), then the
-    /// released buffer (`ProjectSession::release`), then every buffer as one
-    /// update (`ProjectSession::hold_with`).
-    pub fn apply(self, session: &mut ProjectSession) -> Applied {
-        let opened = self.root.is_some();
+    /// checks. A `Change::Open` first reopens the session at its root
+    /// (`ProjectSession::reopen`: the project's extensions from `runtime`,
+    /// its environment handed to `loaded` before any source is read, the
+    /// session's buffers carried over); then the watched changes
+    /// (`ProjectSession::apply`), the released buffer
+    /// (`ProjectSession::release`), and every buffer as one update
+    /// (`ProjectSession::hold_with`).
+    pub fn apply(
+        self,
+        session: &mut ProjectSession,
+        runtime: RuntimeSource,
+        loaded: impl FnOnce(&Arc<Environment>),
+    ) -> Applied {
         let mut applied = Applied {
-            environment: opened,
-            changed: opened,
-            inputs_changed: opened,
+            environment: false,
+            changed: false,
+            inputs_changed: false,
             divergences: Vec::new(),
             edited: self.edited,
             touched: Vec::new(),
             closed: false,
         };
+        if let Some(root) = &self.root {
+            applied.opened(session.reopen(root, runtime, loaded));
+        }
         if let Some(changes) = &self.disk {
             if let Some(update) = session.apply(changes) {
                 applied.environment |= update.kind == UpdateKind::Environment;
@@ -215,6 +221,19 @@ pub struct Applied {
 }
 
 impl Applied {
+    /// What reopening the session says: the environment loaded, the session changed, and its
+    /// inputs and its own check as the update reports them. None of its rebuilt files is
+    /// touched: a project opened in a session's place publishes what it reports and what was
+    /// published before ([`Publication::of`]); a file never published needs no clearing
+    /// (ADR 0109 U1).
+    fn opened(&mut self, update: Update) {
+        self.environment |= update.kind == UpdateKind::Environment;
+        self.changed = true;
+        self.inputs_changed |= update.inputs_changed;
+        self.divergences
+            .extend(update.divergence().map(str::to_string));
+    }
+
     /// What an update says about the session's inputs and its own check.
     fn record(&mut self, update: Update) {
         self.inputs_changed |= update.inputs_changed;
