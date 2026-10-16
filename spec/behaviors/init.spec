@@ -202,8 +202,9 @@ behavior non_interactive_init "Non-Interactive Init" {
     with files_written.
     When --version is specified, it MUST override the default version
     (0.1.0) in the generated specforge.json.
-    --extensions takes builtins and local .wasm files, several to a flag
-    separated by commas, each read as add reads a specifier
+    --extensions takes builtins and local .wasm files; the command line
+    accepts several to a flag, separated by commas (its spelling of the
+    list), each read as add reads a specifier
     (parse_extension_specifier: E054, R-RES-003, E040, the same messages
     and suggestions): init enables, before each extension it enables or
     installs, the builtins that extension requires (its non-optional peers

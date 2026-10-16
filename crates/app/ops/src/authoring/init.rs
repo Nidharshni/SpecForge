@@ -166,14 +166,8 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     // The extensions it names, as `add` reads them: a relative local path is read from the
     // directory init creates.
     let about = |error: OpError| error.about(InitField::Extensions);
-    let specifiers: Vec<&str> = req
-        .extensions
-        .iter()
-        .flat_map(|specifier| specifier.split(','))
-        .map(str::trim)
-        .collect();
     let names = Names::read(
-        &specifiers,
+        req.extensions,
         Place {
             root: req.dir,
             base: req.dir,

@@ -146,7 +146,11 @@ fn init_refuses_a_local_file_named_after_a_comma() {
         "specforge.init",
         json!({"path": "created", "extensions": ["@specforge/software,../../outside/greet.wasm"]}),
     );
-    assert_refused(&reply, "extensions");
+    // One string is one specifier (ADR 0105): the whole string is a local path that names nothing,
+    // so the blob outside is never reached.
+    let error = crate::tool_errors::mcp_error(&reply);
+    assert_eq!(error["code"], "file_not_found", "{error}");
+    assert_eq!(error["argument"], "extensions", "{error}");
     assert!(!root.join("created").exists());
 }
 

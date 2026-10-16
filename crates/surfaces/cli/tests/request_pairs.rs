@@ -285,7 +285,10 @@ fn pair(label: &str) -> (Outcome, Outcome) {
     (cli, mcp)
 }
 
-#[test]
+#[specforge_test_macros::test(
+    behavior = "parse_extension_specifier",
+    verify = "a string holding commas is one extension specifier, for add and init alike"
+)]
 fn add_reads_one_string_with_commas_as_one_specifier() {
     assert_eq!(pair("add_one_string_with_commas").0, Outcome::Refused);
 }

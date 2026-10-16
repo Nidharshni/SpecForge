@@ -92,8 +92,10 @@ fn workspace() -> (
     (dir, root, server)
 }
 
-#[test]
-#[ignore = "flipped by T6"]
+#[specforge_test(
+    behavior = "provide_mcp_init_tool",
+    verify = "each string in extensions is one specifier, as add_extension reads each of specifiers"
+)]
 fn init_reads_a_comma_string_as_add_extension_does() {
     let (_dir, root, mut server) = workspace();
     let reply = call_tool(
@@ -105,7 +107,10 @@ fn init_reads_a_comma_string_as_add_extension_does() {
     assert!(!root.join("created").exists());
 }
 
-#[test]
+#[specforge_test(
+    behavior = "parse_extension_specifier",
+    verify = "a string holding commas is one extension specifier, for add and init alike"
+)]
 fn add_extension_reads_a_comma_string_as_one_specifier() {
     let reply = call_tool(
         &mut served(),

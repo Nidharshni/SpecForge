@@ -191,8 +191,10 @@ fn init_reads_a_local_path_through_its_symlinks_as_the_file_system_does() {
 }
 
 /// A comma is part of a specifier: `init` names no more extensions for a string than `add` does.
-#[test]
-#[ignore = "flipped by T6"]
+#[specforge_test_macros::test(
+    behavior = "parse_extension_specifier",
+    verify = "a string holding commas is one extension specifier, for add and init alike"
+)]
 fn init_reads_each_string_as_one_specifier() {
     let scratch = TempDir::new().unwrap();
     let dir = scratch.path().join("demo");

@@ -15,8 +15,8 @@ pub(crate) struct Args {
     #[arg(long, default_value = specforge_ops::authoring::init::DEFAULT_VERSION)]
     version: String,
 
-    /// Extensions to install
-    #[arg(long)]
+    /// Extensions to install: builtins and local .wasm files, several to a flag separated by commas
+    #[arg(long, value_delimiter = ',')]
     extensions: Vec<String>,
 
     #[command(flatten)]
