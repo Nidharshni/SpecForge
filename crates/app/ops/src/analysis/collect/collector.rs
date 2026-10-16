@@ -2,7 +2,7 @@
 //! lands.
 
 use specforge_protocol_types::ExtensionDeclaration;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 /// A collector contributed by an enabled extension.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -91,16 +91,12 @@ pub(super) fn wildcard(pattern: &str, name: &str) -> bool {
 /// The absolute report location. Extensions may only name paths inside the
 /// project: absolute paths and `..` are refused.
 pub(super) fn report_path(collector: &Collector, root: &Path) -> Result<PathBuf, String> {
-    let relative = Path::new(&collector.report);
-    let inside = relative
-        .components()
-        .all(|c| matches!(c, Component::Normal(_) | Component::CurDir));
-    if !inside {
+    let Some(relative) = crate::containment::declared(Path::new(&collector.report)) else {
         return Err(format!(
             "collector '{}' of {} declares report path '{}' outside the project",
             collector.name, collector.extension, collector.report
         ));
-    }
+    };
     Ok(root.join(relative))
 }
 
