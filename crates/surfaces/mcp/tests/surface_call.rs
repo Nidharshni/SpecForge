@@ -6,13 +6,12 @@
 //! A pin marked `PIN` asserts today's behaviour and is flipped, with its
 //! spec link, by the ticket it names.
 
+use crate::support::*;
 use serde_json::{Value, json};
 use specforge_mcp::McpServer;
-use specforge_ops::read::export::{Format, Request};
+use specforge_ops::read::export::{self, Format, Request};
 use specforge_ops::view::ProjectView;
 use specforge_test::prelude::*;
-
-use crate::support::*;
 
 const SOFTWARE: &str = "@specforge/software";
 const PRODUCT: &str = "@specforge/product";
@@ -576,7 +575,8 @@ fn a_read_names_the_uri_the_client_read() {
 fn exported(root: &std::path::Path, request: &Request) -> String {
     let runtime = specforge_project::testing::component_runtime();
     let project = specforge_project::testing::compile_at(root, Some(runtime));
-    specforge_ops::read::export::export(&ProjectView::of(&project), request).unwrap()
+    let exported = export::export(&ProjectView::of(&project), request);
+    exported.unwrap().document
 }
 
 #[specforge_test(

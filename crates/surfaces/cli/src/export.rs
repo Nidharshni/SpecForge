@@ -99,7 +99,7 @@ impl Args {
         // snapshot too, so nothing here shows the project was exported
         // before.
         let recorded = export::export_recorded(&view, &request);
-        for diagnostic in &recorded.diagnostics {
+        for diagnostic in &recorded.notices {
             errln!(terminal, "{}", specforge_common::render_plain(diagnostic));
         }
         let output = match recorded.export {

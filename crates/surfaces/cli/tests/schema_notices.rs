@@ -72,7 +72,6 @@ fn trace_and_model_report_an_unreadable_record() {
     behavior = "compute_schema_version",
     verify = "every reader of the schema reports the notices export reports for the same record"
 )]
-#[ignore = "flipped by T4"]
 fn query_reports_an_unreadable_record() {
     let dir = project_with_unreadable_record();
     assert_reports_i016(&dir, &["query", "parse_input", "--format", "graph"]);

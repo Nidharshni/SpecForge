@@ -1,0 +1,82 @@
+//! Every read outcome that names the schema's version carries what
+//! versioning it against the root's record found (I016, W053; ADR 0111).
+
+use specforge_common::Diagnostic;
+use specforge_ops::read::export::{Request, export, export_recorded};
+use specforge_ops::read::query::{QueryRequest, query};
+use specforge_test::prelude::*;
+
+fn project() -> crate::view_support::Project {
+    crate::view_support::Project::new(
+        "behavior b \"B\" {\n  contract \"The system MUST work\"\n}\n",
+        crate::view_support::registries(&["behavior"], &[]),
+    )
+}
+
+fn record(project: &crate::view_support::Project) -> std::path::PathBuf {
+    project.dir.path().join(".specforge/schema-cache.json")
+}
+
+/// A project whose record cannot be read.
+fn unreadable() -> crate::view_support::Project {
+    let project = project();
+    std::fs::create_dir_all(record(&project).parent().unwrap()).unwrap();
+    std::fs::write(record(&project), r#"{"schema": {"#).unwrap();
+    project
+}
+
+/// A project whose record holds a kind the project lacks: one W053 per
+/// breaking change.
+fn breaking() -> crate::view_support::Project {
+    let project = project();
+    assert!(
+        export_recorded(&project.view(), &Request::default())
+            .export
+            .is_ok()
+    );
+    let mut cache: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(record(&project)).unwrap()).unwrap();
+    cache["schema"]["entity_kinds"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({
+            "name": "legacy", "source_extension": "x", "testable": false, "fields": []
+        }));
+    std::fs::write(record(&project), cache.to_string()).unwrap();
+    project
+}
+
+fn codes(notices: &[Diagnostic]) -> Vec<&str> {
+    notices.iter().map(|d| d.code.as_str()).collect()
+}
+
+fn b() -> QueryRequest<'static> {
+    QueryRequest {
+        entity_id: "b",
+        ..QueryRequest::default()
+    }
+}
+
+#[specforge_test(
+    behavior = "compute_schema_version",
+    verify = "every reader of the schema reports the notices export reports for the same record"
+)]
+fn an_export_and_a_query_carry_the_records_notices() {
+    let project = unreadable();
+    let view = project.view();
+    let exported = export(&view, &Request::default()).unwrap();
+    assert_eq!(codes(&exported.notices), ["I016"]);
+    assert_eq!(codes(&query(&view, &b()).unwrap().notices), ["I016"]);
+
+    let project = breaking();
+    let view = project.view();
+    let exported = export(&view, &Request::default()).unwrap();
+    let queried = query(&view, &b()).unwrap();
+    assert_eq!(codes(&exported.notices), ["W053"]);
+    assert_eq!(queried.notices, exported.notices);
+    // The recorded export reports the same, and records after.
+    assert_eq!(
+        export_recorded(&view, &Request::default()).notices,
+        exported.notices
+    );
+}

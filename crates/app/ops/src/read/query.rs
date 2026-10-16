@@ -62,7 +62,8 @@ pub struct QueryOutcome {
     /// `include_coverage`, each node carrying its `coverage_status`, written
     /// by the export.
     pub document: String,
-    /// I020 for each kind of the filter the project does not know.
+    /// What versioning the schema reported (ADR 0111), then I020 for each
+    /// kind of the filter the project does not know.
     pub notices: Vec<Diagnostic>,
 }
 
@@ -84,7 +85,7 @@ pub fn query(
             .expect_err("a format the agent table does not admit is refused")
             .about(QueryField::Format));
     }
-    let notices = view.kinds().unknown_in(&request.kinds);
+    let unknown = view.kinds().unknown_in(&request.kinds);
     let graph = view.graph();
     graph.node(request.entity_id).ok_or_else(|| {
         crate::view::not_found(graph, request.entity_id).about(QueryField::EntityId)
@@ -94,7 +95,7 @@ pub fn query(
         .then(|| view.coverage())
         .transpose()
         .map_err(Refusal::from)?;
-    let document = export::export(
+    let exported = export::export(
         view,
         &export::Request {
             format: Some(format),
@@ -116,7 +117,12 @@ pub fn query(
             | ExportField::Schema => None,
         })
     })?;
-    Ok(QueryOutcome { document, notices })
+    let mut notices = exported.notices;
+    notices.extend(unknown);
+    Ok(QueryOutcome {
+        document: exported.document,
+        notices,
+    })
 }
 
 /// The JSON Schema of the document [`query`] answers: the export document of
