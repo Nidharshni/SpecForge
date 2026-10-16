@@ -224,3 +224,24 @@ fn a_single_path_on_a_file_reference_field_is_checked() {
     assert_eq!(found.len(), 1, "{found:#?}");
     assert!(found[0][1].contains("'missing.md'"), "{found:#?}");
 }
+
+/// A bare word on a `string` file-reference field is a path (ADR 0118); the graph stores it as an
+/// identifier, which the checks read as the one word it is.
+#[specforge_test(
+    behavior = "validate_file_reference_paths",
+    verify = "a compile checks a bare word on a file-reference field as a path"
+)]
+#[ignore = "flipped by T3"]
+fn a_bare_word_on_a_file_reference_field_is_checked() {
+    let dir = project(&["@test/docs"], "doc d1 { guide README }\n");
+
+    let found = reported(docs(), &dir, &["E016"]);
+
+    assert_eq!(
+        found,
+        [[
+            "E016".to_string(),
+            "file reference 'README' in entity 'd1' does not exist".to_string()
+        ]]
+    );
+}

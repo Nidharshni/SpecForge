@@ -11,6 +11,7 @@ use specforge_registry::rules::NoVerdicts;
 use specforge_registry::{Asked, MemoryDisk};
 use specforge_test_macros::test as spec;
 
+use crate::support::written::checked_on;
 use crate::support::{build, coded_in, declare, span};
 
 /// `behavior`, with `gherkin` (a list of paths, a file reference) and
@@ -339,4 +340,97 @@ fn a_single_path_is_checked() {
         exists,
         [std::path::Path::new("/nonexistent/spec").join("missing.md")]
     );
+}
+
+/// `note` with `guide` (a single path, a file reference) and `docs` (a list of paths, a file
+/// reference), and the `file_exists` rule `F001` over `guide`.
+fn notes_with_a_guide() -> ExtensionDeclaration {
+    declare("@test/notes", |c| {
+        c.kind("Note", |k| {
+            k.keyword("note");
+            k.field("guide", |f| {
+                f.field_type(FieldType::String).file_reference();
+            });
+            k.field("docs", |f| {
+                f.field_type(FieldType::StringList).file_reference();
+            });
+        });
+        c.rule("F001", |r| {
+            r.check(CheckKind::FileExists)
+                .severity(ValidationSeverity::Warning)
+                .target_kind("note")
+                .field("guide")
+                .message_template("note '{id}': missing '{value}'");
+        });
+    })
+}
+
+/// The messages of `code` among the checks over `text`, written as one file, on `disk`.
+fn messages_of(code: &str, text: &str, disk: &MemoryDisk) -> Vec<String> {
+    let diagnostics = checked_on(&build([notes_with_a_guide()]), &[("t.spec", text)], disk);
+    coded_in(&diagnostics, code)
+        .into_iter()
+        .map(|d| d.message.clone())
+        .collect()
+}
+
+#[spec(
+    behavior = "validate_file_reference_paths",
+    verify = "a bare word on a file-reference field is a path"
+)]
+#[ignore = "flipped by T3"]
+fn a_bare_word_on_a_file_reference_field_is_e016() {
+    let text = "note bare \"B\" {\n  guide README\n}\n";
+
+    assert_eq!(
+        messages_of("E016", text, &MemoryDisk::new()),
+        ["file reference 'README' in entity 'bare' does not exist"]
+    );
+    assert_eq!(
+        messages_of("F001", text, &MemoryDisk::new()),
+        ["note 'bare': missing 'README'"]
+    );
+}
+
+#[spec(
+    behavior = "execute_validation_pattern",
+    verify = "file_exists reads no path in a block, an expression group or an empty value"
+)]
+#[ignore = "flipped by T3"]
+fn a_file_exists_rule_reads_no_path_in_a_block_or_an_empty_value() {
+    let text = "note block \"K\" {\n  guide {\n    README \"x\"\n  }\n}\n\
+                note empty \"E\" {\n  guide \"\"\n}\n";
+    let disk = MemoryDisk::new();
+
+    assert!(messages_of("F001", text, &disk).is_empty());
+    assert!(messages_of("E016", text, &disk).is_empty());
+    let asked_exists = disk
+        .asked()
+        .into_iter()
+        .filter(|asked| matches!(asked, Asked::Exists(_)))
+        .collect::<Vec<_>>();
+    assert!(asked_exists.is_empty(), "{asked_exists:?}");
+}
+
+#[spec(
+    behavior = "execute_validation_pattern",
+    verify = "a missing path a file_exists rule names suggests a close sibling"
+)]
+#[ignore = "flipped by T3"]
+fn a_file_exists_rule_suggests_a_close_sibling() {
+    let text = "note quoted \"Q\" {\n  guide \"NOTES\"\n}\n";
+    let disk = MemoryDisk::new().with_file("/spec/NOTE", b"");
+
+    let diagnostics = checked_on(&build([notes_with_a_guide()]), &[("t.spec", text)], &disk);
+
+    let f001 = coded_in(&diagnostics, "F001");
+    assert_eq!(f001.len(), 1, "{diagnostics:?}");
+    assert_eq!(f001[0].suggestion.as_deref(), Some("did you mean 'NOTE'?"));
+    let asked = disk.asked();
+    let exists = asked
+        .iter()
+        .position(|a| *a == Asked::Exists("/spec/NOTES".into()))
+        .unwrap();
+    assert_eq!(asked.last(), Some(&Asked::List("/spec".into())));
+    assert!(exists < asked.len() - 1);
 }

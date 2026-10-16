@@ -210,6 +210,8 @@ behavior validate_file_reference_paths "Validate File Reference Paths" {
   verify unit "relative path resolved from the spec root"
   verify unit "a field another kind declares as a file reference is not one on this kind"
   verify unit "a single path on a file-reference field is checked like a one-item list"
+  verify unit "a bare word on a file-reference field is a path"
+  verify integration "a compile checks a bare word on a file-reference field as a path"
   verify contract "Validate File Reference Paths: file reference validation holds — graph_built_fired, filesystem_available, missing_files_diagnosed, existing_files_pass"
 }
 

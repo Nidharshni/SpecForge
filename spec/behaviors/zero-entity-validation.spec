@@ -115,6 +115,8 @@ behavior execute_validation_pattern "Execute Validation Pattern" {
   verify unit "file_exists reports missing file-reference field targets"
   verify unit "file_exists resolves a relative path against the spec root, never the working directory"
   verify unit "file_exists checks each item of a list field as its own path"
+  verify unit "file_exists reads no path in a block, an expression group or an empty value"
+  verify unit "a missing path a file_exists rule names suggests a close sibling"
   verify unit "custom pattern dispatches to registered Wasm function"
   verify unit "pattern violation produces diagnostic with configured code and severity"
   verify contract "Execute Validation Pattern: declarative validation holds — all_entities_matched, violations_diagnosed, deterministic_order"
