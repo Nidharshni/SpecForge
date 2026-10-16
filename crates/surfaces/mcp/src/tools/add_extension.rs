@@ -1,11 +1,12 @@
 //! `specforge.add_extension`: install extensions (`specforge_ops::extension::add`).
 
-use crate::containment::{self, Containment};
+use crate::containment;
 use crate::refusal::ArgumentOf;
 use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 use serde::Serialize;
 use specforge_common::shape::Shape;
+use specforge_ops::Containment;
 
 use crate::args::{Arguments, NonEmpty};
 use crate::events::ExtensionAdded;
@@ -98,7 +99,7 @@ impl CoreTool for Tool {
             .collect();
         // A local file installs only from inside the project it installs into.
         containment::refuse_local_outside(
-            &Containment::at(root.dir()),
+            &Containment::within(root.dir()),
             root.dir(),
             &extensions,
             "specifiers",

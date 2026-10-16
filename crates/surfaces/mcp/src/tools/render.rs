@@ -12,9 +12,10 @@ use specforge_common::ProjectPath;
 use specforge_common::shape::Shape;
 
 use crate::args::Arguments;
-use crate::containment::Containment;
+use crate::containment;
 use crate::reply::Answered;
 use crate::tool::{ErrorCode, McpError};
+use specforge_ops::Containment;
 use specforge_ops::view::ProjectView;
 
 /// `specforge.render`'s arguments.
@@ -132,12 +133,12 @@ impl CoreTool for Tool {
                 .with_argument("out_dir"),
             ));
         };
-        let bound = Containment::at(root);
+        let bound = Containment::within(root);
         let given = Path::new(out_dir);
-        bound
+        let out_dir = bound
             .resolve(given)
-            .map_err(|outside| Box::new(outside.refusal("out_dir")))?;
-        let out_dir = bound.spelled(given);
+            .map_err(|outside| Box::new(containment::refusal(&outside, "out_dir")))?
+            .spelled;
         let path = out_dir.join(file_name);
         if let Err(e) =
             std::fs::create_dir_all(&out_dir).and_then(|()| std::fs::write(&path, output))

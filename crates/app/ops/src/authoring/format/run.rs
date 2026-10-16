@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use super::document::{Configs, FormattedDocument, format_text};
 use super::targets::{Targets, targets};
-use crate::{OpError, OpErrorKind};
+use crate::{Containment, OpError, OpErrorKind};
 
 /// What the run does with a file whose formatting would change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -416,11 +416,11 @@ pub fn run_within(request: &Request, within: Option<&Path>) -> Result<Outcome, O
     };
     for target in files {
         if let Some(within) = within
-            && let Some(real) = crate::resolves_outside(&target, within)
+            && let Err(outside) = Containment::within(within).resolve(&target)
         {
             outcome
                 .failures
-                .push(Failure::outside(target, &real, within));
+                .push(Failure::outside(target, outside.landed(), within));
             continue;
         }
         let source = match std::fs::read_to_string(&target) {

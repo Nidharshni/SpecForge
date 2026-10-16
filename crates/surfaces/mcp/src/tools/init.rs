@@ -78,10 +78,8 @@ impl CoreTool for Tool {
         // are the ones `init` reads: `init::specified` is its own reading of `extensions` (each
         // entry split, a relative path joined onto `path`). A reading that fails here is the one
         // `init` refuses with next.
-        if let Some(bound) = &new.bound
-            && let Ok(wanted) = init::specified(path, extensions)
-        {
-            containment::refuse_local_outside(bound, path, &wanted, "extensions")?;
+        if let Ok(wanted) = init::specified(path, extensions) {
+            containment::refuse_local_outside(&new.containment, path, &wanted, "extensions")?;
         }
 
         // The scaffold `specforge init` writes. The call target refused a

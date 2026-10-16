@@ -447,8 +447,10 @@ fn rename_and_migrate_do_not_write_through_a_symlink_that_leaves_the_project() {
 /// `src` is a symlink to `outside/`: a file named behind it that does not exist is outside the
 /// project all the same (not `file_not_found`).
 #[cfg(unix)]
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a path that leaves the project through a symlink is outside it, whether or not the file it names exists"
+)]
 fn infer_session_refuses_a_missing_file_behind_a_symlink_that_leaves_the_project() {
     let scene = Scene::new();
     std::os::unix::fs::symlink(scene.outside(), scene.proj().join("src")).unwrap();

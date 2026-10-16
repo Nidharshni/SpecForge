@@ -24,7 +24,7 @@ use specforge_registry::RegistryBuild;
 use specforge_wasm::WasmRuntime;
 use std::path::Path;
 
-use crate::{OpError, OpErrorKind, Refusal, Writes};
+use crate::{Containment, OpError, OpErrorKind, Refusal, Writes};
 
 /// The field of a migration request a refusal can be about (ADR 0072).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -341,7 +341,8 @@ pub fn run_within(
     let sources = read.config.sources(project.dir()).files();
     if let Some(within) = within {
         for source in &sources {
-            if let Some(real) = crate::resolves_outside(source, within) {
+            if let Err(outside) = Containment::within(within).resolve(source) {
+                let real = outside.landed();
                 return Err(OpError::new(
                     OpErrorKind::InvalidInput,
                     SOURCE_OUTSIDE_ROOT,

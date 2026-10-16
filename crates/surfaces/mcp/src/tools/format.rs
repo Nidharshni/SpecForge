@@ -4,7 +4,8 @@ use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 use std::path::{Path, PathBuf};
 
-use crate::containment::Containment;
+use crate::containment;
+use specforge_ops::Containment;
 
 use crate::args::Arguments;
 use crate::mutation::{
@@ -80,7 +81,7 @@ impl CoreTool for Tool {
 
         // The run `specforge format` makes. Relative paths name files under
         // the project root, and none leaves it (ADR 0092).
-        let bound = Containment::at(project_root.dir());
+        let bound = Containment::within(project_root.dir());
         let explicit = args
             .paths
             .iter()
@@ -88,8 +89,8 @@ impl CoreTool for Tool {
                 let named = Path::new(p);
                 bound
                     .resolve(named)
-                    .map(|_| bound.spelled(named))
-                    .map_err(|outside| Box::new(outside.refusal("paths")))
+                    .map(|held| held.spelled)
+                    .map_err(|outside| Box::new(containment::refusal(&outside, "paths")))
             })
             .collect::<Result<Vec<PathBuf>, Box<McpError>>>()?;
         // A source that is a symlink leaving the project is not followed.
