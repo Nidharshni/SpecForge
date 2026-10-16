@@ -46,7 +46,6 @@ pub(crate) enum Named<'a> {
     /// A local file, read once and claimed first; `starter` is the starter template it declares.
     Local {
         install: Box<Install<'a>>,
-        #[expect(dead_code, reason = "init reads it once it moves onto the reader")]
         starter: Option<String>,
     },
     /// A registry package at the version the caller's step resolved, claimed first.

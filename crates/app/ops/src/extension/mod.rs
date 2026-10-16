@@ -41,7 +41,7 @@ pub use update::{
 
 pub(crate) use claims::{Claimed, Claims};
 pub(crate) use lock_plan::{Also, Ask, Install, LockPlan};
-pub(crate) use names::{Named, Names, Place, Source, Specified, git_not_supported, named, parse};
+pub(crate) use names::{Named, Names, Place};
 
 use specforge_installed::LockSource;
 

@@ -3,7 +3,8 @@
 //! another source) is `extension_conflict`, naming both. `add` and `init` claim every specifier
 //! here before they ask their lock plan for it.
 
-use super::{Install, Source, Specified};
+use super::Install;
+use super::names::{Source, Specified};
 use crate::{OpError, OpErrorKind};
 use specforge_package::{PackageName, Version};
 

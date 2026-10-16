@@ -217,7 +217,10 @@ fn init_reads_each_string_as_one_specifier() {
 /// `link/../a.wasm`, `link` a symlink to `elsewhere/sub`: `add` and `init` both read the file beside
 /// the link's target, and the lock records it (ADR 0104 D6 made init resolve what it reads).
 #[cfg(unix)]
-#[test]
+#[specforge_test_macros::test(
+    behavior = "non_interactive_init",
+    verify = "init resolves a .. in a relative local path as the file system does, as add resolves it"
+)]
 fn init_reads_a_dot_dot_after_a_symlink_as_add_does() {
     let scratch = TempDir::new().unwrap();
     let elsewhere = scratch.path().join("elsewhere");

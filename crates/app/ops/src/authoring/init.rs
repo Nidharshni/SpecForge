@@ -1,7 +1,7 @@
 //! `specforge init` and `specforge.init`: one scaffold for both surfaces.
 //!
 //! [`init`] validates everything, reads its extension specifiers as `add` reads them and claims
-//! them as `add` does (two that add one extension differently are refused, ADR 0098), and writes
+//! them as `add` does (both through `extension::names`, ADR 0105) (two that add one extension differently are refused, ADR 0098), and writes
 //! one change: it enables builtins and installs local `.wasm` extensions through the lock plan
 //! `add` uses (ADR 0004 D3-e, ADR 0041, ADR 0065), judged once before any file is written, so it
 //! never writes an entry `specforge check` can't load. The modules, the lock, `specforge.json`,
@@ -9,9 +9,7 @@
 //! needs a configured registry, which a project that doesn't exist yet can't have, so it is added
 //! afterwards with `specforge add`.
 
-use crate::extension::{
-    self, Also, Ask, Candidate, Claimed, Claims, Install, LocalFile, LockPlan, Source,
-};
+use crate::extension::{self, Also, Ask, Candidate, LockPlan, Named, Names, Place};
 use crate::{Containment, OpError, OpErrorKind, Refusal, Writes};
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -67,7 +65,7 @@ pub struct Request<'a> {
     /// The project version (`specforge init --version`; [`DEFAULT_VERSION`]
     /// unless given).
     pub version: &'a str,
-    /// Extension specifiers; an entry may hold several, comma-separated. A relative local path is
+    /// Extension specifiers, one per string (nothing splits a string); a relative local path is
     /// read from `dir`.
     pub extensions: &'a [String],
     /// The bound local extensions are read in (ADR 0104): the CLI passes
@@ -118,38 +116,6 @@ pub struct InitDocument {
     pub extensions_installed: Vec<String>,
 }
 
-/// The extensions an init of `dir` names, as init reads them: each entry split on commas, a
-/// relative local path joined onto `dir`. The containment resolves the path when it is read, so a
-/// `..` lands the way the file system would (the directory may not exist yet: by name).
-fn specified(
-    dir: &Path,
-    extensions: &[String],
-) -> Result<Vec<extension::Specified>, Refusal<InitField>> {
-    let specifiers: Vec<&str> = extensions
-        .iter()
-        .flat_map(|specifier| specifier.split(','))
-        .map(str::trim)
-        .collect();
-    let several = specifiers.len() > 1;
-    specifiers
-        .into_iter()
-        .map(|specifier| {
-            let mut source = extension::parse(specifier)
-                .map_err(|error| extension::named(several, specifier, error))
-                .map_err(|error| error.about(InitField::Extensions))?;
-            if let Source::Local(path) = &mut source
-                && path.is_relative()
-            {
-                *path = dir.join(&*path);
-            }
-            Ok(extension::Specified {
-                specifier: specifier.to_string(),
-                source,
-            })
-        })
-        .collect()
-}
-
 /// Scaffold the project `req` describes: validated first, its extension specifiers read as `add`
 /// reads them (E054, R-RES-003, E040; a registry package is E063 and a git source E064, both
 /// before anything is written) and claims them as `add` does (the same way twice is enabled
@@ -197,55 +163,45 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     }
     let version = req.version.to_string();
 
-    let wanted = specified(req.dir, req.extensions)?;
-    let several = wanted.len() > 1;
-    let named = |at: usize, error: OpError| {
-        let error = match wanted.get(at) {
-            Some(wanted) => extension::named(several, &wanted.specifier, error),
-            None => error,
-        };
-        error.about(InitField::Extensions)
-    };
+    // The extensions it names, as `add` reads them: a relative local path is read from the
+    // directory init creates.
+    let about = |error: OpError| error.about(InitField::Extensions);
+    let specifiers: Vec<&str> = req
+        .extensions
+        .iter()
+        .flat_map(|specifier| specifier.split(','))
+        .map(str::trim)
+        .collect();
+    let names = Names::read(
+        &specifiers,
+        Place {
+            root: req.dir,
+            base: req.dir,
+            containment: req.containment,
+        },
+    )
+    .map_err(about)?;
 
     // The lock plan the installs will be, `add`'s: an unreadable lock refuses here (E033), and the
     // project's peer set is judged before anything is written.
     let installed = Installed::at(req.dir);
-    let mut plan = LockPlan::initializing(
-        &installed,
-        runtime,
-        wanted.iter().any(|wanted| wanted.source.installs()),
-    )?;
+    let mut plan = LockPlan::initializing(&installed, runtime, names.installs())?;
+    // A registry package needs a registry, which a project that doesn't exist yet can't have.
+    let named = names
+        .name_each(runtime, &mut |specifier, _| Err(no_registry(specifier)))
+        .map_err(about)?;
     // What each local file contributes to the starter, by the name it declares.
     let mut templates: Vec<(String, Option<String>)> = Vec::new();
-    let mut claims = Claims::default();
-    for (at, one) in wanted.iter().enumerate() {
-        // A claim names both specifiers itself, as add's does.
-        let claimed = |error: OpError| error.about(InitField::Extensions);
-        if claims.repeated(one).is_some() {
-            continue;
-        }
-        match &one.source {
-            Source::Builtin(name) => {
-                if claims.builtin(one, name).map_err(claimed)? == Claimed::First {
-                    plan.enable(Ask(at), name);
-                }
+    for (at, one) in named.into_iter().enumerate() {
+        match one {
+            Named::Duplicate { .. } => {}
+            Named::Builtin(name) => plan.enable(Ask(at), name),
+            Named::Local { install, starter } => {
+                templates.push((install.name().to_string(), starter));
+                plan.install(Ask(at), *install);
             }
-            Source::Local(path) => {
-                let local =
-                    LocalFile::read(runtime, path, req.containment).map_err(|e| named(at, e))?;
-                let candidate = local.binary.candidate();
-                let declared = (
-                    candidate.name().to_string(),
-                    candidate.starter_template().map(str::to_string),
-                );
-                let install = Install::local(req.dir, local).map_err(|e| named(at, e))?;
-                if claims.local(one, &install).map_err(claimed)? == Claimed::First {
-                    templates.push(declared);
-                    plan.install(Ask(at), install);
-                }
-            }
-            Source::Registry(_) => return Err(named(at, no_registry(&one.specifier))),
-            Source::Git { url } => return Err(named(at, extension::git_not_supported(url))),
+            // The package step above refuses every package.
+            Named::Package { .. } => unreachable!("init's package step refuses every package"),
         }
     }
     // Test obligations (`verify`) on software kinds come from @specforge/testing (ADR 0002), so
@@ -257,7 +213,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     }
     let checked = plan.check().map_err(|refused| {
         let (Ask(at), error) = refused.decisive();
-        named(at, error)
+        names.named(at, error).about(InitField::Extensions)
     })?;
     let extensions = checked.entries();
 
