@@ -18,6 +18,7 @@ use crate::subscriptions::Watched;
 use crate::target::TargetSpec;
 use crate::tool::{ErrorCode, McpError};
 use crate::uri_template::{Malformed, Matched};
+use specforge_ops::Noticed;
 use specforge_ops::view::ProjectView;
 
 /// One core resource, stated once in its own module under `resources/`.
@@ -50,6 +51,25 @@ pub struct ResourceText {
 }
 
 impl ResourceText {
+    /// An extension's read: its MIME type and text, no notices.
+    pub fn new(mime_type: impl Into<String>, text: impl Into<String>) -> Self {
+        Self {
+            mime_type: mime_type.into(),
+            text: text.into(),
+            notices: Vec::new(),
+        }
+    }
+
+    /// A JSON read that noticed: its text, its notices in `_meta.diagnostics` (ADR 0111 D2, ADR 0130).
+    pub fn noticed(read: Noticed<String>) -> Self {
+        let (text, notices) = read.into_value_and_notices();
+        Self {
+            mime_type: "application/json".into(),
+            text,
+            notices,
+        }
+    }
+
     pub fn json(text: impl Into<String>) -> Self {
         Self {
             mime_type: "application/json".into(),
@@ -190,12 +210,24 @@ mod tests {
     }
 
     #[test]
-    fn a_read_with_notices_carries_them_in_its_meta() {
+    fn a_noticed_read_carries_its_notices_in_its_meta() {
         let notice = Diagnostic::new(codes::I016, "the schema cache could not be read");
 
         let with = result_of(ResourceText::json("{}").with_notices(vec![notice]));
         assert_eq!(with["_meta"]["diagnostics"][0]["code"], "I016", "{with}");
         assert_eq!(with["contents"][0]["text"], "{}");
+
+        let noticed = result_of(ResourceText::noticed(Noticed::new(
+            "{}".into(),
+            vec![Diagnostic::new(
+                codes::I016,
+                "the schema cache could not be read",
+            )],
+        )));
+        assert_eq!(
+            noticed["_meta"]["diagnostics"][0]["code"], "I016",
+            "{noticed}"
+        );
 
         let without = result_of(ResourceText::json("{}"));
         assert!(without.get("_meta").is_none(), "{without}");
