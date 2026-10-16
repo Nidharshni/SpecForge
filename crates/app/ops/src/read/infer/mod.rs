@@ -16,7 +16,6 @@
 //! progress, paged file lists and the kinds in the order to write them) is
 //! the infer prompt's plan scope.
 
-mod discovery;
 mod gaps;
 mod guide;
 mod lint;

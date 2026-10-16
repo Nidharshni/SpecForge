@@ -9,8 +9,8 @@ use serde::{Deserialize, Serialize};
 use specforge_common::shape::Shape;
 
 use super::ScanFailure;
-use super::discovery::source_files;
 use super::manifest::InferenceManifest;
+use super::sources::InferenceSources;
 use crate::OpError;
 use crate::view::ProjectView;
 
@@ -77,13 +77,9 @@ pub fn compute_gap_report(
 pub fn gaps(view: &ProjectView) -> Result<Gaps, OpError> {
     let root = view.project_root()?;
     let declarations = view.registries().declarations();
-    let files = source_files(root, declarations, &InferenceManifest::at(root)?);
-    let scanned = crate::read::infer::scan::scan_source_files(
-        view.runtime().map(|r| r.as_ref()),
-        declarations,
-        root,
-        &files,
-    );
+    let sources = InferenceSources::of(root, declarations, &InferenceManifest::at(root)?);
+    let scanned =
+        crate::read::infer::scan::scan_source_files(view.runtime().map(|r| r.as_ref()), &sources);
     let entity_ids: Vec<&str> = view
         .graph()
         .nodes()

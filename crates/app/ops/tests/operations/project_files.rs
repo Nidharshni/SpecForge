@@ -96,12 +96,6 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
         "an inference source file: routed by plan 02 of round 12",
     ),
     (
-        "read/infer/scan/mod.rs",
-        "fs::read_to_string(",
-        1,
-        "an inference source file: routed by plan 02 of round 12",
-    ),
-    (
         "read/infer/manifest.rs",
         "fs::read(",
         1,

@@ -65,7 +65,6 @@ fn answer(server: &mut Served, tool: &str, arguments: Value) -> Value {
     behavior = "discover_inference_sources",
     verify = "no inference source lands outside the project root"
 )]
-#[ignore = "flipped by T6"]
 fn infer_gaps_lists_no_file_outside_the_served_project() {
     let (_outside, mut server) = scene();
     let gaps = answer(&mut server, "specforge.infer_gaps", json!({}));

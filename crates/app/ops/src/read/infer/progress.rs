@@ -9,11 +9,11 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_protocol_types::ExtensionDeclaration;
 
-use super::discovery::source_files;
 use super::gaps::directory_of;
 use super::manifest::{
     InferenceManifest, InferenceSession, InferenceSummary, detect_stale_entries,
 };
+use super::sources::InferenceSources;
 use crate::OpError;
 use crate::view::ProjectView;
 
@@ -63,12 +63,13 @@ fn progress_under(
     manifest: &InferenceManifest,
     recorded: bool,
 ) -> Progress {
-    let files = source_files(root, declarations, manifest);
+    let sources = InferenceSources::of(root, declarations, manifest);
+    let files = sources.keys();
     let indexed = manifest.indexed_paths();
     let unanalyzed = files
         .iter()
-        .filter(|f| !indexed.contains(f.as_str()))
-        .cloned()
+        .filter(|key| !indexed.contains(key.as_str()))
+        .map(|key| key.as_str().to_string())
         .collect();
     let (stale, deleted) = detect_stale_entries(root, manifest);
     Progress {

@@ -72,7 +72,6 @@ fn link(target: &Path, name: &Path) {
     behavior = "discover_inference_sources",
     verify = "no symlinked directory is entered, so a symlink cycle adds no source"
 )]
-#[ignore = "flipped by T6"]
 fn a_symlink_cycle_adds_no_source() {
     let project = project();
     link(Path::new(".."), &project.root().join("src/loop"));
@@ -86,7 +85,6 @@ fn a_symlink_cycle_adds_no_source() {
     behavior = "discover_inference_sources",
     verify = "no symlinked directory is entered, so a symlink cycle adds no source"
 )]
-#[ignore = "flipped by T6"]
 fn a_symlinked_directory_is_not_entered() {
     let project = project();
     let outside = outside(&project);
@@ -98,7 +96,6 @@ fn a_symlinked_directory_is_not_entered() {
     behavior = "discover_inference_sources",
     verify = "an analyzer's excluded_dirs add to the default skipped directories"
 )]
-#[ignore = "flipped by T6"]
 fn an_analyzers_excluded_dirs_add_to_the_skipped_directories() {
     let project = Assembled::new().declarations(vec![
         analyzer("@acme/rust", &["target"]),
@@ -123,7 +120,6 @@ fn an_analyzers_excluded_dirs_add_to_the_skipped_directories() {
     behavior = "discover_inference_sources",
     verify = "a file two source roots reach is one source"
 )]
-#[ignore = "flipped by T6"]
 fn a_file_two_source_roots_reach_is_one_source() {
     let project = project();
     manifest(
@@ -139,7 +135,6 @@ fn a_file_two_source_roots_reach_is_one_source() {
     behavior = "discover_inference_sources",
     verify = "no inference source lands outside the project root"
 )]
-#[ignore = "flipped by T6"]
 fn a_source_root_outside_the_project_is_not_walked() {
     let project = project();
     let outside = outside(&project);
@@ -161,7 +156,6 @@ fn a_source_root_outside_the_project_is_not_walked() {
     behavior = "discover_inference_sources",
     verify = "no inference source lands outside the project root"
 )]
-#[ignore = "flipped by T6"]
 fn a_symlinked_file_that_leaves_the_project_is_no_source() {
     let project = project();
     let outside = outside(&project);
