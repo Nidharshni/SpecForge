@@ -275,6 +275,21 @@ mod tests {
         assert!(exclude.holds("build.spec"));
     }
 
+    #[cfg(unix)]
+    #[test]
+    #[ignore = "flipped by T2"]
+    fn holds_refuses_a_path_under_a_symlinked_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        fs::create_dir_all(root.join("sub")).unwrap();
+        fs::write(root.join("sub/a.spec"), "").unwrap();
+        std::os::unix::fs::symlink(root.join("sub"), root.join("dirlink")).unwrap();
+        let held = sources(root, Exclude::default());
+        assert!(held.holds("sub/a.spec"));
+        assert!(!held.holds("dirlink/a.spec"));
+        assert!(!held.holds("dirlink/new.spec"));
+    }
+
     fn found(relative: &str, exclude: &[&str]) -> bool {
         let tmp = tempfile::tempdir().unwrap();
         sources(tmp.path(), Exclude::parse(exclude.iter().copied()).unwrap()).holds(relative)
