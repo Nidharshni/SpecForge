@@ -3,7 +3,7 @@
 //! session holds one and keeps it current.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
 use specforge_common::{Diagnostic, ProjectRoot, codes};
@@ -12,8 +12,9 @@ use specforge_graph::{
 };
 
 use crate::coverage::RecordedCoverage;
+use crate::ledger::{Reads, Unrecorded};
 use crate::snapshot::EntitySnapshot;
-use crate::sources::{self, Read, SourceCache};
+use crate::sources::{Read, SourceCache};
 use crate::{Environment, SharedRuntime, SourceBuild};
 
 /// A compiled project: an environment, the sources read in it, their graph
@@ -29,9 +30,15 @@ use crate::{Environment, SharedRuntime, SourceBuild};
 /// 0047). An editor update that skipped the checks
 /// ([`crate::CheckMode::SyntaxOnlyIfParseErrors`]) reports no check
 /// diagnostic until the next update that runs them.
+///
+/// A copy of this project as it is now: the graph is copied, everything else
+/// is shared. What a reader holds while the project's session is out for an
+/// update (the LSP, ADR 0100 D4, ADR 0108). A copy is never the session's:
+/// updating it is the session's alone.
+#[derive(Clone)]
 pub struct CompiledProject {
     /// Shared, so a reader keeps the environment an update started from
-    /// while the session is out for it (the LSP's stand-in).
+    /// while the session is out for it (the LSP's copy).
     env: Arc<Environment>,
     /// The text of every source as read, the retained trees and the
     /// sources that could not be read.
@@ -73,11 +80,9 @@ impl CompiledProject {
     /// an extension command on it first): its sources read, its graph built
     /// and checked in the environment's runtime.
     pub fn of(env: Environment) -> Self {
-        let env = Arc::new(env);
-        let discovered = env.discover();
-        let mut project = CompiledProject::read(env, &discovered, &BTreeMap::new());
-        let entities = project.snapshot_now();
-        project.check_over(entities);
+        let mut reads = Unrecorded;
+        let mut project = Self::read(Arc::new(env), &BTreeMap::new(), &mut reads);
+        project.check(&mut reads);
         project
     }
 
@@ -190,20 +195,64 @@ impl CompiledProject {
         }
     }
 
-    /// The cold read of `discovered` in `env` (ADR 0032's one cold
-    /// pipeline, [`Environment::build_sources`]): sources read and parsed,
-    /// the graph built, the imports resolved. The checks have not run. A
-    /// `held` text (by source key) is read in place of its file.
+    /// The project of an environment whose sources are not read yet: no
+    /// source, an empty graph, and it reports what its environment reports.
+    /// Rooted where the environment was loaded (none for one assembled in
+    /// memory).
+    pub fn unread(env: Arc<Environment>) -> Self {
+        let graph = GraphBuild::new(env.graph_config());
+        let on_disk = env.project_root().is_some();
+        CompiledProject {
+            env,
+            sources: SourceCache::empty(),
+            graph,
+            import_diagnostics: Vec::new(),
+            check_diagnostics: Vec::new(),
+            recorded: OnceLock::new(),
+            reported: OnceLock::new(),
+            on_disk,
+        }
+    }
+
+    /// A project a test assembled in memory: `graph` (made elsewhere), the
+    /// environment it was assembled in and `reported`, exactly (no check
+    /// runs). `rooted`: it is rooted where the environment is; otherwise it
+    /// has no root (ADR 0047 D4). Its memo is made over its own graph.
+    #[cfg(feature = "testing")]
+    pub(crate) fn assembled(
+        env: Arc<Environment>,
+        graph: Graph,
+        reported: Vec<Diagnostic>,
+        rooted: bool,
+    ) -> Self {
+        CompiledProject {
+            env,
+            sources: SourceCache::empty(),
+            graph: GraphBuild::holding(graph),
+            import_diagnostics: Vec::new(),
+            check_diagnostics: Vec::new(),
+            recorded: OnceLock::new(),
+            reported: OnceLock::from(Arc::<[Diagnostic]>::from(reported)),
+            on_disk: rooted,
+        }
+    }
+
+    /// The cold read in `env` (ADR 0032's one cold pipeline,
+    /// [`Environment::build_sources`]): discover through `reads`, read each
+    /// source through it (a `held` text, by source key, in place of its
+    /// file), build the graph, resolve the imports. The checks have not run.
     pub(crate) fn read(
         env: Arc<Environment>,
-        discovered: &[PathBuf],
         held: &BTreeMap<String, &str>,
+        reads: &mut impl Reads,
     ) -> Self {
+        let keys = reads.discover(env.sources());
+        let spec_root = env.spec_root().to_path_buf();
         let SourceBuild {
             sources,
             graph,
             imports,
-        } = env.build_sources(discovered, held);
+        } = env.build_sources(&keys, held, |key| reads.source(&spec_root, key));
         CompiledProject {
             env,
             sources,
@@ -214,11 +263,6 @@ impl CompiledProject {
             reported: OnceLock::new(),
             on_disk: true,
         }
-    }
-
-    /// The one read of a source (`sources::read`) under its spec root.
-    pub(crate) fn read_source(&self, key: &str) -> Read {
-        sources::read(self.env.spec_root(), key)
     }
 
     /// Whether the project already holds the state `read` gives for `key`.
@@ -245,15 +289,24 @@ impl CompiledProject {
         applied
     }
 
+    /// Every check on the current graph, over a snapshot of it taken now
+    /// (ADR 0019), `reads` told first: whether the inputs moved.
+    pub(crate) fn check(&mut self, reads: &mut impl Reads) -> bool {
+        let entities = self.snapshot_now();
+        let changed = reads.before_checks(&self.env, &entities);
+        self.check_over(entities);
+        changed
+    }
+
     /// A snapshot of the current graph, taken now (ADR 0019).
-    pub(crate) fn snapshot_now(&self) -> Arc<EntitySnapshot> {
+    fn snapshot_now(&self) -> Arc<EntitySnapshot> {
         Arc::new(self.env.entity_snapshot(self.graph.graph()))
     }
 
     /// Run every check on the current graph over `entities`, its snapshot,
     /// in the environment's runtime; the memo starts again from that
     /// snapshot.
-    pub(crate) fn check_over(&mut self, entities: Arc<EntitySnapshot>) {
+    fn check_over(&mut self, entities: Arc<EntitySnapshot>) {
         self.check_diagnostics = self.env.run_checks(self.graph.graph(), &entities);
         self.recorded = OnceLock::from(RecordedCoverage::of(entities));
         self.reported = OnceLock::new();

@@ -3,7 +3,7 @@ use specforge_extension_sdk::prelude::{ContributionsBuilder, FieldType, Vocabula
 use specforge_graph::{Graph, Node};
 use specforge_lsp::{Document, MOD_DECLARATION, MOD_REFERENCE, SemanticToken};
 use specforge_ops::view::ProjectView;
-use specforge_project::coverage::RecordedCoverage;
+use specforge_project::testing::Assembled;
 use specforge_registry::RegistryBuild;
 use specforge_test_macros::test as spec;
 use tree_sitter_specforge::{field, kind};
@@ -12,9 +12,8 @@ use crate::registries::registries;
 
 /// The semantic tokens of `text` over `registries` and `graph`.
 fn tokens_over(text: &str, registries: RegistryBuild, graph: &Graph) -> Vec<SemanticToken> {
-    let env = specforge_project::Environment::with_registries(registries, None);
-    let recorded = RecordedCoverage::over(graph, &env);
-    let view = ProjectView::new(graph, &env, None, &recorded);
+    let project = Assembled::over(registries).graph(graph.clone());
+    let view = ProjectView::of(project.detached());
     Document::new(text.into()).tokens(&view)
 }
 

@@ -20,7 +20,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   registration and I002. `Environment::from_read` is its disk adapter: it reads the lock and runs
   the extension load. Its fields are private; it is read through accessors (ADR 0047). A session
   reads `specforge.json` once per load and builds its extension runtime and, holding it, its
-  environment from that read, after stamping every environment input (ADR 0030). It
+  environment from that read, after stamping every environment input (ADR 0030, ADR 0106). It
   A project opened in a session's place loads its environment first and hands it over before any
   source is read (`ProjectSession::reopen`), so an editor answers what needs only the environment
   (keyword completion) while the sources are still being read.
@@ -30,7 +30,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   report order: the environment's, the imports', the graph build's, the checks', then surface conflicts
   (`specforge_project::CompiledProject`). A one-shot compile (every CLI command) is one and keeps no
   stamp; a project session holds one and keeps it current (`ProjectSession::project`, ADR 0047); it is
-  compiled from a project root (`CompiledProject::compile(&ProjectRoot, …)`).
+  compiled from a project root (`CompiledProject::compile(&ProjectRoot, …)`). A copy shares all but its graph
+  (`Clone`, ADR 0108).
 - **Project root**: the directory holding the `specforge.json` a path is in, located from any path inside the
   project (a subdirectory, a file) by walking up, the nearest winning
   (`specforge_common::ProjectRoot::of`, ADR 0053). Only `specforge.json` marks a project. With none at or
@@ -88,6 +89,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   buffer is to its file is the session's to say (ADR 0023, ADR 0046). After every update that runs the
   checks, its compiled project reports exactly what a fresh compile of the same sources reports, in the
   same order (an editor update that skips the checks while a file does not parse is the one exception).
+- **Read ledger**: what a project session read and when (`specforge_project::ledger`, crate-private): its session
+  inputs and the stamp of each file, taken in the call that reads it. It does every disk read the session makes
+  (the config, the lock and modules, the sources, the check inputs), derives every source key, and answers `changes`
+  and `stale`. A one-shot compile runs the same steps through an adapter that records nothing (ADR 0106).
 - **Session inputs**: everything a project session depends on besides its sources' text: where its
   sources are discovered (the spec root and `exclude`), its **environment inputs**
   (`specforge.json`, `specforge.lock`, the extension modules it loaded) and its **check inputs**
@@ -96,7 +101,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   lies (its target)). One value per
   environment load, renewed each time the checks run (`specforge_project::SessionInputs`,
   `ProjectSession::inputs`). What a changed path reaches, which directories watch watches, which files
-  the LSP asks its client to report and what the session stamps for freshness are all read from it;
+  the LSP asks its client to report and what the session stamps for freshness are all read from it; the
+  read ledger stamps each when it reads it (ADR 0106);
   a detached session's inputs are empty (ADR 0030). Nothing else: an import names one of the sources,
   never a file on disk (ADR 0055).
 - **Held buffer**: an editor buffer a project session holds (`specforge_project::Buffer`: the file's path, the
@@ -495,9 +501,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   command), so none takes a runtime of its own; its entity snapshot, through the per-compile
   memo (`ProjectView::entities`) (`specforge_ops::view::ProjectView`). It owns
   the project's recorded test report and its versioned schema, both read at that root and never an
-  ancestor's. The CLI builds one from its compiled project and the LSP from its session's
-  (`ProjectView::of`); MCP from its call target (`ProjectRef::view`: the served session's compiled
+  ancestor's. Built only from a compiled project (`ProjectView::of`): the CLI from its compiled project and the LSP
+  from its session's, or, while the session is out for an update, from a copy of it (ADR 0108); MCP from its call target (`ProjectRef::view`: the served session's compiled
   project with its I017 notices, or that of a session opened for one call) (ADR 0015, ADR 0047).
+- **Assembled project**: a compiled project a test builds in memory from a graph and an environment rooted at its
+  directory, reporting what the test lists; no check runs (`specforge_project::testing::Assembled`, ADR 0108).
 - **Read view**: an operation that only reads the project view: stats, trace, the coverage view, the
   model and outline diagrams, the versioned schema, inspect, query, list and search (the entities a
   selection over the view returns, `specforge_ops::read::query`), the exploration and the review

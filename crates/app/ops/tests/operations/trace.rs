@@ -3,7 +3,7 @@ use specforge_graph::{Edge, Graph, Node};
 use specforge_ops::read::trace::{Target, TraceExpectations, TraceLinkStatus};
 use specforge_registry::RegistryBuild;
 
-use crate::view_support::{Project, chain, chain_in, every_chain};
+use crate::view_support::{Assembled, Viewed, chain, chain_in, every_chain};
 use specforge_parser::{EntityId, EntityKind, FieldMap};
 use specforge_test::prelude::*;
 
@@ -101,7 +101,7 @@ fn trace_shows_full_chain_depth() {
 #[specforge_test(behavior = "compute_traceability_chain")]
 fn trace_nonexistent_entity_returns_error() {
     let graph = build_chain();
-    let project = Project::of_graph(graph, RegistryBuild::default());
+    let project = Assembled::over(RegistryBuild::default()).graph(graph);
     let result = specforge_ops::read::trace::trace(&project.view(), Target::Entity("nonexistent"));
     assert!(result.is_err());
 }
@@ -113,7 +113,7 @@ fn trace_nonexistent_entity_returns_error() {
 )]
 fn trace_serializes_to_json() {
     let graph = build_chain();
-    let project = Project::of_graph(graph, RegistryBuild::default());
+    let project = Assembled::over(RegistryBuild::default()).graph(graph);
     let outcome = specforge_ops::read::trace::trace(&project.view(), Target::Entity("b")).unwrap();
     let json = serde_json::to_string_pretty(&outcome).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
@@ -367,7 +367,7 @@ fn trace_human_output_marks_missing_links() {
         target: "b".into(),
         label: "behaviors".into(),
     });
-    let project = Project::of_graph(graph, crate::trace_support::build());
+    let project = Assembled::over(crate::trace_support::build()).graph(graph);
     let outcome = specforge_ops::read::trace::trace(&project.view(), Target::Entity("b")).unwrap();
     assert_eq!(
         outcome.to_human(),
@@ -389,11 +389,11 @@ fn trace_human_output_marks_missing_links() {
     verify = "the reach of some entities is every entity their trace chains reach, the seeds included, and its unverified entities are those that count toward coverage and are not proven"
 )]
 fn reach_lists_what_the_chains_reach_and_what_is_unverified() {
-    let mut project = Project::new(
-        "behavior alpha \"A\" {\n  verify unit \"test alpha\"\n}\n\nfeature beta \"B\" {\n}\n",
-        crate::view_support::registries(&["behavior"], &["feature"]),
-    );
-    project.graph.add_edge(Edge {
+    let mut project = Assembled::over(crate::view_support::registries(&["behavior"], &["feature"]))
+        .source(
+            "behavior alpha \"A\" {\n  verify unit \"test alpha\"\n}\n\nfeature beta \"B\" {\n}\n",
+        );
+    project.graph_mut().add_edge(Edge {
         source: "beta".into(),
         target: "alpha".into(),
         label: "behaviors".into(),

@@ -7,7 +7,7 @@
 //! The reaction is synchronous (ADR 0043, amending ADR 0023 D8): it reads files and runs the
 //! checks, so it runs on the blocking pool, one change at a time. It takes the state's lock
 //! only briefly, with the blocking accessors, and never holds it while it talks to the editor;
-//! readers meanwhile see the session's last complete graph (`LspState`'s stand-in). It must not
+//! readers meanwhile see a copy of the session's last complete compile. It must not
 //! be called from an async task.
 
 use std::path::PathBuf;
@@ -202,7 +202,7 @@ impl<E: Editor> Reaction<E> {
     }
 
     /// An update panicked: the session is lost, so the state falls back to an empty one rather
-    /// than a stale stand-in.
+    /// than a stale copy.
     fn lose_session(&mut self, panic: String) -> Option<Applied> {
         self.state
             .blocking_write()

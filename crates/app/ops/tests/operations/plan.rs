@@ -4,7 +4,7 @@ use specforge_ops::read::plan::{AgentPlan, PlanGapKind};
 use specforge_parser::{EntityId, EntityKind, FieldMap, VerifyStatement};
 use specforge_test::prelude::*;
 
-use crate::view_support::{Project, gap_texts, registries};
+use crate::view_support::{Assembled, Viewed, gap_texts, registries};
 
 fn span() -> SourceSpan {
     SourceSpan {
@@ -278,10 +278,7 @@ fn plan_validation_contract_consistency() {
     verify = "the plan check reads no recorded test report"
 )]
 fn the_plan_check_reads_no_recorded_report() {
-    let project = Project::new(
-        "behavior a \"A\" {\n  verify unit \"a works\"\n}\n\nbehavior b \"B\" {\n  verify unit \"b works\"\n}\n",
-        registries(&["behavior"], &[]),
-    );
+    let project = Assembled::over(registries(&["behavior"], &[])).source("behavior a \"A\" {\n  verify unit \"a works\"\n}\n\nbehavior b \"B\" {\n  verify unit \"b works\"\n}\n");
     let plan = AgentPlan::read(
         &serde_json::json!({"plan_id": "p", "entries": [{"entity_id": "a", "action": "implement"}]}),
     )
@@ -295,7 +292,7 @@ fn the_plan_check_reads_no_recorded_report() {
         "{",
         r#"{"results":{"a":{"tests":[{"name":"t","status":"pass","verify":"a works"}]}}}"#,
     ] {
-        std::fs::write(project.dir.path().join("specforge-report.json"), report).unwrap();
+        std::fs::write(project.root().join("specforge-report.json"), report).unwrap();
         assert_eq!(
             specforge_ops::read::plan::check(&project.view(), &plan),
             unreported,

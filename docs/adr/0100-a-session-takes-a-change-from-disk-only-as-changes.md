@@ -23,6 +23,8 @@ that reaches only an excluded file, and `apply` returns `None`).
   the stand-in copies five things (the graph, the environment handle, the source texts, the source keys and the
   memo's snapshot), not one, and the graph clone is deep. Its reopen condition (a second reader of a session during
   an update) is unmet.
+  *ADR 0108: the stand-in is a copy of the compiled project (`CompiledProject: Clone`); the decision and its reopen
+  condition stand.*
 
 ## Rejected
 

@@ -4,7 +4,7 @@ use super::*;
 fn an_unusable_report_is_refused_as_e045() {
     let project = Project::new();
     std::fs::write(
-        project.dir.path().join("specforge-report.json"),
+        project.assembled.root().join("specforge-report.json"),
         "{not json",
     )
     .unwrap();
@@ -15,7 +15,7 @@ fn an_unusable_report_is_refused_as_e045() {
     assert_eq!(e.code, "E045");
 
     let missing = AnalyzeOptions {
-        report: ReportSource::File(project.dir.path().join("absent.json")),
+        report: ReportSource::File(project.assembled.root().join("absent.json")),
         ..Default::default()
     };
     assert!(matches!(
@@ -28,7 +28,7 @@ fn an_unusable_report_is_refused_as_e045() {
 fn a_report_source_of_none_ignores_a_broken_recorded_report() {
     let project = Project::new();
     std::fs::write(
-        project.dir.path().join("specforge-report.json"),
+        project.assembled.root().join("specforge-report.json"),
         "{not json",
     )
     .unwrap();
@@ -51,13 +51,16 @@ fn a_sub_path_does_not_read_the_ancestors_report() {
         &[EXT, TESTING],
     );
     std::fs::write(
-        project.dir.path().join("specforge-report.json"),
+        project.assembled.root().join("specforge-report.json"),
         r#"{"results":{}}"#,
     )
     .unwrap();
-    let sub = project.dir.path().join("sub");
-    std::fs::create_dir(&sub).unwrap();
-    let view = project.view_at(Some(&sub));
+    // A project of its own below: it reads its root and nothing above.
+    let sub = project.assembled.root().join("sub");
+    let nested = Assembled::assembling_at(&sub, |root| {
+        loaded_at(root, &project.runtime, &[EXT, TESTING])
+    });
+    let view = nested.view();
     let min = AnalyzeOptions {
         min: Some(50.0),
         ..Default::default()
@@ -97,7 +100,7 @@ fn min_needs_a_report_and_comes_after_the_other_checks() {
     ));
 
     std::fs::write(
-        project.dir.path().join("specforge-report.json"),
+        project.assembled.root().join("specforge-report.json"),
         r#"{"results":{}}"#,
     )
     .unwrap();
@@ -109,7 +112,7 @@ fn min_needs_a_report_and_comes_after_the_other_checks() {
 fn gate_of(pass_name: &str, min: Option<f64>, summary: Value) -> Option<Gate> {
     let project = Project::serving(InProcessRuntime::new().with(coverage(summary)), &[TESTING]);
     std::fs::write(
-        project.dir.path().join("specforge-report.json"),
+        project.assembled.root().join("specforge-report.json"),
         r#"{"results":{}}"#,
     )
     .unwrap();
@@ -280,7 +283,7 @@ fn a_minimum_without_the_coverage_pass_is_refused_before_any_pass_runs() {
         &[TESTING, EXT],
     );
     std::fs::write(
-        project.dir.path().join("specforge-report.json"),
+        project.assembled.root().join("specforge-report.json"),
         r#"{"results":{}}"#,
     )
     .unwrap();

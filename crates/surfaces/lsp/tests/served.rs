@@ -358,7 +358,7 @@ impl Served {
             .then(|| hover_text(&self.state(), &self.uri(file), self.position_of(file, id)))?
     }
 
-    /// `f` over the state while the session is out for an update (its stand-in).
+    /// `f` over the state while the session is out for an update (its copy).
     pub fn rebuilding<R>(&mut self, f: impl FnOnce(&LspState) -> R) -> R {
         let mut state = self.state.blocking_write();
         let session = state.take_session().expect("held");

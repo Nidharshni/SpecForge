@@ -1,7 +1,7 @@
 # The compiled project is the session's core
 
 **Status:** accepted (2026-10-09). Amends [ADR 0032](0032-one-graph-build.md) ("One cold pipeline"); notes in
-ADRs 0014, 0015 and 0019. D1: the core also memoizes its report (ADR 0074). D6 amended by [ADR 0109](0109-reopening-a-project-in-place-is-one-session-operation.md) (`McpState::source` is the one runtime rule; the served project is reopened in place).
+ADRs 0014, 0015 and 0019. D1: the core also memoizes its report (ADR 0074). D5 and E5 amended by [ADR 0108](0108-a-project-view-comes-only-from-a-compiled-project.md) (`of` is the only view constructor). D6 amended by [ADR 0109](0109-reopening-a-project-in-place-is-one-session-operation.md) (`McpState::source` is the one runtime rule; the served project is reopened in place).
 
 `specforge-project` had two types with the same six fields, the environment, the sources, the import
 diagnostics, the graph, the check diagnostics and the snapshot and coverage memo, held in different types
@@ -29,11 +29,14 @@ project was brought up to date with `ensure_fresh`. `OtherProject` also re-imple
 - **D3. The check pipeline is the core's, the stamps the session's.** The core takes a snapshot
   (`snapshot_now`) and runs the checks over it (`check_over`); the session renews and stamps its check
   inputs between the two (ADR 0030 D3), a one-shot compile does nothing between them.
+  *(ADR 0106: the core's check takes the compile's reads; a session's ledger records the check inputs, a one-shot's `Unrecorded` does nothing.)*
 - **D4. A detached project is a compiled project with no root** (`root()` is `None`, no import is
   resolved), so a view of it is rootless with no parameter (ADR 0030 D5).
 - **D5. One view constructor for a compiled project.** `ProjectView::of(&CompiledProject)` serves a
   one-shot compile and a session's; `of_session` and `Reported::Session` are gone. `Reported` keeps
   `Compiled` and `Listed`: the LSP hover and MCP's context prompt report a listed slice.
+  *ADR 0108: `of` is the only constructor; the view holds the project; `with_registries` is the in-memory builder's
+  bare build.*
 - **D6. MCP opens another project as a session.** `CallTarget::Other` holds a `ProjectSession` opened by
   `McpState::open`, the one rule for the served project and another one (the host's runtime, else the
   project's own per load); after a call that wrote files it is brought up to date with `ensure_fresh`,

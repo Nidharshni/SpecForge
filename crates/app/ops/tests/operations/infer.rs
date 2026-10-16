@@ -6,20 +6,21 @@ use specforge_ops::analysis::check::{CheckOptions, check};
 use specforge_project::{Environment, ExtensionLoad, LintProfile};
 use specforge_test::prelude::*;
 
-use crate::view_support::{Project, config_read};
+use crate::view_support::{Assembled, Viewed, config_read};
 
 /// A project with an `inferred` check over the manifest `manifest` (or no
 /// manifest) and the source file `src/tiny.rs` of two lines, whose compile
 /// read `config` as its `specforge.json`.
-fn project(manifest: Option<&str>, config: serde_json::Value) -> Project {
-    let project = Project::assembled("behavior a \"A\" {\n}\n", |root| {
+fn project(manifest: Option<&str>, config: serde_json::Value) -> Assembled {
+    let project = Assembled::assembling(|root| {
         Environment::assemble(
             config_read(root, config),
             Installed::unread(root),
             ExtensionLoad::NoRuntime,
         )
-    });
-    let root = project.dir.path();
+    })
+    .source("behavior a \"A\" {\n}\n");
+    let root = project.root();
     std::fs::create_dir_all(root.join("src")).unwrap();
     std::fs::write(root.join("src/tiny.rs"), "pub fn a() {}\npub fn b() {}\n").unwrap();
     if let Some(manifest) = manifest {
@@ -46,7 +47,7 @@ fn indexing(entities: usize) -> String {
 
 /// What `specforge check --lint inferred` reports for `project`, beyond
 /// nothing.
-fn inferred(project: &Project) -> Vec<String> {
+fn inferred(project: &Assembled) -> Vec<String> {
     let options = CheckOptions {
         lint_profiles: vec![LintProfile::Inferred],
         ..Default::default()
@@ -123,21 +124,21 @@ use specforge_ops::read::infer::{
 
 /// One `step` over `project`'s view.
 fn step(
-    project: &Project,
+    project: &Assembled,
     step: SessionStep<'_>,
 ) -> Result<infer::SessionOutcome, specforge_ops::Refusal<infer::SessionField>> {
     infer::session(&project.view(), step)
 }
 
 /// The sessions `specforge-infer.json` records at `project`'s root.
-fn recorded_sessions(project: &Project) -> Vec<serde_json::Value> {
-    let text = std::fs::read_to_string(project.dir.path().join("specforge-infer.json")).unwrap();
+fn recorded_sessions(project: &Assembled) -> Vec<serde_json::Value> {
+    let text = std::fs::read_to_string(project.root().join("specforge-infer.json")).unwrap();
     let manifest: serde_json::Value = serde_json::from_str(&text).unwrap();
     manifest["sessions"].as_array().cloned().unwrap_or_default()
 }
 
 /// The id a start recorded.
-fn started(project: &Project, agent: Option<&str>) -> String {
+fn started(project: &Assembled, agent: Option<&str>) -> String {
     let outcome = step(
         project,
         SessionStep::Start {
@@ -174,7 +175,7 @@ fn start_records_an_active_session() {
 fn a_second_start_is_session_active_and_writes_nothing() {
     let project = project(None, serde_json::json!({}));
     started(&project, None);
-    let before = std::fs::read(project.dir.path().join("specforge-infer.json")).unwrap();
+    let before = std::fs::read(project.root().join("specforge-infer.json")).unwrap();
 
     let error = step(
         &project,
@@ -190,7 +191,7 @@ fn a_second_start_is_session_active_and_writes_nothing() {
         error.error.message,
         "Another inference session is already active. End it first."
     );
-    let after = std::fs::read(project.dir.path().join("specforge-infer.json")).unwrap();
+    let after = std::fs::read(project.root().join("specforge-infer.json")).unwrap();
     assert_eq!(before, after);
 }
 
@@ -255,12 +256,12 @@ fn end_of_an_unknown_session_is_unknown_session() {
     assert_eq!(error.error.code, UNKNOWN_SESSION);
     assert_eq!(error.error.kind, OpErrorKind::InvalidInput);
     assert_eq!(error.error.message, "Unknown session_id: 'nope'");
-    assert!(!project.dir.path().join("specforge-infer.json").exists());
+    assert!(!project.root().join("specforge-infer.json").exists());
 }
 
 /// The index entries `specforge-infer.json` records.
-fn source_index(project: &Project) -> Vec<serde_json::Value> {
-    let text = std::fs::read_to_string(project.dir.path().join("specforge-infer.json")).unwrap();
+fn source_index(project: &Assembled) -> Vec<serde_json::Value> {
+    let text = std::fs::read_to_string(project.root().join("specforge-infer.json")).unwrap();
     let manifest: serde_json::Value = serde_json::from_str(&text).unwrap();
     manifest["source_index"]
         .as_array()
@@ -315,7 +316,7 @@ fn mark_hashes_the_file_with_sha256() {
     )
     .unwrap();
     let index = source_index(&project);
-    let bytes = std::fs::read(project.dir.path().join("src/tiny.rs")).unwrap();
+    let bytes = std::fs::read(project.root().join("src/tiny.rs")).unwrap();
     assert_eq!(
         index[0]["content_hash"],
         format!("{:x}", Sha256::digest(&bytes)).as_str()
@@ -338,10 +339,7 @@ fn mark_hashes_the_file_with_sha256() {
 #[test]
 fn a_rootless_view_is_no_project() {
     let project = project(None, serde_json::json!({}));
-    let recorded =
-        specforge_project::coverage::RecordedCoverage::over(&project.graph, &project.env);
-    let rootless =
-        specforge_ops::view::ProjectView::new(&project.graph, &project.env, None, &recorded);
+    let rootless = project.rootless_view();
     let error = infer::session(
         &rootless,
         SessionStep::Start {
@@ -359,7 +357,7 @@ fn a_rootless_view_is_no_project() {
 )]
 fn every_step_reports_the_manifest_as_its_write() {
     let project = project(None, serde_json::json!({}));
-    let root = project.dir.path();
+    let root = project.root();
     let id = started(&project, None);
     let mut all = vec![
         step(
@@ -417,7 +415,7 @@ fn a_source_root_outside_the_root_is_refused() {
         "source_roots entry '../x' is not a path inside the project root"
     );
     assert!(error.error.data.is_none(), "{error:?}");
-    assert!(!project.dir.path().join("specforge-infer.json").exists());
+    assert!(!project.root().join("specforge-infer.json").exists());
 
     // The project root itself is a root; roots are recorded by the rule.
     step(
@@ -428,7 +426,7 @@ fn a_source_root_outside_the_root_is_refused() {
         },
     )
     .unwrap();
-    let text = std::fs::read_to_string(project.dir.path().join("specforge-infer.json")).unwrap();
+    let text = std::fs::read_to_string(project.root().join("specforge-infer.json")).unwrap();
     let manifest: serde_json::Value = serde_json::from_str(&text).unwrap();
     assert_eq!(manifest["source_roots"], serde_json::json!([".", "src"]));
 }

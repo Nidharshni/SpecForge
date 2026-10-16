@@ -29,6 +29,7 @@ and five places.
   *(ADR 0073: `classify` and `SessionInputs::changes` are gone; `ProjectSession::changes(paths)` is
   the stamp comparison narrowed by the paths. The value also holds each symlinked source's
   target.)*
+  *(ADR 0106: the session stamps and discovers through its read ledger, `specforge_project::ledger`, which owns this value and the stamps.)*
   *(ADR 0055: complete. Import resolution reads no file, so a `.spec` file discovery does not find is no
   input of any kind.)*
 - **D2. When it changes.** It is made when the environment loads and renewed each time the checks

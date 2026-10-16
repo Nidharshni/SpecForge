@@ -20,9 +20,28 @@ use specforge_protocol_types::PeerDependency;
 use specforge_wasm::testing::InProcessRuntime;
 
 use crate::solver::{Availability, SolveFailure, Solver, Z3};
+use crate::view::ProjectView;
 
 #[path = "../../../../fixtures/greet-extension/src/contributions.rs"]
 mod greet;
+
+/// A test's assembled project, viewed (ADR 0108): [`ProjectView::of`] its compiled project, rooted or detached.
+pub trait Viewed {
+    /// The view of the rooted compiled project.
+    fn view(&self) -> ProjectView<'_>;
+    /// The view of the same project without a root.
+    fn rootless_view(&self) -> ProjectView<'_>;
+}
+
+impl Viewed for specforge_project::testing::Assembled {
+    fn view(&self) -> ProjectView<'_> {
+        ProjectView::of(self.compiled())
+    }
+
+    fn rootless_view(&self) -> ProjectView<'_> {
+        ProjectView::of(self.detached())
+    }
+}
 
 /// The bytes the in-process runtime serves as `@sdk/greet` 0.1.0.
 pub const GREET: &[u8] = b"\0asm in-process @sdk/greet 0.1.0";

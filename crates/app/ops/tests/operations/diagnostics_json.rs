@@ -13,7 +13,7 @@ use specforge_ops::analysis::analyze::{AnalyzeOptions, analyze};
 use specforge_registry::build_registries;
 use specforge_registry_client::registry_client::RegistryError;
 
-use crate::view_support::Project;
+use crate::view_support::{Assembled, Viewed};
 
 /// W112: the registry build refuses a rule that can never fire.
 fn unexecutable_rule() -> Diagnostic {
@@ -54,7 +54,7 @@ fn entity_without_contracts() -> Diagnostic {
         "widget w \"W\" {\n}\n",
         "main.spec",
     )]);
-    let project = Project::of_graph(graph, registries);
+    let project = Assembled::over(registries).graph(graph);
     let outcome = analyze(
         &project.view(),
         &AnalyzeOptions {
@@ -82,7 +82,7 @@ fn registry_unauthorized() -> Diagnostic {
 /// I202: inference reports a source file that produced too many entities,
 /// through the lint the `inferred` profile runs.
 fn dense_inference() -> Diagnostic {
-    let project = Project::assembled("behavior a \"A\" {\n}\n", |root| {
+    let project = Assembled::assembling(|root| {
         specforge_project::Environment::assemble(
             crate::view_support::config_read(
                 root,
@@ -91,8 +91,9 @@ fn dense_inference() -> Diagnostic {
             specforge_installed::Installed::unread(root),
             specforge_project::ExtensionLoad::NoRuntime,
         )
-    });
-    let root = project.dir.path();
+    })
+    .source("behavior a \"A\" {\n}\n");
+    let root = project.root();
     std::fs::write(root.join("lib.rs"), "fn a() {}\n").unwrap();
     std::fs::write(
         root.join("specforge-infer.json"),

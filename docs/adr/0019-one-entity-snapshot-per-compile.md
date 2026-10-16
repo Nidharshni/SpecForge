@@ -41,6 +41,7 @@ elsewhere, which takes it with `Environment::entity_snapshot`): it is never aske
 inputs of its own, so no caller can score a graph with another's registries or spec root. A session
 whose update skipped the checks makes its memo over its own graph on first use; the LSP's stand-in
 graph carries the snapshot its session held for that graph.
+*ADR 0108: only the compiled project makes its memo; the LSP's copy shares its session's.*
 
 ### Placement
 

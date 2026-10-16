@@ -206,8 +206,7 @@ impl ProjectCoverage {
 
 /// The entity snapshot of a graph, the recorded test report at a root and
 /// the coverage computed from both, memoized. Owned by whoever owns the
-/// graph it scores (a [`crate::CompiledProject`], one-shot or a session's;
-/// the session ([`crate::ProjectSession`]) starts a fresh one on every update and
+/// graph it scores: made only by the [`crate::CompiledProject`] that owns it, one-shot or a session's (ADR 0108; the session ([`crate::ProjectSession`]) starts a fresh one on every update and
 /// reload), so "once per compile" holds by construction. The memo is bound
 /// to its snapshot when it is made: seeded with the one the owner's checks
 /// read ([`Self::of`]), or with one taken from the graph and environment it
@@ -238,9 +237,21 @@ pub struct Recorded {
     pub coverage: Arc<ProjectCoverage>,
 }
 
+/// A copy starts with the coverage already computed, and re-reads the report
+/// on its own when the report's bytes change (the memo is keyed on content).
+impl Clone for RecordedCoverage {
+    fn clone(&self) -> Self {
+        let memo = self.memo.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        RecordedCoverage {
+            entities: Arc::clone(&self.entities),
+            memo: Mutex::new(memo),
+        }
+    }
+}
+
 impl RecordedCoverage {
     /// A memo seeded with the snapshot its owner's checks read.
-    pub fn of(entities: Arc<EntitySnapshot>) -> Self {
+    pub(crate) fn of(entities: Arc<EntitySnapshot>) -> Self {
         RecordedCoverage {
             entities,
             memo: Mutex::default(),
@@ -250,7 +261,7 @@ impl RecordedCoverage {
     /// A memo over `graph`, built in `env` (a graph assembled in a test, a
     /// session's graph after an update that skipped the checks): its
     /// snapshot is taken now, with `env`'s registries and spec root.
-    pub fn over(graph: &Graph, env: &Environment) -> Self {
+    pub(crate) fn over(graph: &Graph, env: &Environment) -> Self {
         Self::of(Arc::new(env.entity_snapshot(graph)))
     }
 

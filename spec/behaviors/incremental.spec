@@ -168,6 +168,7 @@ behavior bring_session_up_to_date "Bring a Session Up to Date with Disk" {
   verify unit "a specforge.lock change reloads the environment"
   verify unit "after bringing itself up to date a session matches a fresh compile"
   verify unit "a specforge.json or module written while the extension runtime loads is seen next time"
+  verify unit "a source or check input written between its stamp and its read is seen next time"
   verify integration "after the LSP's watchers move, the session catches up on what changed while they did"
   verify integration "the LSP's catch-up keeps an open buffer"
   verify unit "a nested project appearing below the spec root takes its files out of the session, and its removal puts them back"

@@ -5,6 +5,7 @@
 
 mod build;
 mod contracts;
+mod copy;
 mod derived;
 mod field_form;
 mod graph;

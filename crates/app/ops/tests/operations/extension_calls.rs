@@ -240,7 +240,7 @@ fn the_migration_hook_input_and_any_answer() {
 }
 
 mod evidence {
-    use crate::view_support::{Project, registries};
+    use crate::view_support::{Assembled, Viewed, registries};
     use serde_json::Map;
     use specforge_ops::extension::command::{CommandFormat, ExtensionCommand, run};
     use specforge_protocol_types::{
@@ -270,7 +270,7 @@ mod evidence {
 
     /// The evidence `project`'s command run sends the export: the `evidence`
     /// of the input it received (`None`: the input carries none).
-    fn sent(project: &Project, runtime: &InProcessRuntime) -> CommandEvidence {
+    fn sent(project: &Assembled, runtime: &InProcessRuntime) -> CommandEvidence {
         let command = ExtensionCommand::new(
             "@pin/ext",
             "pin",
@@ -307,10 +307,11 @@ mod evidence {
     )]
     fn the_input_carries_each_counted_entitys_proof() {
         let runtime = probe_runtime();
-        let project = Project::in_runtime(SOURCE, registries(&["behavior"], &[]), runtime.clone());
+        let project =
+            Assembled::over_in(registries(&["behavior"], &[]), runtime.clone()).source(SOURCE);
         let pass = |verify: &str| serde_json::json!({"name": verify, "status": "passed", "verify": verify});
         std::fs::write(
-            project.dir.path().join("specforge-report.json"),
+            project.root().join("specforge-report.json"),
             serde_json::json!({"runner": "fixture", "results": {
                 "proven": {"tests": [pass("a"), pass("b")]},
                 "half": {"tests": [pass("a")]},
@@ -348,13 +349,10 @@ mod evidence {
     )]
     fn no_report_is_no_evidence_and_a_broken_one_says_why() {
         let runtime = probe_runtime();
-        let project = Project::in_runtime(SOURCE, registries(&["behavior"], &[]), runtime.clone());
+        let project =
+            Assembled::over_in(registries(&["behavior"], &[]), runtime.clone()).source(SOURCE);
         assert_eq!(sent(&project, &runtime), CommandEvidence::None);
-        std::fs::write(
-            project.dir.path().join("specforge-report.json"),
-            "{not json",
-        )
-        .unwrap();
+        std::fs::write(project.root().join("specforge-report.json"), "{not json").unwrap();
         let CommandEvidence::Unreadable { reason } = sent(&project, &runtime) else {
             panic!("a broken report is unreadable evidence");
         };

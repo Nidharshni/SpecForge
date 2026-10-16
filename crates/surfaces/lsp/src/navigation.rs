@@ -396,7 +396,7 @@ mod tests {
         assert_eq!(
             state.compiled_text("a.spec").as_deref(),
             Some(COMPILED),
-            "the stand-in holds the compiled text"
+            "the copy holds the compiled text"
         );
         state.set_session(session);
     }
