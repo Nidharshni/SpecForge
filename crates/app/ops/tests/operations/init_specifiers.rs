@@ -195,3 +195,27 @@ fn init_reads_a_local_path_through_its_symlinks_as_the_file_system_does() {
     let installed = std::fs::read(dir.join(".specforge/extensions/@x/a/extension.wasm")).unwrap();
     assert_eq!(installed, A_ONE);
 }
+
+/// A comma is part of a specifier: `init` names no more extensions for a string than `add` does.
+#[test]
+#[ignore = "flipped by T6"]
+fn init_reads_each_string_as_one_specifier() {
+    let scratch = TempDir::new().unwrap();
+    let dir = scratch.path().join("demo");
+    let runtime = serving_builtin(
+        runtime(),
+        "@specforge/governance",
+        declaring("@specforge/governance", "1.0.0", &[]),
+    );
+
+    let error = init_with(
+        &dir,
+        &["@specforge/product,@specforge/governance".to_string()],
+        &runtime,
+    )
+    .unwrap_err();
+
+    assert_eq!(error.error.code, "E054");
+    assert_eq!(error.subject, Some(InitField::Extensions));
+    assert!(!dir.exists(), "nothing was written");
+}

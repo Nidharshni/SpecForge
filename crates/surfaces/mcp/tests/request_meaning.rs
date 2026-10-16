@@ -77,3 +77,40 @@ fn export_refuses_both_schema_flags_on_with_schema() {
     );
     assert_refused(&reply, "with_schema", None);
 }
+
+/// A server over an empty workspace, for the calls that create a project.
+fn workspace() -> (
+    tempfile::TempDir,
+    std::path::PathBuf,
+    specforge_mcp::McpServer,
+) {
+    let dir = tempfile::TempDir::new().unwrap();
+    let root = dir.path().join("workspace");
+    std::fs::create_dir_all(&root).unwrap();
+    let mut server = specforge_mcp::McpServer::with_project_root(root.clone());
+    call(&mut server, "initialize", json!({}));
+    (dir, root, server)
+}
+
+#[test]
+#[ignore = "flipped by T6"]
+fn init_reads_a_comma_string_as_add_extension_does() {
+    let (_dir, root, mut server) = workspace();
+    let reply = call_tool(
+        &mut server,
+        "specforge.init",
+        json!({"path": "created", "extensions": ["@specforge/product,@specforge/governance"]}),
+    );
+    assert_refused(&reply, "extensions", Some("E054"));
+    assert!(!root.join("created").exists());
+}
+
+#[test]
+fn add_extension_reads_a_comma_string_as_one_specifier() {
+    let reply = call_tool(
+        &mut served(),
+        "specforge.add_extension",
+        json!({"specifiers": ["@specforge/product,@specforge/governance"]}),
+    );
+    assert_refused(&reply, "specifiers", Some("E054"));
+}
