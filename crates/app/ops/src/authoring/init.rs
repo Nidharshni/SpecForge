@@ -309,7 +309,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
             }),
         },
     ];
-    let done = checked.finish(dir, files)?;
+    let done = checked.finish(dir, files, &req.containment.narrowed(dir))?;
 
     Ok(Outcome {
         root: dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf()),

@@ -572,6 +572,7 @@ fn remove_and_check_agree_on_the_project_peer_set() {
                 name,
                 force,
                 dry_run: false,
+                containment: &specforge_ops::Containment::unbounded(),
             },
         );
 

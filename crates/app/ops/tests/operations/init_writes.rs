@@ -505,3 +505,42 @@ fn init_enables_the_builtins_a_local_file_requires() {
         compiled.diagnostics()
     );
 }
+
+/// A `.gitignore` that is a symlink leaving the directory: a bounded init refuses before writing,
+/// the CLI's (unbounded) writes through it, as the user's own link (ADR 0092 D6, D8).
+#[cfg(unix)]
+#[test]
+fn init_writes_no_file_through_a_gitignore_that_leaves_its_directory() {
+    use specforge_ops::Containment;
+    use specforge_ops::authoring::init;
+    let scratch = TempDir::new().unwrap();
+    let elsewhere = TempDir::new().unwrap();
+    let outside = elsewhere.path().join("victim");
+    let request = |dir: &Path, containment: &Containment| {
+        let request = init::Request {
+            dir,
+            name: Some("demo"),
+            version: init::DEFAULT_VERSION,
+            extensions: &[],
+            containment,
+        };
+        init::init(&request, &candidates())
+    };
+    let linked = |name: &str| {
+        let dir = scratch.path().join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(&outside, "one\n").unwrap();
+        std::os::unix::fs::symlink(&outside, dir.join(".gitignore")).unwrap();
+        dir
+    };
+
+    let dir = linked("bounded");
+    let refused = request(&dir, &Containment::within(scratch.path())).unwrap_err();
+    assert_eq!(refused.error.code, specforge_ops::OUTSIDE_ROOT);
+    assert_eq!(std::fs::read_to_string(&outside).unwrap(), "one\n");
+    assert!(!dir.join("specforge.json").exists());
+
+    let dir = linked("unbounded");
+    request(&dir, &Containment::unbounded()).unwrap();
+    assert_ne!(std::fs::read_to_string(&outside).unwrap(), "one\n");
+}

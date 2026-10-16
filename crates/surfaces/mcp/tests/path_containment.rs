@@ -466,8 +466,10 @@ fn infer_session_refuses_a_missing_file_behind_a_symlink_that_leaves_the_project
 /// `init` into a directory whose `.gitignore` is a symlink that leaves the server's root appends
 /// to nothing outside it.
 #[cfg(unix)]
-#[test]
-#[ignore = "flipped by T8"]
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a mutation reads and writes no file through a symlink that leaves the project"
+)]
 fn init_writes_no_file_through_a_symlink_that_leaves_its_directory() {
     let scene = Scene::new();
     let root = scene.dir.path().join("workspace");
@@ -485,7 +487,8 @@ fn init_writes_no_file_through_a_symlink_that_leaves_its_directory() {
         "outside-gitignore-original\n",
         "{reply}"
     );
-    assert_refused(&reply, "path");
+    let error = crate::tool_errors::mcp_error(&reply);
+    assert_eq!(error["code"], "invalid_input", "{error}");
     assert!(!existing.join("specforge.json").exists());
 }
 

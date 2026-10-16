@@ -435,7 +435,11 @@ fn apply<'a>(
             let (Ask(at), error) = refused.decisive();
             named(several, specifier(at), error).about(AddField::Extensions)
         })?
-        .finish(req.root.dir(), Vec::new())?;
+        .finish(
+            req.root.dir(),
+            Vec::new(),
+            &req.containment.narrowed(req.root.dir()),
+        )?;
     for (at, wanted) in asked {
         outcomes[at] = Some(wanted.outcome(done.asked(Ask(at)), req.dry_run));
     }

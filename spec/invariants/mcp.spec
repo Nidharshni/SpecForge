@@ -89,7 +89,8 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
     resource takes it and in either revision. A file or directory a tool
     argument names (format's paths, render's out_dir, outline's file)
     resolves inside the root of the project the call acts on, and no
-    mutation reads or writes through a symlink that leaves it. init creates
+    mutation reads or writes through a symlink that leaves it (init's
+    files, the lock and the installed modules included). init creates
     its project inside the server's root and never inside the served
     project. The CLI is not bounded: its user is already at the file system.
     A call

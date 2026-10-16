@@ -154,6 +154,7 @@ fn remove_over(project: &CompiledProject, name: &str, dry_run: bool) -> extensio
         name,
         force: false,
         dry_run,
+        containment: &specforge_ops::Containment::unbounded(),
     };
     extension::remove(&ProjectView::of(project), &request).unwrap()
 }
@@ -407,6 +408,7 @@ fn a_failed_remove_changes_nothing() {
             name: PROBE,
             force: false,
             dry_run: false,
+            containment: &specforge_ops::Containment::unbounded(),
         },
     )
     .unwrap_err();

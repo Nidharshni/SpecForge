@@ -1,5 +1,6 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, errln, outln};
+use specforge_ops::Containment;
 use specforge_ops::extension::{self, UpdateRequest};
 use specforge_ops_registry::ConfiguredRegistry;
 use specforge_package::Reach;
@@ -54,6 +55,7 @@ impl Args {
             },
             allow_unsigned: self.allow_unsigned,
             trust: format.trust(self.yes),
+            containment: &Containment::unbounded(),
         };
         let updated = extension::update(&request, &registry, &runtime);
         terminal.diagnostics(&registry.reported());
