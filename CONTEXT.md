@@ -63,7 +63,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Schema record**: `<root>/.specforge/schema-cache.json`, the versioned schema the last successful `specforge
   export` recorded, with its content hash (`specforge_ops::schema_version::SchemaCache`). Every reader of the
   project's schema versions against it; only export writes it, into the project it exports. One that cannot be
-  read is I016 and the version starts again at 1.0.0.
+  read is I016 and the version starts again at 1.0.0. Every reader reports what versioning found, the I016 or one
+  W053 per breaking change, as its **schema notices** (`VersionedSchema::notices`, ADR 0111).
 - **Migration record**: `<root>/.specforge/migration.json`, what `specforge migrate --rollback` undoes: the
   last kept migration made with backups, each file with its backup and the SHA-256 of the file as the migration
   left it (`specforge_migrate::MigrationRecord`). A rollback restores only a recorded file that still holds that

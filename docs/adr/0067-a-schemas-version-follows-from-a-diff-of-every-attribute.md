@@ -1,7 +1,7 @@
 # A schema's version follows from a diff of every attribute
 
 **Status:** accepted (2026-10-13, architecture round 8, plan 05). Amends ADR 0003 ("Built instead of trimmed"),
-ADR 0007 (where things live) and ADR 0015 D10.
+ADR 0007 (where things live) and ADR 0015 D10. Amended by ADR 0111 (D5: every reader reports I016, not only export).
 
 The Graph Protocol schema's version was the recorded version bumped by `diff_schemas`, which compared 4 of a
 field's 9 attributes, 2 of a kind's 5, an edge type's label only and none of the extensions. A field that became
@@ -50,6 +50,7 @@ migrate, whose own comparison of two compiles of one environment never found any
   (`InvalidInput`). The export always carries the current schema at its own version.
 - **D5. I016 is an unreadable cache**, the one case where the version restarts; the "prior exports in an output
   directory" case and fallback are gone (exports go to stdout).
+  *(ADR 0111: every reader reports it, not only export.)*
 - **D6. A migration compares no schema.** The schema is the registry build's (ADR 0060 D5), the build is the
   environment's, and a migration changes only sources, its hooks running with no file system (ADR 0037). Migrate's
   `check_schema_compatibility` and `schema_warnings` are gone; W053 is `specforge export`'s.
