@@ -36,6 +36,7 @@ mod prompts;
 mod protocol;
 mod read_notices;
 mod refusal_arguments;
+mod render_writes;
 mod request_meaning;
 mod resource_templates;
 mod resources;
