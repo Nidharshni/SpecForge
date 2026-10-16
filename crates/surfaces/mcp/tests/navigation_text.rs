@@ -82,7 +82,6 @@ fn unseen_edit(served: &Served, file: &str, text: &str) {
     set_mtime(&path);
 }
 
-#[ignore = "flipped by T7"]
 #[specforge_test(
     behavior = "provide_mcp_find_definition_tool",
     verify = "a definition is a position in the text the project was compiled from, not the file on disk now"
@@ -115,7 +114,6 @@ fn a_definition_is_a_position_in_the_compiled_text() {
     assert_eq!(parsed["column"], 11, "{parsed}");
 }
 
-#[ignore = "flipped by T7"]
 #[specforge_test(
     behavior = "provide_mcp_rename_tool",
     verify = "a rename whose file changed on disk since the compile is refused as conflict, and nothing is written"

@@ -3,7 +3,7 @@ use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::SourceSpan;
 use specforge_common::shape::Shape;
-use specforge_ops::read::navigate::{OutlineEntry, outline};
+use specforge_ops::read::navigate::{Navigator, OutlineEntry, outline};
 
 use crate::args::Arguments;
 use crate::containment;
@@ -110,7 +110,7 @@ impl CoreTool for Tool {
                 .resolve(Path::new(file))
                 .map_err(|outside| Box::new(containment::refusal(&outside, "file")))?;
         }
-        let entries = outline(&super::navigator(view), file);
+        let entries = outline(&Navigator::new(view), file);
         // A file the graph has no entity from is either empty or not there:
         // under the project's spec root. With nothing served no file is the
         // project's (the dispatcher makes the refusal the no-project one,

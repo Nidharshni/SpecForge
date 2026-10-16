@@ -120,8 +120,8 @@ impl RenamePlan {
 /// when the compile's `specforge.json` does not say which files are the
 /// project's sources
 /// ([`ConfigProblem::blocks_rewrites`](specforge_common::ConfigProblem::blocks_rewrites)).
-pub fn plan<F: Fn(&str) -> Option<String>>(
-    nav: &Navigator<'_, F>,
+pub fn plan(
+    nav: &Navigator<'_>,
     old_id: &str,
     new_id: &str,
 ) -> Result<RenamePlan, Refusal<RenameField>> {
@@ -352,12 +352,21 @@ mod tests {
         (dir, project)
     }
 
-    /// A navigator over `project`, reading its files through `read`.
-    fn nav<'p, F: Fn(&str) -> Option<String>>(
-        project: &'p specforge_project::CompiledProject,
-        read: F,
-    ) -> Navigator<'p, F> {
-        Navigator::new(crate::view::ProjectView::of(project), read)
+    /// A navigator over `project`, reading the text it was compiled from.
+    fn nav(project: &specforge_project::CompiledProject) -> Navigator<'_> {
+        Navigator::new(crate::view::ProjectView::of(project))
+    }
+
+    /// `project` as if the compile had no text of `limit.spec`.
+    fn without_limit(
+        project: &specforge_project::CompiledProject,
+    ) -> specforge_project::CompiledProject {
+        project.with_source_texts(
+            project
+                .source_texts()
+                .into_iter()
+                .filter(|(key, _)| key != "limit.spec"),
+        )
     }
 
     const LIMIT: &str = "invariant session_limit \"Limit\" {\n  guarantee \"x\"\n}\n";
@@ -369,9 +378,8 @@ mod tests {
     )]
     fn a_config_that_hides_the_sources_refuses_the_rename() {
         let hiding = r#"{"name":"r","extensions":["@specforge/software"],"spec_root":["spec"]}"#;
-        let (dir, project) = project_with_config(hiding, &[("limit.spec", LIMIT)]);
-        let read = |f: &str| std::fs::read_to_string(dir.path().join(f)).ok();
-        let refused = plan(&nav(&project, read), "session_limit", "session_cap").unwrap_err();
+        let (_dir, project) = project_with_config(hiding, &[("limit.spec", LIMIT)]);
+        let refused = plan(&nav(&project), "session_limit", "session_cap").unwrap_err();
         assert_eq!(refused.error.code, "config_invalid");
         assert!(
             refused.error.message.contains("\"spec_root\""),
@@ -379,23 +387,20 @@ mod tests {
             refused.error.message
         );
         // The refusal wins over a bad name.
-        let read = |f: &str| std::fs::read_to_string(dir.path().join(f)).ok();
-        let refused = plan(&nav(&project, read), "session_limit", "1 bad").unwrap_err();
+        let refused = plan(&nav(&project), "session_limit", "1 bad").unwrap_err();
         assert_eq!(refused.error.code, "config_invalid");
 
         // A problem the plan goes around plans as usual.
         let around = r#"{"name":7,"extensions":["@specforge/software"]}"#;
-        let (dir, project) = project_with_config(around, &[("limit.spec", LIMIT)]);
-        let read = |f: &str| std::fs::read_to_string(dir.path().join(f)).ok();
-        assert!(plan(&nav(&project, read), "session_limit", "session_cap").is_ok());
+        let (_dir, project) = project_with_config(around, &[("limit.spec", LIMIT)]);
+        assert!(plan(&nav(&project), "session_limit", "session_cap").is_ok());
     }
 
     #[test]
     fn a_plan_renames_the_declaration_and_every_reference() {
         let (dir, project) = project(&[("limit.spec", LIMIT), ("login.spec", LOGIN)]);
-        let read = |f: &str| std::fs::read_to_string(dir.path().join(f)).ok();
 
-        let plan = plan(&nav(&project, read), "session_limit", "session_cap").unwrap();
+        let plan = plan(&nav(&project), "session_limit", "session_cap").unwrap();
         assert_eq!(
             plan.affected_files().into_iter().collect::<Vec<_>>(),
             ["limit.spec", "login.spec"]
@@ -415,9 +420,8 @@ mod tests {
         let text = "invariant session_limit \"session_limit cap\" {\n  guarantee \"session_limit is never exceeded\"\n}\n\
                     behavior login \"Login\" {\n  invariants [session_limit]\n  // keeps session_limit\n  verify unit \"login respects session_limit\"\n}\n";
         let (dir, project) = project(&[("a.spec", text)]);
-        let read = |f: &str| std::fs::read_to_string(dir.path().join(f)).ok();
 
-        let plan = plan(&nav(&project, read), "session_limit", "session_cap").unwrap();
+        let plan = plan(&nav(&project), "session_limit", "session_cap").unwrap();
         let at: Vec<(usize, usize)> = plan.edits.iter().map(|e| (e.line, e.start_col)).collect();
         assert_eq!(at, [(1, 10), (5, 14)], "the declaration and the reference");
         apply(&plan, dir.path(), &Containment::unbounded()).unwrap();
@@ -433,8 +437,7 @@ mod tests {
     fn a_failed_write_puts_every_file_back() {
         use std::os::unix::fs::PermissionsExt;
         let (dir, project) = project(&[("limit.spec", LIMIT), ("login.spec", LOGIN)]);
-        let read = |f: &str| std::fs::read_to_string(dir.path().join(f)).ok();
-        let plan = plan(&nav(&project, read), "session_limit", "session_cap").unwrap();
+        let plan = plan(&nav(&project), "session_limit", "session_cap").unwrap();
         // limit.spec is written first; login.spec cannot be.
         let login = dir.path().join("login.spec");
         std::fs::set_permissions(&login, std::fs::Permissions::from_mode(0o444)).unwrap();
@@ -456,8 +459,7 @@ mod tests {
     #[test]
     fn apply_writes_nothing_when_one_file_leaves_the_containment() {
         let (dir, project) = project(&[("limit.spec", LIMIT), ("login.spec", LOGIN)]);
-        let read = |f: &str| std::fs::read_to_string(dir.path().join(f)).ok();
-        let plan = plan(&nav(&project, read), "session_limit", "session_cap").unwrap();
+        let plan = plan(&nav(&project), "session_limit", "session_cap").unwrap();
         // login.spec is a symlink to a file outside the directory.
         let outside = tempfile::tempdir().unwrap();
         let elsewhere = outside.path().join("login.spec");
@@ -478,10 +480,9 @@ mod tests {
 
     #[test]
     fn a_plan_refuses_what_it_cannot_do_whole() {
-        let (dir, project) = project(&[("limit.spec", LIMIT), ("login.spec", LOGIN)]);
-        let read = |f: &str| std::fs::read_to_string(dir.path().join(f)).ok();
+        let (_dir, project) = project(&[("limit.spec", LIMIT), ("login.spec", LOGIN)]);
         let code = |r: Result<RenamePlan, Refusal<RenameField>>| r.unwrap_err().error.code;
-        let navigator = nav(&project, read);
+        let navigator = nav(&project);
 
         assert_eq!(code(plan(&navigator, "session_limit", "x")), INVALID_ID);
         assert_eq!(code(plan(&navigator, "nope", "fine_name")), "E003");
@@ -493,15 +494,8 @@ mod tests {
             OpErrorKind::EntityNotFound
         );
         assert_eq!(code(plan(&navigator, "session_limit", "login")), TAKEN);
-        let without_limit = |f: &str| {
-            (f != "limit.spec").then(|| std::fs::read_to_string(dir.path().join(f)).unwrap())
-        };
-        let refused = plan(
-            &nav(&project, without_limit),
-            "session_limit",
-            "session_cap",
-        )
-        .unwrap_err();
+        let without_limit = without_limit(&project);
+        let refused = plan(&nav(&without_limit), "session_limit", "session_cap").unwrap_err();
         assert_eq!(refused.error.code, UNREADABLE);
         assert!(
             refused.error.message.contains("limit.spec"),
@@ -510,15 +504,15 @@ mod tests {
         );
         // A file whose text no longer spells the ID where the graph says
         // (it changed since the compile) is refused the same way.
-        let stale = |f: &str| {
-            let text = std::fs::read_to_string(dir.path().join(f)).unwrap();
-            Some(if f == "login.spec" {
-                format!("\n{text}")
+        let stale = project.with_source_texts(project.source_texts().into_iter().map(|(k, t)| {
+            let text = if k == "login.spec" {
+                format!("\n{t}")
             } else {
-                text
-            })
-        };
-        let refused = plan(&nav(&project, stale), "session_limit", "session_cap").unwrap_err();
+                t.to_string()
+            };
+            (k, text)
+        }));
+        let refused = plan(&nav(&stale), "session_limit", "session_cap").unwrap_err();
         assert_eq!(refused.error.code, UNREADABLE);
         assert!(
             refused.error.message.contains("login.spec"),
@@ -532,23 +526,16 @@ mod tests {
         verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
     )]
     fn rename_states_which_field_a_refusal_is_about() {
-        let (dir, project) = project(&[("limit.spec", LIMIT), ("login.spec", LOGIN)]);
-        let read = |f: &str| std::fs::read_to_string(dir.path().join(f)).ok();
-        let navigator = nav(&project, read);
+        let (_dir, project) = project(&[("limit.spec", LIMIT), ("login.spec", LOGIN)]);
+        let navigator = nav(&project);
         let subject = |old: &str, new: &str| plan(&navigator, old, new).unwrap_err().subject;
 
         assert_eq!(subject("session_limit", "x"), Some(RenameField::NewId));
         assert_eq!(subject("session_limit", "login"), Some(RenameField::NewId));
         assert_eq!(subject("nope", "fine_name"), Some(RenameField::OldId));
         // A file the rename cannot read is a refusal of the environment: about no field.
-        let without_limit = |f: &str| {
-            (f != "limit.spec").then(|| std::fs::read_to_string(dir.path().join(f)).unwrap())
-        };
-        let refused = plan(
-            &nav(&project, without_limit),
-            "session_limit",
-            "session_cap",
-        );
+        let without_limit = without_limit(&project);
+        let refused = plan(&nav(&without_limit), "session_limit", "session_cap");
         assert_eq!(refused.unwrap_err().subject, None);
     }
 }

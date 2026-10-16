@@ -120,10 +120,7 @@ pub struct OutlineMethod {
 /// The outline of spec file `file` (its path, canonical separators): its
 /// entities in line order, each with its method members, each entry
 /// selecting its name. The LSP's document symbols and MCP's outline.
-pub fn outline<F: Fn(&str) -> Option<String>>(
-    nav: &Navigator<'_, F>,
-    file: &str,
-) -> Vec<OutlineEntry> {
+pub fn outline(nav: &Navigator<'_>, file: &str) -> Vec<OutlineEntry> {
     let graph = nav.view.graph();
     let mut nodes: Vec<&Node> = graph
         .nodes()
@@ -176,7 +173,7 @@ pub fn outline<F: Fn(&str) -> Option<String>>(
         .collect()
 }
 
-impl<F: Fn(&str) -> Option<String>> Navigator<'_, F> {
+impl Navigator<'_> {
     /// A method's name in its declaration (`method <name>(…)`): the first
     /// identifier after the keyword, when the text spells the name there;
     /// else the method's whole span.

@@ -46,17 +46,9 @@ pub fn compile(extensions: &[&str], files: &[(&str, &str)]) -> Compiled {
 }
 
 impl Compiled {
-    /// A navigator reading the project's files from disk.
-    pub fn navigator(&self) -> Navigator<'_, impl Fn(&str) -> Option<String> + '_> {
-        let spec_root = self.project.environment().spec_root().to_path_buf();
-        Navigator::new(ProjectView::of(&self.project), move |file| {
-            std::fs::read_to_string(spec_root.join(file)).ok()
-        })
-    }
-
-    /// A navigator reading `text_of` instead of the files.
-    pub fn navigator_over<F: Fn(&str) -> Option<String>>(&self, text_of: F) -> Navigator<'_, F> {
-        Navigator::new(ProjectView::of(&self.project), text_of)
+    /// A navigator over the project, reading the text it was compiled from.
+    pub fn navigator(&self) -> Navigator<'_> {
+        Navigator::new(ProjectView::of(&self.project))
     }
 }
 
@@ -383,11 +375,11 @@ fn a_stale_text_gives_entity_precision() {
     let p = nav();
     // The file changed since the compile: the token is not where the
     // graph says.
-    let nav = p.navigator_over(|file| match file {
-        "login.spec" => Some(format!("\n{LOGIN}")),
-        "limit.spec" => Some(LIMIT.to_string()),
-        _ => None,
-    });
+    let shifted = p.project.with_source_texts([
+        ("login.spec", format!("\n{LOGIN}")),
+        ("limit.spec", LIMIT.to_string()),
+    ]);
+    let nav = Navigator::new(ProjectView::of(&shifted));
     let refs = nav.references("session_limit", INCOMING).unwrap();
     assert_eq!(refs.len(), 1);
     assert_eq!(refs[0].precision, Precision::Entity);
@@ -398,7 +390,8 @@ fn a_stale_text_gives_entity_precision() {
     );
 
     // Unreadable text: the same fallback, the declaration included.
-    let unreadable = p.navigator_over(|_| None);
+    let none = p.project.with_source_texts(Vec::<(String, String)>::new());
+    let unreadable = Navigator::new(ProjectView::of(&none));
     let refs = unreadable
         .references("session_limit", WITH_DECLARATION)
         .unwrap();
@@ -954,9 +947,7 @@ fn an_untargeted_obligation_rule_stubs_every_kind_that_accepts_verify() {
     );
     // The stubs fix exactly what the rule reports: not delta (its flag
     // exempts it), not epsilon (its kind accepts no verify).
-    let navigator = Navigator::new(ProjectView::of(&project), |file| {
-        std::fs::read_to_string(dir.path().join(file)).ok()
-    });
+    let navigator = Navigator::new(ProjectView::of(&project));
     assert_eq!(
         stubs(navigator.fixes(&project.diagnostics(), &FixQuery::default())),
         [
@@ -1002,15 +993,9 @@ fn the_verify_stub_lands_inside_the_block() {
     assert_eq!(parsed.entities[0].obligations.len(), 1);
 }
 
-/// A view of `p`'s graph with `registries` instead of its extensions'.
-fn navigator_over<'a>(
-    p: &Compiled,
-    project: &'a CompiledProject,
-) -> Navigator<'a, impl Fn(&str) -> Option<String> + 'a> {
-    let spec_root = p.project.environment().spec_root().to_path_buf();
-    Navigator::new(ProjectView::of(project), move |file| {
-        std::fs::read_to_string(spec_root.join(file)).ok()
-    })
+/// `project` holding the texts `p` was compiled from, as another project's graph is navigated over them.
+fn with_texts_of(p: &Compiled, project: &CompiledProject) -> CompiledProject {
+    project.with_source_texts(p.project.source_texts())
 }
 
 /// The registries of kinds that take verify statements of `verify_kinds`.
@@ -1043,7 +1028,8 @@ fn the_verify_stub_uses_the_kinds_first_allowed_verify_kind() {
     );
     let project = Assembled::over(verifiable(&["invariant"], &["property", "unit"]))
         .graph(p.project.graph().clone());
-    let fixes = navigator_over(&p, project.detached()).fixes(&[], &FixQuery::default());
+    let fixes = Navigator::new(ProjectView::of(&with_texts_of(&p, project.detached())))
+        .fixes(&[], &FixQuery::default());
     assert_eq!(
         titles(&fixes),
         ["Add verify stub for unique_ids"],
@@ -1206,7 +1192,8 @@ fn no_stub_without_a_target_kind() {
     let p = compile(TESTING, &[("auth.spec", DANGLING)]);
     let diagnostics = p.project.diagnostics();
     let project = Assembled::over(invariants_field(None)).graph(p.project.graph().clone());
-    let fixes = navigator_over(&p, project.detached()).fixes(&diagnostics, &FixQuery::default());
+    let fixes = Navigator::new(ProjectView::of(&with_texts_of(&p, project.detached())))
+        .fixes(&diagnostics, &FixQuery::default());
     assert!(
         fixes.iter().all(|f| f.source != FixSource::CreateStub),
         "{:?}",
@@ -1214,7 +1201,8 @@ fn no_stub_without_a_target_kind() {
     );
     let targeted =
         Assembled::over(invariants_field(Some("invariant"))).graph(p.project.graph().clone());
-    let fixes = navigator_over(&p, targeted.detached()).fixes(&diagnostics, &FixQuery::default());
+    let fixes = Navigator::new(ProjectView::of(&with_texts_of(&p, targeted.detached())))
+        .fixes(&diagnostics, &FixQuery::default());
     assert!(fixes.iter().any(|f| f.source == FixSource::CreateStub));
 }
 

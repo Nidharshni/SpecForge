@@ -562,8 +562,10 @@ behavior provide_mcp_find_definition_tool "Provide MCP Find Definition Tool" {
     location where the entity is defined, including file path, line number,
     and column. LSP equivalence: this tool mirrors textDocument/definition
     (gotoDefinition), returning the same source location an IDE navigates to
-    but over the MCP transport. If the entity does not exist, the tool MUST
-    return an error.
+    but over the MCP transport. Every position it returns is in the text the
+    project was compiled from (the text the graph's spans index), never the
+    file as it is on disk now: MCP and the LSP read one text. If the entity
+    does not exist, the tool MUST return an error.
   """
   verify unit "specforge.find_definition returns file, line, and column"
   verify unit "non-existent entity returns error response"
