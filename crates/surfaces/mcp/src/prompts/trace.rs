@@ -80,7 +80,7 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
                     .collect();
                 (outcome.entries, gaps, "the plan".to_string())
             }
-            Ask::Entity(entity_id) => {
+            Ask::Trace(Target::Entity(entity_id)) => {
                 // As the trace tool traces it: its chain and missing links.
                 // ADR 0111 D6: the trace prompt's payload has no `_meta`, so it reports no notices.
                 let (outcome, _unreported) = trace(&view, Target::Entity(entity_id))
@@ -93,7 +93,7 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
                     format!("entity '{entity_id}'"),
                 )
             }
-            Ask::Every => {
+            Ask::Trace(Target::Every) => {
                 // As the trace tool refuses it.
                 return Err(Box::new(
                     McpError::new(

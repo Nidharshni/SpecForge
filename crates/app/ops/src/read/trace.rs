@@ -176,7 +176,7 @@ impl TraceExpectations {
     }
 }
 
-/// What to trace.
+/// What a trace request asks to trace (`Ask::Trace`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Target<'t> {
     /// One entity's chain.

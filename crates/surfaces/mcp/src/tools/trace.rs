@@ -91,8 +91,8 @@ impl CoreTool for Tool {
             Ask::Plan(plan) => {
                 return Ok(Reply::Plan(specforge_ops::read::plan::check(&view, plan)).into());
             }
-            Ask::Entity(entity_id) => entity_id,
-            Ask::Every => {
+            Ask::Trace(Target::Entity(entity_id)) => entity_id,
+            Ask::Trace(Target::Every) => {
                 return Err(Box::new(McpError::invalid_input(
                     "entity_id",
                     "Missing required parameter: entity_id or plan",

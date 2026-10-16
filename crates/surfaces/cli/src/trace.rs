@@ -2,7 +2,7 @@ use crate::notes::Notes;
 use crate::outcome::{Exit, OutputFormat, Refusal};
 use crate::terminal::{Terminal, out};
 use specforge_ops::read::plan::AgentPlan;
-use specforge_ops::read::trace::{Ask, Target};
+use specforge_ops::read::trace::Ask;
 use specforge_ops::view::ProjectView;
 
 // `specforge trace`'s command line.
@@ -42,26 +42,23 @@ impl Args {
             Ok(project) => project,
             Err(error) => return Refusal::of(self.format).report(terminal, &error),
         };
+        let view = ProjectView::of(&project);
         // clap refuses an entity with --plan first; the reading is the operation's all the same.
-        let ask = match Ask::of(self.entity.as_deref(), self.plan.as_ref()) {
-            Ok(ask) => ask,
+        let target = match Ask::of(self.entity.as_deref(), self.plan.as_ref()) {
             Err(refusal) => {
                 return Refusal::of(self.format).report(terminal, &refusal.into_error());
             }
-        };
-        if let Ask::Plan(plan) = ask {
-            let outcome = specforge_ops::read::plan::check(&ProjectView::of(&project), plan);
-            match self.format {
-                OutputFormat::Human => out!(terminal, "{}", outcome.to_human()),
-                OutputFormat::Json => terminal.json(&outcome),
+            Ok(Ask::Plan(plan)) => {
+                let outcome = specforge_ops::read::plan::check(&view, plan);
+                match self.format {
+                    OutputFormat::Human => out!(terminal, "{}", outcome.to_human()),
+                    OutputFormat::Json => terminal.json(&outcome),
+                }
+                return Exit::of_verdict(outcome.ok);
             }
-            return Exit::of_verdict(outcome.ok);
-        }
-        let target = match ask {
-            Ask::Entity(entity) => Target::Entity(entity),
-            Ask::Every | Ask::Plan(_) => Target::Every,
+            Ok(Ask::Trace(target)) => target,
         };
-        let traced = match specforge_ops::read::trace::trace(&ProjectView::of(&project), target) {
+        let traced = match specforge_ops::read::trace::trace(&view, target) {
             Ok(traced) => traced,
             Err(refusal) => return Refusal::of(self.format).report(terminal, &refusal),
         };
