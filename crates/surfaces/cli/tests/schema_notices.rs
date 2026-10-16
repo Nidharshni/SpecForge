@@ -108,3 +108,20 @@ fn every_reader_reports_a_breaking_change_as_export_does() {
         assert_eq!(lines, &exported, "{args:?}");
     }
 }
+
+#[specforge_test(
+    behavior = "compute_schema_version",
+    verify = "every reader of the schema reports the notices export reports for the same record"
+)]
+fn every_trace_reports_an_unreadable_record() {
+    let dir = project_with_unreadable_record();
+    assert_reports_i016(&dir, &["trace"]);
+    assert_reports_i016(&dir, &["trace", "parse_input", "--format", "json"]);
+    // ADR 0120 D1: the trace document carries no notices, so stderr says them.
+    let output = Cli::on(&dir)
+        .command(&["trace", "parse_input", "--format", "json"])
+        .output()
+        .unwrap();
+    let document: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(document.get("notices").is_none(), "{document}");
+}
