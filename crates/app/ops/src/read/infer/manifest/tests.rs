@@ -278,21 +278,11 @@ fn compute_summary_counts() {
 }
 
 #[test]
-fn content_hash_is_sha256() {
-    let dir = TempDir::new().unwrap();
-    let file = dir.path().join("test.rs");
-    fs::write(&file, "fn main() {}").unwrap();
-
-    let hash = compute_content_hash(&file).unwrap();
-    assert_eq!(hash.len(), 64);
-}
-
-#[test]
 fn detect_stale_and_deleted() {
     let dir = TempDir::new().unwrap();
     let file_a = dir.path().join("a.rs");
     fs::write(&file_a, "original").unwrap();
-    let hash_a = compute_content_hash(&file_a).unwrap();
+    let hash_a = content_hash(&fs::read(&file_a).unwrap());
 
     let mut m = InferenceManifest::default();
     m.upsert_source_entry(SourceFileEntry::new("a.rs", hash_a, vec![], "t"));
@@ -306,31 +296,6 @@ fn detect_stale_and_deleted() {
     let (stale, deleted) = detect_stale_entries(dir.path(), &m);
     assert_eq!(stale, vec!["a.rs"]);
     assert_eq!(deleted, vec!["deleted.rs"]);
-}
-
-#[test]
-fn the_source_path_rule() {
-    for (given, recorded) in [
-        ("a.rs", "a.rs"),
-        ("./a.rs", "a.rs"),
-        ("src\\a.rs", "src/a.rs"),
-        ("src//a.rs", "src/a.rs"),
-        ("src/./a.rs", "src/a.rs"),
-        ("src/", "src"),
-    ] {
-        assert_eq!(source_path(given), Ok(recorded.to_string()), "{given}");
-    }
-    for outside in [
-        "/x", "\\x", "C:\\x", "c:/x", "../x", "a/../b", "", ".", "./",
-    ] {
-        assert_eq!(source_path(outside), Err(OutsideRoot), "{outside:?}");
-    }
-    // A source root may be the project root itself.
-    assert_eq!(source_root("."), Ok(".".to_string()));
-    assert_eq!(source_root("./src"), Ok("src".to_string()));
-    for outside in ["", "/x", "../x"] {
-        assert_eq!(source_root(outside), Err(OutsideRoot), "{outside:?}");
-    }
 }
 
 #[test]

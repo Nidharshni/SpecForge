@@ -9,10 +9,10 @@ use std::path::Path;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 use specforge_common::{Diagnostic, codes};
 
+use super::sources::{content_hash, normal_path};
 use crate::{Containment, Held, OpError, OpErrorKind, Outside, ReadFailure, Writes};
 
 const CURRENT_VERSION: u32 = 1;
@@ -364,71 +364,6 @@ impl InferenceManifest {
     }
 }
 
-/// A path outside the project root, or naming nothing: the source path
-/// rule refuses it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct OutsideRoot;
-
-/// The components of `query` under the source path rule's separators (`/`
-/// and `\`), without the empty and `.` ones. A path that is absolute, has
-/// a drive prefix or has a `..` component is outside the root.
-fn components(query: &str) -> Result<Vec<&str>, OutsideRoot> {
-    let bytes = query.as_bytes();
-    let absolute = query.starts_with(['/', '\\']);
-    let drive = bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':';
-    if absolute || drive {
-        return Err(OutsideRoot);
-    }
-    let parts: Vec<&str> = query
-        .split(['/', '\\'])
-        .filter(|part| !part.is_empty() && *part != ".")
-        .collect();
-    if parts.contains(&"..") {
-        return Err(OutsideRoot);
-    }
-    Ok(parts)
-}
-
-/// The source path rule: `query` as the root-relative, `/`-separated path
-/// the manifest records. Separators `/` and `\` are both accepted; empty
-/// and `.` components are dropped. A path that is absolute, has a drive
-/// prefix, has a `..` component, or names nothing is outside the root.
-pub(crate) fn source_path(query: &str) -> Result<String, OutsideRoot> {
-    let parts = components(query)?;
-    if parts.is_empty() {
-        return Err(OutsideRoot);
-    }
-    Ok(parts.join("/"))
-}
-
-/// [`source_path`] for a source root: the project root itself (`.`) is a
-/// root, naming nothing at all is not.
-pub(crate) fn source_root(query: &str) -> Result<String, OutsideRoot> {
-    let parts = components(query)?;
-    if parts.is_empty() {
-        return if query.is_empty() {
-            Err(OutsideRoot)
-        } else {
-            Ok(".".to_string())
-        };
-    }
-    Ok(parts.join("/"))
-}
-
-/// A recorded path as the rule spells it, leniently: an entry an older
-/// version recorded as the agent spelled it (`./src/a.rs`) compares as
-/// the path it names.
-fn normal_path(path: &str) -> String {
-    components(path).map_or_else(|_| path.to_string(), |parts| parts.join("/"))
-}
-
-/// The SHA-256 of the file's bytes, lowercase hex.
-pub(crate) fn compute_content_hash(file_path: &Path) -> std::io::Result<String> {
-    let content = std::fs::read(file_path)?;
-    let hash = Sha256::digest(&content);
-    Ok(format!("{:x}", hash))
-}
-
 pub fn detect_stale_entries(
     project_root: &Path,
     manifest: &InferenceManifest,
@@ -442,7 +377,7 @@ pub fn detect_stale_entries(
             deleted.push(entry.path.clone());
             continue;
         }
-        match compute_content_hash(&abs_path) {
+        match std::fs::read(&abs_path).map(|bytes| content_hash(&bytes)) {
             Ok(hash) if hash != entry.content_hash => {
                 stale.push(entry.path.clone());
             }

@@ -25,6 +25,7 @@ mod plan;
 mod progress;
 mod scan;
 mod session;
+mod sources;
 
 pub use gaps::{
     DirectoryGaps, GapItem, Gaps, GapsDocument, ScanFailureRow, SourceItem, directory_of, gaps,

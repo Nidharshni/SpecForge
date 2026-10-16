@@ -170,7 +170,7 @@ pub struct SessionRow {
 #[cfg(test)]
 mod tests {
     use super::super::gaps::gaps;
-    use super::super::manifest::compute_content_hash;
+    use super::super::sources::content_hash;
     use super::*;
     use crate::testing::Viewed;
     use serde_json::json;
@@ -185,7 +185,7 @@ mod tests {
         std::fs::create_dir_all(dir.join("src/net")).unwrap();
         std::fs::write(dir.join("src/lib.rs"), "pub fn alpha() {}\n").unwrap();
         std::fs::write(dir.join("src/net/wire.rs"), "pub struct Wire;\n").unwrap();
-        let hash = compute_content_hash(&dir.join("src/lib.rs")).unwrap();
+        let hash = content_hash(&std::fs::read(dir.join("src/lib.rs")).unwrap());
         std::fs::write(
             dir.join("specforge-infer.json"),
             json!({
@@ -311,7 +311,7 @@ mod tests {
     )]
     fn an_entry_recorded_as_dot_slash_counts_as_analyzed() {
         let dir = project();
-        let hash = compute_content_hash(&dir.root().join("src/lib.rs")).unwrap();
+        let hash = content_hash(&std::fs::read(dir.root().join("src/lib.rs")).unwrap());
         std::fs::write(
             dir.root().join("specforge-infer.json"),
             json!({

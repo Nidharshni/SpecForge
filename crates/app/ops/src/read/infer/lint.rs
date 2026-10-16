@@ -97,7 +97,8 @@ fn compute_inference_diagnostics(
 
 #[cfg(test)]
 mod tests {
-    use super::super::manifest::{SourceFileEntry, compute_content_hash};
+    use super::super::manifest::SourceFileEntry;
+    use super::super::sources::content_hash;
     use super::*;
     use tempfile::TempDir;
 
@@ -107,7 +108,7 @@ mod tests {
         let file = dir.path().join("main.rs");
         fs::write(&file, "fn main() {}").unwrap();
 
-        let hash = compute_content_hash(&file).unwrap();
+        let hash = content_hash(&fs::read(&file).unwrap());
         let mut manifest = InferenceManifest::default();
         manifest.upsert_source_entry(SourceFileEntry {
             path: "main.rs".to_string(),
@@ -131,7 +132,7 @@ mod tests {
         let file = dir.path().join("tiny.rs");
         fs::write(&file, "pub fn a() {}\npub fn b() {}").unwrap();
 
-        let hash = compute_content_hash(&file).unwrap();
+        let hash = content_hash(&fs::read(&file).unwrap());
         let mut manifest = InferenceManifest::default();
         manifest.upsert_source_entry(SourceFileEntry {
             path: "tiny.rs".to_string(),
@@ -160,7 +161,7 @@ mod tests {
             .collect::<String>();
         fs::write(&file, &content).unwrap();
 
-        let hash = compute_content_hash(&file).unwrap();
+        let hash = content_hash(&fs::read(&file).unwrap());
         let mut manifest = InferenceManifest::default();
         manifest.upsert_source_entry(SourceFileEntry {
             path: "big.rs".to_string(),
