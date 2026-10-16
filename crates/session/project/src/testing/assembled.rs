@@ -53,7 +53,8 @@ impl Parts {
 /// (or a directory the test owns); only what the test writes is on disk. The in-memory counterpart of
 /// [`super::TestProject`].
 ///
-/// Invariants: `compiled().root() == Some(root())` and `compiled().environment().root() == root()`;
+/// Invariants: `compiled().root() == Some(root())`, `compiled().environment().root() == root()`
+/// and `compiled().environment().project_root() == None`;
 /// `detached().root() == None`; `compiled().diagnostics()` is exactly the `reporting` list (empty by default); its
 /// entity snapshot is taken over its own graph, in its own environment.
 ///

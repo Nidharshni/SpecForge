@@ -2695,7 +2695,7 @@ fn a_reload_keeps_the_root_it_was_opened_at() {
     write(&sub, "specforge.json", r#"{"name": "inner"}"#);
     session.reload_environment();
 
-    let kept = session.project().project_root().expect("on disk");
+    let kept = session.project().environment().project_root().unwrap();
     assert_eq!(kept.dir(), dir.root());
     assert_eq!(session.project().root(), Some(dir.root()));
 }

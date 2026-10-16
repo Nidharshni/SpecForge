@@ -33,6 +33,7 @@ mod registry_build_snapshot;
 mod registry_fields;
 mod registry_order;
 mod reopen;
+mod rooted;
 mod rules;
 mod session;
 mod structural_checks;
