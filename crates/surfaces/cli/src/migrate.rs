@@ -2,7 +2,6 @@ use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, outln};
 use specforge_common::ProjectPath;
-use specforge_ops::Containment;
 use specforge_ops::authoring::migrate::{
     self, MigrateDocument, MigrationStatus, Request, RollbackSummary,
 };
@@ -78,7 +77,7 @@ impl Args {
             target,
             dry_run,
             no_backup,
-            containment: &Containment::unbounded(),
+            caller: crate::caller::of(false, format, terminal),
         };
         let outcome = match migrate::run(&request, Some(runtime)) {
             Ok(outcome) => outcome,

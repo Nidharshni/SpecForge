@@ -8,7 +8,7 @@
 
 use crate::read::navigate::{Direction, Navigator, Precision, ReferenceQuery};
 use crate::view::EntityField;
-use crate::{Containment, OpError, OpErrorKind, Refusal};
+use crate::{Caller, OpError, OpErrorKind, Refusal};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::Arc;
@@ -206,17 +206,17 @@ pub fn plan(
 /// already written, and the one that failed part-way, get their old text
 /// back (and nothing is reported written). Returns the files it wrote.
 ///
-/// Every file is resolved through `containment` first (ADR 0104), and read and written where it
+/// Every file is resolved through the caller's containment first (ADR 0104), and read and written where it
 /// landed: one that leaves it, by a symlink, refuses the rename (`outside_root`) before any file is
 /// written.
 pub fn apply(
     plan: &RenamePlan,
     spec_root: &Path,
-    containment: &Containment,
+    caller: Caller<'_>,
 ) -> Result<crate::Writes, OpError> {
     let mut changes = Vec::new();
     for file in plan.affected_files() {
-        let held = containment.resolve(&spec_root.join(file))?;
+        let held = caller.containment().resolve(&spec_root.join(file))?;
         let old = held.read_to_string().map_err(|e| {
             OpError::new(
                 OpErrorKind::of_io(&e),
@@ -405,7 +405,7 @@ mod tests {
             plan.affected_files().into_iter().collect::<Vec<_>>(),
             ["limit.spec", "login.spec"]
         );
-        apply(&plan, dir.path(), &Containment::unbounded()).unwrap();
+        apply(&plan, dir.path(), crate::testing::caller()).unwrap();
         let login = std::fs::read_to_string(dir.path().join("login.spec")).unwrap();
         assert!(login.contains("invariants [session_cap]"), "{login}");
         let limit = std::fs::read_to_string(dir.path().join("limit.spec")).unwrap();
@@ -424,7 +424,7 @@ mod tests {
         let plan = plan(&nav(&project), "session_limit", "session_cap").unwrap();
         let at: Vec<(usize, usize)> = plan.edits.iter().map(|e| (e.line, e.start_col)).collect();
         assert_eq!(at, [(1, 10), (5, 14)], "the declaration and the reference");
-        apply(&plan, dir.path(), &Containment::unbounded()).unwrap();
+        apply(&plan, dir.path(), crate::testing::caller()).unwrap();
         assert_eq!(
             std::fs::read_to_string(dir.path().join("a.spec")).unwrap(),
             text.replace("invariant session_limit", "invariant session_cap")
@@ -445,7 +445,7 @@ mod tests {
             return; // permissions don't bind this user (root)
         }
 
-        let error = apply(&plan, dir.path(), &Containment::unbounded()).unwrap_err();
+        let error = apply(&plan, dir.path(), crate::testing::caller()).unwrap_err();
 
         assert_eq!(error.code, UNREADABLE);
         assert_eq!(
@@ -467,8 +467,8 @@ mod tests {
         std::fs::remove_file(dir.path().join("login.spec")).unwrap();
         std::os::unix::fs::symlink(&elsewhere, dir.path().join("login.spec")).unwrap();
 
-        let held = Containment::within(dir.path());
-        let error = apply(&plan, dir.path(), &held).unwrap_err();
+        let held = crate::Containment::within(dir.path());
+        let error = apply(&plan, dir.path(), crate::testing::bounded(&held)).unwrap_err();
 
         assert_eq!(error.code, crate::OUTSIDE_ROOT, "{error:?}");
         assert_eq!(
