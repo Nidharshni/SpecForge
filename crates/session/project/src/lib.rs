@@ -48,7 +48,7 @@ use specforge_common::{
 use specforge_graph::{Graph, GraphBuild, GraphConfig};
 use specforge_installed::{Builtins, Installed};
 use specforge_registry::{
-    Disk, EntitySnapshot, RegistryBuild, build_registries,
+    Disk, EntitySnapshot, PlainDisk, RegistryBuild, build_registries,
     rules::{CustomVerdicts, NoVerdicts},
 };
 use specforge_wasm::WasmRuntime;
@@ -270,7 +270,12 @@ impl Environment {
         let installed = Installed::at(root.dir());
         let load = match runtime {
             Some(runtime) => ExtensionLoad::In {
-                loaded: installed.load(&read.config.extensions, &builtins(), runtime.as_ref()),
+                loaded: installed.load(
+                    &read.config.extensions,
+                    &builtins(),
+                    runtime.as_ref(),
+                    &PlainDisk,
+                ),
                 runtime,
             },
             None => ExtensionLoad::NoRuntime,

@@ -5,6 +5,7 @@
 use std::path::Path;
 
 use specforge_package::PackageName;
+use specforge_registry::PlainDisk;
 
 use crate::Installed;
 use crate::layout::lock_path;
@@ -40,7 +41,7 @@ pub fn install(root: &Path, names: &[&str]) {
 /// As [`install`].
 pub fn install_module(root: &Path, name: &str, bytes: &[u8]) {
     let installed = Installed::unread(root);
-    let mut lock = match LockState::at(root) {
+    let mut lock = match LockState::read(root, &PlainDisk) {
         LockState::Read(lock) => lock,
         LockState::Absent | LockState::Unreadable(_) => LockFile::default(),
     };

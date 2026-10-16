@@ -18,6 +18,7 @@ pub mod testing;
 use std::path::{Path, PathBuf};
 
 use specforge_package::PackageName;
+use specforge_registry::{Disk, PlainDisk};
 
 pub use change::{Change, Committed, Failed, Pin};
 pub use declare::declaration_of;
@@ -39,11 +40,18 @@ pub struct Installed {
 
 impl Installed {
     /// The installed extensions of the project at `root`: `specforge.lock`
-    /// read once (absent, read, or unreadable with its E033).
+    /// read once from the file system (absent, read, or unreadable with its
+    /// E033).
     pub fn at(root: &Path) -> Installed {
+        Installed::read(root, &PlainDisk)
+    }
+
+    /// The installed extensions of the project at `root`: `specforge.lock`
+    /// read once through `disk` (ADR 0114), as [`Self::at`] reads it.
+    pub fn read(root: &Path, disk: &dyn Disk) -> Installed {
         Installed {
             root: root.to_path_buf(),
-            lock: LockState::at(root),
+            lock: LockState::read(root, disk),
         }
     }
 
@@ -64,9 +72,9 @@ impl Installed {
         }
     }
 
-    /// The layout of the installed extensions at `root`, the lock not read
-    /// (absent): what the paths a session depends on are derived from
-    /// before anything is read.
+    /// The layout at `root`, the lock not read (absent): for deriving
+    /// `module_path`/`package_dir` and for an environment assembled in
+    /// memory.
     pub fn unread(root: &Path) -> Installed {
         Installed::with_lock(root, LockState::Absent)
     }
