@@ -387,7 +387,7 @@ impl Environment {
                 .check(&entities.rule_input(disk), verdicts.as_ref()),
         );
         if let Some(runtime) = runtime {
-            diagnostics.extend(check_passes::run(self, graph, entities, runtime));
+            diagnostics.extend(check_passes::run(self, graph, entities, runtime, disk));
         }
         diagnostics
     }
