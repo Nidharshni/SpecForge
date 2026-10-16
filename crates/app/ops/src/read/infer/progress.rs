@@ -10,10 +10,8 @@ use specforge_common::shape::Shape;
 use specforge_protocol_types::ExtensionDeclaration;
 
 use super::gaps::directory_of;
-use super::manifest::{
-    InferenceManifest, InferenceSession, InferenceSummary, detect_stale_entries,
-};
-use super::sources::InferenceSources;
+use super::manifest::{InferenceManifest, InferenceSession, InferenceSummary};
+use super::sources::{IndexState, InferenceSources};
 use crate::OpError;
 use crate::view::ProjectView;
 
@@ -71,7 +69,15 @@ fn progress_under(
         .filter(|key| !indexed.contains(key.as_str()))
         .map(|key| key.as_str().to_string())
         .collect();
-    let (stale, deleted) = detect_stale_entries(root, manifest);
+    let mut stale = Vec::new();
+    let mut deleted = Vec::new();
+    for indexed in sources.files().indexed(manifest) {
+        match indexed.state {
+            IndexState::Changed { .. } => stale.push(indexed.entry.path.clone()),
+            IndexState::Deleted => deleted.push(indexed.entry.path.clone()),
+            IndexState::Current { .. } | IndexState::Unreadable => {}
+        }
+    }
     Progress {
         summary: manifest.compute_summary(files.len()),
         unanalyzed,

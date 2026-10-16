@@ -1,12 +1,10 @@
 //! The `inferred` lint profile: I200 and I202 from the inference
 //! manifest.
 
-use std::fs;
-use std::path::Path;
-
 use specforge_common::{Diagnostic, codes};
 
-use super::manifest::{InferenceManifest, detect_stale_entries};
+use super::manifest::InferenceManifest;
+use super::sources::{IndexState, Indexed, ProjectFiles};
 use crate::view::ProjectView;
 
 /// The inference density above which I202 is reported, unless
@@ -34,18 +32,23 @@ pub fn lint(view: &ProjectView) -> Vec<Diagnostic> {
         .inference
         .density_threshold
         .unwrap_or(DEFAULT_DENSITY_THRESHOLD);
-    compute_inference_diagnostics(root, &manifest, density_threshold)
+    compute_inference_diagnostics(
+        &ProjectFiles::at(root).indexed(&manifest),
+        density_threshold,
+    )
 }
 
 fn compute_inference_diagnostics(
-    project_root: &Path,
-    manifest: &InferenceManifest,
+    indexed: &[Indexed<'_>],
     density_threshold: f64,
 ) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
 
-    let (stale, _deleted) = detect_stale_entries(project_root, manifest);
-    for path in &stale {
+    for path in indexed
+        .iter()
+        .filter(|i| matches!(i.state, IndexState::Changed { .. }))
+        .map(|i| &i.entry.path)
+    {
         diagnostics.push(
             Diagnostic::new(
                 codes::I200,
@@ -58,18 +61,19 @@ fn compute_inference_diagnostics(
         );
     }
 
-    for entry in &manifest.source_index {
+    for Indexed { entry, state } in indexed {
+        let (IndexState::Current {
+            lines: Some(line_count),
+        }
+        | IndexState::Changed {
+            lines: Some(line_count),
+        }) = *state
+        else {
+            continue;
+        };
         if entry.entities_produced.is_empty() {
             continue;
         }
-        let abs_path = project_root.join(&entry.path);
-        if !abs_path.exists() {
-            continue;
-        }
-        let line_count = match fs::read_to_string(&abs_path) {
-            Ok(content) => content.lines().count().max(1),
-            Err(_) => continue,
-        };
         let density = entry.entities_produced.len() as f64 / line_count as f64;
         if density > density_threshold {
             diagnostics.push(
@@ -100,6 +104,7 @@ mod tests {
     use super::super::manifest::SourceFileEntry;
     use super::super::sources::content_hash;
     use super::*;
+    use std::fs;
     use tempfile::TempDir;
 
     #[test]
@@ -118,11 +123,13 @@ mod tests {
             unknown: Default::default(),
         });
 
-        let diags = compute_inference_diagnostics(dir.path(), &manifest, 0.05);
+        let diags =
+            compute_inference_diagnostics(&ProjectFiles::at(dir.path()).indexed(&manifest), 0.05);
         assert!(diags.iter().all(|d| d.code != "I200"));
 
         fs::write(&file, "fn main() { changed }").unwrap();
-        let diags = compute_inference_diagnostics(dir.path(), &manifest, 0.05);
+        let diags =
+            compute_inference_diagnostics(&ProjectFiles::at(dir.path()).indexed(&manifest), 0.05);
         assert!(diags.iter().any(|d| d.code == "I200"));
     }
 
@@ -148,7 +155,8 @@ mod tests {
             unknown: Default::default(),
         });
 
-        let diags = compute_inference_diagnostics(dir.path(), &manifest, 0.05);
+        let diags =
+            compute_inference_diagnostics(&ProjectFiles::at(dir.path()).indexed(&manifest), 0.05);
         assert!(diags.iter().any(|d| d.code == "I202"));
     }
 
@@ -171,7 +179,8 @@ mod tests {
             unknown: Default::default(),
         });
 
-        let diags = compute_inference_diagnostics(dir.path(), &manifest, 0.05);
+        let diags =
+            compute_inference_diagnostics(&ProjectFiles::at(dir.path()).indexed(&manifest), 0.05);
         assert!(diags.iter().all(|d| d.code != "I202"));
     }
 }

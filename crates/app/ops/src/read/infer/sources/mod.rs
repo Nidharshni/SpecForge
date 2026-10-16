@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 use specforge_common::walk_files;
 use specforge_protocol_types::ExtensionDeclaration;
 
-use super::manifest::InferenceManifest;
+use super::manifest::{InferenceManifest, SourceFileEntry};
 use crate::{Containment, ReadFailure};
 
 /// Directories inference skips beyond the shared walk's own list.
@@ -152,7 +152,6 @@ pub(crate) enum SourceRead {
     Bytes(Vec<u8>),
     Missing,
     Outside,
-    #[allow(dead_code, reason = "the session mark names why it read nothing (T7)")]
     Unreadable(std::io::Error),
 }
 
@@ -180,6 +179,57 @@ impl ProjectFiles {
             }
             Err(ReadFailure::Io { error, .. }) => SourceRead::Unreadable(error),
         }
+    }
+}
+
+/// Where an index entry's file stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum IndexState {
+    /// Its hash is the recorded one.
+    Current { lines: Option<usize> },
+    /// Its hash differs from the recorded one.
+    Changed { lines: Option<usize> },
+    /// The path is no key, lands outside the project, or names no file.
+    Deleted,
+    /// The file exists and cannot be read.
+    Unreadable,
+}
+
+/// An index entry and where its file stands.
+#[derive(Debug)]
+pub(crate) struct Indexed<'m> {
+    pub(crate) entry: &'m SourceFileEntry,
+    pub(crate) state: IndexState,
+}
+
+impl ProjectFiles {
+    /// Each index entry, in index order, its file read once: `Deleted` when the path is no key,
+    /// lands outside or is missing; `Unreadable` when it exists and cannot be read; else
+    /// `Current` or `Changed` by its hash, with its line count when it is UTF-8.
+    pub(crate) fn indexed<'m>(&self, manifest: &'m InferenceManifest) -> Vec<Indexed<'m>> {
+        manifest
+            .source_index
+            .iter()
+            .map(|entry| {
+                let state = match SourceKey::of(&entry.path).map(|key| self.read(&key)) {
+                    Err(OutsideRoot) | Ok(SourceRead::Missing | SourceRead::Outside) => {
+                        IndexState::Deleted
+                    }
+                    Ok(SourceRead::Unreadable(_)) => IndexState::Unreadable,
+                    Ok(SourceRead::Bytes(bytes)) => {
+                        let lines = std::str::from_utf8(&bytes)
+                            .ok()
+                            .map(|text| text.lines().count().max(1));
+                        if content_hash(&bytes) == entry.content_hash {
+                            IndexState::Current { lines }
+                        } else {
+                            IndexState::Changed { lines }
+                        }
+                    }
+                };
+                Indexed { entry, state }
+            })
+            .collect()
     }
 }
 

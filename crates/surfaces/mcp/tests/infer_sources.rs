@@ -77,7 +77,6 @@ fn infer_gaps_lists_no_file_outside_the_served_project() {
     behavior = "discover_inference_sources",
     verify = "an indexed path outside the project root is deleted, never read"
 )]
-#[ignore = "flipped by T7"]
 fn infer_progress_and_the_inferred_lint_read_no_indexed_file_outside_the_served_project() {
     let project = TestProject::new();
     let outside = TempDir::new().unwrap();

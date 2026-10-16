@@ -278,27 +278,6 @@ fn compute_summary_counts() {
 }
 
 #[test]
-fn detect_stale_and_deleted() {
-    let dir = TempDir::new().unwrap();
-    let file_a = dir.path().join("a.rs");
-    fs::write(&file_a, "original").unwrap();
-    let hash_a = content_hash(&fs::read(&file_a).unwrap());
-
-    let mut m = InferenceManifest::default();
-    m.upsert_source_entry(SourceFileEntry::new("a.rs", hash_a, vec![], "t"));
-    m.upsert_source_entry(SourceFileEntry::new("deleted.rs", "whatever", vec![], "t"));
-
-    let (stale, deleted) = detect_stale_entries(dir.path(), &m);
-    assert!(stale.is_empty());
-    assert_eq!(deleted, vec!["deleted.rs"]);
-
-    fs::write(&file_a, "modified").unwrap();
-    let (stale, deleted) = detect_stale_entries(dir.path(), &m);
-    assert_eq!(stale, vec!["a.rs"]);
-    assert_eq!(deleted, vec!["deleted.rs"]);
-}
-
-#[test]
 fn an_entry_recorded_with_another_spelling_is_the_same_path() {
     let mut m = InferenceManifest::default();
     m.upsert_source_entry(entry("./src/lib.rs", &["a"]));

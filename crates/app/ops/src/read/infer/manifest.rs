@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use specforge_common::{Diagnostic, codes};
 
-use super::sources::{content_hash, normal_path};
+use super::sources::normal_path;
 use crate::{Containment, Held, OpError, OpErrorKind, Outside, ReadFailure, Writes};
 
 const CURRENT_VERSION: u32 = 1;
@@ -362,30 +362,6 @@ impl InferenceManifest {
             entities_produced,
         }
     }
-}
-
-pub fn detect_stale_entries(
-    project_root: &Path,
-    manifest: &InferenceManifest,
-) -> (Vec<String>, Vec<String>) {
-    let mut stale = Vec::new();
-    let mut deleted = Vec::new();
-
-    for entry in &manifest.source_index {
-        let abs_path = project_root.join(&entry.path);
-        if !abs_path.exists() {
-            deleted.push(entry.path.clone());
-            continue;
-        }
-        match std::fs::read(&abs_path).map(|bytes| content_hash(&bytes)) {
-            Ok(hash) if hash != entry.content_hash => {
-                stale.push(entry.path.clone());
-            }
-            _ => {}
-        }
-    }
-
-    (stale, deleted)
 }
 
 #[cfg(test)]

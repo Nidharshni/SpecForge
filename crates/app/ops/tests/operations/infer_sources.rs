@@ -171,7 +171,6 @@ fn a_symlinked_file_that_leaves_the_project_is_no_source() {
     behavior = "discover_inference_sources",
     verify = "an indexed path outside the project root is deleted, never read"
 )]
-#[ignore = "flipped by T7"]
 fn an_indexed_path_outside_the_project_is_deleted_and_never_read() {
     let project = project();
     let outside = outside(&project);
