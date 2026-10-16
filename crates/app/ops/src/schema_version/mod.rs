@@ -267,8 +267,9 @@ impl VersionedSchema {
     /// What versioning found, for every read outcome that names the version
     /// to carry (ADR 0111): one W053 per change whose [`Bump`] is major, in
     /// [`Self::changes`] order, or the one I016 of an unreadable record.
-    /// Empty otherwise.
-    pub fn notices(&self) -> Vec<Diagnostic> {
+    /// Empty otherwise. Crate-private: only a read turns versioning into
+    /// notices, and hands them to a surface as a `Noticed` (ADR 0130).
+    pub(crate) fn notices(&self) -> Vec<Diagnostic> {
         match &self.since {
             Since::NoRecord => Vec::new(),
             Since::Unreadable { path, reason } => vec![

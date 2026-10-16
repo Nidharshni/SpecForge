@@ -78,13 +78,13 @@ pub fn exported_with(project: &CompiledProject, request: &export::Request<'_>) -
 pub fn schema_of(project: &CompiledProject, request: &SchemaRequest<'_>) -> Value {
     let outcome = schema::schema(&ProjectView::of(project), request)
         .unwrap_or_else(|e| panic!("schema refused: {e:?}"));
-    serde_json::to_value(outcome).expect("a schema serializes")
+    serde_json::to_value(outcome.into_value_and_notices().0).expect("a schema serializes")
 }
 
 /// `specforge schema --publish --format <format>`.
 pub fn published(project: &CompiledProject, format: Format) -> Value {
     schema::json_schema(&ProjectView::of(project), format)
-        .map(|published| published.schema)
+        .map(|published| published.into_value_and_notices().0)
         .unwrap_or_else(|e| panic!("publish refused: {e:?}"))
 }
 

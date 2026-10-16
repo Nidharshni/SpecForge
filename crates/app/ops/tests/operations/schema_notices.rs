@@ -93,11 +93,11 @@ fn the_schema_and_its_publication_carry_the_records_notices() {
     let view = project.view();
 
     let outcome = schema(&view, &SchemaRequest::default()).unwrap();
-    assert_eq!(codes(&outcome.notices), ["I016"]);
-    let document = serde_json::to_value(&outcome).unwrap();
+    assert_eq!(codes(outcome.notices()), ["I016"]);
+    let document = serde_json::to_value(outcome.into_value_and_notices().0).unwrap();
     assert!(document.get("notices").is_none(), "{document}");
     assert_eq!(
-        codes(&json_schema(&view, Format::Graph).unwrap().notices),
+        codes(json_schema(&view, Format::Graph).unwrap().notices()),
         ["I016"]
     );
 }

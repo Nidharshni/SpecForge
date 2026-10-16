@@ -163,3 +163,17 @@ pub fn every_chain(
     let project = Assembled::over(registries).graph(graph.clone());
     specforge_ops::read::trace::trace(&project.view(), Target::Every).unwrap()
 }
+
+/// A noticed read's value, its notices let go: for a test of the value.
+pub fn plain<T>(read: specforge_ops::Noticed<T>) -> T {
+    read.into_value_and_notices().0
+}
+
+/// The document `specforge.schema` answers for `request` over `view`.
+pub fn schema_json(
+    view: &specforge_ops::view::ProjectView<'_>,
+    request: &specforge_ops::read::schema::SchemaRequest<'_>,
+) -> serde_json::Value {
+    let outcome = plain(specforge_ops::read::schema::schema(view, request).unwrap());
+    serde_json::to_value(outcome).expect("a schema serializes")
+}

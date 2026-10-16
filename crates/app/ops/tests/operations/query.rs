@@ -12,7 +12,7 @@ use specforge_ops::read::query::{
 use specforge_ops::read::{export::Format, schema::json_schema};
 use specforge_test::prelude::*;
 
-use crate::view_support::{Assembled, Viewed, registries};
+use crate::view_support::{Assembled, Viewed, plain, registries};
 
 fn node(id: &str, kind: &str) -> Node {
     Node {
@@ -312,7 +312,7 @@ fn a_query_with_coverage_conforms_to_the_published_schema() {
     use specforge_common::shape::{unchecked_keywords, violations};
     let project = covered();
     for format in [Format::Graph, Format::Context, Format::Brief] {
-        let published = json_schema(&project.view(), format).unwrap().schema;
+        let published = plain(json_schema(&project.view(), format).unwrap());
         assert!(unchecked_keywords(&published).is_empty(), "{format:?}");
         let document: Value =
             serde_json::from_str(&queried(&project, "login", format, true)).unwrap();
