@@ -1,5 +1,6 @@
+use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
-use crate::terminal::{Terminal, errln, outln};
+use crate::terminal::{Terminal, outln};
 use specforge_common::ProjectRoot;
 use specforge_ops::authoring::init;
 use std::path::{Path, PathBuf};
@@ -57,20 +58,18 @@ fn init_at(
         extensions,
         containment: &specforge_ops::Containment::unbounded(),
     };
+    let notes = Notes::new(terminal, format);
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
     let outcome = match init::init(&request, &runtime) {
         Ok(outcome) => outcome,
         Err(error) => return Refusal::of(format).report(terminal, &error),
     };
-    if let Some(enclosing) = path.parent().and_then(ProjectRoot::enclosing)
-        && format != OutputFormat::Json
-    {
-        errln!(
-            terminal,
+    if let Some(enclosing) = path.parent().and_then(ProjectRoot::enclosing) {
+        notes.person(format_args!(
             "note: {} is inside the project at {}; the new project is separate",
             path.display(),
             enclosing.dir().display()
-        );
+        ));
     }
 
     // Every file init wrote: .gitignore when it lacked an entry, the

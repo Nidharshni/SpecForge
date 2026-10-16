@@ -5,8 +5,9 @@
 //! it. No manifest file is written or read: the binary declares the
 //! extension.
 
+use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
-use crate::terminal::{Terminal, err, errln, outln};
+use crate::terminal::{Terminal, errln, outln};
 use serde_json::json;
 use specforge_common::{Code, Diagnostic, Severity, codes};
 use specforge_ops::OpErrorKind;
@@ -183,9 +184,7 @@ fn run_build(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit {
             path.display(),
             first_error.map(|l| format!(": {l}")).unwrap_or_default()
         );
-        if format == OutputFormat::Human {
-            err!(terminal, "{stderr}");
-        }
+        Notes::new(terminal, format).person(format_args!("{}", stderr.trim_end()));
         return Refusal::of(format).coded(terminal, OpErrorKind::Internal, NOT_BUILT, message);
     }
     let binary = match specforge_ops::extension::binary_at(path) {

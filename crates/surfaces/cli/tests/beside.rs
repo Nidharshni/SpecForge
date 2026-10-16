@@ -78,6 +78,19 @@ fn check_writes_no_note_beside_its_document() {
     assert_eq!(run.stderr, "");
 }
 
+#[test]
+fn check_tells_a_person_its_notes() {
+    let failing = bare("behavior parse_input \"A\" {\n}\nbehavior parse_input \"B\" {\n}\n");
+    let run = Cli::on(&failing).run(&["check", "--cache", "--lint", "pedantic"]);
+    assert_eq!(run.code, 1, "{}", run.stderr);
+    for note in [
+        "note: --lint pedantic is the default: info diagnostics are always reported",
+        "note: specforge-cache.json not written: the check failed",
+    ] {
+        assert_eq!(run.stderr.matches(note).count(), 1, "{}", run.stderr);
+    }
+}
+
 #[specforge_test(
     behavior = "search_registry",
     verify = "under --format json a failed registry is reported once, in the document's diagnostics, and not on stderr"

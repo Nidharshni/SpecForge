@@ -14,19 +14,11 @@ use std::fmt;
 
 /// Where a command's notes and notices go: its terminal's stderr, by its output format.
 #[derive(Clone, Copy)]
-#[allow(
-    dead_code,
-    reason = "the verbs but `beside` are taken up by the next tickets of plan 09"
-)]
 pub(crate) struct Notes<'t> {
     terminal: &'t Terminal,
     format: OutputFormat,
 }
 
-#[allow(
-    dead_code,
-    reason = "the verbs but `beside` are taken up by the next tickets of plan 09"
-)]
 impl<'t> Notes<'t> {
     /// The notes of a command whose output is `format`. A command with a fixed format (no `--format human|json`:
     /// export, schema, model, query, outline) passes `OutputFormat::Human`, as it does to `Refusal::of`: nobody
@@ -124,6 +116,68 @@ mod tests {
         assert_eq!(
             capture.stderr(),
             format!("{}\n", specforge_common::render_plain(&notice))
+        );
+    }
+
+    /// Every `.rs` under `src`, with its path relative to `src`.
+    fn sources() -> Vec<(String, String)> {
+        fn walk(dir: &std::path::Path, found: &mut Vec<std::path::PathBuf>) {
+            for entry in std::fs::read_dir(dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    walk(&path, found);
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    found.push(path);
+                }
+            }
+        }
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut paths = Vec::new();
+        walk(&src, &mut paths);
+        paths
+            .into_iter()
+            .map(|p| {
+                let name = p.strip_prefix(&src).unwrap().display().to_string();
+                (name, std::fs::read_to_string(&p).unwrap())
+            })
+            .collect()
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "report_command_outcome",
+        verify = "under --format json a note is never written and a notice is written once: in the document when it carries it, else on stderr"
+    )]
+    fn only_the_notes_render_a_notice() {
+        let mut elsewhere = Vec::new();
+        let mut hand_gated = Vec::new();
+        for (name, text) in sources() {
+            if !matches!(
+                name.as_str(),
+                "notes.rs" | "extension_command.rs" | "extension_command/tests.rs"
+            ) && text.contains("render_plain(")
+            {
+                elsewhere.push(name.clone());
+            }
+            let lines: Vec<&str> = text.lines().collect();
+            for (at, line) in lines.iter().enumerate() {
+                let gate = line.trim_start().starts_with("if ")
+                    && (line.contains("!= OutputFormat::Json")
+                        || line.contains("== OutputFormat::Human"));
+                let writes = lines[at + 1..lines.len().min(at + 3)]
+                    .iter()
+                    .any(|l| l.contains("errln!(") || l.contains("err!("));
+                if gate && writes {
+                    hand_gated.push(format!("{name}:{}", at + 1));
+                }
+            }
+        }
+        assert!(
+            elsewhere.is_empty(),
+            "render_plain outside notes: {elsewhere:?}"
+        );
+        assert!(
+            hand_gated.is_empty(),
+            "a hand gate on stderr: {hand_gated:?}"
         );
     }
 }
