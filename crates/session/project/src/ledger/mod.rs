@@ -158,9 +158,8 @@ impl Reads for Ledger {
 
     /// Stamped, then read: a source written after its stamp is seen next time.
     fn source(&mut self, spec_root: &Path, key: &str) -> Read {
-        self.source_with(spec_root, key, |_| {
-            sources::read(&PlainDisk, spec_root, key)
-        })
+        self.read_source(spec_root, key, |disk| sources::read(disk, spec_root, key))
+            .0
     }
 
     /// The checks' reads, each stamped and recorded as a check input when
@@ -218,15 +217,19 @@ impl Ledger {
                 false,
             );
         };
-        self.stamps.stamp_sources(&self.inputs, keys);
-        let moved = self.inputs.relink(keys);
+        let mut moved = self.inputs.relink(keys);
         let reads = keys
             .iter()
             .map(|key| {
                 let read = if self.inputs.excludes(key) {
+                    // No source (any more): a stamp kept would hide its return.
+                    self.forget_source(key);
                     Read::Gone
                 } else {
-                    sources::read(&PlainDisk, &spec_root, key)
+                    let (read, hops_moved) = self
+                        .read_source(&spec_root, key, |disk| sources::read(disk, &spec_root, key));
+                    moved |= hops_moved;
+                    read
                 };
                 (key.clone(), read)
             })
@@ -254,20 +257,27 @@ impl Ledger {
         }
     }
 
-    /// Stamp source `key`, then run `read` on its file (the read the caller
-    /// performs): the one place a source is stamped for the cold read. The
-    /// test hook of [`Reads::source`].
-    pub(crate) fn source_with(
+    /// The one read of source `key` a session makes, for the cold read and
+    /// every reread: its file is stamped, then `read` runs on the disk it is
+    /// to read through (the test hook: a write between the stamp and the
+    /// read is seen next time). A detached ledger records nothing. The read,
+    /// and whether the session's inputs moved.
+    pub(crate) fn read_source(
         &mut self,
         spec_root: &Path,
         key: &str,
-        read: impl FnOnce(&Path) -> Read,
-    ) -> Read {
-        let path = spec_root.join(key);
+        read: impl FnOnce(&dyn Disk) -> Read,
+    ) -> (Read, bool) {
         if self.inputs.root().is_some() {
-            self.stamps.stamp_source(key, &path);
+            self.stamps
+                .set_source(key, Entry::stamp(&spec_root.join(key)));
         }
-        read(&path)
+        (read(&PlainDisk), false)
+    }
+
+    /// Source `key` is no source (any more): its stamp is forgotten.
+    fn forget_source(&mut self, key: &str) {
+        self.stamps.set_source(key, None);
     }
 
     /// A ledger over `inputs`, nothing stamped.

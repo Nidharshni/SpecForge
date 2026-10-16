@@ -122,32 +122,13 @@ impl Stamps {
         self.sources.clear();
     }
 
-    /// Stamp source `key` (its file is `path`), before it is read.
-    pub(super) fn stamp_source(&mut self, key: &str, path: &Path) {
-        match Entry::stamp(path) {
+    /// Source `key` is recorded as `entry`, the stamp its read took before
+    /// reading (`None`: it was not there).
+    pub(super) fn set_source(&mut self, key: &str, entry: Option<Entry>) {
+        match entry {
             Some(entry) => self.sources.insert(key.to_string(), entry),
             None => self.sources.remove(key),
         };
-    }
-
-    /// Stamp the sources `keys` names, before they are read again: the
-    /// others keep what they recorded, so a change to one of them that
-    /// this rebuild does not read is still seen next time.
-    pub(super) fn stamp_sources(&mut self, inputs: &SessionInputs, keys: &[String]) {
-        let Some(spec_root) = inputs.spec_root() else {
-            return;
-        };
-        for key in keys {
-            if inputs.excludes(key) {
-                // No source (any more): a stamp kept would hide its return.
-                self.sources.remove(key);
-                continue;
-            }
-            match Entry::stamp(&spec_root.join(key)) {
-                Some(entry) => self.sources.insert(key.clone(), entry),
-                None => self.sources.remove(key),
-            };
-        }
     }
 
     /// The check inputs are exactly `checks`, each stamped before the run
