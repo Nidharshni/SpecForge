@@ -12,7 +12,7 @@ use specforge_project::snapshot::Standing;
 use specforge_test::prelude::*;
 
 use crate::navigate::compile;
-use crate::view_support::{Project, registries, registries_with};
+use crate::view_support::{Assembled, Viewed, registries, registries_with};
 
 /// A project of every standing: `ob` (an obligated kind), `fr` (a testable
 /// kind no W004 rule targets), `U` (a union of an obligated kind), `ab`
@@ -26,7 +26,7 @@ behavior ab \"Abstract\" {\n  abstract true\n}\n\
 note n \"Note\" {\n}\n\
 behavior done \"Done\" {\n  verify unit \"first\"\n  verify unit \"second\"\n}\n";
 
-fn standings() -> Project {
+fn standings() -> Assembled {
     let build = registries_with(&["behavior", "type"], &["constraint"], |c| {
         c.kind("note", |k| {
             k.keyword("note");
@@ -37,7 +37,7 @@ fn standings() -> Project {
             });
         });
     });
-    Project::new(STANDINGS, build)
+    Assembled::over(build).source(STANDINGS)
 }
 
 const IDS: [&str; 6] = ["ob", "fr", "U", "ab", "n", "done"];
@@ -127,11 +127,7 @@ fn without_a_report_the_coverage_is_unrecorded() {
 fn an_unreadable_report_is_the_coverage_error_not_the_inspects() {
     let project = standings();
     let readable: Vec<Standing> = IDS.iter().map(|id| standing(&project.view(), id)).collect();
-    std::fs::write(
-        project.dir.path().join("specforge-report.json"),
-        "{not json",
-    )
-    .unwrap();
+    std::fs::write(project.root().join("specforge-report.json"), "{not json").unwrap();
     let view = project.view();
     for (id, readable) in IDS.iter().zip(readable) {
         let facts = inspect(&view, id).expect("inspect does not fail on the report");
@@ -160,7 +156,7 @@ fn diagnostics_are_those_about_the_entity() {
     // `task` on lines 1–3, `task_id_uniqueness` on 4–8.
     let source = "invariant task \"Task\" {\n  guarantee \"a task exists\"\n}\n\
                   invariant task_id_uniqueness \"Unique\" {\n  guarantee \"ids are unique\"\n  // one\n  // two\n}\n";
-    let project = Project::new(source, registries(&[], &["invariant"]));
+    let project = Assembled::over(registries(&[], &["invariant"])).source(source);
     let subject = |entity: &str| DiagnosticData::Subject {
         entity: entity.into(),
     };
@@ -236,7 +232,7 @@ fn facts_carry_the_node_kind_entry_headline_and_obligations() {
     assert_eq!(fields, ["contract", "category"]);
 
     // A kind no extension declares has no entry and no headline.
-    let project = Project::new("gizmo g \"G\" {\n  note \"n\"\n}\n", Default::default());
+    let project = Assembled::over(Default::default()).source("gizmo g \"G\" {\n  note \"n\"\n}\n");
     let view = project.view();
     let facts = inspect(&view, "g").unwrap();
     assert!(facts.kind.is_none());
@@ -262,7 +258,7 @@ type user \"User\" {\n}\n\
 type role \"Role\" {\n}\n\
 event user_created \"Created\" {\n}\n\
 type orphan \"Orphan\" {\n}\n";
-    let project = Project::new(source, Default::default());
+    let project = Assembled::over(Default::default()).source(source);
     let view = project.view();
     let create = inspect(&view, "create_user").unwrap().references;
     assert!(create.incoming.is_empty());

@@ -2,8 +2,8 @@
   "file-size": {
     "crates/adapters/ops-registry/tests/fetch.rs": 847,
     "crates/app/ops/tests/operations/migrate.rs": 1261,
-    "crates/app/ops/tests/operations/navigate.rs": 1751,
-    "crates/app/ops/tests/operations/query.rs": 907,
+    "crates/app/ops/tests/operations/navigate.rs": 1746,
+    "crates/app/ops/tests/operations/query.rs": 898,
     "crates/app/ops/tests/operations/schema.rs": 1149,
     "crates/app/ops/tests/operations/writes.rs": 1049,
     "crates/kernel/common/tests/present.rs": 1082,

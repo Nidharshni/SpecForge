@@ -1,3 +1,4 @@
+use crate::view_support::{Assembled, Viewed};
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
 use specforge_ops::read::trace::TraceError;
@@ -42,7 +43,7 @@ fn build_graph() -> Graph {
 // M2: trace for non-existent entity returns TraceError::EntityNotFound
 #[test]
 fn trace_nonexistent_returns_entity_not_found() {
-    let project = crate::view_support::Project::of_graph(build_graph(), Default::default());
+    let project = Assembled::over(Default::default()).graph(build_graph());
     let err = specforge_ops::read::trace::trace(
         &project.view(),
         specforge_ops::read::trace::Target::Entity("nonexistent"),
@@ -59,7 +60,7 @@ fn trace_nonexistent_returns_entity_not_found() {
     verify = "tracing an entity the graph lacks is E003 naming the closest entity"
 )]
 fn tracing_an_unknown_entity_is_e003_with_a_suggestion() {
-    let project = crate::view_support::Project::of_graph(build_graph(), Default::default());
+    let project = Assembled::over(Default::default()).graph(build_graph());
     let trace = |id| {
         specforge_ops::read::trace::trace(
             &project.view(),
@@ -97,7 +98,7 @@ fn a_missing_entity_is_one_refusal() {
     let mut graph = Graph::new();
     graph.add_node(node("login", "behavior"));
     graph.add_node(node("signin", "feature"));
-    let project = crate::view_support::Project::of_graph(graph, Default::default());
+    let project = Assembled::over(Default::default()).graph(graph);
     let view = project.view();
     let navigator = Navigator::new(view, |_: &str| None);
 

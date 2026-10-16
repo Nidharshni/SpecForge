@@ -10,7 +10,7 @@ use specforge_protocol_types::{EntityKindDescriptor, ExtensionDeclaration, Hands
 use specforge_registry::build_registries;
 use specforge_test_macros::test as specforge_test;
 
-use crate::view_support::Project;
+use crate::view_support::{Assembled, Viewed};
 
 fn node(id: &str, kind: &str) -> Node {
     Node {
@@ -34,7 +34,7 @@ fn node(id: &str, kind: &str) -> Node {
 
 /// A project whose extension declares `behavior` and `adr`, with an entity
 /// of each and one E024 entity of the undeclared kind `widget`.
-fn project() -> Project {
+fn project() -> Assembled {
     let kind = |name: &str| EntityKindDescriptor {
         name: name.into(),
         ..EntityKindDescriptor::default()
@@ -52,7 +52,7 @@ fn project() -> Project {
     graph.add_node(node("login", "behavior"));
     graph.add_node(node("pick_db", "adr"));
     graph.add_node(node("gizmo", "widget"));
-    Project::of_graph(graph, build_registries(vec![declaration]))
+    Assembled::over(build_registries(vec![declaration])).graph(graph)
 }
 
 #[specforge_test(

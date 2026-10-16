@@ -7,8 +7,8 @@ use specforge_ops::read::navigate::{
     Direction, Navigator, Occurrence, Precision, ReferenceQuery, Role,
 };
 use specforge_ops::view::ProjectView;
+use specforge_project::CompiledProject;
 use specforge_project::testing::compile_at;
-use specforge_project::{CompiledProject, Environment};
 use specforge_test::prelude::*;
 use tempfile::TempDir;
 
@@ -760,7 +760,6 @@ fn the_message_is_never_read() {
 // ── Fixes: the edits a diagnostic's data or the graph names ─────────────
 
 use specforge_ops::read::navigate::{Fix, FixKind, FixQuery, FixSource, TextEdit};
-use specforge_project::coverage::RecordedCoverage;
 use specforge_registry::{RegistryBuild, build_registries};
 
 /// `text` with `edits` (spans of it) applied.
@@ -1005,15 +1004,13 @@ fn the_verify_stub_lands_inside_the_block() {
 
 /// A view of `p`'s graph with `registries` instead of its extensions'.
 fn with_registries<'a>(
-    p: &'a Compiled,
-    env: &'a Environment,
-    recorded: &'a RecordedCoverage,
+    p: &Compiled,
+    project: &'a CompiledProject,
 ) -> Navigator<'a, impl Fn(&str) -> Option<String> + 'a> {
     let spec_root = p.project.environment().spec_root().to_path_buf();
-    Navigator::new(
-        ProjectView::new(p.project.graph(), env, None, recorded),
-        move |file| std::fs::read_to_string(spec_root.join(file)).ok(),
-    )
+    Navigator::new(ProjectView::of(project), move |file| {
+        std::fs::read_to_string(spec_root.join(file)).ok()
+    })
 }
 
 /// The registries of kinds that take verify statements of `verify_kinds`.
@@ -1044,9 +1041,9 @@ fn the_verify_stub_uses_the_kinds_first_allowed_verify_kind() {
             "invariant unique_ids \"U\" {\n  guarantee \"g\"\n}\nfeature untestable \"F\" {\n}\n",
         )],
     );
-    let env = Environment::with_registries(verifiable(&["invariant"], &["property", "unit"]), None);
-    let recorded = RecordedCoverage::over(p.project.graph(), &env);
-    let fixes = with_registries(&p, &env, &recorded).fixes(&[], &FixQuery::default());
+    let project = Assembled::over(verifiable(&["invariant"], &["property", "unit"]))
+        .graph(p.project.graph().clone());
+    let fixes = with_registries(&p, project.detached()).fixes(&[], &FixQuery::default());
     assert_eq!(
         titles(&fixes),
         ["Add verify stub for unique_ids"],
@@ -1208,16 +1205,16 @@ fn invariants_field(target_kind: Option<&str>) -> RegistryBuild {
 fn no_stub_without_a_target_kind() {
     let p = compile(TESTING, &[("auth.spec", DANGLING)]);
     let diagnostics = p.project.diagnostics();
-    let env = Environment::with_registries(invariants_field(None), None);
-    let recorded = RecordedCoverage::over(p.project.graph(), &env);
-    let fixes = with_registries(&p, &env, &recorded).fixes(&diagnostics, &FixQuery::default());
+    let project = Assembled::over(invariants_field(None)).graph(p.project.graph().clone());
+    let fixes = with_registries(&p, project.detached()).fixes(&diagnostics, &FixQuery::default());
     assert!(
         fixes.iter().all(|f| f.source != FixSource::CreateStub),
         "{:?}",
         titles(&fixes)
     );
-    let targeted = Environment::with_registries(invariants_field(Some("invariant")), None);
-    let fixes = with_registries(&p, &targeted, &recorded).fixes(&diagnostics, &FixQuery::default());
+    let targeted =
+        Assembled::over(invariants_field(Some("invariant"))).graph(p.project.graph().clone());
+    let fixes = with_registries(&p, targeted.detached()).fixes(&diagnostics, &FixQuery::default());
     assert!(fixes.iter().any(|f| f.source == FixSource::CreateStub));
 }
 
@@ -1488,10 +1485,8 @@ fn anchors_of_an_entity_are_in_manifest_order() {
     assert_eq!(files("alpha"), ["src/lib.rs", "src/net.rs"]);
     assert!(files("nope").is_empty());
 
-    let project = crate::view_support::Project::new(
-        "behavior a \"A\" {\n}\n",
-        specforge_registry::RegistryBuild::default(),
-    );
+    let project = Assembled::over(specforge_registry::RegistryBuild::default())
+        .source("behavior a \"A\" {\n}\n");
     assert!(source_anchors(&project.view()).unwrap().anchors.is_empty());
 }
 
@@ -1582,6 +1577,7 @@ fn the_outline_shows_kind_id_title_and_name() {
 
 // ── The reference list without tokens ───────────────────────────────────
 
+use crate::view_support::{Assembled, Viewed};
 use specforge_ops::read::navigate::{Reference, References};
 use std::sync::Arc;
 
@@ -1685,9 +1681,8 @@ fn an_outgoing_reference_to_a_missing_entity_has_no_peer_kind() {
         target: "ghost".into(),
         label: "uses".into(),
     });
-    let env = Environment::empty();
-    let recorded = RecordedCoverage::over(&graph, &env);
-    let view = ProjectView::new(&graph, &env, None, &recorded);
+    let project = Assembled::new().graph(graph);
+    let view = project.rootless_view();
     let references = References::of(&view, "a");
     assert_eq!(
         references.outgoing,

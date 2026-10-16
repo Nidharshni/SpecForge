@@ -5,14 +5,12 @@ use serde_json::json;
 use specforge_extension_sdk::prelude::*;
 use specforge_installed::Installed;
 use specforge_ops::read::infer::{InferencePlanRequest, guide, inference_plan, kind_guide};
-use specforge_ops::view::ProjectView;
 use specforge_project::Environment;
-use specforge_project::coverage::RecordedCoverage;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::build_registries;
 use specforge_test::prelude::*;
 
-use crate::view_support::{Project, config_read, loaded};
+use crate::view_support::{Assembled, Viewed, config_read, loaded};
 
 /// A declaration of `name` that declares each of `kinds` (a keyword and an
 /// inference guide).
@@ -30,8 +28,8 @@ fn extension(name: &str, kinds: &[(&str, Option<&str>)]) -> ExtensionDeclaration
 }
 
 /// The project whose source is `source`, built over `declarations`.
-fn project_of(source: &str, declarations: Vec<ExtensionDeclaration>) -> Project {
-    Project::new(source, build_registries(declarations))
+fn project_of(source: &str, declarations: Vec<ExtensionDeclaration>) -> Assembled {
+    Assembled::over(build_registries(declarations)).source(source)
 }
 
 #[specforge_test(
@@ -39,7 +37,7 @@ fn project_of(source: &str, declarations: Vec<ExtensionDeclaration>) -> Project 
     verify = "a kind's guide is its extension's guide, then the project's guide for the kind under Project-specific"
 )]
 fn a_guide_is_the_extension_s_then_the_project_s() {
-    let project = Project::assembled("", |root| {
+    let project = Assembled::assembling(|root| {
         Environment::assemble(
             config_read(
                 root,
@@ -54,7 +52,8 @@ fn a_guide_is_the_extension_s_then_the_project_s() {
                 &[("behavior", Some("Look for public functions"))],
             )]),
         )
-    });
+    })
+    .source("");
     let view = project.view();
 
     let guide = guide(&view);
@@ -74,7 +73,7 @@ fn a_guide_is_the_extension_s_then_the_project_s() {
     verify = "a kind only the project guides has the project's guide alone, and one nobody guides an empty guide"
 )]
 fn a_kind_without_an_extension_guide_has_the_project_s_alone() {
-    let project = Project::assembled("", |root| {
+    let project = Assembled::assembling(|root| {
         Environment::assemble(
             config_read(
                 root,
@@ -86,7 +85,8 @@ fn a_kind_without_an_extension_guide_has_the_project_s_alone() {
                 &[("behavior", None), ("event", None)],
             )]),
         )
-    });
+    })
+    .source("");
     let view = project.view();
 
     let guide = guide(&view);
@@ -211,13 +211,14 @@ fn a_kind_declared_twice_is_guided_by_the_first() {
 )]
 fn the_spec_directory_is_the_spec_root_relative_to_the_root() {
     let rooted = |config: serde_json::Value| {
-        Project::assembled("", |root| {
+        Assembled::assembling(|root| {
             Environment::assemble(
                 config_read(root, config),
                 Installed::unread(root),
                 loaded(Vec::new()),
             )
         })
+        .source("")
     };
     let project = rooted(json!({"spec_root": "model"}));
     assert_eq!(guide(&project.view()).spec_directory, "model/");
@@ -228,8 +229,7 @@ fn the_spec_directory_is_the_spec_root_relative_to_the_root() {
 
     // A view without a root has no relative directory.
     let project = rooted(json!({"spec_root": "model"}));
-    let recorded = RecordedCoverage::over(&project.graph, &project.env);
-    let rootless = ProjectView::new(&project.graph, &project.env, None, &recorded);
+    let rootless = project.rootless_view();
     assert_eq!(guide(&rootless).spec_directory, "./");
 }
 
@@ -322,7 +322,7 @@ fn linked(name: &str, kinds: &[(&str, &[&str])]) -> ExtensionDeclaration {
     c.declaration()
 }
 
-fn plan_kinds(project: &Project) -> Vec<String> {
+fn plan_kinds(project: &Assembled) -> Vec<String> {
     inference_plan(&project.view(), &InferencePlanRequest::default())
         .unwrap()
         .kind_priorities
@@ -368,7 +368,7 @@ fn kinds_are_ordered_by_what_they_reference() {
 
 /// A project with an analyzer for `.rs` files, the sources `files` under
 /// `src/`, and `manifest` as `specforge-infer.json` when given.
-fn sources(files: &[String], manifest: Option<serde_json::Value>) -> Project {
+fn sources(files: &[String], manifest: Option<serde_json::Value>) -> Assembled {
     let mut c = ContributionsBuilder::new(ExtensionMeta::new("@t/rust", "1.0.0"));
     c.analyzer("rust", |a| {
         a.file_extensions(&[".rs"]).scan(|_| ScanResponse {
@@ -377,13 +377,13 @@ fn sources(files: &[String], manifest: Option<serde_json::Value>) -> Project {
         });
     });
     let project = project_of("", vec![c.declaration()]);
-    std::fs::create_dir_all(project.dir.path().join("src")).unwrap();
+    std::fs::create_dir_all(project.root().join("src")).unwrap();
     for file in files {
-        std::fs::write(project.dir.path().join(file), "fn stub() {}\n").unwrap();
+        std::fs::write(project.root().join(file), "fn stub() {}\n").unwrap();
     }
     if let Some(manifest) = manifest {
         std::fs::write(
-            project.dir.path().join("specforge-infer.json"),
+            project.root().join("specforge-infer.json"),
             manifest.to_string(),
         )
         .unwrap();
@@ -419,13 +419,14 @@ fn the_plan_excludes_analyzed_files() {
     verify = "plan's target directory defaults to the project's spec root"
 )]
 fn the_plan_targets_the_spec_root_unless_told() {
-    let project = Project::assembled("", |root| {
+    let project = Assembled::assembling(|root| {
         Environment::assemble(
             config_read(root, json!({"spec_root": "model"})),
             Installed::unread(root),
             loaded(Vec::new()),
         )
-    });
+    })
+    .source("");
 
     let default = inference_plan(&project.view(), &InferencePlanRequest::default()).unwrap();
     assert_eq!(default.target_spec_directory, "model/");

@@ -4,7 +4,7 @@
 //! ops decided any of it; the ticket that changed a pinned fact flipped it.
 //! The plan check reads no report (plan.rs `the_plan_check_reads_no_recorded_report`).
 
-use crate::view_support::{Project, registries};
+use crate::view_support::{Assembled, Viewed, registries};
 use specforge_ops::analysis::analyze::{AnalyzeError, AnalyzeOptions, ReportSource, analyze};
 use specforge_ops::authoring::format::{Mode, Request, run};
 use specforge_ops::{OpError, OpErrorKind};
@@ -13,33 +13,33 @@ use std::path::Path;
 
 const SOURCE: &str = "behavior b \"B\" {\n  verify unit \"it works\"\n}\n";
 
-fn project() -> Project {
-    Project::new(SOURCE, registries(&["behavior"], &[]))
+fn project() -> Assembled {
+    Assembled::over(registries(&["behavior"], &[])).source(SOURCE)
 }
 
-fn write_report(project: &Project, text: &str) {
-    std::fs::write(project.dir.path().join("specforge-report.json"), text).unwrap();
+fn write_report(project: &Assembled, text: &str) {
+    std::fs::write(project.root().join("specforge-report.json"), text).unwrap();
 }
 
 /// Make the report a directory: reading it fails with something that is
 /// neither "not found" nor "permission denied".
-fn report_is_a_directory(project: &Project) {
-    std::fs::create_dir(project.dir.path().join("specforge-report.json")).unwrap();
+fn report_is_a_directory(project: &Assembled) {
+    std::fs::create_dir(project.root().join("specforge-report.json")).unwrap();
 }
 
 /// Make the report unreadable (`chmod 000`); `false` when the OS still lets
 /// this process read it (running as root).
 #[cfg(unix)]
-fn lock_report(project: &Project) -> bool {
+fn lock_report(project: &Assembled) -> bool {
     use std::os::unix::fs::PermissionsExt;
-    let path = project.dir.path().join("specforge-report.json");
+    let path = project.root().join("specforge-report.json");
     std::fs::write(&path, r#"{"results":{}}"#).unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
     std::fs::read(&path).is_err()
 }
 
 /// What every view that reads the recorded report answers for it.
-fn every_view(project: &Project) -> Vec<(&'static str, OpError)> {
+fn every_view(project: &Assembled) -> Vec<(&'static str, OpError)> {
     let view = project.view();
     vec![
         ("test_report", view.test_report().unwrap_err()),
@@ -150,7 +150,7 @@ fn a_locked_report_is_permission_denied() {
 fn analyze_calls_a_missing_named_report_file_not_found() {
     let project = project();
     let options = AnalyzeOptions {
-        report: ReportSource::File(project.dir.path().join("none.json")),
+        report: ReportSource::File(project.root().join("none.json")),
         ..Default::default()
     };
 

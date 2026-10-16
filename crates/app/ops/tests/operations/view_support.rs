@@ -1,6 +1,6 @@
-//! Projects for the read operations' tests: a graph parsed from source,
-//! registries declaring what made-up extensions declare, and a root
-//! directory to record a test report in.
+//! Projects for the read operations' tests: `Assembled` ones (a graph parsed
+//! from source, registries declaring what made-up extensions declare, and a
+//! root directory to record a test report in), viewed through `Viewed`.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -12,13 +12,12 @@ use specforge_graph::Graph;
 use specforge_ops::read::plan::{PlanGapKind, PlanOutcome};
 use specforge_ops::read::stats::Stats;
 use specforge_ops::read::trace::{Target, TraceChain};
-use specforge_ops::view::ProjectView;
-use specforge_project::coverage::RecordedCoverage;
-use specforge_project::{Environment, ExtensionLoad, Loaded, SharedRuntime};
+pub use specforge_ops::testing::Viewed;
+pub use specforge_project::testing::Assembled;
+use specforge_project::{ExtensionLoad, Loaded};
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::{RegistryBuild, build_registries};
 use specforge_wasm::testing::InProcessRuntime;
-use tempfile::TempDir;
 
 /// A project of five kinds of connectedness (plan 04): `hub` is referenced
 /// by `linked`; `lonely` and `alone` reference nothing and nothing references
@@ -96,91 +95,6 @@ pub fn registries_with(
     build
 }
 
-/// A project on disk: its graph, the environment it was compiled in (the
-/// default config and `registries`) and its coverage memo.
-pub struct Project {
-    pub dir: TempDir,
-    pub graph: Graph,
-    pub env: Environment,
-    /// Made over the graph and environment as they are at the first view.
-    recorded: std::sync::OnceLock<RecordedCoverage>,
-}
-
-impl Project {
-    /// The project whose one file is `source`.
-    pub fn new(source: &str, registries: RegistryBuild) -> Self {
-        let (graph, _) =
-            specforge_graph::build_graph(&[specforge_parser::parse(source, "main.spec")]);
-        Self::of_graph(graph, registries)
-    }
-
-    pub fn of_graph(graph: Graph, registries: RegistryBuild) -> Self {
-        Project {
-            dir: TempDir::new().unwrap(),
-            graph,
-            env: Environment::with_registries(registries, None),
-            recorded: std::sync::OnceLock::new(),
-        }
-    }
-
-    /// The project whose one file is `source`, in the environment
-    /// `assemble` makes at its root (a temp directory).
-    pub fn assembled(source: &str, assemble: impl FnOnce(&Path) -> Environment) -> Self {
-        let (graph, _) =
-            specforge_graph::build_graph(&[specforge_parser::parse(source, "main.spec")]);
-        let dir = TempDir::new().unwrap();
-        let env = assemble(dir.path());
-        Project {
-            dir,
-            graph,
-            env,
-            recorded: std::sync::OnceLock::new(),
-        }
-    }
-
-    /// The project whose one file is `source`, over `registries`, whose
-    /// extension calls go to `runtime`.
-    pub fn in_runtime(source: &str, registries: RegistryBuild, runtime: SharedRuntime) -> Self {
-        let (graph, _) =
-            specforge_graph::build_graph(&[specforge_parser::parse(source, "main.spec")]);
-        Project {
-            dir: TempDir::new().unwrap(),
-            graph,
-            env: Environment::with_registries(registries, Some(runtime)),
-            recorded: std::sync::OnceLock::new(),
-        }
-    }
-
-    pub fn view(&self) -> ProjectView<'_> {
-        ProjectView::new(
-            &self.graph,
-            &self.env,
-            Some(self.dir.path()),
-            self.recorded
-                .get_or_init(|| RecordedCoverage::over(&self.graph, &self.env)),
-        )
-    }
-
-    /// Record, as `specforge collect` would, one passing test per
-    /// `(entity, obligation)`.
-    pub fn record_passing(&self, proofs: &[(&str, &str)]) {
-        let mut results = serde_json::Map::new();
-        for (entity, obligation) in proofs {
-            results.insert(
-                entity.to_string(),
-                serde_json::json!({"tests": [
-                    {"name": format!("{entity}_test"), "status": "passed", "verify": obligation}
-                ]}),
-            );
-        }
-        std::fs::write(
-            self.dir.path().join("specforge-report.json"),
-            serde_json::json!({"runner": "fixture", "results": results}).to_string(),
-        )
-        .unwrap();
-    }
-}
-
 /// `config` read as the `specforge.json` at `root` (not written to disk).
 pub fn config_read(root: &Path, config: serde_json::Value) -> ConfigRead {
     specforge_common::parse_project_config(&root.join("specforge.json"), &config.to_string())
@@ -201,14 +115,14 @@ pub fn loaded(declarations: Vec<ExtensionDeclaration>) -> ExtensionLoad {
 /// The stats of `graph`, whose `testable` kinds are testable and must
 /// declare obligations, with no recorded report, reporting `diagnostics`.
 pub fn stats_of(graph: &Graph, testable: &[&str], diagnostics: &[Diagnostic]) -> Stats {
-    let project = Project::of_graph(graph.clone(), registries(testable, &[]));
+    let project = Assembled::over(registries(testable, &[])).graph(graph.clone());
     specforge_ops::read::stats::stats(&project.view().reporting(diagnostics)).unwrap()
 }
 
 /// `plan` checked against `graph`, whose `testable` kinds are testable and
 /// must declare obligations.
 pub fn plan_check(graph: &Graph, testable: &[&str], plan: &serde_json::Value) -> PlanOutcome {
-    let project = Project::of_graph(graph.clone(), registries(testable, &[]));
+    let project = Assembled::over(registries(testable, &[])).graph(graph.clone());
     specforge_ops::read::plan::check(
         &project.view(),
         &specforge_ops::read::plan::AgentPlan::read(plan).expect("an AgentPlan"),
@@ -228,7 +142,7 @@ pub fn gap_texts(outcome: &PlanOutcome, kind: PlanGapKind) -> Vec<&str> {
 /// The chain of `entity_id` in `graph`, its expected edges from
 /// `registries`; `None` when the graph lacks it.
 pub fn chain_in(graph: &Graph, registries: RegistryBuild, entity_id: &str) -> Option<TraceChain> {
-    let project = Project::of_graph(graph.clone(), registries);
+    let project = Assembled::over(registries).graph(graph.clone());
     specforge_ops::read::trace::trace(&project.view(), Target::Entity(entity_id))
         .ok()
         .map(|outcome| outcome.chains.into_iter().next().unwrap())
@@ -246,6 +160,6 @@ pub fn every_chain(
     graph: &Graph,
     registries: RegistryBuild,
 ) -> specforge_ops::read::trace::TraceOutcome {
-    let project = Project::of_graph(graph.clone(), registries);
+    let project = Assembled::over(registries).graph(graph.clone());
     specforge_ops::read::trace::trace(&project.view(), Target::Every).unwrap()
 }
