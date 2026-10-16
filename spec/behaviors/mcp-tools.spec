@@ -562,12 +562,15 @@ behavior provide_mcp_find_definition_tool "Provide MCP Find Definition Tool" {
     location where the entity is defined, including file path, line number,
     and column. LSP equivalence: this tool mirrors textDocument/definition
     (gotoDefinition), returning the same source location an IDE navigates to
-    but over the MCP transport. If the entity does not exist, the tool MUST
-    return an error.
+    but over the MCP transport. Every position it returns is in the text the
+    project was compiled from (the text the graph's spans index), never the
+    file as it is on disk now: MCP and the LSP read one text. If the entity
+    does not exist, the tool MUST return an error.
   """
   verify unit "specforge.find_definition returns file, line, and column"
   verify unit "non-existent entity returns error response"
   verify contract "Provide MCP Find Definition Tool: MCP find definition tool holds — graph_available, source_location_returned, tool_invoked_emitted"
+  verify unit "a definition is a position in the text the project was compiled from, not the file on disk now"
 }
 
 behavior provide_mcp_find_references_tool "Provide MCP Find References Tool" {
@@ -659,8 +662,12 @@ behavior provide_mcp_outline_tool "Provide MCP Outline Tool" {
     range, the range of its name, and any nested children (an entity's
     method members). LSP equivalence: this tool mirrors
     textDocument/documentSymbol, returning the same outline structure an IDE
-    shows in its symbol navigator but over the MCP transport. If the file
-    does not exist, the tool MUST return an error. With no project served, no
+    shows in its symbol navigator but over the MCP transport. A file that is
+    not one of the project's sources as the compile read them (one that does
+    not exist, a directory, specforge.json or any file that is not a .spec
+    source, one an exclude entry leaves out) MUST be refused as
+    file_not_found, naming it; a source with no entity has an empty outline.
+    With no project served, no
     file is a project's: the tool MUST return the no-project refusal
     (precondition_failed), whatever the server's working directory holds.
   """
@@ -673,6 +680,7 @@ behavior provide_mcp_outline_tool "Provide MCP Outline Tool" {
   verify unit "a file under the spec root with no entities has an empty outline"
   verify unit "with no project served, outline is the no-project refusal"
   verify unit "sorted by line number"
+  verify unit "a file that is not one of the project's sources is file_not_found, though it exists"
 }
 
 behavior provide_mcp_suggest_fixes_tool "Provide MCP Suggest Fixes Tool" {

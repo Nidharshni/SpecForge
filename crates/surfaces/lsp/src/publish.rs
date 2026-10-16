@@ -108,9 +108,9 @@ impl Publication {
 /// A spanless diagnostic about entities, placed at the first one's name,
 /// and the related information pointing at each other's name. `None`
 /// when its data names no entity the graph holds.
-fn place_at_subjects<F: Fn(&str) -> Option<String>>(
+fn place_at_subjects(
     compiled: &Compiled,
-    nav: &specforge_ops::read::navigate::Navigator<'_, F>,
+    nav: &specforge_ops::read::navigate::Navigator<'_>,
     diagnostic: &specforge_common::Diagnostic,
 ) -> Option<(
     specforge_common::Diagnostic,

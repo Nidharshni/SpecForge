@@ -65,6 +65,16 @@ impl SourceCache {
         }
     }
 
+    /// A cache holding only `texts`: no trees and no unreadable source. A test's way to give a
+    /// project other texts than it was read as.
+    #[cfg(feature = "testing")]
+    pub(crate) fn holding(texts: HashMap<String, Arc<str>>) -> Self {
+        SourceCache {
+            texts,
+            ..SourceCache::empty()
+        }
+    }
+
     /// Read (through `read`) and parse the sources `keys` names: the cold read. An unreadable
     /// one is recorded with its E025; no tree is kept (the first edit of a
     /// file parses it whole).

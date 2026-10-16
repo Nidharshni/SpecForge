@@ -100,7 +100,7 @@ fn a_missing_entity_is_one_refusal() {
     graph.add_node(node("signin", "feature"));
     let project = Assembled::over(Default::default()).graph(graph);
     let view = project.view();
-    let navigator = Navigator::new(view, |_: &str| None);
+    let navigator = Navigator::new(view);
 
     let refusals: Vec<(&str, OpError)> = vec![
         (

@@ -1,5 +1,5 @@
 //! The LSP's adapter over `specforge_ops::read::navigate`: it builds the
-//! navigator over the session (open buffers first, then disk) and converts
+//! navigator over the session (the text the project was compiled from) and converts
 //! its answers, `SourceSpan`s, to LSP locations and UTF-16 ranges. What
 //! the answers are is navigation's to say (ADR 0016); `use`-path
 //! navigation is the resolver's `import_target` over the compile's sources
@@ -51,11 +51,8 @@ impl<'s> Compiled<'s> {
     /// project was compiled from, not the buffer now (an edit not yet
     /// compiled would move the spans) nor the disk. A file the compile
     /// does not hold has no text.
-    pub(crate) fn navigator(&self) -> Navigator<'s, impl Fn(&str) -> Option<String> + use<'s>> {
-        let state = self.state;
-        Navigator::new(state.view(), move |file| {
-            state.compiled_text(file).map(|text| text.to_string())
-        })
+    pub(crate) fn navigator(&self) -> Navigator<'s> {
+        Navigator::new(self.state.view())
     }
 
     /// The URI of a session file key: the one the client names it by.

@@ -3,7 +3,7 @@ use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::SourceSpan;
 use specforge_common::shape::Shape;
-use specforge_ops::read::navigate::{OutlineEntry, outline};
+use specforge_ops::read::navigate::{Navigator, OutlineEntry, outline};
 
 use crate::args::Arguments;
 use crate::containment;
@@ -110,15 +110,9 @@ impl CoreTool for Tool {
                 .resolve(Path::new(file))
                 .map_err(|outside| Box::new(containment::refusal(&outside, "file")))?;
         }
-        let entries = outline(&super::navigator(view), file);
-        // A file the graph has no entity from is either empty or not there:
-        // under the project's spec root. With nothing served no file is the
-        // project's (the dispatcher makes the refusal the no-project one,
-        // ADR 0025).
-        let on_disk = spec_root.is_some_and(|spec_root| spec_root.join(file).exists());
-        if entries.is_empty() && !on_disk {
-            return Err(file_not_found(file).into());
-        }
+        // Only a source the compile read has an outline. With nothing served no file is the
+        // project's (the dispatcher makes the refusal the no-project one, ADR 0025).
+        let entries = outline(&Navigator::new(view), file).ok_or_else(|| file_not_found(file))?;
         Ok(Reply {
             entries: entries.iter().map(Entry::of).collect(),
         }

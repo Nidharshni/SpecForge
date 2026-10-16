@@ -381,10 +381,7 @@ pub fn code_actions(state: &LspState, uri: &Url, range: Range) -> Option<CodeAct
 /// flat otherwise.
 pub fn document_symbols(state: &LspState, uri: &Url) -> Option<DocumentSymbolResponse> {
     let compiled = Compiled::new(state);
-    let entries = outline(&compiled.navigator(), &state.key_of(uri));
-    if entries.is_empty() {
-        return None;
-    }
+    let entries = outline(&compiled.navigator(), &state.key_of(uri)).filter(|e| !e.is_empty())?;
     Some(outline_to_document_symbols(
         &compiled,
         entries,
