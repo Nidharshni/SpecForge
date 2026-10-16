@@ -124,3 +124,83 @@ fn a_methods_positions_are_not_serialized() {
         "{json}"
     );
 }
+
+#[specforge_test(
+    behavior = "link_derived_references",
+    verify = "a derived edge is written at each name it was derived from"
+)]
+fn a_derived_edge_is_written_at_each_name() {
+    let source = r#"
+shape Config {
+  root string
+}
+shape Project {
+  name string
+}
+shape Report {
+  ok boolean
+}
+iface Detector {
+  method detect(config: Config) -> Result<Project, Error>
+  method report(items: Project[]) -> Report
+}
+"#;
+    let (graph, _) = build(source, derived());
+
+    assert_eq!(
+        places(&graph, "Detector", "Project", "uses"),
+        ["12:43-12:50", "13:24-13:31"]
+    );
+    assert_eq!(
+        places(&graph, "Detector", "Config", "uses"),
+        ["12:25-12:31"]
+    );
+    assert_eq!(
+        places(&graph, "Detector", "Report", "uses"),
+        ["13:38-13:44"]
+    );
+}
+
+#[specforge_test(
+    behavior = "link_derived_references",
+    verify = "a derived edge is written at each name it was derived from"
+)]
+fn a_parameters_name_is_not_where_its_edge_is_written() {
+    let source =
+        "shape Config {\n  root string\n}\niface X {\n  method keep(Config: Config) -> Config\n}\n";
+    let (graph, _) = build(source, derived());
+
+    assert_eq!(
+        places(&graph, "X", "Config", "uses"),
+        ["5:23-5:29", "5:34-5:40"]
+    );
+}
+
+#[specforge_test(
+    behavior = "link_derived_references",
+    verify = "a derived edge is written at each name it was derived from"
+)]
+fn a_union_member_is_written_at_its_name() {
+    let source = "shape Wheel {\n  size number\n}\nshape Config {\n  root string\n}\n\
+shape Kind = Wheel | Config\nshape Holder {\n  slot Wheel | Config\n}\n";
+    let (graph, _) = build(source, derived());
+
+    assert_eq!(places(&graph, "Kind", "Wheel", "parts"), ["7:14-7:19"]);
+    assert_eq!(places(&graph, "Kind", "Config", "parts"), ["7:22-7:28"]);
+    assert_eq!(places(&graph, "Holder", "Wheel", "parts"), ["9:8-9:13"]);
+    assert_eq!(places(&graph, "Holder", "Config", "parts"), ["9:16-9:22"]);
+}
+
+#[specforge_test(
+    behavior = "link_derived_references",
+    verify = "a derived edge is written at each name it was derived from"
+)]
+fn a_name_inside_a_type_on_a_later_line_is_written_on_its_line() {
+    let source = "shape Config {\n  root string\n}\nshape Project {\n  name string\n}\n\
+iface X {\n  method run() -> Result<\n    Config,\n    Project>\n}\n";
+    let (graph, diagnostics) = build(source, derived());
+
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    assert_eq!(places(&graph, "X", "Config", "uses"), ["9:5-9:11"]);
+    assert_eq!(places(&graph, "X", "Project", "uses"), ["10:5-10:12"]);
+}

@@ -129,8 +129,24 @@ impl Graph {
         unlinked
     }
 
-    /// Panic, naming them, when [`Self::unlinked_references`] is not empty:
-    /// a SpecForge bug, never a spec error.
+    /// The edges with no written place (source, target, field). Empty after
+    /// every link: each reference and each derived name records its span.
+    #[cfg_attr(
+        not(debug_assertions),
+        allow(dead_code, reason = "only debug assertions call it")
+    )]
+    pub(crate) fn unwritten_edges(&self) -> Vec<(Sym, Sym, Sym)> {
+        self.edges
+            .iter()
+            .zip(&self.written)
+            .filter(|(_, places)| places.is_empty())
+            .map(|(edge, _)| (edge.source, edge.target, edge.label))
+            .collect()
+    }
+
+    /// Panic, naming them, when [`Self::unlinked_references`] or
+    /// [`Self::unwritten_edges`] is not empty: a SpecForge bug, never a spec
+    /// error.
     #[cfg_attr(
         not(debug_assertions),
         allow(dead_code, reason = "only debug assertions call it")
@@ -141,6 +157,16 @@ impl Graph {
             unlinked.is_empty(),
             "SpecForge bug: references to existing entities without their edge (source, target, field): {}",
             unlinked
+                .iter()
+                .map(|(source, target, field)| format!("({source}, {target}, {field})"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        let unwritten = self.unwritten_edges();
+        assert!(
+            unwritten.is_empty(),
+            "SpecForge bug: edges the linker made with no written place (source, target, field): {}",
+            unwritten
                 .iter()
                 .map(|(source, target, field)| format!("({source}, {target}, {field})"))
                 .collect::<Vec<_>>()
@@ -194,6 +220,21 @@ invariant inv_one "Invariant One" {
             .collect();
 
         assert_eq!(unlinked, [("alpha", "inv_one", "invariants")]);
+    }
+
+    #[test]
+    #[should_panic(expected = "no written place")]
+    fn an_edge_without_a_written_place_fails_the_assertion() {
+        let (mut graph, _) = built(REFERENCING);
+        // What a linker that forgot a span leaves behind.
+        graph.clear_edges();
+        graph.add_edge(Edge {
+            source: Sym::new("alpha"),
+            target: Sym::new("inv_one"),
+            label: Sym::new("invariants"),
+        });
+
+        graph.assert_linked(&FieldForms::default());
     }
 
     #[specforge_test(

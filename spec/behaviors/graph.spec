@@ -64,6 +64,7 @@ behavior link_derived_references "Link Derived References" {
     field_type_names_linked       "every name in the entity's type-syntax field values that resolves to an entity of the field's target kind gets an edge labelled with the field"
     method_signature_names_linked "every name in the entity's method parameter and return types that resolves to an entity of the field's target kind gets an edge labelled with the field"
     unresolved_names_unlinked     "a primitive, a generic wrapper or an undeclared name creates no edge"
+    derived_names_written         "each derived edge records where every name it was derived from is written"
   }
   contract   """
     A field an extension registers MAY declare `derived_from`. The host
@@ -92,6 +93,8 @@ behavior link_derived_references "Link Derived References" {
     derive edges, from where and to which kind comes only from the fields
     extensions register. Derived edges join the graph after reference
     cycle detection, so a recursive type is not a reference cycle (W061).
+    Each such name is where the edge is written: navigation and rename read
+    it (ADR 0127).
   """
   verify unit "a name in a type-syntax field value links through the derived field"
   verify unit "a name in a method parameter or return type links through the derived field"
@@ -102,6 +105,7 @@ behavior link_derived_references "Link Derived References" {
   verify unit "an entity naming itself creates no edge"
   verify unit "a recursive type derives no reference cycle"
   verify unit "a kind with no derived field derives no edge"
+  verify unit "a derived edge is written at each name it was derived from"
   verify integration "a field's derived_from reaches the graph from the extension's manifest"
 }
 
