@@ -16,6 +16,7 @@ use std::sync::Arc;
 use specforge_common::{Diagnostic, codes};
 use specforge_graph::{FileChange, GraphBuild};
 use specforge_parser::{Previous, SpecFile, parse_incremental};
+use specforge_registry::Disk;
 
 /// What reading one source gave.
 pub(crate) enum Read {
@@ -26,18 +27,27 @@ pub(crate) enum Read {
     Gone,
 }
 
-/// Read `relative` (a source key) under `spec_root`: the one read of a
-/// `.spec` file.
-pub(crate) fn read(spec_root: &Path, relative: &str) -> Read {
-    match std::fs::read_to_string(spec_root.join(relative)) {
-        Ok(text) => Read::Text(text),
+/// Read source `relative` under `spec_root` through `disk`: the one read of a
+/// `.spec` file. Its text; its E025 when it is there and is not UTF-8 text or
+/// cannot be read; `Gone` when the disk says `NotFound`.
+pub(crate) fn read(disk: &dyn Disk, spec_root: &Path, relative: &str) -> Read {
+    match disk.read(&spec_root.join(relative)) {
+        Ok(bytes) => match String::from_utf8(bytes) {
+            Ok(text) => Read::Text(text),
+            Err(_) => unreadable(relative, "stream did not contain valid UTF-8"),
+        },
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Read::Gone,
-        Err(e) => Read::Unreadable(
-            Diagnostic::new(codes::E025, format!("cannot read {relative}: {e}")).with_suggestion(
-                "save it as UTF-8 text, or leave it out with an `exclude` entry in specforge.json",
-            ),
-        ),
+        Err(e) => unreadable(relative, e),
     }
+}
+
+/// The E025 of source `relative`, which is there and cannot be read.
+fn unreadable(relative: &str, why: impl std::fmt::Display) -> Read {
+    Read::Unreadable(
+        Diagnostic::new(codes::E025, format!("cannot read {relative}: {why}")).with_suggestion(
+            "save it as UTF-8 text, or leave it out with an `exclude` entry in specforge.json",
+        ),
+    )
 }
 
 /// The text each held source was parsed from, the retained trees, and the
@@ -224,6 +234,7 @@ mod tests {
     use super::*;
     use specforge_graph::GraphConfig;
     use specforge_parser::parse;
+    use specforge_registry::{Asked, MemoryDisk};
 
     /// Typing reuses the retained tree; a shrinking replacement still
     /// parses as the new text alone.
@@ -257,14 +268,14 @@ mod tests {
     /// A held text is read in place of its file: the file is never read.
     #[test]
     fn a_held_text_is_read_in_place_of_its_file() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("a.spec"), b"type x \"X\xff\" {}\n").unwrap();
+        let disk = MemoryDisk::new().with_file("/spec/a.spec", b"type x \"X\xff\" {}\n");
         let held = BTreeMap::from([
             ("a.spec".to_string(), "type held \"H\" {}\n"),
             ("new.spec".to_string(), "type fresh \"F\" {}\n"),
         ]);
-        let (cache, files) =
-            SourceCache::read_all(&["a.spec".to_string()], &held, |key| read(dir.path(), key));
+        let (cache, files) = SourceCache::read_all(&["a.spec".to_string()], &held, |key| {
+            read(&disk, Path::new("/spec"), key)
+        });
         assert_eq!(files.len(), 2);
         assert!(files.iter().all(|f| f.entities.len() == 1));
         assert!(cache.text("new.spec").is_some());
@@ -273,24 +284,52 @@ mod tests {
             Some("type held \"H\" {}\n")
         );
         assert_eq!(cache.unreadable().count(), 0, "the file was never read");
+        assert!(disk.asked().is_empty(), "the file was never read");
     }
 
-    fn unreadable(path: &str) -> Read {
-        read_of(path, b"term beta \"B\xff\xfe\" {\n}\n")
+    /// A source reads through the disk it is given: its text, its E025, or gone.
+    #[test]
+    fn a_source_reads_through_the_disk_it_is_given() {
+        let disk = MemoryDisk::new()
+            .with_file("/spec/a.spec", b"term alpha \"A\" {}\n")
+            .with_file("/spec/bad.spec", b"term beta \"B\xff\xfe\" {\n}\n");
+        let spec = Path::new("/spec");
+
+        assert!(matches!(
+            read(&disk, spec, "a.spec"),
+            Read::Text(text) if text == "term alpha \"A\" {}\n"
+        ));
+        let Read::Unreadable(bad) = read(&disk, spec, "bad.spec") else {
+            panic!("a file that is not UTF-8 is unreadable");
+        };
+        assert_eq!(
+            bad.message,
+            "cannot read bad.spec: stream did not contain valid UTF-8"
+        );
+        assert!(matches!(read(&disk, spec, "gone.spec"), Read::Gone));
+        assert_eq!(
+            disk.asked(),
+            [
+                Asked::Read("/spec/a.spec".into()),
+                Asked::Read("/spec/bad.spec".into()),
+                Asked::Read("/spec/gone.spec".into()),
+            ]
+        );
     }
 
-    /// What `read` gives for a file holding `bytes`.
-    fn read_of(path: &str, bytes: &[u8]) -> Read {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join(path), bytes).unwrap();
-        read(dir.path(), path)
+    fn unreadable_source(path: &str) -> Read {
+        let disk = MemoryDisk::new().with_file(
+            Path::new("/spec").join(path),
+            b"term beta \"B\xff\xfe\" {\n}\n",
+        );
+        read(&disk, Path::new("/spec"), path)
     }
 
     #[test]
     fn a_gone_source_drops_its_unreadable_diagnostic() {
         let mut cache = SourceCache::empty();
         assert!(matches!(
-            cache.change("bad.spec", unreadable("bad.spec")),
+            cache.change("bad.spec", unreadable_source("bad.spec")),
             FileChange::Removed(_)
         ));
         let messages: Vec<&str> = cache.unreadable().map(|d| d.message.as_str()).collect();
@@ -306,7 +345,7 @@ mod tests {
         assert_eq!(cache.unreadable().count(), 0);
 
         // A source that becomes readable is parsed and no longer reported.
-        cache.change("bad.spec", unreadable("bad.spec"));
+        cache.change("bad.spec", unreadable_source("bad.spec"));
         assert!(matches!(
             cache.change("bad.spec", Read::Text("// ok\n".to_string())),
             FileChange::Parsed(_)

@@ -111,7 +111,7 @@ impl Reads for Unrecorded {
     }
 
     fn source(&mut self, spec_root: &Path, key: &str) -> Read {
-        sources::read(spec_root, key)
+        sources::read(&PlainDisk, spec_root, key)
     }
 
     fn run_checks(&mut self, check: impl FnOnce(&dyn Disk)) -> bool {
@@ -158,7 +158,9 @@ impl Reads for Ledger {
 
     /// Stamped, then read: a source written after its stamp is seen next time.
     fn source(&mut self, spec_root: &Path, key: &str) -> Read {
-        self.source_with(spec_root, key, |_| sources::read(spec_root, key))
+        self.source_with(spec_root, key, |_| {
+            sources::read(&PlainDisk, spec_root, key)
+        })
     }
 
     /// The checks' reads, each stamped and recorded as a check input when
@@ -224,7 +226,7 @@ impl Ledger {
                 let read = if self.inputs.excludes(key) {
                     Read::Gone
                 } else {
-                    sources::read(&spec_root, key)
+                    sources::read(&PlainDisk, &spec_root, key)
                 };
                 (key.clone(), read)
             })
