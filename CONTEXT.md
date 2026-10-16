@@ -93,7 +93,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   same order (an editor update that skips the checks while a file does not parse is the one exception).
 - **Read ledger**: what a project session read and when (`specforge_project::ledger`, crate-private): its session
   inputs and the stamp of each file, taken in the call that reads it. It does every disk read the session makes
-  (the config, the lock and modules, the sources, the check inputs), the environment's each through the one recording adapter, derives every source key, and answers `changes`
+  (the config, the lock and modules, the sources, the check inputs), each through the one recording adapter, derives every source key, and answers `changes`
   and `stale`. A one-shot compile runs the same steps through an adapter that records nothing (ADR 0106).
 - **Check reads**: every file-system read a check, a rule or a check pass makes, through the `Disk` in `RuleInput`
   (`exists`, `list`, `read`; `specforge_registry::Disk`, ADR 0107). A project session's ledger stamps and records each
@@ -102,12 +102,15 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   module the extension load reads) through the `Disk` it is handed (`Installed::read`, `Installed::load`; ADR 0114). A
   project session's ledger stamps and records each one, each link hop included: its environment inputs are what its
   last environment load read.
+- **Source reads**: each read of a `.spec` file a session makes, the cold read and every reread, through the `Disk` it
+  is handed (`sources::read`; ADR 0129). A project session's ledger stamps each source by its key and records each link
+  hop the read followed. A held buffer's file is not read, so nothing of it is recorded until it is released.
 - **Session inputs**: everything a project session depends on besides its sources' text: where its
   sources are discovered (the spec root and `exclude`), its **environment inputs**
   (the environment reads of its last load) and its **check inputs**
   (the check reads of the last check run: `specforge-cache.json` when a check pass read it, each path a check looked
-  for, each directory a missing named file's suggestion listed, and the target of each that is a symlink, and where each symlinked
-  source's text lies (its target)). Every input is keyed by its own name (a symlink stays itself), and each link hop it
+  for, each directory a missing named file's suggestion listed, and the target of each that is a symlink) and its **source hops**
+  (each link hop a symlinked source's last read followed, its target included). Every input is keyed by its own name (a symlink stays itself), and each link hop it
   followed is an input of its own. One value per
   environment load, renewed each time the checks run (`specforge_project::SessionInputs`,
   `ProjectSession::inputs`). What a changed path reaches, which directories watch watches, which files
