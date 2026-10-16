@@ -120,7 +120,6 @@ fn a_symlinked_config_and_locks_targets_are_watched() {
 }
 
 #[cfg(unix)]
-#[ignore = "flipped by T8"]
 #[specforge_test(
     behavior = "classify_project_changes",
     verify = "an input that is a symlink pointed elsewhere is its change"

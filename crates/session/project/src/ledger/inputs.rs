@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use specforge_common::{ProjectConfig, SourceRoot};
 
-use super::key::{canonical, discovered, relative_canonical};
+use super::key::{canonical, discovered, in_canonical_dir, relative_canonical};
 
 /// Everything a project session depends on besides its sources' text:
 /// where its sources are discovered (the spec root and `exclude`), the
@@ -112,7 +112,16 @@ impl OnDisk {
     /// `path` canonical, re-spelled from the root as it was opened when it
     /// lies under it.
     fn respell(&self, path: &Path) -> PathBuf {
-        let path = canonical(path);
+        self.respelled(canonical(path))
+    }
+
+    /// An input file by its own name (a symlink is not resolved), spelled
+    /// as [`Self::respell`] does.
+    fn respell_file(&self, path: &Path) -> PathBuf {
+        self.respelled(in_canonical_dir(path))
+    }
+
+    fn respelled(&self, path: PathBuf) -> PathBuf {
         match path.strip_prefix(&self.canonical.root) {
             Ok(relative) if relative.as_os_str().is_empty() => self.root.clone(),
             Ok(relative) => self.root.join(relative),
@@ -255,7 +264,7 @@ impl SessionInputs {
                 disk.environment
                     .iter()
                     .chain(&disk.check_files)
-                    .map(|path| Watched::File(spelled(path))),
+                    .map(|path| Watched::File(disk.respell_file(path))),
             )
             .chain(
                 disk.links
@@ -378,7 +387,7 @@ impl SessionInputs {
             environment: disk
                 .environment
                 .iter()
-                .map(|path| (canonical(path), path.clone()))
+                .map(|path| (in_canonical_dir(path), path.clone()))
                 .collect(),
             checks: disk.canonical_checks(),
             listings: disk.canonical_listings(),
@@ -394,7 +403,7 @@ impl OnDisk {
     fn canonical_checks(&self) -> BTreeMap<PathBuf, PathBuf> {
         self.check_files
             .iter()
-            .map(|path| (canonical(path), path.clone()))
+            .map(|path| (in_canonical_dir(path), path.clone()))
             .collect()
     }
 

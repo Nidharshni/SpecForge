@@ -79,7 +79,6 @@ fn a_symlinked_check_inputs_target_reruns_the_checks() {
 /// A `file_reference` path that is a symlink and is pointed elsewhere is
 /// its own change: the link is keyed by its name, not by its old target.
 #[cfg(unix)]
-#[ignore = "flipped by T8"]
 #[specforge_test(
     behavior = "classify_project_changes",
     verify = "an input that is a symlink pointed elsewhere is its change"
