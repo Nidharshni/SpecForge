@@ -144,7 +144,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   "another project" is one nested in the served one (`specforge_ops::Containment`, ADR 0092, ADR 0104).
 - **Containment**: what a request may reach on disk: every path (the CLI, ADR 0092 D6) or the paths that land inside
   one directory (an MCP request's bound, or the call's project). Carried in the operation's request and applied where
-  the operation opens or writes the file (`specforge_ops::Containment`, ADR 0104).
+  the operation opens or writes the file (`specforge_ops::Containment`, ADR 0104). MCP's call's project hands it to
+  the tools (`ProjectRef::containment`, ADR 0112).
+- **Project file**: a file of the project an operation reads or writes. It is opened only as a `Held`
+  (`specforge_ops::Containment::resolve`): at where its name landed (`real`), named as given (`spelled`), and replaced
+  atomically through a temp created new beside it (ADR 0104, ADR 0112).
 - **Served project**: the project an MCP server serves to every call that names none: the nearest project (a
   directory holding `specforge.json`) at or above the server's root (the path `specforge mcp` was started with, or
   a handshake client's `projectRoot`), else nothing; while none is served, every request looks there again first
