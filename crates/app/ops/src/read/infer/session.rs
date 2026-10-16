@@ -7,8 +7,8 @@
 use std::path::Path;
 
 use super::manifest::{
-    InferenceManifest, InferenceSession, SessionStatus, SourceFileEntry, compute_content_hash,
-    source_path, source_root,
+    InferenceManifest, InferenceSession, MANIFEST_FILENAME, SessionStatus, SourceFileEntry,
+    compute_content_hash, source_path, source_root,
 };
 use crate::options::{Choice, OptionTable};
 use crate::view::ProjectView;
@@ -146,7 +146,15 @@ pub struct SessionOutcome {
     pub writes: Writes,
 }
 
-/// Record `step` in the inference manifest at the view's root: one read,
+/// A session step and the bound its files must land inside (ADR 0104 D3, ADR 0112 D2): the
+/// manifest, read and replaced, and the file a mark hashes.
+#[derive(Debug, Clone, Copy)]
+pub struct SessionRequest<'a> {
+    pub step: SessionStep<'a>,
+    pub containment: &'a Containment,
+}
+
+/// Record `request`'s step in the inference manifest at the view's root: one read,
 /// the step applied, one write, the writes returned (ADR 0022 D1). A
 /// refusal writes nothing. In order: `no_project` without a root; a path
 /// outside the root ([`SOURCE_OUTSIDE_ROOT`]); E071 for a manifest that
@@ -155,13 +163,25 @@ pub struct SessionOutcome {
 /// [`SOURCE_UNREADABLE`]). Marking a file does not need an active session.
 pub fn session(
     view: &ProjectView<'_>,
-    step: SessionStep<'_>,
+    request: &SessionRequest<'_>,
 ) -> Result<SessionOutcome, Refusal<SessionField>> {
     let root = view.project_root()?;
-    let step = Normalized::of(step)?;
-    let mut manifest = InferenceManifest::at(root)?;
-    let recorded = apply(&mut manifest, root, step, &now(), new_session_id)?;
-    let writes = manifest.write(root)?;
+    let step = Normalized::of(request.step)?;
+    // The manifest is held once: what is read is what is replaced.
+    let file = request
+        .containment
+        .resolve(&root.join(MANIFEST_FILENAME))
+        .map_err(OpError::from)?;
+    let mut manifest = InferenceManifest::at_held(&file)?;
+    let recorded = apply(
+        &mut manifest,
+        root,
+        request.containment,
+        step,
+        &now(),
+        new_session_id,
+    )?;
+    let writes = manifest.write(&file)?;
     Ok(SessionOutcome { recorded, writes })
 }
 
@@ -253,6 +273,7 @@ fn outside_root(code: &'static str, what: &str, given: &str) -> OpError {
 fn apply(
     manifest: &mut InferenceManifest,
     root: &Path,
+    containment: &Containment,
     step: Normalized<'_>,
     now: &str,
     new_id: impl FnOnce() -> String,
@@ -291,7 +312,7 @@ fn apply(
         } => {
             // A symlink that leaves the root is a path outside it (ADR 0092
             // D8): its target is not read.
-            let Ok(held) = Containment::within(root).resolve(Path::new(&path)) else {
+            let Ok(held) = containment.resolve(&root.join(&path)) else {
                 return Err(outside_root(SOURCE_OUTSIDE_ROOT, "source_file", given)
                     .about(SessionField::SourceFile));
             };

@@ -1,7 +1,8 @@
 //! Running a collector's command, its output captured or passed through.
 
-use super::collector::{Collector, capture_path, captures_stdout, command_line};
-use std::path::{Path, PathBuf};
+use super::collector::{Collector, command_line};
+use crate::Held;
+use std::path::Path;
 use std::time::SystemTime;
 
 /// Environment variable the host sets to the absolute report path when it
@@ -31,7 +32,7 @@ pub(super) struct Ran {
     pub started: SystemTime,
     /// The file holding the command's standard output, when the collector
     /// captures it.
-    pub stdout: Option<PathBuf>,
+    pub stdout: Option<Held>,
 }
 
 /// Run the collector's declared command in the project root. A report
@@ -39,35 +40,34 @@ pub(super) struct Ran {
 /// left alone (other tools may keep files there) and filtered by
 /// modification time when it's read. A captured standard output still
 /// reaches the chosen output as it's produced, and is also written to
-/// [`capture_path`].
+/// `capture`. Every file it removes, creates or writes is a held one.
 pub(super) fn run(
     collector: &Collector,
     root: &Path,
-    report: &Path,
+    report: &Held,
+    capture: Option<&Held>,
     output: RunnerOutput,
 ) -> Result<Ran, String> {
-    let argv = command_line(collector, report);
+    let argv = command_line(collector, &report.spelled);
     let Some((program, args)) = argv.split_first() else {
         return Err(format!(
             "collector '{}' of {} declares no command; use --no-run with its report",
             collector.name, collector.extension
         ));
     };
-    let capture = captures_stdout(collector)?.then(|| capture_path(collector, report));
-    if report.is_file() {
-        std::fs::remove_file(report).map_err(|e| format!("{}: {e}", report.display()))?;
+    if report.real.is_file() {
+        report
+            .remove()
+            .map_err(|e| format!("{}: {e}", report.spelled.display()))?;
     }
-    for dir in report
-        .parent()
-        .into_iter()
-        .chain(capture.as_deref().and_then(Path::parent))
-    {
-        std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    for file in std::iter::once(report).chain(capture) {
+        file.create_parent()
+            .map_err(|e| format!("{}: {e}", file.spelled.display()))?;
     }
     let mut cmd = std::process::Command::new(program);
     cmd.args(args)
         .current_dir(root)
-        .env(REPORT_ENV, report)
+        .env(REPORT_ENV, &report.spelled)
         .stdin(std::process::Stdio::null());
     match output {
         RunnerOutput::Inherit => {}
@@ -99,21 +99,21 @@ pub(super) fn run(
         .spawn()
         .map_err(failed)?;
     let pipe = child.stdout.take().expect("stdout is piped");
-    let tee = tee(pipe, &capture, output);
+    let tee = tee(pipe, capture, output);
     let status = child.wait().map_err(failed)?;
-    tee.map_err(|e| format!("{}: {e}", capture.display()))?;
+    tee.map_err(|e| format!("{}: {e}", capture.spelled.display()))?;
     Ok(Ran {
         exit_code: status.code(),
         started,
-        stdout: Some(capture),
+        stdout: Some(capture.clone()),
     })
 }
 
 /// Copy the child's standard output to `file` and to where `output` sends
 /// the runner's output, as it arrives.
-fn tee(mut pipe: impl std::io::Read, file: &Path, output: RunnerOutput) -> std::io::Result<()> {
+fn tee(mut pipe: impl std::io::Read, file: &Held, output: RunnerOutput) -> std::io::Result<()> {
     use std::io::Write;
-    let mut file = std::fs::File::create(file)?;
+    let mut file = file.create()?;
     let mut shown: Box<dyn Write> = match output {
         RunnerOutput::Inherit => Box::new(std::io::stdout()),
         RunnerOutput::Stderr => Box::new(std::io::stderr()),

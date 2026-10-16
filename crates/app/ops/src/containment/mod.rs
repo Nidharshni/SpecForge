@@ -7,6 +7,10 @@
 //! reached so far, and every symlink on the way is followed, a dangling one by its target text.
 //! What does not exist yet (a file about to be created) is the rest of the name, joined on.
 
+mod file;
+
+pub use file::{ReadFailure, declared};
+
 use std::collections::VecDeque;
 use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
@@ -197,126 +201,4 @@ fn landing(path: &Path) -> PathBuf {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn scene() -> (tempfile::TempDir, PathBuf) {
-        let dir = tempfile::TempDir::new().unwrap();
-        let root = dir.path().join("proj");
-        std::fs::create_dir_all(root.join("spec")).unwrap();
-        std::fs::create_dir_all(dir.path().join("outside/deep")).unwrap();
-        // The temp directory itself may sit behind a symlink (macOS `/var`): work from its real path.
-        let real = std::fs::canonicalize(dir.path()).unwrap();
-        (dir, real)
-    }
-
-    #[test]
-    fn a_name_is_resolved_against_the_root_and_cannot_leave_it() {
-        let (_dir, base) = scene();
-        let root = base.join("proj");
-        let containment = Containment::within(&root);
-
-        for inside in ["spec", "./spec/../spec", "not/yet/made", "."] {
-            assert!(containment.resolve(Path::new(inside)).is_ok(), "{inside}");
-        }
-        let outside = base.join("outside");
-        for leaving in [
-            "..",
-            "../outside",
-            "spec/../../outside",
-            "not/yet/../../../outside",
-            outside.to_str().unwrap(),
-        ] {
-            assert!(
-                containment.resolve(Path::new(leaving)).is_err(),
-                "{leaving}"
-            );
-        }
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn a_symlink_that_leaves_the_root_is_followed_before_the_check() {
-        let (_dir, base) = scene();
-        let root = base.join("proj");
-        std::os::unix::fs::symlink(base.join("outside"), root.join("link")).unwrap();
-        std::os::unix::fs::symlink(&root, base.join("outside/back")).unwrap();
-        let containment = Containment::within(&root);
-
-        assert!(containment.resolve(Path::new("link")).is_err());
-        assert!(containment.resolve(Path::new("link/deep")).is_err());
-        // `..` after a symlink is the symlink target's parent, not the root.
-        assert!(containment.resolve(Path::new("link/deep/..")).is_err());
-        // A symlink that comes back inside is inside.
-        assert!(containment.resolve(Path::new("link/back")).is_ok());
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn an_unbounded_containment_refuses_nothing_and_still_lands_each_name() {
-        let (_dir, base) = scene();
-        std::os::unix::fs::symlink(base.join("outside/deep"), base.join("proj/a")).unwrap();
-        let containment = Containment::unbounded();
-
-        // Relative and absolute names are handed back as given.
-        let held = containment.resolve(Path::new("x/y")).unwrap();
-        assert_eq!(held.spelled, Path::new("x/y"));
-        let leaving = base.join("proj/spec/../../outside");
-        let held = containment.resolve(&leaving).unwrap();
-        assert_eq!(
-            (held.spelled.as_path(), held.real),
-            (leaving.as_path(), base.join("outside"))
-        );
-        // A symlink then `..` lands where the OS would: beside the link's target, not the link.
-        let held = containment.resolve(&base.join("proj/a/../x.wasm")).unwrap();
-        assert_eq!(held.real, base.join("outside/x.wasm"));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn a_missing_name_behind_a_symlink_that_leaves_is_outside() {
-        let (_dir, base) = scene();
-        let root = base.join("proj");
-        std::os::unix::fs::symlink(base.join("outside"), root.join("src")).unwrap();
-        let outside = Containment::within(&root)
-            .resolve(Path::new("src/missing.rs"))
-            .unwrap_err();
-        assert_eq!(outside.landed(), base.join("outside/missing.rs"));
-        assert_eq!(outside.root(), root);
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn a_dangling_symlink_lands_where_it_points() {
-        let (_dir, base) = scene();
-        let root = base.join("proj");
-        std::os::unix::fs::symlink(base.join("outside/new.json"), root.join("link")).unwrap();
-        let containment = Containment::within(&root);
-
-        let outside = containment.resolve(Path::new("link")).unwrap_err();
-        assert_eq!(outside.landed(), base.join("outside/new.json"));
-        // One that points inside is inside, by its target text read against its own directory.
-        std::os::unix::fs::symlink("spec/new.json", root.join("inner")).unwrap();
-        let held = containment.resolve(Path::new("inner")).unwrap();
-        assert_eq!(held.real, root.join("spec/new.json"));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn a_symlink_loop_lands_at_itself() {
-        let (_dir, base) = scene();
-        let root = base.join("proj");
-        std::os::unix::fs::symlink(root.join("b"), root.join("a")).unwrap();
-        std::os::unix::fs::symlink(root.join("a"), root.join("b")).unwrap();
-        let held = Containment::within(&root).resolve(Path::new("a")).unwrap();
-        assert!(held.real.starts_with(&root));
-    }
-
-    #[test]
-    fn narrowed_bounds_a_bounded_containment_to_the_directory_and_leaves_an_unbounded_one() {
-        let (_dir, base) = scene();
-        let narrowed = Containment::within(&base).narrowed(&base.join("proj"));
-        assert_eq!(narrowed.root(), Some(base.join("proj").as_path()));
-        assert!(Containment::unbounded().narrowed(&base).root().is_none());
-    }
-}
+mod tests;

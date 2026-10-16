@@ -7,7 +7,8 @@
 //! In order: refuse a place it cannot work from; refresh the lockfile of every
 //! committed blob's crate (`specforge_component::committed::COMMITTED`); rebuild
 //! and vendor every blob with its `inputs.json` (`build-blobs --install`);
-//! rewrite the declaration snapshots of every SDK blob, in process; check what it
+//! rewrite the declaration snapshots of every SDK blob, in process; write the builtins'
+//! candidate vocabulary from those snapshots (ADR 0122); check what it
 //! did not write (`build-blobs --check` and the declarations test) and print
 //! the paths to stage.
 #![expect(
@@ -16,7 +17,10 @@
 )]
 
 use specforge_component::ComponentRuntime;
-use specforge_component::committed::{COMMITTED, snapshots, wire_answers};
+use specforge_component::committed::{
+    COMMITTED, pinned_builtin_declarations, snapshots, wire_answers,
+};
+use specforge_registry::CandidateVocabulary;
 use specforge_wasm::runtime::WasmRuntime;
 use std::path::Path;
 use std::process::Command;
@@ -71,6 +75,9 @@ fn run(root: &Path) -> Result<(), String> {
     println!("== declaration snapshots");
     let written = write_snapshots()?;
     println!("[ok]     {written} snapshot files written");
+    println!("== builtin vocabulary");
+    write_vocabulary(root)?;
+    println!("[ok]     builtin vocabulary written");
     println!("== checks");
     xtask(root, "build-blobs", &["--check"])?;
     declarations_test(root)?;
@@ -86,7 +93,7 @@ fn run(root: &Path) -> Result<(), String> {
         })
         .collect();
     println!(
-        "  git add {} crates/runtime/component/tests/declarations",
+        "  git add {} crates/runtime/component/tests/declarations crates/runtime/component/data",
         paths.join(" ")
     );
     if !changed.is_empty() {
@@ -155,6 +162,14 @@ fn write_snapshots() -> Result<usize, String> {
         }
     }
     Ok(written)
+}
+
+/// Write the builtins' candidate vocabulary from their pinned declarations, which
+/// `write_snapshots` just wrote (ADR 0122).
+fn write_vocabulary(root: &Path) -> Result<(), String> {
+    let vocabulary = CandidateVocabulary::of(&pinned_builtin_declarations()?)?;
+    let path = root.join("crates/runtime/component/data/builtin-vocabulary.json");
+    std::fs::write(&path, vocabulary.to_json()).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 /// The declarations test: the snapshot set, the typed round trip and the protocol freshness test

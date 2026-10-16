@@ -201,33 +201,32 @@ pub fn apply(
     let mut changes = Vec::new();
     for file in plan.affected_files() {
         let held = containment.resolve(&spec_root.join(file))?;
-        let (path, real) = (held.spelled, held.real);
-        let old = std::fs::read_to_string(&real).map_err(|e| {
+        let old = held.read_to_string().map_err(|e| {
             OpError::new(
                 OpErrorKind::of_io(&e),
                 UNREADABLE,
-                format!("failed to read {}: {e}", path.display()),
+                format!("failed to read {}: {e}", held.spelled.display()),
             )
         })?;
         let new = apply_edits(&old, plan.edits.iter().filter(|e| e.file == file));
-        changes.push((path, real, old, new));
+        changes.push((held, old, new));
     }
-    for (i, (path, real, _, new)) in changes.iter().enumerate() {
-        if let Err(e) = std::fs::write(real, new) {
-            for (_, written, old, _) in &changes[..=i] {
-                let _ = std::fs::write(written, old);
+    for (i, (held, _, new)) in changes.iter().enumerate() {
+        if let Err(e) = held.write(new) {
+            for (written, old, _) in &changes[..=i] {
+                let _ = written.write(old);
             }
             return Err(OpError::new(
                 OpErrorKind::of_io(&e),
                 UNREADABLE,
-                format!("failed to write {}: {e}", path.display()),
+                format!("failed to write {}: {e}", held.spelled.display()),
             ));
         }
     }
     Ok(changes
         .into_iter()
-        .filter(|(_, _, old, new)| old != new)
-        .map(|(path, _, _, _)| path)
+        .filter(|(_, old, new)| old != new)
+        .map(|(held, _, _)| held.spelled)
         .collect())
 }
 

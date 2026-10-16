@@ -353,13 +353,6 @@ type SchemeRegistryEntry {
   verify unit "SchemeRegistryEntry schema is valid"
 }
 
-type KeywordExtensionMapping {
-  keyword     string
-  extension   string
-  entity_kind string
-  verify unit "KeywordExtensionMapping schema is valid"
-}
-
 // One edge type as the registry build resolved it (registry_build_edges)
 type EdgeRegistryEntry {
   label            string             @readonly
@@ -385,10 +378,14 @@ type EdgeWriter {
   verify unit "EdgeWriter schema is valid"
 }
 
-type KeywordExtensionIndex {
-  _tag    "KeywordExtensionIndex" @literal
-  entries KeywordExtensionMapping[]
-  verify unit "KeywordExtensionIndex schema is valid"
+// What the extensions a host could enable declare, for suggestions only: kinds maps each kind
+// keyword to the extension that declares it; fields maps each kind to the fields an enhancement
+// adds to it, each to its extension (ADR 0122).
+type CandidateVocabulary {
+  _tag   "CandidateVocabulary" @literal
+  kinds  string
+  fields string
+  verify unit "CandidateVocabulary schema is valid"
 }
 
 type CompilerPassDeclaration {

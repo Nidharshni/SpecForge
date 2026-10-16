@@ -5,7 +5,6 @@ use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
 use std::path::PathBuf;
 
 use crate::refusal::ArgumentOf;
-use specforge_ops::Containment;
 
 use crate::args::Arguments;
 use crate::mutation::{
@@ -95,7 +94,7 @@ impl CoreTool for Tool {
             root: project_root,
             paths: &explicit,
             mode,
-            containment: &Containment::within(project_root.dir()),
+            containment: project.containment(),
         })
         .map_err(Self::failed)?;
 

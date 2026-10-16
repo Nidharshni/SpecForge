@@ -2,7 +2,7 @@
 
 **Status:** accepted (2026-10-14, structure round, plan 13). Amends ADR 0014 D4, D5 and D6 (what "another
 project" may be) and ADR 0029 D8 (`out_dir`). D1 and D8 amended by ADR 0104 (the rule is
-`specforge_ops::Containment`, applied where the operation opens or writes).
+`specforge_ops::Containment`, applied where the operation opens or writes); the audit table and D2 amended by ADR 0112.
 
 `specforge mcp .` in `proj/`, then `tools/call specforge.format {"path": "../outside"}`, answered `ok` and
 rewrote `outside/x.spec`. The server serves one project, and a client that can name any directory could read
@@ -28,6 +28,8 @@ Every argument of a tool, prompt or resource that names a file or directory, and
 | `file` | outline | `spec_root.join(file).exists()`: tells whether a file outside exists | no (read-only) | `outline_of_a_file_outside_the_spec_root_is_refused` |
 | `source_roots`, `source_file` | infer_session | lexical (`..`, absolute and drive paths refused) | yes, lexically | `infer_session_source_paths_outside_the_project_are_refused` |
 | `source_file` | infer_session `mark_analyzed` | hashes `root.join(file)`, through a symlink | no | `infer_session_marks_no_file_behind_a_symlink_that_leaves_the_project` |
+| `test_results` | analyze | read: joined onto the project root, an absolute one used as given; its E045 kind told whether any path exists | no | `analyze_test_results_outside_the_project_is_refused_before_it_is_read` |
+| the project's own files | collect (report, captured output), infer_session (manifest, temp), migrate (backup, temps, record) | written or read through a symlink | no | `project_file_containment.rs` |
 | `file_path` | find_spec_for_source, suggest_fixes | compared as text against the manifest or a diagnostic's file; no file access | yes (no access) | by reading `anchors_of_file` |
 | `scope` `file:{path}`, `target_spec_directory` | prompts/infer | looked up as a graph key; echoed in the plan; no file access | yes (no access) | by reading `prompts/infer.rs` |
 | `specifiers`, `extensions` | add_extension, init | a local `.wasm` or crate directory is read, then installed; `git+` and registry specifiers fetch | read, not written | D7 |
@@ -83,3 +85,5 @@ Every argument of a tool, prompt or resource that names a file or directory, and
 **Amended by ADR 0098 (2026-10-15), second part:** D7 is closed: over MCP, a local `.wasm` that `add_extension` or `init` names must resolve inside the project (the served project, or the server's root while none is served); a path that leaves it is `invalid_input` on `specifiers` or `extensions`. The CLI is unchanged (D6). `git+` stays unsupported.
 
 **Amended by ADR 0104 (2026-10-16):** D1: the one resolver is `specforge_ops::Containment`; MCP builds the bound and resolves only what it targets or opens (the call's `path`, init's directory, outline's `file`, render's file). D8: the operations take the containment in their request and apply it where they open or write, so there is no `run_within` and no `resolves_outside`. D2-D7 stand, D6 included.
+
+**Amended by ADR 0112 (2026-10-16):** the audit table gains `test_results` and the project's own files (collect, the inference manifest, migrate's sidecars). D2's second bullet is carried by `ProjectRef::containment`: every file a tool's operation reads or writes resolves inside the root of the project the call acts on, and a tool builds no bound of its own but outline's and render's.

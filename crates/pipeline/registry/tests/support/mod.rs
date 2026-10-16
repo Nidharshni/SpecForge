@@ -12,7 +12,7 @@ use specforge_extension_sdk::prelude::*;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry::entity::{EntityRecord, RuleInput};
 use specforge_registry::rules::NoVerdicts;
-use specforge_registry::{Disk, RegistryBuild, build_registries};
+use specforge_registry::{CandidateVocabulary, Disk, RegistryBuild, build_registries};
 
 /// A builder for the extension `name`, version 1.0.0.
 pub fn extension(name: &str) -> ContributionsBuilder {
@@ -107,6 +107,25 @@ pub fn product() -> ExtensionDeclaration {
         e.source_kind("feature").target_kind("behavior");
     });
     c.declaration()
+}
+
+/// `@specforge/formal`-like, a peer of software: enhances `invariant` with an `expression` field.
+pub fn formal() -> ExtensionDeclaration {
+    declare("@specforge/formal", |c| {
+        c.meta.peer_dependencies = vec![peer("@specforge/software", "^1")];
+        c.enhance("invariant", |e| {
+            e.field("expression", |f| {
+                f.field_type(FieldType::String)
+                    .normative()
+                    .proof_role("claim");
+            });
+        });
+    })
+}
+
+/// The vocabulary `declarations` declare: what a host that could enable them hands the build.
+pub fn candidates(declarations: &[ExtensionDeclaration]) -> CandidateVocabulary {
+    CandidateVocabulary::of(declarations).unwrap()
 }
 
 /// The registry build of `declarations`, in this load order.

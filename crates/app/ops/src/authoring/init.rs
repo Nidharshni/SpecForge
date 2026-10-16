@@ -10,7 +10,7 @@
 //! afterwards with `specforge add`.
 
 use crate::extension::{self, Also, Ask, Candidate, LockPlan, Named, Names, Place};
-use crate::{Containment, OpError, OpErrorKind, Refusal, Writes};
+use crate::{Containment, Held, OpError, OpErrorKind, Refusal, Writes};
 use serde::Serialize;
 use serde_json::{Value, json};
 use specforge_common::shape::Shape;
@@ -202,7 +202,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     // enabling software enables it too; the project's test runners get the extensions that
     // collect their results.
     plan.accompany("@specforge/software", "@specforge/testing");
-    for runner in detected_runners(req.dir) {
+    for runner in detected_runners(req.dir, &req.containment.narrowed(req.dir)) {
         plan.accompany("@specforge/testing", runner);
     }
     let checked = plan.check().map_err(|refused| {
@@ -239,28 +239,27 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     let files = vec![
         Also {
             path: dir.join(crate::config::CONFIG_FILE),
-            write: Box::new(move || {
-                std::fs::create_dir_all(dir)
+            write: Box::new(move |file| {
+                file.create_parent()
                     .map_err(|e| write_error("the project directory", e))?;
-                crate::config::write(dir, &config)
+                crate::config::write(file, &config)
             }),
         },
         Also {
             path: dir.join(".gitignore"),
-            write: Box::new(move || {
-                let path = dir.join(".gitignore");
-                let existing = std::fs::read_to_string(&path).unwrap_or_default();
-                append_gitignore(&path, &existing)
+            write: Box::new(move |file| {
+                let existing = file.read_to_string().unwrap_or_default();
+                append_gitignore(file, &existing)
                     .map(|_| ())
                     .map_err(|e| write_error(".gitignore", e))
             }),
         },
         Also {
             path: dir.join(STARTER_FILE),
-            write: Box::new(move || {
-                std::fs::create_dir_all(dir.join(SPEC_ROOT))
+            write: Box::new(move |file| {
+                file.create_parent()
                     .map_err(|e| write_error("the spec directory", e))?;
-                create_starter(dir, &starter).map_err(|e| match e.kind() {
+                file.create_new(&starter).map_err(|e| match e.kind() {
                     std::io::ErrorKind::AlreadyExists => starter_exists(dir),
                     _ => write_error(STARTER_FILE, e),
                 })
@@ -276,16 +275,6 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
         extensions,
         writes: done.writes,
     })
-}
-
-/// Create the starter file with `text`.
-fn create_starter(dir: &Path, text: &str) -> std::io::Result<()> {
-    use std::io::Write;
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(dir.join(STARTER_FILE))?;
-    file.write_all(text.as_bytes())
 }
 
 /// E063: init enables builtins and installs local files only, since a project that does not
@@ -381,9 +370,9 @@ spec "{project_name}" {{
     )
 }
 
-/// Append the missing [`GITIGNORE`] entries to `path`, whose text is
+/// Append the missing [`GITIGNORE`] entries to `file`, whose text is
 /// `existing`.
-fn append_gitignore(path: &Path, existing: &str) -> std::io::Result<bool> {
+fn append_gitignore(file: &Held, existing: &str) -> std::io::Result<bool> {
     let missing: Vec<&str> = GITIGNORE
         .into_iter()
         .filter(|entry| !existing.lines().any(|l| l.trim() == *entry))
@@ -399,16 +388,16 @@ fn append_gitignore(path: &Path, existing: &str) -> std::io::Result<bool> {
         text.push_str(entry);
         text.push('\n');
     }
-    std::fs::write(path, text).map(|()| true)
+    file.write(text).map(|()| true)
 }
 
 /// Runner extensions for the test runners the project at `path` uses.
-fn detected_runners(path: &Path) -> Vec<&'static str> {
+fn detected_runners(path: &Path, containment: &Containment) -> Vec<&'static str> {
     let mut runners = Vec::new();
     if path.join("Cargo.toml").is_file() {
         runners.push("@specforge/cargo-test");
     }
-    if uses_vitest(path) {
+    if uses_vitest(path, containment) {
         runners.push("@specforge/vitest");
     }
     runners
@@ -416,7 +405,7 @@ fn detected_runners(path: &Path) -> Vec<&'static str> {
 
 /// A vitest config file, or vitest among package.json's dependencies (a
 /// project may configure it inside vite.config.*).
-fn uses_vitest(path: &Path) -> bool {
+fn uses_vitest(path: &Path, containment: &Containment) -> bool {
     let config = std::fs::read_dir(path)
         .into_iter()
         .flatten()
@@ -427,8 +416,10 @@ fn uses_vitest(path: &Path) -> bool {
             })
         });
     config
-        || std::fs::read_to_string(path.join("package.json"))
+        || containment
+            .resolve(&path.join("package.json"))
             .ok()
+            .and_then(|held| held.read_to_string().ok())
             .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
             .is_some_and(|pkg| {
                 ["dependencies", "devDependencies"]

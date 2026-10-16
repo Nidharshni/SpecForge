@@ -38,7 +38,7 @@ fn shapes() -> ExtensionDeclaration {
 
 #[spec(
     behavior = "check_entities_in_one_order",
-    verify = "the structural checks run in one order: W012, E016, E024, E013, E014, W020, W158, E022, E061, then the rule set"
+    verify = "the structural checks run in one order: W012, E024, E013, E014, W020, W158, E022, E061, then the rule set, the host's E006 and E016 rules last"
 )]
 fn the_checks_run_in_one_order() {
     // One entity per check, written in an order that is not the checks'.
@@ -58,7 +58,7 @@ fn the_checks_run_in_one_order() {
     assert_eq!(
         codes,
         [
-            "W012", "E016", "E024", "E013", "E014", "W020", "W158", "E022", "E061", "W900"
+            "W012", "E024", "E013", "E014", "W020", "W158", "E022", "E061", "W900", "E016"
         ],
         "{diags:?}"
     );

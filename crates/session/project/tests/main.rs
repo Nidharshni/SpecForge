@@ -5,6 +5,7 @@
 
 mod assembled;
 mod buffers;
+mod builtin_vocabulary;
 mod builtins;
 mod changes;
 mod check_passes;

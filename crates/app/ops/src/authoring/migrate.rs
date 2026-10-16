@@ -22,7 +22,7 @@ use specforge_parser::{
 use specforge_project::{CompiledProject, SharedRuntime};
 use specforge_registry::RegistryBuild;
 use specforge_wasm::WasmRuntime;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::{Containment, OpError, OpErrorKind, Refusal, Writes};
 
@@ -332,17 +332,43 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
     let target = &request.target;
     let read = crate::config::rewritable(project.dir())?;
     let sources = read.config.sources(project.dir()).files();
+    // Every file the migration writes is held before anything is: the sources, and (unless it
+    // only previews) each source's backup and temporary files and the migration record.
     if let Some(within) = request.containment.root() {
+        let mut files: Vec<(String, PathBuf)> = Vec::new();
         for source in &sources {
-            if let Err(outside) = request.containment.resolve(source) {
-                let real = outside.landed();
+            files.push((format!("source {}", source.display()), source.clone()));
+            if request.dry_run {
+                continue;
+            }
+            let [backup, temporary, restoring] = specforge_migrate::written_beside(source);
+            if !request.no_backup {
+                files.push((format!("the backup of {}", source.display()), backup));
+            }
+            files.push((
+                format!("the temporary file of {}", source.display()),
+                temporary,
+            ));
+            files.push((
+                format!("the rollback file of {}", source.display()),
+                restoring,
+            ));
+        }
+        if !request.dry_run {
+            files.push((
+                "the migration record".to_string(),
+                project.dir().join(MigrationRecord::PATH),
+            ));
+        }
+        for (what, file) in &files {
+            if let Err(outside) = request.containment.resolve(file) {
                 return Err(OpError::new(
                     OpErrorKind::InvalidInput,
                     SOURCE_OUTSIDE_ROOT,
                     format!(
-                        "source {} resolves to {}, outside {}: a symlink that leaves the project is not migrated",
-                        source.display(),
-                        real.display(),
+                        "{what}, {}, resolves to {}, outside {}: a symlink that leaves the project is not written",
+                        file.display(),
+                        outside.landed().display(),
                         within.display()
                     ),
                 ));

@@ -107,14 +107,13 @@ fn a_check_input_link_pointed_elsewhere_reruns_the_checks() {
     assert_eq!(e016(&session), 1, "{:?}", session.project().diagnostics());
 }
 
-/// Only E016's suggestion lists a directory: a `file_exists` rule asks
-/// whether its file exists, nothing more, so a file beside a missing one
-/// is nothing to the checks.
+/// A `file_exists` rule's missing file lists its directory for the close-sibling help (ADR 0118),
+/// so a file created beside it re-runs the checks and changes that help.
 #[specforge_test(
     behavior = "classify_project_changes",
-    verify = "a file beside a missing file a file_exists rule names changes nothing"
+    verify = "a file beside a missing file a file_exists rule names changes its suggestion"
 )]
-fn a_file_beside_a_missing_file_exists_file_changes_nothing() {
+fn a_file_beside_a_missing_file_exists_file_changes_its_suggestion() {
     let dir = TestProject::new()
         .raw_config(
             json!({"name": "c", "version": "0.1.0", "spec_root": "spec", "extensions": ["@test/files"]})
@@ -124,24 +123,33 @@ fn a_file_beside_a_missing_file_exists_file_changes_nothing() {
     let root = dir.root();
     specforge_installed::testing::install(root, &["@test/files"]);
     let ext = Arc::new(file_rule_extension());
-    let session = ProjectSession::open_with_runtime(
+    let mut session = ProjectSession::open_with_runtime(
         &specforge_common::ProjectRoot::of(root).unwrap(),
         Some(Arc::clone(&ext) as SharedRuntime),
     );
-    assert!(
+    let suggestion = |session: &ProjectSession| {
         session
             .project()
             .diagnostics()
             .iter()
-            .any(|d| d.code == "F001"),
-        "{:?}",
-        session.project().diagnostics()
-    );
+            .find(|d| d.code == "F001")
+            .unwrap_or_else(|| panic!("{:?}", session.project().diagnostics()))
+            .suggestion
+            .clone()
+    };
+    assert_eq!(suggestion(&session), None);
 
-    let notes = root.join("spec/notes.txt");
-    fs::write(&notes, "notes\n").unwrap();
-    let changes = session.changes([notes.as_path()]);
-    assert!(changes.is_empty(), "{changes:?}");
+    let near = root.join("spec/guid.md");
+    fs::write(&near, "notes\n").unwrap();
+    let changes = session.changes([near.as_path()]);
+    assert!(!changes.is_empty(), "{changes:?}");
+    session
+        .apply(&changes)
+        .expect("a file beside the missing one");
+    assert_eq!(
+        suggestion(&session).as_deref(),
+        Some("did you mean 'guid.md'?")
+    );
 }
 
 /// The inputs are the reads: each path asked, and the directory E016's

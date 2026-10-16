@@ -50,5 +50,5 @@ pub use scan::ScanFailure;
 pub use session::{
     END_STATUS, EndStatus, Recorded, SESSION_ACTION, SESSION_ACTIVE, SESSION_NOT_ACTIVE,
     SOURCE_OUTSIDE_ROOT, SOURCE_ROOT_OUTSIDE_ROOT, SOURCE_UNREADABLE, SessionAction, SessionField,
-    SessionOutcome, SessionStep, UNKNOWN_SESSION, session,
+    SessionOutcome, SessionRequest, SessionStep, UNKNOWN_SESSION, session,
 };

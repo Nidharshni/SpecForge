@@ -85,6 +85,8 @@ fn collect_at(options: &Args, terminal: &Terminal) -> Exit {
         mode,
         asking: crate::asking::of(options.yes, format, terminal),
         announce: &mut announce,
+        // The user is already at the file system (ADR 0092 D6).
+        containment: &specforge_ops::Containment::unbounded(),
     };
     // The view is rooted where the project compiled: the report lands where
     // every view over the project reads it.

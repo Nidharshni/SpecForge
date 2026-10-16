@@ -4,9 +4,7 @@
 //! and none reaches the file system but through `input.disk` (ADR 0107).
 
 mod fields;
-mod files;
 mod identifiers;
-mod index;
 mod kinds;
 mod obligations;
 mod references;
@@ -24,31 +22,41 @@ impl RegistryBuild {
     /// order:
     ///
     /// 1. W012: a `ref` nothing references;
-    /// 2. E016: a path a `file_reference` field names that does not exist
-    ///    under `input.spec_root` (with a close sibling as the suggestion);
-    /// 3. unless [`Self::structural_only`]: E024 unknown kind, E013
+    /// 2. unless [`Self::structural_only`]: E024 unknown kind, E013
     ///    reserved ID, E014 identifier length, W020 unknown field, W158 verify
     ///    statements on a kind that accepts none, E022 reference to the wrong kind, E061 value not of its declared type;
     ///    when structural-only with extensions loaded, one W151 instead;
-    /// 4. the rule set ([`crate::rules::Rules::check`]), asking `verdicts`
+    /// 3. the rule set ([`crate::rules::Rules::check`]), asking `verdicts`
     ///    for `custom` rules.
     ///
-    /// Each check reports its entities in record (id) order. E016 and the
-    /// rules' `file_exists` ask `input.disk` whether a path exists, and
-    /// E016's suggestion lists a missing path's directory there; nothing
-    /// else reads the file system.
+    /// The suggestions of E024, W151 and W020 come from the build's candidate vocabulary
+    /// ([`Self::with_candidates`], ADR 0122); it changes no other part of a diagnostic.
+    ///
+    /// Each check reports its entities in record (id) order. The rule set's
+    /// `file_exists` rules, E016 among them (the host builds one per
+    /// `file_reference` field), ask `input.disk` whether a path exists and
+    /// list a missing one's directory for the suggestion; nothing else reads
+    /// the file system.
     pub fn check(&self, input: &RuleInput<'_>, verdicts: &dyn CustomVerdicts) -> Vec<Diagnostic> {
         let entities = input.entities;
         let mut diagnostics = refs::unreferenced(entities); // W012
-        diagnostics.extend(files::missing(input, &self.fields)); // E016
         if self.structural_only() {
             // W151: extensions are loaded but none declares a kind.
-            diagnostics.extend(kinds::unchecked(entities, !self.declarations().is_empty()));
+            diagnostics.extend(kinds::unchecked(
+                entities,
+                !self.declarations().is_empty(),
+                &self.candidates,
+            ));
         } else {
-            diagnostics.extend(kinds::unknown(entities, &self.kinds)); // E024
+            diagnostics.extend(kinds::unknown(entities, &self.kinds, &self.candidates)); // E024
             diagnostics.extend(identifiers::reserved(entities, &self.kinds)); // E013
             diagnostics.extend(identifiers::length(entities)); // E014
-            diagnostics.extend(fields::unknown(entities, &self.kinds, &self.fields)); // W020
+            diagnostics.extend(fields::unknown(
+                entities,
+                &self.kinds,
+                &self.fields,
+                &self.candidates,
+            )); // W020
             diagnostics.extend(obligations::refused(entities, &self.kinds)); // W158
             diagnostics.extend(references::mistyped(entities, &self.kinds, &self.fields)); // E022
             diagnostics.extend(values::mistyped(entities, &self.kinds, &self.fields)); // E061

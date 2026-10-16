@@ -8,6 +8,11 @@ use specforge_common::Severity;
 use specforge_protocol_types::{CollectEntityResult, CollectOutput, TestResult, TestStatus};
 use specforge_test_macros::test as specforge_test;
 
+/// `path` held by no bound: the CLI's containment.
+fn held(path: &Path) -> Held {
+    Containment::unbounded().resolve(path).unwrap()
+}
+
 fn collector(report: &str) -> Collector {
     Collector {
         extension: "@acme/runner".into(),
@@ -50,12 +55,15 @@ fn detects_by_root_files() {
 )]
 fn report_path_must_stay_inside_the_project() {
     let root = Path::new("/p");
+    let any = Containment::unbounded();
     assert_eq!(
-        report_path(&collector("out/r.json"), root).unwrap(),
+        report_path(&collector("out/r.json"), root, &any)
+            .unwrap()
+            .spelled,
         Path::new("/p/out/r.json")
     );
-    assert!(report_path(&collector("../r.json"), root).is_err());
-    assert!(report_path(&collector("/etc/r.json"), root).is_err());
+    assert!(report_path(&collector("../r.json"), root, &any).is_err());
+    assert!(report_path(&collector("/etc/r.json"), root, &any).is_err());
 }
 
 #[specforge_test(
@@ -133,13 +141,18 @@ fn reads_a_file_or_every_json_file_in_a_directory() {
     std::fs::write(reports.join("b.json"), "{}").unwrap();
     std::fs::write(reports.join("a.json"), "[]").unwrap();
     std::fs::write(reports.join("notes.txt"), "x").unwrap();
-    let files = read_report(&reports, dir.path(), None).unwrap();
+    let files = read_report(&held(&reports), dir.path(), None, &Containment::unbounded()).unwrap();
     let paths: Vec<&str> = files.iter().map(|f| f.path.as_str()).collect();
     assert_eq!(paths, vec!["out/a.json", "out/b.json"]);
     assert!(
-        read_report(&dir.path().join("none.json"), dir.path(), None)
-            .unwrap()
-            .is_empty()
+        read_report(
+            &held(&dir.path().join("none.json")),
+            dir.path(),
+            None,
+            &Containment::unbounded()
+        )
+        .unwrap()
+        .is_empty()
     );
 }
 
@@ -157,7 +170,7 @@ fn run_ignores_stale_reports_and_sets_the_report_env() {
         "-c".into(),
         format!("test ! -e {{report}} && printf fresh > \"${REPORT_ENV}\""),
     ];
-    let ran = run(&c, dir.path(), &report, RunnerOutput::Discard).unwrap();
+    let ran = run(&c, dir.path(), &held(&report), None, RunnerOutput::Discard).unwrap();
     assert_eq!(ran.exit_code, Some(0));
     assert_eq!(std::fs::read_to_string(&report).unwrap(), "fresh");
 
@@ -178,9 +191,15 @@ fn run_ignores_stale_reports_and_sets_the_report_env() {
         "-c".into(),
         format!("printf '{{}}' > \"${REPORT_ENV}/new.json\""),
     ];
-    let ran = run(&c, dir.path(), &out, RunnerOutput::Discard).unwrap();
+    let ran = run(&c, dir.path(), &held(&out), None, RunnerOutput::Discard).unwrap();
     assert!(out.join("old.json").exists() && out.join("graph.json").exists());
-    let read = read_report(&out, dir.path(), Some(ran.started)).unwrap();
+    let read = read_report(
+        &held(&out),
+        dir.path(),
+        Some(ran.started),
+        &Containment::unbounded(),
+    )
+    .unwrap();
     let paths: Vec<&str> = read.iter().map(|f| f.path.as_str()).collect();
     assert_eq!(paths, vec!["out/new.json"]);
 }
@@ -200,15 +219,17 @@ fn a_captured_stdout_is_kept_in_every_output_mode() {
         RunnerOutput::Stderr,
         RunnerOutput::Inherit,
     ] {
-        let ran = run(&c, dir.path(), &out, mode).unwrap();
+        let report = held(&out);
+        let capture = capture_path(&c, &report, &Containment::unbounded()).unwrap();
+        let ran = run(&c, dir.path(), &report, Some(&capture), mode).unwrap();
         let kept = ran.stdout.expect("captured");
-        assert_eq!(kept, out.join("acme.stdout.txt"));
+        assert_eq!(kept.spelled, out.join("acme.stdout.txt"));
         assert_eq!(read_capture(&kept).as_deref(), Some("test a ... ok\n"));
     }
     // Not captured without the declaration.
     c.capture = None;
     std::fs::remove_file(out.join("acme.stdout.txt")).unwrap();
-    let ran = run(&c, dir.path(), &out, RunnerOutput::Discard).unwrap();
+    let ran = run(&c, dir.path(), &held(&out), None, RunnerOutput::Discard).unwrap();
     assert!(ran.stdout.is_none());
     assert!(!out.join("acme.stdout.txt").exists());
 }
@@ -225,7 +246,13 @@ fn an_unknown_capture_is_refused() {
     assert!(err.contains("unknown capture 'stderr'"), "{err}");
     // A file report keeps its capture next to it.
     assert_eq!(
-        capture_path(&c, Path::new("/p/out/r.json")),
+        capture_path(
+            &c,
+            &held(Path::new("/p/out/r.json")),
+            &Containment::unbounded()
+        )
+        .unwrap()
+        .spelled,
         Path::new("/p/out/r.json.stdout.txt")
     );
 }
@@ -426,6 +453,7 @@ fn collect_without_a_root_is_no_project() {
             mode: Mode::NoRun,
             asking: Asking::Nobody,
             announce: &mut |_, _| {},
+            containment: &Containment::unbounded(),
         },
     )
     .unwrap_err();
@@ -460,4 +488,51 @@ fn an_unknown_runner_is_invalid_input_about_it() {
     let several = [collector("a.json"), collector("b.json")];
     let refusal = select(&several, None, dir.path());
     assert_eq!(refusal.unwrap_err().subject, None);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_bounded_collect_refuses_a_report_location_that_leaves_the_project() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("proj");
+    let outside = dir.path().join("outside");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    std::os::unix::fs::symlink(&outside, root.join("target")).unwrap();
+    let within = Containment::within(&root);
+
+    // A declared name is judged as text first, then where it lands.
+    let error = report_path(&collector("target/r.json"), &root, &within).unwrap_err();
+    assert_eq!(error.code, crate::OUTSIDE_ROOT);
+    assert_eq!(error.kind, OpErrorKind::InvalidInput);
+    // The report file itself, a link to a file outside.
+    std::os::unix::fs::symlink(
+        outside.join("victim.json"),
+        root.join("specforge-report.json"),
+    )
+    .unwrap();
+    assert!(within.resolve(&root.join("specforge-report.json")).is_err());
+    // The CLI's containment follows both (ADR 0092 D6).
+    let any = Containment::unbounded();
+    assert!(report_path(&collector("target/r.json"), &root, &any).is_ok());
+}
+
+#[cfg(unix)]
+#[test]
+fn an_unbounded_collect_writes_the_report_where_its_link_points() {
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("elsewhere.json");
+    let link = dir.path().join("specforge-report.json");
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+    let held = Containment::unbounded().resolve(&link).unwrap();
+
+    save_report(&held, &empty_report()).unwrap();
+
+    // ADR 0092 D6: the CLI follows the user's link, and keeps it.
+    assert!(std::fs::symlink_metadata(&link).unwrap().is_symlink());
+    assert!(
+        std::fs::read_to_string(&target)
+            .unwrap()
+            .contains("results")
+    );
 }

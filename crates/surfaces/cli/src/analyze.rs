@@ -76,7 +76,10 @@ impl Args {
                 .unwrap_or_else(|| specforge_ops::analysis::analyze::EVERY_PASS.to_string()),
             strict: self.strict,
             report: match &self.test_results {
-                Some(path) => ReportSource::File(path.clone()),
+                Some(path) => ReportSource::Named {
+                    path: path.clone(),
+                    containment: specforge_ops::Containment::unbounded(),
+                },
                 None => ReportSource::Recorded,
             },
             min: self.min,
@@ -242,7 +245,7 @@ mod summary_tests {
         let asked = asked_args.options(&z3);
         assert_eq!(asked.pass, "coverage");
         assert!(
-            matches!(&asked.report, ReportSource::File(p) if p == std::path::Path::new("r.json"))
+            matches!(&asked.report, ReportSource::Named { path, .. } if path == std::path::Path::new("r.json"))
         );
         assert!(asked.prove.is_some() && asked.strict);
         assert_eq!(asked.min, Some(80.0));
