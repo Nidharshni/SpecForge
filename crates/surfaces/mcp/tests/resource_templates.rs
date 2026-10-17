@@ -77,9 +77,10 @@ fn served_with_refs() -> Served {
         .serve_components()
 }
 
-// Linked to `expose_entity_as_mcp_resource` by T8, with its verify line.
-#[test]
-#[ignore = "flipped by T8"]
+#[specforge_test(
+    behavior = "expose_entity_as_mcp_resource",
+    verify = "an entity_id that is a scheme ref ID reads that ref in both entity templates, and a text that is no entity ID is invalid input naming entity_id"
+)]
 fn a_scheme_ref_id_is_an_entity_id_in_both_entity_templates() {
     let mut server = served_with_refs();
     for (uri, id) in [

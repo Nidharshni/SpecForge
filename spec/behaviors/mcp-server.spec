@@ -527,13 +527,15 @@ behavior expose_entity_as_mcp_resource "Expose Per-Entity MCP Resource" {
     read MUST fail as not found (-32002 in a handshake session, -32602 in a
     2026-07-28 request) whose data is an entity_not_found McpError carrying
     E003 and the uri (the 404 case); a malformed entity_id (empty, more than one path
-    segment, or a character no entity ID holds) is invalid input naming
+    segment, or a text that is no entity ID: neither an identifier nor a
+    scheme ref ID such as jira.issue:ABC-123) is invalid input naming
     entity_id (the 400 case). The resource MUST refresh after recompilation.
   """
   verify unit "specforge://graph/{entity_id} returns entity and its neighbors"
   verify unit "non-existent entity_id returns 404 error"
   verify unit "malformed entity_id returns 400 error"
   verify unit "an empty entity_id or one of more than one path segment is invalid input naming entity_id, in both entity templates"
+  verify unit "an entity_id that is a scheme ref ID reads that ref in both entity templates, and a text that is no entity ID is invalid input naming entity_id"
   verify unit "the entity resource is the scoped graph export with its schema_ref"
   verify unit "resource refreshes after recompilation"
   verify contract "Expose Per-Entity MCP Resource: per-entity MCP resource holds — validation_complete_fired, subgraph_returned, resource_read_emitted"
