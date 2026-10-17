@@ -711,6 +711,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   extension not there, a conflict); a refusal of the project or the environment has none. Each surface spells it:
   MCP names the argument (`specifiers`, `path`), the CLI and the LSP print the error (ADR 0072). It is stated where the
   operation fails, with the refusal: no operation keeps an error enum of its own to convert into one (ADR 0132).
+- **Remedy**: what a refusal, a finding or a diagnostic tells the caller to do (an OpError's message tail or
+  suggestion, a doctor finding's remediation). Written below the surfaces, it names a whole command or the request's
+  own words, never a bare flag, so it reads true on every surface; the catalog's explanations, which name each
+  surface's spelling, are not remedies (ADR 0135).
 - **Mutation outcome**: what one MCP mutation call produced, typed: a run (`specforge_mcp::mutation::Mutated`:
   its reply and what it wrote — the files its operation changed, the entities it changed and the domain
   event it produces, `Written`) or a failure (`mutation::Failed`: its McpError and the files it left

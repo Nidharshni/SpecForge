@@ -1,7 +1,7 @@
 # An operation's request owns its meaning; a surface only spells it
 
 **Status:** accepted (2026-10-15, round 10, plan 10). Extends ADR 0027 (option tables) and ADR 0033 D4 (one
-default) from names and defaults to every rule a request's values follow. Amended by round 13, plan 12 (D1, D2).
+default) from names and defaults to every rule a request's values follow. Amended by round 13, plan 12 (D1, D2). D4 is extended by [ADR 0135](0135-a-remedy-names-a-command-or-the-requests-words-never-a-flag.md): an operation's remedy names a command or the request's words, never a surface's flag.
 
 The CLI and MCP each build an operation's request by hand. Most of that is spelling: copying a field, reading a
 shared constant. Three times a surface decided what the arguments *mean*, and the two disagreed:
