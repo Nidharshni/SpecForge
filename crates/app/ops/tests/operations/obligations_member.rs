@@ -63,3 +63,25 @@ fn a_field_named_verify_is_one_field_of_the_node() {
     assert_eq!(keys, ["verify", "name"]);
     assert_eq!(node.obligations.len(), 1);
 }
+
+#[specforge_test(
+    behavior = "compute_the_coverage_view",
+    verify = "a field named verify does not hide an entity's verify statements"
+)]
+fn a_field_named_verify_hides_no_obligation() {
+    let p = project(BOTH);
+    let view = specforge_ops::view::ProjectView::of(&p);
+    let row = specforge_ops::read::coverage::row(&view, "Payload")
+        .unwrap()
+        .unwrap();
+    let document = serde_json::to_value(row.document()).unwrap();
+    assert_eq!(document["declared"], true, "{document}");
+    assert_eq!(document["obligations"], 1, "{document}");
+    assert_eq!(
+        document["unproven"],
+        json!(["Payload schema is valid"]),
+        "{document}"
+    );
+    let facts = specforge_ops::read::inspect::inspect(&view, "Payload").unwrap();
+    assert_eq!(facts.obligations.len(), 1);
+}

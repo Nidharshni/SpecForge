@@ -67,6 +67,13 @@ fn no_match_among_several_collectors_is_e058_listing_them() {
         refusal.error.message.contains("available: first, second"),
         "{refusal:?}"
     );
+    assert!(
+        refusal
+            .error
+            .message
+            .contains("; name the runner to use (available: "),
+        "{refusal:?}"
+    );
     untouched(&fx, &machine);
 }
 
@@ -105,7 +112,7 @@ fn reports_mode_with_several_collectors_is_e058() {
         refusal
             .error
             .message
-            .contains("--report needs one collector, but first, second apply here"),
+            .contains("report files need one collector, but first, second apply here; name the runner that wrote them"),
         "{refusal:?}"
     );
     untouched(&fx, &machine);
@@ -289,7 +296,10 @@ fn no_run_without_a_report_says_how_to_get_one() {
 
     assert_eq!(refusal.error.code, "E045");
     assert!(
-        refusal.error.message.contains("run without --no-run"),
+        refusal
+            .error
+            .message
+            .contains("run the tests to write one (`specforge collect` runs them)"),
         "{refusal:?}"
     );
     untouched(&fx, &machine);
@@ -310,7 +320,7 @@ fn reports_mode_files_that_do_not_exist_are_e045() {
     ));
 
     assert_eq!(refusal.error.code, "E045");
-    assert_eq!(refusal.error.message, "the --report files don't exist");
+    assert_eq!(refusal.error.message, "the report files given don't exist");
     untouched(&fx, &machine);
 }
 

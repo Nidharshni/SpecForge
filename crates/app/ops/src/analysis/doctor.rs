@@ -384,7 +384,7 @@ pub fn diagnose(view: &ProjectView, solver: &dyn Solver) -> DoctorReport {
             check: format!("specforge.json at {}", root.display()),
             status: FindingStatus::Warn,
             code: CONFIG_MISSING.into(),
-            remediation: "run `specforge init` here, or pass --path to the project root; without \
+            remediation: "run `specforge init` here, or run `specforge doctor --path <root>` on the project root; without \
                           specforge.json the project has the default config and no extension"
                 .into(),
         });

@@ -5,7 +5,6 @@ use clap::builder::{PossibleValuesParser, TypedValueParser};
 use specforge_common::{Diagnostic, Severity, diagnostic_summary, render_diagnostics};
 use specforge_ops::analysis::check::{CacheRecord, CheckOptions, check};
 use specforge_ops::view::ProjectView;
-use specforge_ops::{OpError, OpErrorKind};
 use specforge_project::{LintProfile, SharedRuntime};
 use std::sync::Arc;
 
@@ -103,6 +102,11 @@ fn run_in(
     };
     let shown: Vec<Diagnostic> = outcome.shown().into_iter().cloned().collect();
 
+    // A refusal under --format json is the only document on stdout (report_command_outcome).
+    if let (OutputFormat::Json, CacheRecord::WriteFailed(error)) = (format, &outcome.cache) {
+        return Refusal::of(format).report(terminal, error);
+    }
+
     match format {
         OutputFormat::Json => {
             let entries = specforge_common::diagnostics_json(&shown);
@@ -127,16 +131,7 @@ fn run_in(
             "note: {} not written: the check failed",
             specforge_project::BUILD_CACHE_FILE
         )),
-        CacheRecord::WriteFailed(e) => {
-            return Refusal::of(format).report(
-                terminal,
-                &OpError::new(
-                    OpErrorKind::Internal,
-                    "cache_write_failed",
-                    format!("cannot write {}: {e}", specforge_project::BUILD_CACHE_FILE),
-                ),
-            );
-        }
+        CacheRecord::WriteFailed(error) => return Refusal::of(format).report(terminal, error),
     }
 
     // Strict already promoted warnings: errors alone decide.

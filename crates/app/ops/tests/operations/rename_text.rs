@@ -19,7 +19,7 @@ fn apply_refuses_a_file_changed_since_the_plan() {
     std::fs::write(root.join("login.spec"), format!("\n{LOGIN}")).unwrap();
     let before = crate::writes::files_under(&root);
 
-    let error = rename::apply(&plan, &root, specforge_ops::testing::caller()).unwrap_err();
+    let error = rename::apply(&plan, specforge_ops::testing::caller()).unwrap_err();
 
     assert_eq!(error.kind, OpErrorKind::Conflict, "{error:?}");
     assert_eq!(error.code, specforge_ops::FILE_CHANGED, "{error:?}");

@@ -1,8 +1,8 @@
 // MCP Tool behaviors — Core tools and navigation tools
 //
-// 15 behaviors:
-//   - Core Tools (9): query, validate, export, trace, search, schema, coverage, stats, analyze
-//   - Navigation Tools (5): inspect, find_definition, find_references, outline, suggest_fixes
+// 18 behaviors:
+//   - Core Tools (10): query, validate, export, trace, search, explain, schema, coverage, stats, analyze
+//   - Navigation Tools (7): inspect, find_definition, find_references, find_implementation, find_spec_for_source, outline, suggest_fixes
 //   - Dynamic kinds (1): specforge.list and the entities-by-kind resource
 
 use "events/mcp"
@@ -231,8 +231,6 @@ behavior provide_mcp_trace_tool "Provide MCP Trace Tool" {
   verify unit "plan parameter triggers gap analysis"
   verify unit "trace without entity_id or plan returns error"
   verify unit "non-existent entityId returns error response"
-  verify unit "response includes upstream and downstream links"
-  verify unit "missing links flagged in trace output"
   verify unit "a trace call with both entity_id and plan is invalid input on plan"
   verify contract "Provide MCP Trace Tool: MCP trace tool holds — graph_available, trace_result_returned, gaps_identified, tool_invoked_emitted"
 }
@@ -264,25 +262,18 @@ behavior provide_mcp_search_tool "Provide MCP Search Tool" {
     one field-text rule, contains the value, ignoring case: a list item by
     item, an expression in its written form, a block by its keys; one without the other MUST be an invalid-input
     error naming the missing one), references? (an entity id: only
-    entities that reference it), and limit? (default 20). The tool MUST combine these filters with
-    AND semantics. Unknown kind values in the kinds[] array MUST be
-    silently filtered out and an I-level diagnostic MUST be included in the
-    response metadata listing the unrecognized kinds. Fuzzy text search
-    MUST use the same algorithm as LSP workspaceSymbol and completion:
-    exact, prefix, substring, field text (search only), then Jaro-Winkler
-    similarity of at least 0.8 over ID and title. An empty query with no
-    filters MUST return all entities up to the limit. The result is an
+    entities that reference it), and limit? (default 20). The tool MUST
+    return what select_entities_over_the_view selects. Unknown kind values
+    in the kinds[] array MUST be silently filtered out and an I-level
+    diagnostic MUST be included in the response metadata listing the
+    unrecognized kinds. The result is an
     object whose results are the hits, McpSearchResult items, in rank order.
   """
-  verify unit "text search finds entities matching by name or contract"
   verify unit "kind filter restricts results to matching entity kinds"
   verify unit "field and value filter matches entity fields"
   verify unit "field without value, or value without field, is an invalid-input error"
-  verify unit "the field filter reads a field's text: a list by its items, an expression by its written form, a block by its keys; never the export's JSON"
   verify unit "limit caps the number of returned results"
-  verify unit "empty query returns all entities up to limit"
   verify unit "references filter returns entities referencing target"
-  verify unit "the references filter combines with the other filters"
   verify integration "search ranks exactly as LSP workspaceSymbol and completion rank"
   verify contract "Provide MCP Search Tool: MCP search tool holds — graph_available, filtered_results_returned, unknown_kinds_reported, tool_invoked_emitted"
   verify unit "missing query returns error"
@@ -385,45 +376,22 @@ behavior provide_mcp_coverage_tool "Provide MCP Coverage Tool" {
     In MCP server mode, the system MUST register a specforge.coverage tool
     that accepts entity_id? (optional, single entity), kind? (optional, filter
     by entity kind), and status_filter? (optional: covered|uncovered|partial).
-    Status values are structurally computed from the entity's verify declarations
-    and collected evidence — no extension input is required to determine coverage
-    status (P2). An obligation is proven when a passing recorded test names its
-    verify text, the rule analyze coverage applies: an entity is covered only
-    when every obligation is proven and no recorded test fails, so it never
-    reports covered while analyze reports A015 or A014. Each result MUST carry
-    the obligation count, the proven count, and the unproven verify texts. A verify
-    property obligation counts as proven only through a passing test, as in
-    analyze coverage without --prove: the SMT discharge --prove adds is not
-    run per call. The tool MUST return an object whose entities are the coverage status
-    per entity, including verify count, linked evidence count, and evidence status from
-    specforge-report.json if available.
+    The tool MUST return the coverage view's rows (compute_the_coverage_view)
+    as an object whose entities are the rows.
     A specforge-report.json that exists but cannot be read or parsed MUST be
     an error, an isError result carrying an McpError, as the CLI refuses it;
     it is never read as a project with no recorded tests. A report the
     system refuses to read is permission_denied, on this tool and every tool
     that reads it.
-    When no filters are provided, the tool MUST return coverage for every
-    entity that counts toward coverage: an entity of a kind the extension
-    manifests declare testable, less the entities W004 exempts that
-    declare no obligations (union types, abstract entities, governance
-    kinds), the entities stats counts as testable. An entity_id filter
-    returns that entity whether it counts or not; each result says
-    whether the entity is exempt. A status_filter other than covered,
-    uncovered or partial MUST be an invalid-input error on status_filter
-    naming the closest status.
+    A status_filter other than covered, uncovered or partial MUST be an
+    invalid-input error on status_filter naming the closest status.
   """
-  verify unit "specforge.coverage returns coverage for all testable entities"
   verify unit "the result is an object holding the rows as entities"
   verify unit "a report the OS refuses to read is a permission_denied error on every tool that reads it"
-  verify unit "with no filters the rows are the entities that count toward coverage"
-  verify unit "an exempt entity named by entity_id is returned with exempt true"
   verify unit "an unknown status_filter is an invalid-input error naming the closest status"
   verify unit "entity_id filter returns single entity coverage"
   verify unit "kind filter restricts to matching entity kinds"
   verify unit "status_filter restricts to matching coverage status"
-  verify unit "an entity with an unproven obligation is partial, not covered"
-  verify unit "a failing recorded test keeps an entity from being covered"
-  verify unit "a field named verify does not hide an entity's verify statements"
   verify unit "a malformed specforge-report.json is an error result, not an empty report"
   verify integration "specforge.coverage reports covered exactly for the entities analyze coverage proves"
   verify integration "with no filters the coverage rows are the entities stats counts as testable"
@@ -452,19 +420,12 @@ behavior provide_mcp_stats_tool "Provide MCP Stats Tool" {
   }
   contract   """
     In MCP server mode, the system MUST register a specforge.stats tool with
-    no required parameters. The tool MUST return aggregate statistics about the
-    current graph: entity counts by kind, total edge count, the declared
-    percentage (declared_pct), the proof
-    percentage (proof_pct, absent without recorded test results), the unconnected entity
-    count (unconnected_count), and a diagnostic summary (counts by severity). A
+    no required parameters. The tool MUST return the statistics document
+    compute_project_statistics computes (McpStatsResult). A
     specforge-report.json that exists but cannot be read is an error result. The
     response MUST reflect the latest compilation state.
   """
-  verify unit "specforge.stats returns entity counts by kind"
-  verify unit "response includes coverage percentage"
   verify integration "response includes the declared and proof percentages"
-  verify unit "response includes the unconnected entity count"
-  verify unit "response includes diagnostic summary by severity"
   verify contract "Provide MCP Stats Tool: MCP stats tool holds — graph_available, stats_returned, latest_state_reflected, tool_invoked_emitted"
 }
 
@@ -605,7 +566,6 @@ behavior provide_mcp_find_references_tool "Provide MCP Find References Tool" {
     an empty list, not an error.
   """
   verify unit "specforge.find_references returns all reference locations"
-  verify unit "entity with no references returns empty list"
   verify unit "non-existent entity returns error response"
   verify unit "direction and include_declaration select which occurrences are returned"
   verify integration "find_references and the LSP's references answer the same occurrences"
@@ -621,6 +581,8 @@ behavior provide_mcp_find_implementation_tool "Provide MCP Find Implementation T
     anchors_listed   "every anchor of the entity in specforge-anchors.json, in manifest order"
     empty_when_none  "an entity with no anchor, or no anchors manifest, has no implementations"
     unusable_refused "an anchors manifest that cannot be used is E071"
+    unknown_refused  "an id neither the graph nor the anchors manifest knows is E003, with the closest entity id"
+    stale_listed     "the anchors of an id the graph no longer declares are listed"
   }
   contract   """
     In MCP server mode, the system MUST register a
@@ -629,11 +591,44 @@ behavior provide_mcp_find_implementation_tool "Provide MCP Find Implementation T
     entity in the project's specforge-anchors.json (file, line,
     symbol_name, item_kind, scanner), in manifest order, from the one
     anchor lookup navigation owns. No anchors manifest is an empty list.
-    An anchors manifest that cannot be read or parsed is refused with
-    E071.
+    An entity_id that neither the graph declares nor the anchors manifest
+    anchors is refused as find_definition refuses it: E003,
+    entity_not_found on entity_id, with the closest entity id when one is
+    close. The anchors of an id the graph no longer declares (a stale
+    anchor) are still listed. An anchors manifest that cannot be read or
+    parsed is refused with E071.
   """
   verify unit "find_implementation lists every anchor of the entity, in manifest order"
   verify unit "an entity with no anchor has no implementations, and no anchors manifest is none"
+  verify unit "an id neither the graph nor the anchors manifest knows is refused with E003"
+  verify unit "the anchors of an id the graph no longer declares are still listed"
+}
+
+behavior provide_mcp_find_spec_for_source_tool "Provide MCP Find Spec For Source Tool" {
+  features   [mcp_navigation_tools]
+  invariants [diagnostic_determinism, mcp_structured_error_responses, mcp_tool_idempotency]
+  category   query
+  types      [McpSpecForSourceResult, McpSpecForSourceEntity, McpToolDescriptor]
+  ensures {
+    tightest_mode    "the anchors of the tightest matching mode: exact, else under the directory, else ending with the path"
+    kind_from_graph  "each entity carries its kind when the graph declares it"
+    unusable_refused "an anchors manifest that cannot be used is E071"
+  }
+  contract   """
+    In MCP server mode, the system MUST register a
+    specforge.find_spec_for_source tool that accepts file_path (required)
+    and returns {file_path, match_mode, entities, count}: the anchors of
+    the project's specforge-anchors.json whose file the path names,
+    compared as text component by component (./a and a\b are a and a/b; a
+    substring is no match), the tightest non-empty mode winning (exact,
+    else directory, else suffix_path; none when nothing matches), in
+    manifest order, each with the entity's kind when the graph declares
+    it. No anchors manifest is an empty list. An anchors manifest that
+    cannot be read or parsed is refused with E071. The infer prompt's file
+    scope lists the same entities.
+  """
+  verify unit "the tightest match wins: exact, else under the directory, else ending with the path"
+  verify unit "each entity carries its kind when the graph declares it"
 }
 
 behavior provide_mcp_outline_tool "Provide MCP Outline Tool" {
@@ -676,7 +671,6 @@ behavior provide_mcp_outline_tool "Provide MCP Outline Tool" {
   verify unit "nested entries included for complex entities"
   verify unit "non-existent file returns error response"
   verify contract "Provide MCP Outline Tool: MCP outline tool holds — graph_available, outline_returned, tool_invoked_emitted"
-  verify unit "outline entries sorted by line number"
   verify unit "a file under the spec root with no entities has an empty outline"
   verify unit "with no project served, outline is the no-project refusal"
   verify unit "sorted by line number"

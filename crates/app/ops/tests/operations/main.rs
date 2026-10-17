@@ -5,6 +5,7 @@
     reason = "a test's unwrap is its assertion: a None or an Err fails the test"
 )]
 
+mod anchors;
 mod collect;
 mod compiled_support;
 mod connectivity;
@@ -48,10 +49,12 @@ mod project_files;
 mod publish;
 mod query;
 mod refusals;
+mod remedy_wording;
 mod rename_text;
 mod review;
 mod schema;
 mod schema_notices;
+mod search;
 mod setup;
 mod stats;
 mod trace;

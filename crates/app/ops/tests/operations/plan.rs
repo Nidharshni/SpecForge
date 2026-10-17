@@ -206,7 +206,7 @@ fn plan_validation_contract_consistency() {
         ["testable entity 'c' (behavior) is not covered by the plan"]
     );
     assert!(gap_texts(&result, PlanGapKind::Ordering).is_empty());
-    assert_eq!(result.entries, ["b"]);
+    assert_eq!(result.resolved_entries, ["b"]);
 
     // ordering_validated: b references c, so c must come first.
     let misordered = serde_json::json!({
@@ -403,7 +403,7 @@ fn the_plan_outcome_is_one_document() {
         .map(String::as_str)
         .collect();
     keys.sort();
-    assert_eq!(keys, ["affected_entities", "gaps", "ok"]);
+    assert_eq!(keys, ["gaps", "ok", "resolved_entries"]);
     let schema = specforge_common::shape::build::<specforge_ops::read::plan::PlanOutcome>();
     assert_eq!(
         specforge_common::shape::violations(&schema, &value),
@@ -423,7 +423,7 @@ fn the_plan_outcome_reads_as_human_text() {
     let outcome = crate::view_support::plan_check(&graph, &["behavior"], &plan);
     assert_eq!(
         outcome.to_human(),
-        "affected: b, c\n\
+        "resolved: b, c\n\
          gaps (2):\n  \
          - unresolved_entity: E003: unresolved entity 'ghost' in plan — not found in graph\n  \
          - ordering: 'b' depends on 'c' (via depends_on), but 'c' appears later in the plan\n\
@@ -439,12 +439,12 @@ fn the_plan_outcome_reads_as_human_text() {
     );
     assert_eq!(
         ok.to_human(),
-        "affected: c, b\ngaps: none\nplan check: passed\n"
+        "resolved: c, b\ngaps: none\nplan check: passed\n"
     );
     let none = crate::view_support::plan_check(
         &graph,
         &["behavior"],
         &serde_json::json!({"plan_id": "p", "entries": []}),
     );
-    assert!(none.to_human().starts_with("affected: none\ngaps (2):"));
+    assert!(none.to_human().starts_with("resolved: none\ngaps (2):"));
 }

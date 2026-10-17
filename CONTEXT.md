@@ -567,9 +567,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   model and outline diagrams, the versioned schema, inspect, query, list and search (the entities a
   selection over the view returns, `specforge_ops::read::query`), the exploration and the review
   (`specforge_ops::read::{explore, review}`), the reach of a trace (`specforge_ops::read::trace::reach`, the trace prompt's
-  affected and unverified entities), the plan check (`specforge_ops::read::plan::check`), and the inference guide and plan
+  affected and unverified entities), the plan check (`specforge_ops::read::plan::check`), the anchors of a source file and of an entity
+  (`specforge_ops::read::navigate::{anchors_of_file, anchors_of_entity}`, ADR 0140), and the inference guide and plan
   (`specforge_ops::read::infer::{guide, kind_guide, inference_plan}`). Each returns a typed outcome; the CLI,
-  MCP (its tools and its prompts) and the LSP only render it.
+  MCP (its tools and its prompts) and the LSP only render it. Its rules are tested in ops and stated by an ops-level
+  behaviour; a surface's tests hold what the surface decides (ADR 0015).
 - **Noticed read**: a read view that reports what it noticed about the run beside its value: the schema notices and I020. It
   returns `specforge_ops::Noticed<T>`, whose value is reached only with its notices, and only the surfaces' envelopes
   open it: MCP's `Answer::noticed` and `ResourceText::noticed` (into `_meta.diagnostics`) and the CLI's
@@ -669,8 +671,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   outside the project root is none of them and is never read. Progress, gaps, the `inferred` lint and the mark read
   them through one module (`specforge_ops::read::infer::sources`, ADR 0113).
 - **Anchors manifest**: `<root>/specforge-anchors.json`, which source item each entity is anchored
-  to. Navigation reads it (`specforge_ops::read::navigate::source_anchors`): the anchors of a source file
-  and of an entity; E071 when it cannot be used.
+  to. Read only by navigation's anchors read view (`specforge_ops::read::navigate::{anchors_of_file,
+  anchors_of_entity}`): the entities anchored to a source file, each with its kind, and the anchors of an entity;
+  E071 when it cannot be used, `no_project` without a project, E003 for an id neither the graph nor the manifest
+  knows (ADR 0140).
 - **Obligation**: one `verify` statement on an entity, its own member beside its methods (ADR 0094), never a field. **Proven** when a passing test names its
   exact text, or a formal claim discharges it. Who owes obligations is the entity's standing.
 - **Unverified**: an entity that counts toward coverage and is not proven
@@ -695,7 +699,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   Its entry order is its dependency order; the graph's edges are the dependencies. Read from a JSON object or its
   text, checked against the type's schema first (`AgentPlan::read`): a value that departs is refused naming every
   place. The **plan check** (`specforge_ops::read::plan::check`) reads the graph and the entity snapshot, never the
-  recorded test report; it passes (`ok`) when no entry is unresolved and none comes before what it depends on.
+  recorded test report; it passes (`ok`) when no entry is unresolved and none comes before what it depends on; its outcome lists the entries that resolve (`resolved_entries`).
 - **Plan gap**: how an agent plan falls short of the graph: an unresolved entry, a missing entry for
   a testable entity with obligations, or an entry ordered before what it depends on (`PlanGap`). An
   edge to an entity that does not exist is neither: it is E003. Written as an `McpTraceGap`
@@ -726,6 +730,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   extension not there, a conflict); a refusal of the project or the environment has none. Each surface spells it:
   MCP names the argument (`specifiers`, `path`), the CLI and the LSP print the error (ADR 0072). It is stated where the
   operation fails, with the refusal: no operation keeps an error enum of its own to convert into one (ADR 0132).
+- **Remedy**: what a refusal, a finding or a diagnostic tells the caller to do (an OpError's message tail or
+  suggestion, a doctor finding's remediation). Written below the surfaces, it names a whole command or the request's
+  own words, never a bare flag, so it reads true on every surface; the catalog's explanations, which name each
+  surface's spelling, are not remedies (ADR 0135).
 - **Mutation outcome**: what one MCP mutation call produced, typed: a run (`specforge_mcp::mutation::Mutated`:
   its reply and what it wrote — the files its operation changed, the entities it changed and the domain
   event it produces, `Written`) or a failure (`mutation::Failed`: its McpError and the files it left
@@ -1023,7 +1031,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   no text of has no range), MCP renders them as JSON (ADR 0016, ADR 0023).
 - **Rename plan**: the edits that rename one entity (`specforge_ops::authoring::rename::RenamePlan`):
   the declaration's name and each incoming reference's token, positions in the text the project was compiled from,
-  which the plan keeps. MCP writes it only to files that still hold that text, refusing `conflict` otherwise; the LSP
+  which the plan keeps, with the spec root they are relative to. MCP writes it only to files that still hold that text, refusing `conflict` otherwise; the LSP
   hands it to the editor only over buffers that are that text (`ContentModified` otherwise; ADR 0116, ADR 0023 D3).
 - **Lexeme**: one token of a `.spec` text as the language's one lexer reads it without a parse
   (`specforge_parser::lex`): an identifier, a scheme ref ID (one lexeme), a number, a string (read as

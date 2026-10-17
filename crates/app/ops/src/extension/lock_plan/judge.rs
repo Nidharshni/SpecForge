@@ -360,7 +360,7 @@ fn removal_refusal(changing: &Changing, owner: usize, edge: &Edge, edges: &[Edge
     error
         .prefixed(format!("removing '{name}' breaks '{}': ", edge.dependent))
         .with_suggestion(format!(
-            "remove {} first, or use --force to remove '{name}' anyway",
+            "remove {} first, or force the removal of '{name}' anyway",
             dependents.join(", ")
         ))
 }

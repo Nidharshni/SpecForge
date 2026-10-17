@@ -12,7 +12,9 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 use specforge_common::{Diagnostic, Severity};
-use specforge_project::{BuildCache, DiagnosticPolicy, LINT_PROFILE_NAMES, LintProfile};
+use specforge_project::{
+    BUILD_CACHE_FILE, BuildCache, DiagnosticPolicy, LINT_PROFILE_NAMES, LintProfile,
+};
 
 use crate::view::ProjectView;
 use crate::{OpError, OpErrorKind, Refusal};
@@ -32,15 +34,16 @@ pub struct CheckOptions {
 pub use specforge_common::Counts;
 
 /// What became of the build cache.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CacheRecord {
     NotRequested,
     Written,
     /// The check failed (errors, or warnings under strict): the previous
     /// file is left as it was.
     NotWritten,
-    /// The check passed, but the file could not be written.
-    WriteFailed(String),
+    /// The check passed, but the file could not be written: the refusal to report (its kind the I/O
+    /// failure's, [`OpErrorKind::of_io`]). A failed write is not a failed check.
+    WriteFailed(OpError),
 }
 
 /// What a check reported, and what it did with the build cache.
@@ -89,6 +92,8 @@ pub enum CheckField {
     LintProfiles,
 }
 
+/// A passing check whose build cache could not be written ([`CacheRecord::WriteFailed`]).
+pub const CACHE_WRITE_FAILED: &str = "cache_write_failed";
 /// A severity filter naming no severity (`InvalidInput`).
 pub const UNKNOWN_SEVERITY: &str = "unknown_severity";
 /// A lint profile naming no profile (`InvalidInput`).
@@ -186,7 +191,11 @@ pub fn check(view: &ProjectView<'_>, options: &CheckOptions) -> Result<CheckOutc
         (true, false) => CacheRecord::NotWritten,
         (true, true) => match BuildCache::of(view.graph(), view.registries().kinds()).write(root) {
             Ok(()) => CacheRecord::Written,
-            Err(e) => CacheRecord::WriteFailed(e.to_string()),
+            Err(e) => CacheRecord::WriteFailed(OpError::new(
+                OpErrorKind::of_io(&e),
+                CACHE_WRITE_FAILED,
+                format!("cannot write {BUILD_CACHE_FILE}: {e}"),
+            )),
         },
     };
     Ok(CheckOutcome {
@@ -403,10 +412,17 @@ mod tests {
             },
         );
         std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+        let CacheRecord::WriteFailed(error) = &outcome.cache else {
+            panic!("{:?}", outcome.cache);
+        };
+        assert_eq!(error.code, CACHE_WRITE_FAILED);
+        assert_eq!(error.kind, OpErrorKind::PermissionDenied);
         assert!(
-            matches!(outcome.cache, CacheRecord::WriteFailed(_)),
-            "{:?}",
-            outcome.cache
+            error
+                .message
+                .starts_with("cannot write specforge-cache.json: "),
+            "{}",
+            error.message
         );
         assert!(outcome.ok(), "a failed write is not a failed check");
     }

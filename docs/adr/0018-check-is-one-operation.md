@@ -1,6 +1,6 @@
 # Check is one operation
 
-**Status:** accepted (2026-10-05). Amended by ADR 0132: `check` returns `Result<CheckOutcome, OpError>`; `parse_severity` and `parse_lint_profiles` return `Refusal<CheckField>`.
+**Status:** accepted (2026-10-05). Amended by ADR 0132: `check` returns `Result<CheckOutcome, OpError>`; `parse_severity` and `parse_lint_profiles` return `Refusal<CheckField>`. Amended by round 14, plan 12 (a build cache that cannot be written).
 
 What `specforge check` reports was decided in two places. The CLI decided it in
 `cli/check.rs::run_in`, MCP in `tools/validate.rs::call`. Each built a `DiagnosticPolicy`, applied it
@@ -78,3 +78,7 @@ holds: two presenters, one orchestration.
 - Every validate result carries `_meta["specforge/check"]`.
 - Watch and the LSP still report a compile's diagnostics without a policy; giving them `--strict`
   or lint profiles is a product decision, not part of this one.
+
+## Amendment (architecture round 14, plan 12)
+
+A build cache that cannot be written is `CacheRecord::WriteFailed(OpError)`, built by `check` (code `cache_write_failed`, its kind the I/O failure's); the CLI reports it, under `--format json` instead of the diagnostics. Replaces "the CLI maps `ok` and `CacheRecord::WriteFailed` to its exit code" (the exit is the refusal's).

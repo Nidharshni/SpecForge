@@ -81,8 +81,8 @@ fn standing_is_the_coverage_views() {
 }
 
 #[specforge_test(
-    behavior = "provide_mcp_inspect_tool",
-    verify = "coverage status matches specforge.coverage obligation by obligation"
+    behavior = "inspect_entity_facts",
+    verify = "an entity's coverage is its coverage row's verdict, obligation by obligation"
 )]
 fn coverage_is_the_coverage_rows_verdict() {
     let project = standings();
@@ -149,8 +149,8 @@ fn span(file: &str, start_line: usize, end_line: usize) -> SourceSpan {
 }
 
 #[specforge_test(
-    behavior = "provide_mcp_inspect_tool",
-    verify = "diagnostics are the entity's own, not those of an entity whose ID contains it"
+    behavior = "inspect_entity_facts",
+    verify = "the diagnostics about an entity are its own, not those of an entity whose id contains it"
 )]
 fn diagnostics_are_those_about_the_entity() {
     // `task` on lines 1–3, `task_id_uniqueness` on 4–8.
@@ -292,8 +292,8 @@ type orphan \"Orphan\" {\n}\n";
 }
 
 #[specforge_test(
-    behavior = "provide_mcp_inspect_tool",
-    verify = "non-existent entity returns error response"
+    behavior = "inspect_entity_facts",
+    verify = "an unknown entity is E003, entity_not_found"
 )]
 fn an_unknown_entity_is_not_found() {
     let project = standings();

@@ -72,7 +72,7 @@ const FIXTURES: &[(&str, &str, Then)] = &[
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Surface {
-    /// MCP `specforge.validate`, through `McpServer::handle_message`.
+    /// MCP `specforge.validate`, through the pairing harness.
     Mcp,
     /// The LSP `Backend`: every `publishDiagnostics` after opening the
     /// fixture's entry file.
@@ -184,18 +184,11 @@ fn data_entities(data: &Value) -> Vec<String> {
 /// the project declares (MCP find_definition's answer).
 fn subject_name(project: &Project, data: &Value) -> Option<(String, u64)> {
     data_entities(data).into_iter().find_map(|entity| {
-        let mut server = specforge_mcp::McpServer::new();
-        let mut call = |method: &str, params: Value| -> Value {
-            let req = json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params});
-            serde_json::from_str(&server.handle_message(&req.to_string()).unwrap()).unwrap()
-        };
-        call(
-            "initialize",
-            json!({"projectRoot": project.root.to_str().unwrap()}),
-        );
-        let resp = call(
-            "tools/call",
-            json!({"name": "specforge.find_definition", "arguments": {"entity_id": entity}}),
+        let mut server = crate::support::pairing::mcp_on(&project.root);
+        let resp = specforge_mcp::testing::rpc::call_tool(
+            &mut server,
+            "specforge.find_definition",
+            json!({"entity_id": entity}),
         );
         if resp["result"]["isError"] == true {
             return None;
@@ -321,20 +314,8 @@ fn mcp_validate(project: &Project, arguments: Value) -> Keys {
 
 /// MCP `specforge.validate` with `arguments`: the diagnostics it returns.
 fn mcp_validate_json(project: &Project, arguments: Value) -> Value {
-    let mut server = specforge_mcp::McpServer::new();
-    let mut call = |method: &str, params: Value| -> Value {
-        let req = json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params});
-        let resp = server.handle_message(&req.to_string()).unwrap();
-        serde_json::from_str(&resp).unwrap()
-    };
-    call(
-        "initialize",
-        json!({"projectRoot": project.root.to_str().unwrap()}),
-    );
-    let resp = call(
-        "tools/call",
-        json!({"name": "specforge.validate", "arguments": arguments}),
-    );
+    let mut server = crate::support::pairing::mcp_on(&project.root);
+    let resp = specforge_mcp::testing::rpc::call_tool(&mut server, "specforge.validate", arguments);
     let text = resp["result"]["content"][0]["text"]
         .as_str()
         .unwrap_or_else(|| panic!("validate returned no text: {resp}"));

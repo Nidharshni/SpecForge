@@ -145,14 +145,14 @@ impl Configured {
                         "no registry is named '{alias}' (configured: {})",
                         self.aliases()
                     ),
-                    "name one of the configured registries with --registry".to_string(),
+                    "name one of the configured registries by its alias".to_string(),
                 ),
                 None => (
                     format!(
                         "no registry is the default (configured: {})",
                         self.aliases()
                     ),
-                    "name a registry with --registry, or set \"default_registry\": true on one"
+                    "name a registry by its alias, or set \"default_registry\": true on one"
                         .to_string(),
                 ),
             };

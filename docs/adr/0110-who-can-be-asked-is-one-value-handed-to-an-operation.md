@@ -1,7 +1,7 @@
 # Who can be asked is one value handed to an operation
 
 **Status:** accepted (2026-10-16, architecture round 11, plan 07). Amends ADR 0029 D4b, ADR 0059 D6, ADR 0002
-("Execution") and ADR 0044 D4. Extends ADR 0101 D1. D2's request sentence and D5's builders amended by [ADR 0124](0124-what-the-caller-lends-an-operation-is-one-value.md).
+("Execution") and ADR 0044 D4. Extends ADR 0101 D1. D2's request sentence and D5's builders amended by [ADR 0124](0124-what-the-caller-lends-an-operation-is-one-value.md). D4's R-TRUST-003 text is amended by [ADR 0135](0135-a-remedy-names-a-command-or-the-requests-words-never-a-flag.md): "(`specforge add --yes` and `specforge update --yes` accept it without asking)" replaces ", or with --yes".
 
 "May we ask someone, and who answers?" was spelled three ways across two seams. The registry port took `Trust`
 (Refuse, AssumeYes, Prompt) in each request, and the CLI also had to hand the adapter a closure (`.asking(..)`):

@@ -1,23 +1,24 @@
 //! Which entities belong to a file: the file rule (`match_file`) prompts
-//! and tools share, the entities anchored to a source file
-//! (`anchors_of_file`), and the outline of a spec file the LSP's document
+//! and tools share, and the outline of a spec file the LSP's document
 //! symbols and MCP's `specforge.outline` both answer.
 
-use super::anchors::{AnchorManifest, SourceAnchor};
+use serde::Serialize;
+use specforge_common::shape::Shape;
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::Node;
 
 use super::Navigator;
 
-/// How a query path matches a file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// How a query path matches a file; also the spelling of a match mode on the wire.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Shape)]
+#[serde(rename_all = "snake_case")]
 pub enum FileMatch {
     /// The same path.
     Exact,
     /// The query is a directory the file is under.
-    Under,
+    Directory,
     /// The query is a trailing suffix path of the file.
-    Suffix,
+    SuffixPath,
     None,
 }
 
@@ -42,55 +43,12 @@ pub fn match_file(query: &str, file: &str) -> FileMatch {
         return FileMatch::None;
     }
     if file.len() > query.len() && file[..query.len()] == query[..] {
-        return FileMatch::Under;
+        return FileMatch::Directory;
     }
     if file.len() >= query.len() && file[file.len() - query.len()..] == query[..] {
-        return FileMatch::Suffix;
+        return FileMatch::SuffixPath;
     }
     FileMatch::None
-}
-
-/// The anchors a source-file query finds, and how they matched.
-#[derive(Debug, Clone)]
-pub struct FileAnchors<'m> {
-    /// [`FileMatch::Exact`] when some anchor's file is the query;
-    /// otherwise [`FileMatch::Under`] when one is under it, else
-    /// [`FileMatch::Suffix`]; [`FileMatch::None`] when none matches.
-    pub mode: FileMatch,
-    /// In manifest order.
-    pub anchors: Vec<&'m SourceAnchor>,
-}
-
-/// Which entities belong to the source files `query` names: the anchors
-/// manifest's anchors in them, under [`match_file`]. The tightest
-/// non-empty mode wins: exact matches, else those under the query or
-/// ending with it. The MCP `specforge.find_spec_for_source` tool and the
-/// infer prompt's file scope give this one answer.
-pub fn anchors_of_file<'m>(manifest: &'m AnchorManifest, query: &str) -> FileAnchors<'m> {
-    let mut exact = Vec::new();
-    let mut loose = Vec::new();
-    let mut under = false;
-    for anchor in &manifest.anchors {
-        match match_file(query, &anchor.file) {
-            FileMatch::Exact => exact.push(anchor),
-            FileMatch::Under => {
-                under = true;
-                loose.push(anchor);
-            }
-            FileMatch::Suffix => loose.push(anchor),
-            FileMatch::None => {}
-        }
-    }
-    let (mode, anchors) = if !exact.is_empty() {
-        (FileMatch::Exact, exact)
-    } else if loose.is_empty() {
-        (FileMatch::None, loose)
-    } else if under {
-        (FileMatch::Under, loose)
-    } else {
-        (FileMatch::Suffix, loose)
-    };
-    FileAnchors { mode, anchors }
 }
 
 /// One entity of a file's outline.

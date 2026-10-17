@@ -1314,12 +1314,6 @@ expression: listing
         {
           "additionalProperties": false,
           "properties": {
-            "affected_entities": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
             "gaps": {
               "items": {
                 "additionalProperties": false,
@@ -1354,11 +1348,17 @@ expression: listing
             },
             "ok": {
               "type": "boolean"
+            },
+            "resolved_entries": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
             }
           },
           "required": [
             "ok",
-            "affected_entities",
+            "resolved_entries",
             "gaps"
           ],
           "type": "object"

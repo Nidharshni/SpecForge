@@ -2,8 +2,8 @@
 //! checked against tree-sitter's grammar over the repository's spec.
 
 use specforge_parser::lex::{
-    Lexeme, LexemeKind, form_starts, is_ref_id_prefix, lex, line_indent, runs_into_text,
-    starts_top_level_form,
+    Lexeme, LexemeKind, form_starts, is_entity_id, is_ref_id_prefix, lex, line_indent,
+    runs_into_text, starts_top_level_form,
 };
 use specforge_parser::parse_incremental;
 use specforge_test_macros::test as specforge_test;
@@ -656,4 +656,24 @@ fn form_starts_close_every_bracket() {
             "use \"./x\""
         ]
     );
+}
+
+#[test]
+fn an_entity_id_is_an_identifier_or_a_scheme_ref_id() {
+    for id in [
+        "ab",
+        "_x",
+        "a1",
+        "jira.issue:ABC-123",
+        "doc.page:v1+2",
+        "gh.pr:org/repo#12",
+        "web.page:https://example.org/a//b",
+    ] {
+        assert!(is_entity_id(id), "{id}");
+    }
+    for text in [
+        "", "1abc", "a.b", "a.b-c:d", "a:b", "a b", "x.y:", "x.y:a b", "x.y:a\"b", "émile", "!@#$",
+    ] {
+        assert!(!is_entity_id(text), "{text:?}");
+    }
 }

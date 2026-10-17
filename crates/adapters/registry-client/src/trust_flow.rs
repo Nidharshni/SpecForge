@@ -63,7 +63,8 @@ impl KeyChange {
         };
         Diagnostic::new(codes::R_TRUST_003, message).with_suggestion(format!(
             "if you trust the new key, accept it with `specforge add` or `specforge update` in a \
-             terminal, or with --yes; or add '{}' to trusted_keys",
+             terminal (`specforge add --yes` and `specforge update --yes` accept it without asking); \
+             or add '{}' to trusted_keys",
             self.offered
         ))
     }
@@ -115,7 +116,9 @@ pub fn check(
                     codes::R_TRUST_001,
                     format!("package '{name}' is not signed"),
                 )
-                .with_suggestion("re-run with --allow-unsigned to accept the risk".to_string()));
+                .with_suggestion(
+                    "allow unsigned packages for this install to accept the risk".to_string(),
+                ));
             }
             Ok(Trusted {
                 accepted: Accepted::Unsigned,
@@ -123,7 +126,7 @@ pub fn check(
                     Diagnostic::new(
                         codes::W155,
                         format!(
-                            "{name} {} is not signed, and was accepted because --allow-unsigned was given",
+                            "{name} {} is not signed, and was accepted because unsigned packages were allowed",
                             metadata.version
                         ),
                     )
@@ -327,7 +330,7 @@ mod tests {
         assert!(
             err.suggestion
                 .unwrap_or_default()
-                .contains("--allow-unsigned")
+                .contains("allow unsigned packages")
         );
     }
 
@@ -713,7 +716,7 @@ mod tests {
         assert_eq!(
             change.refused(None).suggestion.as_deref(),
             Some(
-                "if you trust the new key, accept it with `specforge add` or `specforge update` in a terminal, or with --yes; or add 'k2' to trusted_keys"
+                "if you trust the new key, accept it with `specforge add` or `specforge update` in a terminal (`specforge add --yes` and `specforge update --yes` accept it without asking); or add 'k2' to trusted_keys"
             )
         );
     }

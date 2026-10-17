@@ -346,7 +346,7 @@ pub fn analyze(
         return Err(OpError::new(
             OpErrorKind::PreconditionFailed,
             NO_TEST_RESULTS,
-            "--min needs test results: run `specforge collect` or pass --test-results",
+            "a proof-coverage minimum needs test results: run `specforge collect`, or name a test results file",
         )
         .into());
     }

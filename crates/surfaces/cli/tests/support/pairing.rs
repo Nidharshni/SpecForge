@@ -2,7 +2,8 @@
 //! server and its calls, and the normalization of an answer's machine-specific parts.
 
 use serde_json::{Value, json};
-use specforge_mcp::testing::{Served, rpc};
+use specforge_mcp::McpServer;
+use specforge_mcp::testing::{Served, rooted_server, rpc};
 use std::path::Path;
 
 use crate::support::TestProject;
@@ -10,6 +11,14 @@ use crate::support::TestProject;
 /// The project as `specforge mcp <root>` serves it, its `initialize` negotiating MCP 2025-03-26.
 pub fn served(project: TestProject) -> Served {
     Served::rooted_at(project, "2025-03-26")
+}
+
+/// An initialized MCP server on `root`, as `specforge mcp <root>` serves it: the one in-process server of the
+/// harnesses that pair a surface with MCP over a project on disk they do not own (ADR 0101 D5).
+pub fn mcp_on(root: &Path) -> McpServer {
+    let mut server = rooted_server(root);
+    rpc::call(&mut server, "initialize", json!({}));
+    server
 }
 
 /// The JSON-RPC responses to `calls` on `served`, one per call, in order. A call is a tool's `{name, arguments}`,

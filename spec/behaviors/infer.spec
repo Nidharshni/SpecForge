@@ -490,11 +490,14 @@ behavior provide_infer_file_scope "Provide Infer Prompt File Scope" {
     file rule MCP navigation and the LSP share, with each one's kind,
     line and symbol, and each kind's guide
     (compute_inference_guide). The list is the one
-    specforge.find_spec_for_source returns for the same path. The payload
-    is tagged with its scope (file).
+    specforge.find_spec_for_source returns for the same path. With no
+    project served the file scope names a file of no project: it is the
+    no-project refusal (precondition_failed), as every core prompt read
+    that names a file is. The payload is tagged with its scope (file).
   """
   verify unit "file scope lists the entities find_spec_for_source finds for the same file"
   verify unit "an unanchored file lists no existing entities"
+  verify unit "with no project served, the file scope is the no-project refusal"
 }
 
 // ---------------------------------------------------------------------------

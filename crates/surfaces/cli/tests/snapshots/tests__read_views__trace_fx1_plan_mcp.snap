@@ -3,9 +3,6 @@ source: crates/surfaces/cli/tests/read_views.rs
 expression: "normalized(value, root)"
 ---
 {
-  "affected_entities": [
-    "login"
-  ],
   "gaps": [
     {
       "gap_context": "E003: unresolved entity 'ghost' in plan — not found in graph",
@@ -26,5 +23,8 @@ expression: "normalized(value, root)"
       "target_entity": "reset_password"
     }
   ],
-  "ok": false
+  "ok": false,
+  "resolved_entries": [
+    "login"
+  ]
 }

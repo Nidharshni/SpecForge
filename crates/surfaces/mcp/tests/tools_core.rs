@@ -1,6 +1,5 @@
 use crate::support::*;
 use serde_json::{Value, json};
-use specforge_extension_sdk::prelude::{PassDiagnostic, PassSeverity};
 use specforge_mcp::McpServer;
 use specforge_test::prelude::*;
 
@@ -451,34 +450,6 @@ fn trace_unknown_entity() {
 
 // --- specforge.search ---
 
-// B:provide_mcp_search_tool — verify unit "returns fuzzy matches"
-#[specforge_test(
-    behavior = "provide_mcp_search_tool",
-    verify = "text search finds entities matching by name or contract"
-)]
-fn search_returns_matches() {
-    let mut server = test_server();
-    let resp = call_tool(&mut server, "specforge.search", json!({"query": "alpha"}));
-    let text = tool_text(&resp);
-    let parsed: Value = serde_json::from_str::<Value>(&text).unwrap()["results"].clone();
-    let results = parsed.as_array().unwrap();
-    assert!(!results.is_empty());
-    assert_eq!(results[0]["entity_id"], "alpha");
-
-    // Contract text is searched too: "system" is in no id or title of the
-    // fixture, only in alpha's contract.
-    let resp = call_tool(&mut server, "specforge.search", json!({"query": "system"}));
-    let by_contract: Value =
-        serde_json::from_str::<Value>(&tool_text(&resp)).unwrap()["results"].clone();
-    let ids: Vec<&str> = by_contract
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|r| r["entity_id"].as_str().unwrap())
-        .collect();
-    assert_eq!(ids, ["alpha"], "{by_contract}");
-}
-
 // B:provide_mcp_search_tool — verify unit "respects kind filter"
 #[specforge_test(
     behavior = "provide_mcp_search_tool",
@@ -715,71 +686,6 @@ fn schema_tool_kind_filter() {
 
 // --- specforge.coverage ---
 
-#[test]
-fn coverage_returns_per_entity() {
-    let mut server = test_server();
-    let resp = call_tool(&mut server, "specforge.coverage", json!({}));
-    let text = tool_text(&resp);
-    let parsed: Value = serde_json::from_str::<Value>(&text).unwrap()["entities"].clone();
-    let results = parsed.as_array().unwrap();
-    assert!(!results.is_empty());
-
-    for r in results {
-        assert!(r["entity_id"].is_string());
-        assert!(r["status"].is_string());
-        assert!(r["declared"].is_boolean());
-    }
-}
-
-#[specforge_test(
-    behavior = "provide_mcp_coverage_tool",
-    verify = "specforge.coverage returns coverage for all testable entities"
-)]
-fn coverage_returns_all_testable_entities() {
-    let mut server = test_server();
-    let resp = call_tool(&mut server, "specforge.coverage", json!({}));
-    let parsed: Value =
-        serde_json::from_str::<Value>(&tool_text(&resp)).unwrap()["entities"].clone();
-    let mut ids: Vec<&str> = parsed
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|r| r["entity_id"].as_str().unwrap())
-        .collect();
-    ids.sort();
-    // beta_feature's kind isn't testable.
-    assert_eq!(ids, vec!["alpha", "gamma_orphan"]);
-
-    // A named entity is reported whatever its kind.
-    let resp = call_tool(
-        &mut server,
-        "specforge.coverage",
-        json!({"entity_id": "beta_feature"}),
-    );
-    let parsed: Value =
-        serde_json::from_str::<Value>(&tool_text(&resp)).unwrap()["entities"].clone();
-    assert_eq!(parsed[0]["entity_id"], "beta_feature");
-}
-
-#[test]
-fn coverage_alpha_uncovered_without_tests() {
-    let mut server = test_server();
-    let resp = call_tool(
-        &mut server,
-        "specforge.coverage",
-        json!({"entity_id": "alpha"}),
-    );
-    let text = tool_text(&resp);
-    let parsed: Value = serde_json::from_str::<Value>(&text).unwrap()["entities"].clone();
-    let results = parsed.as_array().unwrap();
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0]["entity_id"], "alpha");
-    // Declared obligations with no recorded test prove nothing.
-    assert_eq!(results[0]["status"], "uncovered");
-    assert_eq!(results[0]["obligations"], 1);
-    assert_eq!(results[0]["unproven"], json!(["does alpha correctly"]));
-}
-
 /// The server with a behavior `two` declaring obligations "a" and "b", and
 /// a `specforge-report.json` recording `tests` (verify text, status) for it.
 fn server_with_report(tests: &[(&str, &str)]) -> Served {
@@ -797,95 +703,6 @@ fn server_with_report(tests: &[(&str, &str)]) -> Served {
             json!({"results": {"two": {"tests": tests}}}).to_string(),
         )
         .serve(&[extension()])
-}
-
-/// `specforge.coverage`'s result for `two`.
-fn coverage_of_two(server: &mut McpServer) -> Value {
-    let resp = call_tool(server, "specforge.coverage", json!({"entity_id": "two"}));
-    let parsed: Value =
-        serde_json::from_str::<Value>(&tool_text(&resp)).unwrap()["entities"].clone();
-    parsed[0].clone()
-}
-
-#[specforge_test(
-    behavior = "provide_mcp_coverage_tool",
-    verify = "an entity with an unproven obligation is partial, not covered"
-)]
-fn coverage_with_an_unproven_obligation_is_partial() {
-    let mut server = server_with_report(&[("a", "passed")]);
-    let two = coverage_of_two(&mut server);
-    assert_eq!(two["status"], "partial", "{two}");
-    assert_eq!(two["obligations"], 2);
-    assert_eq!(two["proven"], 1);
-    assert_eq!(two["unproven"], json!(["b"]));
-
-    let mut server = server_with_report(&[("a", "passed"), ("b", "passed")]);
-    let two = coverage_of_two(&mut server);
-    assert_eq!(two["status"], "covered", "{two}");
-    assert_eq!(two["unproven"], json!([]));
-}
-
-#[specforge_test(
-    behavior = "provide_mcp_coverage_tool",
-    verify = "a failing recorded test keeps an entity from being covered"
-)]
-fn coverage_with_a_failing_test_is_partial() {
-    // Both obligations are proven, but a third test fails (A014).
-    let mut server = server_with_report(&[("a", "passed"), ("b", "passed"), ("a", "failed")]);
-    let two = coverage_of_two(&mut server);
-    assert_eq!(two["status"], "partial", "{two}");
-    assert_eq!(two["proven"], 2);
-
-    // A failing test proves nothing, even when it names an obligation.
-    let mut server = server_with_report(&[("a", "failed")]);
-    let two = coverage_of_two(&mut server);
-    assert_eq!(two["status"], "partial", "{two}");
-    assert_eq!(two["unproven"], json!(["a", "b"]));
-}
-
-#[specforge_test(
-    behavior = "provide_mcp_coverage_tool",
-    verify = "a field named verify does not hide an entity's verify statements"
-)]
-fn coverage_sees_statements_behind_a_verify_field() {
-    // A struct member named `verify` comes before the entity's statement,
-    // as in `type Payload { verify string @optional; verify unit "..." }`.
-    let mut server = project()
-        .file(
-            "payload.spec",
-            "behavior payload \"Payload\" {\n    verify string @optional\n    verify unit \"payload is valid\"\n}\n",
-        )
-        .serve(&[extension()]);
-
-    let resp = call_tool(
-        &mut server,
-        "specforge.coverage",
-        json!({"entity_id": "payload"}),
-    );
-    let parsed: Value =
-        serde_json::from_str::<Value>(&tool_text(&resp)).unwrap()["entities"].clone();
-    let payload = &parsed[0];
-    assert_eq!(payload["declared"], true, "{payload}");
-    assert_eq!(payload["obligations"], 1, "{payload}");
-    assert_eq!(
-        payload["unproven"],
-        json!(["payload is valid"]),
-        "{payload}"
-    );
-
-    // inspect reads the same obligations.
-    let resp = call_tool(
-        &mut server,
-        "specforge.inspect",
-        json!({"entity_id": "payload"}),
-    );
-    let inspect: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(inspect["testable"], true, "{inspect}");
-    assert_eq!(
-        inspect["verify_declarations"],
-        json!(["unit payload is valid"]),
-        "{inspect}"
-    );
 }
 
 #[specforge_test(
@@ -1186,67 +1003,6 @@ fn analyze_of_another_project_leaves_the_served_one() {
 }
 
 // --- specforge.stats ---
-
-// B:provide_mcp_stats_tool — verify unit "returns project statistics"
-#[specforge_test(
-    behavior = "provide_mcp_stats_tool",
-    verify = "specforge.stats returns entity counts by kind"
-)]
-fn stats_returns_statistics() {
-    let mut server = test_server();
-    let resp = call_tool(&mut server, "specforge.stats", json!({}));
-    let text = tool_text(&resp);
-    let parsed: Value = serde_json::from_str(&text).unwrap();
-    let mut counts: Vec<(String, u64)> = parsed["entity_counts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|c| {
-            (
-                c["kind"].as_str().unwrap().to_string(),
-                c["count"].as_u64().unwrap(),
-            )
-        })
-        .collect();
-    counts.sort();
-    assert_eq!(
-        counts,
-        vec![
-            ("behavior".to_string(), 1),
-            ("feature".to_string(), 1),
-            ("invariant".to_string(), 1),
-        ]
-    );
-
-    // Another behavior, written to disk, shows up in its kind's count.
-    server.write("delta.spec", "behavior delta \"Delta\" {\n}\n");
-    let parsed: Value = serde_json::from_str(&tool_text(&call_tool(
-        &mut server,
-        "specforge.stats",
-        json!({}),
-    )))
-    .unwrap();
-    let behaviors = parsed["entity_counts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|c| c["kind"] == "behavior")
-        .unwrap();
-    assert_eq!(behaviors["count"], 2);
-}
-
-#[specforge_test(
-    behavior = "provide_mcp_stats_tool",
-    verify = "response includes the unconnected entity count"
-)]
-fn stats_counts_match_graph() {
-    let mut server = test_server();
-    let resp = call_tool(&mut server, "specforge.stats", json!({}));
-    let text = tool_text(&resp);
-    let parsed: Value = serde_json::from_str(&text).unwrap();
-    assert_eq!(parsed["edge_count"], 1); // one behaviors edge
-    assert_eq!(parsed["unconnected_count"], 1); // gamma_orphan
-}
 
 // Tool call when not initialized
 #[specforge_test(
@@ -1611,7 +1367,7 @@ fn trace_plan_gap_analysis() {
     let plan = agent_plan(&["act_one", "inv_a", "ghost"]);
     let resp = call_tool(&mut server, "specforge.trace", json!({"plan": plan}));
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(parsed["affected_entities"], json!(["act_one", "inv_a"]));
+    assert_eq!(parsed["resolved_entries"], json!(["act_one", "inv_a"]));
     let gaps: Vec<(&str, &str, &str)> = parsed["gaps"]
         .as_array()
         .unwrap_or_else(|| panic!("no gaps in {parsed}"))
@@ -1653,9 +1409,9 @@ fn trace_plan_reports_its_gaps_as_structured_json() {
         .map(String::as_str)
         .collect();
     keys.sort();
-    assert_eq!(keys, ["affected_entities", "gaps", "ok"], "{parsed}");
+    assert_eq!(keys, ["gaps", "ok", "resolved_entries"], "{parsed}");
     assert_eq!(parsed["ok"], false, "{parsed}");
-    assert_eq!(parsed["affected_entities"], json!(["act_one"]));
+    assert_eq!(parsed["resolved_entries"], json!(["act_one"]));
     for gap in parsed["gaps"].as_array().unwrap() {
         let mut keys: Vec<&str> = gap
             .as_object()
@@ -1689,28 +1445,6 @@ fn trace_plan_reports_its_gaps_as_structured_json() {
         ghost["gap_context"].as_str().unwrap().starts_with("E003"),
         "{ghost}"
     );
-}
-
-#[specforge_test(
-    behavior = "validate_agent_plan",
-    verify = "the plan check reads no recorded test report"
-)]
-fn a_report_the_plan_check_does_not_read_fails_no_plan() {
-    let (project, mut server) = plan_project();
-    std::fs::write(
-        project.path().join("specforge-report.json"),
-        r#"{"results":{"act_one":{"tests":[{"name":"t","status":"pass","verify":"x"}]}}}"#,
-    )
-    .unwrap();
-    let plan = agent_plan(&["act_one", "inv_a", "ghost"]);
-    let resp = call_tool(&mut server, "specforge.trace", json!({"plan": plan}));
-    assert_eq!(resp["result"]["isError"], false, "{resp}");
-    let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(parsed["affected_entities"], json!(["act_one", "inv_a"]));
-    assert_eq!(parsed["gaps"].as_array().unwrap().len(), 3, "{parsed}");
-    // Stats still reads the report: it needs what the report decides.
-    let error = mcp_error(&call_tool(&mut server, "specforge.stats", json!({})));
-    assert_eq!(error["diagnostic"]["code"], "E045", "{error}");
 }
 
 #[specforge_test(
@@ -1758,7 +1492,7 @@ fn trace_refuses_a_plan_that_is_not_an_agent_plan() {
         json!({"plan": "{\"plan_id\":\"p\",\"entries\":[]}"}),
     );
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(parsed["affected_entities"], json!([]), "{parsed}");
+    assert_eq!(parsed["resolved_entries"], json!([]), "{parsed}");
 }
 
 #[specforge_test(
@@ -1772,49 +1506,6 @@ fn trace_without_entity_or_plan_errors() {
     assert_eq!(error["code"], "invalid_input", "{error}");
     let message = error["message"].as_str().unwrap();
     assert!(message.contains("entity_id or plan"), "{message}");
-}
-
-#[test]
-fn trace_missing_links() {
-    let mut server = test_server();
-    let resp = call_tool(
-        &mut server,
-        "specforge.trace",
-        json!({"entity_id": "gamma_orphan"}),
-    );
-    let text = tool_text(&resp);
-    let parsed: Value = serde_json::from_str(&text).unwrap();
-    assert_eq!(parsed["entity_id"], "gamma_orphan");
-    // Orphan has no connections
-    assert!(parsed["upstream"].as_array().unwrap().is_empty());
-    assert!(parsed["downstream"].as_array().unwrap().is_empty());
-}
-
-// B:provide_mcp_search_tool — verify unit "empty query returns all entities up to limit"
-#[specforge_test(
-    behavior = "provide_mcp_search_tool",
-    verify = "empty query returns all entities up to limit"
-)]
-fn search_empty_query_returns_all() {
-    let mut server = test_server();
-    let ids = |server: &mut McpServer, args: Value| {
-        let resp = call_tool(server, "specforge.search", args);
-        let parsed: Value =
-            serde_json::from_str::<Value>(&tool_text(&resp)).unwrap()["results"].clone();
-        let mut ids: Vec<String> = parsed
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|r| r["entity_id"].as_str().unwrap().to_string())
-            .collect();
-        ids.sort();
-        ids
-    };
-    assert_eq!(
-        ids(&mut server, json!({"query": ""})),
-        vec!["alpha", "beta_feature", "gamma_orphan"]
-    );
-    assert_eq!(ids(&mut server, json!({"query": "", "limit": 2})).len(), 2);
 }
 
 #[specforge_test(
@@ -1965,29 +1656,6 @@ fn coverage_refuses_an_unknown_status_filter() {
     );
 }
 
-#[specforge_test(
-    behavior = "provide_mcp_stats_tool",
-    verify = "response includes coverage percentage"
-)]
-fn stats_includes_coverage_percentage() {
-    let mut server = test_server();
-    let coverage = |server: &mut McpServer| {
-        let resp = call_tool(server, "specforge.stats", json!({}));
-        let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-        parsed["declared_pct"].as_f64().unwrap()
-    };
-    // Testable: alpha (behavior, declares verify) and gamma_orphan
-    // (invariant, none). beta_feature's kind is not testable.
-    assert_eq!(coverage(&mut server), 50.0);
-
-    // gamma_orphan declares an obligation on disk.
-    server.write(
-        "invariants.spec",
-        "invariant gamma_orphan \"Gamma Orphan\" {\n    verify unit \"gamma holds\"\n}\n",
-    );
-    assert_eq!(coverage(&mut server), 100.0);
-}
-
 // B:provide_mcp_query_tool — verify unit "format parameter selects emitter format"
 #[specforge_test(
     behavior = "provide_mcp_query_tool",
@@ -2113,123 +1781,6 @@ fn search_references_filter() {
     );
 }
 
-/// `references` is one filter among the others, ANDed: the referrers of
-/// `alpha` narrowed by kind, by the query and by a field.
-#[specforge_test(
-    behavior = "provide_mcp_search_tool",
-    verify = "the references filter combines with the other filters"
-)]
-fn search_references_combines_with_the_other_filters() {
-    // `held`, an invariant, references alpha beside the feature beta_feature.
-    let mut server = project()
-        .file(
-            "held.spec",
-            "invariant held \"Held\" {\n    guarantee \"always\"\n    enforced_by [alpha]\n}\n",
-        )
-        .serve(&[extension().reference("invariant", "enforced_by", "behavior")]);
-    let mut ids = |arguments: Value| -> Vec<String> {
-        tool(&mut server, "specforge.search", arguments)["results"]
-            .as_array()
-            .unwrap_or_else(|| panic!("results"))
-            .iter()
-            .map(|r| r["entity_id"].as_str().unwrap().to_string())
-            .collect()
-    };
-    let mut referrers = ids(json!({"query": "", "references": "alpha"}));
-    referrers.sort();
-    assert_eq!(referrers, ["beta_feature", "held"], "the referrers alone");
-    assert_eq!(
-        ids(json!({"query": "", "references": "alpha", "kinds": ["invariant"]})),
-        ["held"],
-        "kinds narrows them"
-    );
-    assert_eq!(
-        ids(json!({"query": "beta", "references": "alpha"})),
-        ["beta_feature"],
-        "the query narrows them"
-    );
-    assert!(
-        ids(json!({"query": "zzz", "references": "alpha"})).is_empty(),
-        "no referrer matches zzz"
-    );
-    assert_eq!(
-        ids(json!({"query": "", "references": "alpha", "field": "guarantee", "value": "alw"})),
-        ["held"],
-        "a field narrows them"
-    );
-    assert!(
-        ids(json!({"query": "", "references": "alpha", "field": "guarantee", "value": "never"}))
-            .is_empty()
-    );
-    assert!(
-        ids(json!({"query": "", "references": "nope"})).is_empty(),
-        "an unknown target has no referrers"
-    );
-}
-
-// B:provide_mcp_stats_tool — verify unit "diagnostic_summary includes severity counts"
-#[specforge_test(
-    behavior = "provide_mcp_stats_tool",
-    verify = "response includes diagnostic summary by severity"
-)]
-fn stats_diagnostic_summary_severity_counts() {
-    // One error, a real unresolved reference (E003); two warnings, a
-    // check-phase pass's. Nothing is obligated, so no W004 joins them.
-    let mut server = project()
-        .file(
-            "broken.spec",
-            "feature broken \"Broken\" {\n    behaviors [ghost]\n}\n",
-        )
-        .serve(&[TestExtension::software()
-            .reporting(PassDiagnostic::new("W901", PassSeverity::Warning, "m").with_entity("alpha"))
-            .reporting(
-                PassDiagnostic::new("W902", PassSeverity::Warning, "m").with_entity("gamma_orphan"),
-            )]);
-    let resp = call_tool(&mut server, "specforge.stats", json!({}));
-    let text = tool_text(&resp);
-    let parsed: Value = serde_json::from_str(&text).unwrap();
-    assert_eq!(
-        parsed["diagnostic_summary"],
-        json!({"errors": 1, "warnings": 2, "infos": 0})
-    );
-}
-
-// B:provide_mcp_trace_tool — the missing links are the expected edges the
-// entity lacks, as `specforge trace` flags them.
-#[specforge_test(
-    behavior = "provide_mcp_trace_tool",
-    verify = "missing links flagged in trace output"
-)]
-fn trace_flags_the_missing_links() {
-    // Invariants are expected to name the behaviors that enforce them.
-    let mut server =
-        project().serve(&[extension().reference("invariant", "enforced_by", "behavior")]);
-    let resp = call_tool(
-        &mut server,
-        "specforge.trace",
-        json!({"entity_id": "gamma_orphan"}),
-    );
-    let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    let missing: Vec<(&str, &str, &str)> = parsed["missing"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|m| {
-            assert_eq!(m["status"], "missing", "{m}");
-            (
-                m["from"].as_str().unwrap(),
-                m["edge_label"].as_str().unwrap(),
-                m["expected_kind"].as_str().unwrap(),
-            )
-        })
-        .collect();
-    assert_eq!(missing, [("gamma_orphan", "enforced_by", "behavior")]);
-    // Isolation is an empty upstream and downstream, not a gap list.
-    assert_eq!(parsed["upstream"], json!([]));
-    assert_eq!(parsed["downstream"], json!([]));
-    assert!(parsed.get("gaps").is_none(), "{parsed}");
-}
-
 // B:provide_mcp_validate_tool — verify unit "validate recompiles and updates graph"
 #[specforge_test(
     behavior = "provide_mcp_validate_tool",
@@ -2264,34 +1815,6 @@ fn validate_updates_graph() {
         assert!(d["file"].as_str().unwrap().ends_with("app.spec"), "{d}");
         assert!(d["line"].as_u64().unwrap() >= 1, "{d}");
     }
-}
-
-#[test]
-fn trace_missing_links_flagged() {
-    let mut server = test_server();
-    // Trace with a plan that has references to nonexistent entities
-    let resp = call_tool(
-        &mut server,
-        "specforge.trace",
-        json!({"entity_ids": ["nonexistent_entity"]}),
-    );
-    // Should flag missing links
-    assert!(resp["result"].is_object() || resp["error"].is_object());
-}
-
-#[test]
-fn stats_includes_diagnostic_summary() {
-    let mut server = test_server();
-    let resp = call_tool(&mut server, "specforge.stats", json!({}));
-    let text = tool_text(&resp);
-    let parsed: Value = serde_json::from_str(&text).unwrap();
-    // Should include diagnostic counts by severity
-    assert!(
-        parsed["diagnostics"].is_object()
-            || parsed["diagnostic_summary"].is_object()
-            || parsed["entity_count"].is_number(),
-        "stats response should include diagnostic summary"
-    );
 }
 
 // --- C9-02/C9-03: token budget enforcement ---

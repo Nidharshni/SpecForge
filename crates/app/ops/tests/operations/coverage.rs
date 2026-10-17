@@ -1,9 +1,10 @@
+use serde_json::json;
 use specforge_extension_sdk::prelude::FieldType;
 use specforge_ops::read::coverage::{CoverageQuery, CoverageRow, coverage, row};
 use specforge_project::coverage::Status;
 use specforge_test::prelude::*;
 
-use crate::view_support::{Assembled, Viewed, registries_with};
+use crate::view_support::{Assembled, Viewed, registries, registries_with};
 
 /// login (proven), logout (one unproven obligation), a union, an abstract
 /// behavior, a governance constraint that declares nothing and one that
@@ -56,7 +57,7 @@ fn ids(rows: &[CoverageRow]) -> Vec<&str> {
 }
 
 #[specforge_test(
-    behavior = "provide_mcp_coverage_tool",
+    behavior = "compute_the_coverage_view",
     verify = "with no filters the rows are the entities that count toward coverage"
 )]
 fn the_view_lists_what_counts_toward_coverage() {
@@ -122,7 +123,7 @@ fn coverage_rows_and_stats_read_one_standing() {
 }
 
 #[specforge_test(
-    behavior = "provide_mcp_coverage_tool",
+    behavior = "compute_the_coverage_view",
     verify = "an exempt entity named by entity_id is returned with exempt true"
 )]
 fn an_exempt_entity_is_reachable_by_id() {
@@ -225,4 +226,72 @@ fn a_coverage_row_is_one_document() {
     assert_eq!(base["declared"], false);
     assert_eq!(base["obligations"], 0);
     assert_eq!(base.as_object().unwrap().len(), 10);
+}
+
+/// `two`, a behavior of obligations "a" and "b", with `tests` (verify text, status) recorded for it.
+fn two_with(tests: &[(&str, &str)]) -> Assembled {
+    let project = Assembled::over(registries(&["behavior"], &[]))
+        .source("behavior two \"Two\" {\n  verify unit \"a\"\n  verify unit \"b\"\n}\n");
+    let tests: Vec<serde_json::Value> = tests
+        .iter()
+        .map(|(verify, status)| json!({"name": verify, "verify": verify, "status": status}))
+        .collect();
+    project.write(
+        "specforge-report.json",
+        json!({"runner": "fixture", "results": {"two": {"tests": tests}}}).to_string(),
+    );
+    project
+}
+
+/// `two`'s row as every surface writes it.
+fn two(project: &Assembled) -> serde_json::Value {
+    serde_json::to_value(row(&project.view(), "two").unwrap().unwrap().document()).unwrap()
+}
+
+#[specforge_test(
+    behavior = "compute_the_coverage_view",
+    verify = "an entity with an unproven obligation is partial, not covered"
+)]
+fn an_unproven_obligation_leaves_the_row_partial() {
+    let project = two_with(&[("a", "passed")]);
+    let row = two(&project);
+    assert_eq!(
+        (&row["status"], &row["obligations"], &row["proven"]),
+        (&json!("partial"), &json!(2), &json!(1))
+    );
+    assert_eq!(row["unproven"], json!(["b"]));
+    let partial = CoverageQuery {
+        status: Some(Status::Partial),
+        ..Default::default()
+    };
+    assert_eq!(
+        ids(&coverage(&project.view(), &partial).unwrap().rows),
+        ["two"]
+    );
+    let both = two_with(&[("a", "passed"), ("b", "passed")]);
+    assert_eq!(two(&both)["status"], "covered");
+    assert_eq!(two(&both)["unproven"], json!([]));
+}
+
+#[specforge_test(
+    behavior = "compute_the_coverage_view",
+    verify = "a failing recorded test keeps an entity from being covered"
+)]
+fn a_failing_test_keeps_the_row_from_covered() {
+    // Both obligations proven, and a third test fails (A014).
+    let row = two(&two_with(&[
+        ("a", "passed"),
+        ("b", "passed"),
+        ("a", "failed"),
+    ]));
+    assert_eq!(
+        (&row["status"], &row["proven"]),
+        (&json!("partial"), &json!(2))
+    );
+    // A failing test proves nothing, even when it names an obligation.
+    let row = two(&two_with(&[("a", "failed")]));
+    assert_eq!(
+        (&row["status"], &row["unproven"]),
+        (&json!("partial"), &json!(["a", "b"]))
+    );
 }

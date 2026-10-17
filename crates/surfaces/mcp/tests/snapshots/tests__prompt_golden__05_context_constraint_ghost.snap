@@ -8,10 +8,21 @@ expression: "shape(&reply, dir.path())"
     "data": {
       "argument": "structural_constraints",
       "code": "entity_not_found",
+      "diagnostic": {
+        "code": "E003",
+        "column": null,
+        "file": null,
+        "line": null,
+        "message": "unresolved entity 'ghost' — not found in graph",
+        "severity": "Error",
+        "span": null,
+        "suggestion": null,
+        "title": "Unresolved reference"
+      },
       "entity_id": "ghost",
-      "message": "Structural constraint entity not found: ghost",
+      "message": "unresolved entity 'ghost' — not found in graph",
       "prompt": "specforge://prompts/context"
     },
-    "message": "Structural constraint entity not found: ghost"
+    "message": "unresolved entity 'ghost' — not found in graph"
   }
 }

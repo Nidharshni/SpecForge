@@ -324,6 +324,13 @@ pub fn is_ref_id_prefix(text: &str) -> bool {
     }
 }
 
+/// Whether `text` is one entity ID as the grammar reads one, whole: an `identifier`
+/// (`[a-zA-Z_][a-zA-Z0-9_]*`) or a `scheme_ref_id` (`scheme.kind:id`, `gh.issue:42`).
+pub fn is_entity_id(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    [ascii_ident_end(bytes, 0), ref_id_end(bytes, 0)].contains(&Some(bytes.len()))
+}
+
 /// The end of the `"…"` string opening at `open`, and whether the grammar
 /// closes it: at its closing quote when the grammar's token ends there and,
 /// if it spans lines, nothing runs straight into that quote; else at its

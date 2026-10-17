@@ -24,6 +24,8 @@ specforge-registry = { workspace = true }
 specforge-mcp-macros = { path = "../mcp-macros" }
 specforge-ops = { workspace = true }
 specforge-ops-registry = { path = "../../adapters/ops-registry" }
+# What an entity ID is (`lex::is_entity_id`), for the entity resources' 400 case.
+specforge-parser = { workspace = true }
 specforge-project = { workspace = true }
 specforge-protocol-types = { path = "../../leaf/protocol-types" }
 specforge-wasm = { workspace = true }
@@ -48,7 +50,6 @@ specforge-ops = { workspace = true, features = ["testing"] }
 # Extensions served in process (`specforge_wasm::testing`).
 specforge-wasm = { workspace = true, features = ["testing"] }
 specforge-installed = { path = "../../runtime/installed", features = ["testing"] }
-specforge-parser = { workspace = true }
 specforge-test = { workspace = true }
 specforge-test-macros = { workspace = true }
 insta = { workspace = true }

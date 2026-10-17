@@ -64,13 +64,13 @@ $ specforge analyze --min 50
 [exit 2]
 [stdout]
 [stderr]
-error[no_test_results]: --min needs test results: run `specforge collect` or pass --test-results
+error[no_test_results]: a proof-coverage minimum needs test results: run `specforge collect`, or name a test results file
 
 $ specforge analyze --min 50 --format json
 [exit 2]
 [stdout]
 {
-  "error": "--min needs test results: run `specforge collect` or pass --test-results",
+  "error": "a proof-coverage minimum needs test results: run `specforge collect`, or name a test results file",
   "code": "no_test_results"
 }
 [stderr]
