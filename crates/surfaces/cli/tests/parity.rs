@@ -27,11 +27,11 @@
 
 use serde_json::{Map, Value, json};
 use specforge_mcp::McpServer;
-use specforge_mcp::testing::{rooted_server, rpc};
+use specforge_mcp::testing::rpc;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crate::support::pairing;
+use crate::support::pairing::{self, mcp_on};
 use crate::support::{Cli, TestProject};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -961,19 +961,10 @@ fn parity_check_cache() {
 
 // ── export: one function, one schema policy (O2, ADR 0004 D3-a) ─────────────
 
-/// An initialized MCP server on `root`.
-fn mcp_on(root: &Path) -> McpServer {
-    let mut server = rooted_server(root);
-    rpc::call(&mut server, "initialize", json!({}));
-    server
-}
-
 /// The JSON document an MCP request answered with: a tool's text content,
 /// or a resource's.
 fn mcp_document(server: &mut McpServer, method: &str, params: Value) -> Value {
-    let req = json!({"jsonrpc": "2.0", "id": 2, "method": method, "params": params});
-    let resp: Value =
-        serde_json::from_str(&server.handle_message(&req.to_string()).unwrap()).unwrap();
+    let resp = rpc::call(server, method, params);
     let text = resp["result"]["content"][0]["text"]
         .as_str()
         .or_else(|| resp["result"]["contents"][0]["text"].as_str())
@@ -1254,12 +1245,7 @@ fn cli_analyze(project: &TestProject, extra: &[&str]) -> (Option<i32>, Value, St
 /// (the payload, or the error object).
 fn mcp_analyze(root: &Path, arguments: Value) -> (bool, Value) {
     let mut server = mcp_on(root);
-    let req = json!({
-        "jsonrpc": "2.0", "id": 2, "method": "tools/call",
-        "params": {"name": "specforge.analyze", "arguments": arguments}
-    });
-    let resp: Value =
-        serde_json::from_str(&server.handle_message(&req.to_string()).unwrap()).unwrap();
+    let resp = rpc::call_tool(&mut server, "specforge.analyze", arguments);
     let result = &resp["result"];
     let text = result["content"][0]["text"].as_str().unwrap_or_default();
     (
@@ -1391,12 +1377,7 @@ fn export_both_ways(extra: &[&str], arguments: Value) -> (String, String) {
     let mut server = mcp_on(dir.root());
     let mut arguments = arguments;
     arguments["format"] = json!("brief");
-    let req = json!({
-        "jsonrpc": "2.0", "id": 2, "method": "tools/call",
-        "params": {"name": "specforge.export", "arguments": arguments}
-    });
-    let resp: Value =
-        serde_json::from_str(&server.handle_message(&req.to_string()).unwrap()).unwrap();
+    let resp = rpc::call_tool(&mut server, "specforge.export", arguments);
     assert_ne!(resp["result"]["isError"], true, "{resp}");
     let mcp_text = resp["result"]["content"][0]["text"]
         .as_str()
@@ -1442,11 +1423,7 @@ fn export_scoped_depth_kinds() {
 
 /// The text a resource read answered with.
 fn mcp_document_text(server: &mut McpServer, uri: &str) -> String {
-    let req = json!({
-        "jsonrpc": "2.0", "id": 3, "method": "resources/read", "params": {"uri": uri}
-    });
-    let resp: Value =
-        serde_json::from_str(&server.handle_message(&req.to_string()).unwrap()).unwrap();
+    let resp = rpc::read_resource(server, uri);
     resp["result"]["contents"][0]["text"]
         .as_str()
         .unwrap_or_else(|| panic!("{resp}"))
@@ -1506,12 +1483,7 @@ fn cli_infer_status(project: &TestProject, flags: &[&str]) -> Value {
 /// What the tool `name` answered on a server rooted at `root`.
 fn mcp_tool(root: &Path, name: &str) -> Value {
     let mut server = mcp_on(root);
-    let req = json!({
-        "jsonrpc": "2.0", "id": 2, "method": "tools/call",
-        "params": {"name": name, "arguments": {}}
-    });
-    let resp: Value =
-        serde_json::from_str(&server.handle_message(&req.to_string()).unwrap()).unwrap();
+    let resp = rpc::call_tool(&mut server, name, json!({}));
     assert_ne!(resp["result"]["isError"], true, "{resp}");
     let text = resp["result"]["content"][0]["text"].as_str().unwrap();
     serde_json::from_str(text).unwrap()
