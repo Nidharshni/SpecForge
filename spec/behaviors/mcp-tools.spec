@@ -636,6 +636,33 @@ behavior provide_mcp_find_implementation_tool "Provide MCP Find Implementation T
   verify unit "an entity with no anchor has no implementations, and no anchors manifest is none"
 }
 
+behavior provide_mcp_find_spec_for_source_tool "Provide MCP Find Spec For Source Tool" {
+  features   [mcp_navigation_tools]
+  invariants [diagnostic_determinism, mcp_structured_error_responses, mcp_tool_idempotency]
+  category   query
+  types      [McpSpecForSourceResult, McpSpecForSourceEntity, McpToolDescriptor]
+  ensures {
+    tightest_mode    "the anchors of the tightest matching mode: exact, else under the directory, else ending with the path"
+    kind_from_graph  "each entity carries its kind when the graph declares it"
+    unusable_refused "an anchors manifest that cannot be used is E071"
+  }
+  contract   """
+    In MCP server mode, the system MUST register a
+    specforge.find_spec_for_source tool that accepts file_path (required)
+    and returns {file_path, match_mode, entities, count}: the anchors of
+    the project's specforge-anchors.json whose file the path names,
+    compared as text component by component (./a and a\b are a and a/b; a
+    substring is no match), the tightest non-empty mode winning (exact,
+    else directory, else suffix_path; none when nothing matches), in
+    manifest order, each with the entity's kind when the graph declares
+    it. No anchors manifest is an empty list. An anchors manifest that
+    cannot be read or parsed is refused with E071. The infer prompt's file
+    scope lists the same entities.
+  """
+  verify unit "the tightest match wins: exact, else under the directory, else ending with the path"
+  verify unit "each entity carries its kind when the graph declares it"
+}
+
 behavior provide_mcp_outline_tool "Provide MCP Outline Tool" {
   features   [mcp_navigation_tools]
   invariants [

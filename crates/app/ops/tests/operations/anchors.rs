@@ -53,7 +53,10 @@ fn anchors_of_an_entity_are_in_manifest_order() {
     assert_eq!(anchors_of_entity(&bare.view(), "a").unwrap().count, 0);
 }
 
-#[test]
+#[specforge_test(
+    behavior = "provide_mcp_find_spec_for_source_tool",
+    verify = "the tightest match wins: exact, else under the directory, else ending with the path"
+)]
 fn the_tightest_match_wins() {
     let project = anchored(&[
         ("top", "a.rs"),
@@ -87,7 +90,10 @@ fn the_tightest_match_wins() {
     assert_eq!(found("c.rs").0, FileMatch::None);
 }
 
-#[test]
+#[specforge_test(
+    behavior = "provide_mcp_find_spec_for_source_tool",
+    verify = "each entity carries its kind when the graph declares it"
+)]
 fn a_file_anchor_names_its_entitys_kind_when_the_graph_declares_it() {
     let project = anchored(&[("alpha", "src/a.rs"), ("ghost", "src/a.rs")]);
     let found = anchors_of_file(&project.view(), "src/a.rs").unwrap();
