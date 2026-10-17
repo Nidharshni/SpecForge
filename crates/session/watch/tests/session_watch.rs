@@ -340,6 +340,22 @@ fn a_batch_that_changes_nothing_reports_nothing() {
     assert_eq!(recorder.armed().len(), 1);
 }
 
+#[ignore = "flipped by T6"]
+#[test]
+fn a_source_rewritten_with_its_own_text_reports_nothing() {
+    let fixture = Fixture::new(PLAIN);
+    let (mut watch, recorder) = fixture.watch();
+    fixture.write("spec/a.spec", PLAIN);
+    let a = fixture.root.join("spec/a.spec");
+    let file = fs::OpenOptions::new().write(true).open(&a).unwrap();
+    let modified = fs::metadata(&a).unwrap().modified().unwrap();
+    file.set_modified(modified + std::time::Duration::from_secs(3))
+        .unwrap();
+
+    assert!(watch.changed(&[a]).is_empty());
+    assert_eq!(recorder.armed().len(), 1);
+}
+
 #[test]
 fn start_refuses_a_session_built_from_no_directory() {
     let Err(e) = SessionWatch::start(ProjectSession::detached(), Recorder::default()) else {
