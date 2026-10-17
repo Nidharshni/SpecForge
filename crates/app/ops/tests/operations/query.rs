@@ -405,8 +405,8 @@ fn listed(project: &Assembled, request: &ListRequest) -> Vec<String> {
 }
 
 #[specforge_test(
-    behavior = "provide_mcp_entities_by_kind",
-    verify = "specforge.list pages the entities sorted by id with offset and limit"
+    behavior = "select_entities_over_the_view",
+    verify = "list pages the entities of a kind sorted by id, from offset, at most limit"
 )]
 fn list_pages_sorted_by_id() {
     let project = behaviors();
@@ -439,8 +439,8 @@ fn list_pages_sorted_by_id() {
 }
 
 #[specforge_test(
-    behavior = "provide_mcp_entities_by_kind",
-    verify = "specforge.list keeps the entities whose fields hold the where values"
+    behavior = "select_entities_over_the_view",
+    verify = "list keeps the entities whose fields hold every where value"
 )]
 fn list_matches_where_values() {
     let project = behaviors();
@@ -481,8 +481,8 @@ fn list_reports_an_unknown_kind() {
 }
 
 #[specforge_test(
-    behavior = "provide_mcp_search_tool",
-    verify = "limit caps the number of returned results"
+    behavior = "select_entities_over_the_view",
+    verify = "a search returns at most limit hits, twenty when no limit is given"
 )]
 fn search_defaults_to_twenty() {
     let mut graph = Graph::new();

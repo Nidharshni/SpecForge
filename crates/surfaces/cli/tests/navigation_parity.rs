@@ -1300,31 +1300,3 @@ fn mcp_outline_of_a_missing_file_is_file_not_found() {
         serde_json::from_str(result["content"][0]["text"].as_str().unwrap()).unwrap();
     assert_eq!(error["code"], "file_not_found", "{result}");
 }
-
-#[test]
-fn mcp_search_with_an_empty_query_lists_every_entity_up_to_the_limit() {
-    let p = project("nav");
-    let all = mcp_tool(&p, "specforge.search", json!({"query": ""}));
-    assert_eq!(search_ids(&all), ["login", "logout", "session_limit"]);
-    let two = mcp_tool(&p, "specforge.search", json!({"query": "", "limit": 2}));
-    assert_eq!(search_ids(&two).len(), 2);
-}
-
-#[test]
-fn mcp_search_reports_an_unknown_kind() {
-    let p = project("nav");
-    let mut server = specforge_mcp::McpServer::new();
-    let mut call = |method: &str, params: Value| -> Value {
-        let req = json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params});
-        serde_json::from_str(&server.handle_message(&req.to_string()).unwrap()).unwrap()
-    };
-    call(
-        "initialize",
-        json!({"projectRoot": p.root.to_str().unwrap()}),
-    );
-    let resp = call(
-        "tools/call",
-        json!({"name": "specforge.search", "arguments": {"query": "", "kinds": ["invariantz"]}}),
-    );
-    assert!(resp.to_string().contains("I020"), "{resp}");
-}

@@ -363,6 +363,43 @@ behavior compute_the_coverage_view "Compute the Coverage View" {
   verify unit "a field named verify does not hide an entity's verify statements"
 }
 
+// list and search (specforge_ops::read::query::{list, search}): the entities a
+// selection over the project view returns. specforge.list, specforge.search,
+// the entities resource and the LSP's workspace symbols render them.
+behavior select_entities_over_the_view "Select Entities over the Project View" {
+  features   [mcp_core_tools]
+  invariants [diagnostic_determinism, zero_domain_knowledge_core]
+  category   query
+  types      [Graph]
+  ports      [CompilerApi]
+  requires {
+    project_compiled "A compiled project, one-shot or a project session's, supplies the project view"
+  }
+  ensures {
+    filters_anded "Every filter narrows the selection: text, kinds, a field's text and references"
+    ranked_once   "Search ranks as the LSP's workspace symbols and completion rank"
+  }
+  contract   """
+    Search MUST find the entities whose id or title matches the text, or
+    whose string field text contains it, ranked exact, prefix, substring,
+    field text, then Jaro-Winkler similarity of at least 0.8 over id and
+    title. An empty text matches every entity. Every filter is ANDed: kinds,
+    a field's text (by the one field-text rule: a list by its items, an
+    expression by its written form, a block by its keys), and references
+    (the entities that reference the named one). At most limit hits are
+    returned, twenty when none is given. List MUST return the entities of a
+    kind, sorted by id, those whose fields hold every where value, from
+    offset, at most limit.
+  """
+  verify unit "text search finds entities matching by name or contract"
+  verify unit "empty query returns all entities up to limit"
+  verify unit "the references filter combines with the other filters"
+  verify unit "the field filter reads a field's text: a list by its items, an expression by its written form, a block by its keys; never the export's JSON"
+  verify unit "a search returns at most limit hits, twenty when no limit is given"
+  verify unit "list pages the entities of a kind sorted by id, from offset, at most limit"
+  verify unit "list keeps the entities whose fields hold every where value"
+}
+
 // The exploration and the review: the explore and review prompts'
 // payloads, and specforge explore / specforge review, read one view each.
 behavior explore_the_graph "Explore the Graph" {

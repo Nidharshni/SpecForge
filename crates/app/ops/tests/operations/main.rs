@@ -54,6 +54,7 @@ mod rename_text;
 mod review;
 mod schema;
 mod schema_notices;
+mod search;
 mod setup;
 mod stats;
 mod trace;

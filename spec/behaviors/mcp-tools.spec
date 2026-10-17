@@ -264,25 +264,18 @@ behavior provide_mcp_search_tool "Provide MCP Search Tool" {
     one field-text rule, contains the value, ignoring case: a list item by
     item, an expression in its written form, a block by its keys; one without the other MUST be an invalid-input
     error naming the missing one), references? (an entity id: only
-    entities that reference it), and limit? (default 20). The tool MUST combine these filters with
-    AND semantics. Unknown kind values in the kinds[] array MUST be
-    silently filtered out and an I-level diagnostic MUST be included in the
-    response metadata listing the unrecognized kinds. Fuzzy text search
-    MUST use the same algorithm as LSP workspaceSymbol and completion:
-    exact, prefix, substring, field text (search only), then Jaro-Winkler
-    similarity of at least 0.8 over ID and title. An empty query with no
-    filters MUST return all entities up to the limit. The result is an
+    entities that reference it), and limit? (default 20). The tool MUST
+    return what select_entities_over_the_view selects. Unknown kind values
+    in the kinds[] array MUST be silently filtered out and an I-level
+    diagnostic MUST be included in the response metadata listing the
+    unrecognized kinds. The result is an
     object whose results are the hits, McpSearchResult items, in rank order.
   """
-  verify unit "text search finds entities matching by name or contract"
   verify unit "kind filter restricts results to matching entity kinds"
   verify unit "field and value filter matches entity fields"
   verify unit "field without value, or value without field, is an invalid-input error"
-  verify unit "the field filter reads a field's text: a list by its items, an expression by its written form, a block by its keys; never the export's JSON"
   verify unit "limit caps the number of returned results"
-  verify unit "empty query returns all entities up to limit"
   verify unit "references filter returns entities referencing target"
-  verify unit "the references filter combines with the other filters"
   verify integration "search ranks exactly as LSP workspaceSymbol and completion rank"
   verify contract "Provide MCP Search Tool: MCP search tool holds — graph_available, filtered_results_returned, unknown_kinds_reported, tool_invoked_emitted"
   verify unit "missing query returns error"
