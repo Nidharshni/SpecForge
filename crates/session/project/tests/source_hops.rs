@@ -148,3 +148,39 @@ fn stale_sees_a_sources_middle_hop_pointed_elsewhere() {
 
     assert_eq!(session.stale().sources, ["a.spec"]);
 }
+
+#[cfg(unix)]
+#[ignore = "flipped by T6"]
+#[test]
+fn a_hop_into_a_missing_directory_is_seen_when_it_is_created() {
+    let (_dir, mut session, chain) = chained(false);
+    let far = chain.real.parent().unwrap().parent().unwrap().join("far");
+    fs::create_dir_all(&far).unwrap();
+    retarget(&chain.hop, &far.join("newdir/final.spec"));
+
+    let changes = session.changes([chain.hop.as_path()]);
+    assert!(session.apply(&changes).is_some());
+    assert!(
+        session.inputs().watch_roots().contains(&WatchRoot {
+            dir: far.clone(),
+            recursive: false
+        }),
+        "{:?}",
+        session.inputs().watch_roots()
+    );
+
+    fs::create_dir(far.join("newdir")).unwrap();
+    fs::write(far.join("newdir/final.spec"), "term final_one \"F\" {}\n").unwrap();
+    let changes = session.changes([far.join("newdir").as_path()]);
+    assert_eq!(changes.sources, ["a.spec"]);
+    assert!(session.apply(&changes).is_some());
+    assert_matches_a_fresh_compile(&session, &chain.root);
+    assert!(
+        session.inputs().watch_roots().contains(&WatchRoot {
+            dir: far.join("newdir"),
+            recursive: true
+        }),
+        "{:?}",
+        session.inputs().watch_roots()
+    );
+}

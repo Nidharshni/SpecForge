@@ -492,3 +492,55 @@ fn a_sources_middle_hop_pointed_elsewhere_is_seen() {
     assert_eq!(events.len(), 1, "{events:?}");
     assert_eq!(applied(&events[0]).changed, ["link.spec"]);
 }
+
+#[cfg(unix)]
+#[ignore = "flipped by T6"]
+#[test]
+fn a_hop_into_a_missing_directory_is_followed_when_it_is_created() {
+    let fixture = Fixture::new(PLAIN);
+    let real = fixture.parent.join("real");
+    fs::create_dir_all(&real).unwrap();
+    fs::write(
+        real.join("real.spec"),
+        PLAIN.replace("gadget_one", "gadget_three"),
+    )
+    .unwrap();
+    let hop = fixture.parent.join("outside/l1");
+    std::os::unix::fs::symlink(real.join("real.spec"), &hop).unwrap();
+    std::os::unix::fs::symlink(&hop, fixture.root.join("spec/link.spec")).unwrap();
+    let far = fixture.parent.join("far");
+    fs::create_dir_all(&far).unwrap();
+    let (mut watch, recorder) = fixture.watch();
+
+    fs::remove_file(&hop).unwrap();
+    std::os::unix::fs::symlink(far.join("newdir/final.spec"), &hop).unwrap();
+    let events = watch.changed(&[hop]);
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert_eq!(applied(&events[0]).changed, ["link.spec"]);
+    assert!(
+        recorder.armed().last().unwrap().contains(&WatchRoot {
+            dir: far.clone(),
+            recursive: false
+        }),
+        "{:?}",
+        recorder.armed()
+    );
+
+    fs::create_dir(far.join("newdir")).unwrap();
+    fs::write(
+        far.join("newdir/final.spec"),
+        PLAIN.replace("gadget_one", "gadget_five"),
+    )
+    .unwrap();
+    let events = watch.changed(&[far.join("newdir")]);
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert_eq!(applied(&events[0]).changed, ["link.spec"]);
+    assert!(
+        recorder.armed().last().unwrap().contains(&WatchRoot {
+            dir: far.join("newdir"),
+            recursive: true
+        }),
+        "{:?}",
+        recorder.armed()
+    );
+}
