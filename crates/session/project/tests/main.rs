@@ -25,6 +25,7 @@ mod environment_reads;
 mod extension_calls;
 mod field_types;
 mod fixture;
+mod link_identity;
 mod policy;
 mod product_rules;
 mod providers;
