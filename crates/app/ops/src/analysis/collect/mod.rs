@@ -406,7 +406,7 @@ fn run_command(
     }
     let mut kept = match capture {
         Some(held) => Some(
-            held.create()
+            held.create_fresh()
                 .map_err(|e| format!("{}: {e}", held.spelled.display()))?,
         ),
         None => None,

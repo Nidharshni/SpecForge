@@ -36,9 +36,10 @@ impl Held {
         file.write_all(contents.as_ref())
     }
 
-    /// `real`, created or truncated, to stream into (collect's captured output).
-    pub fn create(&self) -> std::io::Result<std::fs::File> {
-        std::fs::File::create(&self.real)
+    /// A new file at `real`, to stream into (collect's captured output): the name is unlinked first,
+    /// so a hard link at it is never written through (ADR 0144).
+    pub fn create_fresh(&self) -> std::io::Result<std::fs::File> {
+        specforge_common::fresh::create_fresh(&self.real)
     }
 
     /// Replace `real` atomically, by its name: [`specforge_common::fresh::replace_file`], so the inode
