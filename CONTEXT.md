@@ -305,7 +305,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   to a flag on the command line. A relative local path is joined onto the change's base: add reads it from the project
   root, or from the CLI's working directory; init from the directory it creates. The file is read within the change's
   containment (ADR 0104), each specifier is claimed (ADR 0098), and a local file is read once. `add` and `init` both
-  take raw strings.
+  take raw strings. Once read, the module asks the change's opened lock plan for each, an ask per specifier by its
+  position, checks the plan once and names its refusal by the specifier it is charged to (ADR 0134).
 - **Project peer set**: the extensions a project's `specforge.json` entries load, as the peer rule reads
   them: a builtin by the declaration this specforge embeds, an installed extension by its lock entry, a
   `.wasm` file entry by its file's declaration, each entry resolved by the extension load's one rule

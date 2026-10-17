@@ -51,3 +51,5 @@ reproduced:
 
 A third operation that names extensions (update naming new sources, a lockfile import), or a specifier grammar that
 contains a list.
+
+**Amended by ADR 0134 (2026-10-17):** D1: add's `apply` is gone: `extension::names` asks the opened lock plan for each specifier and names the plan's refusal; add keeps its config, registry step, dry run and outcomes.
