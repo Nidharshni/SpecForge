@@ -27,8 +27,9 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use super::Changes;
-use super::inputs::{Kind, SessionInputs};
+use super::inputs::SessionInputs;
 use super::reach::Reach;
+use super::recorded::Class;
 
 /// Coarse filesystems record modification times to the second (some to
 /// two); an entry modified this close to when it was stamped is racy.
@@ -188,26 +189,26 @@ impl Stamps {
             Scope::Reached(reach) => {
                 let mut memo: BTreeMap<&Path, bool> = BTreeMap::new();
                 for (path, reached) in &reach.inputs {
-                    for (kind, recorded) in reached {
-                        let table = match kind {
-                            Kind::Environment => &self.environment,
-                            Kind::Check => &self.checks,
+                    for (class, recorded) in reached {
+                        let table = match class {
+                            Class::Environment => &self.environment,
+                            _ => &self.checks,
                         };
                         let moved = *memo.entry(recorded.as_path()).or_insert_with(|| {
                             !unchanged(recorded, table.get(recorded).and_then(Option::as_ref))
                         });
                         if moved {
-                            match kind {
-                                Kind::Environment => changes.environment.push(path.clone()),
-                                Kind::Check => changes.check_inputs.push(path.clone()),
+                            match class {
+                                Class::Environment => changes.environment.push(path.clone()),
+                                _ => changes.check_inputs.push(path.clone()),
                             }
                         }
                     }
                 }
-                for (path, kind) in &reach.pending {
-                    match kind {
-                        Kind::Environment => changes.environment.push(path.clone()),
-                        Kind::Check => changes.check_inputs.push(path.clone()),
+                for (path, class) in &reach.pending {
+                    match class {
+                        Class::Environment => changes.environment.push(path.clone()),
+                        _ => changes.check_inputs.push(path.clone()),
                     }
                 }
                 for list in [&mut changes.environment, &mut changes.check_inputs] {

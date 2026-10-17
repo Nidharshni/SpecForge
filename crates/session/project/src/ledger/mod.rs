@@ -21,6 +21,7 @@ mod disk;
 mod inputs;
 mod key;
 mod reach;
+mod recorded;
 mod stamps;
 #[cfg(test)]
 mod tests;

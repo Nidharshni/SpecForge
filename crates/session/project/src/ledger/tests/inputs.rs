@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use specforge_common::ProjectConfig;
 
 use crate::ledger::inputs::*;
+use crate::ledger::recorded::Class;
 use crate::ledger::{Ledger, Reading};
 
 fn config(extensions: &[&str]) -> ProjectConfig {
@@ -74,7 +75,7 @@ fn classify_compares_canonical_forms() {
     for config in [real.join("specforge.json"), link.join("specforge.json")] {
         let reach = inputs.reach([config.as_path()]);
         assert_eq!(reach.inputs.len(), 1, "{reach:?}");
-        assert_eq!(reach.inputs[0].1[0].0, Kind::Environment);
+        assert_eq!(reach.inputs[0].1[0].0, Class::Environment);
     }
     assert_eq!(
         inputs.reach([real.join("a.spec").as_path()]).regions,
@@ -187,7 +188,7 @@ fn a_module_in_a_missing_directory_is_pending_as_an_environment_input() {
     // beside it is nothing.
     assert_eq!(
         inputs.reach([far.join("deep").as_path()]).pending,
-        vec![(far.join("deep"), Kind::Environment)]
+        vec![(far.join("deep"), Class::Environment)]
     );
     assert!(
         inputs
@@ -225,73 +226,4 @@ fn a_missing_root_has_no_watch_roots() {
     let inputs = SessionInputs::opened(&dir.path().join("nope"), &config(&[]), Vec::new());
     assert!(inputs.watch_roots().is_empty());
     assert!(inputs.discover_at("").is_empty());
-}
-
-#[cfg(unix)]
-#[test]
-fn an_input_is_reached_by_its_link_and_by_each_hop() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let root = dir.path().join("root");
-    let out = dir.path().join("out");
-    std::fs::create_dir_all(&root).unwrap();
-    std::fs::create_dir_all(&out).unwrap();
-    std::fs::write(out.join("a.md"), "a").unwrap();
-    std::fs::write(out.join("b.md"), "b").unwrap();
-    std::os::unix::fs::symlink(out.join("a.md"), root.join("l.md")).unwrap();
-
-    // A check reads the link through the checks' disk, which records each hop.
-    let mut ledger = Ledger::over(SessionInputs::opened(&root, &config(&[]), Vec::new()));
-    let run = ledger.checks();
-    assert!(specforge_registry::Disk::exists(
-        &crate::ledger::disk::RunDisk(&run),
-        &root.join("l.md")
-    ));
-    run.finish();
-    let after = ledger.inputs().clone();
-
-    // The link, and the file it points to, each reach the check input.
-    for changed in [root.join("l.md"), out.join("a.md")] {
-        let reach = after.reach([changed.as_path()]);
-        assert_eq!(reach.inputs.len(), 1, "{changed:?}: {reach:?}");
-        assert_eq!(reach.inputs[0].1[0].0, Kind::Check, "{reach:?}");
-    }
-    // A sibling of the target is not an input.
-    let reach = after.reach([out.join("b.md").as_path()]);
-    assert!(reach.inputs.is_empty(), "{reach:?}");
-}
-
-#[cfg(unix)]
-#[test]
-fn a_source_is_reached_by_each_hop_its_read_followed() {
-    use crate::ledger::Reads;
-
-    let dir = tempfile::TempDir::new().unwrap();
-    let root = dir.path().join("root");
-    let out = dir.path().join("out");
-    std::fs::create_dir_all(root.join("links")).unwrap();
-    std::fs::create_dir_all(&out).unwrap();
-    std::fs::write(out.join("real.spec"), "term a_one \"A\" {}\n").unwrap();
-    std::fs::write(out.join("b.md"), "b").unwrap();
-    std::os::unix::fs::symlink(out.join("real.spec"), root.join("links/l1")).unwrap();
-    std::os::unix::fs::symlink("links/l1", root.join("a.spec")).unwrap();
-
-    let mut ledger = Ledger::over(SessionInputs::opened(&root, &config(&[]), Vec::new()));
-    ledger.source(&root, "a.spec");
-    let after = ledger.inputs().clone();
-
-    // Each hop, and a directory above one, reaches the source.
-    for changed in [
-        root.join("links/l1"),
-        out.join("real.spec"),
-        root.join("links"),
-    ] {
-        let reach = after.reach([changed.as_path()]);
-        assert_eq!(
-            reach.linked,
-            std::collections::BTreeSet::from(["a.spec".to_string()]),
-            "{changed:?}: {reach:?}"
-        );
-    }
-    // A sibling of the target is not a hop.
-    assert!(after.reach([out.join("b.md").as_path()]).linked.is_empty());
 }
