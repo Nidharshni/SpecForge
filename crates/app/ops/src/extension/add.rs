@@ -7,7 +7,6 @@ use super::{Named, Names, Place};
 use crate::registry::{Publisher, Registry};
 use crate::{Caller, Refusal, Writes};
 use specforge_installed::Installed;
-use specforge_package::PackageName;
 use specforge_wasm::WasmRuntime;
 
 /// The field of an add's request a refusal can be about (ADR 0072).
@@ -32,7 +31,8 @@ pub struct AddRequest<'a> {
     /// The add's lock plan judged and not committed: report what the add would do, or the refusal it
     /// would give; write, pin and download nothing. A registry package is judged by the
     /// declaration it was published with (its manifest). An extension already present answers as
-    /// the real add would (`AlreadyPresent`, or `Builtin { changed: false }`).
+    /// the real add does (`AlreadyPresent`, or `Builtin { changed: false }`): its lock plan answers
+    /// it unchanged in both.
     pub dry_run: bool,
     /// What the add may reach (a local extension is read, every file written, through
     /// `caller.containment()`, ADR 0104) and who can be asked about a publisher key change
@@ -177,84 +177,7 @@ pub fn add(
     let named = names
         .name_each(runtime, &mut |_, package| super::resolve(registry, package))
         .map_err(|e| e.about(AddField::Extensions))?;
-    let steps = named
-        .into_iter()
-        .map(|named| step(&config, &installed, named))
-        .collect();
-    apply(req, &names, &config, plan, steps)
-}
-
-/// What the add does for one specifier, once it is resolved.
-enum Step<'a> {
-    /// Nothing to write: already enabled or present, a dry run's plan, or a duplicate.
-    Unchanged(AddOutcome),
-    /// A builtin to enable (the lock plan enables the builtins it requires first).
-    Enable { name: &'static str },
-    /// A local file to install.
-    Local(Install<'a>),
-    /// A registry package to fetch and install.
-    Fetch(PackageName, specforge_package::Version),
-}
-
-/// What the add does for what one specifier names: nothing when it is a duplicate, already enabled
-/// or already present (an already-enabled extension is left exactly as it is, a dry run included).
-fn step<'a>(
-    config: &specforge_common::ProjectConfig,
-    installed: &Installed,
-    named: Named<'a>,
-) -> Step<'a> {
-    match named {
-        Named::Duplicate { name, first } => Step::Unchanged(AddOutcome::Duplicate { name, first }),
-        Named::Builtin(name) => {
-            if super::enabled_builtins(config).contains(&name) {
-                Step::Unchanged(AddOutcome::Builtin {
-                    name,
-                    changed: false,
-                    peers_enabled: Vec::new(),
-                })
-            } else {
-                Step::Enable { name }
-            }
-        }
-        Named::Local { install, .. } => {
-            let name = install.name().clone();
-            match already_present(installed, config, &name, |e| {
-                e.wasm_hash == install.sha256() && e.source.local_path().is_some()
-            }) {
-                Some(present) => Step::Unchanged(present),
-                None => Step::Local(*install),
-            }
-        }
-        Named::Package { name, version } => {
-            match already_present(installed, config, &name, |e| {
-                e.version == version.to_string() && e.source.is_registry()
-            }) {
-                Some(present) => Step::Unchanged(present),
-                None => Step::Fetch(name, version),
-            }
-        }
-    }
-}
-
-/// `AlreadyPresent` when the lock holds `name` as `same` accepts, its
-/// binary is in place and is the one the lock pins, and `specforge.json`
-/// enables it. A binary that changed after install is not present: adding
-/// it again reinstalls it.
-fn already_present(
-    installed: &Installed,
-    config: &specforge_common::ProjectConfig,
-    name: &PackageName,
-    same: impl Fn(&specforge_installed::LockFileEntry) -> bool,
-) -> Option<AddOutcome> {
-    let entry = installed.verified(name.as_str()).filter(|e| same(e))?;
-    let enabled = config
-        .extensions
-        .iter()
-        .any(|e| specforge_common::extension_entry_name(e) == name.as_str());
-    enabled.then(|| AddOutcome::AlreadyPresent {
-        name: name.to_string(),
-        version: entry.version.clone(),
-    })
+    apply(req, &names, plan, named)
 }
 
 /// What a specifier asks the plan for, to turn the plan's answer for its ask into an outcome.
@@ -341,34 +264,36 @@ impl Wanted {
     }
 }
 
-/// Ask `plan` for what `steps` name, check it once and commit it with the `specforge.json`
+/// Ask `plan` for what `named` names, check it once and commit it with the `specforge.json`
 /// entries (each builtin after the builtins it requires, each install by its bare name): one
-/// change that puts everything back when a step fails. A plan the peer rule refuses writes
-/// nothing, its refusal naming the specifier when there are several (ADR 0041).
+/// change that puts everything back when a step fails. The plan answers each ask, one the project
+/// already has included (ADR 0138). A plan the peer rule refuses writes nothing, its refusal naming
+/// the specifier when there are several (ADR 0041).
 fn apply<'a>(
     req: &AddRequest,
     names: &Names<'_>,
-    config: &specforge_common::ProjectConfig,
     mut plan: LockPlan<'a>,
-    steps: Vec<Step<'a>>,
+    named: Vec<Named<'a>>,
 ) -> Result<Added, Refusal<AddField>> {
-    let mut outcomes: Vec<Option<AddOutcome>> = Vec::with_capacity(steps.len());
-    // Each specifier that adds something, and what it asked for.
+    let mut outcomes: Vec<Option<AddOutcome>> = Vec::with_capacity(named.len());
+    // Each specifier that asks the plan, and what it asked for.
     let mut asked: Vec<(usize, Wanted)> = Vec::new();
-    for (at, step) in steps.into_iter().enumerate() {
+    for (at, named) in named.into_iter().enumerate() {
         outcomes.push(None);
         let ask = Ask(at);
-        match step {
-            Step::Unchanged(outcome) => outcomes[at] = Some(outcome),
-            Step::Enable { name } => {
+        match named {
+            Named::Duplicate { name, first } => {
+                outcomes[at] = Some(AddOutcome::Duplicate { name, first });
+            }
+            Named::Builtin(name) => {
                 plan.enable(ask, name);
                 asked.push((at, Wanted::Builtin(name)));
             }
-            Step::Local(install) => {
+            Named::Local { install, .. } => {
                 asked.push((at, Wanted::of(&install)));
-                plan.install(ask, install);
+                plan.install(ask, *install);
             }
-            Step::Fetch(name, version) => {
+            Named::Package { name, version } => {
                 let install = plan
                     .fetch(&name, &version)
                     .map_err(|error| names.named(at, error).about(AddField::Extensions))?;
@@ -376,13 +301,6 @@ fn apply<'a>(
                 plan.install(ask, install);
             }
         }
-    }
-    if asked.is_empty() {
-        return Ok(Added {
-            added: added(names, outcomes),
-            writes: Writes::none(),
-            extensions_enabled: config.extensions.len(),
-        });
     }
 
     let done = plan
