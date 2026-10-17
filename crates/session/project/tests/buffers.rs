@@ -139,7 +139,7 @@ fn releasing_a_saved_buffer_reads_it_once_and_leaves_nothing_stale() {
 
     // The file is the disk's again.
     fs::write(&a, ZETA).unwrap();
-    assert_eq!(session.stale().sources, ["a.spec"]);
+    assert_eq!(session.stale().sources(), ["a.spec"]);
 }
 
 #[specforge_test(

@@ -84,7 +84,7 @@ fn a_sources_middle_hop_pointed_elsewhere_changes_that_source() {
     retarget(&chain.hop, &chain.other);
 
     let changes = session.changes([chain.hop.as_path()]);
-    assert_eq!(changes.sources, ["a.spec"]);
+    assert_eq!(changes.sources(), ["a.spec"]);
     assert!(session.apply(&changes).is_some());
     assert_matches_a_fresh_compile(&session, &chain.root);
 }
@@ -104,7 +104,7 @@ fn a_hop_that_is_itself_a_source_changes_both() {
     retarget(&b, &chain.other);
 
     let changes = session.changes([b.as_path()]);
-    assert_eq!(changes.sources, ["a.spec", "b.spec"]);
+    assert_eq!(changes.sources(), ["a.spec", "b.spec"]);
     assert!(session.apply(&changes).is_some());
     assert_matches_a_fresh_compile(&session, &chain.root);
 }
@@ -146,7 +146,7 @@ fn stale_sees_a_sources_middle_hop_pointed_elsewhere() {
     let (_dir, session, chain) = chained(true);
     retarget(&chain.hop, &chain.other);
 
-    assert_eq!(session.stale().sources, ["a.spec"]);
+    assert_eq!(session.stale().sources(), ["a.spec"]);
 }
 
 #[cfg(unix)]
@@ -174,7 +174,7 @@ fn a_hop_into_a_missing_directory_is_seen_when_it_is_created() {
     fs::create_dir(far.join("newdir")).unwrap();
     fs::write(far.join("newdir/final.spec"), "term final_one \"F\" {}\n").unwrap();
     let changes = session.changes([far.join("newdir").as_path()]);
-    assert_eq!(changes.sources, ["a.spec"]);
+    assert_eq!(changes.sources(), ["a.spec"]);
     assert!(session.apply(&changes).is_some());
     assert_matches_a_fresh_compile(&session, &chain.root);
     assert!(

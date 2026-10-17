@@ -68,6 +68,21 @@ impl Changes {
     pub fn is_empty(&self) -> bool {
         self.sources.is_empty() && self.environment.is_empty() && self.check_inputs.is_empty()
     }
+
+    /// The changed sources, by key relative to the spec root: sorted, deduplicated.
+    pub fn sources(&self) -> &[String] {
+        &self.sources
+    }
+
+    /// The paths that reached a changed environment input: sorted, deduplicated.
+    pub fn environment(&self) -> &[PathBuf] {
+        &self.environment
+    }
+
+    /// The paths that reached a changed check input: sorted, deduplicated.
+    pub fn check_inputs(&self) -> &[PathBuf] {
+        &self.check_inputs
+    }
 }
 
 /// How a compile reads the disk (ADR 0106). A project session reads through its

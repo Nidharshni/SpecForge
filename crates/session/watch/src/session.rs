@@ -175,16 +175,16 @@ impl<W: Watchers> SessionWatch<W> {
         let root = std::fs::canonicalize(self.session.project().environment().root())
             .unwrap_or_else(|_| self.session.project().environment().root().to_path_buf());
         let mut labels: Vec<String> = changes
-            .environment
+            .environment()
             .iter()
-            .chain(&changes.check_inputs)
+            .chain(changes.check_inputs())
             .map(|path| {
                 path.strip_prefix(&root)
                     .unwrap_or(path)
                     .to_string_lossy()
                     .into_owned()
             })
-            .chain(changes.sources.iter().cloned())
+            .chain(changes.sources().iter().cloned())
             .collect();
         labels.sort();
         labels.dedup();
