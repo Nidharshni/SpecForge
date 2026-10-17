@@ -524,8 +524,10 @@ fn the_plan_refuses_an_unusable_manifest() {
     );
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "provide_infer_file_scope",
+    verify = "with no project served, the file scope is the no-project refusal"
+)]
 fn infer_file_scope_with_no_project_served_is_no_project() {
     let mut server = McpServer::new();
     let init = call(&mut server, "initialize", json!({}));

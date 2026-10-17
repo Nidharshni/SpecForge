@@ -86,12 +86,10 @@ struct SourceAnchor {
     confidence: Option<f64>,
 }
 
-/// The view's anchors manifest: empty without the file; empty without a root; E071 when the file cannot
-/// be used.
+/// The view's anchors manifest: empty without the file; `no_project` without a root; E071 when the file
+/// cannot be used.
 fn manifest(view: &ProjectView<'_>) -> Result<AnchorManifest, OpError> {
-    let Some(root) = view.root() else {
-        return Ok(AnchorManifest::default());
-    };
+    let root = view.project_root()?;
     Ok(
         crate::read::infer::read_manifest::<AnchorManifest>(root, ANCHORS_FILENAME)?
             .unwrap_or_default(),
@@ -102,7 +100,7 @@ fn manifest(view: &ProjectView<'_>) -> Result<AnchorManifest, OpError> {
 /// [`match_file`], each with its entity's kind when the view's graph declares the id. The tightest
 /// non-empty mode wins: exact matches, else those under the query or ending with it. Rows are in
 /// manifest order. No file is opened but the manifest: `file_path` is compared as text. A missing
-/// manifest anchors nothing; one that cannot be used is E071.
+/// manifest anchors nothing; one that cannot be used is E071; a view with no root is `no_project`.
 pub fn anchors_of_file(view: &ProjectView<'_>, file_path: &str) -> Result<FileAnchors, OpError> {
     let manifest = manifest(view)?;
     let mut exact = Vec::new();

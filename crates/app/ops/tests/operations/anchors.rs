@@ -122,7 +122,6 @@ fn an_id_neither_the_graph_nor_the_manifest_knows_is_e003() {
 }
 
 #[test]
-#[ignore = "flipped by T5"]
 fn a_rootless_view_is_no_project() {
     let project = anchored(&[("alpha", "src/a.rs")]);
     let view = project.rootless_view();
