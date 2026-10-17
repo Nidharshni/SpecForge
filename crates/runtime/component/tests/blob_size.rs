@@ -12,7 +12,6 @@ const TOTAL_BUDGET: usize = 3_500_000;
 const BLOB_BUDGET: usize = 800_000;
 
 #[test]
-#[ignore = "flipped by T4"]
 fn committed_builtins_stay_under_their_size_budget() {
     let sizes: Vec<(&str, usize)> = COMMITTED[..BUILTINS.len()]
         .iter()
