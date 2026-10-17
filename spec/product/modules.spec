@@ -338,6 +338,7 @@ module specforge_mcp "specforge-mcp" {
     specforge_mcp_macros,
     specforge_ops,
     specforge_ops_registry,
+    specforge_parser,
     specforge_project,
     specforge_protocol_types,
     specforge_registry,
