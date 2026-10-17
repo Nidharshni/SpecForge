@@ -192,7 +192,6 @@ fn a_hop_into_a_missing_directory_is_seen_when_it_is_created() {
     behavior = "classify_project_changes",
     verify = "a symlinked source is keyed by its link and changes when its target does"
 )]
-#[ignore = "flipped by T4"]
 fn a_dangling_source_link_that_comes_alive_is_that_sources_change() {
     let dir = TestProject::new().raw_config(json!({"name": "c", "version": "0.1.0"}).to_string());
     let root = fs::canonicalize(dir.root()).unwrap();

@@ -2,6 +2,8 @@
 
 use std::path::{Path, PathBuf};
 
+use specforge_common::{SourceRoot, Walked};
+
 use crate::Environment;
 
 impl Environment {
@@ -32,6 +34,18 @@ pub fn source_key(spec_root: &Path, path: &Path) -> String {
         return relative.to_string_lossy().into_owned();
     }
     path.to_string_lossy().into_owned()
+}
+
+/// The keys of what `walked` (a walk of `sources`) holds for a session to read:
+/// its files and its dangling links, sorted (ADR 0141).
+pub(crate) fn discovered_keys(sources: &SourceRoot, walked: &Walked) -> Vec<String> {
+    // Sorted as paths, as the walk sorts its files.
+    let mut paths: Vec<&PathBuf> = walked.files.iter().chain(&walked.dangling).collect();
+    paths.sort();
+    paths
+        .into_iter()
+        .map(|path| discovered(sources.dir(), path))
+        .collect()
 }
 
 /// The key of a path discovery walked: relative to the spec root, lexically. A

@@ -552,7 +552,6 @@ fn a_hop_into_a_missing_directory_is_followed_when_it_is_created() {
     behavior = "watch_file_system_for_changes",
     verify = "a symlinked source whose hop lies in a directory that did not exist is seen when it is created"
 )]
-#[ignore = "flipped by T4"]
 fn a_dangling_source_links_missing_directory_outside_the_root_is_watched() {
     let fixture = Fixture::new(PLAIN);
     let far = fixture.parent.join("far");

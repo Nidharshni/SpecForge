@@ -141,13 +141,11 @@ impl Reads for Unrecorded {
     }
 }
 
-/// The keys of the files discovery finds under `sources`, in its order.
+/// The keys of the sources discovery finds under `sources`, in its order,
+/// and of the links it finds that point nowhere: the session reads both
+/// (ADR 0141), sorted.
 fn walked_keys(sources: &SourceRoot) -> Vec<String> {
-    sources
-        .files()
-        .iter()
-        .map(|path| key::discovered(sources.dir(), path))
-        .collect()
+    key::discovered_keys(sources, &sources.walk_at(sources.dir()))
 }
 
 impl Reads for Ledger {
