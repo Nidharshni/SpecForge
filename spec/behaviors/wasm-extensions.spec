@@ -273,6 +273,9 @@ behavior write_build_cache "Write the Build Cache" {
     cache. The file is replaced atomically (written beside, then
     renamed). A check that exits non-zero (errors, or warnings under
     `--strict`) does not write it: a broken build is not a baseline.
+    A check that passes but cannot write the file refuses with
+    cache_write_failed: the diagnostics, then the refusal, under human
+    output; under --format json the error document alone.
     A --severity filter does not change whether the file is written.
     CI may commit the file to check transitions across builds.
   """
@@ -284,6 +287,7 @@ behavior write_build_cache "Write the Build Cache" {
   verify unit "check --cache with errors leaves the cache untouched"
   verify unit "check --strict --cache with warnings leaves the cache untouched"
   verify unit "a check that passes records the cache and says so"
+  verify unit "a cache that cannot be written refuses the check, under --format json with the error document alone"
   verify integration "MCP validate never writes the build cache"
 }
 

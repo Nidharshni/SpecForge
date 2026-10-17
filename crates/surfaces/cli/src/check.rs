@@ -102,6 +102,11 @@ fn run_in(
     };
     let shown: Vec<Diagnostic> = outcome.shown().into_iter().cloned().collect();
 
+    // A refusal under --format json is the only document on stdout (report_command_outcome).
+    if let (OutputFormat::Json, CacheRecord::WriteFailed(error)) = (format, &outcome.cache) {
+        return Refusal::of(format).report(terminal, error);
+    }
+
     match format {
         OutputFormat::Json => {
             let entries = specforge_common::diagnostics_json(&shown);

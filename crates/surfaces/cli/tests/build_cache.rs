@@ -137,9 +137,10 @@ fn check_cache_with_errors_leaves_the_cache_untouched() {
 }
 
 #[cfg(unix)]
-// Linked to `write_build_cache` by T6, with its verify line.
-#[test]
-#[ignore = "flipped by T6"]
+#[specforge_test(
+    behavior = "write_build_cache",
+    verify = "a cache that cannot be written refuses the check, under --format json with the error document alone"
+)]
 fn a_cache_that_cannot_be_written_refuses_with_one_json_document() {
     use std::os::unix::fs::PermissionsExt;
     let dir = project(SOURCES);
