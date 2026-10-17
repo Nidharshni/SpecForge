@@ -31,7 +31,7 @@ mod stamps;
 mod tests;
 
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use specforge_common::{ProjectRoot, SourceRoot};
@@ -305,6 +305,7 @@ impl Ledger {
     /// its first stamp.
     fn record(&mut self, recording: Recording<'_>, read: Vec<(Reading, PathBuf, Option<Entry>)>) {
         let mut rows: Vec<(Class, PathBuf)> = Vec::new();
+        let mut seen: BTreeSet<(Class, PathBuf)> = BTreeSet::new();
         let mut stamps: BTreeMap<(Class, PathBuf), Option<Entry>> = BTreeMap::new();
         let mut source: Option<Option<Entry>> = None;
         for (reading, path, entry) in read {
@@ -316,7 +317,8 @@ impl Ledger {
             if class.stamped() {
                 stamps.entry((class.clone(), path.clone())).or_insert(entry);
             }
-            if !rows.iter().any(|(c, p)| c == &class && p == &path) {
+            // A set, not a scan of `rows`: a check run can read thousands of files.
+            if seen.insert((class.clone(), path.clone())) {
                 rows.push((class, path));
             }
         }
