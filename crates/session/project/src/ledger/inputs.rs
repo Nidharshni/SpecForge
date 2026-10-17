@@ -301,20 +301,20 @@ impl SessionInputs {
     }
 
     /// Source `key`'s hops are now `hops` (empty: none), and their canonical
-    /// forms are taken again. Whether the record changed.
-    pub(super) fn set_hops(&mut self, key: &str, hops: Vec<PathBuf>) -> bool {
+    /// forms are taken again.
+    pub(super) fn set_hops(&mut self, key: &str, hops: Vec<PathBuf>) {
         let Some(disk) = self.disk_mut() else {
-            return false;
+            return;
         };
         let changed = if hops.is_empty() {
             disk.hops.remove(key).is_some()
         } else {
             disk.hops.insert(key.to_string(), hops.clone()) != Some(hops)
         };
+        // Only a changed record retakes the canonical forms (a disk call per hop).
         if changed {
             disk.canonical.hops = disk.canonical_hops();
         }
-        changed
     }
 
     /// The check inputs are now `files` and the `listings` the checks

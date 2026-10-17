@@ -89,9 +89,8 @@ pub(crate) trait Reads {
     fn source(&mut self, spec_root: &Path, key: &str) -> Read;
     /// Run `check` (the checks over one snapshot) with the disk they read
     /// through (ADR 0107): the ledger's records and stamps each read as a
-    /// check input; `Unrecorded`'s only reads. Whether the session's inputs
-    /// moved (always `false` unrecorded).
-    fn run_checks(&mut self, check: impl FnOnce(&dyn Disk)) -> bool;
+    /// check input; `Unrecorded`'s only reads.
+    fn run_checks(&mut self, check: impl FnOnce(&dyn Disk));
 }
 
 /// A one-shot compile's reads: the same steps, nothing recorded, no stamp (ADR
@@ -115,9 +114,8 @@ impl Reads for Unrecorded {
         sources::read(&PlainDisk, spec_root, key)
     }
 
-    fn run_checks(&mut self, check: impl FnOnce(&dyn Disk)) -> bool {
+    fn run_checks(&mut self, check: impl FnOnce(&dyn Disk)) {
         check(&PlainDisk);
-        false
     }
 }
 
@@ -158,15 +156,14 @@ impl Reads for Ledger {
     /// stamp is seen next time.
     fn source(&mut self, spec_root: &Path, key: &str) -> Read {
         self.read_source(spec_root, key, |disk| sources::read(disk, spec_root, key))
-            .0
     }
 
     /// The checks' reads, each stamped and recorded as a check input when
     /// the run finishes.
-    fn run_checks(&mut self, check: impl FnOnce(&dyn Disk)) -> bool {
+    fn run_checks(&mut self, check: impl FnOnce(&dyn Disk)) {
         let run = self.checks();
         check(&RunDisk(&run));
-        run.finish()
+        run.finish();
     }
 }
 
@@ -208,32 +205,23 @@ impl Ledger {
     /// Read the sources `keys` names again, each stamped, its link read,
     /// then read. A key that is no source any more reads as gone and its
     /// stamp and link are forgotten (so its return is seen). Each key's
-    /// read, in order, and whether a link moved.
-    pub(crate) fn reread(&mut self, keys: &[String]) -> (Vec<(String, Read)>, bool) {
+    /// read, in order.
+    pub(crate) fn reread(&mut self, keys: &[String]) -> Vec<(String, Read)> {
         let Some(spec_root) = self.inputs.spec_root().map(Path::to_path_buf) else {
-            return (
-                keys.iter().map(|key| (key.clone(), Read::Gone)).collect(),
-                false,
-            );
+            return keys.iter().map(|key| (key.clone(), Read::Gone)).collect();
         };
-        let mut moved = false;
-        let reads = keys
-            .iter()
+        keys.iter()
             .map(|key| {
                 let read = if self.inputs.excludes(key) {
                     // No source (any more): a record kept would hide its return.
-                    moved |= self.forget_source(key);
+                    self.forget_source(key);
                     Read::Gone
                 } else {
-                    let (read, hops_moved) = self
-                        .read_source(&spec_root, key, |disk| sources::read(disk, &spec_root, key));
-                    moved |= hops_moved;
-                    read
+                    self.read_source(&spec_root, key, |disk| sources::read(disk, &spec_root, key))
                 };
                 (key.clone(), read)
             })
-            .collect();
-        (reads, moved)
+            .collect()
     }
 
     /// One run of the checks' reads: each is stamped and recorded as a check
@@ -267,27 +255,25 @@ impl Ledger {
     /// which stamps each link hop the read follows, then the file, before
     /// reading it; the source's stamp (by key) and its hops are then exactly
     /// what this read saw. A detached ledger records nothing. `read` is a
-    /// parameter so a test can write between the stamp and the read. The
-    /// read, and whether the session's inputs moved (a hop appeared, went or
-    /// points elsewhere).
+    /// parameter so a test can write between the stamp and the read.
     pub(crate) fn read_source(
         &mut self,
         spec_root: &Path,
         key: &str,
         read: impl FnOnce(&dyn Disk) -> Read,
-    ) -> (Read, bool) {
+    ) -> Read {
         let path = spec_root.join(key);
         let run = self.run();
         let text = read(&RunDisk(&run));
-        let moved = run.finish_source(key, &path);
-        (text, moved)
+        run.finish_source(key, &path);
+        text
     }
 
     /// Source `key` is no source (any more): its stamp and hops are
-    /// forgotten. Whether the inputs moved.
-    fn forget_source(&mut self, key: &str) -> bool {
+    /// forgotten.
+    fn forget_source(&mut self, key: &str) {
         self.stamps.set_source(key, None);
-        self.inputs.set_hops(key, Vec::new())
+        self.inputs.set_hops(key, Vec::new());
     }
 
     /// A ledger over `inputs`, nothing stamped.
@@ -368,15 +354,15 @@ impl Run<'_> {
     /// Source `key` (its file `path`) is now recorded as this run read it: the
     /// file's stamp, taken before its read, by key, and each link hop the read
     /// followed, in read order, each once (ADR 0129). Nothing else in the
-    /// record changes. Whether the session's inputs moved.
-    pub(crate) fn finish_source(self, key: &str, path: &Path) -> bool {
+    /// record changes.
+    pub(crate) fn finish_source(self, key: &str, path: &Path) {
         let Run {
             ledger,
             records,
             read,
         } = self;
         if !records {
-            return false;
+            return;
         }
         // The file's first stamp, as for every other input.
         let mut stamp = None;
@@ -393,18 +379,17 @@ impl Run<'_> {
             }
         }
         ledger.stamps.set_source(key, stamp);
-        ledger.inputs.set_hops(key, hops)
+        ledger.inputs.set_hops(key, hops);
     }
 
     /// The check inputs are now exactly what this run read (ADR 0030 D2: renewed each time the checks run). Their canonical
     /// forms and missing directories are taken again; nothing else in the
-    /// record changes. Whether the inputs moved.
-    pub(crate) fn finish(self) -> bool {
+    /// record changes.
+    pub(crate) fn finish(self) {
         let Run { ledger, read, .. } = self;
         if ledger.inputs.root().is_none() {
-            return false;
+            return;
         }
-        let before = ledger.inputs.clone();
         let mut files: Vec<PathBuf> = Vec::new();
         let mut listings: Vec<PathBuf> = Vec::new();
         let mut stamps: BTreeMap<PathBuf, Option<Entry>> = BTreeMap::new();
@@ -423,6 +408,5 @@ impl Run<'_> {
         listings.sort();
         ledger.inputs.set_checks(files, listings);
         ledger.stamps.set_checks(stamps);
-        ledger.inputs != before
     }
 }

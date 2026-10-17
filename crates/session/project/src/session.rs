@@ -292,7 +292,7 @@ impl ProjectSession {
     /// it: then it leaves the graph. Then every check runs.
     fn reread(&mut self, keys: &[String]) -> Update {
         self.update(|s| {
-            let (reads, _) = s.ledger.reread(keys);
+            let reads = s.ledger.reread(keys);
             let reads: Vec<(String, Read)> = reads
                 .into_iter()
                 // A key that is no source and never was changes nothing.
@@ -322,7 +322,7 @@ impl ProjectSession {
                 s.held.release(&key);
                 // Stamped, then read (the ledger): a saved buffer leaves nothing
                 // stale. With no project the buffer was the file's only text.
-                let (mut read, _) = s.ledger.reread(std::slice::from_ref(&key));
+                let mut read = s.ledger.reread(std::slice::from_ref(&key));
                 let read = read.pop().map_or(Read::Gone, |(_, read)| read);
                 reads.push((key, read));
             }

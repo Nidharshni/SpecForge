@@ -70,7 +70,7 @@ fn an_unfinished_check_run_records_nothing() {
 }
 
 #[test]
-fn a_run_that_reads_what_the_last_read_moves_nothing() {
+fn a_run_that_reads_what_the_last_read_leaves_the_inputs_as_they_were() {
     let (dir, mut ledger) = opened();
     let one = dir.path().join("one.md");
     let two = dir.path().join("two.md");
@@ -79,15 +79,20 @@ fn a_run_that_reads_what_the_last_read_moves_nothing() {
     let read = |ledger: &mut Ledger, file: &std::path::Path| {
         let run = ledger.checks();
         run.read(Reading::File, file, |_| ());
-        run.finish()
+        run.finish();
     };
-    assert!(read(&mut ledger, &one));
-    assert!(!read(&mut ledger, &one));
-    assert!(read(&mut ledger, &two));
+    let mut before = ledger.inputs().clone();
+    read(&mut ledger, &one);
+    assert_ne!(ledger.inputs(), &before);
+    before = ledger.inputs().clone();
+    read(&mut ledger, &one);
+    assert_eq!(ledger.inputs(), &before);
+    read(&mut ledger, &two);
+    assert_ne!(ledger.inputs(), &before);
 }
 
 #[test]
-fn a_run_that_reads_a_path_twice_moves_nothing() {
+fn a_run_that_reads_a_path_twice_leaves_the_inputs_as_they_were() {
     let (dir, mut ledger) = opened();
     let one = dir.path().join("one.md");
     let two = dir.path().join("two.md");
@@ -96,11 +101,13 @@ fn a_run_that_reads_a_path_twice_moves_nothing() {
         for file in files {
             run.read(Reading::File, file, |_| ());
         }
-        run.finish()
+        run.finish();
     };
-    assert!(run_of(&mut ledger, &[&one, &two, &one]));
+    run_of(&mut ledger, &[&one, &two, &one]);
+    let before = ledger.inputs().clone();
     // The same set, asked in another order and with repeats: no change.
-    assert!(!run_of(&mut ledger, &[&two, &one, &two]));
+    run_of(&mut ledger, &[&two, &one, &two]);
+    assert_eq!(ledger.inputs(), &before);
 }
 
 #[test]
