@@ -41,6 +41,7 @@ use crate::Environment;
 use crate::sources::{self, Read};
 
 use disk::RunDisk;
+pub use disk::SourceDisk;
 pub use inputs::{SessionInputs, WatchRoot, Watched};
 pub use key::source_key;
 use recorded::{Class, Recording};
@@ -158,7 +159,7 @@ impl Reads for Ledger {
         load: impl FnOnce(&dyn Disk) -> Environment,
     ) -> Environment {
         let run = self.environment_run();
-        let environment = load(&RunDisk(&run));
+        let environment = load(&RunDisk(&run, &PlainDisk));
         run.finish(Recording::Environment {
             root: root.dir(),
             config: environment.config(),
@@ -184,7 +185,7 @@ impl Reads for Ledger {
     /// the run finishes.
     fn run_checks(&mut self, check: impl FnOnce(&dyn Disk)) {
         let run = self.checks();
-        check(&RunDisk(&run));
+        check(&RunDisk(&run, &PlainDisk));
         run.finish(Recording::Checks);
     }
 }
@@ -195,6 +196,8 @@ impl Reads for Ledger {
 pub(crate) struct Ledger {
     inputs: SessionInputs,
     stamps: Stamps,
+    /// The disk a source is read through; none reads the plain file system (ADR 0145).
+    source_disk: Option<SourceDisk>,
 }
 
 impl Ledger {
@@ -205,12 +208,21 @@ impl Ledger {
         Ledger {
             inputs: SessionInputs::detached(),
             stamps: Stamps::default(),
+            source_disk: None,
         }
     }
 
-    /// About to open a project: nothing read yet.
-    pub(crate) fn opening() -> Self {
-        Self::detached()
+    /// About to open a project: nothing read yet, its sources read through `disk` (none: plain).
+    pub(crate) fn opening_through(disk: Option<SourceDisk>) -> Self {
+        Ledger {
+            source_disk: disk,
+            ..Self::detached()
+        }
+    }
+
+    /// The disk the sources are read through, so a reload keeps it.
+    pub(crate) fn source_disk(&self) -> Option<SourceDisk> {
+        self.source_disk.clone()
     }
 
     /// What the session depends on now; its equality is what
@@ -285,8 +297,10 @@ impl Ledger {
         read: impl FnOnce(&dyn Disk) -> Read,
     ) -> Read {
         let path = spec_root.join(key);
+        let disk = self.source_disk();
         let run = self.run();
-        let text = read(&RunDisk(&run));
+        let plain: &dyn Disk = &PlainDisk;
+        let text = read(&RunDisk(&run, disk.as_deref().map_or(plain, |d| d)));
         run.finish(Recording::Source { key, path: &path });
         text
     }
@@ -334,6 +348,7 @@ impl Ledger {
         Ledger {
             inputs,
             stamps: Stamps::default(),
+            source_disk: None,
         }
     }
 

@@ -4,31 +4,34 @@
 
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
-use specforge_registry::{Disk, PlainDisk};
+use specforge_registry::Disk;
 
 use super::{Reading, Run};
 
+/// The disk a surface hands a session to read its sources through (ADR 0145): MCP hands a
+/// contained one, the CLI, watch and the LSP hand none and the session reads the plain file system.
+pub type SourceDisk = Arc<dyn Disk + Send + Sync>;
+
 /// The recording disk in a project session: each read goes through the recording
-/// run, which stamps the path first and records it as an input.
-pub(super) struct RunDisk<'r, 'l>(pub(super) &'r Run<'l>);
+/// run, which stamps the path first and records it as an input, then reads with
+/// the disk it wraps (the plain file system, or the one a surface handed for sources).
+pub(super) struct RunDisk<'r, 'l>(pub(super) &'r Run<'l>, pub(super) &'r dyn Disk);
 
 impl Disk for RunDisk<'_, '_> {
     fn exists(&self, path: &Path) -> bool {
         self.record_link_targets(path);
-        self.0
-            .read(Reading::File, path, |path| PlainDisk.exists(path))
+        self.0.read(Reading::File, path, |path| self.1.exists(path))
     }
 
     fn list(&self, dir: &Path) -> Option<Vec<String>> {
-        self.0
-            .read(Reading::Listing, dir, |dir| PlainDisk.list(dir))
+        self.0.read(Reading::Listing, dir, |dir| self.1.list(dir))
     }
 
     fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
         self.record_link_targets(path);
-        self.0
-            .read(Reading::File, path, |path| PlainDisk.read(path))
+        self.0.read(Reading::File, path, |path| self.1.read(path))
     }
 }
 

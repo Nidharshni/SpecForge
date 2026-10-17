@@ -33,7 +33,7 @@ fn rewrite(path: &Path, text: &str) {
 #[test]
 fn a_config_written_after_its_read_is_stale() {
     let (dir, root) = project(CONFIG);
-    let mut ledger = Ledger::opening();
+    let mut ledger = Ledger::opening_through(None);
     Environment::read_through(&mut ledger, &root, |_| None);
     assert!(ledger.stale().is_empty());
     rewrite(
@@ -53,7 +53,7 @@ fn a_module_written_after_its_read_is_stale() {
     );
     let module = dir.path().join("ext/local.wasm");
     rewrite(&module, "first");
-    let mut ledger = Ledger::opening();
+    let mut ledger = Ledger::opening_through(None);
     // The extension load runs (a runtime is given), so it reads the module.
     Environment::read_through(&mut ledger, &root, |_| {
         Some(Arc::new(InProcessRuntime::new()) as SharedRuntime)
@@ -67,7 +67,7 @@ fn a_module_written_after_its_read_is_stale() {
 fn a_source_that_is_no_source_any_more_leaves_the_record() {
     let (dir, root) = project(CONFIG);
     rewrite(&dir.path().join("sub/c.spec"), "behavior c \"C\" {\n}\n");
-    let mut ledger = Ledger::opening();
+    let mut ledger = Ledger::opening_through(None);
     let env = Environment::read_through(&mut ledger, &root, |_| None);
     let sources = env.config().sources(root.dir());
     assert_eq!(ledger.discover(&sources), ["sub/c.spec"]);
@@ -89,7 +89,7 @@ fn a_source_that_is_no_source_any_more_leaves_the_record() {
 #[test]
 fn a_source_read_as_gone_is_recorded_and_stays_unchanged_while_it_is_gone() {
     let (dir, root) = project(CONFIG);
-    let mut ledger = Ledger::opening();
+    let mut ledger = Ledger::opening_through(None);
     let env = Environment::read_through(&mut ledger, &root, |_| None);
     let sources = env.config().sources(root.dir());
     assert!(matches!(
@@ -106,7 +106,7 @@ fn a_source_read_as_gone_is_recorded_and_stays_unchanged_while_it_is_gone() {
 fn a_source_never_read_is_changed() {
     let (dir, root) = project(CONFIG);
     rewrite(&dir.path().join("a.spec"), "behavior a \"A\" {\n}\n");
-    let mut ledger = Ledger::opening();
+    let mut ledger = Ledger::opening_through(None);
     let env = Environment::read_through(&mut ledger, &root, |_| None);
     let sources = env.config().sources(root.dir());
     assert_eq!(ledger.discover(&sources), ["a.spec"]);

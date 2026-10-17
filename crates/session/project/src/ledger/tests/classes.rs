@@ -8,7 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use specforge_common::ProjectConfig;
-use specforge_registry::Disk;
+use specforge_registry::{Disk, PlainDisk};
 use specforge_test_macros::test as specforge_test;
 
 use crate::ledger::disk::RunDisk;
@@ -84,7 +84,7 @@ struct Case {
 
 fn record_environment(l: &Layout, ledger: &mut Ledger, input: &Path) {
     let run = ledger.environment_run();
-    let _ = RunDisk(&run).read(input);
+    let _ = RunDisk(&run, &PlainDisk).read(input);
     run.finish(Recording::Environment {
         root: &l.root,
         config: &ProjectConfig::default(),
@@ -93,13 +93,13 @@ fn record_environment(l: &Layout, ledger: &mut Ledger, input: &Path) {
 
 fn record_check(_: &Layout, ledger: &mut Ledger, input: &Path) {
     let run = ledger.checks();
-    RunDisk(&run).exists(input);
+    RunDisk(&run, &PlainDisk).exists(input);
     run.finish(Recording::Checks);
 }
 
 fn record_listing(_: &Layout, ledger: &mut Ledger, input: &Path) {
     let run = ledger.checks();
-    RunDisk(&run).list(input);
+    RunDisk(&run, &PlainDisk).list(input);
     run.finish(Recording::Checks);
 }
 
