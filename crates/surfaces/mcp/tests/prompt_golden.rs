@@ -416,7 +416,6 @@ fn prompt_golden_events() {
     invariant = "mcp_structured_error_responses",
     verify = "a missing entity is one E003 refusal naming the closest entity on every read view"
 )]
-#[ignore = "flipped by T3"]
 fn context_constraint_naming_no_entity_is_the_e003_refusal() {
     let dir = project();
     let mut server = server(&dir);

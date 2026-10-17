@@ -95,8 +95,10 @@ behavior provide_mcp_context_prompt "Provide MCP Context Prompt" {
     all directly related entities (upstream and downstream), verify
     declarations as verification expectations, and related entities.
     structural_constraints entities are included as additional context even if not
-    directly connected. If the entity does not exist, the prompt MUST
-    return an error.
+    directly connected. A structural constraint that names no entity is
+    refused as a missing entity is everywhere (E003, with the closest
+    entity), naming structural_constraints. If the entity does not exist,
+    the prompt MUST return an error.
   """
   verify unit "specforge://prompts/context returns structured entity context"
   verify unit "response includes contract and related entities"
