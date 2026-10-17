@@ -19,9 +19,24 @@ const PROGRAMS: [&str; 3] = ["specforge ", "cargo ", "z3 "];
 /// Relative to `crates/`.
 const EXEMPT: &str = "leaf/diagnostics/src/catalog.rs";
 
+/// Whether the flag that follows `clause` belongs to a whole command: the last program in the clause is followed by
+/// nothing but the command's own words, so no closing backtick and no connecting word (`or pass --x`, `and --y`)
+/// stands between the program and the flag.
+fn attached_to_a_program(clause: &str) -> bool {
+    let Some(from) = PROGRAMS.iter().filter_map(|p| clause.rfind(p)).max() else {
+        return false;
+    };
+    let between = &clause[from..];
+    !between.contains('`')
+        && ![" or ", " and ", " pass ", " use ", " with "]
+            .iter()
+            .any(|word| between.contains(word))
+}
+
 /// The bare flags in `text`. A flag is `--` then a lowercase letter, then letters, digits or `-`, not glued to a
 /// word before it or a word or `{` after it (`||--o{` is Mermaid). It is bare unless one of `PROGRAMS` appears in
-/// its clause: the text after the last `;`, `,`, `(` or `)` before it. A literal that is one argv token
+/// its clause (the text after the last `;`, `,`, `(` or `)` before it) with nothing but the command's own words
+/// between the program and the flag (`attached_to_a_program`). A literal that is one argv token
 /// (`--out={report}`, no whitespace, starting with `--`) has none.
 fn bare_flags(text: &str) -> Vec<&str> {
     if text.starts_with("--") && !text.contains(char::is_whitespace) {
@@ -56,7 +71,7 @@ fn bare_flags(text: &str) -> Vec<&str> {
             .rfind([';', ',', '(', ')'])
             .map_or(0, |i| i + 1);
         let clause = &text[clause_start..start];
-        if !PROGRAMS.iter().any(|program| clause.contains(program)) {
+        if !attached_to_a_program(clause) {
             flags.push(&text[start..end]);
         }
         at = end;
@@ -172,6 +187,8 @@ fn a_flag_is_bare_unless_a_program_precedes_it_in_its_clause() {
         "in a terminal, or with --yes; or add 'k' to trusted_keys",
         "pick one with --runner (available: a)",
         "the --report files don't exist",
+        "run `specforge collect` or pass --test-results",
+        "run specforge collect or pass --test-results",
     ] {
         assert!(!bare_flags(refused).is_empty(), "{refused}");
     }
