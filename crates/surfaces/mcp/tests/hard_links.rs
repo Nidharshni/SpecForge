@@ -183,7 +183,6 @@ fn infer_session_replaces_a_hard_linked_manifest() {
     invariant = "mcp_served_project_consistency",
     verify = "a mutation writes no file through a hard link to a file outside the project"
 )]
-#[ignore = "flipped by T5: the migration record is written in place"]
 fn migrate_record_is_not_written_through_a_hard_link() {
     let project = old_project();
     let (_outside, victim) = plant(project.path(), ".specforge/migration.json");

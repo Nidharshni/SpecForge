@@ -173,7 +173,7 @@ impl MigrationRecord {
         }
         let mut text = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
         text.push('\n');
-        std::fs::write(path, text)
+        specforge_common::fresh::replace_file(&path, text.as_bytes())
     }
 
     /// Remove the record; `true` when there was one.
