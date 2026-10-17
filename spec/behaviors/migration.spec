@@ -106,7 +106,10 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
     specified. Each file MUST be migrated independently — a failure in one
     file MUST NOT prevent migration of others. Each file MUST be written
     atomically (write to temporary file, then rename) to prevent corruption
-    from interrupted migrations. Each file MUST be read once: its backup,
+    from interrupted migrations. The backup and the temporary file are
+    created new (a link at either name is unlinked first, never its
+    target), so a migration never writes through a file planted at a name
+    it owns. Each file MUST be read once: its backup,
     its diff and the text an automatic rollback restores are that one
     read, so a save made while the migration runs is never split between
     them. Over MCP, a source, its backup, either temporary file or the
@@ -156,6 +159,7 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
   verify unit "failure in one file does not block others"
   verify unit "summary reports migrated, failed, and skipped counts"
   verify unit "interrupted migration leaves no partially written files"
+  verify unit "the backup and temporary file are created new, never through a planted link"
   verify unit "the graph is captured before any file is transformed"
   verify unit "files already at target version are skipped with skippedCount incremented"
   verify unit "only the project's sources are migrated: under spec_root, without excluded files"

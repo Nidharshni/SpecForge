@@ -88,8 +88,10 @@ fn written_beside_names_the_backup_and_both_temporary_files() {
 }
 
 #[cfg(unix)]
-#[test]
-#[ignore = "flipped by T2"]
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "the backup and temporary file are created new, never through a planted link"
+)]
 fn an_inside_link_at_a_temp_name_is_not_written_through() {
     let dir = project();
     let notes = dir.path().join("notes.txt");
@@ -100,7 +102,7 @@ fn an_inside_link_at_a_temp_name_is_not_written_through() {
 
     let summary = migrate_project(
         &root,
-        &[source.clone()],
+        std::slice::from_ref(&source),
         &CURRENT_FORMAT_VERSION,
         false,
         false,
