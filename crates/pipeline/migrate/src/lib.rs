@@ -425,7 +425,7 @@ fn migrate_file(
     // Create backup
     let backup = if !no_backup {
         let [backup_path, ..] = written_beside(path);
-        if let Err(e) = std::fs::write(&backup_path, &content) {
+        if let Err(e) = create_new_beside(&backup_path, content.as_bytes()) {
             return FileMigration::of(
                 MigrationResult {
                     file_path: name,
@@ -448,7 +448,7 @@ fn migrate_file(
 
     // Atomic write: temp + rename
     let [_, tmp_path, _] = written_beside(path);
-    if let Err(e) = std::fs::write(&tmp_path, &transformed) {
+    if let Err(e) = create_new_beside(&tmp_path, transformed.as_bytes()) {
         return FileMigration::of(
             MigrationResult {
                 file_path: name,
@@ -508,10 +508,28 @@ pub fn written_beside(source: &Path) -> [PathBuf; 3] {
     ]
 }
 
+/// Write `bytes` to `path`, a name the migration alone owns (a backup or a temporary file): whatever
+/// is there is unlinked first (a link, never its target), then the file is created new, so a link
+/// planted at the name is never written through (ADR 0112 D3). A name recreated between the two steps
+/// fails with `AlreadyExists` instead of escaping.
+fn create_new_beside(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    match std::fs::remove_file(path) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e),
+        _ => {}
+    }
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)?
+        .write_all(bytes)
+}
+
 /// Write `text` over `target` atomically (temp file, then rename).
 fn write_atomically(target: &Path, text: &str) -> Result<(), String> {
     let [_, _, tmp_path] = written_beside(target);
-    std::fs::write(&tmp_path, text).map_err(|e| format!("failed to write restore temp: {e}"))?;
+    create_new_beside(&tmp_path, text.as_bytes())
+        .map_err(|e| format!("failed to write restore temp: {e}"))?;
     if let Err(e) = std::fs::rename(&tmp_path, target) {
         let _ = std::fs::remove_file(&tmp_path);
         return Err(format!("failed to rename restore: {e}"));

@@ -3,7 +3,7 @@
 use super::lock_plan::{Ask, Disabled, LockPlan, Purpose};
 use super::{NOT_FOUND, Origin, ProjectExtension, Selection, not_installed};
 use crate::view::ProjectView;
-use crate::{Caller, Containment, OpError, OpErrorKind, Refusal, Writes};
+use crate::{Caller, OpError, OpErrorKind, Refusal, Writes};
 use serde::Serialize;
 use specforge_common::ExtensionEntry;
 use specforge_common::shape::Shape;
@@ -21,8 +21,8 @@ pub struct RemoveRequest<'a> {
     pub force: bool,
     /// Report what would be removed; change nothing.
     pub dry_run: bool,
-    /// What the removal may write (`caller.containment()`, ADR 0104): a file it would write that
-    /// lands outside, by a symlink in the project, refuses it.
+    /// What the removal may reach (`caller.containment()`, ADR 0104): a file it would write that
+    /// lands outside its project, by a symlink in it, refuses it (ADR 0137).
     pub caller: Caller<'a>,
 }
 
@@ -30,10 +30,9 @@ pub struct RemoveRequest<'a> {
 /// its graph.
 struct Removing<'a> {
     view: &'a ProjectView<'a>,
-    root: &'a Path,
     force: bool,
     dry_run: bool,
-    containment: &'a Containment,
+    caller: Caller<'a>,
     kinds: &'a KindRegistry,
     graph: &'a Graph,
     /// The project's installed extensions, as the compile read them.
@@ -151,7 +150,7 @@ pub fn remove(
     view: &ProjectView,
     req: &RemoveRequest,
 ) -> Result<RemoveOutcome, Refusal<RemoveField>> {
-    let root = view.project_root()?;
+    view.project_root()?;
     if let Some(problem) = view
         .env()
         .config_problems()
@@ -163,10 +162,9 @@ pub fn remove(
     let inventory = super::inventory(view);
     let removing = &Removing {
         view,
-        root,
         force: req.force,
         dry_run: req.dry_run,
-        containment: req.caller.containment(),
+        caller: req.caller,
         kinds: view.registries().kinds(),
         graph: view.graph(),
         installed: view.installed(),
@@ -280,7 +278,7 @@ fn change(
     } else {
         Purpose::Commit
     };
-    let mut plan = LockPlan::removing(req.view, purpose, req.force, locked.is_some())?;
+    let mut plan = LockPlan::removing(req.view, req.caller, purpose, req.force, locked.is_some())?;
     // Its directory is named by the lock entry's package name, which the lock read validated
     // (ADR 0036): nothing outside `.specforge/extensions` can be deleted.
     if let Some(locked) = locked {
@@ -290,7 +288,7 @@ fn change(
     let done = plan
         .check()
         .map_err(|refused| refused.decisive().1.about(RemoveField::Name))?
-        .finish(req.root, Vec::new(), req.containment)?;
+        .finish()?;
     Ok(done.writes)
 }
 

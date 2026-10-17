@@ -63,3 +63,5 @@ A third surface that bounds requests differently, or an operation that must open
 close check-then-open.
 
 **Amended by ADR 0112 (2026-10-16):** D2: the list of sites grows to every project file an operation opens or writes (collect's report and runner files, analyze's named report, the inference manifest, migrate's sidecars, the lock plan's config and `Also` files), opened through the `Held` they were checked as; a test holds it.
+
+**Amended by ADR 0137 (2026-10-17):** D2: the lock plan narrows the request's containment to its own project and applies it to its writes; the operations pass the caller, not a bound.

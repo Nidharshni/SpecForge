@@ -155,7 +155,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   "another project" is one nested in the served one (`specforge_ops::Containment`, ADR 0092, ADR 0104).
 - **Containment**: what a request may reach on disk: every path (the CLI, ADR 0092 D6) or the paths that land inside
   one directory (an MCP request's bound, or the call's project). Lent by the **Caller** in the operation's request and
-  applied where the operation opens or writes the file (`specforge_ops::Containment`, ADR 0104). MCP's call's project
+  applied where the operation opens or writes the file (a lock plan narrows it to its project, ADR 0137) (`specforge_ops::Containment`, ADR 0104). MCP's call's project
   hands it to the tools (`ProjectRef::caller`, ADR 0112, ADR 0124), and render's view input hands it the request's bound (ADR 0131).
 - **Caller**: what the surface that calls an operation lends it, one value (`specforge_ops::Caller`, ADR 0124): what the
   call may reach (**Containment**) and who can be asked (**Asking**). The CLI lends every path and its terminal when
@@ -280,9 +280,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   disabled entries and uninstall), staged as the operation leaves them: each package's lock entry
   replaces its previous one, never sits beside it, each new `specforge.json` entry is appended, each
   dropped one removed; the change writes exactly those entries into the `specforge.json` it read, other keys
-  kept, and refuses (`file_changed`) when the file no longer holds what the plan opened with (ADR 0126)
+  kept, and refuses (`file_changed`) when the file no longer holds what the plan opened with (ADR 0126). Its writes land inside its own project: it is opened with the operation's **Caller** and narrows the caller's **Containment** to the project root itself (ADR 0137)
   (`specforge_ops::extension::lock_plan::LockPlan`, ADR 0041, ADR 0065). An
   operation names what it asks for, each an **ask**; refusals and outcomes are answered per ask.
+  An ask the project already has (an entry enables it; for an install, the lock pins it as asked with its module on disk
+  the one pinned) is answered **unchanged** and stages nothing, and a plan whose asks change nothing is neither judged
+  nor written (ADR 0138).
   `add` and `init` first enable the builtins what they add requires, dependencies first;
   `update` enables nothing. The peer rule then judges the **project peer set** as the change leaves it,
   once: every declared peer whose dependent or peer the change touches. A required peer no member
@@ -302,7 +305,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   to a flag on the command line. A relative local path is joined onto the change's base: add reads it from the project
   root, or from the CLI's working directory; init from the directory it creates. The file is read within the change's
   containment (ADR 0104), each specifier is claimed (ADR 0098), and a local file is read once. `add` and `init` both
-  take raw strings.
+  take raw strings. Once read, the module asks the change's opened lock plan for each, an ask per specifier by its
+  position, checks the plan once and names its refusal by the specifier it is charged to (ADR 0134).
 - **Project peer set**: the extensions a project's `specforge.json` entries load, as the peer rule reads
   them: a builtin by the declaration this specforge embeds, an installed extension by its lock entry, a
   `.wasm` file entry by its file's declaration, each entry resolved by the extension load's one rule

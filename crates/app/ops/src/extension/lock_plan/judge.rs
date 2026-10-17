@@ -39,7 +39,12 @@ impl<'a> LockPlan<'a> {
     /// fetches decided (`Publisher::pin`), in staging order, for [`Checked::finish`] to save. Lock
     /// order and entry order decide nothing.
     pub(crate) fn check(mut self) -> Result<Checked<'a>, Refused> {
-        let changing = self.touched()?;
+        let changes = !self.changes_nothing();
+        let changing = if changes {
+            self.touched()?
+        } else {
+            Changing::none()
+        };
         let mut failed: Vec<Option<(OpError, bool)>> =
             changing.names.iter().map(|_| None).collect();
         if !changing.names.is_empty() && !(self.verb == Verb::Remove && self.force) {
@@ -71,12 +76,13 @@ impl<'a> LockPlan<'a> {
             staged,
             config,
             appended,
-            wanted,
+            asked,
             fetching,
             purpose,
             disabled,
             uninstalled,
             operation,
+            caller,
             ..
         } = self;
         for (i, s) in staged.iter().enumerate() {
@@ -108,7 +114,10 @@ impl<'a> LockPlan<'a> {
             pins: fetching.map(|fetching| (fetching.registry, pins)),
             config,
             appended,
-            wanted,
+            asked,
+            lent: caller.containment(),
+            also: Vec::new(),
+            changes,
         })
     }
 
@@ -132,11 +141,7 @@ impl<'a> LockPlan<'a> {
     /// member it removes, or one it lets load (a `.wasm` file entry another entry shadowed), each
     /// charged to the first ask.
     fn removal_touched(&mut self) -> Result<Changing, Refused> {
-        let none = || Changing {
-            names: Vec::new(),
-            asks: Vec::new(),
-            staged: 0,
-        };
+        let none = Changing::none;
         let before = ProjectPeers::of(
             self.installed,
             self.config.entries(),

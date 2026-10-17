@@ -593,8 +593,8 @@ impl Installed {
     }
 
     /// `name`'s lock entry when its module on disk is the one it pins (any
-    /// module, for an entry that pins no hash). What "already installed"
-    /// means for `add`.
+    /// module, for an entry that pins no hash): the check the extension load
+    /// makes ([`Self::check_module`]), without loading it.
     pub fn verified(&self, name: &str) -> Option<&LockFileEntry> {
         let entry = self
             .lock

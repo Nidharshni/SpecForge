@@ -20,15 +20,14 @@
 
 use crate::view::ProjectView;
 use serde_json::Value;
-use specforge_installed::{Installed, LockFile, LockState, Module, Pin};
+use specforge_installed::{Installed, LockFile, LockFileEntry, LockState, Module, Pin};
 use specforge_package::PackageName;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_wasm::WasmRuntime;
 
 use super::peer_set::Declarations;
-use crate::asking::Asking;
 use crate::registry::{KeyPin, Publisher, Registry};
-use crate::{OpError, OpErrorKind};
+use crate::{Caller, Containment, OpError, OpErrorKind};
 
 /// What a lock plan is for. It words the refusal of an install that a locked extension does not
 /// accept ("installing '@x/b' 2.0.0 breaks '@x/a': ...", "updating ...").
@@ -98,14 +97,12 @@ impl Disabled {
     }
 }
 
-/// Where a plan's registry installs come from, and how their publishers are accepted: the
-/// registry port and the caller's choices.
+/// Where a plan's registry installs come from, and whether an unsigned one is accepted. Who is asked
+/// about a key change is the plan's caller's (ADR 0110, ADR 0124).
 #[derive(Clone, Copy)]
 pub(crate) struct Fetching<'a> {
     pub(crate) registry: &'a dyn Registry,
     pub(crate) allow_unsigned: bool,
-    /// Who can be asked about a publisher key change (ADR 0110).
-    pub(crate) asking: Asking<'a>,
 }
 
 /// One install a lock plan stages: a module (none for a preview's registry package, which has not
@@ -134,6 +131,8 @@ enum From<'a> {
         publisher: Publisher,
         bytes: Module,
     },
+    /// What the project already has, read from its lock entry: never staged, downloaded or loaded.
+    Locked,
 }
 
 /// An install the plan staged, for the ask that wanted it.
@@ -169,8 +168,9 @@ pub(crate) struct LockPlan<'a> {
     /// `specforge.json` as the plan opened it: what it enables before the change.
     config: Opened,
     appended: Vec<Appended>,
-    /// The extension each ask enables, in the order they were asked.
-    wanted: Vec<(Ask, String)>,
+    /// The answer each ask got when it was asked, in the order they were asked; a `Changes` holds
+    /// no peers until `finish` fills them.
+    asked: Vec<(Ask, Asked)>,
     declarations: Declarations<'a>,
     /// The runtime the plan's fetched binaries load in; `None` for a plan that fetches nothing
     /// and reads its declarations from a compiled project (`remove`).
@@ -189,6 +189,9 @@ pub(crate) struct LockPlan<'a> {
     fetching: Option<Fetching<'a>>,
     /// The operation's name, for the refusal of a fetch from no registry.
     operation: &'static str,
+    /// What the operation was lent (ADR 0124): who its fetches ask, and the bound its writes are
+    /// narrowed from (ADR 0137).
+    caller: Caller<'a>,
 }
 
 impl<'a> LockPlan<'a> {
@@ -202,6 +205,7 @@ impl<'a> LockPlan<'a> {
         config: Opened,
         runtime: &'a dyn WasmRuntime,
         fetching: Fetching<'a>,
+        caller: Caller<'a>,
         purpose: Purpose,
         installs: bool,
     ) -> Result<LockPlan<'a>, OpError> {
@@ -214,6 +218,7 @@ impl<'a> LockPlan<'a> {
             Some(fetching),
             "add",
             installs,
+            caller,
         )?;
         plan.purpose = purpose;
         Ok(plan)
@@ -225,6 +230,7 @@ impl<'a> LockPlan<'a> {
         config: Opened,
         runtime: &'a dyn WasmRuntime,
         fetching: Fetching<'a>,
+        caller: Caller<'a>,
     ) -> Result<LockPlan<'a>, OpError> {
         LockPlan::open(
             installed,
@@ -235,6 +241,7 @@ impl<'a> LockPlan<'a> {
             Some(fetching),
             "update",
             true,
+            caller,
         )
     }
 
@@ -244,6 +251,7 @@ impl<'a> LockPlan<'a> {
     pub(crate) fn initializing(
         installed: &'a Installed,
         runtime: &'a dyn WasmRuntime,
+        caller: Caller<'a>,
         installs: bool,
         document: Value,
     ) -> Result<LockPlan<'a>, OpError> {
@@ -256,6 +264,7 @@ impl<'a> LockPlan<'a> {
             None,
             "init",
             installs,
+            caller,
         )
     }
 
@@ -265,6 +274,7 @@ impl<'a> LockPlan<'a> {
     /// unreadable lock is E033). `force`: the peer rule is not applied (`remove --force`).
     pub(crate) fn removing(
         view: &ProjectView<'a>,
+        caller: Caller<'a>,
         purpose: Purpose,
         force: bool,
         uninstalls: bool,
@@ -278,6 +288,7 @@ impl<'a> LockPlan<'a> {
             None,
             "remove",
             uninstalls,
+            caller,
         )?;
         plan.purpose = purpose;
         plan.force = force;
@@ -286,7 +297,7 @@ impl<'a> LockPlan<'a> {
 
     #[expect(
         clippy::too_many_arguments,
-        reason = "the plan's whole input: the installed set, the entries, the runtime, the declarations, the verb, the registry, the operation and whether it installs"
+        reason = "the plan's whole input: the installed set, the entries, the runtime, the declarations, the verb, the registry, the operation, whether it installs and the caller"
     )]
     fn open(
         installed: &'a Installed,
@@ -297,6 +308,7 @@ impl<'a> LockPlan<'a> {
         fetching: Option<Fetching<'a>>,
         operation: &'static str,
         installs: bool,
+        caller: Caller<'a>,
     ) -> Result<LockPlan<'a>, OpError> {
         let lock = if installs {
             Some(
@@ -313,7 +325,7 @@ impl<'a> LockPlan<'a> {
             staged: Vec::new(),
             config,
             appended: Vec::new(),
-            wanted: Vec::new(),
+            asked: Vec::new(),
             declarations,
             runtime,
             verb,
@@ -324,6 +336,7 @@ impl<'a> LockPlan<'a> {
             uninstalled: Vec::new(),
             fetching,
             operation,
+            caller,
         })
     }
 
@@ -346,6 +359,26 @@ impl<'a> LockPlan<'a> {
             "'{}' is installed twice by one plan: claim the specifiers first (ADR 0098)",
             install.pin.name
         );
+        if let Some(locked) = self
+            .unchanged(&install.pin.name, |entry| {
+                entry.wasm_hash == install.sha256
+                    && std::mem::discriminant(&entry.source)
+                        == std::mem::discriminant(&install.pin.source)
+            })
+            .map(|entry| entry.version.clone())
+        {
+            self.answer(
+                ask,
+                Asked::Unchanged {
+                    locked: Some(locked),
+                },
+            );
+            return;
+        }
+        debug_assert!(
+            !matches!(install.from, From::Locked),
+            "a locked install is always unchanged"
+        );
         let Install {
             module,
             sha256,
@@ -357,8 +390,14 @@ impl<'a> LockPlan<'a> {
             .expect("a plan opened with installs: false stages no install")
             .put(pin.entry(&sha256));
         if self.verb.enables() {
-            self.enable(ask, pin.name.as_str());
+            self.append(ask, pin.name.as_str());
         }
+        self.answer(
+            ask,
+            Asked::Changes {
+                peers_enabled: Vec::new(),
+            },
+        );
         self.staged.push(Staged {
             ask,
             name: pin.name.clone(),
@@ -370,21 +409,68 @@ impl<'a> LockPlan<'a> {
     }
 
     /// Enable `name` (a builtin, or an install's bare name) for `ask` with an entry of its own,
-    /// after the entries `specforge.json` holds; nothing when an entry already enables it.
+    /// after the entries `specforge.json` holds; the ask is answered unchanged when an entry
+    /// already enables it.
     pub(crate) fn enable(&mut self, ask: Ask, name: &str) {
-        self.wanted.push((ask, name.to_string()));
-        let enabled = self
-            .config
-            .entries()
-            .iter()
-            .chain(self.appended.iter().map(|appended| &appended.name))
-            .any(|entry| specforge_common::extension_entry_name(entry) == name);
-        if !enabled {
+        let answer = if self.append(ask, name) {
+            Asked::Changes {
+                peers_enabled: Vec::new(),
+            }
+        } else {
+            Asked::Unchanged { locked: None }
+        };
+        self.answer(ask, answer);
+    }
+
+    /// Append an entry for `name` unless one already enables it; `false` when an entry of
+    /// `specforge.json` (as opened) does. An earlier ask of this change appending it still makes
+    /// the change enable it.
+    fn append(&mut self, ask: Ask, name: &str) -> bool {
+        let named = |entry: &String| specforge_common::extension_entry_name(entry) == name;
+        if self.config.entries().iter().any(named) {
+            return false;
+        }
+        if !self.appended.iter().any(|appended| named(&appended.name)) {
             self.appended.push(Appended {
                 name: name.to_string(),
                 ask,
                 required_by: None,
             });
+        }
+        true
+    }
+
+    /// `name`'s lock entry when the project already has it as `same` accepts: the lock the plan
+    /// opened pins it, its module on disk is the one pinned, and an entry of the `specforge.json`
+    /// the plan opened enables it. What the project has before the change, never the staged lock.
+    fn unchanged(
+        &self,
+        name: &PackageName,
+        same: impl Fn(&LockFileEntry) -> bool,
+    ) -> Option<&LockFileEntry> {
+        let entry = self.installed.verified(name.as_str()).filter(|e| same(e))?;
+        let enabled = self
+            .config
+            .entries()
+            .iter()
+            .any(|e| specforge_common::extension_entry_name(e) == name.as_str());
+        enabled.then_some(entry)
+    }
+
+    /// Whether the asks so far leave the project as it is: nothing staged, appended, dropped,
+    /// uninstalled or created.
+    fn changes_nothing(&self) -> bool {
+        self.staged.is_empty()
+            && self.appended.is_empty()
+            && self.disabled.is_empty()
+            && self.uninstalled.is_empty()
+            && !self.config.creates()
+    }
+
+    /// Record `asked` as the answer to `ask`, unless it already has one.
+    fn answer(&mut self, ask: Ask, asked: Asked) {
+        if !self.asked.iter().any(|(known, _)| *known == ask) {
+            self.asked.push((ask, asked));
         }
     }
 
@@ -468,6 +554,14 @@ impl Changing {
         }
     }
 
+    fn none() -> Changing {
+        Changing {
+            names: Vec::new(),
+            asks: Vec::new(),
+            staged: 0,
+        }
+    }
+
     fn position(&self, name: &str) -> Option<usize> {
         self.names.iter().position(|touched| touched == name)
     }
@@ -502,7 +596,14 @@ pub(crate) struct Checked<'a> {
     /// `specforge.json` as the plan opened it.
     config: Opened,
     appended: Vec<Appended>,
-    wanted: Vec<(Ask, String)>,
+    asked: Vec<(Ask, Asked)>,
+    /// The bound the caller lent; the commit narrows it to `installed.root()` (ADR 0137).
+    lent: &'a Containment,
+    /// Files the change writes after `specforge.json` and before the pins (init's), in order.
+    also: Vec<Also<'a>>,
+    /// Whether the change writes anything (`LockPlan::changes_nothing` was false); when not, it is
+    /// neither judged nor written (ADR 0138).
+    changes: bool,
 }
 
 mod close;

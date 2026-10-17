@@ -312,3 +312,5 @@ fn a_local_file_outside_the_containment_is_refused_at_the_read() {
 
     assert_eq!(error.code, crate::OUTSIDE_ROOT);
 }
+
+mod ask;

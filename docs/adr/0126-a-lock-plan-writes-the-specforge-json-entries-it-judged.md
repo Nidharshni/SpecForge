@@ -51,3 +51,5 @@ the window is inside one call or one CLI run.
 
 A `specforge.json` key the peer rule reads besides `extensions` (a concurrent edit to it is still refused, but the
 rule grows); an editor that holds `specforge.json` open (then the buffer, not the disk, is what the file holds).
+
+**Amended by ADR 0138 (2026-10-17):** D1: the per-ask `appended` is gone; an ask is answered `Changes` or `Unchanged`.

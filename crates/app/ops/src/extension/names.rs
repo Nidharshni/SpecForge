@@ -3,7 +3,8 @@
 //! change's base, and a local file is read within the change's containment (ADR 0104), its `..` resolved
 //! as the file system resolves it. Every specifier is claimed (ADR 0098), so two that name one extension
 //! are a duplicate or `extension_conflict`. A registry package is resolved by the caller's step, then
-//! claimed.
+//! claimed. It then asks the change's opened lock plan for each, and names the plan's refusal
+//! (ADR 0134).
 
 mod specifier;
 #[cfg(test)]
@@ -14,6 +15,7 @@ pub(crate) use specifier::{
 };
 
 use super::candidate::LocalFile;
+use super::lock_plan::{Ask, Checked, LockPlan};
 use super::{Claimed, Claims, Install};
 use crate::{Containment, OpError};
 use specforge_package::{PackageName, PackageRef, Version};
@@ -37,8 +39,25 @@ pub(crate) struct Names<'r> {
     place: Place<'r>,
 }
 
+/// What one specifier of a change came to, once it was named and asked of the change's lock plan,
+/// index for index with the strings. `R` is what the caller recorded of each install before the plan
+/// took it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Answer<R> {
+    /// An earlier specifier (`first`) names `name` the same way: nothing was asked (ADR 0098).
+    Duplicate { name: String, first: String },
+    /// A builtin, enabled under its `Ask` (its position).
+    Builtin(&'static str),
+    /// A local file or a registry package installed under its `Ask`: what `record` kept of the
+    /// install, and, for a local file, the starter template it declares (`None` for a package).
+    Installed {
+        recorded: R,
+        starter: Option<String>,
+    },
+}
+
 /// What one specifier names, read and claimed.
-pub(crate) enum Named<'a> {
+enum Named<'a> {
     /// An earlier specifier names the extension the same way (or has the same source): ask nothing.
     Duplicate { name: String, first: String },
     /// A builtin, claimed first.
@@ -92,8 +111,66 @@ impl<'r> Names<'r> {
     }
 
     /// `error`, naming the specifier at `at` when there are several (for the plan's refusals).
-    pub(crate) fn named(&self, at: usize, error: OpError) -> OpError {
+    fn named(&self, at: usize, error: OpError) -> OpError {
         named(self.wanted.len() > 1, self.specifier(at), error)
+    }
+
+    /// Name each specifier and ask `plan` for what it names, then check the plan once (ADR 0065,
+    /// ADR 0134).
+    ///
+    /// Every specifier is read and claimed first ([`Self::name_each`]), then each is asked of `plan`
+    /// in order, charged to `Ask(at)`, `at` its position: a builtin enabled, a local file installed,
+    /// a registry package fetched from the plan's registry and installed; a duplicate asks nothing.
+    /// `plan` was opened by the operation for its verb, with `installs: self.installs()`, so a lock
+    /// it cannot read has refused before any file is read.
+    ///
+    /// Refusals are named by the specifier they are charged to when there are several ("adding
+    /// '<s>': "): reading or `packages`, a fetch, and the plan's decisive refusal (the first ask the
+    /// peer rule refused, else the first whose binary did not load). A claim conflict names both
+    /// specifiers and is not prefixed. The caller states the refusal's subject.
+    ///
+    /// `record` is handed each install (a local file's, or the one `fetch` returned) just before the
+    /// plan takes it; what it returns comes back in [`Answer::Installed`].
+    pub(crate) fn ask<'a, R>(
+        &self,
+        mut plan: LockPlan<'a>,
+        runtime: &'a dyn WasmRuntime,
+        packages: &mut dyn FnMut(&str, &PackageRef) -> Result<Version, OpError>,
+        record: &mut dyn FnMut(&Install<'a>) -> R,
+    ) -> Result<(Checked<'a>, Vec<Answer<R>>), OpError> {
+        let named = self.name_each(runtime, packages)?;
+        let mut answers = Vec::with_capacity(named.len());
+        for (at, named) in named.into_iter().enumerate() {
+            let ask = Ask(at);
+            answers.push(match named {
+                Named::Duplicate { name, first } => Answer::Duplicate { name, first },
+                Named::Builtin(name) => {
+                    plan.enable(ask, name);
+                    Answer::Builtin(name)
+                }
+                Named::Local { install, starter } => {
+                    let recorded = record(&install);
+                    plan.install(ask, *install);
+                    Answer::Installed { recorded, starter }
+                }
+                Named::Package { name, version } => {
+                    let install = plan
+                        .fetch(&name, &version)
+                        .map_err(|error| self.named(at, error))?;
+                    let recorded = record(&install);
+                    plan.install(ask, install);
+                    Answer::Installed {
+                        recorded,
+                        starter: None,
+                    }
+                }
+            });
+        }
+        let checked = plan.check().map_err(|refused| {
+            let (Ask(at), error) = refused.decisive();
+            self.named(at, error)
+        })?;
+        Ok((checked, answers))
     }
 
     /// What each specifier names, in order: one [`Named`] per string, index for index. `packages`
@@ -101,7 +178,7 @@ impl<'r> Names<'r> {
     /// are named among several: reading a local file (E054, E040, E028, E072, a binary declaring a
     /// builtin's name, a path outside the containment), git (E064), and whatever `packages` returns.
     /// A claim conflict is `extension_conflict`, naming both specifiers and not prefixed.
-    pub(crate) fn name_each<'a>(
+    fn name_each<'a>(
         &self,
         runtime: &'a dyn WasmRuntime,
         packages: &mut dyn FnMut(&str, &PackageRef) -> Result<Version, OpError>,
