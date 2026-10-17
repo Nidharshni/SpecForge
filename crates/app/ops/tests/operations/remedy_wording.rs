@@ -217,7 +217,6 @@ fn declared_strings() -> Vec<(String, String)> {
 }
 
 #[test]
-#[ignore = "flipped by T4"]
 fn no_declared_description_names_a_bare_flag() {
     let offenders: Vec<String> = declared_strings()
         .into_iter()

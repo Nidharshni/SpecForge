@@ -5670,7 +5670,7 @@ expression: "digest(&load(&runtime, &all))"
               }
             ],
             "category": "query",
-            "description": "List features: each feature's id, title, status, priority, problem and tags, filtered (every filter set must match), sorted (by id unless --sort-by says otherwise) and paged, with the total before paging.",
+            "description": "List features: each feature's id, title, status, priority, problem and tags, filtered (every filter set must match), sorted (by id unless a sort field is given) and paged, with the total before paging.",
             "export": "cmd__product_features",
             "id": "features",
             "title": "List features"
@@ -5744,7 +5744,7 @@ expression: "digest(&load(&runtime, &all))"
               }
             ],
             "category": "query",
-            "description": "List journeys: each journey's id, title, persona, channel and feature counts, priority and tags, filtered (every filter set must match), sorted (by id unless --sort-by says otherwise) and paged, with the total before paging.",
+            "description": "List journeys: each journey's id, title, persona, channel and feature counts, priority and tags, filtered (every filter set must match), sorted (by id unless a sort field is given) and paged, with the total before paging.",
             "export": "cmd__product_journeys",
             "id": "journeys",
             "title": "List journeys"
@@ -5832,7 +5832,7 @@ expression: "digest(&load(&runtime, &all))"
               }
             ],
             "category": "query",
-            "description": "List deliverables: each deliverable's id, title, artifact type, status, journey and module counts and tags, filtered (every filter set must match), sorted (by id unless --sort-by says otherwise) and paged, with the total before paging.",
+            "description": "List deliverables: each deliverable's id, title, artifact type, status, journey and module counts and tags, filtered (every filter set must match), sorted (by id unless a sort field is given) and paged, with the total before paging.",
             "export": "cmd__product_deliverables",
             "id": "deliverables",
             "title": "List deliverables"
@@ -5915,7 +5915,7 @@ expression: "digest(&load(&runtime, &all))"
               }
             ],
             "category": "query",
-            "description": "List milestones: each milestone's id, title, status, target date, feature count, priority and tags, filtered (every filter set must match), sorted (by id unless --sort-by says otherwise) and paged, with the total before paging.",
+            "description": "List milestones: each milestone's id, title, status, target date, feature count, priority and tags, filtered (every filter set must match), sorted (by id unless a sort field is given) and paged, with the total before paging.",
             "export": "cmd__product_milestones",
             "id": "milestones",
             "title": "List milestones"
@@ -5973,7 +5973,7 @@ expression: "digest(&load(&runtime, &all))"
               }
             ],
             "category": "query",
-            "description": "List modules: each module's id, title, family, feature count, the modules it depends on and tags, filtered (every filter set must match), sorted (by id unless --sort-by says otherwise) and paged, with the total before paging.",
+            "description": "List modules: each module's id, title, family, feature count, the modules it depends on and tags, filtered (every filter set must match), sorted (by id unless a sort field is given) and paged, with the total before paging.",
             "export": "cmd__product_modules",
             "id": "modules",
             "title": "List modules"
@@ -6024,7 +6024,7 @@ expression: "digest(&load(&runtime, &all))"
               }
             ],
             "category": "query",
-            "description": "List terms: each term's id, title, definition, alias count and tags, filtered (every filter set must match), sorted (by id unless --sort-by says otherwise) and paged, with the total before paging.",
+            "description": "List terms: each term's id, title, definition, alias count and tags, filtered (every filter set must match), sorted (by id unless a sort field is given) and paged, with the total before paging.",
             "export": "cmd__product_terms",
             "id": "terms",
             "title": "List terms"
@@ -6106,7 +6106,7 @@ expression: "digest(&load(&runtime, &all))"
               }
             ],
             "category": "query",
-            "description": "List personas: each persona's id, title, technical level, status, journey count and tags, filtered (every filter set must match), sorted (by id unless --sort-by says otherwise) and paged, with the total before paging.",
+            "description": "List personas: each persona's id, title, technical level, status, journey count and tags, filtered (every filter set must match), sorted (by id unless a sort field is given) and paged, with the total before paging.",
             "export": "cmd__product_personas",
             "id": "personas",
             "title": "List personas"
@@ -6189,7 +6189,7 @@ expression: "digest(&load(&runtime, &all))"
               }
             ],
             "category": "query",
-            "description": "List channels: each channel's id, title, interaction model, status, journey count and tags, filtered (every filter set must match), sorted (by id unless --sort-by says otherwise) and paged, with the total before paging.",
+            "description": "List channels: each channel's id, title, interaction model, status, journey count and tags, filtered (every filter set must match), sorted (by id unless a sort field is given) and paged, with the total before paging.",
             "export": "cmd__product_channels",
             "id": "channels",
             "title": "List channels"
@@ -6256,7 +6256,7 @@ expression: "digest(&load(&runtime, &all))"
               }
             ],
             "category": "query",
-            "description": "List releases: each release's id, title, version, status, deliverable count, release date and tags, filtered (every filter set must match), sorted (by id unless --sort-by says otherwise) and paged, with the total before paging.",
+            "description": "List releases: each release's id, title, version, status, deliverable count, release date and tags, filtered (every filter set must match), sorted (by id unless a sort field is given) and paged, with the total before paging.",
             "export": "cmd__product_releases",
             "id": "releases",
             "title": "List releases"
@@ -6439,7 +6439,7 @@ expression: "digest(&load(&runtime, &all))"
               }
             ],
             "category": "query",
-            "description": "How many of the milestones a deliverable is tracked by are completed, as a count and a ratio in [0, 1]; --details adds each milestone's feature completion.",
+            "description": "How many of the milestones a deliverable is tracked by are completed, as a count and a ratio in [0, 1]; asking for details adds each milestone's feature completion.",
             "export": "cmd__product_deliverable_completion",
             "id": "deliverable_completion",
             "title": "Show deliverable completion"
@@ -6665,7 +6665,7 @@ expression: "digest(&load(&runtime, &all))"
               }
             ],
             "category": "query",
-            "description": "The terms reachable from a term over see_also within --max-hops (default 1, at most 5), sorted by id, the term itself left out.",
+            "description": "The terms reachable from a term over see_also within the hop limit given (default 1, at most 5), sorted by id, the term itself left out.",
             "export": "cmd__product_term_graph",
             "id": "term_graph",
             "title": "Show the terms related to a term"
@@ -6697,7 +6697,7 @@ expression: "digest(&load(&runtime, &all))"
               }
             ],
             "category": "query",
-            "description": "Every milestone by target date, undated ones last, by id within a date; a milestone not completed whose target date is before --as-of (default today) is overdue.",
+            "description": "Every milestone by target date, undated ones last, by id within a date; a milestone not completed whose target date is before the date compared against (default today) is overdue.",
             "export": "cmd__product_milestone_timeline",
             "id": "milestone_timeline",
             "title": "Show the milestone timeline"
@@ -6720,7 +6720,7 @@ expression: "digest(&load(&runtime, &all))"
               }
             ],
             "category": "query",
-            "description": "A milestone's done, in-progress and remaining features, its completion, the days elapsed since its start date (or target date) as of --as-of (default today), features done per day and the days that pace leaves.",
+            "description": "A milestone's done, in-progress and remaining features, its completion, the days elapsed since its start date (or target date) as of the date compared against (default today), features done per day and the days that pace leaves.",
             "export": "cmd__product_milestone_velocity",
             "id": "milestone_velocity",
             "title": "Show a milestone's velocity"
