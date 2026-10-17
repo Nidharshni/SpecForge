@@ -20,7 +20,7 @@
 
 use crate::view::ProjectView;
 use serde_json::Value;
-use specforge_installed::{Installed, LockFile, LockState, Module, Pin};
+use specforge_installed::{Installed, LockFile, LockFileEntry, LockState, Module, Pin};
 use specforge_package::PackageName;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_wasm::WasmRuntime;
@@ -134,6 +134,8 @@ enum From<'a> {
         publisher: Publisher,
         bytes: Module,
     },
+    /// What the project already has, read from its lock entry: never staged, downloaded or loaded.
+    Locked,
 }
 
 /// An install the plan staged, for the ask that wanted it.
@@ -347,6 +349,26 @@ impl<'a> LockPlan<'a> {
             "'{}' is installed twice by one plan: claim the specifiers first (ADR 0098)",
             install.pin.name
         );
+        if let Some(locked) = self
+            .unchanged(&install.pin.name, |entry| {
+                entry.wasm_hash == install.sha256
+                    && std::mem::discriminant(&entry.source)
+                        == std::mem::discriminant(&install.pin.source)
+            })
+            .map(|entry| entry.version.clone())
+        {
+            self.answer(
+                ask,
+                Asked::Unchanged {
+                    locked: Some(locked),
+                },
+            );
+            return;
+        }
+        debug_assert!(
+            !matches!(install.from, From::Locked),
+            "a locked install is always unchanged"
+        );
         let Install {
             module,
             sha256,
@@ -406,6 +428,33 @@ impl<'a> LockPlan<'a> {
             });
         }
         true
+    }
+
+    /// `name`'s lock entry when the project already has it as `same` accepts: the lock the plan
+    /// opened pins it, its module on disk is the one pinned, and an entry of the `specforge.json`
+    /// the plan opened enables it. What the project has before the change, never the staged lock.
+    fn unchanged(
+        &self,
+        name: &PackageName,
+        same: impl Fn(&LockFileEntry) -> bool,
+    ) -> Option<&LockFileEntry> {
+        let entry = self.installed.verified(name.as_str()).filter(|e| same(e))?;
+        let enabled = self
+            .config
+            .entries()
+            .iter()
+            .any(|e| specforge_common::extension_entry_name(e) == name.as_str());
+        enabled.then_some(entry)
+    }
+
+    /// Whether the asks so far leave the project as it is: nothing staged, appended, dropped,
+    /// uninstalled or created.
+    fn changes_nothing(&self) -> bool {
+        self.staged.is_empty()
+            && self.appended.is_empty()
+            && self.disabled.is_empty()
+            && self.uninstalled.is_empty()
+            && !self.config.creates()
     }
 
     /// Record `asked` as the answer to `ask`, unless it already has one.
@@ -495,6 +544,14 @@ impl Changing {
         }
     }
 
+    fn none() -> Changing {
+        Changing {
+            names: Vec::new(),
+            asks: Vec::new(),
+            staged: 0,
+        }
+    }
+
     fn position(&self, name: &str) -> Option<usize> {
         self.names.iter().position(|touched| touched == name)
     }
@@ -530,6 +587,9 @@ pub(crate) struct Checked<'a> {
     config: Opened,
     appended: Vec<Appended>,
     asked: Vec<(Ask, Asked)>,
+    /// Whether the change writes anything (`LockPlan::changes_nothing` was false); when not, it is
+    /// neither judged nor written (ADR 0138).
+    changes: bool,
 }
 
 mod close;

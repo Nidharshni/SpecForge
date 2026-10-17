@@ -54,6 +54,11 @@ impl Opened {
         }
     }
 
+    /// Whether the change creates `specforge.json` (`init`).
+    pub(super) fn creates(&self) -> bool {
+        self.creating.is_some()
+    }
+
     /// The string items as read: what `specforge.json` enables before the change.
     pub(crate) fn entries(&self) -> &[String] {
         &self.entries

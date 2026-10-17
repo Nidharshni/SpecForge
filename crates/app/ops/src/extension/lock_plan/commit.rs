@@ -87,6 +87,9 @@ impl Checked<'_> {
     /// Before anything is written, a commit refuses `file_changed` when `specforge.json` no longer
     /// holds the document the plan opened with (ADR 0126); a preview writes nothing and is not checked.
     ///
+    /// A change that changes nothing (and writes no `also` file) answers here: nothing is resolved,
+    /// compared or written (ADR 0138).
+    ///
     /// Before anything is written, and for a preview too, every file the change would write is
     /// resolved through `containment` (ADR 0104): the config, the `also` files, the lock and each
     /// installed or uninstalled module. One that lands outside it, by a symlink in the project,
@@ -110,8 +113,16 @@ impl Checked<'_> {
             pins,
             appended,
             asked,
+            changes,
             ..
         } = self;
+        if !changes && also.is_empty() {
+            return Ok(Done {
+                writes: Writes::none(),
+                enabled: final_entries.len(),
+                asked,
+            });
+        }
         let document = config.written(&items);
         // Held before anything is written: what is written is what is checked here.
         let also_held = also
