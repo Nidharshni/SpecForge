@@ -43,8 +43,9 @@ directory outside the project.
 ## Consequences
 
 A legitimate shared-spec layout (a source link or `spec_root` into a sibling tree) works over the CLI and the LSP and
-stops working over MCP. The E025 suggestion text ("save it as UTF-8 text") is wrong for an outside link; the message
-names the landing. The pins are `source_links.rs` (MCP), `tests/source_disk.rs` (session) and `containment/disk_tests.rs`.
+stops working over MCP. The message names the landing, and the suggestion for a refusal by the bound says to keep the
+file and the link inside the served project, or to read it with the CLI (the "save it as UTF-8 text" suggestion stays for
+a file that is not text). The pins are `source_links.rs` (MCP), `tests/source_disk.rs` (session) and `containment/disk_tests.rs`.
 
 ## What would reopen it
 
