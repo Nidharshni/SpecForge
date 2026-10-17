@@ -4,6 +4,8 @@
 project" may be) and ADR 0029 D8 (`out_dir`). D1 and D8 amended by ADR 0104 (the rule is
 `specforge_ops::Containment`, applied where the operation opens or writes); the audit table and D2 amended by ADR 0112. D2's second bullet is carried by `ProjectRef::caller` ([ADR 0124](0124-what-the-caller-lends-an-operation-is-one-value.md)). The outline row is closed by [ADR 0116](0116-navigation-reads-the-text-the-project-was-compiled-from.md): outline asks the compile's sources and reads no file.
 
+D8 (reads of a project source) is amended by [ADR 0145](0145-the-session-reads-sources-through-the-disk-the-surface-hands-it.md): the session reads sources through the disk the surface hands it.
+
 `specforge mcp .` in `proj/`, then `tools/call specforge.format {"path": "../outside"}`, answered `ok` and
 rewrote `outside/x.spec`. The server serves one project, and a client that can name any directory could read
 or write any directory the user could. A handshake client names its own `projectRoot`; every other path in a

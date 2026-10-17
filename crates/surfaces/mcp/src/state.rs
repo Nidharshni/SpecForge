@@ -1,9 +1,10 @@
 use specforge_common::{Diagnostic, ProjectConfig, ProjectRoot};
 use specforge_graph::Graph;
+use specforge_ops::Containment;
 use specforge_ops::analysis::collect::{CollectorMachine, ProcessMachine};
 use specforge_ops::solver::{Solver, Z3};
 use specforge_project::{
-    DiagnosticsDelta, ProjectSession, RuntimeSource, SharedRuntime, Update, UpdateKind,
+    DiagnosticsDelta, ProjectSession, RuntimeSource, SharedRuntime, SourceDisk, Update, UpdateKind,
 };
 use specforge_registry::RegistryBuild;
 use std::path::{Path, PathBuf};
@@ -214,7 +215,9 @@ impl McpState {
             "only a project is served: {} holds no specforge.json",
             root.dir().display()
         );
-        let update = self.session.reopen(root, self.source(), |_| {});
+        let update =
+            self.session
+                .reopen_through(root, self.source(), Some(contained(root)), |_| {});
         self.applied(update);
     }
 
@@ -231,7 +234,7 @@ impl McpState {
     /// A session of the project at `root`, its extensions running as
     /// [`Self::source`] says: how another project a call names is opened.
     pub(crate) fn open(&self, root: &ProjectRoot) -> ProjectSession {
-        ProjectSession::open_from(root, self.source())
+        ProjectSession::open_through(root, self.source(), Some(contained(root)))
     }
 
     /// Bring the served project up to date with disk (behavior
@@ -313,6 +316,12 @@ pub(crate) fn assert_converged(update: &Update, project: &str) {
             "an update of {project} diverged from a cold rebuild: {divergence}"
         );
     }
+}
+
+/// The disk a session of the project at `root` reads its sources through: a source that resolves
+/// outside the root is unreadable (E025), never read (ADR 0145).
+fn contained(root: &ProjectRoot) -> SourceDisk {
+    Arc::new(Containment::within(root.dir()).disk())
 }
 
 #[cfg(test)]

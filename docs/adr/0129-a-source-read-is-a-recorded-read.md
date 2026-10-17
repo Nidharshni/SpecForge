@@ -6,6 +6,8 @@
 [ADR 0106](0106-a-project-session-reads-the-disk-through-one-ledger.md) D5 ("the renewals of the links happen in
 place"). Keeps ADR 0106 D2 and its rejected "stamping every discovered source at discovery". D3 is completed by [ADR 0133](0133-recorded-inputs-are-one-table.md): a hop's missing directory outside the root is watched from its nearest existing ancestor, like any input's.
 
+D1 is amended by [ADR 0145](0145-the-session-reads-sources-through-the-disk-the-surface-hands-it.md): the recording run wraps the disk the surface hands the session.
+
 ## Context
 
 Three rules answered "what did this read follow":

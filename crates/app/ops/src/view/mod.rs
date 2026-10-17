@@ -36,7 +36,6 @@ pub use connectivity::{Connectivity, Degree};
 pub use entity::{EntityField, not_found};
 pub use kinds::{KnownKinds, UNKNOWN_KIND};
 
-use crate::containment::ContainedDisk;
 use crate::schema_version::{SchemaCache, VersionedSchema};
 use crate::{Containment, OpError};
 
@@ -203,7 +202,7 @@ impl<'a> ProjectView<'a> {
         read: impl FnOnce(&dyn Disk) -> Result<T, ReportError>,
     ) -> Result<T, OpError> {
         match self.root().filter(|_| self.contained) {
-            Some(root) => read(&ContainedDisk(Containment::within(root))),
+            Some(root) => read(&Containment::within(root).disk()),
             None => read(&PlainDisk),
         }
         .map_err(crate::report::unusable)

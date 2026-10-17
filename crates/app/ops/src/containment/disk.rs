@@ -12,7 +12,7 @@ use super::{Containment, ReadFailure};
 /// The disk inside one containment: a name that lands outside reads as an error of kind
 /// `InvalidInput` (the only way the port's `io::Result` can carry `Outside`), exists not and
 /// lists nothing; anything inside is the file system's answer.
-pub(crate) struct ContainedDisk(pub(crate) Containment);
+pub struct ContainedDisk(pub(crate) Containment);
 
 impl Disk for ContainedDisk {
     fn exists(&self, path: &Path) -> bool {

@@ -9,7 +9,7 @@ use specforge_graph::{Applied, GraphDelta, NodeChange};
 use crate::buffers::{Buffer, Held};
 use crate::compiled::CompiledProject;
 use crate::diagnostics_delta::DiagnosticsDelta;
-use crate::ledger::{Changes, Ledger, SessionInputs};
+use crate::ledger::{Changes, Ledger, SessionInputs, SourceDisk};
 use crate::sources::Read;
 use crate::{Environment, SharedRuntime};
 
@@ -232,17 +232,31 @@ impl ProjectSession {
     /// Open the project at `root`, each environment load getting its
     /// runtime from `source`.
     pub fn open_from(root: &ProjectRoot, source: RuntimeSource) -> Self {
-        Self::begin_open(root, source).finish()
+        Self::open_through(root, source, None)
+    }
+
+    /// [`Self::open_from`], reading each source through `disk` (none: the plain file system). The
+    /// environment and the checks are always read plain; a reload keeps `disk` (ADR 0145).
+    pub fn open_through(
+        root: &ProjectRoot,
+        source: RuntimeSource,
+        disk: Option<SourceDisk>,
+    ) -> Self {
+        Self::begin_open(root, source, disk).finish()
     }
 
     /// The first half of [`Self::open_from`] and [`Self::reopen`]: the
     /// environment loaded (config, extensions, registries; each load getting
     /// its runtime from `source`), no `.spec` file read.
-    fn begin_open(root: &ProjectRoot, source: RuntimeSource) -> OpeningProject {
+    fn begin_open(
+        root: &ProjectRoot,
+        source: RuntimeSource,
+        disk: Option<SourceDisk>,
+    ) -> OpeningProject {
         // The ledger stamps each input in the read that reads it: the config,
         // the lock and the modules in the environment load, the sources by
         // `finish`.
-        let mut ledger = Ledger::opening();
+        let mut ledger = Ledger::opening_through(disk);
         let env = Environment::read_through(&mut ledger, root, |config| {
             source.runtime_for(root.dir(), config)
         });
@@ -440,7 +454,8 @@ impl ProjectSession {
             return self.update(|_| (UpdateKind::Environment, Applied::default()));
         };
         let source = self.source.clone();
-        self.reopen(&root, source, |_| {})
+        let disk = self.ledger.source_disk();
+        self.reopen_through(&root, source, disk, |_| {})
     }
 
     /// Open the project at `root` in this session's place, each environment load getting its runtime
@@ -462,8 +477,20 @@ impl ProjectSession {
         source: RuntimeSource,
         loaded: impl FnOnce(&Arc<Environment>),
     ) -> Update {
+        self.reopen_through(root, source, None, loaded)
+    }
+
+    /// [`Self::reopen`], reading each source through `disk` (none: the plain file system), which a
+    /// later reload keeps (ADR 0145).
+    pub fn reopen_through(
+        &mut self,
+        root: &ProjectRoot,
+        source: RuntimeSource,
+        disk: Option<SourceDisk>,
+        loaded: impl FnOnce(&Arc<Environment>),
+    ) -> Update {
         self.update(|s| {
-            let opening = Self::begin_open(root, source);
+            let opening = Self::begin_open(root, source, disk);
             loaded(opening.environment());
             let buffers = std::mem::take(&mut s.held).into_buffers();
             let mut next = opening.finish_holding(buffers);

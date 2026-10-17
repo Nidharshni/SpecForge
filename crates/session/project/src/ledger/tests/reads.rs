@@ -59,7 +59,7 @@ fn a_source_written_between_its_stamp_and_its_read_is_seen_next_time() {
 #[test]
 fn the_unrecorded_reads_are_the_ledgers() {
     let (_dir, root) = project();
-    let mut ledger = Ledger::opening();
+    let mut ledger = Ledger::opening_through(None);
     let mut unrecorded = Unrecorded;
     let from_ledger = Environment::read_through(&mut ledger, &root, |_| None);
     let from_unrecorded = Environment::read_through(&mut unrecorded, &root, |_| None);
@@ -85,7 +85,7 @@ fn the_unrecorded_reads_are_the_ledgers() {
 #[test]
 fn a_held_key_is_not_stamped_until_it_is_read() {
     let (_dir, root) = project();
-    let mut ledger = Ledger::opening();
+    let mut ledger = Ledger::opening_through(None);
     let env = Environment::read_through(&mut ledger, &root, |_| None);
     let held = BTreeMap::from([("a.spec".to_string(), NEW)]);
     CompiledProject::read(Arc::new(env), &held, &mut ledger);
@@ -105,7 +105,7 @@ fn a_dangling_link_is_read_as_gone_and_records_its_chain() {
         dir.path().join("link.spec"),
     )
     .unwrap();
-    let mut ledger = Ledger::opening();
+    let mut ledger = Ledger::opening_through(None);
     let mut unrecorded = Unrecorded;
     let env = Environment::read_through(&mut ledger, &root, |_| None);
     let sources = env.config().sources(root.dir());

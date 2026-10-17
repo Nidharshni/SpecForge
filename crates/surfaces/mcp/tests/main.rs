@@ -46,6 +46,7 @@ mod revision;
 mod schema_reflection;
 mod served;
 mod served_project;
+mod source_links;
 mod stateless;
 mod stdio;
 mod subscriptions;

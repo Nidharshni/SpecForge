@@ -2,6 +2,8 @@
 
 **Status:** accepted (2026-10-17, architecture round 14, plan 07). Answers [ADR 0112](0112-every-project-file-an-operation-opens-goes-through-the-requests-containment.md)'s reopen condition ("a crate below app that must open a project file (the session's recorded report)") without its rejected kernel move. Extends [ADR 0108](0108-a-project-view-comes-only-from-a-compiled-project.md) D2 (only a compiled project reads its report, at its own root) and ADR 0107 D1's port to the recorded report. Keeps ADR 0092 D6. Amended by [ADR 0144](0144-a-project-file-is-written-by-replacing-its-name.md) (a project file is written by replacing its name).
 
+D2 is amended by [ADR 0145](0145-the-session-reads-sources-through-the-disk-the-surface-hands-it.md): the surface also decides the disk sources are read through; the hard-link read is stated there.
+
 Every view that scores coverage passed the project's own root back into the project's memo
 (`self.project.recorded().report(self.root())`), the shape ADR 0108 removed from `ProjectView::new`. The memo then
 opened `<root>/specforge-report.json` with a raw `std::fs::read`, below every containment, so over MCP a report that

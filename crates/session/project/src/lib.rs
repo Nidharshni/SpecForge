@@ -59,7 +59,7 @@ pub use buffers::Buffer;
 pub use build_cache::{BUILD_CACHE_FILE, BUILD_CACHE_FORMAT, BuildCache, CachedStatus};
 pub use compiled::CompiledProject;
 pub use diagnostics_delta::DiagnosticsDelta;
-pub use ledger::{Changes, SessionInputs, WatchRoot, Watched, source_key};
+pub use ledger::{Changes, SessionInputs, SourceDisk, WatchRoot, Watched, source_key};
 use ledger::{Reads, Unrecorded};
 pub use policy::{DiagnosticPolicy, LINT_PROFILE_NAMES, LintProfile, UnknownLintProfile};
 pub use providers::Providers;

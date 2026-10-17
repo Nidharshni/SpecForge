@@ -10,7 +10,7 @@
 mod disk;
 mod file;
 
-pub(crate) use disk::ContainedDisk;
+pub use disk::ContainedDisk;
 pub use file::{ReadFailure, declared};
 
 use std::collections::VecDeque;
@@ -62,6 +62,12 @@ impl Containment {
         Containment {
             root: Some(landing(root)),
         }
+    }
+
+    /// This containment as the `Disk` port: what a session reads its sources through when the surface
+    /// bounds them (ADR 0145).
+    pub fn disk(&self) -> ContainedDisk {
+        ContainedDisk(self.clone())
     }
 
     /// The same kind of bound for a project inside this one: `within(dir)` when bounded,
@@ -202,6 +208,8 @@ fn landing(path: &Path) -> PathBuf {
     landed
 }
 
+#[cfg(test)]
+mod disk_tests;
 #[cfg(test)]
 mod replace_tests;
 #[cfg(test)]
