@@ -11,7 +11,7 @@ pub(super) fn declare(c: &mut ContributionsBuilder) {
             .description(
                 "Every milestone by target date, undated ones last, by id within \
             a date; a milestone not completed whose target date is before \
-            --as-of (default today) is overdue.",
+            the date compared against (default today) is overdue.",
             )
             .category("query");
         as_of_arg(cmd);
@@ -49,7 +49,7 @@ pub(super) fn declare(c: &mut ContributionsBuilder) {
             .description(
                 "A milestone's done, in-progress and remaining features, its \
             completion, the days elapsed since its start date (or target \
-            date) as of --as-of (default today), features done per day and \
+            date) as of the date compared against (default today), features done per day and \
             the days that pace leaves.",
             )
             .category("query");
@@ -165,7 +165,7 @@ fn as_of(call: &CommandCall<'_>) -> Result<(String, i64), CommandError> {
         Some(date) => (date, "as_of"),
         None if call.today().is_empty() => {
             return Err(queries::invalid_input(
-                "no date to compare against: the host passed none; pass --as-of YYYY-MM-DD",
+                "no date to compare against: the host passed none; give a date to compare against, YYYY-MM-DD",
             ));
         }
         None => (call.today(), "the host's today"),

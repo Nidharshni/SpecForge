@@ -10,63 +10,63 @@ pub(super) fn declare(c: &mut ContributionsBuilder) {
         c,
         "List features: each feature's id, title, status, priority, \
             problem and tags, filtered (every filter set must match), sorted \
-            (by id unless --sort-by says otherwise) and paged, with the \
+            (by id unless a sort field is given) and paged, with the \
             total before paging.",
     );
     list_command::<queries::JourneyListEntry>(
         c,
         "List journeys: each journey's id, title, persona, channel and \
             feature counts, priority and tags, filtered (every filter set \
-            must match), sorted (by id unless --sort-by says otherwise) and \
+            must match), sorted (by id unless a sort field is given) and \
             paged, with the total before paging.",
     );
     list_command::<queries::DeliverableListEntry>(
         c,
         "List deliverables: each deliverable's id, title, artifact type, \
             status, journey and module counts and tags, filtered (every \
-            filter set must match), sorted (by id unless --sort-by says \
-            otherwise) and paged, with the total before paging.",
+            filter set must match), sorted (by id unless a sort field is \
+            given) and paged, with the total before paging.",
     );
     list_command::<queries::MilestoneListEntry>(
         c,
         "List milestones: each milestone's id, title, status, target \
             date, feature count, priority and tags, filtered (every filter \
-            set must match), sorted (by id unless --sort-by says otherwise) \
+            set must match), sorted (by id unless a sort field is given) \
             and paged, with the total before paging.",
     );
     list_command::<queries::ModuleListEntry>(
         c,
         "List modules: each module's id, title, family, feature count, \
             the modules it depends on and tags, filtered (every filter set \
-            must match), sorted (by id unless --sort-by says otherwise) and \
+            must match), sorted (by id unless a sort field is given) and \
             paged, with the total before paging.",
     );
     list_command::<queries::TermListEntry>(
         c,
         "List terms: each term's id, title, definition, alias count and \
             tags, filtered (every filter set must match), sorted (by id \
-            unless --sort-by says otherwise) and paged, with the total \
+            unless a sort field is given) and paged, with the total \
             before paging.",
     );
     list_command::<queries::PersonaListEntry>(
         c,
         "List personas: each persona's id, title, technical level, \
             status, journey count and tags, filtered (every filter set must \
-            match), sorted (by id unless --sort-by says otherwise) and \
+            match), sorted (by id unless a sort field is given) and \
             paged, with the total before paging.",
     );
     list_command::<queries::ChannelListEntry>(
         c,
         "List channels: each channel's id, title, interaction model, \
             status, journey count and tags, filtered (every filter set must \
-            match), sorted (by id unless --sort-by says otherwise) and \
+            match), sorted (by id unless a sort field is given) and \
             paged, with the total before paging.",
     );
     list_command::<queries::ReleaseListEntry>(
         c,
         "List releases: each release's id, title, version, status, \
             deliverable count, release date and tags, filtered (every filter \
-            set must match), sorted (by id unless --sort-by says otherwise) \
+            set must match), sorted (by id unless a sort field is given) \
             and paged, with the total before paging.",
     );
 }

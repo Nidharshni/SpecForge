@@ -291,6 +291,8 @@ fn fnv1a(bytes: &[u8]) -> u64 {
 /// - 40406 bytes, `0x918e_c4ab_1cec_3bf5`: the closed filters' help no longer lists the
 ///   values (clap and MCP list them) and says what an absent value counts
 ///   as; nothing else changed.
+/// - 40433 bytes, `0xced9_0e33_5754_998a`: the 13 descriptions say the request's words, not a
+///   CLI flag (ADR 0135 D5); nothing else changed.
 #[test]
 fn the_surfaces_payload_is_pinned() {
     let payload = MockHost::new(crate::specforge_extension_build())
@@ -298,7 +300,7 @@ fn the_surfaces_payload_is_pinned() {
         .unwrap();
     assert_eq!(
         (payload.len(), fnv1a(payload.as_bytes())),
-        (40406, 0x918e_c4ab_1cec_3bf5),
+        (40433, 0xced9_0e33_5754_998a),
         "the surfaces payload changed"
     );
 }

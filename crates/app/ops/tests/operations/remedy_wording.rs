@@ -4,6 +4,8 @@
 //! `z3`) precedes it in its clause: a whole command reads the same on every surface. The diagnostic catalog's
 //! explanations are exempt: they name each surface's spelling side by side.
 //!
+//! A command's declared description is read from the committed `describe_surfaces.json` of each builtin (ADR 0135 D5).
+//!
 //! Not seen: strings built at run time from pieces (`format!("--{}", name)`), text coming from extensions, and the
 //! surfaces themselves (the CLI's own errors may name its flags).
 
@@ -177,6 +179,71 @@ fn no_message_below_the_surfaces_names_a_bare_flag() {
         offenders.len(),
         offenders.join("\n")
     );
+}
+
+/// Every string value of every `describe_surfaces.json` snapshot of a builtin or a fixture, as `snapshot-dir: text`,
+/// in directory-name then document order.
+fn declared_strings() -> Vec<(String, String)> {
+    fn walk(dir: &str, value: &serde_json::Value, out: &mut Vec<(String, String)>) {
+        match value {
+            serde_json::Value::String(text) => out.push((dir.to_string(), text.clone())),
+            serde_json::Value::Array(items) => items.iter().for_each(|item| walk(dir, item, out)),
+            serde_json::Value::Object(map) => map.values().for_each(|item| walk(dir, item, out)),
+            _ => {}
+        }
+    }
+    let root = specforge_repo_root::repo_root().join("crates/runtime/component/tests/declarations");
+    let mut dirs: Vec<_> = std::fs::read_dir(&root)
+        .unwrap_or_else(|error| panic!("{}: {error}", root.display()))
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    dirs.sort();
+    let mut out = Vec::new();
+    for dir in dirs {
+        let file = dir.join("describe_surfaces.json");
+        if !file.is_file() {
+            continue;
+        }
+        let text = std::fs::read_to_string(&file).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&text)
+            .unwrap_or_else(|error| panic!("{}: {error}", file.display()));
+        walk(
+            &dir.file_name().unwrap().to_string_lossy(),
+            &value,
+            &mut out,
+        );
+    }
+    out
+}
+
+#[test]
+fn no_declared_description_names_a_bare_flag() {
+    let offenders: Vec<String> = declared_strings()
+        .into_iter()
+        .filter_map(|(dir, text)| {
+            let flags = bare_flags(&text);
+            let shown: String = text.chars().take(100).collect();
+            (!flags.is_empty()).then(|| format!("{dir}: {flags:?}: {shown}"))
+        })
+        .collect();
+    assert!(
+        offenders.is_empty(),
+        "{} literals name a bare flag (ADR 0135):\n{}",
+        offenders.len(),
+        offenders.join("\n")
+    );
+}
+
+#[test]
+fn the_declared_walk_reads_the_product_commands() {
+    let strings = declared_strings();
+    assert!(
+        strings
+            .iter()
+            .any(|(dir, text)| dir == "product" && text.starts_with("List features: ")),
+        "the product's command descriptions are not read"
+    );
+    assert!(strings.len() > 100, "only {} strings read", strings.len());
 }
 
 #[test]
