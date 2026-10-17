@@ -47,20 +47,21 @@ use recorded::{Class, Recording};
 use stamps::{Entry, Scope, Stamps};
 
 /// What a batch of changed paths, or the disk since the last read, means to
-/// a session: the input to [`crate::ProjectSession::apply`]. Produced only
-/// by [`crate::ProjectSession::changes`] and [`crate::ProjectSession::stale`].
+/// a session: the input to [`crate::ProjectSession::apply`]. Made only by
+/// [`crate::ProjectSession::changes`] and [`crate::ProjectSession::stale`]
+/// (ADR 0100 D5); a reader reads it through its accessors.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Changes {
     /// Changed sources, by key relative to the spec root: sorted, deduplicated.
-    pub sources: Vec<String>,
+    pub(crate) sources: Vec<String>,
     /// The environment must load again. Each path of the batch that reached
     /// an environment input which changed, as the batch spelled it (for
     /// `stale`, each changed input as the session recorded it): sorted,
     /// deduplicated.
-    pub environment: Vec<PathBuf>,
+    pub(crate) environment: Vec<PathBuf>,
     /// The checks must run again: the paths that reached a changed check
     /// input, named the same way.
-    pub check_inputs: Vec<PathBuf>,
+    pub(crate) check_inputs: Vec<PathBuf>,
 }
 
 impl Changes {

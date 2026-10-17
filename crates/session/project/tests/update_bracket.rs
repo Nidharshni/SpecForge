@@ -102,7 +102,7 @@ fn a_source_rewritten_with_its_own_text_changes_nothing() {
             fs::write(&a, ALPHA).unwrap();
         }
         touch(&a);
-        assert_eq!(session.stale().sources, ["a.spec"]);
+        assert_eq!(session.stale().sources(), ["a.spec"]);
         let before = check_runs(&rt);
         let update = disk_changed(&mut session, &["a.spec"]);
         assert!(update.is_none(), "{:?}", update.map(|u| u.rebuilt_files));

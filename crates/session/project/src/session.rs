@@ -489,20 +489,21 @@ impl ProjectSession {
         self.ledger.inputs()
     }
 
-    /// Apply `changes`: the environment first (a reload rebuilds
-    /// everything), else the sources (an update re-runs every check), else
-    /// the checks alone; every file a buffer holds is left out. `None` when
-    /// applying `changes` changes nothing: `changes` is empty, or every
-    /// changed source reads as the session holds it and its inputs did not
-    /// move.
+    /// Apply `changes` this session made ([`Self::changes`], [`Self::stale`]):
+    /// the environment first (a reload rebuilds everything), else the sources
+    /// (an update re-runs every check), else the checks alone; every file a
+    /// buffer holds is left out, including one held since `changes` were made.
+    /// `None` when applying `changes` changes nothing: `changes` is empty, or
+    /// every changed source reads as the session holds it and its inputs did
+    /// not move. A detached session makes no changes (ADR 0073 D7).
     pub fn apply(&mut self, changes: &Changes) -> Option<Update> {
         let mut sources = changes.sources.clone();
         self.held.leave_out(&mut sources);
-        if !changes.environment.is_empty() && self.project.root().is_some() {
+        if !changes.environment.is_empty() {
             Some(self.reload_environment())
         } else if !sources.is_empty() {
             self.reread(&sources)
-        } else if !changes.check_inputs.is_empty() && self.project.root().is_some() {
+        } else if !changes.check_inputs.is_empty() {
             Some(self.recheck())
         } else {
             None
