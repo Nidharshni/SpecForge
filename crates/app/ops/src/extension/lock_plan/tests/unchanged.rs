@@ -26,7 +26,7 @@ fn base_plan<'a>(
 }
 
 fn answer(plan: LockPlan<'_>) -> (Answer, Done) {
-    let done = plan.check().ok().unwrap().finish(Vec::new()).unwrap();
+    let done = plan.check().ok().unwrap().finish().unwrap();
     (done.asked(Ask(0)), done)
 }
 
@@ -165,6 +165,6 @@ fn a_change_that_changes_nothing_resolves_and_compares_nothing() {
         r#"{"extensions":["@specforge/product","@acme/x"]}"#,
     )
     .unwrap();
-    let done = checked.finish(Vec::new()).unwrap();
+    let done = checked.finish().unwrap();
     assert!(done.writes.is_empty());
 }

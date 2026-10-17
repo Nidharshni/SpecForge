@@ -116,6 +116,7 @@ impl<'a> LockPlan<'a> {
             appended,
             asked,
             lent: caller.containment(),
+            also: Vec::new(),
             changes,
         })
     }

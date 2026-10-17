@@ -393,7 +393,7 @@ pub fn update(
     // Apply: one change that places every binary and writes the lock once. A failure puts the
     // previous binaries and lock back.
     if let Some(checked) = checked.filter(|_| outcome.applied()) {
-        checked.finish(Vec::new())?;
+        checked.finish()?;
     }
     Ok(outcome)
 }

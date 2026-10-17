@@ -15,7 +15,7 @@ pub(crate) type StageHeld<'f> =
     Box<dyn FnOnce(Held, &mut ProjectChange) -> Result<(), OpError> + 'f>;
 
 /// A file the change writes after `specforge.json`'s edit and before the pins (`init`'s
-/// `.gitignore` and starter), in the same project change (ADR 0128): put back, or removed when it
+/// `.gitignore` and starter, handed over with [`Checked::writing`]), in the same project change (ADR 0128): put back, or removed when it
 /// was not there, when the change fails. `stage` is handed the file `path` resolved to (ADR 0112):
 /// it reads and stages nothing else. `code` is the refusal of writing it.
 pub(crate) struct Also<'f> {
@@ -60,7 +60,14 @@ impl Done {
     }
 }
 
-impl Checked<'_> {
+impl<'a> Checked<'a> {
+    /// Also write `also` with the change, after `specforge.json` and before the pins (ADR 0128 D4,
+    /// ADR 0137).
+    pub(crate) fn writing(mut self, also: Vec<Also<'a>>) -> Checked<'a> {
+        self.also = also;
+        self
+    }
+
     /// The `extensions` items the change leaves, in order: the items the plan opened with
     /// without the dropped ones, then the appended ones, dependencies first (ADR 0126).
     fn items(&self) -> Vec<Value> {
@@ -78,7 +85,7 @@ impl Checked<'_> {
     /// A preview answers without writing. A commit writes, all or nothing (ADR 0028 D4, ADR 0128):
     /// each staged module placed and each uninstalled one moved aside, the lock once (when a module
     /// changed), then, as the installed change's last step, the project change: `specforge.json` with
-    /// the entries the plan judged (ADR 0126) and the `also` files written in order, and last
+    /// the entries the plan judged (ADR 0126) and the files of [`Self::writing`] written in order, and last
     /// the publisher keys its fetches accepted (ADR 0059). A plan that stages no module writes no
     /// lock and opens no installed change (ADR 0041 B4). A failure at any step, the pins' included
     /// (R-TRUST-006), puts every file back and pins nothing. The error's writes name what could not
@@ -94,7 +101,7 @@ impl Checked<'_> {
     /// resolved through the caller's containment narrowed to the project (ADR 0104, ADR 0137): the config, the `also` files, the lock and each
     /// installed or uninstalled module. One that lands outside it, by a symlink in the project,
     /// refuses the change (`outside_root`), nothing written (ADR 0092 D8).
-    pub(crate) fn finish(self, also: Vec<Also<'_>>) -> Result<Done, OpError> {
+    pub(crate) fn finish(self) -> Result<Done, OpError> {
         let items = self.items();
         let final_entries = Opened::entries_of(&items);
         let Checked {
@@ -110,6 +117,7 @@ impl Checked<'_> {
             asked,
             changes,
             lent,
+            also,
             ..
         } = self;
         if !changes && also.is_empty() {

@@ -76,7 +76,8 @@ fn every_write_of_a_lock_plan_lands_inside_its_project_whatever_bound_its_caller
         .check()
         .ok()
         .unwrap()
-        .finish(also)
+        .writing(also)
+        .finish()
         .unwrap_err();
 
         assert_eq!(error.code, OUTSIDE_ROOT, "{linked}: {error:?}");
@@ -110,7 +111,7 @@ fn an_unbounded_caller_is_not_refused_for_its_own_link() {
     .check()
     .ok()
     .unwrap()
-    .finish(Vec::new())
+    .finish()
     .unwrap();
 
     // The CLI's own link is the user's: the change is written, not refused (ADR 0092 D6).
@@ -136,7 +137,7 @@ fn a_bound_that_does_not_hold_the_project_is_refused_not_widened() {
     .check()
     .ok()
     .unwrap()
-    .finish(Vec::new())
+    .finish()
     .unwrap_err();
 
     assert_eq!(error.code, OUTSIDE_ROOT, "{error:?}");
@@ -165,7 +166,7 @@ fn a_preview_is_bounded_like_a_commit() {
     .check()
     .ok()
     .unwrap()
-    .finish(Vec::new())
+    .finish()
     .unwrap_err();
 
     assert_eq!(error.code, OUTSIDE_ROOT, "{error:?}");

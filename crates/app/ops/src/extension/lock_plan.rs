@@ -599,6 +599,8 @@ pub(crate) struct Checked<'a> {
     asked: Vec<(Ask, Asked)>,
     /// The bound the caller lent; the commit narrows it to `installed.root()` (ADR 0137).
     lent: &'a Containment,
+    /// Files the change writes after `specforge.json` and before the pins (init's), in order.
+    also: Vec<Also<'a>>,
     /// Whether the change writes anything (`LockPlan::changes_nothing` was false); when not, it is
     /// neither judged nor written (ADR 0138).
     changes: bool,

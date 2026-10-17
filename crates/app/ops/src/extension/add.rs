@@ -182,7 +182,7 @@ pub fn add(
             &mut Wanted::of,
         )
         .map_err(|e| e.about(AddField::Extensions))?;
-    let done = checked.finish(Vec::new())?;
+    let done = checked.finish()?;
     let added = answers
         .into_iter()
         .enumerate()

@@ -65,7 +65,7 @@ fn each_specifier_is_asked_under_its_position() {
         ]
     );
     assert_eq!(checked.entries(), ["@specforge/product", "@sdk/greet"]);
-    let done = checked.finish(Vec::new()).unwrap();
+    let done = checked.finish().unwrap();
     assert!(matches!(done.asked(Ask(0)), Asked::Changes { .. }));
     assert!(matches!(done.asked(Ask(1)), Asked::Changes { .. }));
     // The duplicate asked nothing, so its ask was never answered.

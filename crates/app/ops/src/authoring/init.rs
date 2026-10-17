@@ -262,7 +262,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
             code: INIT_WRITE_FAILED,
         },
     ];
-    let done = checked.finish(files)?;
+    let done = checked.writing(files).finish()?;
 
     Ok(Outcome {
         root: dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf()),

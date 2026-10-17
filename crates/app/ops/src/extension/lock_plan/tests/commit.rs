@@ -74,7 +74,7 @@ fn a_lock_plan_pins_what_its_fetches_decided_only_when_it_commits() {
 
     // Committed: pinned.
     let checked = stage_app(&registry, &runtime, &installed).check().unwrap();
-    checked.finish(Vec::new()).unwrap();
+    checked.finish().unwrap();
     assert_eq!(registry.pins(), [(app(), "k1".to_string())].into());
 }
 
@@ -90,7 +90,7 @@ fn a_committed_registry_install_locks_its_hash_and_key_id() {
     stage_app(&registry, &runtime, &installed)
         .check()
         .unwrap()
-        .finish(Vec::new())
+        .finish()
         .unwrap();
 
     let lock =
@@ -127,7 +127,7 @@ fn a_pin_that_cannot_be_saved_puts_back_everything_the_install_wrote() {
     let error = stage_app(&registry, &runtime, &installed)
         .check()
         .unwrap()
-        .finish(Vec::new())
+        .finish()
         .unwrap_err();
 
     assert!(error.is(codes::R_TRUST_006), "{error:?}");
@@ -148,7 +148,7 @@ fn an_already_pinned_or_unsigned_install_pins_nothing() {
     stage_app(&registry, &runtime, &installed)
         .check()
         .unwrap()
-        .finish(Vec::new())
+        .finish()
         .unwrap();
     assert_eq!(registry.pins(), [(app(), "k1".to_string())].into());
 
@@ -159,7 +159,7 @@ fn an_already_pinned_or_unsigned_install_pins_nothing() {
     stage_app(&registry, &runtime, &installed)
         .check()
         .unwrap()
-        .finish(Vec::new())
+        .finish()
         .unwrap();
     assert!(registry.pins().is_empty());
 }
@@ -202,7 +202,7 @@ fn each_ask_is_answered_with_the_builtins_its_extension_required() {
         for (at, name) in asked.iter().enumerate() {
             plan.enable(Ask(at), name);
         }
-        plan.check().ok().unwrap().finish(Vec::new()).unwrap()
+        plan.check().ok().unwrap().finish().unwrap()
     };
 
     // software first: formal's requirement is already met by the earlier ask.
@@ -247,7 +247,7 @@ fn a_pin_failure_whose_rollback_cannot_put_the_config_back_names_it() {
     let error = stage_app(&registry, &runtime, &installed)
         .check()
         .unwrap()
-        .finish(Vec::new())
+        .finish()
         .unwrap_err();
 
     assert!(error.is(codes::R_TRUST_006), "{error:?}");
@@ -322,7 +322,8 @@ fn an_entries_only_plan_accepts_an_unreadable_lock_and_puts_the_config_back() {
         .check()
         .ok()
         .unwrap()
-        .finish(vec![staging(&locked.join("new.txt"), "x")])
+        .writing(vec![staging(&locked.join("new.txt"), "x")])
+        .finish()
         .unwrap_err();
 
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -359,7 +360,8 @@ fn a_failed_change_puts_back_every_project_file_and_the_directories_it_made() {
     let error = stage_app(&registry, &runtime, &installed)
         .check()
         .unwrap()
-        .finish(also)
+        .writing(also)
+        .finish()
         .unwrap_err();
 
     assert!(error.is(codes::R_TRUST_006), "{error:?}");
@@ -392,7 +394,7 @@ fn an_add_over_a_config_changed_since_it_was_read_writes_nothing() {
     // The base is disabled by hand after the plan judged on it.
     std::fs::write(&config, "{\"extensions\":[]}").unwrap();
 
-    let error = checked.finish(Vec::new()).unwrap_err();
+    let error = checked.finish().unwrap_err();
 
     assert_eq!(error.code, "file_changed", "{error:?}");
     assert_eq!(std::fs::read(&lock_file).unwrap(), lock_before);

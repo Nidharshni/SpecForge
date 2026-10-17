@@ -288,7 +288,7 @@ fn change(
     let done = plan
         .check()
         .map_err(|refused| refused.decisive().1.about(RemoveField::Name))?
-        .finish(Vec::new())?;
+        .finish()?;
     Ok(done.writes)
 }
 
