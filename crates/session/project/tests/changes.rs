@@ -9,9 +9,7 @@ use std::sync::Arc;
 
 use serde_json::json;
 use specforge_project::testing::{TestProject, compile_at, disk_changed};
-use specforge_project::{
-    Buffer, Changes, ProjectSession, SharedRuntime, UpdateKind, WatchRoot, Watched,
-};
+use specforge_project::{Buffer, ProjectSession, SharedRuntime, UpdateKind, WatchRoot, Watched};
 use specforge_test::prelude::*;
 use tempfile::TempDir;
 
@@ -480,6 +478,7 @@ fn an_update_that_names_a_new_file_changes_the_inputs() {
     let before = session.inputs().clone();
 
     // An edit that names a file: the inputs gain it.
+    write(root, "new.md", "# New\n");
     let named = "gadget doc \"Doc\" {\n  docs [\"new.md\"]\n}\n";
     write(root, "a.spec", named);
     let keys = ["a.spec".to_string()];
@@ -493,14 +492,12 @@ fn an_update_that_names_a_new_file_changes_the_inputs() {
             .contains(&Watched::File(root.join("new.md")))
     );
 
-    // The same update again, and a re-check of nothing renamed: no change.
+    // The same update again, and a re-check after the named file is rewritten: no change.
     assert!(disk_changed(&mut session, &keys).is_none());
-    let recheck = session
-        .apply(&Changes {
-            check_inputs: vec![root.join("new.md")],
-            ..Changes::default()
-        })
-        .unwrap();
+    write(root, "new.md", "# New, longer\n");
+    let rewritten = session.changes([root.join("new.md").as_path()]);
+    let recheck = session.apply(&rewritten).expect("a check input changed");
+    assert_eq!(recheck.kind, UpdateKind::Checks);
     assert!(!recheck.inputs_changed);
 
     // A reload with the same config reads the same files: same inputs.
@@ -637,11 +634,14 @@ fn a_detached_session_has_no_inputs() {
 
     assert!(session.inputs().watch_roots().is_empty());
     assert!(session.stale().is_empty());
-    let environment = Changes {
-        environment: vec![PathBuf::from("/x/specforge.json")],
-        ..Default::default()
-    };
-    assert!(session.apply(&environment).is_none());
+    let dir = TempDir::new().unwrap();
+    write(dir.path(), "specforge.json", "{}");
+    assert!(
+        session
+            .changes([dir.path().join("specforge.json").as_path()])
+            .is_empty()
+    );
+    assert!(session.ensure_fresh().is_none());
 
     let update = session.reload_environment();
     assert_eq!(update.kind, UpdateKind::Environment);
