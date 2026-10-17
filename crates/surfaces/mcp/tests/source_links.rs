@@ -211,20 +211,90 @@ fn a_source_link_whose_final_target_is_inside_the_project_is_read() {
     assert!(!reply.contains("E025"), "{reply}");
 }
 
-/// A hard link has no path that differs from a file in the project: it is read, and this is the
-/// documented gap (ADR 0145).
+/// A file with more than one name is another name for a file outside: no view reads it (ADR 0146).
 #[cfg(unix)]
 #[specforge_test_macros::test(
     invariant = "mcp_served_project_consistency",
     verify = "a source of the served project is read only from inside the project"
 )]
-fn a_hard_linked_source_is_read_like_a_file_in_the_project() {
+#[ignore = "flipped by T2"]
+fn a_hard_linked_source_that_is_not_a_spec_is_read_by_no_view() {
+    let (_scene, project, outside) = scene();
+    fs::write(
+        outside.join("secret.txt"),
+        format!("{SECRET} not a valid spec\nline-two-password=hunter2\n"),
+    )
+    .unwrap();
+    fs::hard_link(outside.join("secret.txt"), project.join("spec/leak.spec")).unwrap();
+    let mut server = serve(&project);
+    let all = views(&mut server);
+    assert!(all.contains("E025"), "{all}");
+    assert_nothing_of(&all, &[SECRET, "hunter2", "password"]);
+}
+
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a source of the served project is read only from inside the project"
+)]
+#[ignore = "flipped by T2"]
+fn a_hard_linked_source_that_is_a_valid_spec_enters_no_graph() {
     let (_scene, project, outside) = scene();
     fs::write(outside.join("leaked.spec"), OUTSIDE_SPEC).unwrap();
     fs::hard_link(outside.join("leaked.spec"), project.join("spec/leak.spec")).unwrap();
     let mut server = serve(&project);
+    let all = views(&mut server);
+    assert!(all.contains("E025"), "{all}");
+    assert_nothing_of(
+        &all,
+        &["Leaked Behavior", "outside-body-text", "\"leaked\""],
+    );
+}
+
+/// A hard-linked recorded report steers no coverage verdict.
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a source of the served project is read only from inside the project"
+)]
+#[ignore = "flipped by T2"]
+fn a_hard_linked_recorded_report_steers_no_coverage_verdict() {
+    let (_scene, project, outside) = scene();
+    fs::write(
+        outside.join("r.json"),
+        r#"{"results":{"alpha":{"tests":[{"name":"OUTSIDE-TEST","status":"passed"}]}}}"#,
+    )
+    .unwrap();
+    fs::hard_link(
+        outside.join("r.json"),
+        project.join("specforge-report.json"),
+    )
+    .unwrap();
+    let mut server = serve(&project);
+    for name in ["specforge.coverage", "specforge.stats"] {
+        let reply = call_tool(&mut server, name, json!({})).to_string();
+        assert!(reply.contains("E045"), "{name}: {reply}");
+        assert_nothing_of(&reply, &["OUTSIDE-TEST"]);
+    }
+}
+
+/// A plain file, and a symlink that stays inside, still read: only a second name is refused.
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a source of the served project is read only from inside the project"
+)]
+fn a_source_with_one_name_is_read() {
+    let (_scene, project, _outside) = scene();
+    fs::write(
+        project.join("spec/p.spec"),
+        "behavior plain \"Plain\" { }\n",
+    )
+    .unwrap();
+    let mut server = serve(&project);
     let reply = call_tool(&mut server, "specforge.list", json!({})).to_string();
-    assert!(reply.contains("leaked"), "{reply}");
+    assert!(reply.contains("plain"), "{reply}");
+    assert!(!reply.contains("E025"), "{reply}");
 }
 
 /// A symlinked directory inside the spec root is not entered at all.
