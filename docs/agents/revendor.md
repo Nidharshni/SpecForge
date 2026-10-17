@@ -30,6 +30,13 @@ ignored tests), and prints the `git add` line that stages exactly those paths.
 A new committed blob is listed in `crates/runtime/component/src/committed.rs` first.
 `every_committed_wasm_is_listed` (xtask) fails for a `.wasm` file git tracks that the list does not name.
 
+## Profile
+
+The blobs are built with `--profile blob` (root `Cargo.toml`: opt-level `z`, fat LTO, one codegen unit, strip), not with the
+workspace's `release`: the nine builtins go from 7.0 MB to 3.1 MB, which also shrinks the CLI that embeds them. The table is
+an input of every blob (`Cargo.toml#workspace-inherited`), so editing it re-vendors them. Trap frames lose function names;
+to debug a guest, rebuild its crate with a plain `cargo build --release`.
+
 ## Review
 
 Declaration snapshots should change only when the change meant to change a declaration; a snapshot diff nobody

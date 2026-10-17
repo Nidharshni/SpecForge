@@ -90,7 +90,7 @@ fn stage_name(blob: &CommittedBlob) -> &'static str {
 /// Where `blob` is built.
 fn staged_blob(root: &Path, blob: &CommittedBlob) -> PathBuf {
     root.join(format!(
-        "target/blob-stage/{}/target/{TARGET}/release/{}",
+        "target/blob-stage/{}/target/{TARGET}/blob/{}",
         stage_name(blob),
         blob.artifact
     ))
@@ -219,7 +219,7 @@ impl Stage {
         })
     }
 
-    /// `cargo build --release --target wasm32-wasip2 -p <package>` in the stage, with the
+    /// `cargo build --profile blob --target wasm32-wasip2 -p <package>` in the stage, with the
     /// rustflags this function sets and no `RUSTFLAGS`, `build.rustflags` or `CARGO_TARGET_DIR`
     /// of the user's reaching the blob. Then every package of the stage's lock must be in the
     /// extension's: cargo only prunes the dev-dependencies' entries. Returns the blob's path.
@@ -231,7 +231,7 @@ impl Stage {
         ];
         let mut command = Command::new("cargo");
         command
-            .args(["build", "--release", "--target", TARGET, "-p"])
+            .args(["build", "--profile", "blob", "--target", TARGET, "-p"])
             .arg(&self.package)
             .arg("--target-dir")
             .arg(self.root.join("target"))
@@ -249,9 +249,7 @@ impl Stage {
         let status = command
             .status()
             .map_err(|e| format!("spawn cargo while building '{}': {e}", self.crate_dir))?;
-        let blob = self
-            .root
-            .join(format!("target/{TARGET}/release/{artifact}"));
+        let blob = self.root.join(format!("target/{TARGET}/blob/{artifact}"));
         if !status.success() || !blob.exists() {
             return Err(format!("build did not produce {}", blob.display()));
         }

@@ -12,14 +12,15 @@ use crate::change_set::ChangeSet;
 
 pub const FILE: &str = "inputs.json";
 /// The key for the root manifest's tables a staged crate inherits: `[workspace.package]` (edition, version,
-/// license), `[workspace.dependencies]` (dependency specs) and the two `[workspace.lints]` tables (the lint levels
-/// its `[lints] workspace = true` reads). Only these can change how a staged crate builds.
+/// license), `[workspace.dependencies]` (dependency specs) the two `[workspace.lints]` tables (the lint levels
+/// its `[lints] workspace = true` reads) and `[profile.blob]` (how it is optimised). Only these can change how a staged crate builds.
 pub const WORKSPACE_INHERITED: &str = "Cargo.toml#workspace-inherited";
 pub const INHERITED_TABLES: &[&str] = &[
     "[workspace.package]",
     "[workspace.dependencies]",
     "[workspace.lints.rust]",
     "[workspace.lints.clippy]",
+    "[profile.blob]",
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

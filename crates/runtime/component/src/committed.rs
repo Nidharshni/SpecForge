@@ -42,7 +42,7 @@ pub struct CommittedBlob {
     pub name: &'static str,
     /// Its crate, from the repository root: `extensions/software`, `fixtures/greet-extension`.
     pub crate_dir: &'static str,
-    /// The file `cargo build --release --target wasm32-wasip2` produces for it.
+    /// The file `cargo build --profile blob --target wasm32-wasip2` produces for it.
     pub artifact: &'static str,
     pub guest: Guest,
 }

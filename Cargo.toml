@@ -139,3 +139,13 @@ debug = "line-tables-only"
 [profile.release]
 lto = true
 strip = true
+
+# The committed wasm blobs (`xtask build-blobs`, ADR 0114): small over fast. Inherited into the
+# blob stage like the lint tables. Trap frames lose function names (strip); rebuild an extension
+# without this profile to debug it.
+[profile.blob]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+strip = true
