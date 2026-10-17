@@ -320,6 +320,49 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
   verify contract "Read Views over the Project View: read views hold — project_compiled, one_report_rule, one_coverage_per_state, surfaces_agree"
 }
 
+// The coverage view (specforge_ops::read::coverage): one row per entity, by the
+// coverage rule, over the project view. specforge.coverage renders it.
+behavior compute_the_coverage_view "Compute the Coverage View" {
+  features   [extension_driven_coverage, mcp_core_tools]
+  invariants [diagnostic_determinism, testable_entity_classification]
+  category   query
+  types      [CoverageStatus]
+  ports      [CompilerApi]
+  requires {
+    project_compiled "A compiled project, one-shot or a project session's, supplies the project view"
+  }
+  ensures {
+    rows_are_what_counts "With no filter, the rows are the entities that count toward coverage"
+    status_by_the_rule   "A row's status is the coverage rule's verdict over the recorded report"
+  }
+  contract   """
+    The coverage view MUST give each entity a row: its obligation count, its
+    proven count and its unproven verify texts, and a status. An obligation
+    is proven when a passing recorded test names its verify text, the rule
+    analyze coverage applies: an entity is covered only when every
+    obligation is proven and no recorded test fails, so it is never covered
+    while analyze reports A015 or A014; it is partial when some obligation is
+    proven or a recorded test fails, else uncovered. A failing test proves
+    nothing, even when it names an obligation. A verify property obligation
+    counts as proven only through a passing test, as in analyze coverage
+    without --prove. The obligations are the entity's verify statements; a
+    field named verify is a field, never an obligation. Statuses are computed
+    from the entity's verify declarations and the recorded report; no
+    extension input decides them. With no filter the rows are the entities
+    that count toward coverage: an entity of a kind the extension manifests
+    declare testable, less the entities W004 exempts that declare no
+    obligations (union types, abstract entities, governance kinds), the
+    entities stats counts as testable. An entity_id names one entity
+    whether it counts or not; each row says whether the entity is exempt.
+    kind and status narrow the rows.
+  """
+  verify unit "with no filters the rows are the entities that count toward coverage"
+  verify unit "an exempt entity named by entity_id is returned with exempt true"
+  verify unit "an entity with an unproven obligation is partial, not covered"
+  verify unit "a failing recorded test keeps an entity from being covered"
+  verify unit "a field named verify does not hide an entity's verify statements"
+}
+
 // The exploration and the review: the explore and review prompts'
 // payloads, and specforge explore / specforge review, read one view each.
 behavior explore_the_graph "Explore the Graph" {

@@ -1,8 +1,8 @@
 // MCP Tool behaviors — Core tools and navigation tools
 //
-// 15 behaviors:
-//   - Core Tools (9): query, validate, export, trace, search, schema, coverage, stats, analyze
-//   - Navigation Tools (5): inspect, find_definition, find_references, outline, suggest_fixes
+// 18 behaviors:
+//   - Core Tools (10): query, validate, export, trace, search, explain, schema, coverage, stats, analyze
+//   - Navigation Tools (7): inspect, find_definition, find_references, find_implementation, find_spec_for_source, outline, suggest_fixes
 //   - Dynamic kinds (1): specforge.list and the entities-by-kind resource
 
 use "events/mcp"
@@ -385,45 +385,22 @@ behavior provide_mcp_coverage_tool "Provide MCP Coverage Tool" {
     In MCP server mode, the system MUST register a specforge.coverage tool
     that accepts entity_id? (optional, single entity), kind? (optional, filter
     by entity kind), and status_filter? (optional: covered|uncovered|partial).
-    Status values are structurally computed from the entity's verify declarations
-    and collected evidence — no extension input is required to determine coverage
-    status (P2). An obligation is proven when a passing recorded test names its
-    verify text, the rule analyze coverage applies: an entity is covered only
-    when every obligation is proven and no recorded test fails, so it never
-    reports covered while analyze reports A015 or A014. Each result MUST carry
-    the obligation count, the proven count, and the unproven verify texts. A verify
-    property obligation counts as proven only through a passing test, as in
-    analyze coverage without --prove: the SMT discharge --prove adds is not
-    run per call. The tool MUST return an object whose entities are the coverage status
-    per entity, including verify count, linked evidence count, and evidence status from
-    specforge-report.json if available.
+    The tool MUST return the coverage view's rows (compute_the_coverage_view)
+    as an object whose entities are the rows.
     A specforge-report.json that exists but cannot be read or parsed MUST be
     an error, an isError result carrying an McpError, as the CLI refuses it;
     it is never read as a project with no recorded tests. A report the
     system refuses to read is permission_denied, on this tool and every tool
     that reads it.
-    When no filters are provided, the tool MUST return coverage for every
-    entity that counts toward coverage: an entity of a kind the extension
-    manifests declare testable, less the entities W004 exempts that
-    declare no obligations (union types, abstract entities, governance
-    kinds), the entities stats counts as testable. An entity_id filter
-    returns that entity whether it counts or not; each result says
-    whether the entity is exempt. A status_filter other than covered,
-    uncovered or partial MUST be an invalid-input error on status_filter
-    naming the closest status.
+    A status_filter other than covered, uncovered or partial MUST be an
+    invalid-input error on status_filter naming the closest status.
   """
-  verify unit "specforge.coverage returns coverage for all testable entities"
   verify unit "the result is an object holding the rows as entities"
   verify unit "a report the OS refuses to read is a permission_denied error on every tool that reads it"
-  verify unit "with no filters the rows are the entities that count toward coverage"
-  verify unit "an exempt entity named by entity_id is returned with exempt true"
   verify unit "an unknown status_filter is an invalid-input error naming the closest status"
   verify unit "entity_id filter returns single entity coverage"
   verify unit "kind filter restricts to matching entity kinds"
   verify unit "status_filter restricts to matching coverage status"
-  verify unit "an entity with an unproven obligation is partial, not covered"
-  verify unit "a failing recorded test keeps an entity from being covered"
-  verify unit "a field named verify does not hide an entity's verify statements"
   verify unit "a malformed specforge-report.json is an error result, not an empty report"
   verify integration "specforge.coverage reports covered exactly for the entities analyze coverage proves"
   verify integration "with no filters the coverage rows are the entities stats counts as testable"
