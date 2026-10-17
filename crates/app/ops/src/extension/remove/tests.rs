@@ -596,3 +596,43 @@ fn a_removal_over_a_config_deleted_since_the_compile_writes_nothing() {
             .exists()
     );
 }
+
+#[cfg(unix)]
+#[test]
+#[ignore = "flipped by T3"]
+fn a_removal_writes_nothing_outside_its_project_whatever_bound_its_caller_lends() {
+    let fixture = installed(Assembled::new().config(&["@acme/x"]), "@acme/x");
+    write_config(&fixture, r#"{"extensions": ["@acme/x"]}"#);
+    // The lock lives in a sibling directory the project links to.
+    let sibling = tempfile::tempdir().unwrap();
+    let lock = fixture.root().join("specforge.lock");
+    std::fs::rename(&lock, sibling.path().join("specforge.lock")).unwrap();
+    std::os::unix::fs::symlink(sibling.path().join("specforge.lock"), &lock).unwrap();
+    let before = std::fs::read(sibling.path().join("specforge.lock")).unwrap();
+    // A bound wider than the project, holding the sibling too.
+    let wide = Containment::within(&std::env::temp_dir());
+
+    let error = remove(
+        &fixture.view(),
+        &RemoveRequest {
+            caller: crate::testing::bounded(&wide),
+            ..removing("@acme/x")
+        },
+    )
+    .unwrap_err();
+
+    assert_eq!(error.error.code, crate::OUTSIDE_ROOT, "{error:?}");
+    assert_eq!(
+        std::fs::read(sibling.path().join("specforge.lock")).unwrap(),
+        before
+    );
+    assert!(
+        package_dir(fixture.root(), "@acme/x")
+            .join("extension.wasm")
+            .exists()
+    );
+    assert_eq!(
+        text(fixture.root().join("specforge.json")),
+        r#"{"extensions": ["@acme/x"]}"#
+    );
+}
