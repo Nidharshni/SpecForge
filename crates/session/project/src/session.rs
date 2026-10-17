@@ -175,9 +175,6 @@ pub struct ProjectSession {
     /// The editor buffers the session holds: each is the truth for its file
     /// until released (ADR 0046).
     held: Held,
-    /// The last update skipped the checks (the typing fast path): the next
-    /// update, or a release, runs them even when it changes no file.
-    checks_skipped: bool,
 }
 
 /// A project whose environment is loaded and whose sources are not read yet
@@ -223,7 +220,6 @@ impl OpeningProject {
             source: self.source,
             ledger,
             held,
-            checks_skipped: false,
         };
         session.check();
         session
@@ -239,7 +235,6 @@ impl ProjectSession {
             source: RuntimeSource::Fixed(None),
             ledger: Ledger::detached(),
             held: Held::default(),
-            checks_skipped: false,
         }
     }
 
@@ -352,7 +347,7 @@ impl ProjectSession {
                 reads.push((key, read));
             }
         }
-        if reads.is_empty() && !self.checks_skipped && !moved {
+        if reads.is_empty() && !self.project.checks_skipped() && !moved {
             return None;
         }
         Some(self.applied(reads, CheckMode::Full, moved))
@@ -403,7 +398,7 @@ impl ProjectSession {
     /// nothing an update reads besides its sources can have moved (ADR 0055).
     fn applied(&mut self, reads: Vec<(String, Read)>, mode: CheckMode, moved: bool) -> Update {
         if reads.is_empty() {
-            return if self.checks_skipped {
+            return if self.project.checks_skipped() {
                 let mut update = self.recheck();
                 update.inputs_changed |= moved;
                 update
@@ -417,7 +412,6 @@ impl ProjectSession {
             && self.project.has_parse_errors_in(&applied.files)
         {
             self.project.skip_checks();
-            self.checks_skipped = true;
             false
         } else {
             self.check()
@@ -570,7 +564,6 @@ impl ProjectSession {
     /// the check inputs (which the snapshot's `file_exists` rules add to)
     /// stamped first: whether the session's inputs changed.
     fn check(&mut self) -> bool {
-        self.checks_skipped = false;
         self.project.check(&mut self.ledger)
     }
 }

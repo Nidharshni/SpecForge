@@ -65,6 +65,9 @@ pub struct CompiledProject {
     /// and imports are not resolved, with no spec root to resolve them
     /// against (ADR 0030 D5).
     on_disk: bool,
+    /// The last update skipped the checks (the typing fast path): none is
+    /// reported until an update runs them (ADR 0136 D4).
+    checks_skipped: bool,
 }
 
 impl CompiledProject {
@@ -206,6 +209,7 @@ impl CompiledProject {
             recorded: OnceLock::new(),
             reported: OnceLock::new(),
             on_disk: false,
+            checks_skipped: false,
         }
     }
 
@@ -225,6 +229,7 @@ impl CompiledProject {
             recorded: OnceLock::new(),
             reported: OnceLock::new(),
             on_disk,
+            checks_skipped: false,
         }
     }
 
@@ -249,6 +254,7 @@ impl CompiledProject {
             recorded: OnceLock::new(),
             reported: OnceLock::from(Arc::<[Diagnostic]>::from(reported)),
             on_disk: rooted,
+            checks_skipped: false,
         }
     }
 
@@ -277,6 +283,7 @@ impl CompiledProject {
             recorded: OnceLock::new(),
             reported: OnceLock::new(),
             on_disk: true,
+            checks_skipped: false,
         }
     }
 
@@ -316,6 +323,7 @@ impl CompiledProject {
             let entities = Arc::new(env.entity_snapshot(graph));
             outcome = Some((env.run_checks(&entities, disk), entities));
         });
+        self.checks_skipped = false;
         if let Some((diagnostics, entities)) = outcome {
             self.check_diagnostics = diagnostics;
             self.recorded = OnceLock::from(RecordedCoverage::of(entities));
@@ -330,6 +338,13 @@ impl CompiledProject {
         self.check_diagnostics = Vec::new();
         self.recorded = OnceLock::new();
         self.reported = OnceLock::new();
+        self.checks_skipped = true;
+    }
+
+    /// Whether the last update skipped the checks: the next update, or a
+    /// release, runs them even when it changes no file.
+    pub(crate) fn checks_skipped(&self) -> bool {
+        self.checks_skipped
     }
 
     /// Whether any of `paths` has a parse error (E001) in the graph build.
@@ -429,8 +444,10 @@ mod tests {
         );
         let checked = project.diagnostics();
         assert!(checked.iter().any(|d| d.code == "W006"), "{checked:?}");
+        assert!(!project.checks_skipped());
 
         project.skip_checks();
+        assert!(project.checks_skipped());
         assert!(
             project.diagnostics().iter().all(|d| d.code != "W006"),
             "{:?}",
