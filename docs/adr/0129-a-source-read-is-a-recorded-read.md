@@ -1,6 +1,6 @@
 # A source read is a recorded read
 
-**Status:** accepted (2026-10-16, architecture round 13, plan 07). Amended by [ADR 0141](0141-a-session-names-the-dangling-source-links-it-reads.md): discovery names a dangling link; it still records nothing. Completes
+**Status:** accepted (2026-10-16, architecture round 13, plan 07). Amended by [ADR 0141](0141-a-session-names-the-dangling-source-links-it-reads.md): discovery names a dangling link; it still records nothing. Amended by round-14 follow-up G1: a stamp also records the link chain it followed. Completes
 [ADR 0114](0114-environment-inputs-are-recorded-as-read.md) D3 for sources. Amends
 [ADR 0073](0073-a-batch-of-paths-narrows-the-stale-comparison.md) D2 (fourth bullet) and D5 (third bullet), and
 [ADR 0106](0106-a-project-session-reads-the-disk-through-one-ledger.md) D5 ("the renewals of the links happen in
@@ -34,7 +34,9 @@ hands `PlainDisk`, the ledger the recording run's `RunDisk`. The UTF-8 mapping m
 **D2.** The cold read and every reread are one ledger read (`Ledger::read_source`). It stamps each hop and the file
 before reading; the source's stamp (by key) and its hops are exactly those of its last read. Discovery records
 nothing about a source. `Link`, `link_at`, `set_links`, `relink`, `stamp_source` and `stamp_sources` are gone;
-`Entry::stamp` is called only by `Run::read`.
+`Entry::stamp` is called only by `Run::read`. A stamp also records the link chain it followed (each hop's path,
+empty for a plain file), compared with the length and modification time: a source swapped for a link, or a link
+retargeted, to a file with an equal stamp is a moved hop, not an unchanged file.
 
 **D3.** Each hop a symlinked source's read followed is a session input of that source, keyed by its own name in its
 canonical directory (ADR 0114 D3): it reaches the source, its directory is watched, the LSP registers it.
