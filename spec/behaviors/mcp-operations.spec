@@ -565,7 +565,9 @@ behavior provide_mcp_collect_tool "Provide MCP Collect Tool" {
     no_project refusal, as `specforge collect` refuses it. An unapproved
     command is collect's own E059 refusal, whose suggestion names
     `specforge collect` in a terminal,
-    and a missing collector or report is an error naming its code. The
+    and a missing collector or report is an error naming its code, whose
+    remedy names a command or the tool's own words, never a CLI flag (ADR
+    0135). The
     result lists each runner's counts, the W115 diagnostics and the path of
     the written specforge-report.json, named from the project root. Every
     file it reads or writes (the report, a runner's report files and
@@ -579,6 +581,7 @@ behavior provide_mcp_collect_tool "Provide MCP Collect Tool" {
   verify unit "specforge.collect refuses an unapproved command with the operation's own message"
   verify unit "specforge.collect of a directory that holds no project refuses with no_project"
   verify unit "a project without a collector returns an E058 error"
+  verify unit "a missing report's refusal tells the agent to run the tests, naming no CLI flag"
   verify unit "specforge.collect reads and writes no file through a symlink that leaves the project"
   verify integration "specforge.collect reads runner as specforge collect --runner reads it"
   verify unit "a runner no collector answers to, auto included, is an E058 error on runner"

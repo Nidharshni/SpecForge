@@ -141,7 +141,6 @@ fn source_files() -> Vec<PathBuf> {
 }
 
 #[test]
-#[ignore = "flipped by T2"]
 fn no_message_below_the_surfaces_names_a_bare_flag() {
     let crates = specforge_repo_root::repo_root().join("crates");
     let mut offenders = Vec::new();

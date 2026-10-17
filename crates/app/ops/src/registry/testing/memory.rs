@@ -235,7 +235,7 @@ impl MemoryRegistry {
             )
             .with_suggestion(format!(
                 "if you trust the new key, accept it with `specforge add` or `specforge update` in a \
-                 terminal, or with --yes; or add '{key_id}' to trusted_keys"
+                 terminal (`specforge add --yes` and `specforge update --yes` accept it without asking); or add '{key_id}' to trusted_keys"
             )));
         }
         Ok(Publisher::Repinned {
@@ -303,8 +303,8 @@ impl Registry for MemoryRegistry {
     }
 
     /// The package published as `name@version`: R006 "Package not found: {name}@{version}" when there is none,
-    /// R-TRUST-001 "package '{name}' is not signed" (suggestion "re-run with --allow-unsigned to accept the
-    /// risk") when unsigned and `!allow_unsigned`; else its bytes, `hex_sha256(bytes)`, its declaration and
+    /// R-TRUST-001 "package '{name}' is not signed" (suggestion "allow unsigned packages for this install to
+    /// accept the risk") when unsigned and `!allow_unsigned`; else its bytes, `hex_sha256(bytes)`, its declaration and
     /// publisher. A signed package's publisher is decided against the key expected for `name` (the
     /// user's pin, else `policy.locked_key`): first use without one, `first_use: false` when it
     /// matches the user's pin, a key change otherwise (`Repinned` when `policy.asking` consents,
@@ -332,7 +332,7 @@ impl Registry for MemoryRegistry {
                 codes::R_TRUST_001,
                 format!("package '{name}' is not signed"),
             )
-            .with_suggestion("re-run with --allow-unsigned to accept the risk"));
+            .with_suggestion("allow unsigned packages for this install to accept the risk"));
         }
         let publisher = match &published.key_id {
             None => Publisher::Unsigned,

@@ -587,6 +587,12 @@ fn remove_and_check_agree_on_the_project_peer_set() {
                     error.error.message.contains("'@probe/needs-software'"),
                     "{case}: {error:?}"
                 );
+                assert!(
+                    error.error.suggestion.as_deref().is_some_and(
+                        |s| s.ends_with("or force the removal of '@specforge/software' anyway")
+                    ),
+                    "{case}: {error:?}"
+                );
             }
             assert_eq!(snapshot(dir.path()), before, "{case}: nothing written");
         } else {

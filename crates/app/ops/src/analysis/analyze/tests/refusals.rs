@@ -92,7 +92,7 @@ fn analyze_refusals_are_pinned_field_by_field() {
     assert_eq!(refused(&project, min(10.0)), e068);
     assert_eq!(
         refused(&serving, min(50.0)),
-        "PreconditionFailed no_test_results | --min needs test results: run `specforge collect` or pass --test-results | - | - | -"
+        "PreconditionFailed no_test_results | a proof-coverage minimum needs test results: run `specforge collect`, or name a test results file | - | - | -"
     );
     let named_missing = AnalyzeOptions {
         report: named(missing.clone()),

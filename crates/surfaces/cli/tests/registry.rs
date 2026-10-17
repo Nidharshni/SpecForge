@@ -1076,7 +1076,7 @@ fn an_unsigned_add_reports_w155_in_both_formats() {
         stderr_of(&human)
     );
     assert!(
-        stderr_of(&human).contains("was accepted because --allow-unsigned was given"),
+        stderr_of(&human).contains("was accepted because unsigned packages were allowed"),
         "{}",
         stderr_of(&human)
     );
