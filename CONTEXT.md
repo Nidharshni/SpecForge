@@ -33,7 +33,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   compiled from a project root (`CompiledProject::compile(&ProjectRoot, …)`). A copy shares all but its graph
   (`Clone`, ADR 0108). Rooted or detached is its `root()` (a detached project has none and resolves no
   import); the project root it was loaded at is its environment's (`Environment::project_root`), read to reopen
-  it and to hand an operation a project root (ADR 0121).
+  it and to hand an operation a project root (ADR 0121). It reads its recorded test report through the disk it is
+  handed (`CompiledProject::recorded`, ADR 0139).
 - **Project root**: the directory holding the `specforge.json` a path is in, located from any path inside the
   project (a subdirectory, a file) by walking up, the nearest winning
   (`specforge_common::ProjectRoot::of`, ADR 0053). Only `specforge.json` marks a project. With none at or
@@ -79,7 +80,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`ProjectSession::changes`): the comparison with what it last read that bringing it up to date
   makes (`stale`), narrowed to what the paths reach (a directory reaches every source and input
   under it, a symlinked source's target reaches that source, and a reached file is a change only
-  when it differs from its stamp). It applies changes as an update, an environment reload or a
+  when it differs from its stamp). It applies changes (made only by the session itself, ADR 0100) as an update, an environment reload or a
   re-check, and can bring itself up to date with disk without a watcher (`ensure_fresh`, ADR 0073). A session is opened from disk or detached (no project: what the LSP
   holds with no workspace folder and MCP while nothing is served). Watch, the LSP and MCP each hold
   one (`specforge_project::ProjectSession`; MCP's served one is always opened from disk, ADR 0025);
@@ -111,7 +112,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (the environment reads of its last load) and its **check inputs**
   (the check reads of the last check run: `specforge-cache.json` when a check pass read it, each path a check looked
   for, each directory a missing named file's suggestion listed, and the target of each that is a symlink) and its **source hops**
-  (each link hop a symlinked source's last read followed, its target included). Every input is keyed by its own name (a symlink stays itself), and each link hop it
+  (each link hop a symlinked source's last read followed, its target included). They are one table of **recorded
+  inputs** (ADR 0133). Every input is keyed by its own name (a symlink stays itself), and each link hop it
   followed is an input of its own. One value per
   environment load, renewed each time the checks run (`specforge_project::SessionInputs`,
   `ProjectSession::inputs`). What a changed path reaches, which directories watch watches, which files
@@ -119,6 +121,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   read ledger stamps each when it reads it (ADR 0106);
   a detached session's inputs are empty (ADR 0030). Nothing else: an import names one of the sources,
   never a file on disk (ADR 0055).
+- **Recorded input**: one row of a session's inputs: a file or directory a recorded read touched, as the read
+  spelled it, keyed by its own name in its canonical directory, with its class (an environment input, a check
+  input, a directory the checks listed, or a hop of one source). The class decides what reaches it, which
+  directory is watched for it and what its change is; a missing directory on the way to it outside the root is
+  watched from its nearest existing ancestor (`specforge_project::ledger`, crate-private; ADR 0133).
 - **Held buffer**: an editor buffer a project session holds (`specforge_project::Buffer`: the file's path, the
   editor's text and version). While held it is the truth for its file, whatever happens to the file on disk:
   the session's freshness and classification leave it out, and an open or an environment reload builds it in
@@ -157,6 +164,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   one directory (an MCP request's bound, or the call's project). Lent by the **Caller** in the operation's request and
   applied where the operation opens or writes the file (a lock plan narrows it to its project, ADR 0137) (`specforge_ops::Containment`, ADR 0104). MCP's call's project
   hands it to the tools (`ProjectRef::caller`, ADR 0112, ADR 0124), and render's view input hands it the request's bound (ADR 0131).
+- **Contained disk**: a containment as the `Disk` port (`specforge_ops` `ContainedDisk`, ADR 0139): how a crate
+  below app reads a project file the surface bounds; a name that lands outside reads as `invalid_input`.
 - **Caller**: what the surface that calls an operation lends it, one value (`specforge_ops::Caller`, ADR 0124): what the
   call may reach (**Containment**) and who can be asked (**Asking**). The CLI lends every path and its terminal when
   someone can answer; MCP lends the root of the call's project (init: the request's bound) and nobody. Every request
@@ -173,13 +182,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   a handshake client's `projectRoot`), else nothing; while none is served, every request looks there again first
   (`McpState::follow_root`). In a handshake session a call may also serve one (Call target). It is replaced whole or
   not at all, and brought up to date with disk before a request reads it (ADR 0014, ADR 0077).
-- **Update**: one change applied to a project session. It re-reads and re-parses exactly the changed files (an
+- **Update**: one change applied to a project session. Every update goes through one bracket: what the session
+  reports and depends on is taken before it and compared after it (`inputs_changed`, ADR 0136). It re-reads and re-parses exactly the changed files (an
   importer parses the same, since references resolve without `use`), applies them to the session's graph
   build, resolves every file's imports again and re-runs the checks (`specforge_project::Update`, ADR 0006,
   ADR 0032). An update says whether the session's inputs changed (`inputs_changed`), what the session
   reported before it and reports after (its diagnostics delta), and, when it was verified, how it differs
-  from a cold rebuild (`divergence`). An update that changes no file (a held buffer
-  whose text is already its file's) runs no check.
+  from a cold rebuild (`divergence`). An update that changes no file (a held buffer, a
+  released one or a file on disk whose text is already the one it was built from) runs no check.
 - **Graph delta**: what an update or a reload changed in the graph: added and removed nodes (each with its
   kind, file and line), modified nodes (the fields whose values differ, and apart from them which of its
   kind, title, methods and outgoing edges differ), added and removed edges, and the affected files; source
@@ -544,8 +554,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   loaded in (`ProjectView::runtime`), the one every operation that calls an extension over the view
   calls it in (analyze's passes, collect's collectors, inference gaps' scanners, an extension
   command), so none takes a runtime of its own; its entity snapshot, through the per-compile
-  memo (`ProjectView::entities`) (`specforge_ops::view::ProjectView`). It owns
-  the project's recorded test report and its versioned schema, both read at that root and never an
+  memo (`ProjectView::entities`) (`specforge_ops::view::ProjectView`). It reads
+  the project's recorded test report through its compiled project, over MCP held inside the root
+  (`ProjectView::contained`, ADR 0139), and its versioned schema, both at that root and never an
   ancestor's. Built only from a compiled project (`ProjectView::of`): the CLI from its compiled project and the LSP
   from its session's, or, while the session is out for an update, from a copy of it (ADR 0108); MCP from its call target (`ProjectRef::view`: the served session's compiled
   project with its I017 notices, or that of a session opened for one call) (ADR 0015, ADR 0047).

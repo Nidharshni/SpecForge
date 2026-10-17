@@ -7,8 +7,10 @@
 //! reached so far, and every symlink on the way is followed, a dangling one by its target text.
 //! What does not exist yet (a file about to be created) is the rest of the name, joined on.
 
+mod disk;
 mod file;
 
+pub(crate) use disk::ContainedDisk;
 pub use file::{ReadFailure, declared};
 
 use std::collections::VecDeque;

@@ -12,7 +12,7 @@ use crate::Environment;
 use serde::Deserialize;
 use specforge_graph::GraphBuild;
 use specforge_protocol_types::{EntityTests, TestResult, TestResults};
-use specforge_registry::{EntitySnapshot, Standing};
+use specforge_registry::{Disk, EntitySnapshot, Standing};
 use std::collections::BTreeMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -92,6 +92,15 @@ impl ReportError {
             ReportError::Unreadable { path, .. } | ReportError::Malformed { path, .. } => path,
         }
     }
+
+    /// `path` could not be read: `error`, kept by kind.
+    pub fn unreadable(path: &Path, error: &std::io::Error) -> Self {
+        ReportError::Unreadable {
+            path: path.to_path_buf(),
+            io: error.kind(),
+            detail: error.to_string(),
+        }
+    }
 }
 
 impl std::fmt::Display for ReportError {
@@ -111,43 +120,19 @@ impl std::fmt::Display for ReportError {
 
 impl std::error::Error for ReportError {}
 
-/// The project's recorded test results (`specforge-report.json` at `root`,
-/// written by `specforge collect`). No report means no recorded tests
-/// (`Ok(None)`); a report that is there but unreadable or malformed is an
-/// error, never read as empty, so coverage cannot silently drop.
-pub fn read_report(root: &Path) -> Result<Option<TestReport>, ReportError> {
-    let path = root.join(REPORT_FILE);
-    match std::fs::read(&path) {
-        Ok(bytes) => parse_report(&path, &bytes).map(Some),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(unreadable(&path, &e)),
+impl TestReport {
+    /// The report `bytes` hold, named `path` in its errors: not UTF-8 or not the RES-15 shape
+    /// is [`ReportError::Malformed`]. The one parser of `specforge-report.json`.
+    pub fn parse(path: &Path, bytes: &[u8]) -> Result<TestReport, ReportError> {
+        let raw = std::str::from_utf8(bytes).map_err(|_| ReportError::Malformed {
+            path: path.to_path_buf(),
+            detail: "stream did not contain valid UTF-8".to_string(),
+        })?;
+        serde_json::from_str(raw).map_err(|e| ReportError::Malformed {
+            path: path.to_path_buf(),
+            detail: e.to_string(),
+        })
     }
-}
-
-/// A test report at an explicit path (`--test-results`), which must exist.
-pub fn read_report_file(path: &Path) -> Result<TestReport, ReportError> {
-    let bytes = std::fs::read(path).map_err(|e| unreadable(path, &e))?;
-    parse_report(path, &bytes)
-}
-
-fn unreadable(path: &Path, error: &std::io::Error) -> ReportError {
-    ReportError::Unreadable {
-        path: path.to_path_buf(),
-        io: error.kind(),
-        detail: error.to_string(),
-    }
-}
-
-/// The report `path` holds, from its bytes.
-fn parse_report(path: &Path, bytes: &[u8]) -> Result<TestReport, ReportError> {
-    let raw = std::str::from_utf8(bytes).map_err(|_| ReportError::Malformed {
-        path: path.to_path_buf(),
-        detail: "stream did not contain valid UTF-8".to_string(),
-    })?;
-    serde_json::from_str(raw).map_err(|e| ReportError::Malformed {
-        path: path.to_path_buf(),
-        detail: e.to_string(),
-    })
 }
 
 /// A project's coverage, computed by the one rule the `coverage` pass
@@ -215,7 +200,7 @@ impl ProjectCoverage {
 /// Within one, the report is keyed on its path and content, so a rewritten
 /// report is read again.
 #[derive(Debug)]
-pub struct RecordedCoverage {
+pub(crate) struct RecordedCoverage {
     entities: Arc<EntitySnapshot>,
     memo: Mutex<Option<Arc<Memo>>>,
 }
@@ -230,7 +215,7 @@ struct Memo {
     coverage: OnceLock<Arc<ProjectCoverage>>,
 }
 
-/// The recorded report at a root, and the coverage computed from it.
+/// The recorded report, and the coverage computed from it.
 #[derive(Debug, Clone)]
 pub struct Recorded {
     pub report: Option<Arc<TestReport>>,
@@ -266,22 +251,25 @@ impl RecordedCoverage {
     }
 
     /// The entity snapshot of the graph this memo scores.
-    pub fn entities(&self) -> &Arc<EntitySnapshot> {
+    pub(crate) fn entities(&self) -> &Arc<EntitySnapshot> {
         &self.entities
     }
 
-    /// `<root>/specforge-report.json` ([`REPORT_FILE`]): `Ok(None)` without
-    /// a root or a file, an error when it is there but unusable. Read again
-    /// only when its bytes changed since the last call; an error is never
-    /// memoized.
-    pub fn report(&self, root: Option<&Path>) -> Result<Option<Arc<TestReport>>, ReportError> {
-        Ok(self.memo(root)?.report.clone())
+    /// The recorded report `file` names, read through `disk`: `Ok(None)` without a file name or
+    /// when the disk has no such file, an error when it is there but unusable. Read again only
+    /// when its bytes changed since the last call; an error is never memoized.
+    pub(crate) fn report(
+        &self,
+        file: Option<&Path>,
+        disk: &dyn Disk,
+    ) -> Result<Option<Arc<TestReport>>, ReportError> {
+        Ok(self.memo(file, disk)?.report.clone())
     }
 
-    /// The recorded report at `root` and the coverage of the memo's entity
-    /// snapshot against it, computed once per report content.
-    pub fn at(&self, root: Option<&Path>) -> Result<Recorded, ReportError> {
-        let memo = self.memo(root)?;
+    /// The recorded report `file` names and the coverage of the memo's entity snapshot against
+    /// it, computed once per report content.
+    pub(crate) fn at(&self, file: Option<&Path>, disk: &dyn Disk) -> Result<Recorded, ReportError> {
+        let memo = self.memo(file, disk)?;
         let coverage = memo
             .coverage
             .get_or_init(|| {
@@ -297,15 +285,15 @@ impl RecordedCoverage {
         })
     }
 
-    /// The memo for the report at `root` as it is on disk now.
-    fn memo(&self, root: Option<&Path>) -> Result<Arc<Memo>, ReportError> {
-        let path = root.map(|root| root.join(REPORT_FILE));
+    /// The memo for the report `file` names as `disk` has it now: one read.
+    fn memo(&self, file: Option<&Path>, disk: &dyn Disk) -> Result<Arc<Memo>, ReportError> {
+        let path = file.map(Path::to_path_buf);
         let bytes = match &path {
             None => None,
-            Some(path) => match std::fs::read(path) {
+            Some(path) => match disk.read(path) {
                 Ok(bytes) => Some(bytes),
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-                Err(e) => return Err(unreadable(path, &e)),
+                Err(e) => return Err(ReportError::unreadable(path, &e)),
             },
         };
         let content = bytes.as_deref().map(|bytes| {
@@ -321,7 +309,7 @@ impl RecordedCoverage {
             return Ok(Arc::clone(memo));
         }
         let report = match (&path, &bytes) {
-            (Some(path), Some(bytes)) => Some(Arc::new(parse_report(path, bytes)?)),
+            (Some(path), Some(bytes)) => Some(Arc::new(TestReport::parse(path, bytes)?)),
             _ => None,
         };
         let memo = Arc::new(Memo {
@@ -341,7 +329,7 @@ mod tests {
     use specforge_protocol_types::{
         EntityKindDescriptor, ExtensionDeclaration, ValidationRuleDescriptor, ValidationSeverity,
     };
-    use specforge_registry::{RegistryBuild, build_registries};
+    use specforge_registry::{MemoryDisk, RegistryBuild, build_registries};
     use specforge_test_macros::test as specforge_test;
 
     /// `source` built with the graph inputs of `registries`, as the session builds it.
@@ -428,22 +416,25 @@ mod tests {
         verify = "coverage is computed once per compile and report content, and again after the report changes"
     )]
     fn recorded_coverage_is_memoized_per_report_content() {
-        let dir = tempfile::tempdir().unwrap();
+        const FILE: &str = "/p/specforge-report.json";
         let project = Scored::new();
         let entities = project.entities();
         let recorded = RecordedCoverage::of(Arc::clone(&entities));
-        let at = || recorded.at(Some(dir.path()));
+        let with = |text: &str| MemoryDisk::new().with_file(FILE, text.as_bytes());
+        let at = |disk: &MemoryDisk| recorded.at(Some(Path::new(FILE)), disk);
 
         // No report: nothing recorded, nothing proven.
-        let none = at().unwrap();
+        let none = at(&MemoryDisk::new()).unwrap();
         assert!(none.report.is_none());
         // The coverage scores the seeded snapshot, not one of its own.
         assert!(Arc::ptr_eq(&none.coverage.entities, &entities));
         assert!(!none.coverage.verdict("login").unwrap().is_proven());
 
-        std::fs::write(dir.path().join(REPORT_FILE), report("passed")).unwrap();
-        let first = at().unwrap();
-        let second = at().unwrap();
+        let disk = with(&report("passed"));
+        let first = at(&disk).unwrap();
+        let second = at(&disk).unwrap();
+        // One read of the file per call.
+        assert_eq!(disk.asked().len(), 2);
         assert!(Arc::ptr_eq(&first.coverage, &second.coverage));
         assert!(Arc::ptr_eq(
             first.report.as_ref().unwrap(),
@@ -451,39 +442,44 @@ mod tests {
         ));
         assert!(first.coverage.verdict("login").unwrap().is_proven());
         assert!(Arc::ptr_eq(
-            &recorded.report(Some(dir.path())).unwrap().unwrap(),
+            &recorded
+                .report(Some(Path::new(FILE)), &disk)
+                .unwrap()
+                .unwrap(),
             first.report.as_ref().unwrap()
         ));
 
         // Other bytes, read again at once (no mtime to wait for).
-        std::fs::write(dir.path().join(REPORT_FILE), report("failed")).unwrap();
-        let rewritten = at().unwrap();
+        let rewritten = at(&with(&report("failed"))).unwrap();
         assert!(!Arc::ptr_eq(&first.coverage, &rewritten.coverage));
         assert_eq!(rewritten.coverage.verdict("login").unwrap().failing, 1);
 
         // A malformed report is an error every time: never memoized.
-        std::fs::write(dir.path().join(REPORT_FILE), "{not json").unwrap();
-        assert!(matches!(at(), Err(ReportError::Malformed { .. })));
-        assert!(matches!(at(), Err(ReportError::Malformed { .. })));
+        let malformed = with("{not json");
+        assert!(matches!(at(&malformed), Err(ReportError::Malformed { .. })));
+        assert!(matches!(at(&malformed), Err(ReportError::Malformed { .. })));
 
-        // Without a root there is no report to read.
-        let rootless = recorded.at(None).unwrap();
+        // Without a file there is no report to read, and the disk is not asked.
+        let unasked = MemoryDisk::new();
+        let rootless = recorded.at(None, &unasked).unwrap();
         assert!(rootless.report.is_none());
+        assert!(unasked.asked().is_empty());
 
         // A memo is made with its snapshot and hands that one out: its
         // coverage scores it, not one taken later from other inputs.
+        let root = Path::new("/p");
         let env = Environment::assemble(
             specforge_common::parse_project_config(
-                &dir.path().join("specforge.json"),
+                &root.join("specforge.json"),
                 r#"{"spec_root": "spec"}"#,
             ),
-            specforge_installed::Installed::unread(dir.path()),
+            specforge_installed::Installed::unread(root),
             crate::ExtensionLoad::NoRuntime,
         );
         let over = RecordedCoverage::over(&env.graph_of([]), &env);
         assert_eq!(over.entities().spec_root(), env.spec_root());
         assert!(Arc::ptr_eq(
-            &over.at(None).unwrap().coverage.entities,
+            &over.at(None, &unasked).unwrap().coverage.entities,
             over.entities()
         ));
     }
@@ -507,14 +503,15 @@ mod tests {
 
         let path = Path::new("specforge-report.json");
         let Err(ReportError::Malformed { detail, .. }) =
-            parse_report(path, report("pass").as_bytes())
+            TestReport::parse(path, report("pass").as_bytes())
         else {
             panic!("a report saying `pass` must be malformed");
         };
         assert!(detail.contains("unknown variant `pass`"), "{detail}");
         let nameless =
             r#"{"runner": "r", "results": {"login": {"tests": [{"status": "passed"}]}}}"#;
-        let Err(ReportError::Malformed { detail, .. }) = parse_report(path, nameless.as_bytes())
+        let Err(ReportError::Malformed { detail, .. }) =
+            TestReport::parse(path, nameless.as_bytes())
         else {
             panic!("a test without a name must be malformed");
         };

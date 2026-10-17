@@ -162,6 +162,50 @@ fn infer_progress_reads_no_manifest_through_a_symlink_that_leaves_the_project() 
     assert!(reply.to_string().contains("E071"), "{reply}");
 }
 
+/// R7: `specforge-report.json` is a link to a report outside: no read view reads it.
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a file the project keeps at its root is read only from inside the project"
+)]
+fn read_views_read_no_report_through_a_symlink_that_leaves_the_project() {
+    let project = plain_project();
+    let outside = outside();
+    let report = outside.path().join("r.json");
+    fs::write(
+        &report,
+        r#"{"results":{"alpha":{"tests":[{"name":"OUTSIDE-TEST","status":"passed"}]}}}"#,
+    )
+    .unwrap();
+    link(&report, &project.path().join("specforge-report.json"));
+    let mut server = serve(project.path());
+
+    for (name, arguments) in [
+        ("specforge.coverage", json!({})),
+        ("specforge.stats", json!({})),
+        ("specforge.inspect", json!({"entity_id": "alpha"})),
+        ("specforge.analyze", json!({})),
+    ] {
+        let reply = call_tool(&mut server, name, arguments);
+        assert_refused(&reply, None);
+        assert!(reply.to_string().contains("E045"), "{name}: {reply}");
+        assert!(
+            !reply.to_string().contains("OUTSIDE-TEST"),
+            "{name}: {reply}"
+        );
+    }
+    let reply = call(
+        &mut server,
+        "prompts/get",
+        json!({"name": "specforge://prompts/review", "arguments": {}}),
+    );
+    assert_eq!(reply["error"]["data"]["code"], "invalid_input", "{reply}");
+    assert_eq!(
+        reply["error"]["data"]["diagnostic"]["code"], "E045",
+        "{reply}"
+    );
+}
+
 /// R3: a `test_results` that resolves outside the project, in every spelling.
 #[specforge_test_macros::test(
     behavior = "provide_mcp_analyze_tool",
@@ -287,7 +331,7 @@ fn sources(dir: &Path, out: &mut Vec<(String, String)>, base: &Path) {
 }
 
 /// A tool builds no bound and no asker of its own and opens no file: the call's project hands its
-/// caller (ADR 0112 D4, ADR 0124). The exceptions say why.
+/// caller (ADR 0112 D4, ADR 0124), and every view is the call's (ADR 0139). The exceptions say why.
 #[test]
 fn every_caller_a_tool_uses_comes_from_the_call() {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
@@ -309,6 +353,12 @@ fn every_caller_a_tool_uses_comes_from_the_call() {
             }
             if line.contains("Containment::within(") && !within.contains(&name.as_str()) {
                 problems.push(format!("src/{name}:{}: builds its own bound", number + 1));
+            }
+            if line.contains("ProjectView::of(") && name != "target/call.rs" {
+                problems.push(format!(
+                    "src/{name}:{}: builds a view its call did not bound",
+                    number + 1
+                ));
             }
             if line.contains("Asking::") && name != "target/call.rs" {
                 problems.push(format!("src/{name}:{}: names its own asker", number + 1));

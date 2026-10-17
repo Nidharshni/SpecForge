@@ -45,7 +45,7 @@ fn a_source_written_between_its_stamp_and_its_read_is_seen_next_time() {
         &specforge_common::ProjectConfig::default(),
         Vec::new(),
     ));
-    let (read, _) = ledger.read_source(spec_root, "a.spec", |disk| {
+    let read = ledger.read_source(spec_root, "a.spec", |disk| {
         // The file is stamped when it is first asked about, before the write.
         assert!(disk.exists(&spec_root.join("a.spec")));
         fs::write(spec_root.join("a.spec"), NEW).unwrap();
@@ -79,7 +79,7 @@ fn the_unrecorded_reads_are_the_ledgers() {
 
     let env = Environment::load(&root, None);
     let mut project = CompiledProject::read(Arc::new(env), &BTreeMap::new(), &mut unrecorded);
-    assert!(!project.check(&mut unrecorded));
+    project.check(&mut unrecorded);
 }
 
 #[test]
@@ -90,7 +90,7 @@ fn a_held_key_is_not_stamped_until_it_is_read() {
     let held = BTreeMap::from([("a.spec".to_string(), NEW)]);
     CompiledProject::read(Arc::new(env), &held, &mut ledger);
     assert_eq!(ledger.stale().sources, ["a.spec"]);
-    let (reads, _) = ledger.reread(&["a.spec".to_string()]);
+    let reads = ledger.reread(&["a.spec".to_string()]);
     assert_eq!(text(&reads[0].1), Some(OLD));
     assert!(ledger.stale().is_empty());
 }

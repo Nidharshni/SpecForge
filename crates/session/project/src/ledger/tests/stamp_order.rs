@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use specforge_wasm::testing::InProcessRuntime;
 
+use crate::ledger::recorded::Recording;
 use crate::ledger::{Ledger, Reading, Reads};
 use crate::sources::Read;
 use crate::{Environment, SharedRuntime};
@@ -76,7 +77,7 @@ fn a_source_that_is_no_source_any_more_leaves_the_record() {
     // A nested project took it.
     let marker = dir.path().join("sub/specforge.json");
     rewrite(&marker, CONFIG);
-    let (reads, _) = ledger.reread(&["sub/c.spec".to_string()]);
+    let reads = ledger.reread(&["sub/c.spec".to_string()]);
     assert!(matches!(reads[0].1, Read::Gone));
     assert!(ledger.stale().sources.is_empty());
 
@@ -88,13 +89,12 @@ fn a_source_that_is_no_source_any_more_leaves_the_record() {
 #[test]
 fn a_detached_ledger_reads_every_key_as_gone_and_records_nothing() {
     let mut ledger = Ledger::detached();
-    let (reads, moved) = ledger.reread(&["/p/a.spec".to_string()]);
-    assert!(!moved);
+    let reads = ledger.reread(&["/p/a.spec".to_string()]);
     assert!(matches!(reads[0].1, Read::Gone));
     assert!(ledger.stale().is_empty());
     assert!(ledger.changes([Path::new("/p/a.spec")]).is_empty());
     let run = ledger.checks();
     assert!(run.read(Reading::File, Path::new("/p/x.md"), |_| true));
-    assert!(!run.finish());
+    run.finish(Recording::Checks);
     assert_eq!(ledger.inputs(), &crate::ledger::SessionInputs::detached());
 }

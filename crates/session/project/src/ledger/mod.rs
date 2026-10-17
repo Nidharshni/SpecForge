@@ -16,11 +16,16 @@
 //! looked like when it was read) are compared with disk by
 //! `ProjectSession::stale` and `changes`, and are taken in the call that
 //! reads it, before the read, so a write that races the read is seen next time.
+//!
+//! The record is one table of recorded inputs (ADR 0133): every run is recorded by
+//! [`Run::finish`], told what it recorded ([`Recording`]), and [`Ledger::record`] is the
+//! one writer of the rows and the stamps it covers.
 
 mod disk;
 mod inputs;
 mod key;
 mod reach;
+mod recorded;
 mod stamps;
 #[cfg(test)]
 mod tests;
@@ -29,7 +34,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use specforge_common::{ProjectConfig, ProjectRoot, SourceRoot};
+use specforge_common::{ProjectRoot, SourceRoot};
 use specforge_registry::{Disk, PlainDisk};
 
 use crate::Environment;
@@ -38,29 +43,46 @@ use crate::sources::{self, Read};
 use disk::RunDisk;
 pub use inputs::{SessionInputs, WatchRoot, Watched};
 pub use key::source_key;
+use recorded::{Class, Recording};
 use stamps::{Entry, Scope, Stamps};
 
 /// What a batch of changed paths, or the disk since the last read, means to
-/// a session: the input to [`crate::ProjectSession::apply`]. Produced only
-/// by [`crate::ProjectSession::changes`] and [`crate::ProjectSession::stale`].
+/// a session: the input to [`crate::ProjectSession::apply`]. Made only by
+/// [`crate::ProjectSession::changes`] and [`crate::ProjectSession::stale`]
+/// (ADR 0100 D5); a reader reads it through its accessors.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Changes {
     /// Changed sources, by key relative to the spec root: sorted, deduplicated.
-    pub sources: Vec<String>,
+    pub(crate) sources: Vec<String>,
     /// The environment must load again. Each path of the batch that reached
     /// an environment input which changed, as the batch spelled it (for
     /// `stale`, each changed input as the session recorded it): sorted,
     /// deduplicated.
-    pub environment: Vec<PathBuf>,
+    pub(crate) environment: Vec<PathBuf>,
     /// The checks must run again: the paths that reached a changed check
     /// input, named the same way.
-    pub check_inputs: Vec<PathBuf>,
+    pub(crate) check_inputs: Vec<PathBuf>,
 }
 
 impl Changes {
     /// Nothing the session is built from changed.
     pub fn is_empty(&self) -> bool {
         self.sources.is_empty() && self.environment.is_empty() && self.check_inputs.is_empty()
+    }
+
+    /// The changed sources, by key relative to the spec root: sorted, deduplicated.
+    pub fn sources(&self) -> &[String] {
+        &self.sources
+    }
+
+    /// The paths that reached a changed environment input: sorted, deduplicated.
+    pub fn environment(&self) -> &[PathBuf] {
+        &self.environment
+    }
+
+    /// The paths that reached a changed check input: sorted, deduplicated.
+    pub fn check_inputs(&self) -> &[PathBuf] {
+        &self.check_inputs
     }
 }
 
@@ -89,9 +111,8 @@ pub(crate) trait Reads {
     fn source(&mut self, spec_root: &Path, key: &str) -> Read;
     /// Run `check` (the checks over one snapshot) with the disk they read
     /// through (ADR 0107): the ledger's records and stamps each read as a
-    /// check input; `Unrecorded`'s only reads. Whether the session's inputs
-    /// moved (always `false` unrecorded).
-    fn run_checks(&mut self, check: impl FnOnce(&dyn Disk)) -> bool;
+    /// check input; `Unrecorded`'s only reads.
+    fn run_checks(&mut self, check: impl FnOnce(&dyn Disk));
 }
 
 /// A one-shot compile's reads: the same steps, nothing recorded, no stamp (ADR
@@ -115,9 +136,8 @@ impl Reads for Unrecorded {
         sources::read(&PlainDisk, spec_root, key)
     }
 
-    fn run_checks(&mut self, check: impl FnOnce(&dyn Disk)) -> bool {
+    fn run_checks(&mut self, check: impl FnOnce(&dyn Disk)) {
         check(&PlainDisk);
-        false
     }
 }
 
@@ -141,7 +161,10 @@ impl Reads for Ledger {
     ) -> Environment {
         let run = self.environment_run();
         let environment = load(&RunDisk(&run));
-        run.finish_environment(root.dir(), environment.config());
+        run.finish(Recording::Environment {
+            root: root.dir(),
+            config: environment.config(),
+        });
         environment
     }
 
@@ -149,8 +172,7 @@ impl Reads for Ledger {
     /// link hop recorded until it is read ([`Self::source`]); a held source is
     /// never read here (ADR 0106 D2, ADR 0129).
     fn discover(&mut self, sources: &SourceRoot) -> Vec<String> {
-        self.stamps.forget_sources();
-        self.inputs.forget_hops();
+        self.record(Recording::Sources, Vec::new());
         walked_keys(sources)
     }
 
@@ -158,15 +180,14 @@ impl Reads for Ledger {
     /// stamp is seen next time.
     fn source(&mut self, spec_root: &Path, key: &str) -> Read {
         self.read_source(spec_root, key, |disk| sources::read(disk, spec_root, key))
-            .0
     }
 
     /// The checks' reads, each stamped and recorded as a check input when
     /// the run finishes.
-    fn run_checks(&mut self, check: impl FnOnce(&dyn Disk)) -> bool {
+    fn run_checks(&mut self, check: impl FnOnce(&dyn Disk)) {
         let run = self.checks();
         check(&RunDisk(&run));
-        run.finish()
+        run.finish(Recording::Checks);
     }
 }
 
@@ -208,32 +229,23 @@ impl Ledger {
     /// Read the sources `keys` names again, each stamped, its link read,
     /// then read. A key that is no source any more reads as gone and its
     /// stamp and link are forgotten (so its return is seen). Each key's
-    /// read, in order, and whether a link moved.
-    pub(crate) fn reread(&mut self, keys: &[String]) -> (Vec<(String, Read)>, bool) {
+    /// read, in order.
+    pub(crate) fn reread(&mut self, keys: &[String]) -> Vec<(String, Read)> {
         let Some(spec_root) = self.inputs.spec_root().map(Path::to_path_buf) else {
-            return (
-                keys.iter().map(|key| (key.clone(), Read::Gone)).collect(),
-                false,
-            );
+            return keys.iter().map(|key| (key.clone(), Read::Gone)).collect();
         };
-        let mut moved = false;
-        let reads = keys
-            .iter()
+        keys.iter()
             .map(|key| {
                 let read = if self.inputs.excludes(key) {
                     // No source (any more): a record kept would hide its return.
-                    moved |= self.forget_source(key);
+                    self.forget_source(&spec_root, key);
                     Read::Gone
                 } else {
-                    let (read, hops_moved) = self
-                        .read_source(&spec_root, key, |disk| sources::read(disk, &spec_root, key));
-                    moved |= hops_moved;
-                    read
+                    self.read_source(&spec_root, key, |disk| sources::read(disk, &spec_root, key))
                 };
                 (key.clone(), read)
             })
-            .collect();
-        (reads, moved)
+            .collect()
     }
 
     /// One run of the checks' reads: each is stamped and recorded as a check
@@ -267,27 +279,53 @@ impl Ledger {
     /// which stamps each link hop the read follows, then the file, before
     /// reading it; the source's stamp (by key) and its hops are then exactly
     /// what this read saw. A detached ledger records nothing. `read` is a
-    /// parameter so a test can write between the stamp and the read. The
-    /// read, and whether the session's inputs moved (a hop appeared, went or
-    /// points elsewhere).
+    /// parameter so a test can write between the stamp and the read.
     pub(crate) fn read_source(
         &mut self,
         spec_root: &Path,
         key: &str,
         read: impl FnOnce(&dyn Disk) -> Read,
-    ) -> (Read, bool) {
+    ) -> Read {
         let path = spec_root.join(key);
         let run = self.run();
         let text = read(&RunDisk(&run));
-        let moved = run.finish_source(key, &path);
-        (text, moved)
+        run.finish(Recording::Source { key, path: &path });
+        text
     }
 
     /// Source `key` is no source (any more): its stamp and hops are
-    /// forgotten. Whether the inputs moved.
-    fn forget_source(&mut self, key: &str) -> bool {
-        self.stamps.set_source(key, None);
-        self.inputs.set_hops(key, Vec::new())
+    /// forgotten.
+    fn forget_source(&mut self, spec_root: &Path, key: &str) {
+        let path = spec_root.join(key);
+        self.record(Recording::Source { key, path: &path }, Vec::new());
+    }
+
+    /// The one writer of the record: the inputs and the stamps `recording`
+    /// covers, in step (ADR 0133). Each path is recorded once per class, with
+    /// its first stamp.
+    fn record(&mut self, recording: Recording<'_>, read: Vec<(Reading, PathBuf, Option<Entry>)>) {
+        let mut rows: Vec<(Class, PathBuf)> = Vec::new();
+        let mut stamps: BTreeMap<(Class, PathBuf), Option<Entry>> = BTreeMap::new();
+        let mut source: Option<Option<Entry>> = None;
+        for (reading, path, entry) in read {
+            let Some(class) = recording.class_of(reading, &path) else {
+                // The source's own file: its first stamp.
+                source.get_or_insert(entry);
+                continue;
+            };
+            if class.stamped() {
+                stamps.entry((class.clone(), path.clone())).or_insert(entry);
+            }
+            if !rows.iter().any(|(c, p)| c == &class && p == &path) {
+                rows.push((class, path));
+            }
+        }
+        if matches!(recording, Recording::Checks) {
+            // A set: the order the checks asked in is no change.
+            rows.sort();
+        }
+        self.stamps.replace(&recording, stamps, source.flatten());
+        self.inputs.replace(&recording, rows);
     }
 
     /// A ledger over `inputs`, nothing stamped.
@@ -347,82 +385,17 @@ impl Run<'_> {
         read(path)
     }
 
-    /// The environment inputs are now exactly what this run read, in read
-    /// order, each once, each with its first stamp; the inputs are made anew
-    /// for `config` (nothing else of the record is kept, the check inputs
-    /// included). A listing folds into the files: nothing read is dropped.
-    pub(crate) fn finish_environment(self, root: &Path, config: &ProjectConfig) {
-        let Run { ledger, read, .. } = self;
-        let mut files: Vec<PathBuf> = Vec::new();
-        let mut stamps: BTreeMap<PathBuf, Option<Entry>> = BTreeMap::new();
-        for (_, path, entry) in read.into_inner() {
-            if !files.contains(&path) {
-                files.push(path.clone());
-            }
-            stamps.entry(path).or_insert(entry);
-        }
-        ledger.inputs = SessionInputs::opened(root, config, files);
-        ledger.stamps.set_environment(stamps);
-    }
-
-    /// Source `key` (its file `path`) is now recorded as this run read it: the
-    /// file's stamp, taken before its read, by key, and each link hop the read
-    /// followed, in read order, each once (ADR 0129). Nothing else in the
-    /// record changes. Whether the session's inputs moved.
-    pub(crate) fn finish_source(self, key: &str, path: &Path) -> bool {
+    /// Record what this run read as `recording` (ADR 0133): the rows and
+    /// stamps it covers become exactly these reads, each path once per class,
+    /// each with its first stamp. A detached ledger's run records nothing.
+    pub(crate) fn finish(self, recording: Recording<'_>) {
         let Run {
             ledger,
             records,
             read,
         } = self;
-        if !records {
-            return false;
+        if records {
+            ledger.record(recording, read.into_inner());
         }
-        // The file's first stamp, as for every other input.
-        let mut stamp = None;
-        let mut stamped = false;
-        let mut hops: Vec<PathBuf> = Vec::new();
-        for (_, read_path, entry) in read.into_inner() {
-            if read_path == path {
-                if !stamped {
-                    stamp = entry;
-                    stamped = true;
-                }
-            } else if !hops.contains(&read_path) {
-                hops.push(read_path);
-            }
-        }
-        ledger.stamps.set_source(key, stamp);
-        ledger.inputs.set_hops(key, hops)
-    }
-
-    /// The check inputs are now exactly what this run read (ADR 0030 D2: renewed each time the checks run). Their canonical
-    /// forms and missing directories are taken again; nothing else in the
-    /// record changes. Whether the inputs moved.
-    pub(crate) fn finish(self) -> bool {
-        let Run { ledger, read, .. } = self;
-        if ledger.inputs.root().is_none() {
-            return false;
-        }
-        let before = ledger.inputs.clone();
-        let mut files: Vec<PathBuf> = Vec::new();
-        let mut listings: Vec<PathBuf> = Vec::new();
-        let mut stamps: BTreeMap<PathBuf, Option<Entry>> = BTreeMap::new();
-        for (input, path, entry) in read.into_inner() {
-            let list = match input {
-                Reading::File => &mut files,
-                Reading::Listing => &mut listings,
-            };
-            if !list.contains(&path) {
-                list.push(path.clone());
-            }
-            stamps.entry(path).or_insert(entry);
-        }
-        // A set: the order the checks asked in is no change.
-        files.sort();
-        listings.sort();
-        ledger.inputs.set_checks(files, listings);
-        ledger.stamps.set_checks(stamps);
-        ledger.inputs != before
     }
 }

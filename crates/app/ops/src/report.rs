@@ -3,7 +3,7 @@
 //! (ADR 0029 D1).
 
 use specforge_common::codes;
-use specforge_project::coverage::{self, ReportError, TestReport};
+use specforge_project::coverage::{ReportError, TestReport};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -14,10 +14,16 @@ use crate::{Containment, OpError, OpErrorKind};
 const REWRITE: &str =
     "run `specforge collect` again to rewrite the report, or fix or remove the file";
 
+/// What to do about a report that is a link out of the project the call is bounded to.
+const LINKED_OUT: &str =
+    "keep the report inside the project: remove the link and run `specforge collect` again";
+
 /// A test report that cannot be used, as every operation fails with it:
 /// code E045, of kind
 ///
 /// - `SchemaMismatch` when it is not a `specforge-report.json`;
+/// - `InvalidInput` when a bounded view's report lands outside the project
+///   ([`crate::containment::ContainedDisk`]'s only `InvalidInput`, ADR 0139);
 /// - the OS error's kind when it cannot be read
 ///   ([`OpErrorKind::of_io_kind`]: `PermissionDenied`, `FileNotFound` for a
 ///   named file that does not exist, else `Internal`).
@@ -27,6 +33,10 @@ const REWRITE: &str =
 pub(crate) fn unusable(error: ReportError) -> OpError {
     let (kind, suggestion) = match &error {
         ReportError::Malformed { .. } => (OpErrorKind::SchemaMismatch, REWRITE),
+        ReportError::Unreadable {
+            io: std::io::ErrorKind::InvalidInput,
+            ..
+        } => (OpErrorKind::InvalidInput, LINKED_OUT),
         ReportError::Unreadable { io, .. } => {
             let kind = OpErrorKind::of_io_kind(*io);
             let suggestion = match kind {
@@ -46,24 +56,12 @@ pub(crate) fn unusable(error: ReportError) -> OpError {
 /// the caller spelled it (joined onto the bound's root when bounded and relative).
 pub(crate) fn named(path: &Path, containment: &Containment) -> Result<Arc<TestReport>, OpError> {
     let held = containment.resolve(path)?;
-    coverage::read_report_file(&held.real)
+    let bytes = held
+        .read()
+        .map_err(|error| unusable(ReportError::unreadable(&held.spelled, &error)))?;
+    TestReport::parse(&held.spelled, &bytes)
         .map(Arc::new)
-        .map_err(|error| unusable(spelled(error, &held.spelled)))
-}
-
-/// `error` about `path`, whatever file was opened to find out.
-fn spelled(error: ReportError, path: &Path) -> ReportError {
-    match error {
-        ReportError::Unreadable { io, detail, .. } => ReportError::Unreadable {
-            path: path.to_path_buf(),
-            io,
-            detail,
-        },
-        ReportError::Malformed { detail, .. } => ReportError::Malformed {
-            path: path.to_path_buf(),
-            detail,
-        },
-    }
+        .map_err(unusable)
 }
 
 #[cfg(test)]
@@ -93,6 +91,7 @@ mod tests {
             (ErrorKind::PermissionDenied, OpErrorKind::PermissionDenied),
             (ErrorKind::NotFound, OpErrorKind::FileNotFound),
             (ErrorKind::IsADirectory, OpErrorKind::Internal),
+            (ErrorKind::InvalidInput, OpErrorKind::InvalidInput),
         ] {
             let error = unusable(unreadable(io));
             assert_eq!(error.kind, kind, "{io:?}");
@@ -102,6 +101,8 @@ mod tests {
                 "cannot read test results r.json: the OS said no"
             );
         }
+        let outside = unusable(unreadable(ErrorKind::InvalidInput));
+        assert_eq!(outside.suggestion.as_deref(), Some(LINKED_OUT));
         let missing = unusable(unreadable(ErrorKind::NotFound));
         assert!(missing.suggestion.unwrap().contains("check the path"));
     }

@@ -6,6 +6,7 @@ use specforge_common::Diagnostic;
 use specforge_graph::Graph;
 use specforge_project::testing::{TestProject, disk_changed};
 use specforge_project::{Buffer, CheckMode, ProjectSession, UpdateKind};
+use specforge_registry::PlainDisk;
 use specforge_test::prelude::*;
 use tempfile::TempDir;
 
@@ -572,13 +573,13 @@ fn a_nested_project_appearing_takes_its_files_out_and_its_removal_puts_them_back
     assert!(session.project().graph().node("sub_only").is_some());
 
     write(root, "sub/specforge.json", "{}");
-    assert_eq!(session.stale().sources, ["sub/c.spec"]);
+    assert_eq!(session.stale().sources(), ["sub/c.spec"]);
     assert!(session.ensure_fresh().is_some());
     assert!(session.project().graph().node("sub_only").is_none());
     assert_matches_a_fresh_compile(&session, &dir);
 
     fs::remove_file(root.join("sub/specforge.json")).unwrap();
-    assert_eq!(session.stale().sources, ["sub/c.spec"]);
+    assert_eq!(session.stale().sources(), ["sub/c.spec"]);
     assert!(session.ensure_fresh().is_some());
     assert!(session.project().graph().node("sub_only").is_some());
     assert_matches_a_fresh_compile(&session, &dir);
@@ -652,7 +653,7 @@ fn a_wasm_file_entry_loads_in_a_session_and_reloads_with_its_file() {
     assert!(
         !session
             .changes([root.join("ext/greet.wasm").as_path()])
-            .environment
+            .environment()
             .is_empty()
     );
     let update = session.reload_environment();
@@ -1960,8 +1961,8 @@ fn edits_creations_and_deletions_apply_as_one_update() {
     fs::remove_file(root.join("b.spec")).unwrap();
 
     let stale = session.stale();
-    assert_eq!(stale.sources, vec!["a.spec", "b.spec", "c.spec"]);
-    assert!(stale.environment.is_empty() && stale.check_inputs.is_empty());
+    assert_eq!(stale.sources(), vec!["a.spec", "b.spec", "c.spec"]);
+    assert!(stale.environment().is_empty() && stale.check_inputs().is_empty());
     let update = session.ensure_fresh().expect("three files changed");
     assert_eq!(update.kind, specforge_project::UpdateKind::Sources);
     assert_eq!(update.rebuilt_files, vec!["a.spec", "b.spec", "c.spec"]);
@@ -1994,7 +1995,7 @@ fn a_racy_rewrite_is_still_seen() {
         .unwrap();
     assert_eq!(fs::metadata(&path).unwrap().modified().unwrap(), stamp);
 
-    assert_eq!(session.stale().sources, vec!["a.spec"]);
+    assert_eq!(session.stale().sources(), vec!["a.spec"]);
     session.ensure_fresh().expect("the rewrite is seen");
     assert!(session.project().graph().node("omega").is_some());
     assert!(session.project().graph().node("alpha").is_none());
@@ -2034,7 +2035,7 @@ fn a_lock_change_reloads_the_environment() {
 
     let stale = session.stale();
     assert!(
-        !stale.environment.is_empty() && stale.sources.is_empty(),
+        !stale.environment().is_empty() && stale.sources().is_empty(),
         "{stale:?}"
     );
     let update = session.ensure_fresh().expect("the lock changed");
@@ -2090,14 +2091,8 @@ fn an_update_starts_a_fresh_coverage_memo() {
     );
     let root = dir.root();
     let mut session = dir.session();
-    let coverage = |session: &ProjectSession| {
-        session
-            .project()
-            .recorded()
-            .at(Some(root))
-            .unwrap()
-            .coverage
-    };
+    let coverage =
+        |session: &ProjectSession| session.project().recorded(&PlainDisk).unwrap().coverage;
     let first = coverage(&session);
     assert!(std::sync::Arc::ptr_eq(&first, &coverage(&session)));
     assert!(session.project().entities().standing("a").unwrap().counts());
@@ -2196,12 +2191,7 @@ fn a_sessions_snapshot_follows_every_update() {
     let standing = session.project().entities().standing("gizmo").unwrap();
     assert_eq!(standing.declared, 1);
     assert!(standing.counts() && standing.reported_by().is_none());
-    let coverage = session
-        .project()
-        .recorded()
-        .at(Some(root))
-        .unwrap()
-        .coverage;
+    let coverage = session.project().recorded(&PlainDisk).unwrap().coverage;
     assert!(
         coverage
             .verdicts
@@ -2239,7 +2229,7 @@ fn an_update_that_skips_the_checks_still_scores_its_own_graph() {
     );
     let root = dir.root();
     let mut session = dir.session();
-    let before = std::sync::Arc::clone(session.project().recorded().entities());
+    let before = session.project().shared_entities();
     assert!(session.project().entities().kind_of("a").is_some());
 
     // The file now has a parse error: the checks are skipped, and nothing
@@ -2265,12 +2255,7 @@ fn an_update_that_skips_the_checks_still_scores_its_own_graph() {
             node.id.raw
         );
     }
-    let coverage = session
-        .project()
-        .recorded()
-        .at(Some(root))
-        .unwrap()
-        .coverage;
+    let coverage = session.project().recorded(&PlainDisk).unwrap().coverage;
     assert!(
         coverage
             .verdicts
@@ -2361,7 +2346,7 @@ fn a_config_written_while_the_runtime_loads_is_seen_next_time() {
     };
     assert!(!e028(&session), "{:?}", session.project().diagnostics());
     // The write was after the config's stamp: the session is stale.
-    assert!(!session.stale().environment.is_empty());
+    assert!(!session.stale().environment().is_empty());
 
     let update = session.ensure_fresh().expect("the config changed");
     assert_eq!(update.kind, UpdateKind::Environment);
@@ -2369,7 +2354,7 @@ fn a_config_written_while_the_runtime_loads_is_seen_next_time() {
     assert!(!e028(&session), "{:?}", session.project().diagnostics());
     let kinds = session.project().environment().registries().kinds();
     assert!(kinds.contains("alpha") && kinds.contains("beta"));
-    assert!(session.stale().environment.is_empty());
+    assert!(session.stale().environment().is_empty());
 }
 
 #[specforge_test(
@@ -2388,7 +2373,7 @@ fn a_module_written_before_the_load_reads_it_is_what_was_read() {
     let session =
         ProjectSession::open_from(&specforge_common::ProjectRoot::of(root).unwrap(), source);
 
-    assert!(session.stale().environment.is_empty());
+    assert!(session.stale().environment().is_empty());
     let enabled = session.project().environment().enabled();
     assert!(enabled[0].failure.is_some());
 }
@@ -3009,15 +2994,15 @@ fn a_batch_naming_every_changed_path_changes_what_is_stale() {
             let context = format!("seed {seed:#x} step {step}");
             let changes = session.changes(paths.iter().map(PathBuf::as_path));
             let stale = session.stale();
-            assert_eq!(changes.sources, stale.sources, "{context}");
+            assert_eq!(changes.sources(), stale.sources(), "{context}");
             assert_eq!(
-                changes.environment.is_empty(),
-                stale.environment.is_empty(),
+                changes.environment().is_empty(),
+                stale.environment().is_empty(),
                 "{context}"
             );
             assert_eq!(
-                changes.check_inputs.is_empty(),
-                stale.check_inputs.is_empty(),
+                changes.check_inputs().is_empty(),
+                stale.check_inputs().is_empty(),
                 "{context}"
             );
 

@@ -277,7 +277,9 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
     directory. A report that exists but cannot be used is the same error on
     every view that reads it (E045), of the kind the operation decides: schema_mismatch
     when it is not a specforge-report.json, permission_denied when the system
-    refuses to read it, else internal_error. The view says what its surface reports for the
+    refuses to read it, invalid_input over MCP when it is a link that leads
+    outside the call's project (MCP reads it only from inside; the CLI and the
+    LSP follow the user's link), else internal_error. The view says what its surface reports for the
     project: what specforge check reports for the compile behind it, then
     what the surface adds (MCP: I017). Coverage is computed once per
     compiled project or session state and per content of the recorded
@@ -304,6 +306,8 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
   verify unit "inspect reports an entity's standing as the coverage view counts it"
   verify unit "a report that cannot be read is the coverage's error, and the standing still holds"
   verify unit "an unusable report is the same failure, of the kind the operation decides, on every view"
+  verify unit "the CLI and the LSP read the recorded report where its link points"
+  verify unit "over MCP, a recorded report that leads outside the project is the same refusal on every view"
   verify integration "specforge stats --format json and specforge.stats answer the same document"
   verify integration "specforge trace and specforge.trace return the same chain for an entity"
   verify integration "specforge schema and specforge.schema carry the same version"

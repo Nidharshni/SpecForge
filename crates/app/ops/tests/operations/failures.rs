@@ -7,6 +7,7 @@
 use crate::view_support::{Assembled, Viewed, registries};
 use specforge_ops::analysis::analyze::{AnalyzeOptions, ReportSource, analyze};
 use specforge_ops::authoring::format::{Mode, Request, run};
+use specforge_ops::view::ProjectView;
 use specforge_ops::{OpError, OpErrorKind};
 use specforge_test::prelude::*;
 use std::path::Path;
@@ -39,8 +40,8 @@ fn lock_report(project: &Assembled) -> bool {
 }
 
 /// What every view that reads the recorded report answers for it.
-fn every_view(project: &Assembled) -> Vec<(&'static str, OpError)> {
-    let view = project.view();
+fn every_view(view: &ProjectView) -> Vec<(&'static str, OpError)> {
+    let view = *view;
     vec![
         ("test_report", view.test_report().unwrap_err()),
         (
@@ -90,7 +91,7 @@ fn an_unusable_report_is_one_failure_on_every_view() {
     }
 
     for (project, kind) in cases {
-        let views = every_view(&project);
+        let views = every_view(&project.view());
         let (_, first) = &views[0];
         assert_eq!((first.kind, first.code.as_ref()), (kind, "E045"));
         for (view, error) in &views {
@@ -104,7 +105,7 @@ fn an_unparsable_report_fails_every_view() {
     let project = project();
     write_report(&project, "{");
 
-    for (view, error) in every_view(&project) {
+    for (view, error) in every_view(&project.view()) {
         assert_eq!(error.kind, OpErrorKind::SchemaMismatch, "{view}");
         assert_eq!(error.code, "E045", "{view}");
         assert!(
@@ -113,6 +114,71 @@ fn an_unparsable_report_fails_every_view() {
             error.message
         );
     }
+}
+
+/// Over MCP the report is held inside the project: a link that leads out is one refusal on
+/// every view, and the target is never read (ADR 0139).
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "read_views_over_the_project_view",
+    verify = "over MCP, a recorded report that leads outside the project is the same refusal on every view"
+)]
+fn a_report_linked_outside_is_one_refusal_on_every_contained_view() {
+    let project = project();
+    let outside = tempfile::tempdir().unwrap();
+    let report = outside.path().join("r.json");
+    std::fs::write(
+        &report,
+        r#"{"results":{"b":{"tests":[{"name":"t","status":"passed","verify":"it works"}]}}}"#,
+    )
+    .unwrap();
+    let link = project.root().join("specforge-report.json");
+    std::os::unix::fs::symlink(&report, &link).unwrap();
+
+    let views = every_view(&project.view().contained());
+    let (_, first) = &views[0];
+    assert_eq!(
+        (first.kind, first.code.as_ref()),
+        (OpErrorKind::InvalidInput, "E045")
+    );
+    assert!(first.message.contains("outside"), "{}", first.message);
+    for (view, error) in &views {
+        assert_eq!(error, first, "{view} refuses as every other view does");
+    }
+
+    // A report inside reads as before.
+    std::fs::remove_file(&link).unwrap();
+    write_report(&project, r#"{"results":{}}"#);
+    assert!(project.view().contained().test_report().unwrap().is_some());
+}
+
+/// ADR 0092 D6: the CLI and the LSP follow the user's link to the report.
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "read_views_over_the_project_view",
+    verify = "the CLI and the LSP read the recorded report where its link points"
+)]
+fn an_uncontained_view_follows_the_report_link() {
+    let project = project();
+    let outside = tempfile::tempdir().unwrap();
+    let report = outside.path().join("r.json");
+    std::fs::write(
+        &report,
+        r#"{"results":{"b":{"tests":[{"name":"t","status":"passed","verify":"it works"}]}}}"#,
+    )
+    .unwrap();
+    std::os::unix::fs::symlink(&report, project.root().join("specforge-report.json")).unwrap();
+
+    assert!(project.view().test_report().unwrap().is_some());
+    assert!(
+        project
+            .view()
+            .coverage()
+            .unwrap()
+            .verdict("b")
+            .unwrap()
+            .is_proven()
+    );
 }
 
 #[test]

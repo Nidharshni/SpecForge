@@ -39,8 +39,8 @@ behavior watch_file_system_for_changes "Watch File System for Changes" {
     a file the checks read) the watcher follows the session's watch roots
     and brings the session up to date with what was written meanwhile
     (bring_session_up_to_date); it does so once at start, before it reports
-    ready. A missing directory on the way to an input is watched from its
-    nearest existing ancestor.
+    ready. A missing directory on the way to an input, a symlinked source's
+    hop included, is watched from its nearest existing ancestor.
   """
   verify unit "file modification triggers recompilation"
   verify unit "file creation triggers recompilation"
@@ -60,6 +60,7 @@ behavior watch_file_system_for_changes "Watch File System for Changes" {
   verify integration "a directory moved inside the spec root leaves watch reporting what check reports"
   verify integration "an edit to a symlinked source's target is seen"
   verify unit "a directory event reaches every source under it"
+  verify unit "a symlinked source whose hop lies in a directory that did not exist is seen when it is created"
 }
 
 behavior classify_project_changes "Classify Project Changes" {
@@ -93,10 +94,10 @@ behavior classify_project_changes "Classify Project Changes" {
     is a change when it differs from what the session read (size and
     modification time, and the content when it was read within the
     timestamp granularity); a directory created on the way to a missing
-    input's directory outside the root is that input's change, whatever
-    the stamps say. Any other path changes nothing. A detached session
-    (no project) takes no change from disk: its sources are the buffers
-    it holds.
+    input's directory outside the root is that input's change (a source
+    hop's: that source's), whatever the stamps say. Any other path
+    changes nothing. A detached session (no project) takes no change from
+    disk: its sources are the buffers it holds.
     Watch, the LSP and MCP MUST take changes through the session. What a
     path reaches, which directories watch watches, which files the LSP
     asks its client to report and what the session stamps MUST all derive
@@ -133,6 +134,7 @@ behavior classify_project_changes "Classify Project Changes" {
   verify unit "a symlinked source is keyed by its link and changes when its target does"
   verify unit "a symlinked source is reached by each hop its read followed"
   verify unit "a path whose file is as the session last read it changes nothing"
+  verify unit "a directory created on the way to a missing input's directory outside the root is that input's change, a source hop's included"
   verify unit "a detached session takes no change from disk"
   verify unit "a directory moved above an environment or check input changes that input"
   verify unit "a session's watch roots and the LSP's watchers cover every symlinked source's target"
@@ -245,7 +247,11 @@ behavior invalidate_changed_files "Invalidate Changed Files" {
     without use (ADR 0004 D1-a), so an importer of a changed file parses
     the same as before and MUST NOT be re-parsed; the cross-file effects
     of a change (references, duplicates, cycles, imports) are recomputed
-    over the whole graph and every cached parse instead. For file
+    over the whole graph and every cached parse instead. A file whose read
+    gives the text the session built it from is no changed file, whatever
+    its stamp says (touched, or written again with the same bytes): it is
+    re-stamped, not re-parsed, and runs no check; a link hop its read
+    followed that moved still changes the session's inputs. For file
     deletions, all entities declared in the deleted file MUST be removed
     from the graph along with their edges; no re-parse is attempted.
     For file creations, the new file MUST be parsed and its entities
@@ -258,6 +264,7 @@ behavior invalidate_changed_files "Invalidate Changed Files" {
   verify unit "new file entities added to graph"
   verify unit "several editor buffers changed at once are one update"
   verify unit "the typing fast path skips the checks while any edited buffer does not parse"
+  verify unit "a source rewritten with its own text re-parses nothing and runs no check"
   verify contract "Invalidate Changed Files: file invalidation holds — file_changes_coalesced_fired, invalidation_set_computed, subgraph_invalidated_emitted, unrelated_files_untouched"
 }
 

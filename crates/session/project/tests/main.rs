@@ -39,3 +39,4 @@ mod session;
 mod source_hops;
 mod structural_checks;
 mod symlinked_directory;
+mod update_bracket;

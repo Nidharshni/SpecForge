@@ -5,9 +5,7 @@ use std::path::Path;
 
 use specforge_common::ProjectRoot;
 use specforge_project::testing::{Assembled, TestProject};
-use specforge_project::{
-    Changes, CompiledProject, DiagnosticsDelta, Environment, ProjectSession, UpdateKind,
-};
+use specforge_project::{CompiledProject, Environment, ProjectSession};
 use specforge_registry::RegistryBuild;
 
 /// F1 answers what F2 says, for a project production makes.
@@ -75,19 +73,4 @@ fn an_assembled_project_is_rooted_at_a_directory_it_was_not_loaded_at() {
         assert!(project.compiled().environment().project_root().is_none());
         assert!(project.detached().root().is_none());
     }
-}
-
-#[test]
-fn a_detached_session_applies_no_change_it_is_handed() {
-    let mut session = ProjectSession::detached();
-    let changes = Changes {
-        sources: vec![],
-        environment: vec!["/x/specforge.json".into()],
-        check_inputs: vec!["/x/a.json".into()],
-    };
-    assert!(session.apply(&changes).is_none());
-
-    let update = session.reload_environment();
-    assert_eq!(update.kind, UpdateKind::Environment);
-    assert_eq!(update.diagnostics_delta(), DiagnosticsDelta::default());
 }

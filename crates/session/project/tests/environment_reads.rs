@@ -76,7 +76,7 @@ fn a_symlinked_modules_target_is_watched() {
     );
     fs::write(l.outside.join("ext.wasm"), b"second, longer").unwrap();
     let changes = session.changes([l.outside.join("ext.wasm").as_path()]);
-    assert!(!changes.environment.is_empty(), "{changes:?}");
+    assert!(!changes.environment().is_empty(), "{changes:?}");
 }
 
 #[cfg(unix)]
@@ -147,7 +147,7 @@ fn a_module_link_pointed_elsewhere_reloads_the_environment() {
     fs::remove_file(&link).unwrap();
     std::os::unix::fs::symlink(l.outside.join("other.wasm"), &link).unwrap();
     let changes = session.changes([link.as_path()]);
-    assert_eq!(changes.environment, vec![link], "{changes:?}");
+    assert_eq!(changes.environment(), vec![link], "{changes:?}");
 }
 
 fn project(config: serde_json::Value, files: &[(&str, &str)]) -> TestProject {
@@ -170,7 +170,7 @@ fn a_moved_directory_holding_a_module_reloads_the_environment() {
     fs::rename(root.join("ext"), root.join("ext2")).unwrap();
 
     let changes = session.changes([root.join("ext").as_path(), root.join("ext2").as_path()]);
-    assert_eq!(changes.environment, vec![root.join("ext")]);
+    assert_eq!(changes.environment(), vec![root.join("ext")]);
 }
 
 #[specforge_test(
@@ -207,18 +207,21 @@ fn config_lock_and_loaded_modules_are_environment_inputs() {
         fs::write(&path, "new content").unwrap();
         let changes = session.changes([path.as_path()]);
         assert_eq!(
-            changes.environment,
+            changes.environment(),
             vec![path.clone()],
             "{}",
             path.display()
         );
-        assert!(changes.sources.is_empty());
+        assert!(changes.sources().is_empty());
     }
     let unlocked = root.join(".specforge/extensions/@acme/installed/extension.wasm");
     fs::create_dir_all(unlocked.parent().unwrap()).unwrap();
     fs::write(&unlocked, "new content").unwrap();
     assert!(
-        session.changes([unlocked.as_path()]).environment.is_empty(),
+        session
+            .changes([unlocked.as_path()])
+            .environment()
+            .is_empty(),
         "the load did not read it"
     );
 }
@@ -281,7 +284,7 @@ fn an_entry_the_load_does_not_read_is_no_input() {
     )
     .unwrap();
     let changes = session.changes([root.join("specforge.lock").as_path()]);
-    assert_eq!(changes.environment, vec![root.join("specforge.lock")]);
+    assert_eq!(changes.environment(), vec![root.join("specforge.lock")]);
 }
 
 #[test]
