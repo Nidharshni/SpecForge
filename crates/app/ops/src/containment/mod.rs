@@ -203,4 +203,6 @@ fn landing(path: &Path) -> PathBuf {
 }
 
 #[cfg(test)]
+mod replace_tests;
+#[cfg(test)]
 mod tests;

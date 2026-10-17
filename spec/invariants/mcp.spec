@@ -136,6 +136,7 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
   verify unit "a path an MCP request names resolves inside the served project, whatever its spelling"
   verify unit "a file or directory an MCP tool argument names resolves inside the call's project"
   verify unit "a mutation reads and writes no file through a symlink that leaves the project"
+  verify unit "a mutation writes no file through a hard link to a file outside the project"
   verify unit "a file the project keeps at its root is read only from inside the project"
   verify unit "a path that leaves the project through a symlink is outside it, whether or not the file it names exists"
   verify unit "init creates its project inside the server's root and never inside the served project"

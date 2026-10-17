@@ -1,6 +1,6 @@
 # A compiled project reads its recorded report through the disk it is handed
 
-**Status:** accepted (2026-10-17, architecture round 14, plan 07). Answers [ADR 0112](0112-every-project-file-an-operation-opens-goes-through-the-requests-containment.md)'s reopen condition ("a crate below app that must open a project file (the session's recorded report)") without its rejected kernel move. Extends [ADR 0108](0108-a-project-view-comes-only-from-a-compiled-project.md) D2 (only a compiled project reads its report, at its own root) and ADR 0107 D1's port to the recorded report. Keeps ADR 0092 D6.
+**Status:** accepted (2026-10-17, architecture round 14, plan 07). Answers [ADR 0112](0112-every-project-file-an-operation-opens-goes-through-the-requests-containment.md)'s reopen condition ("a crate below app that must open a project file (the session's recorded report)") without its rejected kernel move. Extends [ADR 0108](0108-a-project-view-comes-only-from-a-compiled-project.md) D2 (only a compiled project reads its report, at its own root) and ADR 0107 D1's port to the recorded report. Keeps ADR 0092 D6. Amended by [ADR 0144](0144-a-project-file-is-written-by-replacing-its-name.md) (a project file is written by replacing its name).
 
 Every view that scores coverage passed the project's own root back into the project's memo
 (`self.project.recorded().report(self.root())`), the shape ADR 0108 removed from `ProjectView::new`. The memo then
@@ -41,7 +41,7 @@ refuses to write through the same link. One file format had three readers (`read
 ## Consequences
 
 MCP's read views no longer follow a report link out of the project. The CLI and the LSP are unchanged. A hard link
-stays readable everywhere: a name rule cannot see it.
+stays readable everywhere: a name rule cannot see it (a write never goes through one, ADR 0144).
 
 ## What would reopen it
 

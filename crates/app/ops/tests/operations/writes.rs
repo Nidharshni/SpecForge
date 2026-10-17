@@ -321,7 +321,7 @@ fn an_add_that_fails_after_placing_its_module_writes_nothing() {
 
     assert_eq!(error.error.code, "E033", "{error:?}");
     assert!(
-        error.error.message.contains("specforge.lock.tmp"),
+        error.error.message.contains("specforge.lock"),
         "the message names the file it could not write: {error:?}"
     );
     assert!(error.error.writes.is_empty(), "{:?}", error.error.writes);

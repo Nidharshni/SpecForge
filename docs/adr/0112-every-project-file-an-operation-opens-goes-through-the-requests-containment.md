@@ -1,6 +1,6 @@
 # Every project file an operation opens goes through the request's containment **Amended by [ADR 0131](0131-an-export-is-written-into-the-project-by-the-export-operation.md):** D4: render builds no bound; outline's spec-root bound is the one exception left.
 
-**Status:** accepted (2026-10-16, architecture round 12, plan 01). Amends ADR 0104 D2, ADR 0092 (the audit table and D2)
+**Status:** accepted (2026-10-16, architecture round 12, plan 01). Amends ADR 0104 D2, ADR 0092 (the audit table and D2) Amended by [ADR 0144](0144-a-project-file-is-written-by-replacing-its-name.md) (a project file is written by replacing its name).
 and ADR 0029 D8. D2 (collect's request and `SessionRequest`) and D4 (`ProjectRef::caller`) amended by [ADR 0124](0124-what-the-caller-lends-an-operation-is-one-value.md); its Rejected line stands.
 D1 (`replace`) amended by [ADR 0128](0128-one-project-change-over-held-files.md): it keeps the file's permissions and refuses a file the process may not write. Its reopen condition (the session's recorded report) is answered by [ADR 0139](0139-a-compiled-project-reads-its-recorded-report-through-the-disk-it-is-handed.md): the session reads the report through the `Disk` port and ops supplies the containment adapter; the Rejected kernel move stands. The Consequences bullet on `coverage::read_report` no longer holds.
 

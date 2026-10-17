@@ -169,8 +169,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   one directory (an MCP request's bound, or the call's project). Lent by the **Caller** in the operation's request and
   applied where the operation opens or writes the file (a lock plan narrows it to its project, ADR 0137) (`specforge_ops::Containment`, ADR 0104). MCP's call's project
   hands it to the tools (`ProjectRef::caller`, ADR 0112, ADR 0124), and render's view input hands it the request's bound (ADR 0131).
+  Containment does not see a hard link: a write never goes through one (a project file is written by `specforge_common::fresh::replace_file`, which replaces
+  the name, ADR 0144), and a read of one is a read of the file in the project.
 - **Contained disk**: a containment as the `Disk` port (`specforge_ops` `ContainedDisk`, ADR 0139): how a crate
   below app reads a project file the surface bounds; a name that lands outside reads as `invalid_input`.
+- **Replace file**: how a project file is written (`specforge_common::fresh::replace_file`, ADR 0144): a new file beside the name,
+  renamed onto it, so the inode that held the name is never opened for writing. `create_fresh` is the same for a stream.
 - **Caller**: what the surface that calls an operation lends it, one value (`specforge_ops::Caller`, ADR 0124): what the
   call may reach (**Containment**) and who can be asked (**Asking**). The CLI lends every path and its terminal when
   someone can answer; MCP lends the root of the call's project (init: the request's bound) and nobody. Every request
