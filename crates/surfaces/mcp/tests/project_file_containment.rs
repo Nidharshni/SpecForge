@@ -339,6 +339,7 @@ fn every_caller_a_tool_uses_comes_from_the_call() {
     sources(&src, &mut files, &src);
     let within = [
         "containment.rs",
+        "state.rs", // the bound a session reads its own sources through (ADR 0145)
         "target/call.rs",
         "tools/outline.rs", // the spec root bounds a file of the outline
     ];
