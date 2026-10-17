@@ -139,7 +139,7 @@ fn a_plan_whose_asks_change_nothing_is_not_judged() {
 }
 
 #[test]
-fn a_change_that_changes_nothing_resolves_and_compares_nothing() {
+fn a_change_that_changes_nothing_writes_nothing_and_ignores_a_later_edit_of_the_config() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(
         dir.path().join("specforge.json"),
@@ -160,11 +160,20 @@ fn a_change_that_changes_nothing_resolves_and_compares_nothing() {
     .unwrap();
     plan.enable(Ask(0), "@specforge/product");
     let checked = plan.check().ok().unwrap();
-    std::fs::write(
-        dir.path().join("specforge.json"),
-        r#"{"extensions":["@specforge/product","@acme/x"]}"#,
-    )
-    .unwrap();
+    let edited = r#"{"extensions":["@specforge/product","@acme/x"]}"#;
+    std::fs::write(dir.path().join("specforge.json"), edited).unwrap();
+    // A write would compare the config with what the plan opened and refuse `file_changed`; an unchanged plan
+    // answers before that (ADR 0138 I4).
     let done = checked.finish().unwrap();
     assert!(done.writes.is_empty());
+    assert_eq!(done.enabled, 1);
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("specforge.json")).unwrap(),
+        edited,
+        "the config is the caller's edit, not rewritten"
+    );
+    assert!(
+        !dir.path().join("specforge.lock").exists(),
+        "no lock is written for a change that changes nothing"
+    );
 }

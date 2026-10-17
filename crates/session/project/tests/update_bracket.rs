@@ -46,6 +46,8 @@ fn releasing_a_buffer_whose_file_became_a_symlink_moves_the_inputs() {
     let outside = TempDir::new().unwrap();
     let outside_dir = fs::canonicalize(outside.path()).unwrap();
     fs::write(outside_dir.join("real.spec"), TERM).unwrap();
+    // The same bytes, a later modification time: the stamps must differ whatever the clock's granularity.
+    touch(&outside_dir.join("real.spec"));
 
     session.hold(&[Buffer::new(&a, TERM)]);
     fs::remove_file(&a).unwrap();
@@ -119,6 +121,8 @@ fn a_source_relinked_to_its_own_text_moves_the_inputs_and_rebuilds_nothing() {
     let outside = TempDir::new().unwrap();
     let outside_dir = fs::canonicalize(outside.path()).unwrap();
     fs::write(outside_dir.join("real.spec"), TERM).unwrap();
+    // The same bytes, a later modification time: the stamps must differ whatever the clock's granularity.
+    touch(&outside_dir.join("real.spec"));
     fs::remove_file(&a).unwrap();
     std::os::unix::fs::symlink(outside_dir.join("real.spec"), &a).unwrap();
 
