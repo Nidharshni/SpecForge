@@ -3,7 +3,7 @@
 //! (ADR 0029 D1).
 
 use specforge_common::codes;
-use specforge_project::coverage::{self, ReportError, TestReport};
+use specforge_project::coverage::{ReportError, TestReport};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -46,24 +46,12 @@ pub(crate) fn unusable(error: ReportError) -> OpError {
 /// the caller spelled it (joined onto the bound's root when bounded and relative).
 pub(crate) fn named(path: &Path, containment: &Containment) -> Result<Arc<TestReport>, OpError> {
     let held = containment.resolve(path)?;
-    coverage::read_report_file(&held.real)
+    let bytes = held
+        .read()
+        .map_err(|error| unusable(ReportError::unreadable(&held.spelled, &error)))?;
+    TestReport::parse(&held.spelled, &bytes)
         .map(Arc::new)
-        .map_err(|error| unusable(spelled(error, &held.spelled)))
-}
-
-/// `error` about `path`, whatever file was opened to find out.
-fn spelled(error: ReportError, path: &Path) -> ReportError {
-    match error {
-        ReportError::Unreadable { io, detail, .. } => ReportError::Unreadable {
-            path: path.to_path_buf(),
-            io,
-            detail,
-        },
-        ReportError::Malformed { detail, .. } => ReportError::Malformed {
-            path: path.to_path_buf(),
-            detail,
-        },
-    }
+        .map_err(unusable)
 }
 
 #[cfg(test)]

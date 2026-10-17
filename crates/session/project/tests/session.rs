@@ -6,6 +6,7 @@ use specforge_common::Diagnostic;
 use specforge_graph::Graph;
 use specforge_project::testing::{TestProject, disk_changed};
 use specforge_project::{Buffer, CheckMode, ProjectSession, UpdateKind};
+use specforge_registry::PlainDisk;
 use specforge_test::prelude::*;
 use tempfile::TempDir;
 
@@ -2090,14 +2091,8 @@ fn an_update_starts_a_fresh_coverage_memo() {
     );
     let root = dir.root();
     let mut session = dir.session();
-    let coverage = |session: &ProjectSession| {
-        session
-            .project()
-            .recorded()
-            .at(Some(root))
-            .unwrap()
-            .coverage
-    };
+    let coverage =
+        |session: &ProjectSession| session.project().recorded(&PlainDisk).unwrap().coverage;
     let first = coverage(&session);
     assert!(std::sync::Arc::ptr_eq(&first, &coverage(&session)));
     assert!(session.project().entities().standing("a").unwrap().counts());
@@ -2196,12 +2191,7 @@ fn a_sessions_snapshot_follows_every_update() {
     let standing = session.project().entities().standing("gizmo").unwrap();
     assert_eq!(standing.declared, 1);
     assert!(standing.counts() && standing.reported_by().is_none());
-    let coverage = session
-        .project()
-        .recorded()
-        .at(Some(root))
-        .unwrap()
-        .coverage;
+    let coverage = session.project().recorded(&PlainDisk).unwrap().coverage;
     assert!(
         coverage
             .verdicts
@@ -2239,7 +2229,7 @@ fn an_update_that_skips_the_checks_still_scores_its_own_graph() {
     );
     let root = dir.root();
     let mut session = dir.session();
-    let before = std::sync::Arc::clone(session.project().recorded().entities());
+    let before = session.project().shared_entities();
     assert!(session.project().entities().kind_of("a").is_some());
 
     // The file now has a parse error: the checks are skipped, and nothing
@@ -2265,12 +2255,7 @@ fn an_update_that_skips_the_checks_still_scores_its_own_graph() {
             node.id.raw
         );
     }
-    let coverage = session
-        .project()
-        .recorded()
-        .at(Some(root))
-        .unwrap()
-        .coverage;
+    let coverage = session.project().recorded(&PlainDisk).unwrap().coverage;
     assert!(
         coverage
             .verdicts

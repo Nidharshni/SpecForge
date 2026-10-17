@@ -497,12 +497,13 @@ fn select<'a>(
 }
 
 /// The report `collect` merges new results into: `specforge-report.json`,
-/// or an empty report when it's missing or unreadable. Unlike the readers
-/// that score coverage ([`specforge_project::coverage::read_report`]), collect is the
-/// writer: it replaces a report it cannot read.
+/// or an empty report when it's missing or unreadable. Unlike the views that
+/// score coverage (`CompiledProject::recorded`), collect is the writer: it
+/// replaces a report it cannot read.
 fn load_report(file: &Held) -> TestReport {
-    specforge_project::coverage::read_report_file(&file.real)
+    file.read()
         .ok()
+        .and_then(|bytes| TestReport::parse(&file.spelled, &bytes).ok())
         .unwrap_or(TestReport {
             runner: None,
             results: BTreeMap::new(),

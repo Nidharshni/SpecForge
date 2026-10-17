@@ -3,17 +3,17 @@
 //! session holds one and keeps it current.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use specforge_common::{Diagnostic, ProjectRoot, codes};
 use specforge_graph::{Applied, FileChange, Graph, GraphBuild, compute_graph_delta, moved_nodes};
 
-use crate::coverage::RecordedCoverage;
+use crate::coverage::{REPORT_FILE, Recorded, RecordedCoverage, ReportError, TestReport};
 use crate::ledger::{Reads, Unrecorded};
 use crate::sources::{Read, SourceCache};
 use crate::{Environment, SharedRuntime, SourceBuild};
-use specforge_registry::EntitySnapshot;
+use specforge_registry::{Disk, EntitySnapshot};
 
 /// A compiled project: an environment, the sources read in it, their graph
 /// build, what resolving their imports and running the checks reported, and
@@ -181,12 +181,37 @@ impl CompiledProject {
     /// The graph's entity snapshot (ADR 0019): the one its checks read, or
     /// one taken on first use after an update that skipped them.
     pub fn entities(&self) -> &EntitySnapshot {
-        self.recorded().entities()
+        self.memo().entities()
     }
 
-    /// The entity snapshot, the recorded test report and the coverage of
-    /// the graph, memoized for this state of the project.
-    pub fn recorded(&self) -> &RecordedCoverage {
+    /// [`Self::entities`], shared: a test holds it across an update.
+    #[cfg(feature = "testing")]
+    pub fn shared_entities(&self) -> Arc<EntitySnapshot> {
+        Arc::clone(self.memo().entities())
+    }
+
+    /// The recorded test report, `<root>/specforge-report.json` ([`REPORT_FILE`]), read through
+    /// `disk` (ADR 0139): `Ok(None)` for a detached project (the disk is not asked) or when the
+    /// disk has no such file; an error when it is there but unusable, never memoized. One
+    /// `disk.read` per call; parsed again only when its bytes changed.
+    pub fn test_report(&self, disk: &dyn Disk) -> Result<Option<Arc<TestReport>>, ReportError> {
+        self.memo().report(self.report_file().as_deref(), disk)
+    }
+
+    /// [`Self::test_report`] and the coverage of this project's entity snapshot against it,
+    /// computed once per report content: what every coverage view reads.
+    pub fn recorded(&self, disk: &dyn Disk) -> Result<Recorded, ReportError> {
+        self.memo().at(self.report_file().as_deref(), disk)
+    }
+
+    /// Where its report is: none for a detached project.
+    fn report_file(&self) -> Option<PathBuf> {
+        self.root().map(|root| root.join(REPORT_FILE))
+    }
+
+    /// The memo of the entity snapshot, the report and the coverage, for this state of the
+    /// project.
+    fn memo(&self) -> &RecordedCoverage {
         self.recorded
             .get_or_init(|| RecordedCoverage::over(&self.graph, &self.env))
     }
@@ -385,6 +410,7 @@ impl CompiledProject {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use specforge_registry::{Asked, MemoryDisk, PlainDisk};
     use specforge_test_macros::test as specforge_test;
 
     const MISSING_IMPORT: &str = "use \"missing\"\nbehavior a \"A\" {\n}\n";
@@ -422,6 +448,38 @@ mod tests {
             "{:?}",
             compiled.diagnostics()
         );
+    }
+
+    #[test]
+    fn a_detached_project_asks_no_disk_for_its_report() {
+        let disk = MemoryDisk::new().with_file("/specforge-report.json", b"{");
+        assert!(
+            CompiledProject::detached()
+                .recorded(&disk)
+                .unwrap()
+                .report
+                .is_none()
+        );
+        assert!(disk.asked().is_empty());
+    }
+
+    #[test]
+    fn a_rooted_project_reads_its_report_through_the_disk_it_is_given() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("specforge.json"), r#"{"extensions": []}"#).unwrap();
+        let project = CompiledProject::compile(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            None,
+        );
+        let file = project.root().unwrap().join("specforge-report.json");
+        let disk = MemoryDisk::new().with_file(
+            &file,
+            br#"{"results":{"a":{"tests":[{"name":"t","status":"passed"}]}}}"#,
+        );
+        assert!(project.test_report(&disk).unwrap().is_some());
+        assert_eq!(disk.asked(), [Asked::Read(file)]);
+        // Nothing on the file system: the memo re-keys on content.
+        assert!(project.test_report(&PlainDisk).unwrap().is_none());
     }
 
     #[specforge_test(

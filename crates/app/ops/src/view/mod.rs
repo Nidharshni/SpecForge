@@ -29,7 +29,7 @@ use specforge_graph::Graph;
 use specforge_installed::{Installed, LockState};
 use specforge_project::coverage::{ProjectCoverage, Recorded, TestReport};
 use specforge_project::{CompiledProject, Environment, SharedRuntime};
-use specforge_registry::{EntitySnapshot, RegistryBuild};
+use specforge_registry::{EntitySnapshot, PlainDisk, RegistryBuild};
 
 pub use connectivity::{Connectivity, Degree};
 pub use entity::{EntityField, not_found};
@@ -175,8 +175,7 @@ impl<'a> ProjectView<'a> {
     /// but unusable.
     pub fn test_report(&self) -> Result<Option<Arc<TestReport>>, OpError> {
         self.project
-            .recorded()
-            .report(self.root())
+            .test_report(&PlainDisk)
             .map_err(crate::report::unusable)
     }
 
@@ -191,8 +190,7 @@ impl<'a> ProjectView<'a> {
     /// file for a view that needs both.
     pub fn recorded(&self) -> Result<Recorded, OpError> {
         self.project
-            .recorded()
-            .at(self.root())
+            .recorded(&PlainDisk)
             .map_err(crate::report::unusable)
     }
 
