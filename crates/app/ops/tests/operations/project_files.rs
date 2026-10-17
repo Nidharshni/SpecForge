@@ -66,18 +66,6 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
         "the export's schema record: written by `specforge export` only",
     ),
     (
-        "schema_version/mod.rs",
-        "fs::write(",
-        1,
-        "the export's schema record: written by `specforge export` only",
-    ),
-    (
-        "schema_version/mod.rs",
-        "fs::rename(",
-        1,
-        "the export's schema record: written by `specforge export` only",
-    ),
-    (
         "extension/publish.rs",
         "fs::read(",
         1,
