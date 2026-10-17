@@ -228,6 +228,7 @@ fn a_hard_linked_source_that_is_not_a_spec_is_read_by_no_view() {
     let mut server = serve(&project);
     let all = views(&mut server);
     assert!(all.contains("E025"), "{all}");
+    assert!(all.contains("hard link: copy it in"), "{all}");
     assert_nothing_of(&all, &[SECRET, "hunter2", "password"]);
 }
 

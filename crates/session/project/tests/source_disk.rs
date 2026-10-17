@@ -109,7 +109,7 @@ fn a_source_the_handed_disk_refuses_is_unreadable_and_not_in_the_graph() {
         .cloned()
         .expect("the refused source's E025");
     let suggestion = e025.suggestion.clone().unwrap_or_default();
-    assert!(suggestion.contains("inside the served project"), "{suggestion}");
+    assert!(suggestion.contains("inside the served project as a plain file"), "{suggestion}");
     assert!(!suggestion.contains("UTF-8"), "{suggestion}");
     assert!(session.project().graph().node("alpha_one").is_none());
     assert!(session.project().graph().node("beta_one").is_some());
