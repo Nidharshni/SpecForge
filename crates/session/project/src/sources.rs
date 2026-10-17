@@ -41,8 +41,8 @@ pub(crate) fn read(disk: &dyn Disk, spec_root: &Path, relative: &str) -> Read {
         // says where the name landed.
         Err(e) if e.kind() == std::io::ErrorKind::InvalidInput => Read::Unreadable(
             Diagnostic::new(codes::E025, format!("cannot read {relative}: {e}")).with_suggestion(
-                "keep the file, and the link or `spec_root` that reaches it, inside the served \
-                 project, or read this project with the CLI",
+                "keep the file inside the served project as a plain file (not a symlink that \
+                 leaves it, not a hard link: copy it in), or read this project with the CLI",
             ),
         ),
         Err(e) => unreadable(relative, e),

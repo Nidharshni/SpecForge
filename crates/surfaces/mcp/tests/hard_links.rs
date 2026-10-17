@@ -106,7 +106,7 @@ fn format_replaces_a_hard_linked_source_and_keeps_the_other_name() {
     invariant = "mcp_served_project_consistency",
     verify = "a mutation writes no file through a hard link to a file outside the project"
 )]
-fn rename_replaces_a_hard_linked_source_and_keeps_the_other_name() {
+fn rename_of_a_hard_linked_source_is_refused_and_writes_neither_name() {
     let project = plain_project();
     let outside = TempDir::new().unwrap();
     let victim = outside.path().join("victim.txt");
@@ -116,15 +116,18 @@ fn rename_replaces_a_hard_linked_source_and_keeps_the_other_name() {
     fs::hard_link(&victim, project.path().join("spec/main.spec")).unwrap();
     let mut server = serve(project.path());
 
-    let _ = call_tool(
+    let reply = call_tool(
         &mut server,
         "specforge.rename",
         json!({"entity_id": "alpha", "new_name": "omega"}),
     );
 
+    // The session does not read a source with two names (ADR 0146), so it has no `alpha` to rename:
+    // the rename is refused and neither name is written.
+    assert!(reply.to_string().contains("alpha"), "{reply}");
     assert_eq!(fs::read_to_string(&victim).unwrap(), text);
     let mine = fs::read_to_string(project.path().join("spec/main.spec")).unwrap();
-    assert!(mine.contains("omega"), "{mine}");
+    assert_eq!(mine, text);
 }
 
 #[cfg(unix)]

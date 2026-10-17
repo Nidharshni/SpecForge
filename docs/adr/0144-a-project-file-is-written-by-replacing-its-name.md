@@ -2,7 +2,7 @@
 
 **Status:** accepted (2026-10-17, round 14 follow-up G2). Amends [ADR 0112](0112-every-project-file-an-operation-opens-goes-through-the-requests-containment.md) D1 (the rule holds below `app` too), [ADR 0128](0128-one-project-change-over-held-files.md) (its `openat` reopen item is not needed for hard links), [ADR 0137](0137-a-lock-plan-bounds-its-own-writes.md) (the lock's temporary name) and [ADR 0139](0139-a-compiled-project-reads-its-recorded-report-through-the-disk-it-is-handed.md) (the Consequences sentence on hard links).
 
-D3 is amended by [ADR 0145](0145-the-session-reads-sources-through-the-disk-the-surface-hands-it.md): the read of a hard-linked source has its home there.
+D3 is amended by [ADR 0145](0145-the-session-reads-sources-through-the-disk-the-surface-hands-it.md): the read of a hard-linked source has its home there; and by [ADR 0146](0146-a-file-with-more-than-one-name-is-not-read-through-a-bound.md): over MCP a source or report with more than one name is no longer read.
 
 Round 14 recorded that "a hard link is out of scope: no path rule can see a hard link". That is true of the name and
 false of the write. Every write that went through `Held::replace` or migrate's `create_new_beside` unlinks the name

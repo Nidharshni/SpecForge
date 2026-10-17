@@ -2,7 +2,7 @@
 //! `real`, where the name landed, so the file checked is the file opened; what messages, documents
 //! and `Writes` name is `spelled`. Every project file an operation reads or writes is opened here.
 
-use std::io::Write as _;
+use std::io::{Read as _, Write as _};
 use std::path::{Component, Path, PathBuf};
 
 use super::{Containment, Held, Outside};
@@ -11,6 +11,18 @@ impl Held {
     /// The bytes at `real`. A missing file is the caller's `NotFound` (E054, E045, `None`...).
     pub fn read(&self) -> std::io::Result<Vec<u8>> {
         std::fs::read(&self.real)
+    }
+
+    /// The bytes at `real`, read from the one handle that is checked: a bounded read refuses a regular
+    /// file with more than one name (ADR 0146), which another name outside the bound could have made.
+    fn read_checked(&self, bounded: bool) -> std::io::Result<Vec<u8>> {
+        let mut file = std::fs::File::open(&self.real)?;
+        if bounded {
+            refuse_if_linked(&file)?;
+        }
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes)?;
+        Ok(bytes)
     }
 
     /// The bytes at `real`, or `None` for a file that is not there (`NotFound`); any other error passes.
@@ -102,11 +114,33 @@ impl Containment {
     /// reader that names what it read (inference sources, analyze's named report).
     pub fn read(&self, named: &Path) -> Result<(Held, Vec<u8>), ReadFailure> {
         let held = self.resolve(named).map_err(ReadFailure::Outside)?;
-        match held.read() {
+        match held.read_checked(self.root.is_some()) {
             Ok(bytes) => Ok((held, bytes)),
             Err(error) => Err(ReadFailure::Io { held, error }),
         }
     }
+}
+
+#[cfg(unix)]
+fn refuse_if_linked(file: &std::fs::File) -> std::io::Result<()> {
+    use std::os::unix::fs::MetadataExt as _;
+    let meta = file.metadata()?;
+    if meta.is_file() && meta.nlink() > 1 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!(
+                "it has {} names, so no bound can say where its content is",
+                meta.nlink()
+            ),
+        ));
+    }
+    Ok(())
+}
+
+// shortcut: std's `number_of_links` is unstable on Windows, so the check is skipped there; upgrade when it stabilises.
+#[cfg(not(unix))]
+fn refuse_if_linked(_: &std::fs::File) -> std::io::Result<()> {
+    Ok(())
 }
 
 /// Why [`Containment::read`] read nothing.
