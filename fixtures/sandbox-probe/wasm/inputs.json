@@ -1,9 +1,9 @@
 {
   "artifact": "sandbox_probe.wasm",
-  "artifact_sha256": "9a1b9664c40c56b0e94ad4c9b66bf1cf98f9a0b1acfc8f4625f8344644dff700",
+  "artifact_sha256": "48118dad0e8ff7050044229f50a744867edcdb32e78cddc395d1c4d95530a582",
   "built_with": "rustc 1.98.1 (48a229cea 2026-09-01)",
   "inputs": {
-    "Cargo.toml#workspace-inherited": "73ee8380f34da9a8f0c8ee45dea41f0d3f3fb993b0d7c004ecfa5455624ba64f",
+    "Cargo.toml#workspace-inherited": "52364f99354a8a7632b04447fb28097422e9be69bf8730e400b1d3cf5f87c7cc",
     "crates/leaf/protocol-types/Cargo.toml": "c49e26358223169c357b4157ada37addc7bc97ae7b10e07198748faf5b3f94aa",
     "crates/leaf/protocol-types/src/calls.rs": "bf63066d7cfb673d31faa450e25d87e669636980ef9dcea1096f34f8c1991631",
     "crates/leaf/protocol-types/src/command_args.rs": "dfb15939e9da35bf8e321a7bb23c95e8bd3602ded60b392d3a1ac2f043c041a9",

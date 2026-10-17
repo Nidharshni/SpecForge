@@ -85,6 +85,15 @@ fn inherited_tables_ignore_members_and_profiles() {
 }
 
 #[test]
+fn inherited_tables_keep_the_blob_profile() {
+    let a = "[workspace]\nmembers = []\n[profile.blob]\nopt-level = \"z\"\n[profile.release]\nlto = true\n";
+    let b = a.replace("\"z\"", "\"s\"");
+    assert_ne!(inherited_tables(a), inherited_tables(&b));
+    let c = a.replace("lto = true", "lto = false");
+    assert_eq!(inherited_tables(a), inherited_tables(&c));
+}
+
+#[test]
 fn inherited_tables_keep_the_lint_tables() {
     let a = "[workspace]\nmembers = []\n[workspace.lints.rust]\nunsafe_code = \"deny\"\n\
              [workspace.lints.clippy]\nunwrap_used = \"deny\"\n[profile.dev]\ndebug = 1\n";
