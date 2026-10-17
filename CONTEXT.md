@@ -79,7 +79,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`ProjectSession::changes`): the comparison with what it last read that bringing it up to date
   makes (`stale`), narrowed to what the paths reach (a directory reaches every source and input
   under it, a symlinked source's target reaches that source, and a reached file is a change only
-  when it differs from its stamp). It applies changes as an update, an environment reload or a
+  when it differs from its stamp). It applies changes (made only by the session itself, ADR 0100) as an update, an environment reload or a
   re-check, and can bring itself up to date with disk without a watcher (`ensure_fresh`, ADR 0073). A session is opened from disk or detached (no project: what the LSP
   holds with no workspace folder and MCP while nothing is served). Watch, the LSP and MCP each hold
   one (`specforge_project::ProjectSession`; MCP's served one is always opened from disk, ADR 0025);
