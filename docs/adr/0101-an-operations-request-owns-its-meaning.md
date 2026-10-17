@@ -1,7 +1,7 @@
 # An operation's request owns its meaning; a surface only spells it
 
 **Status:** accepted (2026-10-15, round 10, plan 10). Extends ADR 0027 (option tables) and ADR 0033 D4 (one
-default) from names and defaults to every rule a request's values follow. Amended by round 13, plan 12 (D1, D2). D4 is extended by [ADR 0135](0135-a-remedy-names-a-command-or-the-requests-words-never-a-flag.md): an operation's remedy names a command or the request's words, never a surface's flag.
+default) from names and defaults to every rule a request's values follow. Amended by round 13, plan 12 (D1, D2). D4 is extended by [ADR 0135](0135-a-remedy-names-a-command-or-the-requests-words-never-a-flag.md): an operation's remedy names a command or the request's words, never a surface's flag. Amended by round 14, plan 12 (D1: a relation the request's type states).
 
 The CLI and MCP each build an operation's request by hand. Most of that is spelling: copying a field, reading a
 shared constant. Three times a surface decided what the arguments *mean*, and the two disagreed:
@@ -74,3 +74,7 @@ whose meaning depends on the project (then it is checked against the view, as AD
   The grammar stays in the prompt: no other surface spells a scope (ADR 0101 "Rejected": one request decoder in ops).
 - **D1.** `trace::Ask` is `Trace(Target)` or `Plan(&AgentPlan)`: it carries the trace operation's own target, so no
   surface maps one onto the other.
+
+## Amendment (architecture round 14, plan 12)
+
+A relation the request's type makes unrepresentable is stated in ops by that type: `SearchRequest.field` is `Option<FieldHolds>`, a field and a value or neither. The one surface that builds the request (`specforge.search`) words the refusal of a half pair and names the missing argument, as D2 keeps the infer scope in its prompt. Reopen with a second surface that searches entities.

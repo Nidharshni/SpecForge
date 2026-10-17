@@ -683,7 +683,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   Its entry order is its dependency order; the graph's edges are the dependencies. Read from a JSON object or its
   text, checked against the type's schema first (`AgentPlan::read`): a value that departs is refused naming every
   place. The **plan check** (`specforge_ops::read::plan::check`) reads the graph and the entity snapshot, never the
-  recorded test report; it passes (`ok`) when no entry is unresolved and none comes before what it depends on.
+  recorded test report; it passes (`ok`) when no entry is unresolved and none comes before what it depends on; its outcome lists the entries that resolve (`resolved_entries`).
 - **Plan gap**: how an agent plan falls short of the graph: an unresolved entry, a missing entry for
   a testable entity with obligations, or an entry ordered before what it depends on (`PlanGap`). An
   edge to an entity that does not exist is neither: it is E003. Written as an `McpTraceGap`
@@ -1015,7 +1015,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   no text of has no range), MCP renders them as JSON (ADR 0016, ADR 0023).
 - **Rename plan**: the edits that rename one entity (`specforge_ops::authoring::rename::RenamePlan`):
   the declaration's name and each incoming reference's token, positions in the text the project was compiled from,
-  which the plan keeps. MCP writes it only to files that still hold that text, refusing `conflict` otherwise; the LSP
+  which the plan keeps, with the spec root they are relative to. MCP writes it only to files that still hold that text, refusing `conflict` otherwise; the LSP
   hands it to the editor only over buffers that are that text (`ContentModified` otherwise; ADR 0116, ADR 0023 D3).
 - **Lexeme**: one token of a `.spec` text as the language's one lexer reads it without a parse
   (`specforge_parser::lex`): an identifier, a scheme ref ID (one lexeme), a number, a string (read as

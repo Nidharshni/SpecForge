@@ -1,7 +1,7 @@
 # The plan check reads the snapshot and takes its spec type
 
 **Status:** accepted (2026-10-13, architecture round 9, plan 06). Amends ADR 0015 (I1, I3, the operations list), ADR 0029
-(D1, D2) and ADR 0033 (D1, D2).
+(D1, D2) and ADR 0033 (D1, D2). Amended by round 14, plan 12 (the plan check's key).
 
 The plan check (`specforge_ops::plan::check`, the plan mode of `specforge.trace` and the trace prompt) asked the
 coverage memo for the project's coverage to learn two facts the entity snapshot holds: an entity's kind is testable,
@@ -61,3 +61,7 @@ then `dependencies` returns, with the gaps that reconcile it with the entry orde
 for humans): then the decode takes a format, still checked against one schema.
 
 **Amended by ADR 0086 (2026-10-14):** the plan check is `specforge_ops::read::plan::check`.
+
+## Amendment (architecture round 14, plan 12)
+
+`PlanOutcome`'s entries that resolve are `resolved_entries` (was `affected_entities`); "affected" names the reach of a trace (the trace prompt's `affected_entities`).
