@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SpecForge architecture round 14</title>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+</script>
+<style>
+  :root { --bg:#fafaf9; --fg:#0f172a; --mut:#64748b; --line:#e2e8f0; --card:#fff; --ok:#047857; --bad:#b91c1c; --warn:#b45309; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0b1020; --fg:#e5e7eb; --mut:#94a3b8; --line:#1f2937; --card:#111827; --ok:#34d399; --bad:#f87171; --warn:#fbbf24; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font: 700 2rem/1.2 Georgia, serif; margin: 0 0 4px; }
+  h2 { font: 600 1.4rem/1.3 Georgia, serif; margin: 0; }
+  .sub { color: var(--mut); margin: 0 0 24px; }
+  .kpis { display:grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin: 0 0 32px; }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+  .kpi b { display:block; font-size:1.6rem; }
+  .kpi span { color:var(--mut); font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; }
+  article { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:20px; margin: 0 0 28px; }
+  .head { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:baseline; justify-content:space-between; margin-bottom:6px; }
+  .tags span { font-size:.75rem; padding:2px 8px; border-radius:999px; border:1px solid var(--line); color:var(--mut); margin-left:6px; }
+  .cols { display:grid; grid-template-columns: 1fr 1fr; gap:14px; margin: 14px 0; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+  .col { border:1px solid var(--line); border-radius:8px; padding:12px; overflow-x:auto; }
+  .lbl { font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; color:var(--mut); margin-bottom:6px; }
+  .bad .lbl { color: var(--bad); } .good .lbl { color: var(--ok); }
+  ul { margin: 6px 0 0; padding-left: 20px; } li { margin: 2px 0; }
+  code { font: .85em ui-monospace, monospace; background: color-mix(in srgb, var(--mut) 15%, transparent); padding: 1px 5px; border-radius: 4px; }
+  .def { color: var(--bad); } .fix { color: var(--ok); }
+  table { border-collapse: collapse; width:100%; font-size:.9rem; } td,th { border:1px solid var(--line); padding:6px 8px; text-align:left; }
+</style>
+</head>
+<body>
+<main>
+<h1>SpecForge architecture, round 14</h1>
+<p class="sub">12 plans, one branch, three lanes. Base <code>9c80356d</code>. Each card shows the problem and the solution as before / after diagrams. The boxed ASCII version of each is in the commit messages.</p>
+
+<div class="kpis">
+  <div class="kpi"><b>12</b><span>plans</span></div>
+  <div class="kpi"><b>60</b><span>ticket commits</span></div>
+  <div class="kpi"><b>8</b><span>new ADRs (0133–0140)</span></div>
+  <div class="kpi"><b>3</b><span>lanes, merged clean</span></div>
+  <div class="kpi"><b>0</b><span>re-vendors</span></div>
+  <div class="kpi"><b>0</b><span>new diagnostic codes</span></div>
+</div>
+
+<article>
+  <h2>Plan graph</h2>
+  <pre class="mermaid">
+flowchart LR
+  subgraph A["Lane A: session"]
+    p04["04 one update bracket"] --> p01["01 one table of inputs"] --> p10["10 only the session makes Changes"] --> p07["07 the project reads its report"]
+  end
+  subgraph B["Lane B: extension"]
+    p06["06 plan answers unchanged"] --> p02["02 names ask the plan"] --> p05["05 plan owns its writes"] --> p11["11 migrate temp files"]
+  end
+  subgraph C["Lane C: surfaces"]
+    p03["03 remedy names no flag"] --> p08["08 anchors read view"] --> p12["12 small items"] --> p09["09 read views tested in ops"]
+  end
+  p07 -. "output.spec, failures.rs" .-> p09
+  p06 -. "I5: no fetch for a present package" .-> p05
+  </pre>
+</article>
+
+<!-- 04 -->
+<article id="p04">
+  <div class="head"><h2>04 · Every session update goes through one bracket</h2><div class="tags"><span>ADR 0136</span><span>6 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart LR
+  A["set_hops"] -->|"moved: bool"| B["finish_source"] -->|"moved"| C["read_source"] -->|"moved"| D["reread / release"] -->|"moved |="| E["applied"]
+  F["Run::finish: clone and compare"] --> U["Update::of ×4"]
+  G["replaced: != "] --> U
+  E --> U
+  H["checks_skipped flag"] -.mirror.- I["CompiledProject::skip_checks"]
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart LR
+  W["reads (hold / release / reread)"] --> BR["ProjectSession::update(work)<br/>clone inputs, run, compare"]
+  BR --> U["Update (built once)"]
+  CP["CompiledProject owns checks_skipped"] --> BR
+    </pre></div>
+  </div>
+  <ul><li class="def">A touched source with unchanged text was re-parsed, re-checked and printed as rebuilt by watch (7.8 s per touch on this repo's spec, debug).</li><li class="fix">One <code>is_current</code> rule: an unchanged read changes nothing. The 11 functions that carried the moved bool no longer do.</li></ul>
+</article>
+
+<!-- 01 -->
+<article id="p01">
+  <div class="head"><h2>01 · Recorded inputs are one table, and the class decides</h2><div class="tags"><span>ADR 0133</span><span>6 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart LR
+  E["environment list"] --> R["reach"] & W["watch_roots"] & V["watched"] & P["pending"] & S["stamps"]
+  C["check_files list"] --> R & W & V & P & S
+  L["listings list"] --> R & W & V & P
+  H["hops map"] --> R & V
+  H -. "no pending dir" .-> P
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart LR
+  T["Recorded inputs<br/>class: Environment | Check | Hop(key) | Listing"] --> R["reach"] & W["watch_roots"] & V["watched"] & P["pending"] & S["stamps by row"]
+    </pre></div>
+  </div>
+  <ul><li class="def">22 walks over 11 per-kind containers, 12 kind dispatches, 3 finishers. A source hop whose directory did not exist yet was never watched.</li><li class="fix">One table, one <code>finish(Recording)</code>; the missing hop directory is now pending, so watch sees it created.</li></ul>
+</article>
+
+<!-- 10 -->
+<article id="p10">
+  <div class="head"><h2>10 · Only the session makes <code>Changes</code></h2><div class="tags"><span>ADR 0100 amended (D5)</span><span>4 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart LR
+  T["5 tests build Changes by hand"] --> CH["Changes (pub fields)"]
+  S["stamps.rs"] --> CH
+  CH --> AP["apply: 2 root checks that production never reaches"]
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart LR
+  S["changes() / stale() / ensure_fresh()"] --> CH["Changes (pub(crate) fields, accessors)"]
+  CH --> AP["apply"]
+    </pre></div>
+  </div>
+  <ul><li class="fix">The module's interface now says what its documentation always claimed. The two dead checks and their test are gone.</li></ul>
+</article>
+
+<!-- 07 -->
+<article id="p07">
+  <div class="head"><h2>07 · A compiled project reads its recorded report through the disk it is handed</h2><div class="tags"><span>ADR 0139</span><span>4 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart LR
+  V["ops view passes root"] -->|"must agree"| M["RecordedCoverage::memo"]
+  M -->|"std::fs::read, follows symlinks"| F[("specforge-report.json")]
+  O["MCP tools and prompts"] --> V
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart LR
+  V["ops view (contained for MCP)"] --> C["CompiledProject::test_report(&amp;dyn Disk)"]
+  C -.Disk port.-> A1["ContainedDisk"]
+  C -.Disk port.-> A2["PlainDisk / MemoryDisk"]
+    </pre></div>
+  </div>
+  <ul><li class="def">A report symlinked outside the project was read and scored by MCP's coverage, stats, inspect and analyze tools, contradicting <code>mcp.spec:93</code>.</li><li class="fix">MCP reads the report only from inside the call's project (E045 <code>invalid_input</code> otherwise); the CLI and LSP stay unbounded (ADR 0092 D6).</li></ul>
+</article>
+
+<!-- 06 -->
+<article id="p06">
+  <div class="head"><h2>06 · The lock plan answers what a project already has</h2><div class="tags"><span>ADR 0138</span><span>4 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart LR
+  S["add::step<br/>already_present check"] --> P["LockPlan::enable<br/>same check again"] --> A["Asked.appended<br/>always true here"]
+  S --> I["Installed::verified"]
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart LR
+  add --> P["lock plan: Asked::Changes | Unchanged"]
+  P -->|"fetch's first line, before any registry call"| I["Installed::verified"]
+    </pre></div>
+  </div>
+  <ul><li class="fix">add loses <code>Step</code>, <code>step</code>, <code>already_present</code> and its early return. A plan that changes nothing is not judged and writes nothing.</li></ul>
+</article>
+
+<!-- 02 -->
+<article id="p02">
+  <div class="head"><h2>02 · add and init ask their lock plan through the names module</h2><div class="tags"><span>ADR 0134</span><span>4 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart LR
+  N["Names::read"] --> add1["add: name_each, match Named, check, decisive"]
+  N --> init1["init: name_each, match Named, check, decisive"]
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart LR
+  add --> K["Names::ask(plan, runtime, packages, record)"]
+  init --> K
+  K --> R["checked plan + one Answer per specifier"]
+    </pre></div>
+  </div>
+  <ul><li class="fix">The loop and the refusal naming are written once; <code>Named</code>, <code>name_each</code> and <code>named</code> are private to <code>names</code>.</li></ul>
+</article>
+
+<!-- 05 -->
+<article id="p05">
+  <div class="head"><h2>05 · A lock plan bounds its own writes</h2><div class="tags"><span>ADR 0137</span><span>4 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart LR
+  a["add: narrowed"] --> F["finish(root, also, containment)"]
+  i["init: narrowed + Also"] --> F
+  u["update: not narrowed"] --> F
+  r["remove: not narrowed"] --> F
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart LR
+  all["add, init, update, remove"] -->|"open with the Caller"| LP["lock plan narrows its own writes"]
+  LP --> W["Checked::writing(also).finish()"]
+    </pre></div>
+  </div>
+  <ul><li class="fix">Narrowing is decided in one place; an <code>update</code> or <code>remove</code> lent a wider bound now refuses <code>outside_root</code>.</li></ul>
+</article>
+
+<!-- 11 -->
+<article id="p11">
+  <div class="head"><h2>11 · migrate creates its temp and backup new</h2><div class="tags"><span>no ADR</span><span>2 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart LR
+  L["inside symlink at source.spec.tmp"] --> W["std::fs::write"] -->|"through the link"| X["in-project file overwritten"]
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart LR
+  L["inside symlink at source.spec.tmp"] --> U["unlink, then create_new (O_EXCL)"] --> OK["link replaced, nothing clobbered"]
+    </pre></div>
+  </div>
+  <ul><li>The card's unification with <code>ProjectChange</code> was not done: ADR 0104, 0112 and 0128 rule it out, and migrate's per-file model is spec-pinned.</li></ul>
+</article>
+
+<!-- 03 -->
+<article id="p03">
+  <div class="head"><h2>03 · A remedy names a command or the request's words, never a flag</h2><div class="tags"><span>ADR 0135</span><span>3 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart LR
+  O["15 literals in 7 files:<br/>--test-results, --no-run, --runner, --force, ..."] --> CLI["CLI: right"]
+  O --> MCP["MCP: wrong, one reversed"]
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart LR
+  O["neutral wording"] --> CLI["CLI"]
+  O --> MCP["MCP"]
+  G["syn guard over every crate below the surfaces"] -.refuses a --flag.-> O
+    </pre></div>
+  </div>
+  <ul><li class="def">Over MCP, "run without --no-run" told the caller the opposite of what to do: MCP's <code>run</code> is already false by default.</li></ul>
+</article>
+
+<!-- 08 -->
+<article id="p08">
+  <div class="head"><h2>08 · Source anchors are a read view</h2><div class="tags"><span>ADR 0140</span><span>6 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart LR
+  T1["find_spec_for_source"] --> SA["source_anchors + anchors_of_file"]
+  T2["prompts/infer"] --> SA
+  T3["find_implementation"] --> SA
+  T1 -->|"Anchored::of looks up the kind"| G[("graph")]
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart LR
+  T1["find_spec_for_source"] --> V
+  T2["prompts/infer"] --> V
+  T3["find_implementation"] --> V["ops anchors read view<br/>kind and match mode included"]
+    </pre></div>
+  </div>
+  <ul><li class="def"><code>find_implementation</code> answered <code>count: 0</code> for an unknown id, and the infer <code>file:</code> scope answered with no project.</li><li class="fix">E003 when neither the graph nor the manifest knows the id; <code>no_project</code> with none served.</li></ul>
+</article>
+
+<!-- 12 -->
+<article id="p12">
+  <div class="head"><h2>12 · The small items</h2><div class="tags"><span>ADRs 0018 0076 0101 0103 0124 amended</span><span>10 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart TB
+  a["context prompt: unknown constraint, no E003"]
+  b["resources call gh.pr:org/repo#12 Malformed"]
+  c["check --cache --format json prints 2 documents"]
+  d["affected_entities means two things"]
+  e["rename::apply takes the spec root again"]
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart TB
+  a["the view's E003 with did-you-mean"]
+  b["lex::is_entity_id admits every ID the grammar admits"]
+  c["ops refuses; one error document"]
+  d["resolved_entries"]
+  e["rename::apply(plan, caller)"]
+    </pre></div>
+  </div>
+</article>
+
+<!-- 09 -->
+<article id="p09">
+  <div class="head"><h2>09 · Read views' rules are tested in ops</h2><div class="tags"><span>ADR 0015 and 0101 D5 amended</span><span>7 commits</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div><pre class="mermaid">
+flowchart LR
+  R["coverage, missing links, stats rules"] --> M["proven only over the MCP wire<br/>278 provide_mcp links, 18 in ops"]
+  X["10 tests that cannot fail or repeat another"]
+  H["11 hand-rolled JSON-RPC loops"]
+    </pre></div>
+    <div class="col good"><div class="lbl">After</div><pre class="mermaid">
+flowchart LR
+  R["three ops behaviours:<br/>coverage view, select entities, inspect facts"] --> O["proven in ops over Assembled"]
+  M["MCP keeps arguments, reply schema, refusal argument, _meta notices"] --> P["one pairing harness: mcp_on"]
+    </pre></div>
+  </div>
+  <ul><li>Ten tests that could never fail were deleted. No production code changed.</li></ul>
+</article>
+
+<article>
+  <h2>Defects fixed</h2>
+  <table>
+    <tr><th>Plan</th><th>Defect</th></tr>
+    <tr><td>01</td><td>Watch never saw a directory created behind a source's missing middle hop.</td></tr>
+    <tr><td>03</td><td>MCP errors told callers to pass CLI flags; one gave the reverse advice.</td></tr>
+    <tr><td>04</td><td>A touched file with unchanged text was fully re-checked by watch, MCP and the LSP.</td></tr>
+    <tr><td>05</td><td>init's narrowing was live but untested; a wider lent bound is now refused.</td></tr>
+    <tr><td>07</td><td>A report symlinked outside the project was scored by MCP's read views.</td></tr>
+    <tr><td>08</td><td><code>find_implementation</code> answered <code>count: 0</code> for an unknown id; infer's <code>file:</code> scope ignored a missing project.</td></tr>
+    <tr><td>11</td><td>migrate wrote through an inside symlink planted at its temp or backup name.</td></tr>
+    <tr><td>12</td><td>Context prompt refusal without E003; valid ref ids called Malformed; two JSON documents on one stdout; <code>affected_entities</code> with two meanings.</td></tr>
+    <tr><td>09</td><td>Ten tests that could never fail.</td></tr>
+  </table>
+  <p class="sub">Left for a follow-up card: a dangling source link coming alive (01-U1), a hard link to a report or a migrate backup (no path rule sees one), and the product extension's command descriptions that name CLI flags (a re-vendor).</p>
+</article>
+</main>
+</body>
+</html>

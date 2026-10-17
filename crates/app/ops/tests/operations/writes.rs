@@ -227,7 +227,7 @@ fn rename_writes_are_the_files_it_edited() {
     .unwrap();
     let before = files_under(root);
 
-    let writes = rename::apply(&plan, root, specforge_ops::testing::caller()).unwrap();
+    let writes = rename::apply(&plan, specforge_ops::testing::caller()).unwrap();
 
     assert_eq!(listed(&writes, root), ["limit.spec", "login.spec"]);
     assert_eq!(changed_since(root, &before), ["limit.spec", "login.spec"]);

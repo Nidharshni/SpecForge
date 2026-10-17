@@ -135,3 +135,46 @@ fn check_cache_with_errors_leaves_the_cache_untouched() {
     check(&dir, &["--cache"]).code(1);
     assert!(!dir.root().join(CACHE).exists());
 }
+
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "write_build_cache",
+    verify = "a cache that cannot be written refuses the check, under --format json with the error document alone"
+)]
+fn a_cache_that_cannot_be_written_refuses_with_one_json_document() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = project(SOURCES);
+    let mode = |m| fs::Permissions::from_mode(m);
+    fs::set_permissions(dir.root(), mode(0o555)).unwrap();
+    if fs::write(dir.root().join("probe"), b"").is_ok() {
+        // Permissions do not bind this user (root): nothing to test.
+        fs::set_permissions(dir.root(), mode(0o755)).unwrap();
+        return;
+    }
+    let human = check(&dir, &["--cache"])
+        .code(1)
+        .get_output()
+        .stderr
+        .clone();
+    let json = check(&dir, &["--cache", "--format", "json"])
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+    fs::set_permissions(dir.root(), mode(0o755)).unwrap();
+
+    assert!(
+        String::from_utf8_lossy(&human).contains("error[cache_write_failed]"),
+        "{}",
+        String::from_utf8_lossy(&human)
+    );
+    let doc: serde_json::Value =
+        serde_json::from_slice(&json).expect("one JSON document on stdout");
+    assert_eq!(doc["code"], "cache_write_failed");
+    assert!(
+        doc["error"]
+            .as_str()
+            .unwrap()
+            .starts_with("cannot write specforge-cache.json: ")
+    );
+}

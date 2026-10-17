@@ -125,7 +125,10 @@ fn min_requires_test_results() {
         .unwrap();
     assert_eq!(out.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("--min needs test results"), "{stderr}");
+    assert!(
+        stderr.contains("a proof-coverage minimum needs test results"),
+        "{stderr}"
+    );
 }
 
 #[specforge_test(

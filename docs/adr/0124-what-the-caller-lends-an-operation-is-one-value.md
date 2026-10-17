@@ -4,7 +4,7 @@
 D3 (the spelling of the field), [ADR 0110](0110-who-can-be-asked-is-one-value-handed-to-an-operation.md) D2's request
 sentence and D5's builders, and [ADR 0112](0112-every-project-file-an-operation-opens-goes-through-the-requests-containment.md)
 D2 (collect's request and `SessionRequest`) and D4 (`ProjectRef::caller`). Their other decisions stand, and so does
-ADR 0112's Rejected line on `AnalyzeOptions.containment`.
+ADR 0112's Rejected line on `AnalyzeOptions.containment`. Amended by round 14, plan 12 (D2: `rename::apply`).
 
 ## Context
 
@@ -59,3 +59,7 @@ behaviour. An MCP elicitation asker (ADR 0110's "what would reopen it") would ch
 
 A request that must lend a different reach or asker for part of one call (for example a narrower bound for one file); an
 operation whose runtime is neither its view's nor a port its caller passes.
+
+## Amendment (architecture round 14, plan 12)
+
+`rename::apply(plan, caller)`: the plan keeps the spec root it was planned from, so the caller is its only other parameter.

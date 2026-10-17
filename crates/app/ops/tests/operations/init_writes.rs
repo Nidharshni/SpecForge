@@ -545,6 +545,43 @@ fn init_writes_no_file_through_a_gitignore_that_leaves_its_directory() {
     assert_ne!(std::fs::read_to_string(&outside).unwrap(), "one\n");
 }
 
+/// A `.gitignore` linked to a file in a sibling directory the caller's bound still holds: only
+/// init's own narrowing to the directory it creates refuses it.
+#[cfg(unix)]
+#[test]
+fn init_writes_nothing_outside_its_directory_whatever_bound_its_caller_lends() {
+    use specforge_ops::Containment;
+    use specforge_ops::authoring::init;
+    let scratch = TempDir::new().unwrap();
+    let victim = scratch.path().join("sibling/victim");
+    std::fs::create_dir_all(victim.parent().unwrap()).unwrap();
+    std::fs::write(&victim, "sibling-original\n").unwrap();
+    let dir = scratch.path().join("new");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::os::unix::fs::symlink(&victim, dir.join(".gitignore")).unwrap();
+    let within = Containment::within(scratch.path());
+    let request = init::Request {
+        dir: &dir,
+        name: Some("demo"),
+        version: init::DEFAULT_VERSION,
+        extensions: &[],
+        caller: specforge_ops::testing::bounded(&within),
+    };
+
+    let refused = init::init(&request, &candidates()).unwrap_err();
+
+    assert_eq!(
+        refused.error.code,
+        specforge_ops::OUTSIDE_ROOT,
+        "{refused:?}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&victim).unwrap(),
+        "sibling-original\n"
+    );
+    assert!(!dir.join("specforge.json").exists());
+}
+
 #[test]
 fn init_writes_the_entries_its_plan_judged() {
     use specforge_ops::authoring::init;

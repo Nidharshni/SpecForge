@@ -1,7 +1,8 @@
 use super::*;
+use crate::extension::lock_plan::Asked as Answer;
 
 /// `@acme/app` 1.0.0 (needs base `^1.0`), published signed by `signer` (unsigned when `None`).
-fn app_registry(signer: Option<&str>) -> MemoryRegistry {
+pub(super) fn app_registry(signer: Option<&str>) -> MemoryRegistry {
     let app = Published::new(
         APP_NEEDS_BASE_1.to_vec(),
         crate::extension::declare(&runtime(), APP_NEEDS_BASE_1)
@@ -15,7 +16,7 @@ fn app_registry(signer: Option<&str>) -> MemoryRegistry {
 }
 
 /// A project on disk locking base 1.0.0, with a `specforge.json`.
-fn base_project() -> tempfile::TempDir {
+pub(super) fn base_project() -> tempfile::TempDir {
     let dir =
         super::super::super::fixtures::project(vec![entry("@acme/base", "1.0.0", "registry", &[])]);
     std::fs::write(
@@ -37,7 +38,7 @@ fn stage_app<'a>(
     plan
 }
 
-fn app() -> PackageName {
+pub(super) fn app() -> PackageName {
     PackageName::parse("@acme/app").unwrap()
 }
 
@@ -73,9 +74,7 @@ fn a_lock_plan_pins_what_its_fetches_decided_only_when_it_commits() {
 
     // Committed: pinned.
     let checked = stage_app(&registry, &runtime, &installed).check().unwrap();
-    checked
-        .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
-        .unwrap();
+    checked.finish().unwrap();
     assert_eq!(registry.pins(), [(app(), "k1".to_string())].into());
 }
 
@@ -91,7 +90,7 @@ fn a_committed_registry_install_locks_its_hash_and_key_id() {
     stage_app(&registry, &runtime, &installed)
         .check()
         .unwrap()
-        .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
+        .finish()
         .unwrap();
 
     let lock =
@@ -128,7 +127,7 @@ fn a_pin_that_cannot_be_saved_puts_back_everything_the_install_wrote() {
     let error = stage_app(&registry, &runtime, &installed)
         .check()
         .unwrap()
-        .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
+        .finish()
         .unwrap_err();
 
     assert!(error.is(codes::R_TRUST_006), "{error:?}");
@@ -149,7 +148,7 @@ fn an_already_pinned_or_unsigned_install_pins_nothing() {
     stage_app(&registry, &runtime, &installed)
         .check()
         .unwrap()
-        .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
+        .finish()
         .unwrap();
     assert_eq!(registry.pins(), [(app(), "k1".to_string())].into());
 
@@ -160,7 +159,7 @@ fn an_already_pinned_or_unsigned_install_pins_nothing() {
     stage_app(&registry, &runtime, &installed)
         .check()
         .unwrap()
-        .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
+        .finish()
         .unwrap();
     assert!(registry.pins().is_empty());
 }
@@ -195,6 +194,7 @@ fn each_ask_is_answered_with_the_builtins_its_extension_required() {
             opened_at(dir.path()),
             &runtime,
             fetching(no_registry()),
+            crate::testing::caller(),
             Purpose::Commit,
             false,
         )
@@ -202,56 +202,26 @@ fn each_ask_is_answered_with_the_builtins_its_extension_required() {
         for (at, name) in asked.iter().enumerate() {
             plan.enable(Ask(at), name);
         }
-        plan.check()
-            .ok()
-            .unwrap()
-            .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
-            .unwrap()
+        plan.check().ok().unwrap().finish().unwrap()
     };
 
     // software first: formal's requirement is already met by the earlier ask.
     let done = enabling(&["@specforge/software", "@specforge/formal"]);
-    assert_eq!(done.asked(Ask(0)).peers_enabled, Vec::<&str>::new());
-    assert_eq!(done.asked(Ask(1)).peers_enabled, Vec::<&str>::new());
-    assert!(done.asked(Ask(0)).appended && done.asked(Ask(1)).appended);
+    let none = Answer::Changes {
+        peers_enabled: Vec::new(),
+    };
+    assert_eq!(done.asked(Ask(0)), none);
+    assert_eq!(done.asked(Ask(1)), none);
 
     // formal alone enables software with it.
     let done = enabling(&["@specforge/formal"]);
-    assert_eq!(done.asked(Ask(0)).peers_enabled, ["@specforge/software"]);
-    assert_eq!(done.enabled, 2);
-}
-
-#[cfg(unix)]
-#[test]
-fn a_change_whose_lock_is_a_symlink_that_leaves_the_project_writes_nothing() {
-    let (runtime, registry) = (runtime(), app_registry(Some("k1")));
-    let dir = base_project();
-    let outside = tempfile::tempdir().unwrap();
-    let elsewhere = outside.path().join("specforge.lock");
-    let lock = specforge_installed::lock_path(dir.path());
-    std::fs::copy(&lock, &elsewhere).unwrap();
-    std::fs::remove_file(&lock).unwrap();
-    std::os::unix::fs::symlink(&elsewhere, &lock).unwrap();
-    let before = std::fs::read(&elsewhere).unwrap();
-    let installed = Installed::at(dir.path());
-
-    let error = stage_app(&registry, &runtime, &installed)
-        .check()
-        .unwrap()
-        .finish(
-            dir.path(),
-            Vec::new(),
-            &crate::Containment::within(dir.path()),
-        )
-        .unwrap_err();
-
-    assert_eq!(error.code, crate::OUTSIDE_ROOT, "{error:?}");
-    assert_eq!(std::fs::read(&elsewhere).unwrap(), before);
-    assert!(registry.pins().is_empty(), "nothing is pinned either");
-    assert!(
-        !dir.path().join(".specforge/extensions/@acme/app").exists(),
-        "no module was placed"
+    assert_eq!(
+        done.asked(Ask(0)),
+        Answer::Changes {
+            peers_enabled: vec!["@specforge/software"]
+        }
     );
+    assert_eq!(done.enabled, 2);
 }
 
 #[cfg(unix)]
@@ -277,7 +247,7 @@ fn a_pin_failure_whose_rollback_cannot_put_the_config_back_names_it() {
     let error = stage_app(&registry, &runtime, &installed)
         .check()
         .unwrap()
-        .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
+        .finish()
         .unwrap_err();
 
     assert!(error.is(codes::R_TRUST_006), "{error:?}");
@@ -297,7 +267,7 @@ fn a_pin_failure_whose_rollback_cannot_put_the_config_back_names_it() {
 }
 
 /// An [`Also`] that stages a new file `at` with `text`.
-fn staging(at: &Path, text: &'static str) -> Also<'static> {
+pub(super) fn staging(at: &Path, text: &'static str) -> Also<'static> {
     Also {
         path: at.to_path_buf(),
         stage: Box::new(move |held, change| {
@@ -340,6 +310,7 @@ fn an_entries_only_plan_accepts_an_unreadable_lock_and_puts_the_config_back() {
         opened_at(dir.path()),
         &runtime,
         fetching(no_registry()),
+        crate::testing::caller(),
         Purpose::Commit,
         false,
     )
@@ -351,11 +322,8 @@ fn an_entries_only_plan_accepts_an_unreadable_lock_and_puts_the_config_back() {
         .check()
         .ok()
         .unwrap()
-        .finish(
-            dir.path(),
-            vec![staging(&locked.join("new.txt"), "x")],
-            &crate::Containment::unbounded(),
-        )
+        .writing(vec![staging(&locked.join("new.txt"), "x")])
+        .finish()
         .unwrap_err();
 
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -392,7 +360,8 @@ fn a_failed_change_puts_back_every_project_file_and_the_directories_it_made() {
     let error = stage_app(&registry, &runtime, &installed)
         .check()
         .unwrap()
-        .finish(dir.path(), also, &crate::Containment::unbounded())
+        .writing(also)
+        .finish()
         .unwrap_err();
 
     assert!(error.is(codes::R_TRUST_006), "{error:?}");
@@ -425,9 +394,7 @@ fn an_add_over_a_config_changed_since_it_was_read_writes_nothing() {
     // The base is disabled by hand after the plan judged on it.
     std::fs::write(&config, "{\"extensions\":[]}").unwrap();
 
-    let error = checked
-        .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
-        .unwrap_err();
+    let error = checked.finish().unwrap_err();
 
     assert_eq!(error.code, "file_changed", "{error:?}");
     assert_eq!(std::fs::read(&lock_file).unwrap(), lock_before);

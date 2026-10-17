@@ -5,6 +5,7 @@
 
 use serde_json::{Value, json};
 use specforge_mcp::McpServer;
+use specforge_test::prelude::*;
 
 use crate::support::{Logged, agent_plan, events, logged};
 
@@ -409,4 +410,28 @@ fn prompt_golden_events() {
     );
     let invoked = events(&server, "mcp_prompt_invoked");
     insta::assert_json_snapshot!("39_invocation_events", invoked);
+}
+
+#[specforge_test(
+    invariant = "mcp_structured_error_responses",
+    verify = "a missing entity is one E003 refusal naming the closest entity on every read view"
+)]
+fn context_constraint_naming_no_entity_is_the_e003_refusal() {
+    let dir = project();
+    let mut server = server(&dir);
+    let reply = get(
+        &mut server,
+        "context",
+        json!({"entity_id": "alpha", "structural_constraints": "inv_sesion"}),
+    );
+    let data = &reply["error"]["data"];
+    assert_eq!(reply["error"]["code"], -32602, "{reply}");
+    assert_eq!(data["code"], "entity_not_found", "{reply}");
+    assert_eq!(data["argument"], "structural_constraints", "{reply}");
+    assert_eq!(data["entity_id"], "inv_sesion", "{reply}");
+    assert_eq!(data["diagnostic"]["code"], "E003", "{reply}");
+    assert_eq!(
+        data["diagnostic"]["suggestion"], "did you mean 'inv_session'?",
+        "{reply}"
+    );
 }

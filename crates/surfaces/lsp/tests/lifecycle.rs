@@ -331,8 +331,7 @@ fn a_stand_in_reads_the_snapshot_of_its_own_graph() {
         None,
     ));
 
-    let first_snapshot =
-        std::sync::Arc::clone(state.session().unwrap().project().recorded().entities());
+    let first_snapshot = state.session().unwrap().project().shared_entities();
     let session = state.take_session().expect("the session is held");
     let first = state.view().entities().kind_of("a").map(str::to_string);
     assert_eq!(first.as_deref(), Some("behavior"));

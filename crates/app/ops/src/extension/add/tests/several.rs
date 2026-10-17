@@ -341,3 +341,52 @@ fn a_repeated_extension_is_a_duplicate_and_a_different_one_a_conflict() {
     assert_eq!(error.error.suggestion.as_deref(), Some("add '@x/b' once"));
     assert_eq!(files_under(dir.path()), before);
 }
+
+#[test]
+fn a_peer_refusal_is_reported_before_a_binary_that_did_not_load() {
+    use crate::config::testing::files_under;
+    let dir = add_project(Vec::new());
+    let needs = dir.path().join("needs.wasm");
+    std::fs::write(&needs, testing::NEEDS_SOFTWARE_9).unwrap();
+    // `@sdk/greet`'s binary does not declare what its registry published: its load fails.
+    let mut published = declaration_of(&greet());
+    published.handshake.description = Some("Something else".into());
+    let registry = MemoryRegistry::new().serving(Published::new(greet(), published));
+    let before = files_under(dir.path());
+    let shown = needs.display().to_string();
+
+    let error = add(
+        &AddRequest {
+            allow_unsigned: true,
+            ..several(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                vec![
+                    "@sdk/greet@0.1.0".to_string(),
+                    shown.clone(),
+                    "@specforge/software".to_string(),
+                ],
+                false,
+            )
+        },
+        &registry,
+        &testing::probes(),
+    )
+    .unwrap_err();
+
+    // The peer rule's refusal, not the earlier ask's load failure, is the decisive one.
+    assert_eq!(error.error.code, "E027", "{error:?}");
+    assert!(
+        error
+            .error
+            .message
+            .starts_with(&format!("adding '{shown}': ")),
+        "{error:?}"
+    );
+    assert!(
+        error.error.message.ends_with(
+            "requires peer dependency '@specforge/software' ^9.0 but version 1.0.0 is installed"
+        ),
+        "{error:?}"
+    );
+    assert_eq!(files_under(dir.path()), before);
+}

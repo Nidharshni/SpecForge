@@ -180,6 +180,7 @@ impl<'s> Call<'s> {
                 // a runtime: a session without either is no project (it is
                 // unreachable, and a server answers rather than panics).
                 let view = ProjectView::of(session.project())
+                    .contained()
                     .also_reporting(self.state.surfaces().diagnostics());
                 let (Some(root), Some(runtime)) = (
                     session.project().environment().project_root(),
@@ -200,7 +201,7 @@ impl<'s> Call<'s> {
             CallTarget::Other(session) => {
                 // `McpState::open` opens every project from disk, with a
                 // runtime (see above).
-                let view = ProjectView::of(session.project());
+                let view = ProjectView::of(session.project()).contained();
                 let (Some(root), Some(runtime)) = (
                     session.project().environment().project_root(),
                     view.runtime(),
@@ -254,6 +255,7 @@ impl<'s> Call<'s> {
         match self.project() {
             Ok(project) => project.view(),
             Err(_) => ProjectView::of(self.state.session().project())
+                .contained()
                 .also_reporting(self.state.surfaces().diagnostics()),
         }
     }

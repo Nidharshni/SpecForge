@@ -1,6 +1,6 @@
 # The read views are operations over the project view
 
-**Status:** accepted (2026-10-05); P7: tools are named by their typed constants (ADR 0049). Amended by ADR 0111 (D2 reaffirmed with a measurement; D10: every reader reports the versioning's notices). Amended by ADR 0130 (the noticing reads return `Noticed<T>`; `QueryOutcome`, `Listing`, `SearchOutcome` and `ModelOutcome` are gone). D11: `TraceError` is gone (ADR 0132); trace refuses with `view::not_found` about `EntityField::EntityId`.
+**Status:** accepted (2026-10-05); P7: tools are named by their typed constants (ADR 0049). Amended by ADR 0111 (D2 reaffirmed with a measurement; D10: every reader reports the versioning's notices). Amended by ADR 0130 (the noticing reads return `Noticed<T>`; `QueryOutcome`, `Listing`, `SearchOutcome` and `ModelOutcome` are gone). D11: `TraceError` is gone (ADR 0132); trace refuses with `view::not_found` about `EntityField::EntityId`. M14 and P1 name `navigate::anchors_of_file` / `anchors_of_entity` over the view ([ADR 0140](0140-source-anchors-are-a-read-view.md)). Amended by round 14, plan 09 (tools' tests).
 
 `specforge-ops` handed the read views out as building blocks and each surface chained them on its
 own: the CLI's `stats` built a `CoverageRegistries` by hand and called `compute_project_stats`, MCP
@@ -470,3 +470,11 @@ depend on the report, the coverage carries its error, MCP fails inspect on it, t
 holds what the recorded tests prove; standings are read through `ProjectView::entities`.
 
 **Amended by ADR 0086 (2026-10-14):** the read views live under `specforge_ops::read` (`read::stats`, `read::trace`, `read::plan`, ...), the management operations under `extension` and `analysis`, and `collect` under `analysis`. Q5's refusal is `view::not_found`, and its request field is `view::EntityField`; P3's `neighbourhood` raises it from the view.
+
+## Amendment (architecture round 14, plan 09)
+
+- The prompts' rule holds for MCP's tools: a tool's tests keep what the tool decides (each argument's name and that
+  it reaches the request, the argument a refusal names, the reply it builds, `_meta`); the view's rules are tested
+  in ops and are the obligations of an ops-level behaviour (`compute_the_coverage_view`,
+  `select_entities_over_the_view`, `inspect_entity_facts`, `compute_project_statistics`,
+  `compute_traceability_chain`, `query_graph_multi_resolution`, `serve_schema_resource`), never of the tool's.

@@ -8,14 +8,14 @@ use serde_json::Value;
 use super::{Ask, Checked, Opened, Purpose};
 use crate::change::{Cause, ProjectChange};
 use crate::registry::{KeyPin, Registry};
-use crate::{Containment, Held, OpError, OpErrorKind, Writes};
+use crate::{Held, OpError, OpErrorKind, Writes};
 
 /// What stages an [`Also`] file: the file it was resolved to, and the project change to stage it in.
 pub(crate) type StageHeld<'f> =
     Box<dyn FnOnce(Held, &mut ProjectChange) -> Result<(), OpError> + 'f>;
 
 /// A file the change writes after `specforge.json`'s edit and before the pins (`init`'s
-/// `.gitignore` and starter), in the same project change (ADR 0128): put back, or removed when it
+/// `.gitignore` and starter, handed over with [`Checked::writing`]), in the same project change (ADR 0128): put back, or removed when it
 /// was not there, when the change fails. `stage` is handed the file `path` resolved to (ADR 0112):
 /// it reads and stages nothing else. `code` is the refusal of writing it.
 pub(crate) struct Also<'f> {
@@ -34,28 +34,40 @@ pub(crate) struct Done {
     asked: Vec<(Ask, Asked)>,
 }
 
-/// What a finished plan did for one ask.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub(crate) struct Asked {
-    /// The entry of the extension it asked for was appended by this change (would be, for a
-    /// preview); `false` when an entry already enabled it.
-    pub(crate) appended: bool,
-    /// The builtins enabled because its extension requires them, dependencies first.
-    pub(crate) peers_enabled: Vec<&'static str>,
+/// What a finished plan did for one ask, or for a preview would do.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Asked {
+    /// The change enables what the ask named, and installs it for an install, after the builtins
+    /// its extension requires: `peers_enabled`, dependencies first, each reported once, by the ask
+    /// whose extension first required it.
+    Changes { peers_enabled: Vec<&'static str> },
+    /// The project already has it: an entry of `specforge.json` enables it. `locked` is the
+    /// version the lock pins, `None` for an entry only. The change leaves it as it is.
+    Unchanged { locked: Option<String> },
 }
 
 impl Done {
-    /// What the plan did for `ask` (nothing, for an ask the plan changed nothing for).
+    /// What the plan did for `ask`.
+    ///
+    /// # Panics
+    /// For an ask the operation never made.
     pub(crate) fn asked(&self, ask: Ask) -> Asked {
         self.asked
             .iter()
             .find(|(asked, _)| *asked == ask)
             .map(|(_, asked)| asked.clone())
-            .unwrap_or_default()
+            .expect("an ask the operation made is answered")
     }
 }
 
-impl Checked<'_> {
+impl<'a> Checked<'a> {
+    /// Also write `also` with the change, after `specforge.json` and before the pins (ADR 0128 D4,
+    /// ADR 0137).
+    pub(crate) fn writing(mut self, also: Vec<Also<'a>>) -> Checked<'a> {
+        self.also = also;
+        self
+    }
+
     /// The `extensions` items the change leaves, in order: the items the plan opened with
     /// without the dropped ones, then the appended ones, dependencies first (ADR 0126).
     fn items(&self) -> Vec<Value> {
@@ -73,7 +85,7 @@ impl Checked<'_> {
     /// A preview answers without writing. A commit writes, all or nothing (ADR 0028 D4, ADR 0128):
     /// each staged module placed and each uninstalled one moved aside, the lock once (when a module
     /// changed), then, as the installed change's last step, the project change: `specforge.json` with
-    /// the entries the plan judged (ADR 0126) and the `also` files written in order, and last
+    /// the entries the plan judged (ADR 0126) and the files of [`Self::writing`] written in order, and last
     /// the publisher keys its fetches accepted (ADR 0059). A plan that stages no module writes no
     /// lock and opens no installed change (ADR 0041 B4). A failure at any step, the pins' included
     /// (R-TRUST-006), puts every file back and pins nothing. The error's writes name what could not
@@ -82,16 +94,14 @@ impl Checked<'_> {
     /// Before anything is written, a commit refuses `file_changed` when `specforge.json` no longer
     /// holds the document the plan opened with (ADR 0126); a preview writes nothing and is not checked.
     ///
+    /// A change that changes nothing (and writes no `also` file) answers here: nothing is resolved,
+    /// compared or written (ADR 0138).
+    ///
     /// Before anything is written, and for a preview too, every file the change would write is
-    /// resolved through `containment` (ADR 0104): the config, the `also` files, the lock and each
+    /// resolved through the caller's containment narrowed to the project (ADR 0104, ADR 0137): the config, the `also` files, the lock and each
     /// installed or uninstalled module. One that lands outside it, by a symlink in the project,
     /// refuses the change (`outside_root`), nothing written (ADR 0092 D8).
-    pub(crate) fn finish(
-        self,
-        root: &Path,
-        also: Vec<Also<'_>>,
-        containment: &Containment,
-    ) -> Result<Done, OpError> {
+    pub(crate) fn finish(self) -> Result<Done, OpError> {
         let items = self.items();
         let final_entries = Opened::entries_of(&items);
         let Checked {
@@ -104,20 +114,29 @@ impl Checked<'_> {
             config,
             pins,
             appended,
-            wanted,
+            asked,
+            changes,
+            lent,
+            also,
             ..
         } = self;
+        if !changes && also.is_empty() {
+            return Ok(Done {
+                writes: Writes::none(),
+                enabled: final_entries.len(),
+                asked,
+            });
+        }
+        // The project root must lie inside what the caller lent: narrowing never widens (ADR 0137).
+        lent.resolve(installed.root())?;
+        let containment = lent.narrowed(installed.root());
         let document = config.written(&items);
-        let names: Vec<&str> = appended
-            .iter()
-            .map(|appended| appended.name.as_str())
-            .collect();
         // Held before anything is written: what is written is what is checked here.
         let also_held = also
             .iter()
             .map(|also| containment.resolve(&also.path))
             .collect::<Result<Vec<Held>, _>>()?;
-        let config_path = root.join(crate::config::CONFIG_FILE);
+        let config_path = installed.root().join(crate::config::CONFIG_FILE);
         let config_held = config
             .holds_a_file()
             .then(|| containment.resolve(&config_path))
@@ -201,26 +220,23 @@ impl Checked<'_> {
             }
         }
 
-        let written = |name: &str| names.contains(&name);
-        let mut asked: Vec<(Ask, Asked)> = Vec::new();
-        for (ask, name) in &wanted {
-            if asked.iter().any(|(known, _)| known == ask) {
-                continue;
-            }
-            asked.push((
-                *ask,
-                Asked {
-                    appended: written(name),
+        let asked = asked
+            .into_iter()
+            .map(|(ask, answer)| {
+                let answer = match answer {
                     // Each is reported once, by the ask whose extension first required it.
-                    peers_enabled: appended
-                        .iter()
-                        .filter(|entry| entry.ask == *ask && entry.required_by.is_some())
-                        .filter(|entry| written(&entry.name))
-                        .filter_map(|entry| super::super::builtin_name(&entry.name))
-                        .collect(),
-                },
-            ));
-        }
+                    Asked::Changes { .. } => Asked::Changes {
+                        peers_enabled: appended
+                            .iter()
+                            .filter(|entry| entry.ask == ask && entry.required_by.is_some())
+                            .filter_map(|entry| super::super::builtin_name(&entry.name))
+                            .collect(),
+                    },
+                    unchanged => unchanged,
+                };
+                (ask, answer)
+            })
+            .collect();
         Ok(Done {
             writes,
             enabled: final_entries.len(),

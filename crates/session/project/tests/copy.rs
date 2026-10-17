@@ -16,8 +16,8 @@ fn a_copy_reads_as_its_original_until_the_session_moves_on() {
         session.project().environment()
     ));
     assert!(Arc::ptr_eq(
-        copy.recorded().entities(),
-        session.project().recorded().entities()
+        &copy.shared_entities(),
+        &session.project().shared_entities()
     ));
     assert!(Arc::ptr_eq(
         &copy.source_text("a.spec").unwrap(),

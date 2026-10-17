@@ -532,9 +532,10 @@ exists but can't be read or parsed (a recorded test's status is `passed`,
 `failed` or `skipped`, and every test has a name: a report in another
 vocabulary, such as one written before 1.4, is not usable), or when a
 `--test-results` (`test_results`) file can't be read or doesn't exist (over MCP:
-`schema_mismatch`, `permission_denied`, `file_not_found` or `internal_error`),
-rather than scoring the project as if no test ran: run `specforge collect` again
-to rewrite it, or fix or remove the file.
+`schema_mismatch`, `permission_denied`, `file_not_found`, `invalid_input` when
+`specforge-report.json` is a link that leads outside the project, or
+`internal_error`), rather than scoring the project as if no test ran: run
+`specforge collect` again to rewrite it, or fix or remove the file.
 
 Owner: core
 Level: error

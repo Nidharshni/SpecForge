@@ -1,0 +1,180 @@
+//! The anchors read view (ADR 0140): which entities `specforge-anchors.json` anchors to a source file, and which
+//! source items it anchors to an entity.
+
+use serde_json::json;
+use specforge_ops::read::navigate::{FileMatch, anchors_of_entity, anchors_of_file};
+use specforge_test::prelude::*;
+
+use crate::view_support::{Assembled, Viewed};
+
+/// A project declaring `behavior alpha`, whose anchors manifest anchors each `(entity, file)`.
+fn anchored(anchors: &[(&str, &str)]) -> Assembled {
+    let project = Assembled::over(specforge_registry::RegistryBuild::default())
+        .source("behavior alpha \"A\" {\n}\n");
+    let rows: Vec<_> = anchors
+        .iter()
+        .map(|(entity, file)| {
+            json!({"entity_id": entity, "file": file, "line": 1, "symbol_name": entity,
+                   "item_kind": "fn", "scanner": "manual"})
+        })
+        .collect();
+    project.write(
+        "specforge-anchors.json",
+        json!({"version": 1, "anchors": rows}).to_string(),
+    );
+    project
+}
+
+/// An entity's anchors are the manifest's anchors of it, in manifest
+/// order; an entity with none, or a project with no manifest, has none.
+#[specforge_test(
+    behavior = "provide_mcp_find_implementation_tool",
+    verify = "an entity with no anchor has no implementations, and no anchors manifest is none"
+)]
+fn anchors_of_an_entity_are_in_manifest_order() {
+    let project = anchored(&[
+        ("alpha", "src/lib.rs"),
+        ("beta", "src/lib.rs"),
+        ("alpha", "src/net.rs"),
+    ]);
+    let files = |entity: &str| -> Vec<String> {
+        anchors_of_entity(&project.view(), entity)
+            .unwrap()
+            .implementations
+            .into_iter()
+            .map(|implementation| implementation.file)
+            .collect()
+    };
+    assert_eq!(files("alpha"), ["src/lib.rs", "src/net.rs"]);
+    // `beta` is anchored but undeclared; `alpha` is declared. A declared entity with no anchor has none.
+    let lone = anchored(&[("beta", "src/lib.rs")]);
+    assert_eq!(anchors_of_entity(&lone.view(), "alpha").unwrap().count, 0);
+
+    let bare = Assembled::over(specforge_registry::RegistryBuild::default())
+        .source("behavior a \"A\" {\n}\n");
+    assert_eq!(anchors_of_entity(&bare.view(), "a").unwrap().count, 0);
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_find_spec_for_source_tool",
+    verify = "the tightest match wins: exact, else under the directory, else ending with the path"
+)]
+fn the_tightest_match_wins() {
+    let project = anchored(&[
+        ("top", "a.rs"),
+        ("nested", "sub/a.rs"),
+        ("other", "sub/b.rs"),
+        ("cache", "src/cache.rs"),
+    ]);
+    let found = |query: &str| {
+        let found = anchors_of_file(&project.view(), query).unwrap();
+        let ids: Vec<String> = found.entities.iter().map(|e| e.entity_id.clone()).collect();
+        (found.match_mode, ids)
+    };
+    assert_eq!(found("a.rs"), (FileMatch::Exact, vec!["top".to_string()]));
+    // Every spelling of a path is the path.
+    for spelling in ["./a.rs", "a.rs", ".\\a.rs"] {
+        assert_eq!(found(spelling).1, ["top"], "{spelling}");
+    }
+    assert_eq!(
+        found("./sub"),
+        (
+            FileMatch::Directory,
+            vec!["nested".to_string(), "other".to_string()]
+        )
+    );
+    assert_eq!(
+        found("b.rs"),
+        (FileMatch::SuffixPath, vec!["other".to_string()])
+    );
+    // A substring is no match (C9-09).
+    assert_eq!(found("e.rs").0, FileMatch::None);
+    assert_eq!(found("c.rs").0, FileMatch::None);
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_find_spec_for_source_tool",
+    verify = "each entity carries its kind when the graph declares it"
+)]
+fn a_file_anchor_names_its_entitys_kind_when_the_graph_declares_it() {
+    let project = anchored(&[("alpha", "src/a.rs"), ("ghost", "src/a.rs")]);
+    let found = anchors_of_file(&project.view(), "src/a.rs").unwrap();
+    assert_eq!(found.entities[0].kind.as_deref(), Some("behavior"));
+    assert_eq!(found.entities[1].kind, None);
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_find_implementation_tool",
+    verify = "an id neither the graph nor the anchors manifest knows is refused with E003"
+)]
+fn an_id_neither_the_graph_nor_the_manifest_knows_is_e003() {
+    let project = anchored(&[("ghost", "src/a.rs")]);
+    let refusal = anchors_of_entity(&project.view(), "alpah").unwrap_err();
+    assert_eq!(
+        refusal.subject,
+        Some(specforge_ops::view::EntityField::EntityId)
+    );
+    assert_eq!(refusal.error.code, "E003");
+    assert_eq!(
+        refusal.error.suggestion.as_deref(),
+        Some("did you mean 'alpha'?")
+    );
+}
+
+#[test]
+fn a_rootless_view_is_no_project() {
+    let project = anchored(&[("alpha", "src/a.rs")]);
+    let view = project.rootless_view();
+    let file = anchors_of_file(&view, "src/a.rs").unwrap_err();
+    assert_eq!(file.kind, specforge_ops::OpErrorKind::PreconditionFailed);
+    assert_eq!(file.code, "no_project");
+    let entity = anchors_of_entity(&view, "alpha").unwrap_err();
+    assert_eq!(entity.error.code, "no_project");
+    assert_eq!(entity.subject, None);
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_find_implementation_tool",
+    verify = "the anchors of an id the graph no longer declares are still listed"
+)]
+fn the_anchors_of_an_entity_the_graph_lacks_are_listed() {
+    let project = anchored(&[("ghost", "src/a.rs")]);
+    assert_eq!(
+        anchors_of_entity(&project.view(), "ghost").unwrap().count,
+        1
+    );
+    let found = anchors_of_file(&project.view(), "src/a.rs").unwrap();
+    assert_eq!(found.entities[0].kind, None);
+}
+
+#[cfg(unix)]
+#[test]
+fn an_anchors_manifest_outside_the_project_is_not_read() {
+    let project = anchored(&[]);
+    let outside = tempfile::TempDir::new().unwrap();
+    let target = outside.path().join("anchors.json");
+    std::fs::write(
+        &target,
+        r#"{"version":1,"anchors":[{"entity_id":"OUTSIDE","file":"x","line":1,"symbol_name":"s","item_kind":"fn","scanner":"m"}]}"#,
+    )
+    .unwrap();
+    let link = project.root().join("specforge-anchors.json");
+    std::fs::remove_file(&link).unwrap();
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+
+    let file = anchors_of_file(&project.view(), "x").unwrap_err();
+    let entity = anchors_of_entity(&project.view(), "OUTSIDE").unwrap_err();
+    for error in [&file, &entity.error] {
+        assert_eq!(error.kind, specforge_ops::OpErrorKind::InvalidInput);
+        assert_eq!(error.code, "E071");
+        assert!(
+            error
+                .message
+                .starts_with("specforge-anchors.json resolves to"),
+            "{}",
+            error.message
+        );
+        assert!(!error.message.contains("OUTSIDE"), "{}", error.message);
+    }
+    assert_eq!(entity.subject, None);
+}

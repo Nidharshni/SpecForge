@@ -277,7 +277,9 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
     directory. A report that exists but cannot be used is the same error on
     every view that reads it (E045), of the kind the operation decides: schema_mismatch
     when it is not a specforge-report.json, permission_denied when the system
-    refuses to read it, else internal_error. The view says what its surface reports for the
+    refuses to read it, invalid_input over MCP when it is a link that leads
+    outside the call's project (MCP reads it only from inside; the CLI and the
+    LSP follow the user's link), else internal_error. The view says what its surface reports for the
     project: what specforge check reports for the compile behind it, then
     what the surface adds (MCP: I017). Coverage is computed once per
     compiled project or session state and per content of the recorded
@@ -304,6 +306,8 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
   verify unit "inspect reports an entity's standing as the coverage view counts it"
   verify unit "a report that cannot be read is the coverage's error, and the standing still holds"
   verify unit "an unusable report is the same failure, of the kind the operation decides, on every view"
+  verify unit "the CLI and the LSP read the recorded report where its link points"
+  verify unit "over MCP, a recorded report that leads outside the project is the same refusal on every view"
   verify integration "specforge stats --format json and specforge.stats answer the same document"
   verify integration "specforge trace and specforge.trace return the same chain for an entity"
   verify integration "specforge schema and specforge.schema carry the same version"
@@ -318,6 +322,114 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
   verify unit "an argument naming an undeclared kind is refused with unknown_kind naming the closest declared kind"
   verify unit "the reach of some entities is every entity their trace chains reach, the seeds included, and its unverified entities are those that count toward coverage and are not proven"
   verify contract "Read Views over the Project View: read views hold — project_compiled, one_report_rule, one_coverage_per_state, surfaces_agree"
+}
+
+// The coverage view (specforge_ops::read::coverage): one row per entity, by the
+// coverage rule, over the project view. specforge.coverage renders it.
+behavior compute_the_coverage_view "Compute the Coverage View" {
+  features   [extension_driven_coverage, mcp_core_tools]
+  invariants [diagnostic_determinism, testable_entity_classification]
+  category   query
+  types      [CoverageStatus]
+  ports      [CompilerApi]
+  requires {
+    project_compiled "A compiled project, one-shot or a project session's, supplies the project view"
+  }
+  ensures {
+    rows_are_what_counts "With no filter, the rows are the entities that count toward coverage"
+    status_by_the_rule   "A row's status is the coverage rule's verdict over the recorded report"
+  }
+  contract   """
+    The coverage view MUST give each entity a row: its obligation count, its
+    proven count and its unproven verify texts, and a status. An obligation
+    is proven when a passing recorded test names its verify text, the rule
+    analyze coverage applies: an entity is covered only when every
+    obligation is proven and no recorded test fails, so it is never covered
+    while analyze reports A015 or A014; it is partial when some obligation is
+    proven or a recorded test fails, else uncovered. A failing test proves
+    nothing, even when it names an obligation. A verify property obligation
+    counts as proven only through a passing test, as in analyze coverage
+    without --prove. The obligations are the entity's verify statements; a
+    field named verify is a field, never an obligation. Statuses are computed
+    from the entity's verify declarations and the recorded report; no
+    extension input decides them. With no filter the rows are the entities
+    that count toward coverage: an entity of a kind the extension manifests
+    declare testable, less the entities W004 exempts that declare no
+    obligations (union types, abstract entities, governance kinds), the
+    entities stats counts as testable. An entity_id names one entity
+    whether it counts or not; each row says whether the entity is exempt.
+    kind and status narrow the rows.
+  """
+  verify unit "with no filters the rows are the entities that count toward coverage"
+  verify unit "an exempt entity named by entity_id is returned with exempt true"
+  verify unit "an entity with an unproven obligation is partial, not covered"
+  verify unit "a failing recorded test keeps an entity from being covered"
+  verify unit "a field named verify does not hide an entity's verify statements"
+}
+
+// list and search (specforge_ops::read::query::{list, search}): the entities a
+// selection over the project view returns. specforge.list, specforge.search,
+// the entities resource and the LSP's workspace symbols render them.
+behavior select_entities_over_the_view "Select Entities over the Project View" {
+  features   [mcp_core_tools]
+  invariants [diagnostic_determinism, zero_domain_knowledge_core]
+  category   query
+  types      [Graph]
+  ports      [CompilerApi]
+  requires {
+    project_compiled "A compiled project, one-shot or a project session's, supplies the project view"
+  }
+  ensures {
+    filters_anded "Every filter narrows the selection: text, kinds, a field's text and references"
+    ranked_once   "Search ranks as the LSP's workspace symbols and completion rank"
+  }
+  contract   """
+    Search MUST find the entities whose id or title matches the text, or
+    whose string field text contains it, ranked exact, prefix, substring,
+    field text, then Jaro-Winkler similarity of at least 0.8 over id and
+    title. An empty text matches every entity. Every filter is ANDed: kinds,
+    a field's text (by the one field-text rule: a list by its items, an
+    expression by its written form, a block by its keys), and references
+    (the entities that reference the named one). At most limit hits are
+    returned, twenty when none is given. List MUST return the entities of a
+    kind, sorted by id, those whose fields hold every where value, from
+    offset, at most limit.
+  """
+  verify unit "text search finds entities matching by name or contract"
+  verify unit "empty query returns all entities up to limit"
+  verify unit "the references filter combines with the other filters"
+  verify unit "the field filter reads a field's text: a list by its items, an expression by its written form, a block by its keys; never the export's JSON"
+  verify unit "a search returns at most limit hits, twenty when no limit is given"
+  verify unit "list pages the entities of a kind sorted by id, from offset, at most limit"
+  verify unit "list keeps the entities whose fields hold every where value"
+}
+
+// Inspect (specforge_ops::read::inspect): one entity's facts. specforge.inspect,
+// the context prompt and the LSP hover render them.
+behavior inspect_entity_facts "Inspect an Entity's Facts" {
+  features   [mcp_core_tools]
+  invariants [diagnostic_determinism, testable_entity_classification]
+  category   query
+  types      [Graph, Diagnostic]
+  ports      [CompilerApi]
+  requires {
+    project_compiled "A compiled project, one-shot or a project session's, supplies the project view"
+  }
+  ensures {
+    facts_of_one_entity "An entity's node, kind entry, headline, standing, obligations, references and diagnostics"
+  }
+  contract   """
+    Inspect MUST answer one entity's facts: its node and kind entry, its
+    headline statement, its standing and obligations, its references in both
+    directions, and the diagnostics about it: those its data names it in,
+    else those inside its block, never one whose message merely quotes it or
+    whose id contains its id. Its coverage is the coverage view's verdict for
+    its row. An entity the graph lacks is E003, entity_not_found, naming the
+    closest entity.
+  """
+  verify unit "an entity's coverage is its coverage row's verdict, obligation by obligation"
+  verify unit "the diagnostics about an entity are its own, not those of an entity whose id contains it"
+  verify unit "an unknown entity is E003, entity_not_found"
 }
 
 // The exploration and the review: the explore and review prompts'
@@ -1126,6 +1238,7 @@ behavior query_graph_multi_resolution "Query Graph at Multiple Resolutions" {
   verify unit "output includes schema_version field"
   verify property "querying same entity at same depth produces identical subgraph"
   verify unit "filter_nodes with field predicate"
+  verify unit "an unknown format is refused naming the expected formats"
   verify contract "Query Graph at Multiple Resolutions: multi-resolution graph query holds — validation_complete_fired, depth_respected, kind_filter_applied, graph_protocol_conformance, graph_queried_emitted"
 }
 

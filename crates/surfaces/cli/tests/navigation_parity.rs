@@ -5,7 +5,7 @@
 //! entities match a text, which diagnostics are about an entity, and how a
 //! diagnostic is fixed. This harness asks each question of both surfaces,
 //! in process (the LSP `Backend` over memory streams, `McpServer` through
-//! `handle_message`), over the projects under `tests/fixtures/navigation/`.
+//! the pairing harness), over the projects under `tests/fixtures/navigation/`.
 //!
 //! Answers are normalized to keys: a location is `"file L:C-L:C"`, 1-based
 //! lines and columns, end exclusive (the parser's `SourceSpan`); the LSP's
@@ -88,17 +88,8 @@ fn mcp_tool(project: &Project, name: &str, arguments: Value) -> Value {
 
 /// [`mcp_tool`], and whether the call failed (`isError`).
 fn mcp_result(project: &Project, name: &str, arguments: Value) -> (Value, bool) {
-    let mut server = specforge_mcp::McpServer::new();
-    let mut call = |method: &str, params: Value| -> Value {
-        let req = json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params});
-        let resp = server.handle_message(&req.to_string()).unwrap();
-        serde_json::from_str(&resp).unwrap()
-    };
-    call(
-        "initialize",
-        json!({"projectRoot": project.root.to_str().unwrap()}),
-    );
-    let resp = call("tools/call", json!({"name": name, "arguments": arguments}));
+    let mut server = crate::support::pairing::mcp_on(&project.root);
+    let resp = specforge_mcp::testing::rpc::call_tool(&mut server, name, arguments);
     let result = &resp["result"];
     let failed = result["isError"] == true;
     if failed {
@@ -1299,32 +1290,4 @@ fn mcp_outline_of_a_missing_file_is_file_not_found() {
     let error: Value =
         serde_json::from_str(result["content"][0]["text"].as_str().unwrap()).unwrap();
     assert_eq!(error["code"], "file_not_found", "{result}");
-}
-
-#[test]
-fn mcp_search_with_an_empty_query_lists_every_entity_up_to_the_limit() {
-    let p = project("nav");
-    let all = mcp_tool(&p, "specforge.search", json!({"query": ""}));
-    assert_eq!(search_ids(&all), ["login", "logout", "session_limit"]);
-    let two = mcp_tool(&p, "specforge.search", json!({"query": "", "limit": 2}));
-    assert_eq!(search_ids(&two).len(), 2);
-}
-
-#[test]
-fn mcp_search_reports_an_unknown_kind() {
-    let p = project("nav");
-    let mut server = specforge_mcp::McpServer::new();
-    let mut call = |method: &str, params: Value| -> Value {
-        let req = json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params});
-        serde_json::from_str(&server.handle_message(&req.to_string()).unwrap()).unwrap()
-    };
-    call(
-        "initialize",
-        json!({"projectRoot": p.root.to_str().unwrap()}),
-    );
-    let resp = call(
-        "tools/call",
-        json!({"name": "specforge.search", "arguments": {"query": "", "kinds": ["invariantz"]}}),
-    );
-    assert!(resp.to_string().contains("I020"), "{resp}");
 }

@@ -14,7 +14,8 @@
 //!
 //! The view says what its surface reports for the project. The project's
 //! recorded test report and the coverage computed from it are read at the
-//! root the project was compiled from and never in an ancestor directory.
+//! root the project was compiled from and never in an ancestor directory;
+//! over MCP only from inside that root ([`ProjectView::contained`], ADR 0139).
 
 mod connectivity;
 mod entity;
@@ -27,23 +28,25 @@ use specforge_common::Diagnostic;
 use specforge_emitter::{GraphProtocolSchema, generate_schema};
 use specforge_graph::Graph;
 use specforge_installed::{Installed, LockState};
-use specforge_project::coverage::{ProjectCoverage, Recorded, TestReport};
+use specforge_project::coverage::{ProjectCoverage, Recorded, ReportError, TestReport};
 use specforge_project::{CompiledProject, Environment, SharedRuntime};
-use specforge_registry::{EntitySnapshot, RegistryBuild};
+use specforge_registry::{Disk, EntitySnapshot, PlainDisk, RegistryBuild};
 
 pub use connectivity::{Connectivity, Degree};
 pub use entity::{EntityField, not_found};
 pub use kinds::{KnownKinds, UNKNOWN_KIND};
 
-use crate::OpError;
+use crate::containment::ContainedDisk;
 use crate::schema_version::{SchemaCache, VersionedSchema};
+use crate::{Containment, OpError};
 
 /// The compiled project as one surface sees it, borrowed: what every
 /// operation over a project reads (CONTEXT.md "Project view", ADR 0015).
 ///
 /// `root` is the root the project was compiled from: the recorded test
 /// report, the schema cache, `specforge.lock`, the installed binaries and
-/// the source files are read there, never in an ancestor. Without a root
+/// the source files are read there, never in an ancestor. Over MCP the report is read only from
+/// inside that root ([`Self::contained`], ADR 0139). Without a root
 /// (a detached project, one assembled in memory) there is no report, no
 /// schema cache, no extension pass, and an operation that reads or writes
 /// the project on disk refuses with `no_project` ([`Self::project_root`]).
@@ -56,6 +59,8 @@ pub struct ProjectView<'a> {
     /// What the surface reports after what the compile reported (MCP's
     /// I017 notices).
     also_reported: &'a [Diagnostic],
+    /// Whether the project's files it reads are held inside its root (MCP, ADR 0139).
+    contained: bool,
 }
 
 impl<'a> ProjectView<'a> {
@@ -70,6 +75,7 @@ impl<'a> ProjectView<'a> {
             project,
             listed: None,
             also_reported: &[],
+            contained: false,
         }
     }
 
@@ -174,10 +180,7 @@ impl<'a> ProjectView<'a> {
     /// `Ok(None)` without a root or a file; an error (E045) when it is there
     /// but unusable.
     pub fn test_report(&self) -> Result<Option<Arc<TestReport>>, OpError> {
-        self.project
-            .recorded()
-            .report(self.root())
-            .map_err(crate::report::unusable)
+        self.read_report(|disk| self.project.test_report(disk))
     }
 
     /// The coverage rule over the graph's entity snapshot and the recorded
@@ -190,10 +193,31 @@ impl<'a> ProjectView<'a> {
     /// from it ([`Self::coverage`]), read together: one read of the report
     /// file for a view that needs both.
     pub fn recorded(&self) -> Result<Recorded, OpError> {
-        self.project
-            .recorded()
-            .at(self.root())
-            .map_err(crate::report::unusable)
+        self.read_report(|disk| self.project.recorded(disk))
+    }
+
+    /// `read` over the disk this view reads the report through: held inside the root when
+    /// contained, else the file system as the user sees it.
+    fn read_report<T>(
+        &self,
+        read: impl FnOnce(&dyn Disk) -> Result<T, ReportError>,
+    ) -> Result<T, OpError> {
+        match self.root().filter(|_| self.contained) {
+            Some(root) => read(&ContainedDisk(Containment::within(root))),
+            None => read(&PlainDisk),
+        }
+        .map_err(crate::report::unusable)
+    }
+
+    /// This view, reading the project's recorded report only from inside its root: a report
+    /// that lands outside (a symlink out) is E045, `invalid_input`. MCP's call target bounds
+    /// every view it builds (ADR 0092 D2); the CLI and the LSP do not (ADR 0092 D6) and follow
+    /// the user's link.
+    pub fn contained(self) -> Self {
+        ProjectView {
+            contained: true,
+            ..self
+        }
     }
 
     /// The graph's entity snapshot (ADR 0019): every entity with what it

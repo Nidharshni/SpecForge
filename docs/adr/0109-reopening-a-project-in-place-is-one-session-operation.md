@@ -1,6 +1,6 @@
 # Reopening a project in place is one session operation
 
-**Status:** accepted (2026-10-16, architecture round 11, plan 06). Amends ADR 0043 D7, ADR 0046 D3 and ADR 0047 D6.
+**Status:** accepted (2026-10-16, architecture round 11, plan 06). Amends ADR 0043 D7, ADR 0046 D3 and ADR 0047 D6. Amended by [ADR 0136](0136-every-session-update-goes-through-one-bracket.md) (D2: the skipped-checks flag is the compiled project's, so a reopen's new project starts without it).
 
 Three places opened a project at a root in the place of a session that already existed, each with its own copy of the
 steps: `ProjectSession::reload_environment`, the LSP's reaction to `initialized`, and MCP's `McpState::serve`. The

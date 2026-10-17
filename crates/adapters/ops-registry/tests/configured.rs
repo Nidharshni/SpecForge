@@ -191,7 +191,7 @@ fn named_is_the_alias_given_else_the_default() {
     assert_eq!(error.code, "E063");
     let hint = error.suggestion.as_deref().unwrap();
     assert!(
-        hint.contains("--registry") && hint.contains("\"default_registry\": true"),
+        hint.contains("by its alias") && hint.contains("\"default_registry\": true"),
         "{hint}"
     );
 }

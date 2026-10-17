@@ -1,6 +1,7 @@
 # A session takes a change from disk only as changes
 
 **Status:** accepted (2026-10-15, round 10, plan 09). Amends ADR 0046 D1 and finishes ADR 0073 D1.
+*Amended (2026-10-17, round 14, plan 10): D5.*
 
 `ProjectSession::update(SourceChange::Disk(keys))` was public, but its only production caller was
 `ProjectSession::apply`. 58 test call sites used it and skipped the step every surface goes through: turning paths
@@ -25,12 +26,18 @@ that reaches only an excluded file, and `apply` returns `None`).
   an update) is unmet.
   *ADR 0108: the stand-in is a copy of the compiled project (`CompiledProject: Clone`); the decision and its reopen
   condition stand.*
+- **D5.** A session makes every `Changes` it applies. `Changes`'s fields are the crate's, and the readers (watch's
+  event labels, the LSP's touched files, tests) read them through `sources()`, `environment()` and
+  `check_inputs()`. A test takes `Changes` from `changes`, `stale`, `ensure_fresh` or `testing::disk_changed`.
+  `apply` asks no root: a detached session makes no changes (ADR 0073 D7). It still leaves out every buffer held
+  when it runs, since a `Changes` is a value that may outlive a `hold`.
 
 ## Rejected
 
 - A `testing` re-export of the key door: it keeps the door tests use and surfaces do not.
 - Widening `Changes` or `Update` with the labels watch and the LSP print: they read the public result of `changes`
   once each, which is the interface working as designed.
+- A `testing`-only `Changes` constructor: the key door's reason above.
 - A shared read snapshot with a copy-on-write graph: one reader, and no measurement that the copy now costs more
   than ADR 0023's 0.76 ms.
 

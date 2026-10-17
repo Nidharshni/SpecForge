@@ -8,7 +8,7 @@ use std::sync::Arc;
 use specforge_extension_sdk::prelude::*;
 use specforge_project::testing::TestProject;
 use specforge_project::{
-    Buffer, Changes, CheckMode, ProjectSession, RuntimeSource, SharedRuntime, UpdateKind,
+    Buffer, CheckMode, ProjectSession, RuntimeSource, SharedRuntime, UpdateKind,
 };
 use specforge_test::prelude::*;
 use specforge_wasm::testing::InProcessRuntime;
@@ -93,13 +93,12 @@ fn a_held_buffers_deleted_file_is_not_stale() {
     let rt = counting();
     let (dir, mut session) = opened(&rt);
     let a = dir.root().join("a.spec");
-    hold(&mut session, &dir, OMEGA);
     fs::remove_file(&a).unwrap();
+    // Taken before the hold, applied after it: the buffer is still the truth.
+    let named = session.changes(std::iter::once(a.as_path()));
+    assert_eq!(named.sources(), ["a.spec"]);
+    hold(&mut session, &dir, OMEGA);
     assert!(session.stale().is_empty());
-    let named = Changes {
-        sources: vec!["a.spec".into()],
-        ..Changes::default()
-    };
     assert!(session.apply(&named).is_none());
     assert!(has(&session, "omega"));
 
@@ -139,7 +138,7 @@ fn releasing_a_saved_buffer_reads_it_once_and_leaves_nothing_stale() {
 
     // The file is the disk's again.
     fs::write(&a, ZETA).unwrap();
-    assert_eq!(session.stale().sources, ["a.spec"]);
+    assert_eq!(session.stale().sources(), ["a.spec"]);
 }
 
 #[specforge_test(
@@ -277,12 +276,6 @@ fn the_session_classifies_a_held_file_as_nothing() {
     std::fs::write(root.join("a.spec"), "type other \"O\" {}\n").unwrap();
     let paths = [root.join("a.spec"), root.join("specforge.json")];
     let changes = session.changes(paths.iter().map(PathBuf::as_path));
-    assert_eq!(
-        changes,
-        Changes {
-            sources: vec![],
-            environment: vec![root.join("specforge.json")],
-            check_inputs: vec![]
-        }
-    );
+    assert!(changes.sources().is_empty() && changes.check_inputs().is_empty());
+    assert_eq!(changes.environment(), [root.join("specforge.json")]);
 }

@@ -703,24 +703,6 @@ fn suggest_fixes_entity_and_file_filters() {
 }
 
 #[specforge_test(
-    behavior = "provide_mcp_find_references_tool",
-    verify = "entity with no references returns empty list"
-)]
-fn find_references_empty_list() {
-    let mut server = project()
-        .file("orphan.spec", "behavior orphan_node \"Orphan\" {\n}\n")
-        .serve(&[TestExtension::software()]);
-    let resp = call_tool(
-        &mut server,
-        "specforge.find_references",
-        json!({"entity_id": "orphan_node"}),
-    );
-    let text = tool_text(&resp);
-    let parsed: Value = serde_json::from_str(&text).unwrap();
-    assert!(parsed["locations"].as_array().unwrap().is_empty());
-}
-
-#[specforge_test(
     behavior = "provide_mcp_outline_tool",
     verify = "nested entries included for complex entities"
 )]
@@ -753,64 +735,9 @@ fn outline_nests_an_entitys_methods() {
         "specforge.outline",
         json!({"file": "test.spec"}),
     );
-    let flat: Value = serde_json::from_str(&tool_text(&flat)).unwrap();
-    assert!(flat[0].get("children").is_none(), "{flat}");
-}
-
-// B:provide_mcp_find_references_tool — verify unit "each reference includes source span"
-#[specforge_test(
-    behavior = "provide_mcp_find_references_tool",
-    verify = "specforge.find_references returns all reference locations"
-)]
-fn find_references_returns_source_spans() {
-    let mut server = test_server();
-    let parsed = result(
-        &mut server,
-        "specforge.find_references",
-        json!({"entity_id": "alpha"}),
-    );
-    // The token as written: test.spec line 11 is `    behaviors [alpha]`,
-    // `alpha` at columns 16–21.
-    assert_eq!(
-        parsed["locations"],
-        json!([{
-            "referencing_entity_id": "beta",
-            "referenced_entity_id": "alpha",
-            "field": "behaviors",
-            "role": "reference",
-            "precision": "token",
-            "source_span": {
-                "file": "test.spec",
-                "start_line": 11,
-                "start_col": 16,
-                "end_line": 11,
-                "end_col": 21
-            }
-        }])
-    );
-}
-
-// B:provide_mcp_outline_tool — verify unit "outline entries sorted by line number"
-#[specforge_test(
-    behavior = "provide_mcp_outline_tool",
-    verify = "outline entries sorted by line number"
-)]
-fn outline_sorted_by_line_extended() {
-    let mut server = server_with_unordered_file();
-    let resp = call_tool(
-        &mut server,
-        "specforge.outline",
-        json!({"file": "order.spec"}),
-    );
-    let parsed: Value =
-        serde_json::from_str::<Value>(&tool_text(&resp)).unwrap()["entries"].clone();
-    let lines: Vec<u64> = parsed
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|e| e["range"]["start_line"].as_u64().unwrap())
-        .collect();
-    assert_eq!(lines, vec![5, 12, 20]);
+    let flat = &tool_json(&flat)["entries"][0];
+    assert_eq!(flat["entity_id"], "alpha", "{flat}");
+    assert!(flat.get("children").is_none(), "{flat}");
 }
 
 // --- the anchors manifest (plan 06 T0 pins) ---
@@ -855,21 +782,15 @@ fn find_implementation_lists_every_anchor_of_the_entity() {
         })
     );
 
-    let none = result(
+    let refused = call_tool(
         &mut server,
         "specforge.find_implementation",
         json!({"entity_id": "nope"}),
     );
-    assert_eq!(none["count"], 0);
-    assert_eq!(none["implementations"], json!([]));
-
-    let mut bare = test_server();
-    let absent = result(
-        &mut bare,
-        "specforge.find_implementation",
-        json!({"entity_id": "alpha"}),
-    );
-    assert_eq!(absent["count"], 0);
+    let error = crate::tool_errors::mcp_error(&refused);
+    assert_eq!(error["code"], "entity_not_found", "{error}");
+    assert_eq!(error["argument"], "entity_id", "{error}");
+    assert_eq!(error["diagnostic"]["code"], "E003", "{error}");
 }
 
 /// An anchors manifest with an anchor missing a field is a

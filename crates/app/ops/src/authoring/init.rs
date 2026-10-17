@@ -1,7 +1,8 @@
 //! `specforge init` and `specforge.init`: one scaffold for both surfaces.
 //!
-//! [`init`] validates everything, reads its extension specifiers as `add` reads them and claims
-//! them as `add` does (both through `extension::names`, ADR 0105) (two that add one extension differently are refused, ADR 0098), and writes
+//! [`init`] validates everything, reads, claims and asks for its extension specifiers through
+//! `extension::names`, as `add` does (ADR 0105, ADR 0134; two that add one extension differently are
+//! refused, ADR 0098), and writes
 //! one change: it enables builtins and installs local `.wasm` extensions through the lock plan
 //! `add` uses (ADR 0004 D3-e, ADR 0041, ADR 0065), judged once before any file is written, so it
 //! never writes an entry `specforge check` can't load. The modules, the lock, `specforge.json`,
@@ -9,7 +10,7 @@
 //! needs a configured registry, which a project that doesn't exist yet can't have, so it is added
 //! afterwards with `specforge add`.
 
-use crate::extension::{self, Also, Ask, Candidate, LockPlan, Named, Names, Place};
+use crate::extension::{self, Also, Candidate, LockPlan, Names, Place};
 use crate::{Caller, Containment, OpError, OpErrorKind, Refusal, Writes};
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -118,9 +119,9 @@ pub struct InitDocument {
     pub extensions_installed: Vec<String>,
 }
 
-/// Scaffold the project `req` describes: validated first, its extension specifiers read as `add`
-/// reads them (E054, R-RES-003, E040; a registry package is E063 and a git source E064, both
-/// before anything is written) and claims them as `add` does (the same way twice is enabled
+/// Scaffold the project `req` describes: validated first, its extension specifiers read, claimed and
+/// asked for through `extension::names`, as `add` does (E054, R-RES-003, E040; a registry package is E063 and a git source E064, both
+/// before anything is written; the same way twice is enabled
 /// once, another way is `extension_conflict`, naming both), its lock plan judged once, then written as one change: the
 /// installed modules, `specforge.lock`, `specforge.json`, the `.gitignore` entries and the
 /// starter. Init only adds: the starter is created, never overwritten, and a failed init puts
@@ -187,36 +188,32 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
         "version": version,
         "spec_root": SPEC_ROOT,
     });
-    let mut plan = LockPlan::initializing(&installed, runtime, names.installs(), document)?;
-    // A registry package needs a registry, which a project that doesn't exist yet can't have.
-    let named = names
-        .name_each(runtime, &mut |specifier, _| Err(no_registry(specifier)))
-        .map_err(about)?;
-    // What each local file contributes to the starter, by the name it declares.
-    let mut templates: Vec<(String, Option<String>)> = Vec::new();
-    for (at, one) in named.into_iter().enumerate() {
-        match one {
-            Named::Duplicate { .. } => {}
-            Named::Builtin(name) => plan.enable(Ask(at), name),
-            Named::Local { install, starter } => {
-                templates.push((install.name().to_string(), starter));
-                plan.install(Ask(at), *install);
-            }
-            // The package step above refuses every package.
-            Named::Package { .. } => unreachable!("init's package step refuses every package"),
-        }
-    }
+    let mut plan =
+        LockPlan::initializing(&installed, runtime, req.caller, names.installs(), document)?;
     // Test obligations (`verify`) on software kinds come from @specforge/testing (ADR 0002), so
     // enabling software enables it too; the project's test runners get the extensions that
-    // collect their results.
+    // collect their results. The plan reads its companions when it is checked.
     plan.accompany("@specforge/software", "@specforge/testing");
     for runner in detected_runners(req.dir, &req.caller.containment().narrowed(req.dir)) {
         plan.accompany("@specforge/testing", runner);
     }
-    let checked = plan.check().map_err(|refused| {
-        let (Ask(at), error) = refused.decisive();
-        names.named(at, error).about(InitField::Extensions)
-    })?;
+    // A registry package needs a registry, which a project that doesn't exist yet can't have.
+    let (checked, answers) = names
+        .ask(
+            plan,
+            runtime,
+            &mut |specifier, _| Err(no_registry(specifier)),
+            &mut |install| install.name().to_string(),
+        )
+        .map_err(about)?;
+    // What each local file contributes to the starter, by the name it declares.
+    let templates: Vec<(String, Option<String>)> = answers
+        .into_iter()
+        .filter_map(|answer| match answer {
+            extension::Answer::Installed { recorded, starter } => Some((recorded, starter)),
+            extension::Answer::Duplicate { .. } | extension::Answer::Builtin(_) => None,
+        })
+        .collect();
     let extensions = checked.entries();
 
     let starter = match starter_template(&extensions, &templates, runtime)? {
@@ -265,7 +262,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
             code: INIT_WRITE_FAILED,
         },
     ];
-    let done = checked.finish(dir, files, &req.caller.containment().narrowed(dir))?;
+    let done = checked.writing(files).finish()?;
 
     Ok(Outcome {
         root: dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf()),
@@ -444,18 +441,6 @@ mod tests {
             .binary(B, declaring("@x/b", "1.0.0", &[]))
     }
 
-    /// `a.wasm` and `b.wasm` written in a scratch directory, and the directory to init.
-    fn files() -> (tempfile::TempDir, Vec<String>, PathBuf) {
-        let scratch = tempfile::tempdir().unwrap();
-        std::fs::write(scratch.path().join("a.wasm"), A).unwrap();
-        std::fs::write(scratch.path().join("b.wasm"), B).unwrap();
-        let extensions = ["a.wasm", "b.wasm"]
-            .map(|f| scratch.path().join(f).display().to_string())
-            .to_vec();
-        let dir = scratch.path().join("demo");
-        (scratch, extensions, dir)
-    }
-
     fn request<'a>(dir: &'a Path, extensions: &'a [String]) -> Request<'a> {
         Request {
             dir,
@@ -466,27 +451,7 @@ mod tests {
         }
     }
 
-    #[specforge_test_macros::test(
-        behavior = "non_interactive_init",
-        verify = "init refuses local extensions the lock plan refuses before it writes anything"
-    )]
-    fn init_refuses_local_extensions_the_lock_plan_refuses_before_writing() {
-        let (_scratch, extensions, dir) = files();
-
-        let error = init(&request(&dir, &extensions), &runtime()).unwrap_err();
-
-        assert_eq!(error.error.code, "E027", "{error:?}");
-        // Named by the specifier that asked for it, as `add` names it among several.
-        assert!(
-            error.error.message.starts_with("adding '") && error.error.message.ends_with(
-                "extension '@x/a' requires peer dependency '@x/b' ^2 but version 1.0.0 is installed"
-            ),
-            "{error:?}"
-        );
-        assert!(!dir.exists(), "nothing was written");
-    }
-
-    /// The add test of the same name holds `add` to it; init judges the same peer set (ADR 0065).
+    /// add's test of the same name holds add to the same peer set (ADR 0065).
     #[test]
     fn init_refuses_a_required_builtin_peer_the_embedded_one_does_not_satisfy() {
         use crate::testing::{candidates, serving_builtin};

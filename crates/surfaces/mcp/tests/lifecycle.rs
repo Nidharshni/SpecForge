@@ -692,28 +692,6 @@ fn cancel_state_consistent() {
     assert_eq!(server.state().subscriptions(), &subscriptions);
 }
 
-#[test]
-fn cancel_long_running_acknowledgment() {
-    let mut server = init_server();
-    // Simulate cancellation of a hypothetical long-running request
-    let resp = call(&mut server, "$/cancelRequest", json!({"id": 42}));
-    // Cancel is best-effort: should not error out
-    assert!(resp["error"].is_null() || resp["result"].is_object() || resp["result"].is_null());
-    // Server should remain functional after cancel
-    let tools_resp = call(&mut server, "tools/list", json!({}));
-    assert!(tools_resp["result"]["tools"].is_array());
-}
-
-#[test]
-fn cancel_in_progress_best_effort() {
-    let mut server = init_server();
-    // Best-effort cancel: synchronous server cannot truly cancel in-progress work,
-    // but the cancel request itself should succeed without error
-    let resp = call(&mut server, "$/cancelRequest", json!({"id": 1}));
-    // Cancel should not produce an error (it's a best-effort operation)
-    assert!(!resp["error"].is_object() || resp["result"].is_object() || resp["result"].is_null());
-}
-
 // B:handle_mcp_request_cancellation — verify unit "server state remains consistent after cancellation"
 #[specforge_test(
     behavior = "handle_mcp_request_cancellation",

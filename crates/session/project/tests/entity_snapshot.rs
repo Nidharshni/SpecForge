@@ -13,6 +13,7 @@ use specforge_common::Diagnostic;
 use specforge_extension_sdk::prelude::*;
 use specforge_project::CompiledProject;
 use specforge_project::testing::TestProject;
+use specforge_registry::PlainDisk;
 use specforge_wasm::testing::InProcessRuntime;
 
 const EXT: &str = "@pin/snapshot";
@@ -318,10 +319,9 @@ fn an_empty_list_or_block_is_written() {
 }
 
 /// The project's coverage, as the compile records it.
-fn testable_total(compiled: &CompiledProject, root: &Path) -> usize {
+fn testable_total(compiled: &CompiledProject) -> usize {
     compiled
-        .recorded()
-        .at(Some(root))
+        .recorded(&PlainDisk)
         .unwrap()
         .coverage
         .summary
@@ -356,7 +356,7 @@ fn an_untargeted_obligation_rule_obliges_every_kind() {
     }
     // And so does coverage: alpha and beta are testable and owe (gamma's
     // kind is not testable).
-    assert_eq!(testable_total(&compiled, dir.root()), 2);
+    assert_eq!(testable_total(&compiled), 2);
 }
 
 #[specforge_test_macros::test(
@@ -377,7 +377,7 @@ fn an_untargeted_obligation_rule_skips_kinds_that_accept_no_verify() {
     );
     assert_eq!(pass_entity(&runtime, "epsilon")["owes_none"], true);
     assert_eq!(pass_entity(&runtime, "epsilon")["testable"], false);
-    assert_eq!(testable_total(&compiled, dir.root()), 2);
+    assert_eq!(testable_total(&compiled), 2);
 }
 
 #[specforge_test_macros::test(
@@ -412,9 +412,8 @@ fn the_checks_passes_and_coverage_of_one_compile_read_one_snapshot() {
 
     // The coverage memo holds the compile's snapshot, and the coverage is
     // computed from it: no second walk.
-    let memo = compiled.recorded();
-    assert!(std::ptr::eq(entities, &**memo.entities()));
-    let recorded = memo.at(Some(dir.root())).unwrap();
+    assert!(std::ptr::eq(entities, &*compiled.shared_entities()));
+    let recorded = compiled.recorded(&PlainDisk).unwrap();
     assert!(
         recorded
             .coverage

@@ -179,7 +179,7 @@ impl Plan {
                 applied.record(update);
                 applied.changed = true;
             }
-            applied.touched.extend(changes.sources.iter().cloned());
+            applied.touched.extend(changes.sources().iter().cloned());
         }
         if let Some(path) = &self.released {
             applied.close(session, path);

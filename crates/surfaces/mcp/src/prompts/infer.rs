@@ -4,14 +4,13 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_ops::read::infer::{self, InferencePlanRequest, PlanDocument};
-use specforge_ops::read::navigate::{anchors_of_file, source_anchors};
+use specforge_ops::read::navigate::{AnchoredEntity, FileMatch, anchors_of_file};
 
 use crate::args::Arguments;
 use crate::prompt::{CorePrompt, Prompted};
 use crate::refusal::ArgumentOf;
 use crate::tool::CoreTool;
 use crate::tool::{ErrorCode, McpError};
-use crate::tools::find_spec_for_source::{Anchored, MatchMode};
 use crate::tools::{analyze, infer_progress, infer_session, query, schema, search, validate};
 use specforge_ops::read::infer::KindGuideField;
 use specforge_ops::view::ProjectView;
@@ -145,8 +144,8 @@ pub struct KindScope {
 #[derive(Debug, Serialize, Shape)]
 pub struct FileScope {
     pub file: String,
-    pub match_mode: MatchMode,
-    pub existing_entities_referencing_file: Vec<Anchored>,
+    pub match_mode: FileMatch,
+    pub existing_entities_referencing_file: Vec<AnchoredEntity>,
     pub kinds: Vec<FileKind>,
     pub project_conventions: String,
     pub validation: String,
@@ -239,18 +238,9 @@ fn validation() -> String {
 }
 
 fn get_file_scoped(project: &ProjectView, file_path: &str) -> Outcome {
-    // The entities anchored to the file: the one file rule
-    // (specforge_ops::read::navigate::anchors_of_file) over the anchors manifest,
-    // the answer specforge.find_spec_for_source gives (C9-09). With no
-    // project there is no manifest.
-    let manifest = source_anchors(project).map_err(McpError::from)?;
-    let found = anchors_of_file(&manifest, file_path);
-    let referencing_entities: Vec<Anchored> = found
-        .anchors
-        .iter()
-        .map(|anchor| Anchored::of(anchor, project.graph()))
-        .collect();
-    let match_mode = MatchMode::from(found.mode);
+    // The entities anchored to the file: the anchors read view's answer, the one
+    // specforge.find_spec_for_source gives.
+    let found = anchors_of_file(project, file_path).map_err(McpError::from)?;
 
     let guide = infer::guide(project);
     let kinds = guide
@@ -264,8 +254,8 @@ fn get_file_scoped(project: &ProjectView, file_path: &str) -> Outcome {
 
     let result = Payload::File(FileScope {
         file: file_path.to_string(),
-        match_mode,
-        existing_entities_referencing_file: referencing_entities,
+        match_mode: found.match_mode,
+        existing_entities_referencing_file: found.entities,
         kinds,
         project_conventions: guide.conventions.unwrap_or("").to_string(),
         validation: validation(),

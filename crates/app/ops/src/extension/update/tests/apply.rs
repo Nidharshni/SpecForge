@@ -349,3 +349,38 @@ fn an_update_is_judged_against_the_lock_it_leaves_in_any_lock_order() {
         assert_eq!(std::fs::read(lock_path(dir.path())).unwrap(), lock_before);
     }
 }
+
+#[cfg(unix)]
+#[test]
+fn an_update_writes_nothing_outside_its_project_whatever_bound_its_caller_lends() {
+    let dir = enabled_project(vec![entry("@sdk/greet", "0.0.9", "registry", &[])]);
+    // The lock lives in a sibling directory the project links to.
+    let sibling = tempfile::tempdir().unwrap();
+    let lock = lock_path(dir.path());
+    std::fs::rename(&lock, sibling.path().join("specforge.lock")).unwrap();
+    std::os::unix::fs::symlink(sibling.path().join("specforge.lock"), &lock).unwrap();
+    let before = std::fs::read(sibling.path().join("specforge.lock")).unwrap();
+    let registry = MemoryRegistry::new()
+        .serving(old("@sdk/greet", "0.0.9"))
+        .serving(greet_published());
+    // A bound wider than the project, holding the sibling too.
+    let wide = crate::Containment::within(&std::env::temp_dir());
+    let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+
+    let error = update(
+        &UpdateRequest {
+            caller: crate::testing::bounded(&wide),
+            ..request(&root, Reach::Major)
+        },
+        &registry,
+        &runtime(),
+    )
+    .unwrap_err();
+
+    assert_eq!(error.code, crate::OUTSIDE_ROOT, "{error:?}");
+    assert_eq!(
+        std::fs::read(sibling.path().join("specforge.lock")).unwrap(),
+        before
+    );
+    assert!(registry.pins().is_empty());
+}

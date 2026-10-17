@@ -49,7 +49,7 @@ expression: out
 == specforge.analyze {"min":50}
 {
   "code": "precondition_failed",
-  "message": "--min needs test results: run `specforge collect` or pass --test-results",
+  "message": "a proof-coverage minimum needs test results: run `specforge collect`, or name a test results file",
   "tool": "specforge.analyze"
 }
 == specforge.analyze {"test_results":"none.json"}

@@ -10,7 +10,7 @@ use specforge_graph::field_form::write_fields;
 use crate::args::{Arguments, EntityIds};
 use crate::prompt::{CorePrompt, Prompted};
 use crate::refusal::ArgumentOf;
-use crate::tool::{ErrorCode, McpError};
+use crate::tool::McpError;
 use specforge_ops::view::EntityField;
 use specforge_ops::view::ProjectView;
 
@@ -113,13 +113,10 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
     let mut constraint_entities: Vec<ConstraintEntity> = Vec::new();
     for constraint_id in &args.structural_constraints.0 {
         let Some(constraint) = graph.node(constraint_id) else {
+            // The one refusal of an entity the graph lacks (E003, did-you-mean), about the argument that named it.
             return Err(Box::new(
-                McpError::new(
-                    ErrorCode::EntityNotFound,
-                    format!("Structural constraint entity not found: {constraint_id}"),
-                )
-                .with_entity(constraint_id.as_str())
-                .with_argument("structural_constraints"),
+                crate::tool::entity_not_found(graph, constraint_id)
+                    .with_argument("structural_constraints"),
             ));
         };
         constraint_entities.push(ConstraintEntity {

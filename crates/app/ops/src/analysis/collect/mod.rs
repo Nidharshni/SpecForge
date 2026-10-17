@@ -207,7 +207,7 @@ pub fn collect(
             OpErrorKind::PreconditionFailed,
             codes::E058,
             format!(
-                "--report needs one collector, but {} apply here; pick one with --runner",
+                "report files need one collector, but {} apply here; name the runner that wrote them",
                 names.join(", ")
             ),
         )
@@ -275,11 +275,11 @@ pub fn collect(
                     report_at.spelled.display()
                 ),
                 Mode::NoRun => format!(
-                    "no {} report at {}; run without --no-run to produce one",
+                    "no {} report at {}; run the tests to write one (`specforge collect` runs them)",
                     collector.name,
                     report_at.spelled.display()
                 ),
-                Mode::Reports(_) => "the --report files don't exist".to_string(),
+                Mode::Reports(_) => "the report files given don't exist".to_string(),
             };
             return Err(fail(OpErrorKind::SchemaMismatch, codes::E045, message).into());
         }
@@ -353,7 +353,8 @@ fn plan<'a>(
                 OpErrorKind::SchemaMismatch,
                 codes::E045,
                 format!(
-                    "collector '{}' of {} declares no command; use --no-run with its report",
+                    "collector '{}' of {} declares no command, so it cannot run the tests; collect from the \
+                     report they already wrote",
                     collector.name, collector.extension
                 ),
             ));
@@ -486,7 +487,7 @@ fn select<'a>(
             OpErrorKind::PreconditionFailed,
             codes::E058,
             format!(
-                "no test runner detected in {}; pick one with --runner (available: {})",
+                "no test runner detected in {}; name the runner to use (available: {})",
                 root.display(),
                 names()
             ),
@@ -497,12 +498,13 @@ fn select<'a>(
 }
 
 /// The report `collect` merges new results into: `specforge-report.json`,
-/// or an empty report when it's missing or unreadable. Unlike the readers
-/// that score coverage ([`specforge_project::coverage::read_report`]), collect is the
-/// writer: it replaces a report it cannot read.
+/// or an empty report when it's missing or unreadable. Unlike the views that
+/// score coverage (`CompiledProject::recorded`), collect is the writer: it
+/// replaces a report it cannot read.
 fn load_report(file: &Held) -> TestReport {
-    specforge_project::coverage::read_report_file(&file.real)
+    file.read()
         .ok()
+        .and_then(|bytes| TestReport::parse(&file.spelled, &bytes).ok())
         .unwrap_or(TestReport {
             runner: None,
             results: BTreeMap::new(),

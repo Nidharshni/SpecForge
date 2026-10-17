@@ -7,6 +7,7 @@ use specforge_common::ProjectConfig;
 use specforge_registry::{Disk, PlainDisk};
 use specforge_test_macros::test as specforge_test;
 
+use crate::ledger::recorded::Recording;
 use crate::ledger::{Ledger, Reading, SessionInputs, Watched};
 
 fn opened() -> (tempfile::TempDir, Ledger) {
@@ -33,7 +34,7 @@ fn a_check_input_written_between_its_stamp_and_its_read_is_seen_next_time() {
         fs::write(path, "new, and longer").unwrap();
         fs::read(path).ok()
     });
-    run.finish();
+    run.finish(Recording::Checks);
     assert_eq!(ledger.stale().check_inputs, [doc]);
 }
 
@@ -46,7 +47,7 @@ fn a_missing_check_input_records_its_directory() {
     let run = ledger.checks();
     assert!(!run.read(Reading::File, &missing, std::path::Path::exists));
     run.read(Reading::Listing, &root.join("docs"), |_| ());
-    run.finish();
+    run.finish(Recording::Checks);
     assert!(
         ledger
             .inputs()
@@ -70,7 +71,7 @@ fn an_unfinished_check_run_records_nothing() {
 }
 
 #[test]
-fn a_run_that_reads_what_the_last_read_moves_nothing() {
+fn a_run_that_reads_what_the_last_read_leaves_the_inputs_as_they_were() {
     let (dir, mut ledger) = opened();
     let one = dir.path().join("one.md");
     let two = dir.path().join("two.md");
@@ -79,15 +80,20 @@ fn a_run_that_reads_what_the_last_read_moves_nothing() {
     let read = |ledger: &mut Ledger, file: &std::path::Path| {
         let run = ledger.checks();
         run.read(Reading::File, file, |_| ());
-        run.finish()
+        run.finish(Recording::Checks);
     };
-    assert!(read(&mut ledger, &one));
-    assert!(!read(&mut ledger, &one));
-    assert!(read(&mut ledger, &two));
+    let mut before = ledger.inputs().clone();
+    read(&mut ledger, &one);
+    assert_ne!(ledger.inputs(), &before);
+    before = ledger.inputs().clone();
+    read(&mut ledger, &one);
+    assert_eq!(ledger.inputs(), &before);
+    read(&mut ledger, &two);
+    assert_ne!(ledger.inputs(), &before);
 }
 
 #[test]
-fn a_run_that_reads_a_path_twice_moves_nothing() {
+fn a_run_that_reads_a_path_twice_leaves_the_inputs_as_they_were() {
     let (dir, mut ledger) = opened();
     let one = dir.path().join("one.md");
     let two = dir.path().join("two.md");
@@ -96,11 +102,13 @@ fn a_run_that_reads_a_path_twice_moves_nothing() {
         for file in files {
             run.read(Reading::File, file, |_| ());
         }
-        run.finish()
+        run.finish(Recording::Checks);
     };
-    assert!(run_of(&mut ledger, &[&one, &two, &one]));
+    run_of(&mut ledger, &[&one, &two, &one]);
+    let before = ledger.inputs().clone();
     // The same set, asked in another order and with repeats: no change.
-    assert!(!run_of(&mut ledger, &[&two, &one, &two]));
+    run_of(&mut ledger, &[&two, &one, &two]);
+    assert_eq!(ledger.inputs(), &before);
 }
 
 #[test]

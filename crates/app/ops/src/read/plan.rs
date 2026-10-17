@@ -20,8 +20,7 @@ pub struct PlanOutcome {
     /// (`PlanGapKind::fails`).
     pub ok: bool,
     /// Plan entries that name an entity in the graph, in plan order.
-    #[serde(rename = "affected_entities")]
-    pub entries: Vec<String>,
+    pub resolved_entries: Vec<String>,
     /// Unresolved entries (in entry order), then testable entities that
     /// declare obligations and have no entry (in id order), then ordering
     /// gaps (in graph edge order).
@@ -32,10 +31,10 @@ impl PlanOutcome {
     /// The outcome as `specforge trace --plan --format human` prints it.
     pub fn to_human(&self) -> String {
         let mut text = String::new();
-        if self.entries.is_empty() {
-            text.push_str("affected: none\n");
+        if self.resolved_entries.is_empty() {
+            text.push_str("resolved: none\n");
         } else {
-            text.push_str(&format!("affected: {}\n", self.entries.join(", ")));
+            text.push_str(&format!("resolved: {}\n", self.resolved_entries.join(", ")));
         }
         if self.gaps.is_empty() {
             text.push_str("gaps: none\n");
@@ -270,7 +269,7 @@ pub fn check(view: &ProjectView, plan: &AgentPlan) -> PlanOutcome {
 
     PlanOutcome {
         ok: !gaps.iter().any(|gap| gap.kind.fails()),
-        entries: validated_entries,
+        resolved_entries: validated_entries,
         gaps,
     }
 }

@@ -9,9 +9,7 @@ use std::sync::Arc;
 
 use serde_json::json;
 use specforge_project::testing::{TestProject, compile_at, disk_changed};
-use specforge_project::{
-    Buffer, Changes, ProjectSession, SharedRuntime, UpdateKind, WatchRoot, Watched,
-};
+use specforge_project::{Buffer, ProjectSession, SharedRuntime, UpdateKind, WatchRoot, Watched};
 use specforge_test::prelude::*;
 use tempfile::TempDir;
 
@@ -59,7 +57,7 @@ fn a_directory_moved_inside_the_spec_root_moves_its_sources() {
     fs::rename(root.join("old"), root.join("new")).unwrap();
 
     let changes = session.changes([root.join("new").as_path(), root.join("old").as_path()]);
-    assert_eq!(changes.sources, vec!["new/a.spec", "old/a.spec"]);
+    assert_eq!(changes.sources(), vec!["new/a.spec", "old/a.spec"]);
     assert!(session.apply(&changes).is_some());
     assert!(session.stale().is_empty());
     let keys: Vec<&str> = session.project().source_keys().into_iter().collect();
@@ -79,7 +77,7 @@ fn a_directory_moved_in_from_outside_adds_its_sources() {
     fs::rename(outside.path().join("pkg"), root.join("pkg")).unwrap();
 
     let changes = session.changes([root.join("pkg").as_path()]);
-    assert_eq!(changes.sources, vec!["pkg/g.spec"]);
+    assert_eq!(changes.sources(), vec!["pkg/g.spec"]);
 }
 
 #[specforge_test(
@@ -93,7 +91,7 @@ fn a_directory_moved_out_removes_its_sources() {
     fs::rename(root.join("d"), outside.path().join("d")).unwrap();
 
     let changes = session.changes([root.join("d").as_path()]);
-    assert_eq!(changes.sources, vec!["d/e/x.spec"]);
+    assert_eq!(changes.sources(), vec!["d/e/x.spec"]);
 }
 
 #[specforge_test(
@@ -109,7 +107,7 @@ fn a_directory_reported_alone_brings_the_sources_written_in_it() {
     // inotify can report the new directory alone: the files written in it
     // before its watch was added are never reported.
     let changes = session.changes([root.join("n").as_path()]);
-    assert_eq!(changes.sources, vec!["n/m/a.spec", "n/m/b.spec"]);
+    assert_eq!(changes.sources(), vec!["n/m/a.spec", "n/m/b.spec"]);
 }
 
 #[cfg(unix)]
@@ -129,7 +127,7 @@ fn a_symlink_inside_the_spec_root_is_keyed_by_its_own_name() {
     std::os::unix::fs::symlink("shared/r.spec", root.join("alias.spec")).unwrap();
 
     let changes = session.changes([root.join("alias.spec").as_path()]);
-    assert_eq!(changes.sources, vec!["alias.spec"]);
+    assert_eq!(changes.sources(), vec!["alias.spec"]);
     assert!(session.apply(&changes).is_some());
     assert_matches_a_fresh_compile(&session, &root);
 }
@@ -148,7 +146,7 @@ fn an_edit_to_a_symlinked_sources_target_changes_that_source() {
     .unwrap();
 
     let changes = session.changes([outside.join("real.spec").as_path()]);
-    assert_eq!(changes.sources, vec!["link.spec"]);
+    assert_eq!(changes.sources(), vec!["link.spec"]);
 }
 
 /// A project whose `link.spec` is a symlink to `real.spec` in a directory
@@ -247,7 +245,7 @@ fn a_held_file_under_a_moved_directory_is_left_out() {
 
     let changes = session.changes([root.join("new").as_path(), root.join("old").as_path()]);
     assert_eq!(
-        changes.sources,
+        changes.sources(),
         vec!["new/a.spec", "new/b.spec", "old/b.spec"]
     );
 }
@@ -278,7 +276,7 @@ fn a_batch_of_many_file_events_is_one_update() {
         batch.push(root.join(path));
     }
     let changes = session.changes(batch.iter().map(PathBuf::as_path));
-    assert_eq!(changes.sources.len(), 80, "{changes:?}");
+    assert_eq!(changes.sources().len(), 80, "{changes:?}");
     let update = session.apply(&changes).expect("one update");
     assert_eq!(update.rebuilt_files.len(), 80);
     assert_matches_a_fresh_compile(&session, &root);
@@ -297,7 +295,7 @@ fn stale_sees_an_edit_to_a_symlinked_sources_target() {
     )
     .unwrap();
 
-    assert_eq!(session.stale().sources, vec!["link.spec"]);
+    assert_eq!(session.stale().sources(), vec!["link.spec"]);
 }
 
 #[specforge_test(
@@ -327,7 +325,7 @@ fn a_discovered_spec_file_is_a_source_keyed_from_the_spec_root() {
     assert_eq!(
         session
             .changes([root.join("spec/gone.spec").as_path()])
-            .sources,
+            .sources(),
         vec!["gone.spec"]
     );
     assert_eq!(
@@ -354,8 +352,8 @@ fn a_discovered_spec_file_is_a_source_keyed_from_the_spec_root() {
         root.join("notes.txt"),
     ];
     let changes = session.changes(paths.iter().map(|p| p.as_path()));
-    assert_eq!(changes.sources, vec!["a.spec", "sub/b.spec"]);
-    assert!(changes.environment.is_empty() && changes.check_inputs.is_empty());
+    assert_eq!(changes.sources(), vec!["a.spec", "sub/b.spec"]);
+    assert!(changes.environment().is_empty() && changes.check_inputs().is_empty());
 }
 
 #[specforge_test(
@@ -408,8 +406,8 @@ fn the_build_cache_reruns_the_checks_only() {
     // An invalid cache: the check passes report W144 when they read it.
     write_cache(&dir, "{ not json");
     let changes = session.changes([cache.as_path()]);
-    assert_eq!(changes.check_inputs, vec![cache.clone()]);
-    assert!(changes.environment.is_empty() && changes.sources.is_empty());
+    assert_eq!(changes.check_inputs(), vec![cache.clone()]);
+    assert!(changes.environment().is_empty() && changes.sources().is_empty());
 
     let update = session.apply(&changes).expect("a check input changed");
     assert_eq!(update.kind, UpdateKind::Checks);
@@ -480,6 +478,7 @@ fn an_update_that_names_a_new_file_changes_the_inputs() {
     let before = session.inputs().clone();
 
     // An edit that names a file: the inputs gain it.
+    write(root, "new.md", "# New\n");
     let named = "gadget doc \"Doc\" {\n  docs [\"new.md\"]\n}\n";
     write(root, "a.spec", named);
     let keys = ["a.spec".to_string()];
@@ -493,14 +492,12 @@ fn an_update_that_names_a_new_file_changes_the_inputs() {
             .contains(&Watched::File(root.join("new.md")))
     );
 
-    // The same update again, and a re-check of nothing renamed: no change.
+    // The same update again, and a re-check after the named file is rewritten: no change.
     assert!(disk_changed(&mut session, &keys).is_none());
-    let recheck = session
-        .apply(&Changes {
-            check_inputs: vec![root.join("new.md")],
-            ..Changes::default()
-        })
-        .unwrap();
+    write(root, "new.md", "# New, longer\n");
+    let rewritten = session.changes([root.join("new.md").as_path()]);
+    let recheck = session.apply(&rewritten).expect("a check input changed");
+    assert_eq!(recheck.kind, UpdateKind::Checks);
     assert!(!recheck.inputs_changed);
 
     // A reload with the same config reads the same files: same inputs.
@@ -637,11 +634,14 @@ fn a_detached_session_has_no_inputs() {
 
     assert!(session.inputs().watch_roots().is_empty());
     assert!(session.stale().is_empty());
-    let environment = Changes {
-        environment: vec![PathBuf::from("/x/specforge.json")],
-        ..Default::default()
-    };
-    assert!(session.apply(&environment).is_none());
+    let dir = TempDir::new().unwrap();
+    write(dir.path(), "specforge.json", "{}");
+    assert!(
+        session
+            .changes([dir.path().join("specforge.json").as_path()])
+            .is_empty()
+    );
+    assert!(session.ensure_fresh().is_none());
 
     let update = session.reload_environment();
     assert_eq!(update.kind, UpdateKind::Environment);
@@ -742,7 +742,7 @@ fn every_input_lies_under_a_watch_root() {
     assert_eq!(
         session
             .changes([elsewhere.join("far").as_path()])
-            .check_inputs,
+            .check_inputs(),
         vec![elsewhere.join("far")]
     );
 
@@ -836,13 +836,13 @@ fn a_nested_projects_marker_changes_the_sources_under_it() {
     write(&root, "sub/specforge.json", "{}");
     let marker = root.join("sub/specforge.json");
     let changes = session.changes([marker.as_path()]);
-    assert_eq!(changes.sources, vec!["sub/c.spec"]);
+    assert_eq!(changes.sources(), vec!["sub/c.spec"]);
     assert!(session.apply(&changes).is_some());
     assert!(session.project().graph().node("sub_only").is_none());
 
     fs::remove_file(&marker).unwrap();
     let changes = session.changes([marker.as_path()]);
-    assert_eq!(changes.sources, vec!["sub/c.spec"]);
+    assert_eq!(changes.sources(), vec!["sub/c.spec"]);
     assert!(session.apply(&changes).is_some());
     assert!(session.project().graph().node("sub_only").is_some());
 
@@ -850,6 +850,6 @@ fn a_nested_projects_marker_changes_the_sources_under_it() {
     write(&root, "specforge.json", r#"{"name":"c","version":"0.2.0"}"#);
     let own = root.join("specforge.json");
     let changes = session.changes([own.as_path()]);
-    assert!(changes.sources.is_empty(), "{changes:?}");
-    assert_eq!(changes.environment, vec![own]);
+    assert!(changes.sources().is_empty(), "{changes:?}");
+    assert_eq!(changes.environment(), vec![own]);
 }

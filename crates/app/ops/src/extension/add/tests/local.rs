@@ -370,3 +370,36 @@ fn a_missing_config_is_config_not_found_with_the_hint_to_init() {
     assert!(error.error.suggestion.unwrap().contains("specforge init"));
     assert!(!dir.path().join("specforge.json").exists());
 }
+
+#[cfg(unix)]
+#[test]
+fn an_add_writes_nothing_outside_its_project_whatever_bound_its_caller_lends() {
+    use crate::config::testing::files_under;
+    let dir = project_with(EMPTY_PROJECT);
+    let (_files, wasm) = greet_file();
+    // The lock lives in a sibling directory the project links to.
+    let sibling = tempfile::tempdir().unwrap();
+    let target = sibling.path().join("specforge.lock");
+    std::fs::write(&target, r#"{"lockfile_version": 1, "entries": []}"#).unwrap();
+    std::os::unix::fs::symlink(&target, dir.path().join("specforge.lock")).unwrap();
+    let (lock_before, files_before) = (std::fs::read(&target).unwrap(), files_under(dir.path()));
+    // A bound wider than the project, holding the sibling too.
+    let wide = crate::Containment::within(&std::env::temp_dir());
+
+    let error = add(
+        &AddRequest {
+            caller: crate::testing::bounded(&wide),
+            ..local_request(
+                &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+                &wasm,
+            )
+        },
+        &crate::registry::Unconfigured("add"),
+        &runtime(),
+    )
+    .unwrap_err();
+
+    assert_eq!(error.error.code, crate::OUTSIDE_ROOT, "{error:?}");
+    assert_eq!(std::fs::read(&target).unwrap(), lock_before);
+    assert_eq!(files_under(dir.path()), files_before);
+}

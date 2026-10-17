@@ -40,8 +40,8 @@ pub use update::{
 };
 
 pub(crate) use claims::{Claimed, Claims};
-pub(crate) use lock_plan::{Also, Ask, Install, LockPlan};
-pub(crate) use names::{Named, Names, Place};
+pub(crate) use lock_plan::{Also, Install, LockPlan};
+pub(crate) use names::{Answer, Names, Place};
 
 use specforge_installed::LockSource;
 
@@ -115,15 +115,6 @@ pub fn builtin_name(specifier: &str) -> Option<&'static str> {
     specforge_project::builtins()
         .names()
         .find(|builtin| *builtin == name)
-}
-
-/// Builtins `config` enables, in declaration order.
-pub fn enabled_builtins(config: &specforge_common::ProjectConfig) -> Vec<&'static str> {
-    config
-        .extensions
-        .iter()
-        .filter_map(|entry| builtin_name(entry))
-        .collect()
 }
 
 #[cfg(test)]

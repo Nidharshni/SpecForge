@@ -15,12 +15,12 @@
 //! compile of the sub-path has an entity.
 
 use serde_json::{Value, json};
-use specforge_mcp::testing::Served;
+use specforge_mcp::testing::{Served, rpc};
 use std::path::{Path, PathBuf};
 
 use crate::coverage_corpus::project;
 use crate::support::pairing::{
-    mcp_calls, mcp_responses, normalized, normalized_text, served, without_hashes,
+    mcp_calls, mcp_on, mcp_responses, normalized, normalized_text, served, without_hashes,
 };
 use crate::support::{Cli, TestProject};
 
@@ -759,17 +759,13 @@ fn contract_read_views() {
 
     // one_coverage_per_state: within one MCP session the coverage follows
     // the report's content, read again as soon as it changes.
-    let mut server = specforge_mcp::McpServer::with_project_root(root.to_path_buf());
-    server.handle_message(
-        &json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}).to_string(),
-    );
+    let mut server = mcp_on(root);
     let mut alpha_status = || {
-        let request = json!({"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {
-            "name": "specforge.coverage", "arguments": {"entity_id": "alpha"}}});
-        let response: Value =
-            serde_json::from_str(&server.handle_message(&request.to_string()).unwrap()).unwrap();
-        let text = response["result"]["content"][0]["text"].as_str().unwrap();
-        let rows: Value = serde_json::from_str(text).unwrap();
+        let rows = rpc::tool(
+            &mut server,
+            "specforge.coverage",
+            json!({"entity_id": "alpha"}),
+        );
         rows["entities"][0]["status"].as_str().unwrap().to_string()
     };
     assert_eq!(alpha_status(), "uncovered");

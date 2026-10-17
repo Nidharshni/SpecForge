@@ -6,8 +6,9 @@ use std::path::{Path, PathBuf};
 
 use specforge_common::PROJECT_FILE;
 
-use super::inputs::{Kind, SessionInputs};
+use super::inputs::SessionInputs;
 use super::key::{canonical, relative_canonical};
+use super::recorded::Class;
 
 /// What a batch of changed paths reaches of what a session read
 /// ([`SessionInputs::reach`]).
@@ -18,12 +19,10 @@ pub(crate) struct Reach {
     pub(crate) regions: Vec<String>,
     /// Each batch path that reached a recorded input, with the inputs it
     /// reached, as recorded.
-    pub(crate) inputs: Vec<(PathBuf, Vec<(Kind, PathBuf)>)>,
+    pub(crate) inputs: Vec<(PathBuf, Vec<(Class, PathBuf)>)>,
     /// Each batch path that is a directory created on the way to a missing
     /// input's directory.
-    pub(crate) pending: Vec<(PathBuf, Kind)>,
-    /// Symlinked sources a path reached through one of their hops, by key.
-    pub(crate) linked: std::collections::BTreeSet<String>,
+    pub(crate) pending: Vec<(PathBuf, Class)>,
 }
 
 impl SessionInputs {
@@ -35,7 +34,6 @@ impl SessionInputs {
         let Some(disk) = self.disk() else {
             return Reach::default();
         };
-        let known = &disk.canonical;
         let mut parents: BTreeMap<PathBuf, PathBuf> = BTreeMap::new();
         let mut regions: Vec<String> = Vec::new();
         let mut reach = Reach::default();
@@ -48,15 +46,18 @@ impl SessionInputs {
                     .join(name),
                 _ => path.to_path_buf(),
             };
-            if known.spec_root.starts_with(&canonical_path) {
+            if disk.canonical_spec_root.starts_with(&canonical_path) {
                 regions.push(String::new());
-            } else if let Some(relative) = relative_canonical(&known.spec_root, &in_dir) {
+            } else if let Some(relative) = relative_canonical(&disk.canonical_spec_root, &in_dir) {
                 let relative = Path::new(&relative);
                 // A nested project's `specforge.json` (below the spec root,
                 // not an input of this project) is every source under its
                 // directory.
                 let marker = path.file_name() == Some(std::ffi::OsStr::new(PROJECT_FILE))
-                    && !known.environment.contains_key(&in_dir);
+                    && !disk
+                        .rows
+                        .iter()
+                        .any(|row| row.class == Class::Environment && row.key == in_dir);
                 match relative.parent() {
                     Some(directory) if marker && !directory.as_os_str().is_empty() => {
                         regions.push(directory.to_string_lossy().into_owned());
@@ -64,45 +65,29 @@ impl SessionInputs {
                     _ => regions.push(relative.to_string_lossy().into_owned()),
                 }
             }
-            let mut reached: Vec<(Kind, PathBuf)> = Vec::new();
-            // An input that is a symlink is keyed by its own name: pointing it
-            // elsewhere is the change of the name, not of its old target.
-            let reaches =
-                |known: &Path| known.starts_with(&canonical_path) || known.starts_with(&in_dir);
-            for (known, recorded) in &known.environment {
-                if reaches(known) {
-                    reached.push((Kind::Environment, recorded.clone()));
+            let mut reached: Vec<(Class, PathBuf)> = Vec::new();
+            for row in &disk.rows {
+                if row.class.reached_by(&row.key, &canonical_path, &in_dir) {
+                    reached.push((row.class.clone(), row.path.clone()));
                 }
-            }
-            for (known, recorded) in &known.checks {
-                if reaches(known) {
-                    reached.push((Kind::Check, recorded.clone()));
-                }
-            }
-            for (known, recorded) in &known.listings {
-                if known.starts_with(&canonical_path)
-                    || canonical_path.parent() == Some(known.as_path())
+                // A directory created on the way to an input's missing directory.
+                if row
+                    .pending
+                    .as_ref()
+                    .is_some_and(|pending| pending.reached_by(&canonical_path))
                 {
-                    reached.push((Kind::Check, recorded.clone()));
+                    reach.pending.push((path.to_path_buf(), row.class.clone()));
                 }
+            }
+            if disk
+                .spec_root_pending
+                .as_ref()
+                .is_some_and(|pending| pending.reached_by(&canonical_path))
+            {
+                reach.pending.push((path.to_path_buf(), Class::Environment));
             }
             if !reached.is_empty() {
                 reach.inputs.push((path.to_path_buf(), reached));
-            }
-            // A symlinked source one of whose hops is this path, or under it:
-            // its own name or where it points (ADR 0129).
-            for (known, keys) in &known.hops {
-                if reaches(known) {
-                    reach.linked.extend(keys.iter().cloned());
-                }
-            }
-            // A directory created on the way to an input's missing directory.
-            for pending in &disk.pending {
-                if canonical_path.parent() == Some(pending.ancestor.as_path())
-                    && pending.toward.starts_with(&canonical_path)
-                {
-                    reach.pending.push((path.to_path_buf(), pending.kind));
-                }
             }
         }
         regions.sort();

@@ -29,12 +29,10 @@ use crate::OpError;
 use crate::view::{ProjectView, not_found};
 
 pub use anchors::{
-    ANCHORS_FILENAME, AnchorManifest, SourceAnchor, anchors_of_entity, source_anchors,
+    AnchoredEntity, EntityAnchors, FileAnchors, Implementation, anchors_of_entity, anchors_of_file,
 };
 pub use attribution::{is_about, subjects};
-pub use files::{
-    FileAnchors, FileMatch, OutlineEntry, OutlineMethod, anchors_of_file, match_file, outline,
-};
+pub use files::{FileMatch, OutlineEntry, OutlineMethod, match_file, outline};
 pub use find::{
     EntityMatch, EntityQuery, FUZZY_THRESHOLD, MatchScope, MatchedOn, Tier, find_entities, snippet,
     within_fuzzy_threshold,

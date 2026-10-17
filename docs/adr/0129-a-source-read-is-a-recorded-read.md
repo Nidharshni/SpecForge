@@ -4,7 +4,7 @@
 [ADR 0114](0114-environment-inputs-are-recorded-as-read.md) D3 for sources. Amends
 [ADR 0073](0073-a-batch-of-paths-narrows-the-stale-comparison.md) D2 (fourth bullet) and D5 (third bullet), and
 [ADR 0106](0106-a-project-session-reads-the-disk-through-one-ledger.md) D5 ("the renewals of the links happen in
-place"). Keeps ADR 0106 D2 and its rejected "stamping every discovered source at discovery".
+place"). Keeps ADR 0106 D2 and its rejected "stamping every discovered source at discovery". D3 is completed by [ADR 0133](0133-recorded-inputs-are-one-table.md): a hop's missing directory outside the root is watched from its nearest existing ancestor, like any input's.
 
 ## Context
 

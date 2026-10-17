@@ -281,3 +281,33 @@ fn declared_takes_a_relative_name_without_parent_steps() {
     assert!(declared(Path::new("/etc/r.json")).is_none());
     assert!(declared(Path::new("a/../b")).is_none());
 }
+
+#[cfg(unix)]
+#[test]
+fn a_contained_disk_reads_nothing_outside_its_root() {
+    use specforge_registry::Disk;
+
+    let (_dir, base) = scene();
+    let root = base.join("proj");
+    let outside = base.join("outside");
+    std::fs::write(root.join("in.json"), "in").unwrap();
+    std::fs::write(outside.join("out.json"), "out").unwrap();
+    std::os::unix::fs::symlink(outside.join("out.json"), root.join("link.json")).unwrap();
+    std::os::unix::fs::symlink(&outside, root.join("linkdir")).unwrap();
+    let disk = ContainedDisk(Containment::within(&root));
+
+    assert_eq!(disk.read(&root.join("in.json")).unwrap(), b"in".to_vec());
+    let error = disk.read(&root.join("link.json")).unwrap_err();
+    assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+    assert!(error.to_string().contains("out.json"), "{error}");
+    assert_eq!(
+        disk.read(&root.join("missing.json")).unwrap_err().kind(),
+        std::io::ErrorKind::NotFound
+    );
+    assert!(!disk.exists(&root.join("link.json")));
+    assert!(disk.exists(&root.join("in.json")));
+    // A link's name is inside the root; where a directory link leads is not.
+    let names = disk.list(&root).unwrap();
+    assert!(names.contains(&"link.json".to_string()), "{names:?}");
+    assert_eq!(disk.list(&root.join("linkdir")), None);
+}

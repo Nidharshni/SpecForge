@@ -11,7 +11,7 @@ use crate::read::navigate::{Direction, Navigator, Precision, ReferenceQuery};
 use crate::view::EntityField;
 use crate::{Caller, OpError, OpErrorKind, Refusal};
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// The field of a rename's request a refusal can be about (ADR 0072).
@@ -101,6 +101,8 @@ pub struct RenamePlan {
     pub edits: Vec<RenameEdit>,
     /// Each affected file's text, as the plan read it: the text the edits are positions in.
     planned: BTreeMap<String, Arc<str>>,
+    /// Where the edits' files are keyed from: the spec root of the view the plan read.
+    spec_root: PathBuf,
 }
 
 impl RenamePlan {
@@ -197,21 +199,19 @@ pub fn plan(
         new_id: new_id.to_string(),
         edits,
         planned,
+        spec_root: nav.view().env().spec_root().to_path_buf(),
     })
 }
 
-/// Write `plan`'s edits to the files under `spec_root` as one project change (ADR 0128): every file is checked
+/// Write `plan`'s edits to the files under the spec root it was planned from as one project change (ADR 0128): every file is checked
 /// against the text the plan was made on, then replaced; if a write fails, every file already written is put back,
 /// and one that cannot be is the error's writes. Returns the files it wrote.
 ///
 /// Every file is resolved through the caller's containment first (ADR 0104), and read and written where it
 /// landed: one that leaves it, by a symlink, refuses the rename (`outside_root`) before any file is
 /// written.
-pub fn apply(
-    plan: &RenamePlan,
-    spec_root: &Path,
-    caller: Caller<'_>,
-) -> Result<crate::Writes, OpError> {
+pub fn apply(plan: &RenamePlan, caller: Caller<'_>) -> Result<crate::Writes, OpError> {
+    let spec_root = plan.spec_root.as_path();
     let mut change = ProjectChange::new();
     for file in plan.affected_files() {
         let held = caller.containment().resolve(&spec_root.join(file))?;
@@ -396,7 +396,7 @@ mod tests {
             plan.affected_files().into_iter().collect::<Vec<_>>(),
             ["limit.spec", "login.spec"]
         );
-        apply(&plan, dir.path(), crate::testing::caller()).unwrap();
+        apply(&plan, crate::testing::caller()).unwrap();
         let login = std::fs::read_to_string(dir.path().join("login.spec")).unwrap();
         assert!(login.contains("invariants [session_cap]"), "{login}");
         let limit = std::fs::read_to_string(dir.path().join("limit.spec")).unwrap();
@@ -415,7 +415,7 @@ mod tests {
         let plan = plan(&nav(&project), "session_limit", "session_cap").unwrap();
         let at: Vec<(usize, usize)> = plan.edits.iter().map(|e| (e.line, e.start_col)).collect();
         assert_eq!(at, [(1, 10), (5, 14)], "the declaration and the reference");
-        apply(&plan, dir.path(), crate::testing::caller()).unwrap();
+        apply(&plan, crate::testing::caller()).unwrap();
         assert_eq!(
             std::fs::read_to_string(dir.path().join("a.spec")).unwrap(),
             text.replace("invariant session_limit", "invariant session_cap")
@@ -436,7 +436,7 @@ mod tests {
             return; // permissions don't bind this user (root)
         }
 
-        let error = apply(&plan, dir.path(), crate::testing::caller()).unwrap_err();
+        let error = apply(&plan, crate::testing::caller()).unwrap_err();
 
         assert_eq!(error.code, UNREADABLE);
         assert_eq!(
@@ -459,7 +459,7 @@ mod tests {
         std::os::unix::fs::symlink(&elsewhere, dir.path().join("login.spec")).unwrap();
 
         let held = crate::Containment::within(dir.path());
-        let error = apply(&plan, dir.path(), crate::testing::bounded(&held)).unwrap_err();
+        let error = apply(&plan, crate::testing::bounded(&held)).unwrap_err();
 
         assert_eq!(error.code, crate::OUTSIDE_ROOT, "{error:?}");
         assert_eq!(

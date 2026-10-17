@@ -9,7 +9,7 @@ mod extensions;
 mod find_definition;
 mod find_implementation;
 mod find_references;
-pub(crate) mod find_spec_for_source;
+mod find_spec_for_source;
 mod format;
 mod infer_gaps;
 pub(crate) mod infer_progress;

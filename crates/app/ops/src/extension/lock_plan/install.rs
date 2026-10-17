@@ -58,7 +58,7 @@ impl<'a> Install<'a> {
     pub(crate) fn publisher(&self) -> Option<&Publisher> {
         match &self.from {
             From::Registry { publisher, .. } => Some(publisher),
-            From::File | From::Published { .. } => None,
+            From::File | From::Published { .. } | From::Locked => None,
         }
     }
 }
@@ -69,7 +69,7 @@ impl Staged<'_> {
     pub(super) fn key_pin(&self) -> Option<KeyPin> {
         match &self.from {
             From::Registry { publisher, .. } => publisher.pin(&self.name),
-            From::File | From::Published { .. } => None,
+            From::File | From::Published { .. } | From::Locked => None,
         }
     }
 
@@ -78,7 +78,7 @@ impl Staged<'_> {
     pub(super) fn registry(&self) -> Option<&dyn Registry> {
         match &self.from {
             From::Registry { registry, .. } | From::Published { registry } => Some(*registry),
-            From::File => None,
+            From::File | From::Locked => None,
         }
     }
 
@@ -139,6 +139,23 @@ impl<'a> LockPlan<'a> {
         name: &PackageName,
         version: &Version,
     ) -> Result<Install<'a>, OpError> {
+        // What the project already has is answered before any registry call (ADR 0138).
+        if let Some(entry) = self.unchanged(name, |e| {
+            e.source.is_registry() && e.version == version.to_string()
+        }) {
+            return Ok(Install {
+                module: None,
+                sha256: entry.wasm_hash.clone(),
+                pin: Pin {
+                    name: entry.name.clone(),
+                    version: entry.version.clone(),
+                    source: entry.source.clone(),
+                    key_id: entry.key_id.clone(),
+                    peers: entry.peer_dependencies.clone(),
+                },
+                from: From::Locked,
+            });
+        }
         let Some(fetching) = self.fetching else {
             return Err(crate::registry::no_registry(self.operation));
         };
@@ -160,7 +177,7 @@ impl<'a> LockPlan<'a> {
                 },
             });
         }
-        let policy = TrustPolicy::new(fetching.allow_unsigned, fetching.asking)
+        let policy = TrustPolicy::new(fetching.allow_unsigned, self.caller.asking())
             .locked(self.installed.locked_key(name));
         let mut package = fetching.registry.fetch(name, version, policy)?;
         let module = Module::new(std::mem::take(&mut package.wasm));
