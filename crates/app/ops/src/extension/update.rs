@@ -35,8 +35,8 @@ pub struct UpdateRequest<'a> {
     pub reach: Reach,
     /// Accept a registry package with no publisher signature.
     pub allow_unsigned: bool,
-    /// What the update may write (`caller.containment()`, ADR 0104: a file it would write that
-    /// lands outside, by a symlink in the project, refuses it) and who can be asked about a
+    /// What the update may reach (`caller.containment()`, ADR 0104: a file it would write that
+    /// lands outside its project, by a symlink in it, refuses it, ADR 0137) and who can be asked about a
     /// publisher key change (`caller.asking()`, ADR 0110).
     pub caller: Caller<'a>,
 }
@@ -339,8 +339,8 @@ pub fn update(
         Fetching {
             registry,
             allow_unsigned: req.allow_unsigned,
-            asking: req.caller.asking(),
         },
+        req.caller,
     )?;
     let mut extensions = Vec::new();
     for entry in lock
@@ -392,10 +392,8 @@ pub fn update(
     let outcome = UpdateOutcome { extensions };
     // Apply: one change that places every binary and writes the lock once. A failure puts the
     // previous binaries and lock back.
-    if let Some(checked) =
-        checked.filter(|_| outcome.applied() && outcome.updated().next().is_some())
-    {
-        checked.finish(req.root.dir(), Vec::new(), req.caller.containment())?;
+    if let Some(checked) = checked.filter(|_| outcome.applied()) {
+        checked.finish(Vec::new())?;
     }
     Ok(outcome)
 }

@@ -599,7 +599,6 @@ fn a_removal_over_a_config_deleted_since_the_compile_writes_nothing() {
 
 #[cfg(unix)]
 #[test]
-#[ignore = "flipped by T3"]
 fn a_removal_writes_nothing_outside_its_project_whatever_bound_its_caller_lends() {
     let fixture = installed(Assembled::new().config(&["@acme/x"]), "@acme/x");
     write_config(&fixture, r#"{"extensions": ["@acme/x"]}"#);
@@ -610,7 +609,7 @@ fn a_removal_writes_nothing_outside_its_project_whatever_bound_its_caller_lends(
     std::os::unix::fs::symlink(sibling.path().join("specforge.lock"), &lock).unwrap();
     let before = std::fs::read(sibling.path().join("specforge.lock")).unwrap();
     // A bound wider than the project, holding the sibling too.
-    let wide = Containment::within(&std::env::temp_dir());
+    let wide = crate::Containment::within(&std::env::temp_dir());
 
     let error = remove(
         &fixture.view(),

@@ -177,7 +177,7 @@ impl<'a> LockPlan<'a> {
                 },
             });
         }
-        let policy = TrustPolicy::new(fetching.allow_unsigned, fetching.asking)
+        let policy = TrustPolicy::new(fetching.allow_unsigned, self.caller.asking())
             .locked(self.installed.locked_key(name));
         let mut package = fetching.registry.fetch(name, version, policy)?;
         let module = Module::new(std::mem::take(&mut package.wasm));

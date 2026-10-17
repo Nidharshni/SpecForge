@@ -13,6 +13,7 @@ fn init_plan<'a>(
     LockPlan::initializing(
         installed,
         runtime,
+        crate::testing::caller(),
         names.installs(),
         serde_json::json!({"name": "p"}),
     )
@@ -64,7 +65,7 @@ fn each_specifier_is_asked_under_its_position() {
         ]
     );
     assert_eq!(checked.entries(), ["@specforge/product", "@sdk/greet"]);
-    let done = checked.finish(dir.path(), Vec::new(), &UNBOUNDED).unwrap();
+    let done = checked.finish(Vec::new()).unwrap();
     assert!(matches!(done.asked(Ask(0)), Asked::Changes { .. }));
     assert!(matches!(done.asked(Ask(1)), Asked::Changes { .. }));
     // The duplicate asked nothing, so its ask was never answered.

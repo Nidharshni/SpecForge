@@ -165,8 +165,8 @@ pub fn add(
         Fetching {
             registry,
             allow_unsigned: req.allow_unsigned,
-            asking: req.caller.asking(),
         },
+        req.caller,
         if req.dry_run {
             Purpose::Preview
         } else {
@@ -182,11 +182,7 @@ pub fn add(
             &mut Wanted::of,
         )
         .map_err(|e| e.about(AddField::Extensions))?;
-    let done = checked.finish(
-        req.root.dir(),
-        Vec::new(),
-        &req.caller.containment().narrowed(req.root.dir()),
-    )?;
+    let done = checked.finish(Vec::new())?;
     let added = answers
         .into_iter()
         .enumerate()

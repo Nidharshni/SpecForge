@@ -82,6 +82,7 @@ impl<'a> LockPlan<'a> {
             disabled,
             uninstalled,
             operation,
+            caller,
             ..
         } = self;
         for (i, s) in staged.iter().enumerate() {
@@ -114,6 +115,7 @@ impl<'a> LockPlan<'a> {
             config,
             appended,
             asked,
+            lent: caller.containment(),
             changes,
         })
     }

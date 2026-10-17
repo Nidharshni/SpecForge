@@ -10,6 +10,7 @@ fn the_plan_judges_and_answers_one_set_of_entries() {
         opened(&["@acme/foo@1.0.0", " ./a.wasm "]),
         &runtime,
         fetching(no_registry()),
+        crate::testing::caller(),
         Purpose::Commit,
         false,
     )
@@ -63,6 +64,7 @@ fn enabling<'a>(
         opened_at(root),
         runtime,
         fetching(no_registry()),
+        crate::testing::caller(),
         purpose,
         false,
     )
@@ -105,9 +107,7 @@ fn a_commit_writes_the_entries_the_plan_judged_and_keeps_the_rest() {
     );
     let judged = checked.entries();
 
-    let done = checked
-        .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
-        .unwrap();
+    let done = checked.finish(Vec::new()).unwrap();
 
     let text = std::fs::read_to_string(dir.path().join("specforge.json")).unwrap();
     let written: serde_json::Value = serde_json::from_str(&text).unwrap();
@@ -138,7 +138,7 @@ fn an_unchanged_set_of_entries_writes_nothing() {
         Purpose::Commit,
         &["@specforge/software"],
     )
-    .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
+    .finish(Vec::new())
     .unwrap();
 
     assert_eq!(
@@ -166,9 +166,7 @@ fn a_preview_over_a_changed_config_answers_what_was_judged() {
     )
     .unwrap();
 
-    let done = checked
-        .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
-        .unwrap();
+    let done = checked.finish(Vec::new()).unwrap();
 
     assert!(matches!(done.asked(Ask(0)), Answer::Changes { .. }));
     assert!(done.writes.is_empty());
@@ -224,7 +222,7 @@ fn an_entry_whose_name_prefixes_an_enabled_one_is_appended() {
         Purpose::Commit,
         &["@specforge/software"],
     )
-    .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
+    .finish(Vec::new())
     .unwrap();
 
     let written: serde_json::Value =
@@ -287,11 +285,7 @@ fn a_config_write_goes_to_the_file_it_was_handed() {
         Purpose::Commit,
         &["@specforge/software"],
     )
-    .finish(
-        dir.path(),
-        Vec::new(),
-        &crate::Containment::within(dir.path()),
-    )
+    .finish(Vec::new())
     .unwrap();
 
     // The target is rewritten and the link is kept.

@@ -352,7 +352,6 @@ fn an_update_is_judged_against_the_lock_it_leaves_in_any_lock_order() {
 
 #[cfg(unix)]
 #[test]
-#[ignore = "flipped by T3"]
 fn an_update_writes_nothing_outside_its_project_whatever_bound_its_caller_lends() {
     let dir = enabled_project(vec![entry("@sdk/greet", "0.0.9", "registry", &[])]);
     // The lock lives in a sibling directory the project links to.

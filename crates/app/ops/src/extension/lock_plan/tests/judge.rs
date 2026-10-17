@@ -175,6 +175,7 @@ fn a_locked_extension_no_entry_enables_is_not_judged() {
         opened::<&str>(&[]),
         &runtime,
         fetching(no_registry()),
+        crate::testing::caller(),
         Purpose::Commit,
         true,
     )
@@ -327,6 +328,7 @@ fn a_builtin_peer_out_of_range_is_e027_naming_the_embedded_version() {
         opened(&entries),
         &runtime,
         fetching(&registry),
+        crate::testing::caller(),
         Purpose::Commit,
         true,
     )
@@ -402,6 +404,7 @@ fn a_file_entry_is_a_member_both_ways() {
         opened(&entries),
         &runtime,
         fetching(no_registry()),
+        crate::testing::caller(),
         Purpose::Commit,
         true,
     )
@@ -426,6 +429,7 @@ fn a_file_entry_is_a_member_both_ways() {
         opened(&entries),
         &runtime,
         fetching(no_registry()),
+        crate::testing::caller(),
         Purpose::Commit,
         true,
     )

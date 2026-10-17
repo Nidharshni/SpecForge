@@ -8,7 +8,7 @@ use serde_json::Value;
 use super::{Ask, Checked, Opened, Purpose};
 use crate::change::{Cause, ProjectChange};
 use crate::registry::{KeyPin, Registry};
-use crate::{Containment, Held, OpError, OpErrorKind, Writes};
+use crate::{Held, OpError, OpErrorKind, Writes};
 
 /// What stages an [`Also`] file: the file it was resolved to, and the project change to stage it in.
 pub(crate) type StageHeld<'f> =
@@ -91,15 +91,10 @@ impl Checked<'_> {
     /// compared or written (ADR 0138).
     ///
     /// Before anything is written, and for a preview too, every file the change would write is
-    /// resolved through `containment` (ADR 0104): the config, the `also` files, the lock and each
+    /// resolved through the caller's containment narrowed to the project (ADR 0104, ADR 0137): the config, the `also` files, the lock and each
     /// installed or uninstalled module. One that lands outside it, by a symlink in the project,
     /// refuses the change (`outside_root`), nothing written (ADR 0092 D8).
-    pub(crate) fn finish(
-        self,
-        root: &Path,
-        also: Vec<Also<'_>>,
-        containment: &Containment,
-    ) -> Result<Done, OpError> {
+    pub(crate) fn finish(self, also: Vec<Also<'_>>) -> Result<Done, OpError> {
         let items = self.items();
         let final_entries = Opened::entries_of(&items);
         let Checked {
@@ -114,6 +109,7 @@ impl Checked<'_> {
             appended,
             asked,
             changes,
+            lent,
             ..
         } = self;
         if !changes && also.is_empty() {
@@ -123,13 +119,16 @@ impl Checked<'_> {
                 asked,
             });
         }
+        // The project root must lie inside what the caller lent: narrowing never widens (ADR 0137).
+        lent.resolve(installed.root())?;
+        let containment = lent.narrowed(installed.root());
         let document = config.written(&items);
         // Held before anything is written: what is written is what is checked here.
         let also_held = also
             .iter()
             .map(|also| containment.resolve(&also.path))
             .collect::<Result<Vec<Held>, _>>()?;
-        let config_path = root.join(crate::config::CONFIG_FILE);
+        let config_path = installed.root().join(crate::config::CONFIG_FILE);
         let config_held = config
             .holds_a_file()
             .then(|| containment.resolve(&config_path))

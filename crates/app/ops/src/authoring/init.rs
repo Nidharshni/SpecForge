@@ -188,7 +188,8 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
         "version": version,
         "spec_root": SPEC_ROOT,
     });
-    let mut plan = LockPlan::initializing(&installed, runtime, names.installs(), document)?;
+    let mut plan =
+        LockPlan::initializing(&installed, runtime, req.caller, names.installs(), document)?;
     // Test obligations (`verify`) on software kinds come from @specforge/testing (ADR 0002), so
     // enabling software enables it too; the project's test runners get the extensions that
     // collect their results. The plan reads its companions when it is checked.
@@ -261,7 +262,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
             code: INIT_WRITE_FAILED,
         },
     ];
-    let done = checked.finish(dir, files, &req.caller.containment().narrowed(dir))?;
+    let done = checked.finish(files)?;
 
     Ok(Outcome {
         root: dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf()),

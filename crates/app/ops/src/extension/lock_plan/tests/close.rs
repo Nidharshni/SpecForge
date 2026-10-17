@@ -11,6 +11,7 @@ fn a_builtin_that_does_not_load_refuses_the_plan_e028() {
         opened(&entries),
         &runtime,
         fetching(no_registry()),
+        crate::testing::caller(),
         Purpose::Commit,
         true,
     )
@@ -59,6 +60,7 @@ fn close_enables_required_builtins_dependencies_first() {
         opened::<&str>(&[]),
         &runtime,
         fetching(no_registry()),
+        crate::testing::caller(),
         Purpose::Commit,
         true,
     )
@@ -89,6 +91,7 @@ fn close_enables_required_builtins_dependencies_first() {
         opened::<&str>(&[]),
         &runtime,
         fetching(no_registry()),
+        crate::testing::caller(),
         Purpose::Commit,
         false,
     )

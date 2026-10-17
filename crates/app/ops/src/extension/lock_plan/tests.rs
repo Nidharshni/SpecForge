@@ -11,7 +11,6 @@ use specforge_protocol_types::PeerDependency;
 use super::super::candidate::{Installable, LocalFile};
 use super::super::peer_set::{Declarations, ProjectPeers};
 use crate::OpError;
-use crate::asking::Asking;
 use crate::registry::METADATA_MISMATCH;
 use crate::registry::testing::{Asked, MemoryRegistry, Published, declaration};
 use crate::testing::declaring;
@@ -104,7 +103,6 @@ fn fetching(registry: &MemoryRegistry) -> Fetching<'_> {
     Fetching {
         registry,
         allow_unsigned: true,
-        asking: Asking::Nobody,
     }
 }
 
@@ -157,12 +155,17 @@ fn plan_from<'a>(
             opened(&entries),
             runtime,
             fetching(registry),
+            crate::testing::caller(),
             Purpose::Commit,
             true,
         ),
-        Verb::Update => {
-            LockPlan::updating(installed, opened(&entries), runtime, fetching(registry))
-        }
+        Verb::Update => LockPlan::updating(
+            installed,
+            opened(&entries),
+            runtime,
+            fetching(registry),
+            crate::testing::caller(),
+        ),
         Verb::Remove => unreachable!("a removal is planned over a compiled project"),
     }
     .unwrap()
@@ -202,6 +205,7 @@ fn an_enabling_plan_accepts_an_unreadable_lock() {
         opened::<&str>(&[]),
         &runtime,
         fetching(no_registry()),
+        crate::testing::caller(),
         Purpose::Commit,
         false,
     )
@@ -215,6 +219,7 @@ fn an_enabling_plan_accepts_an_unreadable_lock() {
         opened::<&str>(&[]),
         &runtime,
         fetching(no_registry()),
+        crate::testing::caller(),
         Purpose::Commit,
         true,
     )
@@ -227,4 +232,5 @@ mod commit;
 mod config;
 mod diamond;
 mod judge;
+mod reach;
 mod unchanged;

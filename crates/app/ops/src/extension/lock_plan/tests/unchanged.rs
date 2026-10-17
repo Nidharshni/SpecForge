@@ -3,7 +3,6 @@
 
 use super::super::super::fixtures::{enabled_project, entry};
 use super::*;
-use crate::Containment;
 use crate::extension::lock_plan::Asked as Answer;
 use crate::extension::lock_plan::commit::Done;
 
@@ -19,19 +18,15 @@ fn base_plan<'a>(
         opened(enabled),
         runtime,
         fetching(registry),
+        crate::testing::caller(),
         purpose,
         true,
     )
     .unwrap()
 }
 
-fn answer(plan: LockPlan<'_>, root: &Path) -> (Answer, Done) {
-    let done = plan
-        .check()
-        .ok()
-        .unwrap()
-        .finish(root, Vec::new(), &Containment::unbounded())
-        .unwrap();
+fn answer(plan: LockPlan<'_>) -> (Answer, Done) {
+    let done = plan.check().ok().unwrap().finish(Vec::new()).unwrap();
     (done.asked(Ask(0)), done)
 }
 
@@ -53,7 +48,7 @@ fn an_install_the_project_already_has_is_answered_unchanged_and_stages_nothing()
     );
     plan.install(Ask(0), local(&runtime, b"old", "other.wasm"));
     assert!(plan.staged.is_empty());
-    let (asked, done) = answer(plan, dir.path());
+    let (asked, done) = answer(plan);
     assert_eq!(
         asked,
         Answer::Unchanged {
@@ -66,7 +61,7 @@ fn an_install_the_project_already_has_is_answered_unchanged_and_stages_nothing()
     // Control: no entry enables it, so the install changes the project.
     let mut plan = base_plan(&installed, &runtime, &[], Purpose::Preview, no_registry());
     plan.install(Ask(0), local(&runtime, b"old", "other.wasm"));
-    assert!(matches!(answer(plan, dir.path()).0, Answer::Changes { .. }));
+    assert!(matches!(answer(plan).0, Answer::Changes { .. }));
 
     // Control: a module changed after install is reinstalled.
     let path = installed.module_path(&PackageName::parse("@acme/base").unwrap());
@@ -79,7 +74,7 @@ fn an_install_the_project_already_has_is_answered_unchanged_and_stages_nothing()
         no_registry(),
     );
     plan.install(Ask(0), local(&runtime, b"old", "other.wasm"));
-    assert!(matches!(answer(plan, dir.path()).0, Answer::Changes { .. }));
+    assert!(matches!(answer(plan).0, Answer::Changes { .. }));
     assert_eq!(module.unwrap(), b"old");
 }
 
@@ -96,7 +91,7 @@ fn fetching_a_package_the_project_already_has_asks_the_registry_nothing() {
         assert!(registry.asked().is_empty());
         plan.install(Ask(0), install);
         assert!(plan.staged.is_empty());
-        let (asked, _) = answer(plan, dir.path());
+        let (asked, _) = answer(plan);
         assert_eq!(
             asked,
             Answer::Unchanged {
@@ -129,6 +124,7 @@ fn a_plan_whose_asks_change_nothing_is_not_judged() {
             opened(&["@specforge/product"]),
             &runtime,
             fetching(no_registry()),
+            crate::testing::caller(),
             Purpose::Commit,
             false,
         )
@@ -136,7 +132,7 @@ fn a_plan_whose_asks_change_nothing_is_not_judged() {
         plan.enable(Ask(0), name);
         plan
     };
-    let (asked, done) = answer(plan("@specforge/product"), dir.path());
+    let (asked, done) = answer(plan("@specforge/product"));
     assert_eq!(asked, Answer::Unchanged { locked: None });
     assert_eq!(done.enabled, 1);
     assert_eq!(refused(plan("@specforge/formal")).code, "E028");
@@ -157,6 +153,7 @@ fn a_change_that_changes_nothing_resolves_and_compares_nothing() {
         opened_at(dir.path()),
         &runtime,
         fetching(no_registry()),
+        crate::testing::caller(),
         Purpose::Commit,
         false,
     )
@@ -168,8 +165,6 @@ fn a_change_that_changes_nothing_resolves_and_compares_nothing() {
         r#"{"extensions":["@specforge/product","@acme/x"]}"#,
     )
     .unwrap();
-    let done = checked
-        .finish(dir.path(), Vec::new(), &Containment::unbounded())
-        .unwrap();
+    let done = checked.finish(Vec::new()).unwrap();
     assert!(done.writes.is_empty());
 }

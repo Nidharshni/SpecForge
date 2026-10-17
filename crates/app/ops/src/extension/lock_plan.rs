@@ -26,9 +26,8 @@ use specforge_protocol_types::ExtensionDeclaration;
 use specforge_wasm::WasmRuntime;
 
 use super::peer_set::Declarations;
-use crate::asking::Asking;
 use crate::registry::{KeyPin, Publisher, Registry};
-use crate::{OpError, OpErrorKind};
+use crate::{Caller, Containment, OpError, OpErrorKind};
 
 /// What a lock plan is for. It words the refusal of an install that a locked extension does not
 /// accept ("installing '@x/b' 2.0.0 breaks '@x/a': ...", "updating ...").
@@ -98,14 +97,12 @@ impl Disabled {
     }
 }
 
-/// Where a plan's registry installs come from, and how their publishers are accepted: the
-/// registry port and the caller's choices.
+/// Where a plan's registry installs come from, and whether an unsigned one is accepted. Who is asked
+/// about a key change is the plan's caller's (ADR 0110, ADR 0124).
 #[derive(Clone, Copy)]
 pub(crate) struct Fetching<'a> {
     pub(crate) registry: &'a dyn Registry,
     pub(crate) allow_unsigned: bool,
-    /// Who can be asked about a publisher key change (ADR 0110).
-    pub(crate) asking: Asking<'a>,
 }
 
 /// One install a lock plan stages: a module (none for a preview's registry package, which has not
@@ -192,6 +189,9 @@ pub(crate) struct LockPlan<'a> {
     fetching: Option<Fetching<'a>>,
     /// The operation's name, for the refusal of a fetch from no registry.
     operation: &'static str,
+    /// What the operation was lent (ADR 0124): who its fetches ask, and the bound its writes are
+    /// narrowed from (ADR 0137).
+    caller: Caller<'a>,
 }
 
 impl<'a> LockPlan<'a> {
@@ -205,6 +205,7 @@ impl<'a> LockPlan<'a> {
         config: Opened,
         runtime: &'a dyn WasmRuntime,
         fetching: Fetching<'a>,
+        caller: Caller<'a>,
         purpose: Purpose,
         installs: bool,
     ) -> Result<LockPlan<'a>, OpError> {
@@ -217,6 +218,7 @@ impl<'a> LockPlan<'a> {
             Some(fetching),
             "add",
             installs,
+            caller,
         )?;
         plan.purpose = purpose;
         Ok(plan)
@@ -228,6 +230,7 @@ impl<'a> LockPlan<'a> {
         config: Opened,
         runtime: &'a dyn WasmRuntime,
         fetching: Fetching<'a>,
+        caller: Caller<'a>,
     ) -> Result<LockPlan<'a>, OpError> {
         LockPlan::open(
             installed,
@@ -238,6 +241,7 @@ impl<'a> LockPlan<'a> {
             Some(fetching),
             "update",
             true,
+            caller,
         )
     }
 
@@ -247,6 +251,7 @@ impl<'a> LockPlan<'a> {
     pub(crate) fn initializing(
         installed: &'a Installed,
         runtime: &'a dyn WasmRuntime,
+        caller: Caller<'a>,
         installs: bool,
         document: Value,
     ) -> Result<LockPlan<'a>, OpError> {
@@ -259,6 +264,7 @@ impl<'a> LockPlan<'a> {
             None,
             "init",
             installs,
+            caller,
         )
     }
 
@@ -268,6 +274,7 @@ impl<'a> LockPlan<'a> {
     /// unreadable lock is E033). `force`: the peer rule is not applied (`remove --force`).
     pub(crate) fn removing(
         view: &ProjectView<'a>,
+        caller: Caller<'a>,
         purpose: Purpose,
         force: bool,
         uninstalls: bool,
@@ -281,6 +288,7 @@ impl<'a> LockPlan<'a> {
             None,
             "remove",
             uninstalls,
+            caller,
         )?;
         plan.purpose = purpose;
         plan.force = force;
@@ -289,7 +297,7 @@ impl<'a> LockPlan<'a> {
 
     #[expect(
         clippy::too_many_arguments,
-        reason = "the plan's whole input: the installed set, the entries, the runtime, the declarations, the verb, the registry, the operation and whether it installs"
+        reason = "the plan's whole input: the installed set, the entries, the runtime, the declarations, the verb, the registry, the operation, whether it installs and the caller"
     )]
     fn open(
         installed: &'a Installed,
@@ -300,6 +308,7 @@ impl<'a> LockPlan<'a> {
         fetching: Option<Fetching<'a>>,
         operation: &'static str,
         installs: bool,
+        caller: Caller<'a>,
     ) -> Result<LockPlan<'a>, OpError> {
         let lock = if installs {
             Some(
@@ -327,6 +336,7 @@ impl<'a> LockPlan<'a> {
             uninstalled: Vec::new(),
             fetching,
             operation,
+            caller,
         })
     }
 
@@ -587,6 +597,8 @@ pub(crate) struct Checked<'a> {
     config: Opened,
     appended: Vec<Appended>,
     asked: Vec<(Ask, Asked)>,
+    /// The bound the caller lent; the commit narrows it to `installed.root()` (ADR 0137).
+    lent: &'a Containment,
     /// Whether the change writes anything (`LockPlan::changes_nothing` was false); when not, it is
     /// neither judged nor written (ADR 0138).
     changes: bool,
