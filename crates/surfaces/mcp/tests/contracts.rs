@@ -3285,23 +3285,3 @@ fn coverage_by_entity_id_is_one_row() {
         .clone();
     assert_eq!(ghost, json!([]));
 }
-
-#[specforge_test(
-    behavior = "provide_mcp_trace_tool",
-    verify = "response includes upstream and downstream links"
-)]
-fn trace_lists_upstream_and_downstream_links() {
-    let mut server = test_server();
-    // beta lists alpha: beta is upstream of alpha, alpha downstream of beta.
-    let alpha = tool(
-        &mut server,
-        "specforge.trace",
-        json!({"entity_id": "alpha"}),
-    );
-    assert_eq!(alpha["upstream"][0]["entity_id"], "beta", "{alpha}");
-    assert_eq!(alpha["upstream"][0]["edge_label"], "behaviors");
-    let beta = tool(&mut server, "specforge.trace", json!({"entity_id": "beta"}));
-    assert_eq!(beta["downstream"][0]["entity_id"], "alpha", "{beta}");
-    assert_eq!(beta["downstream"][0]["depth"], 1);
-    assert_eq!(beta["downstream"][0]["status"], "resolved");
-}

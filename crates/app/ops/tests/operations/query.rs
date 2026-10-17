@@ -372,8 +372,8 @@ fn an_unknown_entity_is_refused_before_the_report_is_read() {
 }
 
 #[specforge_test(
-    behavior = "provide_mcp_query_tool",
-    verify = "an unknown format is an invalid-input error naming the expected formats"
+    behavior = "query_graph_multi_resolution",
+    verify = "an unknown format is refused naming the expected formats"
 )]
 fn query_refuses_dot() {
     let error = query(

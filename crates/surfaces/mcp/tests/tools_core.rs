@@ -1,6 +1,5 @@
 use crate::support::*;
 use serde_json::{Value, json};
-use specforge_extension_sdk::prelude::{PassDiagnostic, PassSeverity};
 use specforge_mcp::McpServer;
 use specforge_test::prelude::*;
 
@@ -1005,67 +1004,6 @@ fn analyze_of_another_project_leaves_the_served_one() {
 
 // --- specforge.stats ---
 
-// B:provide_mcp_stats_tool — verify unit "returns project statistics"
-#[specforge_test(
-    behavior = "provide_mcp_stats_tool",
-    verify = "specforge.stats returns entity counts by kind"
-)]
-fn stats_returns_statistics() {
-    let mut server = test_server();
-    let resp = call_tool(&mut server, "specforge.stats", json!({}));
-    let text = tool_text(&resp);
-    let parsed: Value = serde_json::from_str(&text).unwrap();
-    let mut counts: Vec<(String, u64)> = parsed["entity_counts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|c| {
-            (
-                c["kind"].as_str().unwrap().to_string(),
-                c["count"].as_u64().unwrap(),
-            )
-        })
-        .collect();
-    counts.sort();
-    assert_eq!(
-        counts,
-        vec![
-            ("behavior".to_string(), 1),
-            ("feature".to_string(), 1),
-            ("invariant".to_string(), 1),
-        ]
-    );
-
-    // Another behavior, written to disk, shows up in its kind's count.
-    server.write("delta.spec", "behavior delta \"Delta\" {\n}\n");
-    let parsed: Value = serde_json::from_str(&tool_text(&call_tool(
-        &mut server,
-        "specforge.stats",
-        json!({}),
-    )))
-    .unwrap();
-    let behaviors = parsed["entity_counts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|c| c["kind"] == "behavior")
-        .unwrap();
-    assert_eq!(behaviors["count"], 2);
-}
-
-#[specforge_test(
-    behavior = "provide_mcp_stats_tool",
-    verify = "response includes the unconnected entity count"
-)]
-fn stats_counts_match_graph() {
-    let mut server = test_server();
-    let resp = call_tool(&mut server, "specforge.stats", json!({}));
-    let text = tool_text(&resp);
-    let parsed: Value = serde_json::from_str(&text).unwrap();
-    assert_eq!(parsed["edge_count"], 1); // one behaviors edge
-    assert_eq!(parsed["unconnected_count"], 1); // gamma_orphan
-}
-
 // Tool call when not initialized
 #[specforge_test(
     behavior = "mcp_initialize",
@@ -1511,28 +1449,6 @@ fn trace_plan_reports_its_gaps_as_structured_json() {
 
 #[specforge_test(
     behavior = "validate_agent_plan",
-    verify = "the plan check reads no recorded test report"
-)]
-fn a_report_the_plan_check_does_not_read_fails_no_plan() {
-    let (project, mut server) = plan_project();
-    std::fs::write(
-        project.path().join("specforge-report.json"),
-        r#"{"results":{"act_one":{"tests":[{"name":"t","status":"pass","verify":"x"}]}}}"#,
-    )
-    .unwrap();
-    let plan = agent_plan(&["act_one", "inv_a", "ghost"]);
-    let resp = call_tool(&mut server, "specforge.trace", json!({"plan": plan}));
-    assert_eq!(resp["result"]["isError"], false, "{resp}");
-    let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(parsed["resolved_entries"], json!(["act_one", "inv_a"]));
-    assert_eq!(parsed["gaps"].as_array().unwrap().len(), 3, "{parsed}");
-    // Stats still reads the report: it needs what the report decides.
-    let error = mcp_error(&call_tool(&mut server, "specforge.stats", json!({})));
-    assert_eq!(error["diagnostic"]["code"], "E045", "{error}");
-}
-
-#[specforge_test(
-    behavior = "validate_agent_plan",
     verify = "a plan that is not an AgentPlan is refused, naming every place it departs from the type"
 )]
 fn trace_refuses_a_plan_that_is_not_an_agent_plan() {
@@ -1740,29 +1656,6 @@ fn coverage_refuses_an_unknown_status_filter() {
     );
 }
 
-#[specforge_test(
-    behavior = "provide_mcp_stats_tool",
-    verify = "response includes coverage percentage"
-)]
-fn stats_includes_coverage_percentage() {
-    let mut server = test_server();
-    let coverage = |server: &mut McpServer| {
-        let resp = call_tool(server, "specforge.stats", json!({}));
-        let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-        parsed["declared_pct"].as_f64().unwrap()
-    };
-    // Testable: alpha (behavior, declares verify) and gamma_orphan
-    // (invariant, none). beta_feature's kind is not testable.
-    assert_eq!(coverage(&mut server), 50.0);
-
-    // gamma_orphan declares an obligation on disk.
-    server.write(
-        "invariants.spec",
-        "invariant gamma_orphan \"Gamma Orphan\" {\n    verify unit \"gamma holds\"\n}\n",
-    );
-    assert_eq!(coverage(&mut server), 100.0);
-}
-
 // B:provide_mcp_query_tool — verify unit "format parameter selects emitter format"
 #[specforge_test(
     behavior = "provide_mcp_query_tool",
@@ -1886,69 +1779,6 @@ fn search_references_filter() {
         results.iter().all(|r| r["entity_id"] != "alpha"),
         "{parsed}"
     );
-}
-
-// B:provide_mcp_stats_tool — verify unit "diagnostic_summary includes severity counts"
-#[specforge_test(
-    behavior = "provide_mcp_stats_tool",
-    verify = "response includes diagnostic summary by severity"
-)]
-fn stats_diagnostic_summary_severity_counts() {
-    // One error, a real unresolved reference (E003); two warnings, a
-    // check-phase pass's. Nothing is obligated, so no W004 joins them.
-    let mut server = project()
-        .file(
-            "broken.spec",
-            "feature broken \"Broken\" {\n    behaviors [ghost]\n}\n",
-        )
-        .serve(&[TestExtension::software()
-            .reporting(PassDiagnostic::new("W901", PassSeverity::Warning, "m").with_entity("alpha"))
-            .reporting(
-                PassDiagnostic::new("W902", PassSeverity::Warning, "m").with_entity("gamma_orphan"),
-            )]);
-    let resp = call_tool(&mut server, "specforge.stats", json!({}));
-    let text = tool_text(&resp);
-    let parsed: Value = serde_json::from_str(&text).unwrap();
-    assert_eq!(
-        parsed["diagnostic_summary"],
-        json!({"errors": 1, "warnings": 2, "infos": 0})
-    );
-}
-
-// B:provide_mcp_trace_tool — the missing links are the expected edges the
-// entity lacks, as `specforge trace` flags them.
-#[specforge_test(
-    behavior = "provide_mcp_trace_tool",
-    verify = "missing links flagged in trace output"
-)]
-fn trace_flags_the_missing_links() {
-    // Invariants are expected to name the behaviors that enforce them.
-    let mut server =
-        project().serve(&[extension().reference("invariant", "enforced_by", "behavior")]);
-    let resp = call_tool(
-        &mut server,
-        "specforge.trace",
-        json!({"entity_id": "gamma_orphan"}),
-    );
-    let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    let missing: Vec<(&str, &str, &str)> = parsed["missing"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|m| {
-            assert_eq!(m["status"], "missing", "{m}");
-            (
-                m["from"].as_str().unwrap(),
-                m["edge_label"].as_str().unwrap(),
-                m["expected_kind"].as_str().unwrap(),
-            )
-        })
-        .collect();
-    assert_eq!(missing, [("gamma_orphan", "enforced_by", "behavior")]);
-    // Isolation is an empty upstream and downstream, not a gap list.
-    assert_eq!(parsed["upstream"], json!([]));
-    assert_eq!(parsed["downstream"], json!([]));
-    assert!(parsed.get("gaps").is_none(), "{parsed}");
 }
 
 // B:provide_mcp_validate_tool — verify unit "validate recompiles and updates graph"

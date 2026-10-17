@@ -1234,6 +1234,7 @@ behavior query_graph_multi_resolution "Query Graph at Multiple Resolutions" {
   verify unit "output includes schema_version field"
   verify property "querying same entity at same depth produces identical subgraph"
   verify unit "filter_nodes with field predicate"
+  verify unit "an unknown format is refused naming the expected formats"
   verify contract "Query Graph at Multiple Resolutions: multi-resolution graph query holds — validation_complete_fired, depth_respected, kind_filter_applied, graph_protocol_conformance, graph_queried_emitted"
 }
 
