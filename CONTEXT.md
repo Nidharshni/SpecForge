@@ -283,6 +283,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   kept, and refuses (`file_changed`) when the file no longer holds what the plan opened with (ADR 0126)
   (`specforge_ops::extension::lock_plan::LockPlan`, ADR 0041, ADR 0065). An
   operation names what it asks for, each an **ask**; refusals and outcomes are answered per ask.
+  An ask the project already has (an entry enables it; for an install, the lock pins it as asked with its module on disk
+  the one pinned) is answered **unchanged** and stages nothing, and a plan whose asks change nothing is neither judged
+  nor written (ADR 0138).
   `add` and `init` first enable the builtins what they add requires, dependencies first;
   `update` enables nothing. The peer rule then judges the **project peer set** as the change leaves it,
   once: every declared peer whose dependent or peer the change touches. A required peer no member
