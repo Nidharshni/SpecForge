@@ -37,6 +37,14 @@ pub(crate) fn read(disk: &dyn Disk, spec_root: &Path, relative: &str) -> Read {
             Err(_) => unreadable(relative, "stream did not contain valid UTF-8"),
         },
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Read::Gone,
+        // The one kind a disk that bounds the session refuses a name with (ADR 0145): the message
+        // says where the name landed.
+        Err(e) if e.kind() == std::io::ErrorKind::InvalidInput => Read::Unreadable(
+            Diagnostic::new(codes::E025, format!("cannot read {relative}: {e}")).with_suggestion(
+                "keep the file, and the link or `spec_root` that reaches it, inside the served \
+                 project, or read this project with the CLI",
+            ),
+        ),
         Err(e) => unreadable(relative, e),
     }
 }
