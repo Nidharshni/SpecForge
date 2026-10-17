@@ -84,3 +84,5 @@ protocol whose manifest is not the declaration the gate judges; a surface that p
 **Amended by ADR 0138 (2026-10-17):** D1: the per-ask outcomes are `Changes { peers_enabled }` or `Unchanged { locked }` (no `appended`); an ask the project already has stages nothing, and a plan that changes nothing is not judged.
 
 **Amended by ADR 0134 (2026-10-17):** D1: add and init ask through `extension::names`, which charges each specifier's ask to its position.
+
+**Amended by ADR 0137 (2026-10-17):** D1: the plan is opened with the operation's `Caller`; `Checked::finish` takes no argument and bounds every write to the plan's project.

@@ -65,3 +65,5 @@ defects, reproduced with a file-size limit (`ulimit -f` with `SIGXFSZ` ignored, 
 
 A third writer below app must change several files, or a project file is opened by handle (`openat`) instead of by
 name.
+
+**Amended by ADR 0137 (2026-10-17):** D4: the `Also` files are handed to the checked plan (`Checked::writing`), not to `finish`; the order is unchanged.
