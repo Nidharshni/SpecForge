@@ -1,6 +1,6 @@
 # A lock plan bounds its own writes
 
-**Status:** accepted (2026-10-17, architecture round 14, plan 05). Amends [ADR 0065](0065-every-extension-change-is-one-lock-plan-change.md)
+**Status:** accepted (2026-10-17, architecture round 14, plan 05). Amends [ADR 0065](0065-every-extension-change-is-one-lock-plan-change.md) Amended by [ADR 0144](0144-a-project-file-is-written-by-replacing-its-name.md) (a project file is written by replacing its name).
 D1 (`Checked::finish`), [ADR 0104](0104-containment-is-applied-where-the-operation-opens-the-file.md) D2 (who applies the
 containment to lock-plan writes) and [ADR 0128](0128-one-project-change-over-held-files.md) D4 (where the `Also` files
 enter). Builds on [ADR 0124](0124-what-the-caller-lends-an-operation-is-one-value.md).

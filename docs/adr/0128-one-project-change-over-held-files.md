@@ -1,6 +1,6 @@
 # One project change over held files
 
-**Status:** accepted (2026-10-16, architecture round 13, plan 06). Amends [ADR 0028](0028-installed-extensions-are-one-module.md)
+**Status:** accepted (2026-10-16, architecture round 13, plan 06). Amends [ADR 0028](0028-installed-extensions-are-one-module.md) Amended by [ADR 0144](0144-a-project-file-is-written-by-replacing-its-name.md) (a project file is written by replacing its name).
 D4, [ADR 0112](0112-every-project-file-an-operation-opens-goes-through-the-requests-containment.md) D1 (`replace`) and
 [ADR 0059](0059-trust-pins-are-written-with-the-lock-plan.md) D2's `commit_with(config, last)` sentence. Keeps
 [ADR 0022](0022-a-mutation-reports-what-it-wrote.md) D1 and D4, which the code did not.
