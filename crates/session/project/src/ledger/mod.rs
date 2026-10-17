@@ -326,7 +326,7 @@ impl Ledger {
             // A set: the order the checks asked in is no change.
             rows.sort();
         }
-        self.stamps.replace(&recording, stamps, source.flatten());
+        self.stamps.replace(&recording, stamps, source);
         self.inputs.replace(&recording, rows);
     }
 

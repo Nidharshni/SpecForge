@@ -102,8 +102,10 @@ fn content_hash(path: &Path) -> u64 {
 /// What a session last built from, as it was when read.
 #[derive(Debug, Default, Clone)]
 pub(super) struct Stamps {
-    /// Every source, by key relative to the spec root.
-    sources: BTreeMap<String, Entry>,
+    /// Every source read, by key relative to the spec root: `None` when the
+    /// read found nothing there (a dangling link, ADR 0141). A key absent was
+    /// never read.
+    sources: BTreeMap<String, Option<Entry>>,
     /// Every stamped row, by its class and path as recorded (absent ones
     /// recorded as `None`; no `Hop` row: ADR 0129).
     inputs: BTreeMap<(Class, PathBuf), Option<Entry>>,
@@ -112,13 +114,14 @@ pub(super) struct Stamps {
 impl Stamps {
     /// The stamps `recording` covers are now these: the environment's
     /// replace every input stamp, the checks' theirs, a source's its own
-    /// (`source`: the stamp its read took before reading; `None`: it was not
-    /// there), and discovery's forget every source's.
+    /// (`source`: `Some(stamp)` its read took before reading, `Some(None)` it
+    /// read and nothing was there; `None`: it was not read), and discovery's
+    /// forget every source's.
     pub(super) fn replace(
         &mut self,
         recording: &Recording<'_>,
         inputs: BTreeMap<(Class, PathBuf), Option<Entry>>,
-        source: Option<Entry>,
+        source: Option<Option<Entry>>,
     ) {
         match recording {
             Recording::Environment { .. } => self.inputs = inputs,
@@ -142,7 +145,10 @@ impl Stamps {
     /// compares its source's stamp, by key, as the read that recorded it does.
     fn moved(&self, class: &Class, recorded: &Path, spec_root: &Path) -> bool {
         match class {
-            Class::Hop(key) => !unchanged(&spec_root.join(key), self.sources.get(key)),
+            Class::Hop(key) => !unchanged(
+                &spec_root.join(key),
+                self.sources.get(key).and_then(Option::as_ref),
+            ),
             _ => {
                 let entry = self
                     .inputs
@@ -170,14 +176,21 @@ impl Stamps {
         for region in regions {
             let discovered = inputs.discover_at(region);
             for key in &discovered {
-                if seen.insert(key.clone())
-                    && !unchanged(&spec_root.join(key), self.sources.get(key))
-                {
+                // A key never read is changed, whether or not its path exists now.
+                let moved = self
+                    .sources
+                    .get(key)
+                    .is_none_or(|entry| !unchanged(&spec_root.join(key), entry.as_ref()));
+                if seen.insert(key.clone()) && moved {
                     changes.sources.push(key.clone());
                 }
             }
             // Recorded, and no longer found: deleted (or excluded since).
-            for key in self.sources.keys() {
+            for key in self
+                .sources
+                .iter()
+                .filter_map(|(key, entry)| entry.as_ref().map(|_| key))
+            {
                 let inside = region.is_empty() || Path::new(key).starts_with(region);
                 if inside && !discovered.contains(key) && seen.insert(key.clone()) {
                     changes.sources.push(key.clone());
