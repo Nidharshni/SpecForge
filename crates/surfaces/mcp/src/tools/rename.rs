@@ -86,8 +86,7 @@ impl CoreTool for Tool {
 
         // Planned on the call's project as it is on disk (the target brought
         // the served project up to date, or compiled the project `path`
-        // names), whose spans are relative to its spec root.
-        let spec_root = project.spec_root().to_path_buf();
+        // names), whose spans are relative to its spec root, which the plan keeps.
         //
         // The operation decided what kind of failure it is, and which entity it
         // is about; an invalid new ID is the argument's fault.
@@ -124,7 +123,7 @@ impl CoreTool for Tool {
             return Ok(Mutated::new(reply, Written::nothing()));
         }
         // A failed write puts back what it wrote; a file it could not put back is the failure's `files_written`.
-        let writes = rename::apply(&plan, &spec_root, project.caller())?;
+        let writes = rename::apply(&plan, project.caller())?;
         // The reply's `diagnostics` are what `specforge check` reports for the
         // project as it is on disk now, edits made since the last call
         // included (`FreshDiagnostics`, filled in once the target is brought up
