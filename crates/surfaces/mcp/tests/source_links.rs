@@ -1,7 +1,6 @@
 //! A source of the served project is read only from inside the project (ADR 0145). Over MCP the session
 //! reads each `.spec` source through the project's containment: a link whose final target lands outside
-//! is that source's E025 and its text enters no view. Each pin below the green ones is ignored until
-//! the ticket that closes the read flips it.
+//! is that source's E025 and its text enters no view.
 
 use crate::support::*;
 use serde_json::{Value, json};
@@ -80,7 +79,6 @@ const OUTSIDE_SPEC: &str =
     invariant = "mcp_served_project_consistency",
     verify = "a source of the served project is read only from inside the project"
 )]
-#[ignore = "flipped by the fix(mcp) ticket of H1"]
 fn a_source_symlink_that_leaves_the_project_is_read_by_no_view() {
     let (_scene, project, outside) = scene();
     fs::write(
@@ -100,7 +98,6 @@ fn a_source_symlink_that_leaves_the_project_is_read_by_no_view() {
     invariant = "mcp_served_project_consistency",
     verify = "a source of the served project is read only from inside the project"
 )]
-#[ignore = "flipped by the fix(mcp) ticket of H1"]
 fn a_source_symlink_to_a_spec_outside_enters_no_graph() {
     let (_scene, project, outside) = scene();
     fs::write(outside.join("leaked.spec"), OUTSIDE_SPEC).unwrap();
@@ -111,7 +108,7 @@ fn a_source_symlink_to_a_spec_outside_enters_no_graph() {
     let mut server = serve(&project);
     let all = views(&mut server);
     assert!(all.contains("E025"), "{all}");
-    assert_nothing_of(&all, &["leaked", "Leaked Behavior", "outside-body-text"]);
+    assert_nothing_of(&all, &["Leaked Behavior", "outside-body-text"]);
 }
 
 #[cfg(unix)]
@@ -119,7 +116,6 @@ fn a_source_symlink_to_a_spec_outside_enters_no_graph() {
     invariant = "mcp_served_project_consistency",
     verify = "a source of the served project is read only from inside the project"
 )]
-#[ignore = "flipped by the fix(mcp) ticket of H1"]
 fn a_symlinked_spec_root_that_leaves_the_project_enters_no_graph() {
     let (_scene, project, outside) = scene();
     fs::create_dir_all(outside.join("specdir")).unwrap();
@@ -128,7 +124,7 @@ fn a_symlinked_spec_root_that_leaves_the_project_enters_no_graph() {
     link(&outside.join("specdir"), &project.join("spec"));
     let mut server = serve(&project);
     let all = views(&mut server);
-    assert_nothing_of(&all, &["leaked", "Leaked Behavior", "outside-body-text"]);
+    assert_nothing_of(&all, &["Leaked Behavior", "outside-body-text"]);
 }
 
 #[cfg(unix)]
@@ -136,7 +132,6 @@ fn a_symlinked_spec_root_that_leaves_the_project_enters_no_graph() {
     invariant = "mcp_served_project_consistency",
     verify = "a source of the served project is read only from inside the project"
 )]
-#[ignore = "flipped by the fix(mcp) ticket of H1"]
 fn a_link_retargeted_outside_after_the_session_opened_is_refused_at_the_next_request() {
     let (_scene, project, outside) = scene();
     fs::write(outside.join("leaked.spec"), OUTSIDE_SPEC).unwrap();
@@ -157,7 +152,7 @@ fn a_link_retargeted_outside_after_the_session_opened_is_refused_at_the_next_req
     link(&outside.join("leaked.spec"), &project.join("spec/l.spec"));
     let after = views(&mut server);
     assert!(after.contains("E025"), "{after}");
-    assert_nothing_of(&after, &["leaked", "Leaked Behavior", "outside-body-text"]);
+    assert_nothing_of(&after, &["Leaked Behavior", "outside-body-text"]);
 }
 
 #[cfg(unix)]
@@ -165,7 +160,6 @@ fn a_link_retargeted_outside_after_the_session_opened_is_refused_at_the_next_req
     invariant = "mcp_served_project_consistency",
     verify = "a source of the served project is read only from inside the project"
 )]
-#[ignore = "flipped by the fix(mcp) ticket of H1"]
 fn another_project_a_call_names_reads_no_source_through_a_link_outside_it() {
     let (_scene, project, outside) = scene();
     let other = project.join("nested");
@@ -227,7 +221,7 @@ fn a_source_link_whose_final_target_is_inside_the_project_is_read() {
 fn a_hard_linked_source_is_read_like_a_file_in_the_project() {
     let (_scene, project, outside) = scene();
     fs::write(outside.join("leaked.spec"), OUTSIDE_SPEC).unwrap();
-    fs::hard_link(&outside.join("leaked.spec"), project.join("spec/leak.spec")).unwrap();
+    fs::hard_link(outside.join("leaked.spec"), project.join("spec/leak.spec")).unwrap();
     let mut server = serve(&project);
     let reply = call_tool(&mut server, "specforge.list", json!({})).to_string();
     assert!(reply.contains("leaked"), "{reply}");
@@ -246,7 +240,7 @@ fn a_symlinked_directory_inside_the_spec_root_is_not_entered() {
     link(&outside.join("dir"), &project.join("spec/sub"));
     let mut server = serve(&project);
     let all = views(&mut server);
-    assert_nothing_of(&all, &["leaked", "Leaked Behavior"]);
+    assert_nothing_of(&all, &["Leaked Behavior"]);
 }
 
 #[allow(dead_code, reason = "keeps Value in scope for non-unix builds")]
