@@ -30,3 +30,21 @@ fn collect_refuses_an_unapproved_command_with_the_operations_own_message() {
         "{error}"
     );
 }
+
+#[test]
+#[ignore = "flipped by T2"]
+fn collect_without_a_report_tells_the_agent_to_run_the_tests() {
+    let mut served = TestProject::new()
+        .enabling(&["@specforge/software", "@specforge/cargo-test"])
+        .file("app.spec", "behavior login \"Log in\" {\n}\n")
+        .serve_components();
+    let reply = call_tool(&mut served, "specforge.collect", json!({}));
+    let error = crate::tool_errors::mcp_error(&reply);
+    assert_eq!(error["diagnostic"]["code"], "E045", "{error}");
+    let message = error["diagnostic"]["message"].as_str().unwrap();
+    assert!(
+        message.contains("(`specforge collect` runs them)"),
+        "{message}"
+    );
+    assert!(!message.contains("--"), "{message}");
+}

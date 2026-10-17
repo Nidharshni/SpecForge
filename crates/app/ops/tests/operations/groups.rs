@@ -258,7 +258,7 @@ fn check(groups: &Groups, file: &str, source: &str) -> Result<Vec<String>, Strin
     Ok(check.violations)
 }
 
-fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
+pub(crate) fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     for entry in std::fs::read_dir(dir).unwrap() {
         let path = entry.unwrap().path();
         if path.is_dir() {
