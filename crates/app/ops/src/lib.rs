@@ -48,7 +48,7 @@ pub mod view;
 mod writes;
 
 pub use caller::Caller;
-pub use containment::{Containment, Held, OUTSIDE_ROOT, Outside, ReadFailure};
+pub use containment::{ContainedDisk, Containment, Held, OUTSIDE_ROOT, Outside, ReadFailure};
 pub use error::{OpError, OpErrorKind};
 pub use noticed::Noticed;
 pub use refusal::Refusal;
