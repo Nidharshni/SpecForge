@@ -94,3 +94,75 @@ fn a_file_anchor_names_its_entitys_kind_when_the_graph_declares_it() {
     assert_eq!(found.entities[0].kind.as_deref(), Some("behavior"));
     assert_eq!(found.entities[1].kind, None);
 }
+
+#[test]
+#[ignore = "flipped by T4"]
+fn an_id_neither_the_graph_nor_the_manifest_knows_is_e003() {
+    let project = anchored(&[("ghost", "src/a.rs")]);
+    let refusal = anchors_of_entity(&project.view(), "alpah").unwrap_err();
+    assert_eq!(
+        refusal.subject,
+        Some(specforge_ops::view::EntityField::EntityId)
+    );
+    assert_eq!(refusal.error.code, "E003");
+    assert_eq!(
+        refusal.error.suggestion.as_deref(),
+        Some("did you mean 'alpha'?")
+    );
+}
+
+#[test]
+#[ignore = "flipped by T5"]
+fn a_rootless_view_is_no_project() {
+    let project = anchored(&[("alpha", "src/a.rs")]);
+    let view = project.rootless_view();
+    let file = anchors_of_file(&view, "src/a.rs").unwrap_err();
+    assert_eq!(file.kind, specforge_ops::OpErrorKind::PreconditionFailed);
+    assert_eq!(file.code, "no_project");
+    let entity = anchors_of_entity(&view, "alpha").unwrap_err();
+    assert_eq!(entity.error.code, "no_project");
+    assert_eq!(entity.subject, None);
+}
+
+#[test]
+fn the_anchors_of_an_entity_the_graph_lacks_are_listed() {
+    let project = anchored(&[("ghost", "src/a.rs")]);
+    assert_eq!(
+        anchors_of_entity(&project.view(), "ghost").unwrap().count,
+        1
+    );
+    let found = anchors_of_file(&project.view(), "src/a.rs").unwrap();
+    assert_eq!(found.entities[0].kind, None);
+}
+
+#[cfg(unix)]
+#[test]
+fn an_anchors_manifest_outside_the_project_is_not_read() {
+    let project = anchored(&[]);
+    let outside = tempfile::TempDir::new().unwrap();
+    let target = outside.path().join("anchors.json");
+    std::fs::write(
+        &target,
+        r#"{"version":1,"anchors":[{"entity_id":"OUTSIDE","file":"x","line":1,"symbol_name":"s","item_kind":"fn","scanner":"m"}]}"#,
+    )
+    .unwrap();
+    let link = project.root().join("specforge-anchors.json");
+    std::fs::remove_file(&link).unwrap();
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+
+    let file = anchors_of_file(&project.view(), "x").unwrap_err();
+    let entity = anchors_of_entity(&project.view(), "OUTSIDE").unwrap_err();
+    for error in [&file, &entity.error] {
+        assert_eq!(error.kind, specforge_ops::OpErrorKind::InvalidInput);
+        assert_eq!(error.code, "E071");
+        assert!(
+            error
+                .message
+                .starts_with("specforge-anchors.json resolves to"),
+            "{}",
+            error.message
+        );
+        assert!(!error.message.contains("OUTSIDE"), "{}", error.message);
+    }
+    assert_eq!(entity.subject, None);
+}

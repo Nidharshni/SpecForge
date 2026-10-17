@@ -523,3 +523,18 @@ fn the_plan_refuses_an_unusable_manifest() {
         "{resp}"
     );
 }
+
+#[test]
+#[ignore = "flipped by T5"]
+fn infer_file_scope_with_no_project_served_is_no_project() {
+    let mut server = McpServer::new();
+    let init = call(&mut server, "initialize", json!({}));
+    assert!(init["error"].is_null(), "{init}");
+    let resp = infer(&mut server, json!({"scope": "file:src/login.rs"}));
+    assert!(resp.get("result").is_none(), "{resp}");
+    assert_eq!(resp["error"]["code"], -32603, "{resp}");
+    assert_eq!(
+        resp["error"]["data"]["code"], "precondition_failed",
+        "{resp}"
+    );
+}
