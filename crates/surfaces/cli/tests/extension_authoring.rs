@@ -301,6 +301,12 @@ fn a_scaffolded_extension_builds_and_validates() {
         .arg(&ext)
         .env("CARGO_NET_OFFLINE", "true")
         .env("CARGO_TARGET_DIR", elsewhere.path())
+        // The component is built for wasm32-wasip2, which has no profiler runtime: under
+        // `cargo llvm-cov` the inherited `-C instrument-coverage` fails the child's build (E040).
+        .env_remove("RUSTFLAGS")
+        .env_remove("CARGO_ENCODED_RUSTFLAGS")
+        .env_remove("RUSTDOCFLAGS")
+        .env_remove("LLVM_PROFILE_FILE")
         .output()
         .unwrap();
     let json = json_of(&output);
