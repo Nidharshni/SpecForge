@@ -116,6 +116,42 @@ fn an_unparsable_report_fails_every_view() {
     }
 }
 
+/// Over MCP the report is held inside the project: a link that leads out is one refusal on
+/// every view, and the target is never read (ADR 0139).
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "read_views_over_the_project_view",
+    verify = "over MCP, a recorded report that leads outside the project is the same refusal on every view"
+)]
+fn a_report_linked_outside_is_one_refusal_on_every_contained_view() {
+    let project = project();
+    let outside = tempfile::tempdir().unwrap();
+    let report = outside.path().join("r.json");
+    std::fs::write(
+        &report,
+        r#"{"results":{"b":{"tests":[{"name":"t","status":"passed","verify":"it works"}]}}}"#,
+    )
+    .unwrap();
+    let link = project.root().join("specforge-report.json");
+    std::os::unix::fs::symlink(&report, &link).unwrap();
+
+    let views = every_view(&project.view().contained());
+    let (_, first) = &views[0];
+    assert_eq!(
+        (first.kind, first.code.as_ref()),
+        (OpErrorKind::InvalidInput, "E045")
+    );
+    assert!(first.message.contains("outside"), "{}", first.message);
+    for (view, error) in &views {
+        assert_eq!(error, first, "{view} refuses as every other view does");
+    }
+
+    // A report inside reads as before.
+    std::fs::remove_file(&link).unwrap();
+    write_report(&project, r#"{"results":{}}"#);
+    assert!(project.view().contained().test_report().unwrap().is_some());
+}
+
 /// ADR 0092 D6: the CLI and the LSP follow the user's link to the report.
 #[cfg(unix)]
 #[specforge_test(

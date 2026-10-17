@@ -164,8 +164,10 @@ fn infer_progress_reads_no_manifest_through_a_symlink_that_leaves_the_project() 
 
 /// R7: `specforge-report.json` is a link to a report outside: no read view reads it.
 #[cfg(unix)]
-#[ignore = "flipped by T4"]
-#[test]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a file the project keeps at its root is read only from inside the project"
+)]
 fn read_views_read_no_report_through_a_symlink_that_leaves_the_project() {
     let project = plain_project();
     let outside = outside();
@@ -329,7 +331,7 @@ fn sources(dir: &Path, out: &mut Vec<(String, String)>, base: &Path) {
 }
 
 /// A tool builds no bound and no asker of its own and opens no file: the call's project hands its
-/// caller (ADR 0112 D4, ADR 0124). The exceptions say why.
+/// caller (ADR 0112 D4, ADR 0124), and every view is the call's (ADR 0139). The exceptions say why.
 #[test]
 fn every_caller_a_tool_uses_comes_from_the_call() {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
@@ -351,6 +353,12 @@ fn every_caller_a_tool_uses_comes_from_the_call() {
             }
             if line.contains("Containment::within(") && !within.contains(&name.as_str()) {
                 problems.push(format!("src/{name}:{}: builds its own bound", number + 1));
+            }
+            if line.contains("ProjectView::of(") && name != "target/call.rs" {
+                problems.push(format!(
+                    "src/{name}:{}: builds a view its call did not bound",
+                    number + 1
+                ));
             }
             if line.contains("Asking::") && name != "target/call.rs" {
                 problems.push(format!("src/{name}:{}: names its own asker", number + 1));
