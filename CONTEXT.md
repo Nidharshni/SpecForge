@@ -33,7 +33,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   compiled from a project root (`CompiledProject::compile(&ProjectRoot, …)`). A copy shares all but its graph
   (`Clone`, ADR 0108). Rooted or detached is its `root()` (a detached project has none and resolves no
   import); the project root it was loaded at is its environment's (`Environment::project_root`), read to reopen
-  it and to hand an operation a project root (ADR 0121).
+  it and to hand an operation a project root (ADR 0121). It reads its recorded test report through the disk it is
+  handed (`CompiledProject::recorded`, ADR 0139).
 - **Project root**: the directory holding the `specforge.json` a path is in, located from any path inside the
   project (a subdirectory, a file) by walking up, the nearest winning
   (`specforge_common::ProjectRoot::of`, ADR 0053). Only `specforge.json` marks a project. With none at or
@@ -163,6 +164,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   one directory (an MCP request's bound, or the call's project). Lent by the **Caller** in the operation's request and
   applied where the operation opens or writes the file (`specforge_ops::Containment`, ADR 0104). MCP's call's project
   hands it to the tools (`ProjectRef::caller`, ADR 0112, ADR 0124), and render's view input hands it the request's bound (ADR 0131).
+- **Contained disk**: a containment as the `Disk` port (`specforge_ops` `ContainedDisk`, ADR 0139): how a crate
+  below app reads a project file the surface bounds; a name that lands outside reads as `invalid_input`.
 - **Caller**: what the surface that calls an operation lends it, one value (`specforge_ops::Caller`, ADR 0124): what the
   call may reach (**Containment**) and who can be asked (**Asking**). The CLI lends every path and its terminal when
   someone can answer; MCP lends the root of the call's project (init: the request's bound) and nobody. Every request
@@ -547,8 +550,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   loaded in (`ProjectView::runtime`), the one every operation that calls an extension over the view
   calls it in (analyze's passes, collect's collectors, inference gaps' scanners, an extension
   command), so none takes a runtime of its own; its entity snapshot, through the per-compile
-  memo (`ProjectView::entities`) (`specforge_ops::view::ProjectView`). It owns
-  the project's recorded test report and its versioned schema, both read at that root and never an
+  memo (`ProjectView::entities`) (`specforge_ops::view::ProjectView`). It reads
+  the project's recorded test report through its compiled project, over MCP held inside the root
+  (`ProjectView::contained`, ADR 0139), and its versioned schema, both at that root and never an
   ancestor's. Built only from a compiled project (`ProjectView::of`): the CLI from its compiled project and the LSP
   from its session's, or, while the session is out for an update, from a copy of it (ADR 0108); MCP from its call target (`ProjectRef::view`: the served session's compiled
   project with its I017 notices, or that of a session opened for one call) (ADR 0015, ADR 0047).
