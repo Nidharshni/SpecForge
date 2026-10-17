@@ -173,13 +173,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   a handshake client's `projectRoot`), else nothing; while none is served, every request looks there again first
   (`McpState::follow_root`). In a handshake session a call may also serve one (Call target). It is replaced whole or
   not at all, and brought up to date with disk before a request reads it (ADR 0014, ADR 0077).
-- **Update**: one change applied to a project session. It re-reads and re-parses exactly the changed files (an
+- **Update**: one change applied to a project session. Every update goes through one bracket: what the session
+  reports and depends on is taken before it and compared after it (`inputs_changed`, ADR 0136). It re-reads and re-parses exactly the changed files (an
   importer parses the same, since references resolve without `use`), applies them to the session's graph
   build, resolves every file's imports again and re-runs the checks (`specforge_project::Update`, ADR 0006,
   ADR 0032). An update says whether the session's inputs changed (`inputs_changed`), what the session
   reported before it and reports after (its diagnostics delta), and, when it was verified, how it differs
-  from a cold rebuild (`divergence`). An update that changes no file (a held buffer
-  whose text is already its file's) runs no check.
+  from a cold rebuild (`divergence`). An update that changes no file (a held buffer, a
+  released one or a file on disk whose text is already the one it was built from) runs no check.
 - **Graph delta**: what an update or a reload changed in the graph: added and removed nodes (each with its
   kind, file and line), modified nodes (the fields whose values differ, and apart from them which of its
   kind, title, methods and outgoing edges differ), added and removed edges, and the affected files; source

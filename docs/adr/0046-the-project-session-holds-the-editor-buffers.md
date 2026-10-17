@@ -1,7 +1,7 @@
 # The project session holds the editor buffers
 
 **Status:** accepted (2026-10-08). Amends [ADR 0023](0023-the-lsp-reads-a-document-through-one-module.md) D9
-and [ADR 0035](0035-one-reaction-to-a-session-update.md) D2. Amended by [ADR 0109](0109-reopening-a-project-in-place-is-one-session-operation.md) (D3: the open in a session's place is `ProjectSession::reopen`; `finish_holding` is private).
+and [ADR 0035](0035-one-reaction-to-a-session-update.md) D2. Amended by [ADR 0109](0109-reopening-a-project-in-place-is-one-session-operation.md) (D3: the open in a session's place is `ProjectSession::reopen`; `finish_holding` is private). Amended by [ADR 0136](0136-every-session-update-goes-through-one-bracket.md) (D3: a disk update whose text is the one built from changes nothing).
 
 A project session accepted editor buffers (`SourceChange::Buffer`, `Buffers`) and forgot them: it did not know
 which of its sources an editor held. So the LSP's change plan wrote "an open buffer is the truth for its file"
