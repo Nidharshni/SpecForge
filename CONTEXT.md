@@ -555,7 +555,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   affected and unverified entities), the plan check (`specforge_ops::read::plan::check`), the anchors of a source file and of an entity
   (`specforge_ops::read::navigate::{anchors_of_file, anchors_of_entity}`, ADR 0140), and the inference guide and plan
   (`specforge_ops::read::infer::{guide, kind_guide, inference_plan}`). Each returns a typed outcome; the CLI,
-  MCP (its tools and its prompts) and the LSP only render it.
+  MCP (its tools and its prompts) and the LSP only render it. Its rules are tested in ops and stated by an ops-level
+  behaviour; a surface's tests hold what the surface decides (ADR 0015).
 - **Noticed read**: a read view that reports what it noticed about the run beside its value: the schema notices and I020. It
   returns `specforge_ops::Noticed<T>`, whose value is reached only with its notices, and only the surfaces' envelopes
   open it: MCP's `Answer::noticed` and `ResourceText::noticed` (into `_meta.diagnostics`) and the CLI's
