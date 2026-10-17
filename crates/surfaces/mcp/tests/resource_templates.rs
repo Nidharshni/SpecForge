@@ -64,3 +64,41 @@ fn a_kind_placeholder_is_one_non_empty_segment() {
         assert_refused(&mut server, uri, "kind");
     }
 }
+
+/// A server whose project holds two ref entities with characters the old charset refused.
+fn served_with_refs() -> Served {
+    TestProject::new()
+        .enabling(&[SOFTWARE])
+        .file("main.spec", SOURCE)
+        .file(
+            "refs.spec",
+            "ref doc.page:v1+2 \"A page\"\nref gh.pr:org/repo#12 \"A pull request\"\n",
+        )
+        .serve_components()
+}
+
+// Linked to `expose_entity_as_mcp_resource` by T8, with its verify line.
+#[test]
+#[ignore = "flipped by T8"]
+fn a_scheme_ref_id_is_an_entity_id_in_both_entity_templates() {
+    let mut server = served_with_refs();
+    for (uri, id) in [
+        ("specforge://graph/doc.page:v1+2", "doc.page:v1+2"),
+        (
+            "specforge://graph/gh.pr:org%2Frepo%2312",
+            "gh.pr:org/repo#12",
+        ),
+        ("specforge://context/doc.page:v1+2", "doc.page:v1+2"),
+    ] {
+        let reply = read_resource(&mut server, uri);
+        assert!(reply["error"].is_null(), "{uri}: {reply}");
+        assert!(reply["result"].to_string().contains(id), "{uri}: {reply}");
+    }
+    for uri in [
+        "specforge://graph/a.b",
+        "specforge://graph/a.b-c:d",
+        "specforge://context/1abc",
+    ] {
+        assert_refused(&mut server, uri, "entity_id");
+    }
+}
