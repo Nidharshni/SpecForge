@@ -328,3 +328,36 @@ fn the_run_and_approval_contracts_hold() {
     assert_eq!(refusal.error.code, "E059");
     assert!(machine.runs().is_empty());
 }
+
+/// A hard link at the capture file's name is not written through (ADR 0144): the run creates a new file.
+#[cfg(unix)]
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a mutation writes no file through a hard link to a file outside the project"
+)]
+#[ignore = "flipped by T6: Held::create truncates the file in place"]
+fn collect_capture_is_not_written_through_a_hard_link() {
+    let fx = Fixture::new(vec![
+        Runner::new("acme")
+            .report("out/r.json")
+            .capturing_stdout()
+            .proving("a", "t"),
+    ]);
+    let outside = tempfile::TempDir::new().unwrap();
+    let victim = outside.path().join("victim.txt");
+    std::fs::write(&victim, "ORIGINAL").unwrap();
+    std::fs::create_dir_all(fx.root().join("out")).unwrap();
+    std::fs::hard_link(&victim, fx.root().join("out/r.json.stdout.txt")).unwrap();
+    let machine = ScriptedMachine::new()
+        .approving_every_command()
+        .answering(ScriptedRun {
+            stdout: Some("t ... ok\n".to_string()),
+            exit_code: Some(0),
+            ..ScriptedRun::default()
+        });
+
+    fx.run(Asking::Nobody, &machine).unwrap();
+
+    assert_eq!(std::fs::read_to_string(&victim).unwrap(), "ORIGINAL");
+    assert_eq!(fx.read("out/r.json.stdout.txt"), "t ... ok\n");
+}

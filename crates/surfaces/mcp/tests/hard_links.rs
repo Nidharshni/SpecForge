@@ -4,7 +4,7 @@
 //! A pin marked ignored is flipped by the ticket that closes its writer.
 
 use crate::support::*;
-use serde_json::json;
+use serde_json::{Value, json};
 use specforge_mcp::McpServer;
 use std::fs;
 use std::path::Path;
@@ -176,4 +176,57 @@ fn infer_session_replaces_a_hard_linked_manifest() {
     );
 
     untouched(&victim);
+}
+
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a mutation writes no file through a hard link to a file outside the project"
+)]
+#[ignore = "flipped by T5: the migration record is written in place"]
+fn migrate_record_is_not_written_through_a_hard_link() {
+    let project = old_project();
+    let (_outside, victim) = plant(project.path(), ".specforge/migration.json");
+    let mut server = serve(project.path());
+
+    let _ = call_tool(&mut server, "specforge.migrate", json!({}));
+
+    untouched(&victim);
+}
+
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a mutation writes no file through a hard link to a file outside the project"
+)]
+#[ignore = "flipped by T4: the lock's temporary file is written in place"]
+fn add_extension_writes_no_lock_through_a_hard_linked_or_symlinked_temp() {
+    let greet = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../fixtures/greet-extension/wasm/greet.wasm");
+    for symlink in [false, true] {
+        let project = plain_project();
+        fs::copy(&greet, project.path().join("greet.wasm")).unwrap();
+        let outside = TempDir::new().unwrap();
+        let victim = outside.path().join("victim.txt");
+        fs::write(&victim, "ORIGINAL").unwrap();
+        let temp = project.path().join("specforge.lock.tmp");
+        if symlink {
+            std::os::unix::fs::symlink(&victim, &temp).unwrap();
+        } else {
+            fs::hard_link(&victim, &temp).unwrap();
+        }
+        let mut server = serve(project.path());
+
+        let reply: Value = call_tool(
+            &mut server,
+            "specforge.add_extension",
+            json!({"specifiers": ["./greet.wasm"]}),
+        );
+
+        assert_eq!(
+            fs::read_to_string(&victim).unwrap(),
+            "ORIGINAL",
+            "symlink={symlink}: {reply}"
+        );
+    }
 }

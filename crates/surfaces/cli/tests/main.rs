@@ -24,6 +24,7 @@ mod extension_surfaces;
 mod extensions;
 mod format;
 mod format_corpus;
+mod hard_links;
 mod init;
 mod inspect_views;
 mod installed_extensions;
