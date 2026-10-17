@@ -1,4 +1,5 @@
 use super::*;
+use crate::extension::lock_plan::Asked as Answer;
 
 #[test]
 fn the_plan_judges_and_answers_one_set_of_entries() {
@@ -122,7 +123,7 @@ fn a_commit_writes_the_entries_the_plan_judged_and_keeps_the_rest() {
         String::from_utf8(crate::config::render(&written).unwrap()).unwrap()
     );
     assert_eq!(done.enabled, 2);
-    assert!(done.asked(Ask(0)).appended);
+    assert!(matches!(done.asked(Ask(0)), Answer::Changes { .. }));
 }
 
 #[test]
@@ -145,7 +146,7 @@ fn an_unchanged_set_of_entries_writes_nothing() {
         r#"{"extensions":["@specforge/software@1.0.0"]}"#
     );
     assert!(done.writes.is_empty());
-    assert!(!done.asked(Ask(0)).appended);
+    assert_eq!(done.asked(Ask(0)), Answer::Unchanged { locked: None });
 }
 
 #[test]
@@ -169,7 +170,7 @@ fn a_preview_over_a_changed_config_answers_what_was_judged() {
         .finish(dir.path(), Vec::new(), &crate::Containment::unbounded())
         .unwrap();
 
-    assert!(done.asked(Ask(0)).appended);
+    assert!(matches!(done.asked(Ask(0)), Answer::Changes { .. }));
     assert!(done.writes.is_empty());
     assert_eq!(
         std::fs::read_to_string(dir.path().join("specforge.json")).unwrap(),
@@ -233,7 +234,7 @@ fn an_entry_whose_name_prefixes_an_enabled_one_is_appended() {
         written["extensions"],
         serde_json::json!(["@specforge/software-ish@1.0.0", "@specforge/software"])
     );
-    assert!(done.asked(Ask(0)).appended);
+    assert!(matches!(done.asked(Ask(0)), Answer::Changes { .. }));
 }
 
 #[test]

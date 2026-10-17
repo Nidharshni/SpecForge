@@ -284,12 +284,28 @@ impl Wanted {
 
     /// What the add did (or, for a dry run, would do) for it, given what the plan did for its ask.
     fn outcome(self, asked: Asked, dry_run: bool) -> AddOutcome {
+        let peers_enabled = match asked {
+            Asked::Unchanged { locked } => {
+                return match self {
+                    Wanted::Builtin(name) => AddOutcome::Builtin {
+                        name,
+                        changed: false,
+                        peers_enabled: Vec::new(),
+                    },
+                    Wanted::Package { name, version, .. } => AddOutcome::AlreadyPresent {
+                        name,
+                        version: locked.unwrap_or(version),
+                    },
+                };
+            }
+            Asked::Changes { peers_enabled } => peers_enabled,
+        };
         match self {
             Wanted::Builtin(name) if dry_run => AddOutcome::Planned {
                 name: name.to_string(),
                 version: None,
                 origin: Origin::Builtin,
-                peers_enabled: asked.peers_enabled,
+                peers_enabled,
             },
             Wanted::Package {
                 name,
@@ -300,12 +316,12 @@ impl Wanted {
                 name,
                 version: Some(version),
                 origin,
-                peers_enabled: asked.peers_enabled,
+                peers_enabled,
             },
             Wanted::Builtin(name) => AddOutcome::Builtin {
                 name,
-                changed: asked.appended,
-                peers_enabled: asked.peers_enabled,
+                changed: true,
+                peers_enabled,
             },
             Wanted::Package {
                 name,
@@ -319,7 +335,7 @@ impl Wanted {
                 sha256,
                 publisher,
                 origin,
-                peers_enabled: asked.peers_enabled,
+                peers_enabled,
             },
         }
     }

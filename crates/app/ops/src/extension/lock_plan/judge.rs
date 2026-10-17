@@ -71,7 +71,7 @@ impl<'a> LockPlan<'a> {
             staged,
             config,
             appended,
-            wanted,
+            asked,
             fetching,
             purpose,
             disabled,
@@ -108,7 +108,7 @@ impl<'a> LockPlan<'a> {
             pins: fetching.map(|fetching| (fetching.registry, pins)),
             config,
             appended,
-            wanted,
+            asked,
         })
     }
 

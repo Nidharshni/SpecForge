@@ -169,8 +169,9 @@ pub(crate) struct LockPlan<'a> {
     /// `specforge.json` as the plan opened it: what it enables before the change.
     config: Opened,
     appended: Vec<Appended>,
-    /// The extension each ask enables, in the order they were asked.
-    wanted: Vec<(Ask, String)>,
+    /// The answer each ask got when it was asked, in the order they were asked; a `Changes` holds
+    /// no peers until `finish` fills them.
+    asked: Vec<(Ask, Asked)>,
     declarations: Declarations<'a>,
     /// The runtime the plan's fetched binaries load in; `None` for a plan that fetches nothing
     /// and reads its declarations from a compiled project (`remove`).
@@ -313,7 +314,7 @@ impl<'a> LockPlan<'a> {
             staged: Vec::new(),
             config,
             appended: Vec::new(),
-            wanted: Vec::new(),
+            asked: Vec::new(),
             declarations,
             runtime,
             verb,
@@ -357,8 +358,14 @@ impl<'a> LockPlan<'a> {
             .expect("a plan opened with installs: false stages no install")
             .put(pin.entry(&sha256));
         if self.verb.enables() {
-            self.enable(ask, pin.name.as_str());
+            self.append(ask, pin.name.as_str());
         }
+        self.answer(
+            ask,
+            Asked::Changes {
+                peers_enabled: Vec::new(),
+            },
+        );
         self.staged.push(Staged {
             ask,
             name: pin.name.clone(),
@@ -370,21 +377,41 @@ impl<'a> LockPlan<'a> {
     }
 
     /// Enable `name` (a builtin, or an install's bare name) for `ask` with an entry of its own,
-    /// after the entries `specforge.json` holds; nothing when an entry already enables it.
+    /// after the entries `specforge.json` holds; the ask is answered unchanged when an entry
+    /// already enables it.
     pub(crate) fn enable(&mut self, ask: Ask, name: &str) {
-        self.wanted.push((ask, name.to_string()));
-        let enabled = self
-            .config
-            .entries()
-            .iter()
-            .chain(self.appended.iter().map(|appended| &appended.name))
-            .any(|entry| specforge_common::extension_entry_name(entry) == name);
-        if !enabled {
+        let answer = if self.append(ask, name) {
+            Asked::Changes {
+                peers_enabled: Vec::new(),
+            }
+        } else {
+            Asked::Unchanged { locked: None }
+        };
+        self.answer(ask, answer);
+    }
+
+    /// Append an entry for `name` unless one already enables it; `false` when an entry of
+    /// `specforge.json` (as opened) does. An earlier ask of this change appending it still makes
+    /// the change enable it.
+    fn append(&mut self, ask: Ask, name: &str) -> bool {
+        let named = |entry: &String| specforge_common::extension_entry_name(entry) == name;
+        if self.config.entries().iter().any(named) {
+            return false;
+        }
+        if !self.appended.iter().any(|appended| named(&appended.name)) {
             self.appended.push(Appended {
                 name: name.to_string(),
                 ask,
                 required_by: None,
             });
+        }
+        true
+    }
+
+    /// Record `asked` as the answer to `ask`, unless it already has one.
+    fn answer(&mut self, ask: Ask, asked: Asked) {
+        if !self.asked.iter().any(|(known, _)| *known == ask) {
+            self.asked.push((ask, asked));
         }
     }
 
@@ -502,7 +529,7 @@ pub(crate) struct Checked<'a> {
     /// `specforge.json` as the plan opened it.
     config: Opened,
     appended: Vec<Appended>,
-    wanted: Vec<(Ask, String)>,
+    asked: Vec<(Ask, Asked)>,
 }
 
 mod close;

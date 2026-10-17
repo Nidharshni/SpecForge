@@ -1,4 +1,5 @@
 use super::*;
+use crate::extension::lock_plan::Asked as Answer;
 
 /// `@acme/app` 1.0.0 (needs base `^1.0`), published signed by `signer` (unsigned when `None`).
 fn app_registry(signer: Option<&str>) -> MemoryRegistry {
@@ -211,13 +212,20 @@ fn each_ask_is_answered_with_the_builtins_its_extension_required() {
 
     // software first: formal's requirement is already met by the earlier ask.
     let done = enabling(&["@specforge/software", "@specforge/formal"]);
-    assert_eq!(done.asked(Ask(0)).peers_enabled, Vec::<&str>::new());
-    assert_eq!(done.asked(Ask(1)).peers_enabled, Vec::<&str>::new());
-    assert!(done.asked(Ask(0)).appended && done.asked(Ask(1)).appended);
+    let none = Answer::Changes {
+        peers_enabled: Vec::new(),
+    };
+    assert_eq!(done.asked(Ask(0)), none);
+    assert_eq!(done.asked(Ask(1)), none);
 
     // formal alone enables software with it.
     let done = enabling(&["@specforge/formal"]);
-    assert_eq!(done.asked(Ask(0)).peers_enabled, ["@specforge/software"]);
+    assert_eq!(
+        done.asked(Ask(0)),
+        Answer::Changes {
+            peers_enabled: vec!["@specforge/software"]
+        }
+    );
     assert_eq!(done.enabled, 2);
 }
 

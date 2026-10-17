@@ -34,24 +34,29 @@ pub(crate) struct Done {
     asked: Vec<(Ask, Asked)>,
 }
 
-/// What a finished plan did for one ask.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub(crate) struct Asked {
-    /// The entry of the extension it asked for was appended by this change (would be, for a
-    /// preview); `false` when an entry already enabled it.
-    pub(crate) appended: bool,
-    /// The builtins enabled because its extension requires them, dependencies first.
-    pub(crate) peers_enabled: Vec<&'static str>,
+/// What a finished plan did for one ask, or for a preview would do.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Asked {
+    /// The change enables what the ask named, and installs it for an install, after the builtins
+    /// its extension requires: `peers_enabled`, dependencies first, each reported once, by the ask
+    /// whose extension first required it.
+    Changes { peers_enabled: Vec<&'static str> },
+    /// The project already has it: an entry of `specforge.json` enables it. `locked` is the
+    /// version the lock pins, `None` for an entry only. The change leaves it as it is.
+    Unchanged { locked: Option<String> },
 }
 
 impl Done {
-    /// What the plan did for `ask` (nothing, for an ask the plan changed nothing for).
+    /// What the plan did for `ask`.
+    ///
+    /// # Panics
+    /// For an ask the operation never made.
     pub(crate) fn asked(&self, ask: Ask) -> Asked {
         self.asked
             .iter()
             .find(|(asked, _)| *asked == ask)
             .map(|(_, asked)| asked.clone())
-            .unwrap_or_default()
+            .expect("an ask the operation made is answered")
     }
 }
 
@@ -104,14 +109,10 @@ impl Checked<'_> {
             config,
             pins,
             appended,
-            wanted,
+            asked,
             ..
         } = self;
         let document = config.written(&items);
-        let names: Vec<&str> = appended
-            .iter()
-            .map(|appended| appended.name.as_str())
-            .collect();
         // Held before anything is written: what is written is what is checked here.
         let also_held = also
             .iter()
@@ -201,26 +202,23 @@ impl Checked<'_> {
             }
         }
 
-        let written = |name: &str| names.contains(&name);
-        let mut asked: Vec<(Ask, Asked)> = Vec::new();
-        for (ask, name) in &wanted {
-            if asked.iter().any(|(known, _)| known == ask) {
-                continue;
-            }
-            asked.push((
-                *ask,
-                Asked {
-                    appended: written(name),
+        let asked = asked
+            .into_iter()
+            .map(|(ask, answer)| {
+                let answer = match answer {
                     // Each is reported once, by the ask whose extension first required it.
-                    peers_enabled: appended
-                        .iter()
-                        .filter(|entry| entry.ask == *ask && entry.required_by.is_some())
-                        .filter(|entry| written(&entry.name))
-                        .filter_map(|entry| super::super::builtin_name(&entry.name))
-                        .collect(),
-                },
-            ));
-        }
+                    Asked::Changes { .. } => Asked::Changes {
+                        peers_enabled: appended
+                            .iter()
+                            .filter(|entry| entry.ask == ask && entry.required_by.is_some())
+                            .filter_map(|entry| super::super::builtin_name(&entry.name))
+                            .collect(),
+                    },
+                    unchanged => unchanged,
+                };
+                (ask, answer)
+            })
+            .collect();
         Ok(Done {
             writes,
             enabled: final_entries.len(),
