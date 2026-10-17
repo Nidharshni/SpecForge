@@ -162,6 +162,48 @@ fn infer_progress_reads_no_manifest_through_a_symlink_that_leaves_the_project() 
     assert!(reply.to_string().contains("E071"), "{reply}");
 }
 
+/// R7: `specforge-report.json` is a link to a report outside: no read view reads it.
+#[cfg(unix)]
+#[ignore = "flipped by T4"]
+#[test]
+fn read_views_read_no_report_through_a_symlink_that_leaves_the_project() {
+    let project = plain_project();
+    let outside = outside();
+    let report = outside.path().join("r.json");
+    fs::write(
+        &report,
+        r#"{"results":{"alpha":{"tests":[{"name":"OUTSIDE-TEST","status":"passed"}]}}}"#,
+    )
+    .unwrap();
+    link(&report, &project.path().join("specforge-report.json"));
+    let mut server = serve(project.path());
+
+    for (name, arguments) in [
+        ("specforge.coverage", json!({})),
+        ("specforge.stats", json!({})),
+        ("specforge.inspect", json!({"entity_id": "alpha"})),
+        ("specforge.analyze", json!({})),
+    ] {
+        let reply = call_tool(&mut server, name, arguments);
+        assert_refused(&reply, None);
+        assert!(reply.to_string().contains("E045"), "{name}: {reply}");
+        assert!(
+            !reply.to_string().contains("OUTSIDE-TEST"),
+            "{name}: {reply}"
+        );
+    }
+    let reply = call(
+        &mut server,
+        "prompts/get",
+        json!({"name": "specforge://prompts/review", "arguments": {}}),
+    );
+    assert_eq!(reply["error"]["data"]["code"], "invalid_input", "{reply}");
+    assert_eq!(
+        reply["error"]["data"]["diagnostic"]["code"], "E045",
+        "{reply}"
+    );
+}
+
 /// R3: a `test_results` that resolves outside the project, in every spelling.
 #[specforge_test_macros::test(
     behavior = "provide_mcp_analyze_tool",

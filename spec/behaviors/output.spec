@@ -304,6 +304,7 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
   verify unit "inspect reports an entity's standing as the coverage view counts it"
   verify unit "a report that cannot be read is the coverage's error, and the standing still holds"
   verify unit "an unusable report is the same failure, of the kind the operation decides, on every view"
+  verify unit "the CLI and the LSP read the recorded report where its link points"
   verify integration "specforge stats --format json and specforge.stats answer the same document"
   verify integration "specforge trace and specforge.trace return the same chain for an entity"
   verify integration "specforge schema and specforge.schema carry the same version"
