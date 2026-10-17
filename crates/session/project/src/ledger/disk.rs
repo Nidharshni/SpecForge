@@ -3,7 +3,7 @@
 //! recording run.
 
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use specforge_registry::{Disk, PlainDisk};
 
@@ -41,19 +41,29 @@ impl RunDisk<'_, '_> {
     /// what read it. Each hop is recorded, stamped first, and a dangling link
     /// still names its target (ADR 0107).
     fn record_link_targets(&self, path: &Path) {
-        let mut current = path.to_path_buf();
-        for _ in 0..MAX_LINK_HOPS {
-            let is_link = std::fs::symlink_metadata(&current)
-                .map(|meta| meta.file_type().is_symlink())
-                .unwrap_or(false);
-            let Some(target) = is_link.then(|| std::fs::read_link(&current).ok()).flatten() else {
-                return;
-            };
-            current = match current.parent() {
-                Some(dir) => dir.join(target),
-                None => target,
-            };
-            self.0.read(Reading::File, &current, |_| ());
+        for hop in link_hops(path) {
+            self.0.read(Reading::File, &hop, |_| ());
         }
     }
+}
+
+/// Each link hop a read of `path` follows, in order: empty for a plain file
+/// or a missing path. A stamp records the same chain (ADR 0129).
+pub(super) fn link_hops(path: &Path) -> Vec<PathBuf> {
+    let mut hops = Vec::new();
+    let mut current = path.to_path_buf();
+    for _ in 0..MAX_LINK_HOPS {
+        let is_link = std::fs::symlink_metadata(&current)
+            .map(|meta| meta.file_type().is_symlink())
+            .unwrap_or(false);
+        let Some(target) = is_link.then(|| std::fs::read_link(&current).ok()).flatten() else {
+            break;
+        };
+        current = match current.parent() {
+            Some(dir) => dir.join(target),
+            None => target,
+        };
+        hops.push(current.clone());
+    }
+    hops
 }

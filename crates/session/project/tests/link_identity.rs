@@ -10,6 +10,7 @@ use std::time::{Duration, SystemTime};
 
 use specforge_project::testing::{TestProject, disk_changed};
 use specforge_project::{ProjectSession, WatchRoot};
+use specforge_test::prelude::*;
 use tempfile::TempDir;
 
 const TERM: &str = "term alpha_one \"A\" {}\n";
@@ -62,8 +63,10 @@ fn watches(session: &ProjectSession, dir: &Path) -> bool {
     })
 }
 
-#[test]
-#[ignore = "flipped by T2"]
+#[specforge_test(
+    behavior = "invalidate_changed_files",
+    verify = "a source relinked to a file with an equal stamp still moves the inputs"
+)]
 fn a_source_relinked_to_an_equal_stamp_file_moves_the_inputs() {
     for time in times() {
         let (dir, _outside, out, mut session) = project(None, time);
@@ -80,7 +83,6 @@ fn a_source_relinked_to_an_equal_stamp_file_moves_the_inputs() {
 }
 
 #[test]
-#[ignore = "flipped by T2"]
 fn a_link_retargeted_to_an_equal_stamp_file_moves_the_inputs() {
     for time in times() {
         let (dir, _outside, _out, mut session) = project(Some("real.spec"), time);
@@ -103,7 +105,6 @@ fn a_link_retargeted_to_an_equal_stamp_file_moves_the_inputs() {
 }
 
 #[test]
-#[ignore = "flipped by T2"]
 fn a_hop_retargeted_in_the_middle_of_a_chain_moves_the_inputs() {
     for time in times() {
         let (dir, _outside, out, _) = project(None, time);

@@ -255,7 +255,9 @@ behavior invalidate_changed_files "Invalidate Changed Files" {
     gives the text the session built it from is no changed file, whatever
     its stamp says (touched, or written again with the same bytes): it is
     re-stamped, not re-parsed, and runs no check; a link hop its read
-    followed that moved still changes the session's inputs. For file
+    followed that was swapped or retargeted is a moved hop, whatever
+    the stamps say (a stamp records the link chain it followed); it
+    still changes the session's inputs. For file
     deletions, all entities declared in the deleted file MUST be removed
     from the graph along with their edges; no re-parse is attempted.
     For file creations, the new file MUST be parsed and its entities
@@ -269,6 +271,7 @@ behavior invalidate_changed_files "Invalidate Changed Files" {
   verify unit "several editor buffers changed at once are one update"
   verify unit "the typing fast path skips the checks while any edited buffer does not parse"
   verify unit "a source rewritten with its own text re-parses nothing and runs no check"
+  verify unit "a source relinked to a file with an equal stamp still moves the inputs"
   verify contract "Invalidate Changed Files: file invalidation holds — file_changes_coalesced_fired, invalidation_set_computed, subgraph_invalidated_emitted, unrelated_files_untouched"
 }
 
