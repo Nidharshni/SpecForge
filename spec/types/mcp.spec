@@ -635,11 +635,11 @@ type McpMissingLink "An edge the registries lead an entity to have, which the gr
 type McpTracePlanResult "Trace tool response when plan parameter is provided" {
   /// The plan passes: no entry names no entity and none comes before an
   /// entity it depends on (a missing entry is a warning).
-  ok                boolean
+  ok               boolean
   /// Plan entries that name an entity in the graph, in plan order.
-  affected_entities string[]
+  resolved_entries string[]
   /// Traceability gaps between plan items and the graph.
-  gaps              McpTraceGap[]
+  gaps             McpTraceGap[]
   verify unit "Trace tool response when plan parameter is provided conforms to schema"
 }
 

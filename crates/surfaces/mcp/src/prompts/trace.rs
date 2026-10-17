@@ -78,7 +78,7 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
                     .iter()
                     .map(|gap| Gap::of(&specforge_ops::read::trace::Gap::Plan(gap.clone())))
                     .collect();
-                (outcome.entries, gaps, "the plan".to_string())
+                (outcome.resolved_entries, gaps, "the plan".to_string())
             }
             Ask::Trace(Target::Entity(entity_id)) => {
                 // As the trace tool traces it: its chain and missing links.

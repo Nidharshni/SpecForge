@@ -1611,7 +1611,7 @@ fn trace_plan_gap_analysis() {
     let plan = agent_plan(&["act_one", "inv_a", "ghost"]);
     let resp = call_tool(&mut server, "specforge.trace", json!({"plan": plan}));
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(parsed["affected_entities"], json!(["act_one", "inv_a"]));
+    assert_eq!(parsed["resolved_entries"], json!(["act_one", "inv_a"]));
     let gaps: Vec<(&str, &str, &str)> = parsed["gaps"]
         .as_array()
         .unwrap_or_else(|| panic!("no gaps in {parsed}"))
@@ -1653,9 +1653,9 @@ fn trace_plan_reports_its_gaps_as_structured_json() {
         .map(String::as_str)
         .collect();
     keys.sort();
-    assert_eq!(keys, ["affected_entities", "gaps", "ok"], "{parsed}");
+    assert_eq!(keys, ["gaps", "ok", "resolved_entries"], "{parsed}");
     assert_eq!(parsed["ok"], false, "{parsed}");
-    assert_eq!(parsed["affected_entities"], json!(["act_one"]));
+    assert_eq!(parsed["resolved_entries"], json!(["act_one"]));
     for gap in parsed["gaps"].as_array().unwrap() {
         let mut keys: Vec<&str> = gap
             .as_object()
@@ -1706,7 +1706,7 @@ fn a_report_the_plan_check_does_not_read_fails_no_plan() {
     let resp = call_tool(&mut server, "specforge.trace", json!({"plan": plan}));
     assert_eq!(resp["result"]["isError"], false, "{resp}");
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(parsed["affected_entities"], json!(["act_one", "inv_a"]));
+    assert_eq!(parsed["resolved_entries"], json!(["act_one", "inv_a"]));
     assert_eq!(parsed["gaps"].as_array().unwrap().len(), 3, "{parsed}");
     // Stats still reads the report: it needs what the report decides.
     let error = mcp_error(&call_tool(&mut server, "specforge.stats", json!({})));
@@ -1758,7 +1758,7 @@ fn trace_refuses_a_plan_that_is_not_an_agent_plan() {
         json!({"plan": "{\"plan_id\":\"p\",\"entries\":[]}"}),
     );
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(parsed["affected_entities"], json!([]), "{parsed}");
+    assert_eq!(parsed["resolved_entries"], json!([]), "{parsed}");
 }
 
 #[specforge_test(

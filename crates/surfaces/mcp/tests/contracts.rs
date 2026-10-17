@@ -499,7 +499,7 @@ fn contract_trace() {
         "specforge.trace",
         json!({"plan": agent_plan(&["alpha", "ghost"])}),
     );
-    assert_eq!(plan["affected_entities"], json!(["alpha"]));
+    assert_eq!(plan["resolved_entries"], json!(["alpha"]));
     let gaps = plan["gaps"].as_array().unwrap();
     assert!(
         gaps.iter()
