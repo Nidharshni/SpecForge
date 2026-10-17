@@ -340,7 +340,6 @@ fn a_batch_that_changes_nothing_reports_nothing() {
     assert_eq!(recorder.armed().len(), 1);
 }
 
-#[ignore = "flipped by T6"]
 #[test]
 fn a_source_rewritten_with_its_own_text_reports_nothing() {
     let fixture = Fixture::new(PLAIN);

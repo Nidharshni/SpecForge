@@ -88,8 +88,10 @@ fn an_update_that_changes_nothing_holds_one_list_twice() {
     ));
 }
 
-#[ignore = "flipped by T6"]
-#[test]
+#[specforge_test(
+    behavior = "invalidate_changed_files",
+    verify = "a source rewritten with its own text re-parses nothing and runs no check"
+)]
 fn a_source_rewritten_with_its_own_text_changes_nothing() {
     let rt = counting();
     let (dir, mut session) = opened(&rt);
@@ -110,7 +112,6 @@ fn a_source_rewritten_with_its_own_text_changes_nothing() {
 }
 
 #[cfg(unix)]
-#[ignore = "flipped by T6"]
 #[test]
 fn a_source_relinked_to_its_own_text_moves_the_inputs_and_rebuilds_nothing() {
     let (dir, mut session) = plain_project(&[("a.spec", TERM)]);

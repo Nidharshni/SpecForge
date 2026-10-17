@@ -289,19 +289,16 @@ impl ProjectSession {
     /// changed, by path relative to the spec root. A file that is gone was deleted; one that is there and
     /// cannot be read is E025 and leaves the graph. A changed path that is no source (an `exclude` entry, a
     /// skipped directory, not `.spec`, inside a nested project) changes nothing, unless the project holds
-    /// it: then it leaves the graph. Then every check runs.
-    fn reread(&mut self, keys: &[String]) -> Update {
-        self.update(|s| {
+    /// it: then it leaves the graph. Then every check runs. A source that reads as the session holds it
+    /// (touched, or written again with the same bytes) is re-stamped and changes nothing. `None` when
+    /// nothing changed.
+    fn reread(&mut self, keys: &[String]) -> Option<Update> {
+        let update = self.update(|s| {
             let reads = s.ledger.reread(keys);
-            let reads: Vec<(String, Read)> = reads
-                .into_iter()
-                // A key that is no source and never was changes nothing.
-                .filter(|(key, read)| {
-                    !(matches!(read, Read::Gone) && s.project.is_current(key, read))
-                })
-                .collect();
+            let reads = s.staged(reads);
             s.sources(reads, CheckMode::Full)
-        })
+        });
+        (!update.changed_nothing()).then_some(update)
     }
 
     /// The editor no longer holds the buffers of `paths` (absolute): each
@@ -495,14 +492,16 @@ impl ProjectSession {
     /// Apply `changes`: the environment first (a reload rebuilds
     /// everything), else the sources (an update re-runs every check), else
     /// the checks alone; every file a buffer holds is left out. `None` when
-    /// there is nothing to apply: `changes` is empty.
+    /// applying `changes` changes nothing: `changes` is empty, or every
+    /// changed source reads as the session holds it and its inputs did not
+    /// move.
     pub fn apply(&mut self, changes: &Changes) -> Option<Update> {
         let mut sources = changes.sources.clone();
         self.held.leave_out(&mut sources);
         if !changes.environment.is_empty() && self.project.root().is_some() {
             Some(self.reload_environment())
         } else if !sources.is_empty() {
-            Some(self.reread(&sources))
+            self.reread(&sources)
         } else if !changes.check_inputs.is_empty() && self.project.root().is_some() {
             Some(self.recheck())
         } else {
