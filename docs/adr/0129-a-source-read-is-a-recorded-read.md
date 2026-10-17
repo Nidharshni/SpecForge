@@ -1,6 +1,6 @@
 # A source read is a recorded read
 
-**Status:** accepted (2026-10-16, architecture round 13, plan 07). Completes
+**Status:** accepted (2026-10-16, architecture round 13, plan 07). Amended by [ADR 0141](0141-a-session-names-the-dangling-source-links-it-reads.md): discovery names a dangling link; it still records nothing. Completes
 [ADR 0114](0114-environment-inputs-are-recorded-as-read.md) D3 for sources. Amends
 [ADR 0073](0073-a-batch-of-paths-narrows-the-stale-comparison.md) D2 (fourth bullet) and D5 (third bullet), and
 [ADR 0106](0106-a-project-session-reads-the-disk-through-one-ledger.md) D5 ("the renewals of the links happen in

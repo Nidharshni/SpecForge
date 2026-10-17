@@ -125,7 +125,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   spelled it, keyed by its own name in its canonical directory, with its class (an environment input, a check
   input, a directory the checks listed, or a hop of one source). The class decides what reaches it, which
   directory is watched for it and what its change is; a missing directory on the way to it outside the root is
-  watched from its nearest existing ancestor (`specforge_project::ledger`, crate-private; ADR 0133).
+  watched from its nearest existing ancestor (`specforge_project::ledger`, crate-private; ADR 0133). A source
+  read as gone still records the hops it followed (ADR 0141).
+- **Dangling source link**: a `.spec` symlink whose target does not exist. It is no source (`SourceRoot::files`
+  omits it) but the session reads it (`SourceRoot::dangling`), finds it gone and records its chain, so it is that
+  source's change when its target appears (ADR 0141).
 - **Held buffer**: an editor buffer a project session holds (`specforge_project::Buffer`: the file's path, the
   editor's text and version). While held it is the truth for its file, whatever happens to the file on disk:
   the session's freshness and classification leave it out, and an open or an environment reload builds it in
@@ -768,7 +772,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `SourceRoot::files` lists them and `SourceRoot::holds` answers for one path, by one policy: the spec root is
   read whatever its own name and whatever it holds, no skipped directory below it is entered, no symlink is
   followed into a directory, only files are sources (a symlink is one when it resolves to a file, read through
-  the link and keyed by its own path, ADR 0073), and the walk ends at every directory below the spec root that
+  the link and keyed by its own path, ADR 0073; one that points nowhere is no source, and a **Dangling source
+  link** the session reads, ADR 0141), and the walk ends at every directory below the spec root that
   holds `specforge.json`: a nested project, whose files are its own project's sources, on every surface
   (ADR 0080). Format's walk of a named directory that is no project is the same walk, taking the sources of
   each project it reaches.
