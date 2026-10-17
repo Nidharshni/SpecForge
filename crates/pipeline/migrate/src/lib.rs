@@ -514,14 +514,7 @@ pub fn written_beside(source: &Path) -> [PathBuf; 3] {
 /// fails with `AlreadyExists` instead of escaping.
 fn create_new_beside(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
-    match std::fs::remove_file(path) {
-        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e),
-        _ => {}
-    }
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)?;
+    let mut file = specforge_common::fresh::create_fresh(path)?;
     // A write that fails leaves no half-written file at a name the next run would unlink anyway.
     file.write_all(bytes).inspect_err(|_| {
         let _ = std::fs::remove_file(path);

@@ -2,7 +2,6 @@
 //! `real`, where the name landed, so the file checked is the file opened; what messages, documents
 //! and `Writes` name is `spelled`. Every project file an operation reads or writes is opened here.
 
-use std::ffi::OsString;
 use std::io::Write as _;
 use std::path::{Component, Path, PathBuf};
 
@@ -42,44 +41,12 @@ impl Held {
         std::fs::File::create(&self.real)
     }
 
-    /// Replace `real` atomically: write `<real>.tmp` (the file name with `.tmp` appended, in
-    /// `real`'s directory), synced, then rename it onto `real`. Whatever is at the temp name first
-    /// (a file left by a crash, or a link) is removed, a link and never its target, and the temp is
-    /// created new (`create_new`, O_EXCL), so it is never written through a link. On failure the
-    /// temp is removed and `real` is as it was.
-    ///
-    /// A file that is there keeps its permissions, and one the process may not write is refused
-    /// with the error of opening it for writing (`PermissionDenied`), as an in-place write would
-    /// have: its owner's read-only marker is not lifted by a rewrite. Ownership and extended
-    /// attributes are not carried over.
+    /// Replace `real` atomically, by its name: [`specforge_common::fresh::replace_file`], so the inode
+    /// that held `real` is never opened for writing (a hard link keeps its other name, ADR 0144). A file
+    /// that is there keeps its permissions, and one the process may not write is refused
+    /// (`PermissionDenied`): its owner's read-only marker is not lifted by a rewrite.
     pub fn replace(&self, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
-        let permissions = match std::fs::OpenOptions::new().write(true).open(&self.real) {
-            Ok(existing) => Some(existing.metadata()?.permissions()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-            Err(e) => return Err(e),
-        };
-        let temp = self.temporary();
-        match std::fs::remove_file(&temp) {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(e),
-        }
-        let written = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temp)
-            .and_then(|mut file| {
-                file.write_all(contents.as_ref())?;
-                if let Some(permissions) = permissions {
-                    file.set_permissions(permissions)?;
-                }
-                file.sync_all()
-            })
-            .and_then(|()| std::fs::rename(&temp, &self.real));
-        if written.is_err() {
-            let _ = std::fs::remove_file(&temp);
-        }
-        written
+        specforge_common::fresh::replace_file(&self.real, contents.as_ref())
     }
 
     /// Unlink the name (`spelled`): a link is removed, never its target. `NotFound` passes through.
@@ -126,13 +93,6 @@ impl Held {
         for dir in dirs {
             let _ = std::fs::remove_dir(dir);
         }
-    }
-
-    /// `<real>.tmp`, beside `real`: the file name with `.tmp` appended.
-    fn temporary(&self) -> PathBuf {
-        let mut name: OsString = self.real.file_name().unwrap_or_default().to_os_string();
-        name.push(".tmp");
-        self.real.with_file_name(name)
     }
 }
 
