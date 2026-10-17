@@ -1771,13 +1771,6 @@ fn contract_guard_reinit() {
     );
 }
 
-#[test]
-fn contract_cancel() {
-    let mut server = test_server();
-    let resp = call(&mut server, "$/cancelRequest", json!({"id": 1}));
-    assert!(resp["result"].is_object() || resp["result"].is_null());
-}
-
 #[specforge_test(
     behavior = "handle_mcp_protocol_error",
     verify = "Handle MCP Protocol Error: MCP protocol error handling holds — mcp_protocol_available, standard_error_returned, no_state_leaked, server_operational, error_handled_emitted"

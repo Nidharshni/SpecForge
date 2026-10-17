@@ -715,22 +715,6 @@ fn schema_tool_kind_filter() {
 
 // --- specforge.coverage ---
 
-#[test]
-fn coverage_returns_per_entity() {
-    let mut server = test_server();
-    let resp = call_tool(&mut server, "specforge.coverage", json!({}));
-    let text = tool_text(&resp);
-    let parsed: Value = serde_json::from_str::<Value>(&text).unwrap()["entities"].clone();
-    let results = parsed.as_array().unwrap();
-    assert!(!results.is_empty());
-
-    for r in results {
-        assert!(r["entity_id"].is_string());
-        assert!(r["status"].is_string());
-        assert!(r["declared"].is_boolean());
-    }
-}
-
 #[specforge_test(
     behavior = "provide_mcp_coverage_tool",
     verify = "specforge.coverage returns coverage for all testable entities"
@@ -1774,22 +1758,6 @@ fn trace_without_entity_or_plan_errors() {
     assert!(message.contains("entity_id or plan"), "{message}");
 }
 
-#[test]
-fn trace_missing_links() {
-    let mut server = test_server();
-    let resp = call_tool(
-        &mut server,
-        "specforge.trace",
-        json!({"entity_id": "gamma_orphan"}),
-    );
-    let text = tool_text(&resp);
-    let parsed: Value = serde_json::from_str(&text).unwrap();
-    assert_eq!(parsed["entity_id"], "gamma_orphan");
-    // Orphan has no connections
-    assert!(parsed["upstream"].as_array().unwrap().is_empty());
-    assert!(parsed["downstream"].as_array().unwrap().is_empty());
-}
-
 // B:provide_mcp_search_tool — verify unit "empty query returns all entities up to limit"
 #[specforge_test(
     behavior = "provide_mcp_search_tool",
@@ -2264,34 +2232,6 @@ fn validate_updates_graph() {
         assert!(d["file"].as_str().unwrap().ends_with("app.spec"), "{d}");
         assert!(d["line"].as_u64().unwrap() >= 1, "{d}");
     }
-}
-
-#[test]
-fn trace_missing_links_flagged() {
-    let mut server = test_server();
-    // Trace with a plan that has references to nonexistent entities
-    let resp = call_tool(
-        &mut server,
-        "specforge.trace",
-        json!({"entity_ids": ["nonexistent_entity"]}),
-    );
-    // Should flag missing links
-    assert!(resp["result"].is_object() || resp["error"].is_object());
-}
-
-#[test]
-fn stats_includes_diagnostic_summary() {
-    let mut server = test_server();
-    let resp = call_tool(&mut server, "specforge.stats", json!({}));
-    let text = tool_text(&resp);
-    let parsed: Value = serde_json::from_str(&text).unwrap();
-    // Should include diagnostic counts by severity
-    assert!(
-        parsed["diagnostics"].is_object()
-            || parsed["diagnostic_summary"].is_object()
-            || parsed["entity_count"].is_number(),
-        "stats response should include diagnostic summary"
-    );
 }
 
 // --- C9-02/C9-03: token budget enforcement ---

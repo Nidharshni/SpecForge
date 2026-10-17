@@ -36,8 +36,8 @@
     "crates/surfaces/lsp/tests/reaction.rs": 1000,
     "crates/surfaces/lsp/tests/semantic_tokens.rs": 819,
     "crates/surfaces/mcp/tests/call_target.rs": 1314,
-    "crates/surfaces/mcp/tests/contracts.rs": 3314,
-    "crates/surfaces/mcp/tests/lifecycle.rs": 881,
+    "crates/surfaces/mcp/tests/contracts.rs": 3307,
+    "crates/surfaces/mcp/tests/lifecycle.rs": 859,
     "crates/surfaces/mcp/tests/mutation_outcome.rs": 1153,
     "crates/surfaces/mcp/tests/operations_mgmt.rs": 833,
     "crates/surfaces/mcp/tests/operations_mutation.rs": 2390,
@@ -46,9 +46,9 @@
     "crates/surfaces/mcp/tests/surface_call.rs": 995,
     "crates/surfaces/mcp/tests/surface_wiring.rs": 1718,
     "crates/surfaces/mcp/tests/tool_arguments.rs": 879,
-    "crates/surfaces/mcp/tests/tools_core.rs": 2629,
+    "crates/surfaces/mcp/tests/tools_core.rs": 2569,
     "crates/surfaces/mcp/tests/tools_inference.rs": 822,
-    "crates/surfaces/mcp/tests/tools_navigation.rs": 893,
+    "crates/surfaces/mcp/tests/tools_navigation.rs": 820,
     "crates/surfaces/registry-server/tests/server_contracts.rs": 1345
   },
   "specs": {

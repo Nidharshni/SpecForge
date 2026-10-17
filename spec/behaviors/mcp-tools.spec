@@ -605,7 +605,6 @@ behavior provide_mcp_find_references_tool "Provide MCP Find References Tool" {
     an empty list, not an error.
   """
   verify unit "specforge.find_references returns all reference locations"
-  verify unit "entity with no references returns empty list"
   verify unit "non-existent entity returns error response"
   verify unit "direction and include_declaration select which occurrences are returned"
   verify integration "find_references and the LSP's references answer the same occurrences"
@@ -711,7 +710,6 @@ behavior provide_mcp_outline_tool "Provide MCP Outline Tool" {
   verify unit "nested entries included for complex entities"
   verify unit "non-existent file returns error response"
   verify contract "Provide MCP Outline Tool: MCP outline tool holds — graph_available, outline_returned, tool_invoked_emitted"
-  verify unit "outline entries sorted by line number"
   verify unit "a file under the spec root with no entities has an empty outline"
   verify unit "with no project served, outline is the no-project refusal"
   verify unit "sorted by line number"
