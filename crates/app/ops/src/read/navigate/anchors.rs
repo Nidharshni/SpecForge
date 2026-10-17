@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use specforge_common::shape::Shape;
 
 use super::{FileMatch, match_file};
-use crate::view::{EntityField, ProjectView};
+use crate::view::{EntityField, ProjectView, not_found};
 use crate::{OpError, Refusal};
 
 /// The source anchors manifest's file, at the project root.
@@ -151,8 +151,10 @@ pub fn anchors_of_file(view: &ProjectView<'_>, file_path: &str) -> Result<FileAn
     })
 }
 
-/// The source items the manifest anchors `entity_id` to, in manifest order; none for an entity with no
-/// anchor or a project with no manifest. A manifest that cannot be used is E071.
+/// The source items the manifest anchors `entity_id` to, in manifest order; none for an entity the graph
+/// declares with no anchor, or a project with no manifest. An id that neither the graph declares nor the
+/// manifest anchors is E003 (with a did-you-mean); the anchors of an id the graph no longer declares (a
+/// stale anchor) are still listed. A manifest that cannot be used is E071, before any id is judged.
 pub fn anchors_of_entity(
     view: &ProjectView<'_>,
     entity_id: &str,
@@ -170,6 +172,12 @@ pub fn anchors_of_entity(
             scanner: anchor.scanner,
         })
         .collect();
+    if implementations.is_empty() && view.graph().node(entity_id).is_none() {
+        return Err(Refusal::about(
+            EntityField::EntityId,
+            not_found(view.graph(), entity_id),
+        ));
+    }
     Ok(EntityAnchors {
         entity_id: entity_id.to_string(),
         count: implementations.len(),
@@ -205,7 +213,9 @@ mod tests {
             anchors_of_file(&fixture.view(), "src/a.rs").unwrap().count,
             0
         );
-        assert_eq!(anchors_of_entity(&fixture.view(), "a").unwrap().count, 0);
+        // With no manifest, an id the graph lacks is not found.
+        let refused = anchors_of_entity(&fixture.view(), "a").unwrap_err();
+        assert_eq!(refused.error.code, "E003");
     }
 
     #[test]

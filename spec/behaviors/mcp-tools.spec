@@ -621,6 +621,8 @@ behavior provide_mcp_find_implementation_tool "Provide MCP Find Implementation T
     anchors_listed   "every anchor of the entity in specforge-anchors.json, in manifest order"
     empty_when_none  "an entity with no anchor, or no anchors manifest, has no implementations"
     unusable_refused "an anchors manifest that cannot be used is E071"
+    unknown_refused  "an id neither the graph nor the anchors manifest knows is E003, with the closest entity id"
+    stale_listed     "the anchors of an id the graph no longer declares are listed"
   }
   contract   """
     In MCP server mode, the system MUST register a
@@ -629,11 +631,17 @@ behavior provide_mcp_find_implementation_tool "Provide MCP Find Implementation T
     entity in the project's specforge-anchors.json (file, line,
     symbol_name, item_kind, scanner), in manifest order, from the one
     anchor lookup navigation owns. No anchors manifest is an empty list.
-    An anchors manifest that cannot be read or parsed is refused with
-    E071.
+    An entity_id that neither the graph declares nor the anchors manifest
+    anchors is refused as find_definition refuses it: E003,
+    entity_not_found on entity_id, with the closest entity id when one is
+    close. The anchors of an id the graph no longer declares (a stale
+    anchor) are still listed. An anchors manifest that cannot be read or
+    parsed is refused with E071.
   """
   verify unit "find_implementation lists every anchor of the entity, in manifest order"
   verify unit "an entity with no anchor has no implementations, and no anchors manifest is none"
+  verify unit "an id neither the graph nor the anchors manifest knows is refused with E003"
+  verify unit "the anchors of an id the graph no longer declares are still listed"
 }
 
 behavior provide_mcp_find_spec_for_source_tool "Provide MCP Find Spec For Source Tool" {

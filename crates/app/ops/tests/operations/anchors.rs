@@ -46,7 +46,9 @@ fn anchors_of_an_entity_are_in_manifest_order() {
             .collect()
     };
     assert_eq!(files("alpha"), ["src/lib.rs", "src/net.rs"]);
-    assert!(files("nope").is_empty());
+    // `beta` is anchored but undeclared; `alpha` is declared. A declared entity with no anchor has none.
+    let lone = anchored(&[("beta", "src/lib.rs")]);
+    assert_eq!(anchors_of_entity(&lone.view(), "alpha").unwrap().count, 0);
 
     let bare = Assembled::over(specforge_registry::RegistryBuild::default())
         .source("behavior a \"A\" {\n}\n");
@@ -101,8 +103,10 @@ fn a_file_anchor_names_its_entitys_kind_when_the_graph_declares_it() {
     assert_eq!(found.entities[1].kind, None);
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "provide_mcp_find_implementation_tool",
+    verify = "an id neither the graph nor the anchors manifest knows is refused with E003"
+)]
 fn an_id_neither_the_graph_nor_the_manifest_knows_is_e003() {
     let project = anchored(&[("ghost", "src/a.rs")]);
     let refusal = anchors_of_entity(&project.view(), "alpah").unwrap_err();
@@ -130,7 +134,10 @@ fn a_rootless_view_is_no_project() {
     assert_eq!(entity.subject, None);
 }
 
-#[test]
+#[specforge_test(
+    behavior = "provide_mcp_find_implementation_tool",
+    verify = "the anchors of an id the graph no longer declares are still listed"
+)]
 fn the_anchors_of_an_entity_the_graph_lacks_are_listed() {
     let project = anchored(&[("ghost", "src/a.rs")]);
     assert_eq!(

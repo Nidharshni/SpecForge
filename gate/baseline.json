@@ -48,7 +48,7 @@
     "crates/surfaces/mcp/tests/tool_arguments.rs": 879,
     "crates/surfaces/mcp/tests/tools_core.rs": 2629,
     "crates/surfaces/mcp/tests/tools_inference.rs": 822,
-    "crates/surfaces/mcp/tests/tools_navigation.rs": 899,
+    "crates/surfaces/mcp/tests/tools_navigation.rs": 893,
     "crates/surfaces/registry-server/tests/server_contracts.rs": 1345
   },
   "specs": {

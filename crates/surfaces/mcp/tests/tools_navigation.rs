@@ -855,21 +855,15 @@ fn find_implementation_lists_every_anchor_of_the_entity() {
         })
     );
 
-    let none = result(
+    let refused = call_tool(
         &mut server,
         "specforge.find_implementation",
         json!({"entity_id": "nope"}),
     );
-    assert_eq!(none["count"], 0);
-    assert_eq!(none["implementations"], json!([]));
-
-    let mut bare = test_server();
-    let absent = result(
-        &mut bare,
-        "specforge.find_implementation",
-        json!({"entity_id": "alpha"}),
-    );
-    assert_eq!(absent["count"], 0);
+    let error = crate::tool_errors::mcp_error(&refused);
+    assert_eq!(error["code"], "entity_not_found", "{error}");
+    assert_eq!(error["argument"], "entity_id", "{error}");
+    assert_eq!(error["diagnostic"]["code"], "E003", "{error}");
 }
 
 /// An anchors manifest with an anchor missing a field is a
