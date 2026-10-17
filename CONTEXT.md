@@ -105,7 +105,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   project session's ledger stamps and records each one, each link hop included: its environment inputs are what its
   last environment load read.
 - **Source reads**: each read of a `.spec` file a session makes, the cold read and every reread, through the `Disk` it
-  is handed (`sources::read`; ADR 0129). A project session's ledger stamps each source by its key and records each link
+  is handed (`sources::read`; ADR 0129). A project session's ledger stamps each source by its key, with the link
+  chain it followed, and records each link
   hop the read followed. A held buffer's file is not read, so nothing of it is recorded until it is released.
 - **Session inputs**: everything a project session depends on besides its sources' text: where its
   sources are discovered (the spec root and `exclude`), its **environment inputs**

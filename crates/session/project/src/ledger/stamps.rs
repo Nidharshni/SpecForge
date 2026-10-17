@@ -15,6 +15,10 @@
 //! too, and compared whenever its stamp is unchanged, so such a rewrite is
 //! still seen, and an unchanged file is not reported.
 //!
+//! A stamp also records the link chain it followed (each hop's path): a
+//! source swapped for a link, or a link retargeted, to a file with the same
+//! length and modification time is still a change (ADR 0129).
+//!
 //! A batch of changed paths narrows the same comparison
 //! ([`ProjectSession::changes`]): only what the paths reach is compared.
 //!
@@ -27,6 +31,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use super::Changes;
+use super::disk::link_hops;
 use super::inputs::SessionInputs;
 use super::reach::Reach;
 use super::recorded::{Class, Recording};
@@ -42,12 +47,14 @@ pub(crate) struct Entry {
     modified: Option<SystemTime>,
     /// The content's hash, for a racy entry only.
     racy_hash: Option<u64>,
+    /// The link hops the path followed: empty for a plain file.
+    links: Vec<PathBuf>,
 }
 
 impl Entry {
     /// Stamp `path` now: `None` when it does not exist.
     pub(crate) fn stamp(path: &Path) -> Option<Entry> {
-        let metadata = std::fs::metadata(path).ok()?;
+        let (metadata, links) = followed(path)?;
         let modified = metadata.modified().ok();
         let now = SystemTime::now();
         // No modification time, or one within the granularity of now (a
@@ -57,18 +64,33 @@ impl Entry {
             len: metadata.len(),
             modified,
             racy_hash: if racy { Some(content_hash(path)) } else { None },
+            links,
         })
     }
 
     /// Whether `path` still holds what this entry recorded.
     fn holds(&self, path: &Path) -> bool {
-        let Ok(metadata) = std::fs::metadata(path) else {
+        let Some((metadata, links)) = followed(path) else {
             return false;
         };
-        if metadata.len() != self.len || metadata.modified().ok() != self.modified {
+        if links != self.links
+            || metadata.len() != self.len
+            || metadata.modified().ok() != self.modified
+        {
             return false;
         }
         self.racy_hash.is_none_or(|hash| content_hash(path) == hash)
+    }
+}
+
+/// What `path` means now: the metadata of the file a read reaches and the
+/// hops to it. A plain file costs one `lstat`, as one `stat` did.
+fn followed(path: &Path) -> Option<(std::fs::Metadata, Vec<PathBuf>)> {
+    let own = std::fs::symlink_metadata(path).ok()?;
+    if own.file_type().is_symlink() {
+        Some((std::fs::metadata(path).ok()?, link_hops(path)))
+    } else {
+        Some((own, Vec::new()))
     }
 }
 
