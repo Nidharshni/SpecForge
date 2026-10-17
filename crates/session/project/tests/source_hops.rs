@@ -186,3 +186,23 @@ fn a_hop_into_a_missing_directory_is_seen_when_it_is_created() {
         session.inputs().watch_roots()
     );
 }
+
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "classify_project_changes",
+    verify = "a symlinked source is keyed by its link and changes when its target does"
+)]
+#[ignore = "flipped by T4"]
+fn a_dangling_source_link_that_comes_alive_is_that_sources_change() {
+    let dir = TestProject::new().raw_config(json!({"name": "c", "version": "0.1.0"}).to_string());
+    let root = fs::canonicalize(dir.root()).unwrap();
+    std::os::unix::fs::symlink("sub/x.spec", root.join("link.spec")).unwrap();
+    let mut session = dir.session_bare();
+
+    fs::create_dir(root.join("sub")).unwrap();
+    fs::write(root.join("sub/x.spec"), "term x_one \"X\" {}\n").unwrap();
+    let changes = session.changes([root.join("sub/x.spec").as_path()]);
+    assert_eq!(changes.sources(), ["link.spec", "sub/x.spec"]);
+    assert!(session.apply(&changes).is_some());
+    assert_matches_a_fresh_compile(&session, &root);
+}
