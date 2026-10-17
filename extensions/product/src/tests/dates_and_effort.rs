@@ -122,7 +122,11 @@ fn as_of_overrides_the_hosts_today() {
         CommandEvidence::None,
     );
     assert_eq!(out.exit, 2, "{}", out.stderr);
-    assert!(out.stderr.contains("--as-of"), "{}", out.stderr);
+    assert!(
+        out.stderr.contains("give a date to compare against"),
+        "{}",
+        out.stderr
+    );
 }
 
 #[specforge_test(

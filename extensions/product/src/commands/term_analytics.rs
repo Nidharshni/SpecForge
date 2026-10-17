@@ -7,7 +7,7 @@ pub(super) fn declare(c: &mut ContributionsBuilder) {
     c.command("term_graph", |cmd| {
         cmd.title("Show the terms related to a term")
             .description(
-                "The terms reachable from a term over see_also within --max-hops \
+                "The terms reachable from a term over see_also within the hop limit given \
             (default 1, at most 5), sorted by id, the term itself left out.",
             )
             .category("query");

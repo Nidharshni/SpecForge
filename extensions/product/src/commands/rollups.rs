@@ -8,7 +8,7 @@ pub(super) fn declare(c: &mut ContributionsBuilder) {
         cmd.title("Show deliverable completion")
             .description(
                 "How many of the milestones a deliverable is tracked by are \
-            completed, as a count and a ratio in [0, 1]; --details adds each \
+            completed, as a count and a ratio in [0, 1]; asking for details adds each \
             milestone's feature completion.",
             )
             .category("query");

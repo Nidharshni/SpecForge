@@ -24,7 +24,6 @@ fn flagged(value: &serde_json::Value, path: &str, found: &mut Vec<String>) {
 }
 
 #[test]
-#[ignore = "flipped by T3"]
 fn no_product_description_names_a_cli_flag() {
     let payload: serde_json::Value = serde_json::from_str(
         &MockHost::new(crate::specforge_extension_build())

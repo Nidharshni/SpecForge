@@ -96,7 +96,7 @@ fn deliverable_completion_answers_its_payload() {
         json!({"deliverable_id": "d2", "milestone_count": 2, "completed_count": 1,
             "completion_ratio": 0.5})
     );
-    // --details adds each milestone's own completion.
+    // asking for details adds each milestone's own completion.
     let dc = json_of(
         "deliverable_completion",
         json!({"deliverable": "d2", "details": true}),
