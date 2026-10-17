@@ -108,13 +108,7 @@ impl SchemaCache {
         };
         let json = serde_json::to_string_pretty(&record).map_err(io::Error::other)?;
 
-        // Atomic write: temp file then rename
-        let target = self.dir.join(CACHE_FILE);
-        let tmp = self.dir.join(".schema-cache.tmp");
-        std::fs::write(&tmp, &json)?;
-        std::fs::rename(&tmp, &target)?;
-
-        Ok(())
+        specforge_common::fresh::replace_file(&self.dir.join(CACHE_FILE), json.as_bytes())
     }
 
     /// What the previous export recorded, if anything.

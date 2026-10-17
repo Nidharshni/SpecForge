@@ -26,7 +26,6 @@ fn plant(dir: &Path, names: &[&str]) -> (TempDir, std::path::PathBuf) {
     invariant = "mcp_served_project_consistency",
     verify = "a mutation writes no file through a hard link to a file outside the project"
 )]
-#[ignore = "flipped by T7: the build cache is staged with fs::write"]
 fn check_cache_temp_is_not_written_through_a_hard_link() {
     let dir = TestProject::new().raw_config(
         r#"{"name":"t","version":"0.1.0","spec_root":"spec","extensions":["@specforge/software"]}"#,
@@ -51,7 +50,6 @@ fn check_cache_temp_is_not_written_through_a_hard_link() {
     invariant = "mcp_served_project_consistency",
     verify = "a mutation writes no file through a hard link to a file outside the project"
 )]
-#[ignore = "flipped by T7: the schema cache is staged with fs::write"]
 fn export_schema_cache_temp_is_not_written_through_a_hard_link() {
     let dir = TestProject::new().raw_config(
         r#"{"name":"t","version":"0.1.0","spec_root":"spec","extensions":["@specforge/software"]}"#,

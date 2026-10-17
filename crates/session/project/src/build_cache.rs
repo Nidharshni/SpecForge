@@ -128,15 +128,10 @@ impl BuildCache {
         Ok(Some(cache))
     }
 
-    /// Write the cache to the project at `root`, replacing the file
-    /// atomically (written beside it, then renamed).
+    /// Write the cache to the project at `root`, replacing the file by its name
+    /// (`specforge_common::fresh::replace_file`: written beside it, then renamed).
     pub fn write(&self, root: &Path) -> std::io::Result<()> {
-        let path = Self::path(root);
-        let staging = root.join(format!(".{BUILD_CACHE_FILE}.tmp"));
-        std::fs::write(&staging, self.to_json())?;
-        std::fs::rename(&staging, &path).inspect_err(|_| {
-            let _ = std::fs::remove_file(&staging);
-        })
+        specforge_common::fresh::replace_file(&Self::path(root), self.to_json().as_bytes())
     }
 }
 
