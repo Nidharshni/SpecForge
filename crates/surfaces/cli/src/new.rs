@@ -184,6 +184,12 @@ crate-type = ["cdylib"]
 [dependencies]
 specforge-extension-sdk = "0.1"
 serde_json = "1.0"
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+strip = true
 "#
     );
     std::fs::write(dir.join("Cargo.toml"), cargo_toml)
@@ -316,6 +322,7 @@ mod tests {
         assert!(cargo.contains(r#"name = "my-ext""#));
         assert!(cargo.contains("crate-type = [\"cdylib\"]"));
         assert!(cargo.contains("specforge-extension-sdk"));
+        assert!(cargo.contains("[profile.release]") && cargo.contains("opt-level = \"z\""));
 
         let config = std::fs::read_to_string(project.join(".cargo/config.toml")).unwrap();
         assert!(config.contains("wasm32-wasip2"));
