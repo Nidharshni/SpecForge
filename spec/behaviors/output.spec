@@ -400,6 +400,34 @@ behavior select_entities_over_the_view "Select Entities over the Project View" {
   verify unit "list keeps the entities whose fields hold every where value"
 }
 
+// Inspect (specforge_ops::read::inspect): one entity's facts. specforge.inspect,
+// the context prompt and the LSP hover render them.
+behavior inspect_entity_facts "Inspect an Entity's Facts" {
+  features   [mcp_core_tools]
+  invariants [diagnostic_determinism, testable_entity_classification]
+  category   query
+  types      [Graph, Diagnostic]
+  ports      [CompilerApi]
+  requires {
+    project_compiled "A compiled project, one-shot or a project session's, supplies the project view"
+  }
+  ensures {
+    facts_of_one_entity "An entity's node, kind entry, headline, standing, obligations, references and diagnostics"
+  }
+  contract   """
+    Inspect MUST answer one entity's facts: its node and kind entry, its
+    headline statement, its standing and obligations, its references in both
+    directions, and the diagnostics about it: those its data names it in,
+    else those inside its block, never one whose message merely quotes it or
+    whose id contains its id. Its coverage is the coverage view's verdict for
+    its row. An entity the graph lacks is E003, entity_not_found, naming the
+    closest entity.
+  """
+  verify unit "an entity's coverage is its coverage row's verdict, obligation by obligation"
+  verify unit "the diagnostics about an entity are its own, not those of an entity whose id contains it"
+  verify unit "an unknown entity is E003, entity_not_found"
+}
+
 // The exploration and the review: the explore and review prompts'
 // payloads, and specforge explore / specforge review, read one view each.
 behavior explore_the_graph "Explore the Graph" {
