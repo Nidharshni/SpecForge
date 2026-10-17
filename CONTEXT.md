@@ -111,7 +111,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (the environment reads of its last load) and its **check inputs**
   (the check reads of the last check run: `specforge-cache.json` when a check pass read it, each path a check looked
   for, each directory a missing named file's suggestion listed, and the target of each that is a symlink) and its **source hops**
-  (each link hop a symlinked source's last read followed, its target included). Every input is keyed by its own name (a symlink stays itself), and each link hop it
+  (each link hop a symlinked source's last read followed, its target included). They are one table of **recorded
+  inputs** (ADR 0133). Every input is keyed by its own name (a symlink stays itself), and each link hop it
   followed is an input of its own. One value per
   environment load, renewed each time the checks run (`specforge_project::SessionInputs`,
   `ProjectSession::inputs`). What a changed path reaches, which directories watch watches, which files
@@ -119,6 +120,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   read ledger stamps each when it reads it (ADR 0106);
   a detached session's inputs are empty (ADR 0030). Nothing else: an import names one of the sources,
   never a file on disk (ADR 0055).
+- **Recorded input**: one row of a session's inputs: a file or directory a recorded read touched, as the read
+  spelled it, keyed by its own name in its canonical directory, with its class (an environment input, a check
+  input, a directory the checks listed, or a hop of one source). The class decides what reaches it, which
+  directory is watched for it and what its change is; a missing directory on the way to it outside the root is
+  watched from its nearest existing ancestor (`specforge_project::ledger`, crate-private; ADR 0133).
 - **Held buffer**: an editor buffer a project session holds (`specforge_project::Buffer`: the file's path, the
   editor's text and version). While held it is the truth for its file, whatever happens to the file on disk:
   the session's freshness and classification leave it out, and an open or an environment reload builds it in
