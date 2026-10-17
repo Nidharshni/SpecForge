@@ -16,6 +16,10 @@
 //! looked like when it was read) are compared with disk by
 //! `ProjectSession::stale` and `changes`, and are taken in the call that
 //! reads it, before the read, so a write that races the read is seen next time.
+//!
+//! The record is one table of recorded inputs (ADR 0133): every run is recorded by
+//! [`Run::finish`], told what it recorded ([`Recording`]), and [`Ledger::record`] is the
+//! one writer of the rows and the stamps it covers.
 
 mod disk;
 mod inputs;
@@ -30,7 +34,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use specforge_common::{ProjectConfig, ProjectRoot, SourceRoot};
+use specforge_common::{ProjectRoot, SourceRoot};
 use specforge_registry::{Disk, PlainDisk};
 
 use crate::Environment;
@@ -39,6 +43,7 @@ use crate::sources::{self, Read};
 use disk::RunDisk;
 pub use inputs::{SessionInputs, WatchRoot, Watched};
 pub use key::source_key;
+use recorded::{Class, Recording};
 use stamps::{Entry, Scope, Stamps};
 
 /// What a batch of changed paths, or the disk since the last read, means to
@@ -140,7 +145,10 @@ impl Reads for Ledger {
     ) -> Environment {
         let run = self.environment_run();
         let environment = load(&RunDisk(&run));
-        run.finish_environment(root.dir(), environment.config());
+        run.finish(Recording::Environment {
+            root: root.dir(),
+            config: environment.config(),
+        });
         environment
     }
 
@@ -148,8 +156,7 @@ impl Reads for Ledger {
     /// link hop recorded until it is read ([`Self::source`]); a held source is
     /// never read here (ADR 0106 D2, ADR 0129).
     fn discover(&mut self, sources: &SourceRoot) -> Vec<String> {
-        self.stamps.forget_sources();
-        self.inputs.forget_hops();
+        self.record(Recording::Sources, Vec::new());
         walked_keys(sources)
     }
 
@@ -164,7 +171,7 @@ impl Reads for Ledger {
     fn run_checks(&mut self, check: impl FnOnce(&dyn Disk)) {
         let run = self.checks();
         check(&RunDisk(&run));
-        run.finish();
+        run.finish(Recording::Checks);
     }
 }
 
@@ -215,7 +222,7 @@ impl Ledger {
             .map(|key| {
                 let read = if self.inputs.excludes(key) {
                     // No source (any more): a record kept would hide its return.
-                    self.forget_source(key);
+                    self.forget_source(&spec_root, key);
                     Read::Gone
                 } else {
                     self.read_source(&spec_root, key, |disk| sources::read(disk, &spec_root, key))
@@ -266,15 +273,43 @@ impl Ledger {
         let path = spec_root.join(key);
         let run = self.run();
         let text = read(&RunDisk(&run));
-        run.finish_source(key, &path);
+        run.finish(Recording::Source { key, path: &path });
         text
     }
 
     /// Source `key` is no source (any more): its stamp and hops are
     /// forgotten.
-    fn forget_source(&mut self, key: &str) {
-        self.stamps.set_source(key, None);
-        self.inputs.set_hops(key, Vec::new());
+    fn forget_source(&mut self, spec_root: &Path, key: &str) {
+        let path = spec_root.join(key);
+        self.record(Recording::Source { key, path: &path }, Vec::new());
+    }
+
+    /// The one writer of the record: the inputs and the stamps `recording`
+    /// covers, in step (ADR 0133). Each path is recorded once per class, with
+    /// its first stamp.
+    fn record(&mut self, recording: Recording<'_>, read: Vec<(Reading, PathBuf, Option<Entry>)>) {
+        let mut rows: Vec<(Class, PathBuf)> = Vec::new();
+        let mut stamps: BTreeMap<(Class, PathBuf), Option<Entry>> = BTreeMap::new();
+        let mut source: Option<Option<Entry>> = None;
+        for (reading, path, entry) in read {
+            let Some(class) = recording.class_of(reading, &path) else {
+                // The source's own file: its first stamp.
+                source.get_or_insert(entry);
+                continue;
+            };
+            if class.stamped() {
+                stamps.entry((class.clone(), path.clone())).or_insert(entry);
+            }
+            if !rows.iter().any(|(c, p)| c == &class && p == &path) {
+                rows.push((class, path));
+            }
+        }
+        if matches!(recording, Recording::Checks) {
+            // A set: the order the checks asked in is no change.
+            rows.sort();
+        }
+        self.stamps.replace(&recording, stamps, source.flatten());
+        self.inputs.replace(&recording, rows);
     }
 
     /// A ledger over `inputs`, nothing stamped.
@@ -334,80 +369,17 @@ impl Run<'_> {
         read(path)
     }
 
-    /// The environment inputs are now exactly what this run read, in read
-    /// order, each once, each with its first stamp; the inputs are made anew
-    /// for `config` (nothing else of the record is kept, the check inputs
-    /// included). A listing folds into the files: nothing read is dropped.
-    pub(crate) fn finish_environment(self, root: &Path, config: &ProjectConfig) {
-        let Run { ledger, read, .. } = self;
-        let mut files: Vec<PathBuf> = Vec::new();
-        let mut stamps: BTreeMap<PathBuf, Option<Entry>> = BTreeMap::new();
-        for (_, path, entry) in read.into_inner() {
-            if !files.contains(&path) {
-                files.push(path.clone());
-            }
-            stamps.entry(path).or_insert(entry);
-        }
-        ledger.inputs = SessionInputs::opened(root, config, files);
-        ledger.stamps.set_environment(stamps);
-    }
-
-    /// Source `key` (its file `path`) is now recorded as this run read it: the
-    /// file's stamp, taken before its read, by key, and each link hop the read
-    /// followed, in read order, each once (ADR 0129). Nothing else in the
-    /// record changes.
-    pub(crate) fn finish_source(self, key: &str, path: &Path) {
+    /// Record what this run read as `recording` (ADR 0133): the rows and
+    /// stamps it covers become exactly these reads, each path once per class,
+    /// each with its first stamp. A detached ledger's run records nothing.
+    pub(crate) fn finish(self, recording: Recording<'_>) {
         let Run {
             ledger,
             records,
             read,
         } = self;
-        if !records {
-            return;
+        if records {
+            ledger.record(recording, read.into_inner());
         }
-        // The file's first stamp, as for every other input.
-        let mut stamp = None;
-        let mut stamped = false;
-        let mut hops: Vec<PathBuf> = Vec::new();
-        for (_, read_path, entry) in read.into_inner() {
-            if read_path == path {
-                if !stamped {
-                    stamp = entry;
-                    stamped = true;
-                }
-            } else if !hops.contains(&read_path) {
-                hops.push(read_path);
-            }
-        }
-        ledger.stamps.set_source(key, stamp);
-        ledger.inputs.set_hops(key, hops);
-    }
-
-    /// The check inputs are now exactly what this run read (ADR 0030 D2: renewed each time the checks run). Their canonical
-    /// forms and missing directories are taken again; nothing else in the
-    /// record changes.
-    pub(crate) fn finish(self) {
-        let Run { ledger, read, .. } = self;
-        if ledger.inputs.root().is_none() {
-            return;
-        }
-        let mut files: Vec<PathBuf> = Vec::new();
-        let mut listings: Vec<PathBuf> = Vec::new();
-        let mut stamps: BTreeMap<PathBuf, Option<Entry>> = BTreeMap::new();
-        for (input, path, entry) in read.into_inner() {
-            let list = match input {
-                Reading::File => &mut files,
-                Reading::Listing => &mut listings,
-            };
-            if !list.contains(&path) {
-                list.push(path.clone());
-            }
-            stamps.entry(path).or_insert(entry);
-        }
-        // A set: the order the checks asked in is no change.
-        files.sort();
-        listings.sort();
-        ledger.inputs.set_checks(files, listings);
-        ledger.stamps.set_checks(stamps);
     }
 }

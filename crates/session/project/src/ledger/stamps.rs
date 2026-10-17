@@ -29,7 +29,7 @@ use std::time::{Duration, SystemTime};
 use super::Changes;
 use super::inputs::SessionInputs;
 use super::reach::Reach;
-use super::recorded::Class;
+use super::recorded::{Class, Recording};
 
 /// Coarse filesystems record modification times to the second (some to
 /// two); an entry modified this close to when it was stamped is racy.
@@ -104,38 +104,53 @@ fn content_hash(path: &Path) -> u64 {
 pub(super) struct Stamps {
     /// Every source, by key relative to the spec root.
     sources: BTreeMap<String, Entry>,
-    /// Every environment input (absent ones recorded as `None`).
-    environment: BTreeMap<PathBuf, Option<Entry>>,
-    /// Every check input, as the last run of the checks read it.
-    checks: BTreeMap<PathBuf, Option<Entry>>,
+    /// Every stamped row, by its class and path as recorded (absent ones
+    /// recorded as `None`; no `Hop` row: ADR 0129).
+    inputs: BTreeMap<(Class, PathBuf), Option<Entry>>,
 }
 
 impl Stamps {
-    /// The environment inputs are exactly `environment`, each stamped before
-    /// the environment load read it (ADR 0114).
-    pub(super) fn set_environment(&mut self, environment: BTreeMap<PathBuf, Option<Entry>>) {
-        self.environment = environment;
+    /// The stamps `recording` covers are now these: the environment's
+    /// replace every input stamp, the checks' theirs, a source's its own
+    /// (`source`: the stamp its read took before reading; `None`: it was not
+    /// there), and discovery's forget every source's.
+    pub(super) fn replace(
+        &mut self,
+        recording: &Recording<'_>,
+        inputs: BTreeMap<(Class, PathBuf), Option<Entry>>,
+        source: Option<Entry>,
+    ) {
+        match recording {
+            Recording::Environment { .. } => self.inputs = inputs,
+            Recording::Checks => {
+                self.inputs.retain(|(class, _), _| !recording.covers(class));
+                self.inputs.extend(inputs);
+            }
+            Recording::Source { key, .. } => match source {
+                Some(entry) => {
+                    self.sources.insert((*key).to_string(), entry);
+                }
+                None => {
+                    self.sources.remove(*key);
+                }
+            },
+            Recording::Sources => self.sources.clear(),
+        }
     }
 
-    /// No source is stamped: discovery starts the record of the sources again,
-    /// each stamped as it is read.
-    pub(super) fn forget_sources(&mut self) {
-        self.sources.clear();
-    }
-
-    /// Source `key` is recorded as `entry`, the stamp its read took before
-    /// reading (`None`: it was not there).
-    pub(super) fn set_source(&mut self, key: &str, entry: Option<Entry>) {
-        match entry {
-            Some(entry) => self.sources.insert(key.to_string(), entry),
-            None => self.sources.remove(key),
-        };
-    }
-
-    /// The check inputs are exactly `checks`, each stamped before the run
-    /// that read it read it.
-    pub(super) fn set_checks(&mut self, checks: BTreeMap<PathBuf, Option<Entry>>) {
-        self.checks = checks;
+    /// Whether the row (`class`, `recorded`) differs from its stamp: a hop
+    /// compares its source's stamp, by key, as the read that recorded it does.
+    fn moved(&self, class: &Class, recorded: &Path, spec_root: &Path) -> bool {
+        match class {
+            Class::Hop(key) => !unchanged(&spec_root.join(key), self.sources.get(key)),
+            _ => {
+                let entry = self
+                    .inputs
+                    .get(&(class.clone(), recorded.to_path_buf()))
+                    .and_then(Option::as_ref);
+                !unchanged(recorded, entry)
+            }
+        }
     }
 
     /// What differs from what was read, among `scope`: the sources `inputs`
@@ -169,55 +184,48 @@ impl Stamps {
                 }
             }
         }
-        // A symlinked source a path reached through its target.
-        if let Scope::Reached(reach) = scope {
-            for key in &reach.linked {
-                if seen.insert(key.clone())
-                    && !unchanged(&spec_root.join(key), self.sources.get(key))
-                {
-                    changes.sources.push(key.clone());
+        match scope {
+            Scope::Everything => {
+                for ((class, path), entry) in &self.inputs {
+                    if !unchanged(path, entry.as_ref()) {
+                        note(&mut changes, class, path);
+                    }
+                }
+            }
+            Scope::Reached(reach) => {
+                let mut memo: BTreeMap<(&Class, &Path), bool> = BTreeMap::new();
+                for (path, reached) in &reach.inputs {
+                    for (class, recorded) in reached {
+                        let moved = *memo
+                            .entry((class, recorded.as_path()))
+                            .or_insert_with(|| self.moved(class, recorded, spec_root));
+                        if moved {
+                            note(&mut changes, class, path);
+                        }
+                    }
+                }
+                for (path, class) in &reach.pending {
+                    note(&mut changes, class, path);
                 }
             }
         }
         changes.sources.sort();
         changes.sources.dedup();
-        match scope {
-            Scope::Everything => {
-                changes.environment = changed_paths(&self.environment);
-                changes.check_inputs = changed_paths(&self.checks);
-            }
-            Scope::Reached(reach) => {
-                let mut memo: BTreeMap<&Path, bool> = BTreeMap::new();
-                for (path, reached) in &reach.inputs {
-                    for (class, recorded) in reached {
-                        let table = match class {
-                            Class::Environment => &self.environment,
-                            _ => &self.checks,
-                        };
-                        let moved = *memo.entry(recorded.as_path()).or_insert_with(|| {
-                            !unchanged(recorded, table.get(recorded).and_then(Option::as_ref))
-                        });
-                        if moved {
-                            match class {
-                                Class::Environment => changes.environment.push(path.clone()),
-                                _ => changes.check_inputs.push(path.clone()),
-                            }
-                        }
-                    }
-                }
-                for (path, class) in &reach.pending {
-                    match class {
-                        Class::Environment => changes.environment.push(path.clone()),
-                        _ => changes.check_inputs.push(path.clone()),
-                    }
-                }
-                for list in [&mut changes.environment, &mut changes.check_inputs] {
-                    list.sort();
-                    list.dedup();
-                }
-            }
+        for list in [&mut changes.environment, &mut changes.check_inputs] {
+            list.sort();
+            list.dedup();
         }
         changes
+    }
+}
+
+/// Note a change to a row of `class`, reached by `path`: what a change to it
+/// is. A hop's is its source's, whatever the stamps say for a pending one.
+fn note(changes: &mut Changes, class: &Class, path: &Path) {
+    match class {
+        Class::Environment => changes.environment.push(path.to_path_buf()),
+        Class::Check | Class::Listing => changes.check_inputs.push(path.to_path_buf()),
+        Class::Hop(key) => changes.sources.push(key.clone()),
     }
 }
 
@@ -227,13 +235,4 @@ pub(super) enum Scope<'r> {
     Everything,
     /// What a batch of changed paths reaches.
     Reached(&'r Reach),
-}
-
-/// The recorded paths of `table` whose file is not as recorded, sorted.
-fn changed_paths(table: &BTreeMap<PathBuf, Option<Entry>>) -> Vec<PathBuf> {
-    table
-        .iter()
-        .filter(|(path, entry)| !unchanged(path, entry.as_ref()))
-        .map(|(path, _)| path.clone())
-        .collect()
 }

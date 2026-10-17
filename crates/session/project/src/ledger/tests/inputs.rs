@@ -4,6 +4,7 @@ use specforge_common::ProjectConfig;
 
 use crate::ledger::inputs::*;
 use crate::ledger::recorded::Class;
+use crate::ledger::recorded::Recording;
 use crate::ledger::{Ledger, Reading};
 
 fn config(extensions: &[&str]) -> ProjectConfig {
@@ -39,7 +40,7 @@ fn after_checks(inputs: SessionInputs, files: &[PathBuf]) -> SessionInputs {
             run.read(Reading::Listing, parent, |_| ());
         }
     }
-    run.finish();
+    run.finish(Recording::Checks);
     ledger.inputs().clone()
 }
 

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use specforge_common::{ProjectConfig, SourceRoot};
 
 use super::key::{canonical, discovered, in_canonical_dir, relative_canonical};
-use super::recorded::{Class, Pending, Recorded};
+use super::recorded::{Class, Pending, Recorded, Recording};
 
 /// Everything a project session depends on besides its sources' text:
 /// where its sources are discovered (the spec root and `exclude`), the
@@ -276,43 +276,25 @@ impl SessionInputs {
         }
     }
 
-    /// No source hop is recorded: discovery starts the record of the sources
-    /// again, each read recording its own (ADR 0129).
-    pub(super) fn forget_hops(&mut self) {
-        self.replace_rows(|class| matches!(class, Class::Hop(_)), Vec::new());
-    }
-
-    /// Source `key`'s hops are now `hops` (empty: none).
-    pub(super) fn set_hops(&mut self, key: &str, hops: Vec<PathBuf>) {
-        let class = Class::Hop(key.to_string());
-        let rows = hops.into_iter().map(|hop| (class.clone(), hop)).collect();
-        self.replace_rows(|covered| covered == &class, rows);
-    }
-
-    /// The check inputs are now `files` and the `listings` the checks
-    /// listed: their keys and missing directories are taken again, nothing
-    /// else changes.
-    pub(super) fn set_checks(&mut self, files: Vec<PathBuf>, listings: Vec<PathBuf>) {
-        let rows = files
-            .into_iter()
-            .map(|file| (Class::Check, file))
-            .chain(listings.into_iter().map(|dir| (Class::Listing, dir)))
-            .collect();
-        self.replace_rows(|class| matches!(class, Class::Check | Class::Listing), rows);
-    }
-
-    /// The rows of the classes `covers` selects are now `rows`, each keyed
-    /// and its pending directory taken now. Nothing covered and nothing new:
-    /// nothing is touched.
-    fn replace_rows(&mut self, covers: impl Fn(&Class) -> bool, rows: Vec<(Class, PathBuf)>) {
+    /// The rows `recording` covers are now `rows` (class, path), each keyed and
+    /// its pending directory taken now. An environment recording makes the value
+    /// anew for its root and config (no check row or hop is kept). Detached:
+    /// nothing, except an environment recording.
+    pub(super) fn replace(&mut self, recording: &Recording<'_>, rows: Vec<(Class, PathBuf)>) {
+        if let Recording::Environment { root, config } = recording {
+            let environment = rows.into_iter().map(|(_, path)| path).collect();
+            *self = SessionInputs::opened(root, config, environment);
+            return;
+        }
         let Some(disk) = self.disk_mut() else {
             return;
         };
-        if rows.is_empty() && !disk.rows.iter().any(|row| covers(&row.class)) {
+        // Nothing covered and nothing new: nothing is touched.
+        if rows.is_empty() && !disk.rows.iter().any(|row| recording.covers(&row.class)) {
             return;
         }
         let root_exists = disk.canonical_root.is_dir();
-        disk.rows.retain(|row| !covers(&row.class));
+        disk.rows.retain(|row| !recording.covers(&row.class));
         let new: Vec<Recorded> = rows
             .into_iter()
             .map(|(class, path)| disk.row(class, path, root_exists))

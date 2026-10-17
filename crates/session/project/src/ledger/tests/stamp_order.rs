@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use specforge_wasm::testing::InProcessRuntime;
 
+use crate::ledger::recorded::Recording;
 use crate::ledger::{Ledger, Reading, Reads};
 use crate::sources::Read;
 use crate::{Environment, SharedRuntime};
@@ -94,6 +95,6 @@ fn a_detached_ledger_reads_every_key_as_gone_and_records_nothing() {
     assert!(ledger.changes([Path::new("/p/a.spec")]).is_empty());
     let run = ledger.checks();
     assert!(run.read(Reading::File, Path::new("/p/x.md"), |_| true));
-    run.finish();
+    run.finish(Recording::Checks);
     assert_eq!(ledger.inputs(), &crate::ledger::SessionInputs::detached());
 }

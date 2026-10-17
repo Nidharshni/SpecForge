@@ -13,6 +13,7 @@ use specforge_test_macros::test as specforge_test;
 
 use crate::ledger::disk::RunDisk;
 use crate::ledger::inputs::{WatchRoot, Watched};
+use crate::ledger::recorded::Recording;
 use crate::ledger::{Changes, Ledger, Reads, SessionInputs};
 
 /// `t/root` (the project and its spec root), `t/mid` (where middle hops live),
@@ -84,19 +85,22 @@ struct Case {
 fn record_environment(l: &Layout, ledger: &mut Ledger, input: &Path) {
     let run = ledger.environment_run();
     let _ = RunDisk(&run).read(input);
-    run.finish_environment(&l.root, &ProjectConfig::default());
+    run.finish(Recording::Environment {
+        root: &l.root,
+        config: &ProjectConfig::default(),
+    });
 }
 
 fn record_check(_: &Layout, ledger: &mut Ledger, input: &Path) {
     let run = ledger.checks();
     RunDisk(&run).exists(input);
-    run.finish();
+    run.finish(Recording::Checks);
 }
 
 fn record_listing(_: &Layout, ledger: &mut Ledger, input: &Path) {
     let run = ledger.checks();
     RunDisk(&run).list(input);
-    run.finish();
+    run.finish(Recording::Checks);
 }
 
 fn record_hop(l: &Layout, ledger: &mut Ledger, _: &Path) {

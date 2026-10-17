@@ -7,6 +7,7 @@ use specforge_common::ProjectConfig;
 use specforge_registry::{Disk, PlainDisk};
 use specforge_test_macros::test as specforge_test;
 
+use crate::ledger::recorded::Recording;
 use crate::ledger::{Ledger, Reading, SessionInputs, Watched};
 
 fn opened() -> (tempfile::TempDir, Ledger) {
@@ -33,7 +34,7 @@ fn a_check_input_written_between_its_stamp_and_its_read_is_seen_next_time() {
         fs::write(path, "new, and longer").unwrap();
         fs::read(path).ok()
     });
-    run.finish();
+    run.finish(Recording::Checks);
     assert_eq!(ledger.stale().check_inputs, [doc]);
 }
 
@@ -46,7 +47,7 @@ fn a_missing_check_input_records_its_directory() {
     let run = ledger.checks();
     assert!(!run.read(Reading::File, &missing, std::path::Path::exists));
     run.read(Reading::Listing, &root.join("docs"), |_| ());
-    run.finish();
+    run.finish(Recording::Checks);
     assert!(
         ledger
             .inputs()
@@ -79,7 +80,7 @@ fn a_run_that_reads_what_the_last_read_leaves_the_inputs_as_they_were() {
     let read = |ledger: &mut Ledger, file: &std::path::Path| {
         let run = ledger.checks();
         run.read(Reading::File, file, |_| ());
-        run.finish();
+        run.finish(Recording::Checks);
     };
     let mut before = ledger.inputs().clone();
     read(&mut ledger, &one);
@@ -101,7 +102,7 @@ fn a_run_that_reads_a_path_twice_leaves_the_inputs_as_they_were() {
         for file in files {
             run.read(Reading::File, file, |_| ());
         }
-        run.finish();
+        run.finish(Recording::Checks);
     };
     run_of(&mut ledger, &[&one, &two, &one]);
     let before = ledger.inputs().clone();

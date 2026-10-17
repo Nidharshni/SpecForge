@@ -4,6 +4,9 @@
 
 use std::path::{Path, PathBuf};
 
+use specforge_common::ProjectConfig;
+
+use super::Reading;
 use super::key::canonical;
 
 /// What read an input. Ordered: the rows of one class sit together, in this order.
@@ -35,6 +38,12 @@ impl Class {
             // elsewhere is the change of the name, not of its old target.
             _ => key.starts_with(canonical_path) || key.starts_with(in_dir),
         }
+    }
+
+    /// Whether the ledger stamps a row of this class (not a hop: its source's stamp
+    /// follows the chain, ADR 0129).
+    pub(super) fn stamped(&self) -> bool {
+        !matches!(self, Class::Hop(_))
     }
 
     /// The directory a watcher must watch for a row at `path`: its parent; none for a
@@ -92,5 +101,49 @@ impl Pending {
     pub(super) fn reached_by(&self, canonical_path: &Path) -> bool {
         canonical_path.parent() == Some(self.ancestor.as_path())
             && self.toward.starts_with(canonical_path)
+    }
+}
+
+/// What one run of reads (or a forgetting) records: which rows and stamps it replaces.
+pub(crate) enum Recording<'a> {
+    /// The environment load at `root` from `config`: every row and every input stamp.
+    Environment {
+        root: &'a Path,
+        config: &'a ProjectConfig,
+    },
+    /// One run of the checks: the `Check` and `Listing` rows, a set.
+    Checks,
+    /// One read of source `key` (its file `path`): its `Hop(key)` rows and its stamp.
+    Source { key: &'a str, path: &'a Path },
+    /// Discovery starts the record of the sources again: every `Hop` row, every source stamp.
+    Sources,
+}
+
+impl Recording<'_> {
+    /// Whether this recording replaces a row of `class`.
+    pub(super) fn covers(&self, class: &Class) -> bool {
+        match self {
+            Recording::Environment { .. } => true,
+            Recording::Checks => matches!(class, Class::Check | Class::Listing),
+            Recording::Source { key, .. } => matches!(class, Class::Hop(hop) if hop == key),
+            Recording::Sources => matches!(class, Class::Hop(_)),
+        }
+    }
+
+    /// The class of one read in this recording; `None` for a source's own file, which is
+    /// its stamp by key, not a row.
+    pub(super) fn class_of(&self, reading: Reading, path: &Path) -> Option<Class> {
+        match self {
+            // A listing folds into the files: nothing read is dropped.
+            Recording::Environment { .. } => Some(Class::Environment),
+            Recording::Checks => Some(match reading {
+                Reading::File => Class::Check,
+                Reading::Listing => Class::Listing,
+            }),
+            Recording::Source { key, path: file } => {
+                (path != *file).then(|| Class::Hop((*key).to_string()))
+            }
+            Recording::Sources => None,
+        }
     }
 }

@@ -23,8 +23,6 @@ pub(crate) struct Reach {
     /// Each batch path that is a directory created on the way to a missing
     /// input's directory.
     pub(crate) pending: Vec<(PathBuf, Class)>,
-    /// Symlinked sources a path reached through one of their hops, by key.
-    pub(crate) linked: std::collections::BTreeSet<String>,
 }
 
 impl SessionInputs {
@@ -70,14 +68,7 @@ impl SessionInputs {
             let mut reached: Vec<(Class, PathBuf)> = Vec::new();
             for row in &disk.rows {
                 if row.class.reached_by(&row.key, &canonical_path, &in_dir) {
-                    match &row.class {
-                        // A symlinked source one of whose hops is this path, or
-                        // under it: its own name or where it points (ADR 0129).
-                        Class::Hop(key) => {
-                            reach.linked.insert(key.clone());
-                        }
-                        class => reached.push((class.clone(), row.path.clone())),
-                    }
+                    reached.push((row.class.clone(), row.path.clone()));
                 }
                 // A directory created on the way to an input's missing directory.
                 if row
