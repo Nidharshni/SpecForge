@@ -494,8 +494,10 @@ fn a_sources_middle_hop_pointed_elsewhere_is_seen() {
 }
 
 #[cfg(unix)]
-#[ignore = "flipped by T6"]
-#[test]
+#[spec(
+    behavior = "watch_file_system_for_changes",
+    verify = "a symlinked source whose hop lies in a directory that did not exist is seen when it is created"
+)]
 fn a_hop_into_a_missing_directory_is_followed_when_it_is_created() {
     let fixture = Fixture::new(PLAIN);
     let real = fixture.parent.join("real");

@@ -39,8 +39,8 @@ behavior watch_file_system_for_changes "Watch File System for Changes" {
     a file the checks read) the watcher follows the session's watch roots
     and brings the session up to date with what was written meanwhile
     (bring_session_up_to_date); it does so once at start, before it reports
-    ready. A missing directory on the way to an input is watched from its
-    nearest existing ancestor.
+    ready. A missing directory on the way to an input, a symlinked source's
+    hop included, is watched from its nearest existing ancestor.
   """
   verify unit "file modification triggers recompilation"
   verify unit "file creation triggers recompilation"
@@ -60,6 +60,7 @@ behavior watch_file_system_for_changes "Watch File System for Changes" {
   verify integration "a directory moved inside the spec root leaves watch reporting what check reports"
   verify integration "an edit to a symlinked source's target is seen"
   verify unit "a directory event reaches every source under it"
+  verify unit "a symlinked source whose hop lies in a directory that did not exist is seen when it is created"
 }
 
 behavior classify_project_changes "Classify Project Changes" {
@@ -93,10 +94,10 @@ behavior classify_project_changes "Classify Project Changes" {
     is a change when it differs from what the session read (size and
     modification time, and the content when it was read within the
     timestamp granularity); a directory created on the way to a missing
-    input's directory outside the root is that input's change, whatever
-    the stamps say. Any other path changes nothing. A detached session
-    (no project) takes no change from disk: its sources are the buffers
-    it holds.
+    input's directory outside the root is that input's change (a source
+    hop's: that source's), whatever the stamps say. Any other path
+    changes nothing. A detached session (no project) takes no change from
+    disk: its sources are the buffers it holds.
     Watch, the LSP and MCP MUST take changes through the session. What a
     path reaches, which directories watch watches, which files the LSP
     asks its client to report and what the session stamps MUST all derive
@@ -133,6 +134,7 @@ behavior classify_project_changes "Classify Project Changes" {
   verify unit "a symlinked source is keyed by its link and changes when its target does"
   verify unit "a symlinked source is reached by each hop its read followed"
   verify unit "a path whose file is as the session last read it changes nothing"
+  verify unit "a directory created on the way to a missing input's directory outside the root is that input's change, a source hop's included"
   verify unit "a detached session takes no change from disk"
   verify unit "a directory moved above an environment or check input changes that input"
   verify unit "a session's watch roots and the LSP's watchers cover every symlinked source's target"

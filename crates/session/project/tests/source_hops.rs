@@ -150,8 +150,10 @@ fn stale_sees_a_sources_middle_hop_pointed_elsewhere() {
 }
 
 #[cfg(unix)]
-#[ignore = "flipped by T6"]
-#[test]
+#[specforge_test(
+    behavior = "classify_project_changes",
+    verify = "a directory created on the way to a missing input's directory outside the root is that input's change, a source hop's included"
+)]
 fn a_hop_into_a_missing_directory_is_seen_when_it_is_created() {
     let (_dir, mut session, chain) = chained(false);
     let far = chain.real.parent().unwrap().parent().unwrap().join("far");

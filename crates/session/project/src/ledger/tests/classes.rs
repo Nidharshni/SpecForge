@@ -279,8 +279,10 @@ fn watched_names_every_input_and_hop() {
     }
 }
 
-#[ignore = "flipped by T6"]
-#[test]
+#[specforge_test(
+    behavior = "classify_project_changes",
+    verify = "a directory created on the way to a missing input's directory outside the root is that input's change, a source hop's included"
+)]
 fn a_missing_directory_on_the_way_to_an_input_is_pending() {
     for case in linked() {
         let l = layout();

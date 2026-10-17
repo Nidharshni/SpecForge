@@ -78,9 +78,7 @@ impl OnDisk {
             _ => in_canonical_dir(&path),
         };
         let pending = match class {
-            // shortcut: a hop's pending directory is T6's fix; this commit
-            // changes no behaviour.
-            Class::Environment | Class::Check if root_exists => path
+            Class::Environment | Class::Check | Class::Hop(_) if root_exists => path
                 .parent()
                 .and_then(|dir| Pending::toward(dir, &self.canonical_root)),
             _ => None,

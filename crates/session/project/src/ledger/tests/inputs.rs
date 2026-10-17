@@ -162,66 +162,6 @@ fn a_watched_path_outside_the_root_is_canonical() {
 }
 
 #[test]
-fn a_module_in_a_missing_directory_is_pending_as_an_environment_input() {
-    let dir = tempfile::TempDir::new().unwrap();
-    let root = dir.path().join("proj");
-    std::fs::create_dir_all(&root).unwrap();
-    let far = dir.path().join("far");
-    std::fs::create_dir_all(&far).unwrap();
-    let module = far.join("deep/mods/ext.wasm");
-    let inputs = SessionInputs::opened(
-        &root,
-        &config(&[&format!("@acme/far={}", module.display())]),
-        vec![module.clone()],
-    );
-    let far = std::fs::canonicalize(&far).unwrap();
-
-    // The nearest existing ancestor is watched for its own entries.
-    assert!(
-        inputs.watch_roots().contains(&WatchRoot {
-            dir: far.clone(),
-            recursive: false
-        }),
-        "{:?}",
-        inputs.watch_roots()
-    );
-    // A directory created on the way is the module's change; one
-    // beside it is nothing.
-    assert_eq!(
-        inputs.reach([far.join("deep").as_path()]).pending,
-        vec![(far.join("deep"), Class::Environment)]
-    );
-    assert!(
-        inputs
-            .reach([far.join("other").as_path()])
-            .pending
-            .is_empty()
-    );
-    // Below the first directory on the way is not this ancestor's.
-    assert!(
-        inputs
-            .reach([far.join("deep/mods").as_path()])
-            .pending
-            .is_empty()
-    );
-    // Once the directory exists, it is watched whole.
-    std::fs::create_dir_all(far.join("deep/mods")).unwrap();
-    let inputs = SessionInputs::opened(
-        &root,
-        &config(&[&format!("@acme/far={}", module.display())]),
-        vec![module.clone()],
-    );
-    assert!(
-        inputs.watch_roots().contains(&WatchRoot {
-            dir: far.join("deep/mods"),
-            recursive: true
-        }),
-        "{:?}",
-        inputs.watch_roots()
-    );
-}
-
-#[test]
 fn a_missing_root_has_no_watch_roots() {
     let dir = tempfile::TempDir::new().unwrap();
     let inputs = SessionInputs::opened(&dir.path().join("nope"), &config(&[]), Vec::new());
