@@ -58,7 +58,6 @@ fn a_contained_disk_refuses_a_dangling_link_outside() {
 
 #[cfg(unix)]
 #[test]
-#[ignore = "flipped by T2"]
 fn a_contained_disk_refuses_a_file_with_two_names_as_invalid_input_naming_the_count_not_the_content()
  {
     let (_dir, base) = scene();

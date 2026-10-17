@@ -217,7 +217,6 @@ fn a_source_link_whose_final_target_is_inside_the_project_is_read() {
     invariant = "mcp_served_project_consistency",
     verify = "a source of the served project is read only from inside the project"
 )]
-#[ignore = "flipped by T2"]
 fn a_hard_linked_source_that_is_not_a_spec_is_read_by_no_view() {
     let (_scene, project, outside) = scene();
     fs::write(
@@ -237,7 +236,6 @@ fn a_hard_linked_source_that_is_not_a_spec_is_read_by_no_view() {
     invariant = "mcp_served_project_consistency",
     verify = "a source of the served project is read only from inside the project"
 )]
-#[ignore = "flipped by T2"]
 fn a_hard_linked_source_that_is_a_valid_spec_enters_no_graph() {
     let (_scene, project, outside) = scene();
     fs::write(outside.join("leaked.spec"), OUTSIDE_SPEC).unwrap();
@@ -257,7 +255,6 @@ fn a_hard_linked_source_that_is_a_valid_spec_enters_no_graph() {
     invariant = "mcp_served_project_consistency",
     verify = "a source of the served project is read only from inside the project"
 )]
-#[ignore = "flipped by T2"]
 fn a_hard_linked_recorded_report_steers_no_coverage_verdict() {
     let (_scene, project, outside) = scene();
     fs::write(
@@ -295,6 +292,44 @@ fn a_source_with_one_name_is_read() {
     let reply = call_tool(&mut server, "specforge.list", json!({})).to_string();
     assert!(reply.contains("plain"), "{reply}");
     assert!(!reply.contains("E025"), "{reply}");
+}
+
+/// The refusal is on the count, so a second name that is also inside the project is refused too (ADR 0146 D3).
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a source of the served project is read only from inside the project"
+)]
+fn a_cp_al_snapshot_served_directly_is_refused() {
+    let (_scene, project, _outside) = scene();
+    fs::hard_link(project.join("spec/a.spec"), project.join("spec/copy.spec")).unwrap();
+    let mut server = serve(&project);
+    let reply = call_tool(&mut server, "specforge.validate", json!({})).to_string();
+    assert!(reply.contains("E025"), "{reply}");
+    assert!(reply.contains("2 names"), "{reply}");
+}
+
+/// A writer replaces the name (ADR 0144), so a rewritten source has one name and reads again; the
+/// format's own read of the project's state before the rewrite is not bounded by the link count.
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a source of the served project is read only from inside the project"
+)]
+fn a_source_rewritten_by_format_has_one_name_and_reads() {
+    let (_scene, project, outside) = scene();
+    fs::write(
+        outside.join("leaked.spec"),
+        "behavior   leaked   \"Leaked\"   {\n}\n",
+    )
+    .unwrap();
+    fs::hard_link(outside.join("leaked.spec"), project.join("spec/leak.spec")).unwrap();
+    let mut server = serve(&project);
+    let reply = call_tool(&mut server, "specforge.format", json!({"write": true})).to_string();
+    let after = call_tool(&mut server, "specforge.list", json!({})).to_string();
+    assert!(reply.contains("spec/leak.spec"), "{reply}");
+    assert!(after.contains("leaked"), "{after}");
+    assert!(!after.contains("E025"), "{after}");
 }
 
 /// A symlinked directory inside the spec root is not entered at all.
