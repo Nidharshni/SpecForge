@@ -70,7 +70,8 @@ behavior resolve_use_imports "Resolve Use Imports" {
     migrate, rename), an editor buffer of one included, and no import
     names it; its own project compiles it. Only files are sources: a directory named like a .spec file is none, and
     a symlink is a source only when it resolves to a file, read through
-    the link wherever it points and keyed by its own path; a symlinked
+    the link wherever it points and keyed by its own path (one that points
+    nowhere is no source and is the session's candidate, ADR 0141); a symlinked
     directory is never entered.
   """
   verify unit "a use path resolves to the project source it names"

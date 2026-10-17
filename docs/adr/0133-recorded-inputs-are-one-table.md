@@ -40,5 +40,5 @@ never saw a symlinked source come back when a hop's missing directory outside th
 ## What would reopen it
 
 An input whose change is not a reload, a re-run of the checks or a source reread (a per-source check input, say), or
-symlinked directories as sources (ADR 0073 D5). A dangling source link that comes alive is not covered: discovery
-skips it, and recording its hops at discovery reopens ADR 0129's rejected option.
+symlinked directories as sources (ADR 0073 D5). A dangling source link that comes alive is covered by
+[ADR 0141](0141-a-session-names-the-dangling-source-links-it-reads.md), which names the key and lets the read record.

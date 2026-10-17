@@ -546,3 +546,38 @@ fn a_hop_into_a_missing_directory_is_followed_when_it_is_created() {
         recorder.armed()
     );
 }
+
+#[cfg(unix)]
+#[spec(
+    behavior = "watch_file_system_for_changes",
+    verify = "a dangling source link whose missing directory lies outside the root is watched"
+)]
+fn a_dangling_source_links_missing_directory_outside_the_root_is_watched() {
+    let fixture = Fixture::new(PLAIN);
+    let far = fixture.parent.join("far");
+    fs::create_dir_all(&far).unwrap();
+    std::os::unix::fs::symlink(
+        far.join("newdir/final.spec"),
+        fixture.root.join("spec/link.spec"),
+    )
+    .unwrap();
+    let (mut watch, recorder) = fixture.watch();
+
+    assert!(
+        recorder.armed()[0].contains(&WatchRoot {
+            dir: far.clone(),
+            recursive: false
+        }),
+        "{:?}",
+        recorder.armed()
+    );
+    fs::create_dir(far.join("newdir")).unwrap();
+    fs::write(
+        far.join("newdir/final.spec"),
+        PLAIN.replace("gadget_one", "gadget_five"),
+    )
+    .unwrap();
+    let events = watch.changed(&[far.join("newdir")]);
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert_eq!(applied(&events[0]).changed, ["link.spec"]);
+}

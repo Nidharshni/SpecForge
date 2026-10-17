@@ -87,6 +87,33 @@ fn a_source_that_is_no_source_any_more_leaves_the_record() {
 }
 
 #[test]
+fn a_source_read_as_gone_is_recorded_and_stays_unchanged_while_it_is_gone() {
+    let (dir, root) = project(CONFIG);
+    let mut ledger = Ledger::opening();
+    let env = Environment::read_through(&mut ledger, &root, |_| None);
+    let sources = env.config().sources(root.dir());
+    assert!(matches!(
+        ledger.source(sources.dir(), "late.spec"),
+        Read::Gone
+    ));
+    assert!(ledger.stale().sources.is_empty());
+
+    rewrite(&dir.path().join("late.spec"), "behavior c \"C\" {\n}\n");
+    assert_eq!(ledger.stale().sources, ["late.spec"]);
+}
+
+#[test]
+fn a_source_never_read_is_changed() {
+    let (dir, root) = project(CONFIG);
+    rewrite(&dir.path().join("a.spec"), "behavior a \"A\" {\n}\n");
+    let mut ledger = Ledger::opening();
+    let env = Environment::read_through(&mut ledger, &root, |_| None);
+    let sources = env.config().sources(root.dir());
+    assert_eq!(ledger.discover(&sources), ["a.spec"]);
+    assert_eq!(ledger.stale().sources, ["a.spec"]);
+}
+
+#[test]
 fn a_detached_ledger_reads_every_key_as_gone_and_records_nothing() {
     let mut ledger = Ledger::detached();
     let reads = ledger.reread(&["/p/a.spec".to_string()]);

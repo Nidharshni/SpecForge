@@ -94,3 +94,36 @@ fn a_held_key_is_not_stamped_until_it_is_read() {
     assert_eq!(text(&reads[0].1), Some(OLD));
     assert!(ledger.stale().is_empty());
 }
+
+#[cfg(unix)]
+#[test]
+fn a_dangling_link_is_read_as_gone_and_records_its_chain() {
+    let (dir, root) = project();
+    let outside = tempfile::TempDir::new().unwrap();
+    std::os::unix::fs::symlink(
+        outside.path().join("new.spec"),
+        dir.path().join("link.spec"),
+    )
+    .unwrap();
+    let mut ledger = Ledger::opening();
+    let mut unrecorded = Unrecorded;
+    let env = Environment::read_through(&mut ledger, &root, |_| None);
+    let sources = env.config().sources(root.dir());
+
+    let keys = ledger.discover(&sources);
+    assert_eq!(keys, ["a.spec", "link.spec", "sub/b.spec"]);
+    assert_eq!(keys, unrecorded.discover(&sources));
+    assert!(matches!(
+        ledger.source(sources.dir(), "link.spec"),
+        Read::Gone
+    ));
+    assert!(
+        ledger
+            .inputs()
+            .watched()
+            .iter()
+            .any(|watched| format!("{watched:?}").contains("new.spec")),
+        "{:?}",
+        ledger.inputs().watched()
+    );
+}

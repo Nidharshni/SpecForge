@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use specforge_common::{ProjectConfig, SourceRoot};
 
-use super::key::{canonical, discovered, in_canonical_dir, relative_canonical};
+use super::key::{canonical, discovered_keys, in_canonical_dir, relative_canonical};
 use super::recorded::{Class, Pending, Recorded, Recording};
 
 /// Everything a project session depends on besides its sources' text:
@@ -308,11 +308,8 @@ impl SessionInputs {
         let Some(disk) = self.disk() else {
             return Vec::new();
         };
-        disk.sources
-            .files_at(&disk.sources.dir().join(key))
-            .into_iter()
-            .map(|path| discovered(disk.sources.dir(), &path))
-            .collect()
+        let walked = disk.sources.walk_at(&disk.sources.dir().join(key));
+        discovered_keys(&disk.sources, &walked)
     }
 
     /// A changed key the session ignores (never, detached).

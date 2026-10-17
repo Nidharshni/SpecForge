@@ -18,8 +18,13 @@ const SKIP_DIRS: &[&str] = &["target", "node_modules", ".git", ".hg", "dist", "b
 pub struct Walked {
     /// The files reached that `keep` accepts, sorted. Only files, through a
     /// symlink too: a directory named like one, or a symlink to one, is not a
-    /// source; nor is a symlink that points nowhere.
+    /// source; nor is a symlink that points nowhere (that is in
+    /// [`Walked::dangling`]).
     pub files: Vec<PathBuf>,
+    /// The symlinks that `keep` accepts and whose target does not exist,
+    /// sorted: no source, but a session reads them (ADR 0141). A link that
+    /// loops, or that cannot be read, is in neither list.
+    pub dangling: Vec<PathBuf>,
     /// The directories below the root that the walk reached and did not
     /// enter because `stop` held for them, sorted.
     pub stopped: Vec<PathBuf>,
@@ -44,6 +49,7 @@ pub fn walk_files(
     mut stop: impl FnMut(&Path) -> bool,
 ) -> Walked {
     let mut stopped: Vec<PathBuf> = Vec::new();
+    let mut dangling: Vec<PathBuf> = Vec::new();
     let mut files: Vec<PathBuf> = walkdir::WalkDir::new(root)
         .follow_links(false) // symlink cycles and out-of-tree traversal are never wanted here
         .into_iter()
@@ -67,13 +73,21 @@ pub fn walk_files(
         .filter_map(Result::ok)
         .filter(|entry| {
             let ft = entry.file_type();
+            if ft.is_symlink() && is_dangling(entry.path()) && keep(entry.path()) {
+                dangling.push(entry.path().to_path_buf());
+            }
             is_source_entry(ft, entry.path()) && keep(entry.path())
         })
         .map(walkdir::DirEntry::into_path)
         .collect();
     files.sort();
+    dangling.sort();
     stopped.sort();
-    Walked { files, stopped }
+    Walked {
+        files,
+        dangling,
+        stopped,
+    }
 }
 
 /// [`walk_files`] for `.spec` files, skipping only [`SKIP_DIRS`].
@@ -95,6 +109,12 @@ fn is_source_entry(ft: std::fs::FileType, path: &Path) -> bool {
     } else {
         !ft.is_dir()
     }
+}
+
+/// Whether the symlink at `path` points at nothing: its target does not exist
+/// (a loop and an unreadable target are not that).
+fn is_dangling(path: &Path) -> bool {
+    std::fs::metadata(path).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound)
 }
 
 /// Where a project's sources are (CONTEXT "Project sources"): its spec root
@@ -130,11 +150,15 @@ impl SourceRoot {
     /// reaches under the spec root that no `exclude` entry leaves out (the
     /// project's `specforge.json` `exclude`, ADR 0055 D7).
     pub fn files(&self) -> Vec<PathBuf> {
-        walk_spec_files(&self.dir, ProjectRoot::is_root)
-            .files
-            .into_iter()
-            .filter(|path| self.keeps(path))
-            .collect()
+        self.walk_at(&self.dir).files
+    }
+
+    /// The `.spec` symlinks the walk reaches that point nowhere and no
+    /// `exclude` entry leaves out, sorted: no source ([`Self::files`] omits
+    /// them), but the session reads each, so its chain is recorded and its
+    /// target's appearance is its change (ADR 0141).
+    pub fn dangling(&self) -> Vec<PathBuf> {
+        self.walk_at(&self.dir).dangling
     }
 
     /// The sources [`Self::files`] lists at `path`, now: when `path` is a
@@ -143,12 +167,24 @@ impl SourceRoot {
     /// itself; else none. Equal to [`Self::files`] filtered to `path` and what
     /// lies under it.
     pub fn files_at(&self, path: &Path) -> Vec<PathBuf> {
+        self.walk_at(path).files
+    }
+
+    /// [`Self::dangling`] at `path`, by the rules of [`Self::files_at`].
+    pub fn dangling_at(&self, path: &Path) -> Vec<PathBuf> {
+        self.walk_at(path).dangling
+    }
+
+    /// What [`Self::files_at`] and [`Self::dangling_at`] answer, from one
+    /// walk (`stopped` is left empty).
+    pub fn walk_at(&self, path: &Path) -> Walked {
         use std::path::Component;
+        let none = Walked::default;
         let Ok(relative) = path.strip_prefix(&self.dir) else {
-            return Vec::new();
+            return none();
         };
         if relative.as_os_str().is_empty() {
-            return self.files();
+            return self.walked_kept(&self.dir);
         }
         let names: Vec<&std::ffi::OsStr> = relative
             .components()
@@ -162,7 +198,7 @@ impl SourceRoot {
                 .iter()
                 .any(|name| name.to_str().is_some_and(|n| SKIP_DIRS.contains(&n)))
         {
-            return Vec::new();
+            return none();
         }
         // No directory on the way is a symlink or a nested project: the walk
         // never enters one.
@@ -172,28 +208,43 @@ impl SourceRoot {
             if std::fs::symlink_metadata(&walked).is_ok_and(|m| m.file_type().is_symlink())
                 || ProjectRoot::is_root(&walked)
             {
-                return Vec::new();
+                return none();
             }
         }
         match std::fs::symlink_metadata(path) {
             Ok(meta) if meta.file_type().is_dir() => {
                 if ProjectRoot::is_root(path) {
-                    return Vec::new();
+                    return none();
                 }
-                walk_spec_files(path, ProjectRoot::is_root)
-                    .files
-                    .into_iter()
-                    .filter(|file| self.keeps(file))
-                    .collect()
+                self.walked_kept(path)
             }
-            Ok(meta)
-                if is_source_entry(meta.file_type(), path)
-                    && self.holds(&relative.to_string_lossy()) =>
-            {
-                vec![path.to_path_buf()]
+            Ok(meta) if self.holds(&relative.to_string_lossy()) => {
+                let entry = vec![path.to_path_buf()];
+                if is_source_entry(meta.file_type(), path) {
+                    Walked {
+                        files: entry,
+                        ..none()
+                    }
+                } else if meta.file_type().is_symlink() && is_dangling(path) {
+                    Walked {
+                        dangling: entry,
+                        ..none()
+                    }
+                } else {
+                    none()
+                }
             }
-            _ => Vec::new(),
+            _ => none(),
         }
+    }
+
+    /// The walk under the directory `dir`, left with what no `exclude` entry
+    /// leaves out.
+    fn walked_kept(&self, dir: &Path) -> Walked {
+        let mut walked = walk_spec_files(dir, ProjectRoot::is_root);
+        walked.files.retain(|path| self.keeps(path));
+        walked.dangling.retain(|path| self.keeps(path));
+        walked
     }
 
     /// Whether `key`, a path relative to the spec root, is one [`Self::files`]
@@ -420,6 +471,73 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_to_nothing_is_dangling_not_a_source() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        fs::write(root.join("a.spec"), "").unwrap();
+        std::os::unix::fs::symlink("nowhere.spec", root.join("dangling.spec")).unwrap();
+        std::os::unix::fs::symlink("sub/x.spec", root.join("far.spec")).unwrap();
+        std::os::unix::fs::symlink("nowhere.txt", root.join("notes.txt")).unwrap();
+
+        let sources = sources(root, Exclude::default());
+        assert_eq!(sources.files(), vec![root.join("a.spec")]);
+        assert_eq!(
+            sources.dangling(),
+            vec![root.join("dangling.spec"), root.join("far.spec")]
+        );
+        // It is a source, and no longer dangling, once its target exists.
+        fs::create_dir(root.join("sub")).unwrap();
+        fs::write(root.join("sub/x.spec"), "").unwrap();
+        assert_eq!(
+            sources.files(),
+            vec![
+                root.join("a.spec"),
+                root.join("far.spec"),
+                root.join("sub/x.spec")
+            ]
+        );
+        assert_eq!(sources.dangling(), vec![root.join("dangling.spec")]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_looping_symlink_is_neither() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::os::unix::fs::symlink("loop.spec", root.join("loop.spec")).unwrap();
+
+        let sources = sources(root, Exclude::default());
+        assert!(sources.files().is_empty());
+        assert!(sources.dangling().is_empty());
+        assert!(sources.dangling_at(&root.join("loop.spec")).is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn dangling_respects_exclude_skips_and_nested_projects() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for dir in ["drafts", "target", "nested", "real"] {
+            fs::create_dir_all(root.join(dir)).unwrap();
+        }
+        fs::write(root.join("nested/specforge.json"), "{}").unwrap();
+        for at in [
+            "drafts/d.spec",
+            "target/t.spec",
+            "nested/n.spec",
+            "real/r.spec",
+        ] {
+            std::os::unix::fs::symlink("nowhere.spec", root.join(at)).unwrap();
+        }
+        let sources = sources(root, Exclude::parse(["drafts/"]).unwrap());
+
+        assert_eq!(sources.dangling(), vec![root.join("real/r.spec")]);
+        assert!(sources.dangling_at(&root.join("drafts/d.spec")).is_empty());
+        assert!(sources.dangling_at(&root.join("nested/n.spec")).is_empty());
+    }
+
     #[test]
     fn a_walk_stops_where_told_and_lists_where() {
         let tmp = tempfile::tempdir().unwrap();
@@ -496,6 +614,12 @@ mod tests {
                 .cloned()
                 .collect();
             assert_eq!(sources.files_at(&path), expected, "{}", path.display());
+            let dangling: Vec<PathBuf> = sources
+                .dangling()
+                .into_iter()
+                .filter(|f| *f == path || f.starts_with(&path))
+                .collect();
+            assert_eq!(sources.dangling_at(&path), dangling, "{}", path.display());
         }
     }
 

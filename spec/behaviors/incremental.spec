@@ -40,7 +40,9 @@ behavior watch_file_system_for_changes "Watch File System for Changes" {
     and brings the session up to date with what was written meanwhile
     (bring_session_up_to_date); it does so once at start, before it reports
     ready. A missing directory on the way to an input, a symlinked source's
-    hop included, is watched from its nearest existing ancestor.
+    hop included, is watched from its nearest existing ancestor. A
+    symlink that points nowhere is no source, but the session reads it,
+    so it is a change when its target appears (ADR 0141).
   """
   verify unit "file modification triggers recompilation"
   verify unit "file creation triggers recompilation"
@@ -61,6 +63,7 @@ behavior watch_file_system_for_changes "Watch File System for Changes" {
   verify integration "an edit to a symlinked source's target is seen"
   verify unit "a directory event reaches every source under it"
   verify unit "a symlinked source whose hop lies in a directory that did not exist is seen when it is created"
+  verify unit "a dangling source link whose missing directory lies outside the root is watched"
 }
 
 behavior classify_project_changes "Classify Project Changes" {
@@ -132,6 +135,7 @@ behavior classify_project_changes "Classify Project Changes" {
   verify integration "the LSP's watchers follow an edit that names a new file the checks read"
   verify unit "a directory created, moved or deleted under the spec root changes every source under it"
   verify unit "a symlinked source is keyed by its link and changes when its target does"
+  verify unit "a dangling source link is that source's change when its target appears"
   verify unit "a symlinked source is reached by each hop its read followed"
   verify unit "a path whose file is as the session last read it changes nothing"
   verify unit "a directory created on the way to a missing input's directory outside the root is that input's change, a source hop's included"
