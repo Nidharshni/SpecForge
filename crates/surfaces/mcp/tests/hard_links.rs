@@ -199,7 +199,6 @@ fn migrate_record_is_not_written_through_a_hard_link() {
     invariant = "mcp_served_project_consistency",
     verify = "a mutation writes no file through a hard link to a file outside the project"
 )]
-#[ignore = "flipped by T4: the lock's temporary file is written in place"]
 fn add_extension_writes_no_lock_through_a_hard_linked_or_symlinked_temp() {
     let greet = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../../fixtures/greet-extension/wasm/greet.wasm");

@@ -332,7 +332,7 @@ fn restore_bytes(path: &Path, before: Option<&[u8]>, left: &mut Vec<PathBuf>) {
         return;
     }
     let restored = match before {
-        Some(bytes) => std::fs::write(path, bytes),
+        Some(bytes) => specforge_common::fresh::replace_file(path, bytes),
         None => std::fs::remove_file(path),
     };
     if restored.is_err() {

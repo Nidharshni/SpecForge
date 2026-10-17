@@ -135,25 +135,14 @@ pub fn write_lock_file(lock: &LockFile, path: &Path) -> Result<(), Diagnostic> {
         Diagnostic::new(codes::E033, format!("failed to serialize lock file: {}", e))
     })?;
 
-    // Write a sibling file, then rename it over the lock: a write that
-    // fails part-way (a full disk) leaves the old lock whole.
-    let mut temp_name = path.file_name().unwrap_or_default().to_os_string();
-    temp_name.push(".tmp");
-    let temp = path.with_file_name(temp_name);
-    std::fs::write(&temp, json)
-        .and_then(|()| std::fs::rename(&temp, path))
-        .map_err(|e| {
-            let _ = std::fs::remove_file(&temp);
-            Diagnostic::new(
-                codes::E033,
-                format!(
-                    "failed to write lock file at '{}' (through '{}'): {}",
-                    path.display(),
-                    temp.display(),
-                    e
-                ),
-            )
-        })
+    // Replace the lock by its name (ADR 0144): a write that fails part-way (a full disk) leaves the
+    // old lock whole, and a link at the lock or its temporary file is never written through.
+    specforge_common::fresh::replace_file(path, json.as_bytes()).map_err(|e| {
+        Diagnostic::new(
+            codes::E033,
+            format!("failed to write lock file at '{}': {}", path.display(), e),
+        )
+    })
 }
 
 /// Read a lock file from disk.

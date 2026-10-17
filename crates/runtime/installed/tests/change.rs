@@ -124,7 +124,7 @@ fn a_failed_install_puts_back_the_binary_and_the_lock() {
     let failed = attempt(&Installed::at(dir.path())).commit().unwrap_err();
     assert_eq!(failed.error.code, "E033", "{:?}", failed.error);
     assert!(
-        failed.error.message.contains("specforge.lock.tmp"),
+        failed.error.message.contains("specforge.lock"),
         "the message names the file it could not write: {:?}",
         failed.error
     );
