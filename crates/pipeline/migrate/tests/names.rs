@@ -86,3 +86,28 @@ fn written_beside_names_the_backup_and_both_temporary_files() {
         ]
     );
 }
+
+#[cfg(unix)]
+#[test]
+#[ignore = "flipped by T2"]
+fn an_inside_link_at_a_temp_name_is_not_written_through() {
+    let dir = project();
+    let notes = dir.path().join("notes.txt");
+    std::fs::write(&notes, "notes\n").unwrap();
+    let source = dir.path().join("spec/a.spec");
+    std::os::unix::fs::symlink("../notes.txt", dir.path().join("spec/a.spec.tmp")).unwrap();
+    let root = ProjectRoot::of(dir.path()).unwrap();
+
+    let summary = migrate_project(
+        &root,
+        &[source.clone()],
+        &CURRENT_FORMAT_VERSION,
+        false,
+        false,
+    );
+
+    assert_eq!(summary.results[0].status, MigrationStatus::Migrated);
+    assert_eq!(std::fs::read_to_string(&notes).unwrap(), "notes\n");
+    assert!(!std::fs::symlink_metadata(&source).unwrap().is_symlink());
+    assert!(!std::fs::read_to_string(&source).unwrap().contains("0.9"));
+}
