@@ -4,6 +4,7 @@ mod commands;
 mod coverage_matrices;
 mod dates_and_effort;
 mod dependency_graphs;
+mod descriptions;
 mod feature_dependents;
 mod host;
 mod journey_coverage;
