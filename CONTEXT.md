@@ -172,10 +172,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   hands it to the tools (`ProjectRef::caller`, ADR 0112, ADR 0124), and render's view input hands it the request's bound (ADR 0131).
   Containment does not see a hard link: a write never goes through one (a project file is written by `specforge_common::fresh::replace_file`, which replaces
   the name, ADR 0144), and a read of one is a read of the file in the project: MCP reads the sources of a served project only from
-  inside it (a source that resolves outside is E025), and a hard-linked source stays readable (ADR 0145).
+  inside it (a source that resolves outside is E025), and a file with more than one name is not read through a bound: over MCP it is E025 (ADR 0146); the CLI, watch and LSP are unbounded and read it.
 - **Contained disk**: a containment as the `Disk` port (`specforge_ops` `ContainedDisk`, ADR 0139): how a crate
   below app reads a project file the surface bounds; a name that lands outside reads as `invalid_input`. Also the disk MCP
-  hands a session to read its sources through (ADR 0145).
+  hands a session to read its sources through (ADR 0145); it refuses a regular file with more than one name (ADR 0146).
 - **Replace file**: how a project file is written (`specforge_common::fresh::replace_file`, ADR 0144): a new file beside the name,
   renamed onto it, so the inode that held the name is never opened for writing. `create_fresh` is the same for a stream.
 - **Caller**: what the surface that calls an operation lends it, one value (`specforge_ops::Caller`, ADR 0124): what the
