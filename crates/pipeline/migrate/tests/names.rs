@@ -113,3 +113,56 @@ fn an_inside_link_at_a_temp_name_is_not_written_through() {
     assert!(!std::fs::symlink_metadata(&source).unwrap().is_symlink());
     assert!(!std::fs::read_to_string(&source).unwrap().contains("0.9"));
 }
+
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "the backup and temporary file are created new, never through a planted link"
+)]
+fn an_inside_link_at_the_backup_name_is_not_written_through() {
+    let dir = project();
+    let notes = dir.path().join("notes.txt");
+    std::fs::write(&notes, "notes\n").unwrap();
+    let source = dir.path().join("spec/a.spec");
+    let backup = dir.path().join("spec/a.spec.bak");
+    std::os::unix::fs::symlink("../notes.txt", &backup).unwrap();
+    let root = ProjectRoot::of(dir.path()).unwrap();
+
+    let summary = migrate_project(
+        &root,
+        std::slice::from_ref(&source),
+        &CURRENT_FORMAT_VERSION,
+        false,
+        false,
+    );
+
+    assert_eq!(summary.results[0].status, MigrationStatus::Migrated);
+    assert_eq!(std::fs::read_to_string(&notes).unwrap(), "notes\n");
+    assert!(!std::fs::symlink_metadata(&backup).unwrap().is_symlink());
+    assert_eq!(std::fs::read_to_string(&backup).unwrap(), OLD);
+}
+
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "the backup and temporary file are created new, never through a planted link"
+)]
+fn an_inside_link_at_the_restore_temp_name_is_not_written_through() {
+    let dir = project();
+    let notes = dir.path().join("notes.txt");
+    std::fs::write(&notes, "notes\n").unwrap();
+    let file = dir.path().join("spec/a.spec");
+    let [_, _, restore_tmp] = written_beside(&file);
+    std::os::unix::fs::symlink("../notes.txt", &restore_tmp).unwrap();
+
+    let summary = restore(&[Original {
+        path: file.clone(),
+        name: ProjectPath::of(dir.path(), &file),
+        text: "restored\n".to_string(),
+    }]);
+
+    assert_eq!(summary.results[0].status, MigrationStatus::Restored);
+    assert_eq!(std::fs::read_to_string(&notes).unwrap(), "notes\n");
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "restored\n");
+    assert!(!std::fs::symlink_metadata(&file).unwrap().is_symlink());
+}
