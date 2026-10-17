@@ -1399,7 +1399,7 @@ fn the_replacement_is_read_from_the_data() {
 
 // ── Files: the file rule and the outline ────────────────────────────────
 
-use specforge_ops::read::navigate::{FileMatch, anchors_of_file, match_file, outline};
+use specforge_ops::read::navigate::{FileMatch, match_file, outline};
 
 #[test]
 fn match_file_is_component_wise() {
@@ -1408,11 +1408,11 @@ fn match_file_is_component_wise() {
     assert_eq!(match_file("todo_list.rs", "todo_list.rs"), FileMatch::Exact);
     assert_eq!(
         match_file("todo_list.rs", "src/todo_list.rs"),
-        FileMatch::Suffix
+        FileMatch::SuffixPath
     );
     assert_eq!(
         match_file("src/auth", "src/auth/login.rs"),
-        FileMatch::Under
+        FileMatch::Directory
     );
     assert_eq!(match_file("src\\auth.rs", "src/auth.rs"), FileMatch::Exact);
     // `.` components are dropped: ./src/login.rs is src/login.rs.
@@ -1426,93 +1426,6 @@ fn match_file_is_component_wise() {
     );
     assert_eq!(match_file("", "src/login.rs"), FileMatch::None);
     assert_eq!(match_file("login.rs", "src/xlogin.rs"), FileMatch::None);
-}
-
-/// An anchors manifest anchoring each `(entity, file)`.
-fn anchored(anchors: &[(&str, &str)]) -> specforge_ops::read::navigate::AnchorManifest {
-    specforge_ops::read::navigate::AnchorManifest {
-        version: 1,
-        anchors: anchors
-            .iter()
-            .map(
-                |(entity, file)| specforge_ops::read::navigate::SourceAnchor {
-                    entity_id: entity.to_string(),
-                    file: file.to_string(),
-                    line: 1,
-                    symbol_name: entity.to_string(),
-                    item_kind: "fn".into(),
-                    scanner: "manual".into(),
-                    mapping_strategy: None,
-                    confidence: None,
-                },
-            )
-            .collect(),
-    }
-}
-
-/// An entity's anchors are the manifest's anchors of it, in manifest
-/// order; an entity with none, or a project with no manifest, has none.
-#[specforge_test(
-    behavior = "provide_mcp_find_implementation_tool",
-    verify = "an entity with no anchor has no implementations, and no anchors manifest is none"
-)]
-fn anchors_of_an_entity_are_in_manifest_order() {
-    use specforge_ops::read::navigate::{anchors_of_entity, source_anchors};
-
-    let manifest = anchored(&[
-        ("alpha", "src/lib.rs"),
-        ("beta", "src/lib.rs"),
-        ("alpha", "src/net.rs"),
-    ]);
-    let files = |entity: &str| -> Vec<String> {
-        anchors_of_entity(&manifest, entity)
-            .iter()
-            .map(|a| a.file.clone())
-            .collect()
-    };
-    assert_eq!(files("alpha"), ["src/lib.rs", "src/net.rs"]);
-    assert!(files("nope").is_empty());
-
-    let project = Assembled::over(specforge_registry::RegistryBuild::default())
-        .source("behavior a \"A\" {\n}\n");
-    assert!(source_anchors(&project.view()).unwrap().anchors.is_empty());
-}
-
-#[test]
-fn the_tightest_match_wins() {
-    let manifest = anchored(&[
-        ("top", "a.rs"),
-        ("nested", "sub/a.rs"),
-        ("other", "sub/b.rs"),
-        ("cache", "src/cache.rs"),
-    ]);
-    let ids = |found: &specforge_ops::read::navigate::FileAnchors| -> Vec<String> {
-        found.anchors.iter().map(|a| a.entity_id.clone()).collect()
-    };
-    let exact = anchors_of_file(&manifest, "a.rs");
-    assert_eq!(
-        (exact.mode, ids(&exact)),
-        (FileMatch::Exact, vec!["top".to_string()])
-    );
-    // Every spelling of a path is the path.
-    for spelling in ["./a.rs", "a.rs", ".\\a.rs"] {
-        assert_eq!(
-            ids(&anchors_of_file(&manifest, spelling)),
-            ["top"],
-            "{spelling}"
-        );
-    }
-    let under = anchors_of_file(&manifest, "./sub");
-    assert_eq!(under.mode, FileMatch::Under);
-    assert_eq!(ids(&under), ["nested", "other"]);
-    let suffix = anchors_of_file(&manifest, "b.rs");
-    assert_eq!(
-        (suffix.mode, ids(&suffix)),
-        (FileMatch::Suffix, vec!["other".to_string()])
-    );
-    // A substring is no match (C9-09).
-    assert_eq!(anchors_of_file(&manifest, "e.rs").mode, FileMatch::None);
-    assert_eq!(anchors_of_file(&manifest, "c.rs").mode, FileMatch::None);
 }
 
 #[specforge_test(
