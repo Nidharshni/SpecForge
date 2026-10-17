@@ -552,7 +552,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   model and outline diagrams, the versioned schema, inspect, query, list and search (the entities a
   selection over the view returns, `specforge_ops::read::query`), the exploration and the review
   (`specforge_ops::read::{explore, review}`), the reach of a trace (`specforge_ops::read::trace::reach`, the trace prompt's
-  affected and unverified entities), the plan check (`specforge_ops::read::plan::check`), and the inference guide and plan
+  affected and unverified entities), the plan check (`specforge_ops::read::plan::check`), the anchors of a source file and of an entity
+  (`specforge_ops::read::navigate::{anchors_of_file, anchors_of_entity}`, ADR 0140), and the inference guide and plan
   (`specforge_ops::read::infer::{guide, kind_guide, inference_plan}`). Each returns a typed outcome; the CLI,
   MCP (its tools and its prompts) and the LSP only render it.
 - **Noticed read**: a read view that reports what it noticed about the run beside its value: the schema notices and I020. It
@@ -654,8 +655,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   outside the project root is none of them and is never read. Progress, gaps, the `inferred` lint and the mark read
   them through one module (`specforge_ops::read::infer::sources`, ADR 0113).
 - **Anchors manifest**: `<root>/specforge-anchors.json`, which source item each entity is anchored
-  to. Navigation reads it (`specforge_ops::read::navigate::source_anchors`): the anchors of a source file
-  and of an entity; E071 when it cannot be used.
+  to. Read only by navigation's anchors read view (`specforge_ops::read::navigate::{anchors_of_file,
+  anchors_of_entity}`): the entities anchored to a source file, each with its kind, and the anchors of an entity;
+  E071 when it cannot be used, `no_project` without a project, E003 for an id neither the graph nor the manifest
+  knows (ADR 0140).
 - **Obligation**: one `verify` statement on an entity, its own member beside its methods (ADR 0094), never a field. **Proven** when a passing test names its
   exact text, or a formal claim discharges it. Who owes obligations is the entity's standing.
 - **Unverified**: an entity that counts toward coverage and is not proven
