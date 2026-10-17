@@ -3,7 +3,7 @@
 use super::Origin;
 use super::lock_plan::{Ask, Asked, Fetching, Install, LockPlan, Opened, Purpose};
 use super::names::no_specifier;
-use super::{Named, Names, Place};
+use super::{Answer, Names, Place};
 use crate::registry::{Publisher, Registry};
 use crate::{Caller, Refusal, Writes};
 use specforge_installed::Installed;
@@ -124,7 +124,7 @@ pub struct Added {
 /// - A registry package is resolved, downloaded, integrity- and
 ///   signature-checked, installed, locked and enabled.
 ///
-/// Every install is staged in one lock plan, judged once by the peer rule over the whole set
+/// Every specifier is asked of one lock plan through `extension::names` (ADR 0134), judged once by the peer rule over the whole set
 /// (ADR 0041: the order of the specifiers decides nothing), and each fetched binary is loaded
 /// only once the plan has passed. An installed extension is enabled by its bare name, which the
 /// runtime loads from the lock (ADR 0004 D3-b).
@@ -174,10 +174,40 @@ pub fn add(
         },
         names.installs(),
     )?;
-    let named = names
-        .name_each(runtime, &mut |_, package| super::resolve(registry, package))
+    let (checked, answers) = names
+        .ask(
+            plan,
+            runtime,
+            &mut |_, package| super::resolve(registry, package),
+            &mut Wanted::of,
+        )
         .map_err(|e| e.about(AddField::Extensions))?;
-    apply(req, &names, plan, named)
+    let done = checked.finish(
+        req.root.dir(),
+        Vec::new(),
+        &req.caller.containment().narrowed(req.root.dir()),
+    )?;
+    let added = answers
+        .into_iter()
+        .enumerate()
+        .map(|(at, answer)| AddedExtension {
+            specifier: names.specifier(at).to_string(),
+            outcome: match answer {
+                Answer::Duplicate { name, first } => AddOutcome::Duplicate { name, first },
+                Answer::Builtin(name) => {
+                    Wanted::Builtin(name).outcome(done.asked(Ask(at)), req.dry_run)
+                }
+                Answer::Installed { recorded, .. } => {
+                    recorded.outcome(done.asked(Ask(at)), req.dry_run)
+                }
+            },
+        })
+        .collect();
+    Ok(Added {
+        added,
+        extensions_enabled: done.enabled,
+        writes: done.writes,
+    })
 }
 
 /// What a specifier asks the plan for, to turn the plan's answer for its ask into an outcome.
@@ -262,78 +292,6 @@ impl Wanted {
             },
         }
     }
-}
-
-/// Ask `plan` for what `named` names, check it once and commit it with the `specforge.json`
-/// entries (each builtin after the builtins it requires, each install by its bare name): one
-/// change that puts everything back when a step fails. The plan answers each ask, one the project
-/// already has included (ADR 0138). A plan the peer rule refuses writes nothing, its refusal naming
-/// the specifier when there are several (ADR 0041).
-fn apply<'a>(
-    req: &AddRequest,
-    names: &Names<'_>,
-    mut plan: LockPlan<'a>,
-    named: Vec<Named<'a>>,
-) -> Result<Added, Refusal<AddField>> {
-    let mut outcomes: Vec<Option<AddOutcome>> = Vec::with_capacity(named.len());
-    // Each specifier that asks the plan, and what it asked for.
-    let mut asked: Vec<(usize, Wanted)> = Vec::new();
-    for (at, named) in named.into_iter().enumerate() {
-        outcomes.push(None);
-        let ask = Ask(at);
-        match named {
-            Named::Duplicate { name, first } => {
-                outcomes[at] = Some(AddOutcome::Duplicate { name, first });
-            }
-            Named::Builtin(name) => {
-                plan.enable(ask, name);
-                asked.push((at, Wanted::Builtin(name)));
-            }
-            Named::Local { install, .. } => {
-                asked.push((at, Wanted::of(&install)));
-                plan.install(ask, *install);
-            }
-            Named::Package { name, version } => {
-                let install = plan
-                    .fetch(&name, &version)
-                    .map_err(|error| names.named(at, error).about(AddField::Extensions))?;
-                asked.push((at, Wanted::of(&install)));
-                plan.install(ask, install);
-            }
-        }
-    }
-
-    let done = plan
-        .check()
-        .map_err(|refused| {
-            let (Ask(at), error) = refused.decisive();
-            names.named(at, error).about(AddField::Extensions)
-        })?
-        .finish(
-            req.root.dir(),
-            Vec::new(),
-            &req.caller.containment().narrowed(req.root.dir()),
-        )?;
-    for (at, wanted) in asked {
-        outcomes[at] = Some(wanted.outcome(done.asked(Ask(at)), req.dry_run));
-    }
-    Ok(Added {
-        added: added(names, outcomes),
-        extensions_enabled: done.enabled,
-        writes: done.writes,
-    })
-}
-
-/// Each specifier of `names` with its outcome.
-fn added(names: &Names<'_>, outcomes: Vec<Option<AddOutcome>>) -> Vec<AddedExtension> {
-    outcomes
-        .into_iter()
-        .enumerate()
-        .map(|(at, outcome)| AddedExtension {
-            specifier: names.specifier(at).to_string(),
-            outcome: outcome.expect("every specifier has an outcome"),
-        })
-        .collect()
 }
 
 mod document;

@@ -41,7 +41,7 @@ pub use update::{
 
 pub(crate) use claims::{Claimed, Claims};
 pub(crate) use lock_plan::{Also, Install, LockPlan};
-pub(crate) use names::{Answer, Named, Names, Place};
+pub(crate) use names::{Answer, Names, Place};
 
 use specforge_installed::LockSource;
 

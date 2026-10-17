@@ -57,7 +57,7 @@ pub(crate) enum Answer<R> {
 }
 
 /// What one specifier names, read and claimed.
-pub(crate) enum Named<'a> {
+enum Named<'a> {
     /// An earlier specifier names the extension the same way (or has the same source): ask nothing.
     Duplicate { name: String, first: String },
     /// A builtin, claimed first.
@@ -111,7 +111,7 @@ impl<'r> Names<'r> {
     }
 
     /// `error`, naming the specifier at `at` when there are several (for the plan's refusals).
-    pub(crate) fn named(&self, at: usize, error: OpError) -> OpError {
+    fn named(&self, at: usize, error: OpError) -> OpError {
         named(self.wanted.len() > 1, self.specifier(at), error)
     }
 
@@ -178,7 +178,7 @@ impl<'r> Names<'r> {
     /// are named among several: reading a local file (E054, E040, E028, E072, a binary declaring a
     /// builtin's name, a path outside the containment), git (E064), and whatever `packages` returns.
     /// A claim conflict is `extension_conflict`, naming both specifiers and not prefixed.
-    pub(crate) fn name_each<'a>(
+    fn name_each<'a>(
         &self,
         runtime: &'a dyn WasmRuntime,
         packages: &mut dyn FnMut(&str, &PackageRef) -> Result<Version, OpError>,
