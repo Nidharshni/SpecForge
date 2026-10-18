@@ -9,10 +9,10 @@ use specforge_registry::{RegistryBuild, build_registries};
 /// reference fields only `invariants` and `features` are expected edges:
 /// `ports` points at a kind nothing loads, `depends_on` at behavior itself,
 /// `satisfies` comes from another extension, and `contract` is a string, not
-/// a reference. `feature.behaviors` is expected of features. `invariants`
-/// and `features` name an `inverse_of`: `features`'s, `behaviors`, is a
-/// field of feature; `invariants`'s, `enforced_by`, is no field of
-/// invariant.
+/// a reference. A feature has no reference field: a relation is written on
+/// its owning field only (ADR 0150). `invariants` and `features` name the
+/// word the target kind reads the relation by in `inverse_of`, neither a
+/// field of its target kind.
 pub fn build() -> RegistryBuild {
     build_with(false)
 }
@@ -69,7 +69,6 @@ fn build_with(required_parent: bool) -> RegistryBuild {
     prod.meta.peer_dependencies = vec![peer("@t/soft")];
     prod.kind("feature", |k| {
         k.keyword("feature");
-        reference_field(k, "feature", "behaviors", "behavior", None);
     });
     let mut formal = ContributionsBuilder::new(ExtensionMeta::new("@t/formal", "1.0.0"));
     formal.meta.peer_dependencies = vec![peer("@t/soft")];

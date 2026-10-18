@@ -161,37 +161,6 @@ impl FieldRegistry {
         kind_map.insert(entry.name().to_string(), entry);
     }
 
-    /// The fields of `kind.field`'s target kind that hold the inverse
-    /// reference: the field it names `inverse_of`, when its target kind
-    /// registers it, and every field of the target kind that names it
-    /// `inverse_of`; sorted, each once. Empty for a field with no target
-    /// kind, or that is not registered. The one reading of `inverse_of`
-    /// ("the field on the target kind that holds the inverse reference",
-    /// ADR 0060): trace and the graph's bidirectional pairs share it.
-    pub fn inverse_fields(&self, kind: &str, field: &str) -> Vec<&str> {
-        let Some(entry) = self.get(kind, field) else {
-            return Vec::new();
-        };
-        let Some(target) = entry.declared().target_kind.as_deref() else {
-            return Vec::new();
-        };
-        let named = entry
-            .declared()
-            .inverse_of
-            .as_deref()
-            .and_then(|inverse| self.get(target, inverse))
-            .map(FieldRegistryEntry::name);
-        let naming_it = self
-            .fields_for_kind(target)
-            .into_iter()
-            .filter(|other| other.declared().inverse_of.as_deref() == Some(field))
-            .map(FieldRegistryEntry::name);
-        let mut inverse: Vec<&str> = named.into_iter().chain(naming_it).collect();
-        inverse.sort_unstable();
-        inverse.dedup();
-        inverse
-    }
-
     pub fn fields_for_kind(&self, kind_name: &str) -> Vec<&FieldRegistryEntry> {
         self.entries
             .get(kind_name)

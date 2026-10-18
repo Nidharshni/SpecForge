@@ -160,11 +160,6 @@ fn rendered<'a>(diagnostics: impl IntoIterator<Item = &'a Diagnostic>) -> Value 
 
 /// What the graph build reads of the build's declarations.
 fn graph_inputs(inputs: &GraphInputs) -> Value {
-    let bidirectional_pairs: Vec<Value> = inputs
-        .bidirectional_pairs
-        .iter()
-        .map(|(a, b)| json!([a, b]))
-        .collect();
     let absent_targets: BTreeMap<String, String> = inputs
         .field_forms
         .targets()
@@ -205,7 +200,6 @@ fn graph_inputs(inputs: &GraphInputs) -> Value {
         .collect();
     json!({
         "member_kinds": inputs.field_forms.member_kinds(),
-        "bidirectional_pairs": bidirectional_pairs,
         "absent_targets": absent_targets,
         "field_forms": field_forms,
         "derived_references": derived_references,

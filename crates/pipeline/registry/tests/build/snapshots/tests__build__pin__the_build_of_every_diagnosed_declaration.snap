@@ -109,7 +109,6 @@ expression: digest(&build)
     "absent_targets": {
       "behavior.owner": "nowhere"
     },
-    "bidirectional_pairs": [],
     "derived_references": [],
     "field_forms": {
       "behavior.contract": "block",

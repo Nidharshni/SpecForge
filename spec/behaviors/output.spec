@@ -167,10 +167,8 @@ behavior compute_traceability_chain "Compute Traceability Chain" {
     in an extension manifest that is NOT instantiated between the two
     entities in the current graph. This distinguishes from broken
     references (E003), which are caught during resolution.
-    An expected link already declared from the other side, an edge from an
-    entity of the target kind through one of the field's inverse fields
-    (the field its inverse_of names on the target kind, and every field of
-    the target kind naming it inverse_of), is not missing.
+    A relation is written on its owning field only (ADR 0150): its other
+    side is the target's upstream, under the owning field's label.
     The JSON trace output MUST carry the Graph Protocol schema_version.
     Tracing an entity the graph does not have MUST be E003, naming the
     closest entity when one is near.
@@ -178,7 +176,7 @@ behavior compute_traceability_chain "Compute Traceability Chain" {
   verify unit "trace from entity shows upstream and downstream connections"
   verify unit "trace shows full chain depth"
   verify unit "missing link in chain is flagged"
-  verify unit "an expected link declared from the other side, through an inverse field of the target kind, is not missing"
+  verify unit "a relation written on its owning field shows on the other side as upstream, under the owning field's label"
   verify unit "trace output includes schema version"
   verify unit "tracing an entity the graph lacks is E003 naming the closest entity"
   verify unit "a reference field another extension adds to a kind is not an expected link"

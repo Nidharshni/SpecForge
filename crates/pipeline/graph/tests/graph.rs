@@ -1,7 +1,5 @@
 use specforge_common::{SourceSpan, Sym};
-use specforge_graph::{
-    Edge, FileChange, Graph, GraphBuild, GraphConfig, GraphInputs, Node, SpecFile,
-};
+use specforge_graph::{Edge, FileChange, Graph, GraphBuild, GraphConfig, Node, SpecFile};
 use specforge_parser::parse;
 use specforge_test_macros::test as specforge_test;
 
@@ -980,48 +978,6 @@ fn detect_cycles_returns_empty_for_dag() {
     assert!(cycles.is_empty(), "DAG should have no cycles");
 }
 
-// C5-08: complementary suppression generalizes to cycles of any length.
-#[test]
-fn complementary_three_hop_cycle_is_suppressed() {
-    let mut graph = Graph::with_bidirectional_pairs(vec![(
-        "invariants".to_string(),
-        "enforced_by".to_string(),
-    )]);
-    graph.add_node(make_node("a", "behavior"));
-    graph.add_node(make_node("b", "feature"));
-    graph.add_node(make_node("c", "invariant"));
-    // a -invariants-> b -enforced_by-> c -enforced_by-> a: every hop label
-    // is one side of the registered pair and both directions appear.
-    graph.add_edge(make_edge("a", "b", "invariants"));
-    graph.add_edge(make_edge("b", "c", "enforced_by"));
-    graph.add_edge(make_edge("c", "a", "enforced_by"));
-
-    assert!(
-        graph.detect_cycles().is_empty(),
-        "a fully complementary 3-hop cycle is not a real dependency cycle"
-    );
-}
-
-#[test]
-fn forward_only_labels_are_real_cycles() {
-    let mut graph = Graph::with_bidirectional_pairs(vec![(
-        "invariants".to_string(),
-        "enforced_by".to_string(),
-    )]);
-    graph.add_node(make_node("a", "behavior"));
-    graph.add_node(make_node("b", "feature"));
-    graph.add_node(make_node("c", "invariant"));
-    // Same shape, but every hop uses the forward label — a genuine cycle.
-    graph.add_edge(make_edge("a", "b", "invariants"));
-    graph.add_edge(make_edge("b", "c", "invariants"));
-    graph.add_edge(make_edge("c", "a", "invariants"));
-
-    assert!(
-        !graph.detect_cycles().is_empty(),
-        "forward-only label cycle is a real dependency cycle"
-    );
-}
-
 #[specforge_test(
     behavior = "build_in_memory_graph",
     verify = "detects self-referencing cycle"
@@ -1358,53 +1314,6 @@ fn subgraph_depth_invariant_found_via_incoming_invariants_edge() {
     assert!(sub.node("beh_b").is_some());
 }
 
-// === H10: Custom bidirectional pairs from config ===
-
-#[specforge_test(
-    behavior = "build_in_memory_graph",
-    verify = "custom bidirectional pairs suppress false-positive cycles"
-)]
-fn custom_bidirectional_pairs_suppress_cycle_warning() {
-    use specforge_graph::{GraphConfig, build_graph_with_config};
-    use specforge_parser::parse;
-
-    // Create a spec with a 2-hop cycle: a -> b (via "guards") and b -> a (via "guarded_by")
-    let source = r#"
-behavior a "A" { contract "first" guards [b] }
-behavior b "B" { contract "second" guarded_by [a] }
-"#;
-    let spec_file = parse(source, "main.spec");
-
-    // Without bidirectional pairs configured, the cycle should be reported as W061
-    let config_no_pairs = GraphConfig::default();
-    let (_, diags_no_pairs) =
-        build_graph_with_config(std::slice::from_ref(&spec_file), &config_no_pairs);
-    let w061_no_pairs: Vec<_> = diags_no_pairs.iter().filter(|d| d.code == "W061").collect();
-    assert!(
-        !w061_no_pairs.is_empty(),
-        "without bidirectional pairs, 2-hop cycle should produce W061"
-    );
-
-    // With custom bidirectional pairs configured, the 2-hop cycle should be suppressed
-    let config_with_pairs = GraphConfig {
-        inputs: GraphInputs {
-            bidirectional_pairs: vec![("guards".to_string(), "guarded_by".to_string())],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    let (_, diags_with_pairs) = build_graph_with_config(&[spec_file], &config_with_pairs);
-    let w061_with_pairs: Vec<_> = diags_with_pairs
-        .iter()
-        .filter(|d| d.code == "W061")
-        .collect();
-    assert!(
-        w061_with_pairs.is_empty(),
-        "with bidirectional pairs configured, 2-hop cycle should be suppressed, got: {:?}",
-        w061_with_pairs
-    );
-}
-
 // === M3/M4: Diagnostics carry actionable suggestions ===
 
 #[specforge_test(
@@ -1491,43 +1400,6 @@ fn w060_cross_kind_collision_has_suggestion() {
         w060s[0].suggestion.as_ref().unwrap().contains("distinct"),
         "W060 suggestion should advise using distinct IDs, got: {:?}",
         w060s[0].suggestion
-    );
-}
-
-#[specforge_test(
-    behavior = "build_in_memory_graph",
-    verify = "Graph::with_bidirectional_pairs stores pairs for cycle suppression"
-)]
-fn graph_with_bidirectional_pairs_stores_pairs() {
-    let mut graph = Graph::with_bidirectional_pairs(vec![(
-        "invariants".to_string(),
-        "enforced_by".to_string(),
-    )]);
-
-    // Build a 2-hop cycle with the known bidirectional pair
-    graph.add_node(make_node("inv1", "invariant"));
-    graph.add_node(make_node("beh1", "behavior"));
-    graph.add_edge(make_edge("beh1", "inv1", "invariants"));
-    graph.add_edge(make_edge("inv1", "beh1", "enforced_by"));
-
-    // Should NOT detect cycles because this is a known bidirectional pair
-    let cycles = graph.detect_cycles();
-    assert!(
-        cycles.is_empty(),
-        "known bidirectional pair should not be flagged as cycle, got: {:?}",
-        cycles
-    );
-
-    // But a REAL cycle with different labels should still be detected
-    graph.add_node(make_node("x", "behavior"));
-    graph.add_node(make_node("y", "behavior"));
-    graph.add_edge(make_edge("x", "y", "depends_on"));
-    graph.add_edge(make_edge("y", "x", "depends_on"));
-
-    let cycles2 = graph.detect_cycles();
-    assert!(
-        !cycles2.is_empty(),
-        "real cycle with non-bidirectional labels should still be detected"
     );
 }
 

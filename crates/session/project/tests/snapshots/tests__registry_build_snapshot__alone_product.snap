@@ -2120,7 +2120,6 @@ expression: "digest(&load(&runtime, &[name]))"
   },
   "graph_inputs": {
     "absent_targets": {},
-    "bidirectional_pairs": [],
     "derived_references": [],
     "field_forms": {
       "channel.description": "string",

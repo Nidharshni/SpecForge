@@ -12,10 +12,6 @@ use std::sync::Arc;
 /// The default is a project with no extension loaded.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct GraphInputs {
-    /// Inverse field pairs, each written (lesser, greater), sorted: a
-    /// two-hop cycle through both labels of one pair is a known
-    /// bidirectional relationship, not a reference cycle.
-    pub bidirectional_pairs: Vec<(String, String)>,
     /// For each target kind no loaded extension declares, the extension that
     /// owns it, where the registry build knows one (`kind_owner` of its
     /// candidate vocabulary, ADR 0117): what I004 and E022 tell the user to
@@ -105,7 +101,7 @@ impl GraphBuild {
     /// An empty build: no file, no node, no diagnostic.
     pub fn new(config: GraphConfig) -> Self {
         GraphBuild {
-            graph: Graph::with_bidirectional_pairs(config.inputs.bidirectional_pairs.clone()),
+            graph: Graph::new(),
             config,
             files: BTreeMap::new(),
             diagnostics: Vec::new(),

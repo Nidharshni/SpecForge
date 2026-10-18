@@ -988,7 +988,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "failure_mode.invariant": "invariant (@specforge/software)",
       "failure_mode.threatens_features": "feature (@specforge/product)"
     },
-    "bidirectional_pairs": [],
     "derived_references": [],
     "field_forms": {
       "constraint.category": "string",

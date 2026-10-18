@@ -70,11 +70,6 @@ pub struct Graph {
     source_index: HashMap<Sym, Vec<usize>>,
     /// Index: target sym -> indices into `edges`
     target_index: HashMap<Sym, Vec<usize>>,
-    /// Known bidirectional edge pairs where A->B with label X and B->A with label Y
-    /// represent complementary relationships, not real circular dependencies.
-    /// Each pair is (label_forward, label_reverse).
-    /// Populated by callers (e.g., from extension edge types) rather than hardcoded.
-    bidirectional_pairs: Vec<(String, String)>,
 }
 
 impl Default for Graph {
@@ -91,21 +86,6 @@ impl Graph {
             written: Vec::new(),
             source_index: HashMap::new(),
             target_index: HashMap::new(),
-            bidirectional_pairs: Vec::new(),
-        }
-    }
-
-    /// Create a new graph with the given bidirectional edge pairs.
-    /// These pairs are used to suppress false-positive cycle detection
-    /// for complementary relationships (e.g., `invariants`/`enforced_by`).
-    pub fn with_bidirectional_pairs(bidirectional_pairs: Vec<(String, String)>) -> Self {
-        Self {
-            nodes: BTreeMap::new(),
-            edges: Vec::new(),
-            written: Vec::new(),
-            source_index: HashMap::new(),
-            target_index: HashMap::new(),
-            bidirectional_pairs,
         }
     }
 
@@ -317,7 +297,7 @@ impl Graph {
     /// two of them, in edge order.
     fn induced(&self, reached: &[Reached]) -> Graph {
         let ids: HashSet<Sym> = reached.iter().map(|r| r.id).collect();
-        let mut sub = Graph::with_bidirectional_pairs(self.bidirectional_pairs.clone());
+        let mut sub = Graph::new();
         for id in &ids {
             if let Some(node) = self.nodes.get(id) {
                 sub.add_node(node.clone());
@@ -430,13 +410,6 @@ impl Graph {
             }
         }
 
-        // C5-08: keep only real cycles. A cycle is complementary — and thus
-        // suppressed — when every hop's label belongs to ONE registered
-        // (forward, reverse) pair and BOTH directions appear on the path.
-        // This generalizes the old 2-hop-only suppression to cycles of any
-        // length; a cycle using only forward labels is a genuine cycle.
-        cycles.retain(|cycle| !self.is_complementary_cycle(cycle));
-
         // C5-02: dedupe by canonical member set. Parallel edges used to
         // report the same cycle once per duplicate edge, and the DFS reports
         // each cycle from whichever seed entered it first.
@@ -444,40 +417,5 @@ impl Graph {
         cycles.dedup_by(|a, b| canonical_cycle_key(a) == canonical_cycle_key(b));
 
         cycles
-    }
-
-    /// True when `cycle` (closed path, first == last) is composed entirely
-    /// of hops whose labels are drawn from a single registered
-    /// (forward, reverse) bidirectional pair, with both directions present.
-    fn is_complementary_cycle(&self, cycle: &[Sym]) -> bool {
-        if cycle.len() < 3 {
-            return false;
-        }
-        let hops = cycle.len() - 1;
-        let mut hop_labels: Vec<std::collections::BTreeSet<&str>> = Vec::with_capacity(hops);
-        for i in 0..hops {
-            let (u, v) = (cycle[i], cycle[i + 1]);
-            let mut labels: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
-            if let Some(indices) = self.source_index.get(&u) {
-                for &idx in indices {
-                    if self.edges[idx].target == v {
-                        labels.insert(self.edges[idx].label.as_str());
-                    }
-                }
-            }
-            if labels.is_empty() {
-                return false; // path is not actually connected
-            }
-            hop_labels.push(labels);
-        }
-
-        self.bidirectional_pairs.iter().any(|(fwd, rev)| {
-            let all_in_pair = hop_labels
-                .iter()
-                .all(|ls| ls.iter().all(|l| l == fwd || l == rev));
-            let has_fwd = hop_labels.iter().any(|ls| ls.contains(fwd.as_str()));
-            let has_rev = hop_labels.iter().any(|ls| ls.contains(rev.as_str()));
-            all_in_pair && has_fwd && has_rev
-        })
     }
 }
