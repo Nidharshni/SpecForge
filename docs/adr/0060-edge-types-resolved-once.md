@@ -1,6 +1,7 @@
 # An edge type is resolved once in the registry build
 
 **Status:** accepted (2026-10-12). Supersedes ADR 0007's round-6 amendments "an open edge type takes the kinds of
+Amended by [ADR 0150](0150-a-relation-is-written-on-one-side.md) (a relation is written on one side; the inverse pairs and `inverse_fields` are gone).
 its writers" and "an undeclared edge type names every writer"; amends ADR 0019 (the record's edge counts), ADR 0020
 (D1's edge-scoped rule, D2's input, D5's cycle rule) and ADR 0032 (the inverse pairs). Protocol 1.3.0: an enhancement
 declares no edge types (D7).
