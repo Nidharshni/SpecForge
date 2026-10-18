@@ -493,7 +493,11 @@ behavior registry_build_edges "Registry Build Registers Edge Types" {
     entity snapshot, the schema and trace read these answers and derive
     none. An edge label declared again by a later extension MUST produce a
     W018 warning naming both extensions; the first in load order keeps the
-    label and its constraints, which graph validation uses.
+    label and its constraints, which graph validation uses. A relation is
+    written from one side (ADR 0150): a reference field whose inverse_of
+    names a field its target kind registers, and two different kinds that
+    each register a reference field targeting the other, MUST produce W162,
+    once per such field or kind pair; the fields still register.
   """
   verify unit "edge type registered with label and description"
   verify unit "source/target kind constraints recorded"
@@ -502,6 +506,9 @@ behavior registry_build_edges "Registry Build Registers Edge Types" {
   verify unit "an edge type names every field that writes it: a kind's own, shared and enhancement fields alike"
   verify unit "a field that writes a declared edge type from a kind outside its declared source kind, or to a kind outside its declared target kind, is W021 and writes no edge of that type"
   verify unit "an edge label a later extension declares again is W018 and the first in load order keeps it"
+  verify unit "a relation declared from both of its ends is W162, once per field whose inverse_of names a field of its target kind"
+  verify unit "two kinds that each declare a reference field targeting the other are W162 once, naming both fields"
+  verify unit "the builtin extensions declare no relation from both ends"
   verify contract "Registry Build Registers Edge Types: edge type registration holds — declarations_in_load_order, edge_types_registered, every_writer_named, one_type_per_field, first_wins"
 }
 

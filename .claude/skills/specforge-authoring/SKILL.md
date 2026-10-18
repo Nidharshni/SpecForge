@@ -144,7 +144,7 @@ Reference entities by their name in reference lists:
 
 ```spec
 invariants [data_persistence, email_uniqueness]   // reference list
-behaviors  [create_user, validate_email]
+produces   [user_created, email_validated]   // a behavior's events
 features   [user_management]
 refs       [gh.issue:42, jira.epic:PROJ-123]
 ```
@@ -209,7 +209,6 @@ behavior create_user "Create User" {
 | Code | Description |
 |------|-------------|
 | E004 | Port method references invalid type |
-| E006 | Event trigger invalid -- trigger must be an existing behavior |
 | E030 | Always-false precondition in requires block |
 | E031 | Liskov compliance violation -- strengthened precondition or weakened postcondition |
 | E032 | Cycle in refinement chain |

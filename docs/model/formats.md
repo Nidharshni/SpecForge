@@ -284,13 +284,13 @@ TableGroup software {
 Table behavior {
   id string [pk]
   features string [ref: > feature.id, note: 'Features this behavior implements']
+  produces string [ref: > event.id, note: 'Events this behavior produces']
+  consumes string [ref: > event.id, note: 'Events this behavior consumes']
   gherkin string [note: 'BDD scenario files']
 }
 
 Table event {
   id string [pk]
-  producers string [ref: > behavior.id, note: 'Behaviors that produce this event']
-  consumers string [ref: > behavior.id, note: 'Behaviors that consume this event']
 }
 
 // ── @specforge/product ──

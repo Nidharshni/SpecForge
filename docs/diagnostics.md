@@ -570,19 +570,6 @@ Owner: core
 Level: error
 ```
 
-## E051
-
-```
-E051: Invalid event trigger
-
-An `event` entity's `trigger` field must reference a `behavior`, but it points
-at something else (or nothing resolvable). Point `trigger` at an existing
-`behavior` entity.
-
-Owner: @specforge/software
-Level: error
-```
-
 ## E052
 
 ```
@@ -3177,6 +3164,25 @@ Owner: core
 Level: warning
 ```
 
+## W162
+
+```
+W162: Relation declared from both sides
+
+A relation has two fields: one extension declares it from both of its ends.
+Either a reference field's `inverse_of` names a field its target kind registers
+(`milestone.behaviors` naming `features`, when `behavior` has its own
+`features`), or two different kinds each register a reference field targeting
+the other (`parent.children` and `child.parent`). A relation is written from one
+side (ADR 0150): the other side is derived, so `query` and `trace` already show
+it. Both fields still register, and an entity can write either. Remove one
+field, or drop the `inverse_of` or name a word the target kind does not use. The
+builtin extensions declare none.
+
+Owner: core
+Level: warning
+```
+
 ## Retired codes
 
 These codes are no longer emitted, and are never reused for another meaning.
@@ -3192,6 +3198,7 @@ These codes are no longer emitted, and are never reused for another meaning.
 | E037 | (nothing) |
 | E038 | (nothing) |
 | E047 | [W139](#w139) |
+| E051 | [E079](#e079) |
 | E053 | (nothing) |
 | E060 | (nothing) |
 | I006 | (nothing) |

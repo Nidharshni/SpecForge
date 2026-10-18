@@ -1,6 +1,6 @@
 ---
 name: specforge-invariants-dsl
-description: "Write invariant blocks in .spec DSL files. Each invariant declares a runtime guarantee with free-form snake_case IDs, a guarantee statement using RFC 2119 keywords, enforced_by references, a risk level (low/medium/high/critical), verify statements (property/unit/mutation), and optional maintains blocks for formal properties. Use when defining what must ALWAYS be true in the system."
+description: "Write invariant blocks in .spec DSL files. Each invariant declares a runtime guarantee with free-form snake_case IDs, a guarantee statement using RFC 2119 keywords, a risk level (low/medium/high/critical), verify statements (property/unit/mutation), and optional maintains blocks for formal properties. Use when defining what must ALWAYS be true in the system."
 ---
 
 # SpecForge Invariants DSL
@@ -12,7 +12,7 @@ Rules and conventions for authoring **`invariant` blocks** in `.spec` files. Inv
 ## When to Use
 
 - Defining a runtime guarantee the system must never violate
-- Specifying what components enforce a guarantee
+- Naming a guarantee that behaviors enforce (they list it in their `invariants`)
 - Establishing risk levels for failure mode analysis
 - Adding formal properties via `maintains` blocks
 - Creating the invariants that behaviors will reference
@@ -25,7 +25,6 @@ invariant data_persistence "Data Persistence" {
     All committed writes survive process restarts.
     No acknowledged write may be silently dropped.
   """
-  enforced_by [persist_committed_writes, replay_write_ahead_log]
   risk high
 
   maintains {
@@ -51,7 +50,6 @@ invariant data_persistence "Data Persistence" {
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `enforced_by` | reference list | Behavior entity IDs that enforce this invariant. |
 | `risk` | enum | `low`, `medium`, `high`, or `critical`. Severity if violated. |
 | `maintains` | block | Frame invariants -- formal properties that must hold before AND after any operation. |
 | `verify` | verify statement(s) | Test specifications: `verify {kind} "{description}"`. Kinds: property, unit, mutation. |
@@ -69,9 +67,11 @@ invariant data_persistence "Data Persistence" {
 
 ### Incoming edges (entities that reference this invariant)
 
+An invariant lists no behaviors: the behaviors that enforce it name it in their `invariants` field, and `trace <invariant>` lists them upstream.
+
 | From | Edge Type | Meaning |
 |------|-----------|---------|
-| `behavior` | `references` | Behavior depends on this invariant |
+| `behavior` | `BehaviorEnforcesInvariant` | Behavior enforces this invariant (via the behavior's `invariants` field) |
 | `decision` | `protects` | Decision protects this invariant |
 | `failure_mode` | `mitigates` | Failure mode threatens this invariant |
 | `constraint` | `constrains` | Quality requirement protects this invariant |
@@ -80,7 +80,6 @@ invariant data_persistence "Data Persistence" {
 
 | To | Edge Type | Meaning |
 |----|-----------|---------|
-| `behavior` | `enforces` | Behaviors that enforce this invariant |
 | `ref` | `links_to` | External references linked to this invariant |
 
 ## Writing Rules
@@ -90,7 +89,7 @@ invariant data_persistence "Data Persistence" {
 3. **Universal** -- the guarantee holds under all conditions, not just the happy path.
 4. **Implementation-independent** -- describe what is true, not how it is achieved.
 5. **Use RFC 2119 keywords** -- MUST, MUST NOT, SHALL in the guarantee text.
-6. **`enforced_by` references declared behavior entities.**
+6. **Write the relation on the behavior** -- a behavior lists the invariants it enforces in `invariants`; an invariant never lists behaviors (E079).
 7. **Every high-risk invariant needs a failure_mode** -- or `W005` warning fires.
 8. **Add `maintains` for formal properties** -- enables automated consistency checking.
 9. **Add `verify` statements** -- invariants are testable (property, unit, mutation).
@@ -99,7 +98,6 @@ invariant data_persistence "Data Persistence" {
 
 | Code | Rule |
 |------|------|
-| E001 | Every ID in `enforced_by` must resolve to a declared behavior entity. |
 | E002 | No duplicate invariant IDs across all `.spec` files. |
 | W003 | Unused invariant -- not referenced by any behavior. |
 | W005 | Unmitigated high-risk invariant -- `risk: high` or `risk: critical` with no `failure_mode`. |
@@ -112,7 +110,6 @@ invariant data_persistence "Data Persistence" {
 ```spec
 invariant email_uniqueness "Email Uniqueness" {
   guarantee "No two active users share the same email address."
-  enforced_by [enforce_unique_email, create_user]
   risk medium
 
   verify property "concurrent user creation preserves email uniqueness"
@@ -129,7 +126,6 @@ invariant audit_trail_integrity "Audit Trail Integrity" {
     Every state-changing operation MUST produce an audit entry
     before returning success to the caller.
   """
-  enforced_by [append_audit_entry, intercept_state_changes]
   risk critical
 
   maintains {
@@ -151,7 +147,6 @@ invariant audit_trail_integrity "Audit Trail Integrity" {
 ```spec
 invariant display_name_length "Display Name Length" {
   guarantee "User display names MUST be between 1 and 100 characters."
-  enforced_by [validate_display_name]
   risk low
 
   verify unit "names within bounds accepted"
@@ -164,5 +159,5 @@ invariant display_name_length "Display Name Length" {
 - Do not use an invariant for something that is a behavior ("Users can log in" is a behavior)
 - Do not use an invariant for a technology choice ("We use PostgreSQL" is a decision)
 - Do not use an invariant for a performance target ("The system is fast" is a constraint)
-- Do not leave `enforced_by` empty for high-risk invariants -- name the enforcement mechanism
+- Do not leave a high-risk invariant without a behavior that lists it in `invariants` -- name the enforcement mechanism
 - Do not skip the `risk` field when a failure_mode will reference this invariant

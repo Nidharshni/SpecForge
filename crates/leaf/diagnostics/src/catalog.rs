@@ -193,9 +193,6 @@ catalog! {
     E048: Error core,
         "Proof coverage below the minimum",
         "`specforge analyze coverage --min N` found that fewer than N% of testable entities are proven, where an entity is proven when a passing test names each of its `verify` obligations or a formal claim discharges it. Prove more obligations, or lower the threshold. The run exits 1.";
-    E051: Error software,
-        "Invalid event trigger",
-        "An `event` entity's `trigger` field must reference a `behavior`, but it points at something else (or nothing resolvable). Point `trigger` at an existing `behavior` entity.";
     E052: Error product,
         "Deliverable dependency cycle",
         "The `depends_on` edges between `deliverable` entities form a cycle. Break the cycle by removing or inverting one of the dependencies.";
@@ -739,4 +736,7 @@ catalog! {
     W158: Warning core,
         "Verify statements on a kind that accepts none",
         "An entity declares `verify` statements, but its kind accepts none: no extension made the kind testable (`supports_verify`). `verify` is reserved syntax; what an obligation means comes from an extension, so a kind takes statements only once one enables them (ADR 0002, ADR 0094). The statements are not fields, so this is not W020. Enable an extension that makes the kind testable (for software kinds, `specforge add @specforge/testing`), or remove the statements.";
+    W162: Warning core,
+        "Relation declared from both sides",
+        "A relation has two fields: one extension declares it from both of its ends. Either a reference field's `inverse_of` names a field its target kind registers (`milestone.behaviors` naming `features`, when `behavior` has its own `features`), or two different kinds each register a reference field targeting the other (`parent.children` and `child.parent`). A relation is written from one side (ADR 0150): the other side is derived, so `query` and `trace` already show it. Both fields still register, and an entity can write either. Remove one field, or drop the `inverse_of` or name a word the target kind does not use. The builtin extensions declare none.";
 }

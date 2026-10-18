@@ -11,7 +11,7 @@ flowchart TB
     class specforge_product_card cls_specforge_product
 
     subgraph specforge_software["  @specforge/software v1.0.0  "]
-        specforge_software_card["<b>5 entities · 15 edges · 11 rules</b><br>─────────────────────────<br>behavior · invariant · event<br>type · port<br>─────────────────────────<br><i>enhances: module +2 · milestone +1</i>"]
+        specforge_software_card["<b>5 entities · 15 edges · 10 rules</b><br>─────────────────────────<br>behavior · invariant · event<br>type · port<br>─────────────────────────<br><i>enhances: module +2 · milestone +1</i>"]
     end
     classDef cls_specforge_software fill:#fff,stroke:#42a5f5,stroke-width:1.5px,color:#333
     class specforge_software_card cls_specforge_software

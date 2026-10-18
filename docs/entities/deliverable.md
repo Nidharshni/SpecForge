@@ -55,7 +55,6 @@ All fields are optional at the type level.
 | `version` | string | Semantic Versioning 2.0.0 string (e.g., `1.0.0`, `1.0.0-alpha.1`, `1.0.0+build.42`). |
 | `reason` | string | Rationale for current status (required context for `deprecated` status, checked by I066). |
 | `tags` | string[] | Free-form tags for categorization. |
-| `refs` | reference list | External references (issues, tickets, diagrams) linked to this deliverable. |
 
 ## Relationships
 

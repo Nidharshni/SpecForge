@@ -1,11 +1,14 @@
 //! W162: a relation declared from both of its ends (ADR 0150).
 
 use specforge_extension_sdk::prelude::*;
+use specforge_test_macros::test as spec;
 
 use crate::support::{build, coded, codes, declare};
 
-#[test]
-#[ignore = "flipped by T10"]
+#[spec(
+    behavior = "registry_build_edges",
+    verify = "a relation declared from both of its ends is W162, once per field whose inverse_of names a field of its target kind"
+)]
 fn an_inverse_of_naming_a_field_of_the_target_kind_is_w162() {
     let declared = declare("@t/docs", |c| {
         c.kind("Doc", |k| {
@@ -41,8 +44,10 @@ fn an_inverse_of_naming_a_field_of_the_target_kind_is_w162() {
     assert_eq!(coded(&build, "W162").len(), 3, "{:?}", codes(&build));
 }
 
-#[test]
-#[ignore = "flipped by T10"]
+#[spec(
+    behavior = "registry_build_edges",
+    verify = "two kinds that each declare a reference field targeting the other are W162 once, naming both fields"
+)]
 fn two_kinds_linked_both_ways_are_w162() {
     let declared = declare("@t/tree", |c| {
         c.kind("Parent", |k| {

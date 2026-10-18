@@ -6,11 +6,11 @@ behavior (@specforge/software): A testable unit of system functionality with a d
 
 Fields:
   abstract  bool  -  Marks a specification-only behavior that concrete behaviors refine; it carries no verify obligations of its own
-  category  string  -  Classification tag for agent task routing
+  category  identifier  -  Classification tag for agent task routing
   consumes  reference_list  -  Events this behavior reacts to
   contract  string  *  The behavioral contract this behavior guarantees
   description  string  -  Human-readable summary of this behavior
-  diagnostic  string  -  Diagnostic message for validation tooling
+  diagnostic  identifier  -  Diagnostic message for validation tooling
   ensures  block  -  Named postconditions: each condition's name and what it guarantees
   features  reference_list  -  Product features this behavior implements
   invariants  reference_list  -  Invariants this behavior enforces
@@ -21,8 +21,8 @@ Fields:
   refs  string_list  -  External references such as issue or document URIs
   requires  block  -  Named preconditions: each condition's name and what it requires
   satisfies  reference_list  -  Temporal properties this behavior satisfies
-  severity  string  -  Impact level if this behavior fails
-  status  string  -  Current lifecycle status of this behavior
+  severity  identifier  -  Impact level if this behavior fails
+  status  identifier  -  Current lifecycle status of this behavior
   sync  block  -  Synchronization bound: barrier, timeout or delivery
   types  reference_list  -  Type definitions used by this behavior
 Existing: login, logout, reset_password
@@ -32,6 +32,6 @@ Example:
   behavior example_behavior "Example Title" {
     contract "..."
     abstract true
-    category "..."
+    category word
     consumes [ref_1, ref_2]
   }

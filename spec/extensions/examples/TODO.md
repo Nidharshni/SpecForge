@@ -56,10 +56,11 @@ port todo_api "Todo REST API" {
 
 behavior create_todo "Create Todo" {
   category command
-  invariants [todo_title_not_empty, todo_id_uniqueness]
+  features   [todo_management]
   types      [TodoItem, TodoError]
   ports      [todo_api, todo_repository]
   produces   [todo_created]
+  invariants [todo_title_not_empty, todo_id_uniqueness]
 
   contract """
     When a valid title is received,
@@ -85,6 +86,7 @@ behavior create_todo "Create Todo" {
 
 behavior toggle_todo "Toggle Todo Completion" {
   category command
+  features   [todo_management]
   types      [TodoItem, TodoError]
   ports      [todo_api, todo_repository]
   produces   [todo_toggled]
@@ -111,6 +113,7 @@ behavior toggle_todo "Toggle Todo Completion" {
 
 behavior delete_todo "Delete Todo" {
   category command
+  features   [todo_management]
   types      [TodoItem, TodoError]
   ports      [todo_api, todo_repository]
   produces   [todo_deleted]
@@ -134,6 +137,8 @@ behavior delete_todo "Delete Todo" {
 
 behavior list_todos "List Todos" {
   category query
+  features   [todo_management]
+  consumes   [todo_created]
   types      [TodoItem, TodoFilter]
   ports      [todo_api, todo_repository]
 
@@ -155,20 +160,16 @@ behavior list_todos "List Todos" {
 // ── Events ────────────────────────────────────────────────
 
 event todo_created "Todo Created" {
-  trigger create_todo
   payload TodoItem
   channel "todos"
-  consumers [list_todos]
 }
 
 event todo_toggled "Todo Toggled" {
-  trigger toggle_todo
   payload TodoItem
   channel "todos"
 }
 
 event todo_deleted "Todo Deleted" {
-  trigger delete_todo
   channel "todos"
 }
 
@@ -178,7 +179,6 @@ invariant todo_title_not_empty "Todo Title Not Empty" {
   guarantee """
     A TodoItem MUST never have an empty or whitespace-only title.
   """
-  enforced_by [create_todo]
   risk medium
 
   verify property "no persisted item has an empty title"
@@ -188,7 +188,6 @@ invariant todo_id_uniqueness "Todo ID Uniqueness" {
   guarantee """
     Every TodoItem MUST have a globally unique id.
   """
-  enforced_by [create_todo]
   risk high
 
   verify property "no two items share the same id"
@@ -197,8 +196,6 @@ invariant todo_id_uniqueness "Todo ID Uniqueness" {
 // ── Features ──────────────────────────────────────────────
 
 feature todo_management "Todo Management" {
-  behaviors [create_todo, toggle_todo, delete_todo, list_todos]
-
   problem """
     Users need to track tasks with the ability to add, complete,
     and remove items.
@@ -225,16 +222,16 @@ feature todo_management "Todo Management" {
 ## Graph edges produced
 
 ```
-todo_management ──Implements──> create_todo
-todo_management ──Implements──> toggle_todo
-todo_management ──Implements──> delete_todo
-todo_management ──Implements──> list_todos
+create_todo ──BehaviorImplementsFeature──> todo_management
+toggle_todo ──BehaviorImplementsFeature──> todo_management
+delete_todo ──BehaviorImplementsFeature──> todo_management
+list_todos ──BehaviorImplementsFeature──> todo_management
 
 create_todo ──Produces──> todo_created
 toggle_todo ──Produces──> todo_toggled
 delete_todo ──Produces──> todo_deleted
 
-todo_created ──Consumes──> list_todos
+list_todos ──BehaviorConsumesEvent──> todo_created
 
 create_todo ──UsesType──> TodoItem, TodoError
 toggle_todo ──UsesType──> TodoItem, TodoError
@@ -249,10 +246,7 @@ toggle_todo ──UsesPort──> todo_api, todo_repository
 delete_todo ──UsesPort──> todo_api, todo_repository
 list_todos  ──UsesPort──> todo_api, todo_repository
 
-create_todo ──References──> todo_title_not_empty, todo_id_uniqueness
-
-todo_title_not_empty ──Enforces──> create_todo
-todo_id_uniqueness   ──Enforces──> create_todo
+create_todo ──BehaviorEnforcesInvariant──> todo_title_not_empty, todo_id_uniqueness
 ```
 
 ## What an AI agent sees
