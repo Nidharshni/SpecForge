@@ -1,4 +1,5 @@
-//! `specforge migrate` and the MCP `specforge.migrate` tool: one migration.
+//! `specforge migrate` and the MCP `specforge.migrate` tool: one migration: the format version header and the
+//! migration steps (`titles`).
 //!
 //! The run previews first: a project with nothing to migrate is left alone
 //! (no compile, no hooks). Otherwise it compiles the project, migrates the
@@ -15,7 +16,9 @@ pub use specforge_migrate::{
     MigrationBackup, MigrationDiff, MigrationRecord, MigrationResult, MigrationStatus,
     MigrationSummary, RecordChange, RollbackSummary,
 };
-use specforge_migrate::{migrate_project, restore, run_rollback, structural_differences};
+use specforge_migrate::{
+    beyond_steps, migrate_project, restore, run_rollback, structural_differences,
+};
 use specforge_parser::{
     CURRENT_FORMAT_VERSION, FormatVersion, MAX_SUPPORTED_VERSION, MIN_SUPPORTED_VERSION,
 };
@@ -99,8 +102,9 @@ pub struct Outcome {
     pub hook_failures: Vec<String>,
     /// Whether the migrated project was compiled and compared.
     pub validated: bool,
-    /// The graph delta from the graph before the migration to the graph after it, source positions ignored: the run
-    /// keeps the migration only when it is empty. Empty when the run did not compare.
+    /// The graph delta from the graph before the migration to the graph after it, source positions ignored, less the
+    /// changes the migration steps declare (a title where a block had none): the run keeps the migration only when it
+    /// is empty. Empty when the run did not compare.
     pub graph_delta: GraphDelta,
     /// What compiling the migrated project reported.
     pub post_diagnostics: Vec<Diagnostic>,
@@ -438,7 +442,7 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
     // The migrated project must have the graph it had before.
     let post = CompiledProject::compile(project, runtime);
     outcome.validated = true;
-    outcome.graph_delta = compute_graph_delta(pre.graph(), post.graph());
+    outcome.graph_delta = beyond_steps(compute_graph_delta(pre.graph(), post.graph()), pre.graph());
     outcome.post_diagnostics = post.diagnostics();
     if !outcome.graph_delta.is_empty() {
         roll_back(project.dir(), &mut outcome);

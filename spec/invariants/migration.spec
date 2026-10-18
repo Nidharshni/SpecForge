@@ -64,7 +64,9 @@ invariant migration_semantic_preservation "Migration Semantic Preservation" {
     migration, the set of nodes (entity IDs, and each node's kind, title,
     field values and methods) and edges (reference relationships) MUST be
     identical to the pre-migration graph, source positions aside: the
-    graph delta between them is empty. Only syntax-level changes
+    graph delta between them is empty, except a title a migration step
+    adds to a block that had none (add_missing_titles); every other node
+    and edge MUST be identical. Only syntax-level changes
     (whitespace, keyword spelling, block ordering) are permitted. Any
     migration that adds, removes, or alters a node or edge is a breaking
     change and MUST be flagged by validate_post_migration_integrity.
