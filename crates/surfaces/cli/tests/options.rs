@@ -63,7 +63,9 @@ const PROBES: &[Probe] = &[
         label: "export format",
         cli: Some(&["export", "--path", ROOT, "--format", NAME]),
         mcp: Some(McpProbe("specforge.export", "format", no_arguments)),
-        names: &["graph", "context", "brief", "dot", "json", "yaml"],
+        names: &[
+            "graph", "context", "brief", "dot", "markdown", "json", "yaml",
+        ],
     },
     Probe {
         label: "schema publish format",
@@ -417,11 +419,10 @@ fn names<T: Copy + PartialEq>(table: &OptionTable<T>) -> Names {
 
 /// The probes both surfaces answer from an option table: the probe's
 /// label, the table the CLI parses with, the table MCP parses with.
-/// `specforge export` takes every export format; `specforge.export` the
-/// agent formats (dot is `specforge.render`'s).
+/// `specforge export` and `specforge.export` take every export format.
 fn paired() -> Vec<(&'static str, Names, Names)> {
     vec![
-        ("export format", names(&FORMAT), names(&AGENT_FORMAT)),
+        ("export format", names(&FORMAT), names(&FORMAT)),
         ("model format", names(&MODEL_FORMAT), names(&MODEL_FORMAT)),
         ("model group_by", names(&GROUP_BY), names(&GROUP_BY)),
         ("model fields", names(&MODEL_FIELDS), names(&MODEL_FIELDS)),

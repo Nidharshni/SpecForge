@@ -18,6 +18,7 @@ mod determinism;
 mod docs_truth;
 mod explain;
 mod export;
+mod export_markdown;
 mod export_version;
 mod extension_authoring;
 mod extension_surfaces;

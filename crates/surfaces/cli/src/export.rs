@@ -54,7 +54,7 @@ pub(crate) struct Args {
     /// then counts toward the budget. The export lists the dropped
     /// entities under `token_budget`; below one entity it is the envelope
     /// with no entities, and below even that it fails (E062). Ignored by
-    /// `dot`.
+    /// `dot` and `markdown`.
     #[arg(long)]
     max_tokens: Option<usize>,
 }

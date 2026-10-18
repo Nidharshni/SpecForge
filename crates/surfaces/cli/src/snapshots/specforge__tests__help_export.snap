@@ -16,10 +16,11 @@ Options:
           Output format
 
           Possible values:
-          - graph:   every entity with its fields, file and line (Graph Protocol)
-          - context: headline and normative fields and verify, for an agent
-          - brief:   id, kind and title
-          - dot:     Graphviz
+          - graph:    every entity with its fields, file and line (Graph Protocol)
+          - context:  headline and normative fields and verify, for an agent
+          - brief:    id, kind and title
+          - dot:      Graphviz
+          - markdown: a document a reviewer reads: each entity's statements, fields, links and obligations
           
           [default: graph]
 
@@ -42,7 +43,7 @@ Options:
           Fail unless a reader of this schema version reads the export: the same major version, not newer than the project's schema
 
       --max-tokens <MAX_TOKENS>
-          Token budget for the export: keeps the most central entities that fit. The schema is left out unless --with-schema is given, and then counts toward the budget. The export lists the dropped entities under `token_budget`; below one entity it is the envelope with no entities, and below even that it fails (E062). Ignored by `dot`
+          Token budget for the export: keeps the most central entities that fit. The schema is left out unless --with-schema is given, and then counts toward the budget. The export lists the dropped entities under `token_budget`; below one entity it is the envelope with no entities, and below even that it fails (E062). Ignored by `dot` and `markdown`
 
   -h, --help
           Print help (see a summary with '-h')

@@ -52,6 +52,27 @@ $ specforge export --format context
 
 About 800 bytes for the whole project: the contracts, the obligations and
 the links, instead of an agent reading files to reconstruct them.
+
+A person who signs the specification reads a document, not JSON.
+`specforge export --format markdown` writes one section per entity, with its
+statements quoted, its links named by kind and title, what references it and
+its numbered obligations:
+
+```console
+$ specforge export --format markdown
+# Specification
+
+4 entities.
+
+## behavior `add_item` — Add an item to the cart
+
+`cart.spec:12`
+
+**contract**
+
+> Adding a named item puts it in the cart once
+```
+
 `specforge trace add_item` shows the neighbourhood of one entity:
 
 ```console

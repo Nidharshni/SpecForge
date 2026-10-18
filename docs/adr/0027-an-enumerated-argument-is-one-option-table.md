@@ -68,3 +68,5 @@ A third surface whose argument syntax cannot be built from a name list (position
 free-form grammar), or an enumerated argument whose names depend on the project.
 
 Extended by ADR 0101: every rule a request's values follow is the operation's.
+
+Amended by ADR 0152: `specforge.export` reads `FORMAT`; `AGENT_FORMAT` is the formats with a published JSON Schema.

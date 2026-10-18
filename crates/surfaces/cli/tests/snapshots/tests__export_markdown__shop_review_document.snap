@@ -1,0 +1,88 @@
+---
+source: crates/surfaces/cli/tests/export_markdown.rs
+expression: run.stdout
+---
+# Specification
+
+4 entities.
+
+## behavior `add_item` — Add an item to the cart
+
+`cart.spec:12`
+
+**contract**
+
+> Adding a named item puts it in the cart once
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| category | cart |
+
+**Links**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| types | `cart` | type | Shopping cart |
+| invariants | `no_duplicate_items` | invariant | An item is in the cart at most once |
+
+**Verify**
+
+| # | Kind | Obligation |
+|---|---|---|
+| 1 | unit | adds the item |
+| 2 | unit | rejects an empty name |
+| 3 | unit | rejects a duplicate item |
+
+## invariant `no_duplicate_items` — An item is in the cart at most once
+
+`cart.spec:22`
+
+**guarantee**
+
+> every item name appears at most once in cart.items
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| invariants | `add_item` | behavior | Add an item to the cart |
+
+**Verify**
+
+| # | Kind | Obligation |
+|---|---|---|
+| 1 | property | a second add of the same item fails |
+
+## spec `shop` — shop
+
+`cart.spec:3`
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| version | 0.1.0 |
+
+## type `cart` — Shopping cart
+
+`cart.spec:7`
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| items | string[] |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| types | `add_item` | behavior | Add an item to the cart |
+
+**Verify**
+
+| # | Kind | Obligation |
+|---|---|---|
+| 1 | unit | starts empty |
