@@ -264,7 +264,12 @@ impl Walk<'_> {
             }
             Expect::HeaderName(header) => match kind {
                 LexemeKind::Ident | LexemeKind::RefId => {
-                    self.set(i, Role::Name);
+                    // The name a `defaults` header gives is a kind, not an entity (ADR 0149).
+                    let kind = self
+                        .syntax
+                        .text(text, self.syntax.headers[header as usize].kind);
+                    let is_defaults = kind == specforge_common::structural::DEFAULTS;
+                    self.set(i, if is_defaults { Role::Kind } else { Role::Name });
                     self.syntax.header_of[i] = Some(header);
                     self.syntax.headers[header as usize].name = Some(i as u32);
                     self.state = Expect::HeaderTitle(header);

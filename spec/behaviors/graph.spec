@@ -78,6 +78,8 @@ behavior apply_file_defaults "Apply File Defaults" {
   verify unit "find-references lists an inherited reference once per block"
   verify unit "rename edits an inherited reference once"
   verify unit "query, trace and the graph export show the inherited list"
+  verify unit "a defaults block completes, hovers and navigates as the kind it names"
+  verify unit "the editor shows an inherited reference's location once"
 }
 
 behavior link_derived_references "Link Derived References" {
