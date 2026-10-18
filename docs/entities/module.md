@@ -47,7 +47,6 @@ All fields are optional at the type level.
 | `depends_on` | EntityId[] | Other modules this module depends on. Creates `ModuleDependsOn` edges. Cycles detected by E007. |
 | `reason` | string | Rationale for module state (e.g., deprecation justification). Documentation-only — no validation rule in v1. |
 | `tags` | string[] | Free-form tags for categorization. |
-| `refs` | reference list | External references (issues, tickets, diagrams) linked to this module. |
 
 ## Relationships
 

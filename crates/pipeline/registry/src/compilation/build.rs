@@ -19,6 +19,7 @@ use super::declaration::{consistency, order_passes, shape};
 use super::graph_inputs;
 use super::peers;
 use super::populate::populate;
+use super::sides;
 use super::validate::validate_extension_testability;
 use crate::rules::{CustomVerdicts, Registries, Rules};
 use crate::{
@@ -44,7 +45,7 @@ pub enum BuildPart {
     /// What the kind, field and edge registries hold: an unknown field type
     /// (W019), a field declaration that cannot be used as declared (W021), an
     /// enhancement of an unknown kind (I004), a testable kind that cannot
-    /// declare obligations (W017).
+    /// declare obligations (W017), a relation declared from both of its ends (W162).
     Registries,
     /// A declared rule: a code its extension may not use (W150), a property
     /// its check does not read (W147), a rule that cannot work or whose
@@ -349,6 +350,8 @@ pub fn build_registries(declarations: Vec<ExtensionDeclaration>) -> RegistryBuil
         BuildPart::Registries,
         validate_extension_testability(&kinds),
     ));
+    // W162: a relation declared from both of its ends.
+    registry_diagnostics.extend(about(BuildPart::Registries, sides::both_sides(&fields)));
 
     // The rule set: W150, W147 or W112 per declared rule, then W023 for a
     // code two extensions declare; E006 rules for required

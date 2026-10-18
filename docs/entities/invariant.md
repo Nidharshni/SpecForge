@@ -26,10 +26,11 @@ invariant data_persistence "Data Persistence" {
     All committed writes survive process restarts.
     No acknowledged write may be silently dropped.
   """
-  enforced_by [persist_committed_writes, replay_write_ahead_log]
   risk high
 }
 ```
+
+An invariant lists no behaviors. The behaviors that enforce it name it in their `invariants` field (`invariants [data_persistence]`), and `trace data_persistence` lists them upstream.
 
 ## Fields
 
@@ -44,7 +45,6 @@ invariant data_persistence "Data Persistence" {
 | Field | Type | Description |
 |-------|------|-------------|
 | `title` | string | Human-readable name (the string after the identifier). Optional — auto-derived from identifier if omitted. |
-| `enforced_by` | reference list | Behavior entity IDs that enforce this invariant. |
 | `risk` | enum | `high`, `medium`, or `low`. Indicates the severity of consequences if this invariant is violated. |
 | `refs` | reference list | External references (issues, tickets, diagrams) linked to this invariant. |
 
@@ -69,7 +69,6 @@ None. No extension declares an outgoing edge type for `invariant`.
 
 | Code | Rule |
 |------|------|
-| E001 | Every ID in `enforced_by` must resolve to a declared behavior entity. |
 | E002 | No two invariants may share the same ID across all `.spec` files. |
 | W003 | If no behavior references this invariant, emit "unused invariant" warning. |
 | W005 | If `risk: high` and no `failure_mode` references this invariant, emit "unmitigated high-risk invariant" warning. |
@@ -113,7 +112,6 @@ Invariants should be:
 ```spec
 invariant email_uniqueness {
   guarantee "No two active users share the same email address."
-  enforced_by [enforce_unique_email, create_user]
   risk medium
 }
 ```
@@ -128,7 +126,6 @@ invariant audit_integrity "Audit Trail Integrity" {
     Every state-changing operation MUST produce an audit entry
     before returning success to the caller.
   """
-  enforced_by [append_audit_entry, intercept_state_changes]
   risk high
   refs [gh.issue:15, jira.epic:PROJ-200]
 }
@@ -139,7 +136,6 @@ invariant audit_integrity "Audit Trail Integrity" {
 ```spec
 invariant display_name_length "Display Name Length" {
   guarantee "User display names MUST be between 1 and 100 characters."
-  enforced_by [validate_display_name]
   risk low
 }
 ```

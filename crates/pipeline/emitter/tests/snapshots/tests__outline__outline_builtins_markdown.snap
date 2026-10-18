@@ -9,7 +9,7 @@ expression: "drawn(&manifests, opts)"
 | Extension | Version | Entities | Edges | Rules | Enhances |
 |-----------|---------|----------|-------|-------|----------|
 | @specforge/product | 1.0.0 | 9 | 20 | 50 | — |
-| @specforge/software | 1.0.0 | 5 | 15 | 11 | module (+2), milestone (+1) |
+| @specforge/software | 1.0.0 | 5 | 15 | 10 | module (+2), milestone (+1) |
 | @specforge/governance | 1.0.0 | 3 | 11 | 0 | — |
 | @specforge/formal | 1.0.0 | 5 | 10 | 12 | behavior (+7), event (+3), invariant (+1) |
 
@@ -133,7 +133,7 @@ expression: "drawn(&manifests, opts)"
 
 | Field | Type | Required | Source | Edge | Target |
 |-------|------|----------|--------|------|--------|
-| family | string | no | @specforge/product | — | — |
+| family | identifier | no | @specforge/product | — | — |
 | description | string | no | @specforge/product | — | — |
 | features | reference_list | no | @specforge/product | ModuleContainsFeature | feature |
 | depends_on | reference_list | no | @specforge/product | ModuleDependsOn | module |
@@ -191,14 +191,14 @@ expression: "drawn(&manifests, opts)"
 | reason | string | no | @specforge/product | — | — |
 | refs | string_list | no | @specforge/product | — | — |
 
-### @specforge/software (5 entities, 15 edges, 11 rules)
+### @specforge/software (5 entities, 15 edges, 10 rules)
 
 **Entity kinds**: behavior, invariant, event, type, port
 
 **Contributes**: entities, edges, enhancements, validation_rules
 
-**Validation rules**: W001, W002, W003, W005, W006, W007, W008, W010, E004, E051, E010 (11 total)
-  Severity breakdown: 3 errors, 8 warnings
+**Validation rules**: W001, W002, W003, W005, W006, W007, W008, W010, E004, E010 (10 total)
+  Severity breakdown: 2 errors, 8 warnings
 
 **Enhances**:
 - @specforge/product/module: +2 fields (ports, ports_defined)
@@ -214,13 +214,13 @@ expression: "drawn(&manifests, opts)"
 | ports | reference_list | no | @specforge/software | BehaviorUsesPort | port |
 | produces | reference_list | no | @specforge/software | BehaviorProducesEvent | event |
 | consumes | reference_list | no | @specforge/software | BehaviorConsumesEvent | event |
-| category | string | no | @specforge/software | — | — |
+| category | identifier | no | @specforge/software | — | — |
 | features | reference_list | no | @specforge/software | BehaviorImplementsFeature | feature |
 | description | string | no | @specforge/software | — | — |
-| status | string | no | @specforge/software | — | — |
+| status | identifier | no | @specforge/software | — | — |
 | refs | string_list | no | @specforge/software | — | — |
-| severity | string | no | @specforge/software | — | — |
-| diagnostic | string | no | @specforge/software | — | — |
+| severity | identifier | no | @specforge/software | — | — |
+| diagnostic | identifier | no | @specforge/software | — | — |
 
 *Enhanced by @specforge/formal*: +7 fields (requires, ensures, maintains, satisfies, sync, abstract, refines)
 
@@ -229,7 +229,7 @@ expression: "drawn(&manifests, opts)"
 | Field | Type | Required | Source | Edge | Target |
 |-------|------|----------|--------|------|--------|
 | guarantee | string | yes | @specforge/software | — | — |
-| risk | string | no | @specforge/software | — | — |
+| risk | enum | no | @specforge/software | — | — |
 | description | string | no | @specforge/software | — | — |
 | refs | string_list | no | @specforge/software | — | — |
 
@@ -240,8 +240,8 @@ expression: "drawn(&manifests, opts)"
 | Field | Type | Required | Source | Edge | Target |
 |-------|------|----------|--------|------|--------|
 | channel | string | no | @specforge/software | — | — |
-| channel_type | string | no | @specforge/software | — | — |
-| category | string | no | @specforge/software | — | — |
+| channel_type | identifier | no | @specforge/software | — | — |
+| category | identifier | no | @specforge/software | — | — |
 | payload | reference | no | @specforge/software | EventCarriesPayloadType | type |
 | description | string | no | @specforge/software | — | — |
 | refs | string_list | no | @specforge/software | — | — |
@@ -262,7 +262,7 @@ expression: "drawn(&manifests, opts)"
 
 | Field | Type | Required | Source | Edge | Target |
 |-------|------|----------|--------|------|--------|
-| direction | string | yes | @specforge/software | — | — |
+| direction | enum | yes | @specforge/software | — | — |
 | category | string | no | @specforge/software | — | — |
 | methods | block | no | @specforge/software | — | — |
 | types | reference_list | no | @specforge/software | PortReferencesType | type |
@@ -300,7 +300,7 @@ expression: "drawn(&manifests, opts)"
 
 | Field | Type | Required | Source | Edge | Target |
 |-------|------|----------|--------|------|--------|
-| category | string | no | @specforge/governance | — | — |
+| category | identifier | no | @specforge/governance | — | — |
 | priority | enum | no | @specforge/governance | — | — |
 | metric | string | no | @specforge/governance | — | — |
 | threshold | string | no | @specforge/governance | — | — |
@@ -405,4 +405,4 @@ expression: "drawn(&manifests, opts)"
 ## Summary
 
 - **4** extensions, **22** entity kinds, **56** edge types
-- **73** validation rules, **15** cross-extension edges, **5** enhancements
+- **72** validation rules, **15** cross-extension edges, **5** enhancements

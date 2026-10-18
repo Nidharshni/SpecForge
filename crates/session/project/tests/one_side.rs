@@ -7,8 +7,10 @@ use specforge_component::builtins::BUILTIN_EXTENSIONS;
 use specforge_project::Environment;
 use tempfile::TempDir;
 
-#[test]
-#[ignore = "flipped by T10"]
+#[specforge_test_macros::test(
+    behavior = "registry_build_edges",
+    verify = "the builtin extensions declare no relation from both ends"
+)]
 fn no_builtin_declares_a_relation_from_both_sides() {
     let dir = TempDir::new().unwrap();
     let all: Vec<&str> = BUILTIN_EXTENSIONS.iter().map(|(name, _)| *name).collect();
@@ -22,23 +24,8 @@ fn no_builtin_declares_a_relation_from_both_sides() {
         Some(std::sync::Arc::new(ComponentRuntime::new())),
     );
     let registries = env.registries();
-
-    let collisions: Vec<String> = registries
-        .fields()
-        .iter()
-        .filter_map(|(kind, field, entry)| {
-            let declared = entry.declared();
-            let (target, inverse) = (
-                declared.target_kind.as_deref()?,
-                declared.inverse_of.as_deref()?,
-            );
-            registries
-                .fields()
-                .contains(target, inverse)
-                .then(|| format!("{kind}.{field} names '{inverse}', a field of {target}"))
-        })
-        .collect();
-    assert!(collisions.is_empty(), "{collisions:?}");
+    let both: Vec<_> = env.diagnostics().filter(|d| d.code == "W162").collect();
+    assert!(both.is_empty(), "{both:?}");
     assert!(
         !registries.rules().iter().any(|rule| rule.code() == "E051"),
         "E051 validates `triggers`, a field no extension declares"

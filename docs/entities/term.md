@@ -67,7 +67,6 @@ term invariant_violation "Invariant Violation" {
 | `aliases` | string list | Alternative forms of this term that mean the same thing. Listed so the team knows they are synonyms. |
 | `context` | string | Optional disambiguation or usage notes. Use when a term has a specific meaning in this project that differs from common usage. |
 | `see_also` | reference list | Cross-references to entities (invariants, behaviors, decisions, etc.) that use or define this term. |
-| `refs` | reference list | External references (issues, tickets, diagrams) related to this term. |
 
 ## Relationships
 
