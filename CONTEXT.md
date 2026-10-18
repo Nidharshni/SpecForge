@@ -52,12 +52,19 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   root (ADR 0055). The CLI's human output names files as typed.
 - **Format version**: the `.spec` file format a file was written against, `MAJOR.MINOR`, declared by
   the `// specforge-format:` header on its first non-blank line; a file with no header is at the
-  current version and reports nothing. The parser reads it with the file
+  current version and reports nothing (migration steps still run on it). The parser reads it with the file
   (`specforge_parser::detect_format_version`, `SpecFile::format_version`) and the compile reports
   I007 (older) and E019 (newer, or a header that is not `MAJOR.MINOR`) on the header line, like any
   parser diagnostic; `specforge migrate` reads and rewrites it through the same module
   (`with_format_version`), so a rewritten header stands where the parser reads it. It is
   distinct from the Graph Protocol's schema version.
+- **Title**: the string after a block's id in its header (`type Task "A unit of work" {`, `type S "States" = a |
+  b`), the one human-readable label a node carries. Every block that becomes a node has one: E076 otherwise. A
+  `spec` block's name is its title; a `define` block has none. A `//` comment is never a title. `specforge
+  migrate` lifts a block's doc comment into a missing title.
+- **Migration step**: a rewrite `specforge migrate` applies to every source it changes, whatever the file's format
+  version, after the header rewrite (`specforge_migrate::titles` today). The graph comparison keeps exactly the
+  changes the steps declare: for `titles`, a title where the block had none.
 - **Schema version**: the Graph Protocol schema's `MAJOR.MINOR.PATCH`, computed, never declared: the version the
   schema record holds, bumped by the largest change between the recorded schema and the one the loaded extensions
   produce (major when something a reader relies on is removed or reshaped, minor for an addition, patch for
