@@ -107,7 +107,7 @@ module specforge_formatter "specforge-formatter" {
   family      core
   description "The .spec formatter: a document, or the blocks a range touches, in canonical layout under its .specforgefmt.toml, a form it cannot read kept as written (ADR 0021, ADR 0063)"
   features    [code_formatting, lsp_formatting]
-  depends_on  [specforge_common, specforge_parser, tree_sitter_specforge]
+  depends_on  [specforge_common, specforge_graph, specforge_parser, tree_sitter_specforge]
   tags        ["formatter", "tooling"]
 }
 
