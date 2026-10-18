@@ -259,6 +259,9 @@ catalog! {
     E074: Error core,
         "Publisher signing key unusable",
         "`specforge publish` signs every package with your publisher key, kept in `~/.specforge/signing-key.json` and created on your first publish. That file is there and can't be read as a key (it is not JSON, or its `secretKey` is not 32 hex-encoded bytes), or the key could not be created there (the directory or the file can't be written). Nothing was sent. Fix the file's permissions, or move it aside: the next publish creates a new key, and whoever pinned the old one then sees a changed publisher key (R-TRUST-003) for your packages.";
+    E079: Error core,
+        "Relation written on its other side",
+        "An entity writes a field its kind does not declare, and that field is the other side of a relation another kind owns. A relation is written on its owning field only (ADR 0150): the one reference field an extension declares for it. The other side is derived, never written: `query` shows it as the incoming edges and `trace` as the upstream. The field is recognised in two ways: an owning field names it in its `inverse_of` (so a documented reverse such as `behaviors` on a feature is refused even when its ids do not resolve), or every id it lists is one other kind's entity and that kind owns a reference field into this one (`journeys [..]` on a feature). A self-relation's other side is not recognised, and a kind that accepts any field is not checked. The graph still carries the field's untyped edge, and `check` fails. Remove the field and write the owning field on each entity it listed; the suggestion names both.";
     I002: Info core,
         "Structural-only mode",
         "Emitted when no extensions are installed, or when every installed extension failed to load, so the compiler falls back to structural-only validation. Install an extension (for example `specforge add @specforge/software`) to enable kind-specific checks.";

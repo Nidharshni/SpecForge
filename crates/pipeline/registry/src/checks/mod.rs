@@ -22,7 +22,7 @@ impl RegistryBuild {
     ///
     /// 1. W012: a `ref` nothing references;
     /// 2. unless [`Self::structural_only`]: E024 unknown kind, E013
-    ///    reserved ID, E014 identifier length, W020 unknown field, W158 verify
+    ///    reserved ID, E014 identifier length, W020 unknown field or E079 the other side of a relation, W158 verify
     ///    statements on a kind that accepts none, E061 value not of its declared type;
     ///    when structural-only with extensions loaded, one W151 instead;
     /// 3. the rule set ([`crate::rules::Rules::check`]), asking `verdicts`
@@ -55,7 +55,7 @@ impl RegistryBuild {
                 &self.kinds,
                 &self.fields,
                 &self.candidates,
-            )); // W020
+            )); // W020, E079
             diagnostics.extend(obligations::refused(entities, &self.kinds)); // W158
             diagnostics.extend(values::mistyped(entities, &self.kinds, &self.fields)); // E061
         }
