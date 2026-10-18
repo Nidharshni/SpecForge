@@ -15,6 +15,7 @@ mod contracts;
 mod coverage_corpus;
 mod coverage_gate;
 mod determinism;
+mod docs_relations;
 mod docs_truth;
 mod explain;
 mod export;
