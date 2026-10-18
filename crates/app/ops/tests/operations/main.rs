@@ -13,6 +13,7 @@ mod contracts;
 mod contracts_pass;
 mod coverage;
 mod cross_extension;
+mod defaults;
 mod determinism;
 mod diagnostics_json;
 mod enhancement_credit;
