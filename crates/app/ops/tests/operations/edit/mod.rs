@@ -7,6 +7,7 @@ mod delete;
 mod fields;
 mod links;
 mod obligations;
+mod replay;
 mod validate;
 
 use crate::navigate::{Compiled, SOFTWARE, compile};
