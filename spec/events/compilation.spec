@@ -63,7 +63,7 @@ type StructuralParseCompletePayload {
 }
 
 event extension_manifests_loaded {
-  channel internal
+  channel "internal"
   payload ExtensionManifestsLoadedPayload
   verify unit "Extension manifests MUST be loaded before populating the kind registry"
 }
@@ -513,19 +513,19 @@ type SchemaVersionComputedPayload {
 
 event plan_validated "Agent Plan Validated" {
   payload McpTracePlanResult
-  channel compilation
+  channel "compilation"
   verify integration "Agent Plan Validated emitted correctly"
 }
 
 event token_budget_applied "Token Budget Applied" {
   payload ExportResult
-  channel compilation
+  channel "compilation"
   verify integration "Token Budget Applied emitted correctly"
 }
 
 event schema_version_negotiated "Schema Version Negotiated" {
   payload SchemaCompatibility
-  channel compilation
+  channel "compilation"
   verify integration "Schema Version Negotiated emitted correctly"
 }
 
