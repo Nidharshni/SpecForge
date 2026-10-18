@@ -19,6 +19,7 @@ mod disk_changed;
 mod dual_mode;
 mod e2e_pipeline;
 mod edge_types;
+mod edited;
 mod entity_snapshot;
 mod environment;
 mod environment_reads;
