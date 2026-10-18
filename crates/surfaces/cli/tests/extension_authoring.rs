@@ -270,6 +270,24 @@ fn extension_build_reports_a_failed_build() {
     );
 }
 
+/// Clear what `cargo llvm-cov` exports from `command`'s environment. The scaffold's component is built
+/// for wasm32-wasip2, which has no profiler runtime: the instrumentation `cargo llvm-cov` adds to the
+/// workspace crates it compiles (through `RUSTC_WRAPPER`, `RUSTFLAGS` or whichever channel the
+/// version uses) fails the child's build with E040. Cleared by name pattern, not a fixed list.
+fn without_coverage_environment(command: &mut assert_cmd::Command) {
+    for (key, _) in std::env::vars_os() {
+        let name = key.to_string_lossy();
+        if name.contains("RUSTFLAGS")
+            || name.contains("CARGO_LLVM_COV")
+            || name == "LLVM_PROFILE_FILE"
+            || name == "RUSTC_WRAPPER"
+            || name == "RUSTC_WORKSPACE_WRAPPER"
+        {
+            command.env_remove(&key);
+        }
+    }
+}
+
 /// `init`, then `build`, then `validate`: the scaffold builds, as is, into
 /// a component that declares a valid extension. Needs the wasm32-wasip2
 /// target (CI installs it); without it, the build is skipped.
@@ -295,14 +313,19 @@ fn a_scaffolded_extension_builds_and_validates() {
     // A target directory configured elsewhere doesn't move the component
     // out of the crate, where `validate` and `publish` look.
     let elsewhere = tempfile::TempDir::new().unwrap();
-    let output = Cli::on(&dir)
-        .with_toolchain()
-        .bare_command(&["extension", "build", "--format", "json", "--dir"])
+    let mut build = Cli::on(&dir).with_toolchain().bare_command(&[
+        "extension",
+        "build",
+        "--format",
+        "json",
+        "--dir",
+    ]);
+    build
         .arg(&ext)
         .env("CARGO_NET_OFFLINE", "true")
-        .env("CARGO_TARGET_DIR", elsewhere.path())
-        .output()
-        .unwrap();
+        .env("CARGO_TARGET_DIR", elsewhere.path());
+    without_coverage_environment(&mut build);
+    let output = build.output().unwrap();
     let json = json_of(&output);
     assert!(output.status.success(), "{json}");
     assert_eq!(json["status"], "built");
