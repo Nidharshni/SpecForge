@@ -4,6 +4,7 @@
 //! one project change (ADR 0128).
 
 mod block;
+mod create;
 mod defaults;
 pub mod write;
 
@@ -280,10 +281,18 @@ impl<'v> Planner<'v> {
             } => self.on(entity_id, |site, text| {
                 block::verify(site, text, kind.as_deref(), description, false)
             }),
-            Edit::Create { .. } | Edit::Delete { .. } => Err(write::not_editable(
-                EditField::Entity,
-                "creating and deleting entities is not planned yet",
-            )),
+            Edit::Create {
+                kind,
+                id,
+                title,
+                file,
+                fields,
+                verify,
+            } => self.create(kind, id, title, file, fields, verify),
+            Edit::Delete {
+                entity_id,
+                unlink_references,
+            } => self.delete(entity_id, *unlink_references),
         }
     }
 

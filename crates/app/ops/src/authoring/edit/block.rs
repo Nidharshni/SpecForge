@@ -186,11 +186,29 @@ impl Block {
     }
 
     /// The first line of the comment lines directly above `line` (`line` itself when there are none).
-    fn with_comments_above(&self, mut line: usize) -> usize {
-        while line > self.header() + 1 && self.lines[line - 1].trim_start().starts_with("//") {
+    fn with_comments_above(&self, line: usize) -> usize {
+        self.comments_above(line, self.header() + 1)
+    }
+
+    /// [`Self::with_comments_above`], climbing no higher than line `floor`.
+    fn comments_above(&self, mut line: usize, floor: usize) -> usize {
+        while line > floor && self.lines[line - 1].trim_start().starts_with("//") {
             line -= 1;
         }
         line
+    }
+
+    /// The block removed, with the comment lines directly above it and one blank line beside it.
+    pub fn delete(&mut self) {
+        let (first, last) = (self.comments_above(self.header(), 0), self.close());
+        let before_blank = first > 0 && self.lines[first - 1].trim().is_empty();
+        let after_blank = last + 1 < self.lines.len() && self.lines[last + 1].trim().is_empty();
+        let (first, last) = match (before_blank, after_blank) {
+            (true, _) => (first - 1, last),
+            (false, true) => (first, last + 1),
+            _ => (first, last),
+        };
+        self.lines.drain(first..=last);
     }
 
     fn remove(&mut self, first: usize, last: usize) {
