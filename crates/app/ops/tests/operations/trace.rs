@@ -34,13 +34,13 @@ fn node(id: &str, kind: &str) -> Node {
 /// a -> b -> c (linear chain)
 fn build_chain() -> Graph {
     let mut graph = Graph::new();
-    graph.add_node(node("a", "feature"));
+    graph.add_node(node("a", "behavior"));
     graph.add_node(node("b", "behavior"));
     graph.add_node(node("c", "invariant"));
     graph.add_edge(Edge {
         source: "a".into(),
         target: "b".into(),
-        label: "behaviors".into(),
+        label: "depends_on".into(),
     });
     graph.add_edge(Edge {
         source: "b".into(),
@@ -203,15 +203,14 @@ fn missing(chain: &specforge_ops::read::trace::TraceChain) -> Vec<(&str, &str, &
     verify = "missing link in chain is flagged"
 )]
 fn trace_missing_link_flagged() {
-    // a -behaviors-> b: b's `features` link is declared from the feature's
-    // side; b declares no invariant, which its kind expects.
+    // b -features-> a: b declares no invariant, which its kind expects.
     let mut graph = Graph::new();
     graph.add_node(node("a", "feature"));
     graph.add_node(node("b", "behavior"));
     graph.add_edge(Edge {
-        source: "a".into(),
-        target: "b".into(),
-        label: "behaviors".into(),
+        source: "b".into(),
+        target: "a".into(),
+        label: "features".into(),
     });
 
     let trace = chain_in(&graph, crate::trace_support::build(), "b").unwrap();
@@ -222,8 +221,8 @@ fn trace_missing_link_flagged() {
     assert_eq!(gap.depth, 1);
     assert!(!gap.required);
     // The resolved links are unchanged and say so.
-    assert_eq!(trace.upstream.len(), 1);
-    assert_eq!(trace.upstream[0].status, TraceLinkStatus::Resolved);
+    assert_eq!(trace.downstream.len(), 1);
+    assert_eq!(trace.downstream[0].status, TraceLinkStatus::Resolved);
 
     // Declaring the invariant closes the gap.
     graph.add_node(node("i", "invariant"));
@@ -235,12 +234,12 @@ fn trace_missing_link_flagged() {
     let trace = chain_in(&graph, crate::trace_support::build(), "b").unwrap();
     assert!(trace.missing.is_empty(), "{:?}", trace.missing);
 
-    // A feature with no behavior misses one; a behavior nothing links
-    // misses both.
+    // A feature expects nothing (its behaviors write the link); a behavior
+    // that links nothing misses both.
     graph.add_node(node("lonely", "feature"));
     graph.add_node(node("orphan", "behavior"));
     let lonely = chain_in(&graph, crate::trace_support::build(), "lonely").unwrap();
-    assert_eq!(missing(&lonely), vec![("lonely", "behaviors", "behavior")]);
+    assert_eq!(missing(&lonely), vec![]);
     let orphan = chain_in(&graph, crate::trace_support::build(), "orphan").unwrap();
     assert_eq!(
         missing(&orphan),
@@ -259,9 +258,9 @@ fn trace_dangling_edge_is_not_a_missing_link() {
     graph.add_node(node("a", "feature"));
     graph.add_node(node("b", "behavior"));
     graph.add_edge(Edge {
-        source: "a".into(),
-        target: "b".into(),
-        label: "behaviors".into(),
+        source: "b".into(),
+        target: "a".into(),
+        label: "features".into(),
     });
     // b declares an invariant that does not exist.
     graph.add_edge(Edge {
@@ -293,12 +292,9 @@ fn trace_expectations_come_from_the_registries() {
     // ports: its kind isn't loaded. depends_on: a self-relation.
     // satisfies: another extension's. contract: not a reference.
     assert_eq!(labels("behavior"), vec!["features", "invariants"]);
-    assert_eq!(labels("feature"), vec!["behaviors"]);
+    assert!(labels("feature").is_empty());
     assert!(labels("invariant").is_empty());
-    // features is also declared by the feature's `behaviors`, which names
-    // no inverse itself.
     let features = &expected.for_kind("behavior")[0];
-    assert_eq!(features.inverse_labels, vec!["behaviors"]);
     assert_eq!(features.target_kind, "feature");
 
     // A required reference is expected wherever it comes from.
@@ -314,46 +310,25 @@ fn trace_expectations_come_from_the_registries() {
     assert!(TraceExpectations::of(&specforge_registry::build_registries(vec![])).is_empty());
 }
 
-// B:compute_traceability_chain — an inverse is a field of the target kind
-// (`FieldRegistry::inverse_fields`), the one rule trace and the graph read.
+// B:compute_traceability_chain — the other side of a relation is derived.
 #[specforge_test(
     behavior = "compute_traceability_chain",
-    verify = "an expected link declared from the other side, through an inverse field of the target kind, is not missing"
+    verify = "a relation written on its owning field shows on the other side as upstream, under the owning field's label"
 )]
-fn an_inverse_is_a_field_of_the_target_kind() {
-    let expected = expectations();
-    let inverse_labels = |label: &str| -> Vec<String> {
-        expected
-            .for_kind("behavior")
-            .iter()
-            .find(|e| e.label == label)
-            .unwrap_or_else(|| panic!("{label} is expected of behaviors"))
-            .inverse_labels
-            .clone()
-    };
-    // `features` names `behaviors`, a field of feature; `invariants` names
-    // `enforced_by`, which invariant lacks: no inverse.
-    assert_eq!(inverse_labels("features"), vec!["behaviors"]);
-    assert!(inverse_labels("invariants").is_empty());
-
-    // So an edge from the target kind through the field it lacks closes
-    // nothing, and one through a field it has does.
+fn the_other_side_of_a_relation_is_upstream() {
     let mut graph = Graph::new();
     graph.add_node(node("a", "feature"));
     graph.add_node(node("b", "behavior"));
-    graph.add_node(node("i", "invariant"));
     graph.add_edge(Edge {
-        source: "a".into(),
-        target: "b".into(),
-        label: "behaviors".into(),
+        source: "b".into(),
+        target: "a".into(),
+        label: "features".into(),
     });
-    graph.add_edge(Edge {
-        source: "i".into(),
-        target: "b".into(),
-        label: "enforced_by".into(),
-    });
-    let trace = chain_in(&graph, crate::trace_support::build(), "b").unwrap();
-    assert_eq!(missing(&trace), vec![("b", "invariants", "invariant")]);
+    let trace = chain_in(&graph, crate::trace_support::build(), "a").unwrap();
+    assert_eq!(trace.upstream.len(), 1);
+    assert_eq!(trace.upstream[0].entity_id, "b");
+    assert_eq!(trace.upstream[0].edge_label, "features");
+    assert!(trace.missing.is_empty(), "{:?}", trace.missing);
 }
 
 // B:compute_traceability_chain — human output marks each missing link.
@@ -363,9 +338,9 @@ fn trace_human_output_marks_missing_links() {
     graph.add_node(node("a", "feature"));
     graph.add_node(node("b", "behavior"));
     graph.add_edge(Edge {
-        source: "a".into(),
-        target: "b".into(),
-        label: "behaviors".into(),
+        source: "b".into(),
+        target: "a".into(),
+        label: "features".into(),
     });
     let project = Assembled::over(crate::trace_support::build()).graph(graph);
     let outcome = specforge_ops::read::trace::trace(&project.view(), Target::Entity("b")).unwrap();
@@ -374,9 +349,9 @@ fn trace_human_output_marks_missing_links() {
         concat!(
             "b [behavior]\n",
             "  upstream:\n",
-            "    <-behaviors- a [feature] (depth 1)\n",
-            "  downstream:\n",
             "    (none)\n",
+            "  downstream:\n",
+            "    -features-> a [feature] (depth 1)\n",
             "  missing:\n",
             "    MISSING b -invariants-> [invariant] (depth 1)\n",
         )
@@ -394,9 +369,9 @@ fn reach_lists_what_the_chains_reach_and_what_is_unverified() {
             "behavior alpha \"A\" {\n  verify unit \"test alpha\"\n}\n\nfeature beta \"B\" {\n}\n",
         );
     project.graph_mut().add_edge(Edge {
-        source: "beta".into(),
-        target: "alpha".into(),
-        label: "behaviors".into(),
+        source: "alpha".into(),
+        target: "beta".into(),
+        label: "features".into(),
     });
 
     let reach = specforge_ops::read::trace::reach(&project.view(), ["beta"]).unwrap();
@@ -466,14 +441,14 @@ mod compiled {
     )]
     fn trace_isolated_entity_has_empty_upstream_and_downstream() {
         let spec = format!(
-            "{}\nbehavior alpha \"A\" {{ contract \"first\" }}\nfeature beta \"B\" {{ problem \"p\" solution \"s\" behaviors [alpha] }}\n",
+            "{}\nfeature alpha \"A\" {{ problem \"p\" solution \"s\" }}\nbehavior beta \"B\" {{ contract \"first\" features [alpha] }}\n",
             specs::ISOLATED
         );
         let (_project, compiled) = built(&[("main.spec", &spec)]);
 
         // Unconnected: nothing either way.
         assert_eq!(trace(&compiled, "isolated_node"), (links(&[]), links(&[])));
-        // beta -behaviors-> alpha: each sees the other on its own side.
+        // beta -features-> alpha: each sees the other on its own side.
         assert_eq!(
             trace(&compiled, "alpha"),
             (links(&[("beta", 1)]), links(&[]))
@@ -491,11 +466,11 @@ mod compiled {
     fn trace_linear_chain_shows_correct_depths() {
         let (_project, compiled) = built(&[("main.spec", specs::DEEP_CHAIN)]);
 
-        // inv_deep -enforced_by-> beh_middle -features-> feat_root: the whole
-        // chain, each hop at its depth.
+        // beh_middle -invariants-> inv_deep and beh_middle -features->
+        // feat_root: each far end sees the behavior upstream, one hop away.
         let (upstream, downstream) = trace(&compiled, "inv_deep");
-        assert_eq!(upstream, links(&[]));
-        assert_eq!(downstream, links(&[("beh_middle", 1), ("feat_root", 2)]));
+        assert_eq!(upstream, links(&[("beh_middle", 1)]));
+        assert_eq!(downstream, links(&[]));
     }
 
     #[test]
@@ -521,17 +496,17 @@ mod compiled {
     fn trace_handles_cycles_without_hanging() {
         let (_project, compiled) = built(&[("main.spec", specs::CYCLE)]);
 
-        // Edges: cycle_a -> cycle_c, cycle_b -> cycle_a, cycle_c -> cycle_a.
+        // Edges: cycle_a -> cycle_b, cycle_b -> cycle_c, cycle_c -> cycle_a.
         // From cycle_c the cycle is walked both ways, each other node once,
         // and the walk stops rather than coming back to cycle_c.
         let (upstream, downstream) = trace(&compiled, "cycle_c");
         assert_eq!(
             once_each(&upstream),
-            BTreeSet::from([("cycle_a".to_string(), 1), ("cycle_b".to_string(), 2)])
+            BTreeSet::from([("cycle_b".to_string(), 1), ("cycle_a".to_string(), 2)])
         );
         assert_eq!(
             once_each(&downstream),
-            BTreeSet::from([("cycle_a".to_string(), 1)])
+            BTreeSet::from([("cycle_a".to_string(), 1), ("cycle_b".to_string(), 2)])
         );
     }
 
@@ -542,16 +517,16 @@ mod compiled {
     fn trace_cycle_visits_each_node_once() {
         let (_project, compiled) = built(&[("main.spec", specs::CYCLE)]);
 
-        // Upstream of cycle_a: cycle_b and cycle_c point at it. Downstream:
-        // cycle_a -> cycle_c, whose only edge leads back to cycle_a.
+        // Upstream of cycle_a: cycle_c points at it, cycle_b points at that.
+        // Downstream: cycle_a -> cycle_b -> cycle_c, whose edge leads back.
         let (upstream, downstream) = trace(&compiled, "cycle_a");
         assert_eq!(
             once_each(&upstream),
-            BTreeSet::from([("cycle_b".to_string(), 1), ("cycle_c".to_string(), 1)])
+            BTreeSet::from([("cycle_c".to_string(), 1), ("cycle_b".to_string(), 2)])
         );
         assert_eq!(
             once_each(&downstream),
-            BTreeSet::from([("cycle_c".to_string(), 1)])
+            BTreeSet::from([("cycle_b".to_string(), 1), ("cycle_c".to_string(), 2)])
         );
     }
 
@@ -574,19 +549,16 @@ mod compiled {
     fn trace_root_entity_has_no_upstream() {
         let (_project, compiled) = built(&[("main.spec", specs::DEEP_CHAIN)]);
 
-        // inv_deep is a root: nothing points at it, but it reaches the chain.
-        let (upstream, downstream) = trace(&compiled, "inv_deep");
-        assert_eq!(upstream, links(&[]), "inv_deep should have no upstream");
-        assert_eq!(downstream, links(&[("beh_middle", 1), ("feat_root", 2)]));
-
-        // beh_middle is in the middle: feat_root and inv_deep point at it, and
-        // it points at feat_root.
+        // beh_middle is a root: nothing points at it, but it reaches the
+        // feature and the invariant.
         let (upstream, downstream) = trace(&compiled, "beh_middle");
-        assert_eq!(
-            once_each(&upstream),
-            BTreeSet::from([("feat_root".to_string(), 1), ("inv_deep".to_string(), 1)])
-        );
-        assert_eq!(downstream, links(&[("feat_root", 1)]));
+        assert_eq!(upstream, links(&[]), "beh_middle should have no upstream");
+        assert_eq!(downstream, links(&[("feat_root", 1), ("inv_deep", 1)]));
+
+        // feat_root is a leaf: only beh_middle points at it.
+        let (upstream, downstream) = trace(&compiled, "feat_root");
+        assert_eq!(upstream, links(&[("beh_middle", 1)]));
+        assert_eq!(downstream, links(&[]));
 
         // typ_leaf has no references either way.
         assert_eq!(trace(&compiled, "typ_leaf"), (links(&[]), links(&[])));
@@ -600,8 +572,8 @@ mod compiled {
         let (_project, compiled) = built(&[(
             "main.spec",
             r#"
-behavior alpha "A" { contract "first" }
-feature beta "B" { problem "p" solution "s" behaviors [alpha] }
+feature alpha "A" { problem "p" solution "s" }
+behavior beta "B" { contract "first" features [alpha] }
 "#,
         )]);
 

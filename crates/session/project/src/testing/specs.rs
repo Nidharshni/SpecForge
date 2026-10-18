@@ -12,6 +12,7 @@ pub const SOFTWARE: &str = r#"
 behavior parse_input "Parse Input" {
     contract "The system MUST parse all valid input"
     status done
+    produces [input_parsed]
 }
 
 behavior emit_output "Emit Output" {
@@ -23,7 +24,7 @@ invariant graph_acyclic "Graph Acyclicity" {
 }
 
 event input_parsed "Input Parsed" {
-    trigger parse_input
+    contract "Sent once a file is parsed"
 }
 
 type parse_result "Parse Result" {
@@ -40,7 +41,6 @@ pub const PRODUCT: &str = r#"
 feature fast_parsing "Fast Parsing" {
     problem "Users need quick feedback"
     solution "Incremental parsing"
-    behaviors [parse_input]
 }
 
 journey developer_workflow "Developer Workflow" {
@@ -95,6 +95,8 @@ pub const MULTI_EXTENSION: &str = r#"
 behavior parse_input "Parse Input" {
     contract "The system MUST parse all valid input"
     status done
+    features [fast_parsing]
+    produces [input_parsed]
 }
 
 behavior emit_output "Emit Output" {
@@ -106,7 +108,7 @@ invariant graph_acyclic "Graph Acyclicity" {
 }
 
 event input_parsed "Input Parsed" {
-    trigger parse_input
+    contract "Sent once a file is parsed"
 }
 
 type parse_result "Parse Result" {
@@ -120,7 +122,6 @@ port file_reader "File Reader" {
 feature fast_parsing "Fast Parsing" {
     problem "Users need quick feedback"
     solution "Incremental parsing"
-    behaviors [parse_input]
 }
 
 journey developer_workflow "Developer Workflow" {
@@ -167,22 +168,21 @@ failure_mode parser_crash "Parser Crash" {
 }
 "#;
 
-/// 4-entity linear chain: feature → behavior → invariant → type (via ref lists)
+/// 4 entities: behavior → feature, behavior → invariant; the type is unlinked
 pub const DEEP_CHAIN: &str = r#"
 feature feat_root "Feature Root" {
     problem "needs parsing"
     solution "parse it"
-    behaviors [beh_middle]
 }
 
 behavior beh_middle "Behavior Middle" {
     contract "The system MUST validate"
     features [feat_root]
+    invariants [inv_deep]
 }
 
 invariant inv_deep "Invariant Deep" {
     guarantee "The graph MUST be acyclic"
-    enforced_by [beh_middle]
 }
 
 type typ_leaf "Type Leaf" {
@@ -190,23 +190,24 @@ type typ_leaf "Type Leaf" {
 }
 "#;
 
-/// Graph with a cycle: a→b→c→a via reference-list fields
+/// Graph with a cycle: a→b→c→a via one reference-list field
 pub const CYCLE: &str = r#"
-behavior cycle_a "Cycle A" {
-    contract "first in cycle"
-    features [cycle_c]
+feature cycle_a "Cycle A" {
+    problem "first"
+    solution "cycle"
+    depends_on [cycle_b]
 }
 
 feature cycle_b "Cycle B" {
     problem "second"
     solution "cycle"
-    behaviors [cycle_a]
+    depends_on [cycle_c]
 }
 
 feature cycle_c "Cycle C" {
     problem "third"
     solution "cycle"
-    behaviors [cycle_a]
+    depends_on [cycle_a]
 }
 "#;
 
@@ -222,6 +223,8 @@ pub const CROSS_REF: &str = r#"
 behavior validate_graph "Validate Graph" {
     contract "The system MUST validate the graph"
     features [graph_validation]
+    invariants [refs_resolved]
+    produces [validation_complete]
 }
 
 behavior resolve_refs "Resolve References" {
@@ -232,16 +235,14 @@ behavior resolve_refs "Resolve References" {
 feature graph_validation "Graph Validation" {
     problem "Graph must be valid before export"
     solution "Multi-pass validation"
-    behaviors [validate_graph, resolve_refs]
 }
 
 invariant refs_resolved "References Resolved" {
     guarantee "All references MUST resolve to existing entities"
-    enforced_by [validate_graph]
 }
 
 event validation_complete "Validation Complete" {
-    trigger validate_graph
+    contract "Sent once the graph is valid"
 }
 
 failure_mode unresolved_ref "Unresolved Reference" {

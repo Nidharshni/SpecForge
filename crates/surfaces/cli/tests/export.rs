@@ -5,13 +5,13 @@ use specforge_test_macros::test as specforge_test;
 const SPEC_CONTENT: &str = r#"
 behavior alpha "Alpha Behavior" {
     contract "The system MUST do alpha"
-    status done
+    status done features [gamma]
 }
 behavior beta "Beta Behavior" {
-    contract "The system MUST do beta"
+    contract "The system MUST do beta" features [gamma]
 }
 feature gamma "Gamma Feature" {
-    behaviors [alpha, beta]
+    problem "Alpha and beta are needed"
 }
 "#;
 
@@ -112,8 +112,8 @@ fn export_with_errors_still_works() {
     let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha, nonexistent] }
+feature alpha "A" { problem "first" }
+behavior gamma "G" { features [alpha, nonexistent] }
 "#,
     )]);
 
@@ -146,7 +146,7 @@ fn export_with_scope_returns_subgraph() {
 
     let nodes = parsed["nodes"].as_array().unwrap();
     let ids: Vec<&str> = nodes.iter().map(|n| n["id"].as_str().unwrap()).collect();
-    // alpha is connected to gamma (via behaviors edge), gamma connects to beta
+    // alpha is connected to gamma (via its features edge), beta connects to gamma
     assert!(ids.contains(&"alpha"));
     assert!(ids.contains(&"gamma"));
 }
@@ -384,13 +384,11 @@ fn budget_project() -> TestProject {
     let mut spec = String::new();
     for i in 0..8 {
         spec.push_str(&format!(
-            "behavior b{i} \"Behavior {i}\" {{\n  contract \"The system MUST {}\"\n}}\n",
+            "behavior b{i} \"Behavior {i}\" {{\n  contract \"The system MUST {}\"\n  features [f]\n}}\n",
             "handle this case with care ".repeat(20)
         ));
     }
-    spec.push_str(
-        "feature f \"All behaviors\" {\n  behaviors [b0, b1, b2, b3, b4, b5, b6, b7]\n}\n",
-    );
+    spec.push_str("feature f \"All behaviors\" {\n  problem \"Eight behaviors implement it: handle this case with care handle this case with care handle this case with care\"\n}\n");
     TestProject::new()
         .without_config()
         .files(&[("specforge.json", CONFIG), ("main.spec", &spec)])

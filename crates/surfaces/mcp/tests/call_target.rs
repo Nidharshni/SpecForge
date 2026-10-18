@@ -220,7 +220,7 @@ fn a_tool_call_serves_files_written_since_the_last_call() {
     // Written after initialize, with no watch running.
     fs::write(
         dir.path().join("added.spec"),
-        "feature fresh \"Fresh\" {\n  behaviors [login]\n}\n",
+        "feature fresh \"Fresh\" {\n  problem \"p\"\n}\n",
     )
     .unwrap();
     assert!(

@@ -16,10 +16,10 @@ use crate::support::*;
 /// test.spec: the behavior `alpha` and the feature `beta` that has it.
 const TEST_SPEC: &str = concat!(
     "behavior alpha \"Alpha\" {\n",
+    "    features [beta]\n",
     "}\n",
-    "\n",
     "feature beta \"Beta\" {\n",
-    "    behaviors [alpha]\n",
+    "    problem \"Users need it\"\n",
     "}\n",
 );
 
@@ -380,16 +380,16 @@ fn a_migration_writes_the_file_and_its_backup() {
     );
 }
 
-/// [`TEST_SPEC`] plus other.spec, whose feature also has `alpha`: renaming
+/// [`TEST_SPEC`] plus other.spec, whose behavior depends on `alpha`: renaming
 /// `alpha` edits both files.
 fn rename_server() -> Served {
     TestProject::new()
         .file("test.spec", TEST_SPEC)
         .file(
             "other.spec",
-            "feature delta \"Delta\" {\n    behaviors [alpha]\n}\n",
+            "behavior delta \"Delta\" {\n    depends_on [alpha]\n}\n",
         )
-        .serve(&[TestExtension::software()])
+        .serve(&[TestExtension::software().reference("behavior", "depends_on", "behavior")])
 }
 
 // 9

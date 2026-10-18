@@ -755,7 +755,7 @@ fn a_diagnostic_the_migration_introduces_is_reported() {
         let migrated = std::fs::read_to_string(file).map_err(|e| e.to_string())?;
         std::fs::write(
             file,
-            format!("{migrated}\nfeature extra \"Extra\" {{\n  behaviors [ghost]\n}}\n"),
+            format!("{migrated}\nbehavior extra \"Extra\" {{\n  features [ghost]\n}}\n"),
         )
         .map_err(|e| e.to_string())
     }));

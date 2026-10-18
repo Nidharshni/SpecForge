@@ -51,20 +51,20 @@ fn edges(list: &[(&str, &str, &str)]) -> EdgeSet {
     behavior = "export_agent_graph_format",
     verify = "graph format includes all nodes and edges"
 )]
-fn behaviors_field_creates_edges() {
+fn the_features_of_two_behaviors_create_edges() {
     let (nodes, edge_set) = exported_graph(
         r#"
-behavior alpha "A" { contract "first" }
-behavior beta "B" { contract "second" }
-feature gamma "G" { behaviors [alpha, beta] }
+feature gamma "G" { problem "p" solution "s" }
+behavior alpha "A" { contract "first" features [gamma] }
+behavior beta "B" { contract "second" features [gamma] }
 "#,
     );
     assert_eq!(nodes, ids(&["alpha", "beta", "gamma"]));
     assert_eq!(
         edge_set,
         edges(&[
-            ("gamma", "alpha", "behaviors"),
-            ("gamma", "beta", "behaviors"),
+            ("alpha", "gamma", "features"),
+            ("beta", "gamma", "features"),
         ])
     );
 }
@@ -94,20 +94,19 @@ behavior parse_input "P" {
     behavior = "export_agent_graph_format",
     verify = "graph format includes all nodes and edges"
 )]
-fn enforced_by_field_creates_edges() {
+fn invariants_field_creates_edges() {
     let (nodes, edge_set) = exported_graph(
         r#"
-behavior validate "V" { contract "must validate" }
+behavior validate "V" { contract "must validate" invariants [refs_resolved] }
 invariant refs_resolved "RR" {
     guarantee "All refs MUST resolve"
-    enforced_by [validate]
 }
 "#,
     );
     assert_eq!(nodes, ids(&["refs_resolved", "validate"]));
     assert_eq!(
         edge_set,
-        edges(&[("refs_resolved", "validate", "enforced_by")])
+        edges(&[("validate", "refs_resolved", "invariants")])
     );
 }
 
@@ -144,15 +143,15 @@ fn export_graph_edge_labels_are_field_names() {
     let (_project, compiled) = built(&[(
         "main.spec",
         r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha] }
+feature alpha "A" { problem "p" solution "s" }
+behavior gamma "G" { contract "first" features [alpha] }
 "#,
     )]);
 
     let parsed = exported(&compiled);
     let edges = parsed["edges"].as_array().unwrap();
     assert_eq!(
-        edges[0]["label"], "behaviors",
+        edges[0]["label"], "features",
         "edge label should match field name"
     );
 }
@@ -165,16 +164,16 @@ fn dot_export_shows_edge_labels() {
     let (_project, compiled) = built(&[(
         "main.spec",
         r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha] }
+feature alpha "A" { problem "p" solution "s" }
+behavior gamma "G" { contract "first" features [alpha] }
 "#,
     )]);
 
     let stdout = exported_as(&compiled, Format::Dot);
     assert!(stdout.contains("digraph"), "should be a DOT digraph");
     assert!(
-        stdout.contains("behaviors"),
-        "DOT should contain edge label 'behaviors'"
+        stdout.contains("features"),
+        "DOT should contain edge label 'features'"
     );
 }
 
@@ -185,9 +184,9 @@ feature gamma "G" { behaviors [alpha] }
 fn trace_follows_edges_across_entity_kinds() {
     let (_project, compiled) = built(&[("main.spec", specs::CROSS_REF)]);
 
-    let parsed = trace_document(&compiled, "validate_graph");
+    let parsed = trace_document(&compiled, "graph_validation");
 
-    assert_eq!(parsed["entity_id"], "validate_graph");
+    assert_eq!(parsed["entity_id"], "graph_validation");
     let links = |direction: &str| -> BTreeSet<(String, String, String, u64)> {
         parsed[direction]
             .as_array()
@@ -206,28 +205,20 @@ fn trace_follows_edges_across_entity_kinds() {
     let link = |id: &str, kind: &str, label: &str, depth: u64| {
         (id.to_string(), kind.to_string(), label.to_string(), depth)
     };
-    // Upstream crosses feature, invariant, behavior and failure_mode:
-    // graph_validation -behaviors-> validate_graph,
-    // refs_resolved -enforced_by-> validate_graph,
+    // Upstream crosses behavior and failure_mode, each under its owning
+    // field: validate_graph -features-> graph_validation,
     // resolve_refs -features-> graph_validation,
     // unresolved_ref -mitigations-> resolve_refs.
     assert_eq!(
         links("upstream"),
         BTreeSet::from([
-            link("graph_validation", "feature", "behaviors", 1),
-            link("refs_resolved", "invariant", "enforced_by", 1),
-            link("resolve_refs", "behavior", "features", 2),
-            link("unresolved_ref", "failure_mode", "mitigations", 3),
+            link("validate_graph", "behavior", "features", 1),
+            link("resolve_refs", "behavior", "features", 1),
+            link("unresolved_ref", "failure_mode", "mitigations", 2),
         ])
     );
-    // Downstream: validate_graph -features-> graph_validation -behaviors-> resolve_refs.
-    assert_eq!(
-        links("downstream"),
-        BTreeSet::from([
-            link("graph_validation", "feature", "features", 1),
-            link("resolve_refs", "behavior", "behaviors", 2),
-        ])
-    );
+    // Nothing leaves the feature: the other side is derived, not written.
+    assert_eq!(links("downstream"), BTreeSet::new());
 }
 
 #[specforge_test(
@@ -239,7 +230,7 @@ fn query_depth_2_traverses_multi_hop() {
         "main.spec",
         r#"
 behavior alpha "A" { contract "first" features [feat_a] }
-feature feat_a "F" { behaviors [alpha] }
+feature feat_a "F" { problem "p" solution "s" }
 journey dev_journey "DJ" { description "workflow" }
 "#,
     )]);
@@ -262,18 +253,17 @@ journey dev_journey "DJ" { description "workflow" }
 fn multiple_reference_fields_produce_separate_edges() {
     let (nodes, edge_set) = exported_graph(
         r#"
-behavior validate "V" { contract "must validate" features [feat_a] }
-feature feat_a "F" { behaviors [validate] }
-invariant inv_a "I" { guarantee "always" enforced_by [validate] }
+behavior validate "V" { contract "must validate" features [feat_a] invariants [inv_a] }
+feature feat_a "F" { problem "p" solution "s" }
+invariant inv_a "I" { guarantee "always" }
 "#,
     );
     assert_eq!(nodes, ids(&["feat_a", "inv_a", "validate"]));
     assert_eq!(
         edge_set,
         edges(&[
-            ("feat_a", "validate", "behaviors"),
             ("validate", "feat_a", "features"),
-            ("inv_a", "validate", "enforced_by"),
+            ("validate", "inv_a", "invariants"),
         ])
     );
 }
@@ -307,8 +297,8 @@ fn dot_export_cross_kind_edges() {
     let (_project, compiled) = built(&[(
         "main.spec",
         r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha] }
+feature alpha "A" { problem "p" solution "s" }
+behavior gamma "G" { contract "first" features [alpha] }
 failure_mode fm "FM" { severity 1 occurrence 1 detection 1 cause "x" effect "y" mitigations [alpha] }
 "#,
     )]);

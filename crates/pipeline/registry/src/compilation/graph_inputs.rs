@@ -3,7 +3,7 @@
 //! and nowhere else. The grammar parses values generically; the field
 //! registry says what a field's value must be and which fields are edges.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use specforge_graph::{DerivedFrom, DerivedReference, FieldForms, GraphInputs, Target};
 
@@ -15,7 +15,6 @@ pub(super) fn derive(
     owner_of: impl Fn(&str) -> Option<String>,
 ) -> GraphInputs {
     GraphInputs {
-        bidirectional_pairs: bidirectional_pairs(fields),
         target_owners: target_owners(forms, owner_of),
         field_forms: forms.clone(),
         derived_references: derived_references(fields),
@@ -37,30 +36,6 @@ fn target_owners(
             Target::Loaded(_) => None,
         })
         .collect()
-}
-
-/// Every pair of a reference field and one of its inverse fields
-/// ([`FieldRegistry::inverse_fields`]: fields of its target kind), written
-/// (lesser, greater), once each, sorted.
-fn bidirectional_pairs(fields: &FieldRegistry) -> Vec<(String, String)> {
-    let pairs: BTreeSet<(String, String)> = fields
-        .iter()
-        .filter(|(_, _, entry)| entry.field_type().is_reference())
-        .flat_map(|(kind, field, _)| {
-            fields
-                .inverse_fields(kind, field)
-                .into_iter()
-                .map(move |inverse| (field, inverse))
-        })
-        .map(|(field, inverse)| {
-            if field <= inverse {
-                (field.to_string(), inverse.to_string())
-            } else {
-                (inverse.to_string(), field.to_string())
-            }
-        })
-        .collect();
-    pairs.into_iter().collect()
 }
 
 /// Every registered field's form, and the kinds that take any field

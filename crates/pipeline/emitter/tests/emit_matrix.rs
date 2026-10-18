@@ -15,21 +15,25 @@ use crate::support::headline_registry;
 const SRC: &str = r#"
 behavior a "Alpha" {
   contract "The system MUST alpha"
+  features [hub]
 }
 behavior b "Beta" {
   contract "The system MUST beta the data"
+  features [hub]
 }
 behavior c "Gamma" {
   contract "The system MUST gamma the request"
+  features [hub]
 }
 behavior d "Delta" {
   contract "The system MUST delta once and only once"
+  features [hub]
 }
 behavior e "Epsilon" {
   contract "The system MUST epsilon"
 }
 feature hub "Hub" {
-  behaviors [a, b, c, d]
+  problem "Four behaviors implement it"
 }
 "#;
 
@@ -70,9 +74,9 @@ fn schema() -> GraphProtocolSchema {
     let mut product = declaration("@specforge/product");
     product.entities = vec![kind("feature", false)];
     product.edges = vec![EdgeTypeDescriptor {
-        label: "behaviors".to_string(),
-        source_kind: Some("feature".to_string()),
-        target_kind: Some("behavior".to_string()),
+        label: "features".to_string(),
+        source_kind: Some("behavior".to_string()),
+        target_kind: Some("feature".to_string()),
         ..Default::default()
     }];
     generate_schema(&build_registries(vec![software, product]))

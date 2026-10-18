@@ -1697,7 +1697,7 @@ fn extensions_list_each_extensions_kinds_and_entities() {
     fs::create_dir_all(dir.root().join("spec")).unwrap();
     fs::write(
         dir.root().join("spec/app.spec"),
-        "behavior login \"L\" {\n  contract \"c\"\n}\n\nbehavior logout \"O\" {\n  contract \"c\"\n}\n\nfeature auth \"A\" {\n  behaviors [login, logout]\n}\n",
+        "behavior login \"L\" {\n  contract \"c\"\n  features [auth]\n}\n\nbehavior logout \"O\" {\n  contract \"c\"\n  features [auth]\n}\n\nfeature auth \"A\" {\n  problem \"p\"\n}\n",
     )
     .unwrap();
 

@@ -146,7 +146,7 @@ behavior beta "B" {
     contract "second"
     verify unit "test beta"
 }
-feature gamma "G" { behaviors [alpha, beta] }
+feature gamma "G" { problem "p" solution "s" }
 "#,
     )]);
 

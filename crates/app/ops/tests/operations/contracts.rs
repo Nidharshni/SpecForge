@@ -66,9 +66,9 @@ fn build_graph() -> Graph {
     graph.add_node(testable_node("b"));
     graph.add_node(testable_node("c"));
     graph.add_edge(Edge {
-        source: "a".into(),
-        target: "b".into(),
-        label: "behaviors".into(),
+        source: "b".into(),
+        target: "a".into(),
+        label: "features".into(),
     });
     graph.add_edge(Edge {
         source: "b".into(),
@@ -125,17 +125,17 @@ fn trace_contract_entity_in_graph_produces_chain() {
     let trace = crate::view_support::chain_in(&graph, crate::trace_support::build(), "b").unwrap();
     assert_eq!(trace.entity_id, "b");
     assert_eq!(trace.entity_kind, "behavior");
-    assert_eq!(
-        links(&trace.upstream),
-        vec![("a".to_string(), "behaviors".to_string(), 1)]
-    );
+    assert!(trace.upstream.is_empty());
     assert_eq!(
         links(&trace.downstream),
-        vec![("c".to_string(), "depends_on".to_string(), 1)]
+        vec![
+            ("a".to_string(), "features".to_string(), 1),
+            ("c".to_string(), "depends_on".to_string(), 1),
+        ]
     );
 
-    // Ensures (missing_links_flagged): b's feature link is declared from
-    // a's side; b declares no invariant.
+    // Ensures (missing_links_flagged): b declares its feature and no
+    // invariant.
     assert_eq!(
         missing(&trace),
         vec![(
@@ -145,20 +145,17 @@ fn trace_contract_entity_in_graph_produces_chain() {
         )]
     );
 
-    // From the root the chain reaches the leaf two hops away, and the root
-    // has the one edge its kind expects.
-    let root = crate::view_support::chain_in(&graph, crate::trace_support::build(), "a").unwrap();
-    assert!(root.upstream.is_empty());
+    // The feature is where b's link ends: b is upstream of it, and a
+    // feature expects no edge of its own.
+    let end = crate::view_support::chain_in(&graph, crate::trace_support::build(), "a").unwrap();
     assert_eq!(
-        links(&root.downstream),
-        vec![
-            ("b".to_string(), "behaviors".to_string(), 1),
-            ("c".to_string(), "depends_on".to_string(), 2),
-        ]
+        links(&end.upstream),
+        vec![("b".to_string(), "features".to_string(), 1)]
     );
-    assert!(root.missing.is_empty(), "{:?}", root.missing);
+    assert!(end.downstream.is_empty());
+    assert!(end.missing.is_empty(), "{:?}", end.missing);
 
-    // c: no feature lists it and it declares nothing its kind expects.
+    // c: it names no feature and declares nothing its kind expects.
     let leaf = crate::view_support::chain_in(&graph, crate::trace_support::build(), "c").unwrap();
     assert_eq!(
         missing(&leaf),
@@ -322,18 +319,15 @@ fn trace_data_contract_all_entities_traced() {
             .collect()
     };
     assert_eq!(
-        hops(&traces[0], "downstream"),
+        hops(&traces[1], "downstream"),
         vec![
-            ("b".to_string(), 1, "resolved".to_string()),
-            ("c".to_string(), 2, "resolved".to_string()),
+            ("a".to_string(), 1, "resolved".to_string()),
+            ("c".to_string(), 1, "resolved".to_string()),
         ]
     );
     assert_eq!(
         hops(&traces[2], "upstream"),
-        vec![
-            ("b".to_string(), 1, "resolved".to_string()),
-            ("a".to_string(), 2, "resolved".to_string()),
-        ]
+        vec![("b".to_string(), 1, "resolved".to_string())]
     );
 
     // gaps_included: every missing link, with a missing status, from the

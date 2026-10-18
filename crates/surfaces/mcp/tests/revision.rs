@@ -225,7 +225,7 @@ fn structured_server() -> (McpServer, tempfile::TempDir) {
     .unwrap();
     std::fs::write(
         root.join("test.spec"),
-        "behavior alpha \"Alpha\" {\n  category command\n  contract \"MUST work\"\n  verify unit \"works\"\n}\n\nfeature beta \"Beta\" {\n  behaviors [alpha]\n}\n",
+        "behavior alpha \"Alpha\" {\n  category command\n  contract \"MUST work\"\n  features [beta]\n  verify unit \"works\"\n}\n\nfeature beta \"Beta\" {\n  problem \"Users need it\"\n}\n",
     )
     .unwrap();
     std::fs::create_dir_all(root.join("src")).unwrap();

@@ -7,14 +7,14 @@ use specforge_test::prelude::*;
 
 use crate::view_support::{Assembled, Viewed, registries};
 
-/// `alpha <- beta -> delta`, and `gamma_orphan`, an invariant with no edge
+/// `alpha -> beta <- delta`, and `gamma_orphan`, an invariant with no edge
 /// and no obligation. Behaviors and invariants owe obligations; `beta` is a
 /// feature, whose kind is unknown here, so it never counts toward coverage.
 fn project() -> Assembled {
     Assembled::over(registries(&["behavior", "invariant"], &[])).source(
-        "behavior alpha \"Alpha\" {\n  verify unit \"test alpha\"\n}\n\n\
-         feature beta \"Beta\" {\n  behaviors [alpha, delta]\n}\n\n\
-         behavior delta \"Delta\" {\n  verify unit \"test delta\"\n}\n\n\
+        "behavior alpha \"Alpha\" {\n  features [beta]\n  verify unit \"test alpha\"\n}\n\n\
+         feature beta \"Beta\" {\n}\n\n\
+         behavior delta \"Delta\" {\n  features [beta]\n  verify unit \"test delta\"\n}\n\n\
          invariant gamma_orphan \"Gamma\" {\n}\n",
     )
 }

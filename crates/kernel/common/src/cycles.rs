@@ -19,7 +19,7 @@
 //!
 //! NOT consolidated here: import-cycle detection (file-level graph, own
 //! semantics) and extension peer-dependency cycles (deliberately reports
-//! bidirectional pairs A→B→A, which the entity-level pass filters).
+//! two-hop cycles A→B→A).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 

@@ -358,8 +358,7 @@ fn enhancements(c: &mut ContributionsBuilder) {
             f.field_type(FieldType::ReferenceList)
                 .description("Behaviors this milestone includes in its delivery scope")
                 .edge("MilestoneIncludesBehavior")
-                .target_kind("behavior")
-                .inverse_of("features");
+                .target_kind("behavior");
         });
     });
 }
@@ -427,14 +426,6 @@ fn rules(c: &mut ContributionsBuilder) {
             .target_kind("port")
             .wasm_function("validate__port_methods")
             .validate(crate::validate_port_methods);
-    });
-    c.rule("E051", |r| {
-        r.check(CheckKind::Custom)
-            .severity(ValidationSeverity::Error)
-            .message_template("event '{id}' trigger must reference a behavior, found '{value}'")
-            .target_kind("event")
-            .wasm_function("validate__event_triggers")
-            .validate(crate::validate_event_triggers);
     });
     c.rule("E010", |r| {
         r.check(CheckKind::Custom)

@@ -357,7 +357,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   its fields are private (ADR 0031).
 - **Graph inputs**: what the graph build reads of the loaded extensions (`specforge_graph::GraphInputs`):
   the kinds whose bodies an extension parses, the extension that owns each target kind no loaded extension declares (`target_owners`), the
-  inverse field pairs (a reference field and its inverse fields, fields of its target kind), each field's form with the kinds that take any field (`FieldForms`, with each reference field's target, ADR 0117) and the derived reference fields. Only the registry
+  each field's form with the kinds that take any field (`FieldForms`, with each reference field's target, ADR 0117) and the derived reference fields. Only the registry
   build derives them (`RegistryBuild::graph_inputs`), which holds them and builds every graph a snapshot reads with them
   (`RegistryBuild::graph_of`, ADR 0123); with the provider schemes the environment registers they are every graph's
   `GraphConfig` (`Environment::graph_of`, ADR 0032).
@@ -368,6 +368,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   edge type outside its declared ends is W021 and writes none. A graph edge's label is the field that wrote it; its
   edge type is read from the field, once, in the entity snapshot. Rules count by it, the schema prints its ends,
   trace names it (ADR 0060).
+- **Owning field**: the one reference field that writes a relation's edges, declared by an extension (ADR 0150).
+  A relation is written there and nowhere else; its other side is derived.
+- **Other side** (of a relation): what the target entity reads the relation as: its incoming edges, which `query`
+  and `trace` (upstream) show. Never a field; an `inverse_of` may name it. Writing it is E079.
 - **Entity enhancement**: fields and verify kinds one extension declares on an entity kind another extension declares
   (`c.enhance(kind, ..)`). Its fields are the declaring extension's: trace treats them as opt-in for the kind, and
   the model and schema name their extension. The kind stays its declarer's. An enhancement of a kind no loaded

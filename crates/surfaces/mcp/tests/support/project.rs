@@ -44,8 +44,8 @@ impl Serve for TestProject {
 // What the fixture serves is what the real build makes of its sources and
 // declarations.
 
-/// `alpha`, a behavior on lines 1–4 of `test.spec`.
-const ALPHA: &str = "behavior alpha \"Alpha\" {\n    contract \"The system MUST do alpha\"\n    verify unit \"does alpha\"\n}\n";
+/// `alpha`, a behavior on lines 1–5 of `test.spec`.
+const ALPHA: &str = "behavior alpha \"Alpha\" {\n    contract \"The system MUST do alpha\"\n    features [beta]\n    verify unit \"does alpha\"\n}\n";
 
 #[test]
 fn the_declaration_is_what_the_builders_declare() {
@@ -104,7 +104,7 @@ fn the_served_graph_is_the_sources_on_disk() {
         .file("test.spec", ALPHA)
         .file(
             "features.spec",
-            "feature beta \"Beta\" {\n    behaviors [alpha]\n}\n",
+            "feature beta \"Beta\" {\n    problem \"Users need it\"\n}\n",
         )
         .serve(&[TestExtension::software()]);
 
@@ -118,16 +118,16 @@ fn the_served_graph_is_the_sources_on_disk() {
         (alpha.source_span.start_line, alpha.source_span.start_col),
         (1, 1)
     );
-    assert_eq!(alpha.source_span.end_line, 4);
+    assert_eq!(alpha.source_span.end_line, 5);
     let beta = graph.node("beta").expect("beta is served");
     assert_eq!(beta.kind.raw, "feature");
     assert_eq!(beta.source_span.file, "features.spec");
     let edges: Vec<(&str, &str)> = graph
-        .edges_from("beta")
+        .edges_from("alpha")
         .iter()
         .map(|e| (e.target.as_str(), e.label.as_str()))
         .collect();
-    assert_eq!(edges, [("alpha", "behaviors")]);
+    assert_eq!(edges, [("beta", "features")]);
     assert!(
         served.state().diagnostics().is_empty(),
         "{:?}",

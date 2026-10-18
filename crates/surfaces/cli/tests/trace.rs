@@ -3,9 +3,9 @@ use specforge_project::testing::specs;
 use specforge_test_macros::test as specforge_test;
 
 const SPEC_CONTENT: &str = r#"
-behavior alpha "Alpha" { contract "first" }
-behavior beta "Beta" { contract "second" }
-feature gamma "Gamma" { behaviors [alpha, beta] }
+behavior alpha "Alpha" { contract "first" features [gamma] }
+behavior beta "Beta" { contract "second" features [gamma] }
+feature gamma "Gamma" { problem "third" }
 "#;
 
 #[test]
@@ -26,9 +26,9 @@ fn trace_produces_upstream_and_downstream_json() {
     assert!(parsed["downstream"].is_array());
     assert!(parsed["schema_version"].is_string());
 
-    // alpha has upstream = gamma (gamma -> alpha via behaviors)
-    let upstream = parsed["upstream"].as_array().unwrap();
-    assert!(upstream.iter().any(|l| l["entity_id"] == "gamma"));
+    // alpha has downstream = gamma (alpha -> gamma via features)
+    let downstream = parsed["downstream"].as_array().unwrap();
+    assert!(downstream.iter().any(|l| l["entity_id"] == "gamma"));
 }
 
 #[test]
@@ -61,8 +61,8 @@ fn trace_plan_exits_by_the_plan_verdict() {
     let dir = TestProject::new().file(
         "main.spec",
         r#"
-behavior alpha "A" { contract "first" }
-feature beta "B" { problem "p" solution "s" behaviors [alpha] }
+feature alpha "A" { problem "p" solution "s" }
+behavior beta "B" { contract "first" features [alpha] }
 "#,
     );
     let entry = |id: &str| format!(r#"{{"entity_id":"{id}","action":"implement"}}"#);

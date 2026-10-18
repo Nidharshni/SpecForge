@@ -89,10 +89,6 @@ pub struct ExpectedEdge {
     pub edge_type: Option<String>,
     pub target_kind: String,
     pub required: bool,
-    /// Labels of the reverse field: an edge with one of them, from an
-    /// entity of `target_kind` to this one, is the same relationship
-    /// declared from the other side.
-    pub inverse_labels: Vec<String>,
 }
 
 /// The edges each kind is expected to have, derived from the registries
@@ -136,11 +132,6 @@ impl TraceExpectations {
             {
                 continue;
             }
-            let inverse_labels = fields
-                .inverse_fields(kind, field)
-                .into_iter()
-                .map(str::to_string)
-                .collect();
             expectations.expect(
                 kind,
                 ExpectedEdge {
@@ -151,7 +142,6 @@ impl TraceExpectations {
                         .map(|edge| edge.label().to_string()),
                     target_kind: target.to_string(),
                     required: entry.declared().required,
-                    inverse_labels,
                 },
             );
         }
@@ -424,20 +414,10 @@ fn missing_links(
     };
     let kind = node.kind.raw.as_str();
     let outgoing = graph.edges_from(entity_id);
-    let incoming = graph.edges_to(entity_id);
     expectations
         .for_kind(kind)
         .iter()
-        .filter(|expected| {
-            let declared = outgoing.iter().any(|e| e.label == *expected.label);
-            let declared_back = incoming.iter().any(|e| {
-                expected.inverse_labels.iter().any(|l| e.label == **l)
-                    && graph
-                        .node(e.source.as_str())
-                        .is_some_and(|source| source.kind.raw == *expected.target_kind)
-            });
-            !declared && !declared_back
-        })
+        .filter(|expected| !outgoing.iter().any(|e| e.label == *expected.label))
         .map(|expected| MissingLink {
             from: entity_id.to_string(),
             from_kind: kind.to_string(),

@@ -868,7 +868,6 @@ expression: "digest(&load(&runtime, &[name]))"
     "absent_targets": {
       "behavior.features": "feature (@specforge/product)"
     },
-    "bidirectional_pairs": [],
     "derived_references": [
       {
         "field": "types",

@@ -64,7 +64,7 @@ fn self_check_runs_without_crashing() {
     // A broken project fails the CI step with exit 1 and says why on stderr.
     let dir = TestProject::new().without_config().files(&[(
         "main.spec",
-        "\nbehavior alpha \"A\" { contract \"first\" }\nfeature gamma \"G\" { behaviors [alpha, nonexistent] }\n",
+        "\nfeature alpha \"A\" { problem \"first\" }\nbehavior gamma \"G\" { features [alpha, nonexistent] }\n",
     )]);
     let output = ci_check(&[], dir.root());
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -199,8 +199,8 @@ fn check_project_with_errors_exits_one() {
     let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha, nonexistent] }
+feature alpha "A" { problem "first" }
+behavior gamma "G" { features [alpha, nonexistent] }
 "#,
     )]);
 
@@ -241,8 +241,8 @@ fn json_format_outputs_valid_json() {
     let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha, nonexistent] }
+feature alpha "A" { problem "first" }
+behavior gamma "G" { features [alpha, nonexistent] }
 "#,
     )]);
 
@@ -287,8 +287,8 @@ fn structured_output_includes_file_line_col() {
     let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha, nonexistent] }
+feature alpha "A" { problem "first" }
+behavior gamma "G" { features [alpha, nonexistent] }
 "#,
     )]);
 
@@ -311,8 +311,8 @@ fn structured_output_includes_context_snippet() {
     let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha, nonexistent] }
+feature alpha "A" { problem "first" }
+behavior gamma "G" { features [alpha, nonexistent] }
 "#,
     )]);
 
@@ -321,14 +321,14 @@ feature gamma "G" { behaviors [alpha, nonexistent] }
     // The offending source line, numbered, with the reference underlined.
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains(" 3 │ feature gamma \"G\" { behaviors [alpha, nonexistent] }\n"),
+        stderr.contains(" 3 │ behavior gamma \"G\" { features [alpha, nonexistent] }\n"),
         "should contain the source line in stderr: {}",
         stderr
     );
     let lines: Vec<&str> = stderr.lines().collect();
     let at = lines
         .iter()
-        .position(|l| l.contains("feature gamma"))
+        .position(|l| l.contains("behavior gamma"))
         .unwrap();
     let column_of = |line: &str, byte: usize| line[..byte].chars().count();
     let source = lines[at];
@@ -353,8 +353,8 @@ fn structured_output_includes_suggestion() {
     let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
-behavior alpha_parser "A" { contract "first" }
-feature gamma "G" { behaviors [alpha_parsr] }
+feature alpha_parser "A" { problem "first" }
+behavior gamma "G" { features [alpha_parsr] }
 "#,
     )]);
 
@@ -404,8 +404,8 @@ fn check_mode_prints_to_stderr() {
     let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha, nonexistent] }
+feature alpha "A" { problem "first" }
+behavior gamma "G" { features [alpha, nonexistent] }
 "#,
     )]);
 
@@ -436,8 +436,8 @@ fn json_diagnostics_have_complete_fields() {
     let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha, nonexistent] }
+feature alpha "A" { problem "first" }
+behavior gamma "G" { features [alpha, nonexistent] }
 "#,
     )]);
 
@@ -663,7 +663,7 @@ fn exit_code_contract_consistency() {
 
     let error_dir = TestProject::new()
         .without_config()
-        .files(&[("main.spec", r#"feature g "G" { behaviors [nonexistent] }"#)]);
+        .files(&[("main.spec", r#"behavior g "G" { features [nonexistent] }"#)]);
     Cli::on(&error_dir).command(&["check"]).assert().code(1);
 }
 
@@ -677,8 +677,8 @@ fn check_mode_contract_consistency() {
     let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha, nonexistent] }
+feature alpha "A" { problem "first" }
+behavior gamma "G" { features [alpha, nonexistent] }
 "#,
     )]);
 
@@ -706,8 +706,8 @@ fn json_format_outputs_to_stdout() {
     let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha, nonexistent] }
+feature alpha "A" { problem "first" }
+behavior gamma "G" { features [alpha, nonexistent] }
 "#,
     )]);
 
@@ -732,8 +732,8 @@ fn json_format_exit_code_matches_human_format() {
     let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha, nonexistent] }
+feature alpha "A" { problem "first" }
+behavior gamma "G" { features [alpha, nonexistent] }
 "#,
     )]);
 
@@ -764,8 +764,8 @@ fn json_diagnostics_contract_consistency() {
     let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha, nonexistent] }
+feature alpha "A" { problem "first" }
+behavior gamma "G" { features [alpha, nonexistent] }
 "#,
     )]);
 
@@ -796,8 +796,8 @@ fn json_diagnostics_include_suggestion_when_available() {
     let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
-behavior alpha_parser "A" { contract "first" }
-feature gamma "G" { behaviors [alpha_parsr] }
+feature alpha_parser "A" { problem "first" }
+behavior gamma "G" { features [alpha_parsr] }
 "#,
     )]);
 
@@ -1070,7 +1070,7 @@ fn check_json_shows_cross_extension_errors() {
     let dir = TestProject::new().file(
         "main.spec",
         r#"
-feature gamma "G" { behaviors [nonexistent] }
+behavior gamma "G" { features [nonexistent] }
 decision use_rust "D" {
     status accepted
     context "need performance"
@@ -1120,7 +1120,7 @@ fn check_full_multi_extension_project_exits_zero() {
 
     // An error in the same project flips the exit code, still on stderr.
     let broken = format!(
-        "{}\nfeature broken_ref \"B\" {{ behaviors [missing_one] }}\n",
+        "{}\nbehavior broken_ref \"B\" {{ features [missing_one] }}\n",
         specs::MULTI_EXTENSION
     );
     let dir = TestProject::new().file("main.spec", &broken);

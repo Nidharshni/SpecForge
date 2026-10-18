@@ -28,7 +28,7 @@ fn unexecutable_rule() -> Diagnostic {
 
 /// E003: the graph build reports a reference to no entity.
 fn unresolved_reference() -> Diagnostic {
-    let source = "behavior a \"A\" { contract \"c\" }\nfeature f \"F\" { behaviors [a, ghost] }\n";
+    let source = "feature a \"A\" { problem \"c\" }\nbehavior f \"F\" { features [a, ghost] }\n";
     let (_, diagnostics) =
         specforge_graph::build_graph(&[specforge_parser::parse(source, "main.spec")]);
     only(diagnostics, "E003")

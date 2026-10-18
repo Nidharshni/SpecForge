@@ -153,8 +153,7 @@ fn kinds(c: &mut ContributionsBuilder) {
             f.field_type(FieldType::ReferenceList)
                 .description("Behaviors that enforce this constraint at runtime")
                 .edge("ConstraintEnforcedByBehavior")
-                .target_kind("behavior")
-                .inverse_of("invariants");
+                .target_kind("behavior");
         });
         k.field("scope", |f| {
             f.field_type(FieldType::String)

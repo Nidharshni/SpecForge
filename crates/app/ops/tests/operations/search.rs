@@ -6,14 +6,14 @@ use specforge_test::prelude::*;
 
 use crate::view_support::{Assembled, Viewed, plain, registries_with};
 
-/// `alpha` (a behavior whose contract says "system"), `beta_feature` (a feature listing alpha), `gamma_orphan`
-/// (an invariant), and `held` (an invariant enforced by alpha, guarantee "always").
+/// `alpha` (a behavior whose contract says "system"), `beta_feature` (an epic listing alpha), `gamma_orphan`
+/// (an invariant), and `held` (an invariant covering alpha, guarantee "always").
 fn project() -> Assembled {
     let build = registries_with(&["behavior", "invariant"], &[], |c| {
         c.edge("behaviors", |_| {});
-        c.edge("enforced_by", |_| {});
-        c.kind("feature", |k| {
-            k.keyword("feature");
+        c.edge("covers", |_| {});
+        c.kind("epic", |k| {
+            k.keyword("epic");
             k.field("behaviors", |f| {
                 f.field_type(FieldType::ReferenceList)
                     .edge("behaviors")
@@ -29,18 +29,18 @@ fn project() -> Assembled {
             e.field("guarantee", |f| {
                 f.field_type(FieldType::String);
             });
-            e.field("enforced_by", |f| {
+            e.field("covers", |f| {
                 f.field_type(FieldType::ReferenceList)
-                    .edge("enforced_by")
+                    .edge("covers")
                     .target_kind("behavior");
             });
         });
     });
     Assembled::over(build).source(
         "behavior alpha \"Alpha Behavior\" {\n  contract \"The system MUST do alpha\"\n  verify unit \"does alpha correctly\"\n}\n\
-         feature beta_feature \"Beta Feature\" {\n  behaviors [alpha]\n}\n\
+         epic beta_feature \"Beta Feature\" {\n  behaviors [alpha]\n}\n\
          invariant gamma_orphan \"Gamma Orphan\" {\n}\n\
-         invariant held \"Held\" {\n  guarantee \"always\"\n  enforced_by [alpha]\n}\n",
+         invariant held \"Held\" {\n  guarantee \"always\"\n  covers [alpha]\n}\n",
     )
 }
 

@@ -4891,16 +4891,6 @@ expression: "digest(&load(&runtime, &all))"
   },
   "graph_inputs": {
     "absent_targets": {},
-    "bidirectional_pairs": [
-      [
-        "behaviors",
-        "features"
-      ],
-      [
-        "enforced_by",
-        "invariants"
-      ]
-    ],
     "derived_references": [
       {
         "field": "types",

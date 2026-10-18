@@ -354,7 +354,7 @@ behavior detect_unknown_entity_fields "Detect Unknown Entity Fields" {
     registries_populated_fired "registries_populated event has fired, confirming FieldRegistry and KindRegistry are fully populated"
   }
   ensures {
-    unknown_fields_diagnosed "W020 warning emitted for every unrecognized field name on registered entity kinds"
+    unknown_fields_diagnosed "W020 warning emitted for every unrecognized field name on registered entity kinds, E079 when the name is the other side of a relation another kind owns"
     cascading_avoided        "Field validation skipped for entities with unregistered kinds (already E024)"
   }
   contract   """
@@ -372,6 +372,13 @@ behavior detect_unknown_entity_fields "Detect Unknown Entity Fields" {
     vocabulary, e.g. an invariant's `expression` from @specforge/formal),
     the W020 MUST suggest installing that extension, as E024 does for a
     kind.
+    A field the kind does not register that is the other side of a relation
+    another kind owns (ADR 0150) MUST produce E079 instead of W020, naming
+    the owning field and the edit: an owning field of another kind that
+    targets this kind names it in its inverse_of, or every id the field
+    lists is an entity of one other kind that owns a reference field into
+    this kind. A field of the kind's own relations (a self-relation) is
+    never the other side, and stays W020.
     `verify` statements are not fields (ADR 0094): a field named `verify`
     MUST be checked like any field, and statements on a kind no
     extension made testable (supports_verify) MUST produce W158. When the
@@ -386,6 +393,10 @@ behavior detect_unknown_entity_fields "Detect Unknown Entity Fields" {
   verify unit "verify statements on a kind no extension made testable produce W158"
   verify unit "expression is checked like any other field (W020 where undeclared)"
   verify unit "an undeclared field a builtin enhancement adds suggests its extension"
+  verify unit "a field written on the non-owning side of a relation is E079 naming the owning field"
+  verify unit "a reverse name an inverse_of declares is E079 even when its ids do not resolve"
+  verify unit "an event's trigger is E079 naming the produces and consumes fields"
+  verify unit "an unknown field of a kind's own relation stays W020"
   verify unit "field validation skipped when entity kind is unregistered"
   verify contract "Detect Unknown Entity Fields: unknown field detection holds — registries_populated_fired, unknown_fields_diagnosed, cascading_avoided"
 }
