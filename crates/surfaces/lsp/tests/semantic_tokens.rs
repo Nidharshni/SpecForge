@@ -680,14 +680,7 @@ fn enum_and_bool_values_are_classified() {
 
 /// Whether `node` has an ancestor of kind `kind`.
 fn within(node: tree_sitter::Node, kinds: &[&str]) -> bool {
-    let mut parent = node.parent();
-    while let Some(p) = parent {
-        if kinds.contains(&p.kind()) {
-            return true;
-        }
-        parent = p.parent();
-    }
-    false
+    std::iter::successors(node.parent(), |p| p.parent()).any(|p| kinds.contains(&p.kind()))
 }
 
 /// Every node of `tree` under `node`, depth first.
@@ -766,7 +759,12 @@ fn tokens_agree_with_the_grammar() {
                     );
                     let name = node.child_by_field_name(field::NAME).unwrap();
                     let token = token_at(name).unwrap_or_else(|| panic!("{}", where_(name)));
-                    assert_ne!(token.1 & MOD_DECLARATION, 0, "{}", where_(name));
+                    if &text[kind.byte_range()] == "defaults" {
+                        // The name a defaults block gives is a kind, not a declaration (ADR 0149).
+                        assert_eq!(token.1 & MOD_DECLARATION, 0, "{}", where_(name));
+                    } else {
+                        assert_ne!(token.1 & MOD_DECLARATION, 0, "{}", where_(name));
+                    }
                 }
                 kind::FIELD => {
                     let key = node.child_by_field_name(field::KEY).unwrap();

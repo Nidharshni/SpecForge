@@ -40,7 +40,7 @@ fn a_reserved_entity_id_produces_e013() {
 #[test]
 fn a_structural_keyword_is_reserved_wherever_kinds_are_checked() {
     let build = build([software()]);
-    for keyword in ["spec", "ref", "use", "define"] {
+    for keyword in ["spec", "ref", "use", "define", "defaults"] {
         let diags = checked(&build, &[("t.spec", &behaviors(&[keyword]))]);
         assert_eq!(coded_in(&diags, "E013").len(), 1, "{keyword}: {diags:?}");
     }

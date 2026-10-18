@@ -234,10 +234,12 @@ pub fn references(
         .references(id.as_str(), query)
         .unwrap_or_default();
     // An occurrence whose file's text is unknown is left out.
-    let locations: Vec<Location> = refs
+    let mut locations: Vec<Location> = refs
         .iter()
         .filter_map(|o| compiled.location(&o.span))
         .collect();
+    // An inherited reference is one token for every block that inherits it (ADR 0149).
+    locations.dedup();
     (!locations.is_empty()).then_some(locations)
 }
 

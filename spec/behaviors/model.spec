@@ -9,11 +9,16 @@ use "types/errors"
 use "types/model"
 use "types/output"
 
-behavior build_model_intermediate "Build Model Intermediate Representation" {
-  features   [logical_data_model]
+defaults behavior {
+  features   [model_multi_format]
   invariants [diagnostic_determinism, zero_domain_knowledge_core]
-  category   query
-  types      [
+  ports      [CompilerApi]
+}
+
+behavior build_model_intermediate "Build Model Intermediate Representation" {
+  features [logical_data_model]
+  category query
+  types    [
     ModelIntermediate,
     ModelEntity,
     ModelField,
@@ -22,8 +27,7 @@ behavior build_model_intermediate "Build Model Intermediate Representation" {
     Cardinality,
     GraphProtocolSchema,
   ]
-  ports      [CompilerApi]
-  consumes   [validation_complete]
+  consumes [validation_complete]
   requires {
     schema_available "GraphProtocolSchema has been generated from the KindRegistry, EdgeRegistry, and FieldRegistry"
   }
@@ -33,7 +37,7 @@ behavior build_model_intermediate "Build Model Intermediate Representation" {
     cardinality_inferred        "Every ModelRelationship has a non-null cardinality derived from the source field type"
     extension_metadata_computed "Every ModelExtension's entity_count is the kinds it declares that the model keeps, and its edge_count the edge types it declares that name a drawn relationship"
   }
-  contract   """
+  contract """
     When the model command is invoked, the system MUST build a
     ModelIntermediate from the GraphProtocolSchema. Every SchemaEntityKind
     MUST produce one ModelEntity. A synthetic id field (string, required,
@@ -61,11 +65,8 @@ behavior build_model_intermediate "Build Model Intermediate Representation" {
 }
 
 behavior render_model_markdown "Render Model as Markdown" {
-  features   [model_multi_format]
-  invariants [diagnostic_determinism, zero_domain_knowledge_core]
-  category   query
-  types      [ModelIntermediate, ModelOptions, ModelFormat]
-  ports      [CompilerApi]
+  category query
+  types    [ModelIntermediate, ModelOptions, ModelFormat]
   requires {
     model_ir_built "ModelIntermediate has been constructed from the schema"
   }
@@ -77,7 +78,7 @@ behavior render_model_markdown "Render Model as Markdown" {
     grouping_respected    "When group_by=extension, entities are grouped under extension headers"
     field_level_respected "Only fields matching the requested field level are included"
   }
-  contract   """
+  contract """
     When specforge model --format=markdown is invoked, the system MUST
     render the ModelIntermediate as Markdown. The output MUST start with
     a framing preamble explaining what entity kinds, fields, and relationships
@@ -103,11 +104,8 @@ behavior render_model_markdown "Render Model as Markdown" {
 }
 
 behavior render_model_mermaid "Render Model as Mermaid erDiagram" {
-  features   [model_multi_format]
-  invariants [diagnostic_determinism, zero_domain_knowledge_core]
-  category   query
-  types      [ModelIntermediate, ModelOptions, ModelFormat, Cardinality]
-  ports      [CompilerApi]
+  category query
+  types    [ModelIntermediate, ModelOptions, ModelFormat, Cardinality]
   requires {
     model_ir_built "ModelIntermediate has been constructed from the schema"
   }
@@ -117,7 +115,7 @@ behavior render_model_mermaid "Render Model as Mermaid erDiagram" {
     field_types_shown            "Entity blocks include field types when fields != none"
     grouping_via_comments        "Extension grouping uses %% comment headers"
   }
-  contract   """
+  contract """
     When specforge model --format=mermaid is invoked, the system MUST
     render the ModelIntermediate as a Mermaid erDiagram. Cardinality MUST
     use standard Mermaid notation: ||--|| for 1:1, ||--o{ for 1:N,
@@ -143,11 +141,8 @@ behavior render_model_mermaid "Render Model as Mermaid erDiagram" {
 }
 
 behavior render_model_dot "Render Model as DOT" {
-  features   [model_multi_format]
-  invariants [diagnostic_determinism, zero_domain_knowledge_core]
-  category   query
-  types      [ModelIntermediate, ModelOptions, ModelFormat]
-  ports      [CompilerApi]
+  category query
+  types    [ModelIntermediate, ModelOptions, ModelFormat]
   requires {
     model_ir_built "ModelIntermediate has been constructed from the schema"
   }
@@ -160,7 +155,7 @@ behavior render_model_dot "Render Model as DOT" {
     cluster_grouping        "Extension grouping uses subgraph cluster_* with dashed borders"
     edges_labeled           "Edges include relationship name and cardinality"
   }
-  contract   """
+  contract """
     When specforge model --format=dot is invoked, the system MUST render
     the ModelIntermediate as a DOT digraph. Entity nodes MUST use HTML-like
     <table> labels with a header row colored by extension and field rows
@@ -182,11 +177,8 @@ behavior render_model_dot "Render Model as DOT" {
 }
 
 behavior render_model_json "Render Model as ERD JSON" {
-  features   [model_multi_format]
-  invariants [diagnostic_determinism, zero_domain_knowledge_core]
-  category   query
-  types      [ModelIntermediate, ModelOptions, ModelFormat]
-  ports      [CompilerApi]
+  category query
+  types    [ModelIntermediate, ModelOptions, ModelFormat]
   requires {
     model_ir_built "ModelIntermediate has been constructed from the schema"
   }
@@ -196,7 +188,7 @@ behavior render_model_json "Render Model as ERD JSON" {
     distinct_from_specforge_schema "Output does NOT include compiler metadata (testable, singleton, incremental)"
     schema_version_present         "Output carries the schema_version of the schema it draws, as specforge schema states it for the project"
   }
-  contract   """
+  contract """
     When specforge model --format=json is invoked, the system MUST
     serialize the ModelIntermediate as ERD-oriented JSON. The output MUST
     include schema_version (the version of the project's Graph Protocol
@@ -216,11 +208,8 @@ behavior render_model_json "Render Model as ERD JSON" {
 }
 
 behavior render_model_dbml "Render Model as DBML" {
-  features   [model_multi_format]
-  invariants [diagnostic_determinism, zero_domain_knowledge_core]
-  category   query
-  types      [ModelIntermediate, ModelOptions, ModelFormat]
-  ports      [CompilerApi]
+  category query
+  types    [ModelIntermediate, ModelOptions, ModelFormat]
   requires {
     model_ir_built "ModelIntermediate has been constructed from the schema"
   }
@@ -233,7 +222,7 @@ behavior render_model_dbml "Render Model as DBML" {
     named_refs          "Each reference is one named Ref declaration, between columns the output writes"
     required_not_null   "Required fields have [not null] annotation"
   }
-  contract   """
+  contract """
     When specforge model --format=dbml is invoked, the system MUST render
     the ModelIntermediate as DBML. Each ModelEntity MUST produce a Table
     with a synthetic id string [pk] column. Enum fields MUST produce
@@ -259,11 +248,9 @@ behavior render_model_dbml "Render Model as DBML" {
 }
 
 behavior filter_model "Filter Model by Extension, Kind, or Depth" {
-  features   [model_filtering]
-  invariants [diagnostic_determinism, zero_domain_knowledge_core]
-  category   query
-  types      [ModelIntermediate, ModelOptions, ModelRoot]
-  ports      [CompilerApi]
+  features [model_filtering]
+  category query
+  types    [ModelIntermediate, ModelOptions, ModelRoot]
   requires {
     model_ir_built "ModelIntermediate has been constructed from the schema"
   }
@@ -275,7 +262,7 @@ behavior filter_model "Filter Model by Extension, Kind, or Depth" {
     filters_compose          "Multiple filters are applied as intersection"
     unknown_names_answered   "A root or an extension the project does not have is refused; a listed kind it does not know is reported as I020 and selects nothing"
   }
-  contract   """
+  contract """
     After building the ModelIntermediate, the system MUST apply any
     requested filters before rendering. --extension filters to entities
     from a single loaded extension. --kinds filters to a comma-separated
@@ -313,12 +300,11 @@ behavior filter_model "Filter Model by Extension, Kind, or Depth" {
 }
 
 behavior expose_model_mcp_tool "Expose Model as MCP Tool" {
-  features   [model_agent_access]
-  invariants [diagnostic_determinism, zero_domain_knowledge_core]
-  category   query
-  types      [ModelIntermediate, ModelOptions, ModelFormat, McpToolDescriptor]
-  ports      [McpProtocol, CompilerApi]
-  consumes   [validation_complete]
+  features [model_agent_access]
+  category query
+  types    [ModelIntermediate, ModelOptions, ModelFormat, McpToolDescriptor]
+  ports    [McpProtocol, CompilerApi]
+  consumes [validation_complete]
   requires {
     validation_complete_fired "validation_complete event has fired, confirming schema is ready"
   }
@@ -328,7 +314,7 @@ behavior expose_model_mcp_tool "Expose Model as MCP Tool" {
     all_filters_available "extension, kinds, root, depth, group_by, fields parameters are supported"
     result_is_string      "Tool result is the rendered string in the requested format"
   }
-  contract   """
+  contract """
     The specforge.model MCP tool MUST accept the same parameters as the
     CLI command: format (default: markdown), group_by, fields, extension,
     kinds, root, depth. The tool MUST compile the project, build the

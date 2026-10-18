@@ -10,6 +10,7 @@ mod completion;
 mod concurrency;
 mod contracts;
 mod cursor;
+mod defaults;
 mod document;
 mod e2e;
 mod field_references;

@@ -15,8 +15,12 @@ use "types/migration"
 use "types/wasm"
 use "types/zero-entity-core"
 
+defaults behavior {
+  features [spec_file_migration]
+  types    [SpecFile, MigrationResult]
+}
+
 behavior detect_format_version_mismatch "Detect Format Version Mismatch" {
-  features   [spec_file_migration]
   invariants [multi_error_collection, zero_domain_knowledge_core, diagnostic_determinism]
   category   validation
   types      [SpecFile, FormatVersion]
@@ -64,7 +68,6 @@ behavior detect_format_version_mismatch "Detect Format Version Mismatch" {
 // directly (v1→v3). Each step is a self-contained transform function. This
 // ensures that each version boundary is validated independently.
 behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
-  features   [spec_file_migration]
   invariants [
     multi_error_collection,
     migration_idempotency,
@@ -174,10 +177,8 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
 }
 
 behavior add_missing_titles "Add Missing Titles" {
-  features   [spec_file_migration]
   invariants [migration_idempotency, migration_semantic_preservation]
   category   mutation
-  types      [SpecFile, MigrationResult]
   ports      [FileSystem]
   contract   """
     The titles step MUST write a title into every block header that has
@@ -210,8 +211,39 @@ behavior add_missing_titles "Add Missing Titles" {
   verify unit "the changes beyond the steps drop only a title the step added"
 }
 
+behavior hoist_file_defaults "Hoist File Defaults" {
+  invariants [migration_idempotency, migration_semantic_preservation]
+  category   mutation
+  ports      [FileSystem]
+  contract   """
+    The defaults step MUST move into a `defaults <kind>` block each reference
+    list a file's blocks repeat: for a kind with two or more blocks in the
+    file and no defaults block of its own, a field is hoisted when every block
+    of the kind writes it exactly once, as a one-line list of bare items with
+    no annotation and no comment on or directly above its line, and at least
+    two blocks write the same list. The most common list becomes the default
+    and is deleted from the blocks that write it; the others keep theirs. A
+    block MUST be written only when it saves at least one line. It goes after
+    the last import, or before the first form and its leading comments. The
+    step MUST leave a text with a syntax error as it is and MUST be
+    idempotent. The graph comparison proves the graph is unchanged: a hoist
+    that changes it is rolled back with W054.
+  """
+  verify unit "a list every block writes alike is hoisted"
+  verify unit "the most common list is hoisted and the others keep theirs"
+  verify unit "a kind where a block lacks the field is left as written"
+  verify unit "an identifier, a quoted or a multi-line list is never hoisted"
+  verify unit "a line with a comment on or above it is left as written"
+  verify unit "a kind that has defaults is left as written"
+  verify unit "a hoist that saves no line is not written"
+  verify unit "the block goes after the imports or before the first form"
+  verify unit "hoisting twice changes nothing"
+  verify unit "a file with a syntax error is left alone"
+  verify unit "a migration that hoists defaults keeps the graph"
+  verify unit "a hoist that changes the graph is rolled back"
+}
+
 behavior generate_migration_diff "Generate Migration Diff" {
-  features   [spec_file_migration]
   invariants [
     diagnostic_determinism,
     migration_idempotency,
@@ -254,7 +286,6 @@ behavior generate_migration_diff "Generate Migration Diff" {
 }
 
 behavior validate_post_migration_integrity "Validate Post-Migration Integrity" {
-  features   [spec_file_migration]
   invariants [
     multi_error_collection,
     graph_traversal_integrity,
@@ -312,7 +343,6 @@ behavior validate_post_migration_integrity "Validate Post-Migration Integrity" {
 }
 
 behavior rollback_failed_migration "Rollback Failed Migration" {
-  features   [spec_file_migration]
   invariants [migration_backup_safety, migration_atomicity, zero_domain_knowledge_core]
   category   command
   types      [MigrationResult, MigrationSummary, MigrationBackup]
@@ -371,7 +401,6 @@ behavior rollback_failed_migration "Rollback Failed Migration" {
 }
 
 behavior invoke_extension_migration_hooks "Invoke Extension Migration Hooks" {
-  features   [spec_file_migration]
   // multi_error_collection applies here because extension hook failures are
   // collected into the DiagnosticBag (not fail-fast) — each hook failure is
   // an independent error that must be reported alongside others.

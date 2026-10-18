@@ -38,9 +38,10 @@ pub(crate) fn add_titles(text: &str) -> String {
     lines.concat()
 }
 
-/// Whether a block of `kind` takes a title: every block the graph places (`define` is never a node).
+/// Whether a block of `kind` takes a title: every block the graph places (`define` is never a node, `defaults` takes
+/// none: E078).
 fn needs_title(kind: &str) -> bool {
-    kind != "define"
+    kind != specforge_common::structural::DEFINE && kind != specforge_common::structural::DEFAULTS
 }
 
 /// Whether `change` is one this step makes: a node whose only change is its title, which it did not have in

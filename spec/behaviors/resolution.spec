@@ -9,8 +9,12 @@ use "types/core"
 use "types/errors"
 use "types/graph"
 
-behavior resolve_use_imports "Resolve Use Imports" {
+defaults behavior {
   features   [reference_resolution]
+  invariants [import_dag]
+}
+
+behavior resolve_use_imports "Resolve Use Imports" {
   invariants [import_dag, reference_resolution_completeness, compilation_pipeline_ordering]
   category   query
   types      [SpecFile, FileEntry]
@@ -105,10 +109,8 @@ behavior resolve_use_imports "Resolve Use Imports" {
 
 // No consumes — called inline during use import resolution
 behavior detect_import_cycles "Detect Import Cycles" {
-  features   [reference_resolution]
-  invariants [import_dag]
-  category   validation
-  types      [CycleError, FileEntry]
+  category validation
+  types    [CycleError, FileEntry]
   requires {
     import_graph_available "File dependency graph from use imports has been constructed"
   }
@@ -117,7 +119,7 @@ behavior detect_import_cycles "Detect Import Cycles" {
     cycle_diagnostic_emitted "Each detected cycle produces a W113 warning naming all participating files"
     non_cyclic_unaffected    "Files not involved in any cycle continue processing normally"
   }
-  contract   """
+  contract """
     The resolver MUST detect circular use imports using topological sort.
     When a cycle is detected, the compiler MUST emit a W113 warning that
     names all files participating in the cycle, starting from the
@@ -133,7 +135,6 @@ behavior detect_import_cycles "Detect Import Cycles" {
 }
 
 behavior link_entity_references "Link Entity References" {
-  features   [reference_resolution]
   invariants [string_interning_consistency, entity_id_uniqueness, reference_resolution_completeness]
   category   command
   types      [EntityId, Graph, Edge, ResolutionError]
@@ -177,7 +178,6 @@ behavior link_entity_references "Link Entity References" {
 }
 
 behavior resolve_soft_cross_extension_references "Resolve Soft Cross-Extension References" {
-  features   [reference_resolution]
   invariants [reference_resolution_completeness]
   category   query
   types      [EntityId]
@@ -215,7 +215,6 @@ behavior resolve_soft_cross_extension_references "Resolve Soft Cross-Extension R
 
 // No consumes — called inline during reference resolution
 behavior resolve_external_ref_declarations "Resolve External Ref Declarations" {
-  features   [reference_resolution]
   invariants [reference_resolution_completeness]
   category   query
   types      [EntityId, Graph]
@@ -243,10 +242,8 @@ behavior resolve_external_ref_declarations "Resolve External Ref Declarations" {
 }
 
 behavior resolve_reexports "Resolve pub use Re-exports" {
-  features   [reference_resolution]
-  invariants [import_dag]
-  category   query
-  types      [FileEntry]
+  category query
+  types    [FileEntry]
   requires {
     imports_resolved "use imports have been resolved to files"
   }
@@ -257,7 +254,7 @@ behavior resolve_reexports "Resolve pub use Re-exports" {
     plain_use_private    "a plain use adds nothing to the file's exports"
     unknown_name_warned  "a selective re-export of a name the target doesn't export is W027"
   }
-  contract   """
+  contract """
     References resolve across the project without use (ADR 0004 D1-a),
     so a file's exports decide no reference; they decide W027. A file
     exports the entities it declares. `pub use "target"` MUST add every

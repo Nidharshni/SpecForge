@@ -11,8 +11,12 @@ use "types/errors"
 use "types/graph"
 use "types/zero-entity-core"
 
+defaults behavior {
+  features [structural_validation]
+  types    [Diagnostic]
+}
+
 behavior detect_dangling_references "Detect Dangling References" {
-  features   [structural_validation]
   invariants [
     reference_resolution_completeness,
     diagnostic_determinism,
@@ -47,7 +51,6 @@ behavior detect_dangling_references "Detect Dangling References" {
 }
 
 behavior detect_duplicate_entity_ids "Detect Duplicate Entity IDs" {
-  features   [structural_validation]
   invariants [string_interning_consistency, entity_id_uniqueness]
   category   validation
   types      [Diagnostic, DuplicateIdError]
@@ -72,10 +75,8 @@ behavior detect_duplicate_entity_ids "Detect Duplicate Entity IDs" {
 }
 
 behavior require_block_titles "Require Block Titles" {
-  features   [structural_validation]
   invariants [entity_id_uniqueness]
   category   validation
-  types      [Diagnostic]
   consumes   [all_files_parsed]
   contract   """
     The graph build MUST report E076 for every block that becomes a node
@@ -122,7 +123,6 @@ behavior require_block_titles "Require Block Titles" {
 // entity) are extension-defined ValidationRulePatterns.
 
 behavior detect_unreferenced_refs "Detect Unreferenced Refs" {
-  features   [structural_validation]
   invariants [
     reference_resolution_completeness,
     diagnostic_determinism,
@@ -190,7 +190,6 @@ behavior validate_file_reference_paths "Validate File Reference Paths" {
   // violate the same completeness guarantee as dangling entity references.
   category   validation
   invariants [reference_resolution_completeness, validation_pipeline_ordering]
-  types      [Diagnostic]
   ports      [FileSystem]
   consumes   [graph_built]
   // Diagnostics from this validator flow into the declarative_validation_executed
@@ -243,7 +242,6 @@ behavior validate_file_reference_paths "Validate File Reference Paths" {
 // -- The Prove Pass ------------------------------------------------------------
 
 behavior prove_declared_bounds_and_claims "Prove Declared Bounds and Claims" {
-  features   [structural_validation]
   invariants [diagnostic_determinism]
   category   validation
   types      [Diagnostic, ProofRole, FieldDescriptor, SolveFailure]
@@ -287,10 +285,8 @@ behavior prove_declared_bounds_and_claims "Prove Declared Bounds and Claims" {
 // -- The Contracts Pass --------------------------------------------------------
 
 behavior report_entities_without_contract_obligations "Report Entities Without Contract Obligations" {
-  features   [structural_validation]
   invariants [diagnostic_determinism]
   category   validation
-  types      [Diagnostic]
   requires {
     contract_targets_declared "an extension declares which kinds are contract targets (contract_target)"
   }

@@ -35,7 +35,7 @@ Commands:
   collect       Run the project's test runners and record which entities their tests prove
   doctor        Run health checks on installed extensions
   mcp           Start MCP server (JSON-RPC over stdio)
-  migrate       Migrate .spec files to the current format: the version header, and a title for every block that has none
+  migrate       Migrate .spec files to the current format: the version header, a title for every block that has none, and the reference lists a file's blocks repeat moved into its `defaults`
   completions   Generate shell completions: the built-in commands, and the commands of the extensions the project at --path enables
   explain       Explain a diagnostic code
   infer-status  Show inference progress (analyzed files, gaps, stale entries)

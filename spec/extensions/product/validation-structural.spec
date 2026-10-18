@@ -9,9 +9,13 @@
 use "types/diagnostics"
 use "types/graph"
 
+defaults behavior {
+  types    [Diagnostic]
+  features [pe_validation_suite]
+}
+
 behavior detect_unreferenced_journeys "Detect Unreferenced Journeys" {
   category validation
-  types    [Diagnostic]
   contract """
     The @specforge/product extension MUST declare a no_incoming_edges
     validation pattern that detects journeys not referenced by any
@@ -21,14 +25,12 @@ behavior detect_unreferenced_journeys "Detect Unreferenced Journeys" {
     fires_when_unreferenced "journey with zero incoming DeliverableSupportsJourney edges produces W042"
     suppresses_deliverable  "journey in at least one deliverable suppresses W042"
   }
-  features [pe_validation_suite]
   verify unit "journey not in any deliverable produces W042"
   verify unit "journey in a deliverable suppresses W042"
 }
 
 behavior detect_unreferenced_modules "Detect Unreferenced Modules" {
   category validation
-  types    [Diagnostic]
   contract """
     The @specforge/product extension MUST declare a no_incoming_edges
     validation pattern on modules. A module with no incoming edge of any
@@ -39,7 +41,6 @@ behavior detect_unreferenced_modules "Detect Unreferenced Modules" {
     fires_when_unreferenced "module with zero incoming edges produces W044"
     suppresses_referenced   "module referenced by a deliverable, milestone, module or term suppresses W044"
   }
-  features [pe_validation_suite]
   verify unit "module nothing references produces W044"
   verify unit "module in a deliverable suppresses W044"
   verify unit "module referenced only by a milestone suppresses W044"
@@ -47,7 +48,6 @@ behavior detect_unreferenced_modules "Detect Unreferenced Modules" {
 
 behavior detect_unreferenced_terms "Detect Unreferenced Terms" {
   category validation
-  types    [Diagnostic]
   contract """
     The @specforge/product extension MUST declare a no_edges validation
     pattern on terms. A term with no incoming and no outgoing edge (no
@@ -58,7 +58,6 @@ behavior detect_unreferenced_terms "Detect Unreferenced Terms" {
     fires_when_isolated  "term with no incoming and no outgoing edges produces I010"
     suppresses_connected "term with any incoming or outgoing edge suppresses I010"
   }
-  features [pe_validation_suite]
   verify unit "term referenced by see_also suppresses I010"
   verify unit "term with its own see_also suppresses I010"
   verify unit "term with no edges produces I010"
@@ -66,7 +65,6 @@ behavior detect_unreferenced_terms "Detect Unreferenced Terms" {
 
 behavior detect_unreferenced_personas "Detect Unreferenced Personas" {
   category validation
-  types    [Diagnostic]
   contract """
     The @specforge/product extension MUST declare a no_incoming_edges
     validation pattern that detects persona entities not referenced by
@@ -78,14 +76,12 @@ behavior detect_unreferenced_personas "Detect Unreferenced Personas" {
     fires_when_unreferenced "persona with zero incoming JourneyTargetsPersona edges produces I046"
     suppresses_referenced   "persona referenced by at least one journey suppresses I046"
   }
-  features [pe_validation_suite]
   verify unit "persona referenced by a journey suppresses I046"
   verify unit "persona not referenced by any journey produces I046"
 }
 
 behavior detect_unreferenced_channels "Detect Unreferenced Channels" {
   category validation
-  types    [Diagnostic]
   contract """
     The @specforge/product extension MUST declare a no_incoming_edges
     validation pattern that detects channel entities not referenced by
@@ -97,7 +93,6 @@ behavior detect_unreferenced_channels "Detect Unreferenced Channels" {
     fires_when_unreferenced "channel with zero incoming JourneyUsesChannel edges produces I047"
     suppresses_referenced   "channel referenced by at least one journey suppresses I047"
   }
-  features [pe_validation_suite]
   verify unit "channel referenced by a journey suppresses I047"
   verify unit "channel not referenced by any journey produces I047"
 }
@@ -105,7 +100,6 @@ behavior detect_unreferenced_channels "Detect Unreferenced Channels" {
 behavior detect_module_cycles "Detect Module Cycles" {
   category   validation
   invariants [module_dag]
-  types      [Diagnostic]
   produces   [pe_module_cycle_detected]
   contract   """
     The @specforge/product extension MUST declare a cycle_detection
@@ -117,7 +111,6 @@ behavior detect_module_cycles "Detect Module Cycles" {
     cycle_detected "module dependency cycle produces E007 naming all cycle members"
     acyclic_passes "acyclic module graph produces no E007"
   }
-  features   [pe_validation_suite]
   verify unit "module cycle produces E007"
   verify unit "acyclic module graph passes"
 }
@@ -125,7 +118,6 @@ behavior detect_module_cycles "Detect Module Cycles" {
 behavior detect_milestone_cycles "Detect Milestone Cycles" {
   category   validation
   invariants [milestone_dag]
-  types      [Diagnostic]
   produces   [pe_milestone_cycle_detected]
   contract   """
     The @specforge/product extension MUST declare a cycle_detection
@@ -137,7 +129,6 @@ behavior detect_milestone_cycles "Detect Milestone Cycles" {
     cycle_detected "milestone dependency cycle produces E015 naming all cycle members"
     acyclic_passes "acyclic milestone graph produces no E015"
   }
-  features   [pe_validation_suite]
   verify unit "milestone cycle produces E015"
   verify unit "acyclic milestone graph passes"
 }
@@ -157,7 +148,6 @@ behavior detect_feature_dependency_cycles "Detect Feature Dependency Cycles" {
     cycle_detected "feature dependency cycle produces W045 naming all cycle members"
     acyclic_passes "acyclic feature dependency graph produces no W045"
   }
-  features   [pe_validation_suite]
   verify unit "feature dependency cycle produces W045"
   verify unit "acyclic feature dependency graph passes"
 }
@@ -177,14 +167,12 @@ behavior detect_deliverable_cycles "Detect Deliverable Cycles" {
     cycle_detected "deliverable dependency cycle produces E052 naming all cycle members"
     acyclic_passes "acyclic deliverable graph produces no E052"
   }
-  features   [pe_validation_suite]
   verify unit "deliverable cycle produces E052"
   verify unit "acyclic deliverable graph passes"
 }
 
 behavior detect_deliverables_with_no_journeys "Detect Deliverables with No Journeys" {
   category validation
-  types    [Diagnostic]
   contract """
     The @specforge/product extension MUST declare a no_outgoing_edges
     validation rule on deliverables scoped to the DeliverableSupportsJourney
@@ -196,7 +184,6 @@ behavior detect_deliverables_with_no_journeys "Detect Deliverables with No Journ
     fires_when_empty     "deliverable with no journeys field or an empty journeys list produces W043"
     suppresses_non_empty "deliverable with at least one journey suppresses W043"
   }
-  features [pe_validation_suite]
   verify unit "deliverable with no journeys produces W043"
   verify unit "deliverable with an empty journeys list produces W043"
   verify unit "deliverable with journeys suppresses W043"
@@ -204,7 +191,6 @@ behavior detect_deliverables_with_no_journeys "Detect Deliverables with No Journ
 
 behavior detect_deliverables_with_no_modules "Detect Deliverables with No Modules" {
   category validation
-  types    [Diagnostic]
   contract """
     The @specforge/product extension MUST declare a no_outgoing_edges
     validation rule on deliverables scoped to the DeliverableContainsModule
@@ -217,7 +203,6 @@ behavior detect_deliverables_with_no_modules "Detect Deliverables with No Module
     fires_when_empty     "deliverable with no modules field or an empty modules list produces W046"
     suppresses_non_empty "deliverable with at least one module suppresses W046"
   }
-  features [pe_validation_suite]
   verify unit "deliverable with no modules produces W046"
   verify unit "deliverable with an empty modules list produces W046"
   verify unit "deliverable with modules suppresses W046"
@@ -225,7 +210,6 @@ behavior detect_deliverables_with_no_modules "Detect Deliverables with No Module
 
 behavior detect_empty_milestones "Detect Empty Milestones" {
   category validation
-  types    [Diagnostic]
   contract """
     The @specforge/product extension MUST declare a
     missing_field_when_flag_set validation pattern on the milestone features
@@ -237,7 +221,6 @@ behavior detect_empty_milestones "Detect Empty Milestones" {
     fires_without_features "milestone with no features produces W049"
     suppresses_features    "milestone with at least one feature suppresses W049"
   }
-  features [pe_validation_suite]
   verify unit "milestone with no features and no modules produces W049"
   verify unit "milestone with features suppresses W049"
   verify unit "milestone with modules but no features produces W049"
@@ -246,7 +229,6 @@ behavior detect_empty_milestones "Detect Empty Milestones" {
 behavior detect_milestone_feature_module_gap "Detect Milestone Feature-Module Gap" {
   category   validation
   invariants [milestone_feature_module_consistency]
-  types      [Diagnostic]
   contract   """
     For each milestone, the @specforge/product extension SHOULD check
     that features scheduled in the milestone are reachable from the
@@ -262,7 +244,6 @@ behavior detect_milestone_feature_module_gap "Detect Milestone Feature-Module Ga
     suppresses_covered  "milestone where all features are covered by modules produces no I051"
     no_modules_no_fire  "milestone with no modules produces no I051"
   }
-  features   [pe_validation_suite]
   verify unit "milestone with matching feature and module assignments produces no I051"
   verify unit "milestone with feature not in any module produces I051"
   verify unit "milestone with no modules produces no I051"
@@ -272,7 +253,6 @@ behavior detect_milestone_feature_module_gap "Detect Milestone Feature-Module Ga
 behavior detect_deliverable_journey_module_gap "Detect Deliverable Journey-Module Feature Gap" {
   category   validation
   invariants [deliverable_journey_module_consistency]
-  types      [Diagnostic]
   contract   """
     For each deliverable, the @specforge/product extension SHOULD check
     that features referenced by the deliverable's journeys are a subset
@@ -288,7 +268,6 @@ behavior detect_deliverable_journey_module_gap "Detect Deliverable Journey-Modul
     suppresses_covered  "deliverable where all journey features are in modules produces no I049"
     no_journeys_no_fire "deliverable with no journeys produces no I049"
   }
-  features   [pe_validation_suite]
   verify unit "deliverable with matching journey and module features produces no I049"
   verify unit "deliverable with journey feature not in any module produces I049"
   verify unit "deliverable with no journeys produces no I049"
@@ -312,7 +291,6 @@ behavior detect_modules_with_no_features "Detect Modules With No Features" {
     fires_when_empty     "module with no features field or an empty features list produces I067"
     suppresses_non_empty "module with at least one feature suppresses I067"
   }
-  features [pe_validation_suite]
   verify unit "module with features suppresses I067"
   verify unit "module with empty features produces I067"
   verify unit "module with no features field produces I067"
@@ -320,7 +298,6 @@ behavior detect_modules_with_no_features "Detect Modules With No Features" {
 
 behavior detect_features_with_no_acceptance "Detect Features with No Acceptance Criteria" {
   category validation
-  types    [Diagnostic]
   contract """
     The @specforge/product extension MUST declare two I048 validation rules
     on the feature acceptance field: a missing_required_field rule (the
@@ -333,7 +310,6 @@ behavior detect_features_with_no_acceptance "Detect Features with No Acceptance 
     fires_when_missing "feature with empty or missing acceptance produces I048"
     suppresses_present "feature with non-empty acceptance suppresses I048"
   }
-  features [pe_validation_suite]
   verify unit "feature with no acceptance criteria produces I048"
   verify unit "feature with an empty acceptance list produces I048"
   verify unit "feature with acceptance criteria suppresses I048"
@@ -353,7 +329,6 @@ behavior detect_completed_milestone_without_criteria "Detect Completed Milestone
     suppresses_with_criteria "completed milestone with non-empty exit_criteria suppresses W057"
     suppresses_non_completed "non-completed milestone without exit_criteria suppresses W057"
   }
-  features [pe_validation_suite]
   verify unit "completed milestone with exit_criteria suppresses W057"
   verify unit "completed milestone without exit_criteria produces W057"
   verify unit "planned milestone without exit_criteria suppresses W057"
@@ -380,7 +355,6 @@ behavior detect_unanchored_exit_criteria "Detect Unanchored Exit Criteria" {
     ignores_empty       "empty exit_criteria array produces no I075 (covered by W057)"
     non_completed_ok    "non-completed milestones with unanchored criteria still produce I075"
   }
-  features [pe_validation_suite]
   verify unit "prose-only exit criterion produces I075"
   verify unit "exit criterion containing entity ID suppresses I075"
   verify unit "milestone with mixed criteria fires I075 only for unanchored ones"
@@ -409,7 +383,6 @@ behavior detect_singleton_tags "Detect Singleton Tags" {
     closest_suggestion "suggestion is the closest tag by Levenshtein distance with alphabetical tiebreak"
     mutual_singletons  "when two tags are mutual singletons, both produce I052"
   }
-  features [pe_validation_suite]
   verify unit "tag appearing on one entity produces I052"
   verify unit "tag appearing on two or more entities suppresses I052"
   verify unit "singleton tag with similar tag includes suggestion in payload"
@@ -421,7 +394,6 @@ behavior detect_singleton_tags "Detect Singleton Tags" {
 
 behavior detect_tag_namespace_collision "Detect Tag Namespace Collision" {
   category validation
-  types    [Diagnostic]
   contract """
     The @specforge/product extension SHOULD detect when the same tag
     string is used on entities of different kinds with potentially
@@ -437,7 +409,6 @@ behavior detect_tag_namespace_collision "Detect Tag Namespace Collision" {
     identifies_kinds              "I084 lists which entity kinds share the tag"
     suggestion_includes_prefixes  "I084 suggests kind-specific prefixes"
   }
-  features [pe_validation_suite]
   verify unit "tag on features and modules only suppresses I084"
   verify unit "tag on features, modules, and milestones produces I084"
   verify unit "I084 identifies the entity kinds sharing the tag"
@@ -465,7 +436,6 @@ behavior detect_term_asymmetric_see_also "Detect Term Asymmetric See-Also Links"
     per_pair_diagnostic "each asymmetric pair produces one I096 on the referencing term"
     identifies_both     "I096 includes both term IDs and suggests adding reciprocal see_also"
   }
-  features [pe_validation_suite]
   verify unit "flags A->B without B->A"
   verify unit "no flag when mutual see_also"
   verify unit "no flag for isolated terms with empty see_also"
@@ -475,7 +445,6 @@ behavior detect_term_asymmetric_see_also "Detect Term Asymmetric See-Also Links"
 
 behavior detect_flow_step_structure "Detect Flow Step Structure" {
   category validation
-  types    [Diagnostic]
   contract """
     The @specforge/product extension SHOULD detect journey flow steps that
     lack a recognizable structure. When a flow step does not begin with a
@@ -490,7 +459,6 @@ behavior detect_flow_step_structure "Detect Flow Step Structure" {
     per_step_diagnostic    "I072 fires per non-numbered step, not per journey"
     identifies_step_index  "I072 includes the step index within the flow"
   }
-  features [pe_validation_suite]
   verify unit "flow step without number prefix produces I072"
   verify unit "flow step with '1. Developer runs...' suppresses I072"
   verify unit "journey with mixed numbered and unnumbered steps fires I072 per unnumbered step"

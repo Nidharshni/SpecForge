@@ -1,5 +1,5 @@
 //! Format-version migration of a project's `.spec` files: the rewrite to a target format version and the migration
-//! steps (`titles`), the backups and
+//! steps (`titles`, `defaults`), the backups and
 //! the `.specforge/migration.json` record a rollback undoes, and W054 for each thing the rewrite changed in the
 //! graph (`structural_differences`).
 
@@ -12,6 +12,7 @@ use specforge_graph::{EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect};
 use specforge_parser::{FormatVersion, detect_format_version, with_format_version};
 use std::path::{Path, PathBuf};
 
+mod defaults;
 mod titles;
 
 // ---------------------------------------------------------------------------
@@ -193,13 +194,14 @@ impl MigrationRecord {
 // Transform Functions (pure)
 // ---------------------------------------------------------------------------
 
-/// Transform content to version `to`: the header when the file is below it, then every migration step. A step runs on
+/// Transform content to version `to`: the header when the file is below it, then every migration step (titles, then
+/// the defaults hoist). A step runs on
 /// any file it changes, whatever the file's version (ADR 0148 D5).
 fn transform_content(content: &str, from: &FormatVersion, to: &FormatVersion) -> String {
     if from < to {
-        titles::add_titles(&with_format_version(content, to))
+        defaults::hoist_defaults(&titles::add_titles(&with_format_version(content, to)))
     } else {
-        titles::add_titles(content)
+        defaults::hoist_defaults(&titles::add_titles(content))
     }
 }
 

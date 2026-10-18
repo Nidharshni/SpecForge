@@ -17,13 +17,16 @@ use "ports/outbound"
 use "types/graph"
 use "types/mcp"
 
+defaults behavior {
+  features [mcp_prompts]
+  ports    [McpProtocol, CompilerApi]
+  produces [mcp_prompt_invoked]
+}
+
 behavior serve_mcp_prompt "Serve MCP Prompt" {
-  features   [mcp_prompts]
   invariants [mcp_structured_error_responses, mcp_served_project_consistency]
   category   query
   types      [McpPromptDescriptor, McpPromptArgument, McpError]
-  ports      [McpProtocol, CompilerApi]
-  produces   [mcp_prompt_invoked]
   ensures {
     arguments_derived  "listed arguments are exactly those the prompt reads, required exactly when it cannot render without them"
     refusal_structured "a prompt that cannot render answers a JSON-RPC error whose data is an McpError"
@@ -66,7 +69,6 @@ behavior serve_mcp_prompt "Serve MCP Prompt" {
 }
 
 behavior provide_mcp_context_prompt "Provide MCP Context Prompt" {
-  features   [mcp_prompts]
   invariants [
     graph_traversal_integrity,
     diagnostic_determinism,
@@ -75,8 +77,6 @@ behavior provide_mcp_context_prompt "Provide MCP Context Prompt" {
   ]
   category   query
   types      [McpPromptDescriptor, Graph, McpContextPromptResult, McpContextConstraint]
-  ports      [McpProtocol, CompilerApi]
-  produces   [mcp_prompt_invoked]
   requires {
     graph_available "Compiled graph is available via CompilerApi"
   }
@@ -109,7 +109,6 @@ behavior provide_mcp_context_prompt "Provide MCP Context Prompt" {
 }
 
 behavior provide_mcp_review_prompt "Provide MCP Review Prompt" {
-  features   [mcp_prompts]
   invariants [
     graph_traversal_integrity,
     diagnostic_determinism,
@@ -118,8 +117,6 @@ behavior provide_mcp_review_prompt "Provide MCP Review Prompt" {
   ]
   category   query
   types      [McpPromptDescriptor, McpCoverageResult, McpReviewPromptResult, McpReviewFinding]
-  ports      [McpProtocol, CompilerApi]
-  produces   [mcp_prompt_invoked]
   requires {
     graph_available "Compiled graph is available via CompilerApi"
   }
@@ -143,7 +140,6 @@ behavior provide_mcp_review_prompt "Provide MCP Review Prompt" {
 }
 
 behavior provide_mcp_trace_prompt "Provide MCP Trace Prompt" {
-  features   [mcp_prompts]
   invariants [
     graph_traversal_integrity,
     diagnostic_determinism,
@@ -152,8 +148,6 @@ behavior provide_mcp_trace_prompt "Provide MCP Trace Prompt" {
   ]
   category   query
   types      [McpPromptDescriptor, TraceChain, McpTracePromptResult, McpTraceGap]
-  ports      [McpProtocol, CompilerApi]
-  produces   [mcp_prompt_invoked]
   requires {
     graph_available "Compiled graph is available via CompilerApi"
   }
@@ -183,7 +177,6 @@ behavior provide_mcp_trace_prompt "Provide MCP Trace Prompt" {
 }
 
 behavior provide_mcp_explore_prompt "Provide MCP Explore Prompt" {
-  features   [mcp_prompts]
   invariants [
     graph_traversal_integrity,
     diagnostic_determinism,
@@ -192,8 +185,6 @@ behavior provide_mcp_explore_prompt "Provide MCP Explore Prompt" {
   ]
   category   query
   types      [McpPromptDescriptor, Graph, McpExplorePromptResult, McpRelationshipPath]
-  ports      [McpProtocol, CompilerApi]
-  produces   [mcp_prompt_invoked]
   requires {
     graph_available "Compiled graph is available via CompilerApi"
   }

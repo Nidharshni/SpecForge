@@ -128,6 +128,7 @@ fn keywords(prefix: &str, view: &ProjectView) -> Vec<CompletionItem> {
     let guide = guide(view);
     let mut keywords: Vec<String> = kinds.keywords().cloned().collect();
     keywords.push(structural::USE.into());
+    keywords.push(structural::DEFAULTS.into());
     keywords.sort();
     keywords.dedup();
     keywords

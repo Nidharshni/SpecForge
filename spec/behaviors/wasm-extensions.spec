@@ -13,6 +13,10 @@ use "types/graph"
 use "types/wasm"
 use "types/zero-entity-core"
 
+defaults behavior {
+  features [test_result_collection]
+}
+
 // -- Query Extensions -----
 
 // -- Entity Kind Conflict Prevention -----
@@ -375,7 +379,6 @@ behavior enforce_per_call_site_permissions "Enforce Per-Call-Site Permissions" {
 // ingest_collector_report. The CLI entry point is `specforge collect`; the
 // MCP entry point is provide_mcp_collect_tool (behaviors/mcp-operations.spec).
 behavior register_collector_contributions "Register Collector Contributions" {
-  features   [test_result_collection]
   invariants [extension_load_order_determinism]
   category   query
   types      [ExtensionDeclaration, CollectorDescriptor, CollectorAutoDetect]
@@ -405,7 +408,6 @@ behavior register_collector_contributions "Register Collector Contributions" {
 // NOTE: auto_detect_collector does not produce an event because dispatch is
 // CLI-initiated (specforge collect), not event-driven.
 behavior auto_detect_collector "Auto-Detect Collector" {
-  features   [test_result_collection]
   invariants [extension_load_order_determinism]
   category   validation
   types      [CollectorDescriptor, CollectorAutoDetect]
@@ -440,7 +442,6 @@ behavior auto_detect_collector "Auto-Detect Collector" {
 }
 
 behavior approve_collector_command "Approve Collector Command" {
-  features   [test_result_collection]
   invariants [extension_isolation]
   category   validation
   types      [CollectorDescriptor]
@@ -477,7 +478,6 @@ behavior approve_collector_command "Approve Collector Command" {
 }
 
 behavior run_collector_command "Run Collector Command" {
-  features   [test_result_collection]
   invariants [extension_isolation]
   category   command
   types      [CollectorDescriptor]
@@ -523,7 +523,6 @@ behavior run_collector_command "Run Collector Command" {
 }
 
 behavior dispatch_collector "Dispatch Collector" {
-  features   [test_result_collection]
   invariants [wasm_sandbox_integrity, extension_isolation]
   category   query
   types      [CollectorDescriptor, CollectInput, CollectOutput, WasmTrapInfo]
@@ -562,7 +561,6 @@ behavior dispatch_collector "Dispatch Collector" {
 }
 
 behavior ingest_collector_report "Ingest Collector Report" {
-  features   [test_result_collection]
   invariants [collector_output_conformance]
   category   query
   types      [CollectOutput, Graph]
@@ -602,7 +600,6 @@ behavior ingest_collector_report "Ingest Collector Report" {
 }
 
 behavior resolve_test_conventions "Resolve Test Naming Conventions" {
-  features   [test_result_collection]
   invariants [collector_output_conformance]
   category   query
   consumes   [collector_dispatched]
@@ -642,7 +639,6 @@ behavior resolve_test_conventions "Resolve Test Naming Conventions" {
 }
 
 behavior slug_obligation_text "Slug an Obligation Text" {
-  features   [test_result_collection]
   invariants [collector_output_conformance]
   category   query
   ensures {
