@@ -128,6 +128,7 @@ fn example_value(field: &FieldRegistryEntry) -> String {
             .clone()
             .or_else(|| field.enum_values().first().cloned())
             .unwrap_or_else(|| "\"...\"".into()),
+        FieldType::Identifier => "word".into(),
         FieldType::StringList => "[\"item1\", \"item2\"]".into(),
         FieldType::Reference => "ref_id".into(),
         FieldType::ReferenceList => "[ref_1, ref_2]".into(),

@@ -9,3 +9,7 @@ crate-type = ["cdylib"]
 [dependencies]
 specforge-extension-sdk = { path = "../../crates/runtime/extension-sdk" }
 serde_json = "1.0"
+
+[dev-dependencies]
+# Spec links: #[specforge_test(behavior = "…", verify = "…")] (ADR 0002).
+specforge-test = { path = "../../integrations/rust/specforge-test" }
