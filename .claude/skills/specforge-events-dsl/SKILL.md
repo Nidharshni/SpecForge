@@ -1,6 +1,6 @@
 ---
 name: specforge-events-dsl
-description: "Write event blocks in .spec DSL files. Each event declares a domain or system event with free-form snake_case IDs, a trigger behavior, payload type reference, channel name, consumer behaviors, sync blocks for CSP concurrency, and verify statements (integration/deadlock_free/liveness). Use when making the system's reactive behavior explicit and traceable across bounded contexts."
+description: "Write event blocks in .spec DSL files. Each event declares a domain or system event with free-form snake_case IDs, payload type reference, channel name, sync blocks for CSP concurrency, and verify statements (integration/deadlock_free/liveness). Use when making the system's reactive behavior explicit and traceable across bounded contexts."
 ---
 
 # SpecForge Events DSL
@@ -24,11 +24,8 @@ use "types/user"
 use "behaviors/user-crud"
 
 event user_created "User Created" {
-  trigger   create_user
   channel   "users.created"
   payload   UserCreatedPayload
-
-  consumers [send_welcome_email, log_audit_entry]
 
   verify integration "event emitted after user creation"
 }
@@ -41,7 +38,6 @@ event user_created "User Created" {
 | Field | Type | Description |
 |-------|------|-------------|
 | `title` | string | Human-readable name (string after the entity ID). |
-| `trigger` | reference | The behavior that produces this event. Must reference an existing behavior. |
 
 ### Optional
 
@@ -49,7 +45,6 @@ event user_created "User Created" {
 |-------|------|-------------|
 | `payload` | reference | Type reference for the event data shape (e.g., `payload UserCreatedPayload`). |
 | `channel` | string | Logical channel, topic, or queue name. |
-| `consumers` | reference list | Behaviors that react to this event. Enables cross-context traceability. |
 | `sync` | block | CSP synchronization constraints: `barrier` (behavior references) and `timeout` (duration). |
 | `verify` | verify statement(s) | Test specifications: `verify {kind} "{description}"`. Kinds: integration, deadlock_free, liveness. |
 | `refs` | reference list | External references linked to this event. |
@@ -84,37 +79,36 @@ sync {
 
 | From | Edge Type | Meaning |
 |------|-----------|---------|
-| `behavior` | `produces` | Behavior emits this event (via `trigger`) |
+| `behavior` | `BehaviorProducesEvent` | Behavior emits this event (via the behavior's `produces` field) |
+| `behavior` | `BehaviorConsumesEvent` | Behavior reacts to this event (via the behavior's `consumes` field) |
+
+An event lists no behaviors: the behaviors that emit or react to it name it, and `trace <event>` lists them upstream.
 
 ### Outgoing edges
 
 | To | Edge Type | Meaning |
 |----|-----------|---------|
-| `behavior` | `consumes` | Event is consumed by these behaviors |
-| `type` | `uses_type` | Event carries data shaped like this type (via `payload`) |
+| `type` | `EventCarriesPayloadType` | Event carries data shaped like this type (via `payload`) |
 | `ref` | `links_to` | External references linked to this event |
 
 ## Writing Rules
 
 1. **Past tense names** -- "user_created", "order_placed", "payment_processed" -- events describe what happened.
-2. **One trigger per event** -- an event is produced by exactly one behavior.
+2. **Write the relation on the behavior** -- a behavior lists the events it emits in `produces` and the events it reacts to in `consumes`; an event never lists behaviors (E079).
 3. **Payload is a type reference** -- use `payload UserCreatedPayload`, not inline field declarations. Define the payload shape as a `type` block.
 4. **Use `sync` for concurrency constraints** -- when multiple behaviors must complete before the event fires.
-5. **Import trigger and consumer files** -- `use` the files that declare referenced behaviors.
-6. **Empty consumers is OK during development** -- `W029` warning will remind you to add them later.
+5. **Import files** -- `use` the files that declare the types a block references.
+6. **An event no behavior produces is OK during development** -- `W007` warning will remind you to add a `produces` later.
 7. **Add verify statements** -- events are testable entities (integration, deadlock_free, liveness).
 
 ## Validation Rules
 
 | Code | Rule |
 |------|------|
-| E001 | `trigger` must resolve to an existing behavior. |
-| E001 | Every ID in `consumers` must resolve to an existing behavior. |
 | E002 | No duplicate event IDs across all `.spec` files. |
-| E006 | Trigger behavior must be valid. |
 | E034 | Circular event dependency detected (deadlock). |
 | E035 | Channel type mismatch -- producer and consumer disagree on payload type. |
-| W007 | Orphan event -- no consumers. |
+| W007 | Event never produced -- no behavior lists it in `produces`. |
 | W029 | Unmatched producers -- event has producers but no consumers. |
 
 ## Examples
@@ -123,11 +117,8 @@ sync {
 
 ```spec
 event user_created "User Created" {
-  trigger   create_user
   channel   "users.created"
   payload   UserCreatedPayload
-
-  consumers [send_welcome_email, log_audit_entry]
 
   verify integration "event emitted after user creation"
 }
@@ -137,11 +128,10 @@ event user_created "User Created" {
 
 ```spec
 event user_email_changed "User Email Changed" {
-  trigger   update_user_email
   channel   "users.email-changed"
   payload   EmailChangedPayload
 
-  // No consumers yet -- W029 warning is fine during early development.
+  // No behavior consumes it yet -- fine during early development.
 
   verify integration "event emitted after email update"
 }
@@ -151,7 +141,6 @@ event user_email_changed "User Email Changed" {
 
 ```spec
 event concurrency_analysis_complete "Concurrency Analysis Complete" {
-  trigger   process_analyze
   channel   "analysis.concurrency"
   payload   ConcurrencyAnalysisReport
 
@@ -171,16 +160,8 @@ event concurrency_analysis_complete "Concurrency Analysis Complete" {
 use "behaviors/order-processing"
 
 event order_placed "Order Placed" {
-  trigger   place_order
   channel   "orders.placed"
   payload   OrderPlacedPayload
-
-  consumers [
-    start_fulfillment,       // Fulfillment service
-    process_billing,         // Billing service
-    send_order_confirmation, // Notification service
-    log_order_audit,         // Audit service
-  ]
 
   verify integration "event emitted with correct order details"
   verify liveness "all consumers eventually process the event"
@@ -191,7 +172,6 @@ event order_placed "Order Placed" {
 
 - Do not name events as commands ("send_welcome_email" -- that is a behavior, not an event)
 - Do not use future tense ("user_will_be_created" -- events describe what happened)
-- Do not create events without a trigger behavior
+- Do not write `trigger` or `consumers` on an event (E079): the behaviors list the event in `produces` and `consumes`
 - Do not define payload fields inline -- use a type reference (`payload MyPayloadType`)
-- Do not reference behaviors from other files without a `use` import
 - Do not ignore sync constraints for events with multiple concurrent dependencies

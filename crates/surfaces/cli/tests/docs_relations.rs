@@ -316,7 +316,6 @@ fn the_quick_reference_relations_are_generated() {
 }
 
 #[test]
-#[ignore = "flipped by T13"]
 fn entity_pages_list_only_declared_reference_fields() {
     let registered = registered_fields();
     let mut problems = Vec::new();

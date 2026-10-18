@@ -159,10 +159,10 @@ Cross-cutting: `ref` — attach external references at any phase.
 1. Scan behaviors for produce/consume patterns → create events
 2. Scan behaviors for external dependencies → create outbound ports
 3. Scan behaviors for public interfaces → create inbound ports
-4. Back-link: update behaviors with `types`, `ports` references
+4. On each behavior, list the types and ports it uses in `types` and `ports`
 
 ### Checkpoint
-- [ ] Every event has at least one consumer (avoids W007)
+- [ ] Every event is produced by at least one behavior, in its `produces` (avoids W007)
 - [ ] Every relation is written on the field that owns it (avoids E079)
 - [ ] Ports cover all integration points
 - [ ] No behavior references a non-existent port or type (avoids E001)
@@ -184,12 +184,11 @@ Cross-cutting: `ref` — attach external references at any phase.
 ### How to write
 1. Review all behaviors — which ones have implicit guarantees?
 2. Extract those guarantees as explicit invariants
-3. Use `enforced_by` to point to the behavior(s) responsible
-4. Back-link: update behaviors to reference their invariants
+3. On each behavior that enforces an invariant, list it in the behavior's `invariants` (an invariant lists no behaviors; `trace <invariant>` shows them upstream)
 
 ### Checkpoint
 - [ ] Every high-risk invariant is referenced by at least one behavior (avoids W003)
-- [ ] Every invariant has `enforced_by` behavior references
+- [ ] Every invariant is listed in the `invariants` of at least one behavior
 - [ ] High-risk invariants should get failure_modes later (Phase 7)
 
 ---
