@@ -379,15 +379,15 @@ tag); and the edge-creating lists `invariants`, `types`, `ports`, `produces`, `c
 `@optional`, `@literal`. Arrays: `Item[]`.
 
 ```spec
-type Task {
+type Task "Task" {
   id     string @readonly @unique
   title  string
   status TaskStatus
 }
 
-type TaskStatus = open | in_progress | done | archived
+type TaskStatus "Task Status" = open | in_progress | done | archived
 
-type TaskNotFoundError {
+type TaskNotFoundError "Task Not Found Error" {
   _tag   "TaskNotFoundError" @literal
   taskId string
 }

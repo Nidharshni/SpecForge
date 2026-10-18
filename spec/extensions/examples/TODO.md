@@ -21,16 +21,16 @@ A minimal todo app specified with all 6 entity kinds from `@specforge/software`.
 
 // ── Types ─────────────────────────────────────────────────
 
-type TodoItem {
+type TodoItem "Todo Item" {
   id          string    @readonly
   title       string
   completed   boolean
   created_at  string    @readonly
 }
 
-type TodoFilter = all | active | completed
+type TodoFilter "Todo Filter" = all | active | completed
 
-type TodoError = not_found | invalid_title | duplicate_id
+type TodoError "Todo Error" = not_found | invalid_title | duplicate_id
 
 // ── Ports ─────────────────────────────────────────────────
 

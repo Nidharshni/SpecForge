@@ -25,7 +25,7 @@ By convention, ports typically use PascalCase, but any valid identifier is accep
 ```spec
 use "types/user"
 
-port UserRepository {
+port UserRepository "User Repository" {
   direction outbound
   category  "persistence/user"
 
@@ -163,7 +163,7 @@ A behavior references the invariants that the port's implementation must uphold.
 ```spec
 use "types/user"
 
-port UserRepository {
+port UserRepository "User Repository" {
   direction outbound
   category  "persistence/user"
 
@@ -181,7 +181,7 @@ port UserRepository {
 ```spec
 use "types/email"
 
-port EmailService {
+port EmailService "Email Service" {
   direction outbound
   category  "external/email"
 
@@ -195,7 +195,7 @@ port EmailService {
 ```spec
 use "types/user"
 
-port UserAPI {
+port UserAPI "User API" {
   direction inbound
   category  "api/user"
 
@@ -212,7 +212,7 @@ port UserAPI {
 ```spec
 use "types/order"
 
-port OrderEventBus {
+port OrderEventBus "Order Event Bus" {
   direction outbound
   category  "messaging/order"
 
