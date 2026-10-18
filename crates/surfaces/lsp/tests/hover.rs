@@ -45,7 +45,7 @@ fn edge(source: &str, target: &str, label: &str) -> Edge {
 
 /// A project of one file, `main.spec`, holding `source`, served with no
 /// extension and `main.spec` open.
-fn plain(source: &str) -> Served {
+pub(crate) fn plain(source: &str) -> Served {
     Served::new(&[("main.spec", source)]).open(&["main.spec"])
 }
 

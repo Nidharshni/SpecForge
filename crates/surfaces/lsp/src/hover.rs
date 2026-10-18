@@ -174,7 +174,6 @@ pub fn entity(
         .fields
         .entries()
         .iter()
-        .filter(|entry| entry.key.as_str() != "title")
         .filter(|entry| !is_headline(&entry.value, facts.headline))
         .map(|entry| format!("- `{}` = {}", entry.key, format_field_value(&entry.value)))
         .collect();

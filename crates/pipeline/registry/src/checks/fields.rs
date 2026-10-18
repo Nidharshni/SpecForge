@@ -10,9 +10,8 @@ use crate::{CandidateVocabulary, FieldRegistry, KindRegistry};
 /// W020 for each field name not declared on a registered kind, or E079 when
 /// the name is the other side of a relation another kind owns (ADR 0150): an
 /// `inverse_of` names it, or the ids it lists are all of one other kind that
-/// owns a reference field into this kind. `title` is
-/// structural and always valid; every other name, `expression` included, is
-/// valid where an extension declares it (the prove pass reads the fields
+/// owns a reference field into this kind. Every name, `title` and
+/// `expression` included, is valid where an extension declares it (the prove pass reads the fields
 /// extensions give a proof role, ADR 0009). A field named `verify` is
 /// checked like any field: `verify` statements are not fields (ADR 0094; a
 /// kind that accepts none is W158). Entities with unregistered kinds are
@@ -43,7 +42,7 @@ pub(super) fn unknown(
 
         for field in &entity.fields {
             let field_name = field.key.as_str();
-            if field_name == "title" || fields.contains(kind, field_name) {
+            if fields.contains(kind, field_name) {
                 continue;
             }
             let listed = listed_ids(field);

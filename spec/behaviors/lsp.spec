@@ -292,6 +292,7 @@ behavior hover_information "Hover Information" {
   """
   verify unit "hover delegates to provide_extension_entity_hover"
   verify unit "hover returns markdown-formatted content"
+  verify unit "hover lists a type member named title"
   verify unit "field help answers only on a field's name"
   verify unit "field help names a field's type as E061 does, an enum's declared values included"
   verify unit "field help says what an absent value counts as"
