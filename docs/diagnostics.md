@@ -3177,6 +3177,25 @@ Owner: core
 Level: warning
 ```
 
+## W162
+
+```
+W162: Relation declared from both sides
+
+A relation has two fields: one extension declares it from both of its ends.
+Either a reference field's `inverse_of` names a field its target kind registers
+(`milestone.behaviors` naming `features`, when `behavior` has its own
+`features`), or two different kinds each register a reference field targeting
+the other (`parent.children` and `child.parent`). A relation is written from one
+side (ADR 0150): the other side is derived, so `query` and `trace` already show
+it. Both fields still register, and an entity can write either. Remove one
+field, or drop the `inverse_of` or name a word the target kind does not use. The
+builtin extensions declare none.
+
+Owner: core
+Level: warning
+```
+
 ## Retired codes
 
 These codes are no longer emitted, and are never reused for another meaning.

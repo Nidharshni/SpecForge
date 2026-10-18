@@ -13,6 +13,7 @@ mod edge_types;
 mod graph_inputs;
 mod peers;
 mod populate;
+mod sides;
 mod validate;
 
 pub use build::{BuildPart, CHECK_PHASE, DeclaredPass, RegistryBuild, build_registries};
