@@ -127,7 +127,7 @@ fn quotes_and_backslashes_are_escaped() {
     verify = "titled, define, spec and ref blocks are left alone"
 )]
 fn a_titled_block_and_define_spec_ref_blocks_are_left_alone() {
-    let text = "// kept\nspec \"shop\" {\n}\n\n// kept\ntype T \"Titled\" {\n}\n\n// kept\ndefine d {\n}\n\nref github.issue:org/repo#1 \"Issue\"\n";
+    let text = "// kept\nspec \"shop\" {\n}\n\ndefaults behavior {\n  ports [R]\n}\n\n// kept\ntype T \"Titled\" {\n}\n\n// kept\ndefine d {\n}\n\nref github.issue:org/repo#1 \"Issue\"\n";
     assert_eq!(migrated(text), text);
 }
 

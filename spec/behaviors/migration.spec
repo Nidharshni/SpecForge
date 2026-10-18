@@ -210,6 +210,40 @@ behavior add_missing_titles "Add Missing Titles" {
   verify unit "the changes beyond the steps drop only a title the step added"
 }
 
+behavior hoist_file_defaults "Hoist File Defaults" {
+  features   [spec_file_migration]
+  invariants [migration_idempotency, migration_semantic_preservation]
+  category   mutation
+  types      [SpecFile, MigrationResult]
+  ports      [FileSystem]
+  contract   """
+    The defaults step MUST move into a `defaults <kind>` block each reference
+    list a file's blocks repeat: for a kind with two or more blocks in the
+    file and no defaults block of its own, a field is hoisted when every block
+    of the kind writes it exactly once, as a one-line list of bare items with
+    no annotation and no comment on or directly above its line, and at least
+    two blocks write the same list. The most common list becomes the default
+    and is deleted from the blocks that write it; the others keep theirs. A
+    block MUST be written only when it saves at least one line. It goes after
+    the last import, or before the first form and its leading comments. The
+    step MUST leave a text with a syntax error as it is and MUST be
+    idempotent. The graph comparison proves the graph is unchanged: a hoist
+    that changes it is rolled back with W054.
+  """
+  verify unit "a list every block writes alike is hoisted"
+  verify unit "the most common list is hoisted and the others keep theirs"
+  verify unit "a kind where a block lacks the field is left as written"
+  verify unit "an identifier, a quoted or a multi-line list is never hoisted"
+  verify unit "a line with a comment on or above it is left as written"
+  verify unit "a kind that has defaults is left as written"
+  verify unit "a hoist that saves no line is not written"
+  verify unit "the block goes after the imports or before the first form"
+  verify unit "hoisting twice changes nothing"
+  verify unit "a file with a syntax error is left alone"
+  verify unit "a migration that hoists defaults keeps the graph"
+  verify unit "a hoist that changes the graph is rolled back"
+}
+
 behavior generate_migration_diff "Generate Migration Diff" {
   features   [spec_file_migration]
   invariants [
