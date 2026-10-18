@@ -94,7 +94,7 @@ expression: "json!({\"core\": core, \"surfaces\": surfaces})"
       "event": "mcp_delta_notified",
       "payload": {
         "addedNodes": 1,
-        "modifiedNodes": 1,
+        "modifiedNodes": 0,
         "notificationType": "graph",
         "removedNodes": 1,
         "subscriberCount": 1

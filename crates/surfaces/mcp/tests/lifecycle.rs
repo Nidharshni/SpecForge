@@ -82,12 +82,12 @@ fn init_server_with_project() -> (McpServer, TempDir) {
         spec_dir.join("test.spec"),
         r#"
 behavior hello_world "Hello World" {
-    contract "The system MUST greet the user"
+    contract "The system MUST greet the user" features [greeting]
     verify unit "greets user"
 }
 
 feature greeting "Greeting Feature" {
-    behaviors [hello_world]
+    problem "Hello World implements it"
 }
 "#,
     )

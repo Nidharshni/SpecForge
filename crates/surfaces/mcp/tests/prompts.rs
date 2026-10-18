@@ -4,10 +4,11 @@ use specforge_mcp::McpServer;
 use specforge_test::prelude::*;
 
 /// test.spec: `alpha`, a behavior with a contract and one obligation.
-const ALPHA: &str = "behavior alpha \"Alpha Behavior\" {\n    contract \"The system MUST do alpha\"\n    verify unit \"test alpha\"\n}\n";
+const ALPHA: &str = "behavior alpha \"Alpha Behavior\" {\n    contract \"The system MUST do alpha\"\n    features [beta]\n    verify unit \"test alpha\"\n}\n";
 
 /// features.spec: `beta` on lines 10–12, the feature that has `alpha`.
-const BETA: &str = "\n\n\n\n\n\n\n\n\nfeature beta \"Beta Feature\" {\n    behaviors [alpha]\n}\n";
+const BETA: &str =
+    "\n\n\n\n\n\n\n\n\nfeature beta \"Beta Feature\" {\n    problem \"Users need it\"\n}\n";
 
 /// inv.spec: `gamma_orphan`, an invariant with no edge and no obligation.
 const GAMMA: &str = "invariant gamma_orphan \"Gamma\" {\n}\n";
@@ -37,10 +38,7 @@ fn test_server() -> Served {
 /// also has: alpha <- beta -> delta, so delta is two hops from alpha.
 fn server_with_delta() -> Served {
     project()
-        .file(
-            "features.spec",
-            BETA.replace("behaviors [alpha]", "behaviors [alpha, delta]"),
-        )
+        .file("features.spec", BETA)
         .file("delta.spec", ALPHA.replace("alpha", "delta"))
         .serve(&[extension()])
 }
@@ -125,9 +123,9 @@ fn context_prompt_includes_edges() {
     );
     let text = prompt_text(&resp);
     let parsed: Value = serde_json::from_str(&text).unwrap();
-    let upstream = parsed["upstream_entities"].as_array().unwrap();
-    // beta -> alpha, so beta is upstream of alpha
-    assert!(upstream.contains(&json!("beta")));
+    let downstream = parsed["downstream_entities"].as_array().unwrap();
+    // alpha -> beta, so beta is downstream of alpha
+    assert!(downstream.contains(&json!("beta")));
 }
 
 // --- specforge://prompts/review ---
@@ -339,17 +337,17 @@ fn trace_prompt_finds_the_gaps_in_a_plan() {
 fn trace_prompt_explains_each_gap() {
     let mut server = test_server();
 
-    // beta depends on alpha, yet the plan does beta first.
-    let result = trace_plan(&mut server, agent_plan(&["beta", "alpha"]));
+    // alpha depends on beta, yet the plan does alpha first.
+    let result = trace_plan(&mut server, agent_plan(&["alpha", "beta"]));
 
     let gaps = result["coverage_gaps"].as_array().unwrap();
     assert_eq!(gaps.len(), 1, "{result}");
     assert_eq!(gaps[0]["missing_link_type"], "ordering");
     assert_eq!(
         gaps[0]["gap_context"],
-        "'beta' depends on 'alpha' (via behaviors), but 'alpha' appears later in the plan"
+        "'alpha' depends on 'beta' (via features), but 'beta' appears later in the plan"
     );
-    let again = trace_plan(&mut server, agent_plan(&["beta", "alpha"]));
+    let again = trace_plan(&mut server, agent_plan(&["alpha", "beta"]));
     assert_eq!(result, again, "gap context is deterministic");
 }
 
@@ -413,9 +411,9 @@ fn explore_prompt_returns_data() {
     let text = prompt_text(&resp);
     let parsed: Value = serde_json::from_str(&text).unwrap();
     // Starting points rank connected entities by out-degree minus in-degree:
-    // beta (1 out) is the top-down entry, alpha (1 in) last; gamma_orphan
+    // alpha (1 out) is the top-down entry, beta (1 in) last; gamma_orphan
     // is linked to nothing, so it leads nowhere.
-    assert_eq!(parsed["starting_points"], json!(["beta", "alpha"]));
+    assert_eq!(parsed["starting_points"], json!(["alpha", "beta"]));
 }
 
 // Unknown prompt

@@ -5,10 +5,10 @@ use specforge_mcp::McpServer;
 use specforge_test::prelude::*;
 
 /// `alpha`, a behavior with a contract and one obligation (test.spec).
-const ALPHA: &str = "behavior alpha \"Alpha Behavior\" {\n    contract \"The system MUST do alpha\"\n    verify unit \"does alpha correctly\"\n}\n";
+const ALPHA: &str = "behavior alpha \"Alpha Behavior\" {\n    contract \"The system MUST do alpha\"\n    features [beta]\n    verify unit \"does alpha correctly\"\n}\n";
 
 /// `beta`, a feature of `alpha` (features.spec).
-const BETA: &str = "feature beta \"Beta Feature\" {\n    behaviors [alpha]\n}\n";
+const BETA: &str = "feature beta \"Beta Feature\" {\n    problem \"Users need it\"\n}\n";
 
 /// `alpha` and the feature `beta` it belongs to, on disk.
 fn project() -> TestProject {
@@ -35,7 +35,7 @@ fn add_unconnected_gamma(server: &Served) {
 
 /// A feature whose `behaviors` names `ghost`, which no entity declares: the
 /// compile reports E003 at its line 2.
-const BROKEN: &str = "feature broken \"Broken\" {\n    behaviors [ghost]\n}\n";
+const BROKEN: &str = "behavior broken \"Broken\" {\n    features [ghost]\n}\n";
 
 /// `diagnostic` at test.spec line 1 (alpha), as a pass reports it.
 fn at_alpha(diagnostic: PassDiagnostic) -> PassDiagnostic {
@@ -90,7 +90,7 @@ fn graph_resource_has_mime_type() {
     assert_eq!(node_ids(&parsed), vec!["alpha", "beta"]);
     assert_eq!(
         parsed["edges"],
-        json!([{"source": "beta", "target": "alpha", "label": "behaviors"}])
+        json!([{"source": "alpha", "target": "beta", "label": "features"}])
     );
     let alpha = parsed["nodes"]
         .as_array()
@@ -222,7 +222,7 @@ fn brief_resource_returns_brief_graph() {
     // The edges carry exactly source, target and label.
     assert_eq!(
         parsed["edges"],
-        json!([{"source": "beta", "target": "alpha", "label": "behaviors"}])
+        json!([{"source": "alpha", "target": "beta", "label": "features"}])
     );
 }
 
@@ -278,7 +278,7 @@ fn entity_resource_returns_subgraph() {
     assert!(!ids.contains(&"gamma"), "gamma is not a neighbor: {ids:?}");
     assert_eq!(
         parsed["edges"],
-        json!([{"source": "beta", "target": "alpha", "label": "behaviors"}])
+        json!([{"source": "alpha", "target": "beta", "label": "features"}])
     );
 }
 

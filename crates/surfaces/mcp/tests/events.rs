@@ -16,7 +16,7 @@ fn init_server() -> Served {
     TestProject::new()
         .file(
             "test.spec",
-            "behavior alpha \"Alpha\" {\n}\nfeature beta \"Beta\" {\n    behaviors [alpha]\n}\n",
+            "behavior alpha \"Alpha\" {\n    features [beta]\n}\nfeature beta \"Beta\" {\n}\n",
         )
         .serve(&[TestExtension::software()])
 }
@@ -414,7 +414,7 @@ fn core_session() -> (Logged, tempfile::TempDir) {
     std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
     std::fs::write(
         dir.path().join("test.spec"),
-        "behavior alpha \"Alpha\" {\n}\nfeature beta \"Beta\" {\n    behaviors [alpha]\n}\n",
+        "behavior alpha \"Alpha\" {\n    features [beta]\n}\nfeature beta \"Beta\" {\n}\n",
     )
     .unwrap();
 

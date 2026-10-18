@@ -6,7 +6,7 @@ use specforge_test::prelude::*;
 
 /// test.spec: the behavior `alpha` and the feature `beta` that has it.
 const TEST_SPEC: &str =
-    "behavior alpha \"Alpha\" {\n}\nfeature beta \"Beta\" {\n    behaviors [alpha]\n}\n";
+    "behavior alpha \"Alpha\" {\n    features [beta]\n}\nfeature beta \"Beta\" {\n}\n";
 
 /// A project that enables no extension, served with its own component
 /// runtime: what `specforge mcp <root>` serves over it. A call naming

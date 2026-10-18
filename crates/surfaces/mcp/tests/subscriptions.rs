@@ -111,7 +111,7 @@ fn project() -> TempDir {
     fs::create_dir_all(&spec_dir).unwrap();
     fs::write(
         spec_dir.join("base.spec"),
-        "behavior base \"Base\" {\n    contract \"The system MUST exist\"\n}\n",
+        "feature base \"Base\" {\n    problem \"The system MUST exist\"\n}\n",
     )
     .unwrap();
     dir
@@ -133,7 +133,7 @@ fn evolve_project(root: &TempDir, entity: &str) {
     fs::write(
         root.path().join("spec").join(format!("{}.spec", entity)),
         format!(
-            "feature {entity} \"{}\" {{\n    behaviors [base]\n}}\n",
+            "behavior {entity} \"{}\" {{\n    features [base]\n}}\n",
             entity
         ),
     )
@@ -604,7 +604,7 @@ fn a_listen_streams_events_name_its_id() {
 
 /// A feature naming `ghost`, which no entity declares: the compile reports
 /// E003.
-const BROKEN: &str = "feature broken \"Broken\" {\n    behaviors [ghost]\n}\n";
+const BROKEN: &str = "behavior broken \"Broken\" {\n    features [ghost]\n}\n";
 
 /// A server over a project of `files`, `@test/ext` declaring the software
 /// kinds.
