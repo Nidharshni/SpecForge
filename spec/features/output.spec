@@ -81,7 +81,7 @@ feature agent_export "Agent-Optimized Export" {
 }
 
 feature review_export "Review Export" {
-  status   in_progress
+  status   done
   problem  """
     A reviewer who signs a specification (a QA lead, a qualified person) reads
     documents, not JSON. Every export format is JSON or Graphviz, so a review
