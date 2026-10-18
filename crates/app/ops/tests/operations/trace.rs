@@ -466,14 +466,14 @@ mod compiled {
     )]
     fn trace_isolated_entity_has_empty_upstream_and_downstream() {
         let spec = format!(
-            "{}\nbehavior alpha \"A\" {{ contract \"first\" }}\nfeature beta \"B\" {{ problem \"p\" solution \"s\" behaviors [alpha] }}\n",
+            "{}\nfeature alpha \"A\" {{ problem \"p\" solution \"s\" }}\nbehavior beta \"B\" {{ contract \"first\" features [alpha] }}\n",
             specs::ISOLATED
         );
         let (_project, compiled) = built(&[("main.spec", &spec)]);
 
         // Unconnected: nothing either way.
         assert_eq!(trace(&compiled, "isolated_node"), (links(&[]), links(&[])));
-        // beta -behaviors-> alpha: each sees the other on its own side.
+        // beta -features-> alpha: each sees the other on its own side.
         assert_eq!(
             trace(&compiled, "alpha"),
             (links(&[("beta", 1)]), links(&[]))
@@ -491,11 +491,11 @@ mod compiled {
     fn trace_linear_chain_shows_correct_depths() {
         let (_project, compiled) = built(&[("main.spec", specs::DEEP_CHAIN)]);
 
-        // inv_deep -enforced_by-> beh_middle -features-> feat_root: the whole
-        // chain, each hop at its depth.
+        // beh_middle -invariants-> inv_deep and beh_middle -features->
+        // feat_root: each far end sees the behavior upstream, one hop away.
         let (upstream, downstream) = trace(&compiled, "inv_deep");
-        assert_eq!(upstream, links(&[]));
-        assert_eq!(downstream, links(&[("beh_middle", 1), ("feat_root", 2)]));
+        assert_eq!(upstream, links(&[("beh_middle", 1)]));
+        assert_eq!(downstream, links(&[]));
     }
 
     #[test]
@@ -521,17 +521,17 @@ mod compiled {
     fn trace_handles_cycles_without_hanging() {
         let (_project, compiled) = built(&[("main.spec", specs::CYCLE)]);
 
-        // Edges: cycle_a -> cycle_c, cycle_b -> cycle_a, cycle_c -> cycle_a.
+        // Edges: cycle_a -> cycle_b, cycle_b -> cycle_c, cycle_c -> cycle_a.
         // From cycle_c the cycle is walked both ways, each other node once,
         // and the walk stops rather than coming back to cycle_c.
         let (upstream, downstream) = trace(&compiled, "cycle_c");
         assert_eq!(
             once_each(&upstream),
-            BTreeSet::from([("cycle_a".to_string(), 1), ("cycle_b".to_string(), 2)])
+            BTreeSet::from([("cycle_b".to_string(), 1), ("cycle_a".to_string(), 2)])
         );
         assert_eq!(
             once_each(&downstream),
-            BTreeSet::from([("cycle_a".to_string(), 1)])
+            BTreeSet::from([("cycle_a".to_string(), 1), ("cycle_b".to_string(), 2)])
         );
     }
 
@@ -542,16 +542,16 @@ mod compiled {
     fn trace_cycle_visits_each_node_once() {
         let (_project, compiled) = built(&[("main.spec", specs::CYCLE)]);
 
-        // Upstream of cycle_a: cycle_b and cycle_c point at it. Downstream:
-        // cycle_a -> cycle_c, whose only edge leads back to cycle_a.
+        // Upstream of cycle_a: cycle_c points at it, cycle_b points at that.
+        // Downstream: cycle_a -> cycle_b -> cycle_c, whose edge leads back.
         let (upstream, downstream) = trace(&compiled, "cycle_a");
         assert_eq!(
             once_each(&upstream),
-            BTreeSet::from([("cycle_b".to_string(), 1), ("cycle_c".to_string(), 1)])
+            BTreeSet::from([("cycle_c".to_string(), 1), ("cycle_b".to_string(), 2)])
         );
         assert_eq!(
             once_each(&downstream),
-            BTreeSet::from([("cycle_c".to_string(), 1)])
+            BTreeSet::from([("cycle_b".to_string(), 1), ("cycle_c".to_string(), 2)])
         );
     }
 
@@ -574,19 +574,16 @@ mod compiled {
     fn trace_root_entity_has_no_upstream() {
         let (_project, compiled) = built(&[("main.spec", specs::DEEP_CHAIN)]);
 
-        // inv_deep is a root: nothing points at it, but it reaches the chain.
-        let (upstream, downstream) = trace(&compiled, "inv_deep");
-        assert_eq!(upstream, links(&[]), "inv_deep should have no upstream");
-        assert_eq!(downstream, links(&[("beh_middle", 1), ("feat_root", 2)]));
-
-        // beh_middle is in the middle: feat_root and inv_deep point at it, and
-        // it points at feat_root.
+        // beh_middle is a root: nothing points at it, but it reaches the
+        // feature and the invariant.
         let (upstream, downstream) = trace(&compiled, "beh_middle");
-        assert_eq!(
-            once_each(&upstream),
-            BTreeSet::from([("feat_root".to_string(), 1), ("inv_deep".to_string(), 1)])
-        );
-        assert_eq!(downstream, links(&[("feat_root", 1)]));
+        assert_eq!(upstream, links(&[]), "beh_middle should have no upstream");
+        assert_eq!(downstream, links(&[("feat_root", 1), ("inv_deep", 1)]));
+
+        // feat_root is a leaf: only beh_middle points at it.
+        let (upstream, downstream) = trace(&compiled, "feat_root");
+        assert_eq!(upstream, links(&[("beh_middle", 1)]));
+        assert_eq!(downstream, links(&[]));
 
         // typ_leaf has no references either way.
         assert_eq!(trace(&compiled, "typ_leaf"), (links(&[]), links(&[])));
@@ -600,8 +597,8 @@ mod compiled {
         let (_project, compiled) = built(&[(
             "main.spec",
             r#"
-behavior alpha "A" { contract "first" }
-feature beta "B" { problem "p" solution "s" behaviors [alpha] }
+feature alpha "A" { problem "p" solution "s" }
+behavior beta "B" { contract "first" features [alpha] }
 "#,
         )]);
 

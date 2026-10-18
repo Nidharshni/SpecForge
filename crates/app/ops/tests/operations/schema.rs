@@ -813,8 +813,8 @@ failure_mode fm1 "F" {
         let (_project, compiled) = built(&[(
             "main.spec",
             r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha] }
+feature alpha "A" { problem "p" solution "s" }
+behavior gamma "G" { contract "first" features [alpha] }
 "#,
         )]);
 

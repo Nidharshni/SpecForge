@@ -206,25 +206,25 @@ fn stats_entities_by_kind_counts_all_kinds() {
 fn multi_file_project_with_use_imports() {
     let (_project, compiled) = built(&[
         (
-            "behaviors.spec",
+            "features.spec",
             r#"
-behavior parse_input "Parse Input" {
-    contract "The system MUST parse all valid input"
-}
-behavior emit_output "Emit Output" {
-    contract "The system MUST emit structured output"
+feature fast_parsing "Fast Parsing" {
+    problem "Users need quick feedback"
+    solution "Incremental parsing"
 }
 "#,
         ),
         (
-            "features.spec",
+            "behaviors.spec",
             r#"
-use "behaviors"
+use "features"
 
-feature fast_parsing "Fast Parsing" {
-    problem "Users need quick feedback"
-    solution "Incremental parsing"
-    behaviors [parse_input]
+behavior parse_input "Parse Input" {
+    contract "The system MUST parse all valid input"
+    features [fast_parsing]
+}
+behavior emit_output "Emit Output" {
+    contract "The system MUST emit structured output"
 }
 "#,
         ),

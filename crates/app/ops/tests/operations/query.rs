@@ -714,7 +714,7 @@ mod compiled {
         assert!(edges.is_empty(), "edges to filtered-out nodes are pruned");
         let unfiltered = query_document(&compiled, "beh_middle", Some(3), &[]);
         assert_eq!(unfiltered["nodes"].as_array().unwrap().len(), 3);
-        assert_eq!(unfiltered["edges"].as_array().unwrap().len(), 3);
+        assert_eq!(unfiltered["edges"].as_array().unwrap().len(), 2);
 
         // Every edge endpoint must reference an existing node
         for edge in edges {
@@ -887,7 +887,7 @@ mod compiled {
         let nodes = parsed["nodes"].as_array().unwrap();
         let edges = parsed["edges"].as_array().unwrap();
         assert_eq!(nodes.len(), 3, "{parsed}");
-        assert_eq!(edges.len(), 3, "{parsed}");
+        assert_eq!(edges.len(), 2, "{parsed}");
         let beh = nodes.iter().find(|n| n["id"] == "beh_middle").unwrap();
         assert_eq!(beh["kind"], "behavior");
         assert_eq!(beh["title"], "Behavior Middle");
