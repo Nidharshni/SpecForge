@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use specforge_common::SourceSpan;
-use specforge_graph::ValueShape;
+use specforge_graph::{Rewrite, ValueShape};
 
 use crate::disk::Disk;
 
@@ -55,6 +55,10 @@ pub struct FieldRecord {
     /// for it (a check then points at the entity). Host-internal: never on
     /// the wire.
     pub value_span: Option<SourceSpan>,
+    /// Each value written in the other form than its field's declared type
+    /// gives it (ADR 0147), in source order. Host-internal: never on the
+    /// wire.
+    pub rewrites: Vec<Rewrite>,
 }
 
 /// One `verify` statement: its kind (`""` for a bare `verify "…"`) and text.
@@ -191,6 +195,7 @@ impl EntityRecord {
             items: Some(items.iter().map(|item| item.to_string()).collect()),
             shape: ValueShape::List,
             value_span: None,
+            rewrites: Vec::new(),
         });
         self
     }
@@ -206,6 +211,7 @@ impl EntityRecord {
             items: shape.is_list().then(|| vec![text.to_string()]),
             shape,
             value_span: None,
+            rewrites: Vec::new(),
         });
         self
     }

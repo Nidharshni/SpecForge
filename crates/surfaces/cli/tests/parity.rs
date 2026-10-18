@@ -117,7 +117,7 @@ const CONFIG: &str = r#"{
 "#;
 
 const MAIN_SPEC: &str =
-    "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n";
+    "behavior alpha \"Alpha\" {\n  category core\n  contract \"The system MUST work\"\n}\n";
 
 /// A third-party extension (`@sdk/greet` 0.1.0, contributing `greeting`).
 fn greet_blob() -> PathBuf {
@@ -166,7 +166,7 @@ fn project_with_unresolved_reference(proj: &TestProject) {
     project(proj);
     std::fs::write(
         root.join("spec/main.spec"),
-        "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n  invariants [missing]\n}\n",
+        "behavior alpha \"Alpha\" {\n  category core\n  contract \"The system MUST work\"\n  invariants [missing]\n}\n",
     )
     .unwrap();
 }
@@ -176,7 +176,7 @@ fn project_unformatted(proj: &TestProject) {
     project(proj);
     std::fs::write(
         root.join("spec/messy.spec"),
-        "behavior messy \"Messy\" {\ncategory \"core\"\ncontract \"The system MUST work\"\n}\n",
+        "behavior messy \"Messy\" {\ncategory core\ncontract \"The system MUST work\"\n}\n",
     )
     .unwrap();
 }
@@ -186,7 +186,7 @@ fn project_at_old_format(proj: &TestProject) {
     project(proj);
     std::fs::write(
         root.join("spec/old.spec"),
-        "// specforge-format: 0.1\nbehavior old_one \"Old\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n",
+        "// specforge-format: 0.1\nbehavior old_one \"Old\" {\n  category core\n  contract \"The system MUST work\"\n}\n",
     )
     .unwrap();
 }
@@ -197,7 +197,7 @@ fn project_with_failing_migration(proj: &TestProject) {
     project(proj);
     std::fs::write(
         root.join("spec/bad.spec"),
-        "// specforge-format: 99.0\nbehavior bad_one \"Bad\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n",
+        "// specforge-format: 99.0\nbehavior bad_one \"Bad\" {\n  category core\n  contract \"The system MUST work\"\n}\n",
     )
     .unwrap();
 }
@@ -1356,7 +1356,7 @@ fn export_project(proj: &TestProject) {
     project(proj);
     std::fs::write(
         root.join("spec/main.spec"),
-        "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n  invariants [law]\n  features [wide]\n}\n\
+        "behavior alpha \"Alpha\" {\n  category core\n  contract \"The system MUST work\"\n  invariants [law]\n  features [wide]\n}\n\
          invariant law \"Law\" {\n  guarantee \"x\"\n}\n\
          feature wide \"Wide\" {\n  problem \"p\"\n}\n",
     )

@@ -3177,6 +3177,22 @@ Owner: core
 Level: warning
 ```
 
+## W159
+
+```
+W159: Value not written in its field's form
+
+A field's declared type decides how its value is written (ADR 0147): bare for an
+enum, identifier or reference value and each item of a reference list; quoted
+for text and each item of a string list. This value is written the other way. It
+reads the same, so the graph is unchanged; run specforge format (or format the
+document in the editor) to rewrite every value in its form. A bare word on a
+kind that takes members (type, port) is left alone: it may be a member's type.
+
+Owner: core
+Level: warning
+```
+
 ## Retired codes
 
 These codes are no longer emitted, and are never reused for another meaning.

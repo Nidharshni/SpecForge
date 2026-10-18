@@ -120,7 +120,7 @@ fn an_enum_value_suggests_the_closest_declared_value() {
 
 #[specforge_test(
     behavior = "check_field_value_types",
-    verify = "Check Field Value Types: declared field types hold — registries_populated_fired, single_values_listed, mismatches_diagnosed, undeclared_untouched"
+    verify = "Check Field Value Types: declared field types hold — registries_populated_fired, off_form_warned, single_values_listed, mismatches_diagnosed, undeclared_untouched"
 )]
 fn check_field_value_types_contract() {
     let (graph, diags) = build_and_check(

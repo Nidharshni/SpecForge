@@ -93,6 +93,11 @@ pub(super) fn record(
                 items: field_items(&entry.value),
                 shape: ValueShape::of(&entry.value),
                 value_span: entry.value_span.clone(),
+                rewrites: registries.field_forms().rewrites(
+                    node.kind.raw.as_str(),
+                    entry,
+                    &node.source_span,
+                ),
             })
             .collect(),
         obligations: node

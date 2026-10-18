@@ -46,7 +46,7 @@ fn project(extensions: &[&str], registries: Value) -> TestProject {
         .enabling(extensions)
         .file(
             "spec/main.spec",
-            "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n",
+            "behavior alpha \"Alpha\" {\n  category core\n  contract \"The system MUST work\"\n}\n",
         )
 }
 

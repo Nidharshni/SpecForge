@@ -307,7 +307,8 @@ behavior check_entities_in_one_order "Check the Entities in One Order" {
     unknown kinds (E024), reserved
     entity IDs (E013), the identifier length contract (E014), unknown
     fields (W020), verify statements on a kind that accepts none (W158),
-    field values that cannot be their declared type (E061), then the
+    field values that cannot be their declared type (E061), values
+    written in the other form than their field's (W159), then the
     rule set: the extensions' rules by code, then the host's E006 rules
     and its E016 rules, which report a path a file-reference field names
     that does not exist (E016 is the host's file_exists rule for each
@@ -333,7 +334,7 @@ behavior check_entities_in_one_order "Check the Entities in One Order" {
     The checks read the file system only through the disk they are
     given; what they read there is the session's check inputs.
   """
-  verify unit "the structural checks run in one order: W012, E024, E013, E014, W020, W158, E061, then the rule set, the host's E006 and E016 rules last"
+  verify unit "the structural checks run in one order: W012, E024, E013, E014, W020, W158, E061, W159, then the rule set, the host's E006 and E016 rules last"
   verify unit "with no entity kind registered, E024, E013, E014, W020, W158 and E061 do not run, and W012 and the rules still do"
   verify unit "extensions that load but declare no entity kind report one W151 naming the unchecked entities"
   verify unit "an entity ID equal to a structural keyword or a registered kind's keyword is E013"
@@ -411,6 +412,7 @@ behavior check_field_value_types "Check Field Value Types" {
     registries_populated_fired "registries_populated event has fired, confirming the FieldRegistry holds each field's declared type"
   }
   ensures {
+    off_form_warned      "W159 warning for every value written in the other form than its field's declared type gives it, at the value, unless E061 refuses the field"
     single_values_listed "A string, bare word, integer, boolean or date on a string_list or reference_list field is stored as a one-item list, and a mixed list as a list of its items' text"
     mismatches_diagnosed "E061 error for every value whose shape the field's declared type never takes, or whose value it refuses; a value it admits is one the published schema admits"
     undeclared_untouched "Unknown fields keep their parsed value and produce no E061"
@@ -441,6 +443,16 @@ behavior check_field_value_types "Check Field Value Types" {
     check MUST run wherever the registry checks run: check, watch and the
     LSP. It reads each field's value shape and value span from the entity
     snapshot, never a graph node.
+
+    A value written in the other form than its field's declared type gives
+    it MUST produce a W159 warning at the value, one per value, naming the
+    field and the form (ADR 0147): bare for an enum, identifier or reference
+    value and each item of a reference list, quoted for text and each item of
+    a string list. The check runs right after E061, only on a value E061
+    admits, and agrees with `specforge format`: a value is W159 exactly when
+    format rewrites it (both ask FieldForms::rewrite). A bare word on a kind
+    that takes members is not W159: it may be a member's type; nor is a
+    quoted value that is not a word, or true or false, on a bare field.
   """
   verify unit "a single string on a string_list field becomes a one-item list"
   verify unit "a single reference on a reference_list field becomes a one-item list"
@@ -453,5 +465,8 @@ behavior check_field_value_types "Check Field Value Types" {
   verify unit "a value the check admits is written as the published schema admits it"
   verify unit "a value outside a builtin vocabulary is E061"
   verify unit "a value that is not one word on an identifier field is E061"
-  verify contract "Check Field Value Types: declared field types hold — registries_populated_fired, single_values_listed, mismatches_diagnosed, undeclared_untouched"
+  verify unit "a quoted word on a word field and a bare word on a text field are W159"
+  verify unit "a bare word on a kind that takes members is not W159"
+  verify unit "a value E061 refuses is not W159"
+  verify contract "Check Field Value Types: declared field types hold — registries_populated_fired, off_form_warned, single_values_listed, mismatches_diagnosed, undeclared_untouched"
 }

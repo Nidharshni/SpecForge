@@ -86,7 +86,7 @@ const ORDER: [&str; 10] = [
 ];
 
 /// E022 first, the linker's, reported with the graph build's diagnostics (ADR 0117); then every
-/// structural check, then the rules: W012, E024, E013, E014, W020, W158, E061, then the extension's
+/// structural check, then the rules: W012, E024, E013, E014, W020, W158, E061, W159, then the extension's
 /// rule, then E016, a host rule after the extension's (ADR 0118).
 #[specforge_test(
     behavior = "check_entities_in_one_order",

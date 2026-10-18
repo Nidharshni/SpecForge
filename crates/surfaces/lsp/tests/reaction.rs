@@ -283,7 +283,7 @@ fn opened_alone(file: &str, text: &str) -> Vec<Diagnostic> {
 fn a_clean_document_publishes_no_diagnostics() {
     let diagnostics = opened_alone(
         "clean.spec",
-        "behavior foo \"Foo\" {\n  contract \"Does something\"\n  category \"core\"\n  features [some_feature]\n}\nfeature some_feature \"SF\" {\n  problem \"Needs solving\"\n}\n",
+        "behavior foo \"Foo\" {\n  contract \"Does something\"\n  category core\n  features [some_feature]\n}\nfeature some_feature \"SF\" {\n  problem \"Needs solving\"\n}\n",
     );
     assert!(diagnostics.is_empty(), "{diagnostics:?}");
 }

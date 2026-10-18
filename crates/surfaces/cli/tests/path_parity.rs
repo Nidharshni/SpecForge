@@ -23,7 +23,7 @@ fn project() -> TestProject {
     .unwrap();
     fs::write(
         root.join("spec/messy.spec"),
-        "behavior messy \"Messy\" {\ncategory \"core\"\ncontract \"The system MUST work\"\n}\n",
+        "behavior messy \"Messy\" {\ncategory core\ncontract \"The system MUST work\"\n}\n",
     )
     .unwrap();
     fs::write(root.join("Cargo.toml"), "").unwrap();

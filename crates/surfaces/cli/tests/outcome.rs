@@ -105,7 +105,7 @@ fn refusals_after() {
 }
 
 const MESSY: &str =
-    "behavior messy \"Messy\" {\ncategory \"core\"\ncontract \"The system MUST work\"\n}\n";
+    "behavior messy \"Messy\" {\ncategory core\ncontract \"The system MUST work\"\n}\n";
 /// A region the formatter cannot parse and keeps as written (W142).
 const REGION: &str = "behavior broken \"Broken\" {\n  @@@ ]]\n}\n";
 
@@ -133,13 +133,13 @@ fn verdicts() {
 
     let old = rv1(None);
     old.write("spec/old.spec",
-        "// specforge-format: 0.1\nbehavior old_one \"Old\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n",
+        "// specforge-format: 0.1\nbehavior old_one \"Old\" {\n  category core\n  contract \"The system MUST work\"\n}\n",
     );
     let migrate_dry_run = exit(&old, &["migrate", "--dry-run"]);
 
     let dangling = rv1(None);
     dangling.write("spec/dangling.spec",
-        "behavior dangling \"D\" {\n  category \"core\"\n  contract \"The system MUST work\"\n  invariants [missing]\n}\n",
+        "behavior dangling \"D\" {\n  category core\n  contract \"The system MUST work\"\n  invariants [missing]\n}\n",
     );
     let check_fails = exit(&dangling, &["check"]);
 
