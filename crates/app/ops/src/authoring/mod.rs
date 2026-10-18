@@ -3,6 +3,7 @@
 //! navigation finds, ADR 0016) and migrate. The group uses the base, the read views and the
 //! extension group.
 
+pub mod edit;
 pub mod format;
 pub mod init;
 pub mod migrate;
