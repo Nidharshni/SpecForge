@@ -13,15 +13,15 @@ fn build_in_memory_graph_contract() {
     // resolution) plus one reference to an entity that does not exist.
     let a = parse(
         r#"
-behavior alpha "A" { contract "first" }
-behavior beta "B" { contract "second" }
+feature alpha "A" { problem "first" }
+feature beta "B" { problem "second" }
 "#,
         "a.spec",
     );
     let b = parse(
         r#"
-feature gamma "G" { behaviors [alpha, beta, ghost] }
-feature delta "D" { behaviors [alpha] }
+behavior gamma "G" { features [alpha, beta, ghost] }
+behavior delta "D" { features [alpha] }
 "#,
         "b.spec",
     );
@@ -42,7 +42,7 @@ feature delta "D" { behaviors [alpha] }
         Some(DiagnosticData::UnresolvedReference {
             target: "ghost".into(),
             entity: "gamma".into(),
-            field: "behaviors".into(),
+            field: "features".into(),
             did_you_mean: None,
         })
     );
@@ -66,9 +66,9 @@ feature delta "D" { behaviors [alpha] }
         .collect();
     edges.sort();
     let expected: Vec<(String, String, String)> = [
-        ("delta", "alpha", "behaviors"),
-        ("gamma", "alpha", "behaviors"),
-        ("gamma", "beta", "behaviors"),
+        ("delta", "alpha", "features"),
+        ("gamma", "alpha", "features"),
+        ("gamma", "beta", "features"),
     ]
     .iter()
     .map(|(s, t, l)| (s.to_string(), t.to_string(), l.to_string()))
@@ -102,8 +102,8 @@ fn maintain_mutable_graph_contract() {
     // Ensures: add/remove mutations reflect correctly, edges cleaned on node removal
     let mut build = GraphBuild::of(
         [
-            parse("behavior a \"a\" {\n  contract \"c\"\n}\n", "a.spec"),
-            parse("feature b \"b\" {\n  behaviors [a]\n}\n", "b.spec"),
+            parse("feature a \"a\" {\n  problem \"c\"\n}\n", "a.spec"),
+            parse("behavior b \"b\" {\n  features [a]\n}\n", "b.spec"),
         ],
         GraphConfig::default(),
     );
@@ -202,8 +202,8 @@ fn provide_did_you_mean_suggestions_contract() {
     // Requires: unresolved reference with entity IDs available
     // Ensures: close match → suggestion, distant match → no suggestion
     let source_close = r#"
-behavior alpha_parser "A" { contract "first" }
-feature gamma "G" { behaviors [alpha_parsr] }
+feature alpha_parser "A" { problem "first" }
+behavior gamma "G" { features [alpha_parsr] }
 "#;
     let spec_file = parse(source_close, "test.spec");
     let config = GraphConfig::default();
@@ -226,8 +226,8 @@ feature gamma "G" { behaviors [alpha_parsr] }
     );
 
     let source_far = r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [zzzzz_completely_different] }
+feature alpha "A" { problem "first" }
+behavior gamma "G" { features [zzzzz_completely_different] }
 "#;
     let spec_file = parse(source_far, "test.spec");
     let (_, diagnostics) = build_graph_with_config(&[spec_file], &config);

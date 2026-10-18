@@ -227,9 +227,9 @@ fn build_graph_one_node_per_entity() {
     use specforge_parser::parse;
 
     let source = r#"
-behavior alpha "A" { contract "first" }
-behavior beta "B" { contract "second" }
-feature gamma "G" { behaviors [alpha, beta] }
+feature alpha "A" { problem "first" }
+feature beta "B" { problem "second" }
+behavior gamma "G" { features [alpha, beta] }
 "#;
     let spec_file = parse(source, "main.spec");
     let (graph, diagnostics) = build_graph(&[spec_file]);
@@ -256,9 +256,9 @@ fn build_graph_one_edge_per_resolved_reference() {
     use specforge_parser::parse;
 
     let source = r#"
-behavior alpha "A" { contract "first" }
-behavior beta "B" { contract "second" }
-feature gamma "G" { behaviors [alpha, beta] }
+feature alpha "A" { problem "first" }
+feature beta "B" { problem "second" }
+behavior gamma "G" { features [alpha, beta] }
 "#;
     let spec_file = parse(source, "main.spec");
     let (graph, _) = build_graph(&[spec_file]);
@@ -268,7 +268,7 @@ feature gamma "G" { behaviors [alpha, beta] }
     assert_eq!(edges_from_gamma.len(), 2);
     assert!(edges_from_gamma.iter().any(|e| e.target == "alpha"));
     assert!(edges_from_gamma.iter().any(|e| e.target == "beta"));
-    assert!(edges_from_gamma.iter().all(|e| e.label == "behaviors"));
+    assert!(edges_from_gamma.iter().all(|e| e.label == "features"));
 }
 
 #[specforge_test(
@@ -280,8 +280,8 @@ fn build_graph_unresolved_ref_produces_e003() {
     use specforge_parser::parse;
 
     let source = r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha, nonexistent] }
+feature alpha "A" { problem "first" }
+behavior gamma "G" { features [alpha, nonexistent] }
 "#;
     let spec_file = parse(source, "main.spec");
     let (graph, diagnostics) = build_graph(&[spec_file]);
@@ -420,8 +420,8 @@ fn build_graph_did_you_mean_for_close_match() {
     use specforge_parser::parse;
 
     let source = r#"
-behavior alpha_parser "A" { contract "first" }
-feature gamma "G" { behaviors [alpha_parsr] }
+feature alpha_parser "A" { problem "first" }
+behavior gamma "G" { features [alpha_parsr] }
 "#;
     let spec_file = parse(source, "main.spec");
     let (_, diagnostics) = build_graph(&[spec_file]);
@@ -447,8 +447,8 @@ fn build_graph_no_suggestion_for_distant_match() {
     use specforge_parser::parse;
 
     let source = r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [zzzzz_totally_unrelated] }
+feature alpha "A" { problem "first" }
+behavior gamma "G" { features [zzzzz_totally_unrelated] }
 "#;
     let spec_file = parse(source, "main.spec");
     let (_, diagnostics) = build_graph(&[spec_file]);
@@ -471,8 +471,8 @@ fn build_graph_suggestion_appears_in_help_text() {
     use specforge_parser::parse;
 
     let source = r#"
-behavior alpha_parser "A" { contract "first" }
-feature gamma "G" { behaviors [alpha_parsr] }
+feature alpha_parser "A" { problem "first" }
+behavior gamma "G" { features [alpha_parsr] }
 "#;
     let spec_file = parse(source, "main.spec");
     let (_, diagnostics) = build_graph(&[spec_file]);
@@ -501,10 +501,10 @@ fn edge_labels_match_field_names() {
     use specforge_parser::parse;
 
     let source = r#"
-behavior alpha "A" { contract "first" }
+feature alpha "A" { problem "first" }
 invariant inv1 "I1" { guarantee "always" }
-feature gamma "G" {
-  behaviors [alpha]
+behavior gamma "G" {
+  features [alpha]
   invariants [inv1]
 }
 "#;
@@ -521,9 +521,9 @@ feature gamma "G" {
     let edges = graph.edges_from("gamma");
     assert_eq!(edges.len(), 2, "two edges from gamma");
 
-    let behavior_edge = edges.iter().find(|e| e.target == "alpha").unwrap();
+    let feature_edge = edges.iter().find(|e| e.target == "alpha").unwrap();
     assert_eq!(
-        behavior_edge.label, "behaviors",
+        feature_edge.label, "features",
         "edge label matches field name"
     );
 
@@ -658,8 +658,8 @@ fn installed_keyword_with_missing_entity_emits_e003() {
 
     // "behavior" is installed, but "nonexistent" entity doesn't exist
     let source = r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha, nonexistent] }
+feature alpha "A" { problem "first" }
+behavior gamma "G" { features [alpha, nonexistent] }
 "#;
     let spec_file = parse(source, "main.spec");
     let config = GraphConfig::default();
@@ -681,9 +681,9 @@ fn installed_keyword_cross_file_missing_entity_emits_e003() {
     use specforge_parser::parse;
 
     // "behavior" is installed, file is imported, but referenced entity doesn't exist there
-    let types = parse(r#"behavior alpha "A" { contract "first" }"#, "types.spec");
+    let types = parse(r#"feature alpha "A" { problem "first" }"#, "types.spec");
     let main = parse(
-        r#"feature gamma "G" { behaviors [alpha, missing_beta] }"#,
+        r#"behavior gamma "G" { features [alpha, missing_beta] }"#,
         "main.spec",
     );
     let config = GraphConfig::default();
@@ -868,10 +868,10 @@ fn end_to_end_resolve_and_build() {
     use specforge_graph::build_graph;
 
     let dir = project_dir(&[
-        ("types.spec", r#"behavior alpha "A" { contract "first" }"#),
+        ("types.spec", r#"feature alpha "A" { problem "first" }"#),
         (
             "main.spec",
-            "use \"types\"\nfeature gamma \"G\" {\n  behaviors [alpha]\n}",
+            "use \"types\"\nbehavior gamma \"G\" {\n  features [alpha]\n}",
         ),
     ]);
 
@@ -899,8 +899,8 @@ fn end_to_end_with_errors() {
     let dir = project_dir(&[(
         "main.spec",
         r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha, nonexistent] }
+feature alpha "A" { problem "first" }
+behavior gamma "G" { features [alpha, nonexistent] }
 "#,
     )]);
 
@@ -1103,9 +1103,9 @@ fn build_graph_no_w061_for_acyclic_refs() {
     use specforge_parser::parse;
 
     let source = r#"
-behavior a "A" { contract "c" }
-behavior b "B" { contract "c" depends_on [a] }
-feature f "F" { behaviors [a, b] }
+feature f "F" { problem "c" }
+behavior a "A" { contract "c" features [f] }
+behavior b "B" { contract "c" features [f] depends_on [a] }
 "#;
     let spec_file = parse(source, "main.spec");
     let (_, diagnostics) = build_graph(&[spec_file]);
@@ -1540,11 +1540,11 @@ fn graph_with_bidirectional_pairs_stores_pairs() {
 fn every_edge_the_build_adds_joins_two_entities() {
     let (graph, diagnostics) = specforge_graph::build_graph(&[
         parse(
-            "behavior a \"A\" {\n  contract \"c\"\n}\nfeature f \"F\" {\n  behaviors [a, ghost]\n}\n",
+            "feature a \"A\" {\n  problem \"c\"\n}\nbehavior f \"F\" {\n  features [a, ghost]\n}\n",
             "main.spec",
         ),
         parse(
-            "feature g \"G\" {\n  behaviors [a, missing]\n}\n",
+            "behavior g \"G\" {\n  features [a, missing]\n}\n",
             "other.spec",
         ),
     ]);

@@ -666,7 +666,7 @@ fn unresolved_reference_at_39() -> (
     std::collections::HashMap<String, String>,
     &'static str,
 ) {
-    let source = "behavior alpha \"A\" { contract \"first\" }\nfeature gamma \"G\" { behaviors [alpha, nonexistent] }\n";
+    let source = "feature alpha \"A\" { problem \"first\" }\nbehavior gamma \"G\" { features [alpha, nonexistent] }\n";
     let diagnostic = Diagnostic::new(
         specforge_common::codes::E003,
         "unresolved reference 'nonexistent'",
@@ -708,13 +708,13 @@ fn diagnostic_shows_source_context() {
     let lines: Vec<&str> = output.lines().collect();
     let row = lines
         .iter()
-        .position(|l| l.ends_with("feature gamma \"G\" { behaviors [alpha, nonexistent] }"))
+        .position(|l| l.ends_with("behavior gamma \"G\" { features [alpha, nonexistent] }"))
         .unwrap_or_else(|| panic!("source line missing:\n{output}"));
     // Character columns: the margin's box-drawing characters are multi-byte.
-    let code_start = lines[row][..lines[row].find("feature").unwrap()]
+    let code_start = lines[row][..lines[row].find("behavior").unwrap()]
         .chars()
         .count();
-    let token_start = code_start + "feature gamma \"G\" { behaviors [alpha, ".len();
+    let token_start = code_start + "behavior gamma \"G\" { features [alpha, ".len();
     let underline: Vec<(usize, char)> = lines[row + 1]
         .chars()
         .enumerate()
@@ -895,7 +895,7 @@ fn diagnostic_format_contract_consistency() {
         end_col: 31,
     });
 
-    let source = "line 1\nfeature gamma \"G\" { behaviors [nonexistent] }\nline 3\n";
+    let source = "line 1\nbehavior gamma \"G\" { features [nonexistent] }\nline 3\n";
     let sources: HashMap<String, String> = vec![("test.spec".to_string(), source.to_string())]
         .into_iter()
         .collect();
@@ -909,7 +909,7 @@ fn diagnostic_format_contract_consistency() {
     // context_snippet_present: the offending line, and only it.
     let row = lines
         .iter()
-        .position(|l| l.ends_with(" 2 │ feature gamma \"G\" { behaviors [nonexistent] }"))
+        .position(|l| l.ends_with(" 2 │ behavior gamma \"G\" { features [nonexistent] }"))
         .unwrap_or_else(|| panic!("{output}"));
     assert!(
         !output.contains("line 1") && !output.contains("line 3"),
@@ -917,7 +917,7 @@ fn diagnostic_format_contract_consistency() {
     );
 
     // caret_marker_present: the row below marks columns 20 through 30.
-    let code_start = lines[row][..lines[row].find("feature").unwrap()]
+    let code_start = lines[row][..lines[row].find("behavior").unwrap()]
         .chars()
         .count();
     let marked: Vec<usize> = lines[row + 1]
