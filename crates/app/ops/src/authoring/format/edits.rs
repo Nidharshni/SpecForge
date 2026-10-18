@@ -362,7 +362,13 @@ pub(super) mod tests {
         let mut checked = 0;
         for input in corpus_inputs() {
             for editor in editors {
-                let doc = document(Place::Detached, &input.text, None, editor);
+                let doc = document(
+                    Place::Detached,
+                    &input.text,
+                    None,
+                    editor,
+                    &specforge_graph::FieldForms::default(),
+                );
                 let edits = doc.edits();
                 checked += 1;
                 let shape = well_formed(&input.text, &edits);
@@ -404,7 +410,13 @@ pub(super) mod tests {
                     first: line,
                     last: line,
                 };
-                let doc = document(Place::Detached, &input.text, Some(lines), None);
+                let doc = document(
+                    Place::Detached,
+                    &input.text,
+                    Some(lines),
+                    None,
+                    &specforge_graph::FieldForms::default(),
+                );
                 let edits = doc.edits();
                 checked += 1;
                 let shape = well_formed(&input.text, &edits);

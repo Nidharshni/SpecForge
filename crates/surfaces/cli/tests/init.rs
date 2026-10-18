@@ -1023,11 +1023,8 @@ fn declared_starter(extension: &str) -> Option<String> {
             let template = template
                 .replace("{project}", "demo")
                 .replace("{version}", "0.1.0");
-            specforge_formatter::format_source(
-                &template,
-                &specforge_formatter::FormatConfig::default(),
-            )
-            .formatted
+            let (config, forms) = Default::default();
+            specforge_formatter::format_source(&template, &config, &forms).formatted
         })
 }
 

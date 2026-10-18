@@ -59,6 +59,7 @@ behavior format_spec_files "Format Spec Files" {
     exit 1; the files are still formatted.
   """
   verify unit "files matching the canonical format are not rewritten"
+  verify unit "a value is written in its field's form, read from the project's declarations"
   verify unit "changed files are printed to stdout"
   verify unit "summary count reflects actual changes"
   verify integration "formatting all files in spec/ directory succeeds"
@@ -223,6 +224,7 @@ behavior format_from_stdin "Format from Standard Input" {
     unformatted, the formatted text MUST still be printed and the command
     MUST exit with code 1. Its output is the formatted text, so --stdin
     MUST refuse --format json (invalid_input, the error document on stdout).
+    Values are written in the forms of the project's declarations.
   """
   verify unit "stdin content is formatted and written to stdout"
   verify unit "--stdin refuses --format json with the error document"
@@ -315,8 +317,11 @@ behavior apply_format_rules "Apply Format Rules" {
     comments and imports. The formatted text ends every line with LF
     (CRLF line endings become LF, inside string literals too) and ends with
     exactly one newline; no blank line opens or closes it, and a blank text
-    formats to the empty text. String literals, triple-quoted ones included, are
-    kept byte-for-byte: their text is a field's value. Statements keep their source
+    formats to the empty text. A value is written in its field's form
+    (ADR 0147): a quoted word on a field whose declared type writes it bare
+    loses its quotes, and a bare word on a text field gains them, read from
+    the project's declarations; nothing else in a string literal changes, and
+    a triple-quoted one is kept byte-for-byte. Statements keep their source
     order; only runs of imports are sorted. An expression block's
     expressions are indented one level inside it, its closing brace at its
     field's level, whatever their indentation. Field keys align to the longest
@@ -343,6 +348,8 @@ behavior apply_format_rules "Apply Format Rules" {
   verify unit "blank line rules enforce exactly one between blocks"
   verify unit "comment rules normalize spacing around inline comments"
   verify unit "multiline string literals are kept byte-for-byte"
+  verify unit "a value is written in its field's form, read from the project's declarations"
+  verify unit "without the project's declarations no value is rewritten"
   verify unit "an expression block's lines are indented one level inside it, whatever their indentation"
   verify property "two files differing only in whitespace produce identical output after formatting"
   verify unit "the formatted text has LF line endings and exactly one final newline"
@@ -401,7 +408,7 @@ behavior lsp_format_document "LSP Format Document" {
     it MUST format the full document using the formatting engine and
     return a list of TextEdit operations. Applied to the document, the
     edits MUST give exactly the text specforge format writes for the
-    same file, byte for byte, in one pass: an edit may span line breaks,
+    same file, byte for byte, with the field forms of the served project, in one pass: an edit may span line breaks,
     so blank lines are removed, a missing final newline is added and CRLF
     line endings become LF. An edit replaces only the text formatting
     changes, so text the formatter keeps, and an editor's cursor in it,

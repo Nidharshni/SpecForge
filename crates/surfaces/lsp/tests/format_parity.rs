@@ -31,6 +31,7 @@ async fn the_cli_and_the_editor_agree_on_a_nested_project() {
                 &specforge_ops::Containment::unbounded(),
                 specforge_ops::asking::Asking::Nobody,
             ),
+            runtime: None,
         })
         .unwrap();
     assert_eq!((outcome.checked, outcome.changes.len()), (1, 0));
@@ -61,6 +62,7 @@ async fn lsp_format_matches_cli_format() {
                 &specforge_ops::Containment::unbounded(),
                 specforge_ops::asking::Asking::Nobody,
             ),
+            runtime: None,
         })
         .unwrap();
     assert_eq!(edited, outcome.changes[0].after);
@@ -120,6 +122,7 @@ async fn editor_formatting_reaches_the_cli_text_in_one_pass() {
             &specforge_ops::Containment::unbounded(),
             specforge_ops::asking::Asking::Nobody,
         ),
+        runtime: None,
     })
     .unwrap();
     let (mut session, _) = Session::start(Some(&root)).await;

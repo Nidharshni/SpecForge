@@ -86,7 +86,8 @@ invariant formatting_semantic_preservation "Formatting Semantic Preservation" {
     Formatting MUST NOT alter the semantic content of a .spec file. Formally:
     parse_to_graph(format(spec)) MUST produce an entity graph identical to
     parse_to_graph(spec) — same nodes, same edges, same field values. Only
-    whitespace and comment positioning MAY change. Any formatting operation
+    whitespace, comment positioning and a value's quotes where its declared
+    type writes it the other way (ADR 0147) MAY change. Any formatting operation
     that alters the entity graph is a P0 bug.
   """
   risk      high

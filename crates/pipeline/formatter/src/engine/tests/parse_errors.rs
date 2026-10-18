@@ -8,7 +8,11 @@ use super::*;
 )]
 fn test_file_with_syntax_error_partially_formatted() {
     let input = "behavior foo \"Foo\" {\n  contract \"good\"\n}\n\nthis is invalid syntax { broken\n\nbehavior bar \"Bar\" {\n  contract \"also good\"\n}\n";
-    let result = format_source(input, &FormatConfig::default());
+    let result = format_source(
+        input,
+        &FormatConfig::default(),
+        &specforge_graph::FieldForms::default(),
+    );
     // Should not crash
     assert!(!result.formatted.is_empty());
     // Good parts should still be formatted
@@ -22,7 +26,11 @@ fn test_file_with_syntax_error_partially_formatted() {
 )]
 fn test_error_regions_preserved_verbatim() {
     let input = "behavior foo \"Foo\" {\n  contract \"good\"\n}\n\n{{{broken\n\nbehavior bar \"Bar\" {\n  contract \"also good\"\n}\n";
-    let result = format_source(input, &FormatConfig::default());
+    let result = format_source(
+        input,
+        &FormatConfig::default(),
+        &specforge_graph::FieldForms::default(),
+    );
     // The error region should be in the output
     assert!(!result.formatted.is_empty());
 }
@@ -33,7 +41,11 @@ fn test_error_regions_preserved_verbatim() {
 )]
 fn test_well_formed_blocks_with_errors_are_formatted() {
     let input = "behavior foo \"Foo\" {\n      contract \"good\"\n}\n\n broken {{\n\nbehavior bar \"Bar\" {\n    contract \"also good\"\n}\n";
-    let result = format_source(input, &FormatConfig::default());
+    let result = format_source(
+        input,
+        &FormatConfig::default(),
+        &specforge_graph::FieldForms::default(),
+    );
     // Well-formed blocks should be properly indented
     assert!(
         result.formatted.contains("  contract \"good\"")
@@ -47,7 +59,11 @@ fn test_well_formed_blocks_with_errors_are_formatted() {
 )]
 fn test_parse_error_diagnostics() {
     let input = "behavior foo \"Foo\" {\n  contract \"good\"\n}\n{{{broken\n";
-    let result = format_source(input, &FormatConfig::default());
+    let result = format_source(
+        input,
+        &FormatConfig::default(),
+        &specforge_graph::FieldForms::default(),
+    );
     let w142: Vec<_> = result
         .diagnostics
         .iter()
@@ -65,7 +81,11 @@ fn test_parse_error_diagnostics() {
 
     // A region over two lines ends at its last line's end.
     let input = "behavior foo \"Foo\" {\n  contract \"good\"\n}\n\nbehavior bar \"Bar\" {\n  contract \"x\" ]]\n  more ((\n";
-    let result = format_source(input, &FormatConfig::default());
+    let result = format_source(
+        input,
+        &FormatConfig::default(),
+        &specforge_graph::FieldForms::default(),
+    );
     let span = result
         .diagnostics
         .iter()
@@ -86,7 +106,11 @@ fn test_parse_error_diagnostics() {
 )]
 fn test_error_region_starts_at_first_unparseable_token() {
     let input = "behavior foo \"Foo\" {\n  contract \"good\"\n}\n{{{broken stuff here\n";
-    let result = format_source(input, &FormatConfig::default());
+    let result = format_source(
+        input,
+        &FormatConfig::default(),
+        &specforge_graph::FieldForms::default(),
+    );
     // Error region should contain the broken content
     assert!(
         result.formatted.contains("{{{broken") || result.formatted.contains("broken"),
@@ -103,7 +127,11 @@ fn test_error_region_starts_at_first_unparseable_token() {
 )]
 fn test_error_region_ends_before_next_parseable_statement() {
     let input = "behavior foo \"Foo\" {\n  contract \"good\"\n}\n\n{{{ broken\n\nbehavior bar \"Bar\" {\n  contract \"also good\"\n}\n";
-    let result = format_source(input, &FormatConfig::default());
+    let result = format_source(
+        input,
+        &FormatConfig::default(),
+        &specforge_graph::FieldForms::default(),
+    );
     // The bar block after the error should still be present and formatted
     assert!(
         result.formatted.contains("behavior bar \"Bar\""),
@@ -118,7 +146,11 @@ fn test_error_region_ends_before_next_parseable_statement() {
 )]
 fn test_whitespace_within_error_regions_preserved_byte_for_byte() {
     let input = "behavior foo \"Foo\" {\n  contract \"good\"\n}\n\n  {{{  broken   stuff  \n\nbehavior bar \"Bar\" {\n  contract \"also good\"\n}\n";
-    let result = format_source(input, &FormatConfig::default());
+    let result = format_source(
+        input,
+        &FormatConfig::default(),
+        &specforge_graph::FieldForms::default(),
+    );
     // The error region whitespace should be preserved
     // The exact error text should appear in the output
     assert!(
@@ -140,7 +172,7 @@ fn test_format_with_parse_errors_contract() {
     // requires: cst_with_errors — source has parse errors
     let source = "behavior foo \"Foo\" {\n      contract \"good\"\n}\n\n{{{ broken stuff\n\nbehavior bar \"Bar\" {\n    contract \"also good\"\n}\n";
 
-    let result = format_source(source, &config);
+    let result = format_source(source, &config, &specforge_graph::FieldForms::default());
 
     // ensures: no_crash — we got here without panicking
     assert!(
@@ -195,7 +227,11 @@ fn test_parse_errors_trigger_partial_formatting() {
     let config = FormatConfig::default();
     let source_with_error = "behavior foo \"Foo\" {\n  contract \"ok\"\n}\n\n{{{ invalid syntax\n\nbehavior bar \"Bar\" {\n      contract   \"fix\"\n}\n";
 
-    let result = format_source(source_with_error, &config);
+    let result = format_source(
+        source_with_error,
+        &config,
+        &specforge_graph::FieldForms::default(),
+    );
     // Should not crash
     assert!(
         !result.formatted.is_empty(),

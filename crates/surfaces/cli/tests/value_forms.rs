@@ -1,5 +1,4 @@
-//! A value is written in its field's one form (ADR 0147). Today `check` and
-//! `format` take either form; the tests still ignored are flipped by the formatter ticket.
+//! A value is written in its field's one form (ADR 0147): `check` warns W159 and `format` rewrites it.
 
 use crate::support::{Cli, TestProject};
 
@@ -36,8 +35,10 @@ fn check_reports_a_tag_written_as_text() {
     );
 }
 
-#[test]
-#[ignore = "flipped by T6"]
+#[specforge_test_macros::test(
+    behavior = "format_spec_files",
+    verify = "a value is written in its field's form, read from the project's declarations"
+)]
 fn format_writes_a_tag_bare() {
     let dir = project("spec/cart.spec", CART);
     let cli = Cli::on(&dir);
@@ -52,8 +53,10 @@ fn format_writes_a_tag_bare() {
     assert_eq!(before, after, "formatting the quotes keeps the graph");
 }
 
-#[test]
-#[ignore = "flipped by T6"]
+#[specforge_test_macros::test(
+    behavior = "format_spec_files",
+    verify = "a value is written in its field's form, read from the project's declarations"
+)]
 fn format_quotes_text_written_bare() {
     let dir = project(
         "spec/events.spec",

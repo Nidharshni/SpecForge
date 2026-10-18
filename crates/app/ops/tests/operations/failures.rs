@@ -301,6 +301,7 @@ fn format_verdict_inputs() {
         paths: &[],
         mode: Mode::Check,
         caller: specforge_ops::testing::caller(),
+        runtime: None,
     })
     .unwrap();
     assert!(checked.succeeded() && checked.complete() && !checked.clean());
@@ -312,6 +313,7 @@ fn format_verdict_inputs() {
         paths: &[],
         mode: Mode::Write,
         caller: specforge_ops::testing::caller(),
+        runtime: None,
     })
     .unwrap();
     assert!(written.succeeded() && written.complete() && !written.clean());

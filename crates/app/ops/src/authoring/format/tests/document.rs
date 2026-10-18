@@ -72,7 +72,13 @@ fn a_nested_projects_file_uses_its_own_projects_config() {
     let outcome = check_paths(dir.path(), &["inner"]);
     assert_eq!((outcome.checked, outcome.changes.len()), (1, 0));
     // As the editor formats it.
-    let doc = document(Place::File(&file), two, None, None);
+    let doc = document(
+        Place::File(&file),
+        two,
+        None,
+        None,
+        &specforge_graph::FieldForms::default(),
+    );
     assert_eq!(doc.config_source, ConfigSource::Defaults);
     assert!(!doc.changed());
 }
@@ -101,7 +107,13 @@ fn kept_regions<'d>(doc: &'d FormattedDocument) -> Vec<&'d Diagnostic> {
     verify = "formatting request returns TextEdit list"
 )]
 fn a_misformatted_document_gets_edits() {
-    let doc = document(Place::Detached, MISINDENTED, None, None);
+    let doc = document(
+        Place::Detached,
+        MISINDENTED,
+        None,
+        None,
+        &specforge_graph::FieldForms::default(),
+    );
 
     assert!(doc.changed());
     // Only the four extra spaces of line 1, which starts at byte 21.
@@ -156,7 +168,13 @@ fn edits_rebuild_the_formatted_text() {
         ),
     ];
     for (text, edits) in expected {
-        let doc = document(Place::Detached, text, None, None);
+        let doc = document(
+            Place::Detached,
+            text,
+            None,
+            None,
+            &specforge_graph::FieldForms::default(),
+        );
         assert_eq!(doc.edits(), edits, "{text:?}");
         assert_eq!(
             edits::tests::apply(text, &doc.edits()),
@@ -167,12 +185,25 @@ fn edits_rebuild_the_formatted_text() {
     // Two blank lines between blocks: which of the two goes is the diff's choice; the text is not.
     let between =
         "behavior a \"A\" {\n  contract \"x\"\n}\n\n\nbehavior b \"B\" {\n  contract \"y\"\n}\n";
-    let doc = document(Place::Detached, between, None, None);
+    let doc = document(
+        Place::Detached,
+        between,
+        None,
+        None,
+        &specforge_graph::FieldForms::default(),
+    );
     assert_eq!(edits::tests::apply(between, &doc.edits()), doc.formatted);
     // A multibyte line: offsets count bytes, on char boundaries.
     let text = "behavior foo \"Foo\" {\n      contract \"é\"\n}\n";
     assert_eq!(
-        document(Place::Detached, text, None, None).edits(),
+        document(
+            Place::Detached,
+            text,
+            None,
+            None,
+            &specforge_graph::FieldForms::default()
+        )
+        .edits(),
         [blank(23..27)]
     );
 }
@@ -183,7 +214,14 @@ fn edits_rebuild_the_formatted_text() {
 )]
 fn edits_do_not_overlap() {
     let text = "behavior foo \"Foo\" {\n      contract \"a\"\n      types [x]\n}\n";
-    let edits = document(Place::Detached, text, None, None).edits();
+    let edits = document(
+        Place::Detached,
+        text,
+        None,
+        None,
+        &specforge_graph::FieldForms::default(),
+    )
+    .edits();
 
     assert!(!edits.is_empty());
     assert!(in_order_without_overlap(&edits), "{edits:?}");
@@ -197,7 +235,13 @@ fn a_parse_error_is_reported_and_kept() {
     let dir = on_disk(&[("spec/x.spec", BROKEN)]);
     let file = dir.path().join("spec/x.spec");
 
-    let doc = document(Place::File(&file), BROKEN, None, None);
+    let doc = document(
+        Place::File(&file),
+        BROKEN,
+        None,
+        None,
+        &specforge_graph::FieldForms::default(),
+    );
 
     let kept = kept_regions(&doc);
     assert_eq!(kept.len(), 1, "{:?}", doc.diagnostics);
@@ -221,7 +265,14 @@ fn formats_a_document_within_50ms() {
     }
 
     let start = std::time::Instant::now();
-    document(Place::Detached, &source, None, None).edits();
+    document(
+        Place::Detached,
+        &source,
+        None,
+        None,
+        &specforge_graph::FieldForms::default(),
+    )
+    .edits();
     let elapsed = start.elapsed();
     assert!(
         elapsed.as_millis() < 50,
@@ -232,7 +283,14 @@ fn formats_a_document_within_50ms() {
     // The worst case for the line diff: every line differs.
     let crlf = source.replace('\n', "\r\n");
     let start = std::time::Instant::now();
-    document(Place::Detached, &crlf, None, None).edits();
+    document(
+        Place::Detached,
+        &crlf,
+        None,
+        None,
+        &specforge_graph::FieldForms::default(),
+    )
+    .edits();
     let elapsed = start.elapsed();
     assert!(
         elapsed.as_millis() < 50,
@@ -250,7 +308,13 @@ fn document_contract() {
     let dir = on_disk(&[("spec/a.spec", MISINDENTED)]);
     let file = dir.path().join("spec/a.spec");
 
-    let doc = document(Place::File(&file), MISINDENTED, None, Some(EDITOR_4));
+    let doc = document(
+        Place::File(&file),
+        MISINDENTED,
+        None,
+        Some(EDITOR_4),
+        &specforge_graph::FieldForms::default(),
+    );
 
     // format_config_loaded: the project's (no file: the defaults), not
     // the editor's.
@@ -280,7 +344,14 @@ fn document_contract() {
 fn the_range_widens_to_whole_blocks() {
     let lines = Lines { first: 6, last: 6 };
 
-    let edits = document(Place::Detached, TWO_BLOCKS, Some(lines), None).edits();
+    let edits = document(
+        Place::Detached,
+        TWO_BLOCKS,
+        Some(lines),
+        None,
+        &specforge_graph::FieldForms::default(),
+    )
+    .edits();
 
     let line = |n: usize| TWO_BLOCKS.match_indices('\n').nth(n - 1).unwrap().0 + 1;
     assert_eq!(
@@ -291,7 +362,14 @@ fn the_range_widens_to_whole_blocks() {
         }]
     );
     // The whole document would also realign `foo` (lines 0–4).
-    let full = document(Place::Detached, TWO_BLOCKS, None, None).edits();
+    let full = document(
+        Place::Detached,
+        TWO_BLOCKS,
+        None,
+        None,
+        &specforge_graph::FieldForms::default(),
+    )
+    .edits();
     assert!(full.iter().any(|e| e.range.start < line(5)), "{full:?}");
 }
 
@@ -305,8 +383,15 @@ fn a_range_formats_its_blocks_as_the_whole_document_does() {
         TWO_BLOCKS,
         Some(Lines { first: 4, last: 6 }),
         None,
+        &specforge_graph::FieldForms::default(),
     );
-    let full = document(Place::Detached, TWO_BLOCKS, None, None);
+    let full = document(
+        Place::Detached,
+        TWO_BLOCKS,
+        None,
+        None,
+        &specforge_graph::FieldForms::default(),
+    );
 
     let block = |text: &str| text.lines().skip(4).take(4).collect::<Vec<_>>().join("\n");
     assert_eq!(block(&range.formatted), block(&full.formatted));
@@ -324,6 +409,7 @@ fn a_parse_error_in_a_range_is_kept() {
         text,
         Some(Lines { first: 8, last: 12 }),
         None,
+        &specforge_graph::FieldForms::default(),
     );
 
     assert_eq!(doc.formatted.lines().nth(12), Some("}}}"));
@@ -354,6 +440,7 @@ fn formats_a_range_within_20ms() {
             last: 20,
         }),
         None,
+        &specforge_graph::FieldForms::default(),
     );
     let elapsed = start.elapsed();
 
@@ -378,8 +465,20 @@ fn range_contract() {
     let file = dir.path().join("spec/a.spec");
     let lines = Lines { first: 6, last: 6 };
 
-    let range = document(Place::File(&file), TWO_BLOCKS, Some(lines), None);
-    let full = document(Place::File(&file), TWO_BLOCKS, None, None);
+    let range = document(
+        Place::File(&file),
+        TWO_BLOCKS,
+        Some(lines),
+        None,
+        &specforge_graph::FieldForms::default(),
+    );
+    let full = document(
+        Place::File(&file),
+        TWO_BLOCKS,
+        None,
+        None,
+        &specforge_graph::FieldForms::default(),
+    );
 
     assert_eq!(range.config.indent_width, 4);
     // range_expanded, textedit_list_returned: one block's edits, in order.
@@ -397,7 +496,13 @@ fn range_contract() {
     verify = "editor settings are used for a document outside any project"
 )]
 fn editor_settings_apply_outside_a_project() {
-    let doc = document(Place::Detached, FOUR, None, Some(EDITOR_4));
+    let doc = document(
+        Place::Detached,
+        FOUR,
+        None,
+        Some(EDITOR_4),
+        &specforge_graph::FieldForms::default(),
+    );
     assert_eq!(doc.config.indent_width, 4);
     assert_eq!(doc.config_source, ConfigSource::Editor);
     assert!(doc.edits().is_empty());
@@ -406,7 +511,13 @@ fn editor_settings_apply_outside_a_project() {
     let dir = tempfile::TempDir::new().unwrap();
     let loose = dir.path().join("loose.spec");
     std::fs::write(&loose, FOUR).unwrap();
-    let doc = document(Place::File(&loose), FOUR, None, Some(EDITOR_4));
+    let doc = document(
+        Place::File(&loose),
+        FOUR,
+        None,
+        Some(EDITOR_4),
+        &specforge_graph::FieldForms::default(),
+    );
     assert_eq!(doc.config_source, ConfigSource::Editor);
     assert_eq!(doc.config.indent_width, 4);
     assert!(doc.edits().is_empty());
@@ -427,7 +538,13 @@ fn config_file_takes_precedence_over_editor() {
         insert_spaces: true,
     };
 
-    let doc = document(Place::File(&file), FOUR, None, Some(editor));
+    let doc = document(
+        Place::File(&file),
+        FOUR,
+        None,
+        Some(editor),
+        &specforge_graph::FieldForms::default(),
+    );
 
     let ConfigSource::File(config_file) = &doc.config_source else {
         panic!("{:?}", doc.config_source);
@@ -445,7 +562,13 @@ fn a_project_without_a_config_file_uses_the_defaults() {
     let dir = on_disk(&[("spec/a.spec", FOUR)]);
     let file = dir.path().join("spec/a.spec");
 
-    let doc = document(Place::File(&file), FOUR, None, Some(EDITOR_4));
+    let doc = document(
+        Place::File(&file),
+        FOUR,
+        None,
+        Some(EDITOR_4),
+        &specforge_graph::FieldForms::default(),
+    );
 
     assert_eq!(doc.config_source, ConfigSource::Defaults);
     assert_eq!(doc.config.indent_width, 2);
@@ -460,7 +583,13 @@ fn editor_config_contract() {
     // lsp_initialized_fired: the editor's settings are given.
     let editor = Some(EDITOR_4);
     // editor_fallback_applied: outside any project.
-    let detached = document(Place::Detached, FOUR, None, editor);
+    let detached = document(
+        Place::Detached,
+        FOUR,
+        None,
+        editor,
+        &specforge_graph::FieldForms::default(),
+    );
     assert_eq!(detached.config_source, ConfigSource::Editor);
     assert_eq!(detached.config.indent_width, 4);
 
@@ -476,6 +605,7 @@ fn editor_config_contract() {
         FOUR,
         None,
         editor,
+        &specforge_graph::FieldForms::default(),
     );
     assert_eq!(with_file.config.indent_width, 3);
     // … else the defaults, never the editor's settings.
@@ -484,6 +614,7 @@ fn editor_config_contract() {
         FOUR,
         None,
         editor,
+        &specforge_graph::FieldForms::default(),
     );
     assert_eq!(without.config_source, ConfigSource::Defaults);
     assert_eq!(without.config.indent_width, 2);
@@ -505,6 +636,7 @@ fn stdin_text_uses_the_config_of_its_directory() {
         MISINDENTED,
         None,
         None,
+        &specforge_graph::FieldForms::default(),
     );
 
     assert_eq!(doc.config.indent_width, 4);

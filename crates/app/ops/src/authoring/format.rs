@@ -14,7 +14,9 @@ mod targets;
 #[cfg(test)]
 mod tests;
 
-pub use document::{ConfigSource, Edit, EditorOptions, FormattedDocument, Lines, Place, document};
+pub use document::{
+    ConfigSource, Edit, EditorOptions, FormattedDocument, Lines, Place, document, forms,
+};
 pub use run::{
     Failure, FileChange, FileDiff, FileFailure, FormatDocument, FormatField, Mode, Outcome,
     Request, UNREADABLE, UNWRITABLE, run,
