@@ -432,6 +432,11 @@ impl FieldForms {
         self.forms.iter()
     }
 
+    /// Every kind a loaded extension declares; empty when none is loaded.
+    pub fn kinds(&self) -> &BTreeSet<String> {
+        &self.kinds
+    }
+
     /// The kinds that take any field (`open_fields`).
     pub fn member_kinds(&self) -> &BTreeSet<String> {
         &self.member_kinds

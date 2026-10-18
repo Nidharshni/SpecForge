@@ -954,6 +954,41 @@ Owner: core
 Level: error
 ```
 
+## E077
+
+```
+E077: Default for a field its kind does not declare
+
+A `defaults <kind> { … }` block (ADR 0149) sets a field that `<kind>` does not
+declare, or names a kind no loaded extension declares, or a structural kind
+(`spec`, `ref`, `use`, `define`, `defaults`). A default only sets a field an
+extension declares for the kind: a field of an `open_fields` kind's members is
+not declared. The default is not applied, so no block of the file takes it.
+Write the field on the blocks that need it, or fix the kind or the field name.
+Reported by the graph build, once per default, at its value; a project whose
+extensions declare no kind checks none.
+
+Owner: core
+Level: error
+```
+
+## E078
+
+```
+E078: Malformed defaults block
+
+A `defaults <kind> { … }` block (ADR 0149) holds only fields, once each, and
+comes before the file's first entity block; a file has at most one per kind.
+This one has a title, a `verify` or `method` member, a field given twice (the
+first is applied), is a second block for its kind in the file (it is not
+applied; the message names the first), or comes after the file's first block (it
+still applies). Remove the title or member, merge the blocks, or move the block
+above every entity block.
+
+Owner: core
+Level: error
+```
+
 ## E079
 
 ```
@@ -3192,6 +3227,21 @@ for text and each item of a string list. This value is written the other way. It
 reads the same, so the graph is unchanged; run specforge format (or format the
 document in the editor) to rewrite every value in its form. A bare word on a
 kind that takes members (type, port) is left alone: it may be a member's type.
+
+Owner: core
+Level: warning
+```
+
+## W161
+
+```
+W161: Default that changes nothing
+
+Either a block writes a field with exactly its file's default value, so the line
+restates the default, or a `defaults <kind>` field reaches no block: every block
+of that kind in the file writes its own value, or the file declares none. Delete
+the line. A block that must keep its value whatever the default becomes may
+write it; a different value replaces the default whole (ADR 0149).
 
 Owner: core
 Level: warning

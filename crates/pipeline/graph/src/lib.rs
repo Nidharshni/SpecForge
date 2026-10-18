@@ -4,6 +4,7 @@
 //! a declared field is written, and `Obligation` how an entity's `verify` statements are written.
 
 mod build;
+mod defaults;
 pub mod field_form;
 pub use field_form::{
     FieldForm, FieldForms, FieldJson, Reading, Reference, Rewrite, Target, ValueShape,

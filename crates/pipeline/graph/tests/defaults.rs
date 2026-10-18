@@ -3,10 +3,12 @@
 //! `apply_file_defaults`).
 
 use specforge_graph::{
-    FieldForm, FieldForms, Graph, GraphConfig, GraphInputs, build_graph_with_config,
+    FieldForm, FieldForms, FileChange, Graph, GraphBuild, GraphConfig, GraphInputs,
+    build_graph_with_config,
 };
 use specforge_parser::parse;
 use specforge_protocol_types::FieldType;
+use specforge_test_macros::test as specforge_test;
 
 /// Kinds `behavior` (`ports`, `features`: reference lists; `owner` is not
 /// declared), `port` and `feature`, standing in for an extension.
@@ -44,33 +46,222 @@ pub(crate) fn build(files: &[(&str, &str)]) -> (Graph, Vec<specforge_graph::Diag
     build_graph_with_config(&parsed, &config)
 }
 
-const A: &str = "defaults behavior {\n  ports [Repo]\n}\n\n\
-                 behavior a \"A\" {\n}\n\nbehavior b \"B\" {\n}\n\nbehavior c \"C\" {\n}\n\n\
-                 port Repo \"Repo\" {\n}\n";
+const BEHAVIORS: &str = "behavior a \"A\" {\n}\n\nbehavior b \"B\" {\n}\n\nbehavior c \"C\" {\n}\n\n\
+                         port Repo \"Repo\" {\n}\n";
 
-#[test]
-#[ignore = "flipped by T3"]
+/// `defaults behavior { ports [Repo] }` above three behaviors and a port.
+fn blocks() -> String {
+    format!("defaults behavior {{\n  ports [Repo]\n}}\n\n{BEHAVIORS}")
+}
+
+fn coded<'d>(diagnostics: &'d [specforge_graph::Diagnostic], code: &str) -> Vec<&'d str> {
+    diagnostics
+        .iter()
+        .filter(|d| d.code == code)
+        .map(|d| d.message.as_str())
+        .collect()
+}
+
+fn ports(graph: &Graph, id: &str) -> Vec<String> {
+    match graph.node(id).unwrap().fields.get("ports") {
+        Some(specforge_graph::FieldValue::List(items)) => {
+            items.iter().map(|i| i.text.clone()).collect()
+        }
+        other => panic!("{id}: {other:?}"),
+    }
+}
+
+#[specforge_test(
+    behavior = "apply_file_defaults",
+    verify = "a default reaches every block of its kind in its file"
+)]
 fn a_default_reaches_every_block_of_its_kind_in_its_file() {
-    let (graph, _) = build(&[("a.spec", A)]);
+    let (graph, _) = build(&[("a.spec", &blocks())]);
     for id in ["a", "b", "c"] {
-        assert!(
-            graph.node(id).unwrap().fields.get("ports").is_some(),
-            "{id}"
-        );
+        assert_eq!(ports(&graph, id), ["Repo"], "{id}");
         assert_eq!(graph.edges_from(id).len(), 1, "{id}");
     }
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test(
+    behavior = "apply_file_defaults",
+    verify = "a defaults block is never a node"
+)]
 fn a_defaults_block_is_no_node() {
     let (graph, diagnostics) = build(&[
         ("a.spec", "defaults behavior {\n  ports [Repo]\n}\n"),
         ("b.spec", "defaults behavior {\n  ports [Repo]\n}\n"),
     ]);
     assert!(graph.node("behavior").is_none());
-    assert!(
-        diagnostics.iter().all(|d| d.code != "E002"),
-        "{diagnostics:?}"
+    assert!(coded(&diagnostics, "E002").is_empty(), "{diagnostics:?}");
+}
+
+#[specforge_test(
+    behavior = "apply_file_defaults",
+    verify = "a block's own field replaces the default whole"
+)]
+fn a_blocks_own_field_replaces_the_default_whole() {
+    let text = "defaults behavior {\n  ports [Repo]\n}\n\nbehavior a \"A\" {\n  ports [Other]\n}\n\n\
+         behavior b \"B\" {\n  ports []\n}\n\nbehavior c \"C\" {\n}\n\nport Repo \"Repo\" {\n}\n";
+    let (graph, _) = build(&[("a.spec", text)]);
+    assert_eq!(ports(&graph, "a"), ["Other"]);
+    assert!(ports(&graph, "b").is_empty());
+    assert!(graph.edges_from("b").is_empty());
+    assert_eq!(ports(&graph, "c"), ["Repo"]);
+}
+
+#[specforge_test(
+    behavior = "apply_file_defaults",
+    verify = "a default reaches no other file and no other kind"
+)]
+fn a_default_reaches_no_other_file_and_no_other_kind() {
+    let (graph, _) = build(&[
+        (
+            "a.spec",
+            "defaults behavior {\n  ports [Repo]\n}\n\nport Repo \"Repo\" {\n}\n",
+        ),
+        ("b.spec", "behavior b \"B\" {\n}\n"),
+    ]);
+    assert!(graph.node("b").unwrap().fields.get("ports").is_none());
+    assert!(graph.node("Repo").unwrap().fields.get("ports").is_none());
+}
+
+#[specforge_test(
+    behavior = "apply_file_defaults",
+    verify = "an inherited reference is written at the default"
+)]
+fn an_inherited_reference_is_written_at_the_default() {
+    let (graph, _) = build(&[("a.spec", &blocks())]);
+    for id in ["a", "b", "c"] {
+        let edge = graph.edges_from(id)[0];
+        let spans: Vec<String> = graph
+            .written(edge)
+            .iter()
+            .map(|s| {
+                format!(
+                    "{}:{}-{}:{}",
+                    s.start_line, s.start_col, s.end_line, s.end_col
+                )
+            })
+            .collect();
+        assert_eq!(spans, ["2:10-2:14"], "{id}");
+    }
+}
+
+#[specforge_test(
+    behavior = "apply_file_defaults",
+    verify = "a default for a field its kind does not declare is E077 and is not applied"
+)]
+fn a_default_for_an_undeclared_field_is_e077() {
+    let text = format!("defaults behavior {{\n  owner \"x\"\n}}\n\n{BEHAVIORS}");
+    let (graph, diagnostics) = build(&[("a.spec", &text)]);
+    assert_eq!(coded(&diagnostics, "E077").len(), 1, "{diagnostics:?}");
+    assert!(coded(&diagnostics, "W161").is_empty());
+    assert!(graph.node("a").unwrap().fields.get("owner").is_none());
+
+    for kind in ["widget", "ref"] {
+        let text = format!("defaults {kind} {{\n  owner \"x\"\n}}\n\n{BEHAVIORS}");
+        let (_, diagnostics) = build(&[("a.spec", &text)]);
+        assert_eq!(
+            coded(&diagnostics, "E077").len(),
+            1,
+            "{kind}: {diagnostics:?}"
+        );
+    }
+}
+
+#[test]
+fn without_declared_kinds_a_default_applies_unchecked() {
+    let text = format!("defaults behavior {{\n  owner \"x\"\n}}\n\n{BEHAVIORS}");
+    let parsed = [parse(&text, "a.spec")];
+    let (graph, diagnostics) = build_graph_with_config(&parsed, &GraphConfig::default());
+    assert!(coded(&diagnostics, "E077").is_empty(), "{diagnostics:?}");
+    assert!(graph.node("a").unwrap().fields.get("owner").is_some());
+}
+
+#[specforge_test(
+    behavior = "apply_file_defaults",
+    verify = "a malformed defaults block is E078"
+)]
+fn a_malformed_defaults_block_is_e078() {
+    let messages = |text: String| {
+        let (graph, diagnostics) = build(&[("a.spec", &text)]);
+        (graph, coded(&diagnostics, "E078").len())
+    };
+    let (graph, n) = messages(format!(
+        "defaults behavior \"B\" {{\n  ports [Repo]\n}}\n\n{BEHAVIORS}"
+    ));
+    assert_eq!(n, 1, "a title");
+    assert_eq!(ports(&graph, "a"), ["Repo"]);
+
+    let (_, n) = messages(format!(
+        "defaults behavior {{\n  verify unit \"x\"\n}}\n\n{BEHAVIORS}"
+    ));
+    assert_eq!(n, 1, "a verify member");
+
+    let (graph, n) = messages(format!(
+        "defaults behavior {{\n  ports [Repo]\n  ports [Other]\n}}\n\n{BEHAVIORS}"
+    ));
+    assert_eq!(n, 1, "a key twice");
+    assert_eq!(ports(&graph, "a"), ["Repo"], "the first is applied");
+
+    let (graph, n) = messages(format!(
+        "{}\n\ndefaults behavior {{\n  ports [Other]\n}}\n",
+        blocks()
+    ));
+    assert_eq!(n, 1, "a second block");
+    assert_eq!(ports(&graph, "a"), ["Repo"], "the first wins");
+
+    let (graph, n) = messages(format!(
+        "{BEHAVIORS}\ndefaults behavior {{\n  ports [Repo]\n}}\n"
+    ));
+    assert_eq!(n, 1, "after the first block");
+    assert_eq!(ports(&graph, "a"), ["Repo"], "it still applies");
+}
+
+#[specforge_test(
+    behavior = "apply_file_defaults",
+    verify = "a default that changes nothing is W161"
+)]
+fn a_default_that_changes_nothing_is_w161() {
+    let text = "defaults behavior {\n  ports [Repo]\n}\n\nbehavior a \"A\" {\n  ports [Repo]\n}\n\n\
+         behavior b \"B\" {\n}\n\nport Repo \"Repo\" {\n}\n";
+    let (_, diagnostics) = build(&[("a.spec", text)]);
+    let w = coded(&diagnostics, "W161");
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert!(w[0].contains("restates"), "{w:?}");
+
+    let (_, diagnostics) = build(&[("a.spec", "defaults behavior {\n  ports [Repo]\n}\n")]);
+    let w = coded(&diagnostics, "W161");
+    assert_eq!(w.len(), 1, "{w:?}");
+    assert!(w[0].contains("reaches no block"), "{w:?}");
+}
+
+#[specforge_test(
+    behavior = "apply_file_defaults",
+    verify = "changing a default changes every block that inherits it"
+)]
+fn changing_a_default_changes_every_block_that_inherits_it() {
+    let config = GraphConfig {
+        inputs: GraphInputs {
+            field_forms: forms(),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut build = GraphBuild::of([parse(&blocks(), "a.spec")], config);
+    build.set_verify(true);
+    let changed = blocks().replace("[Repo]", "[Store]");
+    let applied = build.apply([FileChange::Parsed(parse(&changed, "a.spec"))]);
+    assert_eq!(applied.verification, Some(Ok(())));
+    let modified: Vec<_> = applied
+        .delta
+        .modified_nodes
+        .iter()
+        .map(|n| (n.id.to_string(), n.changed_fields.clone()))
+        .collect();
+    assert_eq!(
+        modified,
+        ["a", "b", "c"].map(|id| (id.to_string(), vec!["ports".to_string()]))
     );
 }
