@@ -75,6 +75,9 @@ behavior apply_file_defaults "Apply File Defaults" {
   verify unit "a malformed defaults block is E078"
   verify unit "a default that changes nothing is W161"
   verify unit "changing a default changes every block that inherits it"
+  verify unit "find-references lists an inherited reference once per block"
+  verify unit "rename edits an inherited reference once"
+  verify unit "query, trace and the graph export show the inherited list"
 }
 
 behavior link_derived_references "Link Derived References" {
