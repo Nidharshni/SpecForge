@@ -1356,9 +1356,9 @@ fn export_project(proj: &TestProject) {
     project(proj);
     std::fs::write(
         root.join("spec/main.spec"),
-        "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n  invariants [law]\n}\n\
+        "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n  invariants [law]\n  features [wide]\n}\n\
          invariant law \"Law\" {\n  guarantee \"x\"\n}\n\
-         feature wide \"Wide\" {\n  behaviors [alpha]\n}\n",
+         feature wide \"Wide\" {\n  problem \"p\"\n}\n",
     )
     .unwrap();
 }

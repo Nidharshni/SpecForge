@@ -7,9 +7,9 @@ fn stats_reports_entity_and_edge_counts() {
     let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
-behavior alpha "A" { contract "first" }
-behavior beta "B" { contract "second" }
-feature gamma "G" { behaviors [alpha, beta] }
+behavior alpha "A" { contract "first" features [gamma] }
+behavior beta "B" { contract "second" features [gamma] }
+feature gamma "G" { problem "third" }
 "#,
     )]);
 
@@ -39,8 +39,8 @@ fn stats_json_format() {
     let dir = TestProject::new().without_config().files(&[(
         "main.spec",
         r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha] }
+behavior alpha "A" { contract "first" features [gamma] }
+feature gamma "G" { problem "third" }
 "#,
     )]);
 
@@ -73,9 +73,9 @@ fn stats_reports_coverage_over_testable_kinds() {
         (
             "main.spec",
             r#"
-behavior alpha "A" { contract "first" verify unit "alpha works" }
-behavior beta "B" { contract "second" }
-feature gamma "G" { behaviors [alpha, beta] }
+behavior alpha "A" { contract "first" verify unit "alpha works" features [gamma] }
+behavior beta "B" { contract "second" features [gamma] }
+feature gamma "G" { problem "third" }
 "#,
         ),
     ]);
