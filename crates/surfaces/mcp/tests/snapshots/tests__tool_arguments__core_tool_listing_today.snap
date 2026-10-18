@@ -1097,11 +1097,13 @@ expression: listing
         },
         "format": {
           "default": "graph",
-          "description": "Export format: graph (also json): every entity with its fields, file and line (Graph Protocol); context: headline and normative fields and verify, for an agent; brief: id, kind and title",
+          "description": "Export format: graph (also json): every entity with its fields, file and line (Graph Protocol); context: headline and normative fields and verify, for an agent; brief: id, kind and title; dot: Graphviz; markdown: a document a reviewer reads: each entity's statements, fields, links and obligations",
           "enum": [
             "graph",
             "context",
             "brief",
+            "dot",
+            "markdown",
             "json"
           ],
           "type": "string"
