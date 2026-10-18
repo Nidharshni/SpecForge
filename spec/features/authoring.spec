@@ -3,7 +3,7 @@
 use "behaviors/authoring"
 
 feature typed_edits "Typed Edits" {
-  status     accepted
+  status     done
   priority   high
   problem    """
     Every change to a .spec file is a hand edit: SpecForge has no operation that

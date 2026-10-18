@@ -9,6 +9,25 @@ Orchestrator skill for writing and maintaining `.spec` DSL files -- the source-o
 
 **This skill writes `.spec` files (compiled DSL). Not markdown spec documents.**
 
+## Write through typed edits
+
+Do not write `.spec` text by hand. Change a project with the typed edits, which write each value in the form its field
+declares, lay the block out canonically, and refuse (E080) an edit that would leave the project with an error it does not
+have:
+
+```bash
+specforge new behavior archive_task "Archive a Task" --in behaviors/task.spec --contract "…" --types Task --category command
+specforge set archive_task category query          # specforge set <id> --title "…" changes the title
+specforge link archive_task invariants task_id_uniqueness    # unlink removes; unset removes a field
+specforge link archive_task --verify unit:"archiving an unknown task fails"
+specforge delete archive_task --unlink-references
+```
+
+Over MCP, `specforge.edit` takes a list of edits (`create`, `set`, `unset`, `retitle`, `link`, `unlink`, `add_verify`,
+`remove_verify`, `delete`) applied all or nothing, so an entity and the link to it go in one call. Add `--dry-run`
+(`dry_run: true`) to see the diff first. The child skills below say what each field means; unions and ports with `method`
+lines are not covered by typed edits yet, so write those blocks by hand.
+
 ## When to Use This Skill
 
 - Writing a new `.spec` file for a SpecForge project
