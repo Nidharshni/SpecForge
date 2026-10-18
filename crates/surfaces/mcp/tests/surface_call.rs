@@ -824,7 +824,7 @@ fn target_argument_descriptions() {
     let paths = described("path");
     let (init, others): (Vec<_>, Vec<_>) =
         paths.iter().partition(|(name, _)| name == "specforge.init");
-    assert_eq!(others.len(), 8, "{paths:?}");
+    assert_eq!(others.len(), 9, "{paths:?}");
     for (name, text) in &others {
         assert_eq!(
             text, "Project root path (the served project if omitted)",

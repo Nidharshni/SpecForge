@@ -79,7 +79,7 @@ pub enum Edit {
     /// reference to it is removed in the same change (an unlink, or an unset for a single `reference` field).
     Delete {
         entity_id: String,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         unlink_references: bool,
     },
 }

@@ -95,6 +95,7 @@ fn each_named_shape_is_defined_once_per_document() {
     let expected: Vec<&str> = vec![
         "analyze",
         "collect",
+        "edit",
         "format",
         "inspect",
         "migrate",
