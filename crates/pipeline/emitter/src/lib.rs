@@ -15,6 +15,7 @@ pub mod dot;
 mod emit;
 mod error;
 pub mod json;
+pub mod markdown;
 pub mod model;
 pub mod outline;
 mod publish;
