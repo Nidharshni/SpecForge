@@ -3,7 +3,7 @@
 use "extensions/typescript/types"
 use "types/errors"
 
-port TsSourceScanner {
+port TsSourceScanner "Ts Source Scanner" {
   direction outbound
   category  "source/typescript"
   method scanFile(path: string) -> Result<TsSourceItem[], EmitterError>
@@ -13,7 +13,7 @@ port TsSourceScanner {
   verify integration "TsSourceScanner contract is satisfied"
 }
 
-port TsProjectDetector {
+port TsProjectDetector "Ts Project Detector" {
   direction outbound
   category  "source/typescript"
   method detectMonorepo(root: string) -> Result<TsMonorepoInfo, EmitterError>

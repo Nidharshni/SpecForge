@@ -1,4 +1,5 @@
-//! Format-version migration of a project's `.spec` files: the rewrite to a target format version, the backups and
+//! Format-version migration of a project's `.spec` files: the rewrite to a target format version and the migration
+//! steps (`titles`), the backups and
 //! the `.specforge/migration.json` record a rollback undoes, and W054 for each thing the rewrite changed in the
 //! graph (`structural_differences`).
 
@@ -10,6 +11,8 @@ use specforge_formatter::unified_diff;
 use specforge_graph::{EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect};
 use specforge_parser::{FormatVersion, detect_format_version, with_format_version};
 use std::path::{Path, PathBuf};
+
+mod titles;
 
 // ---------------------------------------------------------------------------
 // Migration Types
@@ -190,10 +193,23 @@ impl MigrationRecord {
 // Transform Functions (pure)
 // ---------------------------------------------------------------------------
 
-/// Transform content to version `to`.
-/// Currently v1 is the only version, so this just ensures the header is set.
-fn transform_content(content: &str, to: &FormatVersion) -> String {
-    with_format_version(content, to)
+/// Transform content to version `to`: the header when the file is below it, then every migration step. A step runs on
+/// any file it changes, whatever the file's version (ADR 0148 D5).
+fn transform_content(content: &str, from: &FormatVersion, to: &FormatVersion) -> String {
+    if from < to {
+        titles::add_titles(&with_format_version(content, to))
+    } else {
+        titles::add_titles(content)
+    }
+}
+
+/// `delta` without the changes the migration steps declare (`titles`: a title where the node had none), the
+/// graph `before` the migration being the one to compare to. A migration keeps the graph only when this is empty.
+pub fn beyond_steps(mut delta: GraphDelta, before: &specforge_graph::Graph) -> GraphDelta {
+    delta
+        .modified_nodes
+        .retain(|change| !titles::added(change, before));
+    delta
 }
 
 // ---------------------------------------------------------------------------
@@ -372,8 +388,9 @@ fn migrate_file(
         );
     }
 
-    // Skip if already at target version
-    if detected_version >= *target_version {
+    // Transform; a file the header and the steps leave as it is has nothing to migrate.
+    let transformed = transform_content(&content, &detected_version, target_version);
+    if transformed == content {
         return FileMigration::of(
             MigrationResult {
                 file_path: name,
@@ -386,9 +403,6 @@ fn migrate_file(
             None,
         );
     }
-
-    // Transform
-    let transformed = transform_content(&content, target_version);
 
     // Build diff
     let diff = if content != transformed {

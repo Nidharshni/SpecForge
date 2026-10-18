@@ -304,7 +304,7 @@ struct Declarations<'a> {
 
 /// The one sweep over the files, in the iteration order they are given:
 /// every file's E001s and the I007 / E019 its
-/// format version header reports first, then per file and entity W143 / E002 / W060, then I005. It is also first-writer-wins:
+/// format version header reports first, then per file and entity W143 / E076 / E002 / W060, then I005. It is also first-writer-wins:
 /// `seen` is keyed on (kind, id), so a second declaration of a kind is E002
 /// naming the first of that kind; `winners` is keyed on the raw ID, so a
 /// declaration of another kind is W060. Placement reads `winners`.
@@ -330,6 +330,10 @@ fn declarations<'a>(
             if is_define_block(entity) {
                 diagnostics.push(define_block_warning(entity));
                 continue;
+            }
+            // Placed all the same: the LSP keeps the block navigable and every check after the build sees it.
+            if needs_title(entity) && entity.title.as_deref().is_none_or(|t| t.trim().is_empty()) {
+                diagnostics.push(untitled_block_error(entity));
             }
             let key = (entity.kind.raw, entity.id.raw);
             if let Some(first) = seen.get(&key) {
@@ -428,6 +432,25 @@ fn node_from_entity(entity: &Entity) -> Node {
 /// become graph nodes.
 fn is_define_block(entity: &Entity) -> bool {
     entity.kind.raw == structural::DEFINE
+}
+
+/// Whether a block that becomes a node must carry a title (E076): every one that is placed. The one place to skip a
+/// header that is not a node.
+fn needs_title(entity: &Entity) -> bool {
+    !is_define_block(entity)
+}
+
+/// E076: a block with no title, or a blank one.
+fn untitled_block_error(entity: &Entity) -> Diagnostic {
+    Diagnostic::new(
+        codes::E076,
+        format!("{} '{}' has no title", entity.kind.raw, entity.id.raw),
+    )
+    .with_span(entity.span.clone())
+    .with_suggestion(format!(
+        "write one after its id: {} {} \"…\", or run `specforge migrate`, which takes it from the comment above the block",
+        entity.kind.raw, entity.id.raw
+    ))
 }
 
 /// W143: a define block, which declares nothing.

@@ -2,7 +2,7 @@
 
 use "types/core"
 
-type Diagnostic {
+type Diagnostic "Diagnostic" {
   code       ValidationCode @readonly
   severity   Severity
   message    string
@@ -15,16 +15,13 @@ type Diagnostic {
   verify unit "Diagnostic schema is valid"
 }
 
-// A diagnostic's structured payload, tagged by kind. A kind exists only
-// for a diagnostic some consumer acts on.
-type DiagnosticData = UnresolvedReferenceData
+type DiagnosticData "A diagnostic's structured payload, tagged by kind. A kind exists only for a diagnostic some consumer acts on." = UnresolvedReferenceData
   | UnresolvedImportData
   | ShadowedKeywordData
   | ReferenceCycleData
   | SubjectData
 
-// E003: entity's reference field names target, which no entity declares.
-type UnresolvedReferenceData {
+type UnresolvedReferenceData "E003: entity's reference field names target, which no entity declares." {
   kind         "unresolved_reference" @literal
   target       string
   entity       string
@@ -33,53 +30,42 @@ type UnresolvedReferenceData {
   verify unit "UnresolvedReferenceData schema is valid"
 }
 
-// E025: a use import names path, which resolves to no .spec file.
-type UnresolvedImportData {
+type UnresolvedImportData "E025: a use import names path, which resolves to no .spec file." {
   kind         "unresolved_import" @literal
   path         string
   did_you_mean string              @optional
   verify unit "UnresolvedImportData schema is valid"
 }
 
-// E013, E026: keyword (an entity id or an extension's kind keyword)
-// collides with a keyword the grammar or an earlier extension owns.
-type ShadowedKeywordData {
+type ShadowedKeywordData "E013, E026: keyword (an entity id or an extension's kind keyword) collides with a keyword the grammar or an earlier extension owns." {
   kind    "shadowed_keyword" @literal
   keyword string
   verify unit "ShadowedKeywordData schema is valid"
 }
 
-// W061: the reference cycle's entities, in path order.
-type ReferenceCycleData {
+type ReferenceCycleData "W061: the reference cycle's entities, in path order." {
   kind "reference_cycle" @literal
   path string[]
   verify unit "ReferenceCycleData schema is valid"
 }
 
-// A diagnostic an extension pass raised about entity.
-type SubjectData {
+type SubjectData "A diagnostic an extension pass raised about entity." {
   kind   "subject" @literal
   entity string
   verify unit "SubjectData schema is valid"
 }
 
-// ValidationCode is a structured type with a display format: the prefix
-// letter concatenated with the zero-padded number (e.g., E001, W012, I004).
-// The canonical string form is used in diagnostics, documentation, and
-// cross-references throughout the spec.
-type ValidationCode {
+type ValidationCode "ValidationCode is a structured type with a display format: the prefix letter concatenated with the zero-padded number (e.g., E001, W012, I004). The canonical string form is used in diagnostics, documentation, and cross-references throughout the spec." {
   prefix CodePrefix
   number integer
   verify unit "ValidationCode schema is valid"
 }
 
-type CodePrefix = E | W | I
+type CodePrefix "Code Prefix" = E | W | I
 
-type Severity = error | warning | info
+type Severity "Severity" = error | warning | info
 
-// Counts MUST equal the filtered length of the diagnostics array by severity:
-// error_count == diagnostics.filter(d => d.severity == error).length, etc.
-type DiagnosticBag {
+type DiagnosticBag "Counts MUST equal the filtered length of the diagnostics array by severity: error_count == diagnostics.filter(d => d.severity == error).length, etc." {
   diagnostics Diagnostic[]
   error_count integer
   warn_count  integer

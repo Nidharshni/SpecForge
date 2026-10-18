@@ -14,9 +14,9 @@ use "types/zero-entity-core"
 // Distinct from condition: conditions are point-in-time state,
 // properties are assertions about behavior over TIME.
 
-type PropertyType = safety | liveness | fairness
+type PropertyType "Property Type" = safety | liveness | fairness
 
-type FormalProperty {
+type FormalProperty "Formal Property" {
   description   string
   property_type PropertyType
   references    EntityId[] @optional
@@ -27,7 +27,7 @@ type FormalProperty {
 // Assumed-true foundation. No proof required; no coverage
 // tracking item generated. Conditions depend on axioms.
 
-type FormalAxiom {
+type FormalAxiom "Formal Axiom" {
   description   string
   justification string     @optional
   references    EntityId[] @optional
@@ -38,7 +38,7 @@ type FormalAxiom {
 // Shared synchronization contract across events. Replaces
 // duplicated inline sync blocks with a reusable entity.
 
-type FormalProtocol {
+type FormalProtocol "Formal Protocol" {
   description string
   ordering    string[]          @optional
   timeout     string            @optional
@@ -51,9 +51,9 @@ type FormalProtocol {
 // First-class entity kind for specification layering.
 // Captures abstract->concrete behavior mapping as a graph node.
 
-type RefinementStatus = proposed | verified | discharged
+type RefinementStatus "Refinement Status" = proposed | verified | discharged
 
-type FormalRefinement {
+type FormalRefinement "Formal Refinement" {
   description     string
   abstract_entity EntityId
   concrete_entity EntityId
@@ -66,9 +66,9 @@ type FormalRefinement {
 // ── Process Entity Kind ─────────────────────────────────────
 // CSP-style communicating process with alphabet, states, composition.
 
-type CompositionOperator = parallel | sequential | choice | interleaving
+type CompositionOperator "Composition Operator" = parallel | sequential | choice | interleaving
 
-type FormalProcess {
+type FormalProcess "Formal Process" {
   description string
   alphabet    EntityId[]          @optional
   states      ProcessState[]      @optional
@@ -77,7 +77,7 @@ type FormalProcess {
   verify property "FormalProcess"
 }
 
-type ProcessState {
+type ProcessState "Process State" {
   name        string  @readonly
   description string  @optional
   initial     boolean @optional
@@ -87,7 +87,7 @@ type ProcessState {
 
 // ── Structured Condition Types ──────────────────────────────
 
-type ConditionEntry {
+type ConditionEntry "Condition Entry" {
   name        string @readonly
   description string
   verify property "ConditionEntry"
@@ -100,18 +100,18 @@ type ConditionEntry {
 
 // ── Event Graph Linting Types ───────────────────────────────
 
-type DeliverySemantics = at_most_once | at_least_once | exactly_once
+type DeliverySemantics "Delivery Semantics" = at_most_once | at_least_once | exactly_once
 
 // ── Specification Layering Types ────────────────────────────
 
-type RefinementStep {
+type RefinementStep "Refinement Step" {
   fromId     EntityId       @readonly
   toId       EntityId       @readonly
   conditions ConditionDelta @optional
   verify property "RefinementStep"
 }
 
-type ConditionDelta {
+type ConditionDelta "Condition Delta" {
   added_ensures    string[] @optional
   removed_requires string[] @optional
   verify property "ConditionDelta"
@@ -123,7 +123,7 @@ type ConditionDelta {
 // Renamed from "Verification Obligation" per expert review:
 // these are heuristic structural checks, not formal mathematical proofs.
 
-type CoverageTrackingItem {
+type CoverageTrackingItem "Coverage Tracking Item" {
   entityId     EntityId @readonly
   kind         CoverageTrackingKind
   description  string
@@ -132,7 +132,7 @@ type CoverageTrackingItem {
   verify property "CoverageTrackingItem"
 }
 
-type CoverageTrackingKind = condition_coverage
+type CoverageTrackingKind "Coverage Tracking Kind" = condition_coverage
   | invariant_coverage
   | layering_coverage
   | process_coverage
@@ -141,12 +141,16 @@ type CoverageTrackingKind = condition_coverage
 // test_written: test exists but has not yet been executed
 // test_failing: test exists but is currently failing
 
-type CoverageDischargeStatus = pending | test_written | test_failing | test_covered | heuristic_ok
+type CoverageDischargeStatus "Coverage Discharge Status" = pending
+  | test_written
+  | test_failing
+  | test_covered
+  | heuristic_ok
 
 // ── Event Graph Analysis Report ─────────────────────────────
 // Renamed from ConcurrencyAnalysisReport; livelock_risks -> retry_cycle_risks
 
-type EventGraphAnalysisReport {
+type EventGraphAnalysisReport "Event Graph Analysis Report" {
   deadlock_count     integer
   retry_cycle_risks  integer
   unmatched_count    integer
@@ -158,19 +162,19 @@ type EventGraphAnalysisReport {
 // ── Graph Annotation Types ──────────────────────────────────
 // Analysis results attached as node properties for agent consumption
 
-type FormalAnalysisResult = ConditionAnalysisResult
+type FormalAnalysisResult "Formal Analysis Result" = ConditionAnalysisResult
   | LayeringAnalysisResult
   | CycleAnalysisResult
   | CoverageAnalysisResult
 
-type FormalAnalysisAnnotation {
+type FormalAnalysisAnnotation "Formal Analysis Annotation" {
   entity_id EntityId @readonly
   pass_name string   @readonly
   result    FormalAnalysisResult
   verify property "FormalAnalysisAnnotation"
 }
 
-type ConditionAnalysisResult {
+type ConditionAnalysisResult "Condition Analysis Result" {
   satisfiable    boolean
   reachable      boolean
   contradictions string[] @optional
@@ -178,7 +182,7 @@ type ConditionAnalysisResult {
   verify property "ConditionAnalysisResult"
 }
 
-type LayeringAnalysisResult {
+type LayeringAnalysisResult "Layering Analysis Result" {
   complete            boolean
   chain_depth         integer
   missing_concretes   string[] @optional
@@ -186,7 +190,7 @@ type LayeringAnalysisResult {
   verify property "LayeringAnalysisResult"
 }
 
-type CycleAnalysisResult {
+type CycleAnalysisResult "Cycle Analysis Result" {
   has_cycles  boolean
   cycle_count integer
   mitigated   boolean
@@ -194,7 +198,7 @@ type CycleAnalysisResult {
   verify property "CycleAnalysisResult"
 }
 
-type CoverageAnalysisResult {
+type CoverageAnalysisResult "Coverage Analysis Result" {
   total_items  integer
   pending      integer
   test_written integer
@@ -210,4 +214,8 @@ type CoverageAnalysisResult {
 // (edges), conditions (requires or ensures), invariants (also maintains
 // or invariants refs), proofs (also proven by the coverage rule).
 
-type SpecificationDepthLevel = prose | entity_graph | conditions | invariants | proofs
+type SpecificationDepthLevel "Specification Depth Level" = prose
+  | entity_graph
+  | conditions
+  | invariants
+  | proofs

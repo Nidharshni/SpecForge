@@ -178,6 +178,11 @@ fn header_line(content: &str) -> Option<HeaderLine<'_>> {
     None
 }
 
+/// The 0-based line of the format header in `content`: where the header stands, or none.
+pub fn header_row(content: &str) -> Option<usize> {
+    header_line(content).map(|header| header.index)
+}
+
 /// `content` declaring `version`: the header line [`header_line`] finds is
 /// replaced in place, its line ending kept; a file with none gets
 /// `// specforge-format: <version>` as its first line, ended like the file's

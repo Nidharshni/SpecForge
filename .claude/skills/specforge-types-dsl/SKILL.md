@@ -23,7 +23,7 @@ Rules and conventions for authoring **`type` blocks** in `.spec` files. Types de
 ### Struct Type
 
 ```spec
-type User {
+type User "User" {
   id        string      @readonly
   email     string      @unique
   name      string
@@ -36,13 +36,13 @@ type User {
 ### Union Type (Enum)
 
 ```spec
-type UserRole = admin | editor | viewer
+type UserRole "User Role" = admin | editor | viewer
 ```
 
 ### Error Type (Tagged)
 
 ```spec
-type DuplicateEmailError {
+type DuplicateEmailError "Duplicate Email Error" {
   _tag    "DuplicateEmailError"   @literal
   email   string
   message string
@@ -52,7 +52,7 @@ type DuplicateEmailError {
 ### Command Type
 
 ```spec
-type CreateUserCommand {
+type CreateUserCommand "Create User Command" {
   email  string
   name   string
   role   UserRole
@@ -140,7 +140,7 @@ type CreateUserCommand {
 ### Domain Entity
 
 ```spec
-type Order {
+type Order "Order" {
   id         string      @readonly
   customerId string
   items      OrderItem[]
@@ -155,7 +155,7 @@ type Order {
 ### Value Object
 
 ```spec
-type OrderItem {
+type OrderItem "Order Item" {
   productId  string
   name       string
   quantity   integer
@@ -167,13 +167,13 @@ type OrderItem {
 ### Union / Enum
 
 ```spec
-type OrderStatus = pending | confirmed | shipped | delivered | cancelled
+type OrderStatus "Order Status" = pending | confirmed | shipped | delivered | cancelled
 ```
 
 ### Error with Tag
 
 ```spec
-type InsufficientInventoryError {
+type InsufficientInventoryError "Insufficient Inventory Error" {
   _tag       "InsufficientInventoryError"   @literal
   productId  string
   requested  integer
@@ -185,7 +185,7 @@ type InsufficientInventoryError {
 ### Event Payload Type
 
 ```spec
-type UserCreatedPayload {
+type UserCreatedPayload "User Created Payload" {
   userId    string      @readonly
   email     string
   role      UserRole
@@ -196,13 +196,13 @@ type UserCreatedPayload {
 ### Command with Nested Type
 
 ```spec
-type PlaceOrderCommand {
+type PlaceOrderCommand "Place Order Command" {
   customerId string
   items      OrderItemInput[]
   currency   string
 }
 
-type OrderItemInput {
+type OrderItemInput "Order Item Input" {
   productId  string
   quantity   integer
 }

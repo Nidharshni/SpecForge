@@ -96,12 +96,14 @@ fn registered_field_name_does_not_produce_w020() {
 
 #[spec(
     behavior = "detect_unknown_entity_fields",
-    verify = "title is not checked against the field registry"
+    verify = "a body field named title is W020 where no extension declares it"
 )]
-fn title_is_not_checked_against_the_field_registry() {
+fn a_body_title_field_is_w020() {
     let text = "behavior b1 \"B\" {\n  title \"T\"\n}\n";
     let diags = checked(&build([software()]), &[("test.spec", text)]);
-    assert!(diags.is_empty(), "title should be skipped: {diags:?}");
+    assert_eq!(diags.len(), 1, "{diags:?}");
+    assert_eq!(diags[0].code, "W020");
+    assert!(diags[0].message.contains("title"), "{diags:?}");
 }
 
 #[spec(

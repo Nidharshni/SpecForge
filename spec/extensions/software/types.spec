@@ -5,7 +5,7 @@ use "types/zero-entity-core"
 
 // ── Entity Kind Shapes ───────────────────────────────────────
 
-type SoftwareBehavior {
+type SoftwareBehavior "Software Behavior" {
   contract   string
   invariants EntityId[]       @optional
   types      EntityId[]       @optional
@@ -24,33 +24,31 @@ type SoftwareBehavior {
   verify unit "SoftwareBehavior schema is valid"
 }
 
-type SoftwareInvariant {
+type SoftwareInvariant "Software Invariant" {
   guarantee string
   risk      RiskLevel @optional
   verify unit "SoftwareInvariant schema is valid"
 }
 
-type SoftwareFeature {
+type SoftwareFeature "Software Feature" {
   problem  string @optional
   solution string @optional
   verify unit "SoftwareFeature schema is valid"
 }
 
-type SoftwareEvent {
+type SoftwareEvent "Software Event" {
   channel string    @optional
   payload EntityId  @optional
   sync    SyncBlock @optional
   verify unit "SoftwareEvent schema is valid"
 }
 
-// A type's members are written in its body, one `name Type` each (open
-// fields, one TypeFieldDef each); the kind declares no field for them.
-type SoftwareTypeDef {
+type SoftwareTypeDef "A type's members are written in its body, one `name Type` each (open fields, one TypeFieldDef each); the kind declares no field for them." {
   extends EntityId @optional
   verify unit "SoftwareTypeDef schema is valid"
 }
 
-type SoftwarePort {
+type SoftwarePort "Software Port" {
   direction PortDirection
   category  string          @optional
   methods   PortOperation[] @optional
@@ -59,34 +57,34 @@ type SoftwarePort {
 
 // ── Formal Methods Types ─────────────────────────────────────
 
-type ContractCondition {
+type ContractCondition "Contract Condition" {
   name        string @readonly
   description string
   verify unit "ContractCondition schema is valid"
 }
 
-type RequiresBlock {
+type RequiresBlock "Requires Block" {
   conditions ContractCondition[]
   verify unit "RequiresBlock schema is valid"
 }
 
-type EnsuresBlock {
+type EnsuresBlock "Ensures Block" {
   conditions ContractCondition[]
   verify unit "EnsuresBlock schema is valid"
 }
 
-type MaintainsBlock {
+type MaintainsBlock "Maintains Block" {
   conditions ContractCondition[]
   verify unit "MaintainsBlock schema is valid"
 }
 
-type SyncBlock {
+type SyncBlock "Sync Block" {
   barrier EntityId[] @optional
   timeout string     @optional
   verify unit "SyncBlock schema is valid"
 }
 
-type PortOperation {
+type PortOperation "Port Operation" {
   name       string        @readonly
   inputType  string        @optional
   outputType string        @optional
@@ -95,7 +93,7 @@ type PortOperation {
   verify unit "PortOperation schema is valid"
 }
 
-type RefinementChain {
+type RefinementChain "Refinement Chain" {
   abstractId  EntityId @readonly
   concreteIds EntityId[]
   depth       integer
@@ -104,15 +102,15 @@ type RefinementChain {
 
 // ── Enums ────────────────────────────────────────────────────
 
-type RiskLevel = low | medium | high | critical
+type RiskLevel "Risk Level" = low | medium | high | critical
 
-type PortDirection = inbound | outbound | bidirectional
+type PortDirection "Port Direction" = inbound | outbound | bidirectional
 
-type FieldAnnotation = readonly | unique | optional | literal
+type FieldAnnotation "Field Annotation" = readonly | unique | optional | literal
 
-type BehaviorCategory = command | query | handler | saga | projection
+type BehaviorCategory "Behavior Category" = command | query | handler | saga | projection
 
-type TypeFieldDef {
+type TypeFieldDef "Type Field Def" {
   name        string            @readonly
   fieldType   string
   annotations FieldAnnotation[] @optional

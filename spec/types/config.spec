@@ -8,7 +8,7 @@ use "types/zero-entity-core"
 //   providers { <scheme> "<alias>" { extension "..." repo "..." } }
 //     → ProviderConfig { scheme, alias (from positional string), extension, settings }
 
-type CompilerConfig {
+type CompilerConfig "Compiler Config" {
   schema         string           @optional
   // Serialized as "$schema" in JSON ($ prefix is a JSON convention)
   name           string           @readonly
@@ -32,7 +32,7 @@ type CompilerConfig {
   verify unit "CompilerConfig schema is valid"
 }
 
-type ProviderConfig {
+type ProviderConfig "Provider Config" {
   scheme    string   @readonly
   alias     string   @unique
   extension string
@@ -46,13 +46,7 @@ type ProviderConfig {
 
 // ── Registry Types ──────────────────────────────────────────
 
-// One entry of specforge.json's registries. url is the registry's root (an
-// http or https URL without the protocol's /v1;
-// specforge_registry_wire::RegistryRoot). The registry for a package name
-// is the first entry whose scope_filter is its scope, else the first marked
-// default_registry; none is R-OPS-001 (ADR 0045). A credential is kept per
-// alias in ~/.specforge, never here.
-type RegistryConfig {
+type RegistryConfig "One entry of specforge.json's registries. url is the registry's root (an http or https URL without the protocol's /v1; specforge_registry_wire::RegistryRoot). The registry for a package name is the first entry whose scope_filter is its scope, else the first marked default_registry; none is R-OPS-001 (ADR 0045). A credential is kept per alias in ~/.specforge, never here." {
   alias            string  @readonly @unique
   url              string
   scope_filter     string  @optional
@@ -155,10 +149,7 @@ type TokenVerified "Token Verified" {
   verify unit "TokenVerified is the JSON a registry answers a token check with"
 }
 
-// What a registry refused, named the same by server and client
-// (specforge_registry_wire::ErrorCode); a client reads a code it doesn't
-// know as UNKNOWN.
-type RegistryErrorCode = "NOT_FOUND"
+type RegistryErrorCode "What a registry refused, named the same by server and client (specforge_registry_wire::ErrorCode); a client reads a code it doesn't know as UNKNOWN." = "NOT_FOUND"
   | "UNAUTHORIZED"
   | "FORBIDDEN"
   | "ADMIN_REQUIRED"
@@ -267,7 +258,7 @@ type RegistryCredential "Registry Credential" {
   verify unit "RegistryCredential schema is valid"
 }
 
-type InitConfig {
+type InitConfig "Init Config" {
   name        string
   spec_root   string   @optional
   extensions  string[] @optional
@@ -276,11 +267,7 @@ type InitConfig {
   verify unit "InitConfig schema is valid"
 }
 
-// ProjectConfig is the serialization shape of specforge.json — the subset
-// of CompilerConfig that users edit directly. CompilerConfig extends this
-// with computed fields (schema, watch settings, etc.) derived
-// at compile time. ProjectConfig -> CompilerConfig is a one-way transform.
-type ProjectConfig {
+type ProjectConfig "ProjectConfig is the serialization shape of specforge.json — the subset of CompilerConfig that users edit directly. CompilerConfig extends this with computed fields (schema, watch settings, etc.) derived at compile time. ProjectConfig -> CompilerConfig is a one-way transform." {
   name       string
   version    string           @optional
   spec_root  string
@@ -289,7 +276,7 @@ type ProjectConfig {
   verify unit "ProjectConfig schema is valid"
 }
 
-type InitError {
+type InitError "Init Error" {
   kind      "already_exists" | "unresolvable_extension" | "invalid_name" | "io_error"
   message   string
   path      string @optional
@@ -297,12 +284,12 @@ type InitError {
   verify unit "InitError schema is valid"
 }
 
-type BundledExtensionCatalog {
+type BundledExtensionCatalog "Bundled Extension Catalog" {
   extensions BundledExtensionEntry[]
   verify unit "BundledExtensionCatalog schema is valid"
 }
 
-type BundledExtensionEntry {
+type BundledExtensionEntry "Bundled Extension Entry" {
   name        string   @readonly
   description string   @optional
   tags        string[] @optional

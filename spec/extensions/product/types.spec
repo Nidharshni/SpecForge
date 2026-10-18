@@ -4,60 +4,52 @@ use "types/core"
 
 // ── Enum Types ─────────────────────────────────────────────
 
-type Priority {
+type Priority "Priority" {
   values [critical, high, medium, low]
   verify property "Priority"
 }
 
-// Absent status is treated as proposed for all validation and query logic.
-// This supports incremental adoption — features work without lifecycle fields.
-type FeatureStatus {
+type FeatureStatus "Absent status is treated as proposed for all validation and query logic. This supports incremental adoption — features work without lifecycle fields." {
   values [proposed, accepted, in_progress, done, deferred, deprecated]
   verify property "FeatureStatus"
 }
 
-type TechnicalLevel {
+type TechnicalLevel "Technical Level" {
   values [expert, advanced, intermediate, beginner, non_technical]
   verify property "TechnicalLevel"
 }
 
-type InteractionModel {
+type InteractionModel "Interaction Model" {
   values [request_response, event_driven, batch, streaming, bidirectional, manual]
   verify property "InteractionModel"
 }
 
-type PersonaStatus {
+type PersonaStatus "Persona Status" {
   values [active, deprecated]
   verify property "PersonaStatus"
 }
 
-type ChannelStatus {
+type ChannelStatus "Channel Status" {
   values [active, deprecated]
   verify property "ChannelStatus"
 }
 
-type ArtifactType {
+type ArtifactType "Artifact Type" {
   values [cli, service, library, web_app, mobile_app, api, extension, documentation, package]
   verify property "ArtifactType"
 }
 
-// Module family is an open enum with a recommended standard set. A value
-// outside it produces I062 (info).
-type ModuleFamily {
+type ModuleFamily "Module family is an open enum with a recommended standard set. A value outside it produces I062 (info)." {
   values [core, platform, extension, integration, advisory]
   verify property "ModuleFamily"
 }
 
-// Absent status is treated as draft for all validation and query logic.
-// This supports incremental adoption — deliverables work without lifecycle fields.
-type DeliverableStatus {
+type DeliverableStatus "Absent status is treated as draft for all validation and query logic. This supports incremental adoption — deliverables work without lifecycle fields." {
   values [draft, in_progress, shipped, deprecated]
   verify property "DeliverableStatus"
 }
 
-// Absent status is treated as planned for all validation and query logic.
-// This supports incremental adoption — milestones work without lifecycle fields.
-type MilestoneStatus {
+type MilestoneStatus "Absent status is treated as planned for all validation and query logic. This supports incremental adoption — milestones work without lifecycle fields." {
   values [planned, in_progress, completed, blocked]
   verify property "MilestoneStatus"
 }
@@ -79,7 +71,7 @@ type ReleaseStatus "Release Status" {
 
 // ── Entity Kind Shapes ───────────────────────────────────────
 
-type ProductFeature {
+type ProductFeature "Product Feature" {
   description  string        @optional
   problem      string
   solution     string        @optional
@@ -98,7 +90,7 @@ type ProductFeature {
   verify property "ProductFeature"
 }
 
-type ProductJourney {
+type ProductJourney "Product Journey" {
   persona     EntityId   @optional
   description string     @optional
   channels    EntityId[] @optional
@@ -109,7 +101,7 @@ type ProductJourney {
   verify property "ProductJourney"
 }
 
-type ProductDeliverable {
+type ProductDeliverable "Product Deliverable" {
   description   string            @optional
   artifact_type ArtifactType
   // Absent status is treated as draft (see DeliverableStatus definition).
@@ -129,7 +121,7 @@ type ProductDeliverable {
   verify property "ProductDeliverable"
 }
 
-type ProductMilestone {
+type ProductMilestone "Product Milestone" {
   description   string          @optional
   // Absent status is treated as planned (see MilestoneStatus definition).
   status        MilestoneStatus @optional // absent: the declared default (planned)
@@ -158,7 +150,7 @@ type ProductMilestone {
   verify property "ProductMilestone"
 }
 
-type ProductModule {
+type ProductModule "Product Module" {
   // Standard values: core, platform, extension, integration, advisory.
   // See ModuleFamily enum (other values produce I062).
   family      ModuleFamily @optional
@@ -170,7 +162,7 @@ type ProductModule {
   verify property "ProductModule"
 }
 
-type ProductTerm {
+type ProductTerm "Product Term" {
   definition string
   context    string     @optional
   aliases    string[]   @optional
@@ -180,7 +172,7 @@ type ProductTerm {
   verify property "ProductTerm"
 }
 
-type ProductPersona {
+type ProductPersona "Product Persona" {
   description     string
   technical_level TechnicalLevel @optional
   goals           string[]       @optional
@@ -194,7 +186,7 @@ type ProductPersona {
   verify property "ProductPersona"
 }
 
-type ProductChannel {
+type ProductChannel "Product Channel" {
   description       string
   interaction_model InteractionModel @optional
   url               string           @optional
@@ -206,7 +198,7 @@ type ProductChannel {
   verify property "ProductChannel"
 }
 
-type ProductRelease {
+type ProductRelease "Product Release" {
   description  string        @optional
   // SemVer 2.0.0 (semver.org). Non-conforming values produce W093.
   version      string
@@ -228,14 +220,14 @@ type ProductRelease {
 
 // ── Event Payload Types ────────────────────────────────────
 
-type ProductValidationPayload {
+type ProductValidationPayload "Product Validation Payload" {
   warning_count integer
   info_count    integer
   error_count   integer
   verify property "ProductValidationPayload"
 }
 
-type ProductTraceabilityPayload {
+type ProductTraceabilityPayload "Product Traceability Payload" {
   journey_count         integer
   feature_count         integer
   reachable_features    integer
@@ -247,19 +239,19 @@ type ProductTraceabilityPayload {
 // Each registration phase has its own payload reflecting only what
 // was registered in that phase, avoiding misleading zero-value fields.
 
-type ProductEntityKindsRegisteredPayload {
+type ProductEntityKindsRegisteredPayload "Product Entity Kinds Registered Payload" {
   entity_kind_count integer
   kind_names        string[]
   verify property "ProductEntityKindsRegisteredPayload"
 }
 
-type ProductEdgeTypesRegisteredPayload {
+type ProductEdgeTypesRegisteredPayload "Product Edge Types Registered Payload" {
   edge_type_count integer
   edge_type_names string[]
   verify property "ProductEdgeTypesRegisteredPayload"
 }
 
-type ProductFieldsRegisteredPayload {
+type ProductFieldsRegisteredPayload "Product Fields Registered Payload" {
   field_count       integer
   kinds_with_fields string[]
   verify property "ProductFieldsRegisteredPayload"
@@ -267,21 +259,21 @@ type ProductFieldsRegisteredPayload {
 
 // ── Observability Event Payloads ─────────────────────────────
 
-type ProductEntityRegistrationPayload {
+type ProductEntityRegistrationPayload "Product Entity Registration Payload" {
   entity_kind_count integer
   edge_type_count   integer
   field_count       integer
   verify property "ProductEntityRegistrationPayload"
 }
 
-type ProductCycleDetectedPayload {
+type ProductCycleDetectedPayload "Product Cycle Detected Payload" {
   cycle_kind    string
   cycle_members string[]
   diagnostic    string
   verify property "ProductCycleDetectedPayload"
 }
 
-type ProductDeliverableCycleDetectedPayload {
+type ProductDeliverableCycleDetectedPayload "Product Deliverable Cycle Detected Payload" {
   cycle_members string[]
   diagnostic    string
   verify property "ProductDeliverableCycleDetectedPayload"
@@ -289,7 +281,7 @@ type ProductDeliverableCycleDetectedPayload {
 
 // ── Query Result Payloads ────────────────────────────────────
 
-type MilestoneCompletionPayload {
+type MilestoneCompletionPayload "Milestone Completion Payload" {
   milestone_id     EntityId
   total_features   integer
   done_count       integer
@@ -305,11 +297,7 @@ type MilestoneCompletionPayload {
   verify property "MilestoneCompletionPayload"
 }
 
-// What the recorded tests prove of one feature: the behaviors that name
-// it in their features field, how many the coverage rule counts proven,
-// their obligations and failing tests. Proven when at least one behavior
-// implements it and every one is proven.
-type FeatureEvidence {
+type FeatureEvidence "What the recorded tests prove of one feature: the behaviors that name it in their features field, how many the coverage rule counts proven, their obligations and failing tests. Proven when at least one behavior implements it and every one is proven." {
   feature_id         EntityId
   behaviors          integer
   proven_behaviors   integer
@@ -320,7 +308,7 @@ type FeatureEvidence {
   verify unit "a feature is proven when at least one behavior implements it and every one is proven"
 }
 
-type DeliverableTraceabilityPayload {
+type DeliverableTraceabilityPayload "Deliverable Traceability Payload" {
   deliverable_id      EntityId
   transitive_features EntityId[]
   journey_path_count  integer
@@ -328,7 +316,7 @@ type DeliverableTraceabilityPayload {
   verify property "DeliverableTraceabilityPayload"
 }
 
-type JourneyCoveragePayload {
+type JourneyCoveragePayload "Journey Coverage Payload" {
   journey_id         EntityId
   total_features     integer
   covered_count      integer
@@ -336,20 +324,20 @@ type JourneyCoveragePayload {
   verify property "JourneyCoveragePayload"
 }
 
-type FeatureOrderingPayload {
+type FeatureOrderingPayload "Feature Ordering Payload" {
   sorted_features EntityId[]
   has_cycles      boolean
   cycle_members   EntityId[]
   verify property "FeatureOrderingPayload"
 }
 
-type MilestoneTimelinePayload {
+type MilestoneTimelinePayload "Milestone Timeline Payload" {
   milestones    MilestoneTimelineEntry[]
   overdue_count integer
   verify property "MilestoneTimelinePayload"
 }
 
-type MilestoneTimelineEntry {
+type MilestoneTimelineEntry "Milestone Timeline Entry" {
   milestone_id EntityId
   target_date  string          @optional
   status       MilestoneStatus @optional
@@ -358,7 +346,7 @@ type MilestoneTimelineEntry {
   verify property "MilestoneTimelineEntry"
 }
 
-type FeatureDeliverablePayload {
+type FeatureDeliverablePayload "Feature Deliverable Payload" {
   feature_id        EntityId
   deliverables      EntityId[]
   via_journey_count integer
@@ -366,14 +354,14 @@ type FeatureDeliverablePayload {
   verify property "FeatureDeliverablePayload"
 }
 
-type TermGraphPayload {
+type TermGraphPayload "Term Graph Payload" {
   term_id       EntityId
   related_terms EntityId[]
   max_hops      integer
   verify property "TermGraphPayload"
 }
 
-type DeliverableCompletionPayload {
+type DeliverableCompletionPayload "Deliverable Completion Payload" {
   deliverable_id    EntityId
   milestone_count   integer
   completed_count   integer
@@ -382,35 +370,35 @@ type DeliverableCompletionPayload {
   verify property "DeliverableCompletionPayload"
 }
 
-type PersonaChannelPayload {
+type PersonaChannelPayload "Persona Channel Payload" {
   persona_id EntityId
   channels   EntityId[]
   count      integer
   verify property "PersonaChannelPayload"
 }
 
-type FeatureDependentPayload {
+type FeatureDependentPayload "Feature Dependent Payload" {
   feature_id EntityId
   dependents EntityId[]
   count      integer
   verify property "FeatureDependentPayload"
 }
 
-type DeliverableDependentPayload {
+type DeliverableDependentPayload "Deliverable Dependent Payload" {
   deliverable_id EntityId
   dependents     EntityId[]
   count          integer
   verify property "DeliverableDependentPayload"
 }
 
-type DeliverablePriorityPayload {
+type DeliverablePriorityPayload "Deliverable Priority Payload" {
   deliverable_id EntityId
   priority       Priority @optional
   source_count   integer
   verify property "DeliverablePriorityPayload"
 }
 
-type ProductTagConsistencyPayload {
+type ProductTagConsistencyPayload "Product Tag Consistency Payload" {
   tag        string
   entity_id  EntityId
   suggestion string @optional
@@ -424,12 +412,12 @@ type ProductTagConsistencyPayload {
 
 // -- Common filter/pagination for list commands --
 
-type ProductListSortOrder {
+type ProductListSortOrder "Product List Sort Order" {
   values [asc, desc]
   verify property "ProductListSortOrder"
 }
 
-type ProductListFilter {
+type ProductListFilter "Product List Filter" {
   status     string               @optional
   priority   string               @optional
   tags       string[]             @optional
@@ -440,7 +428,7 @@ type ProductListFilter {
   verify property "ProductListFilter"
 }
 
-type ProductEntitySummary {
+type ProductEntitySummary "Product Entity Summary" {
   id       EntityId
   title    string
   kind     string
@@ -450,7 +438,7 @@ type ProductEntitySummary {
   verify property "ProductEntitySummary"
 }
 
-type ProductListResult {
+type ProductListResult "Product List Result" {
   entities ProductEntitySummary[]
   total    integer
   offset   integer
@@ -462,7 +450,7 @@ type ProductListResult {
 // -- Per-kind list output types --
 // Extend the common summary with kind-specific key fields.
 
-type FeatureListEntry {
+type FeatureListEntry "Feature List Entry" {
   id       EntityId
   title    string
   status   FeatureStatus @optional
@@ -472,7 +460,7 @@ type FeatureListEntry {
   verify property "FeatureListEntry"
 }
 
-type JourneyListEntry {
+type JourneyListEntry "Journey List Entry" {
   id            EntityId
   title         string
   persona       EntityId @optional
@@ -483,7 +471,7 @@ type JourneyListEntry {
   verify property "JourneyListEntry"
 }
 
-type DeliverableListEntry {
+type DeliverableListEntry "Deliverable List Entry" {
   id            EntityId
   title         string
   artifact_type ArtifactType      @optional
@@ -494,7 +482,7 @@ type DeliverableListEntry {
   verify property "DeliverableListEntry"
 }
 
-type MilestoneListEntry {
+type MilestoneListEntry "Milestone List Entry" {
   id            EntityId
   title         string
   status        MilestoneStatus @optional
@@ -505,7 +493,7 @@ type MilestoneListEntry {
   verify property "MilestoneListEntry"
 }
 
-type ModuleListEntry {
+type ModuleListEntry "Module List Entry" {
   id            EntityId
   title         string
   family        ModuleFamily @optional
@@ -515,7 +503,7 @@ type ModuleListEntry {
   verify property "ModuleListEntry"
 }
 
-type TermListEntry {
+type TermListEntry "Term List Entry" {
   id          EntityId
   title       string
   definition  string
@@ -524,7 +512,7 @@ type TermListEntry {
   verify property "TermListEntry"
 }
 
-type PersonaListEntry {
+type PersonaListEntry "Persona List Entry" {
   id              EntityId
   title           string
   technical_level TechnicalLevel @optional
@@ -534,7 +522,7 @@ type PersonaListEntry {
   verify property "PersonaListEntry"
 }
 
-type ChannelListEntry {
+type ChannelListEntry "Channel List Entry" {
   id                EntityId
   title             string
   interaction_model InteractionModel @optional
@@ -546,7 +534,7 @@ type ChannelListEntry {
 
 // -- Typed list results per kind --
 
-type FeatureListResult {
+type FeatureListResult "Feature List Result" {
   features FeatureListEntry[]
   total    integer
   offset   integer
@@ -555,7 +543,7 @@ type FeatureListResult {
   verify property "FeatureListResult"
 }
 
-type JourneyListResult {
+type JourneyListResult "Journey List Result" {
   journeys JourneyListEntry[]
   total    integer
   offset   integer
@@ -564,7 +552,7 @@ type JourneyListResult {
   verify property "JourneyListResult"
 }
 
-type DeliverableListResult {
+type DeliverableListResult "Deliverable List Result" {
   deliverables DeliverableListEntry[]
   total        integer
   offset       integer
@@ -573,7 +561,7 @@ type DeliverableListResult {
   verify property "DeliverableListResult"
 }
 
-type MilestoneListResult {
+type MilestoneListResult "Milestone List Result" {
   milestones MilestoneListEntry[]
   total      integer
   offset     integer
@@ -582,7 +570,7 @@ type MilestoneListResult {
   verify property "MilestoneListResult"
 }
 
-type ModuleListResult {
+type ModuleListResult "Module List Result" {
   modules  ModuleListEntry[]
   total    integer
   offset   integer
@@ -591,7 +579,7 @@ type ModuleListResult {
   verify property "ModuleListResult"
 }
 
-type TermListResult {
+type TermListResult "Term List Result" {
   terms    TermListEntry[]
   total    integer
   offset   integer
@@ -600,7 +588,7 @@ type TermListResult {
   verify property "TermListResult"
 }
 
-type PersonaListResult {
+type PersonaListResult "Persona List Result" {
   personas PersonaListEntry[]
   total    integer
   offset   integer
@@ -609,7 +597,7 @@ type PersonaListResult {
   verify property "PersonaListResult"
 }
 
-type ChannelListResult {
+type ChannelListResult "Channel List Result" {
   channels ChannelListEntry[]
   total    integer
   offset   integer
@@ -621,25 +609,23 @@ type ChannelListResult {
 // -- Query command input types --
 // CLI flags map to these fields. MCP tool inputs use the same schema.
 
-type MilestoneCompletionInput {
+type MilestoneCompletionInput "Milestone Completion Input" {
   milestone EntityId
   verify property "MilestoneCompletionInput"
 }
 
-type JourneyCoverageInput {
+type JourneyCoverageInput "Journey Coverage Input" {
   journey EntityId
   verify property "JourneyCoverageInput"
 }
 
-type MilestoneTimelineInput {
+type MilestoneTimelineInput "Milestone Timeline Input" {
   // YYYY-MM-DD; defaults to the today the host passes (CommandInput.today).
   as_of string @optional
   verify property "MilestoneTimelineInput"
 }
 
-// What a command writes to stderr under --format json when it cannot
-// answer: code ENTITY_NOT_FOUND (exit 1) or INVALID_INPUT (exit 2).
-type ProductSurfaceError {
+type ProductSurfaceError "What a command writes to stderr under --format json when it cannot answer: code ENTITY_NOT_FOUND (exit 1) or INVALID_INPUT (exit 2)." {
   code       string
   message    string
   entity_id  EntityId @optional
@@ -649,20 +635,20 @@ type ProductSurfaceError {
 
 // ── Error types for product extension ports ──────────────────
 
-type ProductQueryError {
+type ProductQueryError "Product Query Error" {
   _tag      "ProductQueryError"
   entity_id EntityId @optional
   message   string
   verify property "ProductQueryError"
 }
 
-type ProductValidationError {
+type ProductValidationError "Product Validation Error" {
   _tag    "ProductValidationError"
   message string
   verify property "ProductValidationError"
 }
 
-type RegistrationError {
+type RegistrationError "Registration Error" {
   _tag      "RegistrationError"
   kind_name string @optional
   message   string
@@ -671,7 +657,7 @@ type RegistrationError {
 
 // ── Persona-Feature Traversal ────────────────────────────────
 
-type PersonaFeaturePayload {
+type PersonaFeaturePayload "Persona Feature Payload" {
   persona_id      EntityId
   features        EntityId[]
   via_journey_ids EntityId[]
@@ -681,7 +667,7 @@ type PersonaFeaturePayload {
 
 // ── Feature Impact Analysis ──────────────────────────────────
 
-type FeatureImpactPayload {
+type FeatureImpactPayload "Feature Impact Payload" {
   feature_id              EntityId
   affected_journeys       EntityId[]
   affected_milestones     EntityId[]
@@ -694,7 +680,7 @@ type FeatureImpactPayload {
 
 // ── Milestone Velocity ───────────────────────────────────────
 
-type MilestoneVelocityPayload {
+type MilestoneVelocityPayload "Milestone Velocity Payload" {
   milestone_id         EntityId
   total_features       integer
   done_features        integer
@@ -709,7 +695,7 @@ type MilestoneVelocityPayload {
 
 // ── Deliverable-Persona Composite Query ────────────────────
 
-type DeliverablePersonaPayload {
+type DeliverablePersonaPayload "Deliverable Persona Payload" {
   deliverable_id  EntityId
   personas        EntityId[]
   via_journey_ids EntityId[]
@@ -719,7 +705,7 @@ type DeliverablePersonaPayload {
 
 // ── Validation Rule Observability ──────────────────────────
 
-type ProductValidationRuleFiredPayload {
+type ProductValidationRuleFiredPayload "Product Validation Rule Fired Payload" {
   rule_id         string
   diagnostic_code string
   severity        string
@@ -728,7 +714,7 @@ type ProductValidationRuleFiredPayload {
   verify property "ProductValidationRuleFiredPayload"
 }
 
-type ProductValidationSummaryPayload {
+type ProductValidationSummaryPayload "Product Validation Summary Payload" {
   rules_evaluated  integer
   rules_fired      integer
   rules_suppressed integer
@@ -736,7 +722,7 @@ type ProductValidationSummaryPayload {
   verify property "ProductValidationSummaryPayload"
 }
 
-type ProductDiagnosticCounts {
+type ProductDiagnosticCounts "Product Diagnostic Counts" {
   error   integer
   warning integer
   info    integer
@@ -745,7 +731,7 @@ type ProductDiagnosticCounts {
 
 // ── Rendering Types ────────────────────────────────────────
 
-type ProductRenderPayload {
+type ProductRenderPayload "Product Render Payload" {
   format         string
   entity_count   integer
   edge_count     integer
@@ -753,7 +739,7 @@ type ProductRenderPayload {
   verify property "ProductRenderPayload"
 }
 
-type ProductEntityDiagnostic {
+type ProductEntityDiagnostic "Product Entity Diagnostic" {
   code     string
   severity string
   message  string
@@ -765,7 +751,7 @@ type ProductEntityDiagnostic {
 // transitions. Absent status fields
 // are treated as the default value and are always valid starting points.
 
-type FeatureStatusTransition {
+type FeatureStatusTransition "Feature Status Transition" {
   // proposed -> accepted | deferred
   // accepted -> in_progress | deferred
   // in_progress -> done | deferred
@@ -777,7 +763,7 @@ type FeatureStatusTransition {
   verify property "FeatureStatusTransition"
 }
 
-type MilestoneStatusTransition {
+type MilestoneStatusTransition "Milestone Status Transition" {
   // planned -> in_progress | blocked
   // in_progress -> completed | blocked
   // blocked -> planned | in_progress
@@ -787,7 +773,7 @@ type MilestoneStatusTransition {
   verify property "MilestoneStatusTransition"
 }
 
-type DeliverableStatusTransition {
+type DeliverableStatusTransition "Deliverable Status Transition" {
   // draft -> in_progress
   // in_progress -> shipped | draft
   // shipped -> deprecated
@@ -797,7 +783,7 @@ type DeliverableStatusTransition {
   verify property "DeliverableStatusTransition"
 }
 
-type PersonaStatusTransition {
+type PersonaStatusTransition "Persona Status Transition" {
   // active -> deprecated
   // deprecated is terminal
   from PersonaStatus
@@ -805,7 +791,7 @@ type PersonaStatusTransition {
   verify property "PersonaStatusTransition"
 }
 
-type ChannelStatusTransition {
+type ChannelStatusTransition "Channel Status Transition" {
   // active -> deprecated
   // deprecated is terminal
   from ChannelStatus
@@ -813,7 +799,7 @@ type ChannelStatusTransition {
   verify property "ChannelStatusTransition"
 }
 
-type ReleaseStatusTransition {
+type ReleaseStatusTransition "Release Status Transition" {
   // planned -> in_progress
   // in_progress -> released
   // released -> recalled
@@ -823,7 +809,7 @@ type ReleaseStatusTransition {
   verify property "ReleaseStatusTransition"
 }
 
-type StatusTransitionViolation {
+type StatusTransitionViolation "Status Transition Violation" {
   entity_id     EntityId
   entity_kind   string
   from_status   string @optional
@@ -834,7 +820,7 @@ type StatusTransitionViolation {
 
 // ── Unscheduled Features Query ──────────────────────────────
 
-type UnscheduledFeaturesPayload {
+type UnscheduledFeaturesPayload "Unscheduled Features Payload" {
   features        EntityId[]
   count           integer
   total_features  integer
@@ -844,14 +830,14 @@ type UnscheduledFeaturesPayload {
 
 // ── Cross-Deliverable Feature Overlap ───────────────────────
 
-type FeatureOverlapEntry {
+type FeatureOverlapEntry "Feature Overlap Entry" {
   feature_id        EntityId
   deliverable_ids   EntityId[]
   deliverable_count integer
   verify property "FeatureOverlapEntry"
 }
 
-type FeatureOverlapPayload {
+type FeatureOverlapPayload "Feature Overlap Payload" {
   overlapping_features FeatureOverlapEntry[]
   count                integer
   total_features       integer
@@ -864,7 +850,7 @@ type FeatureOverlapPayload {
 
 // ── Persona Coverage Matrix ─────────────────────────────────
 
-type PersonaCoverageEntry {
+type PersonaCoverageEntry "Persona Coverage Entry" {
   persona_id           EntityId
   reachable_features   EntityId[]
   unreachable_features EntityId[]
@@ -873,7 +859,7 @@ type PersonaCoverageEntry {
   verify property "PersonaCoverageEntry"
 }
 
-type PersonaCoverageMatrixPayload {
+type PersonaCoverageMatrixPayload "Persona Coverage Matrix Payload" {
   personas         PersonaCoverageEntry[]
   total_features   integer
   overall_coverage float @optional
@@ -886,7 +872,7 @@ type PersonaCoverageMatrixPayload {
 
 // ── Channel Coverage Matrix ─────────────────────────────────
 
-type ChannelCoverageEntry {
+type ChannelCoverageEntry "Channel Coverage Entry" {
   channel_id           EntityId
   reachable_features   EntityId[]
   unreachable_features EntityId[]
@@ -895,7 +881,7 @@ type ChannelCoverageEntry {
   verify property "ChannelCoverageEntry"
 }
 
-type ChannelCoverageMatrixPayload {
+type ChannelCoverageMatrixPayload "Channel Coverage Matrix Payload" {
   channels         ChannelCoverageEntry[]
   total_features   integer
   overall_coverage float @optional
@@ -908,7 +894,7 @@ type ChannelCoverageMatrixPayload {
 
 // ── Critical Path Analysis ──────────────────────────────────
 
-type CriticalPathNode {
+type CriticalPathNode "Critical Path Node" {
   entity_id   EntityId
   entity_kind string
   target_date string  @optional
@@ -917,7 +903,7 @@ type CriticalPathNode {
   verify property "CriticalPathNode"
 }
 
-type CriticalPathPayload {
+type CriticalPathPayload "Critical Path Payload" {
   critical_path       CriticalPathNode[]
   path_length         integer
   earliest_completion string @optional
@@ -930,7 +916,7 @@ type CriticalPathPayload {
 
 // ── v1.1 Payload Types — ownership, effort, release ──────────
 
-type OwnerKindBreakdown {
+type OwnerKindBreakdown "Owner Kind Breakdown" {
   features     integer
   milestones   integer
   deliverables integer
@@ -938,7 +924,7 @@ type OwnerKindBreakdown {
   verify property "OwnerKindBreakdown"
 }
 
-type OwnerWorkloadEntry {
+type OwnerWorkloadEntry "Owner Workload Entry" {
   owner        string
   entity_ids   EntityId[]
   entity_count integer
@@ -946,7 +932,7 @@ type OwnerWorkloadEntry {
   verify property "OwnerWorkloadEntry"
 }
 
-type OwnerWorkloadPayload {
+type OwnerWorkloadPayload "Owner Workload Payload" {
   owners         OwnerWorkloadEntry[]
   unowned_count  integer
   total_entities integer
@@ -957,14 +943,14 @@ type OwnerWorkloadPayload {
   verify property "OwnerWorkloadPayload"
 }
 
-type EffortBreakdownEntry {
+type EffortBreakdownEntry "Effort Breakdown Entry" {
   effort_level Effort
   total        integer
   done         integer
   verify property "EffortBreakdownEntry"
 }
 
-type WeightedMilestoneCompletionPayload {
+type WeightedMilestoneCompletionPayload "Weighted Milestone Completion Payload" {
   milestone_id     EntityId
   total_effort     integer
   done_effort      integer
@@ -973,7 +959,7 @@ type WeightedMilestoneCompletionPayload {
   verify property "WeightedMilestoneCompletionPayload"
 }
 
-type ReleaseCompletionPayload {
+type ReleaseCompletionPayload "Release Completion Payload" {
   release_id       EntityId
   total            integer
   shipped          integer
@@ -981,7 +967,7 @@ type ReleaseCompletionPayload {
   verify property "ReleaseCompletionPayload"
 }
 
-type ReleaseListEntry {
+type ReleaseListEntry "Release List Entry" {
   id                EntityId
   title             string        @optional
   version           string        @optional
@@ -992,7 +978,7 @@ type ReleaseListEntry {
   verify property "ReleaseListEntry"
 }
 
-type ReleaseListResult {
+type ReleaseListResult "Release List Result" {
   releases ReleaseListEntry[]
   total    integer
   offset   integer
@@ -1003,14 +989,14 @@ type ReleaseListResult {
 
 // ── Term Analytics ──────────────────────────────────────────
 
-type TermCluster {
+type TermCluster "Term Cluster" {
   cluster_id integer
   term_ids   EntityId[]
   term_count integer
   verify property "TermCluster"
 }
 
-type TermClusterPayload {
+type TermClusterPayload "Term Cluster Payload" {
   clusters       TermCluster[]
   cluster_count  integer
   isolated_count integer
@@ -1018,7 +1004,7 @@ type TermClusterPayload {
   verify property "TermClusterPayload"
 }
 
-type TermDensityPayload {
+type TermDensityPayload "Term Density Payload" {
   total_terms     integer
   total_see_also  integer
   avg_connections float @optional
@@ -1030,14 +1016,14 @@ type TermDensityPayload {
 
 // ── Module Analytics ───────────────────────────────────────
 
-type ModuleDependencyDepthPayload {
+type ModuleDependencyDepthPayload "Module Dependency Depth Payload" {
   module_id     EntityId
   depth         integer
   longest_chain EntityId[]
   verify property "ModuleDependencyDepthPayload"
 }
 
-type ModuleCouplingEntry {
+type ModuleCouplingEntry "Module Coupling Entry" {
   module_id EntityId
   fan_in    integer
   fan_out   integer
@@ -1045,7 +1031,7 @@ type ModuleCouplingEntry {
   verify property "ModuleCouplingEntry"
 }
 
-type ModuleCouplingPayload {
+type ModuleCouplingPayload "Module Coupling Payload" {
   modules         ModuleCouplingEntry[]
   avg_fan_in      float    @optional
   avg_fan_out     float    @optional
@@ -1060,7 +1046,7 @@ type ModuleCouplingPayload {
 
 // ── Channel-Feature Traversal ──────────────────────────────
 
-type ChannelFeaturePayload {
+type ChannelFeaturePayload "Channel Feature Payload" {
   channel_id      EntityId
   features        EntityId[]
   via_journey_ids EntityId[]
@@ -1074,7 +1060,7 @@ type ChannelFeaturePayload {
 // (integer, default 100, clamped to [1, 1000]) and report where the page
 // sits. There are no cursors.
 
-type PaginationMetadata {
+type PaginationMetadata "Pagination Metadata" {
   // Entries after filters, before paging.
   total    integer
   offset   integer
@@ -1086,27 +1072,25 @@ type PaginationMetadata {
 
 // ── Project-wide summaries ───────────────────────────────────
 
-type StatusCount {
+type StatusCount "Status Count" {
   status string
   count  integer
   verify property "StatusCount"
 }
 
-type KindStatusCounts {
+type KindStatusCounts "Kind Status Counts" {
   kind      string
   total     integer
   by_status StatusCount[]
   verify property "KindStatusCounts"
 }
 
-// bulk-status: one entry per lifecycle kind with entities, in the order
-// feature, milestone, deliverable, persona, channel, release.
-type BulkStatusPayload {
+type BulkStatusPayload "bulk-status: one entry per lifecycle kind with entities, in the order feature, milestone, deliverable, persona, channel, release." {
   kinds KindStatusCounts[]
   verify property "BulkStatusPayload"
 }
 
-type HealthScore {
+type HealthScore "Health Score" {
   // Each in [0, 100]; overall is the mean of the other three.
   overall      float
   coverage     float
@@ -1115,20 +1099,20 @@ type HealthScore {
   verify property "HealthScore"
 }
 
-type KindCount {
+type KindCount "Kind Count" {
   kind  string
   count integer
   verify property "KindCount"
 }
 
-type KindUnreferencedCount {
+type KindUnreferencedCount "Kind Unreferenced Count" {
   kind         string
   unreferenced integer
   total        integer
   verify property "KindUnreferencedCount"
 }
 
-type HealthCompleteness {
+type HealthCompleteness "Health Completeness" {
   features_with_status     integer
   features_total           integer
   milestones_with_features integer
@@ -1136,7 +1120,7 @@ type HealthCompleteness {
   verify property "HealthCompleteness"
 }
 
-type HealthPayload {
+type HealthPayload "Health Payload" {
   score               HealthScore
   entity_counts       KindCount[]
   unreferenced_counts KindUnreferencedCount[]

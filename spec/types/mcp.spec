@@ -5,11 +5,14 @@ use "types/diagnostics"
 use "types/formatting"
 use "types/migration"
 
-/// -32002: resource not found, in the handshake revisions (2025-03-26 to
-/// 2025-11-25); the 2026-07-28 revision answers -32602.
-type JsonRpcErrorCode = -32700 | -32600 | -32601 | -32602 | -32603 | -32002
+type JsonRpcErrorCode "-32002: resource not found, in the handshake revisions (2025-03-26 to 2025-11-25); the 2026-07-28 revision answers -32602." = -32700
+  | -32600
+  | -32601
+  | -32602
+  | -32603
+  | -32002
 
-type McpErrorCode = "invalid_input"
+type McpErrorCode "Mcp Error Code" = "invalid_input"
   | "compilation_failed"
   | "entity_not_found"
   | "file_not_found"
@@ -82,32 +85,31 @@ type McpDiscoverResult "MCP Discover Result" {
   verify unit "McpDiscoverResult schema is valid"
 }
 
-type McpServerCapabilities {
+type McpServerCapabilities "Mcp Server Capabilities" {
   tools     McpListChanged
   resources McpResourcesCapability
   prompts   McpListChanged
   verify unit "McpServerCapabilities schema is valid"
 }
 
-type McpListChanged {
+type McpListChanged "Mcp List Changed" {
   listChanged boolean
   verify unit "McpListChanged schema is valid"
 }
 
-type McpResourcesCapability {
+type McpResourcesCapability "Mcp Resources Capability" {
   subscribe   boolean
   listChanged boolean
   verify unit "McpResourcesCapability schema is valid"
 }
 
-type McpServerInfo {
+type McpServerInfo "Mcp Server Info" {
   name    string @readonly
   version string @readonly
   verify unit "McpServerInfo schema is valid"
 }
 
-// A resource as resources/list lists it (MCP Resource).
-type McpResourceDescriptor {
+type McpResourceDescriptor "A resource as resources/list lists it (MCP Resource)." {
   uri         string @readonly
   name        string
   description string @optional
@@ -115,9 +117,7 @@ type McpResourceDescriptor {
   verify unit "McpResourceDescriptor schema is valid"
 }
 
-// A templated resource as resources/templates/list lists it (MCP
-// ResourceTemplate).
-type McpResourceTemplateDescriptor {
+type McpResourceTemplateDescriptor "A templated resource as resources/templates/list lists it (MCP ResourceTemplate)." {
   uriTemplate string @readonly
   name        string
   description string @optional
@@ -125,10 +125,7 @@ type McpResourceTemplateDescriptor {
   verify unit "McpResourceTemplateDescriptor schema is valid"
 }
 
-// A tool as tools/list lists it (MCP Tool, with SpecForge's category and
-// source). inputSchema and outputSchema are JSON Schema documents: open
-// values. outputSchema is listed from 2025-06-18, for a tool with one.
-type McpToolDescriptor {
+type McpToolDescriptor "A tool as tools/list lists it (MCP Tool, with SpecForge's category and source). inputSchema and outputSchema are JSON Schema documents: open values. outputSchema is listed from 2025-06-18, for a tool with one." {
   name         string @readonly
   description  string
   inputSchema  object
@@ -142,11 +139,7 @@ type McpToolDescriptor {
   verify unit "McpToolDescriptor schema is valid"
 }
 
-// MCP's ToolAnnotations. A core tool's derive from what its tool spec
-// declares it does: a read is readOnlyHint and not openWorldHint; a tool
-// that writes states all four. An extension tool's say it only reads,
-// since the host grants an extension no capability.
-type McpToolAnnotations {
+type McpToolAnnotations "MCP's ToolAnnotations. A core tool's derive from what its tool spec declares it does: a read is readOnlyHint and not openWorldHint; a tool that writes states all four. An extension tool's say it only reads, since the host grants an extension no capability." {
   readOnlyHint    boolean
   destructiveHint boolean @optional
   idempotentHint  boolean @optional
@@ -154,20 +147,19 @@ type McpToolAnnotations {
   verify unit "McpToolAnnotations schema is valid"
 }
 
-// Tool categories: "management" corresponds to the "Project Management Tools"
-// feature group (specforge.extensions, specforge.providers, specforge.doctor,
-// specforge.collect, specforge.render). The short name is used in the protocol
-// for brevity; UIs and documentation may display "project management".
-type McpToolCategory = "core" | "navigation" | "mutation" | "management"
+type McpToolCategory "Tool categories: \"management\" corresponds to the \"Project Management Tools\" feature group (specforge.extensions, specforge.providers, specforge.doctor, specforge.collect, specforge.render). The short name is used in the protocol for brevity; UIs and documentation may display \"project management\"." = "core"
+  | "navigation"
+  | "mutation"
+  | "management"
 
-type McpPromptDescriptor {
+type McpPromptDescriptor "Mcp Prompt Descriptor" {
   name        string @readonly
   description string
   arguments   McpPromptArgument[]
   verify unit "McpPromptDescriptor schema is valid"
 }
 
-type McpPromptArgument {
+type McpPromptArgument "Mcp Prompt Argument" {
   name        string @readonly
   description string
   required    boolean
@@ -192,7 +184,7 @@ type McpPromptArgument {
 // McpProvidersResult, McpDoctorReport, McpInferProgressResult,
 // McpInferGapsResult and McpTraceChainResult.
 
-type McpInspectResult {
+type McpInspectResult "Mcp Inspect Result" {
   entity_id           string     @readonly
   kind                string     @readonly
   /// Absent when the entity declares no title.
@@ -228,7 +220,7 @@ type McpInspectResult {
   verify unit "McpInspectResult schema is valid"
 }
 
-type McpDefinitionResult {
+type McpDefinitionResult "Mcp Definition Result" {
   entity_id   string     @readonly
   file_path   string     @readonly
   /// The position of the entity's name.
@@ -243,7 +235,7 @@ type McpDefinitionResult {
   verify unit "McpDefinitionResult schema is valid"
 }
 
-type McpReferenceLocation {
+type McpReferenceLocation "Mcp Reference Location" {
   referencing_entity_id string     @readonly
   referenced_entity_id  string     @readonly
   /// The field naming the referenced entity; absent for its declaration.
@@ -256,7 +248,7 @@ type McpReferenceLocation {
   verify unit "McpReferenceLocation schema is valid"
 }
 
-type McpReferenceResult {
+type McpReferenceResult "Mcp Reference Result" {
   entity_id string @readonly
   /// "incoming", "outgoing" or "both" (navigate::DIRECTION).
   direction "incoming" | "outgoing" | "both"
@@ -264,13 +256,13 @@ type McpReferenceResult {
   verify unit "McpReferenceResult schema is valid"
 }
 
-type McpOutlineResult {
+type McpOutlineResult "Mcp Outline Result" {
   /// The file's entities in line order.
   entries McpOutlineEntry[]
   verify unit "McpOutlineResult schema is valid"
 }
 
-type McpOutlineEntry {
+type McpOutlineEntry "Mcp Outline Entry" {
   entity_id  string            @readonly
   kind       string            @readonly
   /// Absent when the entity declares no title.
@@ -295,12 +287,12 @@ type McpOutlineChild "One method member of an outlined entity" {
   verify unit "McpOutlineChild schema is valid"
 }
 
-type McpFixSuggestions {
+type McpFixSuggestions "Mcp Fix Suggestions" {
   fixes McpFixSuggestion[]
   verify unit "McpFixSuggestions schema is valid"
 }
 
-type McpFixSuggestion {
+type McpFixSuggestion "Mcp Fix Suggestion" {
   /// The LSP code action's title, e.g. "Replace with 'session_limit'".
   title           string
   kind            "quickfix" | "refactor"
@@ -313,7 +305,7 @@ type McpFixSuggestion {
   verify unit "McpFixSuggestion schema is valid"
 }
 
-type McpStatsResult {
+type McpStatsResult "Mcp Stats Result" {
   /// Every entity of the graph.
   entity_count       integer
   /// The entities of each kind, by kind.
@@ -335,26 +327,26 @@ type McpStatsResult {
   verify unit "McpStatsResult schema is valid"
 }
 
-type McpEntityCount {
+type McpEntityCount "Mcp Entity Count" {
   kind  string @readonly
   count integer
   verify unit "McpEntityCount schema is valid"
 }
 
-type McpDiagnosticSummary {
+type McpDiagnosticSummary "Mcp Diagnostic Summary" {
   errors   integer
   warnings integer
   infos    integer
   verify unit "McpDiagnosticSummary schema is valid"
 }
 
-type McpListResult {
+type McpListResult "Mcp List Result" {
   /// The entities, sorted by id and paged.
   entities McpListedEntity[]
   verify unit "McpListResult schema is valid"
 }
 
-type McpListedEntity {
+type McpListedEntity "Mcp Listed Entity" {
   id    string @readonly
   kind  string @readonly
   /// The entity's title; empty when it has none.
@@ -362,7 +354,7 @@ type McpListedEntity {
   verify unit "McpListedEntity schema is valid"
 }
 
-type McpExtensionsResult {
+type McpExtensionsResult "Mcp Extensions Result" {
   extensions            McpExtensionInfo[]
   /// How many extensions are listed.
   count                 integer
@@ -371,13 +363,13 @@ type McpExtensionsResult {
   verify unit "McpExtensionsResult schema is valid"
 }
 
-type McpLockEntry {
+type McpLockEntry "Mcp Lock Entry" {
   name    string @readonly
   version string
   verify unit "McpLockEntry schema is valid"
 }
 
-type McpExtensionInfo {
+type McpExtensionInfo "Mcp Extension Info" {
   name             string @readonly
   /// The loaded version; else an installed extension's locked one; else the
   /// version a legacy name@version entry writes; absent otherwise.
@@ -396,7 +388,7 @@ type McpExtensionInfo {
   verify unit "McpExtensionInfo schema is valid"
 }
 
-type McpProvidersResult {
+type McpProvidersResult "Mcp Providers Result" {
   providers   McpProviderInfo[]
   count       integer
   /// W118 (a malformed entry, or an extension that is not loaded or
@@ -405,7 +397,7 @@ type McpProvidersResult {
   verify unit "McpProvidersResult schema is valid"
 }
 
-type McpProviderInfo {
+type McpProviderInfo "Mcp Provider Info" {
   scheme    string @readonly
   alias     string
   extension string @readonly
@@ -413,7 +405,7 @@ type McpProviderInfo {
   verify unit "McpProviderInfo schema is valid"
 }
 
-type McpDoctorFinding {
+type McpDoctorFinding "Mcp Doctor Finding" {
   /// What the finding is about: config, lock, binary, load, structural_only, providers,
   /// declaration, peer, registry, rule, surface, conflict, shadowing or toolchain.
   about       "config" | "lock" | "binary" | "load" | "structural_only" | "providers" | "declaration" | "peer" | "registry" | "rule" | "surface" | "conflict" | "shadowing" | "toolchain"
@@ -429,7 +421,7 @@ type McpDoctorFinding {
   verify unit "McpDoctorFinding schema is valid"
 }
 
-type McpDoctorExtension {
+type McpDoctorExtension "Mcp Doctor Extension" {
   name              string @readonly
   /// The version the extensions listing gives it; absent when it has none.
   version           string @optional
@@ -442,7 +434,7 @@ type McpDoctorExtension {
   verify unit "McpDoctorExtension schema is valid"
 }
 
-type McpDoctorReport {
+type McpDoctorReport "Mcp Doctor Report" {
   /// The report's verdict: no error-level finding (specforge doctor exits 1 without it).
   ok              boolean
   /// No error-level finding about an installed binary, an extension load or a peer requirement.
@@ -461,7 +453,7 @@ type McpDoctorReport {
   verify unit "McpDoctorReport schema is valid"
 }
 
-type McpInitResult {
+type McpInitResult "Mcp Init Result" {
   /// The new project's root, absolute.
   project_root         string @readonly
   name                 string
@@ -475,7 +467,7 @@ type McpInitResult {
   verify unit "McpInitResult schema is valid"
 }
 
-type McpFormatResult {
+type McpFormatResult "Mcp Format Result" {
   /// The files that would change (or did), each named from the project root (ADR 0102).
   changed_files string[]
   total_checked integer
@@ -511,13 +503,13 @@ type McpFormatFailure "One file a format could not read or write" {
   verify unit "McpFormatFailure schema is valid"
 }
 
-type McpSearchResults {
+type McpSearchResults "Mcp Search Results" {
   /// The hits, best first.
   results McpSearchResult[]
   verify unit "McpSearchResults schema is valid"
 }
 
-type McpSearchResult {
+type McpSearchResult "Mcp Search Result" {
   entity_id     string  @readonly
   kind          string  @readonly
   /// Absent when the entity declares no title.
@@ -535,23 +527,15 @@ type McpSearchResult {
   verify unit "McpSearchResult schema is valid"
 }
 
-type CoverageStatus = "covered" | "uncovered" | "partial"
+type CoverageStatus "Coverage Status" = "covered" | "uncovered" | "partial"
 
-// P2 compliance: CoverageStatus is a structural computation, not domain vocabulary.
-// An obligation is proven when a passing recorded test names its verify text,
-// the same rule `analyze coverage` applies (A015), computable without extension input:
-//   covered   = every obligation proven AND no recorded test fails
-//   partial   = not covered, AND some obligation proven OR a recorded test fails
-//   uncovered = no obligation proven and no recorded test fails (incl. no verify declarations)
-// Extensions may overlay domain-specific labels (pass/fail, conformant/non-conformant)
-// via extension-contributed metadata fields on their entity kinds.
-type McpCoverageResults {
+type McpCoverageResults "P2 compliance: CoverageStatus is a structural computation, not domain vocabulary. An obligation is proven when a passing recorded test names its verify text, the same rule `analyze coverage` applies (A015), computable without extension input: covered   = every obligation proven AND no recorded test fails partial   = not covered, AND some obligation proven OR a recorded test fails uncovered = no obligation proven and no recorded test fails (incl. no verify declarations) Extensions may overlay domain-specific labels (pass/fail, conformant/non-conformant) via extension-contributed metadata fields on their entity kinds." {
   /// One row per entity that counts toward coverage (or the one named).
   entities McpCoverageResult[]
   verify unit "McpCoverageResults schema is valid"
 }
 
-type McpCoverageResult {
+type McpCoverageResult "Mcp Coverage Result" {
   entity_id          string @readonly
   kind               string @readonly
   status             CoverageStatus
@@ -570,7 +554,7 @@ type McpCoverageResult {
   verify unit "McpCoverageResult schema is valid"
 }
 
-type McpRenameResult {
+type McpRenameResult "Mcp Rename Result" {
   old_name       string       @readonly
   new_name       string       @readonly
   /// The files the rename edits, relative to the spec root.
@@ -596,7 +580,7 @@ type McpRenameEdit "One occurrence of the old identifier a rename replaces" {
   verify unit "McpRenameEdit schema is valid"
 }
 
-type McpTraceResult = McpTraceChainResult | McpTracePlanResult
+type McpTraceResult "Mcp Trace Result" = McpTraceChainResult | McpTracePlanResult
 
 type McpTraceChainResult "Trace tool response when entity_id is provided" {
   schema_version string
@@ -609,7 +593,7 @@ type McpTraceChainResult "Trace tool response when entity_id is provided" {
   verify unit "Trace tool response when entity_id is provided conforms to schema"
 }
 
-type McpTraceLink {
+type McpTraceLink "Mcp Trace Link" {
   entity_id   string @readonly
   entity_kind string @readonly
   edge_label  string
@@ -643,7 +627,7 @@ type McpTracePlanResult "Trace tool response when plan parameter is provided" {
   verify unit "Trace tool response when plan parameter is provided conforms to schema"
 }
 
-type McpAnalyzeResult {
+type McpAnalyzeResult "Mcp Analyze Result" {
   /// The run's verdict is passed.
   ok            boolean
   passes        McpAnalyzePass[]
@@ -654,7 +638,7 @@ type McpAnalyzeResult {
   verify unit "McpAnalyzeResult schema is valid"
 }
 
-type McpAnalyzePass {
+type McpAnalyzePass "Mcp Analyze Pass" {
   pass     string @readonly
   findings Diagnostic[]
   /// What the pass summarizes: the pass's own.
@@ -662,9 +646,9 @@ type McpAnalyzePass {
   verify unit "McpAnalyzePass schema is valid"
 }
 
-type McpAnalyzeGate = McpGateMet | McpGateBelow | McpGateUnjudged
+type McpAnalyzeGate "Mcp Analyze Gate" = McpGateMet | McpGateBelow | McpGateUnjudged
 
-type McpGateMet {
+type McpGateMet "Mcp Gate Met" {
   status "met" @literal
   min    float
   pct    float
@@ -673,7 +657,7 @@ type McpGateMet {
   verify unit "McpGateMet schema is valid"
 }
 
-type McpGateBelow {
+type McpGateBelow "Mcp Gate Below" {
   status "below" @literal
   min    float
   pct    float
@@ -682,7 +666,7 @@ type McpGateBelow {
   verify unit "McpGateBelow schema is valid"
 }
 
-type McpGateUnjudged {
+type McpGateUnjudged "Mcp Gate Unjudged" {
   status "unjudged" @literal
   min    float
   reason string
@@ -696,9 +680,9 @@ type McpStrayRecord "A recorded test naming an entity the graph does not have (W
   verify unit "McpStrayRecord schema is valid"
 }
 
-type McpExplainResult = McpExplainEntry | McpExplainRetired
+type McpExplainResult "Mcp Explain Result" = McpExplainEntry | McpExplainRetired
 
-type McpExplainEntry {
+type McpExplainEntry "Mcp Explain Entry" {
   code        string @readonly
   title       string
   owner       string
@@ -710,7 +694,7 @@ type McpExplainEntry {
   verify unit "McpExplainEntry schema is valid"
 }
 
-type McpExplainRetired {
+type McpExplainRetired "Mcp Explain Retired" {
   code        string                @readonly
   retired     boolean
   /// The entry that replaced the code; absent when none did.
@@ -718,7 +702,7 @@ type McpExplainRetired {
   verify unit "McpExplainRetired schema is valid"
 }
 
-type McpExplainReplacement {
+type McpExplainReplacement "Mcp Explain Replacement" {
   code        string @readonly
   title       string
   owner       string
@@ -728,7 +712,7 @@ type McpExplainReplacement {
   verify unit "McpExplainReplacement schema is valid"
 }
 
-type McpCollectResult {
+type McpCollectResult "Mcp Collect Result" {
   /// "collected".
   status      string @readonly
   /// One entry per runner whose results were collected.
@@ -760,7 +744,7 @@ type McpCollectRunner "What one runner's collection found" {
   verify unit "McpCollectRunner schema is valid"
 }
 
-type McpRenderResult {
+type McpRenderResult "Mcp Render Result" {
   format       "graph" | "context" | "brief" | "dot" | "markdown" @readonly
   /// The rendering itself, when no out_dir was given.
   output       string                                             @optional
@@ -778,16 +762,16 @@ type McpAddExtensionResult "What an add did for each of its specifiers" {
   verify unit "McpAddExtensionResult schema is valid"
 }
 
-type McpAddedExtension = McpAddExtensionEnabled
+type McpAddedExtension "Mcp Added Extension" = McpAddExtensionEnabled
   | McpAddExtensionInstalled
   | McpAddExtensionPresent
   | McpAddExtensionPlanned
   | McpAddExtensionDuplicate
 
-/// How a registry package's publisher was accepted: unsigned (allowed),
-/// pinned (its key matched the pin), pinned_now (pinned on first use) or
-/// repinned (a key change accepted with consent).
-type PublisherAcceptance = "unsigned" | "pinned" | "pinned_now" | "repinned"
+type PublisherAcceptance "How a registry package's publisher was accepted: unsigned (allowed), pinned (its key matched the pin), pinned_now (pinned on first use) or repinned (a key change accepted with consent)." = "unsigned"
+  | "pinned"
+  | "pinned_now"
+  | "repinned"
 
 type McpAddExtensionEnabled "A builtin extension enabled" {
   action        "enabled" @literal
@@ -853,7 +837,7 @@ type McpAddExtensionDuplicate "A specifier naming an extension an earlier specif
   verify unit "McpAddExtensionDuplicate schema is valid"
 }
 
-type McpRemoveExtensionResult {
+type McpRemoveExtensionResult "Mcp Remove Extension Result" {
   /// "planned" for a dry run, which changes nothing.
   action    "removed" | "planned"
   extension string @readonly
@@ -908,7 +892,7 @@ type McpMigrateResult "A migration: what it ran or previewed, or that nothing wa
   verify unit "McpMigrateResult schema is valid"
 }
 
-type McpInferProgressResult {
+type McpInferProgressResult "Mcp Infer Progress Result" {
   summary    McpInferSummary
   unanalyzed string[]
   stale      string[]
@@ -917,14 +901,14 @@ type McpInferProgressResult {
   verify unit "McpInferProgressResult schema is valid"
 }
 
-type McpInferSummary {
+type McpInferSummary "Mcp Infer Summary" {
   files_total       integer
   files_analyzed    integer
   entities_produced integer
   verify unit "McpInferSummary schema is valid"
 }
 
-type McpInferSessionRow {
+type McpInferSessionRow "Mcp Infer Session Row" {
   session_id string @readonly
   agent      string
   status     string
@@ -933,7 +917,7 @@ type McpInferSessionRow {
   verify unit "McpInferSessionRow schema is valid"
 }
 
-type McpInferGapsResult {
+type McpInferGapsResult "Mcp Infer Gaps Result" {
   total_pub_items integer
   covered_items   integer
   gap_count       integer
@@ -944,21 +928,21 @@ type McpInferGapsResult {
   verify unit "McpInferGapsResult schema is valid"
 }
 
-type McpScanFailure {
+type McpScanFailure "Mcp Scan Failure" {
   file    string @readonly
   code    string
   message string
   verify unit "McpScanFailure schema is valid"
 }
 
-type McpDirectoryGaps {
+type McpDirectoryGaps "Mcp Directory Gaps" {
   directory string @readonly
   count     integer
   items     McpGapItem[]
   verify unit "McpDirectoryGaps schema is valid"
 }
 
-type McpGapItem {
+type McpGapItem "Mcp Gap Item" {
   name      string
   item_kind string
   file      string
@@ -966,7 +950,7 @@ type McpGapItem {
   verify unit "McpGapItem schema is valid"
 }
 
-type McpInferSessionResult {
+type McpInferSessionResult "Mcp Infer Session Result" {
   /// "active" (started), "recorded" (a file marked) or the status the session ended with.
   status            string
   session_id        string   @optional
@@ -975,14 +959,14 @@ type McpInferSessionResult {
   verify unit "McpInferSessionResult schema is valid"
 }
 
-type McpImplementationResult {
+type McpImplementationResult "Mcp Implementation Result" {
   entity_id       string @readonly
   implementations McpImplementation[]
   count           integer
   verify unit "McpImplementationResult schema is valid"
 }
 
-type McpImplementation {
+type McpImplementation "Mcp Implementation" {
   file        string
   line        integer
   symbol_name string
@@ -991,7 +975,7 @@ type McpImplementation {
   verify unit "McpImplementation schema is valid"
 }
 
-type McpSpecForSourceResult {
+type McpSpecForSourceResult "Mcp Spec For Source Result" {
   file_path  string @readonly
   match_mode "exact" | "directory" | "suffix_path" | "none"
   entities   McpSpecForSourceEntity[]
@@ -999,7 +983,7 @@ type McpSpecForSourceResult {
   verify unit "McpSpecForSourceResult schema is valid"
 }
 
-type McpSpecForSourceEntity {
+type McpSpecForSourceEntity "Mcp Spec For Source Entity" {
   entity_id   string @readonly
   /// The entity's kind; absent when the graph does not have it.
   kind        string @optional
@@ -1051,7 +1035,7 @@ type McpReviewPromptResult "Review Prompt Result" {
   verify unit "Review Prompt Result conforms to schema"
 }
 
-type McpReviewFinding {
+type McpReviewFinding "Mcp Review Finding" {
   entity_id string @readonly
   severity  string
   message   string
@@ -1068,7 +1052,7 @@ type McpTracePromptResult "Trace Prompt Result" {
   verify unit "Trace Prompt Result conforms to schema"
 }
 
-type McpTraceGap {
+type McpTraceGap "Mcp Trace Gap" {
   source_entity     string @readonly
   target_entity     string @readonly
   missing_link_type string
@@ -1093,7 +1077,7 @@ type McpExplorePromptResult "Explore Prompt Result" {
   verify unit "Explore Prompt Result conforms to schema"
 }
 
-type McpRelationshipPath {
+type McpRelationshipPath "Mcp Relationship Path" {
   from_entity string @readonly
   to_entity   string @readonly
   edge_types  string[]
@@ -1101,8 +1085,7 @@ type McpRelationshipPath {
   verify unit "McpRelationshipPath schema is valid"
 }
 
-// The infer prompt's payload, one per scope, tagged by it.
-type McpInferPromptResult = McpInferOverview
+type McpInferPromptResult "The infer prompt's payload, one per scope, tagged by it." = McpInferOverview
   | McpInferKindGuide
   | McpInferFileGuide
   | McpInferPlan
@@ -1121,7 +1104,7 @@ type McpInferOverview "Infer prompt, no scope or scope overview: every kind's gu
   verify unit "Infer Prompt Result conforms to schema"
 }
 
-type McpInferGuideKind {
+type McpInferGuideKind "Mcp Infer Guide Kind" {
   kind            string @readonly
   extension       string @readonly
   description     string @optional
@@ -1144,7 +1127,7 @@ type McpInferKindGuide "Infer prompt, scope kind:<name>: one kind's guide" {
   verify unit "McpInferKindGuide schema is valid"
 }
 
-type McpInferGuideField {
+type McpInferGuideField "Mcp Infer Guide Field" {
   name        string   @readonly
   type        string
   required    boolean
@@ -1165,7 +1148,7 @@ type McpInferFileGuide "Infer prompt, scope file:<path>: what a source file alre
   verify unit "McpInferFileGuide schema is valid"
 }
 
-type McpInferFileKind {
+type McpInferFileKind "Mcp Infer File Kind" {
   kind            string @readonly
   inference_guide string
   verify unit "McpInferFileKind schema is valid"

@@ -1,6 +1,6 @@
 // Inference workflow types — data model for tracking AI agent spec inference progress
 
-type SessionStatus = "active" | "paused" | "completed"
+type SessionStatus "Session Status" = "active" | "paused" | "completed"
 
 type InferenceManifest "Inference Progress Manifest" {
   version      integer

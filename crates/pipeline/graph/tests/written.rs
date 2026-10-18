@@ -36,7 +36,8 @@ fn places(graph: &Graph, source: &str, target: &str, label: &str) -> Vec<String>
     verify = "an edge records the span of each reference it was linked from"
 )]
 fn a_list_items_edge_is_written_at_the_item() {
-    let source = "shape Wheel {\n  size number\n}\nshape Car {\n  parts [Wheel]\n}\n";
+    let source =
+        "shape Wheel \"Wheel\" {\n  size number\n}\nshape Car \"Car\" {\n  parts [Wheel]\n}\n";
     let (graph, _) = build(source, derived());
 
     assert_eq!(places(&graph, "Car", "Wheel", "parts"), ["5:10-5:15"]);
@@ -47,7 +48,7 @@ fn a_list_items_edge_is_written_at_the_item() {
     verify = "an edge records the span of each reference it was linked from"
 )]
 fn a_single_reference_is_written_at_its_value() {
-    let source = "shape Base {\n  id string\n}\nshape Note {\n  base Base\n}\n";
+    let source = "shape Base \"Base\" {\n  id string\n}\nshape Note \"Note\" {\n  base Base\n}\n";
     let (graph, _) = build(source, derived());
 
     assert_eq!(places(&graph, "Note", "Base", "base"), ["5:8-5:12"]);
@@ -58,7 +59,7 @@ fn a_single_reference_is_written_at_its_value() {
     verify = "an edge records the span of each reference it was linked from"
 )]
 fn an_edge_written_twice_keeps_both_places_in_written_order() {
-    let source = "shape Wheel {\n  size number\n}\nshape Car {\n  parts [Wheel, Wheel]\n}\n";
+    let source = "shape Wheel \"Wheel\" {\n  size number\n}\nshape Car \"Car\" {\n  parts [Wheel, Wheel]\n}\n";
     let (graph, _) = build(source, derived());
 
     assert_eq!(graph.edges_from("Car").len(), 1);
@@ -79,7 +80,8 @@ fn an_edge_added_by_hand_is_written_nowhere() {
 
 #[test]
 fn a_subgraph_keeps_where_its_edges_are_written() {
-    let source = "shape Wheel {\n  size number\n}\nshape Car {\n  parts [Wheel]\n}\n";
+    let source =
+        "shape Wheel \"Wheel\" {\n  size number\n}\nshape Car \"Car\" {\n  parts [Wheel]\n}\n";
     let (graph, _) = build(source, derived());
 
     let sub = graph.subgraph("Car").unwrap();
@@ -131,16 +133,16 @@ fn a_methods_positions_are_not_serialized() {
 )]
 fn a_derived_edge_is_written_at_each_name() {
     let source = r#"
-shape Config {
+shape Config "Config" {
   root string
 }
-shape Project {
+shape Project "Project" {
   name string
 }
-shape Report {
+shape Report "Report" {
   ok boolean
 }
-iface Detector {
+iface Detector "Detector" {
   method detect(config: Config) -> Result<Project, Error>
   method report(items: Project[]) -> Report
 }
@@ -166,8 +168,7 @@ iface Detector {
     verify = "a derived edge is written at each name it was derived from"
 )]
 fn a_parameters_name_is_not_where_its_edge_is_written() {
-    let source =
-        "shape Config {\n  root string\n}\niface X {\n  method keep(Config: Config) -> Config\n}\n";
+    let source = "shape Config \"Config\" {\n  root string\n}\niface X \"X\" {\n  method keep(Config: Config) -> Config\n}\n";
     let (graph, _) = build(source, derived());
 
     assert_eq!(
@@ -181,8 +182,8 @@ fn a_parameters_name_is_not_where_its_edge_is_written() {
     verify = "a derived edge is written at each name it was derived from"
 )]
 fn a_union_member_is_written_at_its_name() {
-    let source = "shape Wheel {\n  size number\n}\nshape Config {\n  root string\n}\n\
-shape Kind = Wheel | Config\nshape Holder {\n  slot Wheel | Config\n}\n";
+    let source = "shape Wheel \"Wheel\" {\n  size number\n}\nshape Config \"Config\" {\n  root string\n}\n\
+shape Kind = Wheel | Config\nshape Holder \"Holder\" {\n  slot Wheel | Config\n}\n";
     let (graph, _) = build(source, derived());
 
     assert_eq!(places(&graph, "Kind", "Wheel", "parts"), ["7:14-7:19"]);
@@ -196,8 +197,8 @@ shape Kind = Wheel | Config\nshape Holder {\n  slot Wheel | Config\n}\n";
     verify = "a derived edge is written at each name it was derived from"
 )]
 fn a_name_inside_a_type_on_a_later_line_is_written_on_its_line() {
-    let source = "shape Config {\n  root string\n}\nshape Project {\n  name string\n}\n\
-iface X {\n  method run() -> Result<\n    Config,\n    Project>\n}\n";
+    let source = "shape Config \"Config\" {\n  root string\n}\nshape Project \"Project\" {\n  name string\n}\n\
+iface X \"X\" {\n  method run() -> Result<\n    Config,\n    Project>\n}\n";
     let (graph, diagnostics) = build(source, derived());
 
     assert!(diagnostics.is_empty(), "{diagnostics:?}");

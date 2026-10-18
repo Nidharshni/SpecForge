@@ -4,7 +4,7 @@ use "types/core"
 
 // ── Entity Kind Shapes ───────────────────────────────────────
 
-type GovernanceDecision {
+type GovernanceDecision "Governance Decision" {
   status       DecisionStatus @optional
   date         string         @optional
   context      string
@@ -14,7 +14,7 @@ type GovernanceDecision {
   verify property "GovernanceDecision"
 }
 
-type GovernanceConstraint {
+type GovernanceConstraint "Governance Constraint" {
   category   string     @optional
   priority   ConstraintPriority
   // proof_role bound: the prove pass assumes its comparisons (ADR 0009)
@@ -24,7 +24,7 @@ type GovernanceConstraint {
   verify property "GovernanceConstraint"
 }
 
-type GovernanceFailureMode {
+type GovernanceFailureMode "Governance Failure Mode" {
   invariant       EntityId
   severity        FailureSeverity
   occurrence      FailureOccurrence @optional
@@ -40,7 +40,7 @@ type GovernanceFailureMode {
   verify property "GovernanceFailureMode"
 }
 
-type PostMitigation {
+type PostMitigation "Post Mitigation" {
   severity   integer
   occurrence integer
   detection  integer
@@ -50,19 +50,19 @@ type PostMitigation {
 
 // ── Enums ────────────────────────────────────────────────────
 
-type ConstraintPriority = critical | high | medium | low
+type ConstraintPriority "Constraint Priority" = critical | high | medium | low
 
-type FailureSeverity = critical | high | medium | low
+type FailureSeverity "Failure Severity" = critical | high | medium | low
 
-type FailureOccurrence = certain | likely | occasional | unlikely | rare
+type FailureOccurrence "Failure Occurrence" = certain | likely | occasional | unlikely | rare
 
-type FailureDetection = certain | likely | moderate | unlikely | undetectable
+type FailureDetection "Failure Detection" = certain | likely | moderate | unlikely | undetectable
 
-type ConstraintCategory = performance
+type ConstraintCategory "Constraint Category" = performance
   | security
   | reliability
   | compatibility
   | usability
   | portability
 
-type DecisionStatus = proposed | accepted | deprecated | superseded
+type DecisionStatus "Decision Status" = proposed | accepted | deprecated | superseded

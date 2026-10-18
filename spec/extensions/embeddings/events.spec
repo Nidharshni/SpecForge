@@ -9,7 +9,7 @@ event embeddings_generated "Embeddings Generated" {
   verify integration "emits embeddings_generated with correct entityCount and dimensions after embedding generation"
 }
 
-type EmbeddingsGeneratedPayload {
+type EmbeddingsGeneratedPayload "Embeddings Generated Payload" {
   entityCount integer
   dimensions  integer
   timestamp   timestamp
@@ -23,7 +23,7 @@ event entity_search_performed "Entity Search Performed" {
   verify integration "payload includes similarity threshold used for the search"
 }
 
-type EntitySearchPerformedPayload {
+type EntitySearchPerformedPayload "Entity Search Performed Payload" {
   query       string
   resultCount integer
   threshold   float

@@ -292,6 +292,7 @@ behavior hover_information "Hover Information" {
   """
   verify unit "hover delegates to provide_extension_entity_hover"
   verify unit "hover returns markdown-formatted content"
+  verify unit "hover lists a type member named title"
   verify unit "field help answers only on a field's name"
   verify unit "field help names a field's type as E061 does, an enum's declared values included"
   verify unit "field help says what an absent value counts as"
@@ -738,6 +739,7 @@ behavior provide_semantic_tokens "Provide Semantic Tokens" {
     enumMember and a boolean field's value a keyword.
   """
   verify unit "entity ID declaration uses its kind's semantic_token from the KindRegistry"
+  verify unit "a titled union is a form and its variants are values"
   verify unit "structural keywords are classified as keyword"
   verify unit "a string list's bare item is no reference"
   verify unit "triple-quoted strings are classified as strings"

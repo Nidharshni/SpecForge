@@ -32,6 +32,7 @@ mod semantic_tokens;
 mod served;
 mod session;
 mod state;
+mod union_title;
 
 /// Every `.spec` file under `dir`, recursively.
 pub fn spec_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {

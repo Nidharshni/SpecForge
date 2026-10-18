@@ -364,9 +364,8 @@ behavior detect_unknown_entity_fields "Detect Unknown Entity Fields" {
     each field name against the FieldRegistry for that kind. Every field
     name not present in the FieldRegistry for the entity's kind MUST
     produce a W020 warning diagnostic with the entity's source span, the
-    unrecognized field name, and the entity kind name. `title` is
-    structural and MUST NOT be checked against the FieldRegistry. Every
-    other name, `expression` included, MUST be checked like any field: the
+    unrecognized field name, and the entity kind name. Every name, `title`
+    and `expression` included, MUST be checked like any field: the
     prove pass reads only fields an extension declares a proof role for
     (ADR 0009), so an undeclared `expression` is W020. When a builtin
     extension's enhancement declares the field on that kind (the candidate
@@ -389,7 +388,7 @@ behavior detect_unknown_entity_fields "Detect Unknown Entity Fields" {
   verify unit "unregistered field name produces W020"
   verify unit "W020 includes field name, entity kind, and source span"
   verify unit "registered field name does not produce W020"
-  verify unit "title is not checked against the field registry"
+  verify unit "a body field named title is W020 where no extension declares it"
   verify unit "a field named verify is checked like any field"
   verify unit "verify statements on a kind no extension made testable produce W158"
   verify unit "expression is checked like any other field (W020 where undeclared)"

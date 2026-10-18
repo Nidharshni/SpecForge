@@ -159,6 +159,7 @@ module.exports = grammar({
       seq(
         field("kind", $.identifier),
         field("name", $.identifier),
+        optional(field("title", $.string)),
         "=",
         field("variants", $.union_variants),
       ),

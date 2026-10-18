@@ -29,8 +29,8 @@ expression: run.stdout
 |---|---|---|---|
 | invariants | `completed_implies_timestamp` | invariant | Completed Tasks Have a Timestamp |
 | types | `Task` | type | A unit of work the user wants to track |
-| types | `CompleteTaskCommand` | type | — |
-| types | `TaskNotFoundError` | type | — |
+| types | `CompleteTaskCommand` | type | Command payload for completing a task. |
+| types | `TaskNotFoundError` | type | Error returned when a task id does not resolve. |
 | ports | `TaskRepository` | port | Persistence boundary for tasks |
 | produces | `task_completed` | event | Task Completed |
 | features | `task_management` | feature | Task Management |
@@ -67,8 +67,8 @@ expression: run.stdout
 |---|---|---|---|
 | invariants | `task_id_uniqueness` | invariant | Task ID Uniqueness |
 | types | `Task` | type | A unit of work the user wants to track |
-| types | `CreateTaskCommand` | type | — |
-| types | `InvalidTitleError` | type | — |
+| types | `CreateTaskCommand` | type | Command payload for creating a task. |
+| types | `InvalidTitleError` | type | Error returned when a title fails validation. |
 | ports | `TaskRepository` | port | Persistence boundary for tasks |
 | produces | `task_created` | event | Task Created |
 | features | `task_management` | feature | Task Management |
@@ -107,7 +107,7 @@ expression: run.stdout
 | Field | Entity | Kind | Title |
 |---|---|---|---|
 | types | `Task` | type | A unit of work the user wants to track |
-| types | `TaskStatus` | type | — |
+| types | `TaskStatus` | type | A discriminated union of the states a task can be in. |
 | ports | `TaskRepository` | port | Persistence boundary for tasks |
 | features | `task_management` | feature | Task Management |
 
@@ -228,7 +228,7 @@ without running a server.
 
 | Field | Entity | Kind | Title |
 |---|---|---|---|
-| payload | `TaskCompletedPayload` | type | — |
+| payload | `TaskCompletedPayload` | type | Event payload carried when a task is completed. |
 
 **Referenced by**
 
@@ -257,7 +257,7 @@ without running a server.
 
 | Field | Entity | Kind | Title |
 |---|---|---|---|
-| payload | `TaskCreatedPayload` | type | — |
+| payload | `TaskCreatedPayload` | type | Event payload carried when a task is created. |
 
 **Referenced by**
 
@@ -518,12 +518,12 @@ without running a server.
 
 | Field | Entity | Kind | Title |
 |---|---|---|---|
-| types | `CreateTaskCommand` | type | — |
+| types | `CreateTaskCommand` | type | Command payload for creating a task. |
 | types | `Task` | type | A unit of work the user wants to track |
-| types | `InvalidTitleError` | type | — |
-| types | `TaskNotFoundError` | type | — |
-| types | `CompleteTaskCommand` | type | — |
-| types | `TaskStatus` | type | — |
+| types | `InvalidTitleError` | type | Error returned when a title fails validation. |
+| types | `TaskNotFoundError` | type | Error returned when a task id does not resolve. |
+| types | `CompleteTaskCommand` | type | Command payload for completing a task. |
+| types | `TaskStatus` | type | A discriminated union of the states a task can be in. |
 
 **Referenced by**
 
@@ -606,7 +606,7 @@ without running a server.
 |---|---|---|---|
 | see_also | `done` | term | done |
 
-## type `CompleteTaskCommand`
+## type `CompleteTaskCommand` — Command payload for completing a task.
 
 `types/task.spec:24`
 
@@ -629,9 +629,9 @@ without running a server.
 |---|---|---|
 | 1 | unit | rejects an empty taskId |
 
-## type `CreateTaskCommand`
+## type `CreateTaskCommand` — Command payload for creating a task.
 
-`types/task.spec:17`
+`types/task.spec:18`
 
 **Fields**
 
@@ -653,9 +653,9 @@ without running a server.
 |---|---|---|
 | 1 | unit | rejects a blank title |
 
-## type `InvalidTitleError`
+## type `InvalidTitleError` — Error returned when a title fails validation.
 
-`types/task.spec:38`
+`types/task.spec:36`
 
 **Fields**
 
@@ -696,7 +696,7 @@ without running a server.
 
 | Field | Entity | Kind | Title |
 |---|---|---|---|
-| composed_types | `TaskStatus` | type | — |
+| composed_types | `TaskStatus` | type | A discriminated union of the states a task can be in. |
 
 **Referenced by**
 
@@ -713,9 +713,9 @@ without running a server.
 |---|---|---|
 | 1 | unit | completedAt is set exactly when status is done |
 
-## type `TaskCompletedPayload`
+## type `TaskCompletedPayload` — Event payload carried when a task is completed.
 
-`types/task.spec:52`
+`types/task.spec:48`
 
 **Fields**
 
@@ -736,9 +736,9 @@ without running a server.
 |---|---|---|
 | 1 | unit | round-trips through JSON unchanged |
 
-## type `TaskCreatedPayload`
+## type `TaskCreatedPayload` — Event payload carried when a task is created.
 
-`types/task.spec:45`
+`types/task.spec:42`
 
 **Fields**
 
@@ -759,9 +759,9 @@ without running a server.
 |---|---|---|
 | 1 | unit | round-trips through JSON unchanged |
 
-## type `TaskNotFoundError`
+## type `TaskNotFoundError` — Error returned when a task id does not resolve.
 
-`types/task.spec:30`
+`types/task.spec:29`
 
 **Fields**
 
@@ -784,9 +784,9 @@ without running a server.
 |---|---|---|
 | 1 | unit | message names the missing taskId |
 
-## type `TaskStatus`
+## type `TaskStatus` — A discriminated union of the states a task can be in.
 
-`types/task.spec:14`
+`types/task.spec:13`
 
 **Fields**
 

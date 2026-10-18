@@ -378,11 +378,7 @@ failure_mode extension_initialization_failure "Extension Initialization Failure"
   verify unit "Extension Initialization Failure failure mode is handled"
 }
 
-// C12-01: the operational build assumption the ADRs record only in prose.
-// A fresh clone cannot run wasm-backed extensions until the embedded
-// builtin .wasm blobs exist — record the failure mode so the compiled
-// spec carries what docs forget.
-failure_mode fresh_clone_wasm_bootstrap_missing {
+failure_mode fresh_clone_wasm_bootstrap_missing "C12-01: the operational build assumption the ADRs record only in prose. A fresh clone cannot run wasm-backed extensions until the embedded builtin .wasm blobs exist — record the failure mode so the compiled spec carries what docs forget." {
   severity   high
   occurrence certain
   detection  certain

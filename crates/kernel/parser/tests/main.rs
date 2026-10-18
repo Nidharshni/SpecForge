@@ -16,3 +16,4 @@ mod ref_components;
 mod robustness;
 mod snapshot_tests;
 mod structural_keywords;
+mod union_title;

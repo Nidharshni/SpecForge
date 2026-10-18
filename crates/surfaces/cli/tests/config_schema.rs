@@ -65,7 +65,7 @@ fn specforge_json_with_inference_and_registries_loads() {
             "registries": [ { "alias": "local", "url": "http://127.0.0.1:1", "default_registry": true } ]
         }"#,
         )
-        .file("src/a.spec", "type Widget {\n  id string @unique\n}\n");
+        .file("src/a.spec", "type Widget \"Widget\" {\n  id string @unique\n}\n");
 
     let src = project.root().join("src");
     let out = Cli::on(&project)

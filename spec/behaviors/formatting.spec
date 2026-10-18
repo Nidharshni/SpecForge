@@ -343,6 +343,7 @@ behavior apply_format_rules "Apply Format Rules" {
   verify unit "alignment rules align field values within blocks"
   verify unit "statements keep their source order"
   verify unit "a union that does not fit wraps one variant per line"
+  verify unit "a union title survives formatting"
   verify unit "wrapping rules break long reference lists to multi-line"
   verify unit "import sorting produces alphabetical order"
   verify unit "blank line rules enforce exactly one between blocks"

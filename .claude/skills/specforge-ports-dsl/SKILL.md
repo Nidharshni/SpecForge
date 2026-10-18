@@ -21,7 +21,7 @@ Rules and conventions for authoring **`port` blocks** in `.spec` files. Ports de
 ```spec
 use "types/user"
 
-port UserRepository {
+port UserRepository "User Repository" {
   direction outbound
   category  "persistence/user"
 
@@ -80,7 +80,7 @@ Common return patterns:
 Individual methods can have `requires`/`ensures` blocks for structured conditions:
 
 ```spec
-port PaymentGateway {
+port PaymentGateway "Payment Gateway" {
   direction outbound
   category  "external/payment"
 
@@ -140,7 +140,7 @@ port PaymentGateway {
 ```spec
 use "types/user"
 
-port UserRepository {
+port UserRepository "User Repository" {
   direction outbound
   category  "persistence/user"
 
@@ -157,7 +157,7 @@ port UserRepository {
 ```spec
 use "types/email"
 
-port EmailService {
+port EmailService "Email Service" {
   direction outbound
   category  "external/email"
 
@@ -171,7 +171,7 @@ port EmailService {
 ```spec
 use "types/user"
 
-port UserAPI {
+port UserAPI "User API" {
   direction inbound
   category  "api/user"
 
@@ -186,7 +186,7 @@ port UserAPI {
 ```spec
 use "types/payment"
 
-port PaymentGateway {
+port PaymentGateway "Payment Gateway" {
   direction outbound
   category  "external/payment"
 

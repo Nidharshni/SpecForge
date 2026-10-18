@@ -120,7 +120,7 @@ enum Commands {
     Doctor(doctor::Args),
     /// Start MCP server (JSON-RPC over stdio)
     Mcp(mcp::Args),
-    /// Migrate .spec files between format versions
+    /// Migrate .spec files to the current format: the version header, and a title for every block that has none
     Migrate(migrate::Args),
     /// Generate shell completions: the built-in commands, and the commands
     /// of the extensions the project at --path enables

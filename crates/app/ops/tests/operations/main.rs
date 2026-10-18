@@ -38,6 +38,7 @@ mod machine_reach;
 mod management;
 mod migrate;
 mod migrate_sources;
+mod migrate_titles;
 mod model;
 mod multi_entity;
 mod navigate;

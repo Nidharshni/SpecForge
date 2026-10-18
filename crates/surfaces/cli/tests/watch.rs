@@ -62,7 +62,7 @@ fn wait_for_line(rx: &mpsc::Receiver<String>, needle: &str, timeout: Duration) -
 #[test]
 fn watch_rebuilds_on_file_change() {
     let project = TestProject::new().raw_config("{}");
-    project.write("main.spec", "entity one { title \"One\" }\n");
+    project.write("main.spec", "entity one \"One\" {}\n");
 
     let (rx, child) = spawn_watch(&project);
 
@@ -73,7 +73,7 @@ fn watch_rebuilds_on_file_change() {
     std::thread::sleep(Duration::from_millis(300));
     project.write(
         "main.spec",
-        "entity one { title \"One\" }\nentity two { title \"Two\" }\n",
+        "entity one \"One\" {}\nentity two \"Two\" {}\n",
     );
 
     // A late event for the project's initial write can still arrive after
@@ -107,7 +107,7 @@ fn watch_rebuilds_on_file_change() {
 #[test]
 fn watch_reports_diagnostics_on_broken_edit() {
     let project = TestProject::new().raw_config("{}");
-    project.write("main.spec", "entity one { title \"One\" }\n");
+    project.write("main.spec", "entity one \"One\" {}\n");
 
     let (rx, child) = spawn_watch(&project);
     let ready = wait_for_line(&rx, "\"event\":\"ready\"", Duration::from_secs(60));
@@ -115,10 +115,7 @@ fn watch_reports_diagnostics_on_broken_edit() {
 
     std::thread::sleep(Duration::from_millis(300));
     // Reference a nonexistent entity -> E003 unresolved reference.
-    project.write(
-        "main.spec",
-        "entity one { title \"One\"\n  uses [ghost]\n}\n",
-    );
+    project.write("main.spec", "entity one \"One\" {\n  uses [ghost]\n}\n");
 
     // As in watch_rebuilds_on_file_change: a late event for the initial
     // write can rebuild unchanged content first; the rebuild for this edit
@@ -149,7 +146,7 @@ fn watch_reports_diagnostics_on_broken_edit() {
 #[test]
 fn watch_verify_incremental_checks_each_rebuild_against_a_cold_one() {
     let project = TestProject::new().raw_config("{}");
-    project.write("main.spec", "entity one { title \"One\" }\n");
+    project.write("main.spec", "entity one \"One\" {}\n");
 
     let (rx, child) = spawn_watch_with(&project, &["--verify-incremental"]);
     assert!(
@@ -159,7 +156,7 @@ fn watch_verify_incremental_checks_each_rebuild_against_a_cold_one() {
     std::thread::sleep(Duration::from_millis(300));
     project.write(
         "main.spec",
-        "entity one { title \"One\" }\nentity two { title \"Two\" }\n",
+        "entity one \"One\" {}\nentity two \"Two\" {}\n",
     );
 
     let rebuilt = wait_for_line(&rx, "\"event\":\"rebuilt\"", Duration::from_secs(60));
@@ -180,7 +177,7 @@ fn watch_verify_incremental_checks_each_rebuild_against_a_cold_one() {
 )]
 fn watch_debug_build_verifies_without_the_flag() {
     let project = TestProject::new().raw_config("{}");
-    project.write("main.spec", "entity one { title \"One\" }\n");
+    project.write("main.spec", "entity one \"One\" {}\n");
 
     let (rx, child) = spawn_watch(&project);
     assert!(
@@ -190,7 +187,7 @@ fn watch_debug_build_verifies_without_the_flag() {
     std::thread::sleep(Duration::from_millis(300));
     project.write(
         "main.spec",
-        "entity one { title \"One\" }\nentity two { title \"Two\" }\n",
+        "entity one \"One\" {}\nentity two \"Two\" {}\n",
     );
 
     let rebuilt = wait_for_line(&rx, "\"event\":\"rebuilt\"", Duration::from_secs(60));
@@ -434,7 +431,7 @@ fn watch_reloads_on_a_lock_change() {
 )]
 fn watch_ignores_a_wasm_no_extension_loads() {
     let project = TestProject::new().raw_config("{}");
-    project.write("main.spec", "entity one { title \"One\" }\n");
+    project.write("main.spec", "entity one \"One\" {}\n");
 
     let (rx, child) = spawn_watch(&project);
     wait_for_line(&rx, "\"event\":\"ready\"", Duration::from_secs(60))
@@ -448,7 +445,7 @@ fn watch_ignores_a_wasm_no_extension_loads() {
     std::thread::sleep(Duration::from_millis(500));
     project.write(
         "main.spec",
-        "entity one { title \"One\" }\nentity two { title \"Two\" }\n",
+        "entity one \"One\" {}\nentity two \"Two\" {}\n",
     );
 
     let event = next_event(&rx, Duration::from_secs(20));
@@ -481,7 +478,7 @@ fn watch_follows_a_moved_spec_root() {
     .unwrap();
     fs::create_dir_all(root.join("a")).unwrap();
     fs::create_dir_all(root.join("b")).unwrap();
-    fs::write(root.join("a/one.spec"), "entity one { title \"One\" }\n").unwrap();
+    fs::write(root.join("a/one.spec"), "entity one \"One\" {}\n").unwrap();
 
     let (rx, child) = spawn_watch(&project);
     let ready = wait_for_line(&rx, "\"event\":\"ready\"", Duration::from_secs(60))
@@ -503,7 +500,7 @@ fn watch_follows_a_moved_spec_root() {
     // nothing; a file under the new one is a source.
     fs::write(
         root.join("a/one.spec"),
-        "entity one { title \"One\" }\nentity uno { title \"Uno\" }\n",
+        "entity one \"One\" {}\nentity uno { title \"Uno\" }\n",
     )
     .unwrap();
     std::thread::sleep(Duration::from_millis(500));
@@ -697,7 +694,7 @@ fn watch_ends_when_its_reader_leaves() {
     }
 
     let project = TestProject::new().raw_config("{}");
-    project.write("main.spec", "entity one { title \"One\" }\n");
+    project.write("main.spec", "entity one \"One\" {}\n");
 
     let mut child = Kill(Cli::on(&project).start(&[
         "watch",
@@ -730,7 +727,7 @@ fn watch_ends_when_its_reader_leaves() {
             Instant::now() < deadline,
             "watch kept running after its reader left"
         );
-        let mut spec = String::from("entity one { title \"One\" }\n");
+        let mut spec = String::from("entity one \"One\" {}\n");
         for n in 0..edits {
             spec.push_str(&format!("entity extra{n} {{ title \"Extra\" }}\n"));
         }

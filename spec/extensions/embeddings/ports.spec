@@ -2,7 +2,7 @@
 
 use "types/errors"
 
-port EmbeddingProvider {
+port EmbeddingProvider "Embedding Provider" {
   direction outbound
   category  "ai/embeddings"
   method generateEmbeddings(texts: string[]) -> Result<f32[][], EmitterError>

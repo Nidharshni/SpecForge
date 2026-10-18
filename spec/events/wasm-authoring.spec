@@ -9,7 +9,7 @@ event extension_project_scaffolded "Extension Project Scaffolded" {
   verify integration "consumer build_wasm_extension receives event after scaffold"
 }
 
-type ExtensionProjectScaffoldedPayload {
+type ExtensionProjectScaffoldedPayload "Extension Project Scaffolded Payload" {
   projectPath        string
   extensionName      string
   manifestCreated    boolean
@@ -24,7 +24,7 @@ event extension_built "Extension Built" {
   verify integration "consumer validate_wasm_extension_locally receives event after build"
 }
 
-type ExtensionBuiltPayload {
+type ExtensionBuiltPayload "Extension Built Payload" {
   extensionName string
   wasmSize      integer
   buildTimeMs   integer
@@ -39,7 +39,7 @@ event extension_fixtures_validated "Extension Fixtures Validated" {
   verify integration "consumer publish_wasm_extension receives event after fixture validation"
 }
 
-type ExtensionFixturesValidatedPayload {
+type ExtensionFixturesValidatedPayload "Extension Fixtures Validated Payload" {
   extensionName      string
   fixtureCount       integer
   passed_fixtures    integer
@@ -54,7 +54,7 @@ event extension_published "Extension Published" {
   verify integration "emits extension_published with correct extensionName, version, and registry"
 }
 
-type ExtensionPublishedPayload {
+type ExtensionPublishedPayload "Extension Published Payload" {
   extensionName string
   version       string
   registry      string

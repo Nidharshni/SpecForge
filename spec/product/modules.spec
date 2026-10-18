@@ -121,7 +121,7 @@ module specforge_graph "specforge-graph" {
 
 module specforge_migrate "specforge-migrate" {
   family      core
-  description "Format-version migration of a project's .spec files: the rewrite, its backups and rollback record, and the W054 report of what it changed in the graph"
+  description "Format-version migration of a project's .spec files: the rewrite, its backups and rollback record, the migration steps, and the W054 report of what it changed in the graph"
   depends_on  [specforge_common, specforge_formatter, specforge_graph, specforge_parser]
   tags        ["pipeline"]
 }

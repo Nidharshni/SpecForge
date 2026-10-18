@@ -82,7 +82,7 @@ No graph edges. Root configuration declaring which extensions the project uses.
 
 | Required | Optional |
 |----------|----------|
-| scheme, identifier | title, provider-specific fields |
+| scheme, identifier, title | provider-specific fields |
 
 No outgoing edges. Leaf node.
 Incoming: any entity (`links_to`)

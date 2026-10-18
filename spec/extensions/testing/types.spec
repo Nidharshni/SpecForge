@@ -1,6 +1,6 @@
 // @specforge/testing types
 
-type TestingVerifyKind = unit
+type TestingVerifyKind "Testing Verify Kind" = unit
   | integration
   | contract
   | property

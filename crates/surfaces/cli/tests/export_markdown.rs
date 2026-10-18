@@ -122,8 +122,8 @@ fn complete_task_reads_as_a_review_document() {
     |---|---|---|---|
     | invariants | `completed_implies_timestamp` | invariant | Completed Tasks Have a Timestamp |
     | types | `Task` | type | A unit of work the user wants to track |
-    | types | `CompleteTaskCommand` | type | — |
-    | types | `TaskNotFoundError` | type | — |
+    | types | `CompleteTaskCommand` | type | Command payload for completing a task. |
+    | types | `TaskNotFoundError` | type | Error returned when a task id does not resolve. |
     | ports | `TaskRepository` | port | Persistence boundary for tasks |
     | produces | `task_completed` | event | Task Completed |
     | features | `task_management` | feature | Task Management |

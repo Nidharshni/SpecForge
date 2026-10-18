@@ -173,6 +173,43 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
   verify integration "migrate leaves a nested project's files alone"
 }
 
+behavior add_missing_titles "Add Missing Titles" {
+  features   [spec_file_migration]
+  invariants [migration_idempotency, migration_semantic_preservation]
+  category   mutation
+  types      [SpecFile, MigrationResult]
+  ports      [FileSystem]
+  contract   """
+    The titles step MUST write a title into every block header that has
+    none, entity blocks and unions alike: the block's doc comment (the //
+    lines directly above its header with no blank line between, the format
+    header excluded), each line's text after // trimmed and the lines
+    joined by one space, with \\ and " escaped, the comment lines removed.
+    A block with no doc comment MUST get its id in Title Case words. The
+    step MUST leave define, spec and ref blocks, titled blocks and text
+    with a syntax error as they are, and MUST be idempotent. It runs on
+    every file it changes, whatever the file's format version, and the
+    graph comparison keeps exactly the title it added where a block had
+    none.
+  """
+  verify unit "a doc comment directly above a block becomes its title"
+  verify unit "a multi-line doc comment becomes one title"
+  verify unit "a union takes its doc comment as its title"
+  verify unit "a block with no doc comment is titled with its id in words"
+  verify unit "a comment after a blank line is not lifted"
+  verify unit "a trailing comment on the header stays"
+  verify unit "the format header is never lifted"
+  verify unit "quotes and backslashes in a doc comment are escaped in the title"
+  verify unit "titled, define, spec and ref blocks are left alone"
+  verify unit "a file with a syntax error is left alone"
+  verify unit "the titles step is idempotent"
+  verify unit "a migration that adds titles is kept, with no W054"
+  verify unit "a dry run shows the titles and writes nothing"
+  verify unit "a project already titled has nothing pending"
+  verify unit "a hook that also changes a field rolls the titles back"
+  verify unit "the changes beyond the steps drop only a title the step added"
+}
+
 behavior generate_migration_diff "Generate Migration Diff" {
   features   [spec_file_migration]
   invariants [
@@ -255,7 +292,9 @@ behavior validate_post_migration_integrity "Validate Post-Migration Integrity" {
     (compute_graph_delta): entity IDs, and each entity's kind, title,
     field values, methods and outgoing edges. Source positions MUST be
     ignored, since format migration inherently shifts them. The
-    migration keeps the graph exactly when the delta is empty. Each
+    migration steps declare their own changes (add_missing_titles: a
+    title where a node had none); the delta is taken less those. The
+    migration keeps the graph exactly when that delta is empty. Each
     change the delta names MUST be reported as one W054 warning: an
     entity removed or added, an entity whose content changed (naming
     what changed, in the delta's words), and an edge removed or added.
@@ -267,7 +306,7 @@ behavior validate_post_migration_integrity "Validate Post-Migration Integrity" {
   verify unit "structural equivalence verified between pre and post graphs"
   verify unit "structural differences reported as warnings"
   verify unit "new diagnostics from migration reported"
-  verify unit "a migration step that changes an entity's title or kind is reported and rolled back"
+  verify unit "a migration that changes an existing title or a kind is reported and rolled back"
   verify unit "each change the graph delta names is one W054 warning, and an empty delta none"
   verify contract "Validate Post-Migration Integrity: post-migration integrity validation holds — extension_hooks_complete_fired, structural_equivalence_checked, differences_reported, migration_validation_complete_emitted"
 }

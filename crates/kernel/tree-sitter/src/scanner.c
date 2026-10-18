@@ -238,7 +238,7 @@ static bool line_starts_form(TSLexer *lexer) {
     }
     skip_line_space(lexer);
   }
-  return lexer->lookahead == '{';
+  return lexer->lookahead == '{' || lexer->lookahead == '=';
 }
 
 bool tree_sitter_specforge_external_scanner_scan(void *payload, TSLexer *lexer,
