@@ -738,6 +738,7 @@ behavior provide_semantic_tokens "Provide Semantic Tokens" {
     enumMember and a boolean field's value a keyword.
   """
   verify unit "entity ID declaration uses its kind's semantic_token from the KindRegistry"
+  verify unit "a titled union is a form and its variants are values"
   verify unit "structural keywords are classified as keyword"
   verify unit "a string list's bare item is no reference"
   verify unit "triple-quoted strings are classified as strings"

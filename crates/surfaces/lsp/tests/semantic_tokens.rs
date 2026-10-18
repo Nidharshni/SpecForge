@@ -19,7 +19,7 @@ fn tokens_over(text: &str, registries: RegistryBuild, graph: &Graph) -> Vec<Sema
 
 /// The semantic tokens of `text` over `registries` and an empty graph
 /// (every reference names no entity).
-fn tokens_of(text: &str, registries: RegistryBuild) -> Vec<SemanticToken> {
+pub(crate) fn tokens_of(text: &str, registries: RegistryBuild) -> Vec<SemanticToken> {
     tokens_over(text, registries, &Graph::new())
 }
 
@@ -37,12 +37,12 @@ fn declare_kinds(c: &mut ContributionsBuilder, entries: &[(&str, Option<&str>)])
 }
 
 /// The registries of `(kind keyword, declared semantic_token)` pairs.
-fn kinds(entries: &[(&str, Option<&str>)]) -> RegistryBuild {
+pub(crate) fn kinds(entries: &[(&str, Option<&str>)]) -> RegistryBuild {
     registries("@test/ext", |c| declare_kinds(c, entries))
 }
 
 /// The token classified for `text`, which must exist.
-fn token<'a>(tokens: &'a [SemanticToken], text: &str) -> &'a SemanticToken {
+pub(crate) fn token<'a>(tokens: &'a [SemanticToken], text: &str) -> &'a SemanticToken {
     tokens
         .iter()
         .find(|t| t.text == text)

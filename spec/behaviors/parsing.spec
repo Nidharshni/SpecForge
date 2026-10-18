@@ -166,7 +166,8 @@ behavior parse_all_block_types "Parse All Block Types" {
   }
   contract   """
     The parser MUST use a single generic entity_block rule that parses
-    any keyword name [title] { fields } structure. Only spec, ref, use,
+    any keyword name [title] { fields } structure,
+    or keyword name [title] = variants for a union. Only spec, ref, use,
     and define have dedicated grammar rules due to unique structural
     syntax (ref uses scheme:identifier format). All other keywords MUST
     be parsed generically — the parser MUST NOT reject unknown keywords.
@@ -188,6 +189,7 @@ behavior parse_all_block_types "Parse All Block Types" {
   verify unit "generic block preserves kind, name, title, and fields"
   verify unit "parse string field values correctly"
   verify unit "a type field named kind is an ordinary field"
+  verify unit "a union block carries its title"
   verify contract "Parse All Block Types: block type parsing holds — source_parser_available, generic_blocks_parsed, unknown_keywords_accepted"
   verify unit "field annotations are extracted into FieldEntry"
   verify unit "a list of bare words keeps each item bare"

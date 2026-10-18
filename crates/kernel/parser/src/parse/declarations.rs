@@ -103,6 +103,10 @@ impl<'a> ParseContext<'a> {
             .map(|n| Sym::new(self.text(n)))
             .unwrap_or_else(|| Sym::new(""));
 
+        let title = node
+            .child_by_field_name(field::TITLE)
+            .map(|n| self.unquote(n));
+
         let mut variants = Vec::new();
         let variants_span = node
             .child_by_field_name(field::VARIANTS)
@@ -137,7 +141,7 @@ impl<'a> ParseContext<'a> {
         self.entities.push(Entity {
             kind: EntityKind { raw: kind },
             id: EntityId { raw: name },
-            title: None,
+            title,
             fields,
             span: self.span(node),
             methods: Vec::new(),

@@ -381,6 +381,8 @@ fn form_start_lines() {
     assert!(!starts_alone("behavior b \"B", 0));
     assert!(starts_alone("type status = \"a\" | \"b\"", 0));
     assert!(starts_alone("type t =", 0));
+    assert!(starts_alone("type t \"T\" = a | b", 0));
+    assert!(starts_alone("type t \"T\" =", 0));
     assert!(starts_alone("use\"./a.spec\"", 0));
     // What the LSP's copy took and the grammar does not.
     assert!(!starts_alone("use", 0));

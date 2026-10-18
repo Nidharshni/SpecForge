@@ -77,7 +77,11 @@ fn format_union_block(node: Node, source: &str, config: &FormatConfig) -> Vec<St
         .filter(|c| c.kind() != "|")
         .map(|c| node_text(*c, source))
         .collect();
-    let head = format!("{} {} = ", text(field::KIND), text(field::NAME));
+    let title = node
+        .child_by_field_name(field::TITLE)
+        .map(|n| format!(" {}", node_text(n, source)))
+        .unwrap_or_default();
+    let head = format!("{} {}{title} = ", text(field::KIND), text(field::NAME));
     let one_line = format!("{head}{}", parts.join(" | "));
     if one_line.len() <= config.max_width || parts.len() < 2 {
         return vec![one_line];

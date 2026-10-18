@@ -5,3 +5,4 @@
 
 mod properties;
 mod regressions;
+mod titles;
