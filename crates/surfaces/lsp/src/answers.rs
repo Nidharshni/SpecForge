@@ -463,7 +463,13 @@ pub fn formatting(
     let place = file
         .as_deref()
         .map_or(format::Place::Detached, format::Place::File);
-    let formatted = format::document(place, doc.text(), lines, Some(editor));
+    // The served project's field forms; a document outside any file has none (ADR 0147).
+    let none = specforge_graph::FieldForms::default();
+    let forms = match place {
+        format::Place::Detached => &none,
+        _ => state.registries().field_forms(),
+    };
+    let formatted = format::document(place, doc.text(), lines, Some(editor), forms);
     // The formatter's diagnostics are positions in the document it formatted;
     // the store publishes them beside the compile's, never in their place.
     let findings = Findings {

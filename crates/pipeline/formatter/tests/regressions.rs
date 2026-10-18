@@ -5,7 +5,12 @@ use specforge_test_macros::test as specforge_test;
 use std::collections::BTreeMap;
 
 pub(crate) fn fmt(source: &str) -> String {
-    format_source(source, &FormatConfig::default()).formatted
+    format_source(
+        source,
+        &FormatConfig::default(),
+        &specforge_graph::FieldForms::default(),
+    )
+    .formatted
 }
 
 /// How often each non-blank line occurs.
@@ -31,7 +36,11 @@ fn a_line_shared_with_a_broken_form_is_written_once() {
         "use \"types\"\"\"\"\n\nbehavior greet \"Greet\" {\n  contract \"c\"\n}\n",
         "behavior a \"A\" {\n  contract \"c\"\n}(\n",
     ] {
-        let once = format_source(source, &FormatConfig::default());
+        let once = format_source(
+            source,
+            &FormatConfig::default(),
+            &specforge_graph::FieldForms::default(),
+        );
         assert_eq!(
             line_counts(&once.formatted),
             line_counts(source),

@@ -16,6 +16,7 @@ tree-sitter = { workspace = true }
 tree-sitter-specforge = { workspace = true }
 specforge-common = { workspace = true }
 specforge-parser = { workspace = true }
+specforge-graph = { path = "../graph" }
 toml = { workspace = true }
 similar = { workspace = true }
 
@@ -23,8 +24,8 @@ similar = { workspace = true }
 specforge-parser = { workspace = true, features = ["testing"] }
 proptest = { version = "1.11", default-features = false, features = ["std"] }
 regex = { workspace = true }
-specforge-graph = { path = "../graph" }
 tempfile = { workspace = true }
+specforge-protocol-types = { path = "../../leaf/protocol-types" }
 specforge-test = { workspace = true }
 specforge-test-macros = { workspace = true }
 serde_json = { workspace = true }

@@ -736,6 +736,9 @@ catalog! {
     W158: Warning core,
         "Verify statements on a kind that accepts none",
         "An entity declares `verify` statements, but its kind accepts none: no extension made the kind testable (`supports_verify`). `verify` is reserved syntax; what an obligation means comes from an extension, so a kind takes statements only once one enables them (ADR 0002, ADR 0094). The statements are not fields, so this is not W020. Enable an extension that makes the kind testable (for software kinds, `specforge add @specforge/testing`), or remove the statements.";
+    W159: Warning core,
+        "Value not written in its field's form",
+        "A field's declared type decides how its value is written (ADR 0147): bare for an enum, identifier or reference value and each item of a reference list; quoted for text and each item of a string list. This value is written the other way. It reads the same, so the graph is unchanged; run specforge format (or format the document in the editor) to rewrite every value in its form. A bare word on a kind that takes members (type, port) is left alone: it may be a member's type.";
     W162: Warning core,
         "Relation declared from both sides",
         "A relation has two fields: one extension declares it from both of its ends. Either a reference field's `inverse_of` names a field its target kind registers (`milestone.behaviors` naming `features`, when `behavior` has its own `features`), or two different kinds each register a reference field targeting the other (`parent.children` and `child.parent`). A relation is written from one side (ADR 0150): the other side is derived, so `query` and `trace` already show it. Both fields still register, and an entity can write either. Remove one field, or drop the `inverse_of` or name a word the target kind does not use. The builtin extensions declare none.";

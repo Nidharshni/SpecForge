@@ -132,8 +132,12 @@ fn test_maintain_format_idempotency_contract() {
     ];
 
     for (i, input) in inputs.iter().enumerate() {
-        let first = format_source(input, &config);
-        let second = format_source(&first.formatted, &config);
+        let first = format_source(input, &config, &specforge_graph::FieldForms::default());
+        let second = format_source(
+            &first.formatted,
+            &config,
+            &specforge_graph::FieldForms::default(),
+        );
 
         // ensures: idempotency_holds
         assert_eq!(
@@ -142,7 +146,11 @@ fn test_maintain_format_idempotency_contract() {
         );
 
         // ensures: no_oscillation — 3rd pass identical to 2nd
-        let third = format_source(&second.formatted, &config);
+        let third = format_source(
+            &second.formatted,
+            &config,
+            &specforge_graph::FieldForms::default(),
+        );
         assert_eq!(
             second.formatted, third.formatted,
             "no_oscillation failed for input #{i}"

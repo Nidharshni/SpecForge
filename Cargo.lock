@@ -2971,6 +2971,7 @@ dependencies = [
  "specforge-common",
  "specforge-graph",
  "specforge-parser",
+ "specforge-protocol-types",
  "specforge-test",
  "specforge-test-macros",
  "tempfile",

@@ -4,6 +4,7 @@ use super::{
     overlaps,
 };
 use crate::config::FormatConfig;
+use specforge_graph::FieldForms;
 use specforge_parser::cst::Piece;
 use tree_sitter::Node;
 use tree_sitter_specforge::kind;
@@ -22,16 +23,22 @@ use tree_sitter_specforge::kind;
 pub(super) struct Emitter<'a> {
     source_lines: &'a [&'a str],
     config: &'a FormatConfig,
+    forms: &'a FieldForms,
     out: Vec<String>,
     prev: Option<(Item, usize)>,
     kept: Vec<(usize, usize)>,
 }
 
 impl<'a> Emitter<'a> {
-    pub(super) fn new(source_lines: &'a [&'a str], config: &'a FormatConfig) -> Self {
+    pub(super) fn new(
+        source_lines: &'a [&'a str],
+        config: &'a FormatConfig,
+        forms: &'a FieldForms,
+    ) -> Self {
         Emitter {
             source_lines,
             config,
+            forms,
             out: Vec::new(),
             prev: None,
             kept: Vec::new(),
@@ -143,7 +150,8 @@ impl<'a> Emitter<'a> {
             if class == Item::Comment {
                 self.out.push(comment_text(node, text));
             } else {
-                self.out.extend(format_block(node, text, self.config));
+                self.out
+                    .extend(format_block(node, text, self.config, self.forms));
             }
             self.prev = Some((class, end));
             i += 1;

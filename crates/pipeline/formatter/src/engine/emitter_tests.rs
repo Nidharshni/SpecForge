@@ -1,9 +1,18 @@
 use super::*;
 
 fn fmt(source: &str) -> String {
-    let result = format_source(source, &FormatConfig::default());
+    let result = format_source(
+        source,
+        &FormatConfig::default(),
+        &specforge_graph::FieldForms::default(),
+    );
     assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
-    let again = format_source(&result.formatted, &FormatConfig::default()).formatted;
+    let again = format_source(
+        &result.formatted,
+        &FormatConfig::default(),
+        &specforge_graph::FieldForms::default(),
+    )
+    .formatted;
     assert_eq!(again, result.formatted, "not idempotent");
     result.formatted
 }
@@ -194,7 +203,11 @@ const COMMENTS_IN_STATEMENTS: &str = concat!(
 )]
 fn a_statement_holding_a_comment_is_kept_as_written() {
     assert_eq!(fmt(COMMENTS_IN_STATEMENTS), COMMENTS_IN_STATEMENTS);
-    let result = format_source(COMMENTS_IN_STATEMENTS, &FormatConfig::default());
+    let result = format_source(
+        COMMENTS_IN_STATEMENTS,
+        &FormatConfig::default(),
+        &specforge_graph::FieldForms::default(),
+    );
     assert!(
         specforge_parser::parse(&result.formatted, "c.spec")
             .errors
@@ -222,7 +235,11 @@ const UNCLOSED_STRING: &str = "behavior a1 \"A\" {\n  contract \"x\n}\n\nbehavio
     verify = "a form the parser could not read whole is kept as written and the forms after it are formatted"
 )]
 fn an_unclosed_string_keeps_only_its_form() {
-    let result = format_source(UNCLOSED_STRING, &FormatConfig::default());
+    let result = format_source(
+        UNCLOSED_STRING,
+        &FormatConfig::default(),
+        &specforge_graph::FieldForms::default(),
+    );
     assert_eq!(
         result.formatted,
         "behavior a1 \"A\" {\n  contract \"x\n}\n\nbehavior b1 \"B\" {\n  contract \"y\"\n}\n\nbehavior c1 \"C\" {\n  contract \"z\"\n}\n"
@@ -253,7 +270,11 @@ const UNCLOSED_BODY: &str =
     verify = "the diagnostic spans every line of the form it kept, never past the document"
 )]
 fn a_kept_form_is_reported_at_its_lines() {
-    let result = format_source(UNCLOSED_BODY, &FormatConfig::default());
+    let result = format_source(
+        UNCLOSED_BODY,
+        &FormatConfig::default(),
+        &specforge_graph::FieldForms::default(),
+    );
     assert!(
         result
             .formatted
@@ -294,8 +315,16 @@ fn formatting_a_broken_document_twice_changes_nothing() {
             .collect::<Vec<_>>()
     };
     for text in texts {
-        let once = format_source(text, &FormatConfig::default());
-        let twice = format_source(&once.formatted, &FormatConfig::default());
+        let once = format_source(
+            text,
+            &FormatConfig::default(),
+            &specforge_graph::FieldForms::default(),
+        );
+        let twice = format_source(
+            &once.formatted,
+            &FormatConfig::default(),
+            &specforge_graph::FieldForms::default(),
+        );
         assert_eq!(twice.formatted, once.formatted, "{text}");
         assert_eq!(ids(&once.formatted), ids(text), "{text}");
     }

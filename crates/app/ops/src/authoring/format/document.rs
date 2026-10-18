@@ -4,6 +4,8 @@
 use specforge_common::{Diagnostic, ProjectRoot, Sym, codes};
 use specforge_formatter::config::{find_config_path, read_config_file};
 use specforge_formatter::{FormatConfig, format_range, format_source};
+use specforge_graph::FieldForms;
+use specforge_project::{Environment, SharedRuntime};
 use std::collections::HashMap;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
@@ -112,23 +114,35 @@ impl FormattedDocument<'_> {
     }
 }
 
+/// The field forms of the project at `root`: its extensions loaded into
+/// `runtime` (none without one), their declarations read (ADR 0147).
+/// A project whose extensions do not load has the forms of those that do.
+pub fn forms(root: &ProjectRoot, runtime: Option<SharedRuntime>) -> FieldForms {
+    Environment::load(root, runtime)
+        .registries()
+        .field_forms()
+        .clone()
+}
+
 /// Format `text`, which belongs at `place`: the whole document, or the
 /// blocks `lines` touch. Inside a project its `.specforgefmt.toml` (else the
 /// defaults) decides, never `editor`; outside one, `editor` (else the
-/// defaults).
+/// defaults). Values are written in the form `forms` gives their fields
+/// (ADR 0147).
 pub fn document<'a>(
     place: Place<'_>,
     text: &'a str,
     lines: Option<Lines>,
     editor: Option<EditorOptions>,
+    forms: &FieldForms,
 ) -> FormattedDocument<'a> {
-    let mut configs = Configs::default();
+    let mut configs = Configs::new(None);
     let (file, resolved) = match place {
         Place::File(path) => (Some(path), configs.for_file(path, editor)),
         Place::InProject { root, dir } => (None, configs.resolve(dir, root)),
         Place::Detached => (None, Resolved::editor(editor)),
     };
-    format_text(resolved, text, lines, file)
+    format_text(resolved, text, lines, file, forms)
 }
 
 /// The directory `file` is in (`.` for a bare file name).
@@ -161,14 +175,45 @@ impl Resolved {
 /// The configurations of one run: one project lookup per directory, one
 /// walk per directory and project, one read per configuration file. A
 /// file's W141 goes out the first time it is used.
-#[derive(Default)]
 pub(super) struct Configs {
+    /// Where each project's extensions load, to read its field forms; none
+    /// formats layout only.
+    runtime: Option<SharedRuntime>,
+    forms: HashMap<PathBuf, FieldForms>,
+    none: FieldForms,
     projects: HashMap<PathBuf, Option<PathBuf>>,
     found: HashMap<(PathBuf, PathBuf), Option<PathBuf>>,
     read: HashMap<PathBuf, FormatConfig>,
 }
 
 impl Configs {
+    pub(super) fn new(runtime: Option<SharedRuntime>) -> Self {
+        Configs {
+            runtime,
+            forms: HashMap::new(),
+            none: FieldForms::default(),
+            projects: HashMap::new(),
+            found: HashMap::new(),
+            read: HashMap::new(),
+        }
+    }
+
+    /// The field forms of `file`'s project, loaded once per run; none
+    /// outside a project or without a runtime.
+    pub(super) fn forms_for_file(&mut self, file: &Path) -> &FieldForms {
+        let dir = directory_of(file);
+        let Some(runtime) = self.runtime.clone() else {
+            return &self.none;
+        };
+        let Some(root) = self.project_of(&dir) else {
+            return &self.none;
+        };
+        self.forms.entry(root.clone()).or_insert_with(|| {
+            ProjectRoot::enclosing(&dir)
+                .map_or_else(FieldForms::default, |root| forms(&root, Some(runtime)))
+        })
+    }
+
     /// The configuration of `file`: its own project's (discovery from its
     /// directory up to that project's root), else outside any project the
     /// editor's.
@@ -226,13 +271,14 @@ pub(super) fn format_text<'a>(
     text: &'a str,
     lines: Option<Lines>,
     file: Option<&Path>,
+    forms: &FieldForms,
 ) -> FormattedDocument<'a> {
     let result = match lines {
         // An empty document has no lines to widen.
         Some(lines) if !text.is_empty() => {
-            format_range(text, lines.first, lines.last, &resolved.config)
+            format_range(text, lines.first, lines.last, &resolved.config, forms)
         }
-        _ => format_source(text, &resolved.config),
+        _ => format_source(text, &resolved.config, forms),
     };
     let file = Sym::new(&file.map(|f| f.display().to_string()).unwrap_or_default());
     let mut diagnostics = resolved.diagnostics;

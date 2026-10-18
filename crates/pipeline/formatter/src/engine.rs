@@ -1,5 +1,6 @@
 use crate::config::FormatConfig;
 use specforge_common::{Diagnostic, SourceSpan, Sym, codes};
+use specforge_graph::FieldForms;
 use specforge_parser::cst::Cst;
 use specforge_parser::lex::lex;
 use tree_sitter::Node;
@@ -18,8 +19,10 @@ pub struct FormatResult {
 
 /// Format a complete .spec source string: every top-level form as the
 /// parser reads it (`specforge_parser::cst`), a form the parser could not
-/// read whole kept as written, with one W142 spanning its lines.
-pub fn format_source(source: &str, config: &FormatConfig) -> FormatResult {
+/// read whole kept as written, with one W142 spanning its lines. A value of
+/// an entity block is written in its field's form, read from `forms`
+/// (ADR 0147); with `FieldForms::default()` no value is rewritten.
+pub fn format_source(source: &str, config: &FormatConfig, forms: &FieldForms) -> FormatResult {
     let cst = match Cst::read(source, None) {
         Ok(cst) => cst,
         Err(_) => {
@@ -30,7 +33,7 @@ pub fn format_source(source: &str, config: &FormatConfig) -> FormatResult {
         }
     };
     let source_lines: Vec<&str> = source.lines().collect();
-    let mut emitter = Emitter::new(&source_lines, config);
+    let mut emitter = Emitter::new(&source_lines, config, forms);
     for piece in cst.pieces() {
         emitter.piece(piece);
     }
@@ -46,6 +49,7 @@ pub fn format_range(
     start_line: usize,
     end_line: usize,
     config: &FormatConfig,
+    forms: &FieldForms,
 ) -> FormatResult {
     let cst = match Cst::read(source, None) {
         Ok(cst) => cst,
@@ -91,7 +95,7 @@ pub fn format_range(
         .copied()
         .unwrap_or(source.len());
     let range_source = &source[from..to];
-    let range_result = format_source(range_source, config);
+    let range_result = format_source(range_source, config, forms);
     let mut middle = range_result.formatted;
     // The file's last line, unterminated: so is its formatted text (the final newline is the whole
     // document's to add).

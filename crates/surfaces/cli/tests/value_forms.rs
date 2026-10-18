@@ -1,5 +1,4 @@
-//! A value is written in its field's one form (ADR 0147). Today `check` and
-//! `format` take either form; each test is ignored until the ticket that flips it.
+//! A value is written in its field's one form (ADR 0147): `check` warns W159 and `format` rewrites it.
 
 use crate::support::{Cli, TestProject};
 
@@ -12,8 +11,10 @@ fn project(file: &str, source: &str) -> TestProject {
 
 const CART: &str = "behavior add_item \"Add\" {\n  category \"cart\"\n  contract \"x\"\n}\n";
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test_macros::test(
+    behavior = "check_field_value_types",
+    verify = "a quoted word on a word field and a bare word on a text field are W159"
+)]
 fn check_reports_a_tag_written_as_text() {
     let dir = project("spec/cart.spec", CART);
 
@@ -26,7 +27,7 @@ fn check_reports_a_tag_written_as_text() {
         .filter(|d| d["code"] == "W159")
         .collect();
     assert_eq!(w159.len(), 1, "{diagnostics}");
-    assert_eq!(w159[0]["span"]["start"]["line"], 2, "{diagnostics}");
+    assert_eq!(w159[0]["span"]["start_line"], 2, "{diagnostics}");
     let message = w159[0]["message"].as_str().unwrap();
     assert!(
         message.contains("category") && message.contains("cart"),
@@ -34,8 +35,10 @@ fn check_reports_a_tag_written_as_text() {
     );
 }
 
-#[test]
-#[ignore = "flipped by T6"]
+#[specforge_test_macros::test(
+    behavior = "format_spec_files",
+    verify = "a value is written in its field's form, read from the project's declarations"
+)]
 fn format_writes_a_tag_bare() {
     let dir = project("spec/cart.spec", CART);
     let cli = Cli::on(&dir);
@@ -50,8 +53,10 @@ fn format_writes_a_tag_bare() {
     assert_eq!(before, after, "formatting the quotes keeps the graph");
 }
 
-#[test]
-#[ignore = "flipped by T6"]
+#[specforge_test_macros::test(
+    behavior = "format_spec_files",
+    verify = "a value is written in its field's form, read from the project's declarations"
+)]
 fn format_quotes_text_written_bare() {
     let dir = project(
         "spec/events.spec",

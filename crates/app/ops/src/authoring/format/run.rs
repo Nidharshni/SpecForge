@@ -4,6 +4,7 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{Diagnostic, DiagnosticList, ProjectPath, ProjectRoot, codes};
+use specforge_project::SharedRuntime;
 use std::path::{Path, PathBuf};
 
 use super::document::{Configs, FormattedDocument, format_text};
@@ -65,6 +66,9 @@ pub struct Request<'a> {
     /// symlinked source) that lands outside it is neither read nor written but a failure of kind
     /// [`OpErrorKind::InvalidInput`], and the other targets are formatted (ADR 0092 D8).
     pub caller: Caller<'a>,
+    /// Where each project's extensions load, to read the forms its fields
+    /// take (ADR 0147); `None` formats layout only.
+    pub runtime: Option<SharedRuntime>,
 }
 
 /// The field of a format [`Request`] a refusal can be about.
@@ -428,7 +432,7 @@ pub fn run(request: &Request) -> Result<Outcome, Refusal<FormatField>> {
     // One set of configurations for the run: each file gets the one
     // `document(Place::File(file), ..)` gives it (no editor: the CLI and
     // MCP have none), and each configuration file is read once.
-    let mut configs = Configs::default();
+    let mut configs = Configs::new(request.runtime.clone());
     let mut outcome = Outcome {
         root: request.root.dir().to_path_buf(),
         mode: request.mode,
@@ -455,13 +459,20 @@ pub fn run(request: &Request) -> Result<Outcome, Refusal<FormatField>> {
         };
         outcome.checked += 1;
         let resolved = configs.for_file(&target, None);
+        let forms = configs.forms_for_file(&target);
         // A span names the file as the document does.
         let name = ProjectPath::of(&outcome.root, &target);
         let FormattedDocument {
             formatted,
             diagnostics,
             ..
-        } = format_text(resolved, &source, None, Some(Path::new(name.as_str())));
+        } = format_text(
+            resolved,
+            &source,
+            None,
+            Some(Path::new(name.as_str())),
+            forms,
+        );
         outcome.diagnostics.extend(diagnostics);
         if formatted == source {
             continue;

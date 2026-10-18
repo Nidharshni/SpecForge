@@ -70,8 +70,8 @@ expression: snapshot
       "to_version": "1.0"
     },
     "files": {
-      "spec/bad.spec": "// specforge-format: 99.0\nbehavior bad_one \"Bad\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n",
-      "spec/main.spec": "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n"
+      "spec/bad.spec": "// specforge-format: 99.0\nbehavior bad_one \"Bad\" {\n  category core\n  contract \"The system MUST work\"\n}\n",
+      "spec/main.spec": "behavior alpha \"Alpha\" {\n  category core\n  contract \"The system MUST work\"\n}\n"
     },
     "ok": false
   },
