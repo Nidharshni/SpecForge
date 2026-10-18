@@ -13,5 +13,6 @@ mod obligations;
 mod reading;
 mod resolution;
 mod stress;
+mod titles;
 mod value_forms;
 mod written;
