@@ -163,7 +163,7 @@ Cross-cutting: `ref` — attach external references at any phase.
 
 ### Checkpoint
 - [ ] Every event has at least one consumer (avoids W007)
-- [ ] Every event's trigger references a valid behavior (avoids E051)
+- [ ] Every relation is written on the field that owns it (avoids E079)
 - [ ] Ports cover all integration points
 - [ ] No behavior references a non-existent port or type (avoids E001)
 
@@ -322,7 +322,7 @@ After completing all phases, the spec should have zero errors:
 | No circular modules (E007) | Module deps form a DAG |
 | Valid failure-mode ratings (E061) | Severity, occurrence and detection are recognized values |
 | Resolved references (E003) | Journey personas and channels are declared |
-| Valid triggers (E051) | Event triggers reference real behaviors |
+| Relations on their owning side (E079) | A relation is written on the field that owns it, never on its other side |
 
 And minimal warnings:
 

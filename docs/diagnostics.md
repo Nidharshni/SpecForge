@@ -570,19 +570,6 @@ Owner: core
 Level: error
 ```
 
-## E051
-
-```
-E051: Invalid event trigger
-
-An `event` entity's `trigger` field must reference a `behavior`, but it points
-at something else (or nothing resolvable). Point `trigger` at an existing
-`behavior` entity.
-
-Owner: @specforge/software
-Level: error
-```
-
 ## E052
 
 ```
@@ -3211,6 +3198,7 @@ These codes are no longer emitted, and are never reused for another meaning.
 | E037 | (nothing) |
 | E038 | (nothing) |
 | E047 | [W139](#w139) |
+| E051 | [E079](#e079) |
 | E053 | (nothing) |
 | E060 | (nothing) |
 | I006 | (nothing) |

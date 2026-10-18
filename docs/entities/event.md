@@ -94,7 +94,6 @@ Supported annotations: `@readonly`, `@optional`.
 | E001 | The `trigger` must resolve to an existing `behavior`. |
 | E001 | Every ID in `consumers` must resolve to an existing `behavior`. |
 | E002 | No two events may share the same ID. |
-| E051 | The trigger behavior must exist and be a valid behavior entity. |
 | W007 | If `consumers` is empty or omitted, emit "unreferenced event" warning. |
 
 ## Design Guidance

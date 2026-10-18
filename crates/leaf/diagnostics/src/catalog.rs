@@ -193,9 +193,6 @@ catalog! {
     E048: Error core,
         "Proof coverage below the minimum",
         "`specforge analyze coverage --min N` found that fewer than N% of testable entities are proven, where an entity is proven when a passing test names each of its `verify` obligations or a formal claim discharges it. Prove more obligations, or lower the threshold. The run exits 1.";
-    E051: Error software,
-        "Invalid event trigger",
-        "An `event` entity's `trigger` field must reference a `behavior`, but it points at something else (or nothing resolvable). Point `trigger` at an existing `behavior` entity.";
     E052: Error product,
         "Deliverable dependency cycle",
         "The `depends_on` edges between `deliverable` entities form a cycle. Break the cycle by removing or inverting one of the dependencies.";
