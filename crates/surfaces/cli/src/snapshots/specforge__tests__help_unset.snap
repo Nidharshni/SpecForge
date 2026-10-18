@@ -1,0 +1,32 @@
+---
+source: crates/surfaces/cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Remove a field of an entity
+
+Usage: specforge unset [OPTIONS] <ENTITY> <FIELD>
+
+Arguments:
+  <ENTITY>
+          The entity to change
+
+  <FIELD>
+          The field to remove, or `field.entry` for one entry of a block field
+
+Options:
+      --dry-run
+          Print the diff and write nothing
+
+      --path <PATH>
+          A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
+          
+          [default: .]
+
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
+  -h, --help
+          Print help

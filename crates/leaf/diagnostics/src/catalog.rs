@@ -228,10 +228,10 @@ catalog! {
         "`specforge add` was given a `git+https://...` extension specifier. It parses, but installing from git isn't supported yet. Install from a registry (`name@version`) or from a local `.wasm` path instead.";
     E065: Error core,
         "Invalid scaffold request",
-        "`specforge new` can't scaffold what was asked: only `--extension` projects are supported, the extension name is empty or is a scoped name that isn't `@scope/name`, or the destination directory already exists. Pass `--extension`, fix the name, or pick a destination that doesn't exist yet.";
+        "`specforge extension init` can't scaffold what was asked: the extension name is empty or is a scoped name that isn't `@scope/name`, or the destination directory already exists. Fix the name, or pick a destination that doesn't exist yet.";
     E066: Error core,
         "Extension scaffold failed",
-        "`specforge new --extension` couldn't write the project: creating a directory or writing one of the generated files failed. Check permissions and free space at the destination, remove the partial project, and retry.";
+        "`specforge extension init` couldn't write the project: creating a directory or writing one of the generated files failed. Check permissions and free space at the destination, remove the partial project, and retry.";
     E067: Error core,
         "Invalid registry configuration",
         "The registry configuration in `specforge.json` can't be read: the file isn't valid JSON, `registries` isn't an array, or an entry at the reported index is missing a required field, has the wrong type, or has a `url` that isn't a registry's root (an `http` or `https` URL with no query, fragment or user name; write `https://registry.example`, not `https://registry.example/v1`: SpecForge adds the protocol's `/v1`). No registry is asked while an entry can't be read, so a package whose scope that entry serves never goes to another registry. Fix the reported entry.";
@@ -268,6 +268,9 @@ catalog! {
     E079: Error core,
         "Relation written on its other side",
         "An entity writes a field its kind does not declare, and that field is the other side of a relation another kind owns. A relation is written on its owning field only (ADR 0150): the one reference field an extension declares for it. The other side is derived, never written: `query` shows it as the incoming edges and `trace` as the upstream. The field is recognised in two ways: an owning field names it in its `inverse_of` (so a documented reverse such as `behaviors` on a feature is refused even when its ids do not resolve), or every id it lists is one other kind's entity and that kind owns a reference field into this one (`journeys [..]` on a feature). A self-relation's other side is not recognised, and a kind that accepts any field is not checked. The graph still carries the field's untyped edge, and `check` fails. Remove the field and write the owning field on each entity it listed; the suggestion names both.";
+    E080: Error core,
+        "Typed edit would add errors",
+        "A typed edit (`specforge new`, `set`, `unset`, `link`, `unlink`, `delete`, or MCP `specforge.edit`) was planned, and the project it would leave reports errors the project does not report now: the edit is refused and nothing is written. The refusal lists each new error (an unresolved reference, a missing required field, a value its field does not take, …). Fix what they name first: create the referenced entity, give the required field, or make both changes in one `specforge.edit` call. `delete --unlink-references` removes the references a delete would leave dangling.";
     I002: Info core,
         "Structural-only mode",
         "Emitted when no extensions are installed, or when every installed extension failed to load, so the compiler falls back to structural-only validation. Install an extension (for example `specforge add @specforge/software`) to enable kind-specific checks.";
@@ -708,7 +711,7 @@ catalog! {
         "The formatter hit a parse error in a `.spec` file. It keeps the reported line range exactly as written and formats the rest. Fix the syntax there (see E001) and format again.";
     W143: Warning core,
         "Define blocks are not supported",
-        "A `.spec` file has a `define <name> { ... }` block. Every entity kind comes from an extension, so a project's kinds depend only on `specforge.json` (ADR 0005): the block registers nothing and is left out of the graph. Declare the kind in an extension (`specforge new --extension`) and enable it, then remove the block. `define` stays a reserved word.";
+        "A `.spec` file has a `define <name> { ... }` block. Every entity kind comes from an extension, so a project's kinds depend only on `specforge.json` (ADR 0005): the block registers nothing and is left out of the graph. Declare the kind in an extension (`specforge extension init`) and enable it, then remove the block. `define` stays a reserved word.";
     W144: Warning core,
         "Invalid build cache",
         "The project root has a `specforge-cache.json` that can't be read, isn't valid JSON, or declares a `format` other than 1. The build cache records each entity's status from the build `specforge check --cache` last wrote, and check-phase passes compare against it (status transitions); with the file invalid they get no previous statuses, so history rules stay silent. Rewrite it with `specforge check --cache`, or delete it.";

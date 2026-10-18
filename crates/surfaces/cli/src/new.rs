@@ -1,377 +1,240 @@
-//! `specforge new --extension <name>` — scaffold an SDK-authored extension
-//! project (spec #21 follow-through / SDK adoption).
-//!
-//! The generated project mirrors `fixtures/greet-extension`: a cdylib crate
-//! depending on `specforge-extension-sdk`, built as a `wasm32-wasip2`
-//! component, with a `src/lib.rs` skeleton that builds and describes out of
-//! the box. `specforge extension init` writes the same project.
+//! `specforge new <kind> <id> "<title>" --in <file> [--<field> <value>]… [--verify kind:text]…`: create an entity
+//! (ADR 0151). The field flags are the kind's declared fields, read from the project's extensions at run time, so
+//! `specforge new behavior --help` lists `--contract`, `--invariants`, … and a misspelt flag gets clap's "did you
+//! mean". An open kind's members are set with `specforge set` afterwards.
 
-use crate::terminal::{Terminal, outln};
-
+use crate::edit::{execute, obligation};
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
-use serde_json::json;
-use specforge_common::codes;
-use specforge_ops::OpErrorKind;
-use specforge_package::PackageName;
-use std::path::{Path, PathBuf};
+use crate::project::ProjectArg;
+use crate::terminal::{Terminal, err, outln};
+use clap::{Arg, ArgAction, ArgMatches, Command};
+use specforge_ops::authoring::edit::{self, Edit, FieldInfo, Input, Obligation};
+use specforge_ops::view::ProjectView;
+use specforge_ops::{OpError, OpErrorKind};
+use specforge_protocol_types::FieldType;
+use std::collections::BTreeMap;
+
+/// The options `new` itself takes: a field with one of these names is set with `specforge set`.
+const HOST_OPTIONS: [&str; 6] = ["in", "verify", "dry-run", "path", "format", "help"];
 
 // `specforge new`'s command line.
 #[derive(clap::Args)]
+#[command(
+    disable_help_flag = true,
+    after_help = "The kind's fields are flags too: `specforge new <kind> --help` lists them."
+)]
 pub(crate) struct Args {
-    /// Extension name (e.g. @you/my-ext)
-    name: String,
+    /// The kind of entity (behavior, invariant, …)
+    #[arg(required_unless_present = "help")]
+    kind: Option<String>,
 
-    /// Scaffold an extension project (SDK-authored wasm)
-    #[arg(long, default_value_t = false)]
-    extension: bool,
+    /// The new entity's id
+    #[arg(required_unless_present = "help")]
+    id: Option<String>,
 
-    /// Directory to scaffold into
-    #[arg(long, default_value = ".")]
-    dir: PathBuf,
+    /// The new entity's title
+    #[arg(required_unless_present = "help")]
+    title: Option<String>,
+
+    /// The file, relative to the spec root; created when missing
+    #[arg(long = "in", value_name = "FILE")]
+    file: Option<String>,
+
+    /// A `verify` obligation, as `kind:text` (or just `text`); repeat for several
+    #[arg(long, value_name = "KIND:TEXT")]
+    verify: Vec<String>,
+
+    /// Print the diff and write nothing
+    #[arg(long)]
+    dry_run: bool,
+
+    /// Print help (with a kind, that kind's field flags)
+    #[arg(short = 'h', long = "help")]
+    help: bool,
+
+    #[command(flatten)]
+    project: ProjectArg,
 
     #[command(flatten)]
     output: OutputArg,
+
+    /// The kind's fields: `--<field> <value>`
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true, num_args = 0.., value_name = "FIELDS")]
+    rest: Vec<String>,
+}
+
+/// The kind's command line: its declared fields as flags, and the options `new` takes whatever their place.
+fn command(kind: &str, fields: &[FieldInfo]) -> Command {
+    let mut cmd = Command::new("new")
+        .no_binary_name(true)
+        .disable_help_flag(true)
+        .bin_name(format!("specforge new {kind} <ID> <TITLE>"))
+        .arg(
+            Arg::new("in")
+                .long("in")
+                .value_name("FILE")
+                .help("The file, relative to the spec root"),
+        )
+        .arg(
+            Arg::new("verify")
+                .long("verify")
+                .action(ArgAction::Append)
+                .value_name("KIND:TEXT")
+                .help("A verify obligation"),
+        )
+        .arg(
+            Arg::new("dry-run")
+                .long("dry-run")
+                .action(ArgAction::SetTrue)
+                .help("Print the diff and write nothing"),
+        )
+        .arg(
+            Arg::new("path")
+                .long("path")
+                .help("A path inside the project"),
+        )
+        .arg(
+            Arg::new("format")
+                .long("format")
+                .value_parser(["human", "json"])
+                .help("Output format"),
+        );
+    for field in fields
+        .iter()
+        .filter(|f| !HOST_OPTIONS.contains(&f.name.as_str()))
+    {
+        let mut arg = Arg::new(field.name.clone())
+            .long(field.name.clone())
+            .allow_hyphen_values(true)
+            .action(ArgAction::Append)
+            .help(field.description.clone());
+        arg = match field.field_type {
+            FieldType::ReferenceList => arg.value_delimiter(',').value_name("ID,…"),
+            FieldType::Block => arg.value_name("NAME=TEXT"),
+            _ => arg.value_name("VALUE"),
+        };
+        cmd = cmd.arg(arg);
+    }
+    cmd
+}
+
+/// The fields `matches` sets, as the inputs `Create` takes.
+fn inputs(fields: &[FieldInfo], matches: &ArgMatches) -> Result<BTreeMap<String, Input>, OpError> {
+    let mut out = BTreeMap::new();
+    for field in fields
+        .iter()
+        .filter(|f| !HOST_OPTIONS.contains(&f.name.as_str()))
+    {
+        let Some(values) = matches.get_many::<String>(&field.name) else {
+            continue;
+        };
+        let values: Vec<String> = values.cloned().collect();
+        let input = match field.field_type {
+            FieldType::ReferenceList | FieldType::StringList => Input::Many(values),
+            FieldType::Block => {
+                let mut entries = BTreeMap::new();
+                for value in &values {
+                    let Some((name, text)) = value.split_once('=') else {
+                        return Err(OpError::new(
+                            OpErrorKind::InvalidInput,
+                            "invalid_edit",
+                            format!("--{} takes NAME=TEXT, got '{value}'", field.name),
+                        ));
+                    };
+                    entries.insert(name.trim().to_string(), text.to_string());
+                }
+                Input::Entries(entries)
+            }
+            _ => Input::One(values.last().cloned().unwrap_or_default()),
+        };
+        out.insert(field.name.clone(), input);
+    }
+    Ok(out)
 }
 
 impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        new(
-            &self.name,
-            self.extension,
-            &self.dir,
-            self.output.format,
-            terminal,
-        )
-    }
-}
-
-fn new(
-    name: &str,
-    extension: bool,
-    path: &Path,
-    format: OutputFormat,
-    terminal: &Terminal,
-) -> Exit {
-    if !extension {
-        return Refusal::of(format).coded(
-            terminal,
-            OpErrorKind::InvalidInput,
-            codes::E065,
-            "only `--extension` scaffolding is supported right now",
-        );
-    }
-
-    if let Err(why) = PackageName::parse(name) {
-        return Refusal::of(format).coded(
-            terminal,
-            OpErrorKind::InvalidInput,
-            codes::E065,
-            why.to_string(),
-        );
-    }
-
-    let dir = target_dir(path, name);
-    if dir.exists() {
-        return Refusal::of(format).coded(
-            terminal,
-            OpErrorKind::Conflict,
-            codes::E065,
-            format!("destination '{}' already exists", dir.display()),
-        );
-    }
-
-    if let Err(message) = scaffold(&dir, name) {
-        return Refusal::of(format).coded(terminal, OpErrorKind::Internal, codes::E066, message);
-    }
-
-    match format {
-        OutputFormat::Json => {
-            let output = json!({
-                "action": "new",
-                "kind": "extension",
-                "name": name,
-                "path": dir.display().to_string(),
-            });
-            terminal.json(&output);
-        }
-        OutputFormat::Human => {
-            outln!(
-                terminal,
-                "scaffolded extension '{}' in {}",
-                name,
-                dir.display()
-            );
-            outln!(terminal);
-            outln!(terminal, "next steps:");
-            outln!(terminal, "  cd {}", dir.display());
-            outln!(terminal, "  cargo build --release --target wasm32-wasip2");
-            let wasm = format!(
-                "./target/wasm32-wasip2/release/{}.wasm",
-                crate_name(name).replace('-', "_")
-            );
-            outln!(
-                terminal,
-                "  specforge add {wasm}   # local-path install once built"
-            );
-        }
-    }
-    Exit::Passed
-}
-
-/// The crate- and directory-safe name: the last path segment, sanitized.
-fn crate_name(name: &str) -> String {
-    let last = name.rsplit('/').next().unwrap_or(name);
-    let sanitized: String = last
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
-                c
-            } else {
-                '-'
-            }
-        })
-        .collect();
-    if sanitized.chars().next().is_some_and(|c| c.is_ascii_digit()) {
-        format!("ext-{}", sanitized)
-    } else {
-        sanitized
-    }
-}
-
-/// The extension's short name, which routes its commands
-/// (`specforge <short> <command>`): the crate name in lowercase kebab case,
-/// starting with a letter.
-pub(crate) fn short_name(name: &str) -> String {
-    let kebab: String = crate_name(name)
-        .to_ascii_lowercase()
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect();
-    let kebab = kebab.trim_matches('-').to_string();
-    match kebab.chars().next() {
-        Some(c) if c.is_ascii_lowercase() => kebab,
-        _ => format!("ext-{kebab}").trim_end_matches('-').to_string(),
-    }
-}
-
-fn target_dir(path: &Path, name: &str) -> PathBuf {
-    path.join(crate_name(name))
-}
-
-/// The files [`scaffold`] writes, relative to the project directory.
-pub(crate) const SCAFFOLDED: &[&str] = &["Cargo.toml", ".cargo/config.toml", "src/lib.rs"];
-
-/// Write an SDK extension crate declaring `name` into `dir`: its
-/// [`SCAFFOLDED`] files.
-pub(crate) fn scaffold(dir: &Path, name: &str) -> Result<(), String> {
-    let short = short_name(name);
-    let crate_name = crate_name(name);
-    let src = dir.join("src");
-    std::fs::create_dir_all(&src)
-        .map_err(|e| format!("failed to create {}: {}", src.display(), e))?;
-    std::fs::create_dir_all(dir.join(".cargo"))
-        .map_err(|e| format!("failed to create .cargo: {}", e))?;
-
-    let cargo_toml = format!(
-        r#"[package]
-name = "{crate_name}"
-version = "0.1.0"
-edition = "2021"
-
-[lib]
-crate-type = ["cdylib"]
-
-[dependencies]
-specforge-extension-sdk = "0.1"
-serde_json = "1.0"
-
-[profile.release]
-opt-level = "z"
-lto = "fat"
-codegen-units = 1
-strip = true
-"#
-    );
-    std::fs::write(dir.join("Cargo.toml"), cargo_toml)
-        .map_err(|e| format!("failed to write Cargo.toml: {}", e))?;
-
-    std::fs::write(
-        dir.join(".cargo").join("config.toml"),
-        "[build]\ntarget = \"wasm32-wasip2\"\n",
-    )
-    .map_err(|e| format!("failed to write .cargo/config.toml: {}", e))?;
-
-    let lib_rs = format!(
-        r#"//! {name} — a SpecForge extension authored with the extension SDK.
-//!
-//! Build:  cargo build --release --target wasm32-wasip2
-//! Install: specforge add ./path/to/this/dir
-
-use specforge_extension_sdk::prelude::*;
-
-#[specforge_extension_sdk::extension(
-    name = "{name}",
-    version = "0.1.0",
-    short = "{short}",
-    description = "TODO: one line saying what the extension is for"
-)]
-struct Extension;
-
-impl Contributions for Extension {{
-    fn contribute(c: &mut ContributionsBuilder) {{
-        // Contribute an entity kind (delete if not needed):
-        c.kind("thing", |k| {{
-            k.description("TODO: what this entity represents");
-            k.field("description", |f| {{
-                f.field_type(FieldType::String)
-                    .description("Free-form description");
-            }});
-        }});
-
-        // Contribute a validation rule (delete if not needed):
-        c.rule("W900", |r| {{
-            r.check(CheckKind::MissingRequiredField);
-            r.target_kind("thing");
-            r.field("description");
-            r.severity(ValidationSeverity::Warning);
-            r.message_template("thing '{{id}}' is missing a description");
-        }});
-
-        // Contribute a command, declared with the function that answers it
-        // (delete if not needed). It runs as `specforge {short} things` and is
-        // the MCP tool `specforge.{short}.things`; its args are read through
-        // the declaration.
-        c.command("things", |cmd| {{
-            cmd.title("List things")
-                .description("Every thing, by id")
-                .arg("limit", |a| {{
-                    a.count().description("Return at most this many");
-                }})
-                .handler(|call| {{
-                    let ids: Vec<&str> = call
-                        .graph()
-                        .nodes_of_kind("thing")
-                        .take(call.count("limit").unwrap_or(100))
-                        .map(|n| n.id.as_str())
-                        .collect();
-                    call.render(&serde_json::json!({{ "things": ids }}), |out| {{
-                        for id in &ids {{
-                            out.push_str(id);
-                            out.push('\n');
-                        }}
-                    }})
-                }});
-        }});
-    }}
-}}
-
-// Serves the protocol and the declared commands. Exports you answer by
-// hand go to `handler = dispatch`, a function returning `None` for names it
-// does not know.
-specforge_extension_sdk::component_guest!(build = specforge_extension_build);
-"#
-    );
-    std::fs::write(src.join("lib.rs"), lib_rs)
-        .map_err(|e| format!("failed to write src/lib.rs: {}", e))?;
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn crate_name_takes_last_segment_and_sanitizes() {
-        assert_eq!(crate_name("@you/my-ext"), "my-ext");
-        assert_eq!(crate_name("plain"), "plain");
-        assert_eq!(crate_name("@weird scope/name!"), "name-");
-    }
-
-    #[test]
-    fn the_short_name_is_lowercase_kebab_case() {
-        assert_eq!(short_name("@you/my-ext"), "my-ext");
-        assert_eq!(short_name("My_Ext"), "my-ext");
-        assert_eq!(short_name("@x/4th-kind"), "ext-4th-kind");
-    }
-
-    #[test]
-    fn crate_name_prefixes_leading_digit() {
-        assert_eq!(crate_name("@x/4th-kind"), "ext-4th-kind");
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "scaffold_wasm_extension_project",
-        verify = "the scaffold's extension name is a package name"
-    )]
-    fn the_scaffolds_extension_name_is_a_package_name() {
-        for ok in ["@ok/name", "unscoped"] {
-            assert!(PackageName::parse(ok).is_ok(), "{ok}");
-        }
-        for refused in ["@justscope", "   ", "Bad", "@a/../b"] {
-            assert!(PackageName::parse(refused).is_err(), "{refused}");
-        }
-    }
-
-    #[test]
-    fn scaffold_writes_buildable_shape() {
-        let dir = tempfile::tempdir().unwrap();
-        let project = dir.path().join("my-ext");
-        scaffold(&project, "@you/my-ext").unwrap();
-
-        let cargo = std::fs::read_to_string(project.join("Cargo.toml")).unwrap();
-        assert!(cargo.contains(r#"name = "my-ext""#));
-        assert!(cargo.contains("crate-type = [\"cdylib\"]"));
-        assert!(cargo.contains("specforge-extension-sdk"));
-        assert!(cargo.contains("[profile.release]") && cargo.contains("opt-level = \"z\""));
-
-        let config = std::fs::read_to_string(project.join(".cargo/config.toml")).unwrap();
-        assert!(config.contains("wasm32-wasip2"));
-
-        let lib = std::fs::read_to_string(project.join("src/lib.rs")).unwrap();
-        assert!(lib.contains("name = \"@you/my-ext\""));
-        assert!(lib.contains("#[specforge_extension_sdk::extension("));
-        assert!(lib.contains("impl Contributions for Extension"));
-        assert!(lib.contains("component_guest!"));
-        assert!(lib.contains("c.command(\"things\""));
-        assert!(cargo.contains("serde_json"));
-    }
-
-    /// Every field type and check kind the scaffold names is one the
-    /// host's registry build reads, so a freshly scaffolded extension loads
-    /// without W019/W112 (the scaffold once used a check name it rejected).
-    #[test]
-    fn scaffold_uses_only_vocabulary_the_host_reads() {
-        use specforge_protocol_types::{CheckKind, FieldType};
-
-        let dir = tempfile::tempdir().unwrap();
-        let project = dir.path().join("my-ext");
-        scaffold(&project, "@you/my-ext").unwrap();
-        let lib = std::fs::read_to_string(project.join("src/lib.rs")).unwrap();
-
-        let named = |prefix: &str| -> Vec<String> {
-            lib.match_indices(prefix)
-                .map(|(at, _)| {
-                    lib[at + prefix.len()..]
-                        .chars()
-                        .take_while(|c| c.is_ascii_alphanumeric())
-                        .collect()
-                })
-                .collect()
+        let format = self.output.format;
+        let compiled = match self.project.compile() {
+            Ok(compiled) => compiled,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
         };
-        let checks = named("CheckKind::");
-        let types = named("FieldType::");
-        assert!(!checks.is_empty() && !types.is_empty(), "{lib}");
-        for name in checks {
-            assert!(
-                CheckKind::ALL.iter().any(|c| format!("{c:?}") == name),
-                "scaffold names unknown CheckKind::{name}"
-            );
+        let view = ProjectView::of(&compiled);
+        let kind = self.kind.clone().unwrap_or_default();
+        let fields = edit::fields_of(&view, &kind);
+        if self.help {
+            return help(&kind, &fields, terminal);
         }
-        for name in types {
-            assert!(
-                FieldType::ALL.iter().any(|t| format!("{t:?}") == name),
-                "scaffold names unknown FieldType::{name}"
-            );
-        }
+        let matches = match command(&kind, &fields).try_get_matches_from(&self.rest) {
+            Ok(matches) => matches,
+            Err(e) => {
+                err!(terminal, "{}", e.render());
+                return Exit::Unjudged;
+            }
+        };
+        let edit = self.edit(&kind, &fields, &matches);
+        let (project, dry_run, format) = (
+            matches.get_one::<String>("path").map_or_else(
+                || self.project.clone(),
+                |p| ProjectArg::scan(&["--path".into(), p.clone()]),
+            ),
+            self.dry_run || matches.get_flag("dry-run"),
+            matches.get_one::<String>("format").map_or(format, |f| {
+                if f == "json" {
+                    OutputFormat::Json
+                } else {
+                    OutputFormat::Human
+                }
+            }),
+        );
+        execute(&project, edit.map(|e| vec![e]), dry_run, format, terminal)
     }
+
+    fn edit(
+        &self,
+        kind: &str,
+        fields: &[FieldInfo],
+        matches: &ArgMatches,
+    ) -> Result<Edit, OpError> {
+        let file = self
+            .file
+            .clone()
+            .or_else(|| matches.get_one::<String>("in").cloned())
+            .ok_or_else(|| {
+                OpError::new(
+                    OpErrorKind::InvalidInput,
+                    "invalid_edit",
+                    "new needs --in <file>, relative to the spec root",
+                )
+            })?;
+        let verify = self
+            .verify
+            .iter()
+            .chain(matches.get_many::<String>("verify").into_iter().flatten())
+            .map(|text| {
+                let (kind, text) = obligation(text);
+                Obligation { kind, text }
+            })
+            .collect();
+        Ok(Edit::Create {
+            kind: kind.to_string(),
+            id: self.id.clone().unwrap_or_default(),
+            title: self.title.clone().unwrap_or_default(),
+            file,
+            fields: inputs(fields, matches)?,
+            verify,
+        })
+    }
+}
+
+/// `specforge new --help`, or the field flags of `kind`.
+fn help(kind: &str, fields: &[FieldInfo], terminal: &Terminal) -> Exit {
+    use clap::Args as _;
+    let mut cmd = if fields.is_empty() {
+        Args::augment_args(Command::new("specforge new").about("Create an entity"))
+    } else {
+        command(kind, fields)
+    };
+    outln!(terminal, "{}", cmd.render_long_help());
+    Exit::Passed
 }

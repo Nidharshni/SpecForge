@@ -323,7 +323,6 @@ fn recompilation_refreshes_surfaces() {
 "#,
     )
     .unwrap();
-
     let mut server = McpServer::new();
     call(
         &mut server,
@@ -338,6 +337,7 @@ fn recompilation_refreshes_surfaces() {
         "specforge.collect",
         "specforge.coverage",
         "specforge.doctor",
+        "specforge.edit",
         "specforge.explain",
         "specforge.export",
         "specforge.extensions",

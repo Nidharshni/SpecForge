@@ -479,7 +479,7 @@ fn define_block_warning(entity: &Entity) -> Diagnostic {
     )
     .with_span(entity.span.clone())
     .with_suggestion(
-        "declare custom entity kinds in an extension (`specforge new --extension`), then enable it",
+        "declare custom entity kinds in an extension (`specforge extension init`), then enable it",
     )
 }
 

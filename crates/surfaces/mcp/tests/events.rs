@@ -28,12 +28,12 @@ fn init_server() -> Served {
 )]
 fn event_mcp_initialized() {
     let mut server = init_server();
-    // The core surface: 34 tools, 8 resources, 5 prompts; the project's one
+    // The core surface: 35 tools, 8 resources, 5 prompts; the project's one
     // extension, @test/ext, declares kinds and contributes no surface.
     assert_eq!(
         only_event(&server, "mcp_initialized"),
         json!({
-            "tools_registered": 34,
+            "tools_registered": 35,
             "resources_registered": 8,
             "prompts_registered": 5,
             "extensions_loaded": 1,
@@ -48,7 +48,7 @@ fn event_mcp_initialized() {
             .unwrap()
             .len()
     };
-    assert_eq!(listed(&mut server, "tools/list", "tools"), 34);
+    assert_eq!(listed(&mut server, "tools/list", "tools"), 35);
     // Eight resources: five plain, three templated.
     assert_eq!(listed(&mut server, "resources/list", "resources"), 5);
     assert_eq!(
@@ -191,7 +191,7 @@ fn event_mcp_discovery_invoked() {
     assert_eq!(
         discoveries,
         vec![
-            ("tools".to_string(), 34),
+            ("tools".to_string(), 35),
             ("prompts".to_string(), 5),
             ("resources".to_string(), 5),
         ]

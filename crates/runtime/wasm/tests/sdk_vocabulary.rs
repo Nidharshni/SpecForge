@@ -1,6 +1,6 @@
 //! One extension vocabulary: what an SDK-built extension declares is what
 //! the host's registry build reads. Every field type the SDK can name
-//! registers (no W019), and the rules `specforge new --extension` and the
+//! registers (no W019), and the rules `specforge extension init` and the
 //! greet fixture write parse (no W112) and fire.
 
 use specforge_common::{SourceSpan, Sym};
@@ -31,7 +31,7 @@ fn extension() -> ContributionsBuilder {
             f.field_type(FieldType::String);
         });
     });
-    // The rule `specforge new --extension` scaffolds.
+    // The rule `specforge extension init` scaffolds.
     c.rule("W900", |r| {
         r.check(CheckKind::MissingRequiredField);
         r.target_kind("thing");

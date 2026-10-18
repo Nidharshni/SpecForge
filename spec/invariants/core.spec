@@ -249,4 +249,26 @@ invariant source_span_completeness "Source Span Completeness" {
   verify unit "source spans survive error recovery"
 }
 
+invariant typed_edit_canonical_form "Typed Edit Canonical Form" {
+  guarantee """
+    A value a typed edit writes MUST be in the form its field's declaration
+    decides, so a typed edit never produces W159 or W020. Every block a typed
+    edit touches MUST be format-clean afterwards, and no byte outside the
+    touched blocks changes.
+  """
+  risk      high
+  verify property "every block a typed edit writes is unchanged by format"
+}
+
+invariant typed_edit_atomicity "Typed Edit Atomicity" {
+  guarantee """
+    A typed edit MUST NOT be written when the edited project reports an error
+    the project did not report before (E080). Its files are written as one
+    project change: every file or none, and a file changed since the project
+    was compiled refuses the whole plan.
+  """
+  risk      high
+  verify property "a refused or failed typed edit leaves every file as it was"
+}
+
 // Embedding invariants moved to spec/extensions/embeddings/invariants.spec

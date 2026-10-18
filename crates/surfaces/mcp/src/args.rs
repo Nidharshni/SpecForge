@@ -10,7 +10,9 @@
 //! ([`Argument`]), and so is the reading ([`read`]): nothing else lists,
 //! defaults or checks an argument.
 
+use serde::Deserialize as _;
 use serde_json::{Map, Value, json};
+use specforge_ops::authoring::edit::Edit;
 use specforge_ops::options::OptionTable;
 use specforge_ops::read::plan::AgentPlan;
 use specforge_protocol_types::command_args::normalize_arg;
@@ -325,6 +327,48 @@ impl Arg for AgentPlan {
             other => AgentPlan::read(other),
         }
         .map_err(|error| error.message(name))
+    }
+}
+
+/// The typed edits of a `specforge.edit` call: listed as the schema of a list of `Edit`; read from an array, or from
+/// a string holding one's JSON, checked against that schema before it is decoded, so a list it does not admit is
+/// refused naming every place it departs, and one it admits always decodes.
+#[derive(Debug, Clone)]
+pub struct Edits(pub Vec<Edit>);
+
+impl Arg for Edits {
+    fn schema() -> Value {
+        specforge_common::shape::build::<Vec<Edit>>()
+    }
+    fn absent() -> Option<Self> {
+        None
+    }
+    fn advertised(_: &Self) -> Option<Value> {
+        None
+    }
+    fn read(name: &str, value: &Value) -> Result<Self, String> {
+        let parsed;
+        let value = match value {
+            Value::String(text) => {
+                parsed = serde_json::from_str::<Value>(text)
+                    .map_err(|e| format!("{name} is not JSON: {e}"))?;
+                &parsed
+            }
+            other => other,
+        };
+        let found = specforge_common::shape::violations(
+            specforge_common::shape::document::<Vec<Edit>>(),
+            value,
+        );
+        if !found.is_empty() {
+            return Err(format!(
+                "{name} is not a list of edits: {}",
+                found.join("; ")
+            ));
+        }
+        Vec::<Edit>::deserialize(value)
+            .map(Edits)
+            .map_err(|e| format!("{name} is not a list of edits: {e}"))
     }
 }
 

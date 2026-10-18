@@ -59,5 +59,6 @@ mod tool_dispatch;
 mod tool_errors;
 mod tool_replies;
 mod tools_core;
+mod tools_edit;
 mod tools_inference;
 mod tools_navigation;

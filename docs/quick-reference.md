@@ -29,6 +29,16 @@ specforge explore [<id>]             # starting points, hubs and unconnected ent
 specforge review [<id>]              # coverage gaps around an entity (or the whole project)
 specforge infer-guide [<kind>]       # what to look for in code to write a kind's entities
 
+# Editing entities (no hand-written .spec): each edit is checked, then written all or nothing (E080)
+specforge new behavior <id> "<title>" --in <file> --contract "…" --invariants a,b   # a new entity; its kind's fields are flags
+specforge set <id> <field> <value>   # set a field; `field.entry` edits one entry of a block field
+specforge set <id> --title "<title>" # change the header title
+specforge unset <id> <field>         # remove a field
+specforge link <id> <field> <target> # add a reference; unlink removes it
+specforge link <id> --verify unit:"<text>"   # add a verify obligation; unlink removes it
+specforge delete <id> [--unlink-references]  # delete an entity (and, with the flag, every reference to it)
+# Every edit takes --dry-run (print the diff, write nothing) and --format json. MCP: specforge.edit takes a list.
+
 # Extensions & registry
 specforge extensions                 # list enabled builtins and installed extensions
 specforge add @specforge/product     # enable a builtin, or install @scope/name@version from a registry
@@ -44,7 +54,7 @@ specforge format                     # format .spec files
 specforge migrate                    # bring .spec files to the current format: titles, and repeated reference lists moved into `defaults`
 specforge collect                    # run the test runners (with your approval) and record what they prove
 specforge doctor                     # health-check installed extensions
-specforge mcp                        # start the MCP server (stdio)
+specforge mcp                        # start the MCP server (stdio); specforge.edit applies a list of typed edits
 specforge explain E001               # explain a diagnostic code
 ```
 

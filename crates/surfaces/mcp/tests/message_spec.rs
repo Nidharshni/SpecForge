@@ -719,6 +719,7 @@ reply_type! {
     mcp_search_result => "McpSearchResult", "McpSearchResult schema is valid",
     mcp_coverage_results => "McpCoverageResults", "McpCoverageResults schema is valid",
     mcp_coverage_result => "McpCoverageResult", "McpCoverageResult schema is valid",
+    mcp_edit_result => "McpEditResult", "McpEditResult schema is valid",
     mcp_rename_result => "McpRenameResult", "McpRenameResult schema is valid",
     mcp_rename_edit => "McpRenameEdit", "McpRenameEdit schema is valid",
     mcp_trace_link => "McpTraceLink", "McpTraceLink schema is valid",

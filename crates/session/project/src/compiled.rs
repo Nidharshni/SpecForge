@@ -120,6 +120,27 @@ impl CompiledProject {
         }
     }
 
+    /// This project as if `texts` (by source key, relative to the spec root) were the text of their sources:
+    /// every other source as this project read it, a key no compiled source has when the environment's
+    /// [`Environment::holds_source`] admits it, then every check. What `specforge check` reports once those
+    /// texts are written. Reads the disk only as a compile's checks do, never a source.
+    pub fn edited(&self, texts: &BTreeMap<String, String>) -> CompiledProject {
+        let mut held: BTreeMap<String, Arc<str>> = self.sources.texts().into_iter().collect();
+        let mut keys: BTreeSet<String> =
+            self.sources.keys().into_iter().map(String::from).collect();
+        for (key, text) in texts {
+            if keys.contains(key) || self.env.holds_source(key) {
+                keys.insert(key.clone());
+                held.insert(key.clone(), Arc::from(text.as_str()));
+            }
+        }
+        let held: BTreeMap<String, &str> = held.iter().map(|(k, t)| (k.clone(), &**t)).collect();
+        let mut reads = Keyed(keys.into_iter().collect());
+        let mut project = Self::read(Arc::clone(&self.env), &held, &mut reads);
+        project.check(&mut reads);
+        project
+    }
+
     /// The root it was compiled from; `None` for a detached project.
     pub fn root(&self) -> Option<&Path> {
         self.on_disk.then_some(self.env.root())
@@ -214,6 +235,32 @@ impl CompiledProject {
     fn memo(&self) -> &RecordedCoverage {
         self.recorded
             .get_or_init(|| RecordedCoverage::over(&self.graph, &self.env))
+    }
+}
+
+/// [`CompiledProject::edited`]'s reads: the sources are the keys given (each held, so none is read), the
+/// checks read the disk as a one-shot compile's do.
+struct Keyed(Vec<String>);
+
+impl Reads for Keyed {
+    fn environment(
+        &mut self,
+        root: &ProjectRoot,
+        load: impl FnOnce(&dyn Disk) -> crate::Environment,
+    ) -> crate::Environment {
+        Unrecorded.environment(root, load)
+    }
+
+    fn discover(&mut self, _sources: &specforge_common::SourceRoot) -> Vec<String> {
+        self.0.clone()
+    }
+
+    fn source(&mut self, spec_root: &Path, key: &str) -> Read {
+        Unrecorded.source(spec_root, key)
+    }
+
+    fn run_checks(&mut self, check: impl FnOnce(&dyn Disk)) {
+        Unrecorded.run_checks(check);
     }
 }
 

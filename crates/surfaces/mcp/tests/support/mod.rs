@@ -56,6 +56,10 @@ pub fn path_tool_calls() -> Vec<(&'static str, Value)> {
             json!({"entity_id": "alpha", "new_name": "gamma"}),
         ),
         (
+            "specforge.edit",
+            json!({"edits": [{"op": "set", "entity_id": "alpha", "field": "contract", "value": "The system MUST work"}]}),
+        ),
+        (
             "specforge.add_extension",
             json!({"specifiers": ["@specforge/software"], "dry_run": true}),
         ),

@@ -752,10 +752,9 @@ Level: error
 ```
 E065: Invalid scaffold request
 
-`specforge new` can't scaffold what was asked: only `--extension` projects are
-supported, the extension name is empty or is a scoped name that isn't
-`@scope/name`, or the destination directory already exists. Pass `--extension`,
-fix the name, or pick a destination that doesn't exist yet.
+`specforge extension init` can't scaffold what was asked: the extension name is
+empty or is a scoped name that isn't `@scope/name`, or the destination directory
+already exists. Fix the name, or pick a destination that doesn't exist yet.
 
 Owner: core
 Level: error
@@ -766,7 +765,7 @@ Level: error
 ```
 E066: Extension scaffold failed
 
-`specforge new --extension` couldn't write the project: creating a directory or
+`specforge extension init` couldn't write the project: creating a directory or
 writing one of the generated files failed. Check permissions and free space at
 the destination, remove the partial project, and retry.
 
@@ -1006,6 +1005,24 @@ one other kind's entity and that kind owns a reference field into this one
 and a kind that accepts any field is not checked. The graph still carries the
 field's untyped edge, and `check` fails. Remove the field and write the owning
 field on each entity it listed; the suggestion names both.
+
+Owner: core
+Level: error
+```
+
+## E080
+
+```
+E080: Typed edit would add errors
+
+A typed edit (`specforge new`, `set`, `unset`, `link`, `unlink`, `delete`, or
+MCP `specforge.edit`) was planned, and the project it would leave reports errors
+the project does not report now: the edit is refused and nothing is written. The
+refusal lists each new error (an unresolved reference, a missing required field,
+a value its field does not take, …). Fix what they name first: create the
+referenced entity, give the required field, or make both changes in one
+`specforge.edit` call. `delete --unlink-references` removes the references a
+delete would leave dangling.
 
 Owner: core
 Level: error
@@ -3011,7 +3028,7 @@ W143: Define blocks are not supported
 A `.spec` file has a `define <name> { ... }` block. Every entity kind comes from
 an extension, so a project's kinds depend only on `specforge.json` (ADR 0005):
 the block registers nothing and is left out of the graph. Declare the kind in an
-extension (`specforge new --extension`) and enable it, then remove the block.
+extension (`specforge extension init`) and enable it, then remove the block.
 `define` stays a reserved word.
 
 Owner: core

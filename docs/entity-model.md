@@ -608,7 +608,7 @@ specforge add @specforge/governance
 For regulated industries, complex domains, or custom workflows. Write an extension for your own entity kinds, or use the community extension ecosystem.
 
 ```bash
-# Your own kinds: specforge new @you/my-kinds --extension
+# Your own kinds: specforge extension init --name @you/my-kinds
 # Community: specforge add @specforge/compliance
 #            specforge add @specforge/visual
 ```

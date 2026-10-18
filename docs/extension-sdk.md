@@ -78,7 +78,7 @@ Extensions compile to `wasm32-wasip2`:
 cargo build --target wasm32-wasip2 --release
 ```
 
-The output `.wasm` file is what the host loads at runtime. `specforge new --extension` scaffolds a
+The output `.wasm` file is what the host loads at runtime. `specforge extension init` scaffolds a
 `[profile.release]` (opt-level `z`, fat LTO, one codegen unit, strip) that makes it about half the default size;
 stripping drops function names from trap frames, so remove the table to debug.
 

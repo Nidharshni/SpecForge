@@ -127,6 +127,14 @@ pub const WRITES: &[(&str, &str)] = &[
         "specforge.rename",
         r#"{"entity_id":"alpha","new_name":"gamma2"}"#,
     ),
+    (
+        "specforge.edit",
+        r#"{"edits":[{"op":"set","entity_id":"alpha","field":"contract","value":"The system MUST work"}],"dry_run":true}"#,
+    ),
+    (
+        "specforge.edit",
+        r#"{"edits":[{"op":"set","entity_id":"alpha","field":"contract","value":"The system MUST work"}]}"#,
+    ),
     ("specforge.init", r#"{"path":"<elsewhere>/new"}"#),
     (
         "specforge.add_extension",

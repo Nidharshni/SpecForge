@@ -1,0 +1,41 @@
+---
+source: crates/surfaces/cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Set a field (or --title) of an entity
+
+Usage: specforge set [OPTIONS] <ENTITY> [FIELD] [VALUES]...
+
+Arguments:
+  <ENTITY>
+          The entity to change
+
+  [FIELD]
+          The field, or `field.entry` for one entry of a block field
+
+  [VALUES]...
+          The value; a list field takes several, or one separated by commas
+
+Options:
+      --title <TITLE>
+          Change the header title instead of a field
+
+      --annotation <NAME[=VALUE]>
+          An annotation to write after the value (`readonly`, `since=1.2`); replaces the field's
+
+      --dry-run
+          Print the diff and write nothing
+
+      --path <PATH>
+          A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
+          
+          [default: .]
+
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
+  -h, --help
+          Print help

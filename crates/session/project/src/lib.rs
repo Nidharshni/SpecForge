@@ -454,6 +454,12 @@ impl Environment {
             .map(|setup| setup.diagnostic)
     }
 
+    /// Whether `key`, a path relative to the spec root, is a source of this project once the file exists
+    /// (a `.spec` path inside the spec root, in no skipped or nested-project directory, not excluded).
+    pub fn holds_source(&self, key: &str) -> bool {
+        self.sources.holds(key)
+    }
+
     /// Where the project's sources are discovered.
     pub(crate) fn sources(&self) -> &SourceRoot {
         &self.sources
