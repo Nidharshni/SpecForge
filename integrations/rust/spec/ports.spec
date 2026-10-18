@@ -3,7 +3,7 @@
 
 use "types"
 
-port ProcessExit {
+port ProcessExit "Process Exit" {
   direction outbound
   category  "system/lifecycle"
   method register_atexit(handler: fn()) -> Result<(), string>
@@ -13,7 +13,7 @@ port ProcessExit {
   }
 }
 
-port FileSystem {
+port FileSystem "File System" {
   direction outbound
   category  "io/filesystem"
   method write_report(path: string, report: BinaryReport) -> Result<(), string>
@@ -23,7 +23,7 @@ port FileSystem {
   }
 }
 
-port TestRegistry {
+port TestRegistry "Test Registry" {
   direction inbound
   category  "testing/registry"
   method record(entry: TestRecordEntry) -> Result<(), string>

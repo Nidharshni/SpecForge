@@ -7,7 +7,7 @@ use "types/errors"
 use "types/wasm"
 use "types/zero-entity-core"
 
-port FileSystem {
+port FileSystem "File System" {
   direction outbound
   category  "io/filesystem"
   method readFile(path: string) -> Result<string, EmitterError>
@@ -20,7 +20,7 @@ port FileSystem {
   verify integration "FileSystem contract is satisfied"
 }
 
-port SourceParser {
+port SourceParser "Source Parser" {
   direction outbound
   category  "compiler/parser"
   method parseSource(content: string, path: string) -> Result<SpecFile, ParseError>
@@ -28,7 +28,7 @@ port SourceParser {
   verify integration "SourceParser contract is satisfied"
 }
 
-port GraphSerializer {
+port GraphSerializer "Graph Serializer" {
   direction outbound
   category  "io/output"
   method serializeJson(data: JsonValue) -> Result<string, EmitterError>
@@ -37,7 +37,7 @@ port GraphSerializer {
   verify integration "GraphSerializer contract is satisfied"
 }
 
-port RefValidator {
+port RefValidator "Ref Validator" {
   direction outbound
   category  "validation/refs"
   method validateScheme(scheme: string) -> Result<boolean, never>
@@ -47,7 +47,7 @@ port RefValidator {
   verify integration "RefValidator contract is satisfied"
 }
 
-port WasmRuntime {
+port WasmRuntime "Wasm Runtime" {
   direction outbound
   category  "runtime/wasm"
   // The byte-level port under call_extension_exports (ADR 0013): its two
@@ -60,7 +60,7 @@ port WasmRuntime {
   verify integration "WasmRuntime contract is satisfied"
 }
 
-port RegistryClient {
+port RegistryClient "Registry Client" {
   direction outbound
   category  "io/registry"
   // The transport to a package registry (ADR 0044): it chooses no registry
@@ -83,7 +83,7 @@ port RegistryClient {
   verify integration "RegistryClient contract is satisfied"
 }
 
-port Registry {
+port Registry "Registry" {
   direction outbound
   category  "io/registry"
   // What operations reach a package registry through (ADR 0010, 0036,
@@ -104,7 +104,7 @@ port Registry {
   verify integration "Registry contract is satisfied"
 }
 
-port Editor {
+port Editor "Editor" {
   direction outbound
   category  "api/lsp"
   // What the LSP's reaction to a change tells the editor (ADR 0043): its
@@ -120,7 +120,7 @@ port Editor {
   verify integration "Editor contract is satisfied"
 }
 
-port CollectorMachine {
+port CollectorMachine "Collector Machine" {
   direction outbound
   category  "analysis/collect"
   // What collect asks the machine it runs on (ADR 0125): run a collector's
@@ -133,7 +133,7 @@ port CollectorMachine {
   verify integration "CollectorMachine contract is satisfied"
 }
 
-port SmtSolver {
+port SmtSolver "Smt Solver" {
   direction outbound
   category  "analysis/solver"
   // What the prove pass and doctor ask the SMT solver (ADR 0079):

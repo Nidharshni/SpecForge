@@ -5,12 +5,7 @@ use "types/core"
 use "types/surface"
 use "types/wasm"
 
-// Everything one extension declares: its handshake and every describe
-// category the host reads (specforge_protocol_types::ExtensionDeclaration,
-// ADR 0012). The SDK builds it, the guest serves it, the host loads it once
-// per environment load, the registry build reads it and a package registry
-// stores it as the package's manifest.
-type ExtensionDeclaration {
+type ExtensionDeclaration "Everything one extension declares: its handshake and every describe category the host reads (specforge_protocol_types::ExtensionDeclaration, ADR 0012). The SDK builds it, the guest serves it, the host loads it once per environment load, the registry build reads it and a package registry stores it as the package's manifest." {
   handshake        HandshakeResponse             @readonly
   entities         EntityKindDescriptor[]        @optional
   edges            EdgeTypeDescriptor[]          @optional
@@ -30,9 +25,7 @@ type ExtensionDeclaration {
   verify unit "ExtensionDeclaration schema is valid"
 }
 
-// The extension's answer to __handshake: who it is, what it needs, and how
-// the host shows it.
-type HandshakeResponse {
+type HandshakeResponse "The extension's answer to __handshake: who it is, what it needs, and how the host shows it." {
   protocol_version  string           @readonly
   name              string           @readonly
   version           string           @readonly
@@ -56,10 +49,7 @@ type HandshakeResponse {
   verify unit "HandshakeResponse schema is valid"
 }
 
-// What the registry build derives from the loaded declarations, before any
-// .spec file is read (specforge_registry::build_registries). It is made only
-// by that build and read only through its methods. It is pure.
-type RegistryBuild {
+type RegistryBuild "What the registry build derives from the loaded declarations, before any .spec file is read (specforge_registry::build_registries). It is made only by that build and read only through its methods. It is pure." {
   // The declarations it was built from, in load order
   declarations ExtensionDeclaration[] @readonly
   kinds        KindRegistryEntry[]
@@ -83,10 +73,7 @@ type RegistryBuild {
   verify unit "RegistryBuild schema is valid"
 }
 
-// What the graph build reads of the loaded extensions (specforge_graph::GraphInputs).
-// Only the registry build derives it; with the provider schemes the
-// environment registers it is every graph's configuration (ADR 0032).
-type GraphInputs {
+type GraphInputs "What the graph build reads of the loaded extensions (specforge_graph::GraphInputs). Only the registry build derives it; with the provider schemes the environment registers it is every graph's configuration (ADR 0032)." {
   // each target kind no loaded extension declares, with the extension that
   // owns it (the candidate vocabulary's kind_owner): what I004 and E022
   // suggest enabling
@@ -104,7 +91,7 @@ type GraphInputs {
   verify unit "GraphInputs schema is valid"
 }
 
-type EntityKindDescriptor {
+type EntityKindDescriptor "Entity Kind Descriptor" {
   name            string            @readonly
   // The keyword entities of the kind are written with; absent, its name
   keyword         string            @optional
@@ -137,7 +124,7 @@ type EntityKindDescriptor {
   verify unit "EntityKindDescriptor schema is valid"
 }
 
-type EdgeTypeDescriptor {
+type EdgeTypeDescriptor "Edge Type Descriptor" {
   label          string @readonly
   description    string @optional
   source_kind    string @optional
@@ -151,9 +138,7 @@ type EdgeTypeDescriptor {
   verify unit "EdgeTypeDescriptor schema is valid"
 }
 
-// Fields and verify kinds one extension adds to an entity kind
-// another extension declares.
-type EntityEnhancementDescriptor {
+type EntityEnhancementDescriptor "Fields and verify kinds one extension adds to an entity kind another extension declares." {
   target_kind  string            @readonly
   fields       FieldDescriptor[] @optional
   // Makes the target kind testable with exactly these verify kinds (ADR 0002)
@@ -161,8 +146,7 @@ type EntityEnhancementDescriptor {
   verify unit "EntityEnhancementDescriptor schema is valid"
 }
 
-// A language analyzer specforge infer runs over source files.
-type AnalyzerDescriptor {
+type AnalyzerDescriptor "A language analyzer specforge infer runs over source files." {
   language        string   @readonly
   file_extensions string[]
   excluded_dirs   string[] @optional
@@ -173,7 +157,7 @@ type AnalyzerDescriptor {
   verify unit "AnalyzerDescriptor schema is valid"
 }
 
-type FieldDescriptor {
+type FieldDescriptor "Field Descriptor" {
   name                string                 @readonly
   /// A FieldType name or an accepted older spelling; any other is W019.
   field_type          string                 @readonly
@@ -205,30 +189,16 @@ type FieldDescriptor {
   verify unit "FieldDescriptor schema is valid"
 }
 
-// A field's role in the prove pass: a bound is assumed (bounds must be
-// consistent, E046); a claim must follow from the bounds (W139 when not).
-type ProofRole = bound | claim
+type ProofRole "A field's role in the prove pass: a bound is assumed (bounds must be consistent, E046); a claim must follow from the bounds (W139 when not)." = bound
+  | claim
 
-// Why a solver gave no answer to a script: it ran past its timeout, or it
-// could not be run or ended without an answer (port SmtSolver).
-type SolveFailure = timed_out | failed
+type SolveFailure "Why a solver gave no answer to a script: it ran past its timeout, or it could not be run or ended without an answer (port SmtSolver)." = timed_out
+  | failed
 
-// Where a derived reference field takes its targets from: the type names in
-// the entity's type-syntax field values, or in its method signatures.
-type DerivedReferenceSource = type_expressions | method_signatures
+type DerivedReferenceSource "Where a derived reference field takes its targets from: the type names in the entity's type-syntax field values, or in its method signatures." = type_expressions
+  | method_signatures
 
-// FieldType: how the host reads a field's value (FieldType in
-// specforge-protocol-types). Every output names a field type by these
-// names: the declaration, the Graph Protocol schema and exports, the
-// published JSON Schema, the model, the hover and E061 (ADR 0034). The
-// host also reads the older spellings — each name with a `_type` suffix,
-// and "boolean" — and never writes them.
-//
-// verify is NOT a field type — it is a grammar-level construct parsed by a
-// dedicated rule (parse_verify_statements). Whether an entity kind supports
-// verify is declared via the supports_verify flag on EntityKindDescriptor, not
-// via field type registration.
-type FieldType = "string"
+type FieldType "FieldType: how the host reads a field's value (FieldType in specforge-protocol-types). Every output names a field type by these names: the declaration, the Graph Protocol schema and exports, the published JSON Schema, the model, the hover and E061 (ADR 0034). The host also reads the older spellings — each name with a `_type` suffix, and \"boolean\" — and never writes them. verify is NOT a field type — it is a grammar-level construct parsed by a dedicated rule (parse_verify_statements). Whether an entity kind supports verify is declared via the supports_verify flag on EntityKindDescriptor, not via field type registration." = "string"
   | "integer"
   | "bool"
   | "enum"
@@ -237,12 +207,7 @@ type FieldType = "string"
   | "reference_list"
   | "block"
 
-// A validation rule as an extension declares it (the protocol's
-// ValidationRuleDescriptor). The registry build turns it into a typed rule
-// (specforge_registry::rules::Rule) carrying only what its check reads;
-// constraint.pattern is a regex for field_value_constraint/matches and the
-// condition field's name for conditional_field_required.
-type ValidationRulePattern {
+type ValidationRulePattern "A validation rule as an extension declares it (the protocol's ValidationRuleDescriptor). The registry build turns it into a typed rule (specforge_registry::rules::Rule) carrying only what its check reads; constraint.pattern is a regex for field_value_constraint/matches and the condition field's name for conditional_field_required." {
   code             string          @readonly
   severity         string          @readonly
   message_template string
@@ -256,24 +221,19 @@ type ValidationRulePattern {
   verify unit "ValidationRulePattern schema is valid"
 }
 
-type FieldConstraint {
+type FieldConstraint "Field Constraint" {
   kind    ConstraintKind @readonly
   pattern string         @optional
   values  string[]       @optional
   verify unit "FieldConstraint schema is valid"
 }
 
-// How a constraint reads its pattern and values (ConstraintKind in
-// specforge-protocol-types): non_empty, one_of and matches for
-// field_value_constraint, when_field_equals for conditional_field_required,
-// one_of for verify_kind_allowlist.
-type ConstraintKind = non_empty | one_of | matches | when_field_equals
+type ConstraintKind "How a constraint reads its pattern and values (ConstraintKind in specforge-protocol-types): non_empty, one_of and matches for field_value_constraint, when_field_equals for conditional_field_required, one_of for verify_kind_allowlist." = non_empty
+  | one_of
+  | matches
+  | when_field_equals
 
-// The check kinds of the extension vocabulary (CheckKind in
-// specforge-protocol-types — the SDK writes these names, the registry build
-// reads them; it also reads the older SDK spellings missing_field,
-// field_constraint, cycle and conditional_required).
-type ValidationPatternKind = no_incoming_edges
+type ValidationPatternKind "The check kinds of the extension vocabulary (CheckKind in specforge-protocol-types — the SDK writes these names, the registry build reads them; it also reads the older SDK spellings missing_field, field_constraint, cycle and conditional_required)." = no_incoming_edges
   | no_outgoing_edges
   | no_edges
   | missing_field_when_flag_set
@@ -286,16 +246,14 @@ type ValidationPatternKind = no_incoming_edges
   | no_verify_statements
   | custom
 
-// One call of a custom rule's function: the extension that exports it, the
-// function, and what it is asked about (an entity, or the load-time probe).
-type CustomCall {
+type CustomCall "One call of a custom rule's function: the extension that exports it, the function, and what it is asked about (an entity, or the load-time probe)." {
   extension string @readonly
   function  string @readonly
   subject   string @readonly
   verify unit "CustomCall schema is valid"
 }
 
-type FieldRegistryEntry {
+type FieldRegistryEntry "Field Registry Entry" {
   kind_name           string                 @readonly
   field_name          string                 @readonly
   /// Built only from a descriptor whose type the host reads, named
@@ -317,7 +275,7 @@ type FieldRegistryEntry {
   verify unit "FieldRegistryEntry schema is valid"
 }
 
-type KindRegistryEntry {
+type KindRegistryEntry "Kind Registry Entry" {
   kind_name            string   @readonly
   source_extension     string   @readonly
   testable             boolean
@@ -338,11 +296,7 @@ type KindRegistryEntry {
   verify unit "KindRegistryEntry schema is valid"
 }
 
-// SchemeRegistryEntry maps a ref scheme to the provider extension that
-// handles validation for that scheme. Populated by register_provider_schemes
-// from provider extension manifests. The scheme is the prefix portion of a
-// ref identifier (e.g., the "gh" in "gh.issue:42").
-type SchemeRegistryEntry {
+type SchemeRegistryEntry "SchemeRegistryEntry maps a ref scheme to the provider extension that handles validation for that scheme. Populated by register_provider_schemes from provider extension manifests. The scheme is the prefix portion of a ref identifier (e.g., the \"gh\" in \"gh.issue:42\")." {
   scheme          string   @readonly @unique
   provider_alias  string   @readonly
   extension_name  string   @readonly
@@ -350,8 +304,7 @@ type SchemeRegistryEntry {
   verify unit "SchemeRegistryEntry schema is valid"
 }
 
-// One edge type as the registry build resolved it (registry_build_edges)
-type EdgeRegistryEntry {
+type EdgeRegistryEntry "One edge type as the registry build resolved it (registry_build_edges)" {
   label            string             @readonly
   source_extension string             @readonly
   // Its declaration; absent for an edge type only fields name
@@ -365,9 +318,7 @@ type EdgeRegistryEntry {
   verify unit "EdgeRegistryEntry schema is valid"
 }
 
-// A field that writes an edge type: entities of kind write, through
-// field, edges of the type (to target_kind when the field declares one).
-type EdgeWriter {
+type EdgeWriter "A field that writes an edge type: entities of kind write, through field, edges of the type (to target_kind when the field declares one)." {
   extension   string @readonly
   kind        string @readonly
   field       string @readonly
@@ -375,17 +326,14 @@ type EdgeWriter {
   verify unit "EdgeWriter schema is valid"
 }
 
-// What the extensions a host could enable declare, for suggestions only: kinds maps each kind
-// keyword to the extension that declares it; fields maps each kind to the fields an enhancement
-// adds to it, each to its extension (ADR 0122).
-type CandidateVocabulary {
+type CandidateVocabulary "What the extensions a host could enable declare, for suggestions only: kinds maps each kind keyword to the extension that declares it; fields maps each kind to the fields an enhancement adds to it, each to its extension (ADR 0122)." {
   _tag   "CandidateVocabulary" @literal
   kinds  string
   fields string
   verify unit "CandidateVocabulary schema is valid"
 }
 
-type CompilerPassDeclaration {
+type CompilerPassDeclaration "Compiler Pass Declaration" {
   name          string @readonly
   run_after     string @optional
   wasm_function string @readonly
@@ -393,7 +341,7 @@ type CompilerPassDeclaration {
   verify unit "CompilerPassDeclaration schema is valid"
 }
 
-type FeatureFlagDeclaration {
+type FeatureFlagDeclaration "Feature Flag Declaration" {
   name          string @readonly
   default_value boolean
   description   string @optional

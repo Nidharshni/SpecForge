@@ -13,7 +13,7 @@ behavior reset_password "Reset password" {
   verify unit "Reset link expires after one hour"
 }
 
-type Status = active | inactive
+type Status "Status" = active | inactive
 
 type Payload "Payload" {
   verify string @optional
@@ -21,12 +21,12 @@ type Payload "Payload" {
 }
 
 feature signin "Sign in" {
-  problem "Users cannot reach their data"
+  problem  "Users cannot reach their data"
   solution "Let them log in"
 }
 
 property no_lost_login "A login is never lost" {
   property_type safety
-  expression "once logged in, a session stays until logout"
+  expression    "once logged in, a session stays until logout"
   verify unit "no login is lost"
 }

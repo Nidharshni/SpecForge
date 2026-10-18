@@ -2,14 +2,14 @@
 
 use "types/core"
 
-type ParseError {
+type ParseError "Parse Error" {
   _tag    "ParseError" @literal
   message string
   span    SourceSpan   @readonly
   verify unit "ParseError schema is valid"
 }
 
-type ResolutionError {
+type ResolutionError "Resolution Error" {
   _tag          "ResolutionError" @literal
   message       string
   span          SourceSpan        @readonly
@@ -18,7 +18,7 @@ type ResolutionError {
   verify unit "ResolutionError schema is valid"
 }
 
-type CycleError {
+type CycleError "Cycle Error" {
   _tag         "CycleError" @literal
   message      string
   span         SourceSpan   @readonly
@@ -28,7 +28,7 @@ type CycleError {
   verify unit "CycleError schema is valid"
 }
 
-type DuplicateIdError {
+type DuplicateIdError "Duplicate Id Error" {
   _tag        "DuplicateIdError" @literal
   entity_id   string
   first_span  SourceSpan         @readonly
@@ -36,7 +36,7 @@ type DuplicateIdError {
   verify unit "DuplicateIdError schema is valid"
 }
 
-type ValidationError {
+type ValidationError "Validation Error" {
   _tag    "ValidationError" @literal
   code    string
   message string
@@ -44,14 +44,14 @@ type ValidationError {
   verify unit "ValidationError schema is valid"
 }
 
-type EmitterError {
+type EmitterError "Emitter Error" {
   _tag        "EmitterError" @literal
   message     string
   output_path string         @optional
   verify unit "EmitterError schema is valid"
 }
 
-type ExtensionError {
+type ExtensionError "Extension Error" {
   _tag            "ExtensionError" @literal
   extension_name  string
   message         string
@@ -61,7 +61,7 @@ type ExtensionError {
   verify unit "ExtensionError schema is valid"
 }
 
-type UnknownKindError {
+type UnknownKindError "Unknown Kind Error" {
   _tag        "UnknownKindError" @literal
   code        string             @readonly
   message     string
@@ -71,7 +71,7 @@ type UnknownKindError {
   verify unit "UnknownKindError schema is valid"
 }
 
-type RegistryError {
+type RegistryError "Registry Error" {
   _tag         "RegistryError" @literal
   message      string
   registry_url string          @optional

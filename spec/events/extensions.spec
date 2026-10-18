@@ -12,7 +12,7 @@ event extension_entity_types_registered "Extension Entity Types Registered" {
   verify integration "emits after extension entity types are registered"
 }
 
-type ExtensionEntityTypesRegisteredPayload {
+type ExtensionEntityTypesRegisteredPayload "Extension Entity Types Registered Payload" {
   extensionName   string
   entityKindCount integer
   edgeTypeCount   integer
@@ -26,7 +26,7 @@ event provider_schemes_registered "Provider Schemes Registered" {
   verify integration "emits after provider schemes are registered"
 }
 
-type ProviderSchemesRegisteredPayload {
+type ProviderSchemesRegisteredPayload "Provider Schemes Registered Payload" {
   extensionName string
   schemeCount   integer
   verify unit "ProviderSchemesRegisteredPayload schema is valid"
@@ -39,7 +39,7 @@ event registry_integrity_verified "Registry Integrity Verified" {
   verify integration "emits after registry integrity check completes"
 }
 
-type RegistryIntegrityVerifiedPayload {
+type RegistryIntegrityVerifiedPayload "Registry Integrity Verified Payload" {
   extensionName string
   hashMatch     boolean
   verify unit "RegistryIntegrityVerifiedPayload schema is valid"
@@ -53,7 +53,7 @@ event provider_configured "Provider Configured" {
   verify integration "emits provider_configured with correct alias and schemeCount"
 }
 
-type ProviderConfiguredPayload {
+type ProviderConfiguredPayload "Provider Configured Payload" {
   alias         string
   extensionName string
   schemeCount   integer
@@ -67,7 +67,7 @@ event provider_ref_validated "Provider Ref Validated" {
   verify integration "emits provider_ref_validated with correct scheme and validation result"
 }
 
-type ProviderRefValidatedPayload {
+type ProviderRefValidatedPayload "Provider Ref Validated Payload" {
   scheme        string
   kind          string
   identifier    string
@@ -85,7 +85,7 @@ event registry_resolved "Registry Resolved" {
   verify integration "consumer verify_registry_integrity receives event"
 }
 
-type RegistryResolvedPayload {
+type RegistryResolvedPayload "Registry Resolved Payload" {
   extensionName string
   registryAlias string
   version       string
@@ -99,7 +99,7 @@ event registry_search_completed "Registry Search Completed" {
   verify integration "emits registry_search_completed with correct totalResults"
 }
 
-type RegistrySearchCompletedPayload {
+type RegistrySearchCompletedPayload "Registry Search Completed Payload" {
   query             string
   totalResults      integer
   registriesQueried integer
@@ -112,7 +112,7 @@ event extension_published_to_registry "Extension Published to Registry" {
   verify integration "emits extension_published_to_registry with correct extensionName and sha256"
 }
 
-type ExtensionPublishedToRegistryPayload {
+type ExtensionPublishedToRegistryPayload "Extension Published To Registry Payload" {
   extensionName string
   version       string
   registryAlias string
@@ -127,7 +127,7 @@ event registries_configured "Registries Configured" {
   verify integration "emits registries_configured after registry configuration is parsed"
 }
 
-type RegistriesConfiguredPayload {
+type RegistriesConfiguredPayload "Registries Configured Payload" {
   registryCount integer
   configs       RegistryConfig[]
   verify unit "RegistriesConfiguredPayload schema is valid"
@@ -141,7 +141,7 @@ event registry_authenticated "Registry Authenticated" {
   verify integration "emits registry_authenticated with correct registryUrl and authMethod"
 }
 
-type RegistryAuthenticatedPayload {
+type RegistryAuthenticatedPayload "Registry Authenticated Payload" {
   registryUrl string
   authMethod  string
   success     boolean
@@ -155,7 +155,7 @@ event registry_credentials_validated "Registry Credentials Validated" {
   verify integration "emits registry_credentials_validated with correct registryUrl and valid status"
 }
 
-type RegistryCredentialsValidatedPayload {
+type RegistryCredentialsValidatedPayload "Registry Credentials Validated Payload" {
   registryUrl string
   valid       boolean
   timestamp   timestamp
@@ -168,7 +168,7 @@ event registry_logged_out "Registry Logged Out" {
   verify integration "emits registry_logged_out with correct registryAlias"
 }
 
-type RegistryLoggedOutPayload {
+type RegistryLoggedOutPayload "Registry Logged Out Payload" {
   registryAlias string
   timestamp     timestamp
   verify unit "RegistryLoggedOutPayload schema is valid"
@@ -185,7 +185,7 @@ event registry_request_retry_exhausted "Registry Request Retry Exhausted" {
   verify integration "emits after all retry attempts are exhausted"
 }
 
-type RegistryRequestRetryExhaustedPayload {
+type RegistryRequestRetryExhaustedPayload "Registry Request Retry Exhausted Payload" {
   registryUrl    string
   lastStatusCode integer
   retryCount     integer
@@ -193,13 +193,13 @@ type RegistryRequestRetryExhaustedPayload {
   verify unit "RegistryRequestRetryExhaustedPayload schema is valid"
 }
 
-event extension_removed {
+event extension_removed "Extension Removed" {
   channel "extensions.extension_removed"
   payload ExtensionRemovedPayload
   verify integration "removing extension emits event with unregistered kinds"
 }
 
-type ExtensionRemovedPayload {
+type ExtensionRemovedPayload "Extension Removed Payload" {
   extension_name            string
   entity_kinds_unregistered string[]
   verify unit "ExtensionRemovedPayload schema is valid"

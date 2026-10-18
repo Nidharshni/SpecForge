@@ -13,7 +13,7 @@ event file_parsed "File Parsed" {
   verify integration "emits file_parsed with correct entityCount and errorCount after successful parse"
 }
 
-type FileParsedPayload {
+type FileParsedPayload "File Parsed Payload" {
   filePath    string
   entityCount integer
   errorCount  integer
@@ -35,7 +35,7 @@ event all_files_parsed "All Files Parsed" {
   verify integration "consumer populates the KindRegistry from extension manifests before Phase 2"
 }
 
-type AllFilesParsedPayload {
+type AllFilesParsedPayload "All Files Parsed Payload" {
   fileCount   integer
   entityCount integer
   timestamp   timestamp
@@ -55,20 +55,20 @@ event structural_parse_complete "Structural Parse Complete" {
   verify integration "emits structural_parse_complete after all files are structurally parsed"
 }
 
-type StructuralParseCompletePayload {
+type StructuralParseCompletePayload "Structural Parse Complete Payload" {
   fileCount   integer
   entityCount integer
   timestamp   timestamp
   verify unit "StructuralParseCompletePayload schema is valid"
 }
 
-event extension_manifests_loaded {
+event extension_manifests_loaded "Extension Manifests Loaded" {
   channel "internal"
   payload ExtensionManifestsLoadedPayload
   verify unit "Extension manifests MUST be loaded before populating the kind registry"
 }
 
-type ExtensionManifestsLoadedPayload {
+type ExtensionManifestsLoadedPayload "Extension Manifests Loaded Payload" {
   extensionCount integer
   manifestPaths  string[]
   timestamp      timestamp
@@ -89,7 +89,7 @@ event registries_populated "Registries Populated" {
   verify integration "consumer two_phase_validate_semantic begins keyword and field validation after this event"
 }
 
-type RegistriesPopulatedPayload {
+type RegistriesPopulatedPayload "Registries Populated Payload" {
   kindCount      integer
   fieldCount     integer
   edgeCount      integer
@@ -105,7 +105,7 @@ event resolution_complete "Resolution Complete" {
   verify integration "consumer build_in_memory_graph receives event and constructs graph"
 }
 
-type ResolutionCompletePayload {
+type ResolutionCompletePayload "Resolution Complete Payload" {
   fileCount   integer
   entityCount integer
   timestamp   timestamp
@@ -124,7 +124,7 @@ event graph_built "Graph Built" {
   verify integration "consumers receive graph_built and trigger structural validation and declarative pattern execution"
 }
 
-type GraphBuiltPayload {
+type GraphBuiltPayload "Graph Built Payload" {
   nodeCount integer
   edgeCount integer
   fileCount integer
@@ -139,7 +139,7 @@ event declarative_validation_executed "Declarative Validation Executed" {
   verify integration "consumer aggregate_diagnostic_summary collects pattern diagnostics into final summary"
 }
 
-type DeclarativeValidationExecutedPayload {
+type DeclarativeValidationExecutedPayload "Declarative Validation Executed Payload" {
   ruleCount      integer
   violationCount integer
   extensionCount integer
@@ -159,7 +159,7 @@ event validation_complete "Validation Complete" {
   verify integration "event signals Phase 2 completion — emitter phase may begin"
 }
 
-type ValidationCompletePayload {
+type ValidationCompletePayload "Validation Complete Payload" {
   errorCount   integer
   warningCount integer
   infoCount    integer
@@ -174,7 +174,7 @@ event file_changed "File Changed" {
   verify integration "consumer debounce_file_changes receives event and coalesces into batch"
 }
 
-type FileChangedPayload {
+type FileChangedPayload "File Changed Payload" {
   filePath   string
   changeType string
   timestamp  timestamp
@@ -188,7 +188,7 @@ event file_changes_coalesced "File Changes Coalesced" {
   verify integration "consumer invalidate_changed_files receives coalesced batch and computes invalidation set"
 }
 
-type FileChangesCoalescedPayload {
+type FileChangesCoalescedPayload "File Changes Coalesced Payload" {
   filePaths   string[]
   changeCount integer
   timestamp   timestamp
@@ -203,7 +203,7 @@ event subgraph_invalidated "Subgraph Invalidated" {
   verify integration "consumer resolve_imports_on_update resolves every file's imports again"
 }
 
-type SubgraphInvalidatedPayload {
+type SubgraphInvalidatedPayload "Subgraph Invalidated Payload" {
   invalidatedFiles string[]
   nodeCount        integer
   timestamp        timestamp
@@ -217,7 +217,7 @@ event import_dag_updated "Import DAG Updated" {
   verify integration "consumer rebuild_affected_subgraph waits for import DAG to be current before rebuilding"
 }
 
-type ImportDagUpdatedPayload {
+type ImportDagUpdatedPayload "Import Dag Updated Payload" {
   addedEdges     integer
   removedEdges   integer
   cyclesDetected integer
@@ -234,7 +234,7 @@ event incremental_rebuild_complete "Incremental Rebuild Complete" {
   verify integration "consumer compute_graph_delta diffs previous and new graph states to produce GraphDelta"
 }
 
-type IncrementalRebuildCompletePayload {
+type IncrementalRebuildCompletePayload "Incremental Rebuild Complete Payload" {
   rebuiltFiles string[]
   addedNodes   integer
   removedNodes integer
@@ -249,7 +249,7 @@ event render_complete "Render Complete" {
   verify integration "emits render_complete with correct outputFileCount after rendering"
 }
 
-type RenderCompletePayload {
+type RenderCompletePayload "Render Complete Payload" {
   outputFileCount integer
   format          string
   timestamp       timestamp
@@ -262,7 +262,7 @@ event export_complete "Export Complete" {
   verify integration "emits export_complete with correct format and entityCount after agent export"
 }
 
-type ExportCompletePayload {
+type ExportCompletePayload "Export Complete Payload" {
   format         string
   entityCount    integer
   scopedToEntity string
@@ -276,7 +276,7 @@ event format_complete "Format Complete" {
   verify integration "emits format_complete with correct filesChecked and filesChanged"
 }
 
-type FormatCompletePayload {
+type FormatCompletePayload "Format Complete Payload" {
   filesChecked integer
   filesChanged integer
   timestamp    timestamp
@@ -292,7 +292,7 @@ event project_initialized "Project Initialized" {
   verify integration "specFilePath refers to the starter entity spec file, not specforge.json"
 }
 
-type ProjectInitializedPayload {
+type ProjectInitializedPayload "Project Initialized Payload" {
   projectName    string
   extensionCount integer
   specFilePath   string // Path to the starter entity spec file created by init (e.g., hello.spec)
@@ -307,7 +307,7 @@ event extension_added "Extension Added" {
   verify unit "wasDuplicate is true when extension was already installed"
 }
 
-type ExtensionAddedPayload {
+type ExtensionAddedPayload "Extension Added Payload" {
   extensionSpecifier string
   totalExtensions    integer
   wasDuplicate       boolean
@@ -315,13 +315,13 @@ type ExtensionAddedPayload {
   verify unit "ExtensionAddedPayload schema is valid"
 }
 
-event extension_loading_failed {
+event extension_loading_failed "Extension Loading Failed" {
   channel "compilation.extension_loading_failed"
   payload ExtensionLoadingFailedPayload
   verify integration "manifest parse error emits extension_loading_failed event"
 }
 
-type ExtensionLoadingFailedPayload {
+type ExtensionLoadingFailedPayload "Extension Loading Failed Payload" {
   extension_name string
   error_kind     string
   message        string
@@ -336,7 +336,7 @@ event lsp_initialized "LSP Initialized" {
   verify integration "emits lsp_initialized after LSP server completes initialization"
 }
 
-type LspInitializedPayload {
+type LspInitializedPayload "Lsp Initialized Payload" {
   extensionCount integer
   kindCount      integer
   timestamp      timestamp
@@ -349,7 +349,7 @@ event lsp_shutdown_complete "LSP Shutdown Complete" {
   verify integration "emits lsp_shutdown_complete after LSP server shuts down cleanly"
 }
 
-type LspShutdownCompletePayload {
+type LspShutdownCompletePayload "Lsp Shutdown Complete Payload" {
   timestamp timestamp
   verify unit "LspShutdownCompletePayload schema is valid"
 }
@@ -364,7 +364,7 @@ event migration_started "Migration Started" {
   verify integration "emits migration_started with correct fileCount and targetVersion"
 }
 
-type MigrationStartedPayload {
+type MigrationStartedPayload "Migration Started Payload" {
   fileCount     integer
   targetVersion string
   timestamp     timestamp
@@ -379,7 +379,7 @@ event migration_starting "Migration Starting" {
   verify integration "emits migration_starting before any migration transforms are applied"
 }
 
-type MigrationStartingPayload {
+type MigrationStartingPayload "Migration Starting Payload" {
   fileCount     integer
   targetVersion string
   timestamp     timestamp
@@ -393,7 +393,7 @@ event migration_complete "Migration Complete" {
   verify integration "consumer invoke_extension_migration_hooks receives event to run extension hooks"
 }
 
-type MigrationCompletePayload {
+type MigrationCompletePayload "Migration Complete Payload" {
   migratedCount integer
   failedCount   integer
   // skippedCount: files already at the target version (idempotency).
@@ -410,7 +410,7 @@ event migration_diff_generated "Migration Diff Generated" {
   verify integration "emits migration_diff_generated with correct fileCount and totalDiffLines after dry-run"
 }
 
-type MigrationDiffGeneratedPayload {
+type MigrationDiffGeneratedPayload "Migration Diff Generated Payload" {
   fileCount      integer
   totalDiffLines integer
   timestamp      timestamp
@@ -424,7 +424,7 @@ event extension_migration_hooks_complete "Extension Migration Hooks Complete" {
   verify integration "consumer validate_post_migration_integrity receives event"
 }
 
-type ExtensionMigrationHooksCompletePayload {
+type ExtensionMigrationHooksCompletePayload "Extension Migration Hooks Complete Payload" {
   extensionsInvoked integer
   extensionsFailed  integer
   extensionsSkipped integer
@@ -438,7 +438,7 @@ event migration_validation_complete "Migration Validation Complete" {
   verify integration "emits migration_validation_complete after post-migration validation finishes"
 }
 
-type MigrationValidationCompletePayload {
+type MigrationValidationCompletePayload "Migration Validation Complete Payload" {
   structuralDifferences integer
   newDiagnostics        integer
   timestamp             timestamp
@@ -451,7 +451,7 @@ event migration_rolled_back "Migration Rolled Back" {
   verify integration "emits migration_rolled_back with correct restored, skipped, and failed counts"
 }
 
-type MigrationRolledBackPayload {
+type MigrationRolledBackPayload "Migration Rolled Back Payload" {
   restoredCount integer
   skippedCount  integer
   failedCount   integer
@@ -471,7 +471,7 @@ event schema_generated "Schema Generated" {
   verify integration "consumer detect_breaking_schema_changes receives event"
 }
 
-type SchemaGeneratedPayload {
+type SchemaGeneratedPayload "Schema Generated Payload" {
   entityKindCount integer
   edgeTypeCount   integer
   extensionCount  integer
@@ -485,7 +485,7 @@ event schema_cache_persisted "Schema Cache Persisted" {
   verify integration "emits schema_cache_persisted after writing .specforge/schema-cache.json"
 }
 
-type SchemaCachePersistedPayload {
+type SchemaCachePersistedPayload "Schema Cache Persisted Payload" {
   schemaVersion string
   hash          string
   timestamp     timestamp
@@ -498,7 +498,7 @@ event schema_version_computed "Schema Version Computed" {
   verify integration "emits schema_version_computed with correct major, minor, patch after schema comparison"
 }
 
-type SchemaVersionComputedPayload {
+type SchemaVersionComputedPayload "Schema Version Computed Payload" {
   major     integer
   minor     integer
   patch     integer
@@ -538,7 +538,7 @@ event graph_queried "Graph Queried" {
   verify integration "payload includes depth and scope used for the query"
 }
 
-type GraphQueriedPayload {
+type GraphQueriedPayload "Graph Queried Payload" {
   entityId        string
   scope           string
   depth           integer
@@ -562,7 +562,7 @@ event incremental_diagnostics_complete "Incremental Diagnostics Complete" {
   verify integration "emits incremental_diagnostics_complete after incremental diagnostic pipeline finishes"
 }
 
-type IncrementalDiagnosticsCompletePayload {
+type IncrementalDiagnosticsCompletePayload "Incremental Diagnostics Complete Payload" {
   errorCount    integer
   warningCount  integer
   infoCount     integer
@@ -577,7 +577,7 @@ event delta_subscribers_notified "Delta Subscribers Notified" {
   verify integration "emits delta_subscribers_notified after all subscribers receive delta"
 }
 
-type DeltaSubscribersNotifiedPayload {
+type DeltaSubscribersNotifiedPayload "Delta Subscribers Notified Payload" {
   subscriberCount integer
   timestamp       timestamp
   verify unit "DeltaSubscribersNotifiedPayload schema is valid"
@@ -591,7 +591,7 @@ event entity_renamed "Entity Renamed" {
   verify integration "emits entity_renamed with correct oldId, newId, and affectedFiles"
 }
 
-type EntityRenamedPayload {
+type EntityRenamedPayload "Entity Renamed Payload" {
   oldId         string
   newId         string
   affectedFiles integer
@@ -610,7 +610,7 @@ event graph_delta_computed "Graph Delta Computed" {
   verify integration "consumer validate_delta_correctness receives delta event in debug mode"
 }
 
-type GraphDeltaComputedPayload {
+type GraphDeltaComputedPayload "Graph Delta Computed Payload" {
   addedNodes    integer
   removedNodes  integer
   modifiedNodes integer
@@ -628,7 +628,7 @@ event incremental_validators_dispatched "Incremental Validators Dispatched" {
   verify integration "payload distinguishes incremental vs full-rebuild extension counts"
 }
 
-type IncrementalValidatorsDispatchedPayload {
+type IncrementalValidatorsDispatchedPayload "Incremental Validators Dispatched Payload" {
   incrementalExtensions integer
   fullRebuildExtensions integer
   deltaNodeCount        integer
@@ -647,7 +647,7 @@ event delta_validation_passed "Delta Validation Passed" {
   verify integration "emits delta_validation_passed when incremental rebuild matches full rebuild"
 }
 
-type DeltaValidationPassedPayload {
+type DeltaValidationPassedPayload "Delta Validation Passed Payload" {
   nodeCount integer
   edgeCount integer
   verify unit "DeltaValidationPassedPayload schema is valid"
@@ -659,7 +659,7 @@ event trace_chain_computed "Trace Chain Computed" {
   verify integration "emits trace_chain_computed with correct entityId, chainDepth, and linkCount"
 }
 
-type TraceChainComputedPayload {
+type TraceChainComputedPayload "Trace Chain Computed Payload" {
   entityId   string
   chainDepth integer
   linkCount  integer
@@ -674,7 +674,7 @@ event delta_validation_failed "Delta Validation Failed" {
   verify unit "emits delta_validation_failed when incremental rebuild diverges from full rebuild"
 }
 
-type DeltaValidationFailedPayload {
+type DeltaValidationFailedPayload "Delta Validation Failed Payload" {
   inconsistentNodes integer
   inconsistentEdges integer
   timestamp         timestamp
@@ -689,7 +689,7 @@ event graph_resource_served "Graph Resource Served" {
   verify integration "emits graph_resource_served with correct resourceUri and format after MCP resource read"
 }
 
-type GraphResourceServedPayload {
+type GraphResourceServedPayload "Graph Resource Served Payload" {
   resourceUri    string
   format         string
   entityCount    integer
@@ -707,7 +707,7 @@ event schema_breaking_change_detected "Schema Breaking Change Detected" {
   verify integration "consumer negotiate_schema_version receives event for version compatibility checks"
 }
 
-type SchemaBreakingChangeDetectedPayload {
+type SchemaBreakingChangeDetectedPayload "Schema Breaking Change Detected Payload" {
   previousVersion  string
   currentVersion   string
   breakingCount    integer

@@ -2,17 +2,13 @@
 
 use "types/graph"
 
-// FormatVersion uses major.minor (no patch) because .spec file format changes
-// are always intentional and binary-compatible or not. SchemaVersion (in
-// types/graph.spec) uses semver with patch for the Graph Protocol's more
-// granular compatibility needs.
-type FormatVersion {
+type FormatVersion "FormatVersion uses major.minor (no patch) because .spec file format changes are always intentional and binary-compatible or not. SchemaVersion (in types/graph.spec) uses semver with patch for the Graph Protocol's more granular compatibility needs." {
   major integer @readonly
   minor integer @readonly
   verify unit "FormatVersion schema is valid"
 }
 
-type MigrationDiff {
+type MigrationDiff "Migration Diff" {
   /// The file, named from the project root (ADR 0102).
   file_path      string      @readonly
   before_hash    string      @readonly
@@ -22,7 +18,7 @@ type MigrationDiff {
   verify unit "MigrationDiff schema is valid"
 }
 
-type MigrationResult {
+type MigrationResult "Migration Result" {
   /// The file, named from the project root.
   file_path      string        @readonly
   source_version FormatVersion @readonly
@@ -34,7 +30,7 @@ type MigrationResult {
   verify unit "MigrationResult schema is valid"
 }
 
-type MigrationBackup {
+type MigrationBackup "Migration Backup" {
   /// The file the backup holds the old text of, named from the project root.
   original_path string @readonly
   /// The backup, named from the project root.
@@ -43,7 +39,7 @@ type MigrationBackup {
   verify unit "MigrationBackup schema is valid"
 }
 
-type MigrationSummary {
+type MigrationSummary "Migration Summary" {
   migrated_count integer           @readonly
   failed_count   integer           @readonly
   skipped_count  integer           @readonly

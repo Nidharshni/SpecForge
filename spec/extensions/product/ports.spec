@@ -8,7 +8,7 @@
 use "extensions/product/types"
 use "types/zero-entity-core"
 
-port ProductQueryPort {
+port ProductQueryPort "Product Query Port" {
   direction inbound
   category  "api/product-queries"
   method queryMilestoneCompletion(milestoneId: EntityId) -> Result<MilestoneCompletionPayload, ProductQueryError>
@@ -51,7 +51,7 @@ port ProductQueryPort {
   verify unit "ProductQueryPort"
 }
 
-port ProductValidationPort {
+port ProductValidationPort "Product Validation Port" {
   direction inbound
   category  "api/product-validation"
   method validateProductEntities() -> Result<ProductValidationPayload, ProductValidationError>
@@ -66,7 +66,7 @@ port ProductValidationPort {
   verify unit "ProductValidationPort"
 }
 
-port ProductRegistrationPort {
+port ProductRegistrationPort "Product Registration Port" {
   direction inbound
   category  "api/product-registration"
   method registerEntityKinds() -> Result<ProductEntityRegistrationPayload, RegistrationError>
@@ -83,7 +83,7 @@ port ProductRegistrationPort {
   verify unit "ProductRegistrationPort"
 }
 
-port KindRegistryPort {
+port KindRegistryPort "Kind Registry Port" {
   direction outbound
   category  "spi/compiler-core"
   method registerKind(kind: EntityKindDescriptor) -> Result<void, RegistrationError>
@@ -92,7 +92,7 @@ port KindRegistryPort {
   verify unit "KindRegistryPort"
 }
 
-port FieldRegistryPort {
+port FieldRegistryPort "Field Registry Port" {
   direction outbound
   category  "spi/compiler-core"
   method registerField(kindName: string, field: FieldDescriptor) -> Result<void, RegistrationError>
@@ -100,7 +100,7 @@ port FieldRegistryPort {
   verify unit "FieldRegistryPort"
 }
 
-port EdgeTypeRegistryPort {
+port EdgeTypeRegistryPort "Edge Type Registry Port" {
   direction outbound
   category  "spi/compiler-core"
   method registerEdgeType(edge: EdgeTypeDescriptor) -> Result<void, RegistrationError>
@@ -108,7 +108,7 @@ port EdgeTypeRegistryPort {
   verify unit "EdgeTypeRegistryPort"
 }
 
-port GraphQueryPort {
+port GraphQueryPort "Graph Query Port" {
   direction outbound
   category  "spi/compiler-core"
   method getIncomingEdges(nodeId: EntityId, edgeType: string) -> Result<EntityId[], ProductQueryError>

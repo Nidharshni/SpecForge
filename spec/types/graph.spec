@@ -9,7 +9,7 @@
 use "types/core"
 use "types/diagnostics"
 
-type Graph {
+type Graph "Graph" {
   schema_version string @readonly
   nodes          Node[]
   edges          Edge[]
@@ -17,7 +17,7 @@ type Graph {
   verify unit "Graph schema is valid"
 }
 
-type Node {
+type Node "Node" {
   id          EntityId   @readonly @unique
   kind        EntityKind
   title       string
@@ -27,48 +27,45 @@ type Node {
   verify unit "Node schema is valid"
 }
 
-type Edge {
+type Edge "Edge" {
   source    EntityId @readonly
   target    EntityId @readonly
   edge_type EdgeType
   verify unit "Edge schema is valid"
 }
 
-// EdgeType is an open string — not a closed enum.
-// Extensions declare edge types via edgeTypes and field-to-edge mappings
-// in their manifests. The core only knows edge labels are strings.
-type EdgeType {
+type EdgeType "EdgeType is an open string — not a closed enum. Extensions declare edge types via edgeTypes and field-to-edge mappings in their manifests. The core only knows edge labels are strings." {
   label string @readonly
   verify unit "EdgeType schema is valid"
 }
 
-type FileIndex {
+type FileIndex "File Index" {
   files FileEntry[]
   verify unit "FileIndex schema is valid"
 }
 
-type FileEntry {
+type FileEntry "File Entry" {
   path     string @readonly
   entities EntityId[]
   imports  string[]
   verify unit "FileEntry schema is valid"
 }
 
-type Subgraph {
+type Subgraph "Subgraph" {
   node_ids EntityId[]
   edges    Edge[]
   verify unit "Subgraph schema is valid"
 }
 
-type TraceChain {
+type TraceChain "Trace Chain" {
   root  EntityId
   links TraceLink[]
   verify unit "TraceChain schema is valid"
 }
 
-type TraceLinkStatus = "resolved" | "missing"
+type TraceLinkStatus "Trace Link Status" = "resolved" | "missing"
 
-type TraceLink {
+type TraceLink "Trace Link" {
   from      EntityId
   to        EntityId
   edge_type EdgeType
@@ -79,7 +76,7 @@ type TraceLink {
 
 // ── Graph Protocol Schema Types ──────────────────────────────
 
-type GraphProtocolSchema {
+type GraphProtocolSchema "Graph Protocol Schema" {
   schema_version SchemaVersion @readonly
   extensions     SchemaExtensionInfo[]
   entity_kinds   SchemaEntityKind[]
@@ -87,13 +84,13 @@ type GraphProtocolSchema {
   verify unit "GraphProtocolSchema schema is valid"
 }
 
-type SchemaExtensionInfo {
+type SchemaExtensionInfo "Schema Extension Info" {
   name    string @readonly
   version string @readonly
   verify unit "SchemaExtensionInfo schema is valid"
 }
 
-type SchemaEntityKind {
+type SchemaEntityKind "Schema Entity Kind" {
   name              string  @readonly
   extension         string  @readonly
   testable          boolean
@@ -104,7 +101,7 @@ type SchemaEntityKind {
   verify unit "SchemaEntityKind schema is valid"
 }
 
-type SchemaField {
+type SchemaField "Schema Field" {
   name             string    @readonly
   field_type       FieldType @readonly
   required         boolean
@@ -115,7 +112,7 @@ type SchemaField {
   verify unit "SchemaField schema is valid"
 }
 
-type SchemaEdgeType {
+type SchemaEdgeType "Schema Edge Type" {
   label        string   @readonly
   source_kinds string[] @optional
   target_kinds string[] @optional
@@ -125,7 +122,7 @@ type SchemaEdgeType {
 
 // ── Graph Protocol Versioning ──────────────────────────────
 
-type SchemaVersion {
+type SchemaVersion "Schema Version" {
   major integer @readonly
   minor integer @readonly
   patch integer @readonly
@@ -133,7 +130,7 @@ type SchemaVersion {
   verify unit "SchemaVersion schema is valid"
 }
 
-type VersionedSchema {
+type VersionedSchema "Versioned Schema" {
   schema           GraphProtocolSchema @readonly
   // Absent with no cache, or one that could not be read
   previous_version SchemaVersion       @optional @readonly
@@ -143,9 +140,9 @@ type VersionedSchema {
   verify unit "VersionedSchema schema is valid"
 }
 
-type SchemaChangeBump = "patch" | "minor" | "major"
+type SchemaChangeBump "Schema Change Bump" = "patch" | "minor" | "major"
 
-type SchemaChange {
+type SchemaChange "Schema Change" {
   // "extension" | "load_order" | "kind" | "field" | "edge_type"
   subject     string @readonly
   entity_kind string @optional
@@ -159,7 +156,7 @@ type SchemaChange {
   verify unit "SchemaChange schema is valid"
 }
 
-type SchemaCompatibility {
+type SchemaCompatibility "Schema Compatibility" {
   requested SchemaVersion @readonly
   current   SchemaVersion @readonly
   admitted  boolean
@@ -168,13 +165,7 @@ type SchemaCompatibility {
 
 // ── Graph Delta Types ────────────────────────────────────────
 
-// GraphDelta is what an update changed in the graph: watch prints it
-// (watch --format json) and MCP sends it whole as specforge/graphChanged's
-// params. It is NOT part of the stable Graph Protocol schema (not included
-// in embed_schema_in_export output); its structure may evolve between
-// compiler versions without a Graph Protocol major version bump.
-// Node arrays are sorted by id, edge arrays by (source, target, label).
-type GraphDelta {
+type GraphDelta "GraphDelta is what an update changed in the graph: watch prints it (watch --format json) and MCP sends it whole as specforge/graphChanged's params. It is NOT part of the stable Graph Protocol schema (not included in embed_schema_in_export output); its structure may evolve between compiler versions without a Graph Protocol major version bump. Node arrays are sorted by id, edge arrays by (source, target, label)." {
   added_nodes    NodeChange[]
   removed_nodes  NodeChange[]
   modified_nodes ModifiedNodeChange[]
@@ -185,7 +176,7 @@ type GraphDelta {
   verify unit "GraphDelta schema is valid"
 }
 
-type NodeChange {
+type NodeChange "Node Change" {
   id   string  @readonly
   kind string  @readonly
   file string  @readonly
@@ -193,7 +184,7 @@ type NodeChange {
   verify unit "NodeChange schema is valid"
 }
 
-type ModifiedNodeChange {
+type ModifiedNodeChange "Modified Node Change" {
   id              string  @readonly
   /// The fields whose values differ, by name, sorted: a field named kind or
   /// methods is a field here.
@@ -205,24 +196,16 @@ type ModifiedNodeChange {
   verify unit "ModifiedNodeChange schema is valid"
 }
 
-type NodeAspect = "kind" | "title" | "methods" | "obligations" | "edges"
+type NodeAspect "Node Aspect" = "kind" | "title" | "methods" | "obligations" | "edges"
 
-/// One edge in a GraphDelta, as the graph export writes an edge.
-type EdgeChange {
+type EdgeChange "One edge in a GraphDelta, as the graph export writes an edge." {
   source string @readonly
   target string @readonly
   label  string @readonly
   verify unit "EdgeChange schema is valid"
 }
 
-// The diagnostics one update added and removed, each compared and
-// presented whole, as every surface presents a diagnostic
-// (present_diagnostics_as_json): one that moved or changed in any part is
-// removed and added. The project session states it with each update;
-// specforge watch --format json prints it, and MCP sends it, with the I017
-// its extension surfaces add and remove, as specforge/diagnosticsChanged's
-// params.
-type DiagnosticsDelta {
+type DiagnosticsDelta "The diagnostics one update added and removed, each compared and presented whole, as every surface presents a diagnostic (present_diagnostics_as_json): one that moved or changed in any part is removed and added. The project session states it with each update; specforge watch --format json prints it, and MCP sends it, with the I017 its extension surfaces add and remove, as specforge/diagnosticsChanged's params." {
   added   Diagnostic[]
   removed Diagnostic[]
   verify unit "DiagnosticsDelta schema is valid"
@@ -230,16 +213,13 @@ type DiagnosticsDelta {
 
 // ── Agent Plan Types ──────────────────────────────────────
 
-/// What an agent intends to do, entity by entity, in the order it will do
-/// it: the plan the plan check reads (validate_agent_plan). Its entry order
-/// is its dependency order; the graph's edges are the dependencies.
-type AgentPlan {
+type AgentPlan "What an agent intends to do, entity by entity, in the order it will do it: the plan the plan check reads (validate_agent_plan). Its entry order is its dependency order; the graph's edges are the dependencies." {
   plan_id string @readonly @unique
   entries AgentPlanEntry[]
   verify unit "AgentPlan schema is valid"
 }
 
-type AgentPlanEntry {
+type AgentPlanEntry "Agent Plan Entry" {
   /// The entity the entry is about.
   entity_id string @readonly
   /// What the agent will do to it: free text (implement, modify, remove, ...).
