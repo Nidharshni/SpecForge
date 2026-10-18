@@ -9,6 +9,10 @@
 use "types/diagnostics"
 use "types/graph"
 
+defaults behavior {
+  features [pe_validation_suite]
+}
+
 behavior validate_product_vocabularies "Validate Product Field Vocabularies" {
   category validation
   types    [
@@ -54,7 +58,6 @@ behavior validate_product_vocabularies "Validate Product Field Vocabularies" {
     absent_counts_as    "a status field declares the value an absent status counts as"
     lists_agree         "every value check admits, the list filters take"
   }
-  features [pe_validation_suite]
   verify unit "every vocabulary field is declared an enum of its vocabulary, with its absent value as default, and every closed list filter reads the same vocabulary"
   verify unit "check admits every value the list filters take, and the lists find it"
 }
@@ -85,7 +88,6 @@ behavior validate_module_family_field "Validate Module Family Field" {
     absent_passes       "module with no family produces no I062"
     lists_standard      "I062 names the value and lists the standard families"
   }
-  features [pe_validation_suite]
   verify unit "module with family=core passes"
   verify unit "module with family=integration passes"
   verify unit "module with family=advisory passes"
@@ -111,7 +113,6 @@ behavior validate_milestone_target_date_format "Validate Milestone Target Date F
     suppresses_valid     "milestone with valid YYYY-MM-DD target_date suppresses I053"
     absent_passes        "milestone with no target_date produces no I053"
   }
-  features [pe_validation_suite]
   verify unit "milestone with valid YYYY-MM-DD target_date passes"
   verify unit "milestone with invalid target_date format produces I053"
   verify unit "milestone with no target_date produces no I053"
@@ -142,7 +143,6 @@ behavior validate_deliverable_version_format "Validate Deliverable Version Forma
     accepts_prerelease     "deliverable with pre-release tag (e.g., 1.0.0-alpha.1) suppresses I061"
     accepts_build_metadata "deliverable with build metadata (e.g., 1.0.0+build.42) suppresses I061"
   }
-  features [pe_validation_suite]
   verify unit "deliverable with valid semver version passes"
   verify unit "deliverable with invalid version format produces I061"
   verify unit "deliverable with no version produces no I061"
@@ -176,7 +176,6 @@ behavior validate_tag_format "Validate Tag Format" {
     ignores_empty          "empty string in tags array is silently ignored"
     fires_on_special_chars "tag with special characters (!, @, #, etc.) produces I068"
   }
-  features [pe_validation_suite]
   verify unit "lowercase hyphen-separated tag passes"
   verify unit "uppercase tag produces I068"
   verify unit "tag with spaces produces I068"
@@ -204,14 +203,12 @@ behavior validate_journey_flow_non_empty "Validate Journey Flow Non-Empty" {
     suppresses_non_empty "journey with at least one flow step suppresses I050"
     missing_is_e006      "journey without a flow field produces E006 and no I050"
   }
-  features [pe_validation_suite]
   verify unit "journey with empty flow produces I050"
   verify unit "journey with flow steps suppresses I050"
   verify unit "journey without a flow field produces E006 and no I050"
 }
 
 behavior validate_channel_references "Validate Channel References" {
-  features [pe_validation_suite]
   category validation
   types    [Diagnostic]
   contract """
@@ -243,7 +240,6 @@ behavior detect_term_see_also_non_term_refs "Detect Term See-Also Non-Term Refer
     suppresses_term "see_also reference to another term produces no E022"
     empty_passes    "term with empty see_also produces no E022"
   }
-  features [pe_validation_suite]
   verify unit "term see_also referencing another term produces no E022"
   verify unit "term see_also referencing a module produces E022"
   verify unit "term see_also referencing a feature produces E022"
@@ -268,7 +264,6 @@ behavior detect_term_alias_conflicts "Detect Term Alias Conflicts" {
     identifies_both_terms      "W086 names both conflicting terms and the shared alias"
     suppresses_no_conflict     "terms with unique aliases suppress W086"
   }
-  features [pe_validation_suite]
   verify unit "two terms with same alias produce W086"
   verify unit "term alias matching another term ID produces W086"
   verify unit "case-insensitive match produces W086"
@@ -290,7 +285,6 @@ behavior detect_journey_deprecated_persona "Detect Journey Referencing Deprecate
     absent_suppressed     "journey with no persona reference suppresses W075"
     missing_status_active "persona without status field is treated as active (no W075)"
   }
-  features [pe_validation_suite]
   verify unit "journey referencing deprecated persona produces W075"
   verify unit "journey referencing active persona suppresses W075"
   verify unit "journey with no persona suppresses W075"
@@ -313,7 +307,6 @@ behavior detect_journey_deprecated_channels "Detect Journey Referencing Deprecat
     missing_status_active  "channel without status field is treated as active (no W076)"
     per_channel_diagnostic "each deprecated channel in a journey produces a separate W076"
   }
-  features [pe_validation_suite]
   verify unit "journey referencing deprecated channel produces W076"
   verify unit "journey referencing active channel suppresses W076"
   verify unit "journey with no channels suppresses W076"
@@ -349,7 +342,6 @@ behavior detect_priority_effort_mismatch "Detect Priority-Effort Mismatch" {
     absent_priority_skips "feature without priority field produces no I095"
     identifies_feature    "I095 includes the feature ID and suggests reviewing effort estimate"
   }
-  features   [pe_validation_suite]
   verify unit "flags critical+xs combination"
   verify unit "flags critical+s combination"
   verify unit "flags high+xs combination"

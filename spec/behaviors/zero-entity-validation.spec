@@ -11,11 +11,14 @@ use "types/errors"
 use "types/wasm"
 use "types/zero-entity-core"
 
+defaults behavior {
+  features [declarative_validation_rules]
+}
+
 // -- Declarative Validation --------------------------------------------------
 
 // No consumes — synchronous helper the registry build runs (registry_build_rules)
 behavior parse_validation_rule_pattern "Parse Validation Rule Pattern" {
-  features   [declarative_validation_rules]
   invariants [zero_domain_knowledge_core, declarative_validation_determinism]
   category   command
   types      [ValidationRulePattern, ValidationPatternKind, FieldConstraint]
@@ -59,7 +62,6 @@ behavior parse_validation_rule_pattern "Parse Validation Rule Pattern" {
 }
 
 behavior execute_validation_pattern "Execute Validation Pattern" {
-  features   [declarative_validation_rules]
   invariants [zero_domain_knowledge_core, declarative_validation_determinism]
   category   command
   types      [ValidationRulePattern, ValidationPatternKind, Diagnostic]
@@ -125,7 +127,6 @@ behavior execute_validation_pattern "Execute Validation Pattern" {
 }
 
 behavior emit_diagnostic_from_pattern "Emit Diagnostic From Pattern" {
-  features   [declarative_validation_rules]
   invariants [zero_domain_knowledge_core, declarative_validation_determinism]
   category   command
   types      [ValidationRulePattern, Diagnostic]
@@ -155,7 +156,6 @@ behavior emit_diagnostic_from_pattern "Emit Diagnostic From Pattern" {
 }
 
 behavior register_custom_validation_patterns "Register Custom Validation Patterns" {
-  features   [declarative_validation_rules]
   invariants [zero_domain_knowledge_core, declarative_validation_determinism]
   category   command
   types      [ValidationRulePattern, CustomCall, ExtensionDeclaration]
@@ -207,7 +207,6 @@ behavior register_custom_validation_patterns "Register Custom Validation Pattern
 }
 
 behavior snapshot_entities_once "Snapshot the Entities Once per Compile" {
-  features   [declarative_validation_rules]
   invariants [
     zero_domain_knowledge_core,
     declarative_validation_determinism,

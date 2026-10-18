@@ -12,6 +12,10 @@ use "extensions/formal/invariants"
 use "extensions/formal/types"
 use "types/zero-entity-core"
 
+defaults behavior {
+  features [fa_structured_conditions]
+}
+
 // ── Structured Conditions ───────────────────────────────────
 
 behavior fa_parse_requires_block "Parse Requires Block" {
@@ -32,7 +36,6 @@ behavior fa_parse_requires_block "Parse Requires Block" {
     empty_permitted     "empty requires block produces empty ConditionEntry list"
     non_behavior_warned "requires block on non-behavior entity produces warning"
   }
-  features [fa_structured_conditions]
   verify unit "inline requires block with named conditions parsed"
   verify unit "empty requires block produces empty ConditionEntry list"
   verify unit "requires block on non-behavior entity produces warning"
@@ -56,7 +59,6 @@ behavior fa_parse_ensures_block "Parse Ensures Block" {
     empty_permitted  "empty ensures block produces empty ConditionEntry list"
     standalone_info  "ensures without requires produces info diagnostic (I011, condition_check)"
   }
-  features [fa_structured_conditions]
   verify unit "inline ensures block with named conditions parsed"
   verify unit "empty ensures block produces empty ConditionEntry list"
   verify unit "ensures without requires produces info diagnostic"
@@ -76,7 +78,6 @@ behavior fa_parse_maintains_block "Parse Maintains Block" {
     other_warned        "maintains block on feature/event/type/port produces warning"
     named_conditions    "each inline condition has a name and description"
   }
-  features [fa_structured_conditions]
   verify unit "maintains block on behavior parsed"
   verify unit "maintains block on invariant parsed"
   verify unit "maintains block on feature produces warning"
@@ -103,7 +104,6 @@ behavior fa_validate_condition_consistency "I011: Ensures Without Requires" {
     missing_requires_info "ensures without requires produces I011 info"
     both_sides_pass       "a behavior with requires and ensures produces no I011"
   }
-  features   [fa_structured_conditions]
   verify unit "consistent requires and ensures passes"
   verify unit "ensures without requires produces I011 info"
 }
@@ -136,7 +136,6 @@ behavior fa_condition_check_pass "Condition Check Compiler Pass" {
     one_sided_guarantee  "a behavior with ensures and no requires produces I011"
     prose_invariant      "an invariant with a guarantee and no expression produces W040"
   }
-  features   [fa_structured_conditions]
   verify unit "behavior with requires and no ensures produces W096"
   verify unit "pass runs after graph construction"
 }
@@ -157,7 +156,6 @@ behavior fa_detect_redundant_precondition "W039: Redundant Precondition" {
     non_redundant_passes "a requires naming each condition once passes"
     suggestion           "W039 includes suggestion to remove the repeated condition"
   }
-  features [fa_structured_conditions]
   verify unit "precondition repeated in its requires block produces W039"
   verify unit "independent precondition passes"
 }
@@ -177,7 +175,6 @@ behavior fa_detect_invariant_without_property "W040: Invariant Without Expressio
     formal_passes     "invariant with an expression passes"
     suggestion        "W040 includes suggestion to add an expression for automated checking"
   }
-  features [fa_structured_conditions]
   verify unit "invariant with prose-only guarantee produces W040"
   verify unit "invariant with an expression passes"
 }
@@ -195,7 +192,6 @@ behavior fa_parse_port_operation_conditions "Parse Port Operation Conditions" {
     conditions_parsed     "port operation with requires/ensures blocks parsed"
     consistency_validated "port operation conditions validated for internal consistency"
   }
-  features [fa_structured_conditions]
   verify unit "port operation with requires/ensures parsed"
   verify unit "port operation conditions validated for consistency"
 }

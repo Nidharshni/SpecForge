@@ -10,6 +10,10 @@ use "extensions/formal/invariants"
 use "extensions/formal/types"
 use "types/zero-entity-core"
 
+defaults behavior {
+  features [fa_specification_layering]
+}
+
 behavior fa_parse_abstract_annotation "Parse Abstract Annotation" {
   category command
   contract """
@@ -20,7 +24,6 @@ behavior fa_parse_abstract_annotation "Parse Abstract Annotation" {
     empty_verify_ok     "abstract behavior with no verify permitted"
     non_behavior_warned "abstract on non-behavior entity produces warning"
   }
-  features [fa_specification_layering]
   verify unit "abstract true on behavior parsed"
   verify unit "abstract behavior with no verify permitted"
   verify unit "abstract on non-behavior produces warning"
@@ -37,7 +40,6 @@ behavior fa_parse_refines_annotation "Parse Refines Annotation" {
     multiple_permitted  "multiple behaviors refining same abstract permitted"
     non_abstract_warned "refines referencing non-abstract behavior produces warning"
   }
-  features [fa_specification_layering]
   verify unit "refines referencing abstract behavior parsed"
   verify unit "refines creates directed edge in graph"
   verify unit "refines referencing non-abstract produces warning"
@@ -64,7 +66,6 @@ behavior fa_build_layering_chain "Build Specification Layering Chain" {
     depth_recorded       "each chain records its depth (number of layering levels)"
     deep_chain_warned    "chain depth > 4 produces W031"
   }
-  features   [fa_specification_layering]
   verify unit "layering chain built from abstract to concrete via steps"
   verify unit "each step records condition delta"
   verify unit "cycle in layering produces E041"
@@ -86,7 +87,6 @@ behavior fa_validate_layering_completeness "Validate Layering Completeness" {
     complete_passes   "abstract with concrete refinement passes"
     incomplete_warned "abstract with no refinement produces W030"
   }
-  features [fa_specification_layering]
   verify unit "abstract with concrete refinement passes"
   verify unit "abstract with no refinement produces W030"
 }
@@ -110,7 +110,6 @@ behavior fa_layering_verify_pass "Layering Verify Compiler Pass" {
     dag_verified         "layering DAG has no cycles"
     incomplete_warned    "incomplete layering chain produces W030 (via completeness check)"
   }
-  features [fa_specification_layering]
   verify unit "complete layering chain passes"
   verify unit "incomplete chain produces W030"
   verify unit "pass runs after condition_check pass"

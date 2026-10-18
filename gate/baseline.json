@@ -34,7 +34,7 @@
     "crates/surfaces/cli/tests/watch.rs": 957,
     "crates/surfaces/lsp/tests/contracts.rs": 1113,
     "crates/surfaces/lsp/tests/reaction.rs": 1000,
-    "crates/surfaces/lsp/tests/semantic_tokens.rs": 819,
+    "crates/surfaces/lsp/tests/semantic_tokens.rs": 817,
     "crates/surfaces/mcp/tests/call_target.rs": 1314,
     "crates/surfaces/mcp/tests/contracts.rs": 3283,
     "crates/surfaces/mcp/tests/lifecycle.rs": 859,

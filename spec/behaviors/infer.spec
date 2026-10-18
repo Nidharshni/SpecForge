@@ -12,12 +12,15 @@
 
 use "types/infer"
 
+defaults behavior {
+  features [infer_progress_tracking]
+}
+
 // ---------------------------------------------------------------------------
 // Manifest I/O
 // ---------------------------------------------------------------------------
 
 behavior load_inference_manifest "Load Inference Manifest" {
-  features [infer_progress_tracking]
   types    [InferenceManifest]
   category io
   ensures {
@@ -49,7 +52,6 @@ behavior load_inference_manifest "Load Inference Manifest" {
 }
 
 behavior save_inference_manifest "Save Inference Manifest" {
-  features [infer_progress_tracking]
   types    [InferenceManifest]
   category io
   ensures {
@@ -79,7 +81,6 @@ behavior save_inference_manifest "Save Inference Manifest" {
 }
 
 behavior compute_inference_summary "Compute Inference Summary" {
-  features [infer_progress_tracking]
   types    [InferenceSummary, SourceFileEntry]
   category computation
   ensures {
@@ -105,7 +106,6 @@ behavior compute_inference_summary "Compute Inference Summary" {
 // ---------------------------------------------------------------------------
 
 behavior start_inference_session "Start Inference Session" {
-  features [infer_progress_tracking]
   types    [InferenceSession, SessionStatus]
   category lifecycle
   ensures {
@@ -126,7 +126,6 @@ behavior start_inference_session "Start Inference Session" {
 }
 
 behavior end_inference_session "End Inference Session" {
-  features [infer_progress_tracking]
   types    [InferenceSession, SessionStatus]
   category lifecycle
   ensures {
@@ -144,7 +143,6 @@ behavior end_inference_session "End Inference Session" {
 }
 
 behavior mark_source_file_analyzed "Mark Source File as Analyzed" {
-  features [infer_progress_tracking]
   types    [SourceFileEntry]
   category tracking
   ensures {
@@ -174,7 +172,6 @@ behavior mark_source_file_analyzed "Mark Source File as Analyzed" {
 }
 
 behavior discover_inference_sources "Discover Inference Sources" {
-  features [infer_progress_tracking]
   types    [InferenceManifest, SourceFileEntry]
   category computation
   ensures {
@@ -214,7 +211,6 @@ behavior discover_inference_sources "Discover Inference Sources" {
 // ---------------------------------------------------------------------------
 
 behavior detect_stale_inference_entries "Detect Stale Inference Entries" {
-  features [infer_progress_tracking]
   types    [SourceFileEntry]
   category validation
   ensures {
@@ -240,7 +236,6 @@ behavior detect_stale_inference_entries "Detect Stale Inference Entries" {
 // ---------------------------------------------------------------------------
 
 behavior provide_mcp_infer_progress_tool "Provide MCP Infer Progress Tool" {
-  features [infer_progress_tracking]
   types    [InferenceManifest, InferenceSummary, McpInferProgressResult]
   category mcp
   ensures {
@@ -267,7 +262,6 @@ behavior provide_mcp_infer_progress_tool "Provide MCP Infer Progress Tool" {
 }
 
 behavior provide_mcp_infer_session_tool "Provide MCP Infer Session Tool" {
-  features [infer_progress_tracking]
   types    [InferenceManifest, InferenceSession, SourceFileEntry, McpInferSessionResult]
   category mcp
   ensures {
@@ -447,7 +441,6 @@ behavior provide_infer_plan_scope "Provide Infer Prompt Plan Scope" {
 }
 
 behavior provide_infer_workflow_scope "Provide Infer Prompt Workflow Scope" {
-  features [infer_progress_tracking]
   types    [InferenceManifest, McpInferWorkflow]
   category mcp
   ensures {
@@ -505,7 +498,6 @@ behavior provide_infer_file_scope "Provide Infer Prompt File Scope" {
 // ---------------------------------------------------------------------------
 
 behavior provide_infer_status_cli "Provide CLI Infer-Status Command" {
-  features [infer_progress_tracking]
   types    [InferenceManifest, InferenceSummary]
   category cli
   ensures {

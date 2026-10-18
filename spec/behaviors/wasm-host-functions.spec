@@ -13,12 +13,16 @@ use "ports/outbound"
 use "types/wasm"
 use "types/zero-entity-core"
 
-behavior provide_host_function_query_graph "Provide Host Function: query_graph" {
+defaults behavior {
   features   [wasm_host_function_api]
-  invariants [wasm_sandbox_integrity, host_function_type_safety]
-  category   query
+  invariants [wasm_sandbox_integrity, host_function_type_safety, extension_isolation]
   types      [HostFunctionBinding]
   ports      [WasmRuntime]
+}
+
+behavior provide_host_function_query_graph "Provide Host Function: query_graph" {
+  invariants [wasm_sandbox_integrity, host_function_type_safety]
+  category   query
   requires {
     graph_built "compiled graph is available for querying"
   }
@@ -36,11 +40,8 @@ behavior provide_host_function_query_graph "Provide Host Function: query_graph" 
 }
 
 behavior provide_host_function_emit_diagnostic "Provide Host Function: emit_diagnostic" {
-  features   [wasm_host_function_api]
   invariants [host_function_type_safety]
   category   query
-  types      [HostFunctionBinding]
-  ports      [WasmRuntime]
   requires {
     diagnostic_collection_available "compiler's diagnostic collection is available for appending"
   }
@@ -72,11 +73,9 @@ behavior provide_host_function_emit_diagnostic "Provide Host Function: emit_diag
 // they add instances of already-declared kinds to the graph.
 
 behavior provide_host_function_add_graph_node "Provide Host Function: add_graph_node" {
-  features   [wasm_host_function_api]
   invariants [host_function_type_safety, zero_domain_knowledge_core]
   category   query
   types      [HostFunctionBinding, ExtensionDeclaration]
-  ports      [WasmRuntime]
   requires {
     entity_kind_declared "entity kind for the node is declared in a loaded extension manifest"
     graph_available      "mutable graph is available for adding node instances"
@@ -103,11 +102,8 @@ behavior provide_host_function_add_graph_node "Provide Host Function: add_graph_
 }
 
 behavior provide_host_function_add_graph_edge "Provide Host Function: add_graph_edge" {
-  features   [wasm_host_function_api]
   invariants [host_function_type_safety, zero_domain_knowledge_core]
   category   query
-  types      [HostFunctionBinding]
-  ports      [WasmRuntime]
   requires {
     edge_type_declared      "edge label corresponds to an edge type declared in a loaded extension manifest"
     source_and_target_exist "both source and target nodes exist in the graph"
@@ -135,11 +131,9 @@ behavior provide_host_function_add_graph_edge "Provide Host Function: add_graph_
 }
 
 behavior provide_host_function_read_file "Provide Host Function: read_file" {
-  features   [wasm_host_function_api]
-  invariants [wasm_sandbox_integrity, host_function_type_safety, extension_isolation]
-  category   query
-  types      [HostFunctionBinding, SandboxPolicy]
-  ports      [WasmRuntime, FileSystem]
+  category query
+  types    [HostFunctionBinding, SandboxPolicy]
+  ports    [WasmRuntime, FileSystem]
   requires {
     parser_call_site "call originates from a parser contribution export (not validator, renderer, or provider)"
     spec_root_known  "project's spec root path is known for path scoping enforcement"
@@ -150,7 +144,7 @@ behavior provide_host_function_read_file "Provide Host Function: read_file" {
     size_limited        "files exceeding max_read_file_size (default 1MB) are rejected, not truncated"
     non_parser_rejected "calls from non-parser contribution exports return permission error"
   }
-  contract   """
+  contract """
     The specforge.read_file host function MUST accept a file path and return
     the file content as a string to the calling extension. The host MUST
     enforce all of the following constraints:
@@ -179,11 +173,9 @@ behavior provide_host_function_read_file "Provide Host Function: read_file" {
 }
 
 behavior provide_host_function_emit_file "Provide Host Function: emit_file" {
-  features   [wasm_host_function_api]
-  invariants [wasm_sandbox_integrity, host_function_type_safety, extension_isolation]
-  category   query
-  types      [HostFunctionBinding, SandboxPolicy]
-  ports      [WasmRuntime, FileSystem]
+  category query
+  types    [HostFunctionBinding, SandboxPolicy]
+  ports    [WasmRuntime, FileSystem]
   requires {
     output_directory_known "project output directory is known for path validation"
     sandbox_policy_ready   "sandbox policy with allowed_output_extensions is computed for the extension"
@@ -193,7 +185,7 @@ behavior provide_host_function_emit_file "Provide Host Function: emit_file" {
     extension_allowlist_enforced "only files with allowed extensions (.json, .html, .csv, .svg, .dot, .xml, .txt, .pdf) are written"
     no_code_generation           "code file extensions (.rs, .py, .js, .ts, .go, etc.) are always rejected"
   }
-  contract   """
+  contract """
     The specforge.emit_file host function MUST accept a file path and
     content from the extension. Valid files MUST be written to disk
     relative to the project output directory. The host MUST reject
@@ -230,11 +222,8 @@ behavior provide_host_function_emit_file "Provide Host Function: emit_file" {
 }
 
 behavior provide_host_function_http_get "Provide Host Function: http_get" {
-  features   [wasm_host_function_api]
-  invariants [wasm_sandbox_integrity, host_function_type_safety, extension_isolation]
-  category   query
-  types      [HostFunctionBinding, SandboxPolicy]
-  ports      [WasmRuntime]
+  category query
+  types    [HostFunctionBinding, SandboxPolicy]
   requires {
     provider_call_site   "call originates from a provider contribution export (not validator, renderer, or entity)"
     sandbox_policy_ready "sandbox policy with allowed_domains and timeout configuration is computed"
@@ -245,7 +234,7 @@ behavior provide_host_function_http_get "Provide Host Function: http_get" {
     timeout_produces_warning  "timeout failures produce W-level warning, not hard error"
     non_provider_rejected     "calls from non-provider contribution exports return permission error"
   }
-  contract   """
+  contract """
     The specforge.http_get host function MUST fetch a URL and return
     the response body to the calling extension. The URL MUST be validated
     against the sandbox policy's allowed domains. Requests to disallowed

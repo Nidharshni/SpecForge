@@ -101,7 +101,7 @@ fn complete_task_reads_as_a_review_document() {
 
     ## behavior `complete_task` — Complete a Task
 
-    `behaviors/task.spec:28`
+    `behaviors/task.spec:31`
 
     **contract**
 
@@ -124,10 +124,10 @@ fn complete_task_reads_as_a_review_document() {
     | types | `Task` | type | A unit of work the user wants to track |
     | types | `CompleteTaskCommand` | type | Command payload for completing a task. |
     | types | `TaskNotFoundError` | type | Error returned when a task id does not resolve. |
-    | ports | `TaskRepository` | port | Persistence boundary for tasks |
     | produces | `task_completed` | event | Task Completed |
-    | features | `task_management` | feature | Task Management |
     | satisfies | `no_lost_completion` | property | Completion is never lost |
+    | ports | `TaskRepository` | port | Persistence boundary for tasks |
+    | features | `task_management` | feature | Task Management |
 
     **Verify**
 

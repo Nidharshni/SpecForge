@@ -10,6 +10,10 @@ use "product/features"
 use "types/diagnostics"
 use "types/graph"
 
+defaults behavior {
+  features [pe_validation_suite]
+}
+
 // ════════════════════════════════════════════════════════════════
 // Status Transition Validation (W087-W091)
 //
@@ -69,7 +73,6 @@ behavior validate_feature_status_transition "Validate Feature Status Transition"
 }
 
 behavior validate_milestone_status_transition "Validate Milestone Status Transition" {
-  features [pe_validation_suite]
   category validation
   types    [Diagnostic, MilestoneStatusTransition, StatusTransitionViolation]
   contract """
@@ -95,7 +98,6 @@ behavior validate_milestone_status_transition "Validate Milestone Status Transit
 }
 
 behavior validate_deliverable_status_transition "Validate Deliverable Status Transition" {
-  features [pe_validation_suite]
   category validation
   types    [Diagnostic, DeliverableStatusTransition, StatusTransitionViolation]
   contract """
@@ -119,7 +121,6 @@ behavior validate_deliverable_status_transition "Validate Deliverable Status Tra
 }
 
 behavior validate_persona_status_transition "Validate Persona Status Transition" {
-  features [pe_validation_suite]
   category validation
   types    [Diagnostic, PersonaStatusTransition, StatusTransitionViolation]
   contract """
@@ -140,7 +141,6 @@ behavior validate_persona_status_transition "Validate Persona Status Transition"
 }
 
 behavior validate_channel_status_transition "Validate Channel Status Transition" {
-  features [pe_validation_suite]
   category validation
   types    [Diagnostic, ChannelStatusTransition, StatusTransitionViolation]
   contract """
@@ -210,7 +210,6 @@ behavior detect_terminal_initial_status "Detect Terminal Status on First Build" 
     suppresses_with_prior_build "entity present in prior build suppresses I092 (W087-W091 apply)"
     per_kind_terminal           "terminal state is kind-specific: done for feature, completed for milestone, etc."
   }
-  features [pe_validation_suite]
   verify unit "feature with status=done on first build produces I092"
   verify unit "feature with status=proposed on first build suppresses I092"
   verify unit "milestone with status=completed on first build produces I092"
@@ -238,7 +237,6 @@ behavior detect_inconsistent_initial_done "Detect Done Feature Without Acceptanc
     suppresses_with_acceptance  "feature with status=done and non-empty acceptance suppresses I093"
     suppresses_with_prior_build "feature in prior build suppresses I093"
   }
-  features [pe_validation_suite]
   verify unit "done feature without acceptance on first build produces I093"
   verify unit "done feature with acceptance on first build suppresses I093"
   verify unit "proposed feature without acceptance suppresses I093 (I048 handles this)"
@@ -265,7 +263,6 @@ behavior detect_blocked_milestone_without_dependency "Detect Blocked Milestone W
     suppresses_with_deps   "blocked milestone with at least one depends_on suppresses I057"
     suppresses_non_blocked "non-blocked milestone without depends_on suppresses I057"
   }
-  features [pe_validation_suite]
   verify unit "blocked milestone with depends_on suppresses I057"
   verify unit "blocked milestone without depends_on produces I057"
   verify unit "in_progress milestone without depends_on suppresses I057"
@@ -285,7 +282,6 @@ behavior detect_deferred_feature_without_reason "Detect Deferred Feature Without
     suppresses_with_reason  "deferred feature with non-empty reason suppresses I059"
     suppresses_non_deferred "non-deferred feature without reason suppresses I059"
   }
-  features [pe_validation_suite]
   verify unit "deferred feature with reason suppresses I059"
   verify unit "deferred feature without reason produces I059"
   verify unit "accepted feature without reason suppresses I059"
@@ -305,7 +301,6 @@ behavior detect_blocked_milestone_without_reason "Detect Blocked Milestone Witho
     reason_does_not_suppress "blocked milestone with a reason but no blockers produces I060"
     reason_not_required      "blocked milestone with blockers but no reason produces no I060"
   }
-  features [pe_validation_suite]
   verify unit "blocked milestone with reason but no blockers produces I060"
   verify unit "blocked milestone with blockers but no reason produces no I060"
 }
@@ -328,7 +323,6 @@ behavior detect_done_feature_with_incomplete_deps "Detect Done Feature With Inco
     suppresses_non_done  "non-done feature with incomplete dependencies suppresses I063"
     no_deps_no_fire      "done feature with no dependencies produces no I063"
   }
-  features [pe_validation_suite]
   verify unit "done feature with all done deps suppresses I063"
   verify unit "done feature with non-done dep produces I063"
   verify unit "in_progress feature with non-done dep suppresses I063"
@@ -354,7 +348,6 @@ behavior detect_milestone_temporal_inconsistency "Detect Milestone Temporal Inco
     suppresses_consistent   "milestone with later target_date than dependency suppresses I064"
     absent_dates_no_fire    "milestone or dependency without target_date produces no I064"
   }
-  features [pe_validation_suite]
   verify unit "milestone before its dependency produces I064"
   verify unit "milestone after its dependency suppresses I064"
   verify unit "milestone or dependency without target_date produces no I064"
@@ -378,7 +371,6 @@ behavior detect_shipped_deliverable_incomplete_milestones "Detect Shipped Delive
     suppresses_non_shipped   "non-shipped deliverable with incomplete milestones suppresses I065"
     no_milestones_no_fire    "shipped deliverable with no milestones produces no I065"
   }
-  features   [pe_validation_suite]
   verify unit "shipped deliverable with all completed milestones suppresses I065"
   verify unit "shipped deliverable with non-completed milestone produces I065"
   verify unit "draft deliverable with non-completed milestone suppresses I065"
@@ -400,7 +392,6 @@ behavior detect_journeys_without_persona "Detect Journeys without Persona" {
     fires_when_absent  "journey without persona reference produces I054"
     suppresses_present "journey with persona reference suppresses I054"
   }
-  features [pe_validation_suite]
   verify unit "journey with persona suppresses I054"
   verify unit "journey without persona produces I054"
 }
@@ -422,7 +413,6 @@ behavior detect_journeys_without_channels "Detect Journeys without Channels" {
     fires_when_absent  "journey without channel references produces I055"
     suppresses_present "journey with at least one channel reference suppresses I055"
   }
-  features [pe_validation_suite]
   verify unit "journey with channels suppresses I055"
   verify unit "journey without channels produces I055"
   verify unit "journey with an empty channels list produces I055"
@@ -446,7 +436,6 @@ behavior detect_deprecated_deliverable_without_reason "Detect Deprecated Deliver
     suppresses_with_reason    "deprecated deliverable with non-empty reason suppresses I066"
     suppresses_non_deprecated "non-deprecated deliverable without reason suppresses I066"
   }
-  features [pe_validation_suite]
   verify unit "deprecated deliverable with reason suppresses I066"
   verify unit "deprecated deliverable without reason produces I066"
   verify unit "draft deliverable without reason suppresses I066"
@@ -467,7 +456,6 @@ behavior detect_deprecated_persona_without_reason "Detect Deprecated Persona Wit
     suppresses_non_deprecated "non-deprecated persona without reason suppresses I069"
     absent_treated_active     "persona without status field produces no I069"
   }
-  features [pe_validation_suite]
   verify unit "deprecated persona with reason suppresses I069"
   verify unit "deprecated persona without reason produces I069"
   verify unit "active persona without reason suppresses I069"
@@ -489,7 +477,6 @@ behavior detect_deprecated_channel_without_reason "Detect Deprecated Channel Wit
     suppresses_non_deprecated "non-deprecated channel without reason suppresses I070"
     absent_treated_active     "channel without status field produces no I070"
   }
-  features [pe_validation_suite]
   verify unit "deprecated channel with reason suppresses I070"
   verify unit "deprecated channel without reason produces I070"
   verify unit "active channel without reason suppresses I070"
@@ -513,7 +500,6 @@ behavior detect_transitive_deprecated_persona "Detect Transitive Deprecated Pers
     suppresses_active      "deliverable->journey->active persona suppresses I073"
     per_journey_diagnostic "I073 fires per affected journey within the deliverable"
   }
-  features [pe_validation_suite]
   verify unit "deliverable with journey referencing deprecated persona produces I073"
   verify unit "deliverable with journey referencing active persona suppresses I073"
   verify unit "deliverable with multiple journeys fires I073 per affected journey"
@@ -536,7 +522,6 @@ behavior detect_transitive_deprecated_channel "Detect Transitive Deprecated Chan
     suppresses_active      "deliverable->journey->active channel suppresses I074"
     per_journey_diagnostic "I074 fires per affected journey within the deliverable"
   }
-  features [pe_validation_suite]
   verify unit "deliverable with journey referencing deprecated channel produces I074"
   verify unit "deliverable with journey referencing active channel suppresses I074"
   verify unit "deliverable with multiple journeys fires I074 per affected journey"
@@ -934,7 +919,6 @@ behavior detect_inconsistent_owner_strings "Detect Inconsistent Owner Strings" {
 
 behavior detect_cache_absent_awareness "Detect Cache-Absent Transition Suppression" {
   category    validation
-  features    [pe_validation_suite]
   contract    """
     The @specforge/product extension SHOULD detect when entities have status
     fields that would trigger transition validation (W087-W091, W094) but no
@@ -993,7 +977,6 @@ behavior detect_completed_milestone_with_unfinished_features "Detect Completed M
     suppresses_not_complete "a milestone that is not completed produces no W154 whatever its features' status"
     unset_is_proposed       "a feature without a status counts as proposed"
   }
-  features   [pe_validation_suite]
   verify unit "completed milestone with an unfinished feature produces W154"
   verify unit "completed milestone whose features are done or deprecated suppresses W154"
   verify unit "in_progress milestone with unfinished features suppresses W154"
@@ -1022,7 +1005,6 @@ behavior detect_done_feature_without_evidence "Detect Done Feature Without Evide
     needs_recorded_results "without recorded test results the pass reports nothing"
     summary_compares       "the pass summary counts features, done, proven, done_unproven and proven_not_done"
   }
-  features [pe_validation_suite]
   verify unit "done feature with an unproven implementing behavior produces I071"
   verify unit "done feature whose implementing behaviors are all proven suppresses I071"
   verify unit "without recorded test results delivery_evidence reports nothing"

@@ -11,6 +11,10 @@ use "extensions/formal/invariants"
 use "extensions/formal/types"
 use "types/zero-entity-core"
 
+defaults behavior {
+  features [fa_event_graph_linting]
+}
+
 behavior fa_parse_sync_block "Parse Sync Block" {
   category command
   types    [SyncBlock, DeliverySemantics]
@@ -25,7 +29,6 @@ behavior fa_parse_sync_block "Parse Sync Block" {
     delivery_parsed  "sync block with delivery (at_most_once | at_least_once | exactly_once) parsed"
     non_event_warned "sync block on non-event entity produces warning"
   }
-  features [fa_event_graph_linting]
   verify unit "sync block with barrier parsed"
   verify unit "sync block with timeout parsed"
   verify unit "sync block with delivery semantics parsed"
@@ -58,7 +61,6 @@ behavior fa_build_event_bipartite_graph "Build Event-Behavior Bipartite Graph" {
     protocol_edges       "FollowsProtocol edges incorporated — protocol ordering constraints included"
     no_unconnected_nodes "bipartite graph contains no node disconnected from all edges"
   }
-  features [fa_event_graph_linting]
   verify unit "bipartite graph built from produces/consumes edges"
   verify unit "consumers derived from Consumes edges, not entity fields"
   verify unit "barrier references create synchronization edges"
@@ -92,7 +94,6 @@ behavior fa_detect_unmitigated_cycles "E034: Detect Unmitigated Cycles" {
     non_cycle_passes     "non-circular event dependency produces no diagnostic"
     cycle_path_shown     "E034 names a cycle path and suggests declaring sync on one of its members"
   }
-  features [fa_event_graph_linting]
   verify unit "unmitigated circular event dependency detected as E034"
   verify unit "cycle with a sync on one member passes silently"
   verify unit "non-circular event dependency passes"
@@ -112,7 +113,6 @@ behavior fa_detect_unmatched_producers "W029: Unmatched Producers" {
     unmatched_warned   "event with no consumers produces W029 warning"
     participation_used "an event that participates in a process (participates_in) is used by it and produces no W029"
   }
-  features [fa_event_graph_linting]
   verify unit "event with producers and consumers passes"
   verify unit "event with no consumers produces W029"
   verify unit "an event participating in a process counts as used and produces no W029"
@@ -133,7 +133,6 @@ behavior fa_detect_unbounded_channel "W034: Unbounded Channel Buffer" {
     unbounded_detected "a produced event that declares no sync produces W034"
     bounded_passes     "a produced event that declares a sync produces no diagnostic"
   }
-  features [fa_event_graph_linting]
   verify unit "event channel with no sync produces W034"
   verify unit "event channel with a sync passes"
 }
@@ -153,7 +152,6 @@ behavior fa_detect_asymmetric_connectivity "W033: Asymmetric Connectivity Warnin
     balanced_passes     "port with balanced users or a single user passes"
     suggestion          "W033 includes suggestion to review access patterns"
   }
-  features [fa_event_graph_linting]
   verify unit "port with unbalanced access pattern produces W033"
   verify unit "port with single consumer passes"
 }
@@ -172,7 +170,6 @@ behavior fa_detect_unmitigated_retry_cycle "W032: Unmitigated Retry Cycle" {
     backoff_passes     "a sync on the behavior or the event produces no diagnostic"
     suggestion         "W032 includes suggestion to declare a sync (timeout or backoff) on the event or the behavior"
   }
-  features [fa_event_graph_linting]
   verify unit "re-triggering without backoff detected as W032"
   verify unit "re-triggering with timeout/backoff passes"
 }
@@ -204,7 +201,6 @@ behavior fa_event_graph_analyze_pass "Event Graph Analyze Compiler Pass" {
     timeout_configurable "barrier timeout uses configured value, not hardcoded 30s"
     process_integrated   "process entities integrated into bipartite graph when present"
   }
-  features [fa_event_graph_linting]
   verify unit "bipartite graph construction delegated to fa_build_event_bipartite_graph"
   verify unit "unmitigated cycle detection runs on SCC"
   verify unit "pass runs after layering_verify"

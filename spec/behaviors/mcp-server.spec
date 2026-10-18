@@ -22,6 +22,12 @@ use "types/graph"
 use "types/mcp"
 use "types/output"
 
+defaults behavior {
+  features [mcp_protocol_compliance]
+  types    [Graph, AgentExportConfig, McpResourceDescriptor]
+  ports    [McpProtocol, CompilerApi]
+}
+
 behavior mcp_initialize "MCP Initialize" {
   features   [mcp_lifecycle]
   types      [McpInitializeResult, CompilerConfig]
@@ -82,7 +88,6 @@ behavior mcp_initialize "MCP Initialize" {
 // definition, held to its spec type (ADR 0048 for tool replies; the rest
 // by the same rule, ADR 0058).
 behavior state_mcp_messages_as_spec_types "State MCP Messages as Spec Types" {
-  features   [mcp_protocol_compliance]
   invariants [mcp_structured_error_responses]
   category   query
   types      [McpError, GraphDelta, DiagnosticsDelta]
@@ -145,7 +150,6 @@ behavior list_mcp_resources "List MCP Resources" {
   features   [mcp_discovery]
   invariants [mcp_structured_error_responses, mcp_tool_idempotency]
   category   query
-  ports      [McpProtocol, CompilerApi]
   types      [McpResourceDescriptor, McpResourceTemplateDescriptor]
   produces   [mcp_discovery_invoked]
   requires {
@@ -181,7 +185,6 @@ behavior list_mcp_tools "List MCP Tools" {
   features   [mcp_discovery]
   invariants [mcp_structured_error_responses, mcp_tool_idempotency]
   category   query
-  ports      [McpProtocol, CompilerApi]
   types      [McpToolDescriptor, McpToolCategory, McpToolGroup, McpToolAnnotations]
   produces   [mcp_discovery_invoked]
   requires {
@@ -311,7 +314,6 @@ behavior list_mcp_prompts "List MCP Prompts" {
   features   [mcp_discovery]
   invariants [mcp_structured_error_responses, mcp_tool_idempotency]
   category   query
-  ports      [McpProtocol, CompilerApi]
   types      [McpPromptDescriptor, McpPromptArgument]
   produces   [mcp_discovery_invoked]
   requires {
@@ -347,7 +349,6 @@ behavior expose_graph_as_mcp_resource "Expose Graph as MCP Resource" {
   ]
   category   command
   types      [Graph, GraphProtocolSchema, McpResourceDescriptor]
-  ports      [McpProtocol, CompilerApi]
   consumes   [validation_complete]
   produces   [mcp_resource_read]
   requires {
@@ -378,7 +379,6 @@ behavior expose_schema_as_mcp_resource "Expose Schema as MCP Resource" {
   invariants [graph_schema_completeness, diagnostic_determinism, mcp_structured_error_responses]
   category   command
   types      [GraphProtocolSchema, McpResourceDescriptor]
-  ports      [McpProtocol, CompilerApi]
   consumes   [validation_complete]
   produces   [mcp_resource_read]
   requires {
@@ -410,8 +410,6 @@ behavior expose_context_as_mcp_resource "Expose Context as MCP Resource" {
     mcp_structured_error_responses,
   ]
   category   command
-  types      [Graph, AgentExportConfig, McpResourceDescriptor]
-  ports      [McpProtocol, CompilerApi]
   consumes   [validation_complete]
   produces   [mcp_resource_read]
   requires {
@@ -443,8 +441,6 @@ behavior expose_brief_as_mcp_resource "Expose Brief as MCP Resource" {
     mcp_structured_error_responses,
   ]
   category   command
-  types      [Graph, AgentExportConfig, McpResourceDescriptor]
-  ports      [McpProtocol, CompilerApi]
   consumes   [validation_complete]
   produces   [mcp_resource_read]
   requires {
@@ -472,7 +468,6 @@ behavior expose_diagnostics_as_mcp_resource "Expose Diagnostics as MCP Resource"
   invariants [diagnostic_determinism, mcp_structured_error_responses]
   category   command
   types      [DiagnosticBag, McpResourceDescriptor]
-  ports      [McpProtocol, CompilerApi]
   consumes   [validation_complete]
   produces   [mcp_resource_read]
   requires {
@@ -507,7 +502,6 @@ behavior expose_entity_as_mcp_resource "Expose Per-Entity MCP Resource" {
   ]
   category   command
   types      [Graph, Node, Edge, McpResourceDescriptor]
-  ports      [McpProtocol, CompilerApi]
   consumes   [validation_complete]
   produces   [mcp_resource_read]
   requires {
@@ -558,7 +552,6 @@ behavior notify_graph_delta_via_mcp "Notify Graph Delta via MCP" {
   ]
   category   command
   types      [GraphDelta, NodeChange, ModifiedNodeChange, EdgeChange]
-  ports      [McpProtocol, CompilerApi]
   consumes   [graph_delta_computed]
   produces   [mcp_delta_notified, mcp_subscription_created, mcp_subscription_removed]
   requires {
@@ -614,7 +607,6 @@ behavior notify_diagnostics_delta_via_mcp "Notify Diagnostics Delta via MCP" {
   ]
   category   command
   types      [DiagnosticsDelta]
-  ports      [McpProtocol, CompilerApi]
   consumes   [validation_complete]
   produces   [mcp_delta_notified, mcp_subscription_created, mcp_subscription_removed]
   requires {
@@ -659,7 +651,6 @@ behavior notify_diagnostics_delta_via_mcp "Notify Diagnostics Delta via MCP" {
 // ---------------------------------------------------------------------------
 
 behavior handle_mcp_protocol_error "Handle MCP Protocol Error" {
-  features   [mcp_protocol_compliance]
   invariants [mcp_structured_error_responses]
   category   command
   types      [McpError, JsonRpcErrorCode, McpErrorCode]
@@ -718,7 +709,6 @@ behavior handle_mcp_protocol_error "Handle MCP Protocol Error" {
 }
 
 behavior follow_negotiated_mcp_revision "Follow the Negotiated MCP Revision" {
-  features   [mcp_protocol_compliance]
   invariants [mcp_structured_error_responses]
   category   command
   types      [McpInitializeResult]
@@ -773,11 +763,9 @@ behavior follow_negotiated_mcp_revision "Follow the Negotiated MCP Revision" {
 }
 
 behavior serve_stateless_mcp_requests "Serve Stateless MCP Requests" {
-  features   [mcp_protocol_compliance]
   invariants [mcp_structured_error_responses]
   category   command
   types      [McpDiscoverResult]
-  ports      [McpProtocol, CompilerApi]
   produces   [mcp_protocol_error_handled]
   requires {
     version_in_meta "The request names a protocol version and the client's capabilities in its _meta"
@@ -825,11 +813,9 @@ behavior serve_stateless_mcp_requests "Serve Stateless MCP Requests" {
 }
 
 behavior listen_for_mcp_resource_updates "Listen for MCP Resource Updates" {
-  features   [mcp_protocol_compliance]
   invariants [mcp_structured_error_responses]
   category   command
   types      [McpResourceDescriptor]
-  ports      [McpProtocol, CompilerApi]
   produces   [mcp_subscription_created, mcp_subscription_removed]
   requires {
     listen_requested "A stateless subscriptions/listen request names the resources to hear about"
@@ -867,11 +853,9 @@ behavior listen_for_mcp_resource_updates "Listen for MCP Resource Updates" {
 }
 
 behavior handle_mcp_request_cancellation "Handle MCP Request Cancellation" {
-  features   [mcp_protocol_compliance]
   invariants [mcp_structured_error_responses]
   category   command
   types      [McpError]
-  ports      [McpProtocol, CompilerApi]
   produces   [mcp_request_cancelled]
   requires {
     mcp_protocol_available "McpProtocol port is available and server is accepting requests"
@@ -895,7 +879,6 @@ behavior handle_mcp_request_cancellation "Handle MCP Request Cancellation" {
 }
 
 behavior guard_mcp_reinitialization "Guard MCP Reinitialization" {
-  features   [mcp_protocol_compliance]
   invariants [mcp_structured_error_responses]
   category   command
   types      [McpInitializeResult]
@@ -928,7 +911,6 @@ behavior guard_mcp_reinitialization "Guard MCP Reinitialization" {
 // ---------------------------------------------------------------------------
 
 behavior serve_mcp_over_stdio "Serve MCP over Stdio" {
-  features   [mcp_protocol_compliance]
   invariants [mcp_structured_error_responses, mcp_subscription_cleanup]
   category   command
   types      [JsonRpcErrorCode]

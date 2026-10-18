@@ -13,6 +13,11 @@ use "types/graph"
 use "types/output"
 use "types/zero-entity-core"
 
+defaults behavior {
+  features [agent_export]
+  types    [Graph, Diagnostic]
+}
+
 // render_markdown_documentation moved to spec/extensions/markdown-renderer/behaviors.spec
 
 behavior serialize_json_graph "Serialize JSON Graph" {
@@ -408,7 +413,6 @@ behavior inspect_entity_facts "Inspect an Entity's Facts" {
   features   [mcp_core_tools]
   invariants [diagnostic_determinism, testable_entity_classification]
   category   query
-  types      [Graph, Diagnostic]
   ports      [CompilerApi]
   requires {
     project_compiled "A compiled project, one-shot or a project session's, supplies the project view"
@@ -436,7 +440,6 @@ behavior explore_the_graph "Explore the Graph" {
   features   [agent_export, mcp_prompts]
   invariants [diagnostic_determinism, zero_domain_knowledge_core]
   category   query
-  types      [Graph, Diagnostic]
   requires {
     project_compiled "A compiled project, one-shot or a project session's, supplies the project view"
   }
@@ -475,7 +478,6 @@ behavior review_coverage_gaps "Review Coverage Gaps" {
   features   [agent_export, mcp_prompts, extension_driven_coverage]
   invariants [diagnostic_determinism, testable_entity_classification, zero_domain_knowledge_core]
   category   query
-  types      [Graph, Diagnostic]
   requires {
     project_compiled "A compiled project, one-shot or a project session's, supplies the project view"
   }
@@ -502,10 +504,8 @@ behavior review_coverage_gaps "Review Coverage Gaps" {
 }
 
 behavior provide_explore_cli "Provide CLI Explore Command" {
-  features   [agent_export]
   invariants [diagnostic_determinism]
   category   cli
-  types      [Graph, Diagnostic]
   contract   """
     specforge explore [ENTITY] [--kind KIND] [--depth N] [--path PATH]
     [--format human|json] MUST render the exploration (explore_the_graph)
@@ -526,7 +526,6 @@ behavior provide_review_cli "Provide CLI Review Command" {
   features   [agent_export, extension_driven_coverage]
   invariants [diagnostic_determinism]
   category   cli
-  types      [Graph, Diagnostic]
   contract   """
     specforge review [ENTITY] [--depth N] [--path PATH] [--format
     human|json] MUST render the review (review_coverage_gaps) of the
@@ -1030,7 +1029,6 @@ behavior present_diagnostics_as_json "Present Diagnostics as JSON" {
 // `specforge export` writes to stdout (graph, context, brief, dot, markdown); `specforge.render` writes the same formats into the project.
 
 behavior export_agent_context_format "Export Agent Context Format" {
-  features   [agent_export]
   invariants [
     graph_traversal_integrity,
     diagnostic_determinism,
@@ -1085,7 +1083,6 @@ behavior export_agent_context_format "Export Agent Context Format" {
 }
 
 behavior export_agent_brief_format "Export Agent Brief Format" {
-  features   [agent_export]
   invariants [
     graph_traversal_integrity,
     diagnostic_determinism,
@@ -1122,7 +1119,6 @@ behavior export_agent_brief_format "Export Agent Brief Format" {
 }
 
 behavior export_agent_graph_format "Export Agent Graph Format" {
-  features   [agent_export]
   invariants [
     graph_traversal_integrity,
     diagnostic_determinism,
@@ -1209,7 +1205,6 @@ behavior export_review_document "Export a Review Document" {
 }
 
 behavior query_graph_multi_resolution "Query Graph at Multiple Resolutions" {
-  features   [agent_export]
   invariants [
     graph_traversal_integrity,
     diagnostic_determinism,
@@ -1276,7 +1271,6 @@ behavior query_graph_multi_resolution "Query Graph at Multiple Resolutions" {
 // ── Token Economics (Principle 3: agents are first-class consumers) ────
 
 behavior enforce_token_budget "Enforce Token Budget" {
-  features   [agent_export]
   invariants [
     graph_traversal_integrity,
     diagnostic_determinism,

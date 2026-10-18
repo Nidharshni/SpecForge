@@ -116,25 +116,15 @@ fn query_trace_and_export_show_the_inherited_list() {
     assert_eq!(with_ports, 3);
 }
 
-/// A copy of `examples/todo-app` (its config, its extensions installed) in a temporary directory.
-fn todo_app() -> tempfile::TempDir {
-    fn copy(from: &std::path::Path, to: &std::path::Path) {
-        std::fs::create_dir_all(to).unwrap();
-        for entry in std::fs::read_dir(from).unwrap() {
-            let path = entry.unwrap().path();
-            let target = to.join(path.file_name().unwrap());
-            if path.is_dir() {
-                copy(&path, &target);
-            } else if path.extension().is_some_and(|e| e == "spec" || e == "json") {
-                std::fs::copy(&path, &target).unwrap();
-            }
-        }
-    }
+/// A project of the software and product extensions holding `text` as `a.spec`.
+fn project_of(text: &str) -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
-    copy(
-        &specforge_repo_root::repo_root().join("examples/todo-app"),
-        dir.path(),
-    );
+    std::fs::write(
+        dir.path().join("specforge.json"),
+        r#"{"name": "p", "version": "0.1.0", "extensions": ["@specforge/software", "@specforge/product"]}"#,
+    )
+    .unwrap();
+    std::fs::write(dir.path().join("a.spec"), text).unwrap();
     specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
     dir
 }
@@ -144,13 +134,17 @@ fn todo_app() -> tempfile::TempDir {
     verify = "a migration that hoists defaults keeps the graph"
 )]
 fn migrate_hoists_and_keeps_the_graph() {
-    let dir = todo_app();
+    let block =
+        |id: &str| format!("behavior {id} \"T\" {{\n  ports [Repo]\n  features [Auth]\n}}\n");
+    let text = format!(
+        "feature Auth \"Auth\" {{\n}}\n\nport Repo \"Repo\" {{\n}}\n\n{}",
+        ["a", "b", "c"].map(block).join("\n")
+    );
+    let dir = project_of(&text);
     let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
-    let mut migration = request(&root);
-    migration.no_backup = true;
 
     let outcome = run(
-        &migration,
+        &request(&root),
         Some(specforge_project::testing::component_runtime()),
     );
 
@@ -160,8 +154,12 @@ fn migrate_hoists_and_keeps_the_graph() {
         "{:?}",
         outcome.structural_differences()
     );
-    let task = std::fs::read_to_string(dir.path().join("spec/behaviors/task.spec")).unwrap();
-    assert!(task.contains("defaults behavior {"), "{task}");
+    let after = std::fs::read_to_string(dir.path().join("a.spec")).unwrap();
+    assert!(
+        after.contains("defaults behavior {\n  ports    [Repo]\n  features [Auth]\n}"),
+        "{after}"
+    );
+    assert!(!after.contains("behavior a \"T\" {\n  ports"), "{after}");
 }
 
 #[specforge_test(

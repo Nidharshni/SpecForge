@@ -9,13 +9,18 @@ use "types/config"
 use "types/errors"
 use "types/wasm"
 
+defaults behavior {
+  features [wasm_extension_installation]
+  types    [ExtensionDeclaration, ExtensionError]
+  ports    [WasmRuntime, FileSystem]
+}
+
 // -- Wasm Module Lifecycle -----
 
 behavior load_wasm_module "Load Wasm Module" {
   features   [wasm_extension_runtime]
   invariants [wasm_sandbox_integrity]
   category   command
-  types      [ExtensionDeclaration, ExtensionError]
   ports      [WasmRuntime]
   consumes   [manifest_validated, extension_install_completed, extension_upgrade_completed]
   requires {
@@ -96,7 +101,6 @@ behavior initialize_wasm_extension "Initialize Wasm Extension" {
 // -- Extension Lifecycle -----
 
 behavior install_wasm_extension "Install Wasm Extension" {
-  features   [wasm_extension_installation]
   invariants [
     wasm_compile_cache_integrity,
     extension_operation_atomicity,
@@ -104,7 +108,6 @@ behavior install_wasm_extension "Install Wasm Extension" {
   ]
   category   command
   types      [ExtensionDeclaration, ExtensionInstallResult, ExtensionSource, ExtensionError]
-  ports      [WasmRuntime, FileSystem]
   requires {
     extension_source_available "extension source (registry, local path, or git) is reachable"
     filesystem_available       "FileSystem port is available for writing .wasm binary and specforge.json"
@@ -153,11 +156,9 @@ behavior install_wasm_extension "Install Wasm Extension" {
 }
 
 behavior upgrade_wasm_extension "Upgrade Wasm Extension" {
-  features   [wasm_extension_installation]
   invariants [peer_dependency_satisfaction, extension_operation_atomicity]
   category   mutation
   types      [ExtensionDeclaration, PeerDependency, ExtensionInstallResult, ExtensionError]
-  ports      [WasmRuntime, FileSystem]
   requires {
     extension_installed "target extension is currently installed with a valid manifest"
     source_available    "extension source is reachable for version check"
@@ -200,7 +201,6 @@ behavior upgrade_wasm_extension "Upgrade Wasm Extension" {
 // is the user-facing CLI entry point. This behavior handles all Wasm-specific
 // cleanup; remove_extension handles CLI interaction and post-removal messaging.
 behavior uninstall_wasm_extension "Uninstall Wasm Extension" {
-  features   [wasm_extension_installation]
   invariants [
     peer_dependency_satisfaction,
     extension_load_order_determinism,
@@ -208,7 +208,6 @@ behavior uninstall_wasm_extension "Uninstall Wasm Extension" {
   ]
   category   command
   types      [ExtensionDeclaration, ExtensionInstallResult, ExtensionError]
-  ports      [WasmRuntime, FileSystem]
   requires {
     extension_installed_ready "target extension is currently installed and its manifest is loaded"
     filesystem_available      "FileSystem port is available for removing binary and updating config"
@@ -246,7 +245,6 @@ behavior validate_extension_manifest "Validate Extension Manifest" {
   features   [contribution_based_extensions]
   invariants [host_function_type_safety]
   category   validation
-  types      [ExtensionDeclaration, ExtensionError]
   ports      [FileSystem]
   consumes   [manifest_loaded]
   requires {

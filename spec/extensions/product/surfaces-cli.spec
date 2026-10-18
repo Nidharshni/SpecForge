@@ -16,6 +16,10 @@ use "extensions/product/behaviors-v1-1"
 use "extensions/product/features"
 use "extensions/product/types"
 
+defaults behavior {
+  features [pe_surface_contributions]
+}
+
 // ════════════════════════════════════════════════════════════════
 // CLI List Commands (8 + 1 v1.1) — entity listing with filter/pagination
 // ════════════════════════════════════════════════════════════════
@@ -45,7 +49,6 @@ behavior surface_list_features "Surface: List Features" {
     human_format       "under --format human, stdout is a table with a header row and columns: id, title, status, priority"
     exit_zero          "exit code 0 on success"
   }
-  features [pe_surface_contributions]
   verify unit "list features returns paginated FeatureListResult"
   verify unit "status filter reduces result set"
   verify unit "priority filter reduces result set"
@@ -75,7 +78,6 @@ behavior surface_list_journeys "Surface: List Journeys" {
     feature_count      "each entry's feature_count reflects the number of JourneyExercisesFeature edges"
     exit_zero          "exit code 0 on success"
   }
-  features [pe_surface_contributions]
   verify unit "list journeys returns paginated JourneyListResult"
   verify unit "persona filter reduces result set to matching journeys"
   verify unit "channel_count and feature_count are accurate per entry"
@@ -100,7 +102,6 @@ behavior surface_list_deliverables "Surface: List Deliverables" {
     module_count         "each entry's module_count reflects the number of DeliverableContainsModule edges"
     exit_zero            "exit code 0 on success"
   }
-  features [pe_surface_contributions]
   verify unit "list deliverables returns paginated DeliverableListResult"
   verify unit "artifact-type filter reduces result set"
   verify unit "journey_count and module_count are accurate per entry"
@@ -123,7 +124,6 @@ behavior surface_list_milestones "Surface: List Milestones" {
     feature_count   "each entry's feature_count reflects the number of MilestoneDeliversFeature edges"
     exit_zero       "exit code 0 on success"
   }
-  features [pe_surface_contributions]
   verify unit "list milestones returns paginated MilestoneListResult"
   verify unit "status filter reduces result set"
   verify unit "feature_count is accurate per entry"
@@ -146,7 +146,6 @@ behavior surface_list_modules "Surface: List Modules" {
     depends_on    "each entry's depends_on lists outgoing ModuleDependsOn target IDs"
     exit_zero     "exit code 0 on success"
   }
-  features [pe_surface_contributions]
   verify unit "list modules returns paginated ModuleListResult"
   verify unit "family filter reduces result set"
   verify unit "feature_count and depends_on are accurate per entry"
@@ -168,7 +167,6 @@ behavior surface_list_terms "Surface: List Terms" {
     definition   "each entry includes the full definition string"
     exit_zero    "exit code 0 on success"
   }
-  features [pe_surface_contributions]
   verify unit "list terms returns paginated TermListResult"
   verify unit "alias_count is accurate per entry"
 }
@@ -190,7 +188,6 @@ behavior surface_list_personas "Surface: List Personas" {
     journey_count          "each entry's journey_count reflects the number of reverse JourneyTargetsPersona edges"
     exit_zero              "exit code 0 on success"
   }
-  features [pe_surface_contributions]
   verify unit "list personas returns paginated PersonaListResult"
   verify unit "technical-level filter reduces result set"
   verify unit "journey_count is accurate per entry"
@@ -213,7 +210,6 @@ behavior surface_list_channels "Surface: List Channels" {
     journey_count            "each entry's journey_count reflects the number of reverse JourneyUsesChannel edges"
     exit_zero                "exit code 0 on success"
   }
-  features [pe_surface_contributions]
   verify unit "list channels returns paginated ChannelListResult"
   verify unit "interaction-model filter reduces result set"
   verify unit "journey_count is accurate per entry"
@@ -244,7 +240,6 @@ behavior surface_milestone_completion "Surface: Milestone Completion" {
     exit_zero_success "exit code 0 when query succeeds"
     exit_one_error    "exit code 1 when the entity is not found"
   }
-  features [pe_surface_contributions]
   verify unit "milestone-completion returns MilestoneCompletionPayload JSON"
   verify unit "missing milestone ID returns error with suggestion"
   verify unit "human format shows ratio as percentage"
@@ -273,7 +268,6 @@ behavior surface_journey_coverage "Surface: Journey Coverage" {
     exit_zero_success "exit code 0 when query succeeds"
     exit_one_error    "exit code 1 when the entity is not found"
   }
-  features [pe_surface_contributions]
   verify unit "journey-coverage returns JourneyCoveragePayload JSON"
   verify unit "missing journey ID returns error with suggestion"
   verify unit "exit code 0 on success, 1 on error"
@@ -298,7 +292,6 @@ behavior surface_feature_ordering "Surface: Feature Ordering" {
     human_format      "under --format human, stdout is a numbered feature list with cycle members flagged"
     exit_zero_success "exit code 0 when query succeeds (even if cycles exist)"
   }
-  features [pe_surface_contributions]
   verify unit "feature-ordering returns FeatureOrderingPayload JSON"
   verify unit "cycles present in output does not cause exit code 1"
   verify unit "empty feature graph returns empty sorted list"
@@ -334,7 +327,6 @@ behavior surface_milestone_timeline "Surface: Milestone Timeline" {
     human_format              "under --format human, stdout is a chronological table with overdue markers"
     exit_zero_success         "exit code 0 when query succeeds"
   }
-  features [pe_surface_contributions]
   verify unit "milestone-timeline returns MilestoneTimelinePayload JSON"
   verify unit "as-of flag overrides current date for overdue calculation"
   verify unit "human format marks overdue milestones"
@@ -360,7 +352,6 @@ behavior surface_deliverable_traceability "Surface: Deliverable Traceability" {
     not_found_error "missing deliverable returns ProductSurfaceError with suggestion and exit code 1"
     exit_code       "exit 0 on success, 1 on ENTITY_NOT_FOUND, 2 on INVALID_INPUT (surface_error_handling)"
   }
-  features [pe_surface_contributions]
   verify unit "deliverable-traceability returns DeliverableTraceabilityPayload JSON"
   verify unit "missing deliverable ID returns error with suggestion"
 }
@@ -380,7 +371,6 @@ behavior surface_feature_deliverables "Surface: Feature Deliverables" {
     not_found_error "missing feature returns ProductSurfaceError with suggestion and exit code 1"
     exit_code       "exit 0 on success, 1 on ENTITY_NOT_FOUND, 2 on INVALID_INPUT (surface_error_handling)"
   }
-  features [pe_surface_contributions]
   verify unit "feature-deliverables returns FeatureDeliverablePayload JSON"
   verify unit "missing feature ID returns error with suggestion"
 }
@@ -401,7 +391,6 @@ behavior surface_term_graph "Surface: Term Graph" {
     not_found_error "missing term returns ProductSurfaceError with suggestion and exit code 1"
     exit_code       "exit 0 on success, 1 on ENTITY_NOT_FOUND, 2 on INVALID_INPUT (surface_error_handling)"
   }
-  features [pe_surface_contributions]
   verify unit "term-graph returns TermGraphPayload JSON"
   verify unit "max-hops flag is respected and capped at 5"
   verify unit "missing term ID returns error with suggestion"
@@ -422,7 +411,6 @@ behavior surface_deliverable_completion "Surface: Deliverable Completion" {
     not_found_error "missing deliverable returns ProductSurfaceError with suggestion and exit code 1"
     exit_code       "exit 0 on success, 1 on ENTITY_NOT_FOUND, 2 on INVALID_INPUT (surface_error_handling)"
   }
-  features [pe_surface_contributions]
   verify unit "deliverable-completion returns DeliverableCompletionPayload JSON"
   verify unit "missing deliverable ID returns error with suggestion"
 }
@@ -442,7 +430,6 @@ behavior surface_persona_channels "Surface: Persona Channels" {
     not_found_error "missing persona returns ProductSurfaceError with suggestion and exit code 1"
     exit_code       "exit 0 on success, 1 on ENTITY_NOT_FOUND, 2 on INVALID_INPUT (surface_error_handling)"
   }
-  features [pe_surface_contributions]
   verify unit "persona-channels returns PersonaChannelPayload JSON"
   verify unit "missing persona ID returns error with suggestion"
 }
@@ -462,7 +449,6 @@ behavior surface_feature_dependents "Surface: Feature Dependents" {
     not_found_error "missing feature returns ProductSurfaceError with suggestion and exit code 1"
     exit_code       "exit 0 on success, 1 on ENTITY_NOT_FOUND, 2 on INVALID_INPUT (surface_error_handling)"
   }
-  features [pe_surface_contributions]
   verify unit "feature-dependents returns FeatureDependentPayload JSON"
   verify unit "missing feature ID returns error with suggestion"
 }
@@ -482,7 +468,6 @@ behavior surface_deliverable_dependents "Surface: Deliverable Dependents" {
     not_found_error "missing deliverable returns ProductSurfaceError with suggestion and exit code 1"
     exit_code       "exit 0 on success, 1 on ENTITY_NOT_FOUND, 2 on INVALID_INPUT (surface_error_handling)"
   }
-  features [pe_surface_contributions]
   verify unit "deliverable-dependents returns DeliverableDependentPayload JSON"
   verify unit "missing deliverable ID returns error with suggestion"
 }
@@ -503,7 +488,6 @@ behavior surface_deliverable_priority "Surface: Deliverable Priority" {
     not_found_error "missing deliverable returns ProductSurfaceError with suggestion and exit code 1"
     exit_code       "exit 0 on success, 1 on ENTITY_NOT_FOUND, 2 on INVALID_INPUT (surface_error_handling)"
   }
-  features [pe_surface_contributions]
   verify unit "deliverable-priority returns DeliverablePriorityPayload JSON"
   verify unit "missing deliverable ID returns error with suggestion"
 }
@@ -523,7 +507,6 @@ behavior surface_persona_features "Surface: Persona Features" {
     not_found_error "missing persona returns ProductSurfaceError with suggestion and exit code 1"
     exit_code       "exit 0 on success, 1 on ENTITY_NOT_FOUND, 2 on INVALID_INPUT (surface_error_handling)"
   }
-  features [pe_surface_contributions]
   verify unit "persona-features returns PersonaFeaturePayload JSON"
   verify unit "missing persona ID returns error with suggestion"
 }
@@ -545,7 +528,6 @@ behavior surface_feature_impact "Surface: Feature Impact" {
     not_found_error "missing feature returns ProductSurfaceError with suggestion and exit code 1"
     exit_code       "exit 0 on success, 1 on ENTITY_NOT_FOUND, 2 on INVALID_INPUT (surface_error_handling)"
   }
-  features [pe_surface_contributions]
   verify unit "feature-impact returns FeatureImpactPayload JSON"
   verify unit "missing feature ID returns error with suggestion"
 }
@@ -566,7 +548,6 @@ behavior surface_milestone_velocity "Surface: Milestone Velocity" {
     not_found_error "missing milestone returns ProductSurfaceError with suggestion and exit code 1"
     exit_code       "exit 0 on success, 1 on ENTITY_NOT_FOUND, 2 on INVALID_INPUT (surface_error_handling)"
   }
-  features [pe_surface_contributions]
   verify unit "milestone-velocity returns MilestoneVelocityPayload JSON"
   verify unit "missing milestone ID returns error with suggestion"
 }
@@ -586,7 +567,6 @@ behavior surface_deliverable_personas "Surface: Deliverable Personas" {
     not_found_error "missing deliverable returns ProductSurfaceError with suggestion and exit code 1"
     exit_code       "exit 0 on success, 1 on ENTITY_NOT_FOUND, 2 on INVALID_INPUT (surface_error_handling)"
   }
-  features [pe_surface_contributions]
   verify unit "deliverable-personas returns DeliverablePersonaPayload JSON"
   verify unit "missing deliverable ID returns error with suggestion"
 }
@@ -606,7 +586,6 @@ behavior surface_feature_overlap "Surface: Feature Overlap" {
     json_output "stdout is a valid FeatureOverlapPayload JSON"
     exit_code   "exit 0 on success, 1 on ENTITY_NOT_FOUND, 2 on INVALID_INPUT (surface_error_handling)"
   }
-  features [pe_surface_contributions]
   verify unit "feature-overlap returns FeatureOverlapPayload JSON"
   verify unit "no overlapping features returns empty list"
 }
@@ -626,7 +605,6 @@ behavior surface_channel_features "Surface: Channel Features" {
     not_found_error "missing channel returns ProductSurfaceError with suggestion and exit code 1"
     exit_code       "exit 0 on success, 1 on ENTITY_NOT_FOUND, 2 on INVALID_INPUT (surface_error_handling)"
   }
-  features [pe_surface_contributions]
   verify unit "channel-features returns ChannelFeaturePayload JSON"
   verify unit "missing channel ID returns error with suggestion"
 }
@@ -650,7 +628,6 @@ behavior surface_unscheduled_features "Surface: Unscheduled Features" {
     human_output "human format shows feature ID and status"
     exit_code    "exit 0 on success"
   }
-  features [pe_surface_contributions]
   verify unit "product:unscheduled-features returns UnscheduledFeaturesPayload"
   verify unit "no unscheduled features returns empty list"
 }
@@ -684,7 +661,6 @@ behavior surface_coverage_matrix "Surface: Coverage Matrix" {
     paged        "personas are paged by offset and limit, with total and has_more"
     exit_code    "exit 0 on success"
   }
-  features [pe_surface_contributions]
   verify unit "product:coverage-matrix returns PersonaCoverageMatrixPayload"
   verify unit "no personas returns empty matrix"
 }
@@ -710,7 +686,6 @@ behavior surface_critical_path "Surface: Critical Path" {
     exit_code    "exit 0 on success"
     cycle_safe   "returns empty path with message if milestone cycles exist"
   }
-  features [pe_surface_contributions]
   verify unit "product:critical-path returns CriticalPathPayload"
   verify unit "empty graph returns empty path"
   verify unit "cycles return empty path with diagnostic message"
@@ -733,7 +708,6 @@ behavior surface_list_releases "List Releases CLI" {
     pagination "offset/limit/has_more computed correctly"
     filtering  "status and tags filters applied before pagination"
   }
-  features [pe_surface_contributions]
   verify unit "list-releases returns all releases with default pagination"
   verify unit "list-releases --status=released filters correctly"
   verify unit "list-releases --format=json returns valid JSON"
@@ -748,7 +722,6 @@ behavior surface_release_completion "Release Completion CLI" {
     Wasm export: cmd__product_release_completion.
     MCP tool: specforge.product.release_completion.
   """
-  features [pe_surface_contributions]
   verify unit "release-completion returns correct shipped/total ratio"
 }
 
@@ -763,7 +736,6 @@ behavior surface_owner_workload "Owner Workload CLI" {
     Wasm export: cmd__product_owner_workload.
     MCP tool: specforge.product.owner_workload.
   """
-  features [pe_surface_contributions]
   verify unit "owner-workload returns grouped ownership statistics"
   verify unit "owner-workload reports unowned entities"
 }
@@ -778,7 +750,6 @@ behavior surface_weighted_milestone_completion "Weighted Milestone Completion CL
     Wasm export: cmd__product_weighted_milestone_completion.
     MCP tool: specforge.product.weighted_milestone_completion.
   """
-  features [pe_surface_contributions]
   verify unit "weighted-milestone-completion returns effort breakdown"
   verify unit "weighted-milestone-completion with unknown ID returns ENTITY_NOT_FOUND"
 }
@@ -804,7 +775,6 @@ behavior surface_term_clusters "Surface: Term Clusters" {
     human_output "human format shows per-cluster term lists"
     exit_code    "exit 0 on success"
   }
-  features [pe_surface_contributions]
   verify unit "product:term-clusters returns TermClusterPayload"
   verify unit "no terms returns zero clusters and zero isolated"
 }
@@ -826,7 +796,6 @@ behavior surface_term_density "Surface: Term Density" {
     human_output "human format shows connectivity statistics"
     exit_code    "exit 0 on success"
   }
-  features [pe_surface_contributions]
   verify unit "product:term-density returns TermDensityPayload"
   verify unit "empty graph returns zero stats"
 }
@@ -852,7 +821,6 @@ behavior surface_module_dependency_depth "Surface: Module Dependency Depth" {
     not_found_error "missing module returns ProductSurfaceError with suggestion and exit code 1"
     exit_code       "exit 0 on success, 1 on ENTITY_NOT_FOUND, 2 on INVALID_INPUT (surface_error_handling)"
   }
-  features [pe_surface_contributions]
   verify unit "product:module-depth returns ModuleDependencyDepthPayload"
   verify unit "missing module returns error with suggestion"
 }
@@ -876,7 +844,6 @@ behavior surface_module_coupling "Surface: Module Coupling" {
     paged        "modules are paged by offset and limit, with total and has_more"
     exit_code    "exit 0 on success"
   }
-  features [pe_surface_contributions]
   verify unit "product:module-coupling returns ModuleCouplingPayload"
   verify unit "empty graph returns empty modules array"
 }
@@ -910,7 +877,6 @@ behavior surface_channel_coverage_matrix "Surface: Channel Coverage Matrix" {
     paged        "channels are paged by offset and limit, with total and has_more"
     exit_code    "exit 0 on success"
   }
-  features [pe_surface_contributions]
   verify unit "product:channel-coverage-matrix returns ChannelCoverageMatrixPayload"
   verify unit "no channels returns empty matrix"
 }
@@ -936,7 +902,6 @@ behavior surface_bulk_status "Surface: Bulk Status" {
     totals      "each kind's total is the sum of its status counts"
     exit_code   "exit 0 on success"
   }
-  features [pe_surface_contributions]
   verify unit "bulk-status counts each kind's entities by status"
 }
 
@@ -958,6 +923,5 @@ behavior surface_health "Surface: Project Health" {
     score_bounded "every score is in [0, 100]; overall is the mean of the three"
     exit_code     "exit 0 on success"
   }
-  features [pe_surface_contributions]
   verify unit "health reports the score, counts and unreferenced entities"
 }
