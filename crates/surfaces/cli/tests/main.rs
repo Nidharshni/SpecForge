@@ -55,5 +55,6 @@ mod support;
 mod surface_parity;
 mod toolchain;
 mod trace;
+mod value_forms;
 mod watch;
 mod watch_reload;

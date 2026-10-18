@@ -201,7 +201,7 @@ fn render_table(entity: &super::ModelEntity, out: &mut String) -> fmt::Result {
 /// structured `block` fields render as `json`.
 fn dbml_type(ft: FieldType) -> &'static str {
     match ft {
-        FieldType::String | FieldType::Reference => "varchar",
+        FieldType::String | FieldType::Reference | FieldType::Identifier => "varchar",
         FieldType::Integer => "integer",
         FieldType::Bool => "boolean",
         FieldType::StringList | FieldType::ReferenceList => "text",

@@ -43,6 +43,9 @@ pub fn tickets() -> ExtensionDeclaration {
             k.field("details", |f| {
                 f.field_type(FieldType::Block);
             });
+            k.field("label", |f| {
+                f.field_type(FieldType::Identifier);
+            });
             k.field("watchers", |f| {
                 f.field_type(FieldType::ReferenceList).target_kind("ticket");
             });

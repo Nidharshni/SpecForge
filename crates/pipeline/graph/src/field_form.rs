@@ -158,12 +158,14 @@ impl FieldForm {
                     _ => None,
                 }
             }
-            (FieldType::String | FieldType::Enum, FieldValue::Integer(n)) => {
-                Some(FieldValue::String(n.to_string()))
-            }
-            (FieldType::String | FieldType::Enum, FieldValue::Boolean(b)) => {
-                Some(FieldValue::String(b.to_string()))
-            }
+            (
+                FieldType::String | FieldType::Enum | FieldType::Identifier,
+                FieldValue::Integer(n),
+            ) => Some(FieldValue::String(n.to_string())),
+            (
+                FieldType::String | FieldType::Enum | FieldType::Identifier,
+                FieldValue::Boolean(b),
+            ) => Some(FieldValue::String(b.to_string())),
             _ => None,
         }
     }
@@ -175,6 +177,7 @@ impl FieldForm {
     /// |---|---|
     /// | `string`, `enum` without values | text, a bare word, a date, a type union, an expression group |
     /// | `enum` | a string or bare word that is a declared value |
+    /// | `identifier` | one word (letters, digits and `_`, starting with a letter or `_`), bare or quoted |
     /// | `integer` | an integer |
     /// | `bool` | `true` or `false` |
     /// | `reference` | a bare word or a string |
@@ -218,6 +221,13 @@ impl FieldForm {
                 s if s.is_list() => Err(single_value()),
                 _ => Err(Refusal::with("write the value as text")),
             },
+            FieldType::Identifier => match shape {
+                ValueShape::String | ValueShape::Identifier if is_word(text) => Ok(()),
+                s if s.is_list() => Err(single_value()),
+                _ => Err(Refusal::with(
+                    "write one word: letters, digits and _, starting with a letter or _",
+                )),
+            },
             FieldType::Reference => match shape {
                 ValueShape::Identifier | ValueShape::String => Ok(()),
                 s if s.is_list() => Err(single_value()),
@@ -246,6 +256,9 @@ impl FieldForm {
             FieldType::String | FieldType::Reference => json!({"type": "string"}),
             FieldType::Enum if self.enum_values.is_empty() => json!({"type": "string"}),
             FieldType::Enum => json!({"type": "string", "enum": self.enum_values}),
+            FieldType::Identifier => {
+                json!({"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"})
+            }
             FieldType::Integer => json!({"type": "integer"}),
             FieldType::Bool => json!({"type": "boolean"}),
             FieldType::StringList | FieldType::ReferenceList => {
@@ -256,6 +269,16 @@ impl FieldForm {
             }
         }
     }
+}
+
+/// Whether `text` is one word: the grammar's identifier (letters, digits and
+/// `_`, starting with a letter or `_`).
+pub fn is_word(text: &str) -> bool {
+    let mut chars = text.chars();
+    chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 /// Every registered field's form, and the kinds that take any field: what

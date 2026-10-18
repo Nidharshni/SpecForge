@@ -423,8 +423,9 @@ behavior check_field_value_types "Check Field Value Types" {
     and the value given. A string field takes text, a bare word, a date, a
     type union or an expression group; an enum one of its declared values
     (suggesting the closest); an integer field an integer; a bool field
-    true or false; a reference field one id; a string_list or
-    reference_list field a list; a block field a block. Fields no
+    true or false; an identifier field one word (letters, digits and `_`,
+    starting with a letter or `_`), bare or quoted; a reference field one id;
+    a string_list or reference_list field a list; a block field a block. Fields no
     extension registers keep their parsed value (W020 reports them). The
     check MUST run wherever the registry checks run: check, watch and the
     LSP. It reads each field's value shape and value span from the entity
@@ -440,5 +441,6 @@ behavior check_field_value_types "Check Field Value Types" {
   verify unit "a value of a shape its declared type never takes is an error"
   verify unit "a value the check admits is written as the published schema admits it"
   verify unit "a value outside a builtin vocabulary is E061"
+  verify unit "a value that is not one word on an identifier field is E061"
   verify contract "Check Field Value Types: declared field types hold — registries_populated_fired, single_values_listed, mismatches_diagnosed, undeclared_untouched"
 }

@@ -38,6 +38,20 @@ fn values_that_are_not_the_declared_integer_bool_or_enum_are_errors() {
     assert_eq!(found[1].1.as_deref(), Some("use true or false"));
 }
 
+#[spec(
+    behavior = "check_field_value_types",
+    verify = "a value that is not one word on an identifier field is E061"
+)]
+fn a_quoted_path_on_an_identifier_field_is_e061() {
+    let found = e061("  label \"a/b\"\n");
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(
+        found[0].0,
+        "field 'label' of ticket 't1' is declared identifier, but was given \"a/b\""
+    );
+    assert!(e061("  label ab\n  label \"ab\"\n").is_empty());
+}
+
 #[test]
 fn values_of_the_declared_types_are_no_diagnostic() {
     let found = e061(

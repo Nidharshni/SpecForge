@@ -64,7 +64,7 @@ behavior generate_schema_from_registries "Generate Schema From Registries" {
     cache MUST be invalidated at the start of each new compilation cycle.
     Each SchemaField is its registered field's declaration: its type is
     the field type the extension declares, named as the extension
-    protocol names it (string, integer, bool, enum, string_list,
+    protocol names it (string, integer, bool, enum, identifier, string_list,
     reference, reference_list, block), an enum field carries its declared
     values, and a declared default value is carried.
   """

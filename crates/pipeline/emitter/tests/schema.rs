@@ -1317,8 +1317,7 @@ fn a_field_type_is_named_in_the_schema_as_declared() {
     verify = "the published schema lists the field types the host reads"
 )]
 fn the_published_schema_lists_the_field_types_the_host_reads() {
-    let build = ticket_registries();
-    let schema = generate_schema(&build);
+    let schema = generate_schema(&ticket_registries());
     let published = publish(&schema, EmitFormat::Json).unwrap();
     let listed = &published["$defs"]["GraphProtocolSchema"]["properties"]["entity_kinds"]["items"]
         ["properties"]["fields"]["items"]["properties"]["field_type"]["enum"];
@@ -1330,6 +1329,7 @@ fn the_published_schema_lists_the_field_types_the_host_reads() {
             "integer",
             "bool",
             "enum",
+            "identifier",
             "string_list",
             "reference",
             "reference_list",

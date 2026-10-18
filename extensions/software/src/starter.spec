@@ -15,7 +15,7 @@ type user "User account" {
 
 behavior authenticate_user "Authenticate a user with credentials" {
   status   draft
-  category "auth"
+  category auth
   contract "Given valid credentials, returns an auth token"
   produces [user_logged_in]
 
