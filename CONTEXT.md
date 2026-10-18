@@ -1071,6 +1071,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the declaration's name and each incoming reference's token, positions in the text the project was compiled from,
   which the plan keeps, with the spec root they are relative to. MCP writes it only to files that still hold that text, refusing `conflict` otherwise; the LSP
   hands it to the editor only over buffers that are that text (`ContentModified` otherwise; ADR 0116, ADR 0023 D3).
+- **Typed edit**: one change to a project's entities, named by what it does rather than by text: create, set,
+  unset, retitle, link, unlink, add or remove a verify obligation, delete (`specforge_ops::authoring::edit::Edit`).
+  A list of them is planned over the texts the project was compiled from (each edit reading what the ones before
+  it left), each value written in its field's form and each touched block formatted; the plan is refused with E080
+  when the edited project reports an error the project did not, and is written as one project change (ADR 0151).
 - **Lexeme**: one token of a `.spec` text as the language's one lexer reads it without a parse
   (`specforge_parser::lex`): an identifier, a scheme ref ID (one lexeme), a number, a string (read as
   the grammar reads it, across lines; one the grammar would not close is marked unclosed and, if a
