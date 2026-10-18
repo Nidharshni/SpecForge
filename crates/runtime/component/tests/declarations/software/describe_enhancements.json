@@ -36,7 +36,7 @@
           "edge": "MilestoneIncludesBehavior",
           "field_type": "reference_list",
           "file_reference": false,
-          "inverse_of": "features",
+          "inverse_of": null,
           "name": "behaviors",
           "required": false,
           "target_kind": "behavior"

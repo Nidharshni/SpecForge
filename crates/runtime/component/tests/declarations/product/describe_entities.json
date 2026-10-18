@@ -650,7 +650,7 @@
           "default_value": null,
           "description": "Category or family this module belongs to; the standard ones are core, platform, extension, integration, advisory",
           "edge": null,
-          "field_type": "string",
+          "field_type": "identifier",
           "file_reference": false,
           "inverse_of": null,
           "name": "family",

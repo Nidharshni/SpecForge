@@ -1,6 +1,6 @@
 {
   "artifact": "specforge_ext_product.wasm",
-  "artifact_sha256": "2774891fc4b596557ab7cd27e516503b5159c889136d3668fac6127d87a41668",
+  "artifact_sha256": "47f9248a47a59ae99f222867aac36cb8107c114a3f13be13a645252232906f7b",
   "built_with": "rustc 1.98.1 (48a229cea 2026-09-01)",
   "inputs": {
     "Cargo.toml#workspace-inherited": "52364f99354a8a7632b04447fb28097422e9be69bf8730e400b1d3cf5f87c7cc",
@@ -11,7 +11,7 @@
     "crates/leaf/protocol-types/src/command_args.rs": "dfb15939e9da35bf8e321a7bb23c95e8bd3602ded60b392d3a1ac2f043c041a9",
     "crates/leaf/protocol-types/src/declaration.rs": "efbb1fe12cb0a26b393113206ecc96daefa0abf8869e58ea72d06fe5a0d8455c",
     "crates/leaf/protocol-types/src/lib.rs": "cb15d33130a5da2c8dedade2df5fa5bf165c684c5fcd27d31641c1e99452220e",
-    "crates/leaf/protocol-types/src/vocabulary.rs": "0d175d196adfc20eca38e2eaaed16c5d5d3912c26b0c99509ef2393f917e1c70",
+    "crates/leaf/protocol-types/src/vocabulary.rs": "a9f436e4fe11a724bfddd0eeeae0a2db8c1cac8e8f49e0f1cf89e74a8e8b224b",
     "crates/runtime/extension-sdk-macros/Cargo.toml": "2ee3957dcae159e2fd154f756b770f008d7e64a383e41a0070816eba1b2f9646",
     "crates/runtime/extension-sdk-macros/src/lib.rs": "05b9dfd092444a55acc0993f35172ee3d0e4db9b6b1bed77682ce912ba54f67a",
     "crates/runtime/extension-sdk/Cargo.toml": "fa1ef55571099126dce501ac314f06c97f16ada2c1dd36554c74ac0c4a022264",
@@ -37,7 +37,7 @@
     "extensions/product/src/commands/traceability.rs": "a73b9b5baf403514eb3600a967dca2d73e96bdd53d09c9dab1d11a3b2290439f",
     "extensions/product/src/declaration.rs": "7feedf6ccd4da7bb25312309b8181bd738746fd982b8479b4e044fc7c9a6ce43",
     "extensions/product/src/declaration/edges.rs": "25a83b365c0cc866944f8b9b22120d1b79d0956f0b42203c1d6ae9c68e6dadd4",
-    "extensions/product/src/declaration/kinds.rs": "9cb1cb45e7532870dbb0ff040080935ad33bf141bf8013a4229a18aac2e6bdc8",
+    "extensions/product/src/declaration/kinds.rs": "dd5d0e34d00e4f988622b608f336161a638b6dee61b4d2ed93d3d365685a8454",
     "extensions/product/src/declaration/rules.rs": "3e04f7f3e54b1c761a0bbfe61a22c660716bbbcce586ec5adc5261031b63769c",
     "extensions/product/src/evidence.rs": "39742c4a2367e5154c393aaae5387590d882ed06aec8628d0b413dedead64c25",
     "extensions/product/src/lib.rs": "d099963e7f934617ba0feb25b2aec447c8dce5b8ee425eee00d4bf01c1b8a902",
