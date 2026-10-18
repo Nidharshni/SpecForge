@@ -403,6 +403,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`RegistryBuild::structural_only`). The checks that read kinds, fields and identifiers do not
   run; with no extension loaded I002 says so, with extensions loaded W151 names the entities left
   unchecked.
+- **File default**: a field value a `defaults <kind> { … }` block states once for every block of that kind in
+  its file (ADR 0149). A block's own field replaces it whole. The graph build resolves it, so the graph, every read
+  view, export and check hold the resolved value; its spans stay the default's, so diagnostics, references and
+  rename point at the default's line. `defaults` is a structural keyword: never a kind, never an id.
 - **Custom verdict**: an extension's answer, through its `wasm_function`, on one entity for a
   `check: "custom"` rule: pass, or fail naming a field and value. The rule set asks for it through
   the `CustomVerdicts` port; the project's adapter calls the extension (`ExtensionCalls::validate`),
