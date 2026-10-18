@@ -90,6 +90,9 @@ vocabulary! {
         Bool = "bool",
         /// One of the field's `enum_values`.
         Enum = "enum",
+        /// One word from an open set (a tag): written bare (ADR 0147); a
+        /// value that is not a word is E061.
+        Identifier = "identifier",
         /// A list of quoted strings.
         StringList = "string_list",
         /// One entity id; creates an edge.

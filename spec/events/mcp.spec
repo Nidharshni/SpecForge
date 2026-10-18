@@ -17,7 +17,7 @@ event mcp_discovery_invoked "MCP Discovery Invoked" {
   verify integration "emits mcp_discovery_invoked with correct discoveryType when agent lists tools, prompts, or resources"
 }
 
-type McpDiscoveryInvokedPayload {
+type McpDiscoveryInvokedPayload "Mcp Discovery Invoked Payload" {
   discoveryType string
   resultCount   integer
   timestamp     timestamp
@@ -30,7 +30,7 @@ event mcp_resource_read "MCP Resource Read" {
   verify integration "emits mcp_resource_read with correct resourceUri when agent reads any MCP resource"
 }
 
-type McpResourceReadPayload {
+type McpResourceReadPayload "Mcp Resource Read Payload" {
   resourceUri string
   format      string
   timestamp   timestamp
@@ -43,7 +43,7 @@ event mcp_tool_invoked "MCP Tool Invoked" {
   verify integration "emits mcp_tool_invoked with correct toolName, category, and parameters for any tool call"
 }
 
-type McpToolInvokedPayload {
+type McpToolInvokedPayload "Mcp Tool Invoked Payload" {
   toolName  string
   category  McpToolCategory
   entityId  string @optional
@@ -58,7 +58,7 @@ event mcp_delta_notified "MCP Delta Notified" {
   verify integration "emits mcp_delta_notified with correct notification type and delta summary"
 }
 
-type McpDeltaNotifiedPayload {
+type McpDeltaNotifiedPayload "Mcp Delta Notified Payload" {
   notificationType   string
   subscriberCount    integer
   addedNodes         integer @optional
@@ -76,7 +76,7 @@ event mcp_prompt_invoked "MCP Prompt Invoked" {
   verify integration "emits mcp_prompt_invoked with correct promptName and arguments"
 }
 
-type McpPromptInvokedPayload {
+type McpPromptInvokedPayload "Mcp Prompt Invoked Payload" {
   promptName string
   entityId   string @optional
   kind       string @optional
@@ -90,7 +90,7 @@ event mcp_initialized "MCP Initialized" {
   verify integration "mcp initialization emits event with tool counts"
 }
 
-type McpInitializedPayload {
+type McpInitializedPayload "Mcp Initialized Payload" {
   tools_registered             integer
   resources_registered         integer
   prompts_registered           integer
@@ -122,7 +122,7 @@ event mcp_mutation_completed "MCP Mutation Completed" {
   verify integration "a call whose arguments ask for a preview records nothing and lists no files_written, whatever its operation answered"
 }
 
-type McpMutationCompletedPayload {
+type McpMutationCompletedPayload "Mcp Mutation Completed Payload" {
   toolName          string
   files_changed     integer
   entities_affected integer
@@ -139,7 +139,7 @@ event mcp_subscription_created "MCP Subscription Created" {
   verify integration "emits mcp_subscription_created for each resource a client subscribes to or a listen stream names"
 }
 
-type McpSubscriptionCreatedPayload {
+type McpSubscriptionCreatedPayload "Mcp Subscription Created Payload" {
   resourceUri    string
   subscriptionId string @optional
   timestamp      timestamp
@@ -152,7 +152,7 @@ event mcp_subscription_removed "MCP Subscription Removed" {
   verify integration "emits mcp_subscription_removed for each resource whose subscription ends: unsubscribe, cancel, disconnect or shutdown"
 }
 
-type McpSubscriptionRemovedPayload {
+type McpSubscriptionRemovedPayload "Mcp Subscription Removed Payload" {
   resourceUri    string
   subscriptionId string @optional
   timestamp      timestamp
@@ -165,7 +165,7 @@ event mcp_initialization_failed "MCP Initialization Failed" {
   verify integration "emits mcp_initialization_failed when MCP server fails to initialize"
 }
 
-type McpInitializationFailedPayload {
+type McpInitializationFailedPayload "Mcp Initialization Failed Payload" {
   error_kind string
   message    string
   timestamp  timestamp
@@ -178,7 +178,7 @@ event mcp_protocol_error_handled "MCP Protocol Error Handled" {
   verify integration "emits mcp_protocol_error_handled with correct errorCode for each error type"
 }
 
-type McpProtocolErrorHandledPayload {
+type McpProtocolErrorHandledPayload "Mcp Protocol Error Handled Payload" {
   errorCode     integer
   errorMessage  string
   requestMethod string @optional
@@ -192,7 +192,7 @@ event mcp_request_cancelled "MCP Request Cancelled" {
   verify integration "emits mcp_request_cancelled with correct requestId and wasInProgress flag"
 }
 
-type McpRequestCancelledPayload {
+type McpRequestCancelledPayload "Mcp Request Cancelled Payload" {
   requestId     string
   wasInProgress boolean
   timestamp     timestamp
@@ -205,7 +205,7 @@ event mcp_server_shutdown "MCP Server Shutdown" {
   verify integration "emits mcp_server_shutdown with correct counts when MCP server shuts down"
 }
 
-type McpServerShutdownPayload {
+type McpServerShutdownPayload "Mcp Server Shutdown Payload" {
   pending_notifications_flushed integer
   subscriptions_released        integer
   wasm_engines_released         integer

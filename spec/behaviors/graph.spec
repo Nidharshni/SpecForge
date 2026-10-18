@@ -38,17 +38,48 @@ behavior build_in_memory_graph "Build In-Memory Graph" {
   verify unit "an edge records the span of each reference it was linked from"
   verify unit "an incremental build records what a cold build records"
   verify contract "Build In-Memory Graph: in-memory graph construction holds — resolution_complete, one_node_per_entity, one_edge_per_reference, no_dangling_edges"
-  verify unit "Graph::with_bidirectional_pairs stores pairs for cycle suppression"
   verify unit "W060 carries actionable suggestion"
   verify unit "W061 carries actionable suggestion"
   verify unit "build_graph emits W061 for reference cycles"
   verify unit "W061 names the cycle's entities in its data"
   verify unit "build_graph no W061 for acyclic refs"
-  verify unit "custom bidirectional pairs suppress false-positive cycles"
   verify unit "detects cycles in directed graph"
   verify unit "detects self-referencing cycle"
   verify unit "no false positives for acyclic graph"
   verify unit "same ID with different kinds does not produce E002"
+}
+
+behavior apply_file_defaults "Apply File Defaults" {
+  features   [graph_construction]
+  invariants [zero_domain_knowledge_core, entity_id_uniqueness]
+  category   command
+  types      [Graph, Node, SpecFile]
+  produces   [] // part of the graph build: its nodes surface through graph_built
+  contract   """
+    A `defaults <kind> { field value … }` block MUST give each of its fields to
+    every block of that kind in the same file that does not write the field; a
+    field the block writes MUST replace the default whole. The graph MUST hold the
+    resolved value, written where the default is. A default for a field the kind
+    does not declare, for a kind no loaded extension declares, or for a structural
+    kind MUST be E077 and MUST NOT be applied. A title, a verify or method member, a
+    field given twice, a second block for the kind, or a block after the file's
+    first entity block MUST be E078. A block field equal to its default, and a
+    default no block takes, MUST be W161. A defaults block is never a node.
+  """
+  verify unit "a default reaches every block of its kind in its file"
+  verify unit "a block's own field replaces the default whole"
+  verify unit "a default reaches no other file and no other kind"
+  verify unit "a defaults block is never a node"
+  verify unit "an inherited reference is written at the default"
+  verify unit "a default for a field its kind does not declare is E077 and is not applied"
+  verify unit "a malformed defaults block is E078"
+  verify unit "a default that changes nothing is W161"
+  verify unit "changing a default changes every block that inherits it"
+  verify unit "find-references lists an inherited reference once per block"
+  verify unit "rename edits an inherited reference once"
+  verify unit "query, trace and the graph export show the inherited list"
+  verify unit "a defaults block completes, hovers and navigates as the kind it names"
+  verify unit "the editor shows an inherited reference's location once"
 }
 
 behavior link_derived_references "Link Derived References" {

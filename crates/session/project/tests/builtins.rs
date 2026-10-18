@@ -156,7 +156,7 @@ fn software_extension_loads_via_protocol() {
     assert_eq!(manifest.entities.len(), 5);
     assert_eq!(manifest.edges.len(), 15);
     // W004/W009 moved to @specforge/testing (ADR 0002).
-    assert_eq!(manifest.validation_rules.len(), 11);
+    assert_eq!(manifest.validation_rules.len(), 10);
     assert_eq!(manifest.enhancements.len(), 2);
     assert!(
         manifest

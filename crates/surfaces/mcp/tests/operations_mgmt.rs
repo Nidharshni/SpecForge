@@ -6,7 +6,7 @@ use specforge_test::prelude::*;
 
 /// test.spec: the behavior `alpha` and the feature `beta` that has it.
 const TEST_SPEC: &str =
-    "behavior alpha \"Alpha\" {\n}\nfeature beta \"Beta\" {\n    behaviors [alpha]\n}\n";
+    "behavior alpha \"Alpha\" {\n    features [beta]\n}\nfeature beta \"Beta\" {\n}\n";
 
 /// A project that enables no extension, served with its own component
 /// runtime: what `specforge mcp <root>` serves over it. A call naming
@@ -730,11 +730,11 @@ fn render_unknown_format_lists_the_available_renderers() {
     assert_eq!(error["argument"], "format", "{error}");
     assert_eq!(
         error["message"],
-        "Unknown format: yaml. Expected: graph, context, brief, dot"
+        "Unknown format: yaml. Expected: graph, context, brief, dot, markdown"
     );
     assert_eq!(
         error["data"]["available_renderers"],
-        json!(["graph", "context", "brief", "dot"]),
+        json!(["graph", "context", "brief", "dot", "markdown"]),
         "{resp}"
     );
 }

@@ -8,15 +8,15 @@ use serde_json::{Value, json};
 use specforge_extension_sdk::prelude::*;
 use specforge_mcp::McpServer;
 
-/// `hub -behaviors-> linked`, `lonely` with no reference, `dangling` whose
+/// `linked -features-> hub`, `lonely` with no reference, `dangling` whose
 /// only reference does not resolve, `selfish` referencing itself, `alone`
 /// with nothing.
 fn connectivity_project() -> Served {
     TestProject::new()
         .file(
             "u.spec",
-            "feature hub \"Hub\" {\n    behaviors [linked]\n}\n\n\
-             behavior linked \"Linked\" {\n    verify unit \"linked works\"\n}\n\n\
+            "feature hub \"Hub\" {\n    problem \"Linked implements it\"\n}\n\n\
+             behavior linked \"Linked\" {\n    features [hub]\n    verify unit \"linked works\"\n}\n\n\
              behavior lonely \"Lonely\" {\n    verify unit \"lonely works\"\n}\n\n\
              behavior dangling \"Dangling\" {\n    needs [nowhere]\n    verify unit \"dangling works\"\n}\n\n\
              feature selfish \"Selfish\" {\n    depends_on [selfish]\n}\n\n\
@@ -61,7 +61,7 @@ fn connectivity_is_one_rule() {
         ["alone", "dangling", "lonely", "selfish"]
     );
     assert_eq!(strings(&explored["high_connectivity"]), ["hub", "linked"]);
-    assert_eq!(strings(&explored["starting_points"]), ["hub", "linked"]);
+    assert_eq!(strings(&explored["starting_points"]), ["linked", "hub"]);
 
     let review = prompt_payload(&get_prompt(
         &mut served,

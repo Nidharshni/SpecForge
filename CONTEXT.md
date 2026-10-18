@@ -52,12 +52,19 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   root (ADR 0055). The CLI's human output names files as typed.
 - **Format version**: the `.spec` file format a file was written against, `MAJOR.MINOR`, declared by
   the `// specforge-format:` header on its first non-blank line; a file with no header is at the
-  current version and reports nothing. The parser reads it with the file
+  current version and reports nothing (migration steps still run on it). The parser reads it with the file
   (`specforge_parser::detect_format_version`, `SpecFile::format_version`) and the compile reports
   I007 (older) and E019 (newer, or a header that is not `MAJOR.MINOR`) on the header line, like any
   parser diagnostic; `specforge migrate` reads and rewrites it through the same module
   (`with_format_version`), so a rewritten header stands where the parser reads it. It is
   distinct from the Graph Protocol's schema version.
+- **Title**: the string after a block's id in its header (`type Task "A unit of work" {`, `type S "States" = a |
+  b`), the one human-readable label a node carries. Every block that becomes a node has one: E076 otherwise. A
+  `spec` block's name is its title; a `define` block has none. A `//` comment is never a title. `specforge
+  migrate` lifts a block's doc comment into a missing title.
+- **Migration step**: a rewrite `specforge migrate` applies to every source it changes, whatever the file's format
+  version, after the header rewrite (`specforge_migrate::titles` today). The graph comparison keeps exactly the
+  changes the steps declare: for `titles`, a title where the block had none.
 - **Schema version**: the Graph Protocol schema's `MAJOR.MINOR.PATCH`, computed, never declared: the version the
   schema record holds, bumped by the largest change between the recorded schema and the one the loaded extensions
   produce (major when something a reader relies on is removed or reshaped, minor for an addition, patch for
@@ -357,7 +364,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   its fields are private (ADR 0031).
 - **Graph inputs**: what the graph build reads of the loaded extensions (`specforge_graph::GraphInputs`):
   the kinds whose bodies an extension parses, the extension that owns each target kind no loaded extension declares (`target_owners`), the
-  inverse field pairs (a reference field and its inverse fields, fields of its target kind), each field's form with the kinds that take any field (`FieldForms`, with each reference field's target, ADR 0117) and the derived reference fields. Only the registry
+  each field's form with the kinds that take any field (`FieldForms`, with each reference field's target, ADR 0117) and the derived reference fields. Only the registry
   build derives them (`RegistryBuild::graph_inputs`), which holds them and builds every graph a snapshot reads with them
   (`RegistryBuild::graph_of`, ADR 0123); with the provider schemes the environment registers they are every graph's
   `GraphConfig` (`Environment::graph_of`, ADR 0032).
@@ -368,6 +375,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   edge type outside its declared ends is W021 and writes none. A graph edge's label is the field that wrote it; its
   edge type is read from the field, once, in the entity snapshot. Rules count by it, the schema prints its ends,
   trace names it (ADR 0060).
+- **Owning field**: the one reference field that writes a relation's edges, declared by an extension (ADR 0150).
+  A relation is written there and nowhere else; its other side is derived.
+- **Other side** (of a relation): what the target entity reads the relation as: its incoming edges, which `query`
+  and `trace` (upstream) show. Never a field; an `inverse_of` may name it. Writing it is E079.
 - **Entity enhancement**: fields and verify kinds one extension declares on an entity kind another extension declares
   (`c.enhance(kind, ..)`). Its fields are the declaring extension's: trace treats them as opt-in for the kind, and
   the model and schema name their extension. The kind stays its declarer's. An enhancement of a kind no loaded
@@ -392,6 +403,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`RegistryBuild::structural_only`). The checks that read kinds, fields and identifiers do not
   run; with no extension loaded I002 says so, with extensions loaded W151 names the entities left
   unchecked.
+- **File default**: a field value a `defaults <kind> { … }` block states once for every block of that kind in
+  its file (ADR 0149). A block's own field replaces it whole. The graph build resolves it, so the graph, every read
+  view, export and check hold the resolved value; its spans stay the default's, so diagnostics, references and
+  rename point at the default's line. `defaults` is a structural keyword: never a kind, never an id.
 - **Custom verdict**: an extension's answer, through its `wasm_function`, on one entity for a
   `check: "custom"` rule: pass, or fail naming a field and value. The rule set asks for it through
   the `CustomVerdicts` port; the project's adapter calls the extension (`ExtensionCalls::validate`),
@@ -415,9 +430,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (ADR 0019): scalars as written; lists of strings or references and mixed lists joined by `", "`;
   variant lists and type unions by `" | "`; expressions by `", "`; a
   block's keys by `", "`. An entity's `verify` statements are not a field and have no field text (ADR 0094). An empty value is `""`. Every written field has one, and none is null. It differs from the written value (`field_form::write`) only for an expression group, which every output writes one conjunct per line (ADR 0064, ADR 0115).
-- **Field type**: how the host reads a field's value, one of eight names an extension declares:
+- **Field type**: how the host reads a field's value, one of nine names an extension declares:
   `string`, `integer`, `bool`, `enum` (its values are the declaration's `enum_values`, its absent value its `default_value`: a field
-  vocabulary; an enum without values, or a default outside them, is W021), `string_list`,
+  vocabulary; an enum without values, or a default outside them, is W021), `identifier` (one word from an open set,
+  written bare; ADR 0147), `string_list`,
   `reference`, `reference_list`, `block` (`specforge_protocol_types::FieldType`). The registry build
   reads a declared type once, into the field's registry entry (`FieldRegistryEntry::new`, the only way
   to make one); every output names it by that one name — the schema and exports, the published JSON
@@ -425,6 +441,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   are read, never written; any other name is W019. What a field's type takes, how a written value is
   stored as it, the JSON every output writes for it and that JSON's schema are its field form
   (ADR 0064).
+- **Value form**: how a field's value is written: bare for an `enum`, `identifier`, `reference` and each
+  `reference_list` item, quoted for a `string` and each `string_list` item (ADR 0147). `specforge format` writes it;
+  W159 reports a value written otherwise. Read through `FieldForms::rewrite`, never decided elsewhere.
 - **Field vocabulary**: the closed set of values an enum field takes, in their order, and the value an absent one
   counts as (its declared `default_value`), declared once by the extension that declares the field, as a `const`
   (`specforge_extension_sdk::Vocabulary`, through `FieldBuilder::vocabulary`, the only way to declare an enum).
@@ -768,9 +787,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Graph export**: the project's graph, or the subgraph of a scope, written in one export format by
   `specforge_emitter::emit` through `specforge_ops::read::export::export`: graph (the Graph Protocol), context and brief (JSON
   documents whose schema the emitter derives from the types that write them, published by `specforge schema
-  --publish`), or DOT. It is text: the CLI prints it, MCP sends it as text or writes it into a directory of the project (`export::write_into`, as `<dir>/<format's file name>`, replaced atomically, ADR 0131), an extension command receives it
+  --publish`), DOT, or markdown (a **Review document**). It is text: the CLI prints it, MCP sends it as text or writes it into a directory of the project (`export::write_into`, as `<dir>/<format's file name>`, replaced atomically, ADR 0131), an extension command receives it
   spliced in its input; only `specforge.query` reads it back, into its structured result. A node carries its coverage
   status (`coverage_status`) when the export is given the verdicts, as a query with coverage is (ADR 0007).
+- **Review document**: the graph export in the markdown format (ADR 0152), for a person who signs: one section
+  per selected entity headed `## <kind> \`<id>\` — <title>`, its normative fields quoted, its other fields, its
+  Links (each linked entity's kind and title; an unresolved reference marked so), the entities that reference
+  it and its numbered obligations. Built from field declarations only; the selection chooses sections, the whole
+  graph names links. Not a **Graph export** an agent reads back.
 - **Project sources**: the `.spec` files under the spec root (`spec_root`, else the project root) that
   discovery keeps — no skipped directory, no `exclude` entry. What a compile reads, what format and migrate
   rewrite (`specforge_common::SourceRoot`, built by `ProjectConfig::sources` from a config read through
@@ -1047,6 +1071,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the declaration's name and each incoming reference's token, positions in the text the project was compiled from,
   which the plan keeps, with the spec root they are relative to. MCP writes it only to files that still hold that text, refusing `conflict` otherwise; the LSP
   hands it to the editor only over buffers that are that text (`ContentModified` otherwise; ADR 0116, ADR 0023 D3).
+- **Typed edit**: one change to a project's entities, named by what it does rather than by text: create, set,
+  unset, retitle, link, unlink, add or remove a verify obligation, delete (`specforge_ops::authoring::edit::Edit`).
+  A list of them is planned over the texts the project was compiled from (each edit reading what the ones before
+  it left), each value written in its field's form and each touched block formatted; the plan is refused with E080
+  when the edited project reports an error the project did not, and is written as one project change (ADR 0151).
 - **Lexeme**: one token of a `.spec` text as the language's one lexer reads it without a parse
   (`specforge_parser::lex`): an identifier, a scheme ref ID (one lexeme), a number, a string (read as
   the grammar reads it, across lines; one the grammar would not close is marked unclosed and, if a

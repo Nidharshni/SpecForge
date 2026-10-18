@@ -4,11 +4,14 @@ use "extensions/software/invariants"
 use "extensions/software/types"
 use "types/zero-entity-core"
 
+defaults behavior {
+  features [se_validation_suite]
+  types    [ValidationRulePattern]
+}
+
 behavior se_validate_unreferenced_behaviors "W001: Unreferenced Behaviors" {
-  features   [se_validation_suite]
   category   query
   invariants [se_edge_consistency]
-  types      [ValidationRulePattern]
   contract   """
     Detect behavior entities with no incoming Implements edges.
   """
@@ -27,9 +30,7 @@ behavior se_validate_unreferenced_behaviors "W001: Unreferenced Behaviors" {
 }
 
 behavior se_validate_unreferenced_types "W002: Unreferenced Types" {
-  features [se_validation_suite]
   category query
-  types    [ValidationRulePattern]
   contract """
     Detect type entities nothing references. A type is referenced when a
     behavior lists it in `types`, an event carries it as `payload`, another
@@ -55,9 +56,7 @@ behavior se_validate_unreferenced_types "W002: Unreferenced Types" {
 }
 
 behavior se_validate_unused_invariants "W003: Unused Invariants" {
-  features [se_validation_suite]
   category query
-  types    [ValidationRulePattern]
   contract """
     Detect invariant entities that nothing references: no behavior lists
     them in `invariants`, `requires`, `ensures` or `maintains`. This is the
@@ -76,9 +75,7 @@ behavior se_validate_unused_invariants "W003: Unused Invariants" {
 }
 
 behavior se_validate_unreferenced_ports "W005: Unreferenced Ports" {
-  features [se_validation_suite]
   category query
-  types    [ValidationRulePattern]
   contract """
     Detect port entities with no incoming UsesPort edges.
   """
@@ -92,35 +89,8 @@ behavior se_validate_unreferenced_ports "W005: Unreferenced Ports" {
 
 // W006 is allocated to @specforge/product (Unreferenced Capabilities → W042)
 
-behavior se_validate_event_triggers "E051: Invalid Event Triggers" {
-  features   [se_validation_suite]
-  category   query
-  invariants [se_event_trigger_validity]
-  types      [ValidationRulePattern, ValidationPatternKind]
-  contract   """
-    Detect event entities whose trigger field references a non-behavior
-    entity. Check pattern: field_value_constraint.
-  """
-  requires {
-    trigger_field_present "event entity has a trigger field value"
-  }
-  ensures {
-    valid_trigger_passes  "event trigger referencing behavior produces no diagnostic"
-    invalid_trigger_error "event trigger referencing non-behavior produces E051 error"
-    correct_template      "message template is: event '{id}' trigger must reference a behavior, found {kind} '{value}'"
-  }
-  verify unit "event trigger referencing behavior passes"
-  verify unit "event trigger referencing type produces E051"
-  verify unit "event trigger referencing feature produces E051"
-  verify unit "E051 severity is error"
-  // Note: missing trigger field is caught by se_validate_entity_fields
-  // (generic required-field check), not by this rule.
-}
-
 behavior se_validate_unreferenced_events "W007: Unreferenced Events" {
-  features [se_validation_suite]
   category query
-  types    [ValidationRulePattern]
   contract """
     Detect event entities with no incoming Produces edges.
   """
@@ -133,9 +103,7 @@ behavior se_validate_unreferenced_events "W007: Unreferenced Events" {
 }
 
 behavior se_validate_features_with_empty_behaviors "W008: Features with Empty Behaviors" {
-  features [se_validation_suite]
   category query
-  types    [ValidationRulePattern]
   contract """
     Detect feature entities with an empty behaviors list.
   """
@@ -149,7 +117,6 @@ behavior se_validate_features_with_empty_behaviors "W008: Features with Empty Be
 }
 
 behavior se_validate_port_methods "E004: Invalid Port Methods" {
-  features [se_validation_suite]
   category query
   types    [ValidationRulePattern, PortOperation]
   contract """
@@ -169,7 +136,6 @@ behavior se_validate_port_methods "E004: Invalid Port Methods" {
 }
 
 behavior se_validate_type_field_annotations "W010: Unknown Field Annotations" {
-  features [se_validation_suite]
   category query
   types    [ValidationRulePattern, FieldAnnotation]
   contract """
@@ -186,9 +152,7 @@ behavior se_validate_type_field_annotations "W010: Unknown Field Annotations" {
 }
 
 behavior se_validate_milestone_behavior_ranges "E010: Invalid Milestone Behavior Range" {
-  features [se_validation_suite]
   category validation
-  types    [ValidationRulePattern]
   contract """
     The @specforge/software extension MUST declare a custom validation
     rule, run by its Wasm validate__milestone_behavior_ranges function,

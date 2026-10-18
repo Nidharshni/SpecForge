@@ -424,7 +424,7 @@ behavior registry_build_fields "Registry Build Registers Fields" {
     fields, each embedding its declared descriptor whole (normative flag,
     default value, enum values, description, required, edge, target kind)
     and naming the declaring extension. A field type is one of string,
-    integer, bool, enum, string_list, reference, reference_list and block,
+    integer, bool, enum, identifier, string_list, reference, reference_list and block,
     each also accepted with a `_type` suffix (and bool as boolean); any other type MUST produce a
     W019 warning and the field is not registered. A field's normative flag
     MUST be kept so exports tell what an entity promises from prose without
@@ -493,7 +493,11 @@ behavior registry_build_edges "Registry Build Registers Edge Types" {
     entity snapshot, the schema and trace read these answers and derive
     none. An edge label declared again by a later extension MUST produce a
     W018 warning naming both extensions; the first in load order keeps the
-    label and its constraints, which graph validation uses.
+    label and its constraints, which graph validation uses. A relation is
+    written from one side (ADR 0150): a reference field whose inverse_of
+    names a field its target kind registers, and two different kinds that
+    each register a reference field targeting the other, MUST produce W162,
+    once per such field or kind pair; the fields still register.
   """
   verify unit "edge type registered with label and description"
   verify unit "source/target kind constraints recorded"
@@ -502,6 +506,9 @@ behavior registry_build_edges "Registry Build Registers Edge Types" {
   verify unit "an edge type names every field that writes it: a kind's own, shared and enhancement fields alike"
   verify unit "a field that writes a declared edge type from a kind outside its declared source kind, or to a kind outside its declared target kind, is W021 and writes no edge of that type"
   verify unit "an edge label a later extension declares again is W018 and the first in load order keeps it"
+  verify unit "a relation declared from both of its ends is W162, once per field whose inverse_of names a field of its target kind"
+  verify unit "two kinds that each declare a reference field targeting the other are W162 once, naming both fields"
+  verify unit "the builtin extensions declare no relation from both ends"
   verify contract "Registry Build Registers Edge Types: edge type registration holds — declarations_in_load_order, edge_types_registered, every_writer_named, one_type_per_field, first_wins"
 }
 
@@ -514,7 +521,7 @@ behavior registry_build_graph_inputs "Registry Build Derives the Graph Inputs" {
     registries_populated "The build's kind and field registries hold every loaded declaration (registry_build_kinds, registry_build_fields)"
   }
   ensures {
-    every_input_derived      "Every input the graph build reads of the extensions comes from the build: single reference fields, the owners of absent target kinds, inverse pairs, value coercions and derived references"
+    every_input_derived      "Every input the graph build reads of the extensions comes from the build: single reference fields, the owners of absent target kinds, value coercions and derived references"
     registries_agree         "Each input says what the build's declarations and field registry say, and nothing else"
     deterministic            "The same declarations give the same inputs, whatever order the registries hold them in"
     graph_built_in_the_build "Every graph read with the build is built in it"
@@ -524,10 +531,7 @@ behavior registry_build_graph_inputs "Registry Build Derives the Graph Inputs" {
     loaded extensions, and no caller derives one: every registered field of the
     reference type as a single reference field, none while no kind is
     registered; the extension that owns each reference field's target kind no loaded
-    extension declares, where the candidate vocabulary names one; every pair of a reference field and one of its
-    inverse fields (the field its inverse_of names, when its target kind
-    registers it, and every field of its target kind naming it inverse_of),
-    written lesser label first, the list sorted; how each registered field's value is coerced to
+    extension declares, where the candidate vocabulary names one; how each registered field's value is coerced to
     its declared type (string_list and reference_list to a list, integer,
     bool, string and enum to that type, a single reference and a block read
     as written); and every reference field whose edges the host derives
@@ -541,8 +545,6 @@ behavior registry_build_graph_inputs "Registry Build Derives the Graph Inputs" {
   verify unit "a derived reference field is a graph input only with a target kind and a known source"
   verify unit "a reference field's form says whether its target kind is loaded"
   verify unit "the graph inputs name the extension that owns each absent target kind"
-  verify unit "inverse pairs are written lesser first and sorted, whatever the registration order"
-  verify unit "an inverse field is a field of the target kind: the one inverse_of names, and every one naming the field inverse_of"
   verify unit "a graph built in the registry build reads its own graph inputs and the provider schemes it is handed"
   verify contract "Registry Build Derives the Graph Inputs: graph inputs hold — registries_populated, every_input_derived, registries_agree, deterministic, graph_built_in_the_build"
 }

@@ -570,19 +570,6 @@ Owner: core
 Level: error
 ```
 
-## E051
-
-```
-E051: Invalid event trigger
-
-An `event` entity's `trigger` field must reference a `behavior`, but it points
-at something else (or nothing resolvable). Point `trigger` at an existing
-`behavior` entity.
-
-Owner: @specforge/software
-Level: error
-```
-
 ## E052
 
 ```
@@ -765,10 +752,9 @@ Level: error
 ```
 E065: Invalid scaffold request
 
-`specforge new` can't scaffold what was asked: only `--extension` projects are
-supported, the extension name is empty or is a scoped name that isn't
-`@scope/name`, or the destination directory already exists. Pass `--extension`,
-fix the name, or pick a destination that doesn't exist yet.
+`specforge extension init` can't scaffold what was asked: the extension name is
+empty or is a scoped name that isn't `@scope/name`, or the destination directory
+already exists. Fix the name, or pick a destination that doesn't exist yet.
 
 Owner: core
 Level: error
@@ -779,7 +765,7 @@ Level: error
 ```
 E066: Extension scaffold failed
 
-`specforge new --extension` couldn't write the project: creating a directory or
+`specforge extension init` couldn't write the project: creating a directory or
 writing one of the generated files failed. Check permissions and free space at
 the destination, remove the partial project, and retry.
 
@@ -945,6 +931,98 @@ hex-encoded bytes), or the key could not be created there (the directory or the
 file can't be written). Nothing was sent. Fix the file's permissions, or move it
 aside: the next publish creates a new key, and whoever pinned the old one then
 sees a changed publisher key (R-TRUST-003) for your packages.
+
+Owner: core
+Level: error
+```
+
+## E076
+
+```
+E076: Block has no title
+
+A block that becomes a graph node has no title, or a blank one: write it after
+the block's id (`type Task "A unit of work" { … }`, `type Status "Task status"
+= open | done`). The title is the one label every surface shows for the node; a
+`//` comment above the block never reaches the graph. `specforge migrate` writes
+the missing titles of a project: the comment directly above each block when
+there is one, else its id in words. `spec` takes its name as its title, `ref`
+requires one, and `define` blocks are never nodes.
+
+Owner: core
+Level: error
+```
+
+## E077
+
+```
+E077: Default for a field its kind does not declare
+
+A `defaults <kind> { … }` block (ADR 0149) sets a field that `<kind>` does not
+declare, or names a kind no loaded extension declares, or a structural kind
+(`spec`, `ref`, `use`, `define`, `defaults`). A default only sets a field an
+extension declares for the kind: a field of an `open_fields` kind's members is
+not declared. The default is not applied, so no block of the file takes it.
+Write the field on the blocks that need it, or fix the kind or the field name.
+Reported by the graph build, once per default, at its value; a project whose
+extensions declare no kind checks none.
+
+Owner: core
+Level: error
+```
+
+## E078
+
+```
+E078: Malformed defaults block
+
+A `defaults <kind> { … }` block (ADR 0149) holds only fields, once each, and
+comes before the file's first entity block; a file has at most one per kind.
+This one has a title, a `verify` or `method` member, a field given twice (the
+first is applied), is a second block for its kind in the file (it is not
+applied; the message names the first), or comes after the file's first block (it
+still applies). Remove the title or member, merge the blocks, or move the block
+above every entity block.
+
+Owner: core
+Level: error
+```
+
+## E079
+
+```
+E079: Relation written on its other side
+
+An entity writes a field its kind does not declare, and that field is the other
+side of a relation another kind owns. A relation is written on its owning field
+only (ADR 0150): the one reference field an extension declares for it. The other
+side is derived, never written: `query` shows it as the incoming edges and
+`trace` as the upstream. The field is recognised in two ways: an owning field
+names it in its `inverse_of` (so a documented reverse such as `behaviors` on a
+feature is refused even when its ids do not resolve), or every id it lists is
+one other kind's entity and that kind owns a reference field into this one
+(`journeys [..]` on a feature). A self-relation's other side is not recognised,
+and a kind that accepts any field is not checked. The graph still carries the
+field's untyped edge, and `check` fails. Remove the field and write the owning
+field on each entity it listed; the suggestion names both.
+
+Owner: core
+Level: error
+```
+
+## E080
+
+```
+E080: Typed edit would add errors
+
+A typed edit (`specforge new`, `set`, `unset`, `link`, `unlink`, `delete`, or
+MCP `specforge.edit`) was planned, and the project it would leave reports errors
+the project does not report now: the edit is refused and nothing is written. The
+refusal lists each new error (an unresolved reference, a missing required field,
+a value its field does not take, …). Fix what they name first: create the
+referenced entity, give the required field, or make both changes in one
+`specforge.edit` call. `delete --unlink-references` removes the references a
+delete would leave dangling.
 
 Owner: core
 Level: error
@@ -2950,7 +3028,7 @@ W143: Define blocks are not supported
 A `.spec` file has a `define <name> { ... }` block. Every entity kind comes from
 an extension, so a project's kinds depend only on `specforge.json` (ADR 0005):
 the block registers nothing and is left out of the graph. Declare the kind in an
-extension (`specforge new --extension`) and enable it, then remove the block.
+extension (`specforge extension init`) and enable it, then remove the block.
 `define` stays a reserved word.
 
 Owner: core
@@ -3155,6 +3233,56 @@ Owner: core
 Level: warning
 ```
 
+## W159
+
+```
+W159: Value not written in its field's form
+
+A field's declared type decides how its value is written (ADR 0147): bare for an
+enum, identifier or reference value and each item of a reference list; quoted
+for text and each item of a string list. This value is written the other way. It
+reads the same, so the graph is unchanged; run specforge format (or format the
+document in the editor) to rewrite every value in its form. A bare word on a
+kind that takes members (type, port) is left alone: it may be a member's type.
+
+Owner: core
+Level: warning
+```
+
+## W161
+
+```
+W161: Default that changes nothing
+
+Either a block writes a field with exactly its file's default value, so the line
+restates the default, or a `defaults <kind>` field reaches no block: every block
+of that kind in the file writes its own value, or the file declares none. Delete
+the line. A block that must keep its value whatever the default becomes may
+write it; a different value replaces the default whole (ADR 0149).
+
+Owner: core
+Level: warning
+```
+
+## W162
+
+```
+W162: Relation declared from both sides
+
+A relation has two fields: one extension declares it from both of its ends.
+Either a reference field's `inverse_of` names a field its target kind registers
+(`milestone.behaviors` naming `features`, when `behavior` has its own
+`features`), or two different kinds each register a reference field targeting
+the other (`parent.children` and `child.parent`). A relation is written from one
+side (ADR 0150): the other side is derived, so `query` and `trace` already show
+it. Both fields still register, and an entity can write either. Remove one
+field, or drop the `inverse_of` or name a word the target kind does not use. The
+builtin extensions declare none.
+
+Owner: core
+Level: warning
+```
+
 ## Retired codes
 
 These codes are no longer emitted, and are never reused for another meaning.
@@ -3170,6 +3298,7 @@ These codes are no longer emitted, and are never reused for another meaning.
 | E037 | (nothing) |
 | E038 | (nothing) |
 | E047 | [W139](#w139) |
+| E051 | [E079](#e079) |
 | E053 | (nothing) |
 | E060 | (nothing) |
 | I006 | (nothing) |

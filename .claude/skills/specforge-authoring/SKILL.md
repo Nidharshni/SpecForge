@@ -9,6 +9,25 @@ Orchestrator skill for writing and maintaining `.spec` DSL files -- the source-o
 
 **This skill writes `.spec` files (compiled DSL). Not markdown spec documents.**
 
+## Write through typed edits
+
+Do not write `.spec` text by hand. Change a project with the typed edits, which write each value in the form its field
+declares, lay the block out canonically, and refuse (E080) an edit that would leave the project with an error it does not
+have:
+
+```bash
+specforge new behavior archive_task "Archive a Task" --in behaviors/task.spec --contract "…" --types Task --category command
+specforge set archive_task category query          # specforge set <id> --title "…" changes the title
+specforge link archive_task invariants task_id_uniqueness    # unlink removes; unset removes a field
+specforge link archive_task --verify unit:"archiving an unknown task fails"
+specforge delete archive_task --unlink-references
+```
+
+Over MCP, `specforge.edit` takes a list of edits (`create`, `set`, `unset`, `retitle`, `link`, `unlink`, `add_verify`,
+`remove_verify`, `delete`) applied all or nothing, so an entity and the link to it go in one call. Add `--dry-run`
+(`dry_run: true`) to see the diff first. The child skills below say what each field means; unions and ports with `method`
+lines are not covered by typed edits yet, so write those blocks by hand.
+
 ## When to Use This Skill
 
 - Writing a new `.spec` file for a SpecForge project
@@ -136,6 +155,18 @@ Group related entities together. Within a file, order entities by:
 
 The entity-type-per-directory pattern is recommended for projects with >20 entities.
 
+### File Defaults
+
+When two or more blocks of a kind in one file share a reference list, state it once above the first block:
+
+```
+defaults behavior {
+  features [task_management]
+}
+```
+
+Every behavior in the file now has `features [task_management]`; a block that writes its own `features` replaces it whole (`features []` means none). The next behavior you add inherits it too, so write a default only for what is true of every block of the kind. A default sets a field the kind declares (E077), once per kind (E078), and a block restating it is W161. `specforge migrate` hoists the repeats of an existing file.
+
 ## Cross-Reference Conventions
 
 ### Entity Name References
@@ -144,7 +175,7 @@ Reference entities by their name in reference lists:
 
 ```spec
 invariants [data_persistence, email_uniqueness]   // reference list
-behaviors  [create_user, validate_email]
+produces   [user_created, email_validated]   // a behavior's events
 features   [user_management]
 refs       [gh.issue:42, jira.epic:PROJ-123]
 ```
@@ -209,7 +240,6 @@ behavior create_user "Create User" {
 | Code | Description |
 |------|-------------|
 | E004 | Port method references invalid type |
-| E006 | Event trigger invalid -- trigger must be an existing behavior |
 | E030 | Always-false precondition in requires block |
 | E031 | Liskov compliance violation -- strengthened precondition or weakened postcondition |
 | E032 | Cycle in refinement chain |

@@ -102,17 +102,6 @@
     },
     {
       "check": "custom",
-      "code": "E051",
-      "constraint": null,
-      "edge_type": null,
-      "field": null,
-      "message_template": "event '{id}' trigger must reference a behavior, found '{value}'",
-      "severity": "error",
-      "target_kind": "event",
-      "wasm_function": "validate__event_triggers"
-    },
-    {
-      "check": "custom",
       "code": "E010",
       "constraint": null,
       "edge_type": null,

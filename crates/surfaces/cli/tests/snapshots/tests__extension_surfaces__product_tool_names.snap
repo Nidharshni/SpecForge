@@ -23,6 +23,7 @@ expression: names
   "specforge.suggest_fixes",
   "specforge.format",
   "specforge.rename",
+  "specforge.edit",
   "specforge.init",
   "specforge.add_extension",
   "specforge.remove_extension",

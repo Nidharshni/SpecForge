@@ -1,10 +1,22 @@
 use super::{as_written, comment_text, holds_comment, lines_keeping_strings, node_text, one_line};
 use crate::config::FormatConfig;
+use specforge_graph::FieldForms;
+use specforge_parser::Written;
 use tree_sitter::Node;
 use tree_sitter_specforge::{field, kind};
 
+/// The declared kind a block's fields are looked up under, with the forms
+/// that say how each field's value is written (ADR 0147): only the depth-1
+/// body of an entity block has one.
+type Forms<'a> = Option<(&'a str, &'a FieldForms)>;
+
 /// Format one top-level block.
-pub(super) fn format_block(node: Node, source: &str, config: &FormatConfig) -> Vec<String> {
+pub(super) fn format_block(
+    node: Node,
+    source: &str,
+    config: &FormatConfig,
+    forms: &FieldForms,
+) -> Vec<String> {
     let text = |name: &str| {
         node.child_by_field_name(name)
             .map(|n| node_text(n, source).to_string())
@@ -28,7 +40,7 @@ pub(super) fn format_block(node: Node, source: &str, config: &FormatConfig) -> V
             let mut cursor = node.walk();
             let inner = node.named_children(&mut cursor).next();
             return match inner {
-                Some(inner) => format_block(inner, source, config),
+                Some(inner) => format_block(inner, source, config, forms),
                 None => vec![node_text(node, source).trim_end().to_string()],
             };
         }
@@ -38,7 +50,9 @@ pub(super) fn format_block(node: Node, source: &str, config: &FormatConfig) -> V
         _ => return lines_keeping_strings(node, source),
     };
     let mut lines = vec![format!("{header} {{")];
-    format_body(node, source, config, 1, &mut lines);
+    let kind_text = text(field::KIND);
+    let declared = (node.kind() == kind::ENTITY_BLOCK).then_some((kind_text.as_str(), forms));
+    format_body(node, source, config, 1, declared, &mut lines);
     lines.push("}".to_string());
     lines
 }
@@ -63,7 +77,11 @@ fn format_union_block(node: Node, source: &str, config: &FormatConfig) -> Vec<St
         .filter(|c| c.kind() != "|")
         .map(|c| node_text(*c, source))
         .collect();
-    let head = format!("{} {} = ", text(field::KIND), text(field::NAME));
+    let title = node
+        .child_by_field_name(field::TITLE)
+        .map(|n| format!(" {}", node_text(n, source)))
+        .unwrap_or_default();
+    let head = format!("{} {}{title} = ", text(field::KIND), text(field::NAME));
     let one_line = format!("{head}{}", parts.join(" | "));
     if one_line.len() <= config.max_width || parts.len() < 2 {
         return vec![one_line];
@@ -102,6 +120,7 @@ fn format_body(
     source: &str,
     config: &FormatConfig,
     depth: usize,
+    forms: Forms,
     lines: &mut Vec<String>,
 ) {
     let indent = config.indent_str().repeat(depth);
@@ -119,7 +138,7 @@ fn format_body(
             {
                 Member::Written(as_written(*child, source))
             }
-            kind::FIELD => field_member(*child, source, config, depth),
+            kind::FIELD => field_member(*child, source, config, depth, forms),
             kind::VERIFY_STATEMENT => Member::Line(verify_line(*child, source)),
             kind::METHOD_STATEMENT => Member::Line(method_line(*child, source)),
             kind::COMMENT => Member::Comment(comment_text(*child, source)),
@@ -225,7 +244,13 @@ fn format_body(
     }
 }
 
-fn field_member(node: Node, source: &str, config: &FormatConfig, depth: usize) -> Member {
+fn field_member(
+    node: Node,
+    source: &str,
+    config: &FormatConfig,
+    depth: usize,
+    forms: Forms,
+) -> Member {
     let key = node
         .child_by_field_name(field::KEY)
         .map(|n| node_text(n, source).to_string())
@@ -242,7 +267,7 @@ fn field_member(node: Node, source: &str, config: &FormatConfig, depth: usize) -
     match value.kind() {
         kind::NESTED_BLOCK => {
             let mut body = Vec::new();
-            format_body(value, source, config, depth + 1, &mut body);
+            format_body(value, source, config, depth + 1, None, &mut body);
             Member::Nested {
                 key,
                 lines: body,
@@ -250,7 +275,7 @@ fn field_member(node: Node, source: &str, config: &FormatConfig, depth: usize) -
             }
         }
         kind::LIST => Member::Field {
-            value: list_value(value, source, config, depth, key.len()),
+            value: list_value(value, source, config, depth, &key, forms),
             key,
             annotations,
         },
@@ -286,9 +311,13 @@ fn field_member(node: Node, source: &str, config: &FormatConfig, depth: usize) -
             // Multi-line values (triple-quoted strings, ...) are opaque: the
             // first line follows the key, the rest stays as written. A
             // string's lines are its value, so its trailing whitespace stays.
+            let value = match in_form(value, source, &key, forms) {
+                Some(text) => vec![text],
+                None => lines_keeping_strings(value, source),
+            };
             Member::Field {
                 key,
-                value: lines_keeping_strings(value, source),
+                value,
                 annotations,
             }
         }
@@ -303,8 +332,10 @@ fn list_value(
     source: &str,
     config: &FormatConfig,
     depth: usize,
-    key_len: usize,
+    key: &str,
+    forms: Forms,
 ) -> Vec<String> {
+    let key_len = key.len();
     let mut cursor = node.walk();
     let children: Vec<Node> = node.children(&mut cursor).collect();
     if children.iter().any(|c| c.kind() == kind::COMMENT) {
@@ -313,7 +344,7 @@ fn list_value(
     let items: Vec<String> = children
         .iter()
         .filter(|c| !matches!(c.kind(), "[" | "]" | ","))
-        .map(|c| one_line(*c, source))
+        .map(|c| in_form(*c, source, key, forms).unwrap_or_else(|| one_line(*c, source)))
         .collect();
     let one_line = format!("[{}]", items.join(", "));
     let indent = config.indent_str();
@@ -326,6 +357,23 @@ fn list_value(
     lines.extend(items.iter().map(|item| format!("{outer}{indent}{item},")));
     lines.push(format!("{outer}]"));
     lines
+}
+
+/// `node`, a string or a bare word, written in its field's form when the
+/// declared type writes it the other way (`FieldForms::rewrite`, the rule
+/// `check` reports as W159); `None` leaves it as written.
+fn in_form(node: Node, source: &str, key: &str, forms: Forms) -> Option<String> {
+    let (kind, forms) = forms?;
+    let text = node_text(node, source);
+    let (written, word) = match node.kind() {
+        kind::STRING => (Written::Quoted, text.strip_prefix('"')?.strip_suffix('"')?),
+        kind::IDENTIFIER => (Written::Bare, text),
+        _ => return None,
+    };
+    Some(match forms.rewrite(kind, key, written, word)? {
+        Written::Bare => word.to_string(),
+        _ => format!("\"{word}\""),
+    })
 }
 
 /// `verify [kind] "description"`, single-spaced.

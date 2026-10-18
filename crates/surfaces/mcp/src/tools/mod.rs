@@ -3,6 +3,7 @@ pub(crate) mod analyze;
 mod collect;
 pub(crate) mod coverage;
 mod doctor;
+mod edit;
 mod explain;
 mod export;
 mod extensions;
@@ -69,6 +70,7 @@ pub static CORE_TOOLS: &[&dyn ToolSpec] = &[
     spec(&suggest_fixes::Tool),
     spec(&format::Tool),
     spec(&rename::Tool),
+    spec(&edit::Tool),
     spec(&init::Tool),
     spec(&add_extension::Tool),
     spec(&remove_extension::Tool),

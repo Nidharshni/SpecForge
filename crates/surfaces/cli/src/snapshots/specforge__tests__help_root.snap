@@ -27,7 +27,12 @@ Commands:
   search        Search for extensions in registries
   analyze       Run static analysis passes over the compiled project
   watch         Watch a project and rebuild incrementally on changes
-  new           Scaffold a new extension project
+  new           Create an entity
+  set           Set a field (or --title) of an entity
+  unset         Remove a field of an entity
+  link          Add a reference (or --verify obligation) to an entity
+  unlink        Remove a reference (or --verify obligation) from an entity
+  delete        Delete an entity
   update        Update installed extensions to latest compatible versions
   login         Authenticate with a registry
   logout        Remove registry credentials
@@ -35,7 +40,7 @@ Commands:
   collect       Run the project's test runners and record which entities their tests prove
   doctor        Run health checks on installed extensions
   mcp           Start MCP server (JSON-RPC over stdio)
-  migrate       Migrate .spec files between format versions
+  migrate       Migrate .spec files to the current format: the version header, a title for every block that has none, and the reference lists a file's blocks repeat moved into its `defaults`
   completions   Generate shell completions: the built-in commands, and the commands of the extensions the project at --path enables
   explain       Explain a diagnostic code
   infer-status  Show inference progress (analyzed files, gaps, stale entries)

@@ -11,7 +11,7 @@ use "types/migration"
 use "types/output"
 use "types/wasm"
 
-port CompilerApi {
+port CompilerApi "Compiler Api" {
   direction inbound
   category  "api/compiler"
   method check(config: CompilerConfig) -> Result<DiagnosticBag, ParseError>
@@ -39,7 +39,7 @@ port CompilerApi {
   verify integration "CompilerApi contract is satisfied"
 }
 
-port LspProtocol {
+port LspProtocol "Lsp Protocol" {
   direction inbound
   category  "api/lsp"
   method initialize(config: CompilerConfig) -> Result<void, ExtensionError>
@@ -70,7 +70,7 @@ port LspProtocol {
   verify integration "LspProtocol contract is satisfied"
 }
 
-port McpProtocol {
+port McpProtocol "Mcp Protocol" {
   direction inbound
   category  "api/mcp"
   method initialize(config: CompilerConfig) -> Result<void, ExtensionError>

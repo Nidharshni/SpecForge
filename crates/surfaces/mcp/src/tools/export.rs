@@ -11,7 +11,7 @@ use specforge_ops::view::ProjectView;
 #[derive(Debug, Arguments)]
 pub struct Args {
     /// Export format
-    #[arg(choice = specforge_ops::read::export::AGENT_FORMAT)]
+    #[arg(choice = specforge_ops::read::export::FORMAT)]
     format: Format,
     /// Scope to entity subgraph
     scope: Option<String>,
@@ -59,7 +59,7 @@ impl CoreTool for Tool {
     type Returns = Answered<Text>;
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Text> {
-        // The tool serves the agent formats; dot is `specforge.render`'s.
+        // Every export format, as `specforge export` takes them (ADR 0152 D8).
         let schema = Schema::of_flags(args.with_schema, args.no_schema).map_err(Self::refused)?;
         let request = export::Request {
             format: Some(args.format),

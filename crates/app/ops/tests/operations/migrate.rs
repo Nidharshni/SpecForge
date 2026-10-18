@@ -50,7 +50,7 @@ pub(crate) fn request(root: &specforge_common::ProjectRoot) -> Request<'_> {
 }
 
 /// A project enabling `@acme/x`, with one file at the old format version.
-fn project_with_extension() -> tempfile::TempDir {
+pub(crate) fn project_with_extension() -> tempfile::TempDir {
     let dir = project();
     std::fs::write(
         dir.path().join("specforge.json"),
@@ -149,7 +149,7 @@ fn a_header_only_migration_of_the_dogfood_spec_keeps_its_graph() {
 
 #[specforge_test(
     behavior = "validate_post_migration_integrity",
-    verify = "a migration step that changes an entity's title or kind is reported and rolled back"
+    verify = "a migration that changes an existing title or a kind is reported and rolled back"
 )]
 fn a_migration_step_that_changes_a_title_or_a_kind_is_rolled_back() {
     for (from, to, aspect) in [
@@ -755,7 +755,7 @@ fn a_diagnostic_the_migration_introduces_is_reported() {
         let migrated = std::fs::read_to_string(file).map_err(|e| e.to_string())?;
         std::fs::write(
             file,
-            format!("{migrated}\nfeature extra \"Extra\" {{\n  behaviors [ghost]\n}}\n"),
+            format!("{migrated}\nbehavior extra \"Extra\" {{\n  features [ghost]\n}}\n"),
         )
         .map_err(|e| e.to_string())
     }));

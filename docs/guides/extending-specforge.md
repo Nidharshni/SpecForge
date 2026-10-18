@@ -75,7 +75,7 @@ about to use.
 # Act II — Scaffold
 
 ```console
-$ specforge new --extension @you/my-ext
+$ specforge extension init --name @you/my-ext
 ```
 
 That scaffolds a ready-to-build project:
@@ -141,7 +141,7 @@ handler: commands ([A command](#a-command)), MCP tools and resources,
 compiler passes (`p.run`), collectors (`k.collect`), custom rules
 (`r.validate`), scanners (`a.scan`) and the migration hook. The SDK decodes
 each export's input and encodes its answer, as the protocol's types
-(`docs/extension-protocol.md`, "Operate"). `specforge new --extension`
+(`docs/extension-protocol.md`, "Operate"). `specforge extension init`
 scaffolds all of this for you.
 
 Three things happened:

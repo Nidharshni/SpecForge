@@ -15,7 +15,7 @@ pub fn reading() -> Served {
         .enabling(&["@specforge/software", "@specforge/testing"])
         .file(
             "test.spec",
-            "behavior alpha \"Alpha\" {\n  category command\n  contract \"MUST work\"\n  verify unit \"works\"\n}\n\nfeature beta \"Beta\" {\n  behaviors [alpha]\n}\n\nbehavior untitled_one {\n  category command\n  refines [ghost_ref]\n}\n",
+            "behavior alpha \"Alpha\" {\n  category command\n  contract \"MUST work\"\n  features [beta]\n  verify unit \"works\"\n}\n\nfeature beta \"Beta\" {\n  problem \"Users need it\"\n}\n\nbehavior untitled_one {\n  category command\n  refines [ghost_ref]\n}\n",
         )
         .file("src/lib.rs", "pub fn f() {}\n")
         .file(
@@ -126,6 +126,14 @@ pub const WRITES: &[(&str, &str)] = &[
     (
         "specforge.rename",
         r#"{"entity_id":"alpha","new_name":"gamma2"}"#,
+    ),
+    (
+        "specforge.edit",
+        r#"{"edits":[{"op":"set","entity_id":"alpha","field":"contract","value":"The system MUST work"}],"dry_run":true}"#,
+    ),
+    (
+        "specforge.edit",
+        r#"{"edits":[{"op":"set","entity_id":"alpha","field":"contract","value":"The system MUST work"}]}"#,
     ),
     ("specforge.init", r#"{"path":"<elsewhere>/new"}"#),
     (

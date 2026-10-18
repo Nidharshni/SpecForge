@@ -9,11 +9,11 @@ use specforge_test::prelude::*;
 const SOURCES: &[(&str, &str)] = &[
     (
         "test.spec",
-        "behavior alpha \"Alpha Behavior\" {\n    contract \"The system MUST do alpha\"\n    verify unit \"does alpha correctly\"\n}\n",
+        "behavior alpha \"Alpha Behavior\" {\n    contract \"The system MUST do alpha\"\n    features [beta_feature]\n    verify unit \"does alpha correctly\"\n}\n",
     ),
     (
         "features.spec",
-        "feature beta_feature \"Beta Feature\" {\n    behaviors [alpha]\n}\n",
+        "feature beta_feature \"Beta Feature\" {\n    problem \"Users need it\"\n}\n",
     ),
     (
         "invariants.spec",
@@ -214,7 +214,7 @@ fn query_returns_subgraph() {
     assert_eq!(node_ids(&parsed), vec!["alpha", "beta_feature"]);
     assert_eq!(
         parsed["edges"],
-        json!([{"source": "beta_feature", "target": "alpha", "label": "behaviors"}])
+        json!([{"source": "alpha", "target": "beta_feature", "label": "features"}])
     );
 }
 
@@ -423,12 +423,12 @@ fn trace_returns_chain() {
     let text = tool_text(&resp);
     let parsed: Value = serde_json::from_str(&text).unwrap();
     assert_eq!(parsed["entity_id"], "alpha");
-    // beta_feature -> alpha, so beta_feature is upstream of alpha.
-    let upstream = parsed["upstream"].as_array().unwrap();
-    assert_eq!(upstream.len(), 1, "{parsed}");
-    assert_eq!(upstream[0]["entity_id"], "beta_feature");
-    assert_eq!(upstream[0]["edge_label"], "behaviors");
-    assert_eq!(parsed["downstream"], json!([]));
+    // alpha -> beta_feature, so beta_feature is downstream of alpha.
+    let downstream = parsed["downstream"].as_array().unwrap();
+    assert_eq!(downstream.len(), 1, "{parsed}");
+    assert_eq!(downstream[0]["entity_id"], "beta_feature");
+    assert_eq!(downstream[0]["edge_label"], "features");
+    assert_eq!(parsed["upstream"], json!([]));
 }
 
 // B:provide_mcp_trace_tool — verify unit "unknown entity returns error"
@@ -1768,15 +1768,15 @@ fn search_references_filter() {
     let resp = call_tool(
         &mut server,
         "specforge.search",
-        json!({"query": "", "references": "alpha"}),
+        json!({"query": "", "references": "beta_feature"}),
     );
     let text = tool_text(&resp);
     let parsed: Value = serde_json::from_str::<Value>(&text).unwrap()["results"].clone();
     let results = parsed.as_array().unwrap();
-    // beta_feature has an edge to alpha
-    assert!(results.iter().any(|r| r["entity_id"] == "beta_feature"));
+    // alpha has an edge to beta_feature
+    assert!(results.iter().any(|r| r["entity_id"] == "alpha"));
     assert!(
-        results.iter().all(|r| r["entity_id"] != "alpha"),
+        results.iter().all(|r| r["entity_id"] != "beta_feature"),
         "{parsed}"
     );
 }

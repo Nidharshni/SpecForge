@@ -11,6 +11,11 @@ use "types/graph"
 use "types/output"
 use "types/zero-entity-core"
 
+defaults behavior {
+  features [graph_protocol_versioning]
+  ports    [CompilerApi]
+}
+
 // ── Self-Describing Graph Protocol Schema ─────────────────────────────
 
 behavior generate_schema_from_registries "Generate Schema From Registries" {
@@ -32,7 +37,6 @@ behavior generate_schema_from_registries "Generate Schema From Registries" {
     RegistryBuild,
     SchemaExtensionInfo,
   ]
-  ports      [CompilerApi]
   consumes   [registries_populated]
   produces   [schema_generated]
   requires {
@@ -64,7 +68,7 @@ behavior generate_schema_from_registries "Generate Schema From Registries" {
     cache MUST be invalidated at the start of each new compilation cycle.
     Each SchemaField is its registered field's declaration: its type is
     the field type the extension declares, named as the extension
-    protocol names it (string, integer, bool, enum, string_list,
+    protocol names it (string, integer, bool, enum, identifier, string_list,
     reference, reference_list, block), an enum field carries its declared
     values, and a declared default value is carried.
   """
@@ -95,7 +99,6 @@ behavior embed_schema_in_export "Embed Schema in Export" {
   ]
   category   query
   types      [Graph, GraphProtocolSchema, OutputFile]
-  ports      [CompilerApi]
   // Barrier-join: schema pipeline must complete (schema_version_computed) AND
   // validation must complete (validation_complete) before export embedding.
   consumes   [schema_version_computed, validation_complete]
@@ -133,7 +136,6 @@ behavior embed_schema_in_export "Embed Schema in Export" {
 }
 
 behavior persist_schema_cache "Persist Schema Cache" {
-  features   [graph_protocol_versioning]
   invariants [
     graph_schema_completeness,
     diagnostic_determinism,
@@ -179,7 +181,6 @@ behavior serve_schema_resource "Serve Schema Resource" {
   ]
   category   command
   types      [GraphProtocolSchema, SchemaEntityKind]
-  ports      [CompilerApi]
   consumes   [validation_complete]
   requires {
     validation_complete_fired "validation_complete event has fired, confirming the schema reflects the current compilation state"
@@ -288,7 +289,6 @@ behavior serve_graph_resource "Serve Graph Resource via MCP" {
 // ── Graph Protocol Versioning ─────────────────────────────────────
 
 behavior negotiate_schema_version "Negotiate Schema Version" {
-  features   [graph_protocol_versioning]
   invariants [
     graph_schema_completeness,
     diagnostic_determinism,
@@ -297,7 +297,6 @@ behavior negotiate_schema_version "Negotiate Schema Version" {
   ]
   category   command
   types      [SchemaVersion, SchemaCompatibility, GraphProtocolSchema, ExportResult, VersionedSchema]
-  ports      [CompilerApi]
   consumes   [validation_complete, schema_breaking_change_detected]
   produces   [schema_version_negotiated]
   requires {
@@ -332,7 +331,6 @@ behavior negotiate_schema_version "Negotiate Schema Version" {
 }
 
 behavior detect_breaking_schema_changes "Detect Breaking Schema Changes" {
-  features   [graph_protocol_versioning]
   invariants [
     graph_schema_completeness,
     diagnostic_determinism,
@@ -407,7 +405,6 @@ behavior detect_breaking_schema_changes "Detect Breaking Schema Changes" {
 }
 
 behavior compute_schema_version "Compute Schema Version" {
-  features   [graph_protocol_versioning]
   invariants [
     graph_schema_completeness,
     diagnostic_determinism,
@@ -416,7 +413,6 @@ behavior compute_schema_version "Compute Schema Version" {
   ]
   category   query
   types      [SchemaVersion, VersionedSchema, GraphProtocolSchema, SchemaCacheEntry]
-  ports      [CompilerApi]
   // compute_schema_version depends on breaking change classification from
   // detect_breaking_schema_changes, not the raw schema_generated event.
   consumes   [schema_breaking_change_detected]
@@ -464,7 +460,6 @@ behavior compute_schema_version "Compute Schema Version" {
 }
 
 behavior publish_schema_specification "Publish Schema Specification" {
-  features   [graph_protocol_versioning]
   invariants [
     graph_schema_completeness,
     diagnostic_determinism,

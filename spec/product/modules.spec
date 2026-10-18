@@ -107,7 +107,7 @@ module specforge_formatter "specforge-formatter" {
   family      core
   description "The .spec formatter: a document, or the blocks a range touches, in canonical layout under its .specforgefmt.toml, a form it cannot read kept as written (ADR 0021, ADR 0063)"
   features    [code_formatting, lsp_formatting]
-  depends_on  [specforge_common, specforge_parser, tree_sitter_specforge]
+  depends_on  [specforge_common, specforge_graph, specforge_parser, tree_sitter_specforge]
   tags        ["formatter", "tooling"]
 }
 
@@ -121,7 +121,7 @@ module specforge_graph "specforge-graph" {
 
 module specforge_migrate "specforge-migrate" {
   family      core
-  description "Format-version migration of a project's .spec files: the rewrite, its backups and rollback record, and the W054 report of what it changed in the graph"
+  description "Format-version migration of a project's .spec files: the rewrite, its backups and rollback record, the migration steps, and the W054 report of what it changed in the graph"
   depends_on  [specforge_common, specforge_formatter, specforge_graph, specforge_parser]
   tags        ["pipeline"]
 }

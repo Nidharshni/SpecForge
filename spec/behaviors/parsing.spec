@@ -9,8 +9,11 @@ use "types/core"
 use "types/errors"
 use "types/wasm"
 
+defaults behavior {
+  features [spec_file_parsing]
+}
+
 behavior parse_spec_file_to_ast "Parse Spec File to AST" {
-  features   [spec_file_parsing]
   invariants [
     multi_error_collection,
     string_interning_consistency,
@@ -110,7 +113,6 @@ behavior recover_from_syntax_errors "Recover From Syntax Errors" {
 }
 
 behavior parse_use_imports "Parse Use Imports" {
-  features   [spec_file_parsing]
   invariants [import_dag, zero_domain_knowledge_core, string_interning_consistency]
   category   command
   types      [SpecFile, ImportDeclaration, SourceSpan]
@@ -133,7 +135,6 @@ behavior parse_use_imports "Parse Use Imports" {
 }
 
 behavior parse_all_block_types "Parse All Block Types" {
-  features   [spec_file_parsing]
   invariants [
     multi_error_collection,
     zero_domain_knowledge_core,
@@ -166,7 +167,8 @@ behavior parse_all_block_types "Parse All Block Types" {
   }
   contract   """
     The parser MUST use a single generic entity_block rule that parses
-    any keyword name [title] { fields } structure. Only spec, ref, use,
+    any keyword name [title] { fields } structure,
+    or keyword name [title] = variants for a union. Only spec, ref, use,
     and define have dedicated grammar rules due to unique structural
     syntax (ref uses scheme:identifier format). All other keywords MUST
     be parsed generically — the parser MUST NOT reject unknown keywords.
@@ -188,6 +190,7 @@ behavior parse_all_block_types "Parse All Block Types" {
   verify unit "generic block preserves kind, name, title, and fields"
   verify unit "parse string field values correctly"
   verify unit "a type field named kind is an ordinary field"
+  verify unit "a union block carries its title"
   verify contract "Parse All Block Types: block type parsing holds — source_parser_available, generic_blocks_parsed, unknown_keywords_accepted"
   verify unit "field annotations are extracted into FieldEntry"
   verify unit "a list of bare words keeps each item bare"
@@ -202,7 +205,6 @@ behavior parse_all_block_types "Parse All Block Types" {
 }
 
 behavior parse_triple_quoted_strings "Parse Triple-Quoted Strings" {
-  features   [spec_file_parsing]
   invariants [multi_error_collection, string_interning_consistency, zero_domain_knowledge_core]
   category   command
   types      [SpecFile, StringValue]
@@ -271,7 +273,6 @@ behavior provide_code_folding_queries "Provide Code Folding Queries" {
 // validation) applies type coercion rules. See types/core.spec for the
 // canonical FieldValue type and coercion documentation.
 behavior parse_verify_statements "Parse Verify Statements" {
-  features   [spec_file_parsing]
   invariants [
     multi_error_collection,
     zero_domain_knowledge_core,
@@ -311,7 +312,6 @@ behavior parse_verify_statements "Parse Verify Statements" {
 }
 
 behavior parse_ref_blocks "Parse Ref Blocks" {
-  features   [spec_file_parsing]
   invariants [
     multi_error_collection,
     zero_domain_knowledge_core,
@@ -347,7 +347,6 @@ behavior parse_ref_blocks "Parse Ref Blocks" {
 }
 
 behavior lex_spec_text "Lex Spec Text" {
-  features   [spec_file_parsing]
   invariants [zero_domain_knowledge_core, source_span_completeness]
   category   query
   types      [SourceSpan]
@@ -401,7 +400,6 @@ behavior lex_spec_text "Lex Spec Text" {
 }
 
 behavior parse_define_blocks "Parse Define Blocks" {
-  features   [spec_file_parsing]
   invariants [
     multi_error_collection,
     zero_domain_knowledge_core,

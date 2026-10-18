@@ -64,8 +64,9 @@ feature mcp_mutation_tools "MCP Mutation Tools" {
     to CLI commands, losing structured responses and atomicity.
   """
   solution """
-    Seven mutation MCP tools — specforge.format, specforge.rename, specforge.init,
-    specforge.add_extension, specforge.remove_extension, specforge.migrate, and
+    Eight mutation MCP tools — specforge.format, specforge.rename,
+    specforge.edit, specforge.init, specforge.add_extension,
+    specforge.remove_extension, specforge.migrate, and
     specforge.infer_session (which records inference progress in
     specforge-infer.json, project state no source regenerates) — expose all
     write operations through MCP with structured input/output, enabling

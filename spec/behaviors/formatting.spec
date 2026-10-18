@@ -9,8 +9,11 @@ use "types/config"
 use "types/core"
 use "types/formatting"
 
+defaults behavior {
+  features [code_formatting]
+}
+
 behavior format_spec_files "Format Spec Files" {
-  features   [code_formatting]
   invariants [
     formatting_idempotency,
     formatting_consistency,
@@ -59,6 +62,7 @@ behavior format_spec_files "Format Spec Files" {
     exit 1; the files are still formatted.
   """
   verify unit "files matching the canonical format are not rewritten"
+  verify unit "a value is written in its field's form, read from the project's declarations"
   verify unit "changed files are printed to stdout"
   verify unit "summary count reflects actual changes"
   verify integration "formatting all files in spec/ directory succeeds"
@@ -72,7 +76,6 @@ behavior format_spec_files "Format Spec Files" {
 }
 
 behavior preserve_comments "Preserve Comments During Formatting" {
-  features   [code_formatting]
   invariants [comment_preservation]
   category   command
   types      [FormatConfig]
@@ -109,7 +112,6 @@ behavior preserve_comments "Preserve Comments During Formatting" {
 }
 
 behavior check_formatting "Check Formatting Without Modifying Files" {
-  features   [code_formatting]
   // Dry-run mode: does not emit format_complete (no files modified)
   category   validation
   invariants [
@@ -153,7 +155,6 @@ behavior check_formatting "Check Formatting Without Modifying Files" {
 }
 
 behavior show_formatting_diff "Show Formatting Diff" {
-  features   [code_formatting]
   // Dry-run mode: does not emit format_complete (no files modified)
   category   query
   invariants [
@@ -191,7 +192,6 @@ behavior show_formatting_diff "Show Formatting Diff" {
 }
 
 behavior format_from_stdin "Format from Standard Input" {
-  features   [code_formatting]
   invariants [
     formatting_idempotency,
     formatting_consistency,
@@ -223,6 +223,7 @@ behavior format_from_stdin "Format from Standard Input" {
     unformatted, the formatted text MUST still be printed and the command
     MUST exit with code 1. Its output is the formatted text, so --stdin
     MUST refuse --format json (invalid_input, the error document on stdout).
+    Values are written in the forms of the project's declarations.
   """
   verify unit "stdin content is formatted and written to stdout"
   verify unit "--stdin refuses --format json with the error document"
@@ -234,7 +235,6 @@ behavior format_from_stdin "Format from Standard Input" {
 }
 
 behavior load_format_config "Load Format Configuration" {
-  features   [code_formatting]
   invariants [config_defaults_valid]
   category   query
   types      [FormatConfig]
@@ -272,7 +272,6 @@ behavior load_format_config "Load Format Configuration" {
 }
 
 behavior apply_format_rules "Apply Format Rules" {
-  features   [code_formatting]
   // Extension format rules are discovered via the contribution registry at format time
   category   query
   invariants [
@@ -315,8 +314,11 @@ behavior apply_format_rules "Apply Format Rules" {
     comments and imports. The formatted text ends every line with LF
     (CRLF line endings become LF, inside string literals too) and ends with
     exactly one newline; no blank line opens or closes it, and a blank text
-    formats to the empty text. String literals, triple-quoted ones included, are
-    kept byte-for-byte: their text is a field's value. Statements keep their source
+    formats to the empty text. A value is written in its field's form
+    (ADR 0147): a quoted word on a field whose declared type writes it bare
+    loses its quotes, and a bare word on a text field gains them, read from
+    the project's declarations; nothing else in a string literal changes, and
+    a triple-quoted one is kept byte-for-byte. Statements keep their source
     order; only runs of imports are sorted. An expression block's
     expressions are indented one level inside it, its closing brace at its
     field's level, whatever their indentation. Field keys align to the longest
@@ -338,11 +340,14 @@ behavior apply_format_rules "Apply Format Rules" {
   verify unit "alignment rules align field values within blocks"
   verify unit "statements keep their source order"
   verify unit "a union that does not fit wraps one variant per line"
+  verify unit "a union title survives formatting"
   verify unit "wrapping rules break long reference lists to multi-line"
   verify unit "import sorting produces alphabetical order"
   verify unit "blank line rules enforce exactly one between blocks"
   verify unit "comment rules normalize spacing around inline comments"
   verify unit "multiline string literals are kept byte-for-byte"
+  verify unit "a value is written in its field's form, read from the project's declarations"
+  verify unit "without the project's declarations no value is rewritten"
   verify unit "an expression block's lines are indented one level inside it, whatever their indentation"
   verify property "two files differing only in whitespace produce identical output after formatting"
   verify unit "the formatted text has LF line endings and exactly one final newline"
@@ -350,7 +355,6 @@ behavior apply_format_rules "Apply Format Rules" {
 }
 
 behavior maintain_format_idempotency "Maintain Format Idempotency" {
-  features   [code_formatting]
   invariants [formatting_idempotency, formatting_semantic_preservation]
   category   query
   types      [FormatConfig]
@@ -401,7 +405,7 @@ behavior lsp_format_document "LSP Format Document" {
     it MUST format the full document using the formatting engine and
     return a list of TextEdit operations. Applied to the document, the
     edits MUST give exactly the text specforge format writes for the
-    same file, byte for byte, in one pass: an edit may span line breaks,
+    same file, byte for byte, with the field forms of the served project, in one pass: an edit may span line breaks,
     so blank lines are removed, a missing final newline is added and CRLF
     line endings become LF. An edit replaces only the text formatting
     changes, so text the formatter keeps, and an editor's cursor in it,
@@ -513,7 +517,6 @@ behavior lsp_respect_editor_config "LSP Respect Editor Config" {
 }
 
 behavior format_with_parse_errors "Format Files with Parse Errors" {
-  features   [code_formatting]
   // formatting_consistency applies to well-formed regions only; error regions
   // are preserved verbatim and do not participate in consistency checks.
   category   query
@@ -568,7 +571,6 @@ behavior format_with_parse_errors "Format Files with Parse Errors" {
 }
 
 behavior discover_format_targets "Discover Format Targets" {
-  features   [code_formatting]
   invariants [discover_completeness]
   category   query
   types      [FormatConfig, CompilerConfig]

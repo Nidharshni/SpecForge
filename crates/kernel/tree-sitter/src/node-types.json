@@ -964,6 +964,16 @@
           }
         ]
       },
+      "title": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      },
       "variants": {
         "multiple": false,
         "required": true,

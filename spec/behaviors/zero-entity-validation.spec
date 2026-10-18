@@ -11,11 +11,14 @@ use "types/errors"
 use "types/wasm"
 use "types/zero-entity-core"
 
+defaults behavior {
+  features [declarative_validation_rules]
+}
+
 // -- Declarative Validation --------------------------------------------------
 
 // No consumes — synchronous helper the registry build runs (registry_build_rules)
 behavior parse_validation_rule_pattern "Parse Validation Rule Pattern" {
-  features   [declarative_validation_rules]
   invariants [zero_domain_knowledge_core, declarative_validation_determinism]
   category   command
   types      [ValidationRulePattern, ValidationPatternKind, FieldConstraint]
@@ -59,7 +62,6 @@ behavior parse_validation_rule_pattern "Parse Validation Rule Pattern" {
 }
 
 behavior execute_validation_pattern "Execute Validation Pattern" {
-  features   [declarative_validation_rules]
   invariants [zero_domain_knowledge_core, declarative_validation_determinism]
   category   command
   types      [ValidationRulePattern, ValidationPatternKind, Diagnostic]
@@ -125,7 +127,6 @@ behavior execute_validation_pattern "Execute Validation Pattern" {
 }
 
 behavior emit_diagnostic_from_pattern "Emit Diagnostic From Pattern" {
-  features   [declarative_validation_rules]
   invariants [zero_domain_knowledge_core, declarative_validation_determinism]
   category   command
   types      [ValidationRulePattern, Diagnostic]
@@ -155,7 +156,6 @@ behavior emit_diagnostic_from_pattern "Emit Diagnostic From Pattern" {
 }
 
 behavior register_custom_validation_patterns "Register Custom Validation Patterns" {
-  features   [declarative_validation_rules]
   invariants [zero_domain_knowledge_core, declarative_validation_determinism]
   category   command
   types      [ValidationRulePattern, CustomCall, ExtensionDeclaration]
@@ -207,7 +207,6 @@ behavior register_custom_validation_patterns "Register Custom Validation Pattern
 }
 
 behavior snapshot_entities_once "Snapshot the Entities Once per Compile" {
-  features   [declarative_validation_rules]
   invariants [
     zero_domain_knowledge_core,
     declarative_validation_determinism,
@@ -307,7 +306,8 @@ behavior check_entities_in_one_order "Check the Entities in One Order" {
     unknown kinds (E024), reserved
     entity IDs (E013), the identifier length contract (E014), unknown
     fields (W020), verify statements on a kind that accepts none (W158),
-    field values that cannot be their declared type (E061), then the
+    field values that cannot be their declared type (E061), values
+    written in the other form than their field's (W159), then the
     rule set: the extensions' rules by code, then the host's E006 rules
     and its E016 rules, which report a path a file-reference field names
     that does not exist (E016 is the host's file_exists rule for each
@@ -333,7 +333,7 @@ behavior check_entities_in_one_order "Check the Entities in One Order" {
     The checks read the file system only through the disk they are
     given; what they read there is the session's check inputs.
   """
-  verify unit "the structural checks run in one order: W012, E024, E013, E014, W020, W158, E061, then the rule set, the host's E006 and E016 rules last"
+  verify unit "the structural checks run in one order: W012, E024, E013, E014, W020, W158, E061, W159, then the rule set, the host's E006 and E016 rules last"
   verify unit "with no entity kind registered, E024, E013, E014, W020, W158 and E061 do not run, and W012 and the rules still do"
   verify unit "extensions that load but declare no entity kind report one W151 naming the unchecked entities"
   verify unit "an entity ID equal to a structural keyword or a registered kind's keyword is E013"
@@ -354,7 +354,7 @@ behavior detect_unknown_entity_fields "Detect Unknown Entity Fields" {
     registries_populated_fired "registries_populated event has fired, confirming FieldRegistry and KindRegistry are fully populated"
   }
   ensures {
-    unknown_fields_diagnosed "W020 warning emitted for every unrecognized field name on registered entity kinds"
+    unknown_fields_diagnosed "W020 warning emitted for every unrecognized field name on registered entity kinds, E079 when the name is the other side of a relation another kind owns"
     cascading_avoided        "Field validation skipped for entities with unregistered kinds (already E024)"
   }
   contract   """
@@ -363,15 +363,21 @@ behavior detect_unknown_entity_fields "Detect Unknown Entity Fields" {
     each field name against the FieldRegistry for that kind. Every field
     name not present in the FieldRegistry for the entity's kind MUST
     produce a W020 warning diagnostic with the entity's source span, the
-    unrecognized field name, and the entity kind name. `title` is
-    structural and MUST NOT be checked against the FieldRegistry. Every
-    other name, `expression` included, MUST be checked like any field: the
+    unrecognized field name, and the entity kind name. Every name, `title`
+    and `expression` included, MUST be checked like any field: the
     prove pass reads only fields an extension declares a proof role for
     (ADR 0009), so an undeclared `expression` is W020. When a builtin
     extension's enhancement declares the field on that kind (the candidate
     vocabulary, e.g. an invariant's `expression` from @specforge/formal),
     the W020 MUST suggest installing that extension, as E024 does for a
     kind.
+    A field the kind does not register that is the other side of a relation
+    another kind owns (ADR 0150) MUST produce E079 instead of W020, naming
+    the owning field and the edit: an owning field of another kind that
+    targets this kind names it in its inverse_of, or every id the field
+    lists is an entity of one other kind that owns a reference field into
+    this kind. A field of the kind's own relations (a self-relation) is
+    never the other side, and stays W020.
     `verify` statements are not fields (ADR 0094): a field named `verify`
     MUST be checked like any field, and statements on a kind no
     extension made testable (supports_verify) MUST produce W158. When the
@@ -381,11 +387,15 @@ behavior detect_unknown_entity_fields "Detect Unknown Entity Fields" {
   verify unit "unregistered field name produces W020"
   verify unit "W020 includes field name, entity kind, and source span"
   verify unit "registered field name does not produce W020"
-  verify unit "title is not checked against the field registry"
+  verify unit "a body field named title is W020 where no extension declares it"
   verify unit "a field named verify is checked like any field"
   verify unit "verify statements on a kind no extension made testable produce W158"
   verify unit "expression is checked like any other field (W020 where undeclared)"
   verify unit "an undeclared field a builtin enhancement adds suggests its extension"
+  verify unit "a field written on the non-owning side of a relation is E079 naming the owning field"
+  verify unit "a reverse name an inverse_of declares is E079 even when its ids do not resolve"
+  verify unit "an event's trigger is E079 naming the produces and consumes fields"
+  verify unit "an unknown field of a kind's own relation stays W020"
   verify unit "field validation skipped when entity kind is unregistered"
   verify contract "Detect Unknown Entity Fields: unknown field detection holds — registries_populated_fired, unknown_fields_diagnosed, cascading_avoided"
 }
@@ -400,6 +410,7 @@ behavior check_field_value_types "Check Field Value Types" {
     registries_populated_fired "registries_populated event has fired, confirming the FieldRegistry holds each field's declared type"
   }
   ensures {
+    off_form_warned      "W159 warning for every value written in the other form than its field's declared type gives it, at the value, unless E061 refuses the field"
     single_values_listed "A string, bare word, integer, boolean or date on a string_list or reference_list field is stored as a one-item list, and a mixed list as a list of its items' text"
     mismatches_diagnosed "E061 error for every value whose shape the field's declared type never takes, or whose value it refuses; a value it admits is one the published schema admits"
     undeclared_untouched "Unknown fields keep their parsed value and produce no E061"
@@ -423,12 +434,23 @@ behavior check_field_value_types "Check Field Value Types" {
     and the value given. A string field takes text, a bare word, a date, a
     type union or an expression group; an enum one of its declared values
     (suggesting the closest); an integer field an integer; a bool field
-    true or false; a reference field one id; a string_list or
-    reference_list field a list; a block field a block. Fields no
+    true or false; an identifier field one word (letters, digits and `_`,
+    starting with a letter or `_`), bare or quoted; a reference field one id;
+    a string_list or reference_list field a list; a block field a block. Fields no
     extension registers keep their parsed value (W020 reports them). The
     check MUST run wherever the registry checks run: check, watch and the
     LSP. It reads each field's value shape and value span from the entity
     snapshot, never a graph node.
+
+    A value written in the other form than its field's declared type gives
+    it MUST produce a W159 warning at the value, one per value, naming the
+    field and the form (ADR 0147): bare for an enum, identifier or reference
+    value and each item of a reference list, quoted for text and each item of
+    a string list. The check runs right after E061, only on a value E061
+    admits, and agrees with `specforge format`: a value is W159 exactly when
+    format rewrites it (both ask FieldForms::rewrite). A bare word on a kind
+    that takes members is not W159: it may be a member's type; nor is a
+    quoted value that is not a word, or true or false, on a bare field.
   """
   verify unit "a single string on a string_list field becomes a one-item list"
   verify unit "a single reference on a reference_list field becomes a one-item list"
@@ -440,5 +462,9 @@ behavior check_field_value_types "Check Field Value Types" {
   verify unit "a value of a shape its declared type never takes is an error"
   verify unit "a value the check admits is written as the published schema admits it"
   verify unit "a value outside a builtin vocabulary is E061"
-  verify contract "Check Field Value Types: declared field types hold — registries_populated_fired, single_values_listed, mismatches_diagnosed, undeclared_untouched"
+  verify unit "a value that is not one word on an identifier field is E061"
+  verify unit "a quoted word on a word field and a bare word on a text field are W159"
+  verify unit "a bare word on a kind that takes members is not W159"
+  verify unit "a value E061 refuses is not W159"
+  verify contract "Check Field Value Types: declared field types hold — registries_populated_fired, off_form_warned, single_values_listed, mismatches_diagnosed, undeclared_untouched"
 }

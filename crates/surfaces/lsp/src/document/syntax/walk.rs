@@ -224,6 +224,16 @@ impl Walk<'_> {
         self.state = next;
     }
 
+    /// A union's `=` (lexeme `i`): its variants are values of no field.
+    fn open_union(&mut self, i: usize) -> bool {
+        self.set(i, Role::Other);
+        self.state = Expect::Value(Ctx {
+            key: None,
+            atoms: Role::Value,
+        });
+        true
+    }
+
     /// Open an entity's body at `{` (lexeme `i`) after header `header`.
     fn open_entity(&mut self, i: usize, header: u32) {
         self.set(i, Role::Other);
@@ -254,7 +264,12 @@ impl Walk<'_> {
             }
             Expect::HeaderName(header) => match kind {
                 LexemeKind::Ident | LexemeKind::RefId => {
-                    self.set(i, Role::Name);
+                    // The name a `defaults` header gives is a kind, not an entity (ADR 0149).
+                    let kind = self
+                        .syntax
+                        .text(text, self.syntax.headers[header as usize].kind);
+                    let is_defaults = kind == specforge_common::structural::DEFAULTS;
+                    self.set(i, if is_defaults { Role::Kind } else { Role::Name });
                     self.syntax.header_of[i] = Some(header);
                     self.syntax.headers[header as usize].name = Some(i as u32);
                     self.state = Expect::HeaderTitle(header);
@@ -284,24 +299,17 @@ impl Walk<'_> {
                     self.open_entity(i, header);
                     true
                 }
-                LexemeKind::Punct('=') => {
-                    // A union: its variants are values of no field.
-                    self.set(i, Role::Other);
-                    self.state = Expect::Value(Ctx {
-                        key: None,
-                        atoms: Role::Value,
-                    });
-                    true
-                }
+                LexemeKind::Punct('=') => self.open_union(i),
                 _ => false,
             },
-            Expect::HeaderOpen(header) => {
-                if punct == Some('{') {
+            Expect::HeaderOpen(header) => match punct {
+                Some('{') => {
                     self.open_entity(i, header);
-                    return true;
+                    true
                 }
-                false
-            }
+                Some('=') => self.open_union(i),
+                _ => false,
+            },
             Expect::DefineName | Expect::DefineOpen => match kind {
                 LexemeKind::Ident if self.state == Expect::DefineName => {
                     self.set(i, Role::Other);

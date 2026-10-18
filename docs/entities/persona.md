@@ -52,7 +52,6 @@ persona admin "System Administrator" {
 | `status` | PersonaStatus enum | Lifecycle state: `active`, `deprecated`. Another value is E061. Absent status treated as `active` for incremental adoption. |
 | `reason` | string | Rationale for deprecation (expected when `status=deprecated`, checked by I069). |
 | `tags` | string list | Free-form tags for categorization. |
-| `refs` | reference list | External references (issues, tickets, diagrams) linked to this persona. |
 
 ## Relationships
 

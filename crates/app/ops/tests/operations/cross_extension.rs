@@ -34,15 +34,14 @@ fn edges(list: &[(&str, &str, &str)]) -> EdgeSet {
         .collect()
 }
 
-/// One edge per reference-list entry of specs::CROSS_REF (trigger is a plain
-/// field, not a reference list, so it makes no edge).
+/// One edge per reference-list entry of specs::CROSS_REF, each written on the
+/// field that owns its relation.
 fn cross_ref_spec_edges() -> EdgeSet {
     edges(&[
         ("validate_graph", "graph_validation", "features"),
         ("resolve_refs", "graph_validation", "features"),
-        ("graph_validation", "validate_graph", "behaviors"),
-        ("graph_validation", "resolve_refs", "behaviors"),
-        ("refs_resolved", "validate_graph", "enforced_by"),
+        ("validate_graph", "refs_resolved", "invariants"),
+        ("validate_graph", "validation_complete", "produces"),
         ("unresolved_ref", "resolve_refs", "mitigations"),
     ])
 }
@@ -65,8 +64,8 @@ fn unresolved_cross_ref_produces_e003() {
     let (_project, compiled) = built(&[(
         "main.spec",
         r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha, nonexistent_behavior] }
+feature alpha "A" { problem "first" solution "s" }
+behavior gamma "G" { contract "second" features [alpha, nonexistent_feature] }
 "#,
     )]);
 
@@ -111,18 +110,14 @@ failure_mode parser_crash "PC" {
 fn product_references_software_entities() {
     let found = checked_edges(
         r#"
-behavior parse_input "P" { contract "must parse" }
 feature fast_parsing "F" {
     problem "need speed"
     solution "be fast"
-    behaviors [parse_input]
 }
+behavior parse_input "P" { contract "must parse" features [fast_parsing] }
 "#,
     );
-    assert_eq!(
-        found,
-        edges(&[("fast_parsing", "parse_input", "behaviors")])
-    );
+    assert_eq!(found, edges(&[("parse_input", "fast_parsing", "features")]));
 }
 
 #[specforge_test(
@@ -164,34 +159,27 @@ fn trace_crosses_extension_boundaries() {
     };
 
     // unresolved_ref (governance failure_mode) -mitigations-> resolve_refs
-    // (software behavior) -features-> graph_validation (product feature)
-    // -behaviors-> validate_graph. Nothing points at unresolved_ref.
+    // (software behavior) -features-> graph_validation (product feature).
+    // Nothing points at unresolved_ref.
     let (upstream, downstream) = trace("unresolved_ref");
     assert_eq!(upstream, set(&[]));
     assert_eq!(
         downstream,
-        set(&[
-            ("resolve_refs", 1),
-            ("graph_validation", 2),
-            ("validate_graph", 3)
-        ])
+        set(&[("resolve_refs", 1), ("graph_validation", 2)])
     );
 
-    // resolve_refs sits in the middle: connected both ways across kinds.
-    let (upstream, downstream) = trace("resolve_refs");
+    // graph_validation is the far end of two behaviors' `features`, and the
+    // failure mode reaches it through resolve_refs: connected across kinds.
+    let (upstream, downstream) = trace("graph_validation");
     assert_eq!(
         upstream,
         set(&[
-            ("graph_validation", 1),
-            ("unresolved_ref", 1),
-            ("validate_graph", 2),
-            ("refs_resolved", 3),
+            ("validate_graph", 1),
+            ("resolve_refs", 1),
+            ("unresolved_ref", 2),
         ])
     );
-    assert_eq!(
-        downstream,
-        set(&[("graph_validation", 1), ("validate_graph", 2)])
-    );
+    assert_eq!(downstream, set(&[]));
 }
 
 #[specforge_test(
@@ -202,12 +190,11 @@ fn did_you_mean_works_across_entity_kinds() {
     let (_project, compiled) = built(&[(
         "main.spec",
         r#"
-behavior validate_graph "V" { contract "must validate" }
 feature graph_validation "G" {
     problem "must validate"
     solution "validation"
-    behaviors [validat_graph]
 }
+behavior validate_graph "V" { contract "must validate" features [graph_validatio] }
 "#,
     )]);
 
@@ -216,7 +203,7 @@ feature graph_validation "G" {
         .map(|d| format!("{} {}", d["message"], d["suggestion"]))
         .collect();
     assert!(
-        rendered.contains("did you mean") && rendered.contains("validate_graph"),
+        rendered.contains("did you mean") && rendered.contains("graph_validation"),
         "should suggest correct entity across kinds: {}",
         rendered,
     );

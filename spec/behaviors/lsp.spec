@@ -16,6 +16,11 @@ use "types/lsp"
 use "types/wasm"
 use "types/zero-entity-core"
 
+defaults behavior {
+  features [live_diagnostics]
+  types    [SourceSpan]
+}
+
 behavior lsp_initialize "LSP Initialize" {
   features   [lsp_lifecycle]
   invariants [zero_domain_knowledge_core, lsp_extension_reload_consistency]
@@ -90,7 +95,6 @@ behavior document_open_close "Document Open/Close" {
   features   [lsp_lifecycle]
   invariants [incremental_correctness, lsp_state_concurrency_safety]
   category   command
-  types      [SourceSpan]
   ports      [LspProtocol]
   produces   [file_changed]
   requires {
@@ -147,7 +151,6 @@ behavior document_open_close "Document Open/Close" {
 // Event consumer chain: didChange -> file_changed -> debounce window ->
 // incremental rebuild (see shared_incremental_pipeline and behaviors/incremental.spec).
 behavior handle_text_document_change "Handle Text Document Change" {
-  features   [live_diagnostics]
   types      [SpecFile, SourceSpan, ContentChangeEvent]
   category   command
   ports      [LspProtocol]
@@ -292,6 +295,7 @@ behavior hover_information "Hover Information" {
   """
   verify unit "hover delegates to provide_extension_entity_hover"
   verify unit "hover returns markdown-formatted content"
+  verify unit "hover lists a type member named title"
   verify unit "field help answers only on a field's name"
   verify unit "field help names a field's type as E061 does, an enum's declared values included"
   verify unit "field help says what an absent value counts as"
@@ -299,7 +303,6 @@ behavior hover_information "Hover Information" {
 }
 
 behavior hover_diagnostic "Hover a Diagnostic" {
-  features   [live_diagnostics]
   category   query
   invariants [lsp_response_latency]
   types      [HoverContent]
@@ -465,7 +468,6 @@ behavior rename_entity_id "Rename Entity ID" {
 }
 
 behavior emit_live_diagnostics "Live Diagnostics" {
-  features   [live_diagnostics]
   invariants [
     multi_error_collection,
     incremental_correctness,
@@ -738,6 +740,7 @@ behavior provide_semantic_tokens "Provide Semantic Tokens" {
     enumMember and a boolean field's value a keyword.
   """
   verify unit "entity ID declaration uses its kind's semantic_token from the KindRegistry"
+  verify unit "a titled union is a form and its variants are values"
   verify unit "structural keywords are classified as keyword"
   verify unit "a string list's bare item is no reference"
   verify unit "triple-quoted strings are classified as strings"
@@ -860,7 +863,6 @@ behavior goto_import_definition "Go-to-Definition on Imports" {
   features   [go_to_definition_and_references]
   category   query
   invariants [reference_resolution_completeness, lsp_response_latency, zero_domain_knowledge_core]
-  types      [SourceSpan]
   ports      [LspProtocol]
   requires {
     imports_resolved "use import paths are resolved against the sources the project was last compiled from"
@@ -952,10 +954,8 @@ behavior code_action_create_entity_stub "Code Action: Create Entity Stub" {
 }
 
 behavior incremental_document_sync "Incremental Document Sync" {
-  features   [live_diagnostics]
   invariants [incremental_correctness, lsp_response_latency, lsp_utf16_positions]
   category   command
-  types      [SourceSpan]
   ports      [LspProtocol]
   requires {
     lsp_initialized_fired "LSP server has been initialized with INCREMENTAL sync kind advertised"

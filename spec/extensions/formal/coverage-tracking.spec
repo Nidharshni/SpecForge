@@ -10,6 +10,10 @@ use "extensions/formal/invariants"
 use "extensions/formal/types"
 use "types/zero-entity-core"
 
+defaults behavior {
+  features [fa_coverage_tracking]
+}
+
 behavior fa_coverage_tracking_pass "Coverage Tracking Compiler Pass" {
   category command
   types    [ConditionEntry, RefinementChain, CoverageTrackingItem, CoverageTrackingKind]
@@ -30,7 +34,6 @@ behavior fa_coverage_tracking_pass "Coverage Tracking Compiler Pass" {
     process_items         "process_coverage items generated for process entities (alphabet completeness, composition safety)"
     json_output           "each item emitted as structured JSON: entity ID, kind, description, discharge status"
   }
-  features [fa_coverage_tracking]
   verify unit "condition_coverage items generated"
   verify unit "invariant_coverage items generated"
   verify unit "layering_coverage items generated"
@@ -67,7 +70,6 @@ behavior fa_track_coverage_discharge "Track Coverage Item Discharge" {
     layering_superset_auto  "opted-in concrete behavior whose ensures is a strict superset of abstract ensures auto-discharges layering_coverage to heuristic_ok"
     tautological_criteria   "tautological auto-discharge applies only when: (a) postcondition uses no identifiers from requires, (b) description matches trivial patterns, (c) condition has no side-effect verbs — this is a closed list of criteria"
   }
-  features [fa_coverage_tracking]
   verify unit "item with test file transitions to test_written"
   verify unit "item with failing test transitions to test_failing"
   verify unit "item discharged by test transitions to test_covered"
@@ -100,7 +102,6 @@ behavior fa_emit_coverage_item_covered_info "I008: Coverage Item Covered by Test
     info_emitted      "test_covered item emits I008 with test name"
     claim_only_silent "an item proven only by an entailed claim emits no I008"
   }
-  features [fa_coverage_tracking]
   verify unit "coverage item covered by test produces I008"
 }
 
@@ -118,7 +119,6 @@ behavior fa_emit_no_structural_cycles_info "I009: No Structural Cycles Detected"
     info_emitted "cycle-free event graph emits I009"
     cycle_silent "an event graph with an unmitigated cycle emits no I009"
   }
-  features [fa_coverage_tracking]
   verify unit "cycle-free event graph produces I009"
 }
 
@@ -136,7 +136,6 @@ behavior fa_emit_formal_analysis_available "I015: Formal Analysis Available" {
     once_per_compile "a compile emits at most one I015"
     absent_silent    "behaviors without requires or ensures emit no I015"
   }
-  features [fa_coverage_tracking]
   verify unit "behaviors with requires/ensures trigger I015 info"
 }
 
@@ -167,7 +166,6 @@ behavior fa_detect_specification_depth "I014: Specification Depth Level" {
     level_one_silent  "behavior at Level 1 (entity_graph) emits no depth diagnostic"
     adoption_nudge    "when >5 behaviors are at Level 0-1, one more I014 suggests adopting requires/ensures on critical behaviors"
   }
-  features [fa_coverage_tracking]
   verify unit "entity with requires/ensures computes as Level 2 (conditions)"
   verify unit "entity with maintains and invariant refs computes as Level 3 (invariants)"
   verify unit "entity with all obligations proven computes as Level 4 (proofs)"

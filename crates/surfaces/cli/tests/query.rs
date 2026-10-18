@@ -1,9 +1,9 @@
 use crate::support::{Cli, TestProject};
 
 const SPEC_CONTENT: &str = r#"
-behavior alpha "Alpha" { contract "first" }
-behavior beta "Beta" { contract "second" }
-feature gamma "Gamma" { behaviors [alpha, beta] }
+behavior alpha "Alpha" { contract "first" features [gamma] }
+behavior beta "Beta" { contract "second" features [gamma] }
+feature gamma "Gamma" { problem "third" }
 invariant delta "Delta" { guarantee "always" }
 "#;
 

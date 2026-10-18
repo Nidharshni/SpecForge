@@ -7,18 +7,29 @@
 
 // ── File Extensions & Classification ───────────────────────────
 
-// File extensions this extension handles. .d.ts is declaration-only.
-// .mjs/.cjs are ESM/CJS entry points. .tsx/.jsx imply React.
-type TsFileExtension = ts | tsx | js | jsx | mjs | cjs | dts
+type TsFileExtension "File extensions this extension handles. .d.ts is declaration-only. .mjs/.cjs are ESM/CJS entry points. .tsx/.jsx imply React." = ts
+  | tsx
+  | js
+  | jsx
+  | mjs
+  | cjs
+  | dts
 
-// Classifies a source file's role in the project.
-type TsFileRole = production | test | story | config | script | declaration | generated
+type TsFileRole "Classifies a source file's role in the project." = production
+  | test
+  | story
+  | config
+  | script
+  | declaration
+  | generated
 
-// How the file was detected as a particular role.
-type TsFileRoleSignal = file_extension | path_pattern | file_content | package_json | config_file
+type TsFileRoleSignal "How the file was detected as a particular role." = file_extension
+  | path_pattern
+  | file_content
+  | package_json
+  | config_file
 
-// Describes a source file with its role classification.
-type TsSourceFile {
+type TsSourceFile "Describes a source file with its role classification." {
   path             string @readonly
   extension        TsFileExtension
   role             TsFileRole
@@ -31,9 +42,7 @@ type TsSourceFile {
 
 // ── Test File Detection ────────────────────────────────────────
 
-// Patterns that identify non-production files. The scanner uses these
-// to classify files before extracting SourceItems.
-type TsTestFilePattern {
+type TsTestFilePattern "Patterns that identify non-production files. The scanner uses these to classify files before extracting SourceItems." {
   pattern     string @readonly
   role        TsFileRole
   description string @optional
@@ -57,14 +66,15 @@ type TsTestFilePattern {
 
 // ── Export Kinds ───────────────────────────────────────────────
 
-// The syntactic form of a TypeScript/JavaScript export.
-type TsExportKind = named_export | default_export | re_export | barrel_export | namespace_export
+type TsExportKind "The syntactic form of a TypeScript/JavaScript export." = named_export
+  | default_export
+  | re_export
+  | barrel_export
+  | namespace_export
 
 // ── Source Item Kinds ──────────────────────────────────────────
 
-// The semantic category of an exported symbol. This is the primary
-// discriminator for entity mapping inference.
-type TsItemKind = function_item
+type TsItemKind "The semantic category of an exported symbol. This is the primary discriminator for entity mapping inference." = function_item
   | class_item
   | interface_item
   | type_alias_item
@@ -79,10 +89,7 @@ type TsItemKind = function_item
 
 // ── The Core Type: TsSourceItem ────────────────────────────────
 
-// A single exported symbol extracted from a TypeScript/JavaScript file.
-// This is the primary output of the source scanner and the input to
-// entity ID mapping and inference.
-type TsSourceItem {
+type TsSourceItem "A single exported symbol extracted from a TypeScript/JavaScript file. This is the primary output of the source scanner and the input to entity ID mapping and inference." {
   // Identity
   name                    string              @readonly
   entity_id               string              @readonly
@@ -141,7 +148,7 @@ type TsSourceItem {
 
 // ── Parameters ─────────────────────────────────────────────────
 
-type TsParameter {
+type TsParameter "Ts Parameter" {
   name            string        @readonly
   type_annotation string        @optional
   is_optional     boolean       @optional
@@ -155,7 +162,7 @@ type TsParameter {
 
 // ── JSDoc ──────────────────────────────────────────────────────
 
-type TsJsDocTag {
+type TsJsDocTag "Ts Js Doc Tag" {
   tag             string @readonly
   name            string @optional
   text            string @optional
@@ -165,8 +172,7 @@ type TsJsDocTag {
 
 // ── Decorators ─────────────────────────────────────────────────
 
-// Decorators from Angular, NestJS, TypeORM, MobX, etc.
-type TsDecorator {
+type TsDecorator "Decorators from Angular, NestJS, TypeORM, MobX, etc." {
   name       string   @readonly
   // Full decorator expression (e.g., "@Controller('/users')")
   expression string   @optional
@@ -178,7 +184,7 @@ type TsDecorator {
 
 // ── Class Members ──────────────────────────────────────────────
 
-type TsClassMember {
+type TsClassMember "Ts Class Member" {
   name            string          @readonly
   member_kind     TsClassMemberKind
   type_annotation string          @optional
@@ -195,7 +201,7 @@ type TsClassMember {
   verify unit "TsClassMember schema is valid"
 }
 
-type TsClassMemberKind = method
+type TsClassMemberKind "Ts Class Member Kind" = method
   | property
   | getter
   | setter
@@ -203,11 +209,11 @@ type TsClassMemberKind = method
   | index_signature
   | static_block
 
-type TsAccessibility = public | protected | private
+type TsAccessibility "Ts Accessibility" = public | protected | private
 
 // ── Enum Members ───────────────────────────────────────────────
 
-type TsEnumMember {
+type TsEnumMember "Ts Enum Member" {
   name          string @readonly
   value         string @optional
   jsdoc_summary string @optional
@@ -216,8 +222,7 @@ type TsEnumMember {
 
 // ── React-Specific ─────────────────────────────────────────────
 
-// React component and hook metadata extracted by the scanner.
-type TsReactInfo {
+type TsReactInfo "React component and hook metadata extracted by the scanner." {
   component_type      TsReactComponentType
   // Props type name (e.g., "UserCardProps")
   props_type          string        @optional
@@ -246,7 +251,7 @@ type TsReactInfo {
   verify unit "TsReactInfo schema is valid"
 }
 
-type TsReactComponentType = function_component
+type TsReactComponentType "Ts React Component Type" = function_component
   | class_component
   | forward_ref_component
   | memo_component
@@ -256,10 +261,7 @@ type TsReactComponentType = function_component
 
 // ── Inference Signals ──────────────────────────────────────────
 
-// Signals detected during scanning that guide entity kind inference.
-// Each signal has a kind (what was detected), a confidence score,
-// and a suggested entity kind for the specforge graph.
-type TsInferenceSignal {
+type TsInferenceSignal "Signals detected during scanning that guide entity kind inference. Each signal has a kind (what was detected), a confidence score, and a suggested entity kind for the specforge graph." {
   signal_kind      TsSignalKind
   confidence       number
   suggested_entity TsSuggestedEntity
@@ -267,7 +269,7 @@ type TsInferenceSignal {
   verify unit "TsInferenceSignal schema is valid"
 }
 
-type TsSignalKind = exports_service_class
+type TsSignalKind "Ts Signal Kind" = exports_service_class
   | exports_controller_class
   | exports_repository_class
   | exports_react_component
@@ -304,17 +306,19 @@ type TsSignalKind = exports_service_class
   | is_grpc_service
   | is_websocket_gateway
 
-// Which specforge entity kind a signal suggests.
-type TsSuggestedEntity = behavior | invariant | event | type | port
+type TsSuggestedEntity "Which specforge entity kind a signal suggests." = behavior
+  | invariant
+  | event
+  | type
+  | port
 
 // ── Module System ──────────────────────────────────────────────
 
-type TsModuleSystem = esm | commonjs | ambient | global_script
+type TsModuleSystem "Ts Module System" = esm | commonjs | ambient | global_script
 
 // ── Entity ID Mapping ──────────────────────────────────────────
 
-// How a TypeScript symbol name is converted to a specforge entity ID.
-type TsEntityIdMapping {
+type TsEntityIdMapping "How a TypeScript symbol name is converted to a specforge entity ID." {
   original_name string  @readonly
   entity_id     string  @readonly
   resolution    TsMappingResolution
@@ -323,7 +327,10 @@ type TsEntityIdMapping {
   verify unit "TsEntityIdMapping schema is valid"
 }
 
-type TsMappingResolution = tests_field | jsdoc_tag | naming_convention | barrel_trace
+type TsMappingResolution "Ts Mapping Resolution" = tests_field
+  | jsdoc_tag
+  | naming_convention
+  | barrel_trace
 
 // Entity ID conversion rules:
 //   PascalCase class/interface -> snake_case: UserService -> user_service
@@ -336,8 +343,7 @@ type TsMappingResolution = tests_field | jsdoc_tag | naming_convention | barrel_
 
 // ── Monorepo Types ─────────────────────────────────────────────
 
-// Monorepo tool detection and package resolution.
-type TsMonorepoTool = npm_workspaces
+type TsMonorepoTool "Monorepo tool detection and package resolution." = npm_workspaces
   | yarn_workspaces
   | pnpm_workspaces
   | nx
@@ -345,7 +351,7 @@ type TsMonorepoTool = npm_workspaces
   | lerna
   | rush
 
-type TsMonorepoInfo {
+type TsMonorepoInfo "Ts Monorepo Info" {
   tool            TsMonorepoTool
   root_path       string   @readonly
   packages        TsPackageInfo[]
@@ -354,7 +360,7 @@ type TsMonorepoInfo {
   verify unit "TsMonorepoInfo schema is valid"
 }
 
-type TsPackageInfo {
+type TsPackageInfo "Ts Package Info" {
   name          string   @readonly
   path          string   @readonly
   // Relative path from monorepo root
@@ -370,7 +376,7 @@ type TsPackageInfo {
 
 // ── Framework Detection ────────────────────────────────────────
 
-type TsFramework = react
+type TsFramework "Ts Framework" = react
   | next
   | remix
   | angular
@@ -386,7 +392,7 @@ type TsFramework = react
   | nuxt
   | gatsby
 
-type TsFrameworkDetection {
+type TsFrameworkDetection "Ts Framework Detection" {
   framework  TsFramework
   version    string @optional
   confidence number
@@ -396,8 +402,7 @@ type TsFrameworkDetection {
 
 // ── Scan Result ────────────────────────────────────────────────
 
-// Top-level output from scanning a TypeScript/JavaScript project.
-type TsScanResult {
+type TsScanResult "Top-level output from scanning a TypeScript/JavaScript project." {
   files_scanned    integer
   files_skipped    integer
   items_extracted  integer
@@ -411,9 +416,7 @@ type TsScanResult {
 
 // ── Source Anchor ──────────────────────────────────────────────
 
-// Given an entity ID, the source anchor locates the defining symbol
-// across potentially many files (barrel re-exports, type merging).
-type TsSourceAnchor {
+type TsSourceAnchor "Given an entity ID, the source anchor locates the defining symbol across potentially many files (barrel re-exports, type merging)." {
   entity_id           string                @readonly
   primary_file        string
   primary_line        integer
@@ -424,7 +427,7 @@ type TsSourceAnchor {
   verify unit "TsSourceAnchor schema is valid"
 }
 
-type TsSecondaryLocation {
+type TsSecondaryLocation "Ts Secondary Location" {
   file_path string
   line      integer
   column    integer @optional
@@ -432,7 +435,7 @@ type TsSecondaryLocation {
   verify unit "TsSecondaryLocation schema is valid"
 }
 
-type TsSecondaryRole = re_export
+type TsSecondaryRole "Ts Secondary Role" = re_export
   | interface_merge
   | module_augmentation
   | type_override
@@ -440,8 +443,7 @@ type TsSecondaryRole = re_export
 
 // ── Config ─────────────────────────────────────────────────────
 
-// Extension-specific configuration in specforge.json.
-type TsExtensionConfig {
+type TsExtensionConfig "Extension-specific configuration in specforge.json." {
   // Additional file patterns to exclude from scanning
   exclude_patterns   string[]             @optional
   // Additional file patterns to include (overrides default exclusions)
@@ -461,7 +463,7 @@ type TsExtensionConfig {
   verify unit "TsExtensionConfig schema is valid"
 }
 
-type TsEntityIdOverride {
+type TsEntityIdOverride "Ts Entity Id Override" {
   symbol_name  string @readonly
   file_pattern string @optional
   entity_id    string @readonly

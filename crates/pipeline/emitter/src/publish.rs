@@ -97,7 +97,9 @@ pub fn publish(schema: &GraphProtocolSchema, format: EmitFormat) -> Option<Value
                 *at(&mut document, "/properties/nodes/items/properties/kind") =
                     json!({"type": "string", "enum": kinds});
             }
-            EmitFormat::Dot => unreachable!("DOT has no document schema"),
+            EmitFormat::Dot | EmitFormat::Markdown => {
+                unreachable!("DOT and markdown have no document schema")
+            }
         }
     }
 
@@ -142,7 +144,9 @@ pub fn publish(schema: &GraphProtocolSchema, format: EmitFormat) -> Option<Value
         EmitFormat::Json => (None, "graph"),
         EmitFormat::Context => (Some("context"), "context"),
         EmitFormat::Brief => (Some("brief"), "brief"),
-        EmitFormat::Dot => unreachable!("DOT has no document schema"),
+        EmitFormat::Dot | EmitFormat::Markdown => {
+            unreachable!("DOT and markdown have no document schema")
+        }
     };
     let mut annotated = Map::new();
     annotated.insert(

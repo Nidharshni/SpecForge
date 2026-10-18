@@ -215,7 +215,7 @@
           "default_value": null,
           "description": "Classification of the constraint (e.g. performance, security, regulatory)",
           "edge": null,
-          "field_type": "string",
+          "field_type": "identifier",
           "file_reference": false,
           "inverse_of": null,
           "name": "category",
@@ -292,7 +292,7 @@
           "edge": "ConstraintEnforcedByBehavior",
           "field_type": "reference_list",
           "file_reference": false,
-          "inverse_of": "invariants",
+          "inverse_of": null,
           "name": "enforced_by",
           "required": false,
           "target_kind": "behavior"

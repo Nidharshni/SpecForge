@@ -10,22 +10,22 @@ use std::path::{Path, PathBuf};
 /// unit "works".
 const ALPHA_SPEC: &str = concat!(
     "behavior alpha \"Alpha\" {\n",
-    "    contract \"MUST work\"\n",
+    "    contract \"MUST work\" features [beta]\n",
     "    verify unit \"works\"\n",
     "    // the one behavior\n",
     "}\n",
 );
 
-/// feat.spec: feature `beta` on lines 1–3, its `behaviors [alpha]` on line
-/// 2 (`alpha` at columns 16–21).
-const BETA_SPEC: &str = "feature beta \"Beta\" {\n    behaviors [alpha]\n}\n";
+/// feat.spec: feature `beta` on lines 1–3, which `alpha` names in `features`.
+const BETA_SPEC: &str = "feature beta \"Beta\" {\n    problem \"Users need it\"\n}\n";
 
-/// feat.spec: `beta` with `alpha` and the invariant `gamma`.
-const BETA_WITH_GAMMA: &str =
-    "feature beta \"Beta\" {\n    behaviors [alpha]\n    invariants [gamma]\n}\n";
+/// test.spec's `alpha` that also names the invariant `gamma`.
+fn alpha_with_gamma() -> String {
+    ALPHA_SPEC.replace("features [beta]", "features [beta] invariants [gamma]")
+}
 
 /// The two-entity project the contracts read: behavior `alpha` (test.spec)
-/// and feature `beta` (feat.spec) with a `behaviors` edge beta -> alpha.
+/// and feature `beta` (feat.spec) with a `features` edge alpha -> beta.
 fn contracts_project() -> TestProject {
     TestProject::new()
         .file("test.spec", ALPHA_SPEC)
@@ -315,7 +315,7 @@ fn contract_query() {
     assert_eq!(node_ids(&parsed), ["alpha", "beta"]);
     assert_eq!(
         parsed["edges"],
-        json!([{"source": "beta", "target": "alpha", "label": "behaviors"}])
+        json!([{"source": "alpha", "target": "beta", "label": "features"}])
     );
     assert_eq!(
         find(&parsed["nodes"], "id", "alpha")["fields"]["contract"],
@@ -377,7 +377,7 @@ fn contract_export() {
     assert_eq!(find(&graph["nodes"], "id", "alpha")["file"], "test.spec");
     assert_eq!(
         graph["edges"],
-        json!([{"source": "beta", "target": "alpha", "label": "behaviors"}])
+        json!([{"source": "alpha", "target": "beta", "label": "features"}])
     );
 
     let context = tool(
@@ -481,17 +481,17 @@ fn contract_trace() {
     );
     assert_eq!(chain["entity_id"], "alpha");
     assert_eq!(chain["entity_kind"], "behavior");
+    assert_eq!(chain["upstream"], json!([]));
     assert_eq!(
-        chain["upstream"],
-        json!([{"entity_id": "beta", "entity_kind": "feature", "edge_label": "behaviors", "depth": 1, "status": "resolved"}])
+        chain["downstream"],
+        json!([{"entity_id": "beta", "entity_kind": "feature", "edge_label": "features", "depth": 1, "status": "resolved"}])
     );
-    assert_eq!(chain["downstream"], json!([]));
     // gaps_identified: the missing links, the expected edges an entity
     // lacks; isolation on a side is an empty list, not a gap.
     assert!(chain["missing"].is_array());
     assert!(chain.get("gaps").is_none(), "{chain}");
     let beta = tool(&mut server, "specforge.trace", json!({"entity_id": "beta"}));
-    assert_eq!(beta["upstream"], json!([]));
+    assert_eq!(beta["downstream"], json!([]));
 
     // ...or a McpTracePlanResult for a plan, flagging what the graph lacks.
     let plan = tool(
@@ -605,14 +605,14 @@ fn contract_search() {
     verify = "Provide MCP Stats Tool: MCP stats tool holds — graph_available, stats_returned, latest_state_reflected, tool_invoked_emitted"
 )]
 fn contract_stats() {
-    // An orphan behavior, one nothing references, is a warning: a rule the
-    // extension declares (W901, NoIncomingEdges on `behavior`).
+    // An orphan feature, one nothing references, is a warning: a rule the
+    // extension declares (W901, NoIncomingEdges on `feature`).
     let mut server = contracts_project().serve(&[extension().declaring(|c| {
         c.rule("W901", |r| {
             r.check(CheckKind::NoIncomingEdges)
-                .target_kind("behavior")
+                .target_kind("feature")
                 .severity(ValidationSeverity::Warning)
-                .message_template("behavior '{id}' is an orphan");
+                .message_template("feature '{id}' is an orphan");
         });
     })]);
     let stats = tool(&mut server, "specforge.stats", json!({}));
@@ -632,12 +632,12 @@ fn contract_stats() {
     // line 10), and its warning show up at once.
     server.write(
         "test.spec",
-        &format!("{ALPHA_SPEC}\n\n\n\nbehavior gamma \"GAMMA\" {{\n}}\n"),
+        &format!("{ALPHA_SPEC}\n\n\n\nfeature gamma \"GAMMA\" {{\n}}\n"),
     );
     let stats = tool(&mut server, "specforge.stats", json!({}));
     assert_eq!(
         stats["entity_counts"],
-        json!([{"kind": "behavior", "count": 2}, {"kind": "feature", "count": 1}])
+        json!([{"kind": "behavior", "count": 1}, {"kind": "feature", "count": 2}])
     );
     assert_eq!(stats["unconnected_count"], 1);
     assert_eq!(stats["diagnostic_summary"]["warnings"], 1);
@@ -674,7 +674,7 @@ fn contract_inspect() {
     assert_eq!(details["contract"], "MUST work");
     assert_eq!(details["fields"]["contract"], "MUST work");
     assert_eq!(details["verify_declarations"], json!(["unit works"]));
-    assert_eq!(details["referenced_by"], json!(["beta"]));
+    assert_eq!(details["referenced_by"], json!([]));
     assert_eq!(details["coverage_status"], "uncovered");
     let codes: Vec<&str> = details["diagnostics"]
         .as_array()
@@ -752,28 +752,28 @@ fn contract_find_definition() {
 fn contract_find_references() {
     let mut server = test_server();
 
-    // references_returned: beta references alpha, with where beta lives.
+    // references_returned: alpha references beta, with where alpha lives.
     let refs = call_tool(
         &mut server,
         "specforge.find_references",
-        json!({"entity_id": "alpha"}),
+        json!({"entity_id": "beta"}),
     );
     let refs = tool_json(&refs);
-    assert_eq!(refs["entity_id"], "alpha");
+    assert_eq!(refs["entity_id"], "beta");
     let locations = refs["locations"].as_array().unwrap();
     assert_eq!(locations.len(), 1, "{locations:?}");
-    assert_eq!(locations[0]["referencing_entity_id"], "beta");
-    // The token as written: feat.spec line 2, `    behaviors [alpha]`.
-    assert_eq!(locations[0]["source_span"]["file"], "feat.spec");
+    assert_eq!(locations[0]["referencing_entity_id"], "alpha");
+    // The token as written: test.spec line 2, `    contract "MUST work" features [beta]`.
+    assert_eq!(locations[0]["source_span"]["file"], "test.spec");
     assert_eq!(locations[0]["source_span"]["start_line"], 2);
-    assert_eq!(locations[0]["source_span"]["start_col"], 16);
+    assert_eq!(locations[0]["source_span"]["start_col"], 36);
     assert_eq!(locations[0]["precision"], "token");
 
-    // empty_list_for_unreferenced: nothing references beta; not an error.
+    // empty_list_for_unreferenced: nothing references alpha; not an error.
     let resp = call_tool(
         &mut server,
         "specforge.find_references",
-        json!({"entity_id": "beta"}),
+        json!({"entity_id": "alpha"}),
     );
     assert!(resp["error"].is_null(), "{resp}");
     assert!(resp["result"]["isError"].as_bool() != Some(true), "{resp}");
@@ -960,8 +960,8 @@ fn contract_context_prompt() {
     assert_eq!(context["entity_id"], "alpha");
     assert_eq!(context["kind"], "behavior");
     assert_eq!(context["contract_text"], "MUST work");
-    assert_eq!(context["upstream_entities"], json!(["beta"]));
-    assert_eq!(context["downstream_entities"], json!([]));
+    assert_eq!(context["upstream_entities"], json!([]));
+    assert_eq!(context["downstream_entities"], json!(["beta"]));
     assert_eq!(context["verify_expectations"], json!(["unit works"]));
     // hints_included: gamma rides along although no edge reaches it.
     assert_eq!(context["structural_constraints"], json!(["gamma"]));
@@ -994,12 +994,8 @@ fn contract_review_prompt() {
         .file(
             "test.spec",
             format!(
-                "{ALPHA_SPEC}\nbehavior gamma \"GAMMA\" {{\n    depends_on [delta]\n}}\n\nbehavior delta \"DELTA\" {{\n\n}}\n"
+                "{ALPHA_SPEC}\nbehavior gamma \"GAMMA\" {{\n    depends_on [delta] features [beta]\n}}\n\nbehavior delta \"DELTA\" {{\n\n}}\n"
             ),
-        )
-        .file(
-            "feat.spec",
-            "feature beta \"Beta\" {\n    behaviors [alpha, gamma]\n}\n",
         )
         .serve(&[extension()
             .obligating("behavior")
@@ -1088,14 +1084,16 @@ fn contract_trace_prompt() {
     verify = "Provide MCP Explore Prompt: MCP explore prompt holds — graph_available, exploration_returned, bfs_from_entity, prompt_invoked_emitted"
 )]
 fn contract_explore_prompt() {
-    // alpha <-behaviors- beta -invariants-> gamma (inv.spec); delta
+    // beta <-features- alpha -invariants-> gamma (inv.spec); delta
     // (test.spec 11–13) is unconnected.
     let mut server = contracts_project()
         .file(
             "test.spec",
-            format!("{ALPHA_SPEC}\n\n\n\n\nbehavior delta \"DELTA\" {{\n\n}}\n"),
+            format!(
+                "{}\n\n\n\n\nbehavior delta \"DELTA\" {{\n\n}}\n",
+                alpha_with_gamma()
+            ),
         )
-        .file("feat.spec", BETA_WITH_GAMMA)
         .file("inv.spec", "invariant gamma \"GAMMA\" {\n}\n")
         .serve(&[extension()]);
 
@@ -1105,9 +1103,9 @@ fn contract_explore_prompt() {
         "specforge://prompts/explore",
         json!({}),
     ));
-    assert_eq!(explore["high_connectivity"][0], "beta");
+    assert_eq!(explore["high_connectivity"][0], "alpha");
     assert_eq!(explore["unconnected"], json!(["delta"]));
-    assert_eq!(explore["starting_points"][0], "beta");
+    assert_eq!(explore["starting_points"][0], "alpha");
     assert_eq!(explore["relationship_paths"], json!([]));
 
     // bfs_from_entity: paths from alpha, nearest first.
@@ -1119,8 +1117,8 @@ fn contract_explore_prompt() {
     assert_eq!(
         from_alpha["relationship_paths"],
         json!([
-            {"from_entity": "alpha", "to_entity": "beta", "edge_types": ["behaviors"], "path_length": 1},
-            {"from_entity": "alpha", "to_entity": "gamma", "edge_types": ["behaviors", "invariants"], "path_length": 2},
+            {"from_entity": "alpha", "to_entity": "beta", "edge_types": ["features"], "path_length": 1},
+            {"from_entity": "alpha", "to_entity": "gamma", "edge_types": ["invariants"], "path_length": 1},
         ])
     );
     // A kind filter keeps the paths that end at that kind.
@@ -2185,7 +2183,7 @@ fn contract_graph_resource() {
     assert_eq!(node_ids(&graph), ["alpha", "beta"]);
     assert_eq!(
         graph["edges"],
-        json!([{"source": "beta", "target": "alpha", "label": "behaviors"}])
+        json!([{"source": "alpha", "target": "beta", "label": "features"}])
     );
     assert!(graph["schema"].is_object(), "{graph}");
     assert!(graph["schema"]["entity_kinds"].is_array(), "{graph}");
@@ -2269,7 +2267,7 @@ fn contract_brief_resource() {
     );
     assert_eq!(
         brief["edges"],
-        json!([{"source": "beta", "target": "alpha", "label": "behaviors"}])
+        json!([{"source": "alpha", "target": "beta", "label": "features"}])
     );
     let export = tool(&mut server, "specforge.export", json!({"format": "brief"}));
     assert_eq!(brief, export);
@@ -2288,11 +2286,11 @@ fn contract_diagnostics_resource() {
     let mut server = contracts_project()
         .file(
             "broken.spec",
-            "feature broken \"Broken\" {\n    behaviors [ghost]\n}\nbehavior lonely \"Lonely\" {\n}\n",
+            "behavior broken \"Broken\" {\n    features [ghost]\n}\nbehavior lonely \"Lonely\" {\n}\n",
         )
         .serve(&[extension().declaring(|c| {
             c.rule("W901", |r| {
-                r.check(CheckKind::NoIncomingEdges)
+                r.check(CheckKind::NoOutgoingEdges)
                     .target_kind("behavior")
                     .severity(ValidationSeverity::Warning)
                     .message_template("a warning");
@@ -2307,14 +2305,12 @@ fn contract_diagnostics_resource() {
         json!([
             {"code": "E003", "title": "Unresolved reference", "severity": "Error",
              "message": "unresolved reference 'ghost' in entity 'broken'",
-             "span": {"file": "broken.spec", "start_line": 2, "start_col": 16, "end_line": 2, "end_col": 21},
+             "span": {"file": "broken.spec", "start_line": 2, "start_col": 15, "end_line": 2, "end_col": 20},
              "suggestion": null,
-             "data": {"kind": "unresolved_reference", "target": "ghost", "entity": "broken", "field": "behaviors"},
-             "file": "broken.spec", "line": 2, "column": 16},
-            {"code": "W901", "title": null, "origin": "@test/ext", "severity": "Warning", "message": "a warning",
-             "span": {"file": "broken.spec", "start_line": 4, "start_col": 1, "end_line": 5, "end_col": 2},
-             "suggestion": null,
-             "file": "broken.spec", "line": 4, "column": 1},
+             "data": {"kind": "unresolved_reference", "target": "ghost", "entity": "broken", "field": "features"},
+             "file": "broken.spec", "line": 2, "column": 15},
+            {"code": "W901", "title": null, "origin": "@test/ext", "severity": "Warning", "message": "a warning", "span": {"file": "broken.spec", "start_line": 1, "start_col": 1, "end_line": 3, "end_col": 2}, "suggestion": null, "file": "broken.spec", "line": 1, "column": 1},
+            {"code": "W901", "title": null, "origin": "@test/ext", "severity": "Warning", "message": "a warning", "span": {"file": "broken.spec", "start_line": 4, "start_col": 1, "end_line": 5, "end_col": 2}, "suggestion": null, "file": "broken.spec", "line": 4, "column": 1},
         ])
     );
 
@@ -2332,22 +2328,22 @@ fn contract_diagnostics_resource() {
     verify = "Expose Per-Entity MCP Resource: per-entity MCP resource holds — validation_complete_fired, subgraph_returned, resource_read_emitted"
 )]
 fn contract_entity_resource() {
-    // gamma (inv.spec) hangs off beta: two hops from alpha.
+    // gamma (inv.spec) hangs off alpha, like beta.
     let mut server = contracts_project()
-        .file("feat.spec", BETA_WITH_GAMMA)
+        .file("test.spec", alpha_with_gamma())
         .file("inv.spec", "invariant gamma \"GAMMA\" {\n}\n")
         .serve(&[extension()]);
 
-    // subgraph_returned: alpha, its direct neighbor, the edge between them.
+    // subgraph_returned: alpha, its direct neighbors, the edges between them.
     let (content, entity) = resource(&mut server, "specforge://graph/alpha");
     assert_eq!(content["uri"], "specforge://graph/alpha");
-    assert_eq!(node_ids(&entity), ["alpha", "beta"]);
+    assert_eq!(node_ids(&entity), ["alpha", "beta", "gamma"]);
     assert_eq!(
         entity["edges"],
-        json!([{"source": "beta", "target": "alpha", "label": "behaviors"}])
+        json!([{"source": "alpha", "target": "beta", "label": "features"}, {"source": "alpha", "target": "gamma", "label": "invariants"}])
     );
     let (_, beta) = resource(&mut server, "specforge://graph/beta");
-    assert_eq!(node_ids(&beta), ["alpha", "beta", "gamma"]);
+    assert_eq!(node_ids(&beta), ["alpha", "beta"]);
 
     // An unknown entity is an error, not an empty subgraph.
     let missing = call(
@@ -2378,7 +2374,7 @@ fn project_server() -> (Served, PathBuf) {
     let server = TestProject::new()
         .file(
             "test.spec",
-            "behavior alpha \"Alpha\" {\n}\nfeature beta \"Beta\" {\n    behaviors [alpha]\n}\n",
+            "behavior alpha \"Alpha\" {\n    features [beta]\n}\nfeature beta \"Beta\" {\n    problem \"p\"\n}\n",
         )
         .serve_components();
     let spec = server.root().join("test.spec");
@@ -2437,10 +2433,10 @@ fn contract_graph_notification() {
                 "method": "specforge/graphChanged",
                 "params": {
                     "added_nodes": [{"id": "gamma", "kind": "behavior", "file": "test.spec", "line": 3}],
-                    "removed_nodes": [{"id": "beta", "kind": "feature", "file": "test.spec", "line": 3}],
-                    "modified_nodes": [],
+                    "removed_nodes": [{"id": "beta", "kind": "feature", "file": "test.spec", "line": 4}],
+                    "modified_nodes": [{"id": "alpha", "changed_fields": ["features"], "changed_aspects": ["edges"], "file": "test.spec", "line": 1}],
                     "added_edges": [],
-                    "removed_edges": [{"source": "beta", "target": "alpha", "label": "behaviors"}],
+                    "removed_edges": [{"source": "alpha", "target": "beta", "label": "features"}],
                     "affected_files": ["test.spec"],
                 },
             }),
@@ -2485,7 +2481,7 @@ fn contract_graph_notification() {
         events(&server, "mcp_delta_notified"),
         [
             json!({"notificationType": "graph", "subscriberCount": 1,
-                "addedNodes": 1, "removedNodes": 1, "modifiedNodes": 0}),
+                "addedNodes": 1, "removedNodes": 1, "modifiedNodes": 1}),
             json!({"notificationType": "graph", "subscriberCount": 1,
                 "addedNodes": 0, "removedNodes": 0, "modifiedNodes": 1}),
         ]
@@ -2539,7 +2535,7 @@ fn field_only_edits_are_modified_nodes() {
     // A new field on alpha.
     std::fs::write(
         &spec,
-        "behavior alpha \"Alpha\" {\n  contract \"first\"\n}\nfeature beta \"Beta\" {\n    behaviors [alpha]\n}\n",
+        "behavior alpha \"Alpha\" {\n  contract \"first\"\n  features [beta]\n}\nfeature beta \"Beta\" {\n    problem \"p\"\n}\n",
     )
     .unwrap();
     assert_eq!(modified_after_rebuild(&mut server), json!(["alpha"]));
@@ -2547,7 +2543,7 @@ fn field_only_edits_are_modified_nodes() {
     // A changed field value.
     std::fs::write(
         &spec,
-        "behavior alpha \"Alpha\" {\n  contract \"second\"\n}\nfeature beta \"Beta\" {\n    behaviors [alpha]\n}\n",
+        "behavior alpha \"Alpha\" {\n  contract \"second\"\n  features [beta]\n}\nfeature beta \"Beta\" {\n    problem \"p\"\n}\n",
     )
     .unwrap();
     assert_eq!(modified_after_rebuild(&mut server), json!(["alpha"]));
@@ -2555,7 +2551,7 @@ fn field_only_edits_are_modified_nodes() {
     // A new verify line.
     std::fs::write(
         &spec,
-        "behavior alpha \"Alpha\" {\n  contract \"second\"\n  verify unit \"it works\"\n}\nfeature beta \"Beta\" {\n    behaviors [alpha]\n}\n",
+        "behavior alpha \"Alpha\" {\n  contract \"second\"\n  verify unit \"it works\"\n  features [beta]\n}\nfeature beta \"Beta\" {\n    problem \"p\"\n}\n",
     )
     .unwrap();
     assert_eq!(modified_after_rebuild(&mut server), json!(["alpha"]));
@@ -2563,7 +2559,7 @@ fn field_only_edits_are_modified_nodes() {
     // Two titles at once: the list is sorted.
     std::fs::write(
         &spec,
-        "behavior alpha \"Alpha 2\" {\n  contract \"second\"\n  verify unit \"it works\"\n}\nfeature beta \"Beta 2\" {\n    behaviors [alpha]\n}\n",
+        "behavior alpha \"Alpha 2\" {\n  contract \"second\"\n  verify unit \"it works\"\n  features [beta]\n}\nfeature beta \"Beta 2\" {\n    problem \"p\"\n}\n",
     )
     .unwrap();
     assert_eq!(
@@ -2591,7 +2587,7 @@ fn moving_an_entity_is_not_a_modification() {
     // Blank lines above alpha shift every span.
     std::fs::write(
         &spec,
-        "\n\n\nbehavior alpha \"Alpha\" {\n}\nfeature beta \"Beta\" {\n    behaviors [alpha]\n}\n",
+        "\n\n\nbehavior alpha \"Alpha\" {\n    features [beta]\n}\nfeature beta \"Beta\" {\n    problem \"p\"\n}\n",
     )
     .unwrap();
     rebuild(&mut server);
@@ -2600,7 +2596,7 @@ fn moving_an_entity_is_not_a_modification() {
     // Swapping the two entities moves both.
     std::fs::write(
         &spec,
-        "feature beta \"Beta\" {\n    behaviors [alpha]\n}\n\nbehavior alpha \"Alpha\" {\n}\n",
+        "feature beta \"Beta\" {\n    problem \"p\"\n}\n\nbehavior alpha \"Alpha\" {\n    features [beta]\n}\n",
     )
     .unwrap();
     rebuild(&mut server);
@@ -2609,10 +2605,10 @@ fn moving_an_entity_is_not_a_modification() {
     // Moving alpha to another file.
     std::fs::write(
         spec.with_file_name("moved.spec"),
-        "behavior alpha \"Alpha\" {\n}\n",
+        "behavior alpha \"Alpha\" {\n    features [beta]\n}\n",
     )
     .unwrap();
-    std::fs::write(&spec, "feature beta \"Beta\" {\n    behaviors [alpha]\n}\n").unwrap();
+    std::fs::write(&spec, "feature beta \"Beta\" {\n    problem \"p\"\n}\n").unwrap();
     rebuild(&mut server);
     assert_eq!(server.take_notifications(), moved_graph);
     assert!(events(&server, "mcp_delta_notified").is_empty());
@@ -2632,7 +2628,7 @@ fn a_moved_entity_updates_the_graph_documents() {
     // Three blank lines above alpha: the graph writes its line, the context does not.
     std::fs::write(
         &spec,
-        "\n\n\nbehavior alpha \"Alpha\" {\n}\nfeature beta \"Beta\" {\n    behaviors [alpha]\n}\n",
+        "\n\n\nbehavior alpha \"Alpha\" {\n    features [beta]\n}\nfeature beta \"Beta\" {\n    problem \"p\"\n}\n",
     )
     .unwrap();
     rebuild(&mut server);
@@ -2645,10 +2641,10 @@ fn a_moved_entity_updates_the_graph_documents() {
     // Alpha to another file.
     std::fs::write(
         spec.with_file_name("moved.spec"),
-        "behavior alpha \"Alpha\" {\n}\n",
+        "behavior alpha \"Alpha\" {\n    features [beta]\n}\n",
     )
     .unwrap();
-    std::fs::write(&spec, "feature beta \"Beta\" {\n    behaviors [alpha]\n}\n").unwrap();
+    std::fs::write(&spec, "feature beta \"Beta\" {\n    problem \"p\"\n}\n").unwrap();
     rebuild(&mut server);
     assert_eq!(
         server.take_notifications(),
@@ -2966,7 +2962,7 @@ fn contract_render() {
     let unknown = call_tool(&mut server, "specforge.render", json!({"format": "pdf"}));
     assert_eq!(
         crate::tool_errors::mcp_error(&unknown)["data"]["available_renderers"],
-        json!(["graph", "context", "brief", "dot"])
+        json!(["graph", "context", "brief", "dot", "markdown"])
     );
 
     assert_tool_invoked(&server, "specforge.render");

@@ -1,6 +1,6 @@
 {
   "artifact": "specforge_ext_software.wasm",
-  "artifact_sha256": "8992ba31f34174acb61a3548081d211f9e025be966a0a2eb45eb05bf8612a56d",
+  "artifact_sha256": "d9c16f441c5d38d4895b16583df5fa43bad40f2dd2225e20e9c71837821f4db6",
   "built_with": "rustc 1.98.1 (48a229cea 2026-09-01)",
   "inputs": {
     "Cargo.toml#workspace-inherited": "52364f99354a8a7632b04447fb28097422e9be69bf8730e400b1d3cf5f87c7cc",
@@ -9,7 +9,7 @@
     "crates/leaf/protocol-types/src/command_args.rs": "dfb15939e9da35bf8e321a7bb23c95e8bd3602ded60b392d3a1ac2f043c041a9",
     "crates/leaf/protocol-types/src/declaration.rs": "efbb1fe12cb0a26b393113206ecc96daefa0abf8869e58ea72d06fe5a0d8455c",
     "crates/leaf/protocol-types/src/lib.rs": "cb15d33130a5da2c8dedade2df5fa5bf165c684c5fcd27d31641c1e99452220e",
-    "crates/leaf/protocol-types/src/vocabulary.rs": "0d175d196adfc20eca38e2eaaed16c5d5d3912c26b0c99509ef2393f917e1c70",
+    "crates/leaf/protocol-types/src/vocabulary.rs": "a9f436e4fe11a724bfddd0eeeae0a2db8c1cac8e8f49e0f1cf89e74a8e8b224b",
     "crates/runtime/extension-sdk-macros/Cargo.toml": "2ee3957dcae159e2fd154f756b770f008d7e64a383e41a0070816eba1b2f9646",
     "crates/runtime/extension-sdk-macros/src/lib.rs": "05b9dfd092444a55acc0993f35172ee3d0e4db9b6b1bed77682ce912ba54f67a",
     "crates/runtime/extension-sdk/Cargo.toml": "fa1ef55571099126dce501ac314f06c97f16ada2c1dd36554c74ac0c4a022264",
@@ -20,10 +20,10 @@
     "crates/runtime/extension-sdk/src/operations.rs": "5abc571e460dd645044eb5b5c40e505bec76f4ca12600ae1e23a1eb77895c2f4",
     "crates/runtime/extension-sdk/src/surface.rs": "04753671ca050f7a48b7f2b7bdcbb024e89da6585081e1aae87dde14653b946e",
     "crates/runtime/extension-sdk/src/vocabulary.rs": "93f85b5300e870259d78823b33cc19639aac0c30d966e934d9125e693fc94281",
-    "extensions/software/Cargo.lock": "f03f0739de482c4fb8104ae04790472ceb7d229cf87ebf838432fbe865501afb",
-    "extensions/software/Cargo.toml": "faa52e87f55fd586decb880e48a5e3cf9487835a30775e77c6be9a19f9b52e5f",
-    "extensions/software/src/declaration.rs": "ae6c78b39e8de8b5c222d83c2b6b63d09d25cb94f19bd70b9590ecea303cf261",
-    "extensions/software/src/lib.rs": "ba8aca30cf00729b903fb69e9544ad605d50a0f59adf690a73781779f8cf3ca1",
-    "extensions/software/src/starter.spec": "7ce05f6b65d0cb8d4104cc70f132b719d130f776e12c9b1f128a742e65ef49b7"
+    "extensions/software/Cargo.lock": "9b8e0a046a8b7f60bc1cdec4b52531f5d4f52e5ff7dde7bf245de1ecf90e739c",
+    "extensions/software/Cargo.toml": "41ebd919e527b9e6d5084d595e276af629876c53865e3c2004a4630d9f824890",
+    "extensions/software/src/declaration.rs": "b02ae82e8aa9853f508e6467437cae62db3aceccf67cdcf5a3fcea786ed1fd62",
+    "extensions/software/src/lib.rs": "2101566838e2684b7975ae15df879e757621cf3eb94ced99af7b5ca3212f9e60",
+    "extensions/software/src/starter.spec": "d1c78fa1e131f22051871b9f83f9227c4193d20bfe50378ca9ff3af8e8642989"
   }
 }

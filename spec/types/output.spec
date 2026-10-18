@@ -1,6 +1,6 @@
 // Output types for rendering and emitting
 
-type OutputFile {
+type OutputFile "Output File" {
   path     string       @readonly
   content  string       @readonly
   checksum string       @readonly
@@ -8,11 +8,11 @@ type OutputFile {
   verify unit "OutputFile schema is valid"
 }
 
-type OutputFormat = "json" | "dot" | "context" | "brief" | "graph"
+type OutputFormat "Output Format" = "json" | "dot" | "context" | "brief" | "graph" | "markdown"
 
-type DiagnosticFormat = "text" | "json"
+type DiagnosticFormat "Diagnostic Format" = "text" | "json"
 
-type AgentExportConfig {
+type AgentExportConfig "Agent Export Config" {
   format      OutputFormat @readonly
   scope       string       @readonly @optional
   depth       integer      @readonly @optional
@@ -23,10 +23,9 @@ type AgentExportConfig {
 
 // ── Token Economics ───────────────────────────────────────
 
-type TokenBudgetStrategy = "prioritize"
+type TokenBudgetStrategy "Token Budget Strategy" = "prioritize"
 
-/// The `token_budget` block of an export that did not fit its budget whole.
-type TokenBudgetResult {
+type TokenBudgetResult "The `token_budget` block of an export that did not fit its budget whole." {
   strategy           TokenBudgetStrategy
   budget_tokens      integer
   estimated_tokens   integer
@@ -50,7 +49,7 @@ type DiagnosticSummary "Diagnostic Count Summary" {
 // declared in .spec files. They are included in export output for agent
 // consumption.
 
-type GraphAnnotation {
+type GraphAnnotation "Graph Annotation" {
   key        string @readonly // Always starts with "_" (e.g., "_similarity")
   value_type string @readonly // JSON type: "number", "string", "boolean", "object"
   source     string @readonly // "core" or extension name that produced it
@@ -59,13 +58,13 @@ type GraphAnnotation {
 
 // ── Schema Cache ───────────────────────────────────────────
 
-type SchemaCacheEntry {
+type SchemaCacheEntry "Schema Cache Entry" {
   schema       GraphProtocolSchema @readonly
   content_hash string              @readonly // SHA-256 of the schema's JSON
   verify unit "SchemaCacheEntry schema is valid"
 }
 
-type ExportResult {
+type ExportResult "Export Result" {
   format               OutputFormat
   entity_count         integer
   edge_count           integer

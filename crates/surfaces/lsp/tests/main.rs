@@ -10,6 +10,7 @@ mod completion;
 mod concurrency;
 mod contracts;
 mod cursor;
+mod defaults;
 mod document;
 mod e2e;
 mod field_references;
@@ -32,6 +33,7 @@ mod semantic_tokens;
 mod served;
 mod session;
 mod state;
+mod union_title;
 
 /// Every `.spec` file under `dir`, recursively.
 pub fn spec_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {

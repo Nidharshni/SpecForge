@@ -14,6 +14,11 @@ use "types/errors"
 use "types/wasm"
 use "types/zero-entity-core"
 
+defaults behavior {
+  features [extension_registry]
+  types    [Diagnostic, SchemeRegistryEntry]
+}
+
 // load_extension_manifests is the top-level orchestrator for extension loading.
 // It reads each extension's declaration through load_extension_declaration and
 // hands them all to build_registries_from_declarations.
@@ -611,7 +616,6 @@ behavior validate_ref_target_format "Validate Ref Target Format" {
   features   [provider_based_ref_validation]
   invariants [reference_resolution_completeness, zero_domain_knowledge_core, diagnostic_determinism]
   category   validation
-  types      [Diagnostic, SchemeRegistryEntry]
   ports      [RefValidator]
   requires {
     scheme_registry_populated "SchemeRegistryEntry data is populated from provider registration"
@@ -639,7 +643,6 @@ behavior validate_provider_kinds "Validate Provider Kinds" {
   features   [provider_based_ref_validation]
   invariants [reference_resolution_completeness, zero_domain_knowledge_core, diagnostic_determinism]
   category   validation
-  types      [Diagnostic, SchemeRegistryEntry]
   ports      [RefValidator]
   requires {
     scheme_registry_populated "SchemeRegistryEntry data is populated from provider registration"
@@ -663,7 +666,6 @@ behavior validate_provider_kinds "Validate Provider Kinds" {
 // -- Registry Behaviors -----
 
 behavior resolve_registry_source "Resolve Registry Source" {
-  features   [extension_registry]
   invariants [
     registry_integrity,
     multi_error_collection,
@@ -716,7 +718,6 @@ behavior resolve_registry_source "Resolve Registry Source" {
 }
 
 behavior search_registry "Search Registry" {
-  features   [extension_registry]
   invariants [diagnostic_determinism, multi_error_collection, offline_first_extension_resolution]
   category   query
   types      [RegistryConfig, SearchQuery, SearchResults, SearchHit, CompilerConfig]
@@ -787,7 +788,6 @@ behavior search_registry "Search Registry" {
 // CLI entry point: `specforge publish`. Delegates Wasm binary packaging
 // to publish_wasm_extension in behaviors/wasm-lifecycle.spec.
 behavior publish_to_registry "Publish to Registry" {
-  features   [extension_registry]
   invariants [registry_integrity, multi_error_collection, credential_secrecy]
   category   command
   types      [ExtensionDeclaration, RegistryConfig, PublishReceipt, ExtensionError]
@@ -876,7 +876,6 @@ behavior publish_to_registry "Publish to Registry" {
 }
 
 behavior verify_registry_integrity "Verify Registry Integrity" {
-  features   [extension_registry]
   invariants [registry_integrity, wasm_compile_cache_integrity, offline_first_extension_resolution]
   category   validation
   types      [PackageMetadata, LockFileEntry, ExtensionError]
@@ -911,7 +910,6 @@ behavior verify_registry_integrity "Verify Registry Integrity" {
 // downloaded, the metadata and manifest served, and the user's pins.
 
 behavior check_registry_reply "Check Registry Reply" {
-  features   [extension_registry]
   invariants [registry_reply_binding, registry_integrity]
   category   validation
   types      [PackageMetadata, ExtensionError]
@@ -964,7 +962,6 @@ behavior check_registry_reply "Check Registry Reply" {
 }
 
 behavior verify_publisher_signature "Verify Publisher Signature" {
-  features   [extension_registry]
   invariants [publisher_trust, registry_integrity]
   category   validation
   types      [PackageMetadata, ExtensionError]
@@ -999,7 +996,6 @@ behavior verify_publisher_signature "Verify Publisher Signature" {
 }
 
 behavior pin_publisher_key "Pin Publisher Key" {
-  features   [extension_registry]
   invariants [publisher_trust, extension_operation_atomicity]
   category   command
   types      [PackageMetadata, LockFileEntry, TrustPolicy, KeyPin, ExtensionError]
@@ -1063,7 +1059,6 @@ behavior pin_publisher_key "Pin Publisher Key" {
 }
 
 behavior configure_registries "Configure Registries" {
-  features   [extension_registry]
   invariants [
     diagnostic_determinism,
     zero_domain_knowledge_core,

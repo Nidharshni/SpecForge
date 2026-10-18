@@ -82,12 +82,12 @@ fn init_server_with_project() -> (McpServer, TempDir) {
         spec_dir.join("test.spec"),
         r#"
 behavior hello_world "Hello World" {
-    contract "The system MUST greet the user"
+    contract "The system MUST greet the user" features [greeting]
     verify unit "greets user"
 }
 
 feature greeting "Greeting Feature" {
-    behaviors [hello_world]
+    problem "Hello World implements it"
 }
 "#,
     )
@@ -771,7 +771,7 @@ fn list_tools_core_only() {
     let mut server = init_server();
     let resp = call(&mut server, "tools/list", json!({}));
     let tools = resp["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 34, "the 34 core tools");
+    assert_eq!(tools.len(), 35, "the 35 core tools");
     for tool in tools {
         let name = tool["name"].as_str().unwrap();
         assert!(name.starts_with("specforge."), "{name} is not core");

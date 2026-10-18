@@ -121,7 +121,7 @@ fn classify(
             let key = syntax.key_of[i]?;
             let kind = syntax.kind_of_key(text, key)?;
             match fields.get(kind, syntax.text(text, key))?.field_type() {
-                FieldType::Enum => Some(("enumMember", 0)),
+                FieldType::Enum | FieldType::Identifier => Some(("enumMember", 0)),
                 FieldType::Bool => Some(("keyword", 0)),
                 _ => None,
             }

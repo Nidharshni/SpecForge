@@ -57,6 +57,17 @@ fn every_kinds_fields_and_shared_fields_are_registered() {
     assert!(!build.fields().contains("epic", "estimate"));
 }
 
+/// The field names a type is declared under: its own, and (but for `identifier`, which
+/// has no older spelling) the one a `_type` alias is tried on.
+fn spellings(field_type: FieldType) -> Vec<String> {
+    let name = field_type.as_str();
+    let mut names = vec![name.to_string()];
+    if field_type != FieldType::Identifier {
+        names.push(format!("{name}_alias"));
+    }
+    names
+}
+
 #[spec(
     behavior = "registry_build_fields",
     verify = "each field type and its _type alias register as that type"
@@ -66,10 +77,7 @@ fn each_field_type_and_its_alias_registers_as_that_type() {
         c.kind("Thing", |k| {
             k.keyword("thing");
             for field_type in FieldType::ALL {
-                for name in [
-                    field_type.as_str().to_string(),
-                    format!("{}_alias", field_type.as_str()),
-                ] {
+                for name in spellings(*field_type) {
                     k.field(&name, |f| {
                         if *field_type == FieldType::Enum {
                             f.vocabulary(&Vocabulary::new(&["draft", "done"]));
@@ -96,7 +104,7 @@ fn each_field_type_and_its_alias_registers_as_that_type() {
     );
     for field_type in FieldType::ALL {
         let name = field_type.as_str();
-        for field in [name.to_string(), format!("{name}_alias")] {
+        for field in spellings(*field_type) {
             let entry = build.fields().get("thing", &field).expect(&field);
             assert_eq!(entry.field_type(), *field_type, "{field}");
             assert_eq!(entry.declared().field_type, name, "{field}");

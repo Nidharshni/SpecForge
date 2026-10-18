@@ -127,7 +127,7 @@ fn use_is_suggested_and_define_never_is() {
     let empty = Assembled::over(RegistryBuild::default());
     let bare = ProjectView::of(empty.detached());
     let found = complete("\n", 0, 0, &bare).1;
-    assert_eq!(labels(&found), ["use"]);
+    assert_eq!(labels(&found), ["defaults", "use"]);
     let found = complete_in_project("\n", 0, 0);
     let names = labels(&found);
     assert!(names.contains(&"use"), "{names:?}");

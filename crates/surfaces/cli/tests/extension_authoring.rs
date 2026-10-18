@@ -500,3 +500,87 @@ fn contract_validate_exit_codes() {
         .assert()
         .failure();
 }
+
+#[test]
+fn extension_init_scaffolds_sdk_project() {
+    let dir = scratch();
+    let out = dir.root().join("out");
+
+    let assert = Cli::on(&dir)
+        .bare_command(&[
+            "extension",
+            "init",
+            "--name",
+            "@you/my-ext",
+            "--dir",
+            out.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(assert.status.success());
+
+    let project = out.join("my-ext");
+    let cargo = fs::read_to_string(project.join("Cargo.toml")).unwrap();
+    assert!(cargo.contains(r#"name = "my-ext""#));
+    assert!(cargo.contains("specforge-extension-sdk"));
+    assert!(!cargo.contains("wit-bindgen"));
+
+    let config = fs::read_to_string(project.join(".cargo/config.toml")).unwrap();
+    assert!(config.contains("wasm32-wasip2"));
+
+    let lib = fs::read_to_string(project.join("src/lib.rs")).unwrap();
+    assert!(lib.contains(r#"name = "@you/my-ext""#));
+    assert!(lib.contains("impl Contributions for Extension"));
+}
+
+#[test]
+fn extension_init_refuses_existing_directory() {
+    let dir = scratch();
+    let out = dir.root().join("out");
+    fs::create_dir_all(out.join("dup")).unwrap();
+
+    let assert = Cli::on(&dir)
+        .bare_command(&[
+            "extension",
+            "init",
+            "--name",
+            "dup",
+            "--dir",
+            out.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(!assert.status.success());
+
+    let stderr = String::from_utf8_lossy(&assert.stderr);
+    assert!(stderr.contains("already exists"), "{}", stderr);
+}
+
+#[test]
+fn extension_init_refuses_a_name_that_is_not_a_package_name() {
+    let dir = scratch();
+    let out = dir.root().join("out");
+    let assert = Cli::on(&dir)
+        .bare_command(&[
+            "extension",
+            "init",
+            "--name",
+            "Bad Name",
+            "--dir",
+            out.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(!assert.status.success());
+    assert!(String::from_utf8_lossy(&assert.stderr).contains("E065"));
+    assert!(!out.exists());
+}
+
+#[test]
+fn new_extension_is_no_longer_a_command() {
+    let dir = scratch();
+    Cli::on(&dir)
+        .bare_command(&["new", "--extension", "x"])
+        .assert()
+        .code(2);
+}

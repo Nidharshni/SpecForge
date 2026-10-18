@@ -10,7 +10,7 @@ event extension_loaded "Extension Loaded" {
   verify integration "consumer initialize_wasm_extension receives event and begins initialization"
 }
 
-type ExtensionLoadedPayload {
+type ExtensionLoadedPayload "Extension Loaded Payload" {
   extensionName string
   wasmSize      integer
   fromCache     boolean
@@ -24,7 +24,7 @@ event extension_initialized "Extension Initialized" {
   verify integration "emits extension_initialized with correct entityCount and edgeTypeCount"
 }
 
-type ExtensionInitializedPayload {
+type ExtensionInitializedPayload "Extension Initialized Payload" {
   extensionName string
   entityCount   integer
   edgeTypeCount integer
@@ -37,7 +37,7 @@ event extension_unloaded "Extension Unloaded" {
   verify integration "emits extension_unloaded with correct extensionName and reason"
 }
 
-type ExtensionUnloadedPayload {
+type ExtensionUnloadedPayload "Extension Unloaded Payload" {
   extensionName string
   reason        string
   verify unit "ExtensionUnloadedPayload schema is valid"
@@ -51,7 +51,7 @@ event manifest_validated "Manifest Validated" {
   verify integration "emits manifest_validated with correct entityKindCount and validation status"
 }
 
-type ManifestValidatedPayload {
+type ManifestValidatedPayload "Manifest Validated Payload" {
   extensionName    string
   protocolVersion  string
   entityKindCount  integer
@@ -68,7 +68,7 @@ event extension_install_completed "Extension Install Completed" {
   verify integration "consumer load_wasm_module receives event after install"
 }
 
-type ExtensionInstallCompletedPayload {
+type ExtensionInstallCompletedPayload "Extension Install Completed Payload" {
   extensionName string
   version       string
   source        string
@@ -83,7 +83,7 @@ event wasm_extension_removed "Wasm Extension Removed" {
   verify integration "consumer reuse_session_runtime drops the extension's loaded instance"
 }
 
-type WasmExtensionRemovedPayload {
+type WasmExtensionRemovedPayload "Wasm Extension Removed Payload" {
   extensionName string
   verify unit "WasmExtensionRemovedPayload schema is valid"
 }
@@ -100,7 +100,7 @@ event extension_upgrade_completed "Extension Upgrade Completed" {
   verify integration "consumer load_wasm_module receives event after upgrade"
 }
 
-type ExtensionUpgradeCompletedPayload {
+type ExtensionUpgradeCompletedPayload "Extension Upgrade Completed Payload" {
   extensionName   string
   previousVersion string
   newVersion      string

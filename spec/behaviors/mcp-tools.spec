@@ -16,12 +16,15 @@ use "types/graph"
 use "types/mcp"
 use "types/output"
 
+defaults behavior {
+  features [mcp_core_tools]
+}
+
 // ---------------------------------------------------------------------------
 // Core Tools
 // ---------------------------------------------------------------------------
 
 behavior provide_mcp_query_tool "Provide MCP Query Tool" {
-  features   [mcp_core_tools]
   invariants [
     graph_traversal_integrity,
     diagnostic_determinism,
@@ -73,7 +76,6 @@ behavior provide_mcp_query_tool "Provide MCP Query Tool" {
 // the same output. It does NOT imply execution caching — each invocation
 // performs a full compilation pass.
 behavior provide_mcp_validate_tool "Provide MCP Validate Tool" {
-  features   [mcp_core_tools]
   invariants [
     multi_error_collection,
     diagnostic_determinism,
@@ -127,7 +129,6 @@ behavior provide_mcp_validate_tool "Provide MCP Validate Tool" {
 }
 
 behavior provide_mcp_export_tool "Provide MCP Export Tool" {
-  features   [mcp_core_tools]
   invariants [
     graph_traversal_integrity,
     graph_schema_completeness,
@@ -149,12 +150,12 @@ behavior provide_mcp_export_tool "Provide MCP Export Tool" {
   }
   contract   """
     In MCP server mode, the system MUST register a specforge.export tool that
-    accepts format (required: context|brief|graph), scope? (optional entityId
+    accepts format (graph|context|brief|dot|markdown, default graph; json is graph), scope? (optional entityId
     to restrict to subgraph), max_tokens? (optional integer token budget),
     with_schema? and no_schema? (optional booleans), depth? (with scope,
     hops from the scoped entity), kinds? (entity kinds to keep) and
     schema_version? (as specforge export --schema-version). The tool MUST return the
-    graph in the requested agent-optimized format. When max_tokens is
+    graph in the requested export format. When max_tokens is
     specified, the output MUST be truncated to fit within the budget,
     prioritizing high-connectivity nodes. The output MUST conform to the
     Graph Protocol schema. The tool MUST produce the export specforge export
@@ -185,7 +186,6 @@ behavior provide_mcp_export_tool "Provide MCP Export Tool" {
 }
 
 behavior provide_mcp_trace_tool "Provide MCP Trace Tool" {
-  features   [mcp_core_tools]
   invariants [
     graph_traversal_integrity,
     reference_resolution_completeness,
@@ -236,7 +236,6 @@ behavior provide_mcp_trace_tool "Provide MCP Trace Tool" {
 }
 
 behavior provide_mcp_search_tool "Provide MCP Search Tool" {
-  features   [mcp_core_tools]
   invariants [
     graph_traversal_integrity,
     diagnostic_determinism,
@@ -281,7 +280,6 @@ behavior provide_mcp_search_tool "Provide MCP Search Tool" {
 }
 
 behavior provide_mcp_explain_tool "Provide MCP Explain Tool" {
-  features   [mcp_core_tools]
   invariants [diagnostic_determinism, mcp_structured_error_responses, mcp_tool_idempotency]
   category   query
   types      [McpExplainResult, McpToolDescriptor]
@@ -311,7 +309,6 @@ behavior provide_mcp_explain_tool "Provide MCP Explain Tool" {
 }
 
 behavior provide_mcp_schema_tool "Provide MCP Schema Tool" {
-  features   [mcp_core_tools]
   invariants [
     graph_schema_completeness,
     diagnostic_determinism,
@@ -352,7 +349,6 @@ behavior provide_mcp_schema_tool "Provide MCP Schema Tool" {
 }
 
 behavior provide_mcp_coverage_tool "Provide MCP Coverage Tool" {
-  features   [mcp_core_tools]
   invariants [
     graph_traversal_integrity,
     diagnostic_determinism,
@@ -399,7 +395,6 @@ behavior provide_mcp_coverage_tool "Provide MCP Coverage Tool" {
 }
 
 behavior provide_mcp_stats_tool "Provide MCP Stats Tool" {
-  features   [mcp_core_tools]
   invariants [
     graph_traversal_integrity,
     diagnostic_determinism,
@@ -722,7 +717,6 @@ behavior provide_mcp_suggest_fixes_tool "Provide MCP Suggest Fixes Tool" {
 }
 
 behavior provide_mcp_analyze_tool "Provide MCP Analyze Tool" {
-  features   [mcp_core_tools]
   invariants [diagnostic_determinism, mcp_structured_error_responses, mcp_tool_idempotency]
   category   query
   types      [McpAnalyzeResult, McpToolDescriptor]
@@ -791,7 +785,6 @@ behavior provide_mcp_analyze_tool "Provide MCP Analyze Tool" {
 }
 
 behavior provide_mcp_entities_by_kind "List Entities by Kind over MCP" {
-  features   [mcp_core_tools]
   invariants [graph_traversal_integrity, mcp_tool_idempotency]
   category   query
   types      [McpListResult, McpListedEntity, McpToolDescriptor]

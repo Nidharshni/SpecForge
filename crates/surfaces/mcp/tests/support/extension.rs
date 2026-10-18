@@ -123,12 +123,14 @@ impl TestExtension {
             .kind("behavior", true)
             .kind("invariant", true)
             .kind("feature", false)
-            .reference("feature", "behaviors", "behavior")
-            .reference("feature", "invariants", "invariant");
+            .reference("behavior", "features", "feature")
+            .reference("behavior", "invariants", "invariant");
         ext.kind_mut("behavior")
             .field("contract", || Field::string("contract"));
         ext.kind_mut("invariant")
             .field("guarantee", || Field::string("guarantee"));
+        ext.kind_mut("feature")
+            .field("problem", || Field::string("problem"));
         ext
     }
 

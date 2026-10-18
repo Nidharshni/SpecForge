@@ -7,12 +7,16 @@ use "ports/outbound"
 use "types/errors"
 use "types/wasm"
 
-behavior scaffold_wasm_extension_project "Scaffold Wasm Extension Project" {
+defaults behavior {
   features   [wasm_extension_authoring]
   invariants [extension_operation_atomicity]
-  category   command
-  types      [ExtensionDeclaration]
+  types      [ExtensionDeclaration, ExtensionError]
   ports      [FileSystem]
+}
+
+behavior scaffold_wasm_extension_project "Scaffold Wasm Extension Project" {
+  category command
+  types    [ExtensionDeclaration]
   requires {
     filesystem_available "FileSystem port is available for writing project scaffold files"
   }
@@ -22,7 +26,7 @@ behavior scaffold_wasm_extension_project "Scaffold Wasm Extension Project" {
     build_target_configured              "The crate builds a wasm32-wasip2 component"
     extension_project_scaffolded_emitted "extension_project_scaffolded event is emitted after successful scaffolding"
   }
-  contract   """
+  contract """
     When specforge extension init is invoked, the system MUST scaffold a
     new extension crate written with specforge-extension-sdk: a Cargo.toml
     depending on the SDK, a src/lib.rs whose #[extension(name, version,
@@ -34,7 +38,7 @@ behavior scaffold_wasm_extension_project "Scaffold Wasm Extension Project" {
     default the extension name when --name is not given, and describe what
     it created as structured JSON under --format=json.
   """
-  produces   [extension_project_scaffolded]
+  produces [extension_project_scaffolded]
   verify unit "scaffold creates an SDK crate declaring the extension"
   verify unit "scaffold creates src/ with skeleton exports"
   verify unit "scaffold builds for wasm32-wasip2"
@@ -46,11 +50,7 @@ behavior scaffold_wasm_extension_project "Scaffold Wasm Extension Project" {
 }
 
 behavior build_wasm_extension "Build Wasm Extension" {
-  features   [wasm_extension_authoring]
-  invariants [extension_operation_atomicity]
-  category   command
-  types      [ExtensionDeclaration, ExtensionError]
-  ports      [FileSystem]
+  category command
   requires {
     source_available    "Extension source code exists in the project directory"
     toolchain_available "cargo and the wasm32-wasip2 target are installed"
@@ -60,7 +60,7 @@ behavior build_wasm_extension "Build Wasm Extension" {
     build_errors_diagnosed  "Build errors are reported as ExtensionError diagnostics"
     extension_built_emitted "extension_built event is emitted after successful build"
   }
-  contract   """
+  contract """
     When specforge extension build is invoked, the system MUST compile
     the extension crate to a wasm32-wasip2 component (cargo build
     --release --target wasm32-wasip2) and name the component it built.
@@ -68,7 +68,7 @@ behavior build_wasm_extension "Build Wasm Extension" {
     Before compiling, it MUST check that the extension project
     structure exists and fail with a diagnostic when it doesn't.
   """
-  produces   [extension_built]
+  produces [extension_built]
   verify unit "build produces .wasm binary"
   verify unit "build errors reported as ExtensionError diagnostics"
   verify unit "specforge extension build validates project structure exists"
@@ -76,7 +76,6 @@ behavior build_wasm_extension "Build Wasm Extension" {
 }
 
 behavior validate_wasm_extension_locally "Validate Wasm Extension Locally" {
-  features   [wasm_extension_authoring]
   invariants [wasm_sandbox_integrity]
   category   validation
   types      [ExtensionDeclaration, SandboxPolicy, ExtensionError]
@@ -123,10 +122,8 @@ behavior validate_wasm_extension_locally "Validate Wasm Extension Locally" {
 // Implementation detail for publish_to_registry in behaviors/extensions.spec.
 // Handles Wasm binary packaging and upload.
 behavior publish_wasm_extension "Publish Wasm Extension" {
-  features   [wasm_extension_authoring]
   invariants [registry_integrity, registry_api_openness]
   category   command
-  types      [ExtensionDeclaration, ExtensionError]
   ports      [FileSystem, RegistryClient]
   requires {
     wasm_binary_available "A built component exists"

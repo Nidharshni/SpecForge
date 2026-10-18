@@ -25,7 +25,6 @@ use "types/user"
 use "behaviors/user-crud"
 
 event user_created "User Created" {
-  trigger   create_user
   channel   "users.created"
 
   payload {
@@ -34,8 +33,6 @@ event user_created "User Created" {
     role      UserRole
     timestamp timestamp
   }
-
-  consumers [send_notification, log_audit]
 }
 ```
 
@@ -43,9 +40,7 @@ event user_created "User Created" {
 
 ### Required
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `trigger` | reference | The behavior that produces this event. Must reference an existing `behavior`. |
+None. An event lists no behaviors: the behaviors name it, in `produces` (they emit it) and `consumes` (they react to it), and `trace <event>` lists them upstream.
 
 ### Optional
 
@@ -54,7 +49,6 @@ event user_created "User Created" {
 | `title` | string | Human-readable name (the string after the identifier). Optional — auto-derived from identifier if omitted. |
 | `payload` | block | The event data shape — fields with types. Defines the contract between producer and consumers. |
 | `channel` | string | Logical channel, topic, or queue name. Used for AsyncAPI generation and documentation. |
-| `consumers` | reference list | Behaviors that react to this event. Enables cross-context traceability. |
 | `refs` | reference list | External references (issues, tickets, diagrams) linked to this event. |
 
 ### Payload Fields
@@ -91,11 +85,8 @@ Supported annotations: `@readonly`, `@optional`.
 
 | Code | Rule |
 |------|------|
-| E001 | The `trigger` must resolve to an existing `behavior`. |
-| E001 | Every ID in `consumers` must resolve to an existing `behavior`. |
 | E002 | No two events may share the same ID. |
-| E051 | The trigger behavior must exist and be a valid behavior entity. |
-| W007 | If `consumers` is empty or omitted, emit "unreferenced event" warning. |
+| W007 | If no behavior produces the event, emit "event never produced" warning. |
 
 ## Design Guidance
 
@@ -144,7 +135,6 @@ Events are the primary mechanism for traceability across bounded contexts. When 
 
 ```spec
 event user_created "User Created" {
-  trigger   create_user
   channel   "users.created"
 
   payload {
@@ -153,8 +143,6 @@ event user_created "User Created" {
     role      UserRole
     timestamp timestamp
   }
-
-  consumers [send_notification, log_audit]
 }
 ```
 
@@ -162,7 +150,6 @@ event user_created "User Created" {
 
 ```spec
 event email_changed "User Email Changed" {
-  trigger   update_email
   channel   "users.email-changed"
 
   payload {
@@ -172,7 +159,7 @@ event email_changed "User Email Changed" {
     timestamp timestamp
   }
 
-  // No consumers yet — will emit W007 unreferenced event warning.
+  // No behavior produces it yet — will emit a W007 warning.
   // This is fine during early development.
 }
 ```
@@ -183,7 +170,6 @@ event email_changed "User Email Changed" {
 use "behaviors/order-processing"
 
 event order_placed "Order Placed" {
-  trigger   place_order
   channel   "orders.placed"
 
   payload {
@@ -195,22 +181,16 @@ event order_placed "Order Placed" {
     timestamp   timestamp
   }
 
-  consumers [
-    begin_fulfillment,   // Fulfillment service: begin picking
-    charge_payment,      // Billing service: charge payment
-    send_order_confirm,  // Notification service: send confirmation
-    log_order_audit,     // Audit service: log order event
-  ]
-
   refs [mermaid:order-event-flow]
 }
 ```
 
-### Event Chain (Event Triggers Event)
+The behavior `place_order` lists `order_placed` in `produces`. Four behaviors list it in `consumes`: `begin_fulfillment` (Fulfillment service: begin picking), `charge_payment` (Billing service: charge payment), `send_order_confirm` (Notification service: send confirmation) and `log_order_audit` (Audit service: log order event).
+
+### Event Chain (A Consumer Produces the Next Event)
 
 ```spec
 event payment_processed "Payment Processed" {
-  trigger   charge_payment    // This behavior is itself a consumer of order_placed
   channel   "billing.payment-processed"
 
   payload {
@@ -221,7 +201,7 @@ event payment_processed "Payment Processed" {
     paymentMethod string
     timestamp     timestamp
   }
-
-  consumers [complete_fulfillment, send_payment_confirm]
 }
 ```
+
+The behavior `charge_payment` lists `order_placed` in `consumes` and `payment_processed` in `produces`; `complete_fulfillment` and `send_payment_confirm` list `payment_processed` in `consumes`.

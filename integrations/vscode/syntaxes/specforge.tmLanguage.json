@@ -335,12 +335,13 @@
     },
 
     "union-block": {
-      "match": "^\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(=)\\s*(.+)$",
+      "match": "^\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s+([a-zA-Z_][a-zA-Z0-9_]*)(?:\\s+(\"[^\"]*\"))?\\s*(=)\\s*(.+)$",
       "captures": {
         "1": { "name": "keyword.other.entity-kind.specforge" },
         "2": { "name": "entity.name.type.union.specforge" },
-        "3": { "name": "keyword.operator.assignment.specforge" },
-        "4": {
+        "3": { "name": "string.quoted.double.specforge" },
+        "4": { "name": "keyword.operator.assignment.specforge" },
+        "5": {
           "patterns": [
             { "include": "#string" },
             { "include": "#number" },

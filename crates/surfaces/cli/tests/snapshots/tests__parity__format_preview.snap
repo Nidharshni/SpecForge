@@ -32,8 +32,8 @@ expression: snapshot
       "diagnostics": [],
       "diffs": [
         {
-          "after": "behavior messy \"Messy\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n",
-          "before": "behavior messy \"Messy\" {\ncategory \"core\"\ncontract \"The system MUST work\"\n}\n",
+          "after": "behavior messy \"Messy\" {\n  category core\n  contract \"The system MUST work\"\n}\n",
+          "before": "behavior messy \"Messy\" {\ncategory core\ncontract \"The system MUST work\"\n}\n",
           "deletions": 2,
           "file_path": "spec/messy.spec",
           "insertions": 2
@@ -43,8 +43,8 @@ expression: snapshot
       "total_checked": 2
     },
     "files": {
-      "spec/main.spec": "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n",
-      "spec/messy.spec": "behavior messy \"Messy\" {\ncategory \"core\"\ncontract \"The system MUST work\"\n}\n"
+      "spec/main.spec": "behavior alpha \"Alpha\" {\n  category core\n  contract \"The system MUST work\"\n}\n",
+      "spec/messy.spec": "behavior messy \"Messy\" {\ncategory core\ncontract \"The system MUST work\"\n}\n"
     },
     "ok": true
   },

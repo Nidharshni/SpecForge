@@ -207,7 +207,217 @@ const PAIRS: &[Pair] = &[
         tool: "specforge.trace",
         arguments: || json!({"plan": fx1_plan()}),
     },
+    Pair {
+        label: "edit_new",
+        project: edit_project,
+        cli: &[
+            "new",
+            "behavior",
+            "epsilon",
+            "Epsilon",
+            "--in",
+            "main.spec",
+            "--contract",
+            "The system MUST do epsilon",
+            "--invariants",
+            "rule_one",
+            "--dry-run",
+            "--path",
+            "{root}",
+            "--format",
+            "json",
+        ],
+        exit: 0,
+        tool: "specforge.edit",
+        arguments: || {
+            json!({"dry_run": true, "edits": [{"op": "create", "kind": "behavior", "id": "epsilon",
+                "title": "Epsilon", "file": "main.spec",
+                "fields": {"contract": "The system MUST do epsilon", "invariants": ["rule_one"]}}]})
+        },
+    },
+    Pair {
+        label: "edit_set",
+        project: edit_project,
+        cli: &[
+            "set",
+            "delta",
+            "category",
+            "query",
+            "--dry-run",
+            "--path",
+            "{root}",
+            "--format",
+            "json",
+        ],
+        exit: 0,
+        tool: "specforge.edit",
+        arguments: || json!({"dry_run": true, "edits": [{"op": "set", "entity_id": "delta", "field": "category", "value": "query"}]}),
+    },
+    Pair {
+        label: "edit_set_title",
+        project: edit_project,
+        cli: &[
+            "set",
+            "delta",
+            "--title",
+            "Delta One",
+            "--dry-run",
+            "--path",
+            "{root}",
+            "--format",
+            "json",
+        ],
+        exit: 0,
+        tool: "specforge.edit",
+        arguments: || json!({"dry_run": true, "edits": [{"op": "retitle", "entity_id": "delta", "title": "Delta One"}]}),
+    },
+    Pair {
+        label: "edit_unset",
+        project: edit_project,
+        cli: &[
+            "unset",
+            "delta",
+            "category",
+            "--dry-run",
+            "--path",
+            "{root}",
+            "--format",
+            "json",
+        ],
+        exit: 0,
+        tool: "specforge.edit",
+        arguments: || json!({"dry_run": true, "edits": [{"op": "unset", "entity_id": "delta", "field": "category"}]}),
+    },
+    Pair {
+        label: "edit_link",
+        project: edit_project,
+        cli: &[
+            "link",
+            "delta",
+            "invariants",
+            "rule_two",
+            "--dry-run",
+            "--path",
+            "{root}",
+            "--format",
+            "json",
+        ],
+        exit: 0,
+        tool: "specforge.edit",
+        arguments: || json!({"dry_run": true, "edits": [{"op": "link", "entity_id": "delta", "field": "invariants", "target": "rule_two"}]}),
+    },
+    Pair {
+        label: "edit_link_verify",
+        project: edit_project,
+        cli: &[
+            "link",
+            "delta",
+            "--verify",
+            "unit:delta handles errors",
+            "--dry-run",
+            "--path",
+            "{root}",
+            "--format",
+            "json",
+        ],
+        exit: 0,
+        tool: "specforge.edit",
+        arguments: || json!({"dry_run": true, "edits": [{"op": "add_verify", "entity_id": "delta", "kind": "unit", "text": "delta handles errors"}]}),
+    },
+    Pair {
+        label: "edit_unlink",
+        project: edit_project,
+        cli: &[
+            "unlink",
+            "delta",
+            "invariants",
+            "rule_one",
+            "--dry-run",
+            "--path",
+            "{root}",
+            "--format",
+            "json",
+        ],
+        exit: 0,
+        tool: "specforge.edit",
+        arguments: || json!({"dry_run": true, "edits": [{"op": "unlink", "entity_id": "delta", "field": "invariants", "target": "rule_one"}]}),
+    },
+    Pair {
+        label: "edit_unlink_verify",
+        project: edit_project,
+        cli: &[
+            "unlink",
+            "delta",
+            "--verify",
+            "unit:delta works",
+            "--dry-run",
+            "--path",
+            "{root}",
+            "--format",
+            "json",
+        ],
+        exit: 0,
+        tool: "specforge.edit",
+        arguments: || json!({"dry_run": true, "edits": [{"op": "remove_verify", "entity_id": "delta", "kind": "unit", "text": "delta works"}]}),
+    },
+    Pair {
+        label: "edit_delete",
+        project: edit_project,
+        cli: &[
+            "delete",
+            "rule_two",
+            "--dry-run",
+            "--path",
+            "{root}",
+            "--format",
+            "json",
+        ],
+        exit: 0,
+        tool: "specforge.edit",
+        arguments: || json!({"dry_run": true, "edits": [{"op": "delete", "entity_id": "rule_two"}]}),
+    },
+    Pair {
+        label: "edit_delete_unlinking",
+        project: edit_project,
+        cli: &[
+            "delete",
+            "rule_one",
+            "--unlink-references",
+            "--dry-run",
+            "--path",
+            "{root}",
+            "--format",
+            "json",
+        ],
+        exit: 0,
+        tool: "specforge.edit",
+        arguments: || json!({"dry_run": true, "edits": [{"op": "delete", "entity_id": "rule_one", "unlink_references": true}]}),
+    },
+    Pair {
+        label: "edit_delete_referenced",
+        project: edit_project,
+        cli: &[
+            "delete",
+            "rule_one",
+            "--dry-run",
+            "--path",
+            "{root}",
+            "--format",
+            "json",
+        ],
+        exit: 1,
+        tool: "specforge.edit",
+        arguments: || json!({"dry_run": true, "edits": [{"op": "delete", "entity_id": "rule_one"}]}),
+    },
 ];
+
+/// `rv1` with a behavior that has a category, an invariant link and two verify lines, and the invariants.
+fn edit_project() -> TestProject {
+    rv1().file(
+        "spec/more.spec",
+        "behavior delta \"Delta\" {\n  category   command\n  invariants [rule_one]\n  contract   \"The system MUST do delta\"\n  verify unit \"delta works\"\n}\n\ninvariant rule_one \"Rule One\" {\n  guarantee \"One MUST hold\"\n}\n\ninvariant rule_two \"Rule Two\" {\n  guarantee \"Two MUST hold\"\n}\n",
+    )
+}
 
 /// The project of one behavior with a passing recorded test, for the cargo-test collector.
 fn cargo_test_project() -> TestProject {
@@ -392,4 +602,28 @@ fn schema_flags_select_the_same_document() {
 )]
 fn a_plan_check_is_one_document() {
     assert_eq!(answered("trace_plan")["ok"], false);
+}
+
+#[specforge_test_macros::test(
+    behavior = "validate_typed_edit",
+    verify = "a preview refuses what the write would"
+)]
+fn every_edit_verb_is_one_request_on_both_surfaces() {
+    for label in [
+        "edit_new",
+        "edit_set",
+        "edit_set_title",
+        "edit_unset",
+        "edit_link",
+        "edit_link_verify",
+        "edit_unlink",
+        "edit_unlink_verify",
+        "edit_delete",
+        "edit_delete_unlinking",
+    ] {
+        let document = answered(label);
+        assert_eq!(document["dry_run"], true, "{label}: {document}");
+        assert!(!document["diff"].as_str().unwrap().is_empty(), "{label}");
+    }
+    assert_eq!(pair("edit_delete_referenced").0, Outcome::Refused);
 }

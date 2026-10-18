@@ -4,6 +4,11 @@
 
 use specforge_extension_sdk::prelude::*;
 
+/// `RiskLevel`, the consequence of an invariant's violation, worst first.
+const RISK: Vocabulary = Vocabulary::new(&["critical", "high", "medium", "low"]);
+/// `PortDirection`.
+const PORT_DIRECTION: Vocabulary = Vocabulary::new(&["inbound", "outbound", "bidirectional"]);
+
 /// Declare everything this module holds on `c`.
 pub(crate) fn declare(c: &mut ContributionsBuilder) {
     kinds(c);
@@ -61,7 +66,7 @@ fn kinds(c: &mut ContributionsBuilder) {
                 .target_kind("event");
         });
         k.field("category", |f| {
-            f.field_type(FieldType::String)
+            f.field_type(FieldType::Identifier)
                 .description("Classification tag for agent task routing");
         });
         k.field("features", |f| {
@@ -76,7 +81,7 @@ fn kinds(c: &mut ContributionsBuilder) {
                 .description("Human-readable summary of this behavior");
         });
         k.field("status", |f| {
-            f.field_type(FieldType::String)
+            f.field_type(FieldType::Identifier)
                 .description("Current lifecycle status of this behavior")
                 .headline();
         });
@@ -85,11 +90,11 @@ fn kinds(c: &mut ContributionsBuilder) {
                 .description("External references such as issue or document URIs");
         });
         k.field("severity", |f| {
-            f.field_type(FieldType::String)
+            f.field_type(FieldType::Identifier)
                 .description("Impact level if this behavior fails");
         });
         k.field("diagnostic", |f| {
-            f.field_type(FieldType::String)
+            f.field_type(FieldType::Identifier)
                 .description("Diagnostic message for validation tooling");
         });
     });
@@ -110,8 +115,8 @@ fn kinds(c: &mut ContributionsBuilder) {
                 .normative();
         });
         k.field("risk", |f| {
-            f.field_type(FieldType::String)
-                .description("Consequence or impact if this invariant is violated");
+            f.vocabulary(&RISK)
+                .description("Impact level if this invariant is violated");
         });
         k.field("description", |f| {
             f.field_type(FieldType::String)
@@ -136,11 +141,11 @@ fn kinds(c: &mut ContributionsBuilder) {
                 .description("Communication channel this event is published on");
         });
         k.field("channel_type", |f| {
-            f.field_type(FieldType::String)
+            f.field_type(FieldType::Identifier)
                 .description("Transport mechanism for the channel (e.g. queue, topic, stream)");
         });
         k.field("category", |f| {
-            f.field_type(FieldType::String)
+            f.field_type(FieldType::Identifier)
                 .description("Classification of this event (e.g. domain, integration, system)");
         });
         k.field("payload", |f| {
@@ -210,13 +215,13 @@ fn kinds(c: &mut ContributionsBuilder) {
             .dot_fillcolor("#E0F2F1")
             .inference_guide("Look for trait definitions, abstract classes, interface declarations, and adapter patterns that define boundaries between system layers. Signals: Rust traits in ports/ or interfaces/ directories; TypeScript/Java interfaces for repositories, gateways, or external services; abstract base classes; dependency injection interfaces; API client contracts. Set direction to 'inbound' (receives requests), 'outbound' (calls external systems), or 'bidirectional'. Use open_fields/methods to list the port's operations. Set category to 'http', 'grpc', 'database', 'queue', 'filesystem', etc. Skip: internal module boundaries, utility traits (Display, Debug), marker traits, framework-imposed interfaces.");
         k.field("direction", |f| {
-            f.field_type(FieldType::String)
+            f.vocabulary(&PORT_DIRECTION)
                 .required()
                 .description("Whether this port is inbound, outbound, or bidirectional");
         });
         k.field("category", |f| {
             f.field_type(FieldType::String)
-                .description("Classification of this port (e.g. http, grpc, database, queue)");
+                .description("Classification of this port, a word or a path (e.g. http, io/filesystem)");
         });
         k.field("methods", |f| {
             f.field_type(FieldType::Block)
@@ -353,8 +358,7 @@ fn enhancements(c: &mut ContributionsBuilder) {
             f.field_type(FieldType::ReferenceList)
                 .description("Behaviors this milestone includes in its delivery scope")
                 .edge("MilestoneIncludesBehavior")
-                .target_kind("behavior")
-                .inverse_of("features");
+                .target_kind("behavior");
         });
     });
 }
@@ -422,14 +426,6 @@ fn rules(c: &mut ContributionsBuilder) {
             .target_kind("port")
             .wasm_function("validate__port_methods")
             .validate(crate::validate_port_methods);
-    });
-    c.rule("E051", |r| {
-        r.check(CheckKind::Custom)
-            .severity(ValidationSeverity::Error)
-            .message_template("event '{id}' trigger must reference a behavior, found '{value}'")
-            .target_kind("event")
-            .wasm_function("validate__event_triggers")
-            .validate(crate::validate_event_triggers);
     });
     c.rule("E010", |r| {
         r.check(CheckKind::Custom)

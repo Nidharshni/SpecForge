@@ -1,14 +1,14 @@
 // Logical Data Model types — intermediate representation for schema visualization
 
-type ModelFormat = "markdown" | "mermaid" | "dot" | "json" | "dbml"
+type ModelFormat "Model Format" = "markdown" | "mermaid" | "dot" | "json" | "dbml"
 
-type GroupBy = "extension" | "none"
+type GroupBy "Group By" = "extension" | "none"
 
-type FieldLevel = "none" | "keys" | "all"
+type FieldLevel "Field Level" = "none" | "keys" | "all"
 
-type Cardinality = "1:1" | "1:N" | "N:1" | "N:M"
+type Cardinality "Cardinality" = "1:1" | "1:N" | "N:1" | "N:M"
 
-type ModelOptions {
+type ModelOptions "Model Options" {
   format    ModelFormat @readonly
   group_by  GroupBy     @readonly
   fields    FieldLevel  @readonly
@@ -24,7 +24,7 @@ type ModelRoot "The kinds within depth hops of a root kind" {
   verify unit "ModelRoot schema is valid"
 }
 
-type ModelField {
+type ModelField "Model Field" {
   name           string    @readonly
   field_type     FieldType @readonly
   required       boolean   @readonly
@@ -37,7 +37,7 @@ type ModelField {
   verify unit "ModelField schema is valid"
 }
 
-type ModelEntity {
+type ModelEntity "Model Entity" {
   name        string       @readonly
   extension   string       @readonly
   description string       @readonly @optional
@@ -45,7 +45,7 @@ type ModelEntity {
   verify unit "ModelEntity schema is valid"
 }
 
-type ModelRelationship {
+type ModelRelationship "Model Relationship" {
   name         string      @readonly
   source       string      @readonly
   target       string      @readonly
@@ -55,7 +55,7 @@ type ModelRelationship {
   verify unit "ModelRelationship schema is valid"
 }
 
-type ModelExtension {
+type ModelExtension "Model Extension" {
   name         string  @readonly
   version      string  @readonly
   entity_count integer @readonly

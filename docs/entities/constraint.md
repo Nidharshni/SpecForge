@@ -31,8 +31,8 @@ constraint api_latency "API Latency Under Load" {
     sustained for 5 minutes
   """
 
-  affects     [create_user, read_user, update_email]
-  invariants  [data_persistence]
+  constrains  [create_user, read_user, update_email]
+  protects    [data_persistence]
 
   verify load "k6 load test with 1000 VUs for 5 minutes, assert p99 < 200ms"
 }
@@ -54,8 +54,8 @@ constraint api_latency "API Latency Under Load" {
 |-------|------|-------------|
 | `title` | string | Human-readable name (the string after the entity ID). |
 | `metric` | string or triple-string | Alias for `description`. Use when the constraint is quantifiable with specific thresholds. Both field names are accepted by the compiler. |
-| `behaviors` | reference list | Behaviors this constraint applies to. Alias: `affects`. |
-| `invariants` | reference list | Invariants this constraint helps protect. |
+| `constrains` | reference list | Behaviors this constraint applies to. |
+| `protects` | reference list | Invariants this constraint helps protect. |
 | `verify` | verify statement(s) | How to test this constraint (type + description). |
 | `refs` | reference list | External references (issues, tickets, diagrams) linked to this constraint. |
 
@@ -95,8 +95,8 @@ constraint api_latency "API Latency Under Load" {
 
 | Code | Rule |
 |------|------|
-| E001 | Every ID in `affects` must resolve to an existing `behavior`. |
-| E001 | Every ID in `invariants` must resolve to an existing `invariant`. |
+| E001 | Every ID in `constrains` must resolve to an existing `behavior`. |
+| E001 | Every ID in `protects` must resolve to an existing `invariant`. |
 | E002 | No two constraints may share the same ID. |
 | W006 | If a behavior has no constraint coverage for `security` or `performance` categories, emit "unconstrained behavior" warning. (Configurable — not all projects need this.) |
 
@@ -151,7 +151,7 @@ constraint api_latency "API Latency Under Load" {
     sustained for 5 minutes
   """
 
-  affects     [create_user, read_user, update_email]
+  constrains  [create_user, read_user, update_email]
 
   verify load "k6 load test with 1000 VUs, assert p99 < 200ms"
 }
@@ -166,8 +166,8 @@ constraint pii_encryption_constraint "PII Encryption at Rest" {
 
   metric "All PII fields encrypted with AES-256 in the database."
 
-  invariants  [pii_encryption]
-  affects     [create_user, update_email]
+  protects    [pii_encryption]
+  constrains  [create_user, update_email]
   refs        [gh.issue:55]
 
   verify audit "Database column inspection confirms encryption"
@@ -196,8 +196,8 @@ constraint gdpr_residency "GDPR Data Residency" {
 
   metric "All EU user data stored in EU-West-1 region. No cross-region replication of PII."
 
-  affects     [create_user, update_email]
-  invariants  [data_residency]
+  constrains  [create_user, update_email]
+  protects    [data_residency]
 
   verify audit "Infrastructure audit confirms data residency"
 }

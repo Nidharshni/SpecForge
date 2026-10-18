@@ -8,7 +8,7 @@ expression: "shape(&reply, dir.path())"
   "layout": "turns",
   "payload": {
     "description": "A testable unit of system functionality with a defined contract",
-    "example": "behavior example_behavior \"Example Title\" {\n  contract \"...\"\n  category \"...\"\n  consumes [ref_1, ref_2]\n  description \"...\"\n}",
+    "example": "behavior example_behavior \"Example Title\" {\n  contract \"...\"\n  category word\n  consumes [ref_1, ref_2]\n  description \"...\"\n}",
     "existing_entity_ids": [
       "alpha",
       "beta",
@@ -20,7 +20,7 @@ expression: "shape(&reply, dir.path())"
         "description": "Classification tag for agent task routing",
         "name": "category",
         "required": false,
-        "type": "string"
+        "type": "identifier"
       },
       {
         "description": "Events this behavior reacts to",
@@ -44,7 +44,7 @@ expression: "shape(&reply, dir.path())"
         "description": "Diagnostic message for validation tooling",
         "name": "diagnostic",
         "required": false,
-        "type": "string"
+        "type": "identifier"
       },
       {
         "description": "Product features this behavior implements",
@@ -80,13 +80,13 @@ expression: "shape(&reply, dir.path())"
         "description": "Impact level if this behavior fails",
         "name": "severity",
         "required": false,
-        "type": "string"
+        "type": "identifier"
       },
       {
         "description": "Current lifecycle status of this behavior",
         "name": "status",
         "required": false,
-        "type": "string"
+        "type": "identifier"
       },
       {
         "description": "Type definitions used by this behavior",

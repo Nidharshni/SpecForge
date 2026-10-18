@@ -16,7 +16,7 @@ fn init_server() -> Served {
     TestProject::new()
         .file(
             "test.spec",
-            "behavior alpha \"Alpha\" {\n}\nfeature beta \"Beta\" {\n    behaviors [alpha]\n}\n",
+            "behavior alpha \"Alpha\" {\n    features [beta]\n}\nfeature beta \"Beta\" {\n}\n",
         )
         .serve(&[TestExtension::software()])
 }
@@ -28,12 +28,12 @@ fn init_server() -> Served {
 )]
 fn event_mcp_initialized() {
     let mut server = init_server();
-    // The core surface: 34 tools, 8 resources, 5 prompts; the project's one
+    // The core surface: 35 tools, 8 resources, 5 prompts; the project's one
     // extension, @test/ext, declares kinds and contributes no surface.
     assert_eq!(
         only_event(&server, "mcp_initialized"),
         json!({
-            "tools_registered": 34,
+            "tools_registered": 35,
             "resources_registered": 8,
             "prompts_registered": 5,
             "extensions_loaded": 1,
@@ -48,7 +48,7 @@ fn event_mcp_initialized() {
             .unwrap()
             .len()
     };
-    assert_eq!(listed(&mut server, "tools/list", "tools"), 34);
+    assert_eq!(listed(&mut server, "tools/list", "tools"), 35);
     // Eight resources: five plain, three templated.
     assert_eq!(listed(&mut server, "resources/list", "resources"), 5);
     assert_eq!(
@@ -191,7 +191,7 @@ fn event_mcp_discovery_invoked() {
     assert_eq!(
         discoveries,
         vec![
-            ("tools".to_string(), 34),
+            ("tools".to_string(), 35),
             ("prompts".to_string(), 5),
             ("resources".to_string(), 5),
         ]
@@ -414,7 +414,7 @@ fn core_session() -> (Logged, tempfile::TempDir) {
     std::fs::write(dir.path().join("specforge.json"), config.to_string()).unwrap();
     std::fs::write(
         dir.path().join("test.spec"),
-        "behavior alpha \"Alpha\" {\n}\nfeature beta \"Beta\" {\n    behaviors [alpha]\n}\n",
+        "behavior alpha \"Alpha\" {\n    features [beta]\n}\nfeature beta \"Beta\" {\n}\n",
     )
     .unwrap();
 

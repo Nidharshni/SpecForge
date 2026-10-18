@@ -1,3 +1,4 @@
+use crate::defaults::{FileDefaults, is_defaults_block};
 use crate::delta::{self, GraphDelta, NodeChange};
 use crate::{Graph, Node};
 use specforge_common::{Diagnostic, SourceSpan, Sym, codes, structural};
@@ -12,10 +13,6 @@ use std::sync::Arc;
 /// The default is a project with no extension loaded.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct GraphInputs {
-    /// Inverse field pairs, each written (lesser, greater), sorted: a
-    /// two-hop cycle through both labels of one pair is a known
-    /// bidirectional relationship, not a reference cycle.
-    pub bidirectional_pairs: Vec<(String, String)>,
     /// For each target kind no loaded extension declares, the extension that
     /// owns it, where the registry build knows one (`kind_owner` of its
     /// candidate vocabulary, ADR 0117): what I004 and E022 tell the user to
@@ -75,7 +72,7 @@ pub struct Applied {
 }
 
 /// The graph of a set of parsed `.spec` files and what building it
-/// reported (E001, E002, W060, W143, I005,
+/// reported (E001, E002, E077, E078, W060, W143, W161, I005,
 /// then E003/I004 and W061 from linking), kept current one whole file at a
 /// time.
 ///
@@ -105,7 +102,7 @@ impl GraphBuild {
     /// An empty build: no file, no node, no diagnostic.
     pub fn new(config: GraphConfig) -> Self {
         GraphBuild {
-            graph: Graph::with_bidirectional_pairs(config.inputs.bidirectional_pairs.clone()),
+            graph: Graph::new(),
             config,
             files: BTreeMap::new(),
             diagnostics: Vec::new(),
@@ -240,7 +237,7 @@ impl GraphBuild {
     /// which declarations are placed; the graph holds the others already.
     fn rebuild(&mut self, ids: Ids<'_>) {
         let declared = declarations(self.files.values().map(Arc::as_ref), &self.config);
-        place(&mut self.graph, &declared.winners, ids);
+        place(&mut self.graph, &declared, ids);
         let mut diagnostics = declared.diagnostics;
         diagnostics.extend(link_and_diagnose(&mut self.graph, &self.config));
         self.by_file = partition_by_file(&diagnostics);
@@ -303,12 +300,14 @@ struct Declarations<'a> {
     /// The node's declaration of each raw ID: the first that is not a
     /// `define` block, and the first of its ID's kind.
     winners: HashMap<Sym, &'a Entity>,
+    /// Each file's defaults (ADR 0149), by path.
+    defaults: HashMap<Sym, FileDefaults<'a>>,
     diagnostics: Vec<Diagnostic>,
 }
 
 /// The one sweep over the files, in the iteration order they are given:
 /// every file's E001s and the I007 / E019 its
-/// format version header reports first, then per file and entity W143 / E002 / W060, then I005. It is also first-writer-wins:
+/// format version header reports first, then per file and entity W143 / E076 / E002 / W060, then I005. It is also first-writer-wins:
 /// `seen` is keyed on (kind, id), so a second declaration of a kind is E002
 /// naming the first of that kind; `winners` is keyed on the raw ID, so a
 /// declaration of another kind is W060. Placement reads `winners`.
@@ -318,12 +317,16 @@ fn declarations<'a>(
 ) -> Declarations<'a> {
     let mut diagnostics = Vec::new();
 
+    let mut defaults = HashMap::new();
     // Surface parse errors as diagnostics so CLI/MCP consumers see them.
     for spec_file in files.clone() {
         diagnostics.extend(spec_file.errors.iter().map(Diagnostic::from));
         // What the format version header reports (I007, E019), where the
         // file declares it.
         diagnostics.extend(spec_file.format_diagnostics.iter().cloned());
+        let (file_defaults, problems) = FileDefaults::of(spec_file, &config.inputs.field_forms);
+        diagnostics.extend(problems);
+        defaults.insert(spec_file.path, file_defaults);
     }
 
     // Where each (kind, ID) was first declared, so a duplicate names both sites.
@@ -331,9 +334,17 @@ fn declarations<'a>(
     let mut winners: HashMap<Sym, &'a Entity> = HashMap::new();
     for spec_file in files.clone() {
         for entity in &spec_file.entities {
+            // A defaults block is no node; first, so no per-entity check below sees it.
+            if is_defaults_block(entity) {
+                continue;
+            }
             if is_define_block(entity) {
                 diagnostics.push(define_block_warning(entity));
                 continue;
+            }
+            // Placed all the same: the LSP keeps the block navigable and every check after the build sees it.
+            if needs_title(entity) && entity.title.as_deref().is_none_or(|t| t.trim().is_empty()) {
+                diagnostics.push(untitled_block_error(entity));
             }
             let key = (entity.kind.raw, entity.id.raw);
             if let Some(first) = seen.get(&key) {
@@ -397,29 +408,33 @@ fn declarations<'a>(
 
     Declarations {
         winners,
+        defaults,
         diagnostics,
     }
 }
 
 /// Put the winning declaration of each ID in scope into the graph.
-fn place(graph: &mut Graph, winners: &HashMap<Sym, &Entity>, ids: Ids<'_>) {
-    for (id, entity) in winners {
+fn place(graph: &mut Graph, declared: &Declarations<'_>, ids: Ids<'_>) {
+    for (id, entity) in &declared.winners {
         if match ids {
             Ids::All => true,
             Ids::Only(ids) => ids.contains(id),
         } {
-            graph.add_node(node_from_entity(entity));
+            graph.add_node(node_from_entity(
+                entity,
+                declared.defaults.get(&entity.span.file),
+            ));
         }
     }
 }
 
 /// The graph node for one parsed entity.
-fn node_from_entity(entity: &Entity) -> Node {
+fn node_from_entity(entity: &Entity, defaults: Option<&FileDefaults<'_>>) -> Node {
     Node {
         id: entity.id,
         kind: entity.kind,
         title: entity.title.clone(),
-        fields: entity.fields.clone(),
+        fields: defaults.map_or_else(|| entity.fields.clone(), |d| d.resolve(entity)),
         source_span: entity.span.clone(),
         methods: entity.methods.clone(),
         obligations: entity.obligations.clone(),
@@ -434,6 +449,25 @@ fn is_define_block(entity: &Entity) -> bool {
     entity.kind.raw == structural::DEFINE
 }
 
+/// Whether a block that becomes a node must carry a title (E076): every one that is placed. The one place to skip a
+/// header that is not a node.
+fn needs_title(entity: &Entity) -> bool {
+    !is_define_block(entity) && !is_defaults_block(entity)
+}
+
+/// E076: a block with no title, or a blank one.
+fn untitled_block_error(entity: &Entity) -> Diagnostic {
+    Diagnostic::new(
+        codes::E076,
+        format!("{} '{}' has no title", entity.kind.raw, entity.id.raw),
+    )
+    .with_span(entity.span.clone())
+    .with_suggestion(format!(
+        "write one after its id: {} {} \"…\", or run `specforge migrate`, which takes it from the comment above the block",
+        entity.kind.raw, entity.id.raw
+    ))
+}
+
 /// W143: a define block, which declares nothing.
 fn define_block_warning(entity: &Entity) -> Diagnostic {
     Diagnostic::new(
@@ -445,7 +479,7 @@ fn define_block_warning(entity: &Entity) -> Diagnostic {
     )
     .with_span(entity.span.clone())
     .with_suggestion(
-        "declare custom entity kinds in an extension (`specforge new --extension`), then enable it",
+        "declare custom entity kinds in an extension (`specforge extension init`), then enable it",
     )
 }
 

@@ -180,7 +180,7 @@ as `contract`) and `exempts_obligations` (an entity that sets it owes no
 `verify` obligations).
 
 Field types (`specforge_protocol_types::FieldType`): `string`, `integer`,
-`bool`, `enum` (values in `enum_values`), `string_list`, `reference`,
+`bool`, `enum` (values in `enum_values`), `identifier` (one word from an open set, written bare), `string_list`, `reference`,
 `reference_list`, `block`. The host also reads the `_type`-suffixed
 spellings (`string_type`, ...) and `boolean`; an unknown type drops the
 field with W019. Every host output names a field type by these names — the
@@ -189,9 +189,11 @@ hover and E061; the older spellings are read, never written (ADR 0034).
 
 What a field takes and what is written for it (ADR 0064): `string` takes text, a bare word, a date, a type
 union or an `expr { }` group, and is written as a string (a group as its conjuncts, one per line); `enum` one of
-its `enum_values`; `integer` and `bool` their JSON scalars; `reference` one id, written as a string;
+its `enum_values`; `identifier` one word (letters, digits and `_`, starting with a letter or `_`), written as a string; `integer` and `bool` their JSON scalars; `reference` one id, written as a string;
 `string_list` and `reference_list` a list (a single value is stored as a one-item list; a list is stored as written), written as an
-array of strings; `block` a block, written as an object of its entries. Anything else is E061. A command's
+array of strings; `block` a block, written as an object of its entries. Anything else is E061.
+How a value is written in `.spec` follows the type (ADR 0147): `enum`, `identifier`, `reference` and each `reference_list`
+item bare; `string` and each `string_list` item quoted. `specforge format` writes it and `check` warns W159 on the other form. A command's
 `graph` input, the exports and MCP carry exactly these forms.
 
 ### Category: edges

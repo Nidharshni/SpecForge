@@ -132,35 +132,6 @@ fn resolved_kind<'a>(context: &'a ValidatorContext, id: &str) -> Option<&'a str>
         .and_then(|r| r.kind.as_deref())
 }
 
-/// E006: every event trigger must reference an existing behavior.
-fn validate_event_triggers(context: &ValidatorContext) -> ValidatorVerdict {
-    for field in &context.entity.fields {
-        if field.key != "triggers" {
-            continue;
-        }
-        for id in ref_ids(&field.value) {
-            match resolved_kind(context, &id) {
-                // The ID names no node in the graph (dangling reference).
-                None => {
-                    return ValidatorVerdict::Fail {
-                        field: Some("triggers".into()),
-                        value: Some(id),
-                    };
-                }
-                // The target exists but is not a behavior.
-                Some(kind) if kind != "behavior" => {
-                    return ValidatorVerdict::Fail {
-                        field: Some("triggers".into()),
-                        value: Some(id),
-                    };
-                }
-                _ => {}
-            }
-        }
-    }
-    ValidatorVerdict::Pass
-}
-
 /// E010: milestone behavior references must exist.
 fn validate_milestone_behavior_ranges(context: &ValidatorContext) -> ValidatorVerdict {
     for field in &context.entity.fields {
@@ -224,5 +195,7 @@ fn validate_port_methods(context: &ValidatorContext) -> ValidatorVerdict {
 
 specforge_extension_sdk::component_guest!(build = specforge_extension_build);
 
+#[cfg(test)]
+mod declaration_tests;
 #[cfg(test)]
 mod validator_tests;

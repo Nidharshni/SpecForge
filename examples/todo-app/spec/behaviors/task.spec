@@ -7,13 +7,16 @@ use "invariants/task"
 use "ports/task_repository"
 use "types/task"
 
+defaults behavior {
+  ports    [TaskRepository]
+  features [task_management]
+}
+
 behavior create_task "Create a Task" {
   category   command
   invariants [task_id_uniqueness]
   types      [Task, CreateTaskCommand, InvalidTitleError]
-  ports      [TaskRepository]
   produces   [task_created]
-  features   [task_management]
   contract   """
     When a CreateTaskCommand is received, the system MUST reject an empty or
     whitespace-only title with InvalidTitleError, otherwise it MUST persist a
@@ -29,9 +32,7 @@ behavior complete_task "Complete a Task" {
   category   command
   invariants [completed_implies_timestamp]
   types      [Task, CompleteTaskCommand, TaskNotFoundError]
-  ports      [TaskRepository]
   produces   [task_completed]
-  features   [task_management]
   satisfies  [no_lost_completion]
   contract   """
     When a CompleteTaskCommand is received for an existing task, the system MUST
@@ -47,8 +48,6 @@ behavior complete_task "Complete a Task" {
 behavior list_tasks "List Tasks by Status" {
   category query
   types    [Task, TaskStatus]
-  ports    [TaskRepository]
-  features [task_management]
   contract """
     When given a TaskStatus filter, the system MUST return all tasks with that
     status ordered by createdAt ascending. Listing cannot fail.

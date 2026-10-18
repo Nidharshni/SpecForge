@@ -15,7 +15,7 @@ expression: "normalized(result, root)"
       "origin": "@specforge/software",
       "severity": "Warning",
       "span": {
-        "end_col": 32,
+        "end_col": 41,
         "end_line": 16,
         "file": "main.spec",
         "start_col": 1,
@@ -39,11 +39,12 @@ expression: "normalized(result, root)"
   "refers_to": [],
   "source_extension": "@specforge/software",
   "source_span": {
-    "end_col": 32,
+    "end_col": 41,
     "end_line": 16,
     "file": "main.spec",
     "start_col": 1,
     "start_line": 16
   },
-  "testable": true
+  "testable": true,
+  "title": "Status"
 }

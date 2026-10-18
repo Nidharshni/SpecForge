@@ -813,8 +813,8 @@ failure_mode fm1 "F" {
         let (_project, compiled) = built(&[(
             "main.spec",
             r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha] }
+feature alpha "A" { problem "p" solution "s" }
+behavior gamma "G" { contract "first" features [alpha] }
 "#,
         )]);
 
@@ -1073,13 +1073,13 @@ behavior register "Register" {
   }
 }
 
-type Registration {
+type Registration "Registration" {
   id     string
   fields RegistrationFields
   kind   string
 }
 
-type RegistrationFields {
+type RegistrationFields "Registration fields" {
   entries string[]
 }
 

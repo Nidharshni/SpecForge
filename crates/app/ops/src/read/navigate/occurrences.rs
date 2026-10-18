@@ -200,11 +200,9 @@ impl Navigator<'_> {
             end_line: line,
             end_col: col,
         };
-        let holders = graph
-            .nodes_in_file(file)
-            .into_iter()
-            .filter(|n| contains(&n.source_span, &at));
-        for holder in holders {
+        // Every node of the file: a token in a defaults block lies outside every block and answers for the first
+        // block that inherits it (ADR 0149).
+        for holder in graph.nodes_in_file(file) {
             let declaration = self.declaration(holder);
             let mut candidates = vec![declaration];
             for edge in graph.edges_from(holder.id.raw.as_str()) {

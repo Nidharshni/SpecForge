@@ -46,10 +46,10 @@ feature se_validation_suite "Software Validation Suite" {
     Users receive no warnings about specification quality issues.
   """
   solution """
-    Declarative validation rules (W001-W005, W007-W010, E051, E004)
+    Declarative validation rules (W001-W005, W007-W010, E004)
     detect common specification quality issues: unreferenced entities without
-    incoming edges, testable entities without verify statements, invalid
-    event triggers, features with empty behavior lists, unknown field
+    incoming edges, testable entities without verify statements,
+    features with empty behavior lists, unknown field
     annotations, unenforced invariants, and invalid verify kinds for entity
     types. Each rule uses the declarative pattern engine.
   """

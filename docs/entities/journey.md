@@ -57,7 +57,6 @@ All fields are optional at the type level.
 | `flow` | string[] | Step-by-step interaction flow describing what the user does and what the system responds. |
 | `priority` | Priority | Importance level: `critical`, `high`, `medium`, `low`. |
 | `tags` | string[] | Free-form tags for categorization. |
-| `refs` | reference list | External references (issues, tickets, diagrams) linked to this journey. |
 
 ## Relationships
 

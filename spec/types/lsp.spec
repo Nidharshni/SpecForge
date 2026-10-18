@@ -2,7 +2,7 @@
 
 use "types/core"
 
-type ContentChangeEvent {
+type ContentChangeEvent "Content Change Event" {
   start_line integer
   start_col  integer
   end_line   integer
@@ -11,7 +11,7 @@ type ContentChangeEvent {
   verify unit "ContentChangeEvent schema is valid"
 }
 
-type CompletionItem {
+type CompletionItem "Completion Item" {
   label       string @readonly
   detail      string @optional
   kind        string
@@ -19,7 +19,7 @@ type CompletionItem {
   verify unit "CompletionItem schema is valid"
 }
 
-type HoverContent {
+type HoverContent "Hover Content" {
   entity_kind              string
   title                    string
   source_extension         string
@@ -37,7 +37,7 @@ type HoverContent {
   verify unit "HoverContent schema is valid"
 }
 
-type DocumentSymbolEntry {
+type DocumentSymbolEntry "Document Symbol Entry" {
   name     string                @readonly
   kind     SymbolKind
   range    SourceSpan
@@ -45,22 +45,22 @@ type DocumentSymbolEntry {
   verify unit "DocumentSymbolEntry schema is valid"
 }
 
-type SemanticTokenLegendEntry {
+type SemanticTokenLegendEntry "Semantic Token Legend Entry" {
   token_type       string   @readonly
   token_modifiers  string[] @optional
   source_extension string   @optional
   verify unit "SemanticTokenLegendEntry schema is valid"
 }
 
-type WorkspaceEditResult {
+type WorkspaceEditResult "Workspace Edit Result" {
   edits          TextEdit[]
   document_count integer
   verify unit "WorkspaceEditResult schema is valid"
 }
 
-type CodeActionKind = QuickFix | Refactor | Source | SourceOrganizeImports
+type CodeActionKind "Code Action Kind" = QuickFix | Refactor | Source | SourceOrganizeImports
 
-type CodeAction {
+type CodeAction "Code Action" {
   title           string  @readonly
   kind            CodeActionKind
   diagnostic_code string  @optional
@@ -69,7 +69,7 @@ type CodeAction {
   verify unit "CodeAction schema is valid"
 }
 
-type SemanticToken {
+type SemanticToken "Semantic Token" {
   line       integer  @readonly
   start_col  integer  @readonly
   length     integer  @readonly
@@ -78,7 +78,7 @@ type SemanticToken {
   verify unit "SemanticToken schema is valid"
 }
 
-type WorkspaceSymbolEntry {
+type WorkspaceSymbolEntry "Workspace Symbol Entry" {
   name      string @readonly
   kind      SymbolKind
   location  SourceSpan
@@ -86,7 +86,7 @@ type WorkspaceSymbolEntry {
   verify unit "WorkspaceSymbolEntry schema is valid"
 }
 
-type SymbolKind = file
+type SymbolKind "Symbol Kind" = file
   | module
   | namespace
   | class

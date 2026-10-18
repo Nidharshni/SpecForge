@@ -15,8 +15,12 @@ use "types/migration"
 use "types/wasm"
 use "types/zero-entity-core"
 
+defaults behavior {
+  features [spec_file_migration]
+  types    [SpecFile, MigrationResult]
+}
+
 behavior detect_format_version_mismatch "Detect Format Version Mismatch" {
-  features   [spec_file_migration]
   invariants [multi_error_collection, zero_domain_knowledge_core, diagnostic_determinism]
   category   validation
   types      [SpecFile, FormatVersion]
@@ -64,7 +68,6 @@ behavior detect_format_version_mismatch "Detect Format Version Mismatch" {
 // directly (v1→v3). Each step is a self-contained transform function. This
 // ensures that each version boundary is validated independently.
 behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
-  features   [spec_file_migration]
   invariants [
     multi_error_collection,
     migration_idempotency,
@@ -173,8 +176,74 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
   verify integration "migrate leaves a nested project's files alone"
 }
 
+behavior add_missing_titles "Add Missing Titles" {
+  invariants [migration_idempotency, migration_semantic_preservation]
+  category   mutation
+  ports      [FileSystem]
+  contract   """
+    The titles step MUST write a title into every block header that has
+    none, entity blocks and unions alike: the block's doc comment (the //
+    lines directly above its header with no blank line between, the format
+    header excluded), each line's text after // trimmed and the lines
+    joined by one space, with \\ and " escaped, the comment lines removed.
+    A block with no doc comment MUST get its id in Title Case words. The
+    step MUST leave define, spec and ref blocks, titled blocks and text
+    with a syntax error as they are, and MUST be idempotent. It runs on
+    every file it changes, whatever the file's format version, and the
+    graph comparison keeps exactly the title it added where a block had
+    none.
+  """
+  verify unit "a doc comment directly above a block becomes its title"
+  verify unit "a multi-line doc comment becomes one title"
+  verify unit "a union takes its doc comment as its title"
+  verify unit "a block with no doc comment is titled with its id in words"
+  verify unit "a comment after a blank line is not lifted"
+  verify unit "a trailing comment on the header stays"
+  verify unit "the format header is never lifted"
+  verify unit "quotes and backslashes in a doc comment are escaped in the title"
+  verify unit "titled, define, spec and ref blocks are left alone"
+  verify unit "a file with a syntax error is left alone"
+  verify unit "the titles step is idempotent"
+  verify unit "a migration that adds titles is kept, with no W054"
+  verify unit "a dry run shows the titles and writes nothing"
+  verify unit "a project already titled has nothing pending"
+  verify unit "a hook that also changes a field rolls the titles back"
+  verify unit "the changes beyond the steps drop only a title the step added"
+}
+
+behavior hoist_file_defaults "Hoist File Defaults" {
+  invariants [migration_idempotency, migration_semantic_preservation]
+  category   mutation
+  ports      [FileSystem]
+  contract   """
+    The defaults step MUST move into a `defaults <kind>` block each reference
+    list a file's blocks repeat: for a kind with two or more blocks in the
+    file and no defaults block of its own, a field is hoisted when every block
+    of the kind writes it exactly once, as a one-line list of bare items with
+    no annotation and no comment on or directly above its line, and at least
+    two blocks write the same list. The most common list becomes the default
+    and is deleted from the blocks that write it; the others keep theirs. A
+    block MUST be written only when it saves at least one line. It goes after
+    the last import, or before the first form and its leading comments. The
+    step MUST leave a text with a syntax error as it is and MUST be
+    idempotent. The graph comparison proves the graph is unchanged: a hoist
+    that changes it is rolled back with W054.
+  """
+  verify unit "a list every block writes alike is hoisted"
+  verify unit "the most common list is hoisted and the others keep theirs"
+  verify unit "a kind where a block lacks the field is left as written"
+  verify unit "an identifier, a quoted or a multi-line list is never hoisted"
+  verify unit "a line with a comment on or above it is left as written"
+  verify unit "a kind that has defaults is left as written"
+  verify unit "a hoist that saves no line is not written"
+  verify unit "the block goes after the imports or before the first form"
+  verify unit "hoisting twice changes nothing"
+  verify unit "a file with a syntax error is left alone"
+  verify unit "a migration that hoists defaults keeps the graph"
+  verify unit "a hoist that changes the graph is rolled back"
+}
+
 behavior generate_migration_diff "Generate Migration Diff" {
-  features   [spec_file_migration]
   invariants [
     diagnostic_determinism,
     migration_idempotency,
@@ -217,7 +286,6 @@ behavior generate_migration_diff "Generate Migration Diff" {
 }
 
 behavior validate_post_migration_integrity "Validate Post-Migration Integrity" {
-  features   [spec_file_migration]
   invariants [
     multi_error_collection,
     graph_traversal_integrity,
@@ -255,7 +323,9 @@ behavior validate_post_migration_integrity "Validate Post-Migration Integrity" {
     (compute_graph_delta): entity IDs, and each entity's kind, title,
     field values, methods and outgoing edges. Source positions MUST be
     ignored, since format migration inherently shifts them. The
-    migration keeps the graph exactly when the delta is empty. Each
+    migration steps declare their own changes (add_missing_titles: a
+    title where a node had none); the delta is taken less those. The
+    migration keeps the graph exactly when that delta is empty. Each
     change the delta names MUST be reported as one W054 warning: an
     entity removed or added, an entity whose content changed (naming
     what changed, in the delta's words), and an edge removed or added.
@@ -267,13 +337,12 @@ behavior validate_post_migration_integrity "Validate Post-Migration Integrity" {
   verify unit "structural equivalence verified between pre and post graphs"
   verify unit "structural differences reported as warnings"
   verify unit "new diagnostics from migration reported"
-  verify unit "a migration step that changes an entity's title or kind is reported and rolled back"
+  verify unit "a migration that changes an existing title or a kind is reported and rolled back"
   verify unit "each change the graph delta names is one W054 warning, and an empty delta none"
   verify contract "Validate Post-Migration Integrity: post-migration integrity validation holds — extension_hooks_complete_fired, structural_equivalence_checked, differences_reported, migration_validation_complete_emitted"
 }
 
 behavior rollback_failed_migration "Rollback Failed Migration" {
-  features   [spec_file_migration]
   invariants [migration_backup_safety, migration_atomicity, zero_domain_knowledge_core]
   category   command
   types      [MigrationResult, MigrationSummary, MigrationBackup]
@@ -332,7 +401,6 @@ behavior rollback_failed_migration "Rollback Failed Migration" {
 }
 
 behavior invoke_extension_migration_hooks "Invoke Extension Migration Hooks" {
-  features   [spec_file_migration]
   // multi_error_collection applies here because extension hook failures are
   // collected into the DiagnosticBag (not fail-fast) — each hook failure is
   // an independent error that must be reported alongside others.

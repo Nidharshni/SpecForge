@@ -13,7 +13,7 @@ expression: "json!({\"core\": core, \"surfaces\": surfaces})"
         "resources_registered": 8,
         "surface_resources_registered": 0,
         "surface_tools_registered": 0,
-        "tools_registered": 34
+        "tools_registered": 35
       }
     },
     {
@@ -41,7 +41,7 @@ expression: "json!({\"core\": core, \"surfaces\": surfaces})"
       "event": "mcp_discovery_invoked",
       "payload": {
         "discoveryType": "tools",
-        "resultCount": 34
+        "resultCount": 35
       }
     },
     {
@@ -94,7 +94,7 @@ expression: "json!({\"core\": core, \"surfaces\": surfaces})"
       "event": "mcp_delta_notified",
       "payload": {
         "addedNodes": 1,
-        "modifiedNodes": 1,
+        "modifiedNodes": 0,
         "notificationType": "graph",
         "removedNodes": 1,
         "subscriberCount": 1
@@ -156,7 +156,7 @@ expression: "json!({\"core\": core, \"surfaces\": surfaces})"
         "resources_registered": 9,
         "surface_resources_registered": 1,
         "surface_tools_registered": 2,
-        "tools_registered": 36
+        "tools_registered": 37
       }
     },
     {

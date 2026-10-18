@@ -4,13 +4,19 @@ use crate::config::FormatConfig;
 mod idempotency;
 mod parse_errors;
 mod range;
+mod value_forms;
 
 fn fmt(source: &str) -> String {
-    format_source(source, &FormatConfig::default()).formatted
+    format_source(
+        source,
+        &FormatConfig::default(),
+        &specforge_graph::FieldForms::default(),
+    )
+    .formatted
 }
 
 fn fmt_with(source: &str, config: &FormatConfig) -> String {
-    format_source(source, config).formatted
+    format_source(source, config, &specforge_graph::FieldForms::default()).formatted
 }
 
 // --- Slice 2: Tracer bullet (indent only) ---
@@ -431,10 +437,10 @@ fn test_apply_format_rules_contract() {
     let config = FormatConfig::default();
     let source = "behavior foo \"Foo\" {\n      contract   \"test\"\n    types   [a,  b]\n}\n";
 
-    let result = format_source(source, &config);
+    let result = format_source(source, &config, &specforge_graph::FieldForms::default());
 
     // ensures: deterministic_output — same input+config → same output
-    let result2 = format_source(source, &config);
+    let result2 = format_source(source, &config, &specforge_graph::FieldForms::default());
     assert_eq!(
         result.formatted, result2.formatted,
         "deterministic_output: same input+config must produce same output"
@@ -442,7 +448,11 @@ fn test_apply_format_rules_contract() {
 
     // ensures: no_domain_logic — formatter works with ANY keyword, not just known ones
     let custom_entity = "my_custom_thing foo \"Foo\" {\n      field1   \"value\"\n}\n";
-    let custom_result = format_source(custom_entity, &config);
+    let custom_result = format_source(
+        custom_entity,
+        &config,
+        &specforge_graph::FieldForms::default(),
+    );
     assert!(
         custom_result.formatted.contains("my_custom_thing foo"),
         "no_domain_logic: formatter should handle unknown entity kinds"
@@ -469,7 +479,12 @@ fn test_format_parses_to_identical_entity_graph() {
     ];
 
     for (i, input) in inputs.iter().enumerate() {
-        let formatted = format_source(input, &FormatConfig::default()).formatted;
+        let formatted = format_source(
+            input,
+            &FormatConfig::default(),
+            &specforge_graph::FieldForms::default(),
+        )
+        .formatted;
 
         let original_ast = specforge_parser::parse(input, "test.spec");
         let formatted_ast = specforge_parser::parse(&formatted, "test.spec");
@@ -583,8 +598,8 @@ fn a_configured_width_sets_the_indent() {
 
     let input = "behavior foo \"Foo\" {\n        contract \"test\"\n}\n";
 
-    let result_4 = format_source(input, &config_4);
-    let result_2 = format_source(input, &config_2);
+    let result_4 = format_source(input, &config_4, &specforge_graph::FieldForms::default());
+    let result_2 = format_source(input, &config_2, &specforge_graph::FieldForms::default());
 
     // With indent_width=4, contract should be indented 4 spaces
     assert!(
@@ -616,7 +631,7 @@ fn use_tabs_indents_with_tabs() {
         max_width: 80,
     };
     let input = "behavior foo \"Foo\" {\n  contract \"test\"\n}\n";
-    let result = format_source(input, &config);
+    let result = format_source(input, &config, &specforge_graph::FieldForms::default());
     assert!(
         result.formatted.contains("\tcontract"),
         "use_tabs=true should produce tab indentation: {:?}",

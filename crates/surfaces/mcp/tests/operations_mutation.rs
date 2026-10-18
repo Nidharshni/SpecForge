@@ -7,11 +7,11 @@ use std::path::Path;
 /// test.spec: the behavior `alpha` on lines 1–2, the feature `beta` that
 /// has it on lines 10–12.
 const TEST_SPEC: &str = concat!(
-    "behavior alpha \"Alpha\" {\n",
+    "behavior alpha \"Alpha\" {\n    features [beta]\n",
     "}\n",
-    "\n\n\n\n\n\n\n",
+    "\n\n\n\n\n\n",
     "feature beta \"Beta\" {\n",
-    "    behaviors [alpha]\n",
+    "    problem \"Users need it\"\n",
     "}\n",
 );
 
@@ -1893,7 +1893,7 @@ fn migrate_contract() {
         .project_root()
         .map(std::path::Path::to_path_buf)
         .unwrap();
-    let old = "// specforge-format: 0.9\nfeature gamma \"Gamma\" {\n    behaviors [ghost]\n}\n";
+    let old = "// specforge-format: 0.9\nbehavior gamma \"Gamma\" {\n    features [ghost]\n}\n";
     std::fs::write(root.join("old.spec"), old).unwrap();
     let migrate = |server: &mut McpServer, args: Value| -> Value {
         let resp = call_tool(server, "specforge.migrate", args);

@@ -28,13 +28,13 @@ expression: snapshot
   },
   "cli": {
     "files": {
-      "spec/main.spec": "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n",
+      "spec/main.spec": "behavior alpha \"Alpha\" {\n  category core\n  contract \"The system MUST work\"\n}\n",
       "specforge-cache.json": "{\n  \"format\": 1,\n  \"statuses\": {}\n}\n"
     }
   },
   "mcp": {
     "files": {
-      "spec/main.spec": "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n"
+      "spec/main.spec": "behavior alpha \"Alpha\" {\n  category core\n  contract \"The system MUST work\"\n}\n"
     }
   }
 }

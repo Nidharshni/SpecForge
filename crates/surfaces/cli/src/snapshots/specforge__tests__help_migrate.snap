@@ -2,7 +2,7 @@
 source: crates/surfaces/cli/src/main.rs
 expression: command.clone().render_long_help().to_string()
 ---
-Migrate .spec files between format versions
+Migrate .spec files to the current format: the version header, a title for every block that has none, and the reference lists a file's blocks repeat moved into its `defaults`
 
 Usage: specforge migrate [OPTIONS]
 

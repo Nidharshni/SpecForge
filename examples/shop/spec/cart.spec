@@ -10,7 +10,7 @@ type cart "Shopping cart" {
 }
 
 behavior add_item "Add an item to the cart" {
-  category   "cart"
+  category   cart
   contract   "Adding a named item puts it in the cart once"
   types      [cart]
   invariants [no_duplicate_items]

@@ -23,7 +23,7 @@ use "types/wasm"
 
 // ── Surface Contribution Container ──────────────────────────
 
-type SurfaceDescriptor {
+type SurfaceDescriptor "Surface Descriptor" {
   commands      CommandContribution[]     @optional
   mcp_tools     McpToolContribution[]     @optional
   mcp_resources McpResourceContribution[] @optional
@@ -32,7 +32,7 @@ type SurfaceDescriptor {
 
 // ── CLI Command Contributions ───────────────────────────────
 
-type CommandContribution {
+type CommandContribution "Command Contribution" {
   id          string       @readonly
   title       string
   description string       @optional
@@ -45,19 +45,7 @@ type CommandContribution {
   verify unit "CommandContribution schema is valid"
 }
 
-// On the command line (specforge {ext_short} {id with _ as -}), a required
-// arg is positional, in declaration order; any other, and every bool_arg, is
-// --{name with _ as -}. --path names the project and is the host's on every
-// command, as --help is, and --format (human, the default, or json): a
-// command with an arg named path, help or format, or two args of one name,
-// is refused on the command line (exit 2). A list of values is a string arg
-// the command splits (--tags a,b): there is no list arg type (ADR 0011).
-// default_value is the arg's value when the caller leaves it out, on every
-// surface: the CLI fills it, and the SDK applies it to a call without it
-// (an MCP tool call). A required arg or a bool_arg has none (a bool_arg is
-// false unless set): the SDK refuses such a declaration, and a default its
-// type refuses, when the extension is built.
-type CommandArg {
+type CommandArg "On the command line (specforge {ext_short} {id with _ as -}), a required arg is positional, in declaration order; any other, and every bool_arg, is --{name with _ as -}. --path names the project and is the host's on every command, as --help is, and --format (human, the default, or json): a command with an arg named path, help or format, or two args of one name, is refused on the command line (exit 2). A list of values is a string arg the command splits (--tags a,b): there is no list arg type (ADR 0011). default_value is the arg's value when the caller leaves it out, on every surface: the CLI fills it, and the SDK applies it to a call without it (an MCP tool call). A required arg or a bool_arg has none (a bool_arg is false unless set): the SDK refuses such a declaration, and a default its type refuses, when the extension is built." {
   name          string   @readonly
   arg_type      CommandArgType
   required      boolean  @optional
@@ -70,17 +58,9 @@ type CommandArg {
   verify unit "CommandArg schema is valid"
 }
 
-type CommandArgType = string_arg | path_arg | bool_arg | enum_arg | integer_arg
+type CommandArgType "Command Arg Type" = string_arg | path_arg | bool_arg | enum_arg | integer_arg
 
-// What a cmd__{id} export receives. args holds the declared args the
-// caller set (the CLI's parsed command line, or the auto-promoted MCP
-// tool's arguments), typed as declared; cwd is the project root, absolute and canonical (symlinks resolved), the same on both surfaces; graph is
-// the compiled project's graph in the graph export's shape (entities
-// sorted by id, edges by source, target and label); format is the output
-// the caller asked for (the CLI's --format, json over MCP); today is the
-// host's date at the call, UTC. The export reads no files and no clock:
-// the same call serves the CLI and MCP (ADR 0011).
-type CommandInput {
+type CommandInput "What a cmd__{id} export receives. args holds the declared args the caller set (the CLI's parsed command line, or the auto-promoted MCP tool's arguments), typed as declared; cwd is the project root, absolute and canonical (symlinks resolved), the same on both surfaces; graph is the compiled project's graph in the graph export's shape (entities sorted by id, edges by source, target and label); format is the output the caller asked for (the CLI's --format, json over MCP); today is the host's date at the call, UTC. The export reads no files and no clock: the same call serves the CLI and MCP (ADR 0011)." {
   args     FieldMap
   cwd      string
   graph    Graph
@@ -90,33 +70,26 @@ type CommandInput {
   verify unit "CommandInput schema is valid"
 }
 
-// What a command's input says the project's recorded test report proves
-// (ADR 0039): absent without a report; `unreadable` with the reason when
-// the report cannot be used; else, per entity that counts toward
-// coverage, its obligations, the ones a passing test names and its
-// failing tests, scored by the coverage rule `specforge stats` reports.
-type CommandEvidence {
+type CommandEvidence "What a command's input says the project's recorded test report proves (ADR 0039): absent without a report; `unreadable` with the reason when the report cannot be used; else, per entity that counts toward coverage, its obligations, the ones a passing test names and its failing tests, scored by the coverage rule `specforge stats` reports." {
   state    EvidenceState
   entities EntityEvidence[] @optional
   reason   string           @optional
   verify unit "a command input without evidence leaves the field off the wire, and evidence is tagged by its state"
 }
 
-type EvidenceState = none | recorded | unreadable
+type EvidenceState "Evidence State" = none | recorded | unreadable
 
-type EntityEvidence {
+type EntityEvidence "Entity Evidence" {
   obligations integer
   proven      integer
   failing     integer @optional
   verify unit "an entity is proven when it declares an obligation, every one is proven and no test fails"
 }
 
-// human: the extension's layout for a reader (a table with a header row
-// where the payload is tabular); json: one root object, the command's
-// payload type. The host owns the flag; the extension renders both.
-type CommandFormat = human | json
+type CommandFormat "human: the extension's layout for a reader (a table with a header row where the payload is tabular); json: one root object, the command's payload type. The host owns the flag; the extension renders both." = human
+  | json
 
-type CommandOutput {
+type CommandOutput "Command Output" {
   exit_code integer
   stdout    string @optional
   stderr    string @optional
@@ -125,14 +98,11 @@ type CommandOutput {
 
 // ── MCP Tool Contributions ──────────────────────────────────
 
-// The categories a tool that is no mutation is listed in, and the ones an
-// extension tool may declare: only a core tool that writes its target's
-// project files is a mutation.
-type McpToolGroup = "core" | "navigation" | "management"
+type McpToolGroup "The categories a tool that is no mutation is listed in, and the ones an extension tool may declare: only a core tool that writes its target's project files is a mutation." = "core"
+  | "navigation"
+  | "management"
 
-// input_schema and output_schema must be JSON objects: a tool with
-// another value is E055 and is not registered.
-type McpToolContribution {
+type McpToolContribution "input_schema and output_schema must be JSON objects: a tool with another value is E055 and is not registered." {
   name          string       @readonly
   description   string
   category      McpToolGroup @optional
@@ -145,7 +115,7 @@ type McpToolContribution {
 
 // ── MCP Resource Contributions ──────────────────────────────
 
-type McpResourceContribution {
+type McpResourceContribution "Mcp Resource Contribution" {
   uri_template string @readonly
   name         string @readonly
   description  string @optional
@@ -157,10 +127,7 @@ type McpResourceContribution {
 
 // ── Extension Commands ──────────────────────────────────────
 
-// One command an extension declares, derived once for every surface:
-// its CLI name, its MCP tool name, its args' command-line shapes, its
-// input schema, the args both surfaces send, and why the host refuses it.
-type ExtensionCommand {
+type ExtensionCommand "One command an extension declares, derived once for every surface: its CLI name, its MCP tool name, its args' command-line shapes, its input schema, the args both surfaces send, and why the host refuses it." {
   extension    string @readonly
   short        string @readonly
   cli_name     string @readonly
@@ -174,9 +141,7 @@ type ExtensionCommand {
 
 // ── Command Routes ──────────────────────────────────────────
 
-// One command and the name it is routed under:
-// specforge {short} {cli_name} (ADR 0097)
-type CommandRoute {
+type CommandRoute "One command and the name it is routed under: specforge {short} {cli_name} (ADR 0097)" {
   extension   string @readonly
   short       string @readonly
   cli_name    string @readonly
@@ -184,17 +149,14 @@ type CommandRoute {
   verify unit "CommandRoute schema is valid"
 }
 
-// A command routed under the name of an earlier one: it runs on no surface
-type ShadowedRoute {
+type ShadowedRoute "A command routed under the name of an earlier one: it runs on no surface" {
   route CommandRoute
   // Index of the command that has its name, in CommandRoutes.routed
   by    integer @readonly
   verify unit "ShadowedRoute schema is valid"
 }
 
-// The project's commands, routed by (short name, CLI name), the first in
-// load then declaration order winning
-type CommandRoutes {
+type CommandRoutes "The project's commands, routed by (short name, CLI name), the first in load then declaration order winning" {
   routed   CommandRoute[]
   shadowed ShadowedRoute[]
   verify unit "CommandRoutes schema is valid"
@@ -202,11 +164,11 @@ type CommandRoutes {
 
 // ── Surface Types ──────────────────────────────────────────
 
-type SurfaceType = command | mcp_tool | mcp_resource
+type SurfaceType "Surface Type" = command | mcp_tool | mcp_resource
 
 // ── Surface Errors ──────────────────────────────────────────
 
-type SurfaceError {
+type SurfaceError "Surface Error" {
   extension_name  string @readonly
   surface_type    SurfaceType
   contribution_id string

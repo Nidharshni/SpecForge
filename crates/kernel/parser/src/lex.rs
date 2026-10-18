@@ -157,7 +157,10 @@ pub fn starts_top_level_form(text: &str, lexemes: &[Lexeme], max_indent: usize) 
         Some("pub") => word(1) == Some("use") && import(2),
         Some("spec") => title(1) && punct(2, '{'),
         Some("ref") => kind(1) == Some(LexemeKind::RefId) && title(2),
-        Some(_) if word(1).is_some() => punct(if title(2) { 3 } else { 2 }, '{') || punct(2, '='),
+        Some(_) if word(1).is_some() => {
+            let open = if title(2) { 3 } else { 2 };
+            punct(open, '{') || punct(open, '=')
+        }
         _ => false,
     }
 }

@@ -13,6 +13,11 @@ use "types/graph"
 use "types/output"
 use "types/zero-entity-core"
 
+defaults behavior {
+  features [agent_export]
+  types    [Graph, Diagnostic]
+}
+
 // render_markdown_documentation moved to spec/extensions/markdown-renderer/behaviors.spec
 
 behavior serialize_json_graph "Serialize JSON Graph" {
@@ -167,10 +172,8 @@ behavior compute_traceability_chain "Compute Traceability Chain" {
     in an extension manifest that is NOT instantiated between the two
     entities in the current graph. This distinguishes from broken
     references (E003), which are caught during resolution.
-    An expected link already declared from the other side, an edge from an
-    entity of the target kind through one of the field's inverse fields
-    (the field its inverse_of names on the target kind, and every field of
-    the target kind naming it inverse_of), is not missing.
+    A relation is written on its owning field only (ADR 0150): its other
+    side is the target's upstream, under the owning field's label.
     The JSON trace output MUST carry the Graph Protocol schema_version.
     Tracing an entity the graph does not have MUST be E003, naming the
     closest entity when one is near.
@@ -178,7 +181,7 @@ behavior compute_traceability_chain "Compute Traceability Chain" {
   verify unit "trace from entity shows upstream and downstream connections"
   verify unit "trace shows full chain depth"
   verify unit "missing link in chain is flagged"
-  verify unit "an expected link declared from the other side, through an inverse field of the target kind, is not missing"
+  verify unit "a relation written on its owning field shows on the other side as upstream, under the owning field's label"
   verify unit "trace output includes schema version"
   verify unit "tracing an entity the graph lacks is E003 naming the closest entity"
   verify unit "a reference field another extension adds to a kind is not an expected link"
@@ -410,7 +413,6 @@ behavior inspect_entity_facts "Inspect an Entity's Facts" {
   features   [mcp_core_tools]
   invariants [diagnostic_determinism, testable_entity_classification]
   category   query
-  types      [Graph, Diagnostic]
   ports      [CompilerApi]
   requires {
     project_compiled "A compiled project, one-shot or a project session's, supplies the project view"
@@ -438,7 +440,6 @@ behavior explore_the_graph "Explore the Graph" {
   features   [agent_export, mcp_prompts]
   invariants [diagnostic_determinism, zero_domain_knowledge_core]
   category   query
-  types      [Graph, Diagnostic]
   requires {
     project_compiled "A compiled project, one-shot or a project session's, supplies the project view"
   }
@@ -477,7 +478,6 @@ behavior review_coverage_gaps "Review Coverage Gaps" {
   features   [agent_export, mcp_prompts, extension_driven_coverage]
   invariants [diagnostic_determinism, testable_entity_classification, zero_domain_knowledge_core]
   category   query
-  types      [Graph, Diagnostic]
   requires {
     project_compiled "A compiled project, one-shot or a project session's, supplies the project view"
   }
@@ -504,10 +504,8 @@ behavior review_coverage_gaps "Review Coverage Gaps" {
 }
 
 behavior provide_explore_cli "Provide CLI Explore Command" {
-  features   [agent_export]
   invariants [diagnostic_determinism]
   category   cli
-  types      [Graph, Diagnostic]
   contract   """
     specforge explore [ENTITY] [--kind KIND] [--depth N] [--path PATH]
     [--format human|json] MUST render the exploration (explore_the_graph)
@@ -528,7 +526,6 @@ behavior provide_review_cli "Provide CLI Review Command" {
   features   [agent_export, extension_driven_coverage]
   invariants [diagnostic_determinism]
   category   cli
-  types      [Graph, Diagnostic]
   contract   """
     specforge review [ENTITY] [--depth N] [--path PATH] [--format
     human|json] MUST render the review (review_coverage_gaps) of the
@@ -1029,11 +1026,9 @@ behavior present_diagnostics_as_json "Present Diagnostics as JSON" {
 }
 
 // ── Agent-Optimized Export (Principle 3: agents are first-class consumers) ──
-// `specforge export` writes to stdout for agent/interactive consumption (context, brief, graph formats).
-// `specforge render` writes files to disk for batch/CI output (json, dot, markdown via extensions).
+// `specforge export` writes to stdout (graph, context, brief, dot, markdown); `specforge.render` writes the same formats into the project.
 
 behavior export_agent_context_format "Export Agent Context Format" {
-  features   [agent_export]
   invariants [
     graph_traversal_integrity,
     diagnostic_determinism,
@@ -1088,7 +1083,6 @@ behavior export_agent_context_format "Export Agent Context Format" {
 }
 
 behavior export_agent_brief_format "Export Agent Brief Format" {
-  features   [agent_export]
   invariants [
     graph_traversal_integrity,
     diagnostic_determinism,
@@ -1125,7 +1119,6 @@ behavior export_agent_brief_format "Export Agent Brief Format" {
 }
 
 behavior export_agent_graph_format "Export Agent Graph Format" {
-  features   [agent_export]
   invariants [
     graph_traversal_integrity,
     diagnostic_determinism,
@@ -1177,8 +1170,41 @@ behavior export_agent_graph_format "Export Agent Graph Format" {
   verify contract "Export Agent Graph Format: agent graph export holds — validation_complete_fired, full_fidelity_output, schema_version_present, scope_enforced, invalid_scope_diagnosed, export_complete_emitted"
 }
 
+behavior export_review_document "Export a Review Document" {
+  features   [review_export]
+  invariants [diagnostic_determinism, zero_domain_knowledge_core]
+  category   query
+  types      [Graph]
+  ports      [CompilerApi]
+  contract   """
+    When specforge export --format markdown is invoked, or specforge.export or
+    specforge.render with format markdown, the system MUST write one Markdown
+    document a reviewer reads without tooling: one section per selected
+    entity headed by its kind, id and title; each field its extension
+    declares normative quoted whole; its other fields in a table; its
+    references in a table naming each linked entity's kind and title, a
+    reference that does not resolve listed as unresolved; the entities that
+    reference it; and its obligations, numbered. Core reads only field
+    declarations and names no kind or field. Scope, depth and kinds select
+    the sections as for every export format; links name entities outside
+    the selection too. The document MUST be deterministic: the scoped
+    entity first, then by kind and id, with no timestamp. Prose renders as
+    written, with raw HTML, entity references and backslashes escaped
+    outside code spans.
+  """
+  verify unit "a section is headed by its kind, id and title"
+  verify unit "a normative field is quoted whole"
+  verify unit "links name each linked entity's kind and title, outside the selection too"
+  verify unit "a reference that does not resolve is listed as unresolved"
+  verify unit "the entities that reference it are listed"
+  verify unit "obligations are numbered in declaration order"
+  verify unit "prose renders as written, raw HTML escaped outside code spans"
+  verify unit "sections are ordered scope first, then by kind and id"
+  verify integration "export --format markdown writes the review document of examples/todo-app and examples/shop"
+  verify integration "specforge.export answers the same document as specforge export"
+}
+
 behavior query_graph_multi_resolution "Query Graph at Multiple Resolutions" {
-  features   [agent_export]
   invariants [
     graph_traversal_integrity,
     diagnostic_determinism,
@@ -1245,7 +1271,6 @@ behavior query_graph_multi_resolution "Query Graph at Multiple Resolutions" {
 // ── Token Economics (Principle 3: agents are first-class consumers) ────
 
 behavior enforce_token_budget "Enforce Token Budget" {
-  features   [agent_export]
   invariants [
     graph_traversal_integrity,
     diagnostic_determinism,

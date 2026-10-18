@@ -4,8 +4,11 @@
 //! a declared field is written, and `Obligation` how an entity's `verify` statements are written.
 
 mod build;
+mod defaults;
 pub mod field_form;
-pub use field_form::{FieldForm, FieldForms, FieldJson, Reading, Reference, Target, ValueShape};
+pub use field_form::{
+    FieldForm, FieldForms, FieldJson, Reading, Reference, Rewrite, Target, ValueShape,
+};
 mod delta;
 pub use delta::{
     EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect, NodeChange, compute_graph_delta,
@@ -25,4 +28,4 @@ pub use build::{
 };
 pub use graph::{Edge, Graph, Node, Reached};
 pub use specforge_common::{Diagnostic, Severity, SourceSpan};
-pub use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue, SpecFile};
+pub use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue, SpecFile, Written};

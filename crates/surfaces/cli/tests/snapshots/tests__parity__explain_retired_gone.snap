@@ -28,7 +28,7 @@ expression: snapshot
       "retired": true
     },
     "files": {
-      "spec/main.spec": "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n"
+      "spec/main.spec": "behavior alpha \"Alpha\" {\n  category core\n  contract \"The system MUST work\"\n}\n"
     },
     "ok": true
   },

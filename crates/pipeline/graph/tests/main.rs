@@ -6,6 +6,7 @@
 mod build;
 mod contracts;
 mod copy;
+mod defaults;
 mod derived;
 mod field_form;
 mod graph;
@@ -13,4 +14,6 @@ mod obligations;
 mod reading;
 mod resolution;
 mod stress;
+mod titles;
+mod value_forms;
 mod written;

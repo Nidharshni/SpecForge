@@ -7,7 +7,7 @@ behavior beta "Beta" {
   contract "The system MUST do beta"
 }
 
-type Color = Red | Green
+type Color "Color" = Red | Green
 
 type Red "Red" {
 }

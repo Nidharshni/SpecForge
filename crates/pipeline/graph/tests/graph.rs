@@ -1,7 +1,5 @@
 use specforge_common::{SourceSpan, Sym};
-use specforge_graph::{
-    Edge, FileChange, Graph, GraphBuild, GraphConfig, GraphInputs, Node, SpecFile,
-};
+use specforge_graph::{Edge, FileChange, Graph, GraphBuild, GraphConfig, Node, SpecFile};
 use specforge_parser::parse;
 use specforge_test_macros::test as specforge_test;
 
@@ -227,9 +225,9 @@ fn build_graph_one_node_per_entity() {
     use specforge_parser::parse;
 
     let source = r#"
-behavior alpha "A" { contract "first" }
-behavior beta "B" { contract "second" }
-feature gamma "G" { behaviors [alpha, beta] }
+feature alpha "A" { problem "first" }
+feature beta "B" { problem "second" }
+behavior gamma "G" { features [alpha, beta] }
 "#;
     let spec_file = parse(source, "main.spec");
     let (graph, diagnostics) = build_graph(&[spec_file]);
@@ -256,9 +254,9 @@ fn build_graph_one_edge_per_resolved_reference() {
     use specforge_parser::parse;
 
     let source = r#"
-behavior alpha "A" { contract "first" }
-behavior beta "B" { contract "second" }
-feature gamma "G" { behaviors [alpha, beta] }
+feature alpha "A" { problem "first" }
+feature beta "B" { problem "second" }
+behavior gamma "G" { features [alpha, beta] }
 "#;
     let spec_file = parse(source, "main.spec");
     let (graph, _) = build_graph(&[spec_file]);
@@ -268,7 +266,7 @@ feature gamma "G" { behaviors [alpha, beta] }
     assert_eq!(edges_from_gamma.len(), 2);
     assert!(edges_from_gamma.iter().any(|e| e.target == "alpha"));
     assert!(edges_from_gamma.iter().any(|e| e.target == "beta"));
-    assert!(edges_from_gamma.iter().all(|e| e.label == "behaviors"));
+    assert!(edges_from_gamma.iter().all(|e| e.label == "features"));
 }
 
 #[specforge_test(
@@ -280,8 +278,8 @@ fn build_graph_unresolved_ref_produces_e003() {
     use specforge_parser::parse;
 
     let source = r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha, nonexistent] }
+feature alpha "A" { problem "first" }
+behavior gamma "G" { features [alpha, nonexistent] }
 "#;
     let spec_file = parse(source, "main.spec");
     let (graph, diagnostics) = build_graph(&[spec_file]);
@@ -420,8 +418,8 @@ fn build_graph_did_you_mean_for_close_match() {
     use specforge_parser::parse;
 
     let source = r#"
-behavior alpha_parser "A" { contract "first" }
-feature gamma "G" { behaviors [alpha_parsr] }
+feature alpha_parser "A" { problem "first" }
+behavior gamma "G" { features [alpha_parsr] }
 "#;
     let spec_file = parse(source, "main.spec");
     let (_, diagnostics) = build_graph(&[spec_file]);
@@ -447,8 +445,8 @@ fn build_graph_no_suggestion_for_distant_match() {
     use specforge_parser::parse;
 
     let source = r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [zzzzz_totally_unrelated] }
+feature alpha "A" { problem "first" }
+behavior gamma "G" { features [zzzzz_totally_unrelated] }
 "#;
     let spec_file = parse(source, "main.spec");
     let (_, diagnostics) = build_graph(&[spec_file]);
@@ -471,8 +469,8 @@ fn build_graph_suggestion_appears_in_help_text() {
     use specforge_parser::parse;
 
     let source = r#"
-behavior alpha_parser "A" { contract "first" }
-feature gamma "G" { behaviors [alpha_parsr] }
+feature alpha_parser "A" { problem "first" }
+behavior gamma "G" { features [alpha_parsr] }
 "#;
     let spec_file = parse(source, "main.spec");
     let (_, diagnostics) = build_graph(&[spec_file]);
@@ -501,10 +499,10 @@ fn edge_labels_match_field_names() {
     use specforge_parser::parse;
 
     let source = r#"
-behavior alpha "A" { contract "first" }
+feature alpha "A" { problem "first" }
 invariant inv1 "I1" { guarantee "always" }
-feature gamma "G" {
-  behaviors [alpha]
+behavior gamma "G" {
+  features [alpha]
   invariants [inv1]
 }
 "#;
@@ -521,9 +519,9 @@ feature gamma "G" {
     let edges = graph.edges_from("gamma");
     assert_eq!(edges.len(), 2, "two edges from gamma");
 
-    let behavior_edge = edges.iter().find(|e| e.target == "alpha").unwrap();
+    let feature_edge = edges.iter().find(|e| e.target == "alpha").unwrap();
     assert_eq!(
-        behavior_edge.label, "behaviors",
+        feature_edge.label, "features",
         "edge label matches field name"
     );
 
@@ -658,8 +656,8 @@ fn installed_keyword_with_missing_entity_emits_e003() {
 
     // "behavior" is installed, but "nonexistent" entity doesn't exist
     let source = r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha, nonexistent] }
+feature alpha "A" { problem "first" }
+behavior gamma "G" { features [alpha, nonexistent] }
 "#;
     let spec_file = parse(source, "main.spec");
     let config = GraphConfig::default();
@@ -681,9 +679,9 @@ fn installed_keyword_cross_file_missing_entity_emits_e003() {
     use specforge_parser::parse;
 
     // "behavior" is installed, file is imported, but referenced entity doesn't exist there
-    let types = parse(r#"behavior alpha "A" { contract "first" }"#, "types.spec");
+    let types = parse(r#"feature alpha "A" { problem "first" }"#, "types.spec");
     let main = parse(
-        r#"feature gamma "G" { behaviors [alpha, missing_beta] }"#,
+        r#"behavior gamma "G" { features [alpha, missing_beta] }"#,
         "main.spec",
     );
     let config = GraphConfig::default();
@@ -868,10 +866,10 @@ fn end_to_end_resolve_and_build() {
     use specforge_graph::build_graph;
 
     let dir = project_dir(&[
-        ("types.spec", r#"behavior alpha "A" { contract "first" }"#),
+        ("types.spec", r#"feature alpha "A" { problem "first" }"#),
         (
             "main.spec",
-            "use \"types\"\nfeature gamma \"G\" {\n  behaviors [alpha]\n}",
+            "use \"types\"\nbehavior gamma \"G\" {\n  features [alpha]\n}",
         ),
     ]);
 
@@ -899,8 +897,8 @@ fn end_to_end_with_errors() {
     let dir = project_dir(&[(
         "main.spec",
         r#"
-behavior alpha "A" { contract "first" }
-feature gamma "G" { behaviors [alpha, nonexistent] }
+feature alpha "A" { problem "first" }
+behavior gamma "G" { features [alpha, nonexistent] }
 "#,
     )]);
 
@@ -978,48 +976,6 @@ fn detect_cycles_returns_empty_for_dag() {
 
     let cycles = graph.detect_cycles();
     assert!(cycles.is_empty(), "DAG should have no cycles");
-}
-
-// C5-08: complementary suppression generalizes to cycles of any length.
-#[test]
-fn complementary_three_hop_cycle_is_suppressed() {
-    let mut graph = Graph::with_bidirectional_pairs(vec![(
-        "invariants".to_string(),
-        "enforced_by".to_string(),
-    )]);
-    graph.add_node(make_node("a", "behavior"));
-    graph.add_node(make_node("b", "feature"));
-    graph.add_node(make_node("c", "invariant"));
-    // a -invariants-> b -enforced_by-> c -enforced_by-> a: every hop label
-    // is one side of the registered pair and both directions appear.
-    graph.add_edge(make_edge("a", "b", "invariants"));
-    graph.add_edge(make_edge("b", "c", "enforced_by"));
-    graph.add_edge(make_edge("c", "a", "enforced_by"));
-
-    assert!(
-        graph.detect_cycles().is_empty(),
-        "a fully complementary 3-hop cycle is not a real dependency cycle"
-    );
-}
-
-#[test]
-fn forward_only_labels_are_real_cycles() {
-    let mut graph = Graph::with_bidirectional_pairs(vec![(
-        "invariants".to_string(),
-        "enforced_by".to_string(),
-    )]);
-    graph.add_node(make_node("a", "behavior"));
-    graph.add_node(make_node("b", "feature"));
-    graph.add_node(make_node("c", "invariant"));
-    // Same shape, but every hop uses the forward label — a genuine cycle.
-    graph.add_edge(make_edge("a", "b", "invariants"));
-    graph.add_edge(make_edge("b", "c", "invariants"));
-    graph.add_edge(make_edge("c", "a", "invariants"));
-
-    assert!(
-        !graph.detect_cycles().is_empty(),
-        "forward-only label cycle is a real dependency cycle"
-    );
 }
 
 #[specforge_test(
@@ -1103,9 +1059,9 @@ fn build_graph_no_w061_for_acyclic_refs() {
     use specforge_parser::parse;
 
     let source = r#"
-behavior a "A" { contract "c" }
-behavior b "B" { contract "c" depends_on [a] }
-feature f "F" { behaviors [a, b] }
+feature f "F" { problem "c" }
+behavior a "A" { contract "c" features [f] }
+behavior b "B" { contract "c" features [f] depends_on [a] }
 "#;
     let spec_file = parse(source, "main.spec");
     let (_, diagnostics) = build_graph(&[spec_file]);
@@ -1358,53 +1314,6 @@ fn subgraph_depth_invariant_found_via_incoming_invariants_edge() {
     assert!(sub.node("beh_b").is_some());
 }
 
-// === H10: Custom bidirectional pairs from config ===
-
-#[specforge_test(
-    behavior = "build_in_memory_graph",
-    verify = "custom bidirectional pairs suppress false-positive cycles"
-)]
-fn custom_bidirectional_pairs_suppress_cycle_warning() {
-    use specforge_graph::{GraphConfig, build_graph_with_config};
-    use specforge_parser::parse;
-
-    // Create a spec with a 2-hop cycle: a -> b (via "guards") and b -> a (via "guarded_by")
-    let source = r#"
-behavior a "A" { contract "first" guards [b] }
-behavior b "B" { contract "second" guarded_by [a] }
-"#;
-    let spec_file = parse(source, "main.spec");
-
-    // Without bidirectional pairs configured, the cycle should be reported as W061
-    let config_no_pairs = GraphConfig::default();
-    let (_, diags_no_pairs) =
-        build_graph_with_config(std::slice::from_ref(&spec_file), &config_no_pairs);
-    let w061_no_pairs: Vec<_> = diags_no_pairs.iter().filter(|d| d.code == "W061").collect();
-    assert!(
-        !w061_no_pairs.is_empty(),
-        "without bidirectional pairs, 2-hop cycle should produce W061"
-    );
-
-    // With custom bidirectional pairs configured, the 2-hop cycle should be suppressed
-    let config_with_pairs = GraphConfig {
-        inputs: GraphInputs {
-            bidirectional_pairs: vec![("guards".to_string(), "guarded_by".to_string())],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    let (_, diags_with_pairs) = build_graph_with_config(&[spec_file], &config_with_pairs);
-    let w061_with_pairs: Vec<_> = diags_with_pairs
-        .iter()
-        .filter(|d| d.code == "W061")
-        .collect();
-    assert!(
-        w061_with_pairs.is_empty(),
-        "with bidirectional pairs configured, 2-hop cycle should be suppressed, got: {:?}",
-        w061_with_pairs
-    );
-}
-
 // === M3/M4: Diagnostics carry actionable suggestions ===
 
 #[specforge_test(
@@ -1494,43 +1403,6 @@ fn w060_cross_kind_collision_has_suggestion() {
     );
 }
 
-#[specforge_test(
-    behavior = "build_in_memory_graph",
-    verify = "Graph::with_bidirectional_pairs stores pairs for cycle suppression"
-)]
-fn graph_with_bidirectional_pairs_stores_pairs() {
-    let mut graph = Graph::with_bidirectional_pairs(vec![(
-        "invariants".to_string(),
-        "enforced_by".to_string(),
-    )]);
-
-    // Build a 2-hop cycle with the known bidirectional pair
-    graph.add_node(make_node("inv1", "invariant"));
-    graph.add_node(make_node("beh1", "behavior"));
-    graph.add_edge(make_edge("beh1", "inv1", "invariants"));
-    graph.add_edge(make_edge("inv1", "beh1", "enforced_by"));
-
-    // Should NOT detect cycles because this is a known bidirectional pair
-    let cycles = graph.detect_cycles();
-    assert!(
-        cycles.is_empty(),
-        "known bidirectional pair should not be flagged as cycle, got: {:?}",
-        cycles
-    );
-
-    // But a REAL cycle with different labels should still be detected
-    graph.add_node(make_node("x", "behavior"));
-    graph.add_node(make_node("y", "behavior"));
-    graph.add_edge(make_edge("x", "y", "depends_on"));
-    graph.add_edge(make_edge("y", "x", "depends_on"));
-
-    let cycles2 = graph.detect_cycles();
-    assert!(
-        !cycles2.is_empty(),
-        "real cycle with non-bidirectional labels should still be detected"
-    );
-}
-
 // --- every edge the build adds joins two entities ---
 
 #[specforge_test(
@@ -1540,11 +1412,11 @@ fn graph_with_bidirectional_pairs_stores_pairs() {
 fn every_edge_the_build_adds_joins_two_entities() {
     let (graph, diagnostics) = specforge_graph::build_graph(&[
         parse(
-            "behavior a \"A\" {\n  contract \"c\"\n}\nfeature f \"F\" {\n  behaviors [a, ghost]\n}\n",
+            "feature a \"A\" {\n  problem \"c\"\n}\nbehavior f \"F\" {\n  features [a, ghost]\n}\n",
             "main.spec",
         ),
         parse(
-            "feature g \"G\" {\n  behaviors [a, missing]\n}\n",
+            "behavior g \"G\" {\n  features [a, missing]\n}\n",
             "other.spec",
         ),
     ]);

@@ -1,0 +1,803 @@
+---
+source: crates/surfaces/cli/tests/export_markdown.rs
+expression: run.stdout
+---
+# Specification
+
+30 entities.
+
+## behavior `complete_task` — Complete a Task
+
+`behaviors/task.spec:31`
+
+**contract**
+
+> When a CompleteTaskCommand is received for an existing task, the system MUST
+> set the task status to `done`, set completedAt to the current time, and emit
+> a task_completed event. An unknown task id MUST return TaskNotFoundError.
+> It MUST return Result\<Task, TaskNotFoundError>.
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| category | command |
+
+**Links**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| invariants | `completed_implies_timestamp` | invariant | Completed Tasks Have a Timestamp |
+| types | `Task` | type | A unit of work the user wants to track |
+| types | `CompleteTaskCommand` | type | Command payload for completing a task. |
+| types | `TaskNotFoundError` | type | Error returned when a task id does not resolve. |
+| produces | `task_completed` | event | Task Completed |
+| satisfies | `no_lost_completion` | property | Completion is never lost |
+| ports | `TaskRepository` | port | Persistence boundary for tasks |
+| features | `task_management` | feature | Task Management |
+
+**Verify**
+
+| # | Kind | Obligation |
+|---|---|---|
+| 1 | unit | completing an unknown task returns TaskNotFoundError |
+| 2 | unit | completing a task sets status to done |
+| 3 | integration | task_completed event fires once per completion |
+
+## behavior `create_task` — Create a Task
+
+`behaviors/task.spec:15`
+
+**contract**
+
+> When a CreateTaskCommand is received, the system MUST reject an empty or
+> whitespace-only title with InvalidTitleError, otherwise it MUST persist a
+> new Task with status `open` and a unique id, then emit a task_created event.
+> It MUST return Result\<Task, InvalidTitleError>.
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| category | command |
+
+**Links**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| invariants | `task_id_uniqueness` | invariant | Task ID Uniqueness |
+| types | `Task` | type | A unit of work the user wants to track |
+| types | `CreateTaskCommand` | type | Command payload for creating a task. |
+| types | `InvalidTitleError` | type | Error returned when a title fails validation. |
+| produces | `task_created` | event | Task Created |
+| ports | `TaskRepository` | port | Persistence boundary for tasks |
+| features | `task_management` | feature | Task Management |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| constrains | `create_latency` | constraint | Task creation is fast |
+
+**Verify**
+
+| # | Kind | Obligation |
+|---|---|---|
+| 1 | unit | empty title is rejected |
+| 2 | unit | valid title creates an open task |
+| 3 | integration | created task is retrievable by id |
+
+## behavior `list_tasks` — List Tasks by Status
+
+`behaviors/task.spec:48`
+
+**contract**
+
+> When given a TaskStatus filter, the system MUST return all tasks with that
+> status ordered by createdAt ascending. Listing cannot fail.
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| category | query |
+
+**Links**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| types | `Task` | type | A unit of work the user wants to track |
+| types | `TaskStatus` | type | A discriminated union of the states a task can be in. |
+| ports | `TaskRepository` | port | Persistence boundary for tasks |
+| features | `task_management` | feature | Task Management |
+
+**Verify**
+
+| # | Kind | Obligation |
+|---|---|---|
+| 1 | unit | listing open tasks excludes done tasks |
+
+## channel `cli` — Command-line interface
+
+`product/channels.spec:3`
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| description | A terminal CLI for managing tasks. |
+| interaction_model | request_response |
+| status | active |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| channels | `capture_and_complete` | journey | Capture and complete a task |
+
+## constraint `create_latency` — Task creation is fast
+
+`governance/decisions.spec:21`
+
+**metric**
+
+> create_task p99 \< 50ms on local SSD
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| category | performance |
+| priority | medium |
+| description | Creating a task must feel instant on the CLI. |
+
+**Links**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| constrains | `create_task` | behavior | Create a Task |
+
+**Verify**
+
+| # | Kind | Obligation |
+|---|---|---|
+| 1 | load | benchmark create_task over 10k iterations, assert p99 \< 50ms |
+
+## decision `sqlite_storage` — SQLite for local storage
+
+`governance/decisions.spec:6`
+
+**decision**
+
+> Use an embedded SQLite database file in the user's config directory.
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| status | accepted |
+| date | 2026-01-15 |
+
+**context**
+
+The todo CLI is single-user and local-first. We need durable storage
+without running a server.
+
+**consequences**
+
+- Zero-config persistence
+- No concurrent multi-writer support (acceptable for single-user CLI)
+
+**Links**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| invariants | `task_id_uniqueness` | invariant | Task ID Uniqueness |
+
+## deliverable `todo_cli` — todo CLI
+
+`product/planning.spec:20`
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| artifact_type | cli |
+| status | in_progress |
+
+**Links**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| journeys | `capture_and_complete` | journey | Capture and complete a task |
+| modules | `core` | module | todo-core |
+| milestones | `mvp` | milestone | Minimum Viable Product |
+
+## event `task_completed` — Task Completed
+
+`events/task.spec:12`
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| channel | tasks.completed |
+| category | domain |
+
+**Links**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| payload | `TaskCompletedPayload` | type | Event payload carried when a task is completed. |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| produces | `complete_task` | behavior | Complete a Task |
+
+**Verify**
+
+| # | Kind | Obligation |
+|---|---|---|
+| 1 | integration | task_completed is emitted after a successful complete |
+
+## event `task_created` — Task Created
+
+`events/task.spec:5`
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| channel | tasks.created |
+| category | domain |
+
+**Links**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| payload | `TaskCreatedPayload` | type | Event payload carried when a task is created. |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| produces | `create_task` | behavior | Create a Task |
+
+**Verify**
+
+| # | Kind | Obligation |
+|---|---|---|
+| 1 | integration | task_created is emitted after a successful create |
+
+## failure_mode `lost_task` — Task acknowledged but not persisted
+
+`governance/decisions.spec:30`
+
+**mitigation**
+
+> Write within a SQLite transaction; flush before acknowledging
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| severity | high |
+| occurrence | rare |
+| detection | moderate |
+| cause | Process killed between in-memory insert and disk flush |
+| effect | User believes a task was saved but it disappears on restart |
+
+**Links**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| invariant | `task_id_uniqueness` | invariant | Task ID Uniqueness |
+
+## feature `task_management` — Task Management
+
+`features/task_management.spec:3`
+
+**problem**
+
+> Users need to capture, track, and complete their work items.
+
+**solution**
+
+> Create, complete, and list tasks backed by a durable repository.
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| status | in_progress |
+| priority | high |
+| effort | m |
+
+**acceptance**
+
+- A user can create a task with a title
+- A user can mark a task done
+- A user can list tasks filtered by status
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| features | `complete_task` | behavior | Complete a Task |
+| features | `create_task` | behavior | Create a Task |
+| features | `list_tasks` | behavior | List Tasks by Status |
+| features | `capture_and_complete` | journey | Capture and complete a task |
+| features | `mvp` | milestone | Minimum Viable Product |
+| features | `core` | module | todo-core |
+| key_features | `individual` | persona | Individual user |
+
+## invariant `completed_implies_timestamp` — Completed Tasks Have a Timestamp
+
+`invariants/task.spec:9`
+
+**guarantee**
+
+> A task with status `done` MUST have a non-null completedAt timestamp.
+> A task that is not `done` MUST NOT have a completedAt timestamp.
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| risk | low |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| invariants | `complete_task` | behavior | Complete a Task |
+
+**Verify**
+
+| # | Kind | Obligation |
+|---|---|---|
+| 1 | unit | completing a task sets completedAt |
+| 2 | unit | reopening a task clears completedAt |
+
+## invariant `task_id_uniqueness` — Task ID Uniqueness
+
+`invariants/task.spec:3`
+
+**guarantee**
+
+> No two tasks may share the same id.
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| risk | medium |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| invariants | `create_task` | behavior | Create a Task |
+| invariants | `sqlite_storage` | decision | SQLite for local storage |
+| invariant | `lost_task` | failure_mode | Task acknowledged but not persisted |
+
+**Verify**
+
+| # | Kind | Obligation |
+|---|---|---|
+| 1 | property | concurrent task creation never produces duplicate ids |
+
+## journey `capture_and_complete` — Capture and complete a task
+
+`product/journeys.spec:7`
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| priority | high |
+
+**flow**
+
+- User runs `todo add "Buy milk"`
+- System creates the task and prints its id
+- User runs `todo done <id>`
+- System marks the task done and confirms
+- User runs `todo list --status done` and sees the task
+
+**Links**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| persona | `individual` | persona | Individual user |
+| channels | `cli` | channel | Command-line interface |
+| features | `task_management` | feature | Task Management |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| journeys | `todo_cli` | deliverable | todo CLI |
+
+## milestone `mvp` — Minimum Viable Product
+
+`product/planning.spec:12`
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| status | in_progress |
+| priority | high |
+
+**exit_criteria**
+
+- create / complete / list behaviors verified
+- zero E-level diagnostics
+
+**Links**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| features | `task_management` | feature | Task Management |
+| modules | `core` | module | todo-core |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| milestones | `todo_cli` | deliverable | todo CLI |
+
+## module `core` — todo-core
+
+`product/planning.spec:6`
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| family | core |
+| description | Domain logic: tasks, repository, behaviors. |
+
+**Links**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| features | `task_management` | feature | Task Management |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| modules | `todo_cli` | deliverable | todo CLI |
+| modules | `mvp` | milestone | Minimum Viable Product |
+
+## persona `individual` — Individual user
+
+`product/personas.spec:3`
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| description | A person managing their own personal to-do list. |
+| technical_level | beginner |
+| status | active |
+
+**goals**
+
+- Capture tasks quickly
+- See what is left to do
+
+**Links**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| key_features | `task_management` | feature | Task Management |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| persona | `capture_and_complete` | journey | Capture and complete a task |
+
+## port `TaskRepository` — Persistence boundary for tasks
+
+`ports/task_repository.spec:5`
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| direction | outbound |
+| category | persistence/task |
+
+**Links**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| types | `CreateTaskCommand` | type | Command payload for creating a task. |
+| types | `Task` | type | A unit of work the user wants to track |
+| types | `InvalidTitleError` | type | Error returned when a title fails validation. |
+| types | `TaskNotFoundError` | type | Error returned when a task id does not resolve. |
+| types | `CompleteTaskCommand` | type | Command payload for completing a task. |
+| types | `TaskStatus` | type | A discriminated union of the states a task can be in. |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| ports | `complete_task` | behavior | Complete a Task |
+| ports | `create_task` | behavior | Create a Task |
+| ports | `list_tasks` | behavior | List Tasks by Status |
+
+**Verify**
+
+| # | Kind | Obligation |
+|---|---|---|
+| 1 | integration | TaskRepository contract is satisfied by the SQLite adapter |
+
+## property `no_lost_completion` — Completion is never lost
+
+`formal/properties.spec:3`
+
+**expression**
+
+> Once a task reaches status `done`, it never silently reverts to a
+> non-done status without an explicit reopen command.
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| property_type | safety |
+| scope | task lifecycle |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| satisfies | `complete_task` | behavior | Complete a Task |
+
+## spec `todo-app` — todo-app
+
+`main.spec:6`
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| version | 0.1.0 |
+
+## term `done` — done
+
+`product/glossary.spec:12`
+
+**definition**
+
+> The terminal status of a completed task. A done task carries a
+> completedAt timestamp.
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| see_also | `task` | term | task |
+
+## term `task` — task
+
+`product/glossary.spec:3`
+
+**definition**
+
+> A unit of work the user wants to track. Has a title, a status, and
+> timestamps. Identified by a unique id.
+
+**aliases**
+
+- to-do
+- item
+
+**Links**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| see_also | `done` | term | done |
+
+## type `CompleteTaskCommand` — Command payload for completing a task.
+
+`types/task.spec:24`
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| taskId | string |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| types | `complete_task` | behavior | Complete a Task |
+| types | `TaskRepository` | port | Persistence boundary for tasks |
+
+**Verify**
+
+| # | Kind | Obligation |
+|---|---|---|
+| 1 | unit | rejects an empty taskId |
+
+## type `CreateTaskCommand` — Command payload for creating a task.
+
+`types/task.spec:18`
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| title | string |
+| description | string |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| types | `create_task` | behavior | Create a Task |
+| types | `TaskRepository` | port | Persistence boundary for tasks |
+
+**Verify**
+
+| # | Kind | Obligation |
+|---|---|---|
+| 1 | unit | rejects a blank title |
+
+## type `InvalidTitleError` — Error returned when a title fails validation.
+
+`types/task.spec:36`
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| _tag | InvalidTitleError |
+| reason | string |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| types | `create_task` | behavior | Create a Task |
+| types | `TaskRepository` | port | Persistence boundary for tasks |
+
+**Verify**
+
+| # | Kind | Obligation |
+|---|---|---|
+| 1 | unit | reason says why the title was rejected |
+
+## type `Task` — A unit of work the user wants to track
+
+`types/task.spec:3`
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| id | string |
+| title | string |
+| description | string |
+| status | TaskStatus |
+| createdAt | timestamp |
+| completedAt | timestamp |
+
+**Links**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| composed_types | `TaskStatus` | type | A discriminated union of the states a task can be in. |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| types | `complete_task` | behavior | Complete a Task |
+| types | `create_task` | behavior | Create a Task |
+| types | `list_tasks` | behavior | List Tasks by Status |
+| types | `TaskRepository` | port | Persistence boundary for tasks |
+
+**Verify**
+
+| # | Kind | Obligation |
+|---|---|---|
+| 1 | unit | completedAt is set exactly when status is done |
+
+## type `TaskCompletedPayload` — Event payload carried when a task is completed.
+
+`types/task.spec:48`
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| taskId | string |
+| completedAt | timestamp |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| payload | `task_completed` | event | Task Completed |
+
+**Verify**
+
+| # | Kind | Obligation |
+|---|---|---|
+| 1 | unit | round-trips through JSON unchanged |
+
+## type `TaskCreatedPayload` — Event payload carried when a task is created.
+
+`types/task.spec:42`
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| taskId | string |
+| title | string |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| payload | `task_created` | event | Task Created |
+
+**Verify**
+
+| # | Kind | Obligation |
+|---|---|---|
+| 1 | unit | round-trips through JSON unchanged |
+
+## type `TaskNotFoundError` — Error returned when a task id does not resolve.
+
+`types/task.spec:29`
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| _tag | TaskNotFoundError |
+| taskId | string |
+| message | string |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| types | `complete_task` | behavior | Complete a Task |
+| types | `TaskRepository` | port | Persistence boundary for tasks |
+
+**Verify**
+
+| # | Kind | Obligation |
+|---|---|---|
+| 1 | unit | message names the missing taskId |
+
+## type `TaskStatus` — A discriminated union of the states a task can be in.
+
+`types/task.spec:13`
+
+**Fields**
+
+| Field | Value |
+|---|---|
+| variants | open \| in_progress \| done \| archived |
+
+**Referenced by**
+
+| Field | Entity | Kind | Title |
+|---|---|---|---|
+| types | `list_tasks` | behavior | List Tasks by Status |
+| types | `TaskRepository` | port | Persistence boundary for tasks |
+| composed_types | `Task` | type | A unit of work the user wants to track |

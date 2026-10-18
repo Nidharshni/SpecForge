@@ -122,7 +122,7 @@ fn kinds(c: &mut ContributionsBuilder) {
             .dot_fillcolor("#FBE9E7")
             .inference_guide("Look for non-functional requirements, SLAs, performance budgets, regulatory mandates, and technical limitations. Signals: performance benchmarks or thresholds in code/config; rate limiting configuration; compliance annotations (@HIPAA, @PCI-DSS); resource limits (max connections, memory caps, timeout values); security policies; dependency version constraints; platform limitations documented in README or config. Set category (performance, security, regulatory, compatibility). Include metric and threshold when quantifiable (e.g., metric='p99 latency', threshold='<200ms'). Link enforced_by to behaviors that enforce this constraint at runtime. Constraints are quantified limits with measurable thresholds; for architectural rules about state validity, use invariant instead. Skip: soft preferences, guidelines that aren't enforced.");
         k.field("category", |f| {
-            f.field_type(FieldType::String)
+            f.field_type(FieldType::Identifier)
                 .description("Classification of the constraint (e.g. performance, security, regulatory)");
         });
         k.field("priority", |f| {
@@ -153,8 +153,7 @@ fn kinds(c: &mut ContributionsBuilder) {
             f.field_type(FieldType::ReferenceList)
                 .description("Behaviors that enforce this constraint at runtime")
                 .edge("ConstraintEnforcedByBehavior")
-                .target_kind("behavior")
-                .inverse_of("invariants");
+                .target_kind("behavior");
         });
         k.field("scope", |f| {
             f.field_type(FieldType::String)

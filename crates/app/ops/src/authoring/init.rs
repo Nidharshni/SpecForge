@@ -346,7 +346,8 @@ fn sanitize_entity_id(name: &str) -> String {
 /// `starter`, formatted as the project at `dir` formats its files.
 fn canonical(starter: &str, dir: &Path) -> String {
     let (config, _) = specforge_formatter::load_config(dir, dir);
-    specforge_formatter::format_source(starter, &config).formatted
+    specforge_formatter::format_source(starter, &config, &specforge_graph::FieldForms::default())
+        .formatted
 }
 
 fn structural_starter(project_name: &str, version: &str) -> String {

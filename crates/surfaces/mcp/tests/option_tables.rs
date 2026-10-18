@@ -54,7 +54,7 @@ fn required<T: Copy + PartialEq>(
 fn enumerated() -> Vec<Advertised> {
     vec![
         advertised("specforge.query", "format", &AGENT_FORMAT),
-        advertised("specforge.export", "format", &AGENT_FORMAT),
+        advertised("specforge.export", "format", &FORMAT),
         required("specforge.render", "format", &FORMAT),
         advertised("specforge.model", "format", &MODEL_FORMAT),
         advertised("specforge.model", "group_by", &GROUP_BY),

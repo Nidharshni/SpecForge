@@ -12,8 +12,11 @@ use "types/diagnostics"
 use "types/graph"
 use "types/zero-entity-core"
 
+defaults behavior {
+  features [incremental_compilation]
+}
+
 behavior watch_file_system_for_changes "Watch File System for Changes" {
-  features   [incremental_compilation]
   invariants [incremental_correctness, watch_mode_response_latency]
   category   command
   types      [FileEntry]
@@ -67,7 +70,6 @@ behavior watch_file_system_for_changes "Watch File System for Changes" {
 }
 
 behavior classify_project_changes "Classify Project Changes" {
-  features   [incremental_compilation]
   invariants [incremental_correctness]
   category   command
   ports      [FileSystem]
@@ -153,7 +155,6 @@ behavior classify_project_changes "Classify Project Changes" {
 }
 
 behavior bring_session_up_to_date "Bring a Session Up to Date with Disk" {
-  features   [incremental_compilation]
   invariants [incremental_correctness]
   category   command
   ports      [FileSystem]
@@ -192,7 +193,6 @@ behavior bring_session_up_to_date "Bring a Session Up to Date with Disk" {
 }
 
 behavior hold_editor_buffers "Hold Editor Buffers" {
-  features   [incremental_compilation]
   invariants [incremental_correctness]
   category   command
   ports      [FileSystem]
@@ -228,7 +228,6 @@ behavior hold_editor_buffers "Hold Editor Buffers" {
 }
 
 behavior invalidate_changed_files "Invalidate Changed Files" {
-  features   [incremental_compilation]
   invariants [incremental_correctness, graph_traversal_integrity]
   category   validation
   types      [Graph, Subgraph, FileEntry]
@@ -276,7 +275,6 @@ behavior invalidate_changed_files "Invalidate Changed Files" {
 }
 
 behavior rebuild_affected_subgraph "Rebuild Affected Subgraph" {
-  features   [incremental_compilation]
   invariants [incremental_correctness, graph_traversal_integrity, zero_domain_knowledge_core]
   category   command
   types      [Graph, Subgraph, FileEntry]
@@ -328,7 +326,6 @@ behavior rebuild_affected_subgraph "Rebuild Affected Subgraph" {
 }
 
 behavior emit_incremental_diagnostics "Emit Incremental Diagnostics" {
-  features   [incremental_compilation]
   invariants [
     multi_error_collection,
     incremental_correctness,
@@ -393,7 +390,6 @@ behavior emit_incremental_diagnostics "Emit Incremental Diagnostics" {
 }
 
 behavior debounce_file_changes "Debounce File Changes" {
-  features   [incremental_compilation]
   invariants [incremental_correctness, diagnostic_determinism, watch_mode_response_latency]
   category   command
   types      [FileEntry, CompilerConfig]
@@ -427,7 +423,6 @@ behavior debounce_file_changes "Debounce File Changes" {
 }
 
 behavior resolve_imports_on_update "Resolve Imports on Every Update" {
-  features   [incremental_compilation]
   // Runs synchronously before rebuild_affected_subgraph — every file's
   // imports are resolved again before any subgraph rebuild begins.
   category   command

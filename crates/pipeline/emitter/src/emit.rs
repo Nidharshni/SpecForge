@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use specforge_coverage::{Status, Verdict};
-use specforge_graph::{Graph, Node};
+use specforge_graph::{FieldForms, Graph, Node};
 use specforge_registry::{FieldRegistry, KindRegistry};
 
 use crate::budget::TokenBudget;
@@ -21,6 +21,8 @@ pub enum EmitFormat {
     Brief,
     /// Graphviz DOT format.
     Dot,
+    /// A document a reviewer reads without tooling (ADR 0152).
+    Markdown,
 }
 
 /// Options controlling graph emission.
@@ -62,6 +64,10 @@ pub struct EmitOptions<'a> {
     /// `coverage_status` (graph, context and brief; DOT draws none), and a
     /// token budget counts the key. Default: None — no node carries one.
     pub coverage: Option<&'a BTreeMap<String, Verdict>>,
+    /// How each field reads (ADR 0093): the markdown format lists a field's
+    /// references from it, linked or not. Default: None, so links come from
+    /// the edges alone.
+    pub field_forms: Option<&'a FieldForms>,
 }
 
 /// Default: graph format 1.0 of the whole graph against the unversioned
@@ -79,6 +85,7 @@ impl Default for EmitOptions<'_> {
             kind_registry: None,
             field_registry: None,
             coverage: None,
+            field_forms: None,
         }
     }
 }
@@ -97,7 +104,9 @@ fn unversioned() -> &'static GraphProtocolSchema {
 /// export references the schema instead of embedding it. `format` and `schema`
 /// choose the shape (graph 1.0, or 2.0 with the schema; context and brief, 2.0
 /// when a schema is given); `coverage` gives each node whose entity has a
-/// verdict its `coverage_status`. Under `token_budget` every format but DOT is fitted
+/// verdict its `coverage_status`. Markdown, like DOT, is rendered from the
+/// selection before any shape: not budgeted, no schema. Under `token_budget`
+/// every other format is fitted
 /// by `budget::fit`: the whole export when it fits; otherwise the least
 /// central entities are dropped, with their edges, until it fits, and the
 /// export says which in its `token_budget` block. An embedded schema counts
@@ -116,6 +125,10 @@ pub fn emit(graph: &Graph, options: &EmitOptions<'_>) -> Result<String, EmitterE
                 ..Default::default()
             },
         ));
+    }
+
+    if options.format == EmitFormat::Markdown {
+        return Ok(crate::markdown::render(graph, &selected, options));
     }
 
     // Scoped exports reference the published schema instead of embedding it
@@ -154,7 +167,7 @@ pub fn document_schema(
         EmitFormat::Json => Some(Export::<crate::json::JsonNode>::schema(defs)),
         EmitFormat::Context => Some(Export::<crate::context::ContextNode>::schema(defs)),
         EmitFormat::Brief => Some(Export::<crate::brief::BriefNode>::schema(defs)),
-        EmitFormat::Dot => None,
+        EmitFormat::Dot | EmitFormat::Markdown => None,
     }
 }
 
@@ -230,7 +243,9 @@ impl Shape<'_> {
             EmitFormat::Brief => self
                 .envelope(graph, None, brief_nodes(graph, self.coverage), budget)
                 .to_json(),
-            EmitFormat::Dot => unreachable!("DOT is rendered before a Shape exists"),
+            EmitFormat::Dot | EmitFormat::Markdown => {
+                unreachable!("DOT and markdown are rendered before a Shape exists")
+            }
         }
     }
 

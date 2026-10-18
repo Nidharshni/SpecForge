@@ -5,15 +5,15 @@ use specforge_mcp::McpServer;
 use specforge_test::prelude::*;
 
 /// test.spec: `alpha` on lines 1–4, `beta` on lines 10–12 (its
-/// `behaviors [alpha]` on line 11).
+/// `problem` on line 11).
 const TEST_SPEC: &str = concat!(
     "behavior alpha \"Alpha Behavior\" {\n",
-    "    contract \"The system MUST do alpha\"\n",
+    "    contract \"The system MUST do alpha\"\n    features [beta]\n",
     "    verify unit \"test alpha\"\n",
     "}\n",
-    "\n\n\n\n\n",
+    "\n\n\n\n",
     "feature beta \"Beta Feature\" {\n",
-    "    behaviors [alpha]\n",
+    "    problem \"Users need it\"\n",
     "}\n",
 );
 
@@ -142,10 +142,10 @@ fn inspect_includes_referenced_by_and_refers_to() {
         "specforge.inspect",
         json!({"entity_id": "alpha"}),
     );
-    // beta -> alpha is alpha's only edge: beta references alpha, and alpha
-    // refers to nothing.
-    assert_eq!(parsed["referenced_by"], json!(["beta"]));
-    assert_eq!(parsed["refers_to"], json!([]));
+    // alpha -> beta is alpha's only edge: alpha refers to beta, and nothing
+    // references alpha.
+    assert_eq!(parsed["referenced_by"], json!([]));
+    assert_eq!(parsed["refers_to"], json!(["beta"]));
     assert_eq!(parsed["verify_declarations"], json!(["unit test alpha"]));
     // The deprecated aliases are gone.
     assert!(parsed.get("references").is_none(), "{parsed}");
@@ -156,8 +156,8 @@ fn inspect_includes_referenced_by_and_refers_to() {
         "specforge.inspect",
         json!({"entity_id": "beta"}),
     );
-    assert_eq!(parsed["referenced_by"], json!([]));
-    assert_eq!(parsed["refers_to"], json!(["alpha"]));
+    assert_eq!(parsed["referenced_by"], json!(["alpha"]));
+    assert_eq!(parsed["refers_to"], json!([]));
 }
 
 // B:provide_mcp_inspect_tool — verify unit "unknown entity returns error"

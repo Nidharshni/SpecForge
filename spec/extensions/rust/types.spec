@@ -1,6 +1,6 @@
 // @specforge/rust extension types — Rust test traceability
 
-type TestGuard {
+type TestGuard "Test Guard" {
   entity_kind string  @readonly
   entity_id   string  @readonly
   test_name   string  @readonly
@@ -10,12 +10,12 @@ type TestGuard {
   verify unit "TestGuard schema is valid"
 }
 
-type TestRegistry {
+type TestRegistry "Test Registry" {
   entries EntityMappingEntry[]
   verify unit "TestRegistry schema is valid"
 }
 
-type EntityMappingEntry {
+type EntityMappingEntry "Entity Mapping Entry" {
   entity_id  string  @readonly
   test_name  string
   file       string
@@ -24,15 +24,21 @@ type EntityMappingEntry {
   verify unit "EntityMappingEntry schema is valid"
 }
 
-type MappingResolutionLevel = proc_macro | convention
+type MappingResolutionLevel "Mapping Resolution Level" = proc_macro | convention
 
-type RustFrameworkSupport {
+type RustFrameworkSupport "Rust Framework Support" {
   framework RustFramework
   support   RustSupportLevel
   mechanism string
   verify unit "RustFrameworkSupport schema is valid"
 }
 
-type RustFramework = builtin | nextest | proptest | criterion | tokio | rstest | trybuild
+type RustFramework "Rust Framework" = builtin
+  | nextest
+  | proptest
+  | criterion
+  | tokio
+  | rstest
+  | trybuild
 
-type RustSupportLevel = full | partial | unsupported
+type RustSupportLevel "Rust Support Level" = full | partial | unsupported

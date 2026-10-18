@@ -720,7 +720,6 @@ expression: "digest(&load(&runtime, &[name]))"
       "refinement.abstract_entity": "behavior (@specforge/software)",
       "refinement.concrete_entity": "behavior (@specforge/software)"
     },
-    "bidirectional_pairs": [],
     "derived_references": [],
     "field_forms": {
       "axiom.assumes": "reference_list",

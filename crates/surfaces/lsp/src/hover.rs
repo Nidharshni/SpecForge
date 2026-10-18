@@ -7,7 +7,7 @@ use crate::document::LineIndex;
 use specforge_common::Diagnostic;
 use specforge_graph::Node;
 use specforge_ops::OpError;
-use specforge_ops::read::inspect::{EntityCoverage, EntityFacts};
+use specforge_ops::read::inspect::{EntityCoverage, EntityFacts, quote};
 use specforge_parser::{FieldValue, ListItem, TypeMember, Written};
 use specforge_registry::FieldRegistry;
 use std::collections::BTreeMap;
@@ -119,7 +119,7 @@ pub fn entity(
         header_section.push_str(&format!("\n{}", ext_line));
     }
     if let Some(headline) = facts.headline {
-        header_section.push_str(&format!("\n\n{}", quoted(headline)));
+        header_section.push_str(&format!("\n\n{}", quote(headline)));
     }
 
     let mut sections: Vec<String> = vec![header_section];
@@ -174,7 +174,6 @@ pub fn entity(
         .fields
         .entries()
         .iter()
-        .filter(|entry| entry.key.as_str() != "title")
         .filter(|entry| !is_headline(&entry.value, facts.headline))
         .map(|entry| format!("- `{}` = {}", entry.key, format_field_value(&entry.value)))
         .collect();
@@ -235,36 +234,6 @@ fn is_headline(value: &FieldValue, headline: Option<&str>) -> bool {
         (FieldValue::String(s), Some(headline)) => std::ptr::eq(s.as_str(), headline),
         _ => false,
     }
-}
-
-/// `text` as a markdown quote, whole: its blank edge lines trimmed, its
-/// common leading whitespace removed, every line prefixed `> `.
-fn quoted(text: &str) -> String {
-    let lines: Vec<&str> = text.lines().collect();
-    let first = lines.iter().position(|l| !l.trim().is_empty());
-    let last = lines.iter().rposition(|l| !l.trim().is_empty());
-    let (Some(first), Some(last)) = (first, last) else {
-        return ">".to_string();
-    };
-    let lines = &lines[first..=last];
-    let indent = lines
-        .iter()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| l.len() - l.trim_start().len())
-        .min()
-        .unwrap_or(0);
-    lines
-        .iter()
-        .map(|l| {
-            let line = l.get(indent..).unwrap_or_else(|| l.trim_start()).trim_end();
-            if line.is_empty() {
-                ">".to_string()
-            } else {
-                format!("> {line}")
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 /// The Coverage line after `**Coverage** · `: as `specforge.inspect`

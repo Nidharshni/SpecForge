@@ -19,7 +19,7 @@ fn tokens_over(text: &str, registries: RegistryBuild, graph: &Graph) -> Vec<Sema
 
 /// The semantic tokens of `text` over `registries` and an empty graph
 /// (every reference names no entity).
-fn tokens_of(text: &str, registries: RegistryBuild) -> Vec<SemanticToken> {
+pub(crate) fn tokens_of(text: &str, registries: RegistryBuild) -> Vec<SemanticToken> {
     tokens_over(text, registries, &Graph::new())
 }
 
@@ -37,12 +37,12 @@ fn declare_kinds(c: &mut ContributionsBuilder, entries: &[(&str, Option<&str>)])
 }
 
 /// The registries of `(kind keyword, declared semantic_token)` pairs.
-fn kinds(entries: &[(&str, Option<&str>)]) -> RegistryBuild {
+pub(crate) fn kinds(entries: &[(&str, Option<&str>)]) -> RegistryBuild {
     registries("@test/ext", |c| declare_kinds(c, entries))
 }
 
 /// The token classified for `text`, which must exist.
-fn token<'a>(tokens: &'a [SemanticToken], text: &str) -> &'a SemanticToken {
+pub(crate) fn token<'a>(tokens: &'a [SemanticToken], text: &str) -> &'a SemanticToken {
     tokens
         .iter()
         .find(|t| t.text == text)
@@ -680,14 +680,7 @@ fn enum_and_bool_values_are_classified() {
 
 /// Whether `node` has an ancestor of kind `kind`.
 fn within(node: tree_sitter::Node, kinds: &[&str]) -> bool {
-    let mut parent = node.parent();
-    while let Some(p) = parent {
-        if kinds.contains(&p.kind()) {
-            return true;
-        }
-        parent = p.parent();
-    }
-    false
+    std::iter::successors(node.parent(), |p| p.parent()).any(|p| kinds.contains(&p.kind()))
 }
 
 /// Every node of `tree` under `node`, depth first.
@@ -766,7 +759,12 @@ fn tokens_agree_with_the_grammar() {
                     );
                     let name = node.child_by_field_name(field::NAME).unwrap();
                     let token = token_at(name).unwrap_or_else(|| panic!("{}", where_(name)));
-                    assert_ne!(token.1 & MOD_DECLARATION, 0, "{}", where_(name));
+                    if &text[kind.byte_range()] == "defaults" {
+                        // The name a defaults block gives is a kind, not a declaration (ADR 0149).
+                        assert_eq!(token.1 & MOD_DECLARATION, 0, "{}", where_(name));
+                    } else {
+                        assert_ne!(token.1 & MOD_DECLARATION, 0, "{}", where_(name));
+                    }
                 }
                 kind::FIELD => {
                     let key = node.child_by_field_name(field::KEY).unwrap();

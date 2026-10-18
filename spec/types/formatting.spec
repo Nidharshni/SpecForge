@@ -1,6 +1,6 @@
 // Formatting types — data shapes for the code formatter
 
-type FormatConfig {
+type FormatConfig "Format Config" {
   /// Default: 2
   indent_width    integer
   /// Default: false
@@ -11,7 +11,7 @@ type FormatConfig {
   verify unit "FormatConfig schema is valid"
 }
 
-type FormatRule = IndentRule
+type FormatRule "Format Rule" = IndentRule
   | SpacingRule
   | AlignmentRule
   | WrappingRule
@@ -21,61 +21,55 @@ type FormatRule = IndentRule
   | StringRule
   | ExtensionFormatRule
 
-type IndentRule {
+type IndentRule "Indent Rule" {
   scope string
   style string
   verify unit "IndentRule schema is valid"
 }
 
-type SpacingRule {
+type SpacingRule "Spacing Rule" {
   context string
   spaces  integer
   verify unit "SpacingRule schema is valid"
 }
 
-type AlignmentRule {
+type AlignmentRule "Alignment Rule" {
   target string
   column integer @optional
   verify unit "AlignmentRule schema is valid"
 }
 
-type WrappingRule {
+type WrappingRule "Wrapping Rule" {
   max_width  integer
   wrap_style string
   verify unit "WrappingRule schema is valid"
 }
 
-type NewlineRule {
+type NewlineRule "Newline Rule" {
   context string
   count   integer
   verify unit "NewlineRule schema is valid"
 }
 
-type CommentRule {
+type CommentRule "Comment Rule" {
   style           string
   preserve_inline boolean
   verify unit "CommentRule schema is valid"
 }
 
-type ImportRule {
+type ImportRule "Import Rule" {
   sort_order string
   grouping   string @optional
   verify unit "ImportRule schema is valid"
 }
 
-type StringRule {
+type StringRule "String Rule" {
   quote_style      string
   multiline_string boolean @optional
   verify unit "StringRule schema is valid"
 }
 
-// Extensions can register custom formatting rules via their manifest.
-// The core formatter delegates to extension-provided rules for entity-specific
-// formatting concerns (e.g., field ordering within extension-defined blocks).
-// This is the P7 extension point: core formatting handles generic CST structure;
-// ExtensionFormatRule lets extensions customize entity-specific formatting
-// without modifying the core formatter. See features/formatting.spec P7 comment.
-type ExtensionFormatRule {
+type ExtensionFormatRule "Extensions can register custom formatting rules via their manifest. The core formatter delegates to extension-provided rules for entity-specific formatting concerns (e.g., field ordering within extension-defined blocks). This is the P7 extension point: core formatting handles generic CST structure; ExtensionFormatRule lets extensions customize entity-specific formatting without modifying the core formatter. See features/formatting.spec P7 comment." {
   extension_id string
   rule_name    string
   config       JsonValue @optional

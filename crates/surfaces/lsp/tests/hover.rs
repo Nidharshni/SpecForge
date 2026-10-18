@@ -45,7 +45,7 @@ fn edge(source: &str, target: &str, label: &str) -> Edge {
 
 /// A project of one file, `main.spec`, holding `source`, served with no
 /// extension and `main.spec` open.
-fn plain(source: &str) -> Served {
+pub(crate) fn plain(source: &str) -> Served {
     Served::new(&[("main.spec", source)]).open(&["main.spec"])
 }
 
@@ -57,7 +57,7 @@ fn references(k: &mut specforge_extension_sdk::prelude::KindBuilder, name: &str)
 }
 
 /// The kinds the reference tests link: `behavior` (features, types),
-/// `feature`, `type`, `invariant` (enforced_by) and `milestone` (features).
+/// `feature`, `type`, `invariant` (covers) and `milestone` (features).
 fn graph_kinds(c: &mut ContributionsBuilder) {
     c.kind("behavior", |k| {
         references(k, "features");
@@ -65,7 +65,7 @@ fn graph_kinds(c: &mut ContributionsBuilder) {
     });
     c.kind("feature", |_| {});
     c.kind("type", |_| {});
-    c.kind("invariant", |k| references(k, "enforced_by"));
+    c.kind("invariant", |k| references(k, "covers"));
     c.kind("milestone", |k| references(k, "features"));
 }
 
@@ -150,7 +150,7 @@ fn hover_shows_reference_counts_and_groups() {
         "behavior create_user \"Create User\" {\n  features [user_management]\n  types [user_type]\n}\n\
          feature user_management \"User Management\" {}\n\
          type user_type \"User\" {}\n\
-         invariant data_integrity \"Integrity\" {\n  enforced_by [create_user]\n}\n\
+         invariant data_integrity \"Integrity\" {\n  covers [create_user]\n}\n\
          milestone v1_launch \"V1\" {\n  features [create_user]\n}\n",
     )])
     .extension("@t/graph", graph_kinds)
@@ -170,7 +170,7 @@ fn hover_shows_reference_counts_and_groups() {
              - `features` → user_management\n\
              - `types` → user_type",
             "**Referenced by** *(2)*\n\
-             - invariant via `enforced_by`: data_integrity\n\
+             - invariant via `covers`: data_integrity\n\
              - milestone via `features`: v1_launch"
         ],
         "{text}"

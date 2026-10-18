@@ -95,6 +95,7 @@ impl CoreTool for Tool {
             paths: &explicit,
             mode,
             caller: project.caller(),
+            runtime: Some(project.runtime.clone()),
         })
         .map_err(Self::failed)?;
 

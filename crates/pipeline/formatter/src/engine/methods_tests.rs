@@ -10,7 +10,7 @@ fn method_statements_survive_formatting_idempotently() {
         "}\n",
     );
     let config = FormatConfig::default();
-    let once = format_source(source, &config);
+    let once = format_source(source, &config, &specforge_graph::FieldForms::default());
     assert!(
         once.diagnostics.is_empty(),
         "format diagnostics: {:?}",
@@ -28,7 +28,11 @@ fn method_statements_survive_formatting_idempotently() {
         "method line lost or mangled: {:?}",
         once.formatted
     );
-    let twice = format_source(&once.formatted, &config);
+    let twice = format_source(
+        &once.formatted,
+        &config,
+        &specforge_graph::FieldForms::default(),
+    );
     assert_eq!(
         twice.formatted, once.formatted,
         "formatting must be idempotent"

@@ -13,7 +13,7 @@
     "max_execution_ms": 5000,
     "max_memory_mb": 256
   },
-  "starter_template": "// {project} — software specification\n//\n// Uses @specforge/software entity kinds: behavior, type, event, port, invariant.\n//\n// Try: specforge check\n\nspec \"{project}\" {\n  version \"{version}\"\n}\n\ntype user \"User account\" {\n  status draft\n  verify \"rejects an empty email\"\n}\n\nbehavior authenticate_user \"Authenticate a user with credentials\" {\n  status   draft\n  category \"auth\"\n  contract \"Given valid credentials, returns an auth token\"\n  produces [user_logged_in]\n\n  verify \"rejects invalid password\"\n  verify \"returns token on success\"\n}\n\nevent user_logged_in \"User successfully logged in\" {\n  payload user\n  verify \"is emitted once per successful login\"\n}\n",
+  "starter_template": "// {project} — software specification\n//\n// Uses @specforge/software entity kinds: behavior, type, event, port, invariant.\n//\n// Try: specforge check\n\nspec \"{project}\" {\n  version \"{version}\"\n}\n\ntype user \"User account\" {\n  status draft\n  verify \"rejects an empty email\"\n}\n\nbehavior authenticate_user \"Authenticate a user with credentials\" {\n  status   draft\n  category auth\n  contract \"Given valid credentials, returns an auth token\"\n  produces [user_logged_in]\n\n  verify \"rejects invalid password\"\n  verify \"returns token on success\"\n}\n\nevent user_logged_in \"User successfully logged in\" {\n  payload user\n  verify \"is emitted once per successful login\"\n}\n",
   "theme_color": "#4a90d9",
   "description": "Software design: behaviors, invariants, events, types and ports, and the checks that keep them consistent"
 }

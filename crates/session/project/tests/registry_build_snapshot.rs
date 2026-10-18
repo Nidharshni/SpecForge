@@ -48,11 +48,6 @@ fn diagnostics<'a>(diagnostics: impl IntoIterator<Item = &'a Diagnostic>) -> Val
         .collect()
 }
 
-fn sorted(mut values: Vec<Value>) -> Value {
-    values.sort_by_key(|v| v.to_string());
-    Value::Array(values)
-}
-
 fn surfaces(s: &SurfaceDescriptor) -> Value {
     json!({
         "commands": s.commands.iter().map(|c| json!({
@@ -91,14 +86,6 @@ fn surfaces(s: &SurfaceDescriptor) -> Value {
 /// (`RegistryBuild::graph_inputs`), without the provider schemes.
 fn graph_inputs(env: &Environment) -> Value {
     let config = env.registries().graph_inputs();
-    let bidirectional_pairs: Vec<Value> = config
-        .bidirectional_pairs
-        .iter()
-        .map(|(a, b)| {
-            let (a, b) = if a <= b { (a, b) } else { (b, a) };
-            json!([a, b])
-        })
-        .collect();
     let absent_targets: BTreeMap<String, String> = config
         .field_forms
         .targets()
@@ -139,7 +126,6 @@ fn graph_inputs(env: &Environment) -> Value {
         .collect();
     json!({
         "member_kinds": config.field_forms.member_kinds(),
-        "bidirectional_pairs": sorted(bidirectional_pairs),
         "absent_targets": absent_targets,
         "field_forms": field_forms,
         "derived_references": derived_references,

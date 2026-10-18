@@ -15,6 +15,11 @@ use "extensions/formal/invariants"
 use "extensions/formal/types"
 use "types/zero-entity-core"
 
+defaults behavior {
+  types    [FormalRefinement]
+  features [fa_refinement_layering]
+}
+
 // W059-W060 removed: condition entity kind no longer exists.
 // Conditions are inline fields, not standalone entities.
 
@@ -176,7 +181,6 @@ behavior fa_validate_empty_protocol_description "W129: Empty Protocol Descriptio
 behavior fa_validate_unreferenced_refinement "W131: Unreferenced Refinement" {
   category   query
   invariants [fa_refinement_entity_reachability]
-  types      [FormalRefinement]
   contract   """
     Detect refinement entities with no RefinementRefinesAbstract,
     RefinementRefinesConcrete, or RefinementChainsToRefinement edges. An unreferenced refinement is a graph node
@@ -193,7 +197,6 @@ behavior fa_validate_unreferenced_refinement "W131: Unreferenced Refinement" {
     referenced_passes     "refinement with at least one refinement edge produces no diagnostic"
     correct_template      "message template is: refinement '{id}' is not connected to any behavior or refinement chain"
   }
-  features   [fa_refinement_layering]
   verify unit "refinement with no edges produces W131"
   verify unit "refinement with abstract_entity and concrete_entity edges passes"
   verify unit "refinement with RefinementChainsToRefinement edge passes"
@@ -202,7 +205,6 @@ behavior fa_validate_unreferenced_refinement "W131: Unreferenced Refinement" {
 
 behavior fa_validate_empty_refinement_description "W132: Empty Refinement Description" {
   category query
-  types    [FormalRefinement]
   contract """
     Detect refinement entities with an empty or whitespace-only description.
     Refinements capture abstract-to-concrete mappings — a blank description
@@ -214,7 +216,6 @@ behavior fa_validate_empty_refinement_description "W132: Empty Refinement Descri
     non_empty_passes "refinement with non-empty description passes"
     correct_template "message template is: refinement '{id}' has empty description"
   }
-  features [fa_refinement_layering]
   verify unit "refinement with empty description produces W132"
   verify unit "refinement with non-empty description passes"
 }
@@ -235,7 +236,6 @@ behavior fa_validate_refinement_without_delta "W133: Refinement Without Conditio
     present_passes   "refinement with a non-empty invariant_deltas produces no diagnostic"
     correct_template "message template is: refinement '{id}' declares no invariant_deltas"
   }
-  features [fa_refinement_layering]
   verify unit "refinement with no invariant_deltas produces W133"
   verify unit "refinement with invariant_deltas passes"
 }
@@ -244,7 +244,6 @@ behavior fa_validate_refinement_without_delta "W133: Refinement Without Conditio
 
 behavior fa_validate_refinement_self_reference "E041b: Refinement Self-Reference" {
   category query
-  types    [FormalRefinement]
   contract """
     Detect refinement entities where abstract_entity equals concrete_entity.
     A refinement that maps a behavior to itself is structurally invalid —
@@ -258,7 +257,6 @@ behavior fa_validate_refinement_self_reference "E041b: Refinement Self-Reference
     distinct_passes   "refinement with distinct abstract_entity and concrete_entity produces no diagnostic"
     correct_template  "message template is: refinement '{id}' maps behavior '{behavior_id}' to itself"
   }
-  features [fa_refinement_layering]
   verify unit "refinement with abstract_entity == concrete_entity produces E041"
   verify unit "refinement with distinct IDs passes"
 }

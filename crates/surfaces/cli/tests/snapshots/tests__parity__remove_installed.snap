@@ -37,7 +37,7 @@ expression: snapshot
     },
     "files": {
       "greet.wasm": "<binary>",
-      "spec/main.spec": "behavior alpha \"Alpha\" {\n  category \"core\"\n  contract \"The system MUST work\"\n}\n",
+      "spec/main.spec": "behavior alpha \"Alpha\" {\n  category core\n  contract \"The system MUST work\"\n}\n",
       "specforge.lock": "{\n  \"lockfile_version\": 1,\n  \"entries\": []\n}"
     },
     "ok": true

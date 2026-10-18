@@ -21,11 +21,14 @@ use "product/channels"
 use "product/features"
 use "product/personas"
 
+defaults journey {
+  channels [cli]
+}
+
 // ── Developer + CLI ──────────────────────────────────────────
 
 journey initialize_a_new_spec_project "Initialize a New Spec Project" {
   persona  developer
-  channels [cli]
   priority critical
   tags     ["developer", "cli"]
   features [project_initialization]
@@ -44,7 +47,6 @@ journey initialize_a_new_spec_project "Initialize a New Spec Project" {
 
 journey initialize_project_non_interactively "Initialize a Project Non-Interactively" {
   persona  ci
-  channels [cli]
   priority high
   tags     ["ci", "cli"]
   features [project_initialization]
@@ -60,7 +62,6 @@ journey initialize_project_non_interactively "Initialize a Project Non-Interacti
 
 journey initialize_project_as_agent "Initialize a Project as an AI Agent" {
   persona  agent
-  channels [cli]
   priority high
   tags     ["agent", "cli"]
   features [project_initialization]
@@ -77,7 +78,6 @@ journey initialize_project_as_agent "Initialize a Project as an AI Agent" {
 
 journey validate_spec_files "Validate Spec Files" {
   persona  developer
-  channels [cli]
   priority critical
   tags     ["developer", "cli"]
   features [
@@ -102,7 +102,6 @@ journey validate_spec_files "Validate Spec Files" {
 
 journey watch_for_changes "Watch for Changes" {
   persona  developer
-  channels [cli]
   priority critical
   tags     ["developer", "cli"]
   features [incremental_compilation]
@@ -119,7 +118,6 @@ journey watch_for_changes "Watch for Changes" {
 
 journey generate_documentation "Generate Documentation" {
   persona  developer
-  channels [cli]
   priority high
   tags     ["developer", "cli"]
   features [json_and_dot_render]
@@ -136,7 +134,6 @@ journey generate_documentation "Generate Documentation" {
 
 journey export_graph_formats "Export Graph Formats" {
   persona  developer
-  channels [cli]
   priority high
   tags     ["developer", "cli"]
   features [json_and_dot_render, traceability_serialization]
@@ -150,7 +147,6 @@ journey export_graph_formats "Export Graph Formats" {
 
 journey trace_requirements "Trace Requirements" {
   persona  developer
-  channels [cli]
   priority high
   tags     ["developer", "cli"]
   features [traceability_serialization]
@@ -183,7 +179,6 @@ journey export_graph_for_agents "Export Graph for AI Agents" {
 
 journey check_test_coverage "Check Test Coverage" {
   persona  developer
-  channels [cli]
   priority high
   tags     ["developer", "cli"]
   features [test_result_collection, te_coverage_analysis]
@@ -200,7 +195,6 @@ journey check_test_coverage "Check Test Coverage" {
 
 journey trace_test_coverage "Trace Test Coverage" {
   persona  developer
-  channels [cli]
   priority high
   tags     ["developer", "cli"]
   features [te_coverage_analysis]
@@ -216,7 +210,6 @@ journey trace_test_coverage "Trace Test Coverage" {
 
 journey diagnose_extension_issues "Diagnose Extension Issues" {
   persona  developer
-  channels [cli]
   priority medium
   tags     ["developer", "cli"]
   features [entity_enhancement, extension_management, wasm_extension_runtime, extension_manifest]
@@ -234,7 +227,6 @@ journey diagnose_extension_issues "Diagnose Extension Issues" {
 
 journey manage_extensions "Manage Extensions" {
   persona  developer
-  channels [cli]
   priority medium
   tags     ["developer", "cli"]
   features [extension_management, wasm_extension_runtime, entity_enhancement, extension_manifest]
@@ -251,7 +243,6 @@ journey manage_extensions "Manage Extensions" {
 
 journey install_domain_extensions "Install Domain Extensions" {
   persona  developer
-  channels [cli]
   priority medium
   tags     ["developer", "cli"]
   features [extension_management, wasm_extension_runtime, dynamic_entity_registration]
@@ -269,7 +260,6 @@ journey install_domain_extensions "Install Domain Extensions" {
 
 journey configure_ref_providers "Configure Ref Providers" {
   persona  developer
-  channels [cli]
   priority medium
   tags     ["developer", "cli"]
   features [provider_based_ref_validation]
@@ -286,7 +276,6 @@ journey configure_ref_providers "Configure Ref Providers" {
 
 journey view_project_statistics "View Project Statistics" {
   persona  developer
-  channels [cli]
   priority medium
   tags     ["developer", "cli"]
   features [ci_integration]
@@ -300,7 +289,6 @@ journey view_project_statistics "View Project Statistics" {
 
 journey j_query_graph_multi_resolution "Query Graph at Multiple Resolutions" {
   persona  developer
-  channels [cli]
   priority medium
   tags     ["developer", "cli"]
   features [agent_export]
@@ -316,7 +304,6 @@ journey j_query_graph_multi_resolution "Query Graph at Multiple Resolutions" {
 
 journey j_format_spec_files "Format Spec Files" {
   persona  developer
-  channels [cli]
   priority high
   tags     ["developer", "cli"]
   features [code_formatting]
@@ -487,7 +474,6 @@ journey get_syntax_highlighting_without_lsp "Get Syntax Highlighting Without LSP
 
 journey review_milestone_progress "Review Milestone Progress" {
   persona  product_manager
-  channels [cli]
   priority medium
   tags     ["product_manager", "cli"]
   features [json_and_dot_render, traceability_serialization]
@@ -502,7 +488,6 @@ journey review_milestone_progress "Review Milestone Progress" {
 
 journey review_deliverable_scope "Review Deliverable Scope" {
   persona  product_manager
-  channels [cli]
   priority medium
   tags     ["product_manager", "cli"]
   features [traceability_serialization, json_and_dot_render]
@@ -517,7 +502,6 @@ journey review_deliverable_scope "Review Deliverable Scope" {
 
 journey review_term_glossary "Review Term Glossary" {
   persona  product_manager
-  channels [cli]
   priority medium
   tags     ["product_manager", "cli"]
   features [json_and_dot_render]
@@ -534,7 +518,6 @@ journey review_term_glossary "Review Term Glossary" {
 
 journey review_persona_channel_landscape "Review Persona and Channel Landscape" {
   persona  product_manager
-  channels [cli]
   priority medium
   tags     ["product_manager", "cli"]
   features [json_and_dot_render]
@@ -552,7 +535,6 @@ journey review_persona_channel_landscape "Review Persona and Channel Landscape" 
 
 journey export_graph_as_json "Export Graph as JSON" {
   persona  architect
-  channels [cli]
   priority medium
   tags     ["architect", "cli"]
   features [json_and_dot_render]
@@ -567,7 +549,6 @@ journey export_graph_as_json "Export Graph as JSON" {
 
 journey review_full_traceability "Review Full Traceability" {
   persona  architect
-  channels [cli]
   priority medium
   tags     ["architect", "cli"]
   features [traceability_serialization]
@@ -582,7 +563,6 @@ journey review_full_traceability "Review Full Traceability" {
 
 journey visualize_spec_graph "Visualize Spec Graph" {
   persona  architect
-  channels [cli]
   priority medium
   tags     ["architect", "cli"]
   features [json_and_dot_render]
@@ -598,7 +578,6 @@ journey visualize_spec_graph "Visualize Spec Graph" {
 
 journey author_a_domain_extension "Author a Domain Extension" {
   persona  contributor
-  channels [cli]
   priority low
   tags     ["contributor", "cli"]
   features [extension_management, wasm_extension_authoring]
@@ -618,7 +597,6 @@ journey author_a_domain_extension "Author a Domain Extension" {
 
 journey author_a_custom_provider "Author a Custom Provider" {
   persona  contributor
-  channels [cli]
   priority low
   tags     ["contributor", "cli"]
   features [provider_based_ref_validation]
@@ -635,7 +613,6 @@ journey author_a_custom_provider "Author a Custom Provider" {
 
 journey scaffold_wasm_extension "Scaffold a Wasm Extension" {
   persona  contributor
-  channels [cli]
   priority low
   tags     ["contributor", "cli"]
   features [wasm_extension_authoring]
@@ -651,7 +628,6 @@ journey scaffold_wasm_extension "Scaffold a Wasm Extension" {
 
 journey test_wasm_extension_locally "Test Wasm Extension Locally" {
   persona  contributor
-  channels [cli]
   priority low
   tags     ["contributor", "cli"]
   features [wasm_extension_authoring]
@@ -667,7 +643,6 @@ journey test_wasm_extension_locally "Test Wasm Extension Locally" {
 
 journey j_publish_wasm_extension "Publish Wasm Extension" {
   persona  contributor
-  channels [cli]
   priority low
   tags     ["contributor", "cli"]
   features [wasm_extension_authoring]
@@ -685,7 +660,6 @@ journey j_publish_wasm_extension "Publish Wasm Extension" {
 
 journey j_validate_agent_plan "Validate Agent Implementation Plan" {
   persona  developer
-  channels [cli]
   priority medium
   tags     ["developer", "agent_integration"]
   features [traceability_serialization]
@@ -702,7 +676,6 @@ journey j_validate_agent_plan "Validate Agent Implementation Plan" {
 
 journey j_collect_rust_test_results "Collect Rust Test Results" {
   persona  developer
-  channels [cli]
   priority medium
   tags     ["developer", "agent_integration"]
   features [ct_cargo_test_collection]
@@ -719,7 +692,6 @@ journey j_collect_rust_test_results "Collect Rust Test Results" {
 
 journey annotate_tests_with_proc_macro "Annotate Tests with Proc Macro" {
   persona  developer
-  channels [cli]
   priority medium
   tags     ["developer", "agent_integration"]
   features [rust_proc_macro_annotation]
@@ -736,7 +708,6 @@ journey annotate_tests_with_proc_macro "Annotate Tests with Proc Macro" {
 
 journey export_scoped_context_for_agent "Export Scoped Context for Agent" {
   persona  developer
-  channels [cli]
   priority high
   tags     ["developer", "agent_integration"]
   features [agent_export]
@@ -912,7 +883,6 @@ journey use_guided_prompts_via_mcp "Use Guided Prompts via MCP" {
 
 journey migrate_spec_files "Migrate Spec Files" {
   persona  developer
-  channels [cli]
   priority low
   tags     ["developer", "migration"]
   features [spec_file_migration]

@@ -57,7 +57,7 @@ pub fn validate_id(id: &str) -> Result<(), OpError> {
 
 /// A text edit for a rename operation: `start_col..end_col` (0-based
 /// byte columns) on the 1-based `line` of `file` becomes `new_text`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenameEdit {
     pub file: String,
     pub line: usize,
@@ -177,7 +177,7 @@ pub fn plan(
         .into());
     }
     // A token is one line; RenameEdit columns are 0-based bytes.
-    let edits = occurrences
+    let mut edits: Vec<RenameEdit> = occurrences
         .iter()
         .map(|o| RenameEdit {
             file: o.span.file.to_string(),
@@ -187,6 +187,9 @@ pub fn plan(
             new_text: new_id.to_string(),
         })
         .collect();
+    // An inherited reference is one token for every block that inherits it (ADR 0149); occurrences come sorted
+    // by span, so equal edits are adjacent.
+    edits.dedup();
     let planned = occurrences
         .iter()
         .filter_map(|o| {

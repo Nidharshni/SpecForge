@@ -14,7 +14,7 @@ event extension_specifier_parsed "Extension Specifier Parsed" {
   verify integration "emits extension_specifier_parsed with correct format and name"
 }
 
-type ExtensionSpecifierParsedPayload {
+type ExtensionSpecifierParsedPayload "Extension Specifier Parsed Payload" {
   raw    string
   format string
   name   string
@@ -29,7 +29,7 @@ event lock_file_written "Lock File Written" {
   verify integration "emits lock_file_written with correct extensionCount"
 }
 
-type LockFileWrittenPayload {
+type LockFileWrittenPayload "Lock File Written Payload" {
   extensionCount integer
   lockFilePath   string
   verify unit "LockFileWrittenPayload schema is valid"
@@ -41,7 +41,7 @@ event lock_file_read "Lock File Read" {
   verify integration "emits lock_file_read with correct extensionCount and match status"
 }
 
-type LockFileReadPayload {
+type LockFileReadPayload "Lock File Read Payload" {
   extensionCount    integer
   lockFilePath      string
   allEntriesMatched boolean
@@ -57,7 +57,7 @@ event manifest_loaded "Manifest Loaded" {
   verify integration "consumer validate_extension_manifest receives event"
 }
 
-type ManifestLoadedPayload {
+type ManifestLoadedPayload "Manifest Loaded Payload" {
   extensionName       string
   manifestPath        string
   entityKindCount     integer
@@ -73,7 +73,7 @@ event enhancement_registered "Enhancement Registered" {
   verify integration "emits enhancement_registered with correct field details"
 }
 
-type EnhancementRegisteredPayload {
+type EnhancementRegisteredPayload "Enhancement Registered Payload" {
   extensionName string
   targetEntity  string
   fieldName     string
@@ -90,7 +90,7 @@ event contribution_permission_denied "Contribution Permission Denied" {
   verify integration "emits contribution_permission_denied with correct callSite and hostFunction"
 }
 
-type ContributionPermissionDeniedPayload {
+type ContributionPermissionDeniedPayload "Contribution Permission Denied Payload" {
   extensionName string
   callSite      string
   hostFunction  string
@@ -113,7 +113,7 @@ event collector_registered "Collector Registered" {
   verify integration "consumer auto_detect_collector receives event"
 }
 
-type CollectorRegisteredPayload {
+type CollectorRegisteredPayload "Collector Registered Payload" {
   extensionName string
   collectorName string
   inputFormats  string[]
@@ -128,7 +128,7 @@ event collector_dispatched "Collector Dispatched" {
   verify integration "consumer ingest_collector_report receives event"
 }
 
-type CollectorDispatchedPayload {
+type CollectorDispatchedPayload "Collector Dispatched Payload" {
   collectorName string
   reportPath    string
   fileCount     integer
@@ -143,7 +143,7 @@ event collector_report_ingested "Collector Report Ingested" {
   verify integration "emits collector_report_ingested with correct entry counts"
 }
 
-type CollectorReportIngestedPayload {
+type CollectorReportIngestedPayload "Collector Report Ingested Payload" {
   collectorName   string
   totalEntries    integer
   mappedEntries   integer
@@ -160,7 +160,7 @@ event extension_source_resolved "Extension Source Resolved" {
   verify integration "emits extension_source_resolved with correct extension_id and resolved_path"
 }
 
-type ExtensionSourceResolvedPayload {
+type ExtensionSourceResolvedPayload "Extension Source Resolved Payload" {
   extension_id  string
   source        ExtensionSource
   resolved_path string
@@ -173,7 +173,7 @@ event doctor_check_completed "Doctor Check Completed" {
   verify integration "emits doctor_check_completed with correct issueCount after health check"
 }
 
-type DoctorCheckCompletedPayload {
+type DoctorCheckCompletedPayload "Doctor Check Completed Payload" {
   issueCount     integer
   extensionCount integer
   cacheHealthy   boolean
@@ -192,7 +192,7 @@ event batch_update_completed "Batch Update Completed" {
   verify integration "emits batch_update_completed with correct updatedCount after bulk update"
 }
 
-type BatchUpdateCompletedPayload {
+type BatchUpdateCompletedPayload "Batch Update Completed Payload" {
   updatedCount integer
   failedCount  integer
   skippedCount integer

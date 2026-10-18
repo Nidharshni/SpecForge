@@ -9,7 +9,7 @@ event federation_config_loaded "Federation Config Loaded" {
   verify integration "emits federation_config_loaded with correct dependencyCount and projectNames"
 }
 
-type FederationConfigLoadedPayload {
+type FederationConfigLoadedPayload "Federation Config Loaded Payload" {
   dependencyCount integer
   projectNames    string[]
   timestamp       timestamp
@@ -24,7 +24,7 @@ event remote_graph_loaded "Remote Graph Loaded" {
   verify integration "emits remote_graph_loaded with correct projectName and graphNodeCount"
 }
 
-type RemoteGraphLoadedPayload {
+type RemoteGraphLoadedPayload "Remote Graph Loaded Payload" {
   projectName    string
   graphNodeCount integer
   schemaVersion  string
@@ -40,7 +40,7 @@ event cross_project_refs_resolved "Cross-Project Refs Resolved" {
   verify integration "emits cross_project_refs_resolved with correct resolvedCount and unresolvedCount"
 }
 
-type CrossProjectRefsResolvedPayload {
+type CrossProjectRefsResolvedPayload "Cross Project Refs Resolved Payload" {
   resolvedCount   integer
   unresolvedCount integer
   timestamp       timestamp
@@ -55,7 +55,7 @@ event cross_project_edges_validated "Cross-Project Edges Validated" {
   verify integration "emits cross_project_edges_validated with correct compatibleCount and incompatibleCount"
 }
 
-type CrossProjectEdgesValidatedPayload {
+type CrossProjectEdgesValidatedPayload "Cross Project Edges Validated Payload" {
   compatibleCount   integer
   incompatibleCount integer
   normalizedCount   integer
@@ -71,7 +71,7 @@ event federated_graph_exported "Federated Graph Exported" {
   verify integration "emits federated_graph_exported with correct totalNodes, totalEdges, and projectCount"
 }
 
-type FederatedGraphExportedPayload {
+type FederatedGraphExportedPayload "Federated Graph Exported Payload" {
   totalNodes   integer
   totalEdges   integer
   projectCount integer

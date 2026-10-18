@@ -8,13 +8,16 @@ use "types/errors"
 use "types/graph"
 use "types/output"
 
-behavior render_markdown_documentation "Render Markdown Documentation" {
+defaults behavior {
   invariants [diagnostic_determinism]
-  category   query
   types      [Graph, OutputFile, EmitterError]
   ports      [GraphSerializer, FileSystem]
   features   [markdown_documentation_generation]
-  contract   """
+}
+
+behavior render_markdown_documentation "Render Markdown Documentation" {
+  category query
+  contract """
     When specforge render markdown is invoked, the system MUST traverse
     the graph and produce one .md file per entity group. Rendered
     markdown MUST include entity titles, descriptions, cross-reference
@@ -27,12 +30,8 @@ behavior render_markdown_documentation "Render Markdown Documentation" {
 }
 
 behavior render_index_files "Render Index Files" {
-  invariants [diagnostic_determinism]
-  category   query
-  types      [Graph, OutputFile, EmitterError]
-  ports      [GraphSerializer, FileSystem]
-  features   [markdown_documentation_generation]
-  contract   """
+  category query
+  contract """
     The render command MUST auto-generate index files listing all entities
     grouped by kind. Index files MUST NOT be hand-written. They MUST be
     regenerated on every render invocation.
@@ -42,12 +41,8 @@ behavior render_index_files "Render Index Files" {
 }
 
 behavior selective_render_by_entity_type "Selective Render by Entity Kind" {
-  invariants [diagnostic_determinism]
-  category   query
-  types      [Graph, OutputFile, EmitterError]
-  ports      [GraphSerializer, FileSystem]
-  features   [markdown_documentation_generation]
-  contract   """
+  category query
+  contract """
     The render command SHOULD support filtering by entity kind
     (e.g., specforge render markdown --only behaviors). When a filter
     is specified, only matching entities MUST appear in the output.

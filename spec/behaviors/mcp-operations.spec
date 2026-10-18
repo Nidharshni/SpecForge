@@ -22,12 +22,17 @@ use "types/mcp"
 use "types/migration"
 use "types/output"
 
+defaults behavior {
+  features [mcp_mutation_tools]
+  ports    [McpProtocol, CompilerApi, FileSystem]
+  produces [mcp_tool_invoked]
+}
+
 // ---------------------------------------------------------------------------
 // Mutation Tools
 // ---------------------------------------------------------------------------
 
 behavior provide_mcp_format_tool "Provide MCP Format Tool" {
-  features   [mcp_mutation_tools]
   invariants [
     diagnostic_determinism,
     formatting_idempotency,
@@ -40,7 +45,6 @@ behavior provide_mcp_format_tool "Provide MCP Format Tool" {
   ]
   category   query
   types      [McpFormatResult, FormatDiff, McpToolDescriptor]
-  ports      [McpProtocol, CompilerApi, FileSystem]
   produces   [mcp_tool_invoked, mcp_mutation_completed]
   requires {
     filesystem_available "FileSystem port is available for reading and writing spec files"
@@ -101,7 +105,6 @@ behavior provide_mcp_format_tool "Provide MCP Format Tool" {
 }
 
 behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
-  features   [mcp_mutation_tools]
   invariants [
     entity_id_uniqueness,
     graph_traversal_integrity,
@@ -111,7 +114,6 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
   ]
   category   mutation
   types      [McpRenameResult, McpRenameEdit, McpToolDescriptor]
-  ports      [McpProtocol, CompilerApi, FileSystem]
   produces   [mcp_tool_invoked, mcp_mutation_completed]
   requires {
     graph_available      "Compiled graph is available via CompilerApi"
@@ -169,12 +171,50 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
   verify integration "a rename that cannot put a file back names it in files_written"
 }
 
+behavior provide_mcp_edit_tool "Provide MCP Edit Tool" {
+  invariants [
+    diagnostic_determinism,
+    mcp_structured_error_responses,
+    dry_run_side_effect_freedom,
+    typed_edit_canonical_form,
+    typed_edit_atomicity,
+  ]
+  category   mutation
+  types      [McpEditResult, McpToolDescriptor]
+  produces   [mcp_tool_invoked, mcp_mutation_completed]
+  requires {
+    graph_available      "Compiled graph is available via CompilerApi"
+    filesystem_available "FileSystem port is available for updating spec files"
+  }
+  ensures {
+    edits_applied              "The edits are applied in the order given, all or nothing"
+    new_errors_refused         "An edit list that adds an error is refused as E080 and writes nothing"
+    dry_run_safe               "When dry_run is true, no files modified"
+    mutation_completed_emitted "mcp_mutation_completed event emitted after the edits are written"
+    tool_invoked_emitted       "mcp_tool_invoked event emitted"
+  }
+  contract   """
+    In MCP server mode, the system MUST register a specforge.edit tool that
+    accepts edits (required, a list of typed edits, each naming its op:
+    create, set, unset, retitle, link, unlink, add_verify, remove_verify or
+    delete), dry_run? (optional boolean, default false) and path? (the
+    project root). The edits are planned in order over the project as it is
+    on disk, each reading the text the ones before it left, validated by
+    compiling the edited project, and written as one project change. An edit
+    list that leaves an error the project did not have MUST be refused as
+    E080 and nothing written. The response MUST list the entities and files
+    changed, a unified diff and the warnings and infos the edit adds. When
+    dry_run is true, the tool MUST return the same document and write nothing.
+  """
+  verify unit "specforge.edit applies a list of edits all or nothing"
+  verify unit "specforge.edit with dry_run writes nothing and returns the diff"
+}
+
 // MCP init creates a project at a specified path, not the current project.
 // The agent is connected to an existing project's MCP server and uses it
 // to scaffold a new project elsewhere. For bootstrapping the very first
 // project, use the CLI: specforge init.
 behavior provide_mcp_init_tool "Provide MCP Init Tool" {
-  features   [mcp_mutation_tools]
   invariants [
     diagnostic_determinism,
     init_config_validity,
@@ -184,7 +224,6 @@ behavior provide_mcp_init_tool "Provide MCP Init Tool" {
   ]
   category   query
   types      [McpInitResult, McpToolDescriptor]
-  ports      [McpProtocol, CompilerApi, FileSystem]
   produces   [mcp_tool_invoked, mcp_mutation_completed, project_initialized]
   requires {
     filesystem_available "FileSystem port is available for creating project directory and files"
@@ -250,7 +289,6 @@ behavior provide_mcp_init_tool "Provide MCP Init Tool" {
 }
 
 behavior provide_mcp_add_extension_tool "Provide MCP Add Extension Tool" {
-  features   [mcp_mutation_tools]
   invariants [
     diagnostic_determinism,
     mcp_structured_error_responses,
@@ -259,7 +297,6 @@ behavior provide_mcp_add_extension_tool "Provide MCP Add Extension Tool" {
   ]
   category   query
   types      [McpAddExtensionResult, McpToolDescriptor]
-  ports      [McpProtocol, CompilerApi, FileSystem]
   produces   [mcp_tool_invoked, mcp_mutation_completed, extension_added]
   requires {
     filesystem_available "FileSystem port is available for updating specforge.json"
@@ -325,7 +362,6 @@ behavior provide_mcp_add_extension_tool "Provide MCP Add Extension Tool" {
 }
 
 behavior provide_mcp_remove_extension_tool "Provide MCP Remove Extension Tool" {
-  features   [mcp_mutation_tools]
   invariants [
     diagnostic_determinism,
     mcp_structured_error_responses,
@@ -334,7 +370,6 @@ behavior provide_mcp_remove_extension_tool "Provide MCP Remove Extension Tool" {
   ]
   category   query
   types      [McpRemoveExtensionResult, McpToolDescriptor]
-  ports      [McpProtocol, CompilerApi, FileSystem]
   produces   [mcp_tool_invoked, mcp_mutation_completed]
   requires {
     filesystem_available "FileSystem port is available for updating specforge.json"
@@ -377,11 +412,9 @@ behavior provide_mcp_remove_extension_tool "Provide MCP Remove Extension Tool" {
 }
 
 behavior provide_mcp_migrate_tool "Provide MCP Migrate Tool" {
-  features   [mcp_mutation_tools]
   invariants [diagnostic_determinism, mcp_structured_error_responses, dry_run_side_effect_freedom]
   category   mutation
   types      [McpMigrateResult, MigrationResult, MigrationSummary, McpToolDescriptor]
-  ports      [McpProtocol, CompilerApi, FileSystem]
   produces   [mcp_tool_invoked, mcp_mutation_completed]
   requires {
     filesystem_available "FileSystem port is available for reading and writing spec files"
@@ -453,7 +486,6 @@ behavior provide_mcp_extensions_tool "Provide MCP Extensions Tool" {
   category   query
   types      [McpExtensionsResult, McpExtensionInfo, McpLockEntry, McpToolDescriptor]
   ports      [McpProtocol, CompilerApi]
-  produces   [mcp_tool_invoked]
   requires {
     compiler_api_available "CompilerApi port is available for querying loaded extensions"
   }
@@ -479,7 +511,6 @@ behavior provide_mcp_providers_tool "Provide MCP Providers Tool" {
   category   query
   types      [McpProvidersResult, McpProviderInfo, McpToolDescriptor]
   ports      [McpProtocol, CompilerApi]
-  produces   [mcp_tool_invoked]
   requires {
     compiler_api_available "CompilerApi port is available for querying configured providers"
   }
@@ -504,7 +535,6 @@ behavior provide_mcp_doctor_tool "Provide MCP Doctor Tool" {
   category   query
   types      [McpDoctorReport, McpToolDescriptor, McpDoctorFinding]
   ports      [McpProtocol, CompilerApi]
-  produces   [mcp_tool_invoked]
   requires {
     compiler_api_available "CompilerApi port is available for project health inspection"
   }
@@ -540,7 +570,6 @@ behavior provide_mcp_collect_tool "Provide MCP Collect Tool" {
   category   query
   types      [McpCollectResult, McpCollectRunner, McpToolDescriptor]
   ports      [McpProtocol, CompilerApi, FileSystem, CollectorMachine]
-  produces   [mcp_tool_invoked]
   requires {
     filesystem_available   "FileSystem port is available for reading test results and writing report"
     compiler_api_available "CompilerApi port is available for extension collector dispatch"
@@ -598,8 +627,6 @@ behavior provide_mcp_render_tool "Provide MCP Render Tool" {
   ]
   category   query
   types      [McpRenderResult, McpToolDescriptor]
-  ports      [McpProtocol, CompilerApi, FileSystem]
-  produces   [mcp_tool_invoked]
   requires {
     graph_available      "Compiled graph is available via CompilerApi"
     filesystem_available "FileSystem port is available for writing output files"

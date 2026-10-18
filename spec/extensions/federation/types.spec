@@ -2,7 +2,7 @@
 
 use "types/graph"
 
-type ProjectDependency {
+type ProjectDependency "Project Dependency" {
   name     string @readonly
   // Relative to the directory containing specforge.json
   path     string @optional
@@ -14,7 +14,7 @@ type ProjectDependency {
   verify unit "ProjectDependency schema is valid"
 }
 
-type FederatedEntityId {
+type FederatedEntityId "Federated Entity Id" {
   project   string @readonly
   entity_id string @readonly
   verify unit "FederatedEntityId schema is valid"
@@ -23,19 +23,19 @@ type FederatedEntityId {
 // Project identifiers: lowercase alphanumeric with hyphens, 2-64 chars
 // The qualified form is "project::entity_id"
 
-type FederationConfig {
+type FederationConfig "Federation Config" {
   dependencies ProjectDependency[]
   verify unit "FederationConfig schema is valid"
 }
 
-type FederationMetadata {
+type FederationMetadata "Federation Metadata" {
   merged_at         timestamp
   source_projects   string[]
   schema_compatible boolean
   verify unit "FederationMetadata schema is valid"
 }
 
-type FederatedGraph {
+type FederatedGraph "Federated Graph" {
   local               Graph   @readonly
   remote_graphs       Graph[] @optional
   remote_projects     ProjectDependency[]
@@ -45,7 +45,7 @@ type FederatedGraph {
   verify unit "FederatedGraph schema is valid"
 }
 
-type FederatedExportConfig {
+type FederatedExportConfig "Federated Export Config" {
   include_projects string[]                      @optional
   exclude_projects string[]                      @optional
   /// Default: unlimited (all transitive dependencies)

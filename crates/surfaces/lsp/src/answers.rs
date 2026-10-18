@@ -234,10 +234,12 @@ pub fn references(
         .references(id.as_str(), query)
         .unwrap_or_default();
     // An occurrence whose file's text is unknown is left out.
-    let locations: Vec<Location> = refs
+    let mut locations: Vec<Location> = refs
         .iter()
         .filter_map(|o| compiled.location(&o.span))
         .collect();
+    // An inherited reference is one token for every block that inherits it (ADR 0149).
+    locations.dedup();
     (!locations.is_empty()).then_some(locations)
 }
 
@@ -463,7 +465,13 @@ pub fn formatting(
     let place = file
         .as_deref()
         .map_or(format::Place::Detached, format::Place::File);
-    let formatted = format::document(place, doc.text(), lines, Some(editor));
+    // The served project's field forms; a document outside any file has none (ADR 0147).
+    let none = specforge_graph::FieldForms::default();
+    let forms = match place {
+        format::Place::Detached => &none,
+        _ => state.registries().field_forms(),
+    };
+    let formatted = format::document(place, doc.text(), lines, Some(editor), forms);
     // The formatter's diagnostics are positions in the document it formatted;
     // the store publishes them beside the compile's, never in their place.
     let findings = Findings {

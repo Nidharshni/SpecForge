@@ -6,15 +6,18 @@ use "ports/inbound"
 use "types/lsp"
 use "types/zero-entity-core"
 
+defaults behavior {
+  features   [extension_driven_lsp, hover_and_autocomplete]
+  invariants [zero_domain_knowledge_core, lsp_response_latency]
+  types      [KindRegistryEntry]
+  ports      [LspProtocol]
+}
+
 // -- Extension-Driven LSP ----------------------------------------------------
 
 behavior complete_extension_defined_keywords "Complete Extension-Defined Keywords" {
-  features   [extension_driven_lsp, hover_and_autocomplete]
-  invariants [zero_domain_knowledge_core, lsp_response_latency]
-  category   command
-  types      [KindRegistryEntry]
-  ports      [LspProtocol]
-  contract   """
+  category command
+  contract """
     The LSP autocomplete MUST query the KindRegistry for all registered
     entity kinds when completing keywords at the top level of a .spec file.
     Each completion item MUST include the keyword, a snippet template
@@ -35,12 +38,9 @@ behavior complete_extension_defined_keywords "Complete Extension-Defined Keyword
 }
 
 behavior provide_extension_entity_semantic_tokens "Provide Extension Entity Semantic Tokens" {
-  features   [extension_driven_lsp, semantic_tokens]
-  invariants [zero_domain_knowledge_core, lsp_response_latency]
-  category   query
-  types      [KindRegistryEntry]
-  ports      [LspProtocol]
-  contract   """
+  features [extension_driven_lsp, semantic_tokens]
+  category query
+  contract """
     The LSP semantic token provider MUST classify an extension entity's
     ID at its declaration site with the semantic_token field of its kind's
     KindRegistry entry. The legend is sent at initialize, before
@@ -66,12 +66,9 @@ behavior provide_extension_entity_semantic_tokens "Provide Extension Entity Sema
 }
 
 behavior provide_extension_entity_hover "Provide Extension Entity Hover" {
-  features   [extension_driven_lsp, hover_and_autocomplete]
-  invariants [zero_domain_knowledge_core, lsp_response_latency]
-  category   query
-  types      [KindRegistryEntry, HoverContent]
-  ports      [LspProtocol]
-  contract   """
+  category query
+  types    [KindRegistryEntry, HoverContent]
+  contract """
     When hovering over an entity ID, the LSP MUST render the entity's facts
     from the inspect read view, the one specforge.inspect renders: the
     entity kind name, the source extension that defines it, the kind's
@@ -112,12 +109,9 @@ behavior provide_extension_entity_hover "Provide Extension Entity Hover" {
 }
 
 behavior provide_extension_defined_lsp_icons "Provide Extension-Defined LSP Icons" {
-  features   [extension_driven_lsp, outline_and_symbol_search]
-  invariants [zero_domain_knowledge_core, lsp_response_latency]
-  category   query
-  types      [KindRegistryEntry]
-  ports      [LspProtocol]
-  contract   """
+  features [extension_driven_lsp, outline_and_symbol_search]
+  category query
+  contract """
     The LSP document symbols and workspace symbols MUST use the lsp_icon
     field from the KindRegistry entry to determine the SymbolKind. If no
     lsp_icon is specified, the default MUST be SymbolKind::Object.

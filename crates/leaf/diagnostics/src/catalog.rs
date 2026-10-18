@@ -193,9 +193,6 @@ catalog! {
     E048: Error core,
         "Proof coverage below the minimum",
         "`specforge analyze coverage --min N` found that fewer than N% of testable entities are proven, where an entity is proven when a passing test names each of its `verify` obligations or a formal claim discharges it. Prove more obligations, or lower the threshold. The run exits 1.";
-    E051: Error software,
-        "Invalid event trigger",
-        "An `event` entity's `trigger` field must reference a `behavior`, but it points at something else (or nothing resolvable). Point `trigger` at an existing `behavior` entity.";
     E052: Error product,
         "Deliverable dependency cycle",
         "The `depends_on` edges between `deliverable` entities form a cycle. Break the cycle by removing or inverting one of the dependencies.";
@@ -231,10 +228,10 @@ catalog! {
         "`specforge add` was given a `git+https://...` extension specifier. It parses, but installing from git isn't supported yet. Install from a registry (`name@version`) or from a local `.wasm` path instead.";
     E065: Error core,
         "Invalid scaffold request",
-        "`specforge new` can't scaffold what was asked: only `--extension` projects are supported, the extension name is empty or is a scoped name that isn't `@scope/name`, or the destination directory already exists. Pass `--extension`, fix the name, or pick a destination that doesn't exist yet.";
+        "`specforge extension init` can't scaffold what was asked: the extension name is empty or is a scoped name that isn't `@scope/name`, or the destination directory already exists. Fix the name, or pick a destination that doesn't exist yet.";
     E066: Error core,
         "Extension scaffold failed",
-        "`specforge new --extension` couldn't write the project: creating a directory or writing one of the generated files failed. Check permissions and free space at the destination, remove the partial project, and retry.";
+        "`specforge extension init` couldn't write the project: creating a directory or writing one of the generated files failed. Check permissions and free space at the destination, remove the partial project, and retry.";
     E067: Error core,
         "Invalid registry configuration",
         "The registry configuration in `specforge.json` can't be read: the file isn't valid JSON, `registries` isn't an array, or an entry at the reported index is missing a required field, has the wrong type, or has a `url` that isn't a registry's root (an `http` or `https` URL with no query, fragment or user name; write `https://registry.example`, not `https://registry.example/v1`: SpecForge adds the protocol's `/v1`). No registry is asked while an entry can't be read, so a package whose scope that entry serves never goes to another registry. Fix the reported entry.";
@@ -259,6 +256,21 @@ catalog! {
     E074: Error core,
         "Publisher signing key unusable",
         "`specforge publish` signs every package with your publisher key, kept in `~/.specforge/signing-key.json` and created on your first publish. That file is there and can't be read as a key (it is not JSON, or its `secretKey` is not 32 hex-encoded bytes), or the key could not be created there (the directory or the file can't be written). Nothing was sent. Fix the file's permissions, or move it aside: the next publish creates a new key, and whoever pinned the old one then sees a changed publisher key (R-TRUST-003) for your packages.";
+    E076: Error core,
+        "Block has no title",
+        "A block that becomes a graph node has no title, or a blank one: write it after the block's id (`type Task \"A unit of work\" { … }`, `type Status \"Task status\" = open | done`). The title is the one label every surface shows for the node; a `//` comment above the block never reaches the graph. `specforge migrate` writes the missing titles of a project: the comment directly above each block when there is one, else its id in words. `spec` takes its name as its title, `ref` requires one, and `define` blocks are never nodes.";
+    E077: Error core,
+        "Default for a field its kind does not declare",
+        "A `defaults <kind> { … }` block (ADR 0149) sets a field that `<kind>` does not declare, or names a kind no loaded extension declares, or a structural kind (`spec`, `ref`, `use`, `define`, `defaults`). A default only sets a field an extension declares for the kind: a field of an `open_fields` kind's members is not declared. The default is not applied, so no block of the file takes it. Write the field on the blocks that need it, or fix the kind or the field name. Reported by the graph build, once per default, at its value; a project whose extensions declare no kind checks none.";
+    E078: Error core,
+        "Malformed defaults block",
+        "A `defaults <kind> { … }` block (ADR 0149) holds only fields, once each, and comes before the file's first entity block; a file has at most one per kind. This one has a title, a `verify` or `method` member, a field given twice (the first is applied), is a second block for its kind in the file (it is not applied; the message names the first), or comes after the file's first block (it still applies). Remove the title or member, merge the blocks, or move the block above every entity block.";
+    E079: Error core,
+        "Relation written on its other side",
+        "An entity writes a field its kind does not declare, and that field is the other side of a relation another kind owns. A relation is written on its owning field only (ADR 0150): the one reference field an extension declares for it. The other side is derived, never written: `query` shows it as the incoming edges and `trace` as the upstream. The field is recognised in two ways: an owning field names it in its `inverse_of` (so a documented reverse such as `behaviors` on a feature is refused even when its ids do not resolve), or every id it lists is one other kind's entity and that kind owns a reference field into this one (`journeys [..]` on a feature). A self-relation's other side is not recognised, and a kind that accepts any field is not checked. The graph still carries the field's untyped edge, and `check` fails. Remove the field and write the owning field on each entity it listed; the suggestion names both.";
+    E080: Error core,
+        "Typed edit would add errors",
+        "A typed edit (`specforge new`, `set`, `unset`, `link`, `unlink`, `delete`, or MCP `specforge.edit`) was planned, and the project it would leave reports errors the project does not report now: the edit is refused and nothing is written. The refusal lists each new error (an unresolved reference, a missing required field, a value its field does not take, …). Fix what they name first: create the referenced entity, give the required field, or make both changes in one `specforge.edit` call. `delete --unlink-references` removes the references a delete would leave dangling.";
     I002: Info core,
         "Structural-only mode",
         "Emitted when no extensions are installed, or when every installed extension failed to load, so the compiler falls back to structural-only validation. Install an extension (for example `specforge add @specforge/software`) to enable kind-specific checks.";
@@ -699,7 +711,7 @@ catalog! {
         "The formatter hit a parse error in a `.spec` file. It keeps the reported line range exactly as written and formats the rest. Fix the syntax there (see E001) and format again.";
     W143: Warning core,
         "Define blocks are not supported",
-        "A `.spec` file has a `define <name> { ... }` block. Every entity kind comes from an extension, so a project's kinds depend only on `specforge.json` (ADR 0005): the block registers nothing and is left out of the graph. Declare the kind in an extension (`specforge new --extension`) and enable it, then remove the block. `define` stays a reserved word.";
+        "A `.spec` file has a `define <name> { ... }` block. Every entity kind comes from an extension, so a project's kinds depend only on `specforge.json` (ADR 0005): the block registers nothing and is left out of the graph. Declare the kind in an extension (`specforge extension init`) and enable it, then remove the block. `define` stays a reserved word.";
     W144: Warning core,
         "Invalid build cache",
         "The project root has a `specforge-cache.json` that can't be read, isn't valid JSON, or declares a `format` other than 1. The build cache records each entity's status from the build `specforge check --cache` last wrote, and check-phase passes compare against it (status transitions); with the file invalid they get no previous statuses, so history rules stay silent. Rewrite it with `specforge check --cache`, or delete it.";
@@ -736,4 +748,13 @@ catalog! {
     W158: Warning core,
         "Verify statements on a kind that accepts none",
         "An entity declares `verify` statements, but its kind accepts none: no extension made the kind testable (`supports_verify`). `verify` is reserved syntax; what an obligation means comes from an extension, so a kind takes statements only once one enables them (ADR 0002, ADR 0094). The statements are not fields, so this is not W020. Enable an extension that makes the kind testable (for software kinds, `specforge add @specforge/testing`), or remove the statements.";
+    W159: Warning core,
+        "Value not written in its field's form",
+        "A field's declared type decides how its value is written (ADR 0147): bare for an enum, identifier or reference value and each item of a reference list; quoted for text and each item of a string list. This value is written the other way. It reads the same, so the graph is unchanged; run specforge format (or format the document in the editor) to rewrite every value in its form. A bare word on a kind that takes members (type, port) is left alone: it may be a member's type.";
+    W161: Warning core,
+        "Default that changes nothing",
+        "Either a block writes a field with exactly its file's default value, so the line restates the default, or a `defaults <kind>` field reaches no block: every block of that kind in the file writes its own value, or the file declares none. Delete the line. A block that must keep its value whatever the default becomes may write it; a different value replaces the default whole (ADR 0149).";
+    W162: Warning core,
+        "Relation declared from both sides",
+        "A relation has two fields: one extension declares it from both of its ends. Either a reference field's `inverse_of` names a field its target kind registers (`milestone.behaviors` naming `features`, when `behavior` has its own `features`), or two different kinds each register a reference field targeting the other (`parent.children` and `child.parent`). A relation is written from one side (ADR 0150): the other side is derived, so `query` and `trace` already show it. Both fields still register, and an entity can write either. Remove one field, or drop the `inverse_of` or name a word the target kind does not use. The builtin extensions declare none.";
 }

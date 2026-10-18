@@ -12,7 +12,7 @@ A `type` entity has no incoming references from any `behavior`, `port`, or other
 
 ---
 
-**type** `Status`
+**type** `Status` — Status
 
 A data structure or domain model definition
 *@specforge/software* · `testable` · `verify`

@@ -1,10 +1,12 @@
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, errln, out, outln};
-use specforge_common::Diagnostic;
+use specforge_common::{Diagnostic, ProjectRoot};
 use specforge_formatter::unified_diff;
 use specforge_ops::authoring::format::{self, Mode, Request};
 use specforge_ops::{OpError, OpErrorKind};
+use specforge_project::SharedRuntime;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 // `specforge format`'s command line.
 #[derive(clap::Args)]
@@ -48,6 +50,8 @@ impl Args {
     /// `--stdin`, whose output is the formatted text, refuses it.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
+        let runtime: SharedRuntime =
+            Arc::new(specforge_component::ComponentRuntime::with_user_cache());
         let project_root = match self.project.root() {
             Ok(root) => root,
             Err(error) => return Refusal::of(format).report(terminal, &error),
@@ -64,7 +68,7 @@ impl Args {
                     .with_suggestion("drop --format json, or name the files to format"),
                 );
             }
-            return run_stdin(project_root.dir(), self.project.path(), terminal);
+            return run_stdin(&project_root, self.project.path(), runtime, terminal);
         }
         let mode = Mode::of_flags(self.check, self.diff, None);
         let outcome = match format::run(&Request {
@@ -72,6 +76,7 @@ impl Args {
             paths: &self.paths,
             mode,
             caller: crate::caller::of(false, format, terminal),
+            runtime: Some(runtime.clone()),
         }) {
             Ok(outcome) => outcome,
             // A config that does not say which files are the sources:
@@ -148,7 +153,7 @@ fn print_diagnostic(d: &Diagnostic, terminal: &Terminal) {
 /// stdout: it gets the configuration a file in `dir` would. The formatted
 /// text is printed even when a region was left unformatted; the exit code
 /// is then 1.
-fn run_stdin(root: &Path, dir: &Path, terminal: &Terminal) -> Exit {
+fn run_stdin(root: &ProjectRoot, dir: &Path, runtime: SharedRuntime, terminal: &Terminal) -> Exit {
     let input = match terminal.read_to_string() {
         Ok(input) => input,
         Err(e) => {
@@ -163,8 +168,12 @@ fn run_stdin(root: &Path, dir: &Path, terminal: &Terminal) -> Exit {
         }
     };
 
-    let place = format::Place::InProject { root, dir };
-    let result = format::document(place, &input, None, None);
+    let place = format::Place::InProject {
+        root: root.dir(),
+        dir,
+    };
+    let forms = format::forms(root, Some(runtime));
+    let result = format::document(place, &input, None, None, &forms);
 
     for d in &result.diagnostics {
         print_diagnostic(d, terminal);

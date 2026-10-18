@@ -25,7 +25,7 @@ By convention, types typically use PascalCase, but any valid identifier is accep
 ### Struct Type
 
 ```spec
-type User {
+type User "User" {
   id        string      @readonly
   email     string      @unique
   name      string
@@ -38,13 +38,13 @@ type User {
 ### Union Type (Enum)
 
 ```spec
-type UserRole = admin | editor | viewer
+type UserRole "User Role" = admin | editor | viewer
 ```
 
 ### Error Type (Tagged)
 
 ```spec
-type DuplicateEmailError {
+type DuplicateEmailError "Duplicate Email Error" {
   _tag    "DuplicateEmailError"   @literal
   email   string
   message string
@@ -54,12 +54,23 @@ type DuplicateEmailError {
 ### Command Type
 
 ```spec
-type CreateUserCommand {
+type CreateUserCommand "Create User Command" {
   email  string
   name   string
   role   UserRole
 }
 ```
+
+## Titles
+
+Every `type` block has a title, written after its id. A union takes one in the same place, before the `=`:
+
+```spec
+type TaskStatus "Task Status" = open | in_progress | done | archived
+```
+
+A block without a title is E076. `specforge migrate` writes the missing ones: the `//` comment directly above the
+block when there is one, else the id in words.
 
 ## Fields
 
@@ -145,13 +156,13 @@ Each field in a struct type has:
 Use the `_tag` pattern for discriminated unions:
 
 ```spec
-type DuplicateEmailError {
+type DuplicateEmailError "Duplicate Email Error" {
   _tag    "DuplicateEmailError"   @literal
   email   string
   message string
 }
 
-type UserNotFoundError {
+type UserNotFoundError "User Not Found Error" {
   _tag    "UserNotFoundError"     @literal
   userId  string
   message string
@@ -185,7 +196,7 @@ This generates TypeScript discriminated unions, Python tagged classes, and Go er
 ### Domain Entity
 
 ```spec
-type Order {
+type Order "Order" {
   id         string      @readonly
   customerId string
   items      OrderItem[]
@@ -200,7 +211,7 @@ type Order {
 ### Value Object
 
 ```spec
-type OrderItem {
+type OrderItem "Order Item" {
   productId  string
   name       string
   quantity   integer
@@ -212,13 +223,13 @@ type OrderItem {
 ### Union / Enum
 
 ```spec
-type OrderStatus = pending | confirmed | shipped | delivered | cancelled
+type OrderStatus "Order Status" = pending | confirmed | shipped | delivered | cancelled
 ```
 
 ### Error with Tag
 
 ```spec
-type InsufficientInventoryError {
+type InsufficientInventoryError "Insufficient Inventory Error" {
   _tag       "InsufficientInventoryError"   @literal
   productId  string
   requested  integer
@@ -230,13 +241,13 @@ type InsufficientInventoryError {
 ### Command
 
 ```spec
-type PlaceOrderCommand {
+type PlaceOrderCommand "Place Order Command" {
   customerId string
   items      OrderItemInput[]
   currency   string
 }
 
-type OrderItemInput {
+type OrderItemInput "Order Item Input" {
   productId  string
   quantity   integer
 }

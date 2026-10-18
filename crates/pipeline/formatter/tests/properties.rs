@@ -93,7 +93,13 @@ fn formatting_any_edit_of_the_corpus_reaches_a_fixed_point() {
                 "{line:?} written {n} times"
             );
         }
-        let _ = format_range(&case.edited, start, start + span, &FormatConfig::default());
+        let _ = format_range(
+            &case.edited,
+            start,
+            start + span,
+            &FormatConfig::default(),
+            &specforge_graph::FieldForms::default(),
+        );
         Ok(())
     });
     fail(result);
