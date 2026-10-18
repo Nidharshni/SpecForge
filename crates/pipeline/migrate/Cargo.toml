@@ -1,6 +1,6 @@
 [package]
 name = "specforge-migrate"
-description = "Format-version migration of a project's .spec files: the rewrite, its backups and rollback record, and the W054 report of what it changed in the graph"
+description = "Format-version migration of a project's .spec files: the rewrite, its backups and rollback record, the migration steps, and the W054 report of what it changed in the graph"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

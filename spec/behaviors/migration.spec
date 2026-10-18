@@ -173,6 +173,39 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
   verify integration "migrate leaves a nested project's files alone"
 }
 
+behavior add_missing_titles "Add Missing Titles" {
+  features   [spec_file_migration]
+  invariants [migration_idempotency, migration_semantic_preservation]
+  category   mutation
+  types      [SpecFile, MigrationResult]
+  ports      [FileSystem]
+  contract   """
+    The titles step MUST write a title into every block header that has
+    none, entity blocks and unions alike: the block's doc comment (the //
+    lines directly above its header with no blank line between, the format
+    header excluded), each line's text after // trimmed and the lines
+    joined by one space, with \\ and " escaped, the comment lines removed.
+    A block with no doc comment MUST get its id in Title Case words. The
+    step MUST leave define, spec and ref blocks, titled blocks and text
+    with a syntax error as they are, and MUST be idempotent. It runs on
+    every file it changes, whatever the file's format version, and the
+    graph comparison keeps exactly the title it added where a block had
+    none.
+  """
+  verify unit "a doc comment directly above a block becomes its title"
+  verify unit "a multi-line doc comment becomes one title"
+  verify unit "a union takes its doc comment as its title"
+  verify unit "a block with no doc comment is titled with its id in words"
+  verify unit "a comment after a blank line is not lifted"
+  verify unit "a trailing comment on the header stays"
+  verify unit "the format header is never lifted"
+  verify unit "quotes and backslashes in a doc comment are escaped in the title"
+  verify unit "titled, define, spec and ref blocks are left alone"
+  verify unit "a file with a syntax error is left alone"
+  verify unit "the titles step is idempotent"
+  verify unit "the changes beyond the steps drop only a title the step added"
+}
+
 behavior generate_migration_diff "Generate Migration Diff" {
   features   [spec_file_migration]
   invariants [
