@@ -64,7 +64,7 @@ fn new_goes_after_the_last_block_of_its_kind() {
     assert!(is_canonical(&c, &text));
     let middle = project(&[(
         "m.spec",
-        "behavior first_one \"First\" {\n  category query\n}\n\ninvariant some_rule \"Rule\" {\n  guarantee \"g\"\n}\n",
+        "behavior first_one \"First\" {\n  category query\n}\n\ninvariant task_unique \"Rule\" {\n  guarantee \"g\"\n}\n\ninvariant done_stamped \"Rule\" {\n  guarantee \"g\"\n}\n\ntype Task \"Task\" {\n  id string\n}\n",
     )]);
     let text = after(&middle, "m.spec", &[archive("m.spec")]);
     assert!(
@@ -73,19 +73,21 @@ fn new_goes_after_the_last_block_of_its_kind() {
         ),
         "{text}"
     );
-    assert!(text.contains("}\n\ninvariant some_rule"), "{text}");
+    assert!(text.contains("}\n\ninvariant task_unique"), "{text}");
 }
 
 #[test]
 fn new_goes_at_the_end_without_a_sibling() {
     let c = project(&[(
         "e.spec",
-        "invariant some_rule \"Rule\" {\n  guarantee \"g\"\n}\n",
+        "invariant task_unique \"Rule\" {\n  guarantee \"g\"\n}\n\ninvariant done_stamped \"Rule\" {\n  guarantee \"g\"\n}\n\ntype Task \"Task\" {\n  id string\n}\n",
     )]);
     let text = after(&c, "e.spec", &[archive("e.spec")]);
     assert_eq!(
         text,
-        format!("invariant some_rule \"Rule\" {{\n  guarantee \"g\"\n}}\n\n{ARCHIVE}")
+        format!(
+            "invariant task_unique \"Rule\" {{\n  guarantee \"g\"\n}}\n\ninvariant done_stamped \"Rule\" {{\n  guarantee \"g\"\n}}\n\ntype Task \"Task\" {{\n  id string\n}}\n\n{ARCHIVE}"
+        )
     );
 }
 
@@ -203,7 +205,7 @@ fn a_later_edit_sees_an_entity_created_before_it() {
         "tasks.spec",
         &[
             archive("tasks.spec"),
-            link("archive_task", "invariants", "some_new_rule"),
+            link("archive_task", "invariants", "extra_rule"),
             Edit::Retitle {
                 entity_id: "archive_task".into(),
                 title: "Archive".into(),
@@ -215,20 +217,23 @@ fn a_later_edit_sees_an_entity_created_before_it() {
         "{text}"
     );
     assert!(
-        text.contains("invariants [task_unique, done_stamped, some_new_rule]"),
+        text.contains("invariants [task_unique, done_stamped, extra_rule]"),
         "{text}"
     );
 }
 
 #[test]
 fn new_omits_a_field_equal_to_the_default() {
-    let defaulted = "defaults behavior {\n  invariants [done_stamped]\n}\n\ninvariant done_stamped \"Done\" {\n  guarantee \"g\"\n}\n\nbehavior list_tasks \"List\" {\n  category query\n}\n";
+    let defaulted = "defaults behavior {\n  invariants [done_stamped]\n}\n\ninvariant done_stamped \"Done\" {\n  guarantee \"g\"\n}\n\ninvariant other_rule \"Other\" {\n  guarantee \"g\"\n}\n\nbehavior list_tasks \"List\" {\n  category query\n  contract \"The system MUST list\"\n}\n";
     let c = project(&[("d.spec", defaulted)]);
     let same = create(
         "behavior",
         "archive_task",
         "d.spec",
-        &[("invariants", many(&["done_stamped"]))],
+        &[
+            ("invariants", many(&["done_stamped"])),
+            ("contract", one("The system MUST archive")),
+        ],
     );
     let text = after(&c, "d.spec", &[same]);
     assert_eq!(text.matches("invariants").count(), 1, "{text}");
@@ -236,7 +241,10 @@ fn new_omits_a_field_equal_to_the_default() {
         "behavior",
         "archive_task",
         "d.spec",
-        &[("invariants", many(&["other_rule"]))],
+        &[
+            ("invariants", many(&["other_rule"])),
+            ("contract", one("The system MUST archive")),
+        ],
     );
     let text = after(&c, "d.spec", &[other]);
     assert!(text.contains("invariants [other_rule]"), "{text}");

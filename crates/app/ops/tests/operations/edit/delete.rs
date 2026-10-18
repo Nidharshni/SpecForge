@@ -24,12 +24,12 @@ const TWO_FILES: [(&str, &str); 2] = [
 )]
 fn delete_removes_the_block_comment_and_one_blank_line() {
     let c = project(&TWO_FILES);
-    let text = after(&c, "rules.spec", &[delete("done_stamped", false)]);
+    let text = after(&c, "rules.spec", &[delete("done_stamped", true)]);
     assert_eq!(
         text,
         "// the rules\n\ninvariant task_unique \"Task Unique\" {\n  guarantee \"g\"\n}\n"
     );
-    let text = after(&c, "rules.spec", &[delete("task_unique", false)]);
+    let text = after(&c, "rules.spec", &[delete("task_unique", true)]);
     assert_eq!(
         text,
         "// the rules\n\n// stamping\ninvariant done_stamped \"Done Stamped\" {\n  guarantee \"h\"\n}\n"

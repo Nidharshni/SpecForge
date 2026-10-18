@@ -1,11 +1,13 @@
 //! Typed edits (`specforge_ops::authoring::edit`) over projects compiled in a temp dir.
 
+mod apply;
 mod create;
 mod defaults;
 mod delete;
 mod fields;
 mod links;
 mod obligations;
+mod validate;
 
 use crate::navigate::{Compiled, SOFTWARE, compile};
 use specforge_ops::Refusal;
@@ -22,11 +24,19 @@ invariant done_stamped "Done Stamped" {
   guarantee "done tasks carry a time"
 }
 
+invariant extra_rule "Extra Rule" {
+  guarantee "something else"
+}
+
+type Task "Task" {
+  id string
+}
+
 behavior complete_task "Complete a Task" {
   category   command
   invariants [done_stamped]
+  // what completing touches
   types      [Task]
-  // what completing does
   contract   """
     When completed, the system MUST set the status.
   """

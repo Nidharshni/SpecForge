@@ -1011,6 +1011,24 @@ Owner: core
 Level: error
 ```
 
+## E080
+
+```
+E080: Typed edit would add errors
+
+A typed edit (`specforge new`, `set`, `unset`, `link`, `unlink`, `delete`, or
+MCP `specforge.edit`) was planned, and the project it would leave reports errors
+the project does not report now: the edit is refused and nothing is written. The
+refusal lists each new error (an unresolved reference, a missing required field,
+a value its field does not take, …). Fix what they name first: create the
+referenced entity, give the required field, or make both changes in one
+`specforge.edit` call. `delete --unlink-references` removes the references a
+delete would leave dangling.
+
+Owner: core
+Level: error
+```
+
 ## I002
 
 ```

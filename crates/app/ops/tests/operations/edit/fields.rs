@@ -50,10 +50,10 @@ fn set_of_an_absent_field_inserts_it_at_its_rank() {
 )]
 fn unset_removes_the_field_and_the_comment_above() {
     let c = tasks();
-    let text = after(&c, "tasks.spec", &[unset("complete_task", "contract")]);
-    assert!(!text.contains("what completing does"));
-    assert!(!text.contains("contract   \"\"\""));
-    assert!(text.contains("verify unit \"completing sets the status\""));
+    let text = after(&c, "tasks.spec", &[unset("complete_task", "types")]);
+    assert!(!text.contains("what completing touches"));
+    assert!(!text.contains("types      [Task]"));
+    assert!(text.contains("contract   \"\"\""));
     assert!(is_canonical(&c, &text));
 }
 

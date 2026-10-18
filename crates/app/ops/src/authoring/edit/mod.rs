@@ -6,14 +6,18 @@
 mod block;
 mod create;
 mod defaults;
+mod validate;
 pub mod write;
 
+use crate::authoring::rename::UNREADABLE;
+use crate::change::{Cause, ProjectChange};
 use crate::view::ProjectView;
-use crate::{OpError, OpErrorKind, Refusal};
+use crate::{Caller, OpError, OpErrorKind, Refusal, Writes};
 use serde::{Deserialize, Serialize};
+use specforge_common::DiagnosticList;
 use specforge_common::shape::{Definitions, Shape};
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// One typed edit. The MCP `specforge.edit` tool reads a list of them (`op` names the variant); each CLI verb
@@ -129,6 +133,8 @@ pub struct EditReport {
     pub affected_files: Vec<String>,
     /// A unified diff of every affected file (spec-root-relative headers), in file order. Empty when nothing changes.
     pub diff: String,
+    /// The warnings and infos the edited project reports that the project did not, in report order.
+    pub added: DiagnosticList,
 }
 
 /// The files a list of edits changes, and what they would write.
@@ -218,7 +224,7 @@ impl<'v> Planner<'v> {
         let text = self.text(&located.key).ok_or_else(|| {
             OpError::new(
                 OpErrorKind::Internal,
-                crate::authoring::rename::UNREADABLE,
+                UNREADABLE,
                 format!("no text was read for {}", located.key),
             )
         })?;
@@ -296,7 +302,7 @@ impl<'v> Planner<'v> {
         }
     }
 
-    fn finish(self) -> EditPlan {
+    fn finish(self) -> Result<EditPlan, Refusal<EditField>> {
         let mut files = BTreeMap::new();
         let mut diff = String::new();
         for (key, after) in self.texts {
@@ -310,16 +316,26 @@ impl<'v> Planner<'v> {
             );
             files.insert(key, (before, after));
         }
+        let after: BTreeMap<String, String> = files
+            .iter()
+            .map(|(key, (_, after))| (key.clone(), after.clone()))
+            .collect();
+        let added = if after.is_empty() {
+            Vec::new()
+        } else {
+            validate::check(self.view, &after)?
+        };
         let report = EditReport {
             entities: self.entities.into_iter().collect(),
             affected_files: files.keys().cloned().collect(),
             diff,
+            added: DiagnosticList(added),
         };
-        EditPlan {
+        Ok(EditPlan {
             files,
             spec_root: self.view.env().spec_root().to_path_buf(),
             report,
-        }
+        })
     }
 }
 
@@ -375,5 +391,49 @@ pub fn plan(view: &ProjectView<'_>, edits: &[Edit]) -> Result<EditPlan, Refusal<
             refusal
         })?;
     }
-    Ok(planner.finish())
+    planner.finish()
+}
+
+/// Write `plan` as one project change (ADR 0128), each file resolved through the caller's containment (ADR 0104):
+/// checked against the text it was planned on, then replaced or created; on any failure, every file already written
+/// is put back (one that cannot be is the error's writes). Returns the files it wrote.
+pub fn apply(plan: &EditPlan, caller: Caller<'_>) -> Result<Writes, OpError> {
+    let mut change = ProjectChange::new();
+    for (key, (before, after)) in &plan.files {
+        let held = caller.containment().resolve(&plan.spec_root.join(key))?;
+        change.stage(
+            held,
+            before.as_ref().map(|b| b.as_bytes().to_vec()),
+            after.clone().into_bytes(),
+        );
+    }
+    let named = |file: &Path| {
+        file.strip_prefix(&plan.spec_root)
+            .unwrap_or(file)
+            .display()
+            .to_string()
+    };
+    change.commit().map_err(|failed| {
+        failed.error(|cause| match cause {
+            Cause::Changed { file } => OpError::new(
+                OpErrorKind::Conflict,
+                crate::FILE_CHANGED,
+                format!(
+                    "cannot apply the edits: {} changed since the project was compiled; nothing was written",
+                    named(&file)
+                ),
+            ),
+            Cause::Unreadable { file, error } => OpError::new(
+                OpErrorKind::of_io(&error),
+                UNREADABLE,
+                format!("failed to read {}: {error}", file.display()),
+            ),
+            Cause::Unwritable { file, error } => OpError::new(
+                OpErrorKind::of_io(&error),
+                UNREADABLE,
+                format!("failed to write {}: {error}", file.display()),
+            ),
+            Cause::Then(never) => match never {},
+        })
+    })
 }

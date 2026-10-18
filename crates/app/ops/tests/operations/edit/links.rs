@@ -68,7 +68,7 @@ fn unlink_of_a_target_not_there_plans_nothing() {
 
 #[test]
 fn link_on_a_single_reference_is_not_editable_and_unlink_removes_a_match() {
-    let events = "type Task \"Task\" {\n  id string\n}\n\nevent task_done \"Task Done\" {\n  payload Task\n}\n";
+    let events = "type Other \"Other\" {\n  id string\n}\n\ntype Task \"Task\" {\n  id string\n}\n\nevent task_done \"Task Done\" {\n  payload Task\n}\n";
     let c = project(&[("events.spec", events)]);
     let (code, message) = refused(&c, &[link("task_done", "payload", "Other")]);
     assert_eq!(code, "not_editable", "{message}");
@@ -101,15 +101,17 @@ fn a_list_holding_a_comment_is_not_editable() {
 
 #[test]
 fn a_long_list_is_rewrapped_by_the_formatter() {
-    let c = tasks();
-    let edits: Vec<Edit> = (0..12)
-        .map(|n| {
-            link(
-                "list_tasks",
-                "invariants",
-                &format!("some_long_invariant_name_{n}"),
-            )
-        })
+    let names: Vec<String> = (0..12)
+        .map(|n| format!("some_long_invariant_name_{n}"))
+        .collect();
+    let rules: String = names
+        .iter()
+        .map(|n| format!("invariant {n} \"Rule\" {{\n  guarantee \"g\"\n}}\n\n"))
+        .collect();
+    let c = project(&[("tasks.spec", &format!("{rules}{TASKS}"))]);
+    let edits: Vec<Edit> = names
+        .iter()
+        .map(|n| link("list_tasks", "invariants", n))
         .collect();
     let text = after(&c, "tasks.spec", &edits);
     assert!(text.contains("invariants ["), "{text}");
