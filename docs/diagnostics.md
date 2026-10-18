@@ -752,10 +752,9 @@ Level: error
 ```
 E065: Invalid scaffold request
 
-`specforge new` can't scaffold what was asked: only `--extension` projects are
-supported, the extension name is empty or is a scoped name that isn't
-`@scope/name`, or the destination directory already exists. Pass `--extension`,
-fix the name, or pick a destination that doesn't exist yet.
+`specforge extension init` can't scaffold what was asked: the extension name is
+empty or is a scoped name that isn't `@scope/name`, or the destination directory
+already exists. Fix the name, or pick a destination that doesn't exist yet.
 
 Owner: core
 Level: error
@@ -766,7 +765,7 @@ Level: error
 ```
 E066: Extension scaffold failed
 
-`specforge new --extension` couldn't write the project: creating a directory or
+`specforge extension init` couldn't write the project: creating a directory or
 writing one of the generated files failed. Check permissions and free space at
 the destination, remove the partial project, and retry.
 
@@ -3029,7 +3028,7 @@ W143: Define blocks are not supported
 A `.spec` file has a `define <name> { ... }` block. Every entity kind comes from
 an extension, so a project's kinds depend only on `specforge.json` (ADR 0005):
 the block registers nothing and is left out of the graph. Declare the kind in an
-extension (`specforge new --extension`) and enable it, then remove the block.
+extension (`specforge extension init`) and enable it, then remove the block.
 `define` stays a reserved word.
 
 Owner: core

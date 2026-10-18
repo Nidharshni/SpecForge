@@ -26,7 +26,6 @@ mod login;
 mod mcp;
 mod migrate;
 mod model;
-mod new;
 mod notes;
 mod options;
 mod outcome;
@@ -37,6 +36,7 @@ mod publish;
 mod query;
 mod remove;
 mod review;
+mod scaffold;
 mod search;
 mod stats;
 mod terminal;
@@ -104,8 +104,6 @@ enum Commands {
     Analyze(analyze::Args),
     /// Watch a project and rebuild incrementally on changes
     Watch(watch::Args),
-    /// Scaffold a new extension project
-    New(new::Args),
     /// Update installed extensions to latest compatible versions
     Update(update::Args),
     /// Authenticate with a registry
@@ -205,7 +203,6 @@ fn run(command: Commands, terminal: &Terminal) -> Exit {
         Commands::Add(args) => args.run(terminal),
         Commands::Analyze(args) => args.run(terminal),
         Commands::Watch(args) => args.run(terminal),
-        Commands::New(args) => args.run(terminal),
         Commands::Remove(args) => args.run(terminal),
         Commands::Extensions(args) => args.run(terminal),
         Commands::Publish(args) => args.run(terminal),

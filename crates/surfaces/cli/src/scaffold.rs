@@ -1,122 +1,11 @@
-//! `specforge new --extension <name>` — scaffold an SDK-authored extension
-//! project (spec #21 follow-through / SDK adoption).
+//! The extension project `specforge extension init` writes.
 //!
 //! The generated project mirrors `fixtures/greet-extension`: a cdylib crate
 //! depending on `specforge-extension-sdk`, built as a `wasm32-wasip2`
 //! component, with a `src/lib.rs` skeleton that builds and describes out of
-//! the box. `specforge extension init` writes the same project.
+//! the box.
 
-use crate::terminal::{Terminal, outln};
-
-use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
-use serde_json::json;
-use specforge_common::codes;
-use specforge_ops::OpErrorKind;
-use specforge_package::PackageName;
-use std::path::{Path, PathBuf};
-
-// `specforge new`'s command line.
-#[derive(clap::Args)]
-pub(crate) struct Args {
-    /// Extension name (e.g. @you/my-ext)
-    name: String,
-
-    /// Scaffold an extension project (SDK-authored wasm)
-    #[arg(long, default_value_t = false)]
-    extension: bool,
-
-    /// Directory to scaffold into
-    #[arg(long, default_value = ".")]
-    dir: PathBuf,
-
-    #[command(flatten)]
-    output: OutputArg,
-}
-
-impl Args {
-    pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        new(
-            &self.name,
-            self.extension,
-            &self.dir,
-            self.output.format,
-            terminal,
-        )
-    }
-}
-
-fn new(
-    name: &str,
-    extension: bool,
-    path: &Path,
-    format: OutputFormat,
-    terminal: &Terminal,
-) -> Exit {
-    if !extension {
-        return Refusal::of(format).coded(
-            terminal,
-            OpErrorKind::InvalidInput,
-            codes::E065,
-            "only `--extension` scaffolding is supported right now",
-        );
-    }
-
-    if let Err(why) = PackageName::parse(name) {
-        return Refusal::of(format).coded(
-            terminal,
-            OpErrorKind::InvalidInput,
-            codes::E065,
-            why.to_string(),
-        );
-    }
-
-    let dir = target_dir(path, name);
-    if dir.exists() {
-        return Refusal::of(format).coded(
-            terminal,
-            OpErrorKind::Conflict,
-            codes::E065,
-            format!("destination '{}' already exists", dir.display()),
-        );
-    }
-
-    if let Err(message) = scaffold(&dir, name) {
-        return Refusal::of(format).coded(terminal, OpErrorKind::Internal, codes::E066, message);
-    }
-
-    match format {
-        OutputFormat::Json => {
-            let output = json!({
-                "action": "new",
-                "kind": "extension",
-                "name": name,
-                "path": dir.display().to_string(),
-            });
-            terminal.json(&output);
-        }
-        OutputFormat::Human => {
-            outln!(
-                terminal,
-                "scaffolded extension '{}' in {}",
-                name,
-                dir.display()
-            );
-            outln!(terminal);
-            outln!(terminal, "next steps:");
-            outln!(terminal, "  cd {}", dir.display());
-            outln!(terminal, "  cargo build --release --target wasm32-wasip2");
-            let wasm = format!(
-                "./target/wasm32-wasip2/release/{}.wasm",
-                crate_name(name).replace('-', "_")
-            );
-            outln!(
-                terminal,
-                "  specforge add {wasm}   # local-path install once built"
-            );
-        }
-    }
-    Exit::Passed
-}
+use std::path::Path;
 
 /// The crate- and directory-safe name: the last path segment, sanitized.
 fn crate_name(name: &str) -> String {
@@ -152,10 +41,6 @@ pub(crate) fn short_name(name: &str) -> String {
         Some(c) if c.is_ascii_lowercase() => kebab,
         _ => format!("ext-{kebab}").trim_end_matches('-').to_string(),
     }
-}
-
-fn target_dir(path: &Path, name: &str) -> PathBuf {
-    path.join(crate_name(name))
 }
 
 /// The files [`scaffold`] writes, relative to the project directory.
@@ -279,6 +164,7 @@ specforge_extension_sdk::component_guest!(build = specforge_extension_build);
 #[cfg(test)]
 mod tests {
     use super::*;
+    use specforge_package::PackageName;
 
     #[test]
     fn crate_name_takes_last_segment_and_sanitizes() {

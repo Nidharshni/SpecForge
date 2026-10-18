@@ -1450,61 +1450,6 @@ fn remove_nonexistent_extension() {
         .stderr(predicates::str::contains("not installed"));
 }
 
-// ---------------------------------------------------------------------------
-// specforge new --extension (SDK adoption scaffolder)
-// ---------------------------------------------------------------------------
-
-#[test]
-fn new_extension_scaffolds_sdk_project() {
-    let dir = TestProject::new().without_config();
-    let out = dir.root().join("out");
-
-    let assert = Cli::on(&dir)
-        .bare_command(&[
-            "new",
-            "--extension",
-            "@you/my-ext",
-            "--dir",
-            out.to_str().unwrap(),
-        ])
-        .output()
-        .unwrap();
-    assert!(assert.status.success());
-
-    let project = out.join("my-ext");
-    let cargo = fs::read_to_string(project.join("Cargo.toml")).unwrap();
-    assert!(cargo.contains(r#"name = "my-ext""#));
-    assert!(cargo.contains("specforge-extension-sdk"));
-    assert!(!cargo.contains("wit-bindgen"));
-
-    let config = fs::read_to_string(project.join(".cargo/config.toml")).unwrap();
-    assert!(config.contains("wasm32-wasip2"));
-
-    let lib = fs::read_to_string(project.join("src/lib.rs")).unwrap();
-    assert!(lib.contains("component_guest!"));
-
-    let lib = fs::read_to_string(project.join("src/lib.rs")).unwrap();
-    assert!(lib.contains(r#"name = "@you/my-ext""#));
-    assert!(lib.contains("impl Contributions for Extension"));
-}
-
-#[test]
-fn new_extension_refuses_existing_directory() {
-    let dir = TestProject::new().without_config();
-    let out = dir.root().join("out");
-    let project = out.join("dup");
-    fs::create_dir_all(&project).unwrap();
-
-    let assert = Cli::on(&dir)
-        .bare_command(&["new", "--extension", "dup", "--dir", out.to_str().unwrap()])
-        .output()
-        .unwrap();
-    assert!(!assert.status.success());
-
-    let stderr = String::from_utf8_lossy(&assert.stderr);
-    assert!(stderr.contains("already exists"), "{}", stderr);
-}
-
 // ===============================================================
 // Builtins: enabled through specforge.json, no download or lock entry
 // ===============================================================

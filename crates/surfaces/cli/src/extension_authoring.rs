@@ -11,6 +11,7 @@ use crate::terminal::{Terminal, errln, outln};
 use serde_json::json;
 use specforge_common::{Code, Diagnostic, Severity, codes};
 use specforge_ops::OpErrorKind;
+use specforge_package::PackageName;
 use std::path::{Path, PathBuf};
 
 /// The diagnostic for an extension project that isn't there or isn't
@@ -90,6 +91,14 @@ fn run_init(path: &Path, name: Option<&str>, format: OutputFormat, terminal: &Te
         format!("@local/{ext_name}")
     };
 
+    if let Err(why) = PackageName::parse(&declared) {
+        return Refusal::of(format).coded(
+            terminal,
+            OpErrorKind::InvalidInput,
+            codes::E065,
+            why.to_string(),
+        );
+    }
     if ext_dir.exists() {
         return Refusal::of(format).coded(
             terminal,
@@ -98,7 +107,7 @@ fn run_init(path: &Path, name: Option<&str>, format: OutputFormat, terminal: &Te
             format!("directory '{}' already exists", ext_dir.display()),
         );
     }
-    if let Err(message) = crate::new::scaffold(&ext_dir, &declared) {
+    if let Err(message) = crate::scaffold::scaffold(&ext_dir, &declared) {
         return Refusal::of(format).coded(terminal, OpErrorKind::Internal, codes::E066, message);
     }
 
@@ -107,9 +116,9 @@ fn run_init(path: &Path, name: Option<&str>, format: OutputFormat, terminal: &Te
             let output = json!({
                 "status": "created",
                 "name": declared,
-                "short": crate::new::short_name(&declared),
+                "short": crate::scaffold::short_name(&declared),
                 "path": ext_dir.display().to_string(),
-                "files": crate::new::SCAFFOLDED,
+                "files": crate::scaffold::SCAFFOLDED,
             });
             terminal.json(&output);
         }
@@ -120,7 +129,7 @@ fn run_init(path: &Path, name: Option<&str>, format: OutputFormat, terminal: &Te
                 declared,
                 ext_dir.display()
             );
-            for file in crate::new::SCAFFOLDED {
+            for file in crate::scaffold::SCAFFOLDED {
                 outln!(terminal, "  {file}");
             }
             outln!(terminal);

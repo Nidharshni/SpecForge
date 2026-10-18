@@ -27,7 +27,6 @@ Commands:
   search        Search for extensions in registries
   analyze       Run static analysis passes over the compiled project
   watch         Watch a project and rebuild incrementally on changes
-  new           Scaffold a new extension project
   update        Update installed extensions to latest compatible versions
   login         Authenticate with a registry
   logout        Remove registry credentials
