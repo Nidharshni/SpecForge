@@ -165,8 +165,8 @@ behavior greet_user "Greet a user by name" {
 behavior field_value_kinds "Field Value Kinds" {
   // Field value kinds you'll use constantly:
 
-  status   draft                      // bare word (enum / keyword value)
-  category "auth"                     // string (quotes optional for single tokens)
+  status   draft                      // bare: a word from the field's set
+  category auth                       // bare: an identifier field (a tag)
 
   contract """                        // triple-quoted multi-line string
     Multi-line text.
@@ -179,10 +179,12 @@ behavior field_value_kinds "Field Value Kinds" {
 }
 ```
 
-> 💡 The field's **declared type** decides what a value references, not how it is written.
+> 💡 The field's **declared type** decides both what a value references and how it is written:
+> words and references bare, text quoted. `specforge format` writes every value so, and
+> `specforge check` warns (W159) on the other form (ADR 0147).
 > Every item of a `reference_list` field (and the value of a `reference` field) must resolve to
-> a real entity or you get an error, quoted or not. A `string_list` field's items are opaque
-> strings, whether quoted or bare; only a scheme ref ID (`gh.issue:42`) links its `ref`.
+> a real entity or you get an error. A `string_list` field's items are opaque
+> quoted strings; only a scheme ref ID (`gh.issue:42`) links its `ref`.
 > Reference fields build the graph; string lists don't.
 
 **Comments** are line-only (`//`). **Imports** wire files together:
@@ -405,7 +407,7 @@ type TaskNotFoundError {
 event task_created "Task Created" {
   channel  "tasks.created"
   payload  TaskCreatedPayload
-  category "domain"
+  category domain
   verify integration "emitted after a successful create"
 }
 ```
