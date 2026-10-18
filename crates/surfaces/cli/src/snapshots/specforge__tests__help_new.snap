@@ -1,0 +1,46 @@
+---
+source: crates/surfaces/cli/src/main.rs
+expression: command.clone().render_long_help().to_string()
+---
+Create an entity
+
+Usage: specforge new [OPTIONS] [KIND] [ID] [TITLE] [FIELDS]...
+
+Arguments:
+  [KIND]
+          The kind of entity (behavior, invariant, …)
+
+  [ID]
+          The new entity's id
+
+  [TITLE]
+          The new entity's title
+
+  [FIELDS]...
+          The kind's fields: `--<field> <value>`
+
+Options:
+      --in <FILE>
+          The file, relative to the spec root; created when missing
+
+      --verify <KIND:TEXT>
+          A `verify` obligation, as `kind:text` (or just `text`); repeat for several
+
+      --dry-run
+          Print the diff and write nothing
+
+  -h, --help
+          Print help (with a kind, that kind's field flags)
+
+      --path <PATH>
+          A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)
+          
+          [default: .]
+
+      --format <FORMAT>
+          Output format: human or json
+          
+          [default: human]
+          [possible values: human, json]
+
+The kind's fields are flags too: `specforge new <kind> --help` lists them.

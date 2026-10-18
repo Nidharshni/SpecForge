@@ -124,6 +124,37 @@ pub enum EditField {
     File,
 }
 
+/// A field a kind declares, as `specforge new` offers it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FieldInfo {
+    pub name: String,
+    pub field_type: specforge_protocol_types::FieldType,
+    pub description: String,
+}
+
+/// The fields `kind` declares, in the order a new block writes them (the kind's own, then its enhancements');
+/// none for a kind no loaded extension declares.
+pub fn fields_of(view: &ProjectView<'_>, kind: &str) -> Vec<FieldInfo> {
+    let site = block::Site {
+        view,
+        key: "",
+        id: "",
+        kind,
+        resolved: None,
+    };
+    site.order()
+        .into_iter()
+        .filter_map(|name| {
+            let entry = view.registries().fields().get(kind, &name)?;
+            Some(FieldInfo {
+                field_type: entry.field_type(),
+                description: entry.declared().description.clone().unwrap_or_default(),
+                name,
+            })
+        })
+        .collect()
+}
+
 /// What a plan will write.
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 pub struct EditReport {

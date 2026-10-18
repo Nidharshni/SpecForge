@@ -12,6 +12,7 @@ mod caller;
 mod check;
 mod collect;
 mod doctor;
+mod edit;
 mod explain;
 mod explore;
 mod export;
@@ -26,6 +27,7 @@ mod login;
 mod mcp;
 mod migrate;
 mod model;
+mod new;
 mod notes;
 mod options;
 mod outcome;
@@ -104,6 +106,18 @@ enum Commands {
     Analyze(analyze::Args),
     /// Watch a project and rebuild incrementally on changes
     Watch(watch::Args),
+    /// Create an entity
+    New(new::Args),
+    /// Set a field (or --title) of an entity
+    Set(edit::SetArgs),
+    /// Remove a field of an entity
+    Unset(edit::UnsetArgs),
+    /// Add a reference (or --verify obligation) to an entity
+    Link(edit::LinkArgs),
+    /// Remove a reference (or --verify obligation) from an entity
+    Unlink(edit::LinkArgs),
+    /// Delete an entity
+    Delete(edit::DeleteArgs),
     /// Update installed extensions to latest compatible versions
     Update(update::Args),
     /// Authenticate with a registry
@@ -203,6 +217,12 @@ fn run(command: Commands, terminal: &Terminal) -> Exit {
         Commands::Add(args) => args.run(terminal),
         Commands::Analyze(args) => args.run(terminal),
         Commands::Watch(args) => args.run(terminal),
+        Commands::New(args) => args.run(terminal),
+        Commands::Set(args) => args.run(terminal),
+        Commands::Unset(args) => args.run(terminal),
+        Commands::Link(args) => args.run(true, terminal),
+        Commands::Unlink(args) => args.run(false, terminal),
+        Commands::Delete(args) => args.run(terminal),
         Commands::Remove(args) => args.run(terminal),
         Commands::Extensions(args) => args.run(terminal),
         Commands::Publish(args) => args.run(terminal),
@@ -258,9 +278,8 @@ mod tests {
     }
 
     /// The commands that read no project: they take no `--path`.
-    const NO_PROJECT: [&str; 8] = [
+    const NO_PROJECT: [&str; 7] = [
         "init",
-        "new",
         "explain",
         "mcp",
         "extension",

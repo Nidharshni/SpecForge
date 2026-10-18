@@ -23,7 +23,6 @@ fn assert_format_clean(project: &TestProject) {
     behavior = "create_entity",
     verify = "new writes the block in the canonical form after the last block of its kind"
 )]
-#[ignore = "flipped by T9"]
 fn new_writes_the_canonical_block() {
     let project = todo();
     let before = project.read(TASKS);
@@ -78,7 +77,6 @@ behavior archive_task "Archive a Task" {
     behavior = "edit_entity_field",
     verify = "set of an absent field inserts it at its rank"
 )]
-#[ignore = "flipped by T9"]
 fn link_unset_and_a_new_field_are_laid_out_by_the_formatter() {
     let project = todo();
     sf(
@@ -87,7 +85,7 @@ fn link_unset_and_a_new_field_are_laid_out_by_the_formatter() {
     )
     .exits(0);
     let unset = sf(&project, &["unset", "complete_task", "satisfies"]).exits(0);
-    assert!(unset.stdout.contains("W123"), "{}", unset.stdout);
+    assert!(unset.stderr.contains("W123"), "{}", unset.stderr);
     sf(
         &project,
         &["link", "list_tasks", "invariants", "task_id_uniqueness"],
@@ -110,7 +108,6 @@ fn link_unset_and_a_new_field_are_laid_out_by_the_formatter() {
     behavior = "validate_typed_edit",
     verify = "an edit that adds an error is E080 and writes nothing"
 )]
-#[ignore = "flipped by T9"]
 fn a_dangling_link_is_e080_and_writes_nothing() {
     let project = todo();
     let before = project.read(TASKS);
@@ -127,6 +124,11 @@ fn a_dangling_link_is_e080_and_writes_nothing() {
     );
     assert_eq!(refused.code, 1, "{}{}", refused.stdout, refused.stderr);
     assert!(refused.stdout.contains("E080"), "{}", refused.stdout);
+    assert!(
+        refused.stdout.contains("task_archived"),
+        "{}",
+        refused.stdout
+    );
     assert_eq!(project.read(TASKS), before);
 }
 
@@ -142,7 +144,6 @@ fn a_dangling_link_is_e080_and_writes_nothing() {
     behavior = "edit_entity_obligation",
     verify = "a verify line is removed by kind and text"
 )]
-#[ignore = "flipped by T9"]
 fn set_retitle_and_verify_change_one_block() {
     let project = todo();
     let unchanged = sf(&project, &["set", "list_tasks", "category", "query"]).exits(0);
@@ -196,7 +197,6 @@ fn set_retitle_and_verify_change_one_block() {
     behavior = "delete_entity",
     verify = "delete with unlink_references removes every reference"
 )]
-#[ignore = "flipped by T9"]
 fn delete_is_e080_until_references_are_unlinked() {
     let project = todo();
     let refused = sf(&project, &["delete", "create_task"]);
@@ -212,7 +212,6 @@ fn delete_is_e080_until_references_are_unlinked() {
     behavior = "validate_typed_edit",
     verify = "every block an edit touches is format-clean"
 )]
-#[ignore = "flipped by T9"]
 fn every_written_file_is_format_clean() {
     let project = todo();
     sf(&project, &["set", "list_tasks", "--title", "List Tasks"]).exits(0);
@@ -222,4 +221,123 @@ fn every_written_file_is_format_clean() {
     )
     .exits(0);
     assert_format_clean(&project);
+}
+
+#[test]
+fn new_lists_the_kinds_fields_in_its_help() {
+    let project = todo();
+    let help = sf(&project, &["new", "behavior", "--help"]).exits(0);
+    assert!(help.stdout.contains("--contract"), "{}", help.stdout);
+    assert!(
+        help.stdout.contains("The behavioral contract"),
+        "{}",
+        help.stdout
+    );
+    assert!(help.stdout.contains("--invariants <ID,"), "{}", help.stdout);
+}
+
+#[test]
+fn a_misspelt_field_flag_is_a_clap_error() {
+    let project = todo();
+    let before = project.read(TASKS);
+    let run = sf(
+        &project,
+        &[
+            "new",
+            "behavior",
+            "archive_task",
+            "Archive",
+            "--in",
+            "behaviors/task.spec",
+            "--contrcat",
+            "x",
+        ],
+    );
+    assert_eq!(run.code, 2, "{}{}", run.stdout, run.stderr);
+    assert!(
+        run.stderr.contains("--contract"),
+        "did you mean: {}",
+        run.stderr
+    );
+    assert_eq!(project.read(TASKS), before);
+}
+
+#[test]
+fn new_without_in_is_refused() {
+    let project = todo();
+    let run = sf(&project, &["new", "behavior", "archive_task", "Archive"]);
+    assert_eq!(run.code, 1, "{}{}", run.stdout, run.stderr);
+    assert!(run.stderr.contains("--in"), "{}", run.stderr);
+}
+
+#[test]
+fn dry_run_prints_the_diff_and_writes_nothing() {
+    let project = todo();
+    let before = project.read(TASKS);
+    let run = sf(
+        &project,
+        &["set", "list_tasks", "--title", "List Tasks", "--dry-run"],
+    )
+    .exits(0);
+    assert!(
+        run.stdout.contains("+behavior list_tasks \"List Tasks\" {"),
+        "{}",
+        run.stdout
+    );
+    assert!(run.stdout.contains("dry run"), "{}", run.stdout);
+    assert_eq!(project.read(TASKS), before);
+}
+
+#[test]
+fn json_output_is_the_edit_report() {
+    let project = todo();
+    let document =
+        Cli::on(&project).document(&["link", "complete_task", "invariants", "task_id_uniqueness"]);
+    assert_eq!(document.code, 0);
+    assert_eq!(
+        document.json["entities"],
+        serde_json::json!(["complete_task"])
+    );
+    assert_eq!(
+        document.json["affected_files"],
+        serde_json::json!(["behaviors/task.spec"])
+    );
+    assert_eq!(
+        document.json["files_written"],
+        serde_json::json!(["spec/behaviors/task.spec"])
+    );
+    assert!(
+        document.json["diff"]
+            .as_str()
+            .unwrap()
+            .contains("+  invariants")
+    );
+    let preview = Cli::on(&project).document(&[
+        "unlink",
+        "complete_task",
+        "invariants",
+        "task_id_uniqueness",
+        "--dry-run",
+    ]);
+    assert_eq!(preview.json["dry_run"], true);
+    assert!(preview.json.get("files_written").is_none());
+}
+
+#[test]
+fn no_builtin_field_shadows_a_new_option() {
+    let project = todo();
+    let schema = sf(&project, &["schema", "--no-edges"]).exits(0).json();
+    for kind in schema["entity_kinds"].as_array().unwrap() {
+        for field in kind["fields"].as_array().unwrap() {
+            let name = field["name"].as_str().unwrap();
+            assert!(
+                ![
+                    "in", "verify", "path", "format", "dry-run", "dry_run", "help", "title"
+                ]
+                .contains(&name),
+                "{} declares '{name}'",
+                kind["name"]
+            );
+        }
+    }
 }

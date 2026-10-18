@@ -27,6 +27,12 @@ Commands:
   search        Search for extensions in registries
   analyze       Run static analysis passes over the compiled project
   watch         Watch a project and rebuild incrementally on changes
+  new           Create an entity
+  set           Set a field (or --title) of an entity
+  unset         Remove a field of an entity
+  link          Add a reference (or --verify obligation) to an entity
+  unlink        Remove a reference (or --verify obligation) from an entity
+  delete        Delete an entity
   update        Update installed extensions to latest compatible versions
   login         Authenticate with a registry
   logout        Remove registry credentials
