@@ -171,6 +171,45 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
   verify integration "a rename that cannot put a file back names it in files_written"
 }
 
+behavior provide_mcp_edit_tool "Provide MCP Edit Tool" {
+  invariants [
+    diagnostic_determinism,
+    mcp_structured_error_responses,
+    dry_run_side_effect_freedom,
+    typed_edit_canonical_form,
+    typed_edit_atomicity,
+  ]
+  category   mutation
+  types      [McpEditResult, McpToolDescriptor]
+  produces   [mcp_tool_invoked, mcp_mutation_completed]
+  requires {
+    graph_available      "Compiled graph is available via CompilerApi"
+    filesystem_available "FileSystem port is available for updating spec files"
+  }
+  ensures {
+    edits_applied              "The edits are applied in the order given, all or nothing"
+    new_errors_refused         "An edit list that adds an error is refused as E080 and writes nothing"
+    dry_run_safe               "When dry_run is true, no files modified"
+    mutation_completed_emitted "mcp_mutation_completed event emitted after the edits are written"
+    tool_invoked_emitted       "mcp_tool_invoked event emitted"
+  }
+  contract   """
+    In MCP server mode, the system MUST register a specforge.edit tool that
+    accepts edits (required, a list of typed edits, each naming its op:
+    create, set, unset, retitle, link, unlink, add_verify, remove_verify or
+    delete), dry_run? (optional boolean, default false) and path? (the
+    project root). The edits are planned in order over the project as it is
+    on disk, each reading the text the ones before it left, validated by
+    compiling the edited project, and written as one project change. An edit
+    list that leaves an error the project did not have MUST be refused as
+    E080 and nothing written. The response MUST list the entities and files
+    changed, a unified diff and the warnings and infos the edit adds. When
+    dry_run is true, the tool MUST return the same document and write nothing.
+  """
+  verify unit "specforge.edit applies a list of edits all or nothing"
+  verify unit "specforge.edit with dry_run writes nothing and returns the diff"
+}
+
 // MCP init creates a project at a specified path, not the current project.
 // The agent is connected to an existing project's MCP server and uses it
 // to scaffold a new project elsewhere. For bootstrapping the very first
