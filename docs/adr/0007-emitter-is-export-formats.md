@@ -181,3 +181,5 @@ referenced `graph-protocol-v<version>.json` and failed it on every node (brief d
 
 What would reopen it: a consumer that edits an export before it is written (a second per-node key an operation adds),
 or an MCP reply that can be sent without building a `Value`.
+
+Amended by ADR 0152: `emit` writes a fifth format, markdown, beside DOT; `markdown::quote` is the hover's statement quote.

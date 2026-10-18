@@ -768,9 +768,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Graph export**: the project's graph, or the subgraph of a scope, written in one export format by
   `specforge_emitter::emit` through `specforge_ops::read::export::export`: graph (the Graph Protocol), context and brief (JSON
   documents whose schema the emitter derives from the types that write them, published by `specforge schema
-  --publish`), or DOT. It is text: the CLI prints it, MCP sends it as text or writes it into a directory of the project (`export::write_into`, as `<dir>/<format's file name>`, replaced atomically, ADR 0131), an extension command receives it
+  --publish`), DOT, or markdown (a **Review document**). It is text: the CLI prints it, MCP sends it as text or writes it into a directory of the project (`export::write_into`, as `<dir>/<format's file name>`, replaced atomically, ADR 0131), an extension command receives it
   spliced in its input; only `specforge.query` reads it back, into its structured result. A node carries its coverage
   status (`coverage_status`) when the export is given the verdicts, as a query with coverage is (ADR 0007).
+- **Review document**: the graph export in the markdown format (ADR 0152), for a person who signs: one section
+  per selected entity headed `## <kind> \`<id>\` — <title>`, its normative fields quoted, its other fields, its
+  Links (each linked entity's kind and title; an unresolved reference marked so), the entities that reference
+  it and its numbered obligations. Built from field declarations only; the selection chooses sections, the whole
+  graph names links. Not a **Graph export** an agent reads back.
 - **Project sources**: the `.spec` files under the spec root (`spec_root`, else the project root) that
   discovery keeps — no skipped directory, no `exclude` entry. What a compile reads, what format and migrate
   rewrite (`specforge_common::SourceRoot`, built by `ProjectConfig::sources` from a config read through
