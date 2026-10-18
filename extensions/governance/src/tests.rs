@@ -53,3 +53,9 @@ fn governance_declares_its_rating_and_status_vocabularies() {
         "no value rule is declared"
     );
 }
+
+/// A constraint's category is a tag: one word, written bare (ADR 0147).
+#[test]
+fn the_constraint_category_is_a_word() {
+    assert_eq!(declared("constraint", "category").field_type, "identifier");
+}
