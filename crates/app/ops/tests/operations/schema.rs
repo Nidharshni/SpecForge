@@ -1073,13 +1073,13 @@ behavior register "Register" {
   }
 }
 
-type Registration {
+type Registration "Registration" {
   id     string
   fields RegistrationFields
   kind   string
 }
 
-type RegistrationFields {
+type RegistrationFields "Registration fields" {
   entries string[]
 }
 

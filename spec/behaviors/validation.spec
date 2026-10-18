@@ -71,6 +71,26 @@ behavior detect_duplicate_entity_ids "Detect Duplicate Entity IDs" {
   verify contract "Detect Duplicate Entity IDs: duplicate entity ID detection holds — all_files_parsed, duplicate_ids_diagnosed"
 }
 
+behavior require_block_titles "Require Block Titles" {
+  features   [structural_validation]
+  invariants [entity_id_uniqueness]
+  category   validation
+  types      [Diagnostic]
+  consumes   [all_files_parsed]
+  contract   """
+    The graph build MUST report E076 for every block that becomes a node
+    and has no title, or a blank one: entity blocks, unions, spec and ref.
+    A define block is never a node (W143) and needs none. The block MUST
+    still be placed in the graph, so hover, completion and navigation keep
+    working while it is typed. The check needs no extension and names no
+    kind; it follows the file in an incremental build.
+  """
+  verify unit "a block with no title or a blank one is E076 and is still placed"
+  verify unit "an untitled union is E076"
+  verify unit "define, spec and ref blocks are not E076"
+  verify unit "E076 needs no extension and follows the file in an incremental build"
+}
+
 // ── Domain-Specific Validation ──────────────────────────────
 // Domain-specific validations (unreferenced entity checks, unused reference
 // warnings, unverified entity warnings, trigger consistency checks, etc.)

@@ -18,7 +18,7 @@ pub(crate) fn add_titles(text: &str) -> String {
     let format_header = header_row(text);
     // From the last block up, so the line numbers of the blocks above stay valid.
     for entity in file.entities.iter().rev() {
-        if entity.title.is_some() || entity.kind.raw.as_str() == "define" {
+        if entity.title.is_some() || !needs_title(entity.kind.raw.as_str()) {
             continue;
         }
         let row = entity.span.start_line - 1;
@@ -36,6 +36,11 @@ pub(crate) fn add_titles(text: &str) -> String {
         lines.drain(first..row);
     }
     lines.concat()
+}
+
+/// Whether a block of `kind` takes a title: every block the graph places (`define` is never a node).
+fn needs_title(kind: &str) -> bool {
+    kind != "define"
 }
 
 /// Whether `change` is one this step makes: a node whose only change is its title, which it did not have in

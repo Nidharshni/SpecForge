@@ -92,13 +92,13 @@ fn edge(target: &str, label: &str) -> (String, String) {
 )]
 fn a_field_type_name_links_through_the_derived_field() {
     let source = r#"
-shape Wheel {
+shape Wheel "Wheel" {
   size number
 }
-shape Axle {
+shape Axle "Axle" {
   ends Wheel
 }
-shape Car {
+shape Car "Car" {
   wheels    Wheel[]
   front     Axle | Wheel
   nested    Option<Axle>[]
@@ -121,16 +121,16 @@ shape Car {
 )]
 fn a_method_signature_name_links_through_the_derived_field() {
     let source = r#"
-shape Config {
+shape Config "Config" {
   root string
 }
-shape Project {
+shape Project "Project" {
   name string
 }
-shape Report {
+shape Report "Report" {
   ok boolean
 }
-iface Detector {
+iface Detector "Detector" {
   method detect(config: Config) -> Result<Project, Error>
   method report(items: Project[]) -> Report
 }
@@ -153,12 +153,12 @@ iface Detector {
 )]
 fn primitives_wrappers_and_undeclared_names_create_no_edge() {
     let source = r#"
-shape Thing {
+shape Thing "Thing" {
   name    string
   count   Option<number>[]
   list    Vec<Missing>[]
 }
-iface Store {
+iface Store "Store" {
   method load(id: string) -> Result<Option<Unknown>, Error>
 }
 "#;
@@ -174,13 +174,13 @@ iface Store {
 )]
 fn a_name_of_another_kind_creates_no_edge() {
     let source = r#"
-iface Other {
+iface Other "Other" {
   method ping() -> string
 }
-shape Holder {
+shape Holder "Holder" {
   peer Other
 }
-iface Caller {
+iface Caller "Caller" {
   method call(other: Other) -> Holder
 }
 "#;
@@ -196,10 +196,10 @@ iface Caller {
 )]
 fn quoted_strings_and_single_reference_fields_derive_no_edge() {
     let source = r#"
-shape Base {
+shape Base "Base" {
   id string
 }
-shape Note {
+shape Note "Note" {
   text "mentions Base by name"
   base Base
 }
@@ -216,7 +216,7 @@ shape Note {
 )]
 fn an_entity_naming_itself_creates_no_edge() {
     let source = r#"
-shape Tree {
+shape Tree "Tree" {
   children Tree[]
 }
 "#;
@@ -231,10 +231,10 @@ shape Tree {
 )]
 fn a_recursive_type_derives_no_reference_cycle() {
     let source = r#"
-shape Expr {
+shape Expr "Expr" {
   operands Term[]
 }
-shape Term {
+shape Term "Term" {
   inner Expr
 }
 "#;
@@ -252,13 +252,13 @@ shape Term {
 )]
 fn a_kind_with_no_derived_field_derives_no_edge() {
     let source = r#"
-shape Part {
+shape Part "Part" {
   id string
 }
-shape Whole {
+shape Whole "Whole" {
   part Part
 }
-iface Port {
+iface Port "Port" {
   method get() -> Part
 }
 "#;
