@@ -419,9 +419,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (ADR 0019): scalars as written; lists of strings or references and mixed lists joined by `", "`;
   variant lists and type unions by `" | "`; expressions by `", "`; a
   block's keys by `", "`. An entity's `verify` statements are not a field and have no field text (ADR 0094). An empty value is `""`. Every written field has one, and none is null. It differs from the written value (`field_form::write`) only for an expression group, which every output writes one conjunct per line (ADR 0064, ADR 0115).
-- **Field type**: how the host reads a field's value, one of eight names an extension declares:
+- **Field type**: how the host reads a field's value, one of nine names an extension declares:
   `string`, `integer`, `bool`, `enum` (its values are the declaration's `enum_values`, its absent value its `default_value`: a field
-  vocabulary; an enum without values, or a default outside them, is W021), `string_list`,
+  vocabulary; an enum without values, or a default outside them, is W021), `identifier` (one word from an open set,
+  written bare; ADR 0147), `string_list`,
   `reference`, `reference_list`, `block` (`specforge_protocol_types::FieldType`). The registry build
   reads a declared type once, into the field's registry entry (`FieldRegistryEntry::new`, the only way
   to make one); every output names it by that one name — the schema and exports, the published JSON
@@ -429,6 +430,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   are read, never written; any other name is W019. What a field's type takes, how a written value is
   stored as it, the JSON every output writes for it and that JSON's schema are its field form
   (ADR 0064).
+- **Value form**: how a field's value is written: bare for an `enum`, `identifier`, `reference` and each
+  `reference_list` item, quoted for a `string` and each `string_list` item (ADR 0147). `specforge format` writes it;
+  W159 reports a value written otherwise. Read through `FieldForms::rewrite`, never decided elsewhere.
 - **Field vocabulary**: the closed set of values an enum field takes, in their order, and the value an absent one
   counts as (its declared `default_value`), declared once by the extension that declares the field, as a `const`
   (`specforge_extension_sdk::Vocabulary`, through `FieldBuilder::vocabulary`, the only way to declare an enum).
@@ -772,9 +776,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Graph export**: the project's graph, or the subgraph of a scope, written in one export format by
   `specforge_emitter::emit` through `specforge_ops::read::export::export`: graph (the Graph Protocol), context and brief (JSON
   documents whose schema the emitter derives from the types that write them, published by `specforge schema
-  --publish`), or DOT. It is text: the CLI prints it, MCP sends it as text or writes it into a directory of the project (`export::write_into`, as `<dir>/<format's file name>`, replaced atomically, ADR 0131), an extension command receives it
+  --publish`), DOT, or markdown (a **Review document**). It is text: the CLI prints it, MCP sends it as text or writes it into a directory of the project (`export::write_into`, as `<dir>/<format's file name>`, replaced atomically, ADR 0131), an extension command receives it
   spliced in its input; only `specforge.query` reads it back, into its structured result. A node carries its coverage
   status (`coverage_status`) when the export is given the verdicts, as a query with coverage is (ADR 0007).
+- **Review document**: the graph export in the markdown format (ADR 0152), for a person who signs: one section
+  per selected entity headed `## <kind> \`<id>\` — <title>`, its normative fields quoted, its other fields, its
+  Links (each linked entity's kind and title; an unresolved reference marked so), the entities that reference
+  it and its numbered obligations. Built from field declarations only; the selection chooses sections, the whole
+  graph names links. Not a **Graph export** an agent reads back.
 - **Project sources**: the `.spec` files under the spec root (`spec_root`, else the project root) that
   discovery keeps — no skipped directory, no `exclude` entry. What a compile reads, what format and migrate
   rewrite (`specforge_common::SourceRoot`, built by `ProjectConfig::sources` from a config read through

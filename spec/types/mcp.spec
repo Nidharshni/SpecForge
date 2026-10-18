@@ -761,9 +761,9 @@ type McpCollectRunner "What one runner's collection found" {
 }
 
 type McpRenderResult {
-  format       "graph" | "context" | "brief" | "dot" @readonly
+  format       "graph" | "context" | "brief" | "dot" | "markdown" @readonly
   /// The rendering itself, when no out_dir was given.
-  output       string                                @optional
+  output       string                                             @optional
   /// The files written into out_dir, each named from the project root (ADR 0102).
   output_files string[]
   verify unit "McpRenderResult schema is valid"

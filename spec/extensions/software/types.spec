@@ -106,7 +106,7 @@ type RefinementChain {
 
 type RiskLevel = low | medium | high | critical
 
-type PortDirection = inbound | outbound
+type PortDirection = inbound | outbound | bidirectional
 
 type FieldAnnotation = readonly | unique | optional | literal
 

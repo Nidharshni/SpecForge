@@ -196,4 +196,6 @@ fn validate_port_methods(context: &ValidatorContext) -> ValidatorVerdict {
 specforge_extension_sdk::component_guest!(build = specforge_extension_build);
 
 #[cfg(test)]
+mod declaration_tests;
+#[cfg(test)]
 mod validator_tests;

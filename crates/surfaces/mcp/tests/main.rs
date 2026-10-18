@@ -10,6 +10,7 @@ mod conformance;
 mod contracts;
 mod event_spec;
 mod events;
+mod export_markdown;
 mod failure_kinds;
 mod fake_extension;
 mod hard_links;

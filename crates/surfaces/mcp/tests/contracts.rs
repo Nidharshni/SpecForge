@@ -2962,7 +2962,7 @@ fn contract_render() {
     let unknown = call_tool(&mut server, "specforge.render", json!({"format": "pdf"}));
     assert_eq!(
         crate::tool_errors::mcp_error(&unknown)["data"]["available_renderers"],
-        json!(["graph", "context", "brief", "dot"])
+        json!(["graph", "context", "brief", "dot", "markdown"])
     );
 
     assert_tool_invoked(&server, "specforge.render");

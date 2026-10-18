@@ -8,7 +8,7 @@
 //! under the CLI's schema policy: a full `graph` export embeds the schema
 //! (format 2.0), a scoped one references it (`schema_ref`), and `context`,
 //! `brief` and any export under a token budget leave it out unless asked
-//! for it. `dot` never carries a schema.
+//! for it. `dot` and `markdown` never carry a schema.
 
 use crate::containment::Held;
 use crate::options::{Choice, OptionTable};
@@ -27,6 +27,7 @@ pub enum Format {
     Context,
     Brief,
     Dot,
+    Markdown,
 }
 
 impl Format {
@@ -37,6 +38,7 @@ impl Format {
             Self::Context => EmitFormat::Context,
             Self::Brief => EmitFormat::Brief,
             Self::Dot => EmitFormat::Dot,
+            Self::Markdown => EmitFormat::Markdown,
         }
     }
 
@@ -47,6 +49,7 @@ impl Format {
             Self::Context => "context.json",
             Self::Brief => "brief.json",
             Self::Dot => "graph.dot",
+            Self::Markdown => "specification.md",
         }
     }
 }
@@ -75,11 +78,17 @@ const DOT: Choice<Format> = Choice {
     help: "Graphviz",
     value: Format::Dot,
 };
+const MARKDOWN: Choice<Format> = Choice {
+    name: "markdown",
+    aliases: &[],
+    help: "a document a reviewer reads: each entity's statements, fields, links and obligations",
+    value: Format::Markdown,
+};
 
 /// `specforge export --format`, `specforge.render`'s `format`.
 pub const FORMAT: OptionTable<Format> = OptionTable {
     argument: "format",
-    choices: &[GRAPH, CONTEXT, BRIEF, DOT],
+    choices: &[GRAPH, CONTEXT, BRIEF, DOT, MARKDOWN],
     default: Some(Format::Graph),
 };
 
@@ -99,7 +108,7 @@ pub enum Schema {
     /// it), leave it out for `context`, `brief` and under a token budget.
     #[default]
     Default,
-    /// Attach it to every format but `dot` (`--with-schema`). Under a
+    /// Attach it to every format but `dot` and `markdown` (`--with-schema`). Under a
     /// budget it counts toward the budget, and a budget it doesn't fit in
     /// fails with E062.
     With,
@@ -168,7 +177,7 @@ impl Request<'_> {
     /// Whether the export carries the schema, under the policy.
     pub fn attaches_schema(&self) -> bool {
         let format = self.format();
-        if format == Format::Dot {
+        if matches!(format, Format::Dot | Format::Markdown) {
             return false;
         }
         match self.schema {
@@ -328,6 +337,7 @@ fn export_versioned(
         kind_registry: Some(view.registries().kinds()),
         field_registry: Some(view.registries().fields()),
         coverage: request.coverage.map(|coverage| &coverage.verdicts),
+        field_forms: Some(view.registries().field_forms()),
     };
     emit(view.graph(), &options).map_err(|error| failure(view, error))
 }
@@ -417,7 +427,7 @@ mod tests {
         assert_eq!(error.code, "invalid_input");
         assert_eq!(
             error.message,
-            "Unknown format: yaml. Expected: graph, context, brief, dot"
+            "Unknown format: yaml. Expected: graph, context, brief, dot, markdown"
         );
         assert_eq!(
             AGENT_FORMAT.parse("dot").unwrap_err().message,
@@ -503,7 +513,13 @@ mod tests {
         let files: Vec<&str> = FORMAT.choices.iter().map(|c| c.value.file_name()).collect();
         assert_eq!(
             files,
-            ["graph.json", "context.json", "brief.json", "graph.dot"]
+            [
+                "graph.json",
+                "context.json",
+                "brief.json",
+                "graph.dot",
+                "specification.md"
+            ]
         );
     }
 
@@ -513,6 +529,7 @@ mod tests {
         assert!(!request(Format::Context).attaches_schema());
         assert!(!request(Format::Brief).attaches_schema());
         assert!(!request(Format::Dot).attaches_schema());
+        assert!(!request(Format::Markdown).attaches_schema());
         let budgeted = Request {
             max_tokens: Some(100),
             ..request(Format::Graph)
@@ -530,6 +547,7 @@ mod tests {
         assert!(with(Format::Graph).attaches_schema());
         assert!(with(Format::Brief).attaches_schema());
         assert!(!with(Format::Dot).attaches_schema());
+        assert!(!with(Format::Markdown).attaches_schema());
         let without = Request {
             schema: Schema::Without,
             ..request(Format::Graph)

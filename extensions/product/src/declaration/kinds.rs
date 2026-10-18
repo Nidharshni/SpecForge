@@ -267,7 +267,7 @@ pub(super) fn kinds(c: &mut ContributionsBuilder) {
             .dot_fillcolor("#ECEFF1")
             .inference_guide("Look for logical boundaries in the codebase: bounded contexts, packages, crates, or top-level directories that group related functionality. Signals: top-level directories in src/ (e.g., src/auth/, src/billing/); Cargo workspace members; Go packages; separate npm workspaces; DDD bounded contexts; module declarations in architecture docs. Set family for higher-level grouping (e.g., 'core', 'platform', 'integration'). Link features contained in this module and depends_on for inter-module dependencies. Modules are logical groupings of features; for shippable artifacts, use deliverable instead. Skip: pure utility directories with no domain cohesion, test directories, build tooling.");
         k.field("family", |f| {
-            f.field_type(FieldType::String).description(&format!(
+            f.field_type(FieldType::Identifier).description(&format!(
                 "Category or family this module belongs to; the standard ones are {}",
                 MODULE_FAMILY.values().join(", ")
             ));

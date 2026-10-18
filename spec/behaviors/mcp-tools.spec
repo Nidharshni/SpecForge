@@ -149,12 +149,12 @@ behavior provide_mcp_export_tool "Provide MCP Export Tool" {
   }
   contract   """
     In MCP server mode, the system MUST register a specforge.export tool that
-    accepts format (required: context|brief|graph), scope? (optional entityId
+    accepts format (graph|context|brief|dot|markdown, default graph; json is graph), scope? (optional entityId
     to restrict to subgraph), max_tokens? (optional integer token budget),
     with_schema? and no_schema? (optional booleans), depth? (with scope,
     hops from the scoped entity), kinds? (entity kinds to keep) and
     schema_version? (as specforge export --schema-version). The tool MUST return the
-    graph in the requested agent-optimized format. When max_tokens is
+    graph in the requested export format. When max_tokens is
     specified, the output MUST be truncated to fit within the budget,
     prioritizing high-connectivity nodes. The output MUST conform to the
     Graph Protocol schema. The tool MUST produce the export specforge export

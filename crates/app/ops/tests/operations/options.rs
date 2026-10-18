@@ -48,7 +48,7 @@ fn a_table_parses_names_and_aliases_and_refuses_others() {
     let error = FORMAT.parse("yaml").unwrap_err();
     assert_eq!(
         error.message,
-        "Unknown format: yaml. Expected: graph, context, brief, dot"
+        "Unknown format: yaml. Expected: graph, context, brief, dot, markdown"
     );
     assert!(!FORMAT.names().any(|name| name == "json"));
     assert!(FORMAT.accepted().any(|name| name == "json"));

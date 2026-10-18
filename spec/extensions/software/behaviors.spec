@@ -90,17 +90,18 @@ behavior se_register_field_definitions "Register Software Field Definitions" {
     kinds_and_edges_registered "all 6 kinds and 9 edge types are registered"
   }
   ensures {
-    behavior_fields  "behavior has: contract(string), invariants(reference[]->invariant, Enforces), types(reference[]->type, UsesType), ports(reference[]->port, UsesPort), produces(reference[]->event, Produces), consumers(reference[]->event, Consumes), category(string), abstract(string), refines(reference->behavior, References), requires(block), ensures(block), maintains(block), tests(string[]), gherkin(string[], file_reference=true)"
-    invariant_fields "invariant has: guarantee(string), enforced_by(reference[]->behavior, Enforces), risk(string)"
+    behavior_fields  "behavior has: contract(string), invariants(reference[]->invariant, Enforces), types(reference[]->type, UsesType), ports(reference[]->port, UsesPort), produces(reference[]->event, Produces), consumers(reference[]->event, Consumes), category(identifier), status(identifier), severity(identifier), diagnostic(identifier), abstract(string), refines(reference->behavior, References), requires(block), ensures(block), maintains(block), tests(string[]), gherkin(string[], file_reference=true)"
+    invariant_fields "invariant has: guarantee(string), enforced_by(reference[]->behavior, Enforces), risk(enum RiskLevel)"
     feature_fields   "feature has: behaviors(reference[]->behavior, Implements), problem(string), solution(string)"
-    event_fields     "event has: trigger(reference->behavior, Produces), channel(string), payload(reference->type, UsesType), consumers(reference[]->behavior, Consumes), sync(block)"
+    event_fields     "event has: trigger(reference->behavior, Produces), channel(string), channel_type(identifier), category(identifier), payload(reference->type, UsesType), consumers(reference[]->behavior, Consumes), sync(block)"
     type_fields      "type has: composed_types(reference[]->type, TypeComposesType, derived from the type names in its members), extends(reference->type, TypeExtendsType), description(string), refs(string[]); its members are written in its body as open fields (name Type), so a member may take any name"
-    port_fields      "port has: direction(string), category(string), methods(block), types(reference[]->type, PortReferencesType, derived from the type names in its method signatures)"
+    port_fields      "port has: direction(enum PortDirection), category(string), methods(block), types(reference[]->type, PortReferencesType, derived from the type names in its method signatures)"
   }
   verify unit "behavior contract field registered as string type"
   verify unit "behavior invariants field registered with Enforces edge"
   verify unit "feature behaviors field registered with Implements edge"
   verify unit "event trigger field registered with Produces edge"
+  verify unit "tag fields are identifiers, and risk and direction are enums of their levels"
 }
 
 behavior se_register_validation_rules "Register Software Validation Rules" {

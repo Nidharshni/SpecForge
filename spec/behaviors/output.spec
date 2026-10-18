@@ -1027,8 +1027,7 @@ behavior present_diagnostics_as_json "Present Diagnostics as JSON" {
 }
 
 // ── Agent-Optimized Export (Principle 3: agents are first-class consumers) ──
-// `specforge export` writes to stdout for agent/interactive consumption (context, brief, graph formats).
-// `specforge render` writes files to disk for batch/CI output (json, dot, markdown via extensions).
+// `specforge export` writes to stdout (graph, context, brief, dot, markdown); `specforge.render` writes the same formats into the project.
 
 behavior export_agent_context_format "Export Agent Context Format" {
   features   [agent_export]
@@ -1173,6 +1172,40 @@ behavior export_agent_graph_format "Export Agent Graph Format" {
   verify unit "output includes schema_version field"
   verify integration "structural-only graph exports valid JSON with raw keyword strings as entity kinds"
   verify contract "Export Agent Graph Format: agent graph export holds — validation_complete_fired, full_fidelity_output, schema_version_present, scope_enforced, invalid_scope_diagnosed, export_complete_emitted"
+}
+
+behavior export_review_document "Export a Review Document" {
+  features   [review_export]
+  invariants [diagnostic_determinism, zero_domain_knowledge_core]
+  category   query
+  types      [Graph]
+  ports      [CompilerApi]
+  contract   """
+    When specforge export --format markdown is invoked, or specforge.export or
+    specforge.render with format markdown, the system MUST write one Markdown
+    document a reviewer reads without tooling: one section per selected
+    entity headed by its kind, id and title; each field its extension
+    declares normative quoted whole; its other fields in a table; its
+    references in a table naming each linked entity's kind and title, a
+    reference that does not resolve listed as unresolved; the entities that
+    reference it; and its obligations, numbered. Core reads only field
+    declarations and names no kind or field. Scope, depth and kinds select
+    the sections as for every export format; links name entities outside
+    the selection too. The document MUST be deterministic: the scoped
+    entity first, then by kind and id, with no timestamp. Prose renders as
+    written, with raw HTML, entity references and backslashes escaped
+    outside code spans.
+  """
+  verify unit "a section is headed by its kind, id and title"
+  verify unit "a normative field is quoted whole"
+  verify unit "links name each linked entity's kind and title, outside the selection too"
+  verify unit "a reference that does not resolve is listed as unresolved"
+  verify unit "the entities that reference it are listed"
+  verify unit "obligations are numbered in declaration order"
+  verify unit "prose renders as written, raw HTML escaped outside code spans"
+  verify unit "sections are ordered scope first, then by kind and id"
+  verify integration "export --format markdown writes the review document of examples/todo-app and examples/shop"
+  verify integration "specforge.export answers the same document as specforge export"
 }
 
 behavior query_graph_multi_resolution "Query Graph at Multiple Resolutions" {

@@ -424,7 +424,7 @@ behavior registry_build_fields "Registry Build Registers Fields" {
     fields, each embedding its declared descriptor whole (normative flag,
     default value, enum values, description, required, edge, target kind)
     and naming the declaring extension. A field type is one of string,
-    integer, bool, enum, string_list, reference, reference_list and block,
+    integer, bool, enum, identifier, string_list, reference, reference_list and block,
     each also accepted with a `_type` suffix (and bool as boolean); any other type MUST produce a
     W019 warning and the field is not registered. A field's normative flag
     MUST be kept so exports tell what an entity promises from prose without

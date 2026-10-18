@@ -13,6 +13,9 @@ use crate::read::navigate::{References, is_about};
 use crate::view::{EntityField, ProjectView, not_found};
 use crate::{OpError, Refusal};
 
+/// How the hover and the review document quote a statement (ADR 0152 D6).
+pub use specforge_emitter::markdown::quote;
+
 /// Everything a surface shows about one entity, borrowed from the view.
 #[derive(Debug, Clone)]
 pub struct EntityFacts<'v> {

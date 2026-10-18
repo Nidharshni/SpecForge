@@ -25,4 +25,4 @@ pub use build::{
 };
 pub use graph::{Edge, Graph, Node, Reached};
 pub use specforge_common::{Diagnostic, Severity, SourceSpan};
-pub use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue, SpecFile};
+pub use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue, SpecFile, Written};
