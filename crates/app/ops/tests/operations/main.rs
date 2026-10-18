@@ -16,6 +16,7 @@ mod cross_extension;
 mod defaults;
 mod determinism;
 mod diagnostics_json;
+mod edit;
 mod enhancement_credit;
 mod errors;
 mod explore;

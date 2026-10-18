@@ -124,6 +124,15 @@ fn string_item(text: &str) -> String {
     }
 }
 
+/// One item of a list field of type `field_type`, as it is written.
+pub fn list_item(field_type: FieldType, text: &str) -> String {
+    if field_type == FieldType::ReferenceList {
+        id_or_quoted(text)
+    } else {
+        string_item(text)
+    }
+}
+
 /// `[a, b]` of the already written `items`.
 pub fn list(items: &[String]) -> String {
     format!("[{}]", items.join(", "))
