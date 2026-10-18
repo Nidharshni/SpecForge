@@ -5,23 +5,13 @@ use crate::diagram::markdown_cell;
 /// `text` as a markdown quote, whole: its blank edge lines trimmed, its
 /// common leading whitespace removed, every line prefixed `> `.
 pub fn quote(text: &str) -> String {
-    let lines: Vec<&str> = text.lines().collect();
-    let first = lines.iter().position(|l| !l.trim().is_empty());
-    let last = lines.iter().rposition(|l| !l.trim().is_empty());
-    let (Some(first), Some(last)) = (first, last) else {
+    let lines = dedent(text);
+    if lines.is_empty() {
         return ">".to_string();
-    };
-    let lines = &lines[first..=last];
-    let indent = lines
-        .iter()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| l.len() - l.trim_start().len())
-        .min()
-        .unwrap_or(0);
+    }
     lines
         .iter()
-        .map(|l| {
-            let line = l.get(indent..).unwrap_or_else(|| l.trim_start()).trim_end();
+        .map(|line| {
             if line.is_empty() {
                 ">".to_string()
             } else {
@@ -32,13 +22,31 @@ pub fn quote(text: &str) -> String {
         .join("\n")
 }
 
+/// `text`'s lines without the blank edge lines and the common leading
+/// whitespace, each right-trimmed; none for blank text.
+pub(crate) fn dedent(text: &str) -> Vec<&str> {
+    let lines: Vec<&str> = text.lines().collect();
+    let first = lines.iter().position(|l| !l.trim().is_empty());
+    let last = lines.iter().rposition(|l| !l.trim().is_empty());
+    let (Some(first), Some(last)) = (first, last) else {
+        return Vec::new();
+    };
+    let lines = &lines[first..=last];
+    let indent = lines
+        .iter()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.len() - l.trim_start().len())
+        .min()
+        .unwrap_or(0);
+    lines
+        .iter()
+        .map(|l| l.get(indent..).unwrap_or_else(|| l.trim_start()).trim_end())
+        .collect()
+}
+
 /// `text` as it renders when written: outside code spans `\`, `<` and `&` are
 /// backslash-escaped, so no raw HTML, autolink or entity reference can form.
 /// Borrowed when there is nothing to escape.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the renderer reads it from the next ticket")
-)]
 pub(crate) fn inline(text: &str) -> Cow<'_, str> {
     if !text.contains(['\\', '<', '&']) {
         return Cow::Borrowed(text);
@@ -54,20 +62,12 @@ pub(crate) fn inline(text: &str) -> Cow<'_, str> {
 }
 
 /// `text` as one table cell: escaped like [`inline`], `|` escaped, one line.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the renderer reads it from the next ticket")
-)]
 pub(crate) fn cell(text: &str) -> String {
     markdown_cell(&inline(text)).into_owned()
 }
 
 /// One line: a code span (a backtick run closed by a run of the same length
 /// on the line) is copied as written; a run left open stays literal.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "the renderer reads it from the next ticket")
-)]
 fn escape_line(line: &str, out: &mut String) {
     let bytes = line.as_bytes();
     let run_at = |from: usize| bytes[from..].iter().take_while(|b| **b == b'`').count();

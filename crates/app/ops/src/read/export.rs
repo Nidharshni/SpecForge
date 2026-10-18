@@ -328,6 +328,7 @@ fn export_versioned(
         kind_registry: Some(view.registries().kinds()),
         field_registry: Some(view.registries().fields()),
         coverage: request.coverage.map(|coverage| &coverage.verdicts),
+        field_forms: Some(view.registries().field_forms()),
     };
     emit(view.graph(), &options).map_err(|error| failure(view, error))
 }
