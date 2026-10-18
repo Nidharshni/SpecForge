@@ -11,7 +11,8 @@ type SoftwareBehavior {
   types      EntityId[]       @optional
   ports      EntityId[]       @optional
   produces   EntityId[]       @optional
-  consumers  EntityId[]       @optional
+  consumes   EntityId[]       @optional
+  features   EntityId[]       @optional
   category   BehaviorCategory @optional
   abstract   boolean          @optional
   refines    EntityId         @optional
@@ -24,25 +25,21 @@ type SoftwareBehavior {
 }
 
 type SoftwareInvariant {
-  guarantee   string
-  enforced_by EntityId[] @optional
-  risk        RiskLevel  @optional
+  guarantee string
+  risk      RiskLevel @optional
   verify unit "SoftwareInvariant schema is valid"
 }
 
 type SoftwareFeature {
-  behaviors EntityId[]
-  problem   string @optional
-  solution  string @optional
+  problem  string @optional
+  solution string @optional
   verify unit "SoftwareFeature schema is valid"
 }
 
 type SoftwareEvent {
-  trigger   EntityId
-  channel   string     @optional
-  payload   EntityId   @optional
-  consumers EntityId[] @optional
-  sync      SyncBlock  @optional
+  channel string    @optional
+  payload EntityId  @optional
+  sync    SyncBlock @optional
   verify unit "SoftwareEvent schema is valid"
 }
 

@@ -81,7 +81,7 @@ behavior detect_duplicate_entity_ids "Detect Duplicate Entity IDs" {
 //   - spec/extensions/governance/validation-rules.spec
 // The core compiler executes these patterns generically via the declarative
 // validation engine (see behaviors/zero-entity-core.spec).
-// Diagnostic codes (W001, W003, W004, W007, E051, etc.) are defined by
+// Diagnostic codes (W001, W003, W004, W007, etc.) are defined by
 // their owning extensions, not by the core compiler.
 
 // ── Structural Validation (core — domain-agnostic) ───────────

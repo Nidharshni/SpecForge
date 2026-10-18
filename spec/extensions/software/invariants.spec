@@ -14,18 +14,6 @@ invariant se_edge_consistency "Edge-Field Mapping Consistency" {
   verify unit "dangling edge mapping detected and reported"
 }
 
-invariant se_event_trigger_validity "Event Trigger Validity" {
-  guarantee """
-    An event's trigger field MUST reference a behavior entity. Events
-    are caused by behaviors — they cannot trigger themselves or reference
-    non-behavior entity kinds. Invalid trigger references MUST produce
-    E051 error diagnostics.
-  """
-  risk      high
-  verify unit "event trigger referencing behavior passes"
-  verify unit "event trigger referencing non-behavior produces E051"
-}
-
 invariant se_port_direction_constraint "Port Direction Constraint" {
   guarantee """
     A port's direction field MUST be one of: inbound, outbound. No

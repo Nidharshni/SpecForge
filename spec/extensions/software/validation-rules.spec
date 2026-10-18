@@ -92,31 +92,6 @@ behavior se_validate_unreferenced_ports "W005: Unreferenced Ports" {
 
 // W006 is allocated to @specforge/product (Unreferenced Capabilities → W042)
 
-behavior se_validate_event_triggers "E051: Invalid Event Triggers" {
-  features   [se_validation_suite]
-  category   query
-  invariants [se_event_trigger_validity]
-  types      [ValidationRulePattern, ValidationPatternKind]
-  contract   """
-    Detect event entities whose trigger field references a non-behavior
-    entity. Check pattern: field_value_constraint.
-  """
-  requires {
-    trigger_field_present "event entity has a trigger field value"
-  }
-  ensures {
-    valid_trigger_passes  "event trigger referencing behavior produces no diagnostic"
-    invalid_trigger_error "event trigger referencing non-behavior produces E051 error"
-    correct_template      "message template is: event '{id}' trigger must reference a behavior, found {kind} '{value}'"
-  }
-  verify unit "event trigger referencing behavior passes"
-  verify unit "event trigger referencing type produces E051"
-  verify unit "event trigger referencing feature produces E051"
-  verify unit "E051 severity is error"
-  // Note: missing trigger field is caught by se_validate_entity_fields
-  // (generic required-field check), not by this rule.
-}
-
 behavior se_validate_unreferenced_events "W007: Unreferenced Events" {
   features [se_validation_suite]
   category query
