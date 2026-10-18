@@ -8,7 +8,7 @@ type OutputFile {
   verify unit "OutputFile schema is valid"
 }
 
-type OutputFormat = "json" | "dot" | "context" | "brief" | "graph"
+type OutputFormat = "json" | "dot" | "context" | "brief" | "graph" | "markdown"
 
 type DiagnosticFormat = "text" | "json"
 

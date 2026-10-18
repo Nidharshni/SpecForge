@@ -5,11 +5,82 @@ fn todo_app() -> TestProject {
     TestProject::copy_of(specforge_repo_root::repo_root().join("examples/todo-app"))
 }
 
+fn shop() -> TestProject {
+    TestProject::copy_of(specforge_repo_root::repo_root().join("examples/shop"))
+}
+
 #[specforge_test(
     behavior = "export_review_document",
     verify = "export --format markdown writes the review document of examples/todo-app and examples/shop"
 )]
-#[ignore = "flipped by T7"]
+fn todo_app_review_document() {
+    let run = Cli::on(&todo_app())
+        .run(&["export", "--format", "markdown"])
+        .exits(0);
+    assert_eq!(
+        run.stdout.matches("\n## ").count(),
+        30,
+        "one section per entity"
+    );
+    insta::assert_snapshot!("todo_app_review_document", run.stdout);
+}
+
+#[specforge_test(
+    behavior = "export_review_document",
+    verify = "export --format markdown writes the review document of examples/todo-app and examples/shop"
+)]
+fn shop_review_document() {
+    let run = Cli::on(&shop())
+        .run(&["export", "--format", "markdown"])
+        .exits(0);
+    insta::assert_snapshot!("shop_review_document", run.stdout);
+}
+
+#[test]
+fn markdown_ignores_the_budget_and_the_schema_flags() {
+    let project = shop();
+    let plain = Cli::on(&project)
+        .run(&["export", "--format", "markdown"])
+        .exits(0);
+    let flagged = Cli::on(&project)
+        .run(&[
+            "export",
+            "--format",
+            "markdown",
+            "--max-tokens",
+            "5",
+            "--with-schema",
+        ])
+        .exits(0);
+    assert_eq!(flagged.stdout, plain.stdout);
+}
+
+#[test]
+fn a_written_reference_that_does_not_resolve_is_in_the_document() {
+    let project = shop();
+    let source = project.read("spec/cart.spec");
+    project.write(
+        "spec/cart.spec",
+        source.replace(
+            "invariants [no_duplicate_items]",
+            "invariants [no_duplicate_items, ghost_inv]",
+        ),
+    );
+    let run = Cli::on(&project)
+        .run(&["export", "--format", "markdown"])
+        .exits(0);
+    assert!(
+        run.stdout
+            .contains("| invariants | `ghost_inv` | — | *unresolved* |"),
+        "{}",
+        run.stdout
+    );
+}
+
+#[specforge_test(
+    behavior = "export_review_document",
+    verify = "export --format markdown writes the review document of examples/todo-app and examples/shop"
+)]
 fn complete_task_reads_as_a_review_document() {
     let project = todo_app();
     let run = Cli::on(&project)

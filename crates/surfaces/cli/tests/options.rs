@@ -63,7 +63,9 @@ const PROBES: &[Probe] = &[
         label: "export format",
         cli: Some(&["export", "--path", ROOT, "--format", NAME]),
         mcp: Some(McpProbe("specforge.export", "format", no_arguments)),
-        names: &["graph", "context", "brief", "dot", "json", "yaml"],
+        names: &[
+            "graph", "context", "brief", "dot", "markdown", "json", "yaml",
+        ],
     },
     Probe {
         label: "schema publish format",
