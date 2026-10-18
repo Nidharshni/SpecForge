@@ -136,6 +136,18 @@ Group related entities together. Within a file, order entities by:
 
 The entity-type-per-directory pattern is recommended for projects with >20 entities.
 
+### File Defaults
+
+When two or more blocks of a kind in one file share a reference list, state it once above the first block:
+
+```
+defaults behavior {
+  features [task_management]
+}
+```
+
+Every behavior in the file now has `features [task_management]`; a block that writes its own `features` replaces it whole (`features []` means none). The next behavior you add inherits it too, so write a default only for what is true of every block of the kind. A default sets a field the kind declares (E077), once per kind (E078), and a block restating it is W161. `specforge migrate` hoists the repeats of an existing file.
+
 ## Cross-Reference Conventions
 
 ### Entity Name References

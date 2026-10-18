@@ -41,6 +41,7 @@ specforge publish                    # publish an extension to a registry
 
 # Tooling
 specforge format                     # format .spec files
+specforge migrate                    # bring .spec files to the current format: titles, and repeated reference lists moved into `defaults`
 specforge collect                    # run the test runners (with your approval) and record what they prove
 specforge doctor                     # health-check installed extensions
 specforge mcp                        # start the MCP server (stdio)
@@ -61,6 +62,34 @@ Projects are configured via **`specforge.json`** (like `tsconfig.json`):
 ```
 
 `specforge init --extensions @specforge/software` creates this for you; `specforge add` / `specforge remove` edit the `extensions` list afterwards.
+
+---
+
+## File defaults
+
+A file states a kind's shared fields once (ADR 0149): `defaults <kind> { <field> <value> … }`.
+
+1. It sits at the top level, before the file's first block (else E078), once per kind; it takes no title, `verify` or `method`.
+2. It applies to every block of that kind in the same file: not another kind, file or importer.
+3. A block that writes a field keeps its own value whole; `ports []` says "none".
+4. A default sets a field the kind declares (else E077, not applied).
+5. A block field equal to its default, and a default no block takes, is W161.
+6. `defaults` is reserved: never a kind, E013 as an id.
+7. The graph holds the resolved value; its spans stay the default's, so diagnostics, references and rename point at the default's line.
+
+```
+defaults behavior {
+  ports    [TaskRepository]
+  features [task_management]
+}
+
+behavior create_task "Create a Task" {
+  category command
+  produces [task_created]
+}
+```
+
+`specforge migrate` hoists the reference lists a file's blocks repeat into its defaults.
 
 ---
 
