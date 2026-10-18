@@ -80,6 +80,21 @@ feature agent_export "Agent-Optimized Export" {
   """
 }
 
+feature review_export "Review Export" {
+  status   in_progress
+  problem  """
+    A reviewer who signs a specification (a QA lead, a qualified person) reads
+    documents, not JSON. Every export format is JSON or Graphviz, so a review
+    needs a hand conversion that can drop or misstate what the spec says.
+  """
+  solution """
+    specforge export --format markdown writes the graph as one Markdown
+    document: per entity its statements, fields, links with titles, the
+    entities that reference it and its obligations. It reads only the field
+    declarations, so every extension's kinds render without templates.
+  """
+}
+
 feature ci_integration "CI Integration" {
   status   done
   problem  """
