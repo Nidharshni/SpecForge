@@ -67,6 +67,7 @@ behavior watch_file_system_for_changes "Watch File System for Changes" {
   verify unit "a directory event reaches every source under it"
   verify unit "a symlinked source whose hop lies in a directory that did not exist is seen when it is created"
   verify unit "a dangling source link whose missing directory lies outside the root is watched"
+  verify unit "a batch of an unchanged source and a created named file is rechecked"
 }
 
 behavior classify_project_changes "Classify Project Changes" {
@@ -169,7 +170,12 @@ behavior bring_session_up_to_date "Bring a Session Up to Date with Disk" {
     nested project having taken it, leaves the graph, and one that is a
     source again is read): sources by an update, environment
     inputs by an environment reload, check inputs by re-running the
-    checks. Afterwards its graph and diagnostics MUST be those a fresh
+    checks. One batch, or one comparison, is one update: an environment
+    reload covers every other change; otherwise the changed sources are
+    applied and the checks run once, when a source changed, a check input
+    changed or the checks were skipped, so a check input's change is never
+    lost because a source in the same batch reads as the session holds it.
+    Afterwards its graph and diagnostics MUST be those a fresh
     compile of the files on disk produces. specforge.json MUST be read
     once per environment load, the extension runtime and the environment
     both built from that read, and every input MUST be stamped in the
@@ -190,6 +196,9 @@ behavior bring_session_up_to_date "Bring a Session Up to Date with Disk" {
   verify integration "after the LSP's watchers move, the session catches up on what changed while they did"
   verify integration "the LSP's catch-up keeps an open buffer"
   verify unit "a nested project appearing below the spec root takes its files out of the session, and its removal puts them back"
+  verify unit "a source that reads as the session holds it does not drop a check input changed with it"
+  verify unit "a changed source and a changed check input run the checks once"
+  verify unit "an environment reload covers a check input changed with it"
 }
 
 behavior hold_editor_buffers "Hold Editor Buffers" {

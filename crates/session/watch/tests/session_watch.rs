@@ -355,8 +355,10 @@ fn a_source_rewritten_with_its_own_text_reports_nothing() {
     assert_eq!(recorder.armed().len(), 1);
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[spec(
+    behavior = "watch_file_system_for_changes",
+    verify = "a batch of an unchanged source and a created named file is rechecked"
+)]
 fn an_unchanged_source_and_a_created_named_file_are_rechecked() {
     let fixture = Fixture::new(NAMES_INSIDE);
     let (mut watch, recorder) = fixture.watch();

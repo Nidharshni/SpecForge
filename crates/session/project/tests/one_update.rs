@@ -10,6 +10,7 @@ use std::time::Duration;
 use specforge_extension_sdk::prelude::*;
 use specforge_project::testing::TestProject;
 use specforge_project::{Buffer, ProjectSession, SharedRuntime, UpdateKind};
+use specforge_test::prelude::*;
 use specforge_wasm::testing::InProcessRuntime;
 #[cfg(unix)]
 use tempfile::TempDir;
@@ -87,8 +88,10 @@ fn created_guide(dir: &TestProject) -> PathBuf {
     guide
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test(
+    behavior = "bring_session_up_to_date",
+    verify = "a source that reads as the session holds it does not drop a check input changed with it"
+)]
 fn a_current_source_and_a_changed_check_input_run_the_checks() {
     let rt = owed();
     let (dir, mut session) = opened(&rt);
@@ -111,7 +114,6 @@ fn a_current_source_and_a_changed_check_input_run_the_checks() {
 }
 
 #[test]
-#[ignore = "flipped by T3"]
 fn ensure_fresh_applies_a_current_source_and_a_changed_check_input_at_once() {
     let rt = owed();
     let (dir, mut session) = opened(&rt);
@@ -126,7 +128,6 @@ fn ensure_fresh_applies_a_current_source_and_a_changed_check_input_at_once() {
 
 #[cfg(unix)]
 #[test]
-#[ignore = "flipped by T3"]
 fn a_relinked_source_and_a_changed_check_input_run_the_checks() {
     let rt = owed();
     let (dir, mut session) = opened(&rt);
@@ -148,7 +149,10 @@ fn a_relinked_source_and_a_changed_check_input_run_the_checks() {
     assert!(session.stale().is_empty());
 }
 
-#[test]
+#[specforge_test(
+    behavior = "bring_session_up_to_date",
+    verify = "a changed source and a changed check input run the checks once"
+)]
 fn a_changed_source_and_a_changed_check_input_run_the_checks_once() {
     let rt = owed();
     let (dir, mut session) = opened(&rt);
@@ -168,7 +172,10 @@ fn a_changed_source_and_a_changed_check_input_run_the_checks_once() {
     assert!(session.stale().is_empty());
 }
 
-#[test]
+#[specforge_test(
+    behavior = "bring_session_up_to_date",
+    verify = "an environment reload covers a check input changed with it"
+)]
 fn an_environment_change_covers_a_changed_check_input() {
     let rt = owed();
     let (dir, mut session) = opened(&rt);

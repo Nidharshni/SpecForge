@@ -63,7 +63,8 @@ pub enum CheckMode {
 pub enum UpdateKind {
     /// Sources were re-parsed (and every check ran again).
     Sources,
-    /// Only the checks ran again: a check input changed.
+    /// No source changed and the checks ran again: a check input changed, or an earlier update
+    /// had skipped them.
     Checks,
     /// The environment loaded again and the project was rebuilt from disk.
     Environment,
@@ -100,7 +101,7 @@ impl Update {
     /// Nothing changed: no file was applied and no check ran (the session
     /// reports the list it reported, held twice: every change of a compiled
     /// project starts its report again), and the inputs are as they were.
-    /// What `release` and `reread` answer `None` for.
+    /// What `release` and `apply` answer `None` for.
     fn changed_nothing(&self) -> bool {
         !self.inputs_changed && Arc::ptr_eq(&self.previous_diagnostics, &self.diagnostics)
     }
@@ -296,23 +297,7 @@ impl ProjectSession {
             self.held.hold(key, buffer.clone());
         }
         let reads = self.staged(reads);
-        self.update(|s| s.sources(reads, mode))
-    }
-
-    /// Read the sources `keys` names again: the sources [`Self::changes`] or [`Self::stale`] found
-    /// changed, by path relative to the spec root. A file that is gone was deleted; one that is there and
-    /// cannot be read is E025 and leaves the graph. A changed path that is no source (an `exclude` entry, a
-    /// skipped directory, not `.spec`, inside a nested project) changes nothing, unless the project holds
-    /// it: then it leaves the graph. Then every check runs. A source that reads as the session holds it
-    /// (touched, or written again with the same bytes) is re-stamped and changes nothing. `None` when
-    /// nothing changed.
-    fn reread(&mut self, keys: &[String]) -> Option<Update> {
-        let update = self.update(|s| {
-            let reads = s.ledger.reread(keys);
-            let reads = s.staged(reads);
-            s.sources(reads, CheckMode::Full)
-        });
-        (!update.changed_nothing()).then_some(update)
+        self.update(|s| s.sources(reads, mode, false))
     }
 
     /// The editor no longer holds the buffers of `paths` (absolute): each
@@ -338,7 +323,7 @@ impl ProjectSession {
                 reads.push((key, read));
             }
             let reads = s.staged(reads);
-            s.sources(reads, CheckMode::Full)
+            s.sources(reads, CheckMode::Full, false)
         });
         (!update.changed_nothing()).then_some(update)
     }
@@ -422,12 +407,18 @@ impl ProjectSession {
 
     /// The tail of every source update (inside the bracket): apply `reads`,
     /// resolve the imports, then run or skip the checks. With nothing to
-    /// apply it runs the checks only if they were skipped, else it changes
-    /// nothing: nothing an update reads besides its sources can have moved
-    /// (ADR 0055).
-    fn sources(&mut self, reads: Vec<(String, Read)>, mode: CheckMode) -> (UpdateKind, Applied) {
+    /// apply it runs the checks only when they are owed: a check input
+    /// changed (`rechecks`, only `apply` passes it) or an earlier update
+    /// skipped them; else it changes nothing (a buffer or a source names
+    /// nothing else that can have moved, ADR 0055).
+    fn sources(
+        &mut self,
+        reads: Vec<(String, Read)>,
+        mode: CheckMode,
+        rechecks: bool,
+    ) -> (UpdateKind, Applied) {
         if reads.is_empty() {
-            if self.project.checks_skipped() {
+            if rechecks || self.project.checks_skipped() {
                 self.project.check(&mut self.ledger);
                 return (UpdateKind::Checks, Applied::default());
             }
@@ -516,25 +507,35 @@ impl ProjectSession {
         self.ledger.inputs()
     }
 
-    /// Apply `changes` this session made ([`Self::changes`], [`Self::stale`]):
-    /// the environment first (a reload rebuilds everything), else the sources
-    /// (an update re-runs every check), else the checks alone; every file a
-    /// buffer holds is left out, including one held since `changes` were made.
-    /// `None` when applying `changes` changes nothing: `changes` is empty, or
-    /// every changed source reads as the session holds it and its inputs did
-    /// not move. A detached session makes no changes (ADR 0073 D7).
+    /// Apply `changes` this session made ([`Self::changes`], [`Self::stale`]) as one update (ADR
+    /// 0159). A changed environment input reloads the environment, which reads every source and
+    /// runs every check, so it covers the rest of `changes`. Otherwise the named sources are read
+    /// again, by path relative to the spec root: a file that is gone was deleted; one that is there
+    /// and cannot be read is E025 and leaves the graph; a changed path that is no source (an
+    /// `exclude` entry, a skipped directory, not `.spec`, inside a nested project) changes nothing,
+    /// unless the project holds it: then it leaves the graph. A source that reads as the session
+    /// holds it is re-stamped and changes nothing (ADR 0136 D3). The checks then run once if a
+    /// source changed, a check input changed, or an earlier update skipped them. Every file a
+    /// buffer holds is left out, including one held since `changes` were made. `None` when applying
+    /// `changes` changes nothing: no source and no check input is named (once the held files are
+    /// left out), or every named source reads as the session holds it, no check input is named and
+    /// the inputs did not move. A detached session makes no changes (ADR 0073 D7).
     pub fn apply(&mut self, changes: &Changes) -> Option<Update> {
+        if !changes.environment.is_empty() {
+            return Some(self.reload_environment());
+        }
         let mut sources = changes.sources.clone();
         self.held.leave_out(&mut sources);
-        if !changes.environment.is_empty() {
-            Some(self.reload_environment())
-        } else if !sources.is_empty() {
-            self.reread(&sources)
-        } else if !changes.check_inputs.is_empty() {
-            Some(self.recheck())
-        } else {
-            None
+        let rechecks = !changes.check_inputs.is_empty();
+        if sources.is_empty() && !rechecks {
+            return None;
         }
+        let update = self.update(|s| {
+            let reads = s.ledger.reread(&sources);
+            let reads = s.staged(reads);
+            s.sources(reads, CheckMode::Full, rechecks)
+        });
+        (!update.changed_nothing()).then_some(update)
     }
 
     /// What changed on disk since the session last built (behavior
@@ -561,13 +562,5 @@ impl ProjectSession {
     /// environment's; none: no extension loads).
     pub fn runtime(&self) -> Option<&SharedRuntime> {
         self.project.environment().runtime()
-    }
-
-    /// Run every check again on the current graph: a check input changed.
-    fn recheck(&mut self) -> Update {
-        self.update(|s| {
-            s.project.check(&mut s.ledger);
-            (UpdateKind::Checks, Applied::default())
-        })
     }
 }
