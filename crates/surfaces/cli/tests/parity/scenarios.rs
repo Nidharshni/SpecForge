@@ -115,6 +115,72 @@ pub(super) const SCENARIOS: &[Scenario] = &[
         mcp_rooted: true,
     },
     Scenario {
+        name: "add_dry_run",
+        setup: project,
+        cli: |root| {
+            args(&[
+                "add",
+                "@specforge/product",
+                "--dry-run",
+                "--path",
+                &s(root),
+                "--format",
+                "json",
+            ])
+        },
+        mcp: |_| {
+            (
+                "specforge.add_extension",
+                json!({"specifiers": ["@specforge/product"], "dry_run": true}),
+            )
+        },
+        mcp_rooted: true,
+    },
+    Scenario {
+        name: "add_dry_run_present",
+        setup: project,
+        cli: |root| {
+            args(&[
+                "add",
+                "@specforge/software",
+                "--dry-run",
+                "--path",
+                &s(root),
+                "--format",
+                "json",
+            ])
+        },
+        mcp: |_| {
+            (
+                "specforge.add_extension",
+                json!({"specifiers": ["@specforge/software"], "dry_run": true}),
+            )
+        },
+        mcp_rooted: true,
+    },
+    Scenario {
+        name: "remove_dry_run",
+        setup: project_with_product_enabled,
+        cli: |root| {
+            args(&[
+                "remove",
+                "@specforge/product",
+                "--dry-run",
+                "--path",
+                &s(root),
+                "--format",
+                "json",
+            ])
+        },
+        mcp: |_| {
+            (
+                "specforge.remove_extension",
+                json!({"name": "@specforge/product", "dry_run": true}),
+            )
+        },
+        mcp_rooted: true,
+    },
+    Scenario {
         name: "extensions",
         setup: project_with_greet_installed,
         cli: |root| args(&["extensions", "--path", &s(root), "--format", "json"]),
@@ -300,6 +366,24 @@ fn parity_remove_builtin() {
 #[test]
 fn parity_remove_installed() {
     parity("remove_installed");
+}
+
+#[test]
+#[ignore = "flipped by T6"]
+fn parity_add_dry_run() {
+    parity("add_dry_run");
+}
+
+#[test]
+#[ignore = "flipped by T6"]
+fn parity_add_dry_run_present() {
+    parity("add_dry_run_present");
+}
+
+#[test]
+#[ignore = "flipped by T6"]
+fn parity_remove_dry_run() {
+    parity("remove_dry_run");
 }
 
 #[test]
