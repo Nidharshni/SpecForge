@@ -6,9 +6,9 @@
 //! answers; it decides nothing (ADR 0023).
 
 use specforge_common::Sym;
-use specforge_ops::authoring::fix::{self, FixQuery};
+use specforge_ops::authoring::fix::{self, FixQuery, Offer};
 use specforge_ops::authoring::format;
-use specforge_ops::read::navigate::{EntityQuery, MatchScope, find_entities, outline};
+use specforge_ops::read::navigate::{EntityQuery, MatchScope, Navigator, find_entities, outline};
 use tower_lsp::jsonrpc::{Error, ErrorCode};
 use tower_lsp::lsp_types::{
     ClientCapabilities, CodeAction, CodeActionOrCommand, CodeActionResponse, CompletionResponse,
@@ -333,29 +333,44 @@ pub fn rename(
         .map_err(|Unplaced(file)| content_modified(file.as_str()))
 }
 
+/// The fixes offered for the published diagnostics of `file` overlapping `range` (the editor's own
+/// positions), read by `navigator` over the compile. Every fix edits `file` (`fix::offers`), so over
+/// a text the editor no longer has none is chosen and none is planned (ADR 0023 D3):
+/// `ContentModified`. What both code-action requests ask (ADR 0161 D5: a resolve chooses again what
+/// the list chose).
+fn offered(
+    compiled: &Compiled,
+    navigator: &Navigator,
+    file: &str,
+    range: Range,
+) -> Result<Vec<Offer>, Error> {
+    if compiled.is_stale(file) {
+        return Err(content_modified(file));
+    }
+    let files = compiled.state().files();
+    let within = files
+        .document(file)
+        .map(|doc| doc.index().span(Sym::new(file), range));
+    let query = FixQuery {
+        file: Some(file),
+        within: within.as_ref(),
+        ..FixQuery::default()
+    };
+    Ok(fix::offers(
+        navigator,
+        files.compile_diagnostics(file),
+        &query,
+    ))
+}
+
 /// The fixes for the published diagnostics of `uri` overlapping `range`
 /// (the editor's own positions), each offered whole or not at all (ADR
 /// 0016: the fixes MCP suggest_fixes returns for the same diagnostics).
 pub fn code_actions(state: &LspState, uri: &Url, range: Range) -> Option<CodeActionResponse> {
     let compiled = Compiled::new(state);
     let file = state.key_of(uri);
-    // Every fix edits the file its diagnostic or entity is in (`fix::offers`): over a text the
-    // editor no longer has, none is offered, typed or not, and none is planned (ADR 0023 D3).
-    if compiled.is_stale(&file) {
-        return None;
-    }
-    // The request's range is the editor's own: positions in its buffer.
-    let within = state
-        .files()
-        .document(&file)
-        .map(|doc| doc.index().span(Sym::new(&file), range));
-    let query = FixQuery {
-        file: Some(&file),
-        within: within.as_ref(),
-        ..FixQuery::default()
-    };
     let navigator = compiled.navigator();
-    let offers = fix::offers(&navigator, state.files().compile_diagnostics(&file), &query);
+    let offers = offered(&compiled, &navigator, &file, range).ok()?;
     // A client that resolves `edit` is shown a stub without its edits: planning one costs a
     // compile of the project, made when the editor resolves the action (ADR 0161). A fix that
     // cannot be placed whole (`Compiled::workspace_edit`) is not offered.
@@ -398,20 +413,8 @@ pub fn resolve_code_action(state: &LspState, action: CodeAction) -> Result<CodeA
     };
     let compiled = Compiled::new(state);
     let file = state.key_of(&uri);
-    if compiled.is_stale(&file) {
-        return Err(content_modified(&file));
-    }
-    let within = state
-        .files()
-        .document(&file)
-        .map(|doc| doc.index().span(Sym::new(&file), range));
-    let query = FixQuery {
-        file: Some(&file),
-        within: within.as_ref(),
-        ..FixQuery::default()
-    };
     let navigator = compiled.navigator();
-    let offer = fix::offers(&navigator, state.files().compile_diagnostics(&file), &query)
+    let offer = offered(&compiled, &navigator, &file, range)?
         .into_iter()
         .find(|offer| offer.title() == action.title)
         .ok_or_else(|| {
