@@ -16,6 +16,8 @@ use specforge_protocol_types::FieldType;
 
 use crate::Graph;
 
+pub mod spell;
+
 /// What a field's value was written as, after the graph build coerced it:
 /// one variant per parsed value form, so a check tells `"1"` from `1`, a
 /// one-item list from a scalar and a quoted string from a bare word
@@ -374,8 +376,8 @@ impl FieldForms {
     /// The form `kind`'s field `field` writes a value in, when `written`/`text`
     /// is not it (ADR 0147); `None` leaves the value as written: the field
     /// has no declared form, the value is already in it or is neither bare
-    /// nor quoted, a bare form cannot hold `text` (not a word, or `true` /
-    /// `false`, which would read back as a boolean), or a bare word sits on
+    /// nor quoted, a bare form cannot hold `text` ([`spell::holds_bare`]: not
+    /// a word, or `true` / `false`, which would read back as a boolean), or a bare word sits on
     /// a kind that takes members (it may be a member's type).
     pub fn rewrite(
         &self,
@@ -392,7 +394,7 @@ impl FieldForms {
             return None;
         }
         let holds = match to {
-            Written::Bare => is_word(text) && !matches!(text, "true" | "false"),
+            Written::Bare => spell::holds_bare(form.field_type(), text),
             _ => !self.member_kinds.contains(kind),
         };
         holds.then_some(to)

@@ -258,6 +258,7 @@ invariant typed_edit_canonical_form "Typed Edit Canonical Form" {
   """
   risk      high
   verify property "every block a typed edit writes is unchanged by format"
+  verify unit "a spelled value reads back and is left as it is by format and W159"
 }
 
 invariant typed_edit_atomicity "Typed Edit Atomicity" {
