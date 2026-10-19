@@ -5,8 +5,6 @@
 //! takes the state's read lock, calls one of these and returns what it
 //! answers; it decides nothing (ADR 0023).
 
-use std::collections::HashMap;
-
 use specforge_common::Sym;
 use specforge_ops::authoring::fix::{self, FixQuery};
 use specforge_ops::authoring::format;
@@ -22,7 +20,7 @@ use tower_lsp::lsp_types::{
 use crate::document::{LineIndex, Target};
 use crate::files::Findings;
 use crate::navigation::{
-    Compiled, code_action_kind, fix_to_code_action, outline_to_document_symbols,
+    Compiled, Unplaced, code_action_kind, fix_to_code_action, outline_to_document_symbols,
     symbol_kind_from_entity,
 };
 use crate::publish::diagnostic_to_lsp;
@@ -278,8 +276,8 @@ pub fn prepare_rename(
 
 /// The shared rename plan (`specforge_ops::authoring::rename::plan`) as one workspace
 /// edit, all or nothing: `None` when the cursor names no entity;
-/// `invalid_params` with the plan's reason when it is refused, or when an
-/// edit's file has no compiled text; `ContentModified` when the document or a
+/// `invalid_params` with the plan's reason when it is refused (a file without compiled text
+/// among them); `ContentModified` when the document or a
 /// file it edits is not the compiled text.
 pub fn rename(
     state: &LspState,
@@ -312,36 +310,12 @@ pub fn rename(
         Err(e) => return Err(Error::invalid_params(e.error.message)),
     };
 
-    let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
-    for edit in edits {
-        // The edits are positions in the compiled text, and apply to the
-        // editor's buffer: a buffer typed in since the compile is not that
-        // text, so the rename waits for the compile (LSP's
-        // ContentModified).
-        let file = edit.span.file.as_str();
-        if compiled.is_stale(file) {
-            return Err(content_modified(file));
-        }
-        // A rename is all or nothing: an edit that cannot be placed
-        // refuses it.
-        let Some(range) = compiled.range(&edit.span) else {
-            return Err(Error::invalid_params(format!(
-                "cannot rename: the text of {file} is not known"
-            )));
-        };
-        changes
-            .entry(compiled.uri(file))
-            .or_default()
-            .push(TextEdit {
-                range,
-                new_text: edit.new_text,
-            });
-    }
-
-    Ok(Some(WorkspaceEdit {
-        changes: Some(changes),
-        ..Default::default()
-    }))
+    // The edits are positions in the compiled text and apply to the editor's buffer: a file
+    // typed in since is not that text, so the rename waits for the compile (ContentModified).
+    compiled
+        .workspace_edit(edits)
+        .map(Some)
+        .map_err(|Unplaced(file)| content_modified(file.as_str()))
 }
 
 /// The fixes for the published diagnostics of `uri` overlapping `range`
@@ -350,6 +324,11 @@ pub fn rename(
 pub fn code_actions(state: &LspState, uri: &Url, range: Range) -> Option<CodeActionResponse> {
     let compiled = Compiled::new(state);
     let file = state.key_of(uri);
+    // Every fix edits the file its diagnostic or entity is in (`fix::offers`): over a text the
+    // editor no longer has, none is offered, typed or not, and none is planned (ADR 0023 D3).
+    if compiled.is_stale(&file) {
+        return None;
+    }
     // The request's range is the editor's own: positions in its buffer.
     let within = state
         .files()
@@ -364,7 +343,7 @@ pub fn code_actions(state: &LspState, uri: &Url, range: Range) -> Option<CodeAct
     let offers = fix::offers(&navigator, state.files().compile_diagnostics(&file), &query);
     // A client that resolves `edit` is shown a stub without its edits: planning one costs a
     // compile of the project, made when the editor resolves the action (ADR 0161). A fix that
-    // cannot be placed whole (see `fix_to_code_action`) is not offered.
+    // cannot be placed whole (`Compiled::workspace_edit`) is not offered.
     let lazily = state.client().code_action_resolve;
     let actions: Vec<CodeActionOrCommand> = offers
         .into_iter()
@@ -379,7 +358,7 @@ pub fn code_actions(state: &LspState, uri: &Url, range: Range) -> Option<CodeAct
                     ..Default::default()
                 });
             }
-            fix_to_code_action(&compiled, offer.fix(&navigator).ok()?)
+            fix_to_code_action(&compiled, offer.fix(&navigator).ok()?).ok()
         })
         .map(CodeActionOrCommand::CodeAction)
         .collect();
@@ -426,7 +405,7 @@ pub fn resolve_code_action(state: &LspState, action: CodeAction) -> Result<CodeA
     let fix = offer
         .fix(&navigator)
         .map_err(|refusal| Error::invalid_params(refusal.error.message))?;
-    fix_to_code_action(&compiled, fix).ok_or_else(|| content_modified(&file))
+    fix_to_code_action(&compiled, fix).map_err(|Unplaced(file)| content_modified(file.as_str()))
 }
 
 /// The document's outline (`specforge_ops::read::navigate::outline`, what MCP

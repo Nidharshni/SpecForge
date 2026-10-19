@@ -1126,7 +1126,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Fix**: an edit offered for a diagnostic or an entity, the same as an LSP code action and from MCP `suggest_fixes`
   (`specforge_ops::authoring::fix`): a replacement of an unresolved token by its close match, or a stub (a create of the
   unresolved target's kind, a verify obligation) planned as a typed edit and offered as the position edits that apply it
-  (`EditPlan::edits`); a stub the plan refuses is not offered (ADR 0161).
+  (`EditPlan::edits`); a stub the plan refuses is not offered (ADR 0161); the LSP lists none over a buffer typed since the compile (ADR 0023 D3).
 - **Lexeme**: one token of a `.spec` text as the language's one lexer reads it without a parse
   (`specforge_parser::lex`): an identifier, a scheme ref ID (one lexeme), a number, a string (read as
   the grammar reads it, across lines; one the grammar would not close is marked unclosed and, if a

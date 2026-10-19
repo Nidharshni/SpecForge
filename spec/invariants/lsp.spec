@@ -73,7 +73,9 @@ invariant lsp_utf16_positions "LSP UTF-16 Positions" {
     buffer typed since nor the disk now; a file the compile holds no text
     of has no range (its location, symbol or edit is left out, a fix or a
     rename that would need it is refused whole), never byte columns passed
-    off as UTF-16.
+    off as UTF-16. While the document a code-action request names is not
+    that text, no action is listed, whether the client resolves code
+    actions or not, and none is planned.
   """
   risk      medium
   verify unit "the line index converts byte columns to UTF-16 and back on every line"
@@ -81,6 +83,7 @@ invariant lsp_utf16_positions "LSP UTF-16 Positions" {
   verify unit "a span converts against the text the project was compiled from, not the buffer typed since"
   verify unit "a span of a file the compile holds no text of has no range, never byte columns"
   verify unit "a fix is offered whole or not at all: never over a buffer typed since, nor a file with no compiled text"
+  verify unit "no code action is listed over a buffer typed since the compile, to a client that resolves them or not"
   verify unit "a column past its line's end, up to the largest, resolves to the line's end"
 }
 

@@ -3,7 +3,7 @@
 **Status:** accepted (2026-10-19, architecture round 16, plan 04). Amends [ADR 0016](0016-navigation-is-one-module.md)
 (the Fixes paragraph and D1's interface list), extends [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md), amends
 [ADR 0086](0086-ops-is-four-module-groups-over-a-base.md) (the fixes are in `authoring`) and, for D5,
-[ADR 0023](0023-the-lsp-reads-a-document-through-one-module.md).
+[ADR 0023](0023-the-lsp-reads-a-document-through-one-module.md). Amended by round 17 plan 07 (2026-10-19): D5's list request chooses nothing over a buffer typed since the compile.
 
 ## Context
 
@@ -31,6 +31,11 @@ Each rule the typed edits learned since (reserved words, the file's format confi
 - **D5.** The LSP makes a stub's edits on `codeAction/resolve` for a client that declares `resolveSupport` for `edit`
   (`fix::offers`, `Offer::fix`): the list request only chooses. MCP, and a client that does not resolve, get the edits at
   once.
+
+  > **Amended by round 17 plan 07 (2026-10-19):** the list request first asks whether its document is the text the
+  > project was compiled from, as `codeAction/resolve` does; when it is not, it answers no action, typed or not, and
+  > plans none (ADR 0023 D3). Before, a resolving client was listed a stub whose resolve was then refused, and a
+  > client that does not resolve paid one compile per stub only to drop it.
 
 Rejected: a draft plan without E080 (a stub could again add an error; ADR 0151 rejects validation by hand); splitting the
 choice (`read`) from the plan (`authoring`) across groups (a description type that restates `Edit` for one caller); a

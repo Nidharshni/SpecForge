@@ -146,3 +146,26 @@ fn a_client_without_resolve_support_gets_edits_at_once() {
         "a refused stub is not offered to a client that does not resolve"
     );
 }
+
+/// The request's file is not the compiled text: nothing is listed, typed or not (ADR 0023 D3).
+#[specforge_test_macros::test(
+    invariant = "lsp_utf16_positions",
+    verify = "no code action is listed over a buffer typed since the compile, to a client that resolves them or not"
+)]
+fn an_eager_client_is_listed_nothing_over_a_buffer_typed_since() {
+    let mut served = served(ClientSupport::default());
+    assert!(titles(&listed(&served)).contains(&VERIFY));
+    served.type_text("a.spec", &format!("// typed\n{TEXT}"));
+    assert_eq!(titles(&listed(&served)), Vec::<&str>::new());
+}
+
+#[specforge_test_macros::test(
+    invariant = "lsp_utf16_positions",
+    verify = "no code action is listed over a buffer typed since the compile, to a client that resolves them or not"
+)]
+fn a_resolving_client_is_listed_nothing_over_a_buffer_typed_since() {
+    let mut served = served(resolving());
+    assert!(titles(&listed(&served)).contains(&VERIFY));
+    served.type_text("a.spec", &format!("// typed\n{TEXT}"));
+    assert_eq!(titles(&listed(&served)), Vec::<&str>::new());
+}

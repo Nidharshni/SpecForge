@@ -1,6 +1,6 @@
 # The LSP reads a document through one module
 
-**Status:** accepted (2026-10-06) Amended by [ADR 0161](0161-a-stub-fix-is-a-typed-edit.md) D5: code actions resolve a stub's edits.
+**Status:** accepted (2026-10-06) Amended by [ADR 0161](0161-a-stub-fix-is-a-typed-edit.md) D5: code actions resolve a stub's edits. Amended by round 17 plan 07: the code-action request checks its document first (via ADR 0161 D5's amendment).
 
 The LSP answered questions about a `.spec` buffer with seven scanners of its own: a bracket scanner for
 completion that counted `[` inside strings, a brace scanner that respected strings but not `"""`, a
