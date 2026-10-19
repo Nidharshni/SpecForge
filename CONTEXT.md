@@ -311,12 +311,19 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   or whether it loaded (ADR 0028).
 - **Candidate**: an extension a project does not load yet — a builtin `add` or `init` enables, a
   binary `add`, `update` or `init` installs, a binary `publish` uploads — and the extension
-  declaration read from its binary once, through the `WasmRuntime` the operation's caller passes (the
-  CLI's component runtime with the per-user compile cache, the MCP call's runtime, a test's in-process
-  runtime), never through one the operation builds (`specforge_ops::extension::candidate`, ADR 0028
-  D7). A binary to install must load (E028) and must not declare a builtin's name; the lock plan
+  declaration read from its binary once, as the load answers it (`Loaded`: the declaration and its
+  warnings, which name the extension as it declares itself), through the `WasmRuntime` the operation's
+  caller passes (the CLI's component runtime with the per-user compile cache, the MCP call's runtime, a
+  test's in-process runtime), never through one the operation builds (`specforge_ops::extension::candidate`,
+  ADR 0028 D7, ADR 0172). A binary to install must load (E028) and must not declare a builtin's name; the lock plan
   enables the builtins an extension requires (CONTEXT "Lock plan"), and a builtin that does not load
   refuses the operation.
+- **Local component**: the component a path names, read once through the request's containment: a `.wasm`
+  file, or the component an extension's crate directory builds (`target/wasm32-wasip2/release/<crate>.wasm`,
+  the layout `specforge extension build` builds into), named as the caller spelled it. add, init, publish and
+  extension validate read a path only through it, so one cause is one code and one message in every verb:
+  E040 for nothing there, no built component, several, or a file that can't be read
+  (`specforge_ops::extension::LocalComponent`, ADR 0172).
 - **Candidate vocabulary**: what the extensions a host could enable declare, read only for suggestions: each kind
   keyword and each field an enhancement adds, with the extension that declares it
   (`specforge_registry::CandidateVocabulary`, ADR 0122). The session hands the builtins' to the registry build;
@@ -604,7 +611,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Extension specifier**: an `add` argument (also each of `specforge.add_extension`'s
   `specifiers` and `init --extensions`'): a builtin's name, a local path (anything that is no
   builtin's name, `git+` URL or package reference: a `.wasm` file, or an extension's crate directory,
-  read as the component its crate builds: `specforge_ops::extension::binary_at`), a `git+` URL, or a
+  read as a local component, `LocalComponent`), a `git+` URL, or a
   package reference `@scope/name[@requirement]` (`PackageRef`; it starts with `@`), read once by
   `specforge_ops::extension::names` (each string one specifier). An add takes one or more and adds them as one change, judged on
   the whole set (one lock plan, ADR 0041); a specifier naming an extension an earlier one of the same
