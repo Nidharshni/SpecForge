@@ -1,7 +1,7 @@
 # An operation's outcome is one document both surfaces print
 
 **Status:** accepted (2026-10-11). Amends ADR 0015 D6 and ADR 0004 D1-c; extends the list in
-ADR 0048 D2. D5 extended by ADR 0058 to watch's lines. D1 and D5 amended in round 16 (plan 11).
+ADR 0048 D2. D5 extended by ADR 0058 to watch's lines. D1 and D5 amended in round 16 (plan 11); D1 and D2 in round 17 (plan 05): rename's document.
 D8's "nothing goes to stderr" is a case of [ADR 0120](0120-what-a-cli-command-says-beside-its-document-is-said-once.md).
 Amended by [ADR 0162](0162-a-mutations-preview-is-a-fact-of-its-outcome.md) (round 16, plan 05): every previewable document says `dry_run` (D4, D8's `check_only`).
 ADR 0102: every file a document names follows one rule. D1's documents include the anchors read view's ([ADR 0140](0140-source-anchors-are-a-read-view.md)).
@@ -128,3 +128,10 @@ whole set. The spec type is `McpAddExtensionResult { added: McpAddedExtension[],
   which ops never names: ADR 0010, and Rejected "Doctor's credentials").
 - **A document's diagnostics** are `DiagnosticList`, the one shape every surface prints.
 - Terminal text is the CLI's: `PlanOutcome::to_human` and `TraceOutcome::to_human` left ops.
+
+## Amendment (architecture round 17, plan 05): rename's document
+
+- **D1's list** gains `RenameDocument` (`Renamed::document`, beside `rename::run`): `old_name`, `new_name`,
+  `affected_files`, `dry_run`. MCP is the only surface that prints it (D5).
+- **D2's MCP extras** gain rename's `edits`: the spec's `TextEdit`, which MCP spells (ADR 0164 D3: no `Serialize`
+  on ops' `TextEdit`), flattened beside the document as the add's `note` is.

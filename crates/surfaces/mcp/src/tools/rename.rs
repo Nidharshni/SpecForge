@@ -9,8 +9,7 @@ use crate::args::Arguments;
 use crate::mutation::{FreshDiagnostics, Mutated, Mutation, MutationArgs, MutationReply, Written};
 use crate::refusal::ArgumentOf;
 use crate::target::ProjectRef;
-use specforge_ops::Wrote;
-use specforge_ops::authoring::rename::RenameField;
+use specforge_ops::authoring::rename::{RenameDocument, RenameField};
 use specforge_ops::read::navigate::Navigator;
 
 /// `specforge.rename`'s arguments.
@@ -34,15 +33,13 @@ impl MutationReply for Reply {
     type After = FreshDiagnostics;
 }
 
-/// `specforge.rename`'s reply.
+/// `specforge.rename`'s reply (`McpRenameResult`): the rename's document, and its edits as the spec's `TextEdit`
+/// (ADR 0164 D3).
 #[derive(Debug, Serialize, Shape)]
 pub struct Reply {
-    old_name: String,
-    new_name: String,
-    affected_files: Vec<String>,
+    #[serde(flatten)]
+    renamed: RenameDocument,
     edits: Vec<crate::reply::TextEdit>,
-    /// Whether the call previewed: nothing was written.
-    dry_run: bool,
 }
 
 pub(crate) struct Tool;
@@ -80,34 +77,27 @@ impl CoreTool for Tool {
         //
         // The operation decided what kind of failure it is, and which entity it
         // is about; an invalid new ID is the argument's fault.
-        let plan = rename::plan(
+        //
+        // A failed write puts back what it wrote; a file it could not put back is the failure's `files_written`.
+        let renamed = rename::run(
             &Navigator::new(project.view()),
             &args.entity_id,
             &args.new_name,
+            args.dry_run,
+            project.caller(),
         )
         .map_err(Self::failed)?;
-
-        let mut reply = Reply {
-            old_name: args.entity_id,
-            new_name: args.new_name.clone(),
-            affected_files: plan
-                .affected_files()
-                .into_iter()
-                .map(String::from)
-                .collect(),
-            edits: plan.edits.iter().map(Into::into).collect(),
-            dry_run: false,
+        let reply = Reply {
+            renamed: renamed.document(),
+            edits: renamed.plan.edits.iter().map(Into::into).collect(),
         };
-        // A failed write puts back what it wrote; a file it could not put back is the failure's `files_written`.
-        let wrote = Wrote::unless_preview(args.dry_run, || rename::apply(&plan, project.caller()))?;
-        reply.dry_run = wrote.previewed();
         // The reply's `diagnostics` are what `specforge check` reports for the
         // project as it is on disk now, edits made since the last call
         // included (`FreshDiagnostics`, filled in once the target is brought up
         // to date).
         Ok(Mutated::new(
             reply,
-            Written::of(wrote).with_entities([args.new_name]),
+            Written::of(renamed.wrote).with_entities([renamed.plan.new_id]),
         ))
     }
 }

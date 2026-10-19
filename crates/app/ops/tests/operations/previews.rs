@@ -5,6 +5,7 @@ use serde_json::json;
 use specforge_ops::authoring::edit;
 use specforge_ops::authoring::format::{self, Mode};
 use specforge_ops::authoring::migrate;
+use specforge_ops::authoring::rename;
 use specforge_ops::extension::{self, AddRequest};
 use specforge_ops::view::ProjectView;
 use specforge_ops::{Writes, Wrote};
@@ -230,6 +231,102 @@ fn an_edit_refused_by_the_plan_is_refused_by_run() {
     )];
     let error = run_edits(&c, &dangling, false).unwrap_err().error;
     assert!(error.is(specforge_common::codes::E080), "{error:?}");
+    assert_eq!(
+        crate::writes::changed_since(&root, &before),
+        Vec::<String>::new()
+    );
+}
+
+fn rename_over(
+    c: &crate::navigate::Compiled,
+    new_id: &str,
+    dry_run: bool,
+) -> Result<rename::Renamed, specforge_ops::Refusal<rename::RenameField>> {
+    rename::run(
+        &c.navigator(),
+        "session_limit",
+        new_id,
+        dry_run,
+        specforge_ops::testing::caller(),
+    )
+}
+
+#[test]
+fn a_rename_preview_writes_nothing_and_says_so() {
+    let c = crate::navigate::nav();
+    let root = c.project.environment().spec_root().to_path_buf();
+    let before = crate::writes::files_under(&root);
+    let renamed = rename_over(&c, "session_cap", true).unwrap();
+    assert_eq!(renamed.wrote, Wrote::Previewed);
+    assert_eq!(
+        crate::writes::changed_since(&root, &before),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        serde_json::to_value(renamed.document()).unwrap(),
+        json!({
+            "old_name": "session_limit",
+            "new_name": "session_cap",
+            "affected_files": ["limit.spec", "login.spec"],
+            "dry_run": true
+        })
+    );
+    assert_eq!(renamed.plan.edits.len(), 2);
+}
+
+#[test]
+fn a_rename_run_writes_what_it_planned() {
+    let c = crate::navigate::nav();
+    let root = c.project.environment().spec_root().to_path_buf();
+    let planned = rename::plan(&c.navigator(), "session_limit", "session_cap").unwrap();
+    let renamed = rename_over(&c, "session_cap", false).unwrap();
+    assert_eq!(renamed.plan.edits, planned.edits);
+    assert!(!renamed.document().dry_run);
+    assert_eq!(
+        crate::writes::listed(&renamed.wrote.into_files(), &root),
+        ["limit.spec", "login.spec"]
+    );
+    let limit = std::fs::read_to_string(root.join("limit.spec")).unwrap();
+    assert!(limit.starts_with("invariant session_cap "), "{limit}");
+}
+
+#[test]
+fn a_rename_refused_by_the_plan_is_refused_by_run() {
+    let c = crate::navigate::nav();
+    let root = c.project.environment().spec_root().to_path_buf();
+    let before = crate::writes::files_under(&root);
+    let invalid = rename_over(&c, "x", false).unwrap_err();
+    assert_eq!(invalid.error.code, rename::INVALID_ID);
+    assert_eq!(invalid.subject, Some(rename::RenameField::NewId));
+    let taken = rename_over(&c, "login", false).unwrap_err();
+    assert_eq!(taken.error.code, rename::TAKEN);
+    assert_eq!(
+        crate::writes::changed_since(&root, &before),
+        Vec::<String>::new()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_rename_run_that_cannot_write_is_refused_about_no_field() {
+    use std::os::unix::fs::PermissionsExt;
+    let c = crate::navigate::nav();
+    let root = c.project.environment().spec_root().to_path_buf();
+    let locked = root.join("login.spec");
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o444)).unwrap();
+    if std::fs::OpenOptions::new()
+        .append(true)
+        .open(&locked)
+        .is_ok()
+    {
+        return; // permissions do not bind (root)
+    }
+    let before = crate::writes::files_under(&root);
+    let refused = rename_over(&c, "session_cap", false).unwrap_err();
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert_eq!(refused.error.code, specforge_ops::FILE_UNWRITABLE);
+    assert_eq!(refused.subject, None);
+    assert!(refused.error.writes.is_empty(), "{:?}", refused.error);
     assert_eq!(
         crate::writes::changed_since(&root, &before),
         Vec::<String>::new()

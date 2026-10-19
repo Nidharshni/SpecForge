@@ -798,11 +798,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Outcome document**: the one typed JSON document of an operation's outcome, defined in ops beside
   the operation and deriving `Serialize` and `Shape`: the outcome itself when it is plain data
   (`stats::Stats`), else its `document()` (`AddDocument`, `RemoveDocument`, `UpdateDocument`,
-  `InitDocument`, `ExtensionsDocument`, `MigrateDocument`, `AnalyzeDocument`, `DoctorDocument`,
+  `InitDocument`, `ExtensionsDocument`, `MigrateDocument`, `RenameDocument`, `AnalyzeDocument`, `DoctorDocument`,
   `ValidateDocument`, `SearchDocument`, `PublishDocument`, `explain::Explanation`, …). A command with no ops
   operation (extension init, build, login, logout) keeps its document in its command module.
   The CLI prints it under `--format json` and MCP answers it as the tool reply; a surface adds only
-  what it alone knows, typed and flattened beside it (MCP's `note` on an add, a mutation's
+  what it alone knows, typed and flattened beside it (MCP's `note` on an add, rename's `edits`, the spec's `TextEdit`, a mutation's
   `files_written`, the CLI's credential health on doctor), and never renames, drops or re-derives a
   key. It carries no `null`. Its spec type is the tool's `Mcp*` reply type (ADR 0052).
 - **Graph export**: the project's graph, or the subgraph of a scope, written in one export format by
@@ -1102,7 +1102,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   now. The navigator reads it from its view's compiled project; no surface hands it a text, and outline answers
   only for the compile's sources (ADR 0116). The LSP converts spans to UTF-16 ranges through that text's line index (a file the compile holds
   no text of has no range), MCP renders them as JSON (ADR 0016, ADR 0023).
-- **Rename plan**: the edits that rename one entity (`specforge_ops::authoring::rename::RenamePlan`), text edits:
+- **Rename plan**: the edits that rename one entity (`specforge_ops::authoring::rename::RenamePlan`), text edits (`rename::run` plans it and writes it unless its request previews: `Renamed`, whose document is `RenameDocument`; ADR 0162):
   the declaration's name and each incoming reference's token, positions in the text the project was compiled from,
   which the plan keeps, with the spec root they are relative to. MCP writes it only to files that still hold that text, refusing `conflict` otherwise; the LSP
   hands it to the editor only over buffers that are that text (`ContentModified` otherwise; ADR 0116, ADR 0023 D3).

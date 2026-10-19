@@ -2,6 +2,7 @@
 
 **Status:** accepted (2026-10-19, architecture round 16, plan 05). Amends [ADR 0022](0022-a-mutation-reports-what-it-wrote.md)
 D6 and [ADR 0052](0052-an-operations-outcome-is-one-document-both-surfaces-print.md) D4 and D8.
+Amended by round 17 plan 05 (2026-10-19): rename runs through `rename::run`.
 
 "Did this mutation only preview, and what did it write?" was answered at 18 places: seven CLI `files_written` sites
 under four rules, eight `MutationArgs::previews` impls and three MCP handler lines that read `dry_run` again. The
@@ -46,3 +47,7 @@ CLI `--format json`: `add --dry-run` and `remove --dry-run` no longer print `fil
 
 What would reopen it: a mutation whose preview its request cannot state; a client that needs to tell "would write
 nothing" from "previewed" on a failure.
+
+**Amended by round 17 plan 05 (2026-10-19):** P1's operations include rename: `rename::run(nav, old_id, new_id,
+dry_run, caller)` answers `Renamed { plan, wrote }`, and `Wrote::unless_preview` is crate-private to ops, so no
+surface decides a preview. Round 16 had left rename's handler calling it (plan 05 D5, a file-ownership call).
