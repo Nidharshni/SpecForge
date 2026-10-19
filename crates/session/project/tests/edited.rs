@@ -138,7 +138,6 @@ impl Disk for RefusesLeak {
 
 const LEAK: &str = "use \"SECRETWORD_IMPORT\"\nbehavior alpha \"SECRETWORD_TITLE\" {\n}\n";
 
-#[ignore = "flipped by T3"]
 #[specforge_test(
     invariant = "mcp_served_project_consistency",
     verify = "a source of the served project is read only from inside the project"

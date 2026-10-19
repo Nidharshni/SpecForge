@@ -121,23 +121,25 @@ impl CompiledProject {
     }
 
     /// This project as if `texts` (by source key, relative to the spec root) were the text of their sources:
-    /// every other source as this project read it, a key no compiled source has when the environment's
-    /// [`Environment::holds_source`] admits it, then every check. What `specforge check` reports once those
-    /// texts are written. Reads the disk only as a compile's checks do, never a source.
+    /// a key no compiled source has when the environment's [`Environment::holds_source`] admits it, then
+    /// every check. What `specforge check` reports once those texts are written. Reads no source: every
+    /// other source is what this project holds (the text it read, or the E025 it recorded for one it could
+    /// not read: over MCP, one the bound refused, ADR 0158); the checks read the disk as a compile's do.
     pub fn edited(&self, texts: &BTreeMap<String, String>) -> CompiledProject {
-        let mut held: BTreeMap<String, Arc<str>> = self.sources.texts().into_iter().collect();
         let mut keys: BTreeSet<String> =
             self.sources.keys().into_iter().map(String::from).collect();
+        let mut planned: BTreeMap<String, &str> = BTreeMap::new();
         for (key, text) in texts {
             if keys.contains(key) || self.env.holds_source(key) {
                 keys.insert(key.clone());
-                held.insert(key.clone(), Arc::from(text.as_str()));
+                planned.insert(key.clone(), text.as_str());
             }
         }
-        let held: BTreeMap<String, &str> = held.iter().map(|(k, t)| (k.clone(), &**t)).collect();
-        let mut reads = Keyed(keys.into_iter().collect());
-        let mut project = Self::read(Arc::clone(&self.env), &held, &mut reads);
-        project.check(&mut reads);
+        let keys: Vec<String> = keys.into_iter().collect();
+        let mut project = Self::built(Arc::clone(&self.env), &keys, &planned, |key| {
+            self.sources.as_read(key)
+        });
+        project.check(&mut Unrecorded);
         project
     }
 
@@ -238,32 +240,6 @@ impl CompiledProject {
     }
 }
 
-/// [`CompiledProject::edited`]'s reads: the sources are the keys given (each held, so none is read), the
-/// checks read the disk as a one-shot compile's do.
-struct Keyed(Vec<String>);
-
-impl Reads for Keyed {
-    fn environment(
-        &mut self,
-        root: &ProjectRoot,
-        load: impl FnOnce(&dyn Disk) -> crate::Environment,
-    ) -> crate::Environment {
-        Unrecorded.environment(root, load)
-    }
-
-    fn discover(&mut self, _sources: &specforge_common::SourceRoot) -> Vec<String> {
-        self.0.clone()
-    }
-
-    fn source(&mut self, spec_root: &Path, key: &str) -> Read {
-        Unrecorded.source(spec_root, key)
-    }
-
-    fn run_checks(&mut self, check: impl FnOnce(&dyn Disk)) {
-        Unrecorded.run_checks(check);
-    }
-}
-
 /// What the session asks of its compiled project, between stamps.
 impl CompiledProject {
     /// No project: the empty environment, no source, no file, nothing
@@ -341,11 +317,23 @@ impl CompiledProject {
     ) -> Self {
         let keys = reads.discover(env.sources());
         let spec_root = env.spec_root().to_path_buf();
+        Self::built(env, &keys, held, |key| reads.source(&spec_root, key))
+    }
+
+    /// The cold build of `keys` in `env` (ADR 0032's one cold pipeline, [`Environment::build_sources`]): each
+    /// key a `held` text, else what `source` gives for it; the graph built, the imports resolved. The checks
+    /// have not run.
+    fn built(
+        env: Arc<Environment>,
+        keys: &[String],
+        held: &BTreeMap<String, &str>,
+        source: impl FnMut(&str) -> Read,
+    ) -> Self {
         let SourceBuild {
             sources,
             graph,
             imports,
-        } = env.build_sources(&keys, held, |key| reads.source(&spec_root, key));
+        } = env.build_sources(keys, held, source);
         CompiledProject {
             env,
             sources,

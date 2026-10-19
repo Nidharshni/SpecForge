@@ -120,7 +120,10 @@ behavior validate_typed_edit "Validate a Typed Edit" {
   category   validation
   contract   """
     Edits are planned in order over the texts the project was compiled from.
-    The edited project is compiled; an edit that leaves an error-severity
+    The edited project is compiled from what the project holds: the text of
+    each source it read, the E025 of each it could not read, and the planned
+    texts, reading no source again, so its verdict never depends on a file
+    the project could not read; an edit that leaves an error-severity
     diagnostic the project did not have is refused with E080 and writes
     nothing. Warnings and infos it adds are written and reported. A preview
     refuses exactly what the write would. The files are written as one project

@@ -43,7 +43,7 @@ fn link(target: &Path, at: &Path) {
     std::os::unix::fs::symlink(target, at).unwrap();
 }
 
-/// Every reply of the views that read the graph or its diagnostics, as one string.
+/// Every reply of the views that read the graph or its diagnostics, and of a typed edit's preview, as one string.
 fn views(server: &mut McpServer) -> String {
     let mut all = String::new();
     for (name, arguments) in [
@@ -51,6 +51,10 @@ fn views(server: &mut McpServer) -> String {
         ("specforge.list", json!({})),
         ("specforge.search", json!({"query": "leaked"})),
         ("specforge.export", json!({})),
+        (
+            "specforge.edit",
+            json!({"edits": [{"op": "retitle", "entity_id": "alpha", "title": "Alpha Two"}], "dry_run": true}),
+        ),
     ] {
         all += &call_tool(server, name, arguments).to_string();
     }
@@ -363,7 +367,6 @@ fn retitle(server: &mut McpServer) -> Value {
 }
 
 #[cfg(unix)]
-#[ignore = "flipped by T3"]
 #[specforge_test_macros::test(
     invariant = "mcp_served_project_consistency",
     verify = "a source of the served project is read only from inside the project"
@@ -379,7 +382,6 @@ fn an_edit_validates_over_no_source_symlink_that_leaves_the_project() {
 }
 
 #[cfg(unix)]
-#[ignore = "flipped by T3"]
 #[specforge_test_macros::test(
     invariant = "mcp_served_project_consistency",
     verify = "a source of the served project is read only from inside the project"

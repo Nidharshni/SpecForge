@@ -188,6 +188,16 @@ impl SourceCache {
         self.texts.clone()
     }
 
+    /// What it holds for `key`, as the read that made it gave it: the text it parsed, the E025 it recorded
+    /// for a source it could not read, or `Gone`. A rebuild from it reads no file.
+    pub fn as_read(&self, key: &str) -> Read {
+        match (self.texts.get(key), self.unreadable.get(key)) {
+            (Some(text), _) => Read::Text(text.to_string()),
+            (None, Some(e025)) => Read::Unreadable(e025.clone()),
+            (None, None) => Read::Gone,
+        }
+    }
+
     /// E025 for each source that could not be read, in path order.
     pub fn unreadable(&self) -> impl Iterator<Item = &Diagnostic> {
         self.unreadable.values()
