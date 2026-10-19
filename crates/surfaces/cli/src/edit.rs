@@ -6,7 +6,7 @@ use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::project::ProjectArg;
 use crate::terminal::{Terminal, outln};
-use specforge_ops::authoring::edit::{self, Edit, EditReport, Input};
+use specforge_ops::authoring::edit::{self, Edit, EditReport, Input, Obligation};
 use specforge_ops::view::ProjectView;
 use specforge_ops::{OpError, OpErrorKind};
 
@@ -217,31 +217,12 @@ pub(crate) struct LinkArgs {
     output: OutputArg,
 }
 
-/// A letter or `_`, then letters, digits and `_`.
-fn is_word(text: &str) -> bool {
-    let mut chars = text.chars();
-    chars
-        .next()
-        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
-}
-
-/// `kind:text` as an obligation's parts: the kind is a word before the first colon.
-pub(crate) fn obligation(text: &str) -> (Option<String>, String) {
-    match text.split_once(':') {
-        Some((kind, rest)) if is_word(kind) => {
-            (Some(kind.to_string()), rest.trim_start().to_string())
-        }
-        _ => (None, text.to_string()),
-    }
-}
-
 impl LinkArgs {
     pub(crate) fn run(self, add: bool, terminal: &Terminal) -> Exit {
         let entity_id = self.entity.clone();
         let edit = match (&self.verify, &self.field, &self.target) {
             (Some(verify), _, _) => {
-                let (kind, text) = obligation(verify);
+                let Obligation { kind, text } = Obligation::parse(verify);
                 if add {
                     Edit::AddVerify {
                         entity_id,

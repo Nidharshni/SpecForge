@@ -3,7 +3,7 @@
 //! `specforge new behavior --help` lists `--contract`, `--invariants`, … and a misspelt flag gets clap's "did you
 //! mean". An open kind's members are set with `specforge set` afterwards.
 
-use crate::edit::{execute, obligation};
+use crate::edit::execute;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::project::ProjectArg;
 use crate::terminal::{Terminal, err, outln};
@@ -211,10 +211,7 @@ impl Args {
             .verify
             .iter()
             .chain(matches.get_many::<String>("verify").into_iter().flatten())
-            .map(|text| {
-                let (kind, text) = obligation(text);
-                Obligation { kind, text }
-            })
+            .map(|text| Obligation::parse(text))
             .collect();
         Ok(Edit::Create {
             kind: kind.to_string(),
