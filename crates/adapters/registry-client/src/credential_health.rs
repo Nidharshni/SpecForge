@@ -223,4 +223,24 @@ mod tests {
         assert!(empty.lines.is_empty() && empty.failures == 0);
         assert!(empty.signing_key_present);
     }
+
+    #[test]
+    #[ignore = "flipped by T2"]
+    fn an_unreadable_store_is_a_credential_failure() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let store = dir.path().join("credentials.json");
+        std::fs::write(&store, r#"{"registries": {"a": {"token": "t"},}}"#).unwrap();
+
+        let health = credential_health(&store, &dir.path().join("no-key"), chrono::Utc::now());
+
+        assert_eq!(health.failures, 1, "{health:?}");
+        assert_eq!(health.lines.len(), 1, "{health:?}");
+        assert_eq!(health.lines[0].level, CredentialLevel::Error);
+        assert!(
+            health.lines[0]
+                .text
+                .contains("invalid credentials file format"),
+            "{health:?}"
+        );
+    }
 }
