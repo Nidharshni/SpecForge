@@ -1,5 +1,6 @@
 //! What a request's values mean is the operation's, so each refusal reads the same on the wire (ADR 0101): the
-//! code and the argument it is about. The pairing with the CLI is `cli/tests/request_pairs.rs`.
+//! code and the argument it is about. The pairing with the CLI is `cli/tests/request_pairs.rs`. An argument that
+//! names an entity, or counts hops from one, is refused the same way.
 
 use crate::support::*;
 use serde_json::{Value, json};
@@ -118,4 +119,90 @@ fn add_extension_reads_a_comma_string_as_one_specifier() {
         json!({"specifiers": ["@specforge/product,@specforge/governance"]}),
     );
     assert_refused(&reply, "specifiers", Some("E054"));
+}
+
+#[test]
+#[ignore = "flipped by T2"]
+fn coverage_refuses_an_entity_the_graph_lacks_on_entity_id() {
+    let reply = call_tool(
+        &mut served(),
+        "specforge.coverage",
+        json!({"entity_id": "logn"}),
+    );
+    let error = crate::tool_errors::mcp_error(&reply);
+    assert_eq!(error["code"], "entity_not_found", "{error}");
+    assert_eq!(error["argument"], "entity_id", "{error}");
+    assert_eq!(error["diagnostic"]["code"], "E003", "{error}");
+    assert!(
+        error.to_string().contains("did you mean 'login'?"),
+        "{error}"
+    );
+}
+
+#[test]
+#[ignore = "flipped by T3"]
+fn coverage_kind_reports_i020_and_narrows_an_entity_id() {
+    let mut served = served();
+    let reply = call_tool(
+        &mut served,
+        "specforge.coverage",
+        json!({"kind": "behaviour"}),
+    );
+    assert_eq!(reply["result"]["isError"], false, "{reply}");
+    assert_eq!(
+        reply["result"]["structuredContent"]["entities"],
+        json!([]),
+        "{reply}"
+    );
+    assert_eq!(
+        reply["result"]["_meta"]["diagnostics"][0]["code"], "I020",
+        "{reply}"
+    );
+    let reply = call_tool(
+        &mut served,
+        "specforge.coverage",
+        json!({"entity_id": "login", "kind": "type"}),
+    );
+    assert_eq!(
+        reply["result"]["structuredContent"]["entities"],
+        json!([]),
+        "{reply}"
+    );
+    let reply = call_tool(
+        &mut served,
+        "specforge.coverage",
+        json!({"entity_id": "login", "kind": "behavior"}),
+    );
+    let rows = &reply["result"]["structuredContent"]["entities"];
+    assert_eq!(rows.as_array().map(Vec::len), Some(1), "{reply}");
+    assert_eq!(rows[0]["entity_id"], "login", "{reply}");
+}
+
+#[test]
+#[ignore = "flipped by T5"]
+fn search_refuses_a_referenced_entity_the_graph_lacks_on_references() {
+    let reply = call_tool(
+        &mut served(),
+        "specforge.search",
+        json!({"query": "", "references": "logn"}),
+    );
+    let error = crate::tool_errors::mcp_error(&reply);
+    assert_eq!(error["code"], "entity_not_found", "{error}");
+    assert_eq!(error["argument"], "references", "{error}");
+    assert_eq!(error["diagnostic"]["code"], "E003", "{error}");
+}
+
+#[test]
+#[ignore = "flipped by T6"]
+fn explore_and_review_prompts_refuse_a_depth_without_an_entity() {
+    for (prompt, depth) in [("explore", "1"), ("review", "2")] {
+        let reply = call(
+            &mut served(),
+            "prompts/get",
+            json!({"name": format!("specforge://prompts/{prompt}"), "arguments": {"depth": depth}}),
+        );
+        assert_eq!(reply["error"]["code"], -32602, "{reply}");
+        assert_eq!(reply["error"]["data"]["code"], "invalid_input", "{reply}");
+        assert_eq!(reply["error"]["data"]["argument"], "entity_id", "{reply}");
+    }
 }
