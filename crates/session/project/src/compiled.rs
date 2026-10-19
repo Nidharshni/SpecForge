@@ -13,7 +13,7 @@ use crate::coverage::{REPORT_FILE, Recorded, RecordedCoverage, ReportError, Test
 use crate::ledger::{Reads, Unrecorded};
 use crate::sources::{Read, SourceCache};
 use crate::{Environment, SharedRuntime, SourceBuild};
-use specforge_registry::{Disk, EntitySnapshot};
+use specforge_registry::{Disk, EntitySnapshot, PlainDisk};
 
 /// A compiled project: an environment, the sources read in it, their graph
 /// build, what resolving their imports and running the checks reported, and
@@ -72,19 +72,39 @@ pub struct CompiledProject {
 
 impl CompiledProject {
     /// Compile the project at `root`, its extensions loaded into `runtime`
-    /// (without one no extension loads), which its environment holds. It
-    /// keeps no stamp (ADR 0030).
+    /// (without one no extension loads), which its environment holds, its
+    /// sources read from the plain file system. It keeps no stamp (ADR 0030).
     pub fn compile(root: &ProjectRoot, runtime: Option<SharedRuntime>) -> Self {
-        Self::of(Environment::load(root, runtime))
+        Self::compile_through(root, runtime, &PlainDisk)
+    }
+
+    /// [`Self::compile`], each source read through `sources` (ADR 0166): a
+    /// surface that bounds its request hands its containment's disk, and a
+    /// source the disk refuses is that source's E025, absent from the graph
+    /// (ADR 0145 D2). The environment and the checks read the plain file
+    /// system (ADR 0145 D3), as a session's do.
+    pub fn compile_through(
+        root: &ProjectRoot,
+        runtime: Option<SharedRuntime>,
+        sources: &dyn Disk,
+    ) -> Self {
+        Self::checked(
+            Environment::load(root, runtime),
+            &mut Unrecorded::through(sources),
+        )
     }
 
     /// Compile the project of an environment already loaded (the CLI routes
-    /// an extension command on it first): its sources read, its graph built
-    /// and checked in the environment's runtime.
+    /// an extension command on it first): its sources read from the plain
+    /// file system, its graph built and checked in the environment's runtime.
     pub fn of(env: Environment) -> Self {
-        let mut reads = Unrecorded;
-        let mut project = Self::read(Arc::new(env), &BTreeMap::new(), &mut reads);
-        project.check(&mut reads);
+        Self::checked(env, &mut Unrecorded::plain())
+    }
+
+    /// The cold read of `env` through `reads`, then every check.
+    fn checked(env: Environment, reads: &mut Unrecorded<'_>) -> Self {
+        let mut project = Self::read(Arc::new(env), &BTreeMap::new(), reads);
+        project.check(reads);
         project
     }
 
@@ -139,7 +159,7 @@ impl CompiledProject {
         let mut project = Self::built(Arc::clone(&self.env), &keys, &planned, |key| {
             self.sources.as_read(key)
         });
-        project.check(&mut Unrecorded);
+        project.check(&mut Unrecorded::plain());
         project
     }
 

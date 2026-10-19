@@ -77,7 +77,8 @@ pub struct Request<'a> {
     pub no_backup: bool,
     /// What the migration may reach (`caller.containment()`, ADR 0104): a source that lands
     /// outside it, by a symlink in the project, refuses the run (`invalid_input`, nothing read or
-    /// written; ADR 0092 D8); one with more than one name fails that file.
+    /// written; ADR 0092 D8); one with more than one name fails that file, and the compiles before and
+    /// after read none it refuses.
     pub caller: Caller<'a>,
 }
 
@@ -335,7 +336,8 @@ pub use specforge_protocol_types::MigrationInput;
 /// which files are the project's sources or which extensions it loads; each
 /// other problem is one E069 in [`Outcome::diagnostics`] and fails
 /// [`Outcome::ok`]. The preview and the migration rewrite the same sources. Each source is read through the
-/// caller's containment: over MCP a source with more than one name fails its file (ADR 0146, ADR 0158).
+/// caller's containment: over MCP a source with more than one name fails its file (ADR 0146, ADR 0158),
+/// and the project is compiled through it before and after (ADR 0166).
 pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome, OpError> {
     // The project the files are migrated in and the one the hooks and the checks compile.
     let project = request.root;
@@ -385,8 +387,9 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
             }
         }
     }
-    // Every source is read through the caller's containment: over MCP a file with more than one name fails
-    // (ADR 0146, ADR 0158); a link that leaves was refused above.
+    // Every source is read, and the project compiled before and after, through the caller's containment: over
+    // MCP a file with more than one name fails its file and is E025 in the compiles (ADR 0146, 0158, 0166); a
+    // link that leaves was refused above.
     let bound = request.caller.containment().disk();
     let read_source = |path: &Path| -> std::io::Result<String> {
         String::from_utf8(bound.read(path)?).map_err(|_| {
@@ -424,8 +427,8 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
         return Ok(outcome);
     }
 
-    // The graph before any file is touched.
-    let pre = CompiledProject::compile(project, runtime.clone());
+    // The graph before any file is touched, read through the same bound: a refused source is its E025 (ADR 0166).
+    let pre = CompiledProject::compile_through(project, runtime.clone(), &bound);
 
     outcome.summary = migrate_project(
         project,
@@ -465,7 +468,7 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
     }
 
     // The migrated project must have the graph it had before.
-    let post = CompiledProject::compile(project, runtime);
+    let post = CompiledProject::compile_through(project, runtime, &bound);
     outcome.validated = true;
     outcome.graph_delta = beyond_steps(compute_graph_delta(pre.graph(), post.graph()), pre.graph());
     outcome.post_diagnostics = post.diagnostics();

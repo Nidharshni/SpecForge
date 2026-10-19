@@ -1,6 +1,6 @@
 # An edited compile and a migration read no source past the bound
 
-**Status:** accepted (2026-10-19, round 16, plan 01). Amends [ADR 0145](0145-the-session-reads-sources-through-the-disk-the-surface-hands-it.md) D1, [ADR 0146](0146-a-file-with-more-than-one-name-is-not-read-through-a-bound.md) D4 and [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) D3.
+**Status:** accepted (2026-10-19, round 16, plan 01). Amends [ADR 0145](0145-the-session-reads-sources-through-the-disk-the-surface-hands-it.md) D1, [ADR 0146](0146-a-file-with-more-than-one-name-is-not-read-through-a-bound.md) D4 and [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) D3. **Amended by ADR 0166 (2026-10-19):** D4 is replaced: the compiles before and after read through the same bound; the compile before the migration did read a refused source.
 
 Over MCP the session reads each `.spec` source through the contained disk, and a source the bound refuses (a symlink
 that leaves the project, a file with more than one name) is held as an unreadable key with its E025. Two paths read

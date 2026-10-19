@@ -30,7 +30,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   report order: the environment's, the imports', the graph build's, the checks', then surface conflicts
   (`specforge_project::CompiledProject`). A one-shot compile (every CLI command) is one and keeps no
   stamp; a project session holds one and keeps it current (`ProjectSession::project`, ADR 0047); it is
-  compiled from a project root (`CompiledProject::compile(&ProjectRoot, …)`). A copy shares all but its graph
+  compiled from a project root (`CompiledProject::compile(&ProjectRoot, …)`), or with its sources read through a
+  disk the surface hands it (`compile_through`, ADR 0166). A copy shares all but its graph
   (`Clone`, ADR 0108). Rooted or detached is its `root()` (a detached project has none and resolves no
   import); the project root it was loaded at is its environment's (`Environment::project_root`), read to reopen
   it and to hand an operation a project root (ADR 0121). It reads its recorded test report through the disk it is
@@ -103,7 +104,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Read ledger**: what a project session read and when (`specforge_project::ledger`, crate-private): its session
   inputs and the stamp of each file, taken in the call that reads it. It does every disk read the session makes
   (the config, the lock and modules, the sources, the check inputs), each through the one recording adapter, derives every source key, and answers `changes`
-  and `stale`. A one-shot compile runs the same steps through an adapter that records nothing (ADR 0106).
+  and `stale`. A one-shot compile runs the same steps through an adapter that records nothing and reads each source through the disk it is handed (ADR 0106, ADR 0166).
 - **Check reads**: every file-system read a check, a rule or a check pass makes, through the `Disk` in `RuleInput`
   (`exists`, `list`, `read`; `specforge_registry::Disk`, ADR 0107). A project session's ledger stamps and records each
   one; its check inputs are the reads its checks made the last time they ran. Tests give the checks a `MemoryDisk`.
@@ -116,8 +117,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`ProjectSession::open_through`, ADR 0145). A project session's ledger stamps each source by its key, with the link
   chain it followed, and records each link
   hop the read followed. A held buffer's file is not read, so nothing of it is recorded until it is released.
-  A migration reads each source through the request's containment (`migrate_project`'s `read`, ADR 0158); an edited
-  project reads none.
+  A migration reads each source, and compiles the project before and after, through the request's containment
+  (`migrate_project`'s `read`, `CompiledProject::compile_through`; ADR 0158, ADR 0166); an edited project reads none.
 - **Session inputs**: everything a project session depends on besides its sources' text: where its
   sources are discovered (the spec root and `exclude`), its **environment inputs**
   (the environment reads of its last load) and its **check inputs**
