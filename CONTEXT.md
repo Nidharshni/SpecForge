@@ -784,7 +784,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`specforge_coverage::Verdict`).
 - **Operation**: one user-level command (init, add, remove, …) as a typed request and outcome,
   independent of surface. What its request's values mean (a default, a value standing for another, arguments that
-  exclude or need each other) is the operation's, read once in ops; a surface only spells the arguments (ADR 0101); an argument a surface owns that picks which reader answers (the infer prompt's `scope`) refuses a value it does not know, never reading it as a default.
+  exclude or need each other) is the operation's, read once in ops; a surface only spells the arguments (ADR 0101); an argument that names an entity, the request's subject or a filter, is refused by the operation when the graph lacks it, and a depth needs the entity it counts from; an argument a surface owns that picks which reader answers (the infer prompt's `scope`) refuses a value it does not know, never reading it as a default.
   An operation that writes names the files it changed on disk in its
   outcome (`specforge_ops::Writes`), recorded where it wrote. It fails with an `OpError` whose kind
   (`OpErrorKind`: invalid input, not found, conflict, schema mismatch, compilation failed, …) is
@@ -804,6 +804,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   extension not there, a conflict); a refusal of the project or the environment has none. Each surface spells it:
   MCP names the argument (`specifiers`, `path`), the CLI and the LSP print the error (ADR 0072). It is stated where the
   operation fails, with the refusal: no operation keeps an error enum of its own to convert into one (ADR 0132).
+- **Entity argument**: an argument of a request that names one entity: the subject of a read (inspect's, trace's,
+  coverage's `entity_id`) or a filter (search's `references`, export's `scope`). One the graph lacks is refused by the
+  operation with `view::not_found` (E003, did-you-mean) about that field, never answered as an empty result (ADR 0015
+  Q5, ADR 0101).
 - **Remedy**: what a refusal, a finding or a diagnostic tells the caller to do (an OpError's message tail or
   suggestion, a doctor finding's remediation). Written below the surfaces, it names a whole command or the request's
   own words, never a bare flag, so it reads true on every surface; the catalog's explanations, which name each
