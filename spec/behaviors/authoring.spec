@@ -66,6 +66,7 @@ behavior edit_entity_link "Edit an Entity Reference List" {
     the earlier edits of the list left the file, and an own field equal to the default is removed.
   """
   verify unit "link on the other side of a relation names the owning field of the target's kind"
+  verify unit "a reference list's items are split at commas however they are given"
   verify unit "link appends the target and keeps the items as written"
   verify unit "unlink of the last item removes the field"
   verify unit "link of an inherited field copies the default"

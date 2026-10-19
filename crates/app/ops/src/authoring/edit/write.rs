@@ -91,20 +91,38 @@ fn one<'i>(input: &'i Input, key: &str, what: &str) -> Result<&'i str, Refusal<E
     }
 }
 
-fn items_of(input: &Input, key: &str, split: bool) -> Result<Vec<String>, Refusal<EditField>> {
-    match input {
-        Input::Many(items) => Ok(items.clone()),
-        Input::One(text) if split => Ok(text
-            .split(',')
+/// The items `input` gives a list field of `field_type`: a reference list's items are split at commas wherever
+/// they stand (one text or several; an entity id holds no comma), a string list's are taken whole.
+pub(super) fn items_given(
+    input: &Input,
+    key: &str,
+    field_type: FieldType,
+) -> Result<Vec<String>, Refusal<EditField>> {
+    debug_assert!(matches!(
+        field_type,
+        FieldType::ReferenceList | FieldType::StringList
+    ));
+    let split = field_type == FieldType::ReferenceList;
+    let texts: &[String] = match input {
+        Input::Many(items) => items,
+        Input::One(text) => std::slice::from_ref(text),
+        Input::Entries(_) => {
+            return Err(not_editable(
+                EditField::Value,
+                format!("'{key}' is a list; give its items"),
+            ));
+        }
+    };
+    Ok(if split {
+        texts
+            .iter()
+            .flat_map(|text| text.split(','))
             .map(|item| item.trim().to_string())
             .filter(|item| !item.is_empty())
-            .collect()),
-        Input::One(text) => Ok(vec![text.clone()]),
-        Input::Entries(_) => Err(not_editable(
-            EditField::Value,
-            format!("'{key}' is a list; give its items"),
-        )),
-    }
+            .collect()
+    } else {
+        texts.to_vec()
+    })
 }
 
 /// The text after `key ` on a line that starts with `lead` (the key line's leading whitespace as it stands once the
@@ -154,12 +172,12 @@ pub fn written(
                 (spell::value(form, one(input, key, what)?), Expect::Any)
             }
             FieldType::ReferenceList => {
-                items = items_of(input, key, true)?;
+                items = items_given(input, key, FieldType::ReferenceList)?;
                 let written: Vec<String> = items.iter().map(|i| spell::value(form, i)).collect();
                 (list(&written), Expect::Items(&items))
             }
             FieldType::StringList => {
-                items = items_of(input, key, false)?;
+                items = items_given(input, key, FieldType::StringList)?;
                 let written: Vec<String> = items.iter().map(|i| spell::value(form, i)).collect();
                 (list(&written), Expect::Items(&items))
             }
