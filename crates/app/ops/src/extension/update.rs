@@ -105,7 +105,6 @@ impl UpdateOutcome {
     /// adapter passes `Utc::now()`, a test a fixed time).
     pub fn document(&self, ended_at: chrono::DateTime<chrono::Utc>) -> UpdateDocument {
         let applied = self.applied();
-        let counts = self.batch_update_completed();
         UpdateDocument {
             ok: applied,
             extensions: self
@@ -150,12 +149,7 @@ impl UpdateOutcome {
                 })
                 .collect(),
             extension_upgrade_completed: self.extension_upgrade_completed(),
-            batch_update_completed: BatchUpdateEvent {
-                updated_count: counts.updated_count,
-                failed_count: counts.failed_count,
-                skipped_count: counts.skipped_count,
-                timestamp: ended_at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
-            },
+            batch_update_completed: self.batch_update_completed(ended_at),
         }
     }
 
@@ -175,12 +169,15 @@ impl UpdateOutcome {
             .collect()
     }
 
-    /// The `batch_update_completed` event's counts
-    /// (`spec/events/wasm-extensions.spec`). An extension counts as
-    /// updated only when the update was applied; one an aborted update
-    /// would have moved counts as skipped, since nothing changed. The
-    /// adapter that emits the event stamps its `timestamp`.
-    pub fn batch_update_completed(&self) -> BatchUpdateCompleted {
+    /// The `batch_update_completed` event's payload
+    /// (`spec/events/wasm-extensions.spec`), stamped `ended_at`. An
+    /// extension counts as updated only when the update was applied; one an
+    /// aborted update would have moved counts as skipped, since nothing
+    /// changed.
+    pub fn batch_update_completed(
+        &self,
+        ended_at: chrono::DateTime<chrono::Utc>,
+    ) -> BatchUpdateCompleted {
         let failed_count = self.failures().count();
         let updated_count = if failed_count == 0 {
             self.updated().count()
@@ -191,6 +188,7 @@ impl UpdateOutcome {
             updated_count,
             failed_count,
             skipped_count: self.extensions.len() - updated_count - failed_count,
+            timestamp: ended_at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         }
     }
 }
@@ -209,7 +207,7 @@ pub struct UpdateDocument {
     /// One per extension moved, in lock order; empty when nothing was
     /// applied.
     pub extension_upgrade_completed: Vec<UpgradeCompleted>,
-    pub batch_update_completed: BatchUpdateEvent,
+    pub batch_update_completed: BatchUpdateCompleted,
 }
 
 /// `extension_upgrade_completed` (`spec/events/wasm-lifecycle.spec`): one
@@ -258,22 +256,12 @@ pub enum UpdateRow {
     },
 }
 
-/// `batch_update_completed` as `specforge update --format json` carries it
-/// (`spec/events/wasm-extensions.spec`): the counts and when the update
-/// ended.
+/// The payload of `batch_update_completed`
+/// (`spec/events/wasm-extensions.spec`, `BatchUpdateCompletedPayload`), which
+/// an update that ran to the end (applied or rolled back) produces, as
+/// `specforge update --format json` carries it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Shape)]
 #[serde(rename_all = "camelCase")]
-pub struct BatchUpdateEvent {
-    pub updated_count: usize,
-    pub failed_count: usize,
-    pub skipped_count: usize,
-    /// RFC 3339, UTC, milliseconds.
-    pub timestamp: String,
-}
-
-/// The payload of `batch_update_completed`, which an update that ran to
-/// the end (applied or rolled back) produces, its timestamp aside.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BatchUpdateCompleted {
     /// Extensions moved to a newer version.
     pub updated_count: usize,
@@ -283,6 +271,8 @@ pub struct BatchUpdateCompleted {
     /// Extensions left as they were: up to date, not from a registry, or
     /// held back because another failed.
     pub skipped_count: usize,
+    /// RFC 3339, UTC, milliseconds.
+    pub timestamp: String,
 }
 
 /// Update the extensions `req` names in the project at `req.root.dir()`.

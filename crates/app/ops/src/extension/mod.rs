@@ -38,8 +38,8 @@ pub use remove::{
 };
 pub use resolve::{resolve, upgrade};
 pub use update::{
-    BatchUpdateCompleted, BatchUpdateEvent, ExtensionUpdate, NO_LOCK, UpdateDocument,
-    UpdateOutcome, UpdateRequest, UpdateRow, UpdateStatus, UpgradeCompleted, update,
+    BatchUpdateCompleted, ExtensionUpdate, NO_LOCK, UpdateDocument, UpdateOutcome, UpdateRequest,
+    UpdateRow, UpdateStatus, UpgradeCompleted, update,
 };
 
 pub(crate) use claims::{Claimed, Claims};

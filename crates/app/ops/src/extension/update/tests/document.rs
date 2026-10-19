@@ -45,11 +45,7 @@ fn update_document_lists_each_status() {
             ),
         ],
     };
-    let ended_at = chrono::DateTime::parse_from_rfc3339("2026-10-11T12:00:00.123Z")
-        .unwrap()
-        .with_timezone(&chrono::Utc);
-
-    let document = serde_json::to_value(outcome.document(ended_at)).unwrap();
+    let document = serde_json::to_value(outcome.document(ended())).unwrap();
 
     assert_eq!(document["ok"], false);
     assert_eq!(
