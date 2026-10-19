@@ -8,6 +8,7 @@ mod fields;
 mod layout;
 mod links;
 mod obligations;
+mod paths;
 mod positions;
 mod replay;
 mod sides;
@@ -15,8 +16,9 @@ mod validate;
 
 use crate::navigate::{Compiled, SOFTWARE, compile};
 use specforge_ops::Refusal;
-use specforge_ops::authoring::edit::{self, Edit, EditField, Input};
+use specforge_ops::authoring::edit::{self, Edit, EditField, Input, Obligation};
 use specforge_ops::view::ProjectView;
+use std::collections::BTreeMap;
 
 pub const TASKS: &str = r#"// The tasks.
 
@@ -117,6 +119,23 @@ pub fn unlink(id: &str, field: &str, target: &str) -> Edit {
         entity_id: id.to_string(),
         field: field.to_string(),
         target: target.to_string(),
+    }
+}
+
+pub fn create(kind: &str, id: &str, file: &str, fields: &[(&str, Input)]) -> Edit {
+    Edit::Create {
+        kind: kind.into(),
+        id: id.into(),
+        title: "Archive a Task".into(),
+        file: file.into(),
+        fields: fields
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect::<BTreeMap<_, _>>(),
+        verify: vec![Obligation {
+            kind: Some("unit".into()),
+            text: "archiving an unknown task fails".into(),
+        }],
     }
 }
 

@@ -1,26 +1,7 @@
 use super::*;
-use specforge_ops::authoring::edit::Obligation;
-use std::collections::BTreeMap;
 
 fn tasks() -> Compiled {
     project(&[("tasks.spec", TASKS)])
-}
-
-fn create(kind: &str, id: &str, file: &str, fields: &[(&str, Input)]) -> Edit {
-    Edit::Create {
-        kind: kind.into(),
-        id: id.into(),
-        title: "Archive a Task".into(),
-        file: file.into(),
-        fields: fields
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.clone()))
-            .collect::<BTreeMap<_, _>>(),
-        verify: vec![Obligation {
-            kind: Some("unit".into()),
-            text: "archiving an unknown task fails".into(),
-        }],
-    }
 }
 
 fn archive(file: &str) -> Edit {
