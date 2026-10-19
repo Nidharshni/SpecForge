@@ -6,8 +6,10 @@ use specforge_common::{Diagnostic, SourceSpan, Sym, codes, structural};
 use specforge_parser::{Entity, FieldEntry, FieldMap, SpecFile};
 use std::collections::HashSet;
 
-/// One file's defaults: the fields each kind's first `defaults` block applies, as written, in written order.
-pub(crate) struct FileDefaults<'f> {
+/// One file's defaults (ADR 0149): the entry each kind's first `defaults` block applies, and whether a block's own
+/// field restates it (W161). The graph build resolves blocks through it; a typed edit asks it over the text it is
+/// planning (ADR 0154).
+pub struct FileDefaults<'f> {
     by_kind: Vec<(Sym, Vec<&'f FieldEntry>)>,
 }
 
@@ -29,7 +31,7 @@ impl<'f> FileDefaults<'f> {
     /// twice, a second block for a kind, a block after the file's first entity block) and W161 (a block field that
     /// restates its default; a default no block takes). Without declared kinds (`forms.kinds()` empty) only E078 and
     /// W161 are reported.
-    pub(crate) fn of(file: &'f SpecFile, forms: &FieldForms) -> (Self, Vec<Diagnostic>) {
+    pub fn of(file: &'f SpecFile, forms: &FieldForms) -> (Self, Vec<Diagnostic>) {
         let checked = !forms.kinds().is_empty();
         let mut diagnostics = Vec::new();
         let mut by_kind: Vec<(Sym, Vec<&FieldEntry>)> = Vec::new();
@@ -127,6 +129,26 @@ impl<'f> FileDefaults<'f> {
         (defaults, diagnostics)
     }
 
+    /// The entry `kind`'s defaults apply for `field`, as written (its spans are in the defaults block): `None` when the
+    /// file states none, or states it where it is not applied (an undeclared field or kind, E077; a second block for
+    /// the kind; a key given twice, after its first).
+    pub fn entry(&self, kind: &str, field: &str) -> Option<&'f FieldEntry> {
+        self.by_kind
+            .iter()
+            .find(|(k, _)| k.as_str() == kind)?
+            .1
+            .iter()
+            .find(|e| e.key.as_str() == field)
+            .copied()
+    }
+
+    /// Whether `own`, a field a block of `kind` writes, restates its default: both are written alike
+    /// (`field_form::write`), so deleting the line changes nothing in the graph's JSON. W161 asks this.
+    pub fn restates(&self, kind: &str, own: &FieldEntry) -> bool {
+        self.entry(kind, own.key.as_str())
+            .is_some_and(|d| field_form::write(&own.value) == field_form::write(&d.value))
+    }
+
     /// W161: a block field equal to its default, and a default no block of its kind takes.
     fn dead(&self, file: &SpecFile, diagnostics: &mut Vec<Diagnostic>) {
         for (kind, applied) in &self.by_kind {
@@ -147,10 +169,7 @@ impl<'f> FileDefaults<'f> {
                 for block in &blocks {
                     match block.fields.entries().iter().find(|e| e.key == default.key) {
                         None => reached = true,
-                        Some(own)
-                            if field_form::write(&own.value)
-                                == field_form::write(&default.value) =>
-                        {
+                        Some(own) if self.restates(kind.as_str(), own) => {
                             diagnostics.push(
                                 Diagnostic::new(
                                     codes::W161,
