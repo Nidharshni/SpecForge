@@ -259,7 +259,13 @@ behavior load_format_config "Load Format Configuration" {
     diagnostics and fall back to defaults. If no config file is found
     within the project root boundary, defaults MUST be used. The walk
     stops at the file's own project root, the nearest directory holding
-    specforge.json, whichever project the run started in.
+    specforge.json, whichever project the run started in. The
+    configuration MUST be read through the disk of the caller: over MCP a
+    configuration file that resolves outside the project, or that has more
+    than one name, MUST NOT be read; it is reported as W141 naming where
+    it lands or how many names it has, never what it holds, and the
+    defaults apply. The CLI and the LSP follow it. A run, a typed edit and
+    init read each configuration file once.
   """
   verify unit "config file in project root is loaded"
   verify unit "config file in parent directory is discovered"

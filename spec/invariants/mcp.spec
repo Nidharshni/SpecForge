@@ -98,7 +98,10 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
     project keeps at its root (the inference and anchors manifests, the
     test report) is read only from inside it. A source of the served
     project, and the recorded report, is also read only from a file that has
-    one name: a hard link to a file outside is another name for it. A typed
+    one name: a hard link to a file outside is another name for it. So is
+    the format configuration (.specforgefmt.toml) a call reads (format's, a
+    typed edit's layout, init's starter), and format reads each file it
+    formats only when it has one name. A typed
     edit is validated over the sources the served project read, and a
     migration reads each source, and compiles the project before and after
     it, through the call's bound, so neither a

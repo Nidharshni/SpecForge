@@ -192,7 +192,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   inside it (a source that resolves outside is E025), and a file with more than one name is not read through a bound: over MCP it is E025 (ADR 0146); the CLI, watch and LSP are unbounded and read it.
 - **Contained disk**: a containment as the `Disk` port (`specforge_ops` `ContainedDisk`, ADR 0139): how a crate
   below app reads a project file the surface bounds; a name that lands outside reads as `invalid_input`. Also the disk MCP
-  hands a session to read its sources through (ADR 0145); it refuses a regular file with more than one name (ADR 0146).
+  hands a session to read its sources through (ADR 0145); it refuses a regular file with more than one name (ADR 0146), and the disk a bounded caller's format configuration is read through (ADR 0169).
 - **Replace file**: how a project file is written (`specforge_common::fresh::replace_file`, ADR 0144): a new file beside the name,
   renamed onto it, so the inode that held the name is never opened for writing. `create_fresh` is the same for a stream.
 - **Caller**: what the surface that calls an operation lends it, one value (`specforge_ops::Caller`, ADR 0124): what the
@@ -851,8 +851,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Format configuration**: how one `.spec` document is laid out: inside a project, the nearest
   `.specforgefmt.toml` from the document's directory up to its own project root, else the defaults;
   outside any project, the editor's tab settings. `specforge format`, MCP `specforge.format` and the
-  LSP all format through `specforge_ops::authoring::format::document` (ADR 0021). A typed edit lays a multi-line
-  value out with it (`specforge_ops::authoring::format::config`, ADR 0153).
+  LSP all format through `specforge_ops::authoring::format::document` (ADR 0021); it is looked up by `Configs`, through
+  the disk the caller hands it (ADR 0169): over MCP a `.specforgefmt.toml` that leaves the project or has more than one
+  name is a W141 and the defaults apply. A typed edit lays a multi-line value out with it, looked up once per plan
+  through its view's disk (`Site::config`, ADR 0153, ADR 0169).
 - **Formatted document**: one `.spec` text formatted with its format configuration, whole or in the
   blocks a range touches (`specforge_ops::authoring::format::document` → `FormattedDocument`): the formatted text,
   the configuration and where it came from, what formatting reported (W141, W142), and the edits that
