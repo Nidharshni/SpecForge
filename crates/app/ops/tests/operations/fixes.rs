@@ -13,7 +13,7 @@ use specforge_test::prelude::*;
 use std::sync::Arc;
 
 /// `text` with `edits` (spans of it) applied.
-fn apply(text: &str, edits: &[TextEdit]) -> String {
+pub(crate) fn apply(text: &str, edits: &[TextEdit]) -> String {
     let offset = |line: usize, col: usize| -> usize {
         let start: usize = text
             .split_inclusive('\n')
@@ -34,7 +34,7 @@ fn apply(text: &str, edits: &[TextEdit]) -> String {
 }
 
 /// The fixes of `p`'s own diagnostics for `query`.
-fn fixes_of(p: &Compiled, query: &FixQuery) -> Vec<Fix> {
+pub(crate) fn fixes_of(p: &Compiled, query: &FixQuery) -> Vec<Fix> {
     p.navigator().fixes(&p.project.diagnostics(), query)
 }
 
