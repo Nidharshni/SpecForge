@@ -16,12 +16,12 @@ use crate::{Caller, OpError, OpErrorKind};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{Code, codes};
-use specforge_installed::{Installed, LockState};
+use specforge_installed::Installed;
 use specforge_package::PackageName;
 use specforge_package::{LockedVersion, Reach};
 use specforge_wasm::WasmRuntime;
 
-/// The code `update` reports when the project has no lock file.
+/// The code `update` reports when the project has no lock file, or one that can't be read.
 pub const NO_LOCK: Code = codes::E033;
 
 /// What to update, and how.
@@ -288,8 +288,9 @@ pub struct BatchUpdateCompleted {
 /// Update the extensions `req` names in the project at `req.root.dir()`.
 ///
 /// Fails outright (nothing asked, nothing written) with `config_invalid`
-/// when `specforge.json` cannot be used, with E033 when the
-/// project has no lock file, with `extension_not_found` (E072 for a name
+/// when `specforge.json` cannot be used, with E033 when `specforge.lock` is there and can't be read
+/// (the lock plan's refusal, as `add` and `remove` give it) and when the project has no lock file
+/// (`precondition_failed`, naming `specforge add`), with `extension_not_found` (E072 for a name
 /// that is no package name) when the name it was given is not locked, and with E063 when a registry install needs a
 /// registry and none is configured. Fails with the change's error (E032
 /// naming the package whose binary could not be placed, E033 for the lock)
@@ -305,33 +306,10 @@ pub fn update(
     let read = crate::config::usable(req.root.dir())?;
     let (config, found) = (read.config, read.found);
     let installed = Installed::at(req.root.dir());
-    let lock = match installed.lock() {
-        LockState::Read(lock) => lock.clone(),
-        LockState::Absent => {
-            return Err(OpError::coded(
-                OpErrorKind::PreconditionFailed,
-                NO_LOCK,
-                "no lock file found. Run `specforge add` first.",
-            ));
-        }
-        LockState::Unreadable(problem) => {
-            return Err(OpError::coded(
-                OpErrorKind::PreconditionFailed,
-                NO_LOCK,
-                format!("{}. Run `specforge add` first.", problem.message),
-            ));
-        }
-    };
-
-    // A name the lock does not hold is refused before any registry is asked.
-    if let Some(name) = req.name
-        && !lock.entries.iter().any(|entry| entry.name.as_str() == name)
-    {
-        return Err(not_locked(name));
-    }
-
-    // Every newer package is fetched and staged; every upgrade is then judged against the lock as
-    // the whole update leaves it, whatever order the lock lists the extensions in.
+    // The plan opens the lock: one that is there and can't be read is refused here, as `add` and
+    // `remove` refuse it (E033), before a name is checked or a registry asked. Every newer package
+    // is fetched and staged; every upgrade is then judged against the lock as the whole update
+    // leaves it, whatever order the lock lists the extensions in.
     let mut plan = LockPlan::updating(
         &installed,
         Opened::read(&config, found),
@@ -342,6 +320,22 @@ pub fn update(
         },
         req.caller,
     )?;
+    // Update's own empty case: no lock file, nothing locked to update.
+    let Some(lock) = installed.lock().file() else {
+        return Err(OpError::coded(
+            OpErrorKind::PreconditionFailed,
+            NO_LOCK,
+            "no lock file found. Run `specforge add` first.",
+        ));
+    };
+
+    // A name the lock does not hold is refused before any registry is asked.
+    if let Some(name) = req.name
+        && !lock.entries.iter().any(|entry| entry.name.as_str() == name)
+    {
+        return Err(not_locked(name));
+    }
+
     let mut extensions = Vec::new();
     for entry in lock
         .entries

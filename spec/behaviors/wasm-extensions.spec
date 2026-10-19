@@ -945,6 +945,10 @@ behavior update_all_extensions "Update All Extensions" {
     refuse a name the lock does not hold, before any registry is asked:
     extension_not_found naming it (E072 when it is no package name; a
     builtin's name is told that builtins update with specforge).
+    A specforge.lock that is there and can't be read MUST refuse the update
+    before any registry is asked, with the refusal add gives (E033, the
+    lock's own remedy); with no lock file the update is refused E033 naming
+    specforge add.
     When a registry-installed extension is
     to be updated and no registry is configured in specforge.json, update
     MUST make no network call and MUST fail with E063, whose suggestion
@@ -971,6 +975,7 @@ behavior update_all_extensions "Update All Extensions" {
   verify unit "every upgrade is judged against the lock as the whole update leaves it, whatever order the lock lists them in"
   verify unit "an upgrade whose required peer no entry enables is refused, and update enables nothing"
   verify unit "an update of a name the lock does not hold is refused before any registry is asked"
+  verify unit "an update over an unreadable specforge.lock is refused as add refuses it, before any registry is asked"
   verify unit "failed upgrade rolls back all changes"
   verify unit "a write that fails while applying fails the update, naming what it could not write, and nothing is applied"
   verify integration "update never replaces a locally installed extension from a registry"

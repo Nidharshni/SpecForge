@@ -6,14 +6,16 @@ $ specforge update
 [exit 1]
 [stdout]
 [stderr]
-error[E033]: corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2. Run `specforge add` first.
+error[E033]: corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2
+  hint: fix specforge.lock, or delete it and install the extensions again with `specforge add`
 
 $ specforge update --format json
 [exit 1]
 [stdout]
 {
-  "error": "corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2. Run `specforge add` first.",
-  "code": "E033"
+  "error": "corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2",
+  "code": "E033",
+  "suggestion": "fix specforge.lock, or delete it and install the extensions again with `specforge add`"
 }
 [stderr]
 

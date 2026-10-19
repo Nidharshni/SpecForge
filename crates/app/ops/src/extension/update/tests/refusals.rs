@@ -97,8 +97,10 @@ fn an_unusable_config_is_refused_before_the_lock_is_read() {
     }
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "update_all_extensions",
+    verify = "an update over an unreadable specforge.lock is refused as add refuses it, before any registry is asked"
+)]
 fn an_update_over_an_unreadable_lock_is_refused_as_add_refuses_it() {
     use crate::extension::{AddRequest, add};
 

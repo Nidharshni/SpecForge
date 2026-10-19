@@ -225,7 +225,8 @@ impl<'a> LockPlan<'a> {
         Ok(plan)
     }
 
-    /// `update`'s plan: as [`Self::adding`], never enabling; E033 for an unreadable lock.
+    /// `update`'s plan: as [`Self::adding`], never enabling; an unreadable lock is refused here
+    /// (E033), before `update` reads an entry.
     pub(crate) fn updating(
         installed: &'a Installed,
         config: Opened,
