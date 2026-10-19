@@ -9,6 +9,7 @@ mod layout;
 mod links;
 mod obligations;
 mod replay;
+mod sides;
 mod validate;
 
 use crate::navigate::{Compiled, SOFTWARE, compile};

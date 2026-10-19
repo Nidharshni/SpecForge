@@ -341,3 +341,91 @@ fn no_builtin_field_shadows_a_new_option() {
         }
     }
 }
+
+#[test]
+#[ignore = "flipped by T6"]
+fn link_on_the_other_side_is_refused_naming_the_owning_field() {
+    let project = todo();
+    let file = "spec/invariants/task.spec";
+    let before = project.read(file);
+    let document =
+        Cli::on(&project).document(&["link", "task_id_uniqueness", "enforced_by", "complete_task"]);
+    assert_eq!(document.code, 1, "{}", document.json);
+    assert_eq!(document.json["code"], "other_side", "{}", document.json);
+    assert_eq!(project.read(file), before);
+}
+
+#[test]
+#[ignore = "flipped by T8"]
+fn new_with_path_after_the_kind_reads_that_projects_fields() {
+    let project = todo();
+    let outside = tempfile::TempDir::new().unwrap();
+    let run = Cli::on(&project).in_dir(outside.path()).run(&[
+        "new",
+        "behavior",
+        "archive_task",
+        "Archive a Task",
+        "--in",
+        "behaviors/task.spec",
+        "--contract",
+        "When asked, the system MUST archive.",
+        "--dry-run",
+    ]);
+    assert_eq!(run.code, 0, "{}{}", run.stdout, run.stderr);
+    assert!(
+        run.stdout
+            .contains("+behavior archive_task \"Archive a Task\" {"),
+        "{}",
+        run.stdout
+    );
+}
+
+#[test]
+#[ignore = "flipped by T9"]
+fn new_given_one_value_field_twice_is_refused() {
+    let project = todo();
+    let run = sf(
+        &project,
+        &[
+            "new",
+            "behavior",
+            "archive_task",
+            "Archive",
+            "--in",
+            "behaviors/task.spec",
+            "--contract",
+            "first",
+            "--contract",
+            "second",
+            "--dry-run",
+        ],
+    );
+    assert_eq!(run.code, 1, "{}{}", run.stdout, run.stderr);
+    assert!(run.stderr.contains("takes one text"), "{}", run.stderr);
+}
+
+#[test]
+#[ignore = "flipped by T9"]
+fn new_of_an_unknown_kind_is_refused_as_unknown_kind() {
+    let project = todo();
+    let run = sf(
+        &project,
+        &[
+            "new",
+            "behaviour",
+            "archive_task",
+            "Archive",
+            "--in",
+            "behaviors/task.spec",
+            "--contract",
+            "x",
+        ],
+    );
+    assert_eq!(run.code, 1, "{}{}", run.stdout, run.stderr);
+    assert!(run.stderr.contains("unknown_kind"), "{}", run.stderr);
+    assert!(
+        run.stderr.contains("did you mean 'behavior'?"),
+        "{}",
+        run.stderr
+    );
+}
