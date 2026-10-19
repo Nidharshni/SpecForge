@@ -80,3 +80,35 @@ fn a_rename_from_a_document_opened_since_the_compile_waits_for_it() {
         Ok(Some(_))
     ));
 }
+
+const TYPO: &str = "behavior login \"Login\" {\n  invariants [session_limt]\n}\n";
+
+/// A line typed above the block: the compile's E003 is at line 1 of the text it read, and line 1 of
+/// the buffer is the block's header now.
+#[test]
+#[ignore = "flipped by T4"]
+fn hover_over_a_buffer_typed_since_shows_no_diagnostic_of_the_compile() {
+    let mut served =
+        Served::new(&[("limit.spec", LIMIT), ("login.spec", TYPO)]).open(&["login.spec"]);
+    assert!(
+        served
+            .hover("login.spec", 1, 18)
+            .is_some_and(|md| md.contains("E003"))
+    );
+
+    served.type_text("login.spec", &format!("// typed\n{TYPO}"));
+    for line in [1, 2] {
+        let md = served.hover("login.spec", line, 18);
+        assert!(
+            !md.as_deref().is_some_and(|md| md.contains("E003")),
+            "line {line}: {md:?}"
+        );
+    }
+
+    served.apply(Change::Edited(vec![served.uri("login.spec")]));
+    assert!(
+        served
+            .hover("login.spec", 2, 18)
+            .is_some_and(|md| md.contains("E003"))
+    );
+}
