@@ -408,7 +408,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **File default**: a field value a `defaults <kind> { … }` block states once for every block of that kind in
   its file (ADR 0149). A block's own field replaces it whole. The graph build resolves it, so the graph, every read
   view, export and check hold the resolved value; its spans stay the default's, so diagnostics, references and
-  rename point at the default's line. `defaults` is a structural keyword: never a kind, never an id.
+  rename point at the default's line. `defaults` is a structural keyword: never a kind, never an id. A typed edit
+  asks the graph's defaults module (`specforge_graph::FileDefaults`) over the text it plans which default applies and
+  whether a field restates it, so it never writes what W161 would flag (ADR 0154).
 - **Custom verdict**: an extension's answer, through its `wasm_function`, on one entity for a
   `check: "custom"` rule: pass, or fail naming a field and value. The rule set asks for it through
   the `CustomVerdicts` port; the project's adapter calls the extension (`ExtensionCalls::validate`),
@@ -1079,7 +1081,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Typed edit**: one change to a project's entities, named by what it does rather than by text: create, set,
   unset, retitle, link, unlink, add or remove a verify obligation, delete (`specforge_ops::authoring::edit::Edit`).
   A list of them is planned over the texts the project was compiled from (each edit reading what the ones before
-  it left), each value written in its field's form (a multi-line one laid out with the file's format configuration)
+  it left), each value written in its field's form (a multi-line one laid out with the file's format configuration, and left out when it restates its file's default)
   and each touched block formatted; the plan is refused with E080
   when the edited project reports an error the project did not, and is written as one project change (ADR 0151).
 - **Lexeme**: one token of a `.spec` text as the language's one lexer reads it without a parse
