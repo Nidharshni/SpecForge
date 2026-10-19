@@ -5,7 +5,7 @@ use specforge_ops::authoring::rename;
 use specforge_ops::read::export::{Format, Request, export};
 use specforge_ops::read::navigate::{Direction, ReferenceQuery, Role};
 use specforge_ops::read::query::{QueryRequest, query};
-use specforge_ops::read::trace::{Target, trace};
+use specforge_ops::read::trace::chain;
 use specforge_ops::view::ProjectView;
 use specforge_test::prelude::*;
 
@@ -114,7 +114,8 @@ fn query_trace_and_export_show_the_inherited_list() {
     );
 
     assert!(
-        plain(trace(&view, Target::Entity("b")).unwrap()).chains[0]
+        plain(chain(&view, "b").unwrap())
+            .chain
             .downstream
             .iter()
             .any(|link| link.entity_id == "Repo")

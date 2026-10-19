@@ -156,7 +156,7 @@ fn trace_on_root_has_downstream_only() {
 )]
 fn tracing_every_entity_covers_all_root_entities() {
     let graph = build_chain();
-    let traces = every_chain(&graph, RegistryBuild::default()).chains;
+    let traces = every_chain(&graph, RegistryBuild::default()).traces;
     // All 3 entities should have a trace
     assert_eq!(traces.len(), 3);
     let ids: Vec<&str> = traces.iter().map(|t| t.entity_id.as_str()).collect();

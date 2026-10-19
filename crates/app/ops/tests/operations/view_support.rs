@@ -11,7 +11,7 @@ use specforge_extension_sdk::prelude::*;
 use specforge_graph::Graph;
 use specforge_ops::read::plan::{PlanGapKind, PlanOutcome};
 use specforge_ops::read::stats::Stats;
-use specforge_ops::read::trace::{Target, TraceChain};
+use specforge_ops::read::trace::TraceChain;
 pub use specforge_ops::testing::Viewed;
 pub use specforge_project::testing::Assembled;
 use specforge_project::{ExtensionLoad, Loaded};
@@ -143,9 +143,9 @@ pub fn gap_texts(outcome: &PlanOutcome, kind: PlanGapKind) -> Vec<&str> {
 /// `registries`; `None` when the graph lacks it.
 pub fn chain_in(graph: &Graph, registries: RegistryBuild, entity_id: &str) -> Option<TraceChain> {
     let project = Assembled::over(registries).graph(graph.clone());
-    specforge_ops::read::trace::trace(&project.view(), Target::Entity(entity_id))
+    specforge_ops::read::trace::chain(&project.view(), entity_id)
         .ok()
-        .map(|outcome| plain(outcome).chains.into_iter().next().unwrap())
+        .map(|document| plain(document).chain)
 }
 
 /// The chain of `entity_id` in `graph`, with no extension: nothing is
@@ -156,12 +156,9 @@ pub fn chain(graph: &Graph, entity_id: &str) -> TraceChain {
 
 /// Every entity's chain in `graph`, with `registries`, as the trace
 /// operation returns them.
-pub fn every_chain(
-    graph: &Graph,
-    registries: RegistryBuild,
-) -> specforge_ops::read::trace::TraceOutcome {
+pub fn every_chain(graph: &Graph, registries: RegistryBuild) -> specforge_ops::read::trace::Traces {
     let project = Assembled::over(registries).graph(graph.clone());
-    plain(specforge_ops::read::trace::trace(&project.view(), Target::Every).unwrap())
+    plain(specforge_ops::read::trace::every(&project.view()))
 }
 
 /// A noticed read's value, its notices let go: for a test of the value.

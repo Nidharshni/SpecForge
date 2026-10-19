@@ -4,7 +4,7 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_ops::read::plan::AgentPlan;
-use specforge_ops::read::trace::{Ask, Target, TraceField, trace};
+use specforge_ops::read::trace::{self, Ask, Target, TraceField};
 
 use crate::args::Arguments;
 use crate::prompt::{CorePrompt, Prompted};
@@ -83,10 +83,17 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
             Ask::Trace(Target::Entity(entity_id)) => {
                 // As the trace tool traces it: its chain and missing links.
                 // ADR 0111 D6: the trace prompt's payload has no `_meta`, so it reports no notices.
-                let (outcome, _unreported) = trace(&view, Target::Entity(entity_id))
+                let (document, _unreported) = trace::chain(&view, entity_id)
                     .map_err(|refusal: Refusal<EntityField>| Prompt::refused(refusal))?
                     .into_value_and_notices();
-                let gaps = outcome.gaps().iter().map(Gap::of).collect();
+                let gaps = document
+                    .chain
+                    .missing
+                    .iter()
+                    .cloned()
+                    .map(trace::Gap::MissingLink)
+                    .map(|gap| Gap::of(&gap))
+                    .collect();
                 (
                     vec![entity_id.to_string()],
                     gaps,

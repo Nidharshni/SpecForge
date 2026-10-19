@@ -2,8 +2,7 @@
 //! operation over the project view (ADR 0015), and the vocabulary of what
 //! falls short ([`Gap`]: a missing link, or a plan gap).
 
-use serde::ser::SerializeStruct;
-use serde::{Serialize, Serializer};
+use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_graph::{Direction, Graph};
 use specforge_registry::RegistryBuild;
@@ -175,34 +174,30 @@ pub enum Target<'t> {
     Every,
 }
 
-/// The chains a trace computed. It serializes as the document `specforge
-/// trace --format json` writes: one chain as `{schema_version, entity_id,
-/// entity_kind, upstream, downstream, missing}`, every chain as
-/// `{schema_version, traces}`.
-#[derive(Debug)]
-pub struct TraceOutcome {
-    pub chains: Vec<TraceChain>,
-    /// The project's versioned schema version, as `specforge export` and
-    /// `specforge schema` state it.
-    schema_version: String,
-    /// One entity was traced (else every one).
-    single: bool,
+/// Every entity's chain, ordered by entity id: the document `specforge
+/// trace --format json` writes with no entity, `{schema_version, traces}`.
+#[derive(Debug, Serialize)]
+pub struct Traces {
+    pub schema_version: String,
+    pub traces: Vec<TraceChain>,
 }
 
-impl Serialize for TraceOutcome {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match (self.single, self.chains.first()) {
-            (true, Some(chain)) => ChainDocument {
-                schema_version: self.schema_version.clone(),
-                chain,
-            }
-            .serialize(serializer),
-            _ => {
-                let mut doc = serializer.serialize_struct("TraceAll", 2)?;
-                doc.serialize_field("schema_version", &self.schema_version)?;
-                doc.serialize_field("traces", &self.chains)?;
-                doc.end()
-            }
+/// What a trace computed, as the document it serializes as: one entity's
+/// chain, `{schema_version, entity_id, entity_kind, upstream, downstream,
+/// missing}`, or every entity's, `{schema_version, traces}`.
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum TraceOutcome {
+    Chain(ChainDocument<TraceChain>),
+    Every(Traces),
+}
+
+impl TraceOutcome {
+    /// Its chains: the traced entity's, or every entity's in id order.
+    pub fn chains(&self) -> &[TraceChain] {
+        match self {
+            TraceOutcome::Chain(document) => std::slice::from_ref(&document.chain),
+            TraceOutcome::Every(every) => &every.traces,
         }
     }
 }
@@ -217,73 +212,58 @@ pub struct ChainDocument<C> {
     pub chain: C,
 }
 
-impl TraceOutcome {
-    /// The traced entity's chain as its document, for a trace of one entity
-    /// (`None` for a trace of every entity).
-    pub fn into_chain(self) -> Option<ChainDocument<TraceChain>> {
-        let single = self.single;
-        let schema_version = self.schema_version;
-        self.chains
-            .into_iter()
-            .next()
-            .filter(|_| single)
-            .map(|chain| ChainDocument {
-                schema_version,
-                chain,
-            })
-    }
-
-    /// The missing links of every chain, as gaps.
-    pub fn gaps(&self) -> Vec<Gap> {
-        self.chains
-            .iter()
-            .flat_map(|chain| chain.missing.iter().cloned().map(Gap::MissingLink))
-            .collect()
-    }
-}
-
-/// Trace `target` in the view's graph: each chain both ways, with every
-/// edge the registries lead the traced entity to have, and it lacks,
-/// flagged as missing. Its notices are what versioning the schema reported
-/// (I016, W053; ADR 0111).
+/// Trace `target` in the view's graph: [`chain`] for one entity, [`every`]
+/// for all.
 pub fn trace(
     view: &ProjectView,
     target: Target,
 ) -> Result<Noticed<TraceOutcome>, Refusal<EntityField>> {
+    match target {
+        Target::Entity(entity_id) => Ok(chain(view, entity_id)?.map(TraceOutcome::Chain)),
+        Target::Every => Ok(every(view).map(TraceOutcome::Every)),
+    }
+}
+
+/// The chain of `entity_id` both ways, with every edge the registries lead
+/// it to have, and it lacks, flagged as missing. Its notices are what
+/// versioning the schema reported (I016, W053; ADR 0111). An entity the
+/// graph lacks is `view::not_found` (E003, with its did-you-mean).
+pub fn chain(
+    view: &ProjectView,
+    entity_id: &str,
+) -> Result<Noticed<ChainDocument<TraceChain>>, Refusal<EntityField>> {
     let expectations = TraceExpectations::of(view.registries());
     let graph = view.graph();
     let versioned = view.versioned_schema();
-    let schema_version = versioned.version().to_string();
-    match target {
-        Target::Entity(entity_id) => {
-            let chain = chain(graph, entity_id, &expectations)
-                .ok_or_else(|| not_found(graph, entity_id).about(EntityField::EntityId))?;
-            Ok(Noticed::new(
-                TraceOutcome {
-                    chains: vec![chain],
-                    schema_version,
-                    single: true,
-                },
-                versioned.notices(),
-            ))
-        }
-        Target::Every => {
-            let mut chains: Vec<TraceChain> = graph
-                .nodes()
-                .iter()
-                .filter_map(|n| chain(graph, n.id.raw.as_str(), &expectations))
-                .collect();
-            chains.sort_by(|a, b| a.entity_id.cmp(&b.entity_id));
-            Ok(Noticed::new(
-                TraceOutcome {
-                    chains,
-                    schema_version,
-                    single: false,
-                },
-                versioned.notices(),
-            ))
-        }
-    }
+    let chain = traced(graph, entity_id, &expectations)
+        .ok_or_else(|| not_found(graph, entity_id).about(EntityField::EntityId))?;
+    Ok(Noticed::new(
+        ChainDocument {
+            schema_version: versioned.version().to_string(),
+            chain,
+        },
+        versioned.notices(),
+    ))
+}
+
+/// Every entity's chain, ordered by entity id; the notices as [`chain`]'s.
+pub fn every(view: &ProjectView) -> Noticed<Traces> {
+    let expectations = TraceExpectations::of(view.registries());
+    let graph = view.graph();
+    let versioned = view.versioned_schema();
+    let mut traces: Vec<TraceChain> = graph
+        .nodes()
+        .iter()
+        .filter_map(|n| traced(graph, n.id.raw.as_str(), &expectations))
+        .collect();
+    traces.sort_by(|a, b| a.entity_id.cmp(&b.entity_id));
+    Noticed::new(
+        Traces {
+            schema_version: versioned.version().to_string(),
+            traces,
+        },
+        versioned.notices(),
+    )
 }
 
 /// What the trace chains of some entities reach, and which of it is
@@ -310,7 +290,7 @@ pub fn reach<'s>(
     let graph = view.graph();
     let mut affected = BTreeSet::new();
     for seed in seeds {
-        let chain = chain(graph, seed, &expectations).ok_or_else(|| not_found(graph, seed))?;
+        let chain = traced(graph, seed, &expectations).ok_or_else(|| not_found(graph, seed))?;
         affected.extend(chain.reached().map(str::to_string));
     }
     let coverage = view.coverage()?;
@@ -327,7 +307,7 @@ pub fn reach<'s>(
 
 /// The chain of `entity_id` both ways, with every expected edge it lacks
 /// flagged as missing; `None` when the graph lacks it.
-fn chain(graph: &Graph, entity_id: &str, expectations: &TraceExpectations) -> Option<TraceChain> {
+fn traced(graph: &Graph, entity_id: &str, expectations: &TraceExpectations) -> Option<TraceChain> {
     let root = graph.node(entity_id)?;
     Some(TraceChain {
         entity_id: entity_id.to_string(),

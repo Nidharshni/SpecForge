@@ -1,9 +1,10 @@
 use specforge_common::{SourceSpan, Sym};
 use specforge_graph::{Edge, Graph, Node};
-use specforge_ops::read::trace::TraceLink;
+use specforge_ops::read::trace::{Target, TraceLink, TraceOutcome, trace};
+use specforge_registry::RegistryBuild;
 use specforge_test::prelude::*;
 
-use crate::view_support::chain;
+use crate::view_support::{Assembled, Viewed, chain, plain};
 
 fn node(id: &str) -> Node {
     Node::new(
@@ -70,5 +71,44 @@ fn a_link_carries_the_label_it_was_first_reached_over() {
     assert_eq!(
         links(&up.upstream),
         expect(&[("a", 1, "p"), ("b", 1, "q"), ("r", 2, "z")])
+    );
+}
+
+/// The position of each key's first appearance in `json`, in the order given: they must ascend.
+fn in_order(json: &str, keys: &[&str]) {
+    let at: Vec<usize> = keys
+        .iter()
+        .map(|key| json.find(&format!("\"{key}\"")).unwrap_or(usize::MAX))
+        .collect();
+    assert!(
+        at.windows(2).all(|w| w[0] < w[1]),
+        "{keys:?} at {at:?} in {json}"
+    );
+}
+
+#[specforge_test(behavior = "serialize_traceability_data")]
+fn one_entity_is_a_chain_every_entity_is_a_list_of_traces() {
+    let project = Assembled::over(RegistryBuild::default()).graph(two_ways());
+    let view = project.view();
+    let one = plain(trace(&view, Target::Entity("r")).unwrap());
+    assert!(matches!(one, TraceOutcome::Chain(_)));
+    assert_eq!(one.chains().len(), 1);
+    in_order(
+        &serde_json::to_string(&one).unwrap(),
+        &[
+            "schema_version",
+            "entity_id",
+            "entity_kind",
+            "upstream",
+            "downstream",
+            "missing",
+        ],
+    );
+    let every = plain(trace(&view, Target::Every).unwrap());
+    assert!(matches!(every, TraceOutcome::Every(_)));
+    assert_eq!(every.chains().len(), 4);
+    in_order(
+        &serde_json::to_string(&every).unwrap(),
+        &["schema_version", "traces"],
     );
 }
