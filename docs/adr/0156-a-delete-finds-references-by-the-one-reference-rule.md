@@ -3,7 +3,7 @@
 **Status:** accepted (2026-10-19, architecture round 15, plan 04). Extends [ADR 0093](0093-a-fields-declared-type-decides-what-its-value-references.md)
 D2 (a typed edit's referrer scan asks the rule), [ADR 0149](0149-a-file-states-a-kinds-shared-fields-once.md) D11
 (where "once per token" is answered) and [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) D5 (what a delete
-does about a reference it may not remove).
+does about a reference it may not remove). D1 and D2 extended by [ADR 0163](0163-a-written-token-is-found-by-one-finder.md): the referrer scan is the graph's finder (this ADR's reopen case); a derived type name refuses the delete too.
 
 `delete --unlink-references` found the references it must remove with its own copy of "this field names X", which
 drifted from ADR 0093's rule four ways. It missed a scheme ref in a `string_list`, a `reference_list` written as one

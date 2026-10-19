@@ -1073,12 +1073,17 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   *refers to* are its outgoing references. "Find references" means incoming, with the declaration
   only on request (`specforge_ops::read::navigate`). Navigation answers the references to an entity two ways: one per
   holder (an inherited reference once per block that inherits it, `Navigator::references`, what find-references
-  returns) and one per written token (`Navigator::tokens`, what rename edits and an editor shows) (ADR 0149 D11, ADR 0156).
+  returns) and one per written token (`Navigator::tokens`, read by the graph's finder, a default no block takes
+  included: what rename edits and an editor shows) (ADR 0149 D11, ADR 0156, ADR 0163).
 - **Written span** (of an edge): where one of an edge's references is written: a reference's token (a list
   item, a single reference's value) or a name inside a type expression a derived field reads (a parameter or
   return type, a field written as a type, a union member). The linker records every edge's written spans, in
   written order (`Graph::written`); navigation's occurrences, rename and the LSP read them and never re-derive
   them. An edge added by hand has none (ADR 0127).
+- **Written token**: a place a file writes an entity's ID as a reference: a field's reference (a block's own, or a
+  `defaults` entry whether or not a block takes it) or a type name a derived field reads. The graph's one finder answers
+  them per parsed file (`specforge_graph::written_tokens`), with who writes each and how; rename, the editor's
+  find-references and a delete's referrer scan ask it, the first two through `Navigator::tokens` (ADR 0163).
 - **Navigation**: where an entity is declared, its references, entity lookup and ranking, which
   entities a diagnostic is about, and the fixes a diagnostic's data names. The LSP and MCP answer
   from one module (`specforge_ops::read::navigate`) in source spans. A span is a position in the text the
@@ -1098,8 +1103,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   it left), each value written in its field's form (a multi-line one laid out with the file's format configuration, and left out when it restates its file's default)
   and each touched block formatted; the plan is refused with E080
   when the edited project reports an error the project did not (the **edited project** being compiled from what the project holds: the text of each source it read, the E025 of each it could not read, the planned texts; it reads no source, `CompiledProject::edited`, ADR 0158), and is written as one project change (ADR 0151).
-  A delete with `unlink_references` removes every reference the graph build would link, found by `Reading::references`
-  in the planned texts; one written in a `defaults` block or an undeclared field refuses it (`not_editable`, ADR 0156).
+  A delete with `unlink_references` removes every reference the graph build would link, found by the graph's finder
+  in the planned texts (ADR 0163); one written in a `defaults` block, an undeclared field or as a derived type name refuses it (`not_editable`, ADR 0156).
   A list value is taken by its field's type: a reference list's items split at commas however given, a string list's never (ADR 0157). The stub fixes are typed edits too (ADR 0161).
 - **Fix**: an edit offered for a diagnostic or an entity, the same as an LSP code action and from MCP `suggest_fixes`
   (`specforge_ops::authoring::fix`): a replacement of an unresolved token by its close match, or a stub (a create of the
