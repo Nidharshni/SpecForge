@@ -2,7 +2,7 @@
 
 **Status:** accepted (2026-10-16, architecture round 13, plan 03). Amends [ADR 0002](0002-test-runner-extensions.md)
 ("Execution"). Mirrors [ADR 0079](0079-the-smt-solver-is-one-port-that-analyze-and-doctor-take.md). Leaves ADR 0110 and
-ADR 0112 as they are.
+ADR 0112 as they are. Amended by round 15, plan 07 (D7: each mode checks only the locations it reads).
 
 `collect` orders consent, a command run, a report read and a merge, but it reached the machine directly: a child
 process, the wall clock and the user's consent file through `HOME`. No ops test could run the flow past consent: every
@@ -45,6 +45,14 @@ for every selected collector before the first command runs; every approval is as
 
 In process, a `ScriptedMachine`; for a `specforge` child process, a `PATH` and a `HOME` the test builds.
 
+## D7. Each mode checks what it reads
+
+`collect` plans one evidence source per collector (`analysis::collect::evidence`): a run (the declared report and
+captured output, the command, the approval), the report already written (the declared report and captured
+output), or the files the request names (`Mode::Reports`, `specforge collect --report`). D5 holds for what the
+source reads: under `--report` the collector's declared report, capture and command are neither resolved nor
+refused, since nothing is read from them. A named file still goes through the request's containment.
+
 ## Rejected
 
 - **Two ports** (a runner and a consent store): they always travel together and are built at one place.
@@ -65,3 +73,10 @@ In process, a `ScriptedMachine`; for a `specforge` child process, a `PATH` and a
 
 A second operation that runs a declared command (then the port leaves `collect`), or a consent store that is not a
 file (a keychain: a third adapter).
+
+## Amendment (architecture round 15, plan 07)
+
+D5's list is the refusals of the locations a mode reads (D7). `collect --report` no longer refuses a declared `../`
+report (E058), an unknown capture (E058) or a declared report that lands outside (`outside_root`). Rejected: one
+module per mode (three modules sharing the declared locations, for three modes unchanged since ADR 0002); an `Option`
+for the declared locations (the mode and the option could disagree).

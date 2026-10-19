@@ -1,7 +1,8 @@
 //! What every MCP test serves: a project on disk whose extensions are
 //! declared with the SDK builders and run in process (`InProcessRuntime`,
 //! the test adapter of the `WasmRuntime` port), loaded when the server
-//! initializes over it — `ProjectSession::open_with_runtime`,
+//! initializes over it — a reopen of the session at
+//! the root (`ProjectSession::reopen_through`, sources read contained, ADR 0145),
 //! `Environment::load`, `build_registries`, a full compile — exactly as
 //! `specforge mcp <root>` loads a project. No test writes a registry entry,
 //! a graph or a diagnostic into the server's state: what a test serves is

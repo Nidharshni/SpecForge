@@ -1134,6 +1134,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   commands. Its adapters are a child process with the user-level consent store (`ProcessMachine`) and a scripted
   machine (tests). The caller passes it; collect decides every refusal that needs no run before the machine runs
   anything (ADR 0125).
+- **Collect mode**: how `collect` gets each collector's evidence (`specforge_ops::analysis::collect::Mode`): run
+  the declared command and read its report (`Run`), read the report it already wrote (`NoRun`, `--no-run`), or
+  read only the files the request names (`Reports`, `--report`). Collect checks only what the mode reads: under
+  `--report` the collector's declared report, capture and command are not looked at (ADR 0125 D7).
 - **Risk grading**: the coverage owner's policy for one kind: its entities' risk is tallied, and
   one with no obligations is A002, an error at the grading's error level
   (`specforge_coverage::RiskGrading`, supplied by `@specforge/testing`; ADR 0009).
