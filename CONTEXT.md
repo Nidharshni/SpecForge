@@ -786,7 +786,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   pipeline's tools adapter alone (`mutation::complete`) turns it into the call target's refresh, the reply
   sent once (`WrittenReply`: the tool reply, `files_written` — the one place a client learns which files
   the call wrote — and what its reply type adds after the write, rename's fresh diagnostics), the domain
-  event and `mcp_mutation_completed` (ADR 0022).
+  event and `mcp_mutation_completed` (ADR 0022); its outcome says the same (ADR 0162).
+- **Preview**: a mutation asked only to report (`--dry-run`/`dry_run`; format's `--check` or `--diff`). It writes
+  nothing; its operation's outcome answers `Wrote::Previewed` (`specforge_ops::Wrote`), its document says
+  `dry_run: true`, and neither surface lists `files_written`. A run that found nothing to change is no preview:
+  `Wrote::Ran` with no file, `files_written: []` (ADR 0162).
 - **Outcome document**: the one typed JSON document of an operation's outcome, defined in ops beside
   the operation and deriving `Serialize` and `Shape`: the outcome itself when it is plain data
   (`stats::Stats`), else its `document()` (`AddDocument`, `RemoveDocument`, `UpdateDocument`,
