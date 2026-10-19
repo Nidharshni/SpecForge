@@ -108,7 +108,6 @@ fn edit_lays_a_block_out_with_the_defaults_when_the_configuration_links_outside(
 }
 
 #[cfg(unix)]
-#[ignore = "flipped by T6"]
 #[specforge_test_macros::test(
     invariant = "mcp_served_project_consistency",
     verify = "no format configuration a call reads leaves the project, and none with more than one name is read"

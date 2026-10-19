@@ -19,7 +19,7 @@ use serde_json::{Value, json};
 use specforge_common::shape::Shape;
 use specforge_common::{PROJECT_FILE, ProjectRoot, validate_project_name};
 use specforge_installed::Installed;
-use specforge_registry::PlainDisk;
+use specforge_registry::Disk;
 use specforge_wasm::WasmRuntime;
 use std::path::{Path, PathBuf};
 
@@ -225,8 +225,13 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
         None => structural_starter(&spec_id, &version),
     };
     // Whatever the extensions contribute, the file is written as the
-    // formatter writes it, so `specforge format --check` accepts it.
-    let starter = canonical(&starter, req.dir);
+    // formatter writes it, so `specforge format --check` accepts it, with the
+    // configuration init's bound reads (ADR 0169).
+    let starter = canonical(
+        &starter,
+        req.dir,
+        &req.caller.containment().narrowed(req.dir).disk(),
+    );
     let dir = req.dir;
     let files = vec![
         Also {
@@ -337,8 +342,8 @@ fn sanitize_entity_id(name: &str) -> String {
 }
 
 /// `starter`, formatted as the project at `dir` formats its files.
-fn canonical(starter: &str, dir: &Path) -> String {
-    let config = Configs::new(None, &PlainDisk).layout(FormatPlace::InProject { root: dir, dir });
+fn canonical(starter: &str, dir: &Path, disk: &dyn Disk) -> String {
+    let config = Configs::new(None, disk).layout(FormatPlace::InProject { root: dir, dir });
     specforge_formatter::format_source(starter, &config, &specforge_graph::FieldForms::default())
         .formatted
 }
