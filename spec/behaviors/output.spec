@@ -1334,6 +1334,7 @@ behavior enforce_token_budget "Enforce Token Budget" {
   verify unit "TokenBudgetResult included in metadata when budget applied"
   verify unit "truncated_entities lists omitted entity IDs"
   verify unit "no --max-tokens skips budget enforcement"
+  verify unit "an edge from an entity to itself adds nothing to its centrality"
   verify integration "export with max_tokens produces output within budget and includes metadata"
   verify integration "the graph export honours --max-tokens with the schema left out unless --with-schema is given"
   verify integration "an embedded schema counts toward the token budget"
