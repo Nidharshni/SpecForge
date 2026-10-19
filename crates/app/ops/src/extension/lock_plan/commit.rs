@@ -115,7 +115,7 @@ impl<'a> Checked<'a> {
             ..
         } = plan;
         let changes_lock = lock.is_some();
-        let pins = fetching.map(|fetching| {
+        let pins = fetching.map(|(fetching, _)| {
             (
                 fetching.registry,
                 staged

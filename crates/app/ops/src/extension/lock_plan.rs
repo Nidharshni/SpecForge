@@ -173,9 +173,6 @@ pub(crate) struct LockPlan<'a> {
     /// no peers until `finish` fills them.
     asked: Vec<(Ask, Asked)>,
     declarations: Declarations<'a>,
-    /// The runtime the plan's fetched binaries load in; `None` for a plan that fetches nothing
-    /// and reads its declarations from a compiled project (`remove`).
-    runtime: Option<&'a dyn WasmRuntime>,
     verb: Verb,
     purpose: Purpose,
     /// A removal is not judged (`remove --force`).
@@ -186,8 +183,9 @@ pub(crate) struct LockPlan<'a> {
     /// The entries a removal drops, and the packages it uninstalls, each for its ask.
     disabled: Vec<(Ask, Disabled)>,
     uninstalled: Vec<(Ask, PackageName)>,
-    /// Where registry installs come from; `None` for a plan that fetches nothing.
-    fetching: Option<Fetching<'a>>,
+    /// Where registry installs come from, and the runtime their binaries load in once the gate
+    /// passed; `None` for a plan that fetches nothing (`init`, `remove`).
+    fetching: Option<(Fetching<'a>, &'a dyn WasmRuntime)>,
     /// The operation's name, for the refusal of a fetch from no registry.
     operation: &'static str,
     /// What the operation was lent (ADR 0124): who its fetches ask, and the bound its writes are
@@ -213,10 +211,9 @@ impl<'a> LockPlan<'a> {
         let mut plan = LockPlan::open(
             installed,
             config,
-            Some(runtime),
             Declarations::through(runtime),
             Verb::Install,
-            Some(fetching),
+            Some((fetching, runtime)),
             "add",
             installs,
             caller,
@@ -237,10 +234,9 @@ impl<'a> LockPlan<'a> {
         LockPlan::open(
             installed,
             config,
-            Some(runtime),
             Declarations::through(runtime),
             Verb::Update,
-            Some(fetching),
+            Some((fetching, runtime)),
             "update",
             true,
             caller,
@@ -260,7 +256,6 @@ impl<'a> LockPlan<'a> {
         LockPlan::open(
             installed,
             Opened::creating(document),
-            Some(runtime),
             Declarations::through(runtime),
             Verb::Install,
             None,
@@ -284,7 +279,6 @@ impl<'a> LockPlan<'a> {
         let mut plan = LockPlan::open(
             view.installed(),
             Opened::read(view.env().config(), view.env().config_found()),
-            view.runtime().map(|runtime| &**runtime),
             Declarations::loaded_by(view),
             Verb::Remove,
             None,
@@ -299,15 +293,14 @@ impl<'a> LockPlan<'a> {
 
     #[expect(
         clippy::too_many_arguments,
-        reason = "the plan's whole input: the installed set, the entries, the runtime, the declarations, the verb, the registry, the operation, whether it installs and the caller"
+        reason = "the plan's whole input: the installed set, the entries, the declarations, the verb, the registry and its runtime, the operation, whether it installs and the caller"
     )]
     fn open(
         installed: &'a Installed,
         config: Opened,
-        runtime: Option<&'a dyn WasmRuntime>,
         declarations: Declarations<'a>,
         verb: Verb,
-        fetching: Option<Fetching<'a>>,
+        fetching: Option<(Fetching<'a>, &'a dyn WasmRuntime)>,
         operation: &'static str,
         installs: bool,
         caller: Caller<'a>,
@@ -321,7 +314,6 @@ impl<'a> LockPlan<'a> {
             appended: Vec::new(),
             asked: Vec::new(),
             declarations,
-            runtime,
             verb,
             purpose: Purpose::Commit,
             force: false,

@@ -156,7 +156,7 @@ impl<'a> LockPlan<'a> {
                 from: From::Locked,
             });
         }
-        let Some(fetching) = self.fetching else {
+        let Some((fetching, runtime)) = self.fetching else {
             return Err(crate::registry::no_registry(self.operation));
         };
         if self.purpose == Purpose::Preview {
@@ -191,7 +191,7 @@ impl<'a> LockPlan<'a> {
         Ok(Install {
             from: From::Registry {
                 registry: fetching.registry,
-                runtime: self.runtime.expect("a plan that fetches has a runtime"),
+                runtime,
                 declaration: Box::new(package.declaration),
                 publisher: package.publisher,
                 bytes: module.clone(),
