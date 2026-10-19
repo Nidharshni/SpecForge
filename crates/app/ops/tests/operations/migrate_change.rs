@@ -175,3 +175,25 @@ fn a_rollback_keeps_a_files_permissions_and_refuses_a_read_only_one() {
     let record = std::fs::read_to_string(dir.path().join(".specforge/migration.json")).unwrap();
     assert!(record.contains("other.spec"), "{record}");
 }
+
+#[test]
+#[ignore = "flipped by T3"]
+fn a_file_that_cannot_be_migrated_leaves_every_file_as_it_was() {
+    let dir = project();
+    std::fs::write(
+        dir.path().join("bad.spec"),
+        "// specforge-format: 99.0\nbehavior bad \"Bad\" {\n}\n",
+    )
+    .unwrap();
+    let before = crate::migrate::files_under(dir.path());
+
+    let outcome = run(&request(&ProjectRoot::of(dir.path()).unwrap()), None);
+
+    assert!(matches!(
+        outcome.failure(),
+        Some(specforge_ops::authoring::migrate::Failure::FilesFailed { .. })
+    ));
+    assert!(outcome.writes.is_empty());
+    assert!(!outcome.migrated());
+    assert_eq!(crate::migrate::files_under(dir.path()), before);
+}
