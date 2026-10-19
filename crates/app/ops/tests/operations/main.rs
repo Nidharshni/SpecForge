@@ -44,6 +44,8 @@ mod management;
 mod migrate;
 #[cfg(unix)]
 mod migrate_bound;
+#[cfg(unix)]
+mod migrate_change;
 mod migrate_sources;
 mod migrate_titles;
 mod model;
