@@ -4,6 +4,7 @@
 
 use crate::support::{Cli, TestProject};
 use serde_json::json;
+use specforge_test_macros::test as specforge_test;
 
 /// A builtin enabled, a `.wasm` entry whose file is missing, a named entry nothing installs.
 fn project() -> TestProject {
@@ -18,8 +19,10 @@ fn stdout(dir: &TestProject, args: &[&str]) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
-#[test]
-#[ignore = "flipped by T2"]
+#[specforge_test(
+    behavior = "list_installed_extensions",
+    verify = "the human listing names its rows the project's extensions, never installed ones, and counts those loaded"
+)]
 fn the_listing_does_not_call_enabled_rows_installed() {
     let text = stdout(&project(), &["extensions"]);
     assert!(!text.contains("installed"), "{text}");
@@ -27,15 +30,19 @@ fn the_listing_does_not_call_enabled_rows_installed() {
     assert!(text.ends_with("\n3 extension(s), 1 loaded.\n"), "{text}");
 }
 
-#[test]
-#[ignore = "flipped by T2"]
+#[specforge_test(
+    behavior = "list_installed_extensions",
+    verify = "the human listing counts one entity as one entity"
+)]
 fn one_entity_is_one_entity() {
     let text = stdout(&project(), &["extensions"]);
     assert!(text.contains("(builtin): 1 entity ("), "{text}");
 }
 
-#[test]
-#[ignore = "flipped by T2"]
+#[specforge_test(
+    behavior = "remove_extension",
+    verify = "a dry-run removal of a .wasm file entry names the entry without saying it loaded"
+)]
 fn a_dry_run_removal_of_a_file_entry_that_never_loaded_does_not_say_it_loaded() {
     assert_eq!(
         stdout(&project(), &["remove", "gone.wasm", "--dry-run"]),

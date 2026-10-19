@@ -15,7 +15,7 @@ pub(crate) struct Args {
 
 impl Args {
     /// `specforge extensions`: every extension the project enables, has
-    /// installed or loaded, alphabetically, with the entity kinds each
+    /// locked or loaded, alphabetically, with the entity kinds each
     /// registered and how many of the project's entities use them.
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
@@ -30,12 +30,12 @@ impl Args {
             OutputFormat::Json => terminal.json(&listing.document()),
             OutputFormat::Human => {
                 if entries.is_empty() {
-                    outln!(terminal, "No extensions installed.");
+                    outln!(terminal, "This project has no extensions.");
                     outln!(terminal);
-                    outln!(terminal, "Install one with: specforge add <extension>");
+                    outln!(terminal, "Add one with: specforge add <extension>");
                     return Exit::Passed;
                 }
-                outln!(terminal, "Installed extensions:");
+                outln!(terminal, "Extensions of the project:");
                 outln!(terminal);
                 for entry in entries {
                     let version = entry
@@ -47,8 +47,13 @@ impl Args {
                         String::new()
                     } else {
                         format!(
-                            ": {} entities ({})",
+                            ": {} {} ({})",
                             entry.entity_count,
+                            if entry.entity_count == 1 {
+                                "entity"
+                            } else {
+                                "entities"
+                            },
                             entry.entity_kinds.join(", ")
                         )
                     };
@@ -64,7 +69,11 @@ impl Args {
                     );
                 }
                 outln!(terminal);
-                outln!(terminal, "{} extension(s) installed.", entries.len());
+                let loaded = entries
+                    .iter()
+                    .filter(|e| e.status == extension::Status::Loaded)
+                    .count();
+                outln!(terminal, "{} extension(s), {loaded} loaded.", entries.len());
             }
         }
 

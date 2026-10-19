@@ -66,7 +66,7 @@ impl Args {
                     }
                     Origin::File { path } => outln!(
                         terminal,
-                        "{disabled} extension '{}' loaded from {path} (the file is left in place)",
+                        "{disabled} extension '{}' (the .wasm file entry {path}; the file is left in place)",
                         outcome.name
                     ),
                     Origin::Installed { .. } => outln!(

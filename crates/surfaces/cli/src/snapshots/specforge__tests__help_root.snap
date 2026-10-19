@@ -22,7 +22,7 @@ Commands:
   infer-guide   What to look for in code to write a kind's entities
   add           Install an extension
   remove        Remove an installed extension
-  extensions    List installed extensions
+  extensions    List the project's extensions: enabled, locked or loaded
   publish       Publish an extension to the registry that serves its name: its binary, and the declaration read from it as the package's manifest
   search        Search for extensions in registries
   analyze       Run static analysis passes over the compiled project
