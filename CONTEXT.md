@@ -116,6 +116,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`ProjectSession::open_through`, ADR 0145). A project session's ledger stamps each source by its key, with the link
   chain it followed, and records each link
   hop the read followed. A held buffer's file is not read, so nothing of it is recorded until it is released.
+  A migration reads each source through the request's containment (`migrate_project`'s `read`, ADR 0158); an edited
+  project reads none.
 - **Session inputs**: everything a project session depends on besides its sources' text: where its
   sources are discovered (the spec root and `exclude`), its **environment inputs**
   (the environment reads of its last load) and its **check inputs**
@@ -1087,7 +1089,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   A list of them is planned over the texts the project was compiled from (each edit reading what the ones before
   it left), each value written in its field's form (a multi-line one laid out with the file's format configuration, and left out when it restates its file's default)
   and each touched block formatted; the plan is refused with E080
-  when the edited project reports an error the project did not, and is written as one project change (ADR 0151).
+  when the edited project reports an error the project did not (the **edited project** being compiled from what the project holds: the text of each source it read, the E025 of each it could not read, the planned texts; it reads no source, `CompiledProject::edited`, ADR 0158), and is written as one project change (ADR 0151).
   A delete with `unlink_references` removes every reference the graph build would link, found by `Reading::references`
   in the planned texts; one written in a `defaults` block or an undeclared field refuses it (`not_editable`, ADR 0156).
   A list value is taken by its field's type: a reference list's items split at commas however given, a string list's never (ADR 0157).
