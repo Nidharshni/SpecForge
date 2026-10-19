@@ -3,9 +3,10 @@
 
 use std::path::PathBuf;
 
-use serde_json::Value;
+use specforge_installed::{Module, Pin};
+use specforge_package::PackageName;
 
-use super::{Ask, Checked, Opened, Purpose};
+use super::{Ask, Checked, LockPlan, Opened, Purpose, Staged};
 use crate::change::ProjectChange;
 use crate::registry::{KeyPin, Registry};
 use crate::{Held, OpError, OpErrorKind, Writes};
@@ -67,18 +68,9 @@ impl<'a> Checked<'a> {
         self
     }
 
-    /// The `extensions` items the change leaves, in order: the items the plan opened with
-    /// without the dropped ones, then the appended ones, dependencies first (ADR 0126).
-    fn items(&self) -> Vec<Value> {
-        self.config.items_after(
-            |entry| self.disabled.iter().any(|disabled| disabled.drops(entry)),
-            &self.appended,
-        )
-    }
-
     /// What `specforge.json` enables as the change leaves it, in order.
     pub(crate) fn entries(&self) -> Vec<String> {
-        Opened::entries_of(&self.items())
+        self.plan.entries_after()
     }
 
     /// A preview answers without writing. A commit writes, all or nothing (ADR 0028 D4, ADR 0128):
@@ -101,24 +93,43 @@ impl<'a> Checked<'a> {
     /// installed or uninstalled module. One that lands outside it, by a symlink in the project,
     /// refuses the change (`outside_root`), nothing written (ADR 0092 D8).
     pub(crate) fn finish(self) -> Result<Done, OpError> {
-        let items = self.items();
+        let items = self.plan.items_after();
         let final_entries = Opened::entries_of(&items);
         let Checked {
+            plan,
+            changes,
+            also,
+        } = self;
+        let LockPlan {
             installed,
-            changes_lock,
-            installs,
-            uninstalls,
-            purpose,
-            operation,
+            lock,
+            staged,
             config,
-            pins,
             appended,
             asked,
-            changes,
-            lent,
-            also,
+            purpose,
+            uninstalled,
+            fetching,
+            operation,
+            caller,
             ..
-        } = self;
+        } = plan;
+        let changes_lock = lock.is_some();
+        let pins = fetching.map(|fetching| {
+            (
+                fetching.registry,
+                staged
+                    .iter()
+                    .filter_map(Staged::key_pin)
+                    .collect::<Vec<KeyPin>>(),
+            )
+        });
+        let installs: Vec<(Module, Pin)> = staged
+            .into_iter()
+            .filter_map(|staged| staged.module.map(|module| (module, staged.pin)))
+            .collect();
+        let uninstalls: Vec<PackageName> = uninstalled.into_iter().map(|(_, name)| name).collect();
+        let lent = caller.containment();
         if !changes && also.is_empty() {
             return Ok(Done {
                 writes: Writes::none(),

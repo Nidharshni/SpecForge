@@ -27,8 +27,8 @@ use specforge_protocol_types::ExtensionDeclaration;
 use specforge_wasm::WasmRuntime;
 
 use super::peer_set::Declarations;
-use crate::registry::{KeyPin, Publisher, Registry};
-use crate::{Caller, Containment, OpError, OpErrorKind};
+use crate::registry::{Publisher, Registry};
+use crate::{Caller, OpError, OpErrorKind};
 
 /// What a lock plan is for. It words the refusal of an install that a locked extension does not
 /// accept ("installing '@x/b' 2.0.0 breaks '@x/a': ...", "updating ...").
@@ -505,17 +505,23 @@ impl<'a> LockPlan<'a> {
         }
     }
 
-    /// What `specforge.json` enables as the change leaves it.
-    fn entries_after(&self) -> Vec<String> {
-        let items = self.config.items_after(
+    /// The `extensions` items the change leaves, in order: the items the plan opened with without
+    /// the dropped ones, then the appended ones, dependencies first (ADR 0126 D1). The judgement,
+    /// the closure, a dry run's answers, the count and the commit's write all read it.
+    fn items_after(&self) -> Vec<Value> {
+        self.config.items_after(
             |entry| {
                 self.disabled
                     .iter()
                     .any(|(_, disabled)| disabled.drops(entry))
             },
             &self.appended,
-        );
-        Opened::entries_of(&items)
+        )
+    }
+
+    /// What `specforge.json` enables as the change leaves it.
+    fn entries_after(&self) -> Vec<String> {
+        Opened::entries_of(&self.items_after())
     }
 }
 
@@ -580,34 +586,15 @@ impl Changing {
 }
 
 /// A lock plan the peer rule accepts and whose binaries all loaded as published: what may be
-/// written, and the publisher keys to pin once it is.
+/// written, and the publisher keys to pin once it is. It holds the plan as judged, so the commit
+/// writes what was judged (ADR 0126).
 pub(crate) struct Checked<'a> {
-    installed: &'a Installed,
-    /// Whether the change writes the lock (the plan was opened to install or uninstall).
-    changes_lock: bool,
-    /// The modules to place, each with the lock entry that pins it, in staging order.
-    installs: Vec<(Module, Pin)>,
-    /// The packages to uninstall.
-    uninstalls: Vec<PackageName>,
-    /// The `specforge.json` entries to drop.
-    disabled: Vec<Disabled>,
-    purpose: Purpose,
-    /// The operation's name, for a refusal.
-    operation: &'static str,
-    /// The pins its registry installs call for, and the registry port that pins them; none for a
-    /// plan that fetches nothing.
-    pins: Option<(&'a dyn Registry, Vec<KeyPin>)>,
-    /// `specforge.json` as the plan opened it.
-    config: Opened,
-    appended: Vec<Appended>,
-    asked: Vec<(Ask, Asked)>,
-    /// The bound the caller lent; the commit narrows it to `installed.root()` (ADR 0137).
-    lent: &'a Containment,
-    /// Files the change writes after `specforge.json` and before the pins (init's), in order.
-    also: Vec<Also<'a>>,
+    plan: LockPlan<'a>,
     /// Whether the change writes anything (`LockPlan::changes_nothing` was false); when not, it is
     /// neither judged nor written (ADR 0138).
     changes: bool,
+    /// Files the change writes after `specforge.json` and before the pins (init's), in order.
+    also: Vec<Also<'a>>,
 }
 
 mod close;

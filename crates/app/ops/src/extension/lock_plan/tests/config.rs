@@ -18,20 +18,16 @@ fn the_plan_judges_and_answers_one_set_of_entries() {
     plan.disable(Ask(0), Disabled::Entry("./a.wasm".into()));
     plan.enable(Ask(0), "@acme/bar");
 
-    let judged = plan.entries_after();
-    let items = plan.config.items_after(
-        |entry| Disabled::Entry("./a.wasm".into()).drops(entry),
-        &plan.appended,
-    );
-
-    assert_eq!(judged, ["@acme/foo@1.0.0", "@acme/bar"]);
+    assert_eq!(plan.entries_after(), ["@acme/foo@1.0.0", "@acme/bar"]);
     assert_eq!(
-        items,
+        plan.items_after(),
         [
             serde_json::json!("@acme/foo@1.0.0"),
             serde_json::json!("@acme/bar")
         ]
     );
+    let checked = plan.check().ok().unwrap();
+    assert_eq!(checked.entries(), ["@acme/foo@1.0.0", "@acme/bar"]);
 }
 
 #[test]

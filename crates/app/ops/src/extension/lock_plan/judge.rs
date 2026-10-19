@@ -87,22 +87,7 @@ impl<'a> LockPlan<'a> {
                 }
             }
         }
-        let LockPlan {
-            installed,
-            lock,
-            staged,
-            config,
-            appended,
-            asked,
-            fetching,
-            purpose,
-            disabled,
-            uninstalled,
-            operation,
-            caller,
-            ..
-        } = self;
-        for (i, s) in staged.iter().enumerate() {
+        for (i, s) in self.staged.iter().enumerate() {
             if failed[i].is_none() {
                 failed[i] = s.load().err().map(|error| (error, false));
             }
@@ -116,25 +101,10 @@ impl<'a> LockPlan<'a> {
         if !failures.is_empty() {
             return Err(Refused { failures, judged });
         }
-        let pins = staged.iter().filter_map(Staged::key_pin).collect();
         Ok(Checked {
-            installed,
-            changes_lock: lock.is_some(),
-            installs: staged
-                .into_iter()
-                .filter_map(|staged| staged.module.map(|module| (module, staged.pin)))
-                .collect(),
-            uninstalls: uninstalled.into_iter().map(|(_, name)| name).collect(),
-            disabled: disabled.into_iter().map(|(_, disabled)| disabled).collect(),
-            purpose,
-            operation,
-            pins: fetching.map(|fetching| (fetching.registry, pins)),
-            config,
-            appended,
-            asked,
-            lent: caller.containment(),
-            also: Vec::new(),
+            plan: self,
             changes,
+            also: Vec::new(),
         })
     }
 
