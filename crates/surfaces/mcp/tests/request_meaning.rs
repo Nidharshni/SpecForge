@@ -177,7 +177,6 @@ fn coverage_kind_reports_i020_and_narrows_an_entity_id() {
 }
 
 #[test]
-#[ignore = "flipped by T5"]
 fn search_refuses_a_referenced_entity_the_graph_lacks_on_references() {
     let reply = call_tool(
         &mut served(),

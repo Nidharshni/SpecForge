@@ -6,6 +6,7 @@ use specforge_ops::OpErrorKind;
 use specforge_ops::authoring::fix::{self, FixQuery};
 use specforge_ops::read::coverage::{CoverageQuery, coverage};
 use specforge_ops::read::navigate::Navigator;
+use specforge_ops::read::query::{SearchField, SearchRequest, search};
 use specforge_ops::view::EntityField;
 use specforge_test::prelude::*;
 
@@ -87,6 +88,25 @@ fn fixes_refuse_an_entity_the_graph_lacks() {
     };
     let refusal = fix::fixes(&Navigator::new(project.view()), &[], &query).unwrap_err();
     assert_eq!(refusal.subject, Some(EntityField::EntityId));
+    assert_eq!(refusal.error.code, "E003");
+    assert_eq!(
+        refusal.error.suggestion.as_deref(),
+        Some("did you mean 'login'?")
+    );
+}
+
+#[specforge_test(
+    behavior = "select_entities_over_the_view",
+    verify = "a references entity the graph lacks is E003 naming the closest entity"
+)]
+fn search_refuses_a_referenced_entity_the_graph_lacks() {
+    let project = project();
+    let request = SearchRequest {
+        referencing: Some("logn"),
+        ..Default::default()
+    };
+    let refusal = search(&project.view(), &request).unwrap_err();
+    assert_eq!(refusal.subject, Some(SearchField::Referencing));
     assert_eq!(refusal.error.code, "E003");
     assert_eq!(
         refusal.error.suggestion.as_deref(),

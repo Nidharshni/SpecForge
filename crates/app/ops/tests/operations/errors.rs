@@ -163,6 +163,18 @@ fn a_missing_entity_is_one_refusal() {
             .unwrap_err()
             .error,
         ),
+        (
+            "search references",
+            specforge_ops::read::query::search(
+                &view,
+                &specforge_ops::read::query::SearchRequest {
+                    referencing: Some("logn"),
+                    ..Default::default()
+                },
+            )
+            .unwrap_err()
+            .error,
+        ),
         ("navigator", navigator.definition("logn").unwrap_err().error),
         (
             "rename",

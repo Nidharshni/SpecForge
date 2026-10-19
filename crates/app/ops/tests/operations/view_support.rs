@@ -166,11 +166,16 @@ pub fn plain<T>(read: specforge_ops::Noticed<T>) -> T {
     read.into_value_and_notices().0
 }
 
+/// A read that answered: its value.
+pub fn ok<T, F: std::fmt::Debug>(read: Result<T, specforge_ops::Refusal<F>>) -> T {
+    read.expect("the read answers")
+}
+
 /// A read that answered: its value, its notices dropped.
 pub fn answered<T, F: std::fmt::Debug>(
     read: Result<specforge_ops::Noticed<T>, specforge_ops::Refusal<F>>,
 ) -> T {
-    plain(read.expect("the read answers"))
+    plain(ok(read))
 }
 
 /// The document `specforge.schema` answers for `request` over `view`.

@@ -402,7 +402,8 @@ behavior select_entities_over_the_view "Select Entities over the Project View" {
     title. An empty text matches every entity. Every filter is ANDed: kinds,
     a field's text (by the one field-text rule: a list by its items, an
     expression by its written form, a block by its keys), and references
-    (the entities that reference the named one). At most limit hits are
+    (the entities that reference the named one; an entity the graph lacks is
+    E003 naming the closest entity). At most limit hits are
     returned, twenty when none is given. List MUST return the entities of a
     kind, sorted by id, those whose fields hold every where value, from
     offset, at most limit.
@@ -410,6 +411,7 @@ behavior select_entities_over_the_view "Select Entities over the Project View" {
   verify unit "text search finds entities matching by name or contract"
   verify unit "empty query returns all entities up to limit"
   verify unit "the references filter combines with the other filters"
+  verify unit "a references entity the graph lacks is E003 naming the closest entity"
   verify unit "the field filter reads a field's text: a list by its items, an expression by its written form, a block by its keys; never the export's JSON"
   verify unit "a search returns at most limit hits, twenty when no limit is given"
   verify unit "list pages the entities of a kind sorted by id, from offset, at most limit"

@@ -4,7 +4,7 @@ use specforge_extension_sdk::prelude::FieldType;
 use specforge_ops::read::query::{FieldHolds, SearchRequest, search};
 use specforge_test::prelude::*;
 
-use crate::view_support::{Assembled, Viewed, plain, registries_with};
+use crate::view_support::{Assembled, Viewed, answered, registries_with};
 
 /// `alpha` (a behavior whose contract says "system"), `beta_feature` (an epic listing alpha), `gamma_orphan`
 /// (an invariant), and `held` (an invariant covering alpha, guarantee "always").
@@ -46,7 +46,7 @@ fn project() -> Assembled {
 
 /// The ids `request` finds, in rank order.
 fn ids(project: &Assembled, request: &SearchRequest) -> Vec<String> {
-    plain(search(&project.view(), request))
+    answered(search(&project.view(), request))
         .iter()
         .map(|hit| hit.found.node.id.raw.to_string())
         .collect()
@@ -134,12 +134,4 @@ fn the_references_filter_is_anded_with_the_others() {
     };
     assert_eq!(referencing(field("alw")), ["held"], "a field narrows them");
     assert!(referencing(field("never")).is_empty());
-    let unknown = SearchRequest {
-        referencing: Some("nope"),
-        ..text("")
-    };
-    assert!(
-        ids(&project, &unknown).is_empty(),
-        "an unknown target has no referrers"
-    );
 }
