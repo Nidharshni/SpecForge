@@ -177,6 +177,10 @@ behavior compute_traceability_chain "Compute Traceability Chain" {
     The JSON trace output MUST carry the Graph Protocol schema_version.
     Tracing an entity the graph does not have MUST be E003, naming the
     closest entity when one is near.
+    Each direction is walked breadth-first: a link's depth is its distance
+    from the traced entity, and its edge label is the label of the edge it
+    was first reached over, nearer entities first and each entity's edges
+    in the order they are written. Links are listed by depth, then id.
   """
   verify unit "trace from entity shows upstream and downstream connections"
   verify unit "trace shows full chain depth"
@@ -185,6 +189,7 @@ behavior compute_traceability_chain "Compute Traceability Chain" {
   verify unit "trace output includes schema version"
   verify unit "tracing an entity the graph lacks is E003 naming the closest entity"
   verify unit "a reference field another extension adds to a kind is not an expected link"
+  verify unit "a link carries the label of the edge it was first reached over, nearer entities first and each entity's edges in written order"
   verify contract "Compute Traceability Chain: traceability chain computation holds — validation_complete_fired, full_chain_traversed, missing_links_flagged, trace_chain_computed_emitted"
 }
 

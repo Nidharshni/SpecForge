@@ -72,6 +72,7 @@ mod search;
 mod setup;
 mod stats;
 mod trace;
+mod trace_order;
 mod trace_support;
 mod verify_statements;
 mod view_support;
