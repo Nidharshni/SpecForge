@@ -242,14 +242,21 @@ fn an_entry_whose_name_prefixes_an_enabled_one_is_appended() {
 fn a_named_removal_drops_every_entry_naming_exactly_it() {
     let read = specforge_common::parse_project_config(
         Path::new("specforge.json"),
-        r#"{"name":"p","extensions":["@acme/foo@1.0.0","@acme/foobar","@acme/foo"]}"#,
+        r#"{"name":"p","extensions":["@acme/foo@1.0.0","@acme/foobar","@acme/foo","@acme/foo=./foo.wasm"]}"#,
     );
     let opened = Opened::read(&read.config, true);
     let named = Disabled::Named("@acme/foo".into());
 
     let items = opened.items_after(|entry| named.drops(entry), &[]);
 
-    assert_eq!(items, [serde_json::json!("@acme/foobar")]);
+    assert_eq!(
+        items,
+        [
+            serde_json::json!("@acme/foobar"),
+            serde_json::json!("@acme/foo=./foo.wasm")
+        ],
+        "a file entry is not dropped by name"
+    );
 }
 
 #[test]

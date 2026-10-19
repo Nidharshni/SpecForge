@@ -40,7 +40,6 @@ fn a_bare_path_is_a_local_source() {
 }
 
 #[test]
-#[ignore = "flipped by T3"]
 fn a_name_file_specifier_is_a_local_path_not_a_builtin() {
     assert_eq!(
         parse("@specforge/product=./a.wasm").unwrap(),

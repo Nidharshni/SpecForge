@@ -108,10 +108,14 @@ impl Origin {
     }
 }
 
-/// The builtin `specifier` names (`@specforge/product`, optionally with an
-/// `@version` suffix, which is ignored: builtins track the binary).
+/// The builtin a named `specifier` names (`@specforge/product`, optionally with an
+/// `@version` suffix, which is ignored: builtins track the binary); a `.wasm` file entry names none.
 pub fn builtin_name(specifier: &str) -> Option<&'static str> {
-    let name = specforge_common::extension_entry_name(specifier);
+    let specforge_common::ExtensionEntry::Named(name) =
+        specforge_common::ExtensionEntry::parse(specifier)
+    else {
+        return None;
+    };
     specforge_project::builtins()
         .names()
         .find(|builtin| *builtin == name)
@@ -133,5 +137,6 @@ mod tests {
         );
         assert_eq!(builtin_name("@acme/thing"), None);
         assert_eq!(builtin_name("./local.wasm"), None);
+        assert_eq!(builtin_name("@specforge/product=./x.wasm"), None);
     }
 }

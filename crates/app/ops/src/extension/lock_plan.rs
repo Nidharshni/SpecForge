@@ -20,6 +20,7 @@
 
 use crate::view::ProjectView;
 use serde_json::Value;
+use specforge_common::ExtensionEntry;
 use specforge_installed::{Installed, LockFile, LockFileEntry, LockState, Module, Pin};
 use specforge_package::PackageName;
 use specforge_protocol_types::ExtensionDeclaration;
@@ -91,7 +92,7 @@ impl Disabled {
     /// Whether `entry` (a `specforge.json` entry) is dropped by it.
     fn drops(&self, entry: &str) -> bool {
         match self {
-            Disabled::Named(name) => specforge_common::extension_entry_name(entry) == name,
+            Disabled::Named(name) => ExtensionEntry::parse(entry).names(name),
             Disabled::Entry(text) => entry.trim() == text.trim(),
         }
     }
@@ -422,15 +423,14 @@ impl<'a> LockPlan<'a> {
         self.answer(ask, answer);
     }
 
-    /// Append an entry for `name` unless one already enables it; `false` when an entry of
-    /// `specforge.json` (as opened) does. An earlier ask of this change appending it still makes
+    /// Append an entry for `name` unless one already enables it; `false` when a named entry of
+    /// `specforge.json` (as opened) names it. An earlier ask of this change appending it still makes
     /// the change enable it.
     fn append(&mut self, ask: Ask, name: &str) -> bool {
-        let named = |entry: &String| specforge_common::extension_entry_name(entry) == name;
-        if self.config.entries().iter().any(named) {
+        if (self.config.entries().iter()).any(|entry| ExtensionEntry::parse(entry).names(name)) {
             return false;
         }
-        if !self.appended.iter().any(|appended| named(&appended.name)) {
+        if !self.appended.iter().any(|appended| appended.name == name) {
             self.appended.push(Appended {
                 name: name.to_string(),
                 ask,
@@ -442,7 +442,8 @@ impl<'a> LockPlan<'a> {
 
     /// `name`'s lock entry when the project already has it as `same` accepts: the lock the plan
     /// opened pins it, its module on disk is the one pinned, and an entry of the `specforge.json`
-    /// the plan opened enables it. What the project has before the change, never the staged lock.
+    /// the plan opened names it (a `.wasm` file entry never makes it present: the check refuses it,
+    /// ADR 0160). What the project has before the change, never the staged lock.
     fn unchanged(
         &self,
         name: &PackageName,
@@ -453,7 +454,7 @@ impl<'a> LockPlan<'a> {
             .config
             .entries()
             .iter()
-            .any(|e| specforge_common::extension_entry_name(e) == name.as_str());
+            .any(|e| ExtensionEntry::parse(e).names(name.as_str()));
         enabled.then_some(entry)
     }
 
@@ -541,9 +542,8 @@ impl Changing {
         let mut asks: Vec<Ask> = staged.iter().map(|s| s.ask).collect();
         let installs = names.len();
         for entry in appended {
-            let name = specforge_common::extension_entry_name(&entry.name);
-            if !names.iter().any(|touched| touched == name) {
-                names.push(name.to_string());
+            if !names.contains(&entry.name) {
+                names.push(entry.name.clone());
                 asks.push(entry.ask);
             }
         }

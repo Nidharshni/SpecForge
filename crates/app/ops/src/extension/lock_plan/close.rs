@@ -3,6 +3,7 @@
 use super::super::peer_set::ProjectPeers;
 use super::{Appended, Ask, Changing, LockPlan};
 use crate::OpError;
+use specforge_common::ExtensionEntry;
 
 impl<'a> LockPlan<'a> {
     /// Enable what the change requires (a verb that `enables`; `update`'s plan enables nothing):
@@ -81,7 +82,7 @@ impl<'a> LockPlan<'a> {
             let enabled = |name: &str| {
                 after
                     .iter()
-                    .any(|entry| specforge_common::extension_entry_name(entry) == name)
+                    .any(|entry| ExtensionEntry::parse(entry).names(name))
             };
             if enabled(trigger) && !enabled(companion) {
                 let ask = self

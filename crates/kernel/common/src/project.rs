@@ -69,6 +69,15 @@ impl<'a> ExtensionEntry<'a> {
         }
     }
 
+    /// Whether this entry names the extension `name` by its text: a named entry, `name` or
+    /// `name@version` as older `specforge add`s wrote it. That is how the extension load reads a
+    /// named entry (`specforge_installed::Installed::resolve`). A `.wasm` file entry names no
+    /// extension by its text, not even the name written before `=`: it enables what its
+    /// component declares, once the load admits it.
+    pub fn names(&self, name: &str) -> bool {
+        matches!(*self, ExtensionEntry::Named(named) if named == name)
+    }
+
     /// The file a file entry loads, a relative path resolved against
     /// `root` (the project root).
     pub fn file(&self, root: &Path) -> Option<PathBuf> {
@@ -76,20 +85,6 @@ impl<'a> ExtensionEntry<'a> {
             ExtensionEntry::Named(_) => None,
             ExtensionEntry::File { path, .. } => Some(root.join(path)),
         }
-    }
-}
-
-/// The extension a `specforge.json` `extensions` entry names, as far as
-/// the entry alone says ([`ExtensionEntry`]): `name`, or `name@version`
-/// (`@acme/foo@1.2.0` names `@acme/foo`); for a `.wasm` file entry the
-/// name before `=`, else the path as written.
-pub fn extension_entry_name(entry: &str) -> &str {
-    match ExtensionEntry::parse(entry) {
-        ExtensionEntry::Named(name)
-        | ExtensionEntry::File {
-            name: Some(name), ..
-        } => name,
-        ExtensionEntry::File { name: None, path } => path,
     }
 }
 

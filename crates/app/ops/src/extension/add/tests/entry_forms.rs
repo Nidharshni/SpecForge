@@ -59,8 +59,10 @@ fn an_add_that_would_shadow_a_loading_file_entry_is_refused() {
     assert_refused_over(&["@sdk/greet", "./a.wasm"]);
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test(
+    behavior = "add_extension_to_existing_project",
+    verify = "a .wasm file entry never makes an install already present"
+)]
 fn a_file_entry_never_makes_an_install_present() {
     let dir = project_enabling(&[]);
     let (_files, wasm) = greet_file();
