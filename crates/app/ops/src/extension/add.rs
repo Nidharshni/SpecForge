@@ -136,7 +136,8 @@ pub struct Added {
 ///
 /// A specifier naming an extension an earlier one names, as that one adds it, is a
 /// [`AddOutcome::Duplicate`]; two that add one extension differently (another version, other
-/// bytes, another source) are refused with `extension_conflict`.
+/// bytes, another source) are refused with `extension_conflict`. An extension a `.wasm` file
+/// entry already loads is refused the same way (ADR 0160).
 pub fn add(
     req: &AddRequest,
     registry: &dyn Registry,

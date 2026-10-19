@@ -42,19 +42,19 @@ fn assert_refused_over(entries: &[&str]) {
 }
 
 #[test]
-#[ignore = "flipped by T2"]
 fn an_add_of_what_a_name_file_entry_loads_is_refused() {
     assert_refused_over(&["@sdk/greet=./a.wasm"]);
 }
 
-#[test]
-#[ignore = "flipped by T2"]
+#[specforge_test(
+    behavior = "add_extension_to_existing_project",
+    verify = "an add of an extension a .wasm file entry loads is refused, naming the entry, and writes nothing"
+)]
 fn an_add_of_what_a_bare_file_entry_loads_is_refused() {
     assert_refused_over(&["./a.wasm"]);
 }
 
 #[test]
-#[ignore = "flipped by T2"]
 fn an_add_that_would_shadow_a_loading_file_entry_is_refused() {
     assert_refused_over(&["@sdk/greet", "./a.wasm"]);
 }

@@ -15,6 +15,8 @@ use crate::{OpError, OpErrorKind};
 impl<'a> LockPlan<'a> {
     /// Judge the plan, then load what it fetched.
     ///
+    /// 0. For a verb that enables, a touched name a `.wasm` file entry of the opened `specforge.json`
+    ///    loads is refused (`extension_conflict`, ADR 0160).
     /// 1. [`Self::close`], then the peer rule over the project peer set as the change leaves it
     ///    ([`ProjectPeers::of`] over the staged lock and the entries plus the appended ones). It
     ///    judges every declared peer whose dependent or peer the change touches (a staged install,
@@ -47,6 +49,21 @@ impl<'a> LockPlan<'a> {
         };
         let mut failed: Vec<Option<(OpError, bool)>> =
             changing.names.iter().map(|_| None).collect();
+        // A name a `.wasm` file entry loads is not installed or enabled beside it (ADR 0160): the
+        // load would refuse one of the two.
+        if self.verb.enables() && !changing.names.is_empty() {
+            let before = ProjectPeers::of(
+                self.installed,
+                self.config.entries(),
+                &mut self.declarations,
+            )
+            .map_err(|error| Refused::of(&changing, error))?;
+            for (at, name) in changing.names.iter().enumerate() {
+                if let Some(Origin::File { path }) = before.member(name).map(|m| &m.origin) {
+                    failed[at] = Some((loaded_from_a_file(name, path), true));
+                }
+            }
+        }
         if !changing.names.is_empty() && !(self.verb == Verb::Remove && self.force) {
             let (view, after) = (self.view(), self.entries_after());
             let set = match ProjectPeers::of(&view, &after, &mut self.declarations) {
@@ -245,6 +262,17 @@ fn unsatisfied<'s>(set: &'s ProjectPeers, changing: &Changing) -> Vec<Edge<'s>> 
         .collect();
     edges.sort_by_key(|e| changing.position(e.dependent).map_or((1, 0), |i| (0, i)));
     edges
+}
+
+/// The refusal of an install or enable of `name`, which the `.wasm` file entry `path` loads (ADR 0160).
+fn loaded_from_a_file(name: &str, path: &str) -> OpError {
+    OpError::new(
+        OpErrorKind::Conflict,
+        "extension_conflict",
+        format!("'{name}' is loaded from the .wasm file entry '{path}' in specforge.json"),
+    )
+    .with_suggestion(format!("remove that entry first: specforge remove {path}"))
+    .with_data(serde_json::json!({ "extension": name, "file": path }))
 }
 
 /// Why `edge` refuses the touched package at `owner`.

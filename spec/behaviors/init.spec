@@ -300,6 +300,9 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     and locked by its own path, as publish reads it; a directory with no
     built component is E040.
     The system MUST NOT duplicate an already-installed extension.
+    An extension a .wasm file entry of specforge.json loads (its component declares that name and
+    the extension load admits it) MUST NOT be installed or enabled beside it: the add is refused
+    with extension_conflict, naming the entry's file, and writes nothing, a dry run included.
     A dry run is the add's lock plan judged and not committed: it answers
     what the add would answer for each specifier (planned, with the
     builtins it would enable as peers_enabled), or the refusal the add
@@ -396,6 +399,7 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   verify unit "an install that breaks a .wasm file entry, or that a .wasm file entry does not satisfy, is refused with E027"
   verify unit "an install enables the builtins it requires first, whatever its source"
   verify unit "an extension no specforge.json entry enables is not judged"
+  verify unit "an add of an extension a .wasm file entry loads is refused, naming the entry, and writes nothing"
   verify integration "add and check agree: an add check would report E027 or E073 for is refused, and an add that passes leaves none"
   verify integration "a local .wasm install is locked at its declared version with source local:<path> and enabled by its bare name"
   verify unit "a local crate directory installs the component its crate builds"
