@@ -97,8 +97,10 @@ fn an_unknown_field_naming_its_own_kind_stays_w020() {
 }
 
 /// Six owners into `event`: E079 names them in (kind, field) order on every registry built.
-#[test]
-#[ignore = "flipped by T4"]
+#[spec(
+    behavior = "detect_unknown_entity_fields",
+    verify = "E079 names its owning fields in kind and field order"
+)]
 fn e079_names_its_owning_fields_in_kind_and_field_order() {
     let names = ["f_six", "e_five", "d_four", "c_three", "b_two", "a_one"];
     let owned: Vec<(&str, &str, Option<&str>)> =
