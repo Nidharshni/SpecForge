@@ -130,7 +130,7 @@ term t_entity_id "entity ID" {
   definition """
     A globally unique free-form identifier for an entity. Any valid identifier
     (letters, digits, underscores, 2-60 chars, starts with a letter or
-    underscore). No
+    underscore), and not a reserved word (E013). No
     enforced case convention — projects choose their own naming style.
   """
   aliases    ["ID", "entity identifier"]

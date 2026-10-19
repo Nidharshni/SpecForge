@@ -44,7 +44,7 @@ impl Planner<'_> {
         fields: &std::collections::BTreeMap<String, Input>,
         verify: &[Obligation],
     ) -> Result<(), Refusal<EditField>> {
-        validate_id(id).map_err(|e| e.about(EditField::Id))?;
+        validate_id(id, self.view.registries().kinds()).map_err(|e| e.about(EditField::Id))?;
         let graph = self.view.graph();
         if (graph.node(id).is_some() && !self.deleted.contains(id)) || self.created.contains_key(id)
         {

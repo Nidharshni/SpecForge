@@ -6,8 +6,10 @@ use specforge_ops::authoring::rename::{self, RenameField};
 const LIMIT: &str = "invariant session_limit \"Limit\" {\n  guarantee \"x\"\n}\n";
 const LOGIN: &str = "behavior login \"Login\" {\n  invariants [session_limit]\n}\n";
 
-#[test]
-#[ignore = "flipped by T2"]
+#[specforge_test_macros::test(
+    behavior = "rename_entity_id",
+    verify = "rename refuses a reserved word as the new ID before anything is planned"
+)]
 fn a_rename_to_a_reserved_word_is_refused_about_the_new_id() {
     let p = crate::navigate::compile(
         crate::navigate::SOFTWARE,

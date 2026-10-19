@@ -422,8 +422,10 @@ fn mutation_refusals_name_their_argument() {
     assert_refused(&reply, "invalid_input", Some("runner"), Some("E058"));
 }
 
-#[test]
-#[ignore = "flipped by T2"]
+#[specforge_test(
+    behavior = "provide_mcp_rename_tool",
+    verify = "a new_name that is a reserved word is refused as invalid input naming new_name"
+)]
 fn a_rename_to_a_reserved_word_is_refused_naming_new_name() {
     assert_refused(
         &call_served(

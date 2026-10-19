@@ -143,8 +143,10 @@ fn new_refuses_an_invalid_id() {
     }
 }
 
-#[test]
-#[ignore = "flipped by T2"]
+#[specforge_test_macros::test(
+    behavior = "create_entity",
+    verify = "new refuses a reserved id before the edited project is compiled"
+)]
 fn new_refuses_a_reserved_id_before_the_compile() {
     let c = tasks();
     for id in ["behavior", "invariant", "defaults"] {

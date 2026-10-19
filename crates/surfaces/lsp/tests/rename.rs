@@ -184,8 +184,11 @@ async fn rename_to_an_illegal_id_is_refused_with_why() {
 }
 
 /// A reserved word is no entity ID either: the editor gets the reason, and no edit.
+#[spec(
+    behavior = "rename_entity_id",
+    verify = "rename to a reserved word is refused with why"
+)]
 #[tokio::test]
-#[ignore = "flipped by T2"]
 async fn rename_to_a_reserved_word_is_refused_with_why() {
     use crate::session::{Session, uri_of};
     use serde_json::json;
