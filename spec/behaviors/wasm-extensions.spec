@@ -873,7 +873,8 @@ behavior read_lock_file "Read Lock File" {
   contract   """
     When a specforge.lock file exists, the system MUST use the versions and
     hashes it records. A lock file that exists and can't be read or parsed is
-    E033: no installed extension loads from it (each is E028 naming the
+    E033, naming one remedy whatever made it unreadable (fix specforge.lock, or
+    delete it and install the extensions again with specforge add): no installed extension loads from it (each is E028 naming the
     lock), and add, update and remove refuse to change what is installed
     until it is fixed or deleted, so it is never silently replaced.
   """
@@ -881,6 +882,7 @@ behavior read_lock_file "Read Lock File" {
   verify unit "locked versions used when lock file exists"
   verify unit "missing lock entry triggers resolution"
   verify unit "an unreadable lock file is E033 and is never replaced by a change"
+  verify unit "a lock file that can't be read names one remedy, whatever made it unreadable"
   verify contract "Read Lock File: lock file reading holds — all_files_parsed_fired, filesystem_available, lock_file_read_emitted, locked_versions_used, malformed_lock_reported"
 }
 

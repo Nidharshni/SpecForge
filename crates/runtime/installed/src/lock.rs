@@ -151,6 +151,11 @@ pub fn read_lock_file(path: &Path) -> Result<LockFile, Diagnostic> {
     parse_lock_file(path, &content)
 }
 
+/// What to do about a `specforge.lock` that is there and can't be read, whatever made it so (its text, its
+/// permissions, a directory in its place): the one remedy the compile, doctor and every refused change name.
+const REMEDY: &str =
+    "fix specforge.lock, or delete it and install the extensions again with `specforge add`";
+
 fn unreadable(path: &Path, error: &std::io::Error) -> Diagnostic {
     Diagnostic::new(
         codes::E033,
@@ -160,6 +165,7 @@ fn unreadable(path: &Path, error: &std::io::Error) -> Diagnostic {
             error
         ),
     )
+    .with_suggestion(REMEDY.to_string())
 }
 
 fn parse_lock_file(path: &Path, content: &str) -> Result<LockFile, Diagnostic> {
@@ -168,9 +174,7 @@ fn parse_lock_file(path: &Path, content: &str) -> Result<LockFile, Diagnostic> {
             codes::E033,
             format!("corrupt lock file at '{}': {}", path.display(), e),
         )
-        .with_suggestion(
-            "delete the lock file and run `specforge install` to regenerate".to_string(),
-        )
+        .with_suggestion(REMEDY.to_string())
     })
 }
 
@@ -408,10 +412,11 @@ mod tests {
         );
     }
 
-    #[test]
-    #[ignore = "flipped by T3"]
+    #[specforge_test_macros::test(
+        behavior = "read_lock_file",
+        verify = "a lock file that can't be read names one remedy, whatever made it unreadable"
+    )]
     fn a_lock_that_cannot_be_read_names_one_remedy() {
-        const ONE: &str = "fix specforge.lock, or delete it and install the extensions again with `specforge add`";
         let dir = TempDir::new().unwrap();
         let bad_name = r#"{"lockfile_version": 1, "entries": [{"name": "Bad Name", "version": "1.0.0", "source": "registry", "wasm_hash": "h"}]}"#;
         for cause in [Some("not valid json {{{"), None, Some(bad_name)] {
@@ -427,7 +432,11 @@ mod tests {
                 .problem()
                 .cloned()
                 .unwrap();
-            assert_eq!(problem.suggestion.as_deref(), Some(ONE), "{cause:?}");
+            assert_eq!(
+                problem.suggestion.as_deref(),
+                Some(super::REMEDY),
+                "{cause:?}"
+            );
             let refused = crate::Installed::read(dir.path(), &PlainDisk)
                 .writable_lock()
                 .unwrap_err();
