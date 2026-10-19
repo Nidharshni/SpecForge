@@ -329,7 +329,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   written (ADR 0160).
   `add` and `init` first enable the builtins what they add requires, dependencies first;
   `update` enables nothing. The peer rule then judges the **project peer set** as the change leaves it,
-  once: every declared peer whose dependent or peer the change touches. A required peer no member
+  once: every declared peer whose dependent or peer the change touches (what it stages or appends; for a removal,
+  each member the set loses or loads instead, ADR 0041). A required peer no member
   provides is E027; a peer installed from a registry is unified against the registry the install came
   from (R-RES-006/005, ADR 0001); anything else out of range (a local install, a builtin, a `.wasm`
   file entry) is E027. Lock order and entry order decide nothing. A registry install's binary loads

@@ -196,3 +196,8 @@ nothing from being removed), the dry runs of `add` and `remove` are the plan che
 package judged by its published manifest), and A5's init is one plan, committed once (ADR 0065).
 
 **Amended by [ADR 0165](0165-the-lock-a-change-leaves-is-built-when-its-plan-is-checked.md) (2026-10-19):** B4: a plan that stages no install or uninstall accepts any lock; it opens no change.
+
+**Amended (2026-10-19, architecture round 17, plan 08):** B2: what a removal touches is the members that differ between
+the project peer set before it and after it (one it removes, or one a `.wasm` file entry it un-shadows loads instead,
+judged at that entry's version); what an add, init or update touches is what it stages and appends, which includes every
+member it moves. Reopened by a verb that both installs and drops an entry: its drops must be judged by the difference.

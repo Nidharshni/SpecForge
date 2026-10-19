@@ -239,4 +239,5 @@ mod config;
 mod diamond;
 mod judge;
 mod reach;
+mod touched;
 mod unchanged;

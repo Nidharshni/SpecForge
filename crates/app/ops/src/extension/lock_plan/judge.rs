@@ -111,10 +111,11 @@ impl<'a> LockPlan<'a> {
 
     /// What the change touches, once what it enables is closed over (E028 refuses the plan when a
     /// builtin it needs does not load): a staged install, an appended entry, and for a removal the
-    /// members it takes out of the project's peer set or lets load.
-    fn touched(&mut self) -> Result<Changing, Refused> {
+    /// members it takes out of the project's peer set or lets load. For a verb that enables, every
+    /// member the change moves is among these (`tests/touched.rs`).
+    pub(super) fn touched(&mut self) -> Result<Changing, Refused> {
         if self.verb == Verb::Remove {
-            return self.removal_touched();
+            return self.differing();
         }
         if let Err(error) = self.close() {
             return Err(Refused::of(
@@ -125,10 +126,11 @@ impl<'a> LockPlan<'a> {
         Ok(Changing::of(&self.staged, &self.appended))
     }
 
-    /// The members that differ between the project peer set before the removal and after it: a
-    /// member it removes, or one it lets load (a `.wasm` file entry another entry shadowed), each
-    /// charged to the first ask.
-    fn removal_touched(&mut self) -> Result<Changing, Refused> {
+    /// The members that differ between the project peer set before the change and after it: for a
+    /// removal, a member it removes or one it lets load (a `.wasm` file entry another entry
+    /// shadowed), each charged to the removal's ask. What a removal touches; for a verb that
+    /// enables, a subset of what it stages and appends.
+    pub(super) fn differing(&mut self) -> Result<Changing, Refused> {
         let none = Changing::none;
         let before = ProjectPeers::of(
             self.installed,
