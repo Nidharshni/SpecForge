@@ -42,6 +42,7 @@ mod parity;
 mod partial_writes;
 mod path_parity;
 mod path_spelling;
+mod previews;
 mod product_commands;
 mod project_from_path;
 mod publish;

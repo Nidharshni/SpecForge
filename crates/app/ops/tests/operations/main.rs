@@ -48,6 +48,7 @@ mod obligations_member;
 mod options;
 mod peers;
 mod plan;
+mod previews;
 mod project_files;
 mod publish;
 mod query;
