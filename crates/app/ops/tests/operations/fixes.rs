@@ -3,8 +3,8 @@
 use crate::navigate::{Compiled, LIMIT, LOGIN, SOFTWARE, at, compile, nav, span};
 use specforge_common::{Diagnostic, DiagnosticData, SourceSpan, Sym};
 use specforge_extension_sdk::prelude::*;
-use specforge_ops::authoring::fix::{self, Fix, FixKind, FixQuery, FixSource, TextEdit};
-use specforge_ops::read::navigate::Navigator;
+use specforge_ops::authoring::fix::{self, Fix, FixKind, FixQuery, FixSource};
+use specforge_ops::read::navigate::{Navigator, TextEdit, apply_edits};
 use specforge_ops::view::ProjectView;
 use specforge_project::CompiledProject;
 use specforge_project::testing::compile_at;
@@ -13,23 +13,7 @@ use std::sync::Arc;
 
 /// `text` with `edits` (spans of it) applied.
 pub(crate) fn apply(text: &str, edits: &[TextEdit]) -> String {
-    let offset = |line: usize, col: usize| -> usize {
-        let start: usize = text
-            .split_inclusive('\n')
-            .take(line - 1)
-            .map(str::len)
-            .sum();
-        start + col - 1
-    };
-    let mut edits: Vec<&TextEdit> = edits.iter().collect();
-    edits.sort_by_key(|e| std::cmp::Reverse((e.span.start_line, e.span.start_col)));
-    let mut out = text.to_string();
-    for edit in edits {
-        let start = offset(edit.span.start_line, edit.span.start_col);
-        let end = offset(edit.span.end_line, edit.span.end_col);
-        out.replace_range(start..end, &edit.new_text);
-    }
-    out
+    apply_edits(text, edits).expect("the fix's edits lie in the text")
 }
 
 /// The fixes of `p`'s own diagnostics for `query`.

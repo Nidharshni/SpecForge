@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use specforge_common::{SourceSpan, Sym};
+use specforge_common::Sym;
 use specforge_ops::authoring::fix::{self, FixQuery};
 use specforge_ops::authoring::format;
 use specforge_ops::read::navigate::{EntityQuery, MatchScope, find_entities, outline};
@@ -318,30 +318,24 @@ pub fn rename(
         // editor's buffer: a buffer typed in since the compile is not that
         // text, so the rename waits for the compile (LSP's
         // ContentModified).
-        if compiled.is_stale(&edit.file) {
-            return Err(content_modified(&edit.file));
+        let file = edit.span.file.as_str();
+        if compiled.is_stale(file) {
+            return Err(content_modified(file));
         }
-        let file_uri = compiled.uri(&edit.file);
-        // A 1-based line and byte columns of the file's text.
-        let span = SourceSpan {
-            file: Sym::new(&edit.file),
-            start_line: edit.line,
-            start_col: edit.start_col + 1,
-            end_line: edit.line,
-            end_col: edit.end_col + 1,
-        };
         // A rename is all or nothing: an edit that cannot be placed
         // refuses it.
-        let Some(range) = compiled.range(&span) else {
+        let Some(range) = compiled.range(&edit.span) else {
             return Err(Error::invalid_params(format!(
-                "cannot rename: the text of {} is not known",
-                edit.file
+                "cannot rename: the text of {file} is not known"
             )));
         };
-        changes.entry(file_uri).or_default().push(TextEdit {
-            range,
-            new_text: new_name.to_string(),
-        });
+        changes
+            .entry(compiled.uri(file))
+            .or_default()
+            .push(TextEdit {
+                range,
+                new_text: edit.new_text,
+            });
     }
 
     Ok(Some(WorkspaceEdit {

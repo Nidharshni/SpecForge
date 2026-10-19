@@ -12,6 +12,7 @@
 
 mod anchors;
 mod attribution;
+mod edits;
 mod files;
 mod find;
 mod occurrences;
@@ -31,6 +32,7 @@ pub use anchors::{
     AnchoredEntity, EntityAnchors, FileAnchors, Implementation, anchors_of_entity, anchors_of_file,
 };
 pub use attribution::{is_about, subjects};
+pub use edits::{TextEdit, apply_edits};
 pub use files::{FileMatch, OutlineEntry, OutlineMethod, match_file, outline};
 pub use find::{
     EntityMatch, EntityQuery, FUZZY_THRESHOLD, MatchScope, MatchedOn, Tier, find_entities, snippet,

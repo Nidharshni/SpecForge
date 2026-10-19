@@ -109,10 +109,11 @@ impl CoreTool for Tool {
                 .edits
                 .iter()
                 .map(|e| Edit {
-                    file: e.file.to_string(),
-                    line: e.line,
-                    start_col: e.start_col,
-                    end_col: e.end_col,
+                    file: e.span.file.to_string(),
+                    line: e.span.start_line,
+                    // The wire's 0-based columns until T3 answers the spec's TextEdit.
+                    start_col: e.span.start_col - 1,
+                    end_col: e.span.end_col - 1,
                     new_text: e.new_text.clone(),
                 })
                 .collect(),

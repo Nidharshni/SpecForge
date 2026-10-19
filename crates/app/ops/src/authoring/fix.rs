@@ -14,16 +14,9 @@ use specforge_common::{Diagnostic, DiagnosticData, SourceSpan, Sym};
 use specforge_graph::Node;
 
 use crate::authoring::edit::{self, Edit, EditField, Input};
-use crate::read::navigate::{Navigator, SourceText, is_about, overlaps};
+use crate::read::navigate::{Navigator, SourceText, TextEdit, is_about, overlaps};
 use crate::view::ProjectView;
 use crate::{OpError, OpErrorKind, Refusal};
-
-/// One edit: `span`'s text becomes `new_text` (an empty span inserts).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TextEdit {
-    pub span: SourceSpan,
-    pub new_text: String,
-}
 
 /// What a fix is to an editor: a quick fix of the diagnostic, or a
 /// refactoring that adds to the project.

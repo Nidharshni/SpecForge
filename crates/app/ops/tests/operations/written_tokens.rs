@@ -31,8 +31,13 @@ fn rename_edits_a_default_no_block_takes() {
         files.into_iter().collect::<Vec<_>>(),
         ["flows.spec", "rules.spec"]
     );
-    let flows = plan.edits.iter().find(|e| e.file == "flows.spec").unwrap();
-    assert_eq!((flows.line, flows.start_col, flows.end_col), (2, 14, 19));
+    let flows = plan
+        .edits
+        .iter()
+        .find(|e| e.span.file == "flows.spec")
+        .unwrap();
+    let span = &flows.span;
+    assert_eq!((span.start_line, span.start_col, span.end_col), (2, 15, 20));
 }
 
 #[test]
@@ -185,7 +190,7 @@ fn rename_and_delete_find_the_same_tokens() {
             .unwrap_or_else(|e| panic!("{name}: {e:?}"))
             .edits
             .iter()
-            .map(|e| (e.file.clone(), e.line))
+            .map(|e| (e.span.file.to_string(), e.span.start_line))
             .filter(|(file, line)| (file.as_str(), *line) != declared)
             .collect();
         assert_eq!(renamed, expected, "{name}: rename");

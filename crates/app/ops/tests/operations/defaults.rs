@@ -39,7 +39,7 @@ fn renaming_an_inherited_reference_edits_it_once() {
     let on_line = plan
         .edits
         .iter()
-        .filter(|e| e.file == "a.spec" && e.line == 2)
+        .filter(|e| e.span.file == "a.spec" && e.span.start_line == 2)
         .count();
     assert_eq!(on_line, 1, "{:?}", plan.edits);
 }

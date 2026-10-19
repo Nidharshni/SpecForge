@@ -419,7 +419,7 @@ mod tests {
             subject: None,
             edits: files
                 .iter()
-                .map(|file| specforge_ops::authoring::fix::TextEdit {
+                .map(|file| specforge_ops::read::navigate::TextEdit {
                     span: SourceSpan {
                         file: Sym::new(file),
                         ..brace()
