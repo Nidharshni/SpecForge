@@ -82,7 +82,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "flipped by T6"]
     fn a_candidate_that_does_not_load_names_no_load_key() {
         let error = declaration_of(b"not wasm", &InProcessRuntime::new()).unwrap_err();
 

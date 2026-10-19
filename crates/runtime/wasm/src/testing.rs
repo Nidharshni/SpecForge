@@ -197,9 +197,7 @@ impl WasmRuntime for InProcessRuntime {
         if extensions.contains_key(name) || answered {
             return Ok(());
         }
-        Err(format!(
-            "'{name}' is not a component the in-process runtime serves"
-        ))
+        Err("not a component the in-process runtime serves".to_string())
     }
 
     fn rename(&self, from: &str, to: &str) -> bool {
