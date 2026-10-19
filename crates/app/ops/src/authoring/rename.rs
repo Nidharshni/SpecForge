@@ -6,12 +6,12 @@
 //! comments and verify statements that mentions the ID is not a reference,
 //! and is left alone (ADR 0016).
 
-use crate::change::{Cause, ProjectChange};
+use crate::change::ProjectChange;
 use crate::read::navigate::{Direction, Navigator, Precision, ReferenceQuery};
 use crate::view::EntityField;
 use crate::{Caller, OpError, OpErrorKind, Refusal};
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// The field of a rename's request a refusal can be about (ADR 0072).
@@ -27,9 +27,6 @@ pub enum RenameField {
 pub const INVALID_ID: &str = "invalid_name";
 /// The new ID already names an entity.
 pub const TAKEN: &str = "entity_exists";
-/// A file the rename must edit cannot be read (or written).
-pub const UNREADABLE: &str = "file_unreadable";
-
 /// The shortest and longest entity IDs (E014).
 pub const ID_LENGTH: std::ops::RangeInclusive<usize> = 2..=60;
 
@@ -168,7 +165,7 @@ pub fn plan(
         let files: Vec<&str> = unreadable.into_iter().collect();
         return Err(OpError::new(
             OpErrorKind::Internal,
-            UNREADABLE,
+            crate::FILE_UNREADABLE,
             format!(
                 "cannot rename '{old_id}': {} do not spell it where the graph says",
                 files.join(", ")
@@ -208,21 +205,21 @@ pub fn plan(
 
 /// Write `plan`'s edits to the files under the spec root it was planned from as one project change (ADR 0128): every file is checked
 /// against the text the plan was made on, then replaced; if a write fails, every file already written is put back,
-/// and one that cannot be is the error's writes. Returns the files it wrote.
+/// and one that cannot be is the error's writes. A failure is the change's own (ADR 0155). Returns the files it wrote.
 ///
 /// Every file is resolved through the caller's containment first (ADR 0104), and read and written where it
 /// landed: one that leaves it, by a symlink, refuses the rename (`outside_root`) before any file is
 /// written.
 pub fn apply(plan: &RenamePlan, caller: Caller<'_>) -> Result<crate::Writes, OpError> {
     let spec_root = plan.spec_root.as_path();
-    let mut change = ProjectChange::new();
+    let mut change = ProjectChange::new(spec_root, format!("cannot rename '{}'", plan.old_id));
     for file in plan.affected_files() {
         let held = caller.containment().resolve(&spec_root.join(file))?;
         // The edits are positions in the planned text: another text refuses the whole rename.
         let Some(planned) = plan.planned.get(file) else {
             return Err(OpError::new(
                 OpErrorKind::Internal,
-                UNREADABLE,
+                crate::FILE_UNREADABLE,
                 format!(
                     "cannot rename '{}': no text was planned for {file}",
                     plan.old_id
@@ -232,37 +229,7 @@ pub fn apply(plan: &RenamePlan, caller: Caller<'_>) -> Result<crate::Writes, OpE
         let edited = apply_edits(planned, plan.edits.iter().filter(|e| e.file == file));
         change.stage(held, Some(planned.as_bytes().to_vec()), edited.into_bytes());
     }
-    let named = |file: &Path| {
-        file.strip_prefix(spec_root)
-            .unwrap_or(file)
-            .display()
-            .to_string()
-    };
-    change.commit().map_err(|failed| {
-        failed.error(|cause| match cause {
-            Cause::Changed { file } => OpError::new(
-                OpErrorKind::Conflict,
-                crate::FILE_CHANGED,
-                format!(
-                    "cannot rename '{}': {} changed since the project was compiled; \
-                     nothing was written",
-                    plan.old_id,
-                    named(&file)
-                ),
-            ),
-            Cause::Unreadable { file, error } => OpError::new(
-                OpErrorKind::of_io(&error),
-                UNREADABLE,
-                format!("failed to read {}: {error}", file.display()),
-            ),
-            Cause::Unwritable { file, error } => OpError::new(
-                OpErrorKind::of_io(&error),
-                UNREADABLE,
-                format!("failed to write {}: {error}", file.display()),
-            ),
-            Cause::Then(never) => match never {},
-        })
-    })
+    change.commit()
 }
 
 #[cfg(test)]
@@ -441,7 +408,7 @@ mod tests {
 
         let error = apply(&plan, crate::testing::caller()).unwrap_err();
 
-        assert_eq!(error.code, UNREADABLE);
+        assert_eq!(error.code, crate::FILE_UNWRITABLE);
         assert_eq!(
             std::fs::read_to_string(dir.path().join("limit.spec")).unwrap(),
             LIMIT
@@ -490,7 +457,7 @@ mod tests {
         assert_eq!(code(plan(&navigator, "session_limit", "login")), TAKEN);
         let without_limit = without_limit(&project);
         let refused = plan(&nav(&without_limit), "session_limit", "session_cap").unwrap_err();
-        assert_eq!(refused.error.code, UNREADABLE);
+        assert_eq!(refused.error.code, crate::FILE_UNREADABLE);
         assert!(
             refused.error.message.contains("limit.spec"),
             "{}",
@@ -507,7 +474,7 @@ mod tests {
             (k, text)
         }));
         let refused = plan(&nav(&stale), "session_limit", "session_cap").unwrap_err();
-        assert_eq!(refused.error.code, UNREADABLE);
+        assert_eq!(refused.error.code, crate::FILE_UNREADABLE);
         assert!(
             refused.error.message.contains("login.spec"),
             "{}",

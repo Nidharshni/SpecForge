@@ -10,6 +10,7 @@
 //! needs a configured registry, which a project that doesn't exist yet can't have, so it is added
 //! afterwards with `specforge add`.
 
+use crate::change;
 use crate::extension::{self, Also, Candidate, LockPlan, Names, Place};
 use crate::{Caller, Containment, OpError, OpErrorKind, Refusal, Writes};
 use serde::Serialize;
@@ -25,8 +26,6 @@ pub const PROJECT_EXISTS: &str = "project_exists";
 /// The code an init refused with because the file it would write as the
 /// starter is already there.
 pub const STARTER_EXISTS: &str = "starter_exists";
-/// A file init creates cannot be written.
-const INIT_WRITE_FAILED: &str = "init_write_failed";
 /// The code for a project name init can't use.
 pub const INVALID_NAME: &str = "invalid_name";
 
@@ -226,40 +225,31 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     // formatter writes it, so `specforge format --check` accepts it.
     let starter = canonical(&starter, req.dir);
     let dir = req.dir;
-    let write_error = |what: &str, e: std::io::Error| {
-        OpError::new(
-            OpErrorKind::of_io(&e),
-            INIT_WRITE_FAILED,
-            format!("cannot write {what}: {e}"),
-        )
-    };
     let files = vec![
         Also {
             path: dir.join(".gitignore"),
             stage: Box::new(move |file, change| {
                 let before = file
                     .read_if_there()
-                    .map_err(|e| write_error(".gitignore", e))?;
+                    .map_err(|e| change::unreadable(Path::new(".gitignore"), &e))?;
                 if let Some(after) = gitignore_with(before.as_deref().unwrap_or_default()) {
                     change.stage(file, before, after);
                 }
                 Ok(())
             }),
-            code: INIT_WRITE_FAILED,
         },
         Also {
             path: dir.join(STARTER_FILE),
             stage: Box::new(move |file, change| {
                 let there = file
                     .read_if_there()
-                    .map_err(|e| write_error(STARTER_FILE, e))?;
+                    .map_err(|e| change::unreadable(Path::new(STARTER_FILE), &e))?;
                 if there.is_some() {
                     return Err(starter_exists(dir));
                 }
                 change.stage(file, None, starter.into_bytes());
                 Ok(())
             }),
-            code: INIT_WRITE_FAILED,
         },
     ];
     let done = checked.writing(files).finish()?;

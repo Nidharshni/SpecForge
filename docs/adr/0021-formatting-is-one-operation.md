@@ -136,3 +136,5 @@ even those their own `exclude` left out. The sources now end at every nested pro
   projects nested in them.
 
 `ProjectConfig::spec_files` is `ProjectConfig::sources(root).files()`.
+
+**Amended by [ADR 0155](0155-a-project-change-words-its-own-failures.md) (2026-10-19):** D7: `file_unreadable` and `file_unwritable` are every project change's codes (`specforge_ops::FILE_UNREADABLE`, `FILE_UNWRITABLE`).

@@ -53,3 +53,5 @@ A `specforge.json` key the peer rule reads besides `extensions` (a concurrent ed
 rule grows); an editor that holds `specforge.json` open (then the buffer, not the disk, is what the file holds).
 
 **Amended by ADR 0138 (2026-10-17):** D1: the per-ask `appended` is gone; an ask is answered `Changes` or `Unchanged`.
+
+**Amended by [ADR 0155](0155-a-project-change-words-its-own-failures.md) (2026-10-19):** D3: the refusal is worded by the project change ("cannot <operation>: specforge.json changed since it was read").

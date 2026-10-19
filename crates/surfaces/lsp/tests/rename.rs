@@ -230,6 +230,6 @@ fn a_rename_without_a_files_text_is_refused_whole() {
 
     assert_eq!(
         refused.unwrap_err().error.code,
-        specforge_ops::authoring::rename::UNREADABLE
+        specforge_ops::FILE_UNREADABLE
     );
 }

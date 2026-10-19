@@ -9,15 +9,14 @@ mod defaults;
 mod validate;
 pub mod write;
 
-use crate::authoring::rename::UNREADABLE;
-use crate::change::{Cause, ProjectChange};
+use crate::change::ProjectChange;
 use crate::view::ProjectView;
 use crate::{Caller, OpError, OpErrorKind, Refusal, Writes};
 use serde::{Deserialize, Serialize};
 use specforge_common::DiagnosticList;
 use specforge_common::shape::{Definitions, Shape};
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// One typed edit. The MCP `specforge.edit` tool reads a list of them (`op` names the variant); each CLI verb
@@ -255,7 +254,7 @@ impl<'v> Planner<'v> {
         let text = self.text(&located.key).ok_or_else(|| {
             OpError::new(
                 OpErrorKind::Internal,
-                UNREADABLE,
+                crate::FILE_UNREADABLE,
                 format!("no text was read for {}", located.key),
             )
         })?;
@@ -429,7 +428,7 @@ pub fn plan(view: &ProjectView<'_>, edits: &[Edit]) -> Result<EditPlan, Refusal<
 /// checked against the text it was planned on, then replaced or created; on any failure, every file already written
 /// is put back (one that cannot be is the error's writes). Returns the files it wrote.
 pub fn apply(plan: &EditPlan, caller: Caller<'_>) -> Result<Writes, OpError> {
-    let mut change = ProjectChange::new();
+    let mut change = ProjectChange::new(&plan.spec_root, "cannot apply the edits");
     for (key, (before, after)) in &plan.files {
         let held = caller.containment().resolve(&plan.spec_root.join(key))?;
         change.stage(
@@ -438,33 +437,5 @@ pub fn apply(plan: &EditPlan, caller: Caller<'_>) -> Result<Writes, OpError> {
             after.clone().into_bytes(),
         );
     }
-    let named = |file: &Path| {
-        file.strip_prefix(&plan.spec_root)
-            .unwrap_or(file)
-            .display()
-            .to_string()
-    };
-    change.commit().map_err(|failed| {
-        failed.error(|cause| match cause {
-            Cause::Changed { file } => OpError::new(
-                OpErrorKind::Conflict,
-                crate::FILE_CHANGED,
-                format!(
-                    "cannot apply the edits: {} changed since the project was compiled; nothing was written",
-                    named(&file)
-                ),
-            ),
-            Cause::Unreadable { file, error } => OpError::new(
-                OpErrorKind::of_io(&error),
-                UNREADABLE,
-                format!("failed to read {}: {error}", file.display()),
-            ),
-            Cause::Unwritable { file, error } => OpError::new(
-                OpErrorKind::of_io(&error),
-                UNREADABLE,
-                format!("failed to write {}: {error}", file.display()),
-            ),
-            Cause::Then(never) => match never {},
-        })
-    })
+    change.commit()
 }
