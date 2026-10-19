@@ -27,7 +27,7 @@ impl Args {
         let entries = &listing.extensions;
 
         match format {
-            OutputFormat::Json => terminal.json(&listing.document()),
+            OutputFormat::Json => terminal.json(&listing),
             OutputFormat::Human => {
                 if entries.is_empty() {
                     outln!(terminal, "This project has no extensions.");

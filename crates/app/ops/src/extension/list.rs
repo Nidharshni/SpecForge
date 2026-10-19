@@ -47,38 +47,14 @@ pub struct ExtensionsDocument {
     pub entity_kinds_in_graph: BTreeSet<String>,
 }
 
-impl ExtensionListing {
-    /// The document both surfaces print.
-    pub fn document(&self) -> ExtensionsDocument {
-        ExtensionsDocument {
-            extensions: self.extensions.clone(),
-            count: self.extensions.len(),
-            lock_file_entries: self.locked.clone(),
-            entity_kinds_in_graph: self.kinds_in_graph.clone(),
-        }
-    }
-}
-
-/// Every extension the project enables, has locked at its root, or
-/// loaded; the lock's entries; the kinds its graph uses.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExtensionListing {
-    /// Sorted by name.
-    pub extensions: Vec<ExtensionInfo>,
-    /// In lock order; empty without a lock or a root.
-    pub locked: Vec<LockedExtension>,
-    /// The kinds of the graph's entities.
-    pub kinds_in_graph: BTreeSet<String>,
-}
-
 /// Every extension of the project ([`super::inventory`]), sorted by name,
 /// with the entity kinds each registered (from the kind registry), how many
 /// of the graph's entities use them, and its rule count; the lock's
-/// entries; the kinds its graph uses. The lock is the view's
-/// ([`ProjectView::lock`]): none without a root.
-pub fn list(view: &ProjectView) -> ExtensionListing {
+/// entries; the kinds its graph uses: the document both surfaces print. The
+/// lock is the view's ([`ProjectView::lock`]): none without a root.
+pub fn list(view: &ProjectView) -> ExtensionsDocument {
     let kinds = view.registries().kinds();
-    let extensions = super::inventory(view)
+    let extensions: Vec<ExtensionInfo> = super::inventory(view)
         .rows()
         .iter()
         .map(|extension| {
@@ -108,9 +84,10 @@ pub fn list(view: &ProjectView) -> ExtensionListing {
         })
         .collect();
 
-    ExtensionListing {
+    ExtensionsDocument {
+        count: extensions.len(),
         extensions,
-        locked: view
+        lock_file_entries: view
             .lock()
             .entries()
             .iter()
@@ -119,7 +96,7 @@ pub fn list(view: &ProjectView) -> ExtensionListing {
                 version: e.version.clone(),
             })
             .collect(),
-        kinds_in_graph: view
+        entity_kinds_in_graph: view
             .graph()
             .nodes()
             .iter()
@@ -235,7 +212,7 @@ mod tests {
         let listing = list(&fixture.view());
 
         assert_eq!(
-            listing.locked,
+            listing.lock_file_entries,
             [LockedExtension {
                 name: "@acme/locked".into(),
                 version: "1.0.0".into()
@@ -289,12 +266,15 @@ mod tests {
                 ("@specforge/product", Status::NotLoaded),
             ]
         );
-        assert!(rootless.locked.is_empty(), "no lock is read without a root");
+        assert!(
+            rootless.lock_file_entries.is_empty(),
+            "no lock is read without a root"
+        );
 
         // Rooted, the lock is read at the root.
         let rooted = list(&fixture.view());
         assert_eq!(
-            rooted.locked,
+            rooted.lock_file_entries,
             [LockedExtension {
                 name: "@acme/locked".into(),
                 version: "1.0.0".into()

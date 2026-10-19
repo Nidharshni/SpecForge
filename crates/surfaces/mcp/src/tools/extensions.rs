@@ -26,8 +26,6 @@ impl CoreTool for Tool {
     fn call(project: ProjectRef<'_>, _args: NoArgs) -> Answered<Reply> {
         // The shared listing, over the project view: what the project
         // compiled, its lock and the kinds its graph uses.
-        Ok(specforge_ops::extension::list(&project.view())
-            .document()
-            .into())
+        Ok(specforge_ops::extension::list(&project.view()).into())
     }
 }
