@@ -118,6 +118,23 @@ fn a_string_that_cannot_round_trip_triple_quoted_is_escaped() {
 }
 
 #[test]
+#[ignore = "flipped by T4"]
+fn a_reference_spelled_true_or_false_is_quoted() {
+    assert_eq!(
+        declared(FieldType::Reference, "refines", one("true")),
+        r#""true""#
+    );
+    assert_eq!(
+        declared(
+            FieldType::ReferenceList,
+            "features",
+            many(&["a_one", "false"])
+        ),
+        r#"[a_one, "false"]"#
+    );
+}
+
+#[test]
 fn a_member_type_expression_is_written_as_given() {
     for ty in ["string", "Task[]", "A | B"] {
         let written = written(Reading::Member, "taskId", &one(ty), 2).unwrap();
