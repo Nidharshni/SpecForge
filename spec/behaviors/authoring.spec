@@ -100,11 +100,11 @@ behavior delete_entity "Delete an Entity" {
     A delete edit removes the entity's block and the comment lines directly
     above it. Deleting an entity that is still referenced leaves the project
     with an error, so it is refused with E080 unless the edit asks to remove
-    every reference to the entity in the same change. The references are those
-    the graph build links, found by the rule that decides what a value
-    references (ADR 0093) in the texts the earlier edits left. A reference
-    written where no typed edit writes, in a defaults block or in a field its
-    kind does not declare, refuses the delete as not_editable, naming where it
+    every reference to the entity in the same change. The references are every
+    token that names the entity, as the graph's one finder reads the texts the
+    earlier edits left (ADR 0163). A token written where no typed edit writes,
+    in a defaults block, in a field its kind does not declare or as a type name
+    a derived field reads, refuses the delete as not_editable, naming where it
     is written.
   """
   verify unit "delete removes the block and the comment above it"
@@ -113,6 +113,7 @@ behavior delete_entity "Delete an Entity" {
   verify unit "delete with unlink_references removes a scheme ref ID from a string list"
   verify unit "delete with unlink_references removes a reference list written as one value"
   verify unit "delete with unlink_references refuses a reference no typed edit writes"
+  verify unit "delete with unlink_references refuses a type name a derived field reads"
 }
 
 behavior validate_typed_edit "Validate a Typed Edit" {

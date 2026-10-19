@@ -140,8 +140,10 @@ const MEMBER: &str =
 const SIGNATURE: &str = "type User \"A user\" {\n  name string\n}\n\nport Users \"Users\" {\n  direction outbound\n  \
                          category  \"db\"\n  method find(id: string) -> User\n}\n";
 
-#[test]
-#[ignore = "flipped by T6"]
+#[specforge_test_macros::test(
+    behavior = "delete_entity",
+    verify = "delete with unlink_references refuses a type name a derived field reads"
+)]
 fn delete_with_unlink_references_refuses_a_type_named_in_a_member() {
     let c = project(&[("a.spec", MEMBER)]);
     let (code, message) = refused(&c, &[delete("User", true)]);
@@ -153,7 +155,6 @@ fn delete_with_unlink_references_refuses_a_type_named_in_a_member() {
 }
 
 #[test]
-#[ignore = "flipped by T6"]
 fn delete_with_unlink_references_refuses_a_type_named_in_a_signature() {
     let c = project(&[("a.spec", SIGNATURE)]);
     let (code, message) = refused(&c, &[delete("User", true)]);
