@@ -551,7 +551,7 @@ fn a_migration_writes_each_file_and_its_backup() {
 }
 
 #[test]
-fn a_rolled_back_migration_keeps_only_its_backups() {
+fn a_rolled_back_migration_leaves_nothing() {
     let dir = project(&["@t/x"], &[("old.spec", OLD)]);
     let root = dir.path();
     specforge_installed::testing::install(root, &["@t/x"]);
@@ -571,6 +571,6 @@ fn a_rolled_back_migration_keeps_only_its_backups() {
     .unwrap();
 
     assert!(outcome.rollback.is_some());
-    assert_eq!(listed(&outcome.writes, root), ["old.spec.bak"]);
-    assert_eq!(changed_since(root, &before), ["old.spec.bak"]);
+    assert_eq!(listed(&outcome.writes, root), Vec::<String>::new());
+    assert_eq!(changed_since(root, &before), Vec::<String>::new());
 }

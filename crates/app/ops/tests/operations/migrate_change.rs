@@ -33,8 +33,10 @@ fn chmod(path: &Path, mode: u32) {
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "a migrated source keeps its permissions"
+)]
 fn a_migrated_source_keeps_its_permissions() {
     let dir = project();
     if !binds(dir.path()) {
@@ -46,8 +48,10 @@ fn a_migrated_source_keeps_its_permissions() {
     assert_eq!(mode(&dir.path().join("old.spec")), 0o600);
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "a backup has its source's permissions"
+)]
 fn a_backup_has_its_sources_permissions() {
     let dir = project();
     if !binds(dir.path()) {
@@ -59,8 +63,10 @@ fn a_backup_has_its_sources_permissions() {
     assert_eq!(mode(&dir.path().join("old.spec.bak")), 0o600);
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "a read-only source refuses the migration and nothing is written"
+)]
 fn a_read_only_source_refuses_the_migration_and_nothing_is_written() {
     let dir = project();
     if !binds(dir.path()) {
@@ -91,8 +97,10 @@ fn a_read_only_source_refuses_the_migration_and_nothing_is_written() {
     }
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "a record the migration cannot write refuses it"
+)]
 fn a_record_the_migration_cannot_write_refuses_it() {
     let dir = project();
     if !binds(dir.path()) {
@@ -116,8 +124,10 @@ fn a_record_the_migration_cannot_write_refuses_it() {
     );
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "rollback_failed_migration",
+    verify = "an automatic rollback keeps a file's permissions"
+)]
 fn an_automatic_rollback_keeps_a_files_permissions() {
     let dir = project_with_extension();
     if !binds(dir.path()) {
@@ -201,4 +211,108 @@ fn a_file_that_cannot_be_migrated_leaves_every_file_as_it_was() {
     assert!(outcome.writes.is_empty());
     assert!(!outcome.migrated());
     assert_eq!(crate::migrate::files_under(dir.path()), before);
+}
+
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "a source changed since the migration read it refuses the migration"
+)]
+fn a_source_changed_since_the_plan_refuses_the_migration() {
+    use specforge_extension_sdk::prelude::*;
+    let dir = project_with_extension();
+    let source = dir.path().join("old.spec");
+    // The compile before the change runs after the plan read the source: a save lands in between.
+    let runtime = specforge_wasm::testing::InProcessRuntime::new().with({
+        let source = source.clone();
+        move || {
+            let source = source.clone();
+            let mut c = ContributionsBuilder::new(ExtensionMeta::new("@acme/x", "1.0.0"));
+            c.kind("behavior", |k| {
+                k.description("probe").open_fields(true);
+            });
+            c.rule("P100", move |r| {
+                let source = source.clone();
+                r.check(CheckKind::Custom)
+                    .severity(ValidationSeverity::Info)
+                    .target_kind("behavior")
+                    .wasm_function("validate__edit")
+                    .message_template("{id}")
+                    .validate(move |_| {
+                        std::fs::write(&source, "EDITED").unwrap();
+                        ValidatorVerdict::Pass
+                    });
+            });
+            c
+        }
+    });
+    let root = ProjectRoot::of(dir.path()).unwrap();
+
+    let error = specforge_ops::authoring::migrate::run(&request(&root), Some(Arc::new(runtime)))
+        .unwrap_err();
+
+    assert_eq!(error.code, "file_changed");
+    assert_eq!(std::fs::read_to_string(&source).unwrap(), "EDITED");
+    assert!(!dir.path().join("old.spec.bak").exists());
+    assert!(!dir.path().join(".specforge/migration.json").exists());
+}
+
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "the backup and temporary file are created new, never through a planted link"
+)]
+fn an_inside_link_at_a_temp_name_is_not_written_through() {
+    let dir = project();
+    let notes = dir.path().join("notes.txt");
+    std::fs::write(&notes, "notes\n").unwrap();
+    std::os::unix::fs::symlink("notes.txt", dir.path().join("old.spec.tmp")).unwrap();
+
+    let outcome = run(&request(&ProjectRoot::of(dir.path()).unwrap()), None);
+
+    assert!(outcome.ok());
+    assert_eq!(std::fs::read_to_string(&notes).unwrap(), "notes\n");
+    assert!(!dir.path().join("old.spec.tmp").exists());
+    assert!(
+        !std::fs::read_to_string(dir.path().join("old.spec"))
+            .unwrap()
+            .contains("0.9")
+    );
+}
+
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "the backup and temporary file are created new, never through a planted link"
+)]
+fn an_inside_link_at_the_backup_name_is_not_written_through() {
+    let dir = project();
+    let notes = dir.path().join("notes.txt");
+    std::fs::write(&notes, "notes\n").unwrap();
+    let backup = dir.path().join("old.spec.bak");
+    std::os::unix::fs::symlink("notes.txt", &backup).unwrap();
+
+    let outcome = run(&request(&ProjectRoot::of(dir.path()).unwrap()), None);
+
+    assert!(outcome.ok());
+    assert_eq!(std::fs::read_to_string(&notes).unwrap(), "notes\n");
+    assert!(!std::fs::symlink_metadata(&backup).unwrap().is_symlink());
+    assert_eq!(std::fs::read_to_string(&backup).unwrap(), OLD);
+}
+
+#[test]
+fn two_names_for_one_source_are_written_once() {
+    let dir = project();
+    std::os::unix::fs::symlink("old.spec", dir.path().join("link.spec")).unwrap();
+
+    let outcome = run(&request(&ProjectRoot::of(dir.path()).unwrap()), None);
+
+    assert!(outcome.ok(), "{outcome:?}");
+    assert!(
+        !std::fs::read_to_string(dir.path().join("old.spec"))
+            .unwrap()
+            .contains("0.9")
+    );
+    assert!(
+        std::fs::symlink_metadata(dir.path().join("link.spec"))
+            .unwrap()
+            .is_symlink()
+    );
 }

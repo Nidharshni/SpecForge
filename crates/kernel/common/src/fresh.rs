@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 ///
 /// A file that is there keeps its permissions, and one the process may not write is refused with the
 /// error of opening it for writing (`PermissionDenied`), as an in-place write would have: its owner's
-/// read-only marker is not lifted by a rewrite. Ownership and extended attributes are not carried over.
+/// read-only marker is not lifted by a rewrite. The temp gets them before a byte is written. Ownership and extended attributes are not carried over.
 pub fn replace_file(path: &Path, contents: &[u8]) -> Result<()> {
     let permissions = match OpenOptions::new().write(true).open(path) {
         Ok(existing) => Some(existing.metadata()?.permissions()),
@@ -30,10 +30,10 @@ pub fn replace_file(path: &Path, contents: &[u8]) -> Result<()> {
         .create_new(true)
         .open(&temp)
         .and_then(|mut file| {
-            file.write_all(contents)?;
             if let Some(permissions) = permissions {
                 file.set_permissions(permissions)?;
             }
+            file.write_all(contents)?;
             file.sync_all()
         })
         .and_then(|()| std::fs::rename(&temp, path));

@@ -4,7 +4,8 @@
     reason = "a test's unwrap is its assertion: a None or an Err fails the test"
 )]
 
-use specforge_migrate::{MigrationRecord, RecordChange, migrate_project, restore, run_rollback};
+use specforge_migrate::backup_of;
+use specforge_migrate::{MigrationRecord, RecordChange, migrate_project, run_rollback};
 use specforge_parser::CURRENT_FORMAT_VERSION;
 use specforge_test_macros::test as specforge_test;
 use std::path::Path;
@@ -25,21 +26,22 @@ fn project() -> TempDir {
     dir
 }
 
-/// Migrate `dir` with backups and record it, as `specforge migrate` does once its checks pass.
+/// Migrate `dir` with backups and record it, as `specforge migrate` does once its checks pass: the plan's texts are
+/// written, each backup with the text it read, and the record.
 fn migrated(dir: &TempDir) {
     let summary = migrate_project(
         &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         &[dir.path().join("spec/a.spec")],
         &CURRENT_FORMAT_VERSION,
-        false,
-        false,
         &|path: &Path| std::fs::read_to_string(path),
     );
     assert!(summary.migrated_count >= 1, "{summary:?}");
-    MigrationRecord::of(dir.path(), &CURRENT_FORMAT_VERSION, &summary.backups)
-        .unwrap()
-        .write(dir.path())
-        .unwrap();
+    let rewrite = &summary.rewrites[0];
+    std::fs::write(&rewrite.path, &rewrite.after).unwrap();
+    std::fs::write(backup_of(&rewrite.path), &rewrite.before).unwrap();
+    let record = MigrationRecord::of(dir.path(), &CURRENT_FORMAT_VERSION, &summary.rewrites);
+    std::fs::create_dir_all(dir.path().join(".specforge")).unwrap();
+    std::fs::write(dir.path().join(MigrationRecord::PATH), record.render()).unwrap();
 }
 
 /// The project's record, as ops reads it.
@@ -119,29 +121,6 @@ fn a_full_rollback_removes_the_record() {
     assert!(dir.path().join("spec/a.spec.bak").exists());
 }
 
-#[test]
-fn restore_writes_back_the_texts_a_run_read_without_any_backup() {
-    let dir = project();
-    let summary = migrate_project(
-        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-        &[dir.path().join("spec/a.spec")],
-        &CURRENT_FORMAT_VERSION,
-        false,
-        true,
-        &|path: &Path| std::fs::read_to_string(path),
-    );
-    assert_eq!(summary.originals.len(), 1);
-    assert!(!dir.path().join("spec/a.spec.bak").exists());
-
-    let restored = restore(&summary.originals);
-
-    assert_eq!(restored.restored_count, 1);
-    assert_eq!(
-        std::fs::read_to_string(dir.path().join("spec/a.spec")).unwrap(),
-        OLD
-    );
-}
-
 #[specforge_test(
     behavior = "migrate_spec_files_in_place",
     verify = "each file is read once: its backup, its diff and what a rollback restores are that text"
@@ -149,22 +128,21 @@ fn restore_writes_back_the_texts_a_run_read_without_any_backup() {
 fn a_migrated_file_is_read_once() {
     use sha2::Digest;
     let dir = project();
+    let reads = std::cell::Cell::new(0);
 
     let summary = migrate_project(
         &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         &[dir.path().join("spec/a.spec")],
         &CURRENT_FORMAT_VERSION,
-        false,
-        false,
-        &|path: &Path| std::fs::read_to_string(path),
+        &|path: &Path| {
+            reads.set(reads.get() + 1);
+            std::fs::read_to_string(path)
+        },
     );
 
-    assert_eq!(summary.originals.len(), 1);
-    assert_eq!(summary.originals[0].text, OLD);
-    assert_eq!(
-        std::fs::read_to_string(dir.path().join("spec/a.spec.bak")).unwrap(),
-        OLD
-    );
+    assert_eq!(reads.get(), 1);
+    assert_eq!(summary.rewrites.len(), 1);
+    assert_eq!(summary.rewrites[0].before, OLD);
     assert_eq!(
         summary.diffs[0].before_hash,
         format!("{:x}", sha2::Sha256::digest(OLD.as_bytes()))
@@ -181,21 +159,13 @@ fn migrate_project_rewrites_only_the_sources_it_is_given() {
     let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
     let given = [dir.path().join("spec/a.spec")];
 
-    let summary = migrate_project(
-        &root,
-        &given,
-        &CURRENT_FORMAT_VERSION,
-        false,
-        true,
-        &|path: &Path| std::fs::read_to_string(path),
-    );
+    let summary = migrate_project(&root, &given, &CURRENT_FORMAT_VERSION, &|path: &Path| {
+        std::fs::read_to_string(path)
+    });
 
     assert_eq!(summary.results.len(), 1, "{summary:?}");
     assert_eq!(summary.results[0].file_path, "spec/a.spec");
-    assert_ne!(
-        std::fs::read_to_string(dir.path().join("spec/a.spec")).unwrap(),
-        OLD
-    );
+    assert_eq!(summary.rewrites.len(), 1);
     assert_eq!(
         std::fs::read_to_string(dir.path().join("spec/b.spec")).unwrap(),
         OLD,

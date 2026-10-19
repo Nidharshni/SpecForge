@@ -18,8 +18,6 @@ fn a_file_the_read_refuses_fails_and_is_not_written() {
         &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         std::slice::from_ref(&file),
         &CURRENT_FORMAT_VERSION,
-        false,
-        false,
         &|_: &Path| Err(io::Error::new(io::ErrorKind::InvalidInput, refusal)),
     );
     assert_eq!(summary.failed_count, 1, "{summary:?}");
@@ -27,7 +25,7 @@ fn a_file_the_read_refuses_fails_and_is_not_written() {
         summary.results[0].error.as_deref(),
         Some(format!("failed to read file: {refusal}").as_str())
     );
-    assert!(summary.diffs.is_empty() && summary.backups.is_empty());
+    assert!(summary.diffs.is_empty() && summary.backups.is_empty() && summary.rewrites.is_empty());
     assert_eq!(std::fs::read_to_string(&file).unwrap(), old);
     assert_eq!(
         std::fs::read_dir(file.parent().unwrap()).unwrap().count(),

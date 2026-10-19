@@ -19,7 +19,7 @@ invariant migration_backup_safety "Migration Backup Safety" {
     create a backup copy with a .bak extension unless --no-backup is
     explicitly specified. The backup MUST be a byte-for-byte copy of the
     original file. If backup creation fails (e.g., disk full, permission
-    denied), the migration MUST abort for that file without modifying it.
+    denied), the migration MUST abort without modifying any file.
   """
   risk      high
   verify unit "backup created before file modification"
@@ -31,7 +31,8 @@ invariant migration_atomicity "Migration Atomicity" {
   guarantee """
     Each .spec file MUST be written atomically during migration: the system
     MUST write the migrated content to a temporary file in the same directory,
-    then rename the temporary file to the target path. If the rename fails,
+    then rename the temporary file to the target path, keeping the file's
+    permissions. If the rename fails,
     the original file MUST remain unmodified. This guarantees that no
     partially written file can exist on disk, even if the process is
     interrupted mid-write.

@@ -22,6 +22,7 @@ mod local_specifier_containment;
 mod management_view;
 mod message_spec;
 mod methods;
+mod migrate_writes;
 mod mutation_outcome;
 mod navigation_text;
 mod operations_mgmt;

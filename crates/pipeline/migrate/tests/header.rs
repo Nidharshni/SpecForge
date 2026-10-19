@@ -33,13 +33,11 @@ fn a_header_below_blank_lines_is_rewritten_where_it_stands() {
         &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         std::slice::from_ref(&a),
         &CURRENT_FORMAT_VERSION,
-        false,
-        true,
         &|path: &Path| std::fs::read_to_string(path),
     );
 
     assert_eq!(summary.migrated_count, 1, "{summary:?}");
-    let text = std::fs::read_to_string(&a).unwrap();
+    let text = summary.rewrites[0].after.clone();
     assert_eq!(
         text,
         "\n// specforge-format: 1.0\nbehavior alpha \"Alpha\" {\n}\n"

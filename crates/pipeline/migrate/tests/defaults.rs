@@ -21,15 +21,16 @@ fn migrated(text: &str) -> String {
     std::fs::create_dir_all(dir.path().join("spec")).unwrap();
     let a = dir.path().join("spec/a.spec");
     std::fs::write(&a, text).unwrap();
-    migrate_project(
+    let summary = migrate_project(
         &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
         std::slice::from_ref(&a),
         &CURRENT_FORMAT_VERSION,
-        false,
-        true,
         &|path: &Path| std::fs::read_to_string(path),
     );
-    std::fs::read_to_string(&a).unwrap()
+    summary
+        .rewrites
+        .first()
+        .map_or_else(|| text.to_string(), |rewrite| rewrite.after.clone())
 }
 
 /// `behavior <id> "T" { <body> }`, `body` being whole lines.
