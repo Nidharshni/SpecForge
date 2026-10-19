@@ -2,9 +2,11 @@
 //! `dry_run: true`; a run that found nothing to change is no preview.
 
 use serde_json::json;
+use specforge_ops::authoring::edit;
 use specforge_ops::authoring::format::{self, Mode};
 use specforge_ops::authoring::migrate;
 use specforge_ops::extension::{self, AddRequest};
+use specforge_ops::view::ProjectView;
 use specforge_ops::{Writes, Wrote};
 
 use crate::writes::{
@@ -138,4 +140,94 @@ fn a_run_that_changed_files_ran_with_them() {
     let migrated = migrate_over(old.path(), false);
     assert_eq!(migrated.wrote(), Wrote::Ran(migrated.writes.clone()));
     assert!(!migrated.writes.is_empty());
+}
+
+fn tasks() -> crate::navigate::Compiled {
+    crate::edit::project(&[("tasks.spec", crate::edit::TASKS)])
+}
+
+fn run_edits(
+    c: &crate::navigate::Compiled,
+    edits: &[edit::Edit],
+    dry_run: bool,
+) -> Result<edit::Edited, specforge_ops::Refusal<edit::EditField>> {
+    edit::run(
+        &ProjectView::of(&c.project),
+        edits,
+        dry_run,
+        specforge_ops::testing::caller(),
+    )
+}
+
+fn change_category() -> Vec<edit::Edit> {
+    vec![crate::edit::set(
+        "complete_task",
+        "category",
+        crate::edit::one("query"),
+    )]
+}
+
+#[test]
+fn an_edit_preview_writes_nothing_and_says_so() {
+    let c = tasks();
+    let root = c.project.environment().spec_root().to_path_buf();
+    let before = crate::writes::files_under(&root);
+    let edited = run_edits(&c, &change_category(), true).unwrap();
+    assert_eq!(edited.wrote, Wrote::Previewed);
+    assert_eq!(
+        crate::writes::changed_since(&root, &before),
+        Vec::<String>::new()
+    );
+    let document = serde_json::to_value(edited.document()).unwrap();
+    assert_eq!(document["dry_run"], json!(true));
+    assert!(
+        document["diff"]
+            .as_str()
+            .unwrap()
+            .contains("+  category   query")
+    );
+}
+
+#[test]
+fn an_edit_that_changes_nothing_ran() {
+    let c = tasks();
+    let same = vec![crate::edit::set(
+        "complete_task",
+        "category",
+        crate::edit::one("command"),
+    )];
+    let edited = run_edits(&c, &same, false).unwrap();
+    assert_eq!(edited.wrote, Wrote::Ran(Writes::none()));
+    assert!(edited.report.entities.is_empty(), "{:?}", edited.report);
+}
+
+#[test]
+fn an_edit_run_writes_what_it_planned() {
+    let c = tasks();
+    let root = c.project.environment().spec_root().to_path_buf();
+    let planned = crate::edit::plan(&c, &change_category()).unwrap();
+    let edited = run_edits(&c, &change_category(), false).unwrap();
+    assert_eq!(&edited.report, planned.report());
+    assert_eq!(
+        crate::writes::listed(&edited.wrote.into_files(), &root),
+        ["tasks.spec"]
+    );
+}
+
+#[test]
+fn an_edit_refused_by_the_plan_is_refused_by_run() {
+    let c = tasks();
+    let root = c.project.environment().spec_root().to_path_buf();
+    let before = crate::writes::files_under(&root);
+    let dangling = vec![crate::edit::link(
+        "complete_task",
+        "invariants",
+        "nope_rule",
+    )];
+    let error = run_edits(&c, &dangling, false).unwrap_err().error;
+    assert!(error.is(specforge_common::codes::E080), "{error:?}");
+    assert_eq!(
+        crate::writes::changed_since(&root, &before),
+        Vec::<String>::new()
+    );
 }

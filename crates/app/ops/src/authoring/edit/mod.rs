@@ -6,8 +6,11 @@
 mod block;
 mod create;
 mod defaults;
+mod outcome;
 mod validate;
 pub mod write;
+
+pub use outcome::{EditDocument, Edited, run};
 
 use crate::change::ProjectChange;
 use crate::view::ProjectView;
