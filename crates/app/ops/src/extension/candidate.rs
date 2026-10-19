@@ -130,8 +130,8 @@ impl Installable {
     }
 }
 
-/// The target an extension's crate builds its component for: `specforge extension build` builds it, the reader
-/// looks for it (ADR 0172).
+/// The target an extension's crate builds its component for: `specforge extension build` builds it, `extension init`
+/// scaffolds it, and the reader looks for it (ADR 0172).
 pub const WASM_TARGET: &str = "wasm32-wasip2";
 
 /// Cargo's profile directory for `--release`.
@@ -317,7 +317,7 @@ mod tests {
             error.message.contains("build the extension first"),
             "{error:?}"
         );
-        let release = dir.path().join("target/wasm32-wasip2/release");
+        let release = target_dir(dir.path()).join(WASM_TARGET).join(CARGO_RELEASE);
         std::fs::create_dir_all(&release).unwrap();
         std::fs::write(release.join("other.wasm"), b"x").unwrap();
         std::fs::write(release.join("my_ext.wasm"), b"y").unwrap();

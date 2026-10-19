@@ -5,6 +5,7 @@
 //! component, with a `src/lib.rs` skeleton that builds and describes out of
 //! the box.
 
+use specforge_ops::extension::WASM_TARGET;
 use std::path::Path;
 
 /// The crate- and directory-safe name: the last path segment, sanitized.
@@ -82,14 +83,14 @@ strip = true
 
     std::fs::write(
         dir.join(".cargo").join("config.toml"),
-        "[build]\ntarget = \"wasm32-wasip2\"\n",
+        format!("[build]\ntarget = \"{WASM_TARGET}\"\n"),
     )
     .map_err(|e| format!("failed to write .cargo/config.toml: {}", e))?;
 
     let lib_rs = format!(
         r#"//! {name} — a SpecForge extension authored with the extension SDK.
 //!
-//! Build:  cargo build --release --target wasm32-wasip2
+//! Build:  cargo build --release --target {WASM_TARGET}
 //! Install: specforge add ./path/to/this/dir
 
 use specforge_extension_sdk::prelude::*;
