@@ -2,6 +2,7 @@
 //! answering each export, and a `ScriptedMachine` standing for the machine. Nothing here spawns a
 //! process, reads the environment or the wall clock.
 
+mod modes;
 mod order;
 mod refusals;
 mod runs;
