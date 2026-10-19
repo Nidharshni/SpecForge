@@ -694,8 +694,8 @@ type McpExplainEntry "Mcp Explain Entry" {
   owner       string
   level       string
   explanation string
-  /// Absent when the code has no docs page.
-  docs        string @optional
+  /// Its section of docs/diagnostics.md.
+  docs        string
   retired     boolean
   verify unit "McpExplainEntry schema is valid"
 }
@@ -714,7 +714,7 @@ type McpExplainReplacement "Mcp Explain Replacement" {
   owner       string
   level       string
   explanation string
-  docs        string @optional
+  docs        string
   verify unit "McpExplainReplacement schema is valid"
 }
 

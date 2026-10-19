@@ -3,7 +3,7 @@
 
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_diagnostics::{CodeEntry, docs_href, lookup, retired};
+use specforge_diagnostics::{CodeEntry, lookup, retired};
 
 use crate::{OpError, OpErrorKind, Refusal};
 
@@ -53,9 +53,8 @@ pub struct Entry {
     /// The level's description (`error`, `warning`, `info`, `set by the analyze pass`).
     pub level: String,
     pub explanation: String,
-    /// Its section of `docs/diagnostics.md`; absent when the code has none.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub docs: Option<String>,
+    /// Its section of `docs/diagnostics.md`.
+    pub docs: String,
 }
 
 impl Entry {
@@ -66,7 +65,7 @@ impl Entry {
             owner: entry.owner.to_string(),
             level: entry.level.describe().to_string(),
             explanation: entry.explanation.to_string(),
-            docs: docs_href(entry.code),
+            docs: entry.docs_href(),
         }
     }
 }
@@ -121,8 +120,8 @@ mod tests {
         assert_eq!(found.entry.code, "W018");
         assert!(!found.retired);
         assert_eq!(
-            found.entry.docs.as_deref(),
-            Some("https://github.com/leaderiop/SpecForge/blob/main/docs/diagnostics.md#w018")
+            found.entry.docs,
+            "https://github.com/leaderiop/SpecForge/blob/main/docs/diagnostics.md#w018"
         );
     }
 

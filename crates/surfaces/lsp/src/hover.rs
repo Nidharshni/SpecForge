@@ -46,14 +46,14 @@ pub fn diagnostics(shown: &[&Diagnostic]) -> Option<String> {
         .map(
             |diag| match specforge_diagnostics::describes(&diag.code, diag.origin()) {
                 Some(entry) => {
-                    let mut section = format!(
-                        "**{}** · {}\n\n{}\n\n{}",
-                        entry.code, entry.title, diag.message, entry.explanation
-                    );
-                    if let Some(href) = specforge_diagnostics::docs_href(entry.code) {
-                        section.push_str(&format!("\n\n[Documentation]({href})"));
-                    }
-                    section
+                    format!(
+                        "**{}** · {}\n\n{}\n\n{}\n\n[Documentation]({})",
+                        entry.code,
+                        entry.title,
+                        diag.message,
+                        entry.explanation,
+                        entry.docs_href()
+                    )
                 }
                 // An extension's own uncatalogued code, or one it may not use
                 // (W150): no catalogue entry describes it.
@@ -190,12 +190,11 @@ pub fn entity(
         .iter()
         .filter(|diagnostic| !shown.contains(diagnostic))
         .map(|diagnostic| {
-            let described = specforge_diagnostics::describes(&diagnostic.code, diagnostic.origin());
-            let code =
-                match described.and_then(|entry| specforge_diagnostics::docs_href(entry.code)) {
-                    Some(href) => format!("[**{}**]({href})", diagnostic.code),
-                    None => format!("**{}**", diagnostic.code),
-                };
+            let code = match specforge_diagnostics::describes(&diagnostic.code, diagnostic.origin())
+            {
+                Some(entry) => format!("[**{}**]({})", diagnostic.code, entry.docs_href()),
+                None => format!("**{}**", diagnostic.code),
+            };
             format!("- {code} {}", diagnostic.message)
         })
         .collect();

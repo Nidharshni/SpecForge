@@ -137,15 +137,6 @@ fn place_at_subjects(
     Some((placed, related))
 }
 
-/// The docs link for a diagnostic of `code` reported by `origin`, or `None`
-/// when the catalog does not describe it (a third-party code, or an
-/// extension's use of a code another owner has).
-fn docs_href(code: &str, origin: Option<&str>) -> Option<Url> {
-    specforge_diagnostics::describes(code, origin)
-        .and_then(|entry| specforge_diagnostics::docs_href(entry.code))
-        .and_then(|href| Url::parse(&href).ok())
-}
-
 /// A diagnostic as the client receives it; `range_of` converts its span.
 /// One whose span cannot be converted (its file's text is unknown) stays on
 /// its file at the start, as one with no span does: never at columns read
@@ -159,8 +150,11 @@ pub(crate) fn diagnostic_to_lsp(
         range,
         code: Some(NumberOrString::String(diag.code.clone())),
         // C4-10: editors can render this as a "view docs" link to the
-        // code's section of docs/diagnostics.md.
-        code_description: docs_href(&diag.code, diag.origin()).map(|href| CodeDescription { href }),
+        // code's section of docs/diagnostics.md; none for a code the catalog does not describe
+        // (a third-party code, or an extension's use of a code another owner has).
+        code_description: specforge_diagnostics::describes(&diag.code, diag.origin())
+            .and_then(|entry| Url::parse(&entry.docs_href()).ok())
+            .map(|href| CodeDescription { href }),
         severity: Some(match diag.severity {
             specforge_common::Severity::Error => DiagnosticSeverity::ERROR,
             specforge_common::Severity::Warning => DiagnosticSeverity::WARNING,

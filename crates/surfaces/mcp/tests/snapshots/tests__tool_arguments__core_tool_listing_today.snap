@@ -1523,7 +1523,8 @@ expression: listing
             "title",
             "owner",
             "level",
-            "explanation"
+            "explanation",
+            "docs"
           ],
           "type": "object"
         },
@@ -1560,7 +1561,8 @@ expression: listing
                 "title",
                 "owner",
                 "level",
-                "explanation"
+                "explanation",
+                "docs"
               ],
               "type": "object"
             },
