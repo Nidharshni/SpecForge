@@ -1,6 +1,6 @@
 //! The code-action contracts: the entity stub and the verify stub (ADR 0161).
 
-use crate::served::{Served, buffers};
+use crate::served::Served;
 use specforge_test_macros::test as specforge_test;
 
 // B:code_action_create_entity_stub — verify contract "requires/ensures consistency for create entity stub"
@@ -14,16 +14,13 @@ fn code_action_create_entity_stub_contract() {
     // Ensures: a refactoring that appends a bare stub of that kind to the
     // current file; none without a target kind
     let text = "behavior login \"L\" {\n  invariants [missing_inv]\n}\n";
-    let state = buffers(&[("/p/auth.spec", text)]);
-    let diagnostics = state.session().unwrap().project().diagnostics();
-    let fixes_with = |target_kind: Option<&str>| {
-        let project = specforge_project::testing::Assembled::over(invariants_field(target_kind))
-            .graph(state.graph().clone());
-        let texts = project
-            .detached()
-            .with_source_texts(state.session().unwrap().project().source_texts());
-        let view = specforge_ops::view::ProjectView::of(&texts);
-        let nav = specforge_ops::read::navigate::Navigator::new(view);
+    let fixes_with = |target_kind: Option<&'static str>| {
+        let served = Served::new(&[("auth.spec", text)])
+            .extension("@test/ext", move |c| invariants_field(c, target_kind))
+            .open(&["auth.spec"]);
+        let state = served.state();
+        let nav = specforge_ops::read::navigate::Navigator::new(state.view());
+        let diagnostics = state.session().unwrap().project().diagnostics();
         specforge_ops::authoring::fix::fixes(
             &nav,
             &diagnostics,
@@ -42,10 +39,7 @@ fn code_action_create_entity_stub_contract() {
         edit.new_text.contains("invariant missing_inv"),
         "stub must use correct kind and ID"
     );
-    assert_eq!(
-        edit.span.file, "/p/auth.spec",
-        "stub must target current file"
-    );
+    assert_eq!(edit.span.file, "auth.spec", "stub must target current file");
     assert!(!edit.new_text.contains("fn "), "no application code");
 
     assert!(
@@ -57,22 +51,23 @@ fn code_action_create_entity_stub_contract() {
 }
 
 /// `behavior.invariants` as a reference list targeting `target_kind`.
-fn invariants_field(target_kind: Option<&str>) -> specforge_registry::RegistryBuild {
-    crate::registries::registries("@test/ext", |c| {
-        c.kind("behavior", |k| {
-            k.field("invariants", |f| {
-                f.field_type(specforge_extension_sdk::prelude::FieldType::ReferenceList);
-                if let Some(target_kind) = target_kind {
-                    f.target_kind(target_kind);
-                }
-            });
+fn invariants_field(
+    c: &mut specforge_extension_sdk::prelude::ContributionsBuilder,
+    target_kind: Option<&str>,
+) {
+    c.kind("behavior", |k| {
+        k.field("invariants", |f| {
+            f.field_type(specforge_extension_sdk::prelude::FieldType::ReferenceList);
+            if let Some(target_kind) = target_kind {
+                f.target_kind(target_kind);
+            }
         });
-        if let Some(target_kind) = target_kind {
-            c.kind(target_kind, |k| {
-                k.keyword(target_kind);
-            });
-        }
-    })
+    });
+    if let Some(target_kind) = target_kind {
+        c.kind(target_kind, |k| {
+            k.keyword(target_kind);
+        });
+    }
 }
 
 #[specforge_test(

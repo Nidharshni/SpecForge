@@ -217,7 +217,7 @@ async fn e2e_stub_kind_comes_from_the_enclosing_field() {
 
 #[spec(
     behavior = "code_action_create_entity_stub",
-    verify = "stub is inserted at end of current file"
+    verify = "stub goes after the last block of its kind in the current file"
 )]
 #[tokio::test]
 async fn e2e_stub_is_appended_to_the_file() {

@@ -1,7 +1,6 @@
 //! The fixes a diagnostic's data or the graph names (`specforge_ops::read::navigate`), over compiled projects.
 
 use crate::navigate::{Compiled, LIMIT, LOGIN, SOFTWARE, at, compile, nav, span};
-use crate::view_support::Assembled;
 use specforge_common::{Diagnostic, DiagnosticData, SourceSpan, Sym};
 use specforge_extension_sdk::prelude::*;
 use specforge_ops::authoring::fix::{self, Fix, FixKind, FixQuery, FixSource, TextEdit};
@@ -9,7 +8,6 @@ use specforge_ops::read::navigate::Navigator;
 use specforge_ops::view::ProjectView;
 use specforge_project::CompiledProject;
 use specforge_project::testing::compile_at;
-use specforge_registry::{RegistryBuild, build_registries};
 use specforge_test::prelude::*;
 use std::sync::Arc;
 
@@ -255,11 +253,6 @@ fn the_verify_stub_lands_inside_the_block() {
     assert_eq!(parsed.entities[0].obligations.len(), 1);
 }
 
-/// `project` holding the texts `p` was compiled from, as another project's graph is navigated over them.
-fn with_texts_of(p: &Compiled, project: &CompiledProject) -> CompiledProject {
-    project.with_source_texts(p.project.source_texts())
-}
-
 #[specforge_test(
     behavior = "code_actions_for_missing_verify",
     verify = "verify stub uses allowed_verify_kinds from KindRegistry"
@@ -431,27 +424,37 @@ fn the_stub_kind_is_the_fields_target_kind() {
     );
 }
 
-/// The registries of `behavior.invariants` as a reference list targeting
-/// `target_kind` (a kind declared beside `behavior`).
-fn invariants_field(target_kind: Option<&str>) -> RegistryBuild {
-    let mut c = ContributionsBuilder::new(ExtensionMeta::new("@test/ext", "1.0.0"));
-    c.kind("behavior", |k| {
-        k.keyword("behavior");
-        k.field("invariants", |f| {
-            f.field_type(FieldType::ReferenceList);
-            if let Some(target_kind) = target_kind {
-                f.target_kind(target_kind);
-            }
+/// `auth.spec` ([`DANGLING`]) on disk, compiled with an extension where `behavior.invariants` is a reference list
+/// targeting `target_kind` (a kind declared beside `behavior`, with no required field).
+fn invariants_project(target_kind: Option<&'static str>) -> (tempfile::TempDir, CompiledProject) {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("specforge.json"),
+        serde_json::json!({"name": "p", "extensions": ["@test/ext"]}).to_string(),
+    )
+    .unwrap();
+    std::fs::write(dir.path().join("auth.spec"), DANGLING).unwrap();
+    specforge_installed::testing::install(dir.path(), &["@test/ext"]);
+    let runtime = specforge_wasm::testing::InProcessRuntime::new().with(move || {
+        let mut c = ContributionsBuilder::new(ExtensionMeta::new("@test/ext", "1.0.0"));
+        c.kind("behavior", |k| {
+            k.keyword("behavior");
+            k.field("invariants", |f| {
+                f.field_type(FieldType::ReferenceList);
+                if let Some(target_kind) = target_kind {
+                    f.target_kind(target_kind);
+                }
+            });
         });
+        if let Some(target_kind) = target_kind {
+            c.kind(target_kind, |k| {
+                k.keyword(target_kind);
+            });
+        }
+        c
     });
-    if let Some(target_kind) = target_kind {
-        c.kind(target_kind, |k| {
-            k.keyword(target_kind);
-        });
-    }
-    let build = build_registries(vec![c.declaration()]);
-    assert!(build.diagnostics().next().is_none());
-    build
+    let project = compile_at(dir.path(), Some(Arc::new(runtime)));
+    (dir, project)
 }
 
 #[specforge_test(
@@ -459,32 +462,27 @@ fn invariants_field(target_kind: Option<&str>) -> RegistryBuild {
     verify = "no code action when enclosing field has no target_kind"
 )]
 fn no_stub_without_a_target_kind() {
-    let p = compile(TESTING, &[("auth.spec", DANGLING)]);
-    let diagnostics = p.project.diagnostics();
-    let project = Assembled::over(invariants_field(None)).graph(p.project.graph().clone());
-    let fixes = fix::fixes(
-        &Navigator::new(ProjectView::of(&with_texts_of(&p, project.detached()))),
-        &diagnostics,
-        &FixQuery::default(),
+    let stubs = |target_kind| {
+        let (_dir, project) = invariants_project(target_kind);
+        fix::fixes(
+            &Navigator::new(ProjectView::of(&project)),
+            &project.diagnostics(),
+            &FixQuery::default(),
+        )
+        .into_iter()
+        .filter(|f| f.source == FixSource::CreateStub)
+        .collect::<Vec<_>>()
+    };
+    assert_eq!(titles(&stubs(None)), Vec::<String>::new());
+    assert_eq!(
+        titles(&stubs(Some("invariant"))),
+        ["Create invariant stub for session_limit"]
     );
-    assert!(
-        fixes.iter().all(|f| f.source != FixSource::CreateStub),
-        "{:?}",
-        titles(&fixes)
-    );
-    let targeted =
-        Assembled::over(invariants_field(Some("invariant"))).graph(p.project.graph().clone());
-    let fixes = fix::fixes(
-        &Navigator::new(ProjectView::of(&with_texts_of(&p, targeted.detached()))),
-        &diagnostics,
-        &FixQuery::default(),
-    );
-    assert!(fixes.iter().any(|f| f.source == FixSource::CreateStub));
 }
 
 #[specforge_test(
     behavior = "code_action_create_entity_stub",
-    verify = "stub is inserted at end of current file"
+    verify = "stub goes after the last block of its kind in the current file"
 )]
 fn the_stub_is_appended_to_the_file() {
     let p = compile(TESTING, &[("auth.spec", DANGLING)]);
@@ -515,12 +513,12 @@ fn the_stub_is_a_refactoring() {
     behavior = "code_action_create_entity_stub",
     verify = "generated stub contains no application code or test files"
 )]
-fn the_stub_is_a_bare_block() {
+fn the_stub_is_a_block_with_its_required_fields() {
     let p = compile(TESTING, &[("auth.spec", DANGLING)]);
     let stub = stub_of(&p);
     assert_eq!(
         stub.edits[0].new_text,
-        "\ninvariant session_limit \"session_limit\" {\n  // TODO: fill in fields\n}\n"
+        "\ninvariant session_limit \"session_limit\" {\n  guarantee \"TODO\"\n}\n"
     );
     assert!(stub.edits.iter().all(|e| e.span.file == "auth.spec"));
 }

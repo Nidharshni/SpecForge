@@ -6,15 +6,16 @@
 //! from, offered as the position edits that apply it, and not offered when
 //! its plan is refused (ADR 0161); `read` may not use `authoring` (ADR 0086).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{Diagnostic, DiagnosticData, SourceSpan, Sym};
 use specforge_graph::Node;
 
-use crate::authoring::edit::{self, Edit};
+use crate::authoring::edit::{self, Edit, Input};
 use crate::read::navigate::{Navigator, SourceText, is_about, overlaps};
+use crate::view::ProjectView;
 
 /// One edit: `span`'s text becomes `new_text` (an empty span inserts).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,7 +42,9 @@ pub enum FixSource {
     /// close match: the token becomes the match.
     ReplaceUnresolved,
     /// An unresolved reference to an id no entity has, in a field that
-    /// targets a kind: a stub of that kind at the end of the file.
+    /// targets a kind: the typed create of a block of that kind in the
+    /// reference's file (after its last block of the kind), each required
+    /// field `TODO`; not offered when the create is refused.
     CreateStub,
     /// An entity that declares no verify statements and wants some: it
     /// owes obligations (a `no_verify_statements` rule applies to its kind)
@@ -174,8 +177,9 @@ fn replacement(navigator: &Navigator<'_>, diagnostic: &Diagnostic) -> Option<Fix
 }
 
 /// An unresolved reference to an id no entity has, in a field whose
-/// registry entry targets a kind: a stub of that kind, appended to the
-/// file holding the reference, once per target.
+/// registry entry targets a kind: the typed create of a block of that kind
+/// in the file holding the reference, once per target; none when the
+/// create is refused.
 fn entity_stub(
     navigator: &Navigator<'_>,
     diagnostic: &Diagnostic,
@@ -207,7 +211,18 @@ fn entity_stub(
         .span
         .as_ref()
         .map_or(holder.source_span.file, |s| s.file);
-    let end = navigator.text(file)?.end(file);
+    let edits = typed(
+        navigator,
+        Edit::Create {
+            kind: kind.clone(),
+            id: target.clone(),
+            title: target.clone(),
+            file: file.to_string(),
+            fields: placeholders(navigator.view(), &kind),
+            verify: Vec::new(),
+        },
+    )?;
+    // After the plan: a refused stub is not "stubbed".
     stubbed.insert(target.clone());
     Some(Fix {
         title: format!("Create {kind} stub for {target}"),
@@ -215,10 +230,7 @@ fn entity_stub(
         source: FixSource::CreateStub,
         diagnostic_code: Some(diagnostic.code.clone()),
         subject: Some(holder.id.raw),
-        edits: vec![TextEdit {
-            span: end,
-            new_text: format!("\n{kind} {target} \"{target}\" {{\n  // TODO: fill in fields\n}}\n"),
-        }],
+        edits,
         anchor: diagnostic.span.clone(),
     })
 }
@@ -273,6 +285,26 @@ fn quoted(text: &SourceText, span: &SourceSpan, path: &str) -> Option<SourceSpan
     let haystack = text.slice(lines.start, lines.end)?;
     let at = haystack.find(&format!("\"{path}\""))? + lines.start + 1;
     Some(text.span(span.file, at, at + path.len()))
+}
+
+/// What a create stub writes in each field its kind requires.
+const PLACEHOLDER: &str = "TODO";
+
+/// Each field a new `kind` block must write (the registry's `required`), as `TODO`. A required field that cannot
+/// hold it (an enum, a reference, a block) makes the create's plan refuse, and the stub is not offered.
+fn placeholders(view: &ProjectView<'_>, kind: &str) -> BTreeMap<String, Input> {
+    // shortcut: a required field the file's `defaults` block supplies still gets TODO, overriding it; upgrade if a
+    // builtin ever defaults a required field.
+    edit::fields_of(view, kind)
+        .into_iter()
+        .filter(|field| {
+            view.registries()
+                .fields()
+                .get(kind, &field.name)
+                .is_some_and(|entry| entry.declared().required)
+        })
+        .map(|field| (field.name, Input::One(PLACEHOLDER.to_string())))
+        .collect()
 }
 
 /// `edit` planned over the navigator's view (ADR 0151), as position edits in the text each file was compiled from;

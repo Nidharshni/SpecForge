@@ -86,12 +86,6 @@ impl SourceText {
         self.text.get(start..end)
     }
 
-    /// The end of the text, as an empty span: where an insertion at the
-    /// end of the file goes.
-    pub(crate) fn end(&self, file: Sym) -> SourceSpan {
-        self.span(file, self.text.len(), self.text.len())
-    }
-
     /// Whether the text at `span` is exactly `word`.
     pub(crate) fn spells(&self, span: &SourceSpan, word: &str) -> bool {
         self.range(span)

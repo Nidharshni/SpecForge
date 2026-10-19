@@ -928,7 +928,7 @@ behavior code_action_create_entity_stub "Code Action: Create Entity Stub" {
     field_registry_available "FieldRegistry is populated with target_kind constraints for kind inference"
   }
   ensures {
-    stub_created      "a structural entity block stub is inserted at the end of the current file"
+    stub_created      "a block of the target kind is created by the typed create edit in the current file: after its last block of that kind, else at its end, laid out with the file's format configuration"
     kind_inferred     "entity kind is inferred from the enclosing field's target_kind constraint in the FieldRegistry"
     no_code_generated "no application code, test files, or implementation scaffolding are generated"
   }
@@ -943,8 +943,12 @@ behavior code_action_create_entity_stub "Code Action: Create Entity Stub" {
     knowledge). The unresolved target, the entity that names it and the
     field it is named in MUST be read from the diagnostic's data
     (DiagnosticData), never parsed from its message, which is
-    presentation. The stub MUST be placed in the current file. The code
-    action MUST use CodeActionKind::Refactor.
+    presentation. The stub MUST be placed in the current file, after the
+    file's last block of its kind, else at its end. The stub is the typed
+    create edit (ADR 0151): it is offered only when its plan succeeds, so
+    an ID the create refuses, or a stub after which the project would
+    report a new error (E080), offers none. Each field the kind requires is
+    written TODO. The code action MUST use CodeActionKind::Refactor.
     The generated stub MUST contain only the structural entity block
     (keyword, ID, placeholder fields). It MUST NOT generate application
     code, test files, or implementation scaffolding. SpecForge provides
@@ -954,9 +958,12 @@ behavior code_action_create_entity_stub "Code Action: Create Entity Stub" {
   verify unit "the stub is read from the diagnostic's data, whatever its message says"
   verify unit "stub uses correct entity kind from FieldRegistry target_kind"
   verify unit "no code action when enclosing field has no target_kind"
-  verify unit "stub is inserted at end of current file"
+  verify unit "stub goes after the last block of its kind in the current file"
   verify unit "code action kind is Refactor"
   verify unit "generated stub contains no application code or test files"
+  verify unit "an offered stub adds no error to the project"
+  verify unit "stub is laid out with the file's format configuration"
+  verify unit "stub writes TODO in each required field"
   verify contract "Code Action: Create Entity Stub: create entity stub holds — graph_available, field_registry_available, stub_created, kind_inferred, no_code_generated"
 }
 

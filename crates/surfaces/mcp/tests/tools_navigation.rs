@@ -638,7 +638,7 @@ fn fixes(server: &mut McpServer, args: Value) -> Vec<String> {
 
 const REPLACE: &str =
     "Replace with 'session_limit' quickfix E003 | login.spec 6:15-6:27 \"session_limit\"";
-const CREATE: &str = "Create invariant stub for sesion_limit refactor E003 | login.spec 8:1-8:1 \"\\ninvariant sesion_limit \\\"sesion_limit\\\" {\\n  // TODO: fill in fields\\n}\\n\"";
+const CREATE: &str = "Create invariant stub for sesion_limit refactor E003 | login.spec 8:1-8:1 \"\\ninvariant sesion_limit \\\"sesion_limit\\\" {\\n  guarantee \\\"TODO\\\"\\n}\\n\"";
 
 // B:provide_mcp_suggest_fixes_tool — verify unit "returns suggestions from diagnostics"
 #[specforge_test(

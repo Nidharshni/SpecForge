@@ -506,7 +506,7 @@ struct Divergence {
 /// The fixes for `logout`'s reference to `sesion_limit`, which exists
 /// nowhere: replace it with the close match, or create it.
 const FIXES_FOR_THE_UNRESOLVED_REFERENCE: &[&str] = &[
-    "Create invariant stub for sesion_limit refactor login.spec 8:1-8:1 \\ninvariant sesion_limit \\\"sesion_limit\\\" {\\n  // TODO: fill in fields\\n}\\n",
+    "Create invariant stub for sesion_limit refactor login.spec 8:1-8:1 \\ninvariant sesion_limit \\\"sesion_limit\\\" {\\n  guarantee \\\"TODO\\\"\\n}\\n",
     "Replace with 'session_limit' quickfix login.spec 6:15-6:27 session_limit",
 ];
 
@@ -1217,7 +1217,7 @@ fn lsp_offers_a_stub_for_a_reference_to_nothing() {
     assert_eq!(
         lsp_actions(&p, &lsp),
         [
-            "Create invariant stub for session_limit refactor auth.spec 5:1-5:1 \\ninvariant session_limit \\\"session_limit\\\" {\\n  // TODO: fill in fields\\n}\\n"
+            "Create invariant stub for session_limit refactor auth.spec 5:1-5:1 \\ninvariant session_limit \\\"session_limit\\\" {\\n  guarantee \\\"TODO\\\"\\n}\\n"
         ],
         "{lsp}"
     );
