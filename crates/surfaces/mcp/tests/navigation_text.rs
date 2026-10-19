@@ -144,3 +144,43 @@ fn rename_refuses_a_file_changed_since_the_compile() {
         "nothing is written"
     );
 }
+
+/// A rename's edits are the spans find_references answers, in the shape suggest_fixes answers an edit: the
+/// spec's `TextEdit`, `{file_path, range, new_text}`.
+#[test]
+#[ignore = "flipped by T3"]
+fn rename_edits_are_the_spans_find_references_answers() {
+    let mut server = served_old(&[("limit.spec", LIMIT), ("login.spec", LOGIN)]);
+    let found = call_tool(
+        &mut server,
+        "specforge.find_references",
+        json!({"entity_id": "session_limit", "include_declaration": true}),
+    );
+    let found: Value = serde_json::from_str(&tool_text(&found)).unwrap();
+    let mut spans: Vec<Value> = found["locations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| l["source_span"].clone())
+        .collect();
+    let renamed = call_tool(
+        &mut server,
+        "specforge.rename",
+        json!({"entity_id": "session_limit", "new_name": "session_cap", "dry_run": true}),
+    );
+    let renamed: Value = serde_json::from_str(&tool_text(&renamed)).unwrap();
+    let mut ranges: Vec<Value> = renamed["edits"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| {
+            assert_eq!(e["file_path"], e["range"]["file"], "{e}");
+            assert_eq!(e["new_text"], "session_cap", "{e}");
+            e["range"].clone()
+        })
+        .collect();
+    spans.sort_by_key(Value::to_string);
+    ranges.sort_by_key(Value::to_string);
+    assert_eq!(spans.len(), 2, "{found}");
+    assert_eq!(ranges, spans, "{renamed}");
+}

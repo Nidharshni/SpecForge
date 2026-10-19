@@ -94,3 +94,25 @@ fn a_quoted_union_variant_is_no_reference() {
     let edits = columns(&plan);
     assert_eq!(edits, [(1, 5, 9)]);
 }
+
+/// A rename edits the spans navigation answers for the entity and its declaration, in their convention.
+#[test]
+#[ignore = "flipped by T2"]
+fn a_rename_edits_the_spans_find_references_answers() {
+    let p = compile(SOFTWARE, &[("store.spec", STORE)]);
+    let with_declaration = ReferenceQuery {
+        include_declaration: true,
+        ..INCOMING
+    };
+    let mut found: Vec<(usize, usize, usize)> = p
+        .navigator()
+        .references("Task", with_declaration)
+        .unwrap()
+        .iter()
+        .map(|o| (o.span.start_line, o.span.start_col, o.span.end_col))
+        .collect();
+    found.sort_unstable();
+    let mut edits = columns(&rename::plan(&p.navigator(), "Task", "Job").unwrap());
+    edits.sort_unstable();
+    assert_eq!(edits, found);
+}
