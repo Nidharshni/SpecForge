@@ -5,6 +5,7 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{Diagnostic, DiagnosticList, ProjectPath, ProjectRoot, codes};
 use specforge_project::SharedRuntime;
+use specforge_registry::PlainDisk;
 use std::path::{Path, PathBuf};
 
 use super::document::{Configs, FormattedDocument, format_text};
@@ -451,7 +452,7 @@ pub fn run(request: &Request) -> Result<Outcome, Refusal<FormatField>> {
     // One set of configurations for the run: each file gets the one
     // `document(Place::File(file), ..)` gives it (no editor: the CLI and
     // MCP have none), and each configuration file is read once.
-    let mut configs = Configs::new(request.runtime.clone());
+    let mut configs = Configs::new(request.runtime.clone(), &PlainDisk);
     let mut outcome = Outcome {
         root: request.root.dir().to_path_buf(),
         mode: request.mode,

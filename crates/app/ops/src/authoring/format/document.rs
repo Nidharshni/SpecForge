@@ -2,10 +2,10 @@
 //! formatting requests, `format --stdin`, and each file of a run.
 
 use specforge_common::{Diagnostic, ProjectRoot, Sym, codes};
-use specforge_formatter::config::{find_config_path, read_config_file};
-use specforge_formatter::{FormatConfig, format_range, format_source};
+use specforge_formatter::{FormatConfig, config, format_range, format_source};
 use specforge_graph::FieldForms;
 use specforge_project::{Environment, SharedRuntime};
+use specforge_registry::{Disk, PlainDisk};
 use std::collections::HashMap;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
@@ -136,25 +136,14 @@ pub fn document<'a>(
     editor: Option<EditorOptions>,
     forms: &FieldForms,
 ) -> FormattedDocument<'a> {
-    let (file, resolved) = resolve(place, editor);
+    // The LSP and `format --stdin` are unbounded (ADR 0092 D6): they read the file system as the user sees it.
+    let (file, resolved) = Configs::new(None, &PlainDisk).place(place, editor);
     format_text(resolved, text, lines, file, forms)
 }
 
-/// The configuration [`document`] formats `place` with: inside a project the nearest `.specforgefmt.toml` up to
-/// its root, else the defaults; outside one, the defaults. An invalid file gives its defaults (W141 is
-/// [`document`]'s to report, not this function's).
+/// The configuration [`document`] formats `place` with (T3 of ADR 0169 replaces this lookup per call).
 pub fn config(place: Place<'_>) -> FormatConfig {
-    resolve(place, None).1.config
-}
-
-/// The file `place` names (if it is one) and its resolved configuration, from a fresh lookup.
-fn resolve(place: Place<'_>, editor: Option<EditorOptions>) -> (Option<&Path>, Resolved) {
-    let mut configs = Configs::new(None);
-    match place {
-        Place::File(path) => (Some(path), configs.for_file(path, editor)),
-        Place::InProject { root, dir } => (None, configs.resolve(dir, root)),
-        Place::Detached => (None, Resolved::editor(editor)),
-    }
+    Configs::new(None, &PlainDisk).layout(place)
 }
 
 /// The directory `file` is in (`.` for a bare file name).
@@ -184,10 +173,12 @@ impl Resolved {
     }
 }
 
-/// The configurations of one run: one project lookup per directory, one
-/// walk per directory and project, one read per configuration file. A
-/// file's W141 goes out the first time it is used.
-pub(super) struct Configs {
+/// The configurations of one run, typed-edit plan or init, read through one disk: one project lookup per
+/// directory, one walk per directory and project, one read per configuration file. A file's W141 goes out the
+/// first time it is used. The disk is the caller's bound (ADR 0169): a name it refuses is a configuration that
+/// cannot be read.
+pub(crate) struct Configs<'d> {
+    disk: &'d dyn Disk,
     /// Where each project's extensions load, to read its field forms; none
     /// formats layout only.
     runtime: Option<SharedRuntime>,
@@ -198,15 +189,34 @@ pub(super) struct Configs {
     read: HashMap<PathBuf, FormatConfig>,
 }
 
-impl Configs {
-    pub(super) fn new(runtime: Option<SharedRuntime>) -> Self {
+impl<'d> Configs<'d> {
+    pub(crate) fn new(runtime: Option<SharedRuntime>, disk: &'d dyn Disk) -> Self {
         Configs {
+            disk,
             runtime,
             forms: HashMap::new(),
             none: FieldForms::default(),
             projects: HashMap::new(),
             found: HashMap::new(),
             read: HashMap::new(),
+        }
+    }
+
+    /// The configuration [`document`] formats `place` with, its W141 left out (a typed edit's and init's layout).
+    pub(crate) fn layout(&mut self, place: Place<'_>) -> FormatConfig {
+        self.place(place, None).1.config
+    }
+
+    /// The file `place` names (if it is one) and its resolved configuration.
+    fn place<'p>(
+        &mut self,
+        place: Place<'p>,
+        editor: Option<EditorOptions>,
+    ) -> (Option<&'p Path>, Resolved) {
+        match place {
+            Place::File(path) => (Some(path), self.for_file(path, editor)),
+            Place::InProject { root, dir } => (None, self.resolve(dir, root)),
+            Place::Detached => (None, Resolved::editor(editor)),
         }
     }
 
@@ -245,14 +255,18 @@ impl Configs {
             .clone()
     }
 
-    /// The configuration of a document in `dir`, in the project at `root`:
-    /// the nearest `.specforgefmt.toml` up to `root`, else the defaults.
+    /// The configuration of a document in `dir`, in the project at `root`: the nearest configuration up to
+    /// `root`, else the defaults. Its W141 only on the lookup that read it.
     fn resolve(&mut self, dir: &Path, root: &Path) -> Resolved {
-        let file = self
-            .found
-            .entry((dir.to_path_buf(), root.to_path_buf()))
-            .or_insert_with(|| find_config_path(dir, root))
-            .clone();
+        let key = (dir.to_path_buf(), root.to_path_buf());
+        let (file, diagnostics) = match self.found.get(&key) {
+            Some(file) => (file.clone(), Vec::new()),
+            None => {
+                let (file, diagnostics) = self.nearest(dir, root);
+                self.found.insert(key, file.clone());
+                (file, diagnostics)
+            }
+        };
         let Some(file) = file else {
             return Resolved {
                 config: FormatConfig::default(),
@@ -260,18 +274,39 @@ impl Configs {
                 diagnostics: Vec::new(),
             };
         };
-        let (config, diagnostics) = match self.read.get(&file) {
-            Some(config) => (config.clone(), Vec::new()),
-            None => {
-                let (config, diagnostics) = read_config_file(&file);
-                self.read.insert(file.clone(), config.clone());
-                (config, diagnostics)
-            }
-        };
+        let config = self.read.get(&file).cloned().unwrap_or_default();
         Resolved {
             config,
             source: ConfigSource::File(file),
             diagnostics,
+        }
+    }
+
+    /// Walk from `dir` up to `root` (both canonical where they exist; never past `root`), asking the disk for
+    /// the configuration file in each directory. Only `NotFound` is absence: any other answer (the bytes, a
+    /// refused landing, a second name, a permission) is the nearest configuration, parsed or reported once.
+    fn nearest(&mut self, dir: &Path, root: &Path) -> (Option<PathBuf>, Vec<Diagnostic>) {
+        let real = |path: &Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        let (root, mut dir) = (real(root), real(dir));
+        if !dir.starts_with(&root) {
+            return (None, Vec::new());
+        }
+        loop {
+            let file = dir.join(config::FILE);
+            if self.read.contains_key(&file) {
+                return (Some(file), Vec::new());
+            }
+            match self.disk.read(&file) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                read => {
+                    let (config, diagnostics) = config::parse(&file, read);
+                    self.read.insert(file.clone(), config);
+                    return (Some(file), diagnostics);
+                }
+            }
+            if dir == root || !dir.pop() {
+                return (None, Vec::new());
+            }
         }
     }
 }

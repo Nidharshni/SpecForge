@@ -108,6 +108,7 @@ fn on_disk(files: &[(&str, &str)]) -> tempfile::TempDir {
     project_with("{}", files)
 }
 
+mod configs;
 mod document;
 mod run;
 mod targets;

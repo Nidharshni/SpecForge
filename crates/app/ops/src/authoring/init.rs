@@ -10,6 +10,7 @@
 //! needs a configured registry, which a project that doesn't exist yet can't have, so it is added
 //! afterwards with `specforge add`.
 
+use crate::authoring::format::{Configs, Place as FormatPlace};
 use crate::change;
 use crate::extension::{self, Also, Candidate, LockPlan, Names, Place};
 use crate::{Caller, Containment, OpError, OpErrorKind, Refusal, Writes};
@@ -18,6 +19,7 @@ use serde_json::{Value, json};
 use specforge_common::shape::Shape;
 use specforge_common::{PROJECT_FILE, ProjectRoot, validate_project_name};
 use specforge_installed::Installed;
+use specforge_registry::PlainDisk;
 use specforge_wasm::WasmRuntime;
 use std::path::{Path, PathBuf};
 
@@ -336,7 +338,7 @@ fn sanitize_entity_id(name: &str) -> String {
 
 /// `starter`, formatted as the project at `dir` formats its files.
 fn canonical(starter: &str, dir: &Path) -> String {
-    let (config, _) = specforge_formatter::load_config(dir, dir);
+    let config = Configs::new(None, &PlainDisk).layout(FormatPlace::InProject { root: dir, dir });
     specforge_formatter::format_source(starter, &config, &specforge_graph::FieldForms::default())
         .formatted
 }

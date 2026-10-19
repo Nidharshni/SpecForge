@@ -14,6 +14,7 @@ mod targets;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use document::Configs;
 pub use document::{
     ConfigSource, Edit, EditorOptions, FormattedDocument, Lines, Place, config, document, forms,
 };
