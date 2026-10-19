@@ -18,14 +18,14 @@ impl<'a> Install<'a> {
     /// A `.wasm` file read once, installed as `local:<path>`. The path is relative to `root` when
     /// the file is under it, absolute otherwise. E072 when it declares no package name.
     pub(crate) fn local(root: &Path, local: LocalFile) -> Result<Install<'a>, OpError> {
-        let name = local.binary.package()?;
-        let candidate = local.binary.candidate();
+        let declared = local.binary.declaration();
+        let name = super::super::candidate::package(declared)?;
         let pin = Pin {
             name,
-            version: candidate.version().to_string(),
+            version: declared.version().to_string(),
             source: LockSource::Local(shown_path(root, &local.path)),
             key_id: None,
-            peers: candidate.peers().to_vec(),
+            peers: declared.peers().to_vec(),
         };
         let module = local.binary.into_module();
         Ok(Install {
@@ -96,7 +96,7 @@ impl Staged<'_> {
             return Ok(());
         };
         let binary = Installable::read(*runtime, bytes.clone()).map_err(published_wrongly)?;
-        let declared = binary.candidate();
+        let declared = binary.declaration();
         if declared.name() != self.name.as_str() || declared.version() != self.version {
             return Err(OpError::coded(
                 OpErrorKind::SchemaMismatch,
@@ -110,7 +110,7 @@ impl Staged<'_> {
                 ),
             ));
         }
-        if let Some(category) = first_difference(declaration, declared.declaration()) {
+        if let Some(category) = first_difference(declaration, declared) {
             return Err(OpError::coded(
                 OpErrorKind::SchemaMismatch,
                 METADATA_MISMATCH,

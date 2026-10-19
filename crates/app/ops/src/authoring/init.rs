@@ -12,7 +12,7 @@
 
 use crate::authoring::format::{Configs, Place as FormatPlace};
 use crate::change;
-use crate::extension::{self, Also, Candidate, LockPlan, Names, Place};
+use crate::extension::{self, Also, LockPlan, Names, Place};
 use crate::{Caller, Containment, OpError, OpErrorKind, Refusal, Writes};
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -316,9 +316,12 @@ fn starter_template(
             Some((_, template)) => template.clone(),
             // A builtin that does not load refuses the init (E028).
             None => match extension::builtin_name(name) {
-                Some(builtin) => Candidate::builtin(runtime, builtin)?
-                    .starter_template()
-                    .map(str::to_string),
+                Some(builtin) => {
+                    extension::builtin_declaration(runtime, builtin)?
+                        .declaration
+                        .handshake
+                        .starter_template
+                }
                 None => None,
             },
         };

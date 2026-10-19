@@ -10,8 +10,8 @@ use specforge_common::{Code, Diagnostic, DiagnosticList, Severity, codes};
 use specforge_package::{PackageName, Version};
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_wasm::WasmRuntime;
+use specforge_wasm::protocol::Loaded;
 
-use crate::extension::Candidate;
 use crate::registry::{Published, Registry, Upload};
 use crate::{OpError, OpErrorKind};
 
@@ -114,7 +114,7 @@ fn run(
         .cloned()
         .collect();
     refuse_errors(&declaration, &diagnostics)?;
-    let (name, version) = identity(&declaration)?;
+    let (name, version) = super::candidate::registry_identity(&declaration)?;
     let published = registry.publish(&Upload {
         name: &name,
         version: &version,
@@ -203,38 +203,6 @@ fn read(binary: &Path) -> Result<Vec<u8>, OpError> {
     })
 }
 
-/// What is uploaded is a registry package: a scoped name and a full version
-/// (E072).
-fn identity(declaration: &ExtensionDeclaration) -> Result<(PackageName, Version), OpError> {
-    let name = match PackageName::declared_by(declaration) {
-        Ok(name) if name.scope().is_some() => name,
-        Ok(name) => {
-            return Err(OpError::of(
-                OpErrorKind::InvalidInput,
-                specforge_common::package::invalid(&format_args!(
-                    "'{name}' is not a registry package name: registry packages are named @scope/name"
-                )),
-            ));
-        }
-        Err(why) => {
-            return Err(OpError::of(
-                OpErrorKind::InvalidInput,
-                specforge_common::package::invalid(&why),
-            ));
-        }
-    };
-    let version = Version::parse(declaration.version()).map_err(|why| {
-        OpError::of(
-            OpErrorKind::InvalidInput,
-            specforge_common::package::invalid(&format_args!(
-                "'{}' is not a SemVer version: {why}",
-                declaration.version()
-            )),
-        )
-    })?;
-    Ok((name, version))
-}
-
 /// Load `wasm` and read its declaration, with what the registry build
 /// alone reports of it (its load warnings, W153 and W138, first). A binary
 /// that isn't a loadable extension is E028. Missing peers (E027) are left
@@ -243,7 +211,10 @@ pub fn declare(
     runtime: &dyn WasmRuntime,
     wasm: &[u8],
 ) -> Result<(ExtensionDeclaration, Vec<Diagnostic>), OpError> {
-    let (declaration, warnings) = Candidate::read(runtime, wasm)?.into_parts();
+    let Loaded {
+        declaration,
+        warnings,
+    } = super::candidate::read_declaration(runtime, wasm)?;
     let diagnostics = diagnostics_of(&declaration, warnings);
     Ok((declaration, diagnostics))
 }

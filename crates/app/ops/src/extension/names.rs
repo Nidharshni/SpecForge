@@ -208,9 +208,10 @@ impl<'r> Names<'r> {
                         .map_err(|error| self.named(at, error))?;
                     let starter = local
                         .binary
-                        .candidate()
-                        .starter_template()
-                        .map(str::to_string);
+                        .declaration()
+                        .handshake
+                        .starter_template
+                        .clone();
                     let install = Install::local(self.place.root, local)
                         .map_err(|error| self.named(at, error))?;
                     claims.local(wanted, &install)?.into_named(|| Named::Local {

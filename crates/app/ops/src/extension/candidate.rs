@@ -4,99 +4,88 @@
 //! through the `WasmRuntime` the operation's caller passes (ADR 0028 D7).
 //! What a project loads is the environment's extension load
 //! (`Installed::load`); this module reads everything else, and never builds
-//! a runtime of its own.
+//! a runtime of its own. What a binary declares is the load's answer
+//! (`Loaded`); the package it names is derived here once (ADR 0172).
 
 use std::path::{Path, PathBuf};
 
-use specforge_common::{Diagnostic, codes};
+use specforge_common::codes;
 use specforge_installed::{Module, declaration_of};
-use specforge_package::PackageName;
-use specforge_protocol_types::{ExtensionDeclaration, PeerDependency};
+use specforge_package::{PackageName, Version};
+use specforge_protocol_types::ExtensionDeclaration;
 use specforge_wasm::WasmRuntime;
+use specforge_wasm::protocol::Loaded;
 
 use super::{NOT_FOUND, builtin_name};
 use crate::{Containment, OpError, OpErrorKind};
 
-/// What an extension the project does not load yet declares, read from its
-/// binary once, as every environment loads an extension (under a candidate
-/// name, then unloaded).
-#[derive(Debug, Clone, PartialEq)]
-pub struct Candidate {
-    declaration: ExtensionDeclaration,
-    /// What reading it reported (W153, then W138), in the order read.
-    warnings: Vec<Diagnostic>,
+/// What `bytes` declare, loaded as every environment loads an extension (under
+/// a candidate name, then unloaded): E028 "not a loadable SpecForge
+/// extension: …" when they are no extension. `publish` and `extension
+/// validate` read a binary through it.
+pub(crate) fn read_declaration(runtime: &dyn WasmRuntime, bytes: &[u8]) -> Result<Loaded, OpError> {
+    declaration_of(bytes, runtime).map_err(|why| OpError::of(OpErrorKind::InvalidInput, why))
 }
 
-impl Candidate {
-    /// What `bytes` declare: E028 "not a loadable SpecForge extension: …"
-    /// when they are no extension. `publish` and `extension validate` read a
-    /// binary through it.
-    pub fn read(runtime: &dyn WasmRuntime, bytes: &[u8]) -> Result<Candidate, OpError> {
-        let loaded = declaration_of(bytes, runtime)
-            .map_err(|why| OpError::of(OpErrorKind::InvalidInput, why))?;
-        Ok(Candidate {
-            declaration: loaded.declaration,
-            warnings: loaded.warnings,
-        })
-    }
+/// What the builtin `name` declares, read from the binary this host embeds
+/// (`specforge_project::builtins()`). E028 when it does not load (this
+/// build's builtins are broken); `extension_not_found` when `name` is no
+/// builtin.
+pub fn builtin_declaration(runtime: &dyn WasmRuntime, name: &str) -> Result<Loaded, OpError> {
+    let Some(bytes) = specforge_project::builtins().get(name) else {
+        return Err(OpError::new(
+            OpErrorKind::ExtensionNotFound,
+            NOT_FOUND,
+            format!("'{name}' is not a builtin extension"),
+        ));
+    };
+    declaration_of(bytes, runtime).map_err(|why| {
+        OpError::coded(
+            crate::OpErrorKind::Internal,
+            codes::E028,
+            format!("the builtin '{name}' does not load: {}", why.message),
+        )
+        .with_suggestion(
+            "this specforge build's builtin extensions are broken: reinstall specforge",
+        )
+    })
+}
 
-    /// What the builtin `name` declares, read from the binary this host
-    /// embeds (`specforge_project::builtins()`). E028 when it does not load
-    /// (this build's builtins are broken); `extension_not_found` when `name`
-    /// is no builtin.
-    pub fn builtin(runtime: &dyn WasmRuntime, name: &str) -> Result<Candidate, OpError> {
-        let Some(bytes) = specforge_project::builtins().get(name) else {
-            return Err(OpError::new(
-                OpErrorKind::ExtensionNotFound,
-                NOT_FOUND,
-                format!("'{name}' is not a builtin extension"),
-            ));
-        };
-        let loaded = declaration_of(bytes, runtime).map_err(|why| {
-            OpError::coded(
-                crate::OpErrorKind::Internal,
-                codes::E028,
-                format!("the builtin '{name}' does not load: {}", why.message),
-            )
-            .with_suggestion(
-                "this specforge build's builtin extensions are broken: reinstall specforge",
-            )
-        })?;
-        Ok(Candidate {
-            declaration: loaded.declaration,
-            warnings: loaded.warnings,
-        })
-    }
+/// The package name `declaration` declares: E072 when it is none, before
+/// anything is written (ADR 0036).
+pub(crate) fn package(declaration: &ExtensionDeclaration) -> Result<PackageName, OpError> {
+    PackageName::declared_by(declaration).map_err(|why| {
+        OpError::of(
+            OpErrorKind::InvalidInput,
+            specforge_common::package::invalid(&why),
+        )
+    })
+}
 
-    pub fn declaration(&self) -> &ExtensionDeclaration {
-        &self.declaration
+/// What a registry holds `declaration` as: a scoped package name and a full
+/// SemVer version (E072).
+pub(crate) fn registry_identity(
+    declaration: &ExtensionDeclaration,
+) -> Result<(PackageName, Version), OpError> {
+    let name = package(declaration)?;
+    if name.scope().is_none() {
+        return Err(OpError::of(
+            OpErrorKind::InvalidInput,
+            specforge_common::package::invalid(&format_args!(
+                "'{name}' is not a registry package name: registry packages are named @scope/name"
+            )),
+        ));
     }
-
-    pub fn warnings(&self) -> &[Diagnostic] {
-        &self.warnings
-    }
-
-    pub fn name(&self) -> &str {
-        self.declaration.name()
-    }
-
-    pub fn version(&self) -> &str {
-        self.declaration.version()
-    }
-
-    pub fn peers(&self) -> &[PeerDependency] {
-        self.declaration.peers()
-    }
-
-    /// The starter template its handshake contributes (`init`).
-    pub fn starter_template(&self) -> Option<&str> {
-        self.declaration.handshake.starter_template.as_deref()
-    }
-
-    /// Its declaration and the warnings reading it reported.
-    pub fn into_parts(self) -> (ExtensionDeclaration, Vec<Diagnostic>) {
-        (self.declaration, self.warnings)
-    }
+    let version = Version::parse(declaration.version()).map_err(|why| {
+        OpError::of(
+            OpErrorKind::InvalidInput,
+            specforge_common::package::invalid(&format_args!(
+                "'{}' is not a SemVer version: {why}",
+                declaration.version()
+            )),
+        )
+    })?;
+    Ok((name, version))
 }
 
 /// A binary to install (`add`, `update`, `init`): its module and what it
@@ -106,50 +95,38 @@ impl Candidate {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Installable {
     module: Module,
-    candidate: Candidate,
+    declaration: ExtensionDeclaration,
 }
 
 impl Installable {
     pub fn read(runtime: &dyn WasmRuntime, module: Module) -> Result<Installable, OpError> {
-        let candidate = Candidate::read(runtime, module.bytes())?;
-        if builtin_name(candidate.name()).is_some() {
+        let declaration = read_declaration(runtime, module.bytes())?.declaration;
+        if builtin_name(declaration.name()).is_some() {
             return Err(OpError::new(
                 OpErrorKind::Conflict,
                 "extension_conflict",
                 format!(
                     "the extension declares the name of the builtin '{}'",
-                    candidate.name()
+                    declaration.name()
                 ),
             )
             .with_suggestion(format!(
                 "enable the builtin instead: specforge add {}",
-                candidate.name()
+                declaration.name()
             )));
         }
-        Ok(Installable { module, candidate })
+        Ok(Installable {
+            module,
+            declaration,
+        })
     }
 
-    pub fn module(&self) -> &Module {
-        &self.module
-    }
-
-    pub fn candidate(&self) -> &Candidate {
-        &self.candidate
+    pub fn declaration(&self) -> &ExtensionDeclaration {
+        &self.declaration
     }
 
     pub fn into_module(self) -> Module {
         self.module
-    }
-
-    /// Its declared name as the package name it installs under: E072 when it
-    /// is none, before anything is written (ADR 0036).
-    pub fn package(&self) -> Result<PackageName, OpError> {
-        PackageName::declared_by(&self.candidate.declaration).map_err(|why| {
-            OpError::of(
-                OpErrorKind::InvalidInput,
-                specforge_common::package::invalid(&why),
-            )
-        })
     }
 }
 

@@ -326,8 +326,9 @@ fn init_enables_each_builtin_after_the_builtins_it_requires() {
                 continue;
             };
             let position = |name: &str| extensions.iter().position(|e| e == name);
-            for required in extension::Candidate::builtin(&*runtime, enabled)
+            for required in extension::builtin_declaration(&*runtime, enabled)
                 .unwrap()
+                .declaration
                 .peers()
                 .iter()
                 .filter(|peer| !peer.optional)

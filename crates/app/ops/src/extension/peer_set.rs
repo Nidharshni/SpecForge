@@ -12,7 +12,7 @@ use specforge_protocol_types::{ExtensionDeclaration, PeerDependency};
 use specforge_wasm::WasmRuntime;
 
 use super::Origin;
-use super::candidate::Candidate;
+use super::candidate::{builtin_declaration, read_declaration};
 use crate::OpError;
 use crate::view::ProjectView;
 
@@ -189,7 +189,7 @@ impl<'r> Declarations<'r> {
         }
     }
 
-    /// The builtin `name`'s declaration (`Candidate::builtin`): E028 "the builtin '<name>' does not
+    /// The builtin `name`'s declaration (`builtin_declaration`): E028 "the builtin '<name>' does not
     /// load: …" when it does not; `None` when it was not loaded and there is no runtime to read it.
     pub(crate) fn builtin(&mut self, name: &str) -> Result<Option<&ExtensionDeclaration>, OpError> {
         if let Some(at) = self.builtins.iter().position(|(read, _)| read == name) {
@@ -198,9 +198,8 @@ impl<'r> Declarations<'r> {
         let Some(runtime) = self.runtime else {
             return Ok(None);
         };
-        let candidate = Candidate::builtin(runtime, name)?;
-        self.builtins
-            .push((name.to_string(), candidate.declaration().clone()));
+        let declared = builtin_declaration(runtime, name)?.declaration;
+        self.builtins.push((name.to_string(), declared));
         Ok(self.builtins.last().map(|(_, declared)| declared))
     }
 
@@ -213,8 +212,8 @@ impl<'r> Declarations<'r> {
                 let declared = self.runtime.and_then(|runtime| {
                     Module::read(path)
                         .ok()
-                        .and_then(|module| Candidate::read(runtime, module.bytes()).ok())
-                        .map(|candidate| candidate.declaration().clone())
+                        .and_then(|module| read_declaration(runtime, module.bytes()).ok())
+                        .map(|loaded| loaded.declaration)
                 });
                 self.files.push((path.to_path_buf(), declared));
                 self.files.len() - 1
