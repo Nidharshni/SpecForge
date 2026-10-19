@@ -21,6 +21,7 @@
 //! [`Run::finish`], told what it recorded ([`Recording`]), and [`Ledger::record`] is the
 //! one writer of the rows and the stamps it covers.
 
+mod chain;
 mod disk;
 mod inputs;
 mod key;
@@ -377,12 +378,18 @@ impl Ledger {
     /// What changed on disk among what `paths` reach (ADR 0073).
     pub(crate) fn changes<'p>(&self, paths: impl IntoIterator<Item = &'p Path>) -> Changes {
         let reach = self.inputs.reach(paths);
-        self.stamps.changes(&self.inputs, Scope::Reached(&reach))
+        let disk = self.source_disk();
+        let sources: &dyn Disk = disk.as_deref().map_or(&PlainDisk, |d| d);
+        self.stamps
+            .changes(&self.inputs, Scope::Reached(&reach), sources)
     }
 
     /// Everything that differs from what was read.
     pub(crate) fn stale(&self) -> Changes {
-        self.stamps.changes(&self.inputs, Scope::Everything)
+        let disk = self.source_disk();
+        let sources: &dyn Disk = disk.as_deref().map_or(&PlainDisk, |d| d);
+        self.stamps
+            .changes(&self.inputs, Scope::Everything, sources)
     }
 }
 
@@ -409,12 +416,18 @@ pub(crate) struct Run<'l> {
 }
 
 impl Run<'_> {
-    /// Stamp `path`, then run `read` on it (the read the caller performs)
-    /// and return its result. A detached ledger's run stamps nothing and
+    /// Stamp `path` (a racy stamp hashes its content through `disk`, the disk `read` reads
+    /// with), then run `read` on it (the read the caller performs) and return its result. A detached ledger's run stamps nothing and
     /// still runs `read`.
-    pub(crate) fn read<T>(&self, input: Reading, path: &Path, read: impl FnOnce(&Path) -> T) -> T {
+    pub(crate) fn read<T>(
+        &self,
+        input: Reading,
+        path: &Path,
+        disk: &dyn Disk,
+        read: impl FnOnce(&Path) -> T,
+    ) -> T {
         if self.records {
-            let entry = Entry::stamp(path);
+            let entry = Entry::stamp(path, disk);
             self.read
                 .borrow_mut()
                 .push((input, path.to_path_buf(), entry));

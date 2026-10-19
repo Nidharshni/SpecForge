@@ -21,7 +21,8 @@ pub(crate) struct Reach {
     /// reached, as recorded.
     pub(crate) inputs: Vec<(PathBuf, Vec<(Class, PathBuf)>)>,
     /// Each batch path that is a directory created on the way to a missing
-    /// input's directory.
+    /// input's directory, or a directory link on the way to an input (or a
+    /// directory above one below the root).
     pub(crate) pending: Vec<(PathBuf, Class)>,
 }
 
@@ -75,6 +76,13 @@ impl SessionInputs {
                     .pending
                     .as_ref()
                     .is_some_and(|pending| pending.reached_by(&canonical_path))
+                {
+                    reach.pending.push((path.to_path_buf(), row.class.clone()));
+                }
+                // A directory link on the way to it, or a directory above one below the root,
+                // pointed elsewhere.
+                if row.way.iter().any(|link| link.starts_with(&in_dir))
+                    && !disk.canonical_root.starts_with(&in_dir)
                 {
                     reach.pending.push((path.to_path_buf(), row.class.clone()));
                 }

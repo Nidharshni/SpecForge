@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use specforge_common::{ProjectConfig, SourceRoot};
 
+use super::chain;
 use super::key::{canonical, discovered_keys, in_canonical_dir, relative_canonical};
 use super::recorded::{Class, Pending, Recorded, Recording};
 
@@ -16,7 +17,8 @@ use super::recorded::{Class, Pending, Recorded, Recording};
 /// last checks read (every path a check asked about, the build cache a
 /// check-phase pass read, and every directory E016's suggestion listed,
 /// recorded when read, ADR 0107), and the link hops each symlinked
-/// source's last read followed (its target included, ADR 0129). Behavior `classify_project_changes`, ADR 0030.
+/// source's last read followed (its target included, ADR 0129), and the
+/// directory links on the way to each (ADR 0173). Behavior `classify_project_changes`, ADR 0030.
 ///
 /// One value per environment load, renewed each time the checks run;
 /// `Update::inputs_changed` says when it changed. Every answer to "what
@@ -83,11 +85,13 @@ impl OnDisk {
                 .and_then(|dir| Pending::toward(dir, &self.canonical_root)),
             _ => None,
         };
+        let way = chain::way(&path, &self.root);
         Recorded {
             path,
             class,
             key,
             pending,
+            way,
         }
     }
 }
@@ -141,7 +145,9 @@ impl SessionInputs {
     /// input: the root, the spec root when it is outside the root, and the
     /// directory of every input outside both, recursively (canonical, none
     /// inside another); for an input directory outside the root that does
-    /// not exist, its nearest existing ancestor, for its own entries only.
+    /// not exist, its nearest existing ancestor, for its own entries only; and
+    /// the directory of each directory link on the way to an input, for its
+    /// own entries, unless a root covers it.
     /// Empty when detached or when the root does not exist.
     pub fn watch_roots(&self) -> Vec<WatchRoot> {
         let Some(disk) = self.disk() else {
@@ -187,6 +193,20 @@ impl SessionInputs {
                     watch_roots.push(watch);
                 }
             }
+            // A directory link on the way to an input is watched by its directory's own entries.
+            for link in disk.rows.iter().flat_map(|row| &row.way) {
+                let Some(dir) = link.parent() else {
+                    continue;
+                };
+                let watch = WatchRoot {
+                    dir: dir.to_path_buf(),
+                    recursive: false,
+                };
+                let covered = roots.iter().any(|root| dir.starts_with(root));
+                if !covered && !watch_roots.contains(&watch) {
+                    watch_roots.push(watch);
+                }
+            }
         }
         watch_roots
     }
@@ -194,8 +214,8 @@ impl SessionInputs {
     /// What an editor client must report: the spec root's `.spec` files, every
     /// entry created or deleted under the root (and under the spec root when
     /// it lies outside it), then the files the environment load read (the config,
-    /// the lock, each module), each file the checks read and each directory they
-    /// listed. Each path is canonical
+    /// the lock, each module), each file the checks read, each directory they
+    /// listed and each directory link on the way to one. Each path is canonical
     /// (as the checks read it, `..` resolved), re-spelled from the root as
     /// the session was opened when it lies under it (the spelling the
     /// editor gave), absolute otherwise. Empty when detached.
@@ -226,6 +246,12 @@ impl SessionInputs {
             };
             if !watched.contains(&entry) {
                 watched.push(entry);
+            }
+            for link in &row.way {
+                let link = Watched::File(disk.respelled(link.clone()));
+                if !watched.contains(&link) {
+                    watched.push(link);
+                }
             }
         }
         watched

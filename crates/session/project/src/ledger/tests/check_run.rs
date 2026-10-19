@@ -30,7 +30,7 @@ fn a_check_input_written_between_its_stamp_and_its_read_is_seen_next_time() {
     let doc = std::fs::canonicalize(dir.path()).unwrap().join("guide.md");
     fs::write(&doc, "old").unwrap();
     let run = ledger.checks();
-    run.read(Reading::File, &doc, |path| {
+    run.read(Reading::File, &doc, &PlainDisk, |path| {
         fs::write(path, "new, and longer").unwrap();
         fs::read(path).ok()
     });
@@ -45,8 +45,8 @@ fn a_missing_check_input_records_its_directory() {
     fs::create_dir_all(root.join("docs")).unwrap();
     let missing = root.join("docs/guide.md");
     let run = ledger.checks();
-    assert!(!run.read(Reading::File, &missing, std::path::Path::exists));
-    run.read(Reading::Listing, &root.join("docs"), |_| ());
+    assert!(!run.read(Reading::File, &missing, &PlainDisk, std::path::Path::exists));
+    run.read(Reading::Listing, &root.join("docs"), &PlainDisk, |_| ());
     run.finish(Recording::Checks);
     assert!(
         ledger
@@ -65,7 +65,7 @@ fn an_unfinished_check_run_records_nothing() {
     let doc = dir.path().join("guide.md");
     let before = ledger.inputs().clone();
     let run = ledger.checks();
-    run.read(Reading::File, &doc, |_| ());
+    run.read(Reading::File, &doc, &PlainDisk, |_| ());
     drop(run);
     assert_eq!(ledger.inputs(), &before);
 }
@@ -79,7 +79,7 @@ fn a_run_that_reads_what_the_last_read_leaves_the_inputs_as_they_were() {
     fs::write(&two, "2").unwrap();
     let read = |ledger: &mut Ledger, file: &std::path::Path| {
         let run = ledger.checks();
-        run.read(Reading::File, file, |_| ());
+        run.read(Reading::File, file, &PlainDisk, |_| ());
         run.finish(Recording::Checks);
     };
     let mut before = ledger.inputs().clone();
@@ -100,7 +100,7 @@ fn a_run_that_reads_a_path_twice_leaves_the_inputs_as_they_were() {
     let run_of = |ledger: &mut Ledger, files: &[&std::path::Path]| {
         let run = ledger.checks();
         for file in files {
-            run.read(Reading::File, file, |_| ());
+            run.read(Reading::File, file, &PlainDisk, |_| ());
         }
         run.finish(Recording::Checks);
     };

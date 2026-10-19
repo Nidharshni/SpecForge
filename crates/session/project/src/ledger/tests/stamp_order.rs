@@ -5,6 +5,7 @@ use std::fs;
 use std::path::Path;
 
 use specforge_common::ProjectRoot;
+use specforge_registry::PlainDisk;
 
 use std::sync::Arc;
 
@@ -121,7 +122,7 @@ fn a_detached_ledger_reads_every_key_as_gone_and_records_nothing() {
     assert!(ledger.stale().is_empty());
     assert!(ledger.changes([Path::new("/p/a.spec")]).is_empty());
     let run = ledger.checks();
-    assert!(run.read(Reading::File, Path::new("/p/x.md"), |_| true));
+    assert!(run.read(Reading::File, Path::new("/p/x.md"), &PlainDisk, |_| true));
     run.finish(Recording::Checks);
     assert_eq!(ledger.inputs(), &crate::ledger::SessionInputs::detached());
 }

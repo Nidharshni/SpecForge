@@ -618,3 +618,72 @@ fn a_dangling_source_links_missing_directory_outside_the_root_is_watched() {
     assert_eq!(events.len(), 1, "{events:?}");
     assert_eq!(applied(&events[0]).changed, ["link.spec"]);
 }
+
+#[cfg(unix)]
+#[spec(
+    behavior = "watch_file_system_for_changes",
+    verify = "a source whose directory link is pointed elsewhere is seen"
+)]
+fn a_sources_directory_link_pointed_elsewhere_is_seen() {
+    let fixture = Fixture::new(PLAIN);
+    let outside = fixture.parent.join("outside");
+    for dir in ["v1", "v2"] {
+        fs::create_dir_all(outside.join(dir)).unwrap();
+    }
+    fs::write(
+        outside.join("v1/b.spec"),
+        PLAIN.replace("gadget_one", "gadget_three"),
+    )
+    .unwrap();
+    fs::write(
+        outside.join("v2/b.spec"),
+        format!("{}\n", PLAIN.replace("gadget_one", "gadget_four")),
+    )
+    .unwrap();
+    let alias = fixture.root.join("alias");
+    std::os::unix::fs::symlink(outside.join("v1"), &alias).unwrap();
+    std::os::unix::fs::symlink("../alias/b.spec", fixture.root.join("spec/link.spec")).unwrap();
+    let (mut watch, _recorder) = fixture.watch();
+
+    fs::remove_file(&alias).unwrap();
+    std::os::unix::fs::symlink(outside.join("v2"), &alias).unwrap();
+    let events = watch.changed(&[alias]);
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert_eq!(applied(&events[0]).changed, ["link.spec"]);
+}
+
+#[cfg(unix)]
+#[spec(
+    behavior = "watch_file_system_for_changes",
+    verify = "a named file behind a directory link pointed elsewhere is rechecked"
+)]
+fn a_named_file_behind_a_directory_link_pointed_elsewhere_is_rechecked() {
+    let fixture =
+        Fixture::new("gadget gadget_one \"G\" {\n  docs [\"../docs/linked/guide.md\"]\n}\n");
+    let outside = fixture.parent.join("outside");
+    for dir in ["v1", "v2"] {
+        fs::create_dir_all(outside.join(dir)).unwrap();
+    }
+    fs::write(outside.join("v1/guide.md"), "# guide\n").unwrap();
+    let linked = fixture.root.join("docs/linked");
+    std::os::unix::fs::symlink(outside.join("v1"), &linked).unwrap();
+    let (mut watch, _recorder) = fixture.watch();
+    assert!(
+        !watch
+            .session()
+            .project()
+            .diagnostics()
+            .iter()
+            .any(|d| d.code == "E016")
+    );
+
+    fs::remove_file(&linked).unwrap();
+    std::os::unix::fs::symlink(outside.join("v2"), &linked).unwrap();
+    let events = watch.changed(&[linked]);
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert!(
+        codes(applied(&events[0])).contains(&"E016"),
+        "{:?}",
+        codes(applied(&events[0]))
+    );
+}

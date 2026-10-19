@@ -1,6 +1,6 @@
 # A source read is a recorded read
 
-**Status:** accepted (2026-10-16, architecture round 13, plan 07). Amended by [ADR 0141](0141-a-session-names-the-dangling-source-links-it-reads.md): discovery names a dangling link; it still records nothing. Amended by round-14 follow-up G1: a stamp also records the link chain it followed. Completes
+**Status:** accepted (2026-10-16, architecture round 13, plan 07). Amended by [ADR 0141](0141-a-session-names-the-dangling-source-links-it-reads.md): discovery names a dangling link; it still records nothing. Amended by round-14 follow-up G1: a stamp also records the link chain it followed. Amended by [ADR 0173](0173-a-link-chain-is-every-link-the-file-system-follows.md): a stamp records where each hop lands, and a directory link on the way to a hop reaches its source (D2, D3). Completes
 [ADR 0114](0114-environment-inputs-are-recorded-as-read.md) D3 for sources. Amends
 [ADR 0073](0073-a-batch-of-paths-narrows-the-stale-comparison.md) D2 (fourth bullet) and D5 (third bullet), and
 [ADR 0106](0106-a-project-session-reads-the-disk-through-one-ledger.md) D5 ("the renewals of the links happen in

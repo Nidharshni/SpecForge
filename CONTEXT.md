@@ -135,11 +135,17 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   a detached session's inputs are empty (ADR 0030). Nothing else: an import names one of the sources,
   never a file on disk (ADR 0055).
 - **Recorded input**: one row of a session's inputs: a file or directory a recorded read touched, as the read
-  spelled it, keyed by its own name in its canonical directory, with its class (an environment input, a check
+  spelled it, keyed by its own name in its canonical directory, with the directory links on the way to it
+  (its way, ADR 0173), with its class (an environment input, a check
   input, a directory the checks listed, or a hop of one source). The class decides what reaches it, which
   directory is watched for it and what its change is; a missing directory on the way to it outside the root is
   watched from its nearest existing ancestor (`specforge_project::ledger`, crate-private; ADR 0133). A source
   read as gone still records the hops it followed (ADR 0141).
+- **Link chain**: what a read of a name follows on the file system: its **hops** (each link at the name, in order,
+  at most 40, its target included) and its **way** (each directory link it goes through before its own name, below
+  the project root as opened). A stamp records where each hop lands; a recorded input keeps its way, and a change at
+  a link of either is that input's change (`specforge_project` `ledger::chain`, crate-private; ADR 0129, ADR 0173).
+  The containment's walk (ADR 0104) answers a different question: where a name lands.
 - **Dangling source link**: a `.spec` symlink whose target does not exist. It is no source (`SourceRoot::files`
   omits it) but the session reads it (`SourceRoot::dangling`), finds it gone and records its chain, so it is that
   source's change when its target appears (ADR 0141).

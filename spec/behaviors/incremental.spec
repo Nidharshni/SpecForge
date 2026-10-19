@@ -68,6 +68,8 @@ behavior watch_file_system_for_changes "Watch File System for Changes" {
   verify unit "a symlinked source whose hop lies in a directory that did not exist is seen when it is created"
   verify unit "a dangling source link whose missing directory lies outside the root is watched"
   verify unit "a batch of an unchanged source and a created named file is rechecked"
+  verify unit "a source whose directory link is pointed elsewhere is seen"
+  verify unit "a named file behind a directory link pointed elsewhere is rechecked"
 }
 
 behavior classify_project_changes "Classify Project Changes" {
@@ -101,7 +103,12 @@ behavior classify_project_changes "Classify Project Changes" {
     modification time, and the content when it was read within the
     timestamp granularity); a directory created on the way to a missing
     input's directory outside the root is that input's change (a source
-    hop's: that source's), whatever the stamps say. Any other path
+    hop's: that source's), whatever the stamps say. A directory link on
+    the way to any input (a source's hop, an environment or a check input),
+    below the project root as opened and not directly under the
+    file-system root, reaches that input by its own name, or by a
+    directory above it below the root, and is its change whatever the
+    stamps say. Any other path
     changes nothing. A detached session (no project) takes no change from
     disk: its sources are the buffers it holds.
     Watch, the LSP and MCP MUST take changes through the session. What a
@@ -111,8 +118,9 @@ behavior classify_project_changes "Classify Project Changes" {
     when sources are read and each time the checks run. Watch's watch
     roots and the LSP's watchers MUST cover every input, every
     specforge.json under the spec root included, and each hop of every
-    symlinked source's read (the LSP spelling each under the project root as
-    opened), the LSP MUST ask its client to report every entry
+    symlinked source's read, and each directory link on the way to an input
+    (watch: its directory's own entries) (the LSP spelling each under the
+    project root as opened), the LSP MUST ask its client to report every entry
     created or deleted under the project root, and both MUST follow every
     update that changes the inputs. A set of watchers refused once is not
     asked for again in the same follow: the refusal is reported (watch: a
@@ -153,6 +161,9 @@ behavior classify_project_changes "Classify Project Changes" {
   verify unit "a nested project's specforge.json appearing or going changes every source under its directory"
   verify unit "the LSP's watchers report every specforge.json under the spec root"
   verify integration "the LSP drops a nested project's files when its specforge.json is created, and takes them back when it goes"
+  verify unit "a directory link on the way to a source's hop pointed elsewhere is that source's change"
+  verify unit "a directory link on the way to an input outside the root is watched by its own directory"
+  verify unit "a directory link on the way to an environment or check input pointed elsewhere is that input's change"
 }
 
 behavior bring_session_up_to_date "Bring a Session Up to Date with Disk" {
@@ -264,7 +275,9 @@ behavior invalidate_changed_files "Invalidate Changed Files" {
     its stamp says (touched, or written again with the same bytes): it is
     re-stamped, not re-parsed, and runs no check; a link hop its read
     followed that was swapped or retargeted is a moved hop, whatever
-    the stamps say (a stamp records the link chain it followed); it
+    the stamps say (a stamp records the link chain it followed, each hop
+    where it lands, so a directory link on the way that was pointed
+    elsewhere moves it too); it
     still changes the session's inputs. For file
     deletions, all entities declared in the deleted file MUST be removed
     from the graph along with their edges; no re-parse is attempted.
@@ -280,6 +293,7 @@ behavior invalidate_changed_files "Invalidate Changed Files" {
   verify unit "the typing fast path skips the checks while any edited buffer does not parse"
   verify unit "a source rewritten with its own text re-parses nothing and runs no check"
   verify unit "a source relinked to a file with an equal stamp still moves the inputs"
+  verify unit "a source whose chain goes through a directory link pointed at an equal-stamp file still moves"
   verify contract "Invalidate Changed Files: file invalidation holds — file_changes_coalesced_fired, invalidation_set_computed, subgraph_invalidated_emitted, unrelated_files_untouched"
 }
 
