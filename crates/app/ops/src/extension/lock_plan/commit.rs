@@ -1,12 +1,12 @@
 //! A checked plan written as one change, all or nothing (ADR 0028 D4), the publisher keys pinned last
 //! (ADR 0059).
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde_json::Value;
 
 use super::{Ask, Checked, Opened, Purpose};
-use crate::change::{Cause, ProjectChange};
+use crate::change::ProjectChange;
 use crate::registry::{KeyPin, Registry};
 use crate::{Held, OpError, OpErrorKind, Writes};
 
@@ -17,11 +17,10 @@ pub(crate) type StageHeld<'f> =
 /// A file the change writes after `specforge.json`'s edit and before the pins (`init`'s
 /// `.gitignore` and starter, handed over with [`Checked::writing`]), in the same project change (ADR 0128): put back, or removed when it
 /// was not there, when the change fails. `stage` is handed the file `path` resolved to (ADR 0112):
-/// it reads and stages nothing else. `code` is the refusal of writing it.
+/// it reads and stages nothing else.
 pub(crate) struct Also<'f> {
     pub(crate) path: PathBuf,
     pub(crate) stage: StageHeld<'f>,
-    pub(crate) code: &'static str,
 }
 
 /// What a finished plan did, or for a preview would do.
@@ -172,7 +171,7 @@ impl<'a> Checked<'a> {
             } else {
                 None
             };
-            let mut files = ProjectChange::new();
+            let mut files = ProjectChange::new(installed.root(), format!("cannot {operation}"));
             if let (Some(document), Some(held)) = (&document, &config_held) {
                 files.stage(
                     held.clone(),
@@ -180,17 +179,10 @@ impl<'a> Checked<'a> {
                     crate::config::render(document)?,
                 );
             }
-            let mut also_codes: Vec<(PathBuf, &'static str)> = Vec::new();
             for (file, held) in also.into_iter().zip(also_held) {
-                also_codes.push((held.spelled.clone(), file.code));
                 (file.stage)(held, &mut files)?;
             }
-            let config_spelled = config_held.as_ref().map(|held| held.spelled.clone());
-            let commit_files = |files: ProjectChange| -> Result<Writes, OpError> {
-                files.commit_then(|| record(pins)).map_err(|failed| {
-                    failed.error(|cause| refused(cause, config_spelled.as_deref(), &also_codes))
-                })
-            };
+            let commit_files = |files: ProjectChange| files.commit_then(|| record(pins));
             match change {
                 Some(mut change) => {
                     for (module, pin) in installs {
@@ -242,45 +234,6 @@ impl<'a> Checked<'a> {
             enabled: final_entries.len(),
             asked,
         })
-    }
-}
-
-/// The refusal of a project change that failed: `config` is the spelled `specforge.json` the plan edited, and
-/// `also` the spelled files the caller staged with their codes.
-fn refused(
-    cause: Cause<OpError>,
-    config: Option<&Path>,
-    also: &[(PathBuf, &'static str)],
-) -> OpError {
-    match cause {
-        Cause::Changed { file } => OpError::new(
-            OpErrorKind::Conflict,
-            crate::FILE_CHANGED,
-            format!(
-                "{} changed while the change was being written; nothing was written",
-                file.display()
-            ),
-        ),
-        Cause::Unreadable { file, error } => OpError::new(
-            OpErrorKind::of_io(&error),
-            crate::FILE_UNREADABLE,
-            format!("failed to read {}: {error}", file.display()),
-        ),
-        Cause::Unwritable { file, error } => {
-            let code = if config == Some(file.as_path()) {
-                "config_write_failed"
-            } else {
-                also.iter()
-                    .find(|(path, _)| *path == file)
-                    .map_or(crate::FILE_UNREADABLE, |(_, code)| code)
-            };
-            OpError::new(
-                OpErrorKind::of_io(&error),
-                code,
-                format!("failed to write {}: {error}", file.display()),
-            )
-        }
-        Cause::Then(error) => error,
     }
 }
 

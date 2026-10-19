@@ -60,7 +60,7 @@ fn apply_writes_every_file_or_none() {
     let before = files_under(&root);
     let error = edit::apply(&planned, specforge_ops::testing::caller()).unwrap_err();
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
-    assert_eq!(error.code, specforge_ops::FILE_UNREADABLE, "{error:?}");
+    assert_eq!(error.code, specforge_ops::FILE_UNWRITABLE, "{error:?}");
     assert!(changed_since(&root, &before).is_empty());
 }
 
@@ -131,7 +131,7 @@ fn apply_creates_the_new_file_and_removes_it_on_failure() {
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
     let error = edit::apply(&planned, specforge_ops::testing::caller()).unwrap_err();
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
-    assert_eq!(error.code, specforge_ops::FILE_UNREADABLE, "{error:?}");
+    assert_eq!(error.code, specforge_ops::FILE_UNWRITABLE, "{error:?}");
     assert!(changed_since(&root, &before).is_empty());
     assert!(
         !root.join("fresh").exists(),
@@ -160,7 +160,6 @@ fn an_empty_plan_writes_nothing() {
 
 #[cfg(unix)]
 #[test]
-#[ignore = "flipped by T4"]
 fn an_edit_that_cannot_write_a_file_is_unwritable() {
     use std::os::unix::fs::PermissionsExt;
     let c = two_dirs();

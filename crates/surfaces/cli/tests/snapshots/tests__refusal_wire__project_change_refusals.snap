@@ -6,14 +6,14 @@ $ specforge set user status active
 [exit 1]
 [stdout]
 [stderr]
-error[file_unreadable]: failed to write <root>/spec/hello.spec: Permission denied (os error 13)
+error[file_unwritable]: cannot apply the edits: failed to write hello.spec: Permission denied (os error 13); nothing was written
 
 $ specforge set user status active --format json
 [exit 1]
 [stdout]
 {
-  "error": "failed to write <root>/spec/hello.spec: Permission denied (os error 13)",
-  "code": "file_unreadable"
+  "error": "cannot apply the edits: failed to write hello.spec: Permission denied (os error 13); nothing was written",
+  "code": "file_unwritable"
 }
 [stderr]
 
@@ -21,20 +21,20 @@ $ specforge new type account Account --in fresh.spec
 [exit 1]
 [stdout]
 [stderr]
-error[file_unreadable]: failed to write <root>/spec/fresh.spec: Permission denied (os error 13)
+error[file_unwritable]: cannot apply the edits: failed to write fresh.spec: Permission denied (os error 13); nothing was written
 
 $ specforge add @specforge/product
 [exit 1]
 [stdout]
 [stderr]
-error[config_write_failed]: failed to write <root>/specforge.json: Permission denied (os error 13)
+error[file_unwritable]: cannot add: failed to write specforge.json: Permission denied (os error 13); nothing was written
 
 $ specforge add @specforge/product --format json
 [exit 1]
 [stdout]
 {
-  "error": "failed to write <root>/specforge.json: Permission denied (os error 13)",
-  "code": "config_write_failed"
+  "error": "cannot add: failed to write specforge.json: Permission denied (os error 13); nothing was written",
+  "code": "file_unwritable"
 }
 [stderr]
 
@@ -42,14 +42,14 @@ $ specforge init
 [exit 1]
 [stdout]
 [stderr]
-error[init_write_failed]: failed to write <root>/.gitignore: Permission denied (os error 13)
+error[file_unwritable]: cannot init: failed to write .gitignore: Permission denied (os error 13); nothing was written
 
 $ specforge init --format json
 [exit 1]
 [stdout]
 {
-  "error": "failed to write <root>/.gitignore: Permission denied (os error 13)",
-  "code": "init_write_failed"
+  "error": "cannot init: failed to write .gitignore: Permission denied (os error 13); nothing was written",
+  "code": "file_unwritable"
 }
 [stderr]
 
@@ -57,7 +57,7 @@ $ specforge init
 [exit 1]
 [stdout]
 [stderr]
-error[config_write_failed]: failed to write <root>/specforge.json: Permission denied (os error 13)
+error[file_unwritable]: cannot init: failed to write specforge.json: Permission denied (os error 13); nothing was written
 
 $ specforge init
 [exit 1]
@@ -73,6 +73,6 @@ error[file_unwritable]: failed to write <root>/spec/hello.spec: Permission denie
 Formatted 2 file(s), 1 changed
 
 $ mcp specforge.rename
-{"code":"permission_denied","data":{"files_written":[]},"message":"failed to write <root>/spec/hello.spec: Permission denied (os error 13)","tool":"specforge.rename"}
+{"code":"permission_denied","data":{"files_written":[]},"message":"cannot rename 'user_logged_in': failed to write hello.spec: Permission denied (os error 13); nothing was written","tool":"specforge.rename"}
 $ mcp specforge.edit
-{"code":"permission_denied","data":{"files_written":[]},"message":"failed to write <root>/spec/hello.spec: Permission denied (os error 13)","tool":"specforge.edit"}
+{"code":"permission_denied","data":{"files_written":[]},"message":"cannot apply the edits: failed to write hello.spec: Permission denied (os error 13); nothing was written","tool":"specforge.edit"}

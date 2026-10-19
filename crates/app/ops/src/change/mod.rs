@@ -2,22 +2,26 @@
 //! will hold, checked, replaced in stage order, and put back in reverse when anything fails. What the change left is
 //! its failure's writes, so an operation's error can never drop it (ADR 0022 D4).
 //!
+//! A failure is worded here, once: one code and kind per cause ([`FILE_CHANGED`], [`FILE_UNREADABLE`],
+//! [`FILE_UNWRITABLE`]), the file named from the root the change was opened under, after what the operation was
+//! doing, and a tail saying whether anything was left (ADR 0155).
+//!
 //! The four steps of [`ProjectChange::commit_then`]:
 //! 1. **Check.** Each staged file is read through its [`Held`], in stage order, and compared with the bytes it was
-//!    staged over. Any difference is [`Cause::Changed`]; a read that fails is [`Cause::Unreadable`]. Nothing has
+//!    staged over. Any difference is [`FILE_CHANGED`]; a read that fails is [`FILE_UNREADABLE`]. Nothing has
 //!    been written.
 //! 2. **Write**, in stage order. The missing directories are made (and remembered). A file that was there is
 //!    [`Held::replace`]d, so it holds the new content or the old, never part of either; one that was not is
-//!    [`Held::create_new`]d, so a file that appeared since the check is `Changed`.
+//!    [`Held::create_new`]d, so a file that appeared since the check is changed. A write that fails is
+//!    [`FILE_UNWRITABLE`].
 //! 3. **Then.** The caller's last step runs once every file is written.
 //! 4. **Put back**, on any failure, in reverse stage order: a file that was there gets its bytes back, one that was
 //!    not is unlinked where it landed, and the directories the change made are removed when empty. A file that
-//!    cannot be put back is named in `left`, which is the failure's writes.
+//!    cannot be put back is named in the message and is the error's writes.
 
-use std::convert::Infallible;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use crate::{Held, OpError, Writes};
+use crate::{Held, OpError, OpErrorKind, Writes};
 
 /// A file an operation planned on no longer holds what it read: nothing was written.
 pub const FILE_CHANGED: &str = "file_changed";
@@ -28,6 +32,8 @@ pub const FILE_UNWRITABLE: &str = "file_unwritable";
 
 /// Project files staged to be written together.
 pub(crate) struct ProjectChange {
+    root: PathBuf,
+    doing: String,
     staged: Vec<Staged>,
 }
 
@@ -37,16 +43,8 @@ struct Staged {
     after: Vec<u8>,
 }
 
-/// Why a change failed, and what it could not put back.
-#[derive(Debug)]
-pub(crate) struct Failed<E> {
-    pub(crate) cause: Cause<E>,
-    pub(crate) left: Writes,
-}
-
 /// What stopped a change. A file is named as its caller spelled it.
-#[derive(Debug)]
-pub(crate) enum Cause<E> {
+enum Cause {
     /// `file` no longer holds what it was staged over (or appeared, or went): nothing, or no file but those put
     /// back, was written.
     Changed { file: PathBuf },
@@ -61,12 +59,18 @@ pub(crate) enum Cause<E> {
         error: std::io::Error,
     },
     /// The caller's last step failed; every file was put back but `left`.
-    Then(E),
+    Then(OpError),
 }
 
 impl ProjectChange {
-    pub(crate) fn new() -> Self {
-        ProjectChange { staged: Vec::new() }
+    /// A change whose failures name its files from `root` (the spec root for sources, the project root for a lock
+    /// plan), after `doing`, what the operation was doing (`cannot rename 'a'`).
+    pub(crate) fn new(root: &Path, doing: impl Into<String>) -> Self {
+        ProjectChange {
+            root: root.to_path_buf(),
+            doing: doing.into(),
+            staged: Vec::new(),
+        }
     }
 
     /// Stage `held` to hold `after`, over `before`: the bytes the caller planned on, or `None` for a file that is
@@ -88,29 +92,36 @@ impl ProjectChange {
     }
 
     /// [`Self::commit_then`] with no last step.
-    pub(crate) fn commit(self) -> Result<Writes, Failed<Infallible>> {
+    pub(crate) fn commit(self) -> Result<Writes, OpError> {
         self.commit_then(|| Ok(()))
     }
 
     /// Check, write, then run `then`; see the module docs for the order and what a failure puts back. On success
-    /// the writes are every staged file, as spelled.
-    pub(crate) fn commit_then<E>(
+    /// the writes are every staged file, as spelled. On failure the error is worded as the module docs say; `then`'s
+    /// own error is returned as it is, with the files left.
+    pub(crate) fn commit_then(
         self,
-        then: impl FnOnce() -> Result<(), E>,
-    ) -> Result<Writes, Failed<E>> {
+        then: impl FnOnce() -> Result<(), OpError>,
+    ) -> Result<Writes, OpError> {
         for staged in &self.staged {
             match staged.held.read_if_there() {
                 Ok(now) if now == staged.before => {}
                 Ok(_) => {
-                    return Err(Self::refused(Cause::Changed {
-                        file: staged.held.spelled.clone(),
-                    }));
+                    return Err(self.failed(
+                        Cause::Changed {
+                            file: staged.held.spelled.clone(),
+                        },
+                        Writes::none(),
+                    ));
                 }
                 Err(error) => {
-                    return Err(Self::refused(Cause::Unreadable {
-                        file: staged.held.spelled.clone(),
-                        error,
-                    }));
+                    return Err(self.failed(
+                        Cause::Unreadable {
+                            file: staged.held.spelled.clone(),
+                            error,
+                        },
+                        Writes::none(),
+                    ));
                 }
             }
         }
@@ -133,15 +144,8 @@ impl ProjectChange {
         }
     }
 
-    fn refused<E>(cause: Cause<E>) -> Failed<E> {
-        Failed {
-            cause,
-            left: Writes::none(),
-        }
-    }
-
     /// One staged file written; `made` collects the directories created for it.
-    fn write<E>(staged: &Staged, made: &mut Vec<PathBuf>) -> Result<(), Cause<E>> {
+    fn write(staged: &Staged, made: &mut Vec<PathBuf>) -> Result<(), Cause> {
         let held = &staged.held;
         let file = || held.spelled.clone();
         held.create_parents(made)
@@ -174,7 +178,7 @@ impl ProjectChange {
     }
 
     /// Put back the first `written` files in reverse, then remove `made` when empty.
-    fn put_back<E>(self, written: usize, made: &[PathBuf], cause: Cause<E>) -> Failed<E> {
+    fn put_back(self, written: usize, made: &[PathBuf], cause: Cause) -> OpError {
         let mut left = Writes::none();
         for staged in self.staged[..written].iter().rev() {
             let held = &staged.held;
@@ -194,15 +198,56 @@ impl ProjectChange {
         }
         let deepest_first: Vec<PathBuf> = made.iter().rev().cloned().collect();
         Held::remove_empty(&deepest_first);
-        Failed { cause, left }
+        self.failed(cause, left)
+    }
+
+    /// `file` as the operation names it: from the root, or as spelled when it is not under it.
+    fn named(&self, file: &Path) -> String {
+        file.strip_prefix(&self.root)
+            .unwrap_or(file)
+            .display()
+            .to_string()
+    }
+
+    /// The one wording of a failure (ADR 0155); `left` is what could not be put back, and the error's writes.
+    fn failed(&self, cause: Cause, left: Writes) -> OpError {
+        let (kind, code, what) = match cause {
+            Cause::Changed { file } => (
+                OpErrorKind::Conflict,
+                FILE_CHANGED,
+                format!("{} changed since it was read", self.named(&file)),
+            ),
+            Cause::Unreadable { file, error } => (
+                OpErrorKind::of_io(&error),
+                FILE_UNREADABLE,
+                format!("failed to read {}: {error}", self.named(&file)),
+            ),
+            Cause::Unwritable { file, error } => (
+                OpErrorKind::of_io(&error),
+                FILE_UNWRITABLE,
+                format!("failed to write {}: {error}", self.named(&file)),
+            ),
+            Cause::Then(error) => return error.with_writes(left),
+        };
+        let left_names: Vec<String> = left.paths().map(|file| self.named(file)).collect();
+        let error = refusal(kind, code, &what, &left_names);
+        let error = if self.doing.is_empty() {
+            error
+        } else {
+            error.prefixed(format!("{}: ", self.doing))
+        };
+        error.with_writes(left)
     }
 }
 
-impl<E> Failed<E> {
-    /// The operation's error for this failure: `describe` words the cause, and the files left are its writes.
-    pub(crate) fn error(self, describe: impl FnOnce(Cause<E>) -> OpError) -> OpError {
-        describe(self.cause).with_writes(self.left)
-    }
+/// `what`, then how the change was left: nothing written, or the `left` files that could not be put back.
+fn refusal(kind: OpErrorKind, code: &'static str, what: &str, left: &[String]) -> OpError {
+    let tail = if left.is_empty() {
+        "nothing was written".to_string()
+    } else {
+        format!("{} could not be put back", left.join(", "))
+    };
+    OpError::new(kind, code, format!("{what}; {tail}"))
 }
 
 #[cfg(test)]

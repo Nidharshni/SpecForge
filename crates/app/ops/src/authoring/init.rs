@@ -245,7 +245,6 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
                 }
                 Ok(())
             }),
-            code: INIT_WRITE_FAILED,
         },
         Also {
             path: dir.join(STARTER_FILE),
@@ -259,7 +258,6 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
                 change.stage(file, None, starter.into_bytes());
                 Ok(())
             }),
-            code: INIT_WRITE_FAILED,
         },
     ];
     let done = checked.writing(files).finish()?;

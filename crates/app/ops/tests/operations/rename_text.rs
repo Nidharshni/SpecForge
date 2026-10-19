@@ -30,7 +30,6 @@ fn apply_refuses_a_file_changed_since_the_plan() {
 /// A write the OS refuses is `file_unwritable`, worded by the change (ADR 0155).
 #[cfg(unix)]
 #[test]
-#[ignore = "flipped by T4"]
 fn a_rename_that_cannot_write_a_file_is_unwritable() {
     use std::os::unix::fs::PermissionsExt;
     let p = crate::navigate::compile(

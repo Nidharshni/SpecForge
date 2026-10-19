@@ -160,7 +160,10 @@ fn printed_mcp(project: &TestProject, calls: &[(&str, serde_json::Value)]) -> St
 }
 
 #[cfg(unix)]
-#[test]
+#[specforge_test_macros::test(
+    behavior = "report_command_outcome",
+    verify = "a project file a command could not write, read or found changed is file_unwritable, file_unreadable or file_changed on every command"
+)]
 fn project_change_refusals_print_as_pinned() {
     use std::fs;
     let scratch = tempfile::TempDir::new().unwrap();

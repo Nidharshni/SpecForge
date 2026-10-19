@@ -255,7 +255,7 @@ fn an_install_is_dropped_from_the_config_before_it_is_uninstalled() {
         // order cannot be observed this way.
         return;
     }
-    assert_eq!(refused.unwrap_err().error.code, "config_write_failed");
+    assert_eq!(refused.unwrap_err().error.code, crate::FILE_UNWRITABLE);
     assert_eq!(files_under(fixture.root()), before);
 
     // Writable: all three go.
