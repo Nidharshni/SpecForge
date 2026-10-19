@@ -20,12 +20,18 @@ fn project() -> Assembled {
 }
 
 fn reviewed(project: &Assembled, entity_id: Option<&str>, depth: usize) -> Vec<String> {
-    review(&project.view(), &ReviewRequest { entity_id, depth })
-        .unwrap()
-        .rows
-        .into_iter()
-        .map(|row| row.entity_id)
-        .collect()
+    review(
+        &project.view(),
+        &ReviewRequest {
+            entity_id,
+            depth: entity_id.map(|_| depth),
+        },
+    )
+    .unwrap()
+    .rows
+    .into_iter()
+    .map(|row| row.entity_id)
+    .collect()
 }
 
 fn finding(entity_id: &str, gap: ReviewGap) -> ReviewFinding {
@@ -105,7 +111,7 @@ fn an_unconnected_entity_is_an_info() {
     verify = "the review's depth defaults to one hop"
 )]
 fn review_defaults_to_one_hop() {
-    assert_eq!(ReviewRequest::default().depth, 1);
+    assert_eq!(ReviewRequest::default().depth, None);
     let project = project();
     let default = review(
         &project.view(),
@@ -115,6 +121,7 @@ fn review_defaults_to_one_hop() {
         },
     )
     .unwrap();
+    assert_eq!(default.depth, Some(1));
     let ids: Vec<&str> = default.rows.iter().map(|r| r.entity_id.as_str()).collect();
     assert_eq!(ids, reviewed(&project, Some("alpha"), 1));
 }

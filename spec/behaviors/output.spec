@@ -473,7 +473,8 @@ behavior explore_the_graph "Explore the Graph" {
     unconnected entities (read_views_over_the_project_view). Degrees count
     every edge of the project. A kind the project does not know selects
     nothing and is an I020 notice naming the closest kind; an entity_id
-    the graph lacks is E003 naming the closest entity. The exploration
+    the graph lacks is E003 naming the closest entity; a depth without
+    entity_id is refused as invalid input about entity_id. The exploration
     reaches exactly the entities the review reaches at the same depth.
   """
   verify unit "the exploration selects the entities entity_id reaches within depth, of kind when given, and every list is about that selection"
@@ -482,6 +483,7 @@ behavior explore_the_graph "Explore the Graph" {
   verify unit "unconnected lists the selected entities no edge links to another entity"
   verify unit "relationship paths run from entity_id to each selected entity it reaches, nearest first, with their edge labels"
   verify unit "an unknown kind selects nothing and is an I020 notice naming the closest kind"
+  verify unit "a depth without entity_id is refused as invalid input about entity_id"
   verify unit "the exploration and the review reach the same entities at the same depth"
 }
 
@@ -499,7 +501,8 @@ behavior review_coverage_gaps "Review Coverage Gaps" {
   contract   """
     The review (specforge_ops::read::review) MUST list the coverage view's rows
     of the entities that count toward coverage within depth hops of
-    entity_id (default one hop), or of the whole project without
+    entity_id (default one hop; a depth without entity_id is refused as
+    invalid input about entity_id), or of the whole project without
     entity_id, in id order, and for each row a warning finding when it
     declares no obligation and an info finding when it is unconnected
     (read_views_over_the_project_view). An entity_id the graph lacks is
@@ -510,6 +513,7 @@ behavior review_coverage_gaps "Review Coverage Gaps" {
   verify unit "an entity that declares no obligation is a warning finding"
   verify unit "an unconnected entity is an info finding"
   verify unit "the review's depth defaults to one hop"
+  verify unit "a depth without entity_id is refused as invalid input about entity_id"
   verify unit "a project with nothing that counts toward coverage has no rows and no findings"
   verify unit "a recorded report that cannot be read is the review's E045 failure"
 }
@@ -526,7 +530,7 @@ behavior provide_explore_cli "Provide CLI Explore Command" {
     with their edge counts, the unconnected entities and, with ENTITY, the
     paths from it. Notices go to stderr under human output; under --format
     json the document carries them and stderr is empty. An unknown ENTITY is E003 naming
-    the closest entity, exit 1.
+    the closest entity, exit 1. --depth without ENTITY is a usage error, exit 2.
   """
   verify integration "specforge explore --format json is the explore prompt's payload for the same arguments"
   verify integration "an unknown entity is E003 naming the closest entity, exit 1"
@@ -543,8 +547,8 @@ behavior provide_review_cli "Provide CLI Review Command" {
     project compiled at PATH: --format json prints the document the review
     prompt's payload is for the same arguments; human output lists each
     row (entity, kind, status, proven obligations) and each finding. An
-    unknown ENTITY is E003, exit 1; a recorded report that cannot be read
-    is E045, exit 1.
+    unknown ENTITY is E003, exit 1; --depth without ENTITY is a usage error,
+    exit 2; a recorded report that cannot be read is E045, exit 1.
   """
   verify integration "specforge review --format json is the review prompt's payload for the same arguments"
   verify integration "a recorded report that cannot be read is E045, exit 1"

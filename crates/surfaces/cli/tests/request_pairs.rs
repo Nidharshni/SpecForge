@@ -573,13 +573,11 @@ fn export_depth_without_scope_is_refused_on_both() {
 }
 
 #[test]
-#[ignore = "flipped by T6"]
 fn explore_depth_without_entity_is_refused_on_both() {
     assert_eq!(pair("explore_depth_without_entity").0, Outcome::Refused);
 }
 
 #[test]
-#[ignore = "flipped by T6"]
 fn review_depth_without_entity_is_refused_on_both() {
     assert_eq!(pair("review_depth_without_entity").0, Outcome::Refused);
 }

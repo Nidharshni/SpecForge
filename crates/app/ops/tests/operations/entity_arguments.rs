@@ -5,9 +5,11 @@ use crate::view_support::{Assembled, Viewed, registries};
 use specforge_ops::OpErrorKind;
 use specforge_ops::authoring::fix::{self, FixQuery};
 use specforge_ops::read::coverage::{CoverageQuery, coverage};
+use specforge_ops::read::explore::{ExplorationRequest, explore};
 use specforge_ops::read::navigate::Navigator;
 use specforge_ops::read::query::{SearchField, SearchRequest, search};
-use specforge_ops::view::EntityField;
+use specforge_ops::read::review::{ReviewRequest, review};
+use specforge_ops::view::{DEPTH_WITHOUT_ENTITY, EntityField};
 use specforge_test::prelude::*;
 
 /// A project with one behavior, `login`.
@@ -112,4 +114,50 @@ fn search_refuses_a_referenced_entity_the_graph_lacks() {
         refusal.error.suggestion.as_deref(),
         Some("did you mean 'login'?")
     );
+}
+
+fn assert_depth_refused<T: std::fmt::Debug>(read: Result<T, specforge_ops::Refusal<EntityField>>) {
+    let refusal = read.unwrap_err();
+    assert_eq!(refusal.error.kind, OpErrorKind::InvalidInput);
+    assert_eq!(refusal.error.code, DEPTH_WITHOUT_ENTITY);
+    assert_eq!(refusal.subject, Some(EntityField::EntityId));
+}
+
+#[specforge_test(
+    behavior = "explore_the_graph",
+    verify = "a depth without entity_id is refused as invalid input about entity_id"
+)]
+fn explore_refuses_a_depth_without_an_entity() {
+    let project = project();
+    assert_depth_refused(explore(
+        &project.view(),
+        &ExplorationRequest {
+            depth: Some(1),
+            ..Default::default()
+        },
+    ));
+}
+
+#[specforge_test(
+    behavior = "review_coverage_gaps",
+    verify = "a depth without entity_id is refused as invalid input about entity_id"
+)]
+fn review_refuses_a_depth_without_an_entity() {
+    let project = project();
+    assert_depth_refused(review(
+        &project.view(),
+        &ReviewRequest {
+            depth: Some(1),
+            ..Default::default()
+        },
+    ));
+    let with_entity = review(
+        &project.view(),
+        &ReviewRequest {
+            entity_id: Some("login"),
+            depth: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(with_entity.depth, Some(1));
 }

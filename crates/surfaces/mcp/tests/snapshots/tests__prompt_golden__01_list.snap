@@ -28,7 +28,7 @@ expression: "reply[\"result\"]"
           "required": false
         },
         {
-          "description": "Neighbor hops around entity_id to include (default 1)",
+          "description": "Neighbor hops around entity_id to include (default 1; needs entity_id)",
           "name": "depth",
           "required": false
         }
@@ -65,7 +65,7 @@ expression: "reply[\"result\"]"
           "required": false
         },
         {
-          "description": "Hops from entity_id the exploration reaches (unbounded if omitted)",
+          "description": "Hops from entity_id the exploration reaches (unbounded if omitted; needs entity_id)",
           "name": "depth",
           "required": false
         }

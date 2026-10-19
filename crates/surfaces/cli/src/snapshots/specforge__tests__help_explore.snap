@@ -20,7 +20,7 @@ Options:
           Only entities of this kind
 
       --depth <DEPTH>
-          Hops from the entity (unbounded when omitted)
+          Hops from the entity, unbounded when omitted (requires ENTITY)
 
       --format <FORMAT>
           Output format: human or json

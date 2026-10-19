@@ -26,8 +26,8 @@ pub struct ExplorationRequest<'a> {
     /// Only entities of this kind. A kind the project does not know selects
     /// nothing and is an I020 notice (`KnownKinds::unknown_in`).
     pub kind: Option<&'a str>,
-    /// Hops from `entity_id`; unbounded when `None`; ignored without
-    /// `entity_id`.
+    /// Hops from `entity_id`; unbounded when `None`; refused without
+    /// `entity_id` (`view::depth_without_entity`).
     pub depth: Option<usize>,
 }
 
@@ -117,6 +117,9 @@ pub fn explore(
     view: &ProjectView,
     request: &ExplorationRequest,
 ) -> Result<Noticed<Exploration>, Refusal<EntityField>> {
+    if request.depth.is_some() && request.entity_id.is_none() {
+        return Err(crate::view::depth_without_entity());
+    }
     let graph = view.graph();
     let notices = request
         .kind

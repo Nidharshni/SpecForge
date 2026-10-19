@@ -33,7 +33,7 @@ use specforge_project::{CompiledProject, Environment, SharedRuntime};
 use specforge_registry::{Disk, EntitySnapshot, RegistryBuild};
 
 pub use connectivity::Connectivity;
-pub use entity::{EntityField, not_found};
+pub use entity::{DEPTH_WITHOUT_ENTITY, EntityField, depth_without_entity, not_found};
 pub use kinds::{KnownKinds, UNKNOWN_KIND};
 
 use crate::schema_version::{SchemaCache, VersionedSchema};

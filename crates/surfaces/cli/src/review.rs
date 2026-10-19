@@ -13,9 +13,10 @@ pub(crate) struct Args {
     #[command(flatten)]
     project: crate::project::ProjectArg,
 
-    /// Hops around the entity
-    #[arg(long, default_value_t = specforge_ops::read::review::DEFAULT_DEPTH)]
-    depth: usize,
+    /// Hops around the entity (default 1; requires ENTITY)
+    // clap's `requires` refuses a depth without an entity first; the reading is the operation's.
+    #[arg(long, requires = "entity")]
+    depth: Option<usize>,
 
     #[command(flatten)]
     output: OutputArg,
@@ -45,7 +46,7 @@ impl Args {
             Ok(review) => {
                 match format {
                     OutputFormat::Json => terminal.json(&review.document()),
-                    OutputFormat::Human => print_human(&review, request.depth, terminal),
+                    OutputFormat::Human => print_human(&review, terminal),
                 }
                 Exit::Passed
             }
@@ -54,13 +55,13 @@ impl Args {
     }
 }
 
-fn print_human(review: &Review, depth: usize, terminal: &Terminal) {
-    match &review.entity_id {
-        Some(entity) => {
+fn print_human(review: &Review, terminal: &Terminal) {
+    match (&review.entity_id, review.depth) {
+        (Some(entity), Some(depth)) => {
             let hops = if depth == 1 { "hop" } else { "hops" };
             outln!(terminal, "Review of {entity} within {depth} {hops}");
         }
-        None => outln!(terminal, "Review of the whole project"),
+        _ => outln!(terminal, "Review of the whole project"),
     }
     for row in &review.rows {
         outln!(

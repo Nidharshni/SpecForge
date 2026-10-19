@@ -190,7 +190,6 @@ fn search_refuses_a_referenced_entity_the_graph_lacks_on_references() {
 }
 
 #[test]
-#[ignore = "flipped by T6"]
 fn explore_and_review_prompts_refuse_a_depth_without_an_entity() {
     for (prompt, depth) in [("explore", "1"), ("review", "2")] {
         let reply = call(

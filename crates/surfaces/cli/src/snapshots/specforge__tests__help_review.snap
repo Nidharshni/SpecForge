@@ -17,9 +17,7 @@ Options:
           [default: .]
 
       --depth <DEPTH>
-          Hops around the entity
-          
-          [default: 1]
+          Hops around the entity (default 1; requires ENTITY)
 
       --format <FORMAT>
           Output format: human or json

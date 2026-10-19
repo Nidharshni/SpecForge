@@ -15,22 +15,14 @@ use crate::view::{EntityField, ProjectView};
 pub const DEFAULT_DEPTH: usize = 1;
 
 /// What to review.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct ReviewRequest<'a> {
     /// The entity whose neighbourhood is reviewed; the whole project when
     /// `None`.
     pub entity_id: Option<&'a str>,
-    /// Hops around `entity_id` (ignored without it).
-    pub depth: usize,
-}
-
-impl Default for ReviewRequest<'_> {
-    fn default() -> Self {
-        ReviewRequest {
-            entity_id: None,
-            depth: DEFAULT_DEPTH,
-        }
-    }
+    /// Hops around `entity_id`, [`DEFAULT_DEPTH`] when `None`; refused
+    /// without `entity_id` (`view::depth_without_entity`).
+    pub depth: Option<usize>,
 }
 
 /// What a finding says is missing.
@@ -83,6 +75,8 @@ pub struct Review {
     /// The coverage view's rows (the entities that count toward coverage)
     /// within the neighbourhood, in id order.
     pub rows: Vec<CoverageRow>,
+    /// The hops around `entity_id` the review reached; `None` without it.
+    pub depth: Option<usize>,
     /// Per row, in row order: its missing obligations, then its
     /// unconnectedness.
     pub findings: Vec<ReviewFinding>,
@@ -127,12 +121,19 @@ pub struct FindingDocument {
 }
 
 /// The review `request` asks for. An `entity_id` the graph lacks is
-/// `view::not_found` (E003); a recorded report that cannot be read is
+/// `view::not_found` (E003), and a `depth` without one
+/// `view::depth_without_entity`; a recorded report that cannot be read is
 /// its E045 failure (`ProjectView::coverage`).
 pub fn review(view: &ProjectView, request: &ReviewRequest) -> Result<Review, Refusal<EntityField>> {
+    if request.depth.is_some() && request.entity_id.is_none() {
+        return Err(crate::view::depth_without_entity());
+    }
+    let depth = request
+        .entity_id
+        .map(|_| request.depth.unwrap_or(DEFAULT_DEPTH));
     let neighbourhood: Option<BTreeSet<&'static str>> = request
         .entity_id
-        .map(|id| view.neighbourhood(id, Some(request.depth)))
+        .map(|id| view.neighbourhood(id, depth))
         .transpose()?
         .map(|reached| reached.iter().map(|r| r.id.as_str()).collect());
     let rows: Vec<CoverageRow> = selected(view, &CoverageQuery::default())?
@@ -164,6 +165,7 @@ pub fn review(view: &ProjectView, request: &ReviewRequest) -> Result<Review, Ref
     Ok(Review {
         entity_id: request.entity_id.map(str::to_string),
         rows,
+        depth,
         findings,
     })
 }
