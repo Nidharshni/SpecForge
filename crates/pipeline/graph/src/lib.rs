@@ -30,6 +30,6 @@ pub use specforge_common::cycles::{CycleOptions, find_cycles};
 pub use build::{
     Applied, FileChange, GraphBuild, GraphConfig, GraphInputs, build_graph, build_graph_with_config,
 };
-pub use graph::{Direction, Edge, Graph, Node, Reached};
+pub use graph::{Degree, Direction, Edge, Graph, Node, Reached};
 pub use specforge_common::{Diagnostic, Severity, SourceSpan};
 pub use specforge_parser::{EntityId, EntityKind, FieldMap, FieldValue, SpecFile, Written};

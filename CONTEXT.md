@@ -658,10 +658,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `unknown_kind`. Names are exact; both name the closest kind, a kind equal but for case first
   (`specforge_ops::view::KnownKinds`, `ProjectView::kinds`).
 - **Unconnected entity**: an entity no edge links to another entity, in either direction
-  (`ProjectView::connectivity`, `Degree::is_unconnected`). A reference that does not resolve is no edge
+  (`ProjectView::connectivity`, `Graph::degree`, `Degree::is_unconnected`). A reference that does not resolve is no edge
   (E003 or I004 reports it), and an edge from an entity to itself links it to nothing else. Stats counts
-  them, the exploration lists them and the review flags those that count toward coverage. Not the same as
-  unreferenced.
+  them, the exploration lists them and the review flags those that count toward coverage; the export's token
+  budget ranks by the same degree. Not the same as unreferenced.
 - **Unreferenced entity**: an entity no edge points at: W012 for a `ref`, an extension's
   `no_incoming_edges` rule for its kinds, the coverage summary's `invariant_unreferenced`. No output calls one
   an orphan: the catalog titles, product `health`'s `unreferenced_counts` and the coverage summary's

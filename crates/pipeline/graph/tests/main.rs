@@ -7,6 +7,7 @@ mod build;
 mod contracts;
 mod copy;
 mod defaults;
+mod degree;
 mod derived;
 mod field_form;
 mod graph;

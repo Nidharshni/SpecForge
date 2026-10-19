@@ -2,8 +2,10 @@ use specforge_common::{SourceSpan, Sym};
 use specforge_parser::{EntityId, EntityKind, FieldMap};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+mod degree;
 mod link;
 mod reach;
+pub use degree::Degree;
 pub use reach::Direction;
 
 #[derive(Debug, Clone)]

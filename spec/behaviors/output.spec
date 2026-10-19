@@ -1321,8 +1321,10 @@ behavior enforce_token_budget "Enforce Token Budget" {
     entities before serialization. The remaining subgraph MUST be a valid
     graph with no dangling edge references. The truncated_entities list in
     TokenBudgetResult records which entities were removed. Centrality is
-    degree centrality (count of incoming + outgoing edges); neither the
-    strategy nor the metric is configurable.
+    degree centrality: the number of edges to and from other entities, the
+    degree read_views_over_the_project_view counts (an edge from an entity
+    to itself counts in neither); neither the strategy nor the metric is
+    configurable.
 
     The graph, context and brief exports are budgeted alike: each lists the
     entities it dropped under `token_budget`, keeps no entity when only its

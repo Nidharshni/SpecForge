@@ -2,7 +2,7 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 
 use specforge_graph::{Graph, Node};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use crate::error::EmitterError;
 
@@ -45,27 +45,10 @@ pub fn estimate_tokens(s: &str) -> usize {
     words + structural.div_ceil(2)
 }
 
-fn degree_centrality(graph: &Graph) -> HashMap<String, usize> {
-    let mut degrees: HashMap<String, usize> = HashMap::new();
-    for node in graph.nodes() {
-        degrees.entry(node.id.raw.to_string()).or_insert(0);
-    }
-    for edge in graph.edges() {
-        *degrees.entry(edge.source.to_string()).or_insert(0) += 1;
-        *degrees.entry(edge.target.to_string()).or_insert(0) += 1;
-    }
-    degrees
-}
-
-/// The graph's nodes in truncation order: least connected first, ties by ID.
+/// The graph's nodes in truncation order: least connected first (`Graph::degree`), ties by ID.
 fn nodes_by_priority(graph: &Graph) -> Vec<&Node> {
-    let degrees = degree_centrality(graph);
-    let mut nodes: Vec<_> = graph.nodes().into_iter().collect();
-    nodes.sort_by(|a, b| {
-        let da = degrees.get(a.id.raw.as_str()).copied().unwrap_or(0);
-        let db = degrees.get(b.id.raw.as_str()).copied().unwrap_or(0);
-        da.cmp(&db).then(a.id.raw.cmp(&b.id.raw))
-    });
+    let mut nodes = graph.nodes();
+    nodes.sort_by_cached_key(|node| (graph.degree(node.id.raw.as_str()).total(), node.id.raw));
     nodes
 }
 

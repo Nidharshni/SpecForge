@@ -32,7 +32,7 @@ use specforge_project::coverage::{ProjectCoverage, Recorded, ReportError, TestRe
 use specforge_project::{CompiledProject, Environment, SharedRuntime};
 use specforge_registry::{Disk, EntitySnapshot, RegistryBuild};
 
-pub use connectivity::{Connectivity, Degree};
+pub use connectivity::Connectivity;
 pub use entity::{EntityField, not_found};
 pub use kinds::{KnownKinds, UNKNOWN_KIND};
 

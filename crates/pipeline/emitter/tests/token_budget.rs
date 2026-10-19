@@ -385,7 +385,6 @@ fn a_budget_counts_each_nodes_coverage_status() {
     behavior = "enforce_token_budget",
     verify = "an edge from an entity to itself adds nothing to its centrality"
 )]
-#[ignore = "flipped by the degree fix"]
 fn a_self_reference_adds_nothing_to_centrality() {
     use specforge_emitter::{EmitOptions, estimate_tokens};
 
