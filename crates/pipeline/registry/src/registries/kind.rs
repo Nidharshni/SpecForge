@@ -68,6 +68,12 @@ impl KindRegistry {
     pub fn keywords(&self) -> impl Iterator<Item = &String> {
         self.entries.keys()
     }
+
+    /// Whether `id` may not be an entity ID (E013): a structural keyword, or the keyword of a registered
+    /// kind. An ID equal to one makes `refs [behavior]`-style entries ambiguous with the block introducer.
+    pub fn reserves(&self, id: &str) -> bool {
+        specforge_common::structural::is_structural(id) || self.entries.contains_key(id)
+    }
 }
 
 #[cfg(test)]

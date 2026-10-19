@@ -16,13 +16,14 @@ behavior create_entity "Create an Entity" {
     A create edit names a kind, an id, a title and a file relative to the spec
     root. The block is written in the canonical form, after the last block of
     its kind in the file, or at the end of the file; a file that does not exist
-    is created. The id MUST be an identifier of 2 to 60 characters and MUST NOT
-    be taken, the kind MUST be declared, and the file MUST be a project source.
+    is created. The id MUST be an identifier of 2 to 60 characters that is not a
+    reserved word (E013), and MUST NOT be taken, the kind MUST be declared, and the file MUST be a project source.
   """
   verify unit "new writes the block in the canonical form after the last block of its kind"
   verify unit "new creates a missing source file"
   verify unit "new refuses a file that is not a project source"
   verify unit "new refuses an id that is taken"
+  verify unit "new refuses a reserved id before the edited project is compiled"
 }
 
 behavior edit_entity_field "Edit an Entity Field" {

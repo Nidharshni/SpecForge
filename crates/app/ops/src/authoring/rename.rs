@@ -32,24 +32,34 @@ pub const ID_LENGTH: std::ops::RangeInclusive<usize> = 2..=60;
 
 /// Whether `id` is a legal entity ID: what the grammar's identifier accepts
 /// (an ASCII letter or `_`, then letters, digits and `_`) within E014's
-/// 2-60 characters.
-pub fn validate_id(id: &str) -> Result<(), OpError> {
+/// 2-60 characters, and no word `kinds` reserves (E013).
+pub fn validate_id(id: &str, kinds: &specforge_registry::KindRegistry) -> Result<(), OpError> {
     let mut chars = id.chars();
     let starts = chars
         .next()
         .is_some_and(|c| c.is_ascii_alphabetic() || c == '_');
     let rest = chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
-    if starts && rest && ID_LENGTH.contains(&id.len()) {
-        return Ok(());
+    if !(starts && rest && ID_LENGTH.contains(&id.len())) {
+        return Err(OpError::new(
+            OpErrorKind::InvalidInput,
+            INVALID_ID,
+            format!(
+                "invalid entity ID '{id}': it must be 2-60 characters, letters, digits and \
+                 underscores, starting with a letter or underscore"
+            ),
+        ));
     }
-    Err(OpError::new(
-        OpErrorKind::InvalidInput,
-        INVALID_ID,
-        format!(
-            "invalid entity ID '{id}': it must be 2-60 characters, letters, digits and \
-             underscores, starting with a letter or underscore"
-        ),
-    ))
+    if kinds.reserves(id) {
+        return Err(OpError::new(
+            OpErrorKind::InvalidInput,
+            INVALID_ID,
+            format!(
+                "invalid entity ID '{id}': it is a reserved word (E013), a structural keyword or the keyword \
+                 of a declared kind"
+            ),
+        ));
+    }
+    Ok(())
 }
 
 /// A text edit for a rename operation: `start_col..end_col` (0-based
@@ -135,7 +145,8 @@ pub fn plan(
     {
         return Err(crate::config::refusal(problem).into());
     }
-    validate_id(new_id).map_err(|error| error.about(RenameField::NewId))?;
+    validate_id(new_id, nav.view().registries().kinds())
+        .map_err(|error| error.about(RenameField::NewId))?;
     let graph = nav.view().graph();
     if graph.node(old_id).is_none() {
         return Err(crate::view::not_found(graph, old_id).about(RenameField::OldId));
@@ -273,8 +284,9 @@ mod tests {
 
     #[test]
     fn an_entity_id_follows_the_grammar_and_e014() {
+        let none = specforge_registry::KindRegistry::new();
         for ok in ["ab", "_x", "auth_token", "A1", &"a".repeat(60)] {
-            assert!(validate_id(ok).is_ok(), "{ok}");
+            assert!(validate_id(ok, &none).is_ok(), "{ok}");
         }
         for bad in [
             "",
@@ -283,9 +295,15 @@ mod tests {
             "has-dash",
             "has space",
             "émile",
+            "defaults",
+            "spec",
             &"a".repeat(61),
         ] {
-            assert_eq!(validate_id(bad).unwrap_err().code, INVALID_ID, "{bad}");
+            assert_eq!(
+                validate_id(bad, &none).unwrap_err().code,
+                INVALID_ID,
+                "{bad}"
+            );
         }
     }
 
