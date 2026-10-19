@@ -74,6 +74,7 @@ behavior apply_file_defaults "Apply File Defaults" {
   verify unit "a default for a field its kind does not declare is E077 and is not applied"
   verify unit "a malformed defaults block is E078"
   verify unit "a default that changes nothing is W161"
+  verify unit "the defaults answer which entry applies and whether a field restates it"
   verify unit "changing a default changes every block that inherits it"
   verify unit "find-references lists an inherited reference once per block"
   verify unit "rename edits an inherited reference once"

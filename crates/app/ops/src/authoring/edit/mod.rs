@@ -156,7 +156,6 @@ pub fn fields_of(view: &ProjectView<'_>, kind: &str) -> Vec<FieldInfo> {
         key: "",
         id: "",
         kind,
-        resolved: None,
     };
     site.order()
         .into_iter()
@@ -228,10 +227,9 @@ struct Planner<'v> {
 }
 
 /// Where an entity is.
-struct Located<'v> {
+struct Located {
     key: String,
     kind: String,
-    node: Option<&'v specforge_graph::Node>,
 }
 
 impl<'v> Planner<'v> {
@@ -242,12 +240,11 @@ impl<'v> Planner<'v> {
         }
     }
 
-    fn locate(&self, id: &str) -> Result<Located<'v>, Refusal<EditField>> {
+    fn locate(&self, id: &str) -> Result<Located, Refusal<EditField>> {
         if let Some((kind, key)) = self.created.get(id) {
             return Ok(Located {
                 key: key.clone(),
                 kind: kind.clone(),
-                node: None,
             });
         }
         let graph = self.view.graph();
@@ -255,7 +252,6 @@ impl<'v> Planner<'v> {
             Some(node) => Ok(Located {
                 key: node.source_span.file.to_string(),
                 kind: node.kind.raw.to_string(),
-                node: Some(node),
             }),
             None => Err(crate::view::not_found(graph, id).about(EditField::Entity)),
         }
@@ -280,7 +276,6 @@ impl<'v> Planner<'v> {
             key: &located.key,
             id,
             kind: &located.kind,
-            resolved: located.node.map(|n| &n.fields),
         };
         let new = change(&site, &text)?;
         if new != text {

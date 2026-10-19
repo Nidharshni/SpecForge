@@ -18,12 +18,16 @@ behavior create_entity "Create an Entity" {
     its kind in the file, or at the end of the file; a file that does not exist
     is created. The id MUST be an identifier of 2 to 60 characters that is not a
     reserved word (E013), and MUST NOT be taken, the kind MUST be declared, and the file MUST be a project source.
+    A field whose written value restates its file's default for the kind (W161)
+    is not written: the block inherits it.
   """
   verify unit "new writes the block in the canonical form after the last block of its kind"
   verify unit "new creates a missing source file"
   verify unit "new refuses a file that is not a project source"
   verify unit "new refuses an id that is taken"
   verify unit "new refuses a reserved id before the edited project is compiled"
+  verify unit "new compares what it writes with the default, not what it was given"
+  verify unit "new never writes a field that restates its default"
 }
 
 behavior edit_entity_field "Edit an Entity Field" {
@@ -56,14 +60,16 @@ behavior edit_entity_link "Edit an Entity Reference List" {
     A link edit adds a target to a list field and keeps the items as written;
     an unlink edit removes it, and removes the field when the last item goes.
     A link to a target already there changes nothing. A field a block inherits
-    from its file's defaults is copied into an own field before it changes, and
-    an own field equal to the default is removed.
+    from its file's defaults is copied into an own field before it changes, as
+    the earlier edits of the list left the file, and an own field equal to the default is removed.
   """
   verify unit "link appends the target and keeps the items as written"
   verify unit "unlink of the last item removes the field"
   verify unit "link of an inherited field copies the default"
   verify unit "an own field equal to the default is removed"
   verify unit "link of a target already there writes nothing"
+  verify unit "a link after new starts from the file's default"
+  verify unit "a link after unset starts from the file's default"
 }
 
 behavior edit_entity_obligation "Edit an Entity Obligation" {

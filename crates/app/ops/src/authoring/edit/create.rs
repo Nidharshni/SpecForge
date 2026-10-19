@@ -15,25 +15,6 @@ use std::collections::BTreeSet;
 /// `Create`'s file is not a project source.
 pub const NOT_A_SOURCE: &str = "not_a_source";
 
-/// Whether `input` is the value `default` holds, so a block need not write it.
-fn is_default(default: &FieldValue, input: &Input) -> bool {
-    match (default, input) {
-        (FieldValue::List(items), Input::Many(given)) => {
-            items.len() == given.len() && items.iter().zip(given).all(|(i, g)| &i.text == g)
-        }
-        (FieldValue::List(items), Input::One(given)) => {
-            let given: Vec<&str> = given
-                .split(',')
-                .map(str::trim)
-                .filter(|g| !g.is_empty())
-                .collect();
-            items.len() == given.len() && items.iter().zip(given).all(|(i, g)| i.text == g)
-        }
-        (FieldValue::String(s) | FieldValue::Identifier(s), Input::One(given)) => s == given,
-        _ => false,
-    }
-}
-
 impl Planner<'_> {
     pub(super) fn create(
         &mut self,
@@ -83,19 +64,12 @@ impl Planner<'_> {
             key: file,
             id,
             kind,
-            resolved: None,
         };
         let order = site.order();
         let config = block::layout(&site);
         let mut members: Vec<((u8, usize), String, String)> = Vec::new();
         for (name, input) in fields {
             let reading = site.reading(name)?;
-            if let Reading::Declared(_) = reading
-                && super::defaults::default_entry(&parsed, kind, name)
-                    .is_some_and(|d| is_default(&d.value, input))
-            {
-                continue;
-            }
             let value = written(reading, name, input, &config.indent_str(), &config)?;
             members.push((
                 rank(&order, name, group_of_text(&value)),
@@ -120,7 +94,11 @@ impl Planner<'_> {
         }));
         lines.push("}".to_string());
         let text = place(&existing, &parsed, kind, &lines.join("\n"));
-        let text = block::canonical(&site, &text)?;
+        let mut text = block::canonical(&site, &text)?;
+        // A field that restates its file's default is not written (W161), judged on what was written (ADR 0154).
+        for name in fields.keys() {
+            text = super::defaults::without_repeat(&site, &text, name)?;
+        }
         self.texts.insert(file.to_string(), text);
         self.created
             .insert(id.to_string(), (kind.to_string(), file.to_string()));

@@ -1,7 +1,7 @@
 # A `.spec` file is changed by a typed edit that writes the canonical form
 
 **Status:** accepted (2026-10-18, syntax round, plan 05). Extends [ADR 0128](0128-one-project-change-over-held-files.md)
-(a project change) and [ADR 0021](0021-formatting-is-one-operation.md) (format) to a new writer. Amended by [ADR 0153](0153-a-value-is-spelled-by-one-module.md) (D2: a multi-line value is laid out with the file's format configuration). Amended by round 15 plan 06 (2026-10-19): rename stays its own operation.
+(a project change) and [ADR 0021](0021-formatting-is-one-operation.md) (format) to a new writer. Amended by [ADR 0153](0153-a-value-is-spelled-by-one-module.md) (D2: a multi-line value is laid out with the file's format configuration), by [ADR 0154](0154-a-typed-edit-asks-its-files-defaults-over-the-text-it-plans.md) (D5: an edit reads the defaults from the text it plans, and removes a field that restates its default by W161's comparison of what it wrote) and by round 15 plan 06 (2026-10-19): rename stays its own operation.
 
 ## Context
 
