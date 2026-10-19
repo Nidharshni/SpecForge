@@ -2,6 +2,7 @@
 //! out canonically; a deleted block takes the comment lines above it and one blank line with it.
 
 use super::block::{self, Block, Site, group_of_text, rank};
+use super::path::{self, FieldPath};
 use super::write::{not_editable, written};
 use super::{EditField, Input, Obligation, Planner};
 use crate::authoring::rename::{self, validate_id};
@@ -69,7 +70,12 @@ impl Planner<'_> {
         let config = block::layout(&site);
         let mut members: Vec<((u8, usize), String, String)> = Vec::new();
         for (name, input) in fields {
-            let reading = site.reading(name)?;
+            let reading = match path::resolve(&site, name, None)? {
+                FieldPath::Entry { field, entry, .. } => {
+                    return Err(path::whole_field("create", field, entry));
+                }
+                FieldPath::Field { reading, .. } => reading,
+            };
             let value = written(reading, name, input, &config.indent_str(), &config)?;
             members.push((
                 rank(&order, name, group_of_text(&value)),

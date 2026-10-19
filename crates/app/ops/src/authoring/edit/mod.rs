@@ -7,6 +7,7 @@ mod block;
 mod create;
 mod defaults;
 mod outcome;
+mod path;
 mod validate;
 pub mod write;
 
