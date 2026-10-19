@@ -162,8 +162,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the session's own root; the LSP's open and MCP serving a project are reopens (ADR 0109).
 - **Open document**: a `.spec` buffer the editor has open in the LSP (`specforge_lsp::Document`: its text, its
   version, its line index and its syntax). Its identity is its file's session key (`Environment::source_key` of the
-  path its URI names, percent-decoded): the document, the diagnostics published for its file and whether it is
-  stale are all found by that key, so two spellings of one URI (VS Code writes `@` as `%40`) are one document. The
+  path its URI names, percent-decoded): the document, the diagnostics published for its file and what its
+  text is to the compile (the compiled text, changed since, or a text the project does not build:
+  `navigation::EditorText`) are all found by that key, so two spellings of one URI (VS Code writes `@` as `%40`) are one document. The
   URI the client opened it with is kept only to name the file back to the client (`specforge_lsp::files::Files`,
   ADR 0056). It is given to the project session as a held buffer.
 - **Published diagnostics**: what the LSP last told the editor about one file, kept by session key in two parts,
@@ -1105,7 +1106,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   are checked against the catalog where they enter the host (`check_extension_code`, W150).
 - **Diagnostic origin**: the extension that reported a diagnostic (`Diagnostic::origin`, JSON `origin`;
   a rule's declaring extension, a pass's extension; absent for the host's own). The catalog describes
-  a diagnostic (title, explanation, docs link) only for the host's own or for the code's owner
+  a diagnostic (title, explanation, docs link: `CodeEntry::docs_href`) only for the host's own or for the code's owner
   (`specforge_diagnostics::describes`), so an extension's finding with a code it may not use (W150) is
   kept but never presented as that code's owner's.
 - **Diagnostic data**: a diagnostic's optional typed payload, the values its message names
