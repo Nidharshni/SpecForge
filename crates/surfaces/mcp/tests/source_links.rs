@@ -393,3 +393,61 @@ fn an_edit_validates_over_no_hard_linked_source() {
     assert_nothing_of(&reply.to_string(), &[SECRET]);
     assert_ne!(reply["result"]["isError"], json!(true), "{reply}");
 }
+
+const OLD_PROBE: &str =
+    "// specforge-format: 0.9\nuse \"SECRETWORD_IMPORT\"\nbehavior secretword_id {\n}\n";
+
+/// A scene whose `leak.spec` is a second name of an outside file that needs migrating.
+#[cfg(unix)]
+fn migrating_scene() -> (TempDir, std::path::PathBuf, std::path::PathBuf) {
+    let (scene, project, outside) = scene();
+    fs::write(outside.join("probe.spec"), OLD_PROBE).unwrap();
+    fs::hard_link(outside.join("probe.spec"), project.join("spec/leak.spec")).unwrap();
+    (scene, project, outside)
+}
+
+#[cfg(unix)]
+#[ignore = "flipped by T4"]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a source of the served project is read only from inside the project"
+)]
+fn a_migration_previews_no_hard_linked_source() {
+    let (_scene, project, _outside) = migrating_scene();
+    let before = files_under(&project);
+    let mut server = serve(&project);
+    let reply = call_tool(&mut server, "specforge.migrate", json!({"dry_run": true}));
+    let text = reply.to_string();
+    assert_nothing_of(&text, &[SECRET, "secretword"]);
+    assert!(
+        text.contains("spec/leak.spec") && text.contains("2 names"),
+        "{text}"
+    );
+    assert_eq!(files_under(&project), before);
+}
+
+#[cfg(unix)]
+#[ignore = "flipped by T4"]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a source of the served project is read only from inside the project"
+)]
+fn a_migration_copies_no_hard_linked_source_into_the_project() {
+    use std::os::unix::fs::MetadataExt;
+    let (_scene, project, outside) = migrating_scene();
+    let mut server = serve(&project);
+    let migrated = call_tool(&mut server, "specforge.migrate", json!({}));
+    let all = migrated.to_string() + &views(&mut server);
+    assert_nothing_of(&all, &[SECRET, "secretword"]);
+    assert_eq!(
+        fs::metadata(project.join("spec/leak.spec"))
+            .unwrap()
+            .nlink(),
+        2
+    );
+    assert!(!project.join("spec/leak.spec.bak").exists());
+    assert_eq!(
+        fs::read_to_string(outside.join("probe.spec")).unwrap(),
+        OLD_PROBE
+    );
+}
