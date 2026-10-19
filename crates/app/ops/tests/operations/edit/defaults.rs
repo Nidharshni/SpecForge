@@ -203,8 +203,10 @@ fn new_leaves_out_an_integer_equal_to_its_default() {
     assert!(!added(&c, &[edit]).contains(&"W161".to_string()));
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test_macros::test(
+    behavior = "edit_entity_link",
+    verify = "a link after new starts from the file's default"
+)]
 fn a_link_after_new_starts_from_the_default() {
     let c = defaulted();
     let text = after(
@@ -230,8 +232,10 @@ fn a_link_after_new_starts_from_the_default() {
     assert!(is_canonical(&c, &text));
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test_macros::test(
+    behavior = "edit_entity_link",
+    verify = "a link after unset starts from the file's default"
+)]
 fn a_link_after_unset_starts_from_the_default() {
     let c = defaulted();
     let text = after(
@@ -246,4 +250,14 @@ fn a_link_after_unset_starts_from_the_default() {
         text.contains("invariants [done_stamped, task_unique]"),
         "{text}"
     );
+}
+
+#[test]
+fn a_link_on_a_default_written_as_one_value_extends_it() {
+    let c = project(&[(
+        "d.spec",
+        "defaults behavior {\n  refs \"a\"\n}\n\nbehavior list_tasks \"List\" {\n  category query\n  contract \"The system MUST list\"\n}\n",
+    )]);
+    let text = after(&c, "d.spec", &[link("list_tasks", "refs", "b")]);
+    assert!(text.contains("[\"a\", \"b\"]"), "{text}");
 }

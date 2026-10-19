@@ -4,18 +4,32 @@
 //! never writes a `defaults` block.
 
 use super::EditField;
-use super::block::{Block, Items, Site, items_of, put_list};
+use super::block::{Block, Items, Site, put_list};
 use super::write::not_editable;
 use crate::Refusal;
 use specforge_graph::FileDefaults;
-use specforge_graph::field_form::Reading;
-use specforge_parser::SpecFile;
+use specforge_graph::field_form::{FieldForm, Reading};
+use specforge_parser::{FieldValue, SpecFile};
 use specforge_protocol_types::FieldType;
 
 /// The file's defaults as the graph build applies them (ADR 0149), read from `file`: the text being planned, as the
 /// earlier edits of the list left it (ADR 0154).
 pub fn of<'f>(site: &Site<'_>, file: &'f SpecFile) -> FileDefaults<'f> {
     FileDefaults::of(file, site.view.registries().field_forms()).0
+}
+
+/// What a block that does not write `field` inherits from its file's defaults, as the graph stores it.
+pub fn inherited(
+    site: &Site<'_>,
+    block: &Block,
+    form: &FieldForm,
+    field: &str,
+) -> Option<FieldValue> {
+    let entry = of(site, block.file()).entry(site.kind, field)?;
+    Some(
+        form.coerce(&entry.value, entry.value_span.as_ref())
+            .unwrap_or_else(|| entry.value.clone()),
+    )
 }
 
 /// `text` with the own `field` of the entity removed when it equals the file's default for it.
@@ -35,8 +49,8 @@ pub fn without_repeat(
     }
 }
 
-/// The list `items` is `field`'s new value: written as an own field, or removed from the block when the file's
-/// default says the same (or it is empty and nothing is inherited). A `[]` over a default stays: it says "none".
+/// The list `items` is `field`'s new value: written as an own field (or removed when it is empty and nothing is
+/// inherited), then removed again when it restates the default. A `[]` over a default stays: it says "none".
 pub fn write_list(
     site: &Site<'_>,
     text: &str,
@@ -45,13 +59,10 @@ pub fn write_list(
     items: &Items,
 ) -> Result<String, Refusal<EditField>> {
     let block = Block::open(site, text)?;
-    let default = of(site, block.file()).entry(site.kind, field);
-    let same_as_default = default
-        .and_then(|d| items_of(&d.value))
-        .is_some_and(|d| d.texts == items.texts);
-    let nothing = items.texts.is_empty() && default.is_none();
-    let value = (!same_as_default && !nothing).then_some(items);
-    put_list(site, text, before, field, value)
+    let nothing =
+        items.texts.is_empty() && of(site, block.file()).entry(site.kind, field).is_none();
+    let written = put_list(site, text, before, field, (!nothing).then_some(items))?;
+    without_repeat(site, &written, field)
 }
 
 /// `unset` of a field the block does not write: an inherited list becomes `field []`; anything else is already

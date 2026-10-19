@@ -64,7 +64,6 @@ impl Planner<'_> {
             key: file,
             id,
             kind,
-            resolved: None,
         };
         let order = site.order();
         let config = block::layout(&site);

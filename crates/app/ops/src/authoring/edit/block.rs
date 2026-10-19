@@ -9,7 +9,6 @@ use crate::view::ProjectView;
 use crate::{OpError, OpErrorKind, Refusal};
 use specforge_common::{SourceSpan, find_close_match};
 use specforge_formatter::FormatConfig;
-use specforge_graph::FieldMap;
 use specforge_graph::field_form::{FieldForm, Reading, spell};
 use specforge_parser::lex::{LexemeKind, lex};
 use specforge_parser::{Entity, FieldEntry, FieldValue, SpecFile, parse};
@@ -27,9 +26,6 @@ pub struct Site<'a> {
     pub key: &'a str,
     pub id: &'a str,
     pub kind: &'a str,
-    /// The entity's fields as the graph resolved them (the file defaults' included); `None` for one this plan
-    /// created.
-    pub resolved: Option<&'a FieldMap>,
 }
 
 impl Site<'_> {
@@ -621,7 +617,10 @@ pub fn link(
     let block = Block::open(site, text)?;
     let before = block.text();
     let own = block.entry(field);
-    let inherited = own.is_none().then(|| site.resolved?.get(field)).flatten();
+    let inherited = match own {
+        None => super::defaults::inherited(site, &block, form, field),
+        Some(_) => None,
+    };
     let current = match (own, inherited) {
         (Some(entry), _) => match &entry.value {
             FieldValue::List(_) => items_of(&entry.value),
@@ -633,7 +632,7 @@ pub fn link(
                 ));
             }
         },
-        (None, Some(value)) => items_of(value),
+        (None, Some(value)) => items_of(&value),
         (None, None) => Some(Items {
             written: Vec::new(),
             texts: Vec::new(),
