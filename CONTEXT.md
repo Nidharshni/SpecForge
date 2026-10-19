@@ -662,6 +662,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (E003 or I004 reports it), and an edge from an entity to itself links it to nothing else. Stats counts
   them, the exploration lists them and the review flags those that count toward coverage; the export's token
   budget ranks by the same degree. Not the same as unreferenced.
+- **Reach** (of an entity): the entities a breadth-first walk from it reaches, nearest first: over edges both ways in
+  (id, label) order (`Graph::reach`: the neighbourhood the exploration and the review read, the export's `--scope`), or
+  one way in written order (`Graph::reach_directed`: a trace's upstream and downstream, [ADR 0174](docs/adr/0174-the-graph-owns-directed-reach-and-degree.md)).
+  Each reads only the edges of the entities it reaches. Not the entities a trace's chains reach (`trace::affected`).
 - **Unreferenced entity**: an entity no edge points at: W012 for a `ref`, an extension's
   `no_incoming_edges` rule for its kinds, the coverage summary's `invariant_unreferenced`. No output calls one
   an orphan: the catalog titles, product `health`'s `unreferenced_counts` and the coverage summary's
