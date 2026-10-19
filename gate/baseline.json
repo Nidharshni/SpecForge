@@ -1,7 +1,7 @@
 {
   "file-size": {
     "crates/adapters/ops-registry/tests/fetch.rs": 845,
-    "crates/app/ops/tests/operations/migrate.rs": 1154,
+    "crates/app/ops/tests/operations/migrate.rs": 1151,
     "crates/app/ops/tests/operations/navigate.rs": 995,
     "crates/app/ops/tests/operations/query.rs": 896,
     "crates/app/ops/tests/operations/schema.rs": 1149,

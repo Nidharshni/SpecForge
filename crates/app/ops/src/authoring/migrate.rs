@@ -27,7 +27,7 @@ use specforge_registry::{Disk as _, RegistryBuild};
 use specforge_wasm::WasmRuntime;
 use std::path::{Path, PathBuf};
 
-use crate::{Caller, OpError, OpErrorKind, Refusal, Writes, Wrote};
+use crate::{Caller, OpError, OpErrorKind, ReadFailure, Refusal, Writes, Wrote};
 
 /// The field of a migration request a refusal can be about (ADR 0072).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -553,15 +553,69 @@ impl RollbackOutcome {
     }
 }
 
-/// Restore every migrated file of the project `root` is in from its `.bak`
-/// backup.
-pub fn rollback(root: &specforge_common::ProjectRoot) -> RollbackOutcome {
-    let summary = run_rollback(root);
+/// Restore every migrated file of the project `root` is in from its `.bak` backup, each by replacing its name
+/// through `caller`'s containment: a file keeps its permissions and one the process may not write fails its own
+/// restore (ADR 0171). The record is read, and rewritten or removed, through the same containment; a record that
+/// lands outside it refuses the call (`outside_root`, nothing read or written).
+pub fn rollback(
+    root: &specforge_common::ProjectRoot,
+    caller: Caller<'_>,
+) -> Result<RollbackOutcome, OpError> {
+    let containment = caller.containment();
+    let bound = containment.disk();
+    let record_name = root.dir().join(MigrationRecord::PATH);
+    let (held, record) = match containment.read(&record_name) {
+        Ok((held, bytes)) => {
+            let record = String::from_utf8(bytes)
+                .map_err(|e| e.to_string())
+                .and_then(|text| MigrationRecord::parse(&text))
+                .map(Some);
+            (held, record)
+        }
+        Err(ReadFailure::Outside(outside)) => return Err(outside.into()),
+        Err(ReadFailure::Io { held, error }) if error.kind() == std::io::ErrorKind::NotFound => {
+            (held, Ok(None))
+        }
+        Err(ReadFailure::Io { held, error }) => (
+            held,
+            Err(format!("can't read {}: {error}", MigrationRecord::PATH)),
+        ),
+    };
+    let read = |path: &Path| -> std::io::Result<String> {
+        String::from_utf8(bound.read(path)?).map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "stream did not contain valid UTF-8",
+            )
+        })
+    };
+    let write = |target: &Path, text: &str| -> Result<(), String> {
+        containment
+            .resolve(target)
+            .map_err(|outside| OpError::from(outside).message)
+            .and_then(|held| held.replace(text).map_err(|e| e.to_string()))
+            .map_err(|e| format!("failed to restore: {e}"))
+    };
+    let mut summary = run_rollback(root, record, &read, &write);
+    let applied = match &summary.record {
+        RecordChange::Unchanged => Ok(()),
+        RecordChange::Removed => held.remove().or_else(|e| match e.kind() {
+            std::io::ErrorKind::NotFound => Ok(()),
+            _ => Err(e),
+        }),
+        RecordChange::Rewritten(kept) => held.replace(kept.render()),
+    };
+    if let Err(e) = applied {
+        summary.record = RecordChange::Unchanged;
+        summary
+            .warnings
+            .push(format!("could not update {}: {e}", MigrationRecord::PATH));
+    }
     let mut writes = restored_writes(root.dir(), &summary);
     if summary.record != RecordChange::Unchanged {
-        writes.record(root.dir().join(MigrationRecord::PATH));
+        writes.record(&record_name);
     }
-    RollbackOutcome { summary, writes }
+    Ok(RollbackOutcome { summary, writes })
 }
 
 /// Run each extension's declared migration hook, in the registry build's load order (ADR 0041).

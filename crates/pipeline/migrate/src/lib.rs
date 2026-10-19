@@ -100,13 +100,13 @@ pub struct RollbackSummary {
     pub record: RecordChange,
 }
 
-/// What a rollback did to `.specforge/migration.json`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// What a rollback decided `.specforge/migration.json` must become; the caller applies it.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum RecordChange {
     #[default]
     Unchanged,
-    /// It keeps only the files not restored.
-    Rewritten,
+    /// It becomes this one: only the files not restored.
+    Rewritten(MigrationRecord),
     /// Every recorded file was restored.
     Removed,
 }
@@ -157,17 +157,17 @@ impl MigrationRecord {
         })
     }
 
-    /// The project's record; `None` when there is none. `Err` names a file that can't be read as one.
-    pub fn read(root: &Path) -> Result<Option<Self>, String> {
-        let path = root.join(Self::PATH);
-        let text = match std::fs::read_to_string(&path) {
-            Ok(text) => text,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(format!("can't read {}: {e}", Self::PATH)),
-        };
-        serde_json::from_str(&text)
-            .map(Some)
+    /// The record `text` holds. `Err` says it is not one.
+    pub fn parse(text: &str) -> Result<Self, String> {
+        serde_json::from_str(text)
             .map_err(|e| format!("{} is not a migration record: {e}", Self::PATH))
+    }
+
+    /// The record as its file holds it: pretty JSON and a newline.
+    pub fn render(&self) -> String {
+        let mut text = serde_json::to_string_pretty(self).expect("a migration record serializes");
+        text.push('\n');
+        text
     }
 
     pub fn write(&self, root: &Path) -> std::io::Result<()> {
@@ -175,9 +175,7 @@ impl MigrationRecord {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let mut text = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
-        text.push('\n');
-        specforge_common::fresh::replace_file(&path, text.as_bytes())
+        specforge_common::fresh::replace_file(&path, self.render().as_bytes())
     }
 
     /// Remove the record; `true` when there was one.
@@ -592,12 +590,19 @@ pub fn restore(originals: &[Original]) -> RollbackSummary {
     }
 }
 
-/// Undo the recorded migration of the project at `root`. Each recorded file that still hashes as
-/// the migration left it is restored from its backup, atomically. One whose backup is missing is
-/// skipped with a warning naming the backup. One that changed since is skipped with a warning and
-/// left as it is. Backups are never removed. The record then keeps only the files not restored, and
-/// goes when none is left. With no record, nothing is restored and the one warning says so.
-pub fn run_rollback(root: &ProjectRoot) -> RollbackSummary {
+/// Undo the recorded migration of the project at `root` (`record`: the project's record, `None` when there is none,
+/// `Err` the reason it can't be read). Each recorded file that still hashes as the migration left it is restored
+/// from its backup. One whose backup is missing is skipped with a warning naming the backup. One that changed
+/// since is skipped with a warning and left as it is. Backups are never removed. `summary.record` says what the
+/// record must become: it keeps only the files not restored, and goes when none is left. With no record, nothing
+/// is restored and the one warning says so. Every file is read through `read` and written through `write`; this
+/// function opens none (ops hands it the caller's containment, ADR 0158).
+pub fn run_rollback(
+    root: &ProjectRoot,
+    record: Result<Option<MigrationRecord>, String>,
+    read: &dyn Fn(&Path) -> std::io::Result<String>,
+    write: &dyn Fn(&Path, &str) -> Result<(), String>,
+) -> RollbackSummary {
     let root = root.dir();
     let mut summary = RollbackSummary {
         restored_count: 0,
@@ -607,7 +612,7 @@ pub fn run_rollback(root: &ProjectRoot) -> RollbackSummary {
         warnings: Vec::new(),
         record: RecordChange::Unchanged,
     };
-    let record = match MigrationRecord::read(root) {
+    let record = match record {
         Ok(Some(record)) => record,
         Ok(None) => {
             summary.warnings.push(format!(
@@ -629,19 +634,32 @@ pub fn run_rollback(root: &ProjectRoot) -> RollbackSummary {
         let backup = root.join(&recorded.backup);
         let shown = ProjectPath::of(root, &target);
 
-        if !backup.exists() {
-            summary.skipped_count += 1;
-            summary.warnings.push(format!(
-                "no backup {} for {}; skipped",
-                recorded.backup, recorded.path
-            ));
-            summary
-                .results
-                .push(rollback_result(shown, MigrationStatus::Skipped, None));
-            remaining.push(recorded.clone());
-            continue;
-        }
-        let current = std::fs::read_to_string(&target).map(|text| sha256_hash(&text));
+        let text = match read(&backup) {
+            Ok(text) => text,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                summary.skipped_count += 1;
+                summary.warnings.push(format!(
+                    "no backup {} for {}; skipped",
+                    recorded.backup, recorded.path
+                ));
+                summary
+                    .results
+                    .push(rollback_result(shown, MigrationStatus::Skipped, None));
+                remaining.push(recorded.clone());
+                continue;
+            }
+            Err(e) => {
+                summary.failed_count += 1;
+                summary.results.push(rollback_result(
+                    shown,
+                    MigrationStatus::Failed,
+                    Some(format!("failed to read backup: {e}")),
+                ));
+                remaining.push(recorded.clone());
+                continue;
+            }
+        };
+        let current = read(&target).map(|text| sha256_hash(&text));
         if current.as_deref().ok() != Some(recorded.sha256.as_str()) {
             summary.skipped_count += 1;
             summary.warnings.push(format!(
@@ -654,10 +672,7 @@ pub fn run_rollback(root: &ProjectRoot) -> RollbackSummary {
             remaining.push(recorded.clone());
             continue;
         }
-        let outcome = std::fs::read_to_string(&backup)
-            .map_err(|e| format!("failed to read backup: {e}"))
-            .and_then(|text| write_atomically(&target, &text));
-        match outcome {
+        match write(&target, &text) {
             Ok(()) => {
                 summary.restored_count += 1;
                 summary
@@ -675,17 +690,12 @@ pub fn run_rollback(root: &ProjectRoot) -> RollbackSummary {
     }
 
     if remaining.is_empty() {
-        if MigrationRecord::remove(root).is_ok() {
-            summary.record = RecordChange::Removed;
-        }
+        summary.record = RecordChange::Removed;
     } else if summary.restored_count > 0 {
-        let kept = MigrationRecord {
+        summary.record = RecordChange::Rewritten(MigrationRecord {
             target: record.target,
             files: remaining,
-        };
-        if kept.write(root).is_ok() {
-            summary.record = RecordChange::Rewritten;
-        }
+        });
     }
     summary
 }

@@ -42,6 +42,24 @@ fn migrated(dir: &TempDir) {
         .unwrap();
 }
 
+/// The project's record, as ops reads it.
+fn record(dir: &TempDir) -> Result<Option<MigrationRecord>, String> {
+    match std::fs::read_to_string(dir.path().join(MigrationRecord::PATH)) {
+        Ok(text) => MigrationRecord::parse(&text).map(Some),
+        Err(_) => Ok(None),
+    }
+}
+
+/// `run_rollback` over the plain disk.
+fn rolled_back(dir: &TempDir) -> specforge_migrate::RollbackSummary {
+    run_rollback(
+        &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        record(dir),
+        &|path: &Path| std::fs::read_to_string(path),
+        &|path: &Path, text: &str| std::fs::write(path, text).map_err(|e| e.to_string()),
+    )
+}
+
 #[specforge_test(
     behavior = "rollback_failed_migration",
     verify = "a file edited since the migration is left as it is, its backup kept"
@@ -53,7 +71,7 @@ fn a_file_edited_since_the_migration_is_left_as_it_is() {
     let edited = format!("{}// edited\n", std::fs::read_to_string(&a).unwrap());
     std::fs::write(&a, &edited).unwrap();
 
-    let rolled = run_rollback(&specforge_common::ProjectRoot::of(dir.path()).unwrap());
+    let rolled = rolled_back(&dir);
 
     assert_eq!(rolled.restored_count, 0, "{rolled:?}");
     assert_eq!(rolled.skipped_count, 1, "{rolled:?}");
@@ -61,7 +79,7 @@ fn a_file_edited_since_the_migration_is_left_as_it_is() {
     assert!(rolled.warnings[0].contains("spec/a.spec"), "{rolled:?}");
     assert!(rolled.warnings[0].contains("spec/a.spec.bak"), "{rolled:?}");
     assert!(dir.path().join("spec/a.spec.bak").exists());
-    let record = MigrationRecord::read(dir.path()).unwrap().unwrap();
+    let record = record(&dir).unwrap().unwrap();
     assert_eq!(record.files[0].path, "spec/a.spec");
     assert_eq!(rolled.record, RecordChange::Unchanged);
 }
@@ -75,7 +93,7 @@ fn a_rollback_with_no_recorded_migration_restores_nothing() {
     let a = dir.path().join("spec/a.spec");
     std::fs::write(dir.path().join("spec/a.spec.bak"), "stale").unwrap();
 
-    let rolled = run_rollback(&specforge_common::ProjectRoot::of(dir.path()).unwrap());
+    let rolled = rolled_back(&dir);
 
     assert_eq!(rolled.restored_count, 0, "{rolled:?}");
     assert_eq!(
@@ -90,7 +108,7 @@ fn a_full_rollback_removes_the_record() {
     let dir = project();
     migrated(&dir);
 
-    let rolled = run_rollback(&specforge_common::ProjectRoot::of(dir.path()).unwrap());
+    let rolled = rolled_back(&dir);
 
     assert_eq!(rolled.restored_count, 1, "{rolled:?}");
     assert_eq!(rolled.record, RecordChange::Removed);
@@ -99,7 +117,6 @@ fn a_full_rollback_removes_the_record() {
         OLD
     );
     assert!(dir.path().join("spec/a.spec.bak").exists());
-    assert!(MigrationRecord::read(dir.path()).unwrap().is_none());
 }
 
 #[test]

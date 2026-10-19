@@ -374,7 +374,8 @@ behavior rollback_failed_migration "Rollback Failed Migration" {
     MUST be skipped with a warning naming the backup. With no record,
     nothing is restored and one warning says so. The record then keeps
     only the files not restored, and is removed when none is left. Each
-    file MUST be restored atomically (write to temp, then rename). If a
+    file MUST be restored by replacing its name, keeping its permissions;
+    a file the process may not write fails its restore. If a
     restore fails for one file, the system MUST emit an E-level
     diagnostic and continue with the remaining files — a single restore
     failure MUST NOT block others. After rollback, .bak files MUST be
@@ -388,6 +389,7 @@ behavior rollback_failed_migration "Rollback Failed Migration" {
   verify unit "restores migrated files from .bak backups"
   verify unit "missing .bak file produces warning and skips"
   verify unit "restore is atomic per file"
+  verify unit "a rollback keeps a file's permissions and refuses a read-only one"
   verify unit "rollback failure for one file does not block others"
   verify unit "summary reports restored, skipped, and failed counts"
   verify unit "a migration whose graph changes structure is rolled back automatically"

@@ -53,7 +53,11 @@ impl Args {
         let notes = Notes::new(terminal, format);
         // Handle rollback mode
         if self.rollback {
-            let outcome = migrate::rollback(&root);
+            let outcome = match migrate::rollback(&root, crate::caller::of(false, format, terminal))
+            {
+                Ok(outcome) => outcome,
+                Err(error) => return Refusal::of(format).at(path).report(terminal, &error),
+            };
             print_rollback(
                 path,
                 &outcome.summary,

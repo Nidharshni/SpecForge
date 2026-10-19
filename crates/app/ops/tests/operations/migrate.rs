@@ -444,7 +444,11 @@ fn a_rollback_reports_the_files_it_restored_as_written() {
     assert!(migrated.ok(), "{migrated:?}");
     assert_ne!(std::fs::read_to_string(root.join("old.spec")).unwrap(), OLD);
 
-    let outcome = rollback(&specforge_common::ProjectRoot::of(root).unwrap());
+    let outcome = rollback(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        specforge_ops::testing::caller(),
+    )
+    .unwrap();
 
     assert!(outcome.ok(), "{outcome:?}");
     assert_eq!(std::fs::read_to_string(root.join("old.spec")).unwrap(), OLD);
@@ -1089,9 +1093,10 @@ fn a_kept_migration_records_what_a_rollback_undoes() {
     );
 
     assert!(outcome.ok(), "{outcome:?}");
-    let record = specforge_migrate::MigrationRecord::read(root)
-        .unwrap()
-        .expect("a record");
+    let record = specforge_migrate::MigrationRecord::parse(
+        &std::fs::read_to_string(root.join(".specforge/migration.json")).unwrap(),
+    )
+    .unwrap();
     assert_eq!(record.files.len(), 1, "{record:?}");
     assert_eq!(record.files[0].path, "old.spec");
     assert_eq!(record.files[0].backup, "old.spec.bak");
@@ -1118,11 +1123,7 @@ fn a_migration_without_backups_removes_the_record() {
         &request(&specforge_common::ProjectRoot::of(root).unwrap()),
         Some(Arc::new(unhooked())),
     );
-    assert!(
-        specforge_migrate::MigrationRecord::read(root)
-            .unwrap()
-            .is_some()
-    );
+    assert!(root.join(".specforge/migration.json").exists());
     std::fs::write(root.join("newer.spec"), OLD).unwrap();
     let project = specforge_common::ProjectRoot::of(root).unwrap();
     let mut req = request(&project);
@@ -1131,11 +1132,7 @@ fn a_migration_without_backups_removes_the_record() {
     let outcome = run(&req, Some(Arc::new(unhooked())));
 
     assert!(outcome.ok(), "{outcome:?}");
-    assert!(
-        specforge_migrate::MigrationRecord::read(root)
-            .unwrap()
-            .is_none()
-    );
+    assert!(!root.join(".specforge/migration.json").exists());
 }
 
 #[specforge_test(

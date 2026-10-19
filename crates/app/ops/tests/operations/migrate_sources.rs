@@ -88,7 +88,12 @@ fn migrate_reads_the_project_sources() {
     assert_eq!(visited.len(), 1, "{visited:?}");
     assert_eq!(visited[0], "specs/a.spec", "{visited:?}");
     // A dry run records nothing, so there is nothing to roll back.
-    let rollback = rollback(&specforge_common::ProjectRoot::of(root).unwrap()).summary;
+    let rollback = rollback(
+        &specforge_common::ProjectRoot::of(root).unwrap(),
+        specforge_ops::testing::caller(),
+    )
+    .unwrap()
+    .summary;
     assert!(rollback.results.is_empty(), "{rollback:?}");
     assert_eq!(rollback.warnings.len(), 1, "{rollback:?}");
     assert!(

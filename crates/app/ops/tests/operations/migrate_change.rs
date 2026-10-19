@@ -135,8 +135,10 @@ fn an_automatic_rollback_keeps_a_files_permissions() {
     assert_eq!(mode(&source), 0o600);
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "rollback_failed_migration",
+    verify = "a rollback keeps a file's permissions and refuses a read-only one"
+)]
 fn a_rollback_keeps_a_files_permissions_and_refuses_a_read_only_one() {
     let dir = project();
     if !binds(dir.path()) {
@@ -150,7 +152,7 @@ fn a_rollback_keeps_a_files_permissions_and_refuses_a_read_only_one() {
     chmod(&dir.path().join("old.spec"), 0o600);
     chmod(&other, 0o444);
 
-    let outcome = rollback(&root);
+    let outcome = rollback(&root, specforge_ops::testing::caller()).unwrap();
 
     assert_eq!(
         std::fs::read_to_string(dir.path().join("old.spec")).unwrap(),

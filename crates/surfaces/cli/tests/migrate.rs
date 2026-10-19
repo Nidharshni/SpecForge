@@ -1296,9 +1296,9 @@ fn rollback_restore_is_atomic() {
     let migrated = fs::read_to_string(root.join("spec/test.spec")).unwrap();
 
     // Block the temp-file step: a directory sits where the restore's temp
-    // file goes. An atomic restore (write temp, then rename) fails before
+    // file (`replace_file`'s `<name>.tmp`) goes. An atomic restore (write temp, then rename) fails before
     // touching the target; a direct write would overwrite it.
-    let blocker = root.join("spec/test.spec.restore.tmp");
+    let blocker = root.join("spec/test.spec.tmp");
     fs::create_dir(&blocker).unwrap();
     let output = Cli::on(&tmp)
         .command(&["migrate", "--rollback", "--format=json"])
@@ -1321,7 +1321,7 @@ fn rollback_restore_is_atomic() {
         .success();
     assert!(
         !blocker.exists(),
-        "no .restore.tmp should remain after atomic rollback"
+        "no .tmp should remain after atomic rollback"
     );
     let content = fs::read_to_string(root.join("spec/test.spec")).unwrap();
     assert_eq!(content, original, "file fully restored atomically");
