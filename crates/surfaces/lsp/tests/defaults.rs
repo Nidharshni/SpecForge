@@ -145,3 +145,17 @@ fn the_kind_a_defaults_block_names_is_no_reference() {
     // The name a defaults header gives is coloured as the kind keyword of a block, not as an entity name.
     assert_eq!(at(0), at(4));
 }
+
+/// A default no block takes: no behavior in the file (W161).
+const UNTAKEN: &str = "defaults behavior {\n  ports [Repo]\n}\n\nport Repo \"Repo\" {\n}\n";
+
+#[test]
+#[ignore = "flipped by T5"]
+fn references_show_a_default_no_block_takes() {
+    let served = served(UNTAKEN);
+    let (state, uri) = (served.state(), served.uri("main.spec"));
+    let at = Position::new(4, 6);
+    let found = answers::references(&state, &uri, at, true).unwrap();
+    assert_eq!(found.len(), 2, "{found:?}");
+    assert_eq!(edits(&state, &uri, at), ["1:9-13", "4:5-9"]);
+}

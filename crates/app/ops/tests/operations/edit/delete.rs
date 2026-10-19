@@ -134,3 +134,30 @@ fn delete_with_unlink_references_refuses_a_reference_written_in_a_default() {
     );
     assert_eq!(refused(&c, &[delete("inv_a", false)]).0, "E080");
 }
+
+const MEMBER: &str =
+    "type User \"A user\" {\n  name string\n}\n\ntype Order \"An order\" {\n  owner User\n}\n";
+const SIGNATURE: &str = "type User \"A user\" {\n  name string\n}\n\nport Users \"Users\" {\n  direction outbound\n  \
+                         category  \"db\"\n  method find(id: string) -> User\n}\n";
+
+#[test]
+#[ignore = "flipped by T6"]
+fn delete_with_unlink_references_refuses_a_type_named_in_a_member() {
+    let c = project(&[("a.spec", MEMBER)]);
+    let (code, message) = refused(&c, &[delete("User", true)]);
+    assert_eq!(code, "not_editable");
+    assert!(
+        message.contains("a.spec:6 (Order, composed_types)"),
+        "{message}"
+    );
+}
+
+#[test]
+#[ignore = "flipped by T6"]
+fn delete_with_unlink_references_refuses_a_type_named_in_a_signature() {
+    let c = project(&[("a.spec", SIGNATURE)]);
+    let (code, message) = refused(&c, &[delete("User", true)]);
+    assert_eq!(code, "not_editable");
+    assert!(message.contains("a.spec:8 (Users, types)"), "{message}");
+    assert_eq!(refused(&c, &[delete("User", false)]).0, "E080");
+}
