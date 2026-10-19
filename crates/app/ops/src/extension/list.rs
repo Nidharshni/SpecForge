@@ -64,12 +64,7 @@ pub fn list(view: &ProjectView) -> ExtensionsDocument {
                 .map(|(kind, _)| kind.clone())
                 .collect();
             entity_kinds.sort();
-            let entity_count = view
-                .graph()
-                .nodes()
-                .iter()
-                .filter(|n| entity_kinds.iter().any(|k| k == n.kind.raw.as_str()))
-                .count();
+            let entity_count = super::entities_of(view.graph(), kinds, extension.name).count();
             ExtensionInfo {
                 name: extension.name.to_string(),
                 version: extension.version().map(str::to_string),

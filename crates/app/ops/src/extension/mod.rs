@@ -46,7 +46,9 @@ pub(crate) use claims::{Claimed, Claims};
 pub(crate) use lock_plan::{Also, Install, LockPlan};
 pub(crate) use names::{Answer, Names, Place};
 
+use specforge_graph::{Graph, Node};
 use specforge_installed::LockSource;
+use specforge_registry::KindRegistry;
 
 /// The code an operation reports for an extension the project doesn't
 /// have.
@@ -122,6 +124,23 @@ pub fn builtin_name(specifier: &str) -> Option<&'static str> {
     specforge_project::builtins()
         .names()
         .find(|builtin| *builtin == name)
+}
+
+/// The graph's entities whose kind `extension` registered (the kind
+/// registry's `source_extension`: the first extension to declare a kind,
+/// E026), in id order. `specforge extensions` counts them as the
+/// extension's `entity_count`; removing the extension strands them (E024 on
+/// the next compile).
+pub(crate) fn entities_of<'a>(
+    graph: &'a Graph,
+    kinds: &'a KindRegistry,
+    extension: &'a str,
+) -> impl Iterator<Item = &'a Node> + 'a {
+    graph.nodes().into_iter().filter(move |node| {
+        kinds
+            .get(node.kind.raw.as_str())
+            .is_some_and(|kind| kind.source_extension == extension)
+    })
 }
 
 #[cfg(test)]

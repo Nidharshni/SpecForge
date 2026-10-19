@@ -476,7 +476,8 @@ fn stranded_lists_the_entities_by_id() {
     let root = dir.path();
     add(root, blobs.greet()).unwrap();
 
-    let outcome = remove(root, GREET, true);
+    let project = compiled(root);
+    let outcome = remove_over(&project, GREET, true);
 
     assert_eq!(
         outcome.stranded,
@@ -494,6 +495,13 @@ fn stranded_lists_the_entities_by_id() {
     assert_eq!(
         outcome.stranded[0].warning(GREET),
         format!("greeting 'hello' uses a kind only {GREET} defines")
+    );
+    let listed = extension::list(&ProjectView::of(&project));
+    let greet = listed.extensions.iter().find(|e| e.name == GREET).unwrap();
+    assert_eq!(
+        greet.entity_count,
+        outcome.stranded.len(),
+        "the listing counts what a removal strands"
     );
 }
 

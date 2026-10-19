@@ -312,17 +312,10 @@ fn remove_file(
     })
 }
 
-/// The entities whose kind only `extension` defines, in id order.
+/// The entities whose kind only `extension` defines, in id order
+/// ([`super::entities_of`]).
 fn stranded(graph: &Graph, kinds: &KindRegistry, extension: &str) -> Vec<StrandedEntity> {
-    // `Graph::nodes` is in id order.
-    graph
-        .nodes()
-        .into_iter()
-        .filter(|node| {
-            kinds
-                .get(node.kind.raw.as_str())
-                .is_some_and(|kind| kind.source_extension == extension)
-        })
+    super::entities_of(graph, kinds, extension)
         .map(|node| StrandedEntity {
             entity_id: node.id.raw.to_string(),
             kind: node.kind.raw.to_string(),
