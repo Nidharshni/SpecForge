@@ -2,12 +2,12 @@
 //! out canonically; a deleted block takes the comment lines above it and one blank line with it.
 
 use super::block::{self, Block, Site, group_of_text, items_of, rank};
-use super::write::{quoted, written};
+use super::write::written;
 use super::{EditField, Input, Obligation, Planner};
 use crate::authoring::rename::{self, validate_id};
 use crate::{OpError, OpErrorKind, Refusal};
 use specforge_graph::FieldValue;
-use specforge_graph::field_form::Reading;
+use specforge_graph::field_form::{Reading, spell};
 use specforge_parser::parse;
 use specforge_protocol_types::FieldType;
 use std::collections::BTreeSet;
@@ -86,6 +86,7 @@ impl Planner<'_> {
             resolved: None,
         };
         let order = site.order();
+        let config = block::layout(&site);
         let mut members: Vec<((u8, usize), String, String)> = Vec::new();
         for (name, input) in fields {
             let reading = site.reading(name)?;
@@ -95,7 +96,7 @@ impl Planner<'_> {
             {
                 continue;
             }
-            let value = written(reading, name, input, 2)?;
+            let value = written(reading, name, input, &config.indent_str(), &config)?;
             members.push((
                 rank(&order, name, group_of_text(&value)),
                 name.clone(),
@@ -103,7 +104,7 @@ impl Planner<'_> {
             ));
         }
         members.sort();
-        let mut lines = vec![format!("{kind} {id} {} {{", quoted(title))];
+        let mut lines = vec![format!("{kind} {id} {} {{", spell::quoted(title))];
         lines.extend(
             members
                 .iter()
@@ -115,7 +116,7 @@ impl Planner<'_> {
                 .as_deref()
                 .map(|k| format!("{k} "))
                 .unwrap_or_default();
-            format!("  verify {kind}{}", quoted(&o.text))
+            format!("  verify {kind}{}", spell::quoted(&o.text))
         }));
         lines.push("}".to_string());
         let text = place(&existing, &parsed, kind, &lines.join("\n"));

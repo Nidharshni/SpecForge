@@ -110,6 +110,23 @@ pub struct Obligation {
     pub text: String,
 }
 
+impl Obligation {
+    /// `kind:text` as an obligation: the kind is a word (the grammar's identifier) before the first colon, the
+    /// text what follows it with its leading spaces trimmed; with no such word, the whole text and no kind.
+    pub fn parse(text: &str) -> Obligation {
+        match text.split_once(':') {
+            Some((kind, rest)) if specforge_graph::field_form::is_word(kind) => Obligation {
+                kind: Some(kind.to_string()),
+                text: rest.trim_start().to_string(),
+            },
+            _ => Obligation {
+                kind: None,
+                text: text.to_string(),
+            },
+        }
+    }
+}
+
 /// The part of a request a refusal is about (ADR 0072). MCP names every one `edits`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EditField {

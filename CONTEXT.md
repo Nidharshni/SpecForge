@@ -445,7 +445,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (ADR 0064).
 - **Value form**: how a field's value is written: bare for an `enum`, `identifier`, `reference` and each
   `reference_list` item, quoted for a `string` and each `string_list` item (ADR 0147). `specforge format` writes it;
-  W159 reports a value written otherwise. Read through `FieldForms::rewrite`, never decided elsewhere.
+  W159 reports a value written otherwise. Spelled by one module, `specforge_graph::field_form::spell` (the escape
+  table, the bare rule and each declared type's one-line spelling); `FieldForms::rewrite` reads its bare rule, and
+  `format`, W159, migrate's `titles` step and the typed-edit writer spell through it (ADR 0153).
 - **Field vocabulary**: the closed set of values an enum field takes, in their order, and the value an absent one
   counts as (its declared `default_value`), declared once by the extension that declares the field, as a `const`
   (`specforge_extension_sdk::Vocabulary`, through `FieldBuilder::vocabulary`, the only way to declare an enum).
@@ -822,7 +824,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Format configuration**: how one `.spec` document is laid out: inside a project, the nearest
   `.specforgefmt.toml` from the document's directory up to its own project root, else the defaults;
   outside any project, the editor's tab settings. `specforge format`, MCP `specforge.format` and the
-  LSP all format through `specforge_ops::authoring::format::document` (ADR 0021).
+  LSP all format through `specforge_ops::authoring::format::document` (ADR 0021). A typed edit lays a multi-line
+  value out with it (`specforge_ops::authoring::format::config`, ADR 0153).
 - **Formatted document**: one `.spec` text formatted with its format configuration, whole or in the
   blocks a range touches (`specforge_ops::authoring::format::document` → `FormattedDocument`): the formatted text,
   the configuration and where it came from, what formatting reported (W141, W142), and the edits that
@@ -1076,7 +1079,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Typed edit**: one change to a project's entities, named by what it does rather than by text: create, set,
   unset, retitle, link, unlink, add or remove a verify obligation, delete (`specforge_ops::authoring::edit::Edit`).
   A list of them is planned over the texts the project was compiled from (each edit reading what the ones before
-  it left), each value written in its field's form and each touched block formatted; the plan is refused with E080
+  it left), each value written in its field's form (a multi-line one laid out with the file's format configuration)
+  and each touched block formatted; the plan is refused with E080
   when the edited project reports an error the project did not, and is written as one project change (ADR 0151).
 - **Lexeme**: one token of a `.spec` text as the language's one lexer reads it without a parse
   (`specforge_parser::lex`): an identifier, a scheme ref ID (one lexeme), a number, a string (read as

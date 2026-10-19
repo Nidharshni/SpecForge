@@ -13,6 +13,7 @@ mod graph;
 mod obligations;
 mod reading;
 mod resolution;
+mod spell;
 mod stress;
 mod titles;
 mod value_forms;

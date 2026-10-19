@@ -1,6 +1,7 @@
 use super::{as_written, comment_text, holds_comment, lines_keeping_strings, node_text, one_line};
 use crate::config::FormatConfig;
 use specforge_graph::FieldForms;
+use specforge_graph::field_form::spell;
 use specforge_parser::Written;
 use tree_sitter::Node;
 use tree_sitter_specforge::{field, kind};
@@ -370,10 +371,10 @@ fn in_form(node: Node, source: &str, key: &str, forms: Forms) -> Option<String> 
         kind::IDENTIFIER => (Written::Bare, text),
         _ => return None,
     };
-    Some(match forms.rewrite(kind, key, written, word)? {
-        Written::Bare => word.to_string(),
-        _ => format!("\"{word}\""),
-    })
+    Some(spell::spelled(
+        word,
+        forms.rewrite(kind, key, written, word)?,
+    ))
 }
 
 /// `verify [kind] "description"`, single-spaced.

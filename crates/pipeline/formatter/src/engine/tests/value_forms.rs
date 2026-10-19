@@ -62,6 +62,17 @@ fn what_cannot_be_written_in_the_form_is_left() {
 
 #[specforge_test(
     behavior = "apply_format_rules",
+    verify = "a value is written in its field's form, read from the project's declarations"
+)]
+fn a_quoted_scheme_ref_in_a_reference_list_loses_its_quotes() {
+    assert_eq!(
+        fmt_forms("behavior b \"B\" {\n  types [\"gh.issue:1\", b]\n}\n"),
+        "behavior b \"B\" {\n  types [gh.issue:1, b]\n}\n"
+    );
+}
+
+#[specforge_test(
+    behavior = "apply_format_rules",
     verify = "without the project's declarations no value is rewritten"
 )]
 fn with_no_forms_nothing_is_rewritten() {

@@ -1,11 +1,12 @@
 //! The `titles` migration step (ADR 0148): a title for every block that has none.
 
+use specforge_graph::field_form::spell;
 use specforge_graph::{Graph, ModifiedNodeChange, NodeAspect};
 use specforge_parser::{header_row, parse};
 
 /// `text` with a title written into every block header that has none, entity blocks and unions alike: the block's
 /// doc comment (the `//` lines directly above its header, no blank line between, the format header excluded), each
-/// line's text after `//` trimmed and the lines joined by one space, with `\` and `"` escaped; the comment lines
+/// line's text after `//` trimmed and the lines joined by one space, escaped as a `.spec` string (`field_form::spell::quoted`); the comment lines
 /// are removed. With no doc comment, its id in Title Case words (`CompleteTaskCommand` → "Complete Task Command",
 /// `complete_task` → "Complete Task"). `define`, `spec` and `ref` blocks, and text with a syntax error, are left as
 /// they are. Idempotent: a text whose blocks all have titles is returned unchanged.
@@ -32,7 +33,7 @@ pub(crate) fn add_titles(text: &str) -> String {
             Some((first, title)) => (first, title),
             None => (row, words(entity.id.raw.as_str())),
         };
-        lines[row].insert_str(at, &format!(" \"{}\"", escape(&title)));
+        lines[row].insert_str(at, &format!(" {}", spell::quoted(&title)));
         lines.drain(first..row);
     }
     lines.concat()
@@ -119,8 +120,4 @@ fn words(id: &str) -> String {
         previous = Some(c);
     }
     if out.is_empty() { id.to_string() } else { out }
-}
-
-fn escape(text: &str) -> String {
-    text.replace('\\', "\\\\").replace('"', "\\\"")
 }

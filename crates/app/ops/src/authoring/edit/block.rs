@@ -2,14 +2,15 @@
 //! member starts on its own line) and again after it is changed (so it is laid out canonically); no byte outside it
 //! changes.
 
-use super::write::{list_item, not_editable, quoted, written};
+use super::write::{not_editable, written};
 use super::{EditField, Input};
 use crate::authoring::format::{self, Lines, Place};
 use crate::view::ProjectView;
 use crate::{OpError, OpErrorKind, Refusal};
 use specforge_common::{SourceSpan, find_close_match};
+use specforge_formatter::FormatConfig;
 use specforge_graph::FieldMap;
-use specforge_graph::field_form::{FieldForm, Reading};
+use specforge_graph::field_form::{FieldForm, Reading, spell};
 use specforge_parser::lex::{LexemeKind, lex};
 use specforge_parser::{Entity, FieldEntry, FieldValue, SpecFile, parse};
 use specforge_protocol_types::FieldType;
@@ -107,6 +108,13 @@ pub struct Block {
     lines: Vec<String>,
     file: SpecFile,
     index: usize,
+    /// The file's format configuration: what a multi-line value is laid out with.
+    config: FormatConfig,
+}
+
+/// The format configuration of the file `site` is in.
+pub fn layout(site: &Site<'_>) -> FormatConfig {
+    format::config(Place::File(&site.path()))
 }
 
 /// `text` with the block of `site` laid out canonically.
@@ -132,7 +140,12 @@ impl Block {
         let file = parse(&text, site.key);
         let index = position(&file, site).ok_or_else(|| unreadable(site.id))?;
         let lines = text.split('\n').map(String::from).collect();
-        Ok(Block { lines, file, index })
+        Ok(Block {
+            lines,
+            file,
+            index,
+            config: layout(site),
+        })
     }
 
     pub fn text(&self) -> String {
@@ -169,19 +182,21 @@ impl Block {
             .find(|e| e.key.as_str() == name)
     }
 
-    fn indent_of(&self, line: usize) -> usize {
+    /// The leading whitespace of `line`.
+    fn lead(&self, line: usize) -> &str {
         let text = &self.lines[line];
-        text.len() - text.trim_start().len()
+        &text[..text.len() - text.trim_start().len()]
     }
 
-    /// The indent of the block's members.
-    fn member_indent(&self) -> usize {
+    /// The leading whitespace of the block's members.
+    fn member_lead(&self) -> String {
+        let one_in = self.config.indent_str();
         match self.entity().fields.entries().first() {
             Some(entry) => entry
                 .value_span
                 .as_ref()
-                .map_or(2, |s| self.indent_of(s.start_line - 1)),
-            None => self.indent_of(self.header()) + 2,
+                .map_or(one_in, |s| self.lead(s.start_line - 1).to_string()),
+            None => format!("{}{one_in}", self.lead(self.header())),
         }
     }
 
@@ -278,7 +293,7 @@ fn annotation_text(annotations: &[String]) -> String {
     annotations
         .iter()
         .map(|a| match a.split_once('=') {
-            Some((name, value)) => format!(" @{name} {}", quoted(value)),
+            Some((name, value)) => format!(" @{name} {}", spell::quoted(value)),
             None => format!(" @{a}"),
         })
         .collect()
@@ -316,10 +331,9 @@ impl Block {
     fn insert_member(&mut self, site: &Site<'_>, name: &str, value: &str, annotations: &[String]) {
         let order = site.order();
         let new_rank = rank(&order, name, group_of_text(value));
-        let indent = self.member_indent();
         let text = format!(
             "{}{name} {value}{}",
-            " ".repeat(indent),
+            self.member_lead(),
             annotation_text(annotations)
         );
         let entries = self.entity().fields.entries();
@@ -404,8 +418,14 @@ pub fn set(
                     .value_span
                     .clone()
                     .ok_or_else(|| unreadable(site.id))?;
-                let indent = block.indent_of(span.start_line - 1);
-                let new = written(Reading::Declared(&block_form()), inner, input, indent)?;
+                let lead = block.lead(span.start_line - 1).to_string();
+                let new = written(
+                    Reading::Declared(&block_form()),
+                    inner,
+                    input,
+                    &lead,
+                    &block.config,
+                )?;
                 block.replace_value(&span, &new, annotations);
             }
             Some((outer_entry, None)) => {
@@ -413,9 +433,19 @@ pub fn set(
                     .value_span
                     .clone()
                     .ok_or_else(|| unreadable(site.id))?;
-                let indent = block.indent_of(span.start_line - 1) + 2;
-                let new = written(Reading::Declared(&block_form()), inner, input, indent)?;
-                let line = format!("{}{inner} {new}", " ".repeat(indent));
+                let lead = format!(
+                    "{}{}",
+                    block.lead(span.start_line - 1),
+                    block.config.indent_str()
+                );
+                let new = written(
+                    Reading::Declared(&block_form()),
+                    inner,
+                    input,
+                    &lead,
+                    &block.config,
+                )?;
+                let line = format!("{lead}{inner} {new}");
                 block.insert(span.end_line - 1, &line);
             }
             None => {
@@ -423,7 +453,13 @@ pub fn set(
                     unreachable!("checked above")
                 };
                 let entries = Input::Entries([(inner.to_string(), text.clone())].into());
-                let value = written(site.reading(outer)?, outer, &entries, block.member_indent())?;
+                let value = written(
+                    site.reading(outer)?,
+                    outer,
+                    &entries,
+                    &block.member_lead(),
+                    &block.config,
+                )?;
                 block.insert_member(site, outer, &value, &[]);
             }
         }
@@ -432,12 +468,12 @@ pub fn set(
     let reading = site.reading(field)?;
     match block.entry(field).and_then(|e| e.value_span.clone()) {
         Some(span) => {
-            let indent = block.indent_of(span.start_line - 1);
-            let new = written(reading, field, input, indent)?;
+            let lead = block.lead(span.start_line - 1).to_string();
+            let new = written(reading, field, input, &lead, &block.config)?;
             block.replace_value(&span, &new, annotations);
         }
         None => {
-            let new = written(reading, field, input, block.member_indent())?;
+            let new = written(reading, field, input, &block.member_lead(), &block.config)?;
             block.insert_member(site, field, &new, annotations.unwrap_or_default());
         }
     }
@@ -479,7 +515,7 @@ pub fn retitle(site: &Site<'_>, text: &str, title: &str) -> Result<String, Refus
     let at = block.header();
     let line = block.lines[at].clone();
     let lexemes = lex(&line);
-    let quoted_title = quoted(title);
+    let quoted_title = spell::quoted(title);
     let new = match lexemes.iter().find(|l| l.kind.is_str()) {
         Some(old) => format!("{}{}{}", &line[..old.start], quoted_title, &line[old.end..]),
         None => {
@@ -515,7 +551,6 @@ pub fn verify(
         if found.is_some() {
             return Ok(text.to_string());
         }
-        let indent = block.member_indent();
         let kind_text = if kind.is_empty() {
             String::new()
         } else {
@@ -523,8 +558,8 @@ pub fn verify(
         };
         let line = format!(
             "{}verify {kind_text}{}",
-            " ".repeat(indent),
-            quoted(description)
+            block.member_lead(),
+            spell::quoted(description)
         );
         let at = lines.last().map_or(block.close(), |(_, last)| last + 1);
         block.insert(at, &line);
@@ -553,10 +588,7 @@ pub fn items_of(value: &FieldValue) -> Option<Items> {
     Some(Items {
         written: items
             .iter()
-            .map(|i| match i.written {
-                specforge_parser::Written::Quoted => quoted(&i.text),
-                _ => i.text.clone(),
-            })
+            .map(|i| spell::spelled(&i.text, i.written))
             .collect(),
         texts: items.iter().map(|i| i.text.clone()).collect(),
     })
@@ -577,7 +609,7 @@ pub fn link(
         ));
     };
     let item = match form.field_type() {
-        FieldType::ReferenceList | FieldType::StringList => list_item(form.field_type(), target),
+        FieldType::ReferenceList | FieldType::StringList => spell::value(form, target),
         FieldType::Reference if !add => String::new(),
         _ => {
             return Err(not_editable(
