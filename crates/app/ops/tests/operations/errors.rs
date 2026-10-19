@@ -138,6 +138,18 @@ fn a_missing_entity_is_one_refusal() {
             .unwrap_err()
             .error,
         ),
+        (
+            "coverage",
+            specforge_ops::read::coverage::coverage(
+                &view,
+                &specforge_ops::read::coverage::CoverageQuery {
+                    entity_id: Some("logn"),
+                    ..Default::default()
+                },
+            )
+            .unwrap_err()
+            .error,
+        ),
         ("navigator", navigator.definition("logn").unwrap_err().error),
         (
             "rename",

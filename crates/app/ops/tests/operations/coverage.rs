@@ -142,11 +142,6 @@ fn an_exempt_entity_is_reachable_by_id() {
     let signin = row(&project.view(), "signin").unwrap().unwrap();
     assert!(!signin.testable && !signin.exempt);
     // An entity the graph lacks has no row.
-    let ghost = CoverageQuery {
-        entity_id: Some("ghost"),
-        ..Default::default()
-    };
-    assert!(coverage(&project.view(), &ghost).unwrap().rows.is_empty());
     assert_eq!(row(&project.view(), "ghost").unwrap(), None);
 }
 

@@ -7,7 +7,7 @@ use specforge_graph::Graph;
 use crate::{OpError, OpErrorKind};
 
 /// The field of a read view's request a refusal can be about (ADR 0072): the one entity the
-/// view is asked about (inspect, definition, references, neighbourhood, explore, review, trace).
+/// view is asked about (inspect, definition, references, neighbourhood, explore, review, trace, coverage).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntityField {
     /// The entity the view is about.
@@ -18,7 +18,7 @@ pub enum EntityField {
 /// `EntityNotFound`, about `id`, worded `unresolved entity '<id>' - not
 /// found in graph`, with `did you mean '<closest>'?` when an id of `graph`
 /// is close. The one refusal for it: export's scope, inspect, the
-/// navigator, rename, trace, and every MCP tool and prompt.
+/// navigator, rename, trace, coverage, and every MCP tool and prompt.
 pub fn not_found(graph: &Graph, id: &str) -> OpError {
     let error = OpError::coded(
         OpErrorKind::EntityNotFound,

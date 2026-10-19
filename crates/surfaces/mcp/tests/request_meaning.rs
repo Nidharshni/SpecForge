@@ -122,7 +122,6 @@ fn add_extension_reads_a_comma_string_as_one_specifier() {
 }
 
 #[test]
-#[ignore = "flipped by T2"]
 fn coverage_refuses_an_entity_the_graph_lacks_on_entity_id() {
     let reply = call_tool(
         &mut served(),

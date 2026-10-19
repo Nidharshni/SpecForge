@@ -18,6 +18,7 @@ mod determinism;
 mod diagnostics_json;
 mod edit;
 mod enhancement_credit;
+mod entity_arguments;
 mod errors;
 mod explore;
 mod export_cache;

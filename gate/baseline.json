@@ -36,7 +36,7 @@
     "crates/surfaces/lsp/tests/reaction.rs": 1000,
     "crates/surfaces/lsp/tests/semantic_tokens.rs": 817,
     "crates/surfaces/mcp/tests/call_target.rs": 1314,
-    "crates/surfaces/mcp/tests/contracts.rs": 3283,
+    "crates/surfaces/mcp/tests/contracts.rs": 3275,
     "crates/surfaces/mcp/tests/lifecycle.rs": 859,
     "crates/surfaces/mcp/tests/mutation_outcome.rs": 1153,
     "crates/surfaces/mcp/tests/operations_mgmt.rs": 833,
