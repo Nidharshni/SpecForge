@@ -1,8 +1,10 @@
 //! The edits that fix a diagnostic, read from its data or the graph, never
 //! its message: what the LSP offers as code actions and MCP's
 //! `specforge.suggest_fixes` returns, the same fixes on both surfaces
-//! (ADR 0016). They live in `authoring`, beside rename, because a fix will
-//! plan a typed edit (ADR 0161) and `read` may not use `authoring` (ADR 0086).
+//! (ADR 0016). They live in `authoring`, beside rename, because a stub is a
+//! typed edit (ADR 0151) planned over the text the project was compiled
+//! from, offered as the position edits that apply it, and not offered when
+//! its plan is refused (ADR 0161); `read` may not use `authoring` (ADR 0086).
 
 use std::collections::BTreeSet;
 
@@ -11,6 +13,7 @@ use specforge_common::shape::Shape;
 use specforge_common::{Diagnostic, DiagnosticData, SourceSpan, Sym};
 use specforge_graph::Node;
 
+use crate::authoring::edit::{self, Edit};
 use crate::read::navigate::{Navigator, SourceText, is_about, overlaps};
 
 /// One edit: `span`'s text becomes `new_text` (an empty span inserts).
@@ -43,7 +46,7 @@ pub enum FixSource {
     /// An entity that declares no verify statements and wants some: it
     /// owes obligations (a `no_verify_statements` rule applies to its kind)
     /// or its kind is testable, and neither a union body nor an exempting
-    /// flag exempts it (ADR 0019). A verify stub in its block.
+    /// flag exempts it (ADR 0019). A verify stub in its block: the typed add_verify edit.
     AddVerifyStub,
 }
 
@@ -225,8 +228,8 @@ fn entity_stub(
 /// and nothing exempts it. A union body or an exempting flag is offered
 /// none: a stub there is no obligation it owes (a union has no block to
 /// hold one). The stub is of the kind's first allowed verify kind
-/// (`unit` when it names none), inserted before the block's closing
-/// brace; it fixes the rule that obliges the entity's kind, if any.
+/// (`unit` when it names none), placed by the typed add_verify edit;
+/// it fixes the rule that obliges the entity's kind, if any.
 fn verify_stub(navigator: &Navigator<'_>, node: &Node) -> Option<Fix> {
     let registries = navigator.view().registries();
     let kind = registries
@@ -241,43 +244,15 @@ fn verify_stub(navigator: &Navigator<'_>, node: &Node) -> Option<Fix> {
         .allowed_verify_kinds
         .first()
         .map_or("unit", String::as_str);
-    let stub = format!("  verify {verify_kind} \"{} — TODO\"\n", node.id.raw);
+    let edits = typed(
+        navigator,
+        Edit::AddVerify {
+            entity_id: node.id.raw.to_string(),
+            kind: Some(verify_kind.to_string()),
+            text: format!("{} — TODO", node.id.raw),
+        },
+    )?;
     let block = &node.source_span;
-    let edit = match navigator
-        .text(block.file)
-        .and_then(|text| closing_brace(&text, block))
-    {
-        // The brace opens its own line: the stub goes on the line
-        // before it.
-        Some((brace, true)) => TextEdit {
-            span: SourceSpan {
-                start_col: 1,
-                end_col: 1,
-                ..brace
-            },
-            new_text: stub,
-        },
-        // The brace follows code on its line (a one-line block): the
-        // stub goes on a line of its own before it.
-        Some((brace, false)) => TextEdit {
-            span: SourceSpan {
-                end_line: brace.start_line,
-                end_col: brace.start_col,
-                ..brace
-            },
-            new_text: format!("\n{stub}"),
-        },
-        None => TextEdit {
-            span: SourceSpan {
-                file: block.file,
-                start_line: block.end_line,
-                start_col: 1,
-                end_line: block.end_line,
-                end_col: 1,
-            },
-            new_text: stub,
-        },
-    };
     // The rule that reports it, if any.
     let code = standing.reported_by().map(str::to_string);
     Some(Fix {
@@ -286,7 +261,7 @@ fn verify_stub(navigator: &Navigator<'_>, node: &Node) -> Option<Fix> {
         source: FixSource::AddVerifyStub,
         diagnostic_code: code,
         subject: Some(node.id.raw),
-        edits: vec![edit],
+        edits,
         anchor: Some(block.clone()),
     })
 }
@@ -300,19 +275,20 @@ fn quoted(text: &SourceText, span: &SourceSpan, path: &str) -> Option<SourceSpan
     Some(text.span(span.file, at, at + path.len()))
 }
 
-/// The block's closing brace (its last `}` outside strings and comments)
-/// as a one-byte span, and whether it is the first thing on its line.
-fn closing_brace(text: &SourceText, block: &SourceSpan) -> Option<(SourceSpan, bool)> {
-    let brace = text
-        .tokens(block)
-        .into_iter()
-        .rev()
-        .find(|t| t.is_punct('}'))?;
-    let span = text.span(block.file, brace.start, brace.end);
-    let line_start = text.offset(span.start_line, 1)?;
-    let alone = text
-        .slice(line_start, brace.start)?
-        .chars()
-        .all(char::is_whitespace);
-    Some((span, alone))
+/// `edit` planned over the navigator's view (ADR 0151), as position edits in the text each file was compiled from;
+/// `None` when the plan is refused (an ID `validate_id` refuses, a taken ID, E080, no project root, a configuration
+/// that blocks rewrites) or changes nothing.
+fn typed(navigator: &Navigator<'_>, edit: Edit) -> Option<Vec<TextEdit>> {
+    let plan = edit::plan(navigator.view(), std::slice::from_ref(&edit)).ok()?;
+    let mut edits = Vec::new();
+    for (key, changes) in plan.edits() {
+        let file = Sym::new(key);
+        // The plan read each file's compiled text (`Planner::text`): the text navigation's spans are positions in.
+        let text = navigator.text(file)?;
+        edits.extend(changes.into_iter().map(|change| TextEdit {
+            span: text.span(file, change.range.start, change.range.end),
+            new_text: change.new_text,
+        }));
+    }
+    (!edits.is_empty()).then_some(edits)
 }

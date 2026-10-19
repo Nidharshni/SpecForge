@@ -567,7 +567,10 @@ behavior code_actions_for_missing_verify "Code Actions for Missing Verify" {
     CodeActionKind::QuickFix. The LSP MUST NOT generate test source files
     or application code — SpecForge provides context, agents produce
     output. The set of testable kinds comes from extension manifests, not
-    hardcoded logic.
+    hardcoded logic. The stub is the typed add_verify edit (ADR 0151, ADR
+    0161) planned over the text the project was compiled from: laid out
+    with the file's format configuration, and not offered when its plan is
+    refused.
   """
   verify unit "code action offered on untested testable entity"
   verify unit "generated verify stubs added to entity block in .spec file"
@@ -578,6 +581,7 @@ behavior code_actions_for_missing_verify "Code Actions for Missing Verify" {
   verify unit "code actions are those whose diagnostic or entity overlaps the requested range"
   verify unit "no verify stub is offered for an entity a union body or an exempting flag exempts"
   verify unit "a verify stub fixes the diagnostic that reports its entity, or none when nothing reports it"
+  verify unit "the verify stub is laid out with the file's format configuration"
   verify contract "Code Actions for Missing Verify: missing verify code actions holds — kind_registry_available, graph_available, quickfix_offered, verify_stubs_produced, no_code_generated"
 }
 

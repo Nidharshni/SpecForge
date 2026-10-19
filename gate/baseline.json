@@ -32,7 +32,7 @@
     "crates/surfaces/cli/tests/registry.rs": 1624,
     "crates/surfaces/cli/tests/surface_parity.rs": 821,
     "crates/surfaces/cli/tests/watch.rs": 957,
-    "crates/surfaces/lsp/tests/contracts.rs": 1004,
+    "crates/surfaces/lsp/tests/contracts.rs": 1001,
     "crates/surfaces/lsp/tests/reaction.rs": 1000,
     "crates/surfaces/lsp/tests/semantic_tokens.rs": 817,
     "crates/surfaces/mcp/tests/call_target.rs": 1314,

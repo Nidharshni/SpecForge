@@ -238,7 +238,7 @@ fn the_verify_stub_lands_inside_the_block() {
             "  contract \"c\"\n  verify unit \"first — TODO\"\n}\n\nbehavior second"
         )
     );
-    // A one-line block gets its stub on a line of its own, still inside.
+    // A one-line block becomes the canonical multi-line block, as `specforge link --verify` writes it.
     let one_line = "behavior solo \"S\" { contract \"c\" }\n";
     let p = compile(TESTING, &[("solo.spec", one_line)]);
     let stub = fixes_of(&p, &FixQuery::default())
@@ -248,7 +248,7 @@ fn the_verify_stub_lands_inside_the_block() {
     let edited = apply(one_line, &stub.edits);
     assert_eq!(
         edited,
-        "behavior solo \"S\" { contract \"c\" \n  verify unit \"solo — TODO\"\n}\n"
+        "behavior solo \"S\" {\n  contract \"c\"\n  verify unit \"solo — TODO\"\n}\n"
     );
     let parsed = specforge_parser::parse(&edited, "solo.spec");
     assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
@@ -260,38 +260,25 @@ fn with_texts_of(p: &Compiled, project: &CompiledProject) -> CompiledProject {
     project.with_source_texts(p.project.source_texts())
 }
 
-/// The registries of kinds that take verify statements of `verify_kinds`.
-fn verifiable(kinds: &[&str], verify_kinds: &[&str]) -> RegistryBuild {
-    let mut c = ContributionsBuilder::new(ExtensionMeta::new("@test/ext", "1.0.0"));
-    for kind in kinds {
-        c.kind(kind, |k| {
-            k.keyword(kind)
-                .testable(true)
-                .supports_verify(true)
-                .verify_kinds(verify_kinds);
-        });
-    }
-    let build = build_registries(vec![c.declaration()]);
-    assert!(build.diagnostics().next().is_none());
-    build
-}
-
 #[specforge_test(
     behavior = "code_actions_for_missing_verify",
     verify = "verify stub uses allowed_verify_kinds from KindRegistry"
 )]
 fn the_verify_stub_uses_the_kinds_first_allowed_verify_kind() {
-    let p = compile(
-        SOFTWARE,
-        &[(
-            "a.spec",
-            "invariant unique_ids \"U\" {\n  guarantee \"g\"\n}\nfeature untestable \"F\" {\n}\n",
-        )],
-    );
-    let project = Assembled::over(verifiable(&["invariant"], &["property", "unit"]))
-        .graph(p.project.graph().clone());
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("specforge.json"),
+        serde_json::json!({"name": "p", "extensions": ["@test/verifiable"]}).to_string(),
+    )
+    .unwrap();
+    let text =
+        "invariant unique_ids \"U\" {\n  guarantee \"g\"\n}\n\nfeature untestable \"F\" {\n}\n";
+    std::fs::write(dir.path().join("a.spec"), text).unwrap();
+    specforge_installed::testing::install(dir.path(), &["@test/verifiable"]);
+    let runtime = specforge_wasm::testing::InProcessRuntime::new().with(verifiable_kinds);
+    let project = compile_at(dir.path(), Some(Arc::new(runtime)));
     let fixes = fix::fixes(
-        &Navigator::new(ProjectView::of(&with_texts_of(&p, project.detached()))),
+        &Navigator::new(ProjectView::of(&project)),
         &[],
         &FixQuery::default(),
     );
@@ -300,10 +287,28 @@ fn the_verify_stub_uses_the_kinds_first_allowed_verify_kind() {
         ["Add verify stub for unique_ids"],
         "a feature takes none"
     );
-    assert_eq!(
-        fixes[0].edits[0].new_text,
-        "  verify property \"unique_ids — TODO\"\n"
+    assert!(
+        apply(text, &fixes[0].edits).contains("verify property \"unique_ids — TODO\""),
+        "{:?}",
+        fixes[0].edits
     );
+}
+
+/// `invariant` (testable, verify kinds `property` and `unit`) and `feature` (no verify).
+fn verifiable_kinds() -> specforge_extension_sdk::prelude::ContributionsBuilder {
+    let mut c = ContributionsBuilder::new(ExtensionMeta::new("@test/verifiable", "0.1.0"));
+    c.kind("invariant", |k| {
+        k.testable(true)
+            .supports_verify(true)
+            .verify_kinds(&["property", "unit"]);
+        k.field("guarantee", |f| {
+            f.field_type(FieldType::String);
+        });
+    });
+    c.kind("feature", |k| {
+        k.keyword("feature");
+    });
+    c
 }
 
 #[specforge_test(

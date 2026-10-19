@@ -1,7 +1,6 @@
 //! The code-action contracts: the entity stub and the verify stub (ADR 0161).
 
-use crate::contracts::verifiable;
-use crate::served::buffers;
+use crate::served::{Served, buffers};
 use specforge_test_macros::test as specforge_test;
 
 // B:code_action_create_entity_stub — verify contract "requires/ensures consistency for create entity stub"
@@ -84,14 +83,15 @@ fn code_actions_for_missing_verify_contract() {
     // Requires: testable entity without verify statements
     // Ensures: quickfix code action with verify stub targeting the .spec file
     let text = "\n\n\n\nbehavior my_behavior \"B\" {\n  contract \"c\"\n}\n";
-    let state = buffers(&[("/p/a.spec", text)]);
-    let project = specforge_project::testing::Assembled::over(verifiable(&["behavior"], &[]))
-        .graph(state.graph().clone());
-    let texts = project
-        .detached()
-        .with_source_texts(state.session().unwrap().project().source_texts());
-    let view = specforge_ops::view::ProjectView::of(&texts);
-    let nav = specforge_ops::read::navigate::Navigator::new(view);
+    let served = Served::new(&[("a.spec", text)])
+        .extension("@test/ext", |c| {
+            c.kind("behavior", |k| {
+                k.testable(true).supports_verify(true);
+            });
+        })
+        .open(&["a.spec"]);
+    let state = served.state();
+    let nav = specforge_ops::read::navigate::Navigator::new(state.view());
     let fixes = specforge_ops::authoring::fix::fixes(
         &nav,
         &[],

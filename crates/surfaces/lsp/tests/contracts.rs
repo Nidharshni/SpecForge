@@ -838,10 +838,7 @@ fn provide_semantic_tokens_contract() {
 
 // B:code_actions_for_missing_verify — verify contract "requires/ensures consistency for missing verify code actions"
 /// A registry where `kinds` accept verify statements of `verify_kinds`.
-pub(crate) fn verifiable(
-    kinds: &[&str],
-    verify_kinds: &[&str],
-) -> specforge_registry::RegistryBuild {
+fn verifiable(kinds: &[&str], verify_kinds: &[&str]) -> specforge_registry::RegistryBuild {
     crate::registries::registries("@test/ext", |c| {
         for kind in kinds {
             c.kind(kind, |k| {

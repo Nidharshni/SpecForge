@@ -6,6 +6,7 @@ use crate::fixes::{apply, fixes_of};
 use crate::navigate::{Compiled, compile};
 use specforge_formatter::FormatConfig;
 use specforge_ops::authoring::fix::{Fix, FixQuery};
+use specforge_test::prelude::*;
 use std::collections::BTreeMap;
 
 const TESTING: &[&str] = &["@specforge/software", "@specforge/testing"];
@@ -71,8 +72,10 @@ fn added_errors(p: &Compiled, file: &str, text: &str) -> Vec<(String, String)> {
     added
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "code_actions_for_missing_verify",
+    verify = "the verify stub is laid out with the file's format configuration"
+)]
 fn a_verify_stub_follows_the_files_indent() {
     let p = four("flows.spec", VERIFY_4);
     let fixes = fixes_of(&p, &FixQuery::default());
