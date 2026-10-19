@@ -208,8 +208,10 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     let templates: Vec<(String, Option<String>)> = answers
         .into_iter()
         .filter_map(|answer| match answer {
-            extension::Answer::Installed { recorded, starter } => Some((recorded, starter)),
-            extension::Answer::Duplicate { .. } | extension::Answer::Builtin(_) => None,
+            extension::Answer::Installed {
+                recorded, starter, ..
+            } => Some((recorded, starter)),
+            extension::Answer::Duplicate { .. } | extension::Answer::Builtin { .. } => None,
         })
         .collect();
     let extensions = checked.entries();

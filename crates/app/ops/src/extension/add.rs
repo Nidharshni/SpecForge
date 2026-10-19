@@ -188,7 +188,7 @@ pub fn add(
             plan,
             runtime,
             &mut |_, package| super::resolve(registry, package),
-            &mut Wanted::of,
+            &mut Package::of,
         )
         .map_err(|e| e.about(AddField::Extensions))?;
     let done = checked.finish()?;
@@ -197,15 +197,7 @@ pub fn add(
         .enumerate()
         .map(|(at, answer)| AddedExtension {
             specifier: names.specifier(at).to_string(),
-            outcome: match answer {
-                Answer::Duplicate { name, first } => AddOutcome::Duplicate { name, first },
-                Answer::Builtin(name) => {
-                    Wanted::Builtin(name).outcome(done.asked(Ask(at)), req.dry_run)
-                }
-                Answer::Installed { recorded, .. } => {
-                    recorded.outcome(done.asked(Ask(at)), req.dry_run)
-                }
-            },
+            outcome: outcome(answer, done.peers_enabled(Ask(at)), req.dry_run),
         })
         .collect();
     Ok(Added {
@@ -216,21 +208,18 @@ pub fn add(
     })
 }
 
-/// What a specifier asks the plan for, to turn the plan's answer for its ask into an outcome.
-enum Wanted {
-    Builtin(&'static str),
-    Package {
-        name: String,
-        version: String,
-        sha256: String,
-        publisher: Option<Publisher>,
-        origin: Origin,
-    },
+/// What the add records of a package install, to report it once the plan has answered its ask.
+struct Package {
+    name: String,
+    version: String,
+    sha256: String,
+    publisher: Option<Publisher>,
+    origin: Origin,
 }
 
-impl Wanted {
-    fn of(install: &Install<'_>) -> Wanted {
-        Wanted::Package {
+impl Package {
+    fn of(install: &Install<'_>) -> Package {
+        Package {
             name: install.name().to_string(),
             version: install.version().to_string(),
             sha256: install.sha256().to_string(),
@@ -240,63 +229,58 @@ impl Wanted {
             },
         }
     }
+}
 
-    /// What the add did (or, for a dry run, would do) for it, given what the plan did for its ask.
-    fn outcome(self, asked: Asked, dry_run: bool) -> AddOutcome {
-        let peers_enabled = match asked {
-            Asked::Unchanged { locked } => {
-                return match self {
-                    Wanted::Builtin(name) => AddOutcome::Builtin {
-                        name,
-                        changed: false,
-                        peers_enabled: Vec::new(),
-                    },
-                    Wanted::Package { name, version, .. } => AddOutcome::AlreadyPresent {
-                        name,
-                        version: locked.unwrap_or(version),
-                    },
-                };
-            }
-            Asked::Changes { peers_enabled } => peers_enabled,
-        };
-        match self {
-            Wanted::Builtin(name) if dry_run => AddOutcome::Planned {
-                name: name.to_string(),
-                version: None,
-                origin: Origin::Builtin,
-                peers_enabled,
-            },
-            Wanted::Package {
-                name,
-                version,
-                origin,
-                ..
-            } if dry_run => AddOutcome::Planned {
-                name,
-                version: Some(version),
-                origin,
-                peers_enabled,
-            },
-            Wanted::Builtin(name) => AddOutcome::Builtin {
-                name,
-                changed: true,
-                peers_enabled,
-            },
-            Wanted::Package {
-                name,
-                version,
-                sha256,
-                publisher,
-                origin,
-            } => AddOutcome::Installed {
-                name,
-                version,
-                sha256,
-                publisher,
-                origin,
-                peers_enabled,
-            },
-        }
+/// What the add did (or, for a dry run, would do) for one specifier: names' answer for it and the
+/// builtins the finished plan enabled for its ask.
+fn outcome(answer: Answer<Package>, peers_enabled: Vec<&'static str>, dry_run: bool) -> AddOutcome {
+    match answer {
+        Answer::Duplicate { name, first } => AddOutcome::Duplicate { name, first },
+        Answer::Builtin {
+            name,
+            asked: Asked::Unchanged,
+        } => AddOutcome::Builtin {
+            name,
+            changed: false,
+            peers_enabled: Vec::new(),
+        },
+        Answer::Builtin { name, .. } if dry_run => AddOutcome::Planned {
+            name: name.to_string(),
+            version: None,
+            origin: Origin::Builtin,
+            peers_enabled,
+        },
+        Answer::Builtin { name, .. } => AddOutcome::Builtin {
+            name,
+            changed: true,
+            peers_enabled,
+        },
+        Answer::Installed {
+            recorded: package,
+            asked: Asked::Unchanged,
+            ..
+        } => AddOutcome::AlreadyPresent {
+            name: package.name,
+            version: package.version,
+        },
+        Answer::Installed {
+            recorded: package, ..
+        } if dry_run => AddOutcome::Planned {
+            name: package.name,
+            version: Some(package.version),
+            origin: package.origin,
+            peers_enabled,
+        },
+        Answer::Installed {
+            recorded: package, ..
+        } => AddOutcome::Installed {
+            name: package.name,
+            version: package.version,
+            sha256: package.sha256,
+            publisher: package.publisher,
+            origin: package.origin,
+            peers_enabled,
+        },
     }
 }
 

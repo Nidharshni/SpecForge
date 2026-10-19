@@ -47,9 +47,13 @@ fn each_specifier_is_asked_under_its_position() {
     assert_eq!(
         answers,
         [
-            Answer::Builtin("@specforge/product"),
+            Answer::Builtin {
+                name: "@specforge/product",
+                asked: Asked::Changes
+            },
             Answer::Installed {
                 recorded: "@sdk/greet".to_string(),
+                asked: Asked::Changes,
                 starter: None
             },
             Answer::Duplicate {
@@ -60,11 +64,12 @@ fn each_specifier_is_asked_under_its_position() {
     );
     assert_eq!(checked.entries(), ["@specforge/product", "@sdk/greet"]);
     let done = checked.finish().unwrap();
-    assert!(matches!(done.asked(Ask(0)), Asked::Changes { .. }));
-    assert!(matches!(done.asked(Ask(1)), Asked::Changes { .. }));
-    // The duplicate asked nothing, so its ask was never answered.
-    let unanswered = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| done.asked(Ask(2))));
-    assert!(unanswered.is_err());
+    assert!(done.peers_enabled(Ask(0)).is_empty());
+    assert!(done.peers_enabled(Ask(1)).is_empty());
+    assert!(
+        done.peers_enabled(Ask(2)).is_empty(),
+        "the duplicate asked nothing, so nothing was enabled for it"
+    );
 }
 
 #[test]

@@ -1,7 +1,7 @@
 use super::super::fixtures::{declaration_of, enabled_project, entry, greet, installed};
 use super::*;
 use crate::registry::testing::{Asked, MemoryRegistry, Published, declaration};
-use specforge_installed::{LockSource, hex_sha256, lock_path};
+use specforge_installed::{LockFileEntry, LockSource, hex_sha256, lock_path};
 use specforge_test_macros::test as specforge_test;
 
 /// What the tests serve in process: `@sdk/greet` and `@test/probe`.

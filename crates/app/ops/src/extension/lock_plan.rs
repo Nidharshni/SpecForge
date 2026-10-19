@@ -16,8 +16,9 @@
 //! is each binary fetched from a registry loaded, and it must declare what was published
 //! (ADR 0012). What passes is committed as one change (ADR 0028 D4): the modules, the lock, the
 //! appended `specforge.json` entries and, last, the publisher keys its fetches accepted (ADR
-//! 0059). A refused or failed plan writes and pins nothing. Refusals and outcomes are answered per
-//! ask.
+//! 0059). A refused or failed plan writes and pins nothing. Each ask is answered when it is asked
+//! (changes or unchanged); a finished plan answers the builtins it enabled for each, and a refused
+//! one the asks it refused.
 
 use crate::view::ProjectView;
 use serde_json::Value;
@@ -71,6 +72,18 @@ impl Verb {
 /// init's specifiers, update's lock entries). Refusals and outcomes are answered per ask.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct Ask(pub(crate) usize);
+
+/// What the plan answered an ask when it was asked (ADR 0138, ADR 0168).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Asked {
+    /// The change enables what the ask named, and installs it for an install. The builtins its
+    /// extension requires are the finished plan's (`Done::peers_enabled`).
+    Changes,
+    /// The project already has it: a named entry of `specforge.json` enables it, and for an install
+    /// the lock pins it at the version asked, with the same bytes and kind of source, its module on
+    /// disk the one pinned. The change leaves it as it is.
+    Unchanged,
+}
 
 /// Whether a checked plan is written or only answered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -169,9 +182,6 @@ pub(crate) struct LockPlan<'a> {
     /// `specforge.json` as the plan opened it: what it enables before the change.
     config: Opened,
     appended: Vec<Appended>,
-    /// The answer each ask got when it was asked, in the order they were asked; a `Changes` holds
-    /// no peers until `finish` fills them.
-    asked: Vec<(Ask, Asked)>,
     declarations: Declarations<'a>,
     verb: Verb,
     purpose: Purpose,
@@ -316,7 +326,6 @@ impl<'a> LockPlan<'a> {
             staged: Vec::new(),
             config,
             appended: Vec::new(),
-            asked: Vec::new(),
             declarations,
             verb,
             purpose: Purpose::Commit,
@@ -332,14 +341,16 @@ impl<'a> LockPlan<'a> {
 
     /// Install `install` for `ask`: its lock entry replaces the package's previous one. A verb that
     /// enables also enables it by its bare name (nothing when an entry already does). Nothing is
-    /// judged yet.
+    /// judged yet. An install the project already has (the lock pins it at this version with these
+    /// bytes and this kind of source, its module on disk is the one pinned, an entry enables it) is
+    /// answered unchanged and staged nothing.
     ///
     /// A plan stages one install per name: the operation claims its specifiers first
     /// (`extension::claims`, ADR 0098), so two that name one extension never both reach the plan.
     ///
     /// # Panics
     /// In a debug build, on a second install of one name.
-    pub(crate) fn install(&mut self, ask: Ask, install: Install<'a>) {
+    pub(crate) fn install(&mut self, ask: Ask, install: Install<'a>) -> Asked {
         debug_assert!(
             !self
                 .staged
@@ -348,21 +359,16 @@ impl<'a> LockPlan<'a> {
             "'{}' is installed twice by one plan: claim the specifiers first (ADR 0098)",
             install.pin.name
         );
-        if let Some(locked) = self
+        if self
             .unchanged(&install.pin.name, |entry| {
-                entry.wasm_hash == install.sha256
+                entry.version == install.pin.version
+                    && entry.wasm_hash == install.sha256
                     && std::mem::discriminant(&entry.source)
                         == std::mem::discriminant(&install.pin.source)
             })
-            .map(|entry| entry.version.clone())
+            .is_some()
         {
-            self.answer(
-                ask,
-                Asked::Unchanged {
-                    locked: Some(locked),
-                },
-            );
-            return;
+            return Asked::Unchanged;
         }
         debug_assert!(
             !matches!(install.from, From::Locked),
@@ -377,12 +383,6 @@ impl<'a> LockPlan<'a> {
         if self.verb.enables() {
             self.append(ask, pin.name.as_str());
         }
-        self.answer(
-            ask,
-            Asked::Changes {
-                peers_enabled: Vec::new(),
-            },
-        );
         self.staged.push(Staged {
             ask,
             name: pin.name.clone(),
@@ -392,20 +392,18 @@ impl<'a> LockPlan<'a> {
             sha256,
             from,
         });
+        Asked::Changes
     }
 
     /// Enable `name` (a builtin, or an install's bare name) for `ask` with an entry of its own,
     /// after the entries `specforge.json` holds; the ask is answered unchanged when an entry
     /// already enables it.
-    pub(crate) fn enable(&mut self, ask: Ask, name: &str) {
-        let answer = if self.append(ask, name) {
-            Asked::Changes {
-                peers_enabled: Vec::new(),
-            }
+    pub(crate) fn enable(&mut self, ask: Ask, name: &str) -> Asked {
+        if self.append(ask, name) {
+            Asked::Changes
         } else {
-            Asked::Unchanged { locked: None }
-        };
-        self.answer(ask, answer);
+            Asked::Unchanged
+        }
     }
 
     /// Append an entry for `name` unless one already enables it; `false` when a named entry of
@@ -451,13 +449,6 @@ impl<'a> LockPlan<'a> {
             && self.disabled.is_empty()
             && self.uninstalled.is_empty()
             && !self.config.creates()
-    }
-
-    /// Record `asked` as the answer to `ask`, unless it already has one.
-    fn answer(&mut self, ask: Ask, asked: Asked) {
-        if !self.asked.iter().any(|(known, _)| *known == ask) {
-            self.asked.push((ask, asked));
-        }
     }
 
     /// Drop the entries `disabled` selects, for `ask`.
@@ -594,5 +585,5 @@ mod judge;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use commit::{Also, Asked};
+pub(crate) use commit::Also;
 pub(crate) use config::Opened;

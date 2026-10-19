@@ -31,32 +31,21 @@ pub(crate) struct Done {
     pub(crate) writes: Writes,
     /// How many extensions `specforge.json` enables after the change (would, for a preview).
     pub(crate) enabled: usize,
-    asked: Vec<(Ask, Asked)>,
-}
-
-/// What a finished plan did for one ask, or for a preview would do.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum Asked {
-    /// The change enables what the ask named, and installs it for an install, after the builtins
-    /// its extension requires: `peers_enabled`, dependencies first, each reported once, by the ask
-    /// whose extension first required it.
-    Changes { peers_enabled: Vec<&'static str> },
-    /// The project already has it: an entry of `specforge.json` enables it. `locked` is the
-    /// version the lock pins, `None` for an entry only. The change leaves it as it is.
-    Unchanged { locked: Option<String> },
+    /// Each builtin the change enabled because an extension it asked for requires it, with the ask
+    /// it is charged to, dependencies first.
+    peers: Vec<(Ask, &'static str)>,
 }
 
 impl Done {
-    /// What the plan did for `ask`.
-    ///
-    /// # Panics
-    /// For an ask the operation never made.
-    pub(crate) fn asked(&self, ask: Ask) -> Asked {
-        self.asked
-            .iter()
-            .find(|(asked, _)| *asked == ask)
-            .map(|(_, asked)| asked.clone())
-            .expect("an ask the operation made is answered")
+    /// The builtins the change enabled (would, for a preview) because the extension `ask` named
+    /// requires them, dependencies first, each reported once, by the ask whose extension first
+    /// required it. None for an ask that enabled none: one the project already had, or one never
+    /// made.
+    pub(crate) fn peers_enabled(&self, ask: Ask) -> Vec<&'static str> {
+        (self.peers.iter())
+            .filter(|(by, _)| *by == ask)
+            .map(|(_, peer)| *peer)
+            .collect()
     }
 }
 
@@ -105,7 +94,6 @@ impl<'a> Checked<'a> {
             staged,
             config,
             appended,
-            asked,
             purpose,
             uninstalled,
             fetching,
@@ -128,12 +116,18 @@ impl<'a> Checked<'a> {
             .filter_map(|staged| staged.module.map(|module| (module, staged.pin)))
             .collect();
         let uninstalls: Vec<PackageName> = uninstalled.into_iter().map(|(_, name)| name).collect();
+        // Each is reported once, by the ask whose extension first required it.
+        let peers: Vec<(Ask, &'static str)> = appended
+            .iter()
+            .filter(|entry| entry.required_by.is_some())
+            .filter_map(|entry| Some((entry.ask, super::super::builtin_name(&entry.name)?)))
+            .collect();
         let lent = caller.containment();
         if !changes && also.is_empty() {
             return Ok(Done {
                 writes: Writes::none(),
                 enabled: final_entries.len(),
-                asked,
+                peers,
             });
         }
         // The project root must lie inside what the caller lent: narrowing never widens (ADR 0137).
@@ -222,27 +216,10 @@ impl<'a> Checked<'a> {
             }
         }
 
-        let asked = asked
-            .into_iter()
-            .map(|(ask, answer)| {
-                let answer = match answer {
-                    // Each is reported once, by the ask whose extension first required it.
-                    Asked::Changes { .. } => Asked::Changes {
-                        peers_enabled: appended
-                            .iter()
-                            .filter(|entry| entry.ask == ask && entry.required_by.is_some())
-                            .filter_map(|entry| super::super::builtin_name(&entry.name))
-                            .collect(),
-                    },
-                    unchanged => unchanged,
-                };
-                (ask, answer)
-            })
-            .collect();
         Ok(Done {
             writes,
             enabled: final_entries.len(),
-            asked,
+            peers,
         })
     }
 }

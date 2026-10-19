@@ -10,7 +10,7 @@
 //! The publisher keys the update's fetches accepted are pinned with it, once it is written: an
 //! update that is not applied pins nothing (ADR 0059).
 
-use super::lock_plan::{Ask, Fetching, Install, LockPlan, Opened};
+use super::lock_plan::{Ask, Asked, Fetching, Install, LockPlan, Opened};
 use crate::registry::{Acceptance, NO_REGISTRY, Publisher, Registry};
 use crate::{Caller, OpError, OpErrorKind};
 use serde::Serialize;
@@ -361,7 +361,10 @@ pub fn update(
                             .cloned()
                             .expect("a fetched install has a publisher"),
                     };
-                    plan.install(Ask(extensions.len()), install);
+                    let asked = plan.install(Ask(extensions.len()), install);
+                    // An upgrade's version is never the locked one (`super::upgrade`), so the
+                    // project never already has it (ADR 0168).
+                    debug_assert_eq!(asked, Asked::Changes, "an upgrade is answered unchanged");
                     status
                 }
                 Err(error) if error.is(NO_REGISTRY) => return Err(error),

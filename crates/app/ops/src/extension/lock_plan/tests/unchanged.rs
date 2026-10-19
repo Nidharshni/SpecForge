@@ -23,9 +23,8 @@ fn base_plan<'a>(
     )
 }
 
-fn answer(plan: LockPlan<'_>) -> (Answer, Done) {
-    let done = plan.check().ok().unwrap().finish().unwrap();
-    (done.asked(Ask(0)), done)
+fn finished(plan: LockPlan<'_>) -> Done {
+    plan.check().ok().unwrap().finish().unwrap()
 }
 
 #[test]
@@ -44,22 +43,18 @@ fn an_install_the_project_already_has_is_answered_unchanged_and_stages_nothing()
         Purpose::Commit,
         no_registry(),
     );
-    plan.install(Ask(0), local(&runtime, b"old", "other.wasm"));
+    let asked = plan.install(Ask(0), local(&runtime, b"old", "other.wasm"));
     assert!(plan.staged.is_empty());
-    let (asked, done) = answer(plan);
-    assert_eq!(
-        asked,
-        Answer::Unchanged {
-            locked: Some("1.0.0".into())
-        }
-    );
+    assert_eq!(asked, Answer::Unchanged);
+    let done = finished(plan);
     assert!(done.writes.is_empty());
     assert_eq!(std::fs::read(installed.lock_path()).unwrap(), lock);
 
     // Control: no entry enables it, so the install changes the project.
     let mut plan = base_plan(&installed, &runtime, &[], Purpose::Preview, no_registry());
-    plan.install(Ask(0), local(&runtime, b"old", "other.wasm"));
-    assert!(matches!(answer(plan).0, Answer::Changes { .. }));
+    let asked = plan.install(Ask(0), local(&runtime, b"old", "other.wasm"));
+    assert_eq!(asked, Answer::Changes);
+    finished(plan);
 
     // Control: a module changed after install is reinstalled.
     let path = installed.module_path(&PackageName::parse("@acme/base").unwrap());
@@ -71,8 +66,9 @@ fn an_install_the_project_already_has_is_answered_unchanged_and_stages_nothing()
         Purpose::Preview,
         no_registry(),
     );
-    plan.install(Ask(0), local(&runtime, b"old", "other.wasm"));
-    assert!(matches!(answer(plan).0, Answer::Changes { .. }));
+    let asked = plan.install(Ask(0), local(&runtime, b"old", "other.wasm"));
+    assert_eq!(asked, Answer::Changes);
+    finished(plan);
     assert_eq!(module.unwrap(), b"old");
 }
 
@@ -87,15 +83,10 @@ fn fetching_a_package_the_project_already_has_asks_the_registry_nothing() {
         let mut plan = base_plan(&installed, &runtime, &["@acme/base"], purpose, &registry);
         let install = plan.fetch(&base, &Version::new(1, 0, 0)).unwrap();
         assert!(registry.asked().is_empty());
-        plan.install(Ask(0), install);
+        let asked = plan.install(Ask(0), install);
         assert!(plan.staged.is_empty());
-        let (asked, _) = answer(plan);
-        assert_eq!(
-            asked,
-            Answer::Unchanged {
-                locked: Some("1.0.0".into())
-            }
-        );
+        assert_eq!(asked, Answer::Unchanged);
+        finished(plan);
     }
     // Control: another version is fetched.
     let registry = base_registry();
@@ -125,13 +116,13 @@ fn a_plan_whose_asks_change_nothing_is_not_judged() {
             crate::testing::caller(),
             Purpose::Commit,
         );
-        plan.enable(Ask(0), name);
-        plan
+        let asked = plan.enable(Ask(0), name);
+        (plan, asked)
     };
-    let (asked, done) = answer(plan("@specforge/product"));
-    assert_eq!(asked, Answer::Unchanged { locked: None });
-    assert_eq!(done.enabled, 1);
-    assert_eq!(refused(plan("@specforge/formal")).code, "E028");
+    let (unchanged, asked) = plan("@specforge/product");
+    assert_eq!(asked, Answer::Unchanged);
+    assert_eq!(finished(unchanged).enabled, 1);
+    assert_eq!(refused(plan("@specforge/formal").0).code, "E028");
 }
 
 #[test]
@@ -169,5 +160,41 @@ fn a_change_that_changes_nothing_writes_nothing_and_ignores_a_later_edit_of_the_
     assert!(
         !dir.path().join("specforge.lock").exists(),
         "no lock is written for a change that changes nothing"
+    );
+}
+
+#[test]
+fn an_install_the_lock_pins_at_another_version_is_staged_and_loaded() {
+    // Locked at 1.0.0 with the bytes `old`, which the runtime reads as @acme/base 1.0.0.
+    let dir = enabled_project(vec![entry("@acme/base", "1.0.0", "registry", &[])]);
+    let installed = Installed::at(dir.path());
+    let runtime = InProcessRuntime::new().binary(b"old", declaring("@acme/base", "1.0.0", &[]));
+    // The registry serves those same bytes as 2.0.0.
+    let registry = MemoryRegistry::new().serving(Published::new(
+        b"old".to_vec(),
+        declaration("@acme/base", "2.0.0", &[]),
+    ));
+    let mut plan = base_plan(
+        &installed,
+        &runtime,
+        &["@acme/base"],
+        Purpose::Commit,
+        &registry,
+    );
+    let base = PackageName::parse("@acme/base").unwrap();
+    let install = plan.fetch(&base, &Version::new(2, 0, 0)).unwrap();
+
+    plan.install(Ask(0), install);
+
+    assert_eq!(
+        plan.staged.len(),
+        1,
+        "another version is not the project's already"
+    );
+    let error = refused(plan);
+    assert_eq!(error.code, "E028", "{error:?}");
+    assert_eq!(
+        error.message,
+        "registry package @acme/base@2.0.0 declares itself @acme/base@1.0.0"
     );
 }

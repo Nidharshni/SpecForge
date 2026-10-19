@@ -318,9 +318,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   dropped one removed; the change writes exactly those entries into the `specforge.json` it read, other keys
   kept, and refuses (`file_changed`) when the file no longer holds what the plan opened with (ADR 0126). Its writes land inside its own project: it is opened with the operation's **Caller** and narrows the caller's **Containment** to the project root itself (ADR 0137)
   (`specforge_ops::extension::lock_plan::LockPlan`, ADR 0041, ADR 0065). An
-  operation names what it asks for, each an **ask**; refusals and outcomes are answered per ask.
-  An ask the project already has (a named entry names it; for an install, the lock pins it as asked with its module on disk
-  the one pinned) is answered **unchanged** and stages nothing, and a plan whose asks change nothing is neither judged
+  operation names what it asks for, each an **ask** (its position among the operation's requests), and the plan answers
+  it when it is asked: **changes**, or **unchanged** when the project already has it (a named entry names it; for an
+  install, the lock pins it at the version asked, with the same bytes and kind of source, and its module on disk is
+  the one pinned), which stages nothing. A finished plan answers the builtins it enabled for each ask; a refused one,
+  the asks it refused (ADR 0168). A plan whose asks change nothing is neither judged
   nor written (ADR 0138). An
   `add` or `init` of an extension a `.wasm` file entry already loads is refused (`extension_conflict`), nothing
   written (ADR 0160).

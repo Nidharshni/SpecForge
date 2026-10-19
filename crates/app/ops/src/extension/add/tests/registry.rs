@@ -502,3 +502,30 @@ fn a_fetched_binary_that_is_not_what_was_published_is_a_schema_mismatch() {
         assert_eq!(refusal.subject, None, "{refusal:?}");
     }
 }
+
+#[specforge_test(
+    behavior = "check_registry_reply",
+    verify = "add refuses another version served with the bytes the lock already pins"
+)]
+fn another_version_served_as_the_installed_bytes_is_refused() {
+    use crate::config::testing::files_under;
+    let dir = add_project(Vec::new());
+    // greet's bytes declare 0.1.0; the registry serves them as 0.1.0 and again as 0.2.0.
+    let registry = MemoryRegistry::new()
+        .serving(Published::new(greet(), declaration_of(&greet())))
+        .serving(Published::new(
+            greet(),
+            declaration("@sdk/greet", "0.2.0", &[]),
+        ));
+    add_greet(dir.path(), &registry).unwrap();
+    let before = files_under(dir.path());
+
+    let error = add_one(dir.path(), package("@sdk/greet@0.2.0"), &registry).unwrap_err();
+
+    assert_eq!(error.error.code, "E028", "{error:?}");
+    assert_eq!(
+        error.error.message,
+        "registry package @sdk/greet@0.2.0 declares itself @sdk/greet@0.1.0"
+    );
+    assert_eq!(files_under(dir.path()), before);
+}
