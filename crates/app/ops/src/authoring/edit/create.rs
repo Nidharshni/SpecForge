@@ -86,6 +86,7 @@ impl Planner<'_> {
             resolved: None,
         };
         let order = site.order();
+        let config = block::layout(&site);
         let mut members: Vec<((u8, usize), String, String)> = Vec::new();
         for (name, input) in fields {
             let reading = site.reading(name)?;
@@ -95,7 +96,7 @@ impl Planner<'_> {
             {
                 continue;
             }
-            let value = written(reading, name, input, 2)?;
+            let value = written(reading, name, input, &config.indent_str(), &config)?;
             members.push((
                 rank(&order, name, group_of_text(&value)),
                 name.clone(),

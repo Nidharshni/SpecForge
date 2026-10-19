@@ -6,8 +6,13 @@ fn form(field_type: FieldType) -> FieldForm {
     FieldForm::new(field_type, vec!["done".to_string()])
 }
 
+/// `written` for a key at two spaces, under the default configuration.
+fn at_two(reading: Reading<'_>, key: &str, input: &Input) -> Result<String, Refusal<EditField>> {
+    written(reading, key, input, "  ", &FormatConfig::default())
+}
+
 fn declared(field_type: FieldType, key: &str, input: Input) -> String {
-    written(Reading::Declared(&form(field_type)), key, &input, 2).unwrap()
+    at_two(Reading::Declared(&form(field_type)), key, &input).unwrap()
 }
 
 fn one(text: &str) -> Input {
@@ -136,7 +141,7 @@ fn a_reference_spelled_true_or_false_is_quoted() {
 #[test]
 fn a_member_type_expression_is_written_as_given() {
     for ty in ["string", "Task[]", "A | B"] {
-        let written = written(Reading::Member, "taskId", &one(ty), 2).unwrap();
+        let written = at_two(Reading::Member, "taskId", &one(ty)).unwrap();
         assert_eq!(written, ty);
     }
 }
@@ -144,29 +149,38 @@ fn a_member_type_expression_is_written_as_given() {
 #[test]
 fn a_member_with_spaces_is_quoted() {
     assert_eq!(
-        written(Reading::Member, "taskId", &one("two words {"), 2).unwrap(),
+        at_two(Reading::Member, "taskId", &one("two words {")).unwrap(),
         r#""two words {""#
     );
 }
 
 #[test]
 fn a_value_that_does_not_fit_the_field_is_refused() {
-    let refusal = written(
+    let refusal = at_two(
         Reading::Declared(&form(FieldType::String)),
         "note",
         &many(&["a", "b"]),
-        2,
     )
     .unwrap_err();
     assert_eq!(refusal.error.code, NOT_EDITABLE);
-    assert!(written(Reading::Undeclared, "x", &one("y"), 2).is_err());
-    assert!(
-        written(
-            Reading::Declared(&form(FieldType::Block)),
-            "b",
-            &one("y"),
-            2
-        )
-        .is_err()
+    assert!(at_two(Reading::Undeclared, "x", &one("y")).is_err());
+    assert!(at_two(Reading::Declared(&form(FieldType::Block)), "b", &one("y")).is_err());
+}
+
+#[test]
+fn a_string_is_laid_out_with_the_configuration() {
+    let long = "Given valid credentials the behavior returns an auth token that the client stores and sends with every later request it makes";
+    let tabs = FormatConfig {
+        use_tabs: true,
+        ..Default::default()
+    };
+    assert_eq!(
+        string("contract", long, "\t", &tabs),
+        format!("\"\"\"\n\t\t{long}\n\t\"\"\"")
     );
+    let wide = FormatConfig {
+        max_width: 200,
+        ..Default::default()
+    };
+    assert_eq!(string("contract", long, "  ", &wide), spell::quoted(long));
 }

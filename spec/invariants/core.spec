@@ -253,8 +253,9 @@ invariant typed_edit_canonical_form "Typed Edit Canonical Form" {
   guarantee """
     A value a typed edit writes MUST be in the form its field's declaration
     decides, so a typed edit never produces W159 or W020. Every block a typed
-    edit touches MUST be format-clean afterwards, and no byte outside the
-    touched blocks changes.
+    edit touches MUST be format-clean afterwards, laid out with the project's
+    format configuration, its multi-line values included, and no byte outside
+    the touched blocks changes.
   """
   risk      high
   verify property "every block a typed edit writes is unchanged by format"

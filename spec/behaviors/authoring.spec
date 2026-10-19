@@ -30,13 +30,17 @@ behavior edit_entity_field "Edit an Entity Field" {
   category   mutation
   contract   """
     A set edit replaces a field's value, written in the form its declaration
-    decides, and inserts an absent field at its rank (one-line values, then
+    decides, a text that holds a line break, or whose one-line form passes the
+    project's max_width, triple-quoted with its lines one indent of the
+    project's format configuration past its key, and inserts an absent field
+    at its rank (one-line values, then
     block fields, then triple-quoted text, in the kind's declared order). An
     unset edit removes the field and the comment lines directly above it. A
     dotted field name edits one entry of a block field. A retitle edit
     replaces the header title. A field the kind does not declare is refused.
   """
   verify unit "set writes the value in the form its field declares"
+  verify unit "a multi-line value is laid out with the project's format configuration"
   verify unit "set of an absent field inserts it at its rank"
   verify unit "unset removes the field and the comment above it"
   verify unit "set refuses a field the kind does not declare"

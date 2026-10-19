@@ -16,11 +16,11 @@ fn formats_to_itself(c: &Compiled, config: &FormatConfig, text: &str) -> bool {
     specforge_formatter::format_source(text, config, forms).formatted == text
 }
 
-/// The lines from `header` to the next line that is exactly `}`.
+/// The lines from `header` to the next line that is exactly `}`, with its line break.
 fn block_of<'a>(text: &'a str, header: &str) -> &'a str {
     let start = text.find(header).expect("header");
     let rest = &text[start..];
-    let end = rest.find("\n}\n").expect("closing brace") + 2;
+    let end = rest.find("\n}\n").expect("closing brace") + 3;
     &rest[..end]
 }
 
@@ -28,7 +28,6 @@ fn block_of<'a>(text: &'a str, header: &str) -> &'a str {
     invariant = "typed_edit_canonical_form",
     verify = "every block a typed edit writes is unchanged by format"
 )]
-#[ignore = "flipped by T6"]
 fn a_triple_quoted_value_is_indented_with_the_projects_tabs() {
     let c = configured("use_tabs = true\n");
     let text = after(
@@ -48,8 +47,10 @@ fn a_triple_quoted_value_is_indented_with_the_projects_tabs() {
     assert!(formats_to_itself(&c, &tabs, block));
 }
 
-#[test]
-#[ignore = "flipped by T6"]
+#[specforge_test_macros::test(
+    behavior = "edit_entity_field",
+    verify = "a multi-line value is laid out with the project's format configuration"
+)]
 fn a_value_follows_the_projects_indent_width() {
     let c = configured("indent_width = 4\n");
     let text = after(
@@ -82,7 +83,6 @@ fn a_value_follows_the_projects_indent_width() {
 }
 
 #[test]
-#[ignore = "flipped by T6"]
 fn a_value_past_the_projects_max_width_is_triple_quoted() {
     let c = configured("max_width = 40\n");
     let short = "When asked, the system MUST list every task.";
@@ -98,7 +98,6 @@ fn a_value_past_the_projects_max_width_is_triple_quoted() {
 }
 
 #[test]
-#[ignore = "flipped by T6"]
 fn a_value_within_the_projects_max_width_stays_on_one_line() {
     let c = configured("max_width = 200\n");
     let text = after(

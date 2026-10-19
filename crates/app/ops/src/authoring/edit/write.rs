@@ -1,14 +1,13 @@
-//! The value writer: the text of a field's value, in the form its declaration decides (ADR 0147, ADR 0151).
-//! What it returns reads back as the value it was given, or the edit is refused.
+//! The value writer: the text of a field's value, in the form its declaration decides (ADR 0147, ADR 0151) and
+//! laid out with the file's format configuration (ADR 0153). What it returns reads back as the value it was
+//! given, or the edit is refused.
 
 use super::{EditField, Input};
 use crate::{OpError, OpErrorKind, Refusal};
+use specforge_formatter::FormatConfig;
 use specforge_graph::FieldValue;
 use specforge_graph::field_form::{Reading, spell};
 use specforge_protocol_types::FieldType;
-
-/// A one-line `key "…"` longer than this is written triple-quoted (the formatter's default `max_width`).
-const MAX_WIDTH: usize = 100;
 
 /// The refusal code of an edit that does not fit the field it names.
 pub const NOT_EDITABLE: &str = "not_editable";
@@ -18,15 +17,15 @@ pub fn not_editable(field: EditField, message: impl Into<String>) -> Refusal<Edi
     OpError::new(OpErrorKind::InvalidInput, NOT_EDITABLE, message).about(field)
 }
 
-/// `text` as a string value of `key` at `indent`: triple-quoted (content two columns in, the closing quotes at
-/// `indent`) when it holds a line break or `key "…"` passes the width; else, or when the triple-quoted form does
-/// not read back, `"…"`.
-pub fn string(key: &str, text: &str, indent: usize) -> String {
+/// `text` as a string value of `key` on a line that starts with `lead`: triple-quoted (its lines at `lead` plus one
+/// indent of `config`, the closing quotes at `lead`) when it holds a line break or `lead key "…"` passes the
+/// configuration's `max_width`; else, or when the triple-quoted form does not read back, `"…"`.
+pub fn string(key: &str, text: &str, lead: &str, config: &FormatConfig) -> String {
     let one = spell::quoted(text);
-    if !text.contains('\n') && indent + key.len() + 1 + one.len() <= MAX_WIDTH {
+    if !text.contains('\n') && lead.len() + key.len() + 1 + one.len() <= config.max_width {
         return one;
     }
-    let pad = " ".repeat(indent + 2);
+    let pad = format!("{lead}{}", config.indent_str());
     let body: Vec<String> = text
         .split('\n')
         .map(|line| {
@@ -37,8 +36,8 @@ pub fn string(key: &str, text: &str, indent: usize) -> String {
             }
         })
         .collect();
-    let triple = format!("\"\"\"\n{}\n{}\"\"\"", body.join("\n"), " ".repeat(indent));
-    if reads_back(key, &triple, indent, &Expect::Text(text)) {
+    let triple = format!("\"\"\"\n{}\n{lead}\"\"\"", body.join("\n"));
+    if reads_back(key, &triple, lead, &Expect::Text(text)) {
         triple
     } else {
         one
@@ -52,12 +51,10 @@ enum Expect<'a> {
     Any,
 }
 
-/// Whether `key <written>` at `indent` parses, without error, to one field holding `expect`.
-fn reads_back(key: &str, written: &str, indent: usize, expect: &Expect<'_>) -> bool {
-    let source = format!(
-        "probe probe_entity \"T\" {{\n{}{key} {written}\n}}\n",
-        " ".repeat(indent.max(2))
-    );
+/// Whether `key <written>` on a line that starts with `lead` parses, without error, to one field holding `expect`.
+fn reads_back(key: &str, written: &str, lead: &str, expect: &Expect<'_>) -> bool {
+    let lead = if lead.is_empty() { "  " } else { lead };
+    let source = format!("probe probe_entity \"T\" {{\n{lead}{key} {written}\n}}\n");
     let file = specforge_parser::parse(&source, "probe.spec");
     let [entity] = file.entities.as_slice() else {
         return false;
@@ -110,14 +107,16 @@ fn items_of(input: &Input, key: &str, split: bool) -> Result<Vec<String>, Refusa
     }
 }
 
-/// The text after `key ` on its line (a multi-line value carries its own line breaks, indented for a key at
-/// `indent`) for `input` as the field read as `reading` takes it. `Undeclared` is the caller's refusal
+/// The text after `key ` on a line that starts with `lead` (the key line's leading whitespace as it stands once the
+/// block is formatted), laid out with `config` (the file's format configuration; a multi-line value carries its own
+/// line breaks), for `input` as the field read as `reading` takes it. `Undeclared` is the caller's refusal
 /// (`unknown_field`); the writer reports it as not editable.
 pub fn written(
     reading: Reading<'_>,
     key: &str,
     input: &Input,
-    indent: usize,
+    lead: &str,
+    config: &FormatConfig,
 ) -> Result<String, Refusal<EditField>> {
     let items: Vec<String>;
     let (text, expect) = match reading {
@@ -129,7 +128,7 @@ pub fn written(
         }
         Reading::Member => {
             let text = one(input, key, "type")?;
-            let text = if reads_back(key, text, indent, &Expect::Any) {
+            let text = if reads_back(key, text, lead, &Expect::Any) {
                 text.to_string()
             } else {
                 spell::quoted(text)
@@ -139,7 +138,7 @@ pub fn written(
         Reading::Declared(form) => match form.field_type() {
             FieldType::String => {
                 let text = one(input, key, "text")?;
-                (string(key, text, indent), Expect::Text(text))
+                (string(key, text, lead, config), Expect::Text(text))
             }
             FieldType::Identifier
             | FieldType::Enum
@@ -164,10 +163,10 @@ pub fn written(
                 let written: Vec<String> = items.iter().map(|i| spell::value(form, i)).collect();
                 (list(&written), Expect::Items(&items))
             }
-            FieldType::Block => return block(key, input, indent),
+            FieldType::Block => return block(key, input, lead, config),
         },
     };
-    if reads_back(key, &text, indent, &expect) {
+    if reads_back(key, &text, lead, &expect) {
         Ok(text)
     } else {
         Err(unreadable(key))
@@ -181,7 +180,12 @@ fn unreadable(key: &str) -> Refusal<EditField> {
     )
 }
 
-fn block(key: &str, input: &Input, indent: usize) -> Result<String, Refusal<EditField>> {
+fn block(
+    key: &str,
+    input: &Input,
+    lead: &str,
+    config: &FormatConfig,
+) -> Result<String, Refusal<EditField>> {
     let Input::Entries(entries) = input else {
         return Err(not_editable(
             EditField::Value,
@@ -194,13 +198,13 @@ fn block(key: &str, input: &Input, indent: usize) -> Result<String, Refusal<Edit
             format!("'{key}' needs at least one entry"),
         ));
     }
-    let pad = " ".repeat(indent + 2);
+    let pad = format!("{lead}{}", config.indent_str());
     let lines: Vec<String> = entries
         .iter()
-        .map(|(name, text)| format!("{pad}{name} {}", string(name, text, indent + 2)))
+        .map(|(name, text)| format!("{pad}{name} {}", string(name, text, &pad, config)))
         .collect();
-    let text = format!("{{\n{}\n{}}}", lines.join("\n"), " ".repeat(indent));
-    if reads_back(key, &text, indent, &Expect::Any) {
+    let text = format!("{{\n{}\n{lead}}}", lines.join("\n"));
+    if reads_back(key, &text, lead, &Expect::Any) {
         Ok(text)
     } else {
         Err(unreadable(key))
