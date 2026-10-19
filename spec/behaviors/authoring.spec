@@ -30,6 +30,8 @@ behavior create_entity "Create an Entity" {
   verify unit "new compares what it writes with the default, not what it was given"
   verify unit "new never writes a field that restates its default"
   verify integration "new reads its field flags from the project its --path names, wherever --path stands"
+  verify integration "new refuses a field given twice that takes one value"
+  verify integration "new refuses an unknown kind as unknown_kind"
 }
 
 behavior edit_entity_field "Edit an Entity Field" {

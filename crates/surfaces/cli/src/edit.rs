@@ -105,7 +105,7 @@ pub(crate) struct SetArgs {
     #[arg(conflicts_with = "title")]
     field: Option<String>,
 
-    /// The value; a list field takes several, or one separated by commas
+    /// The value; a list field takes several (a reference list also one separated by commas)
     #[arg(num_args = 0.., conflicts_with = "title")]
     values: Vec<String>,
 

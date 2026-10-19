@@ -109,7 +109,7 @@ fn command(kind: &str, fields: &[FieldInfo]) -> Command {
             .action(ArgAction::Append)
             .help(field.description.clone());
         arg = match field.field_type {
-            FieldType::ReferenceList => arg.value_delimiter(',').value_name("ID,…"),
+            FieldType::ReferenceList => arg.value_name("ID,…"),
             FieldType::Block => arg.value_name("NAME=TEXT"),
             _ => arg.value_name("VALUE"),
         };
@@ -145,7 +145,10 @@ fn inputs(fields: &[FieldInfo], matches: &ArgMatches) -> Result<BTreeMap<String,
                 }
                 Input::Entries(entries)
             }
-            _ => Input::One(values.last().cloned().unwrap_or_default()),
+            _ => match values.as_slice() {
+                [one] => Input::One(one.clone()),
+                _ => Input::Many(values),
+            },
         };
         out.insert(field.name.clone(), input);
     }
@@ -165,6 +168,11 @@ impl Args {
         let fields = edit::fields_of(&view, &kind);
         if self.help {
             return help(&kind, &fields, terminal);
+        }
+        if fields.is_empty()
+            && let Err(error) = view.kinds().declared(&kind)
+        {
+            return Refusal::of(format).report(terminal, &error);
         }
         let matches = match command(&kind, &fields).try_get_matches_from(&self.rest) {
             Ok(matches) => matches,

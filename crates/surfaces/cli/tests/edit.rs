@@ -381,8 +381,10 @@ fn new_with_path_after_the_kind_reads_that_projects_fields() {
     );
 }
 
-#[test]
-#[ignore = "flipped by T9"]
+#[specforge_test(
+    behavior = "create_entity",
+    verify = "new refuses a field given twice that takes one value"
+)]
 fn new_given_one_value_field_twice_is_refused() {
     let project = todo();
     let run = sf(
@@ -405,8 +407,10 @@ fn new_given_one_value_field_twice_is_refused() {
     assert!(run.stderr.contains("takes one text"), "{}", run.stderr);
 }
 
-#[test]
-#[ignore = "flipped by T9"]
+#[specforge_test(
+    behavior = "create_entity",
+    verify = "new refuses an unknown kind as unknown_kind"
+)]
 fn new_of_an_unknown_kind_is_refused_as_unknown_kind() {
     let project = todo();
     let run = sf(
