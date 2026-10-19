@@ -6,19 +6,10 @@ use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::project::ProjectArg;
 use crate::terminal::{Terminal, outln};
-use specforge_ops::authoring::edit::{self, Edit, EditReport, Input, Obligation};
+use specforge_ops::authoring::edit::{self, Edit, Input, Obligation};
 use specforge_ops::view::ProjectView;
 use specforge_ops::{OpError, OpErrorKind};
 use specforge_project::CompiledProject;
-
-/// What a command prints under `--format json`: the plan's report, and whether it is a preview.
-#[derive(serde::Serialize)]
-struct Document<'r> {
-    #[serde(flatten)]
-    report: &'r EditReport,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    dry_run: bool,
-}
 
 /// The refusal of a command line that names no edit.
 fn usage(message: &str) -> OpError {
@@ -58,30 +49,26 @@ pub(crate) fn execute_on(
         Ok(root) => root,
         Err(error) => return Refusal::of(format).report(terminal, &error),
     };
-    let planned = match edit::plan(&view, &edits) {
-        Ok(planned) => planned,
+    let edited = match edit::run(
+        &view,
+        &edits,
+        dry_run,
+        crate::caller::of(false, format, terminal),
+    ) {
+        Ok(edited) => edited,
         Err(refusal) => return Refusal::of(format).at(root).report(terminal, &refusal),
     };
-    let written = if dry_run || planned.is_empty() {
-        None
-    } else {
-        match edit::apply(&planned, crate::caller::of(false, format, terminal)) {
-            Ok(writes) => Some(writes),
-            Err(error) => return Refusal::of(format).at(root).report(terminal, &error),
-        }
-    };
-    let report = planned.report();
+    let report = &edited.report;
     match format {
-        OutputFormat::Json => terminal.json(&Written {
-            document: Document { report, dry_run },
-            files_written: written.map(|w| w.named(Some(root))),
-        }),
+        OutputFormat::Json => {
+            terminal.json(&Written::of(edited.document(), &edited.wrote, root));
+        }
         OutputFormat::Human => {
             if !report.diff.is_empty() {
                 outln!(terminal, "{}", report.diff.trim_end());
             }
             let files = report.affected_files.len();
-            match (dry_run, files) {
+            match (edited.wrote.previewed(), files) {
                 (_, 0) => outln!(terminal, "nothing to write"),
                 (true, n) => outln!(
                     terminal,

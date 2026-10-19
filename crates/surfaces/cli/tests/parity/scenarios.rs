@@ -369,19 +369,16 @@ fn parity_remove_installed() {
 }
 
 #[test]
-#[ignore = "flipped by T6"]
 fn parity_add_dry_run() {
     parity("add_dry_run");
 }
 
 #[test]
-#[ignore = "flipped by T6"]
 fn parity_add_dry_run_present() {
     parity("add_dry_run_present");
 }
 
 #[test]
-#[ignore = "flipped by T6"]
 fn parity_remove_dry_run() {
     parity("remove_dry_run");
 }

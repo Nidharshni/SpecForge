@@ -1,0 +1,43 @@
+---
+source: crates/surfaces/cli/tests/parity.rs
+expression: snapshot
+---
+{
+  "both": {
+    "check": {
+      "diagnostics": [
+        "Warning W001"
+      ],
+      "ok": true
+    },
+    "config": {
+      "extensions": [
+        "@specforge/software",
+        "@specforge/product"
+      ],
+      "name": "demo",
+      "registries": [
+        {
+          "alias": "offline",
+          "default_registry": true,
+          "url": "http://127.0.0.1:9"
+        }
+      ],
+      "spec_root": "spec",
+      "version": "0.1.0"
+    },
+    "document": {
+      "action": "planned",
+      "extension": "@specforge/product",
+      "source": "builtin",
+      "stranded": [],
+      "version": "1.0.0"
+    },
+    "files": {
+      "spec/main.spec": "behavior alpha \"Alpha\" {\n  category core\n  contract \"The system MUST work\"\n}\n"
+    },
+    "ok": true
+  },
+  "cli": {},
+  "mcp": {}
+}

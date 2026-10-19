@@ -457,7 +457,7 @@ behavior remove_extension "Remove Extension" {
     the affected entity blocks. Its JSON output is the remove document
     specforge.remove_extension answers (McpRemoveExtensionResult: the
     extension, its source and version, the stranded entities), with the
-    files it wrote or deleted as files_written.
+    files it wrote or deleted as files_written (absent from a dry run).
   """
   verify unit "delegates to uninstall_wasm_extension for lifecycle cleanup"
   verify unit "extension is removed from extensions list"

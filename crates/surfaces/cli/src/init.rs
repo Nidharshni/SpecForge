@@ -77,7 +77,7 @@ fn init_at(
     let written = outcome.writes.named(Some(path));
     match format {
         OutputFormat::Json => {
-            terminal.json(&Written::of(outcome.document(), written));
+            terminal.json(&Written::ran(outcome.document(), &outcome.writes, path));
         }
         OutputFormat::Human => {
             outln!(

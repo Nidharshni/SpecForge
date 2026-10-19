@@ -361,7 +361,7 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     an installed package or a planned one lists the required builtins the
     add enabled with it as peers_enabled), with the files it
     wrote as files_written (empty when every extension was already
-    enabled). A registry package's source is registry, and its key_id is
+    enabled; absent from a dry run). A registry package's source is registry, and its key_id is
     present only when the package is signed.
   """
   verify unit "with no registry configured, add makes no network call and reports how to configure one"

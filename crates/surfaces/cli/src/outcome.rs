@@ -10,7 +10,7 @@
 
 use crate::terminal::{Terminal, err};
 use specforge_common::{Code, ProjectPath};
-use specforge_ops::{OpError, OpErrorKind};
+use specforge_ops::{OpError, OpErrorKind, Writes, Wrote};
 use std::path::Path;
 
 /// The process exit code: one table for every core command. A core
@@ -135,23 +135,30 @@ impl<'a> Refusal<'a> {
     }
 }
 
-/// A document and the files the command wrote (ADR 0022 D6): what `add`,
-/// `remove`, `init` and `migrate` print under `--format json`. A dry run
-/// lists none (`files_written` absent), as MCP's preview.
+/// A document and what the command wrote (ADR 0022 D6, ADR 0162): no `files_written` for a preview, every file a
+/// run wrote otherwise (`[]` when none), as MCP's reply.
 #[derive(Debug, serde::Serialize)]
 pub(crate) struct Written<D> {
     #[serde(flatten)]
-    pub(crate) document: D,
+    document: D,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) files_written: Option<Vec<ProjectPath>>,
+    files_written: Option<Vec<ProjectPath>>,
 }
 
 impl<D> Written<D> {
-    /// `document` with the files a command wrote.
-    pub(crate) fn of(document: D, files_written: Vec<ProjectPath>) -> Self {
+    /// `document` with what a mutation that can preview wrote, named from `root`.
+    pub(crate) fn of(document: D, wrote: &Wrote, root: &Path) -> Self {
         Self {
             document,
-            files_written: Some(files_written),
+            files_written: wrote.named(Some(root)),
+        }
+    }
+
+    /// `document` with what a mutation that cannot preview wrote (init, a rollback).
+    pub(crate) fn ran(document: D, writes: &Writes, root: &Path) -> Self {
+        Self {
+            document,
+            files_written: Some(writes.named(Some(root))),
         }
     }
 }
