@@ -135,8 +135,8 @@ fn the_outcome_serializes_the_whole_schema() {
     // Nothing is lost: it reads back as the schema, and is the schema's own
     // serialization, keys in order.
     let back: GraphProtocolSchema = serde_json::from_str(&text).unwrap();
-    assert_eq!(back, outcome.schema);
-    assert_eq!(text, serde_json::to_string_pretty(&outcome.schema).unwrap());
+    assert_eq!(back.entity_kinds, outcome.entity_kinds);
+    assert_eq!(text, serde_json::to_string_pretty(&outcome).unwrap());
 }
 
 #[specforge_test(

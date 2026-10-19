@@ -1,15 +1,13 @@
 //! `specforge schema` and `specforge.schema`: the versioned Graph Protocol
 //! schema, one operation over the project view (ADR 0015). Both surfaces
-//! answer one document for one request: the outcome serializes itself
-//! (ADR 0027's round, ADR 0015 D8 as amended). `specforge schema
+//! answer one document for one request: the operation answers the document
+//! itself (ADR 0052, round-18 amendment). `specforge schema
 //! --publish` is [`json_schema`].
 
-use serde::{Serialize, Serializer};
+use serde::Serialize;
 use serde_json::Value;
 use specforge_common::shape::Shape;
-use specforge_emitter::{
-    GraphProtocolSchema, SchemaEdgeType, SchemaEntityKind, SchemaExtensionInfo, SchemaVersion,
-};
+use specforge_emitter::{SchemaEdgeType, SchemaEntityKind, SchemaExtensionInfo, SchemaVersion};
 
 use crate::read::export::{self, AGENT_FORMAT, FORMAT};
 use crate::view::ProjectView;
@@ -36,34 +34,11 @@ impl Default for SchemaRequest<'_> {
     }
 }
 
-/// The schema a request selects.
-#[derive(Debug, Clone)]
-pub struct SchemaOutcome {
-    /// Versioned as `specforge export` versions it; filtered by kind.
-    pub schema: GraphProtocolSchema,
-    /// Whether `schema.edge_types` is part of the answer.
-    pub edges: bool,
-    /// Each loaded extension's rules, tagged `extension`, when asked for.
-    pub validation_rules: Option<Vec<Value>>,
-}
-
-impl SchemaOutcome {
-    /// The schema as one document: its keys in `GraphProtocolSchema` order
-    /// (`schema_version`, `extensions`, `entity_kinds`), then `edge_types`
-    /// when edges were asked for and `validation_rules` when they were.
-    /// Unfiltered, it is the schema's own serialization.
-    pub fn document(&self) -> SchemaDocument {
-        SchemaDocument {
-            schema_version: self.schema.schema_version.clone(),
-            extensions: self.schema.extensions.clone(),
-            entity_kinds: self.schema.entity_kinds.clone(),
-            edge_types: self.edges.then(|| self.schema.edge_types.clone()),
-            validation_rules: self.validation_rules.clone(),
-        }
-    }
-}
-
-/// What `specforge schema` and `specforge.schema` answer with.
+/// What `specforge schema` and `specforge.schema` answer with: the schema
+/// as one document, its keys in `GraphProtocolSchema` order
+/// (`schema_version`, `extensions`, `entity_kinds`), then `edge_types` when
+/// edges were asked for and `validation_rules` when they were. Unfiltered,
+/// it is the schema's own serialization.
 #[derive(Debug, Clone, Serialize, Shape)]
 pub struct SchemaDocument {
     pub schema_version: SchemaVersion,
@@ -76,14 +51,6 @@ pub struct SchemaDocument {
     /// Absent unless asked for.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub validation_rules: Option<Vec<Value>>,
-}
-
-/// The outcome serializes as its document: both surfaces answer one
-/// document for one request.
-impl Serialize for SchemaOutcome {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.document().serialize(serializer)
-    }
 }
 
 /// The standalone JSON Schema (draft 2020-12) a `format` export of the
@@ -117,7 +84,7 @@ pub enum SchemaField {
 pub fn schema(
     view: &ProjectView,
     request: &SchemaRequest,
-) -> Result<Noticed<SchemaOutcome>, Refusal<SchemaField>> {
+) -> Result<Noticed<SchemaDocument>, Refusal<SchemaField>> {
     let versioned = view.versioned_schema();
     let notices = versioned.notices();
     let mut schema = versioned.into_schema();
@@ -147,9 +114,11 @@ pub fn schema(
             .collect()
     });
     Ok(Noticed::new(
-        SchemaOutcome {
-            schema,
-            edges: request.edges,
+        SchemaDocument {
+            schema_version: schema.schema_version,
+            extensions: schema.extensions,
+            entity_kinds: schema.entity_kinds,
+            edge_types: request.edges.then_some(schema.edge_types),
             validation_rules,
         },
         notices,
