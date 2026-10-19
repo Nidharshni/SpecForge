@@ -622,16 +622,20 @@ pub fn link(
         Some(_) => None,
     };
     let current = match (own, inherited) {
-        (Some(entry), _) => match &entry.value {
-            FieldValue::List(_) => items_of(&entry.value),
-            _ if matches!(form.field_type(), FieldType::Reference) => None,
-            _ => {
-                return Err(not_editable(
-                    EditField::Field,
-                    format!("'{field}' is not a list"),
-                ));
+        (Some(entry), _) => {
+            // A list written as one value is its one item, as the graph build stores it (ADR 0093).
+            let stored = form.coerce(&entry.value, entry.value_span.as_ref());
+            match stored.as_ref().unwrap_or(&entry.value) {
+                value @ FieldValue::List(_) => items_of(value),
+                _ if matches!(form.field_type(), FieldType::Reference) => None,
+                _ => {
+                    return Err(not_editable(
+                        EditField::Field,
+                        format!("'{field}' is not a list"),
+                    ));
+                }
             }
-        },
+        }
         (None, Some(value)) => items_of(&value),
         (None, None) => Some(Items {
             written: Vec::new(),

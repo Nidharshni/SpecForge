@@ -59,7 +59,7 @@ behavior edit_entity_link "Edit an Entity Reference List" {
   contract   """
     A link edit adds a target to a list field and keeps the items as written;
     an unlink edit removes it, and removes the field when the last item goes.
-    A link to a target already there changes nothing. A field a block inherits
+    A link to a target already there changes nothing. A list written as one value is its one item. A field a block inherits
     from its file's defaults is copied into an own field before it changes, as
     the earlier edits of the list left the file, and an own field equal to the default is removed.
   """
@@ -70,6 +70,7 @@ behavior edit_entity_link "Edit an Entity Reference List" {
   verify unit "link of a target already there writes nothing"
   verify unit "a link after new starts from the file's default"
   verify unit "a link after unset starts from the file's default"
+  verify unit "link and unlink read a list written as one value as its one item"
 }
 
 behavior edit_entity_obligation "Edit an Entity Obligation" {
