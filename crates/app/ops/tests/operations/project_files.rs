@@ -65,18 +65,6 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
         1,
         "the export's schema record: written by `specforge export` only",
     ),
-    (
-        "extension/publish.rs",
-        "fs::read(",
-        1,
-        "an author's built binary, `specforge publish` only",
-    ),
-    (
-        "extension/candidate.rs",
-        "fs::read_to_string(",
-        1,
-        "a held crate directory's Cargo.toml: only its name is read, and the binary it names is held",
-    ),
 ];
 
 /// Files and directories that are test support, or the module itself.

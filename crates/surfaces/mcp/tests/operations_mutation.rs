@@ -1550,7 +1550,7 @@ fn add_extension_invalid_manifest_placeholder() {
         json!({"specifiers": ["invalid-extension-xyz"]}),
     );
     let error = crate::tool_errors::mcp_error(&resp);
-    assert_eq!(error["diagnostic"]["code"], "E054", "{resp}");
+    assert_eq!(error["diagnostic"]["code"], "E040", "{resp}");
     let msg = error["message"].as_str().unwrap();
     assert!(msg.contains("invalid-extension-xyz"), "{msg}");
 }
@@ -1634,7 +1634,7 @@ fn add_extension_invalid_specifier() {
         json!({"specifiers": ["no-at-sign"]}),
     );
     let error = crate::tool_errors::mcp_error(&resp);
-    assert_eq!(error["diagnostic"]["code"], "E054", "{resp}");
+    assert_eq!(error["diagnostic"]["code"], "E040", "{resp}");
     let msg = error["message"].as_str().unwrap();
     assert!(msg.contains("no-at-sign"), "{msg}");
 }
@@ -1650,7 +1650,7 @@ fn add_extension_reads_specifiers_as_add_does() {
     let mut server = test_server();
     for (specifier, code) in [
         ("@acme/tool@1.x", "E063"), // I5
-        ("foo@/bar", "E054"),       // I9
+        ("foo@/bar", "E040"),       // I9
         ("@acme/..", "E054"),       // I12
         ("@a/x", "E063"),           // I15
     ] {

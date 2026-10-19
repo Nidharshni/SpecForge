@@ -9,6 +9,7 @@ use specforge_ops::extension::{self, AddRequest, publish, validate};
 use specforge_ops::registry::Unconfigured;
 use specforge_ops::registry::testing::MemoryRegistry;
 use specforge_ops::testing::candidates;
+use specforge_test_macros::test as specforge_test;
 use tempfile::TempDir;
 
 /// The `(code, message)` each verb answers for `path`: add, init, publish, extension validate.
@@ -54,8 +55,10 @@ fn refusals(scratch: &Path, path: &Path) -> [(String, String); 4] {
     [by_add, by_init, by_publish, by_validate].map(|e| (e.code.to_string(), e.message))
 }
 
-#[test]
-#[ignore = "flipped by T7"]
+#[specforge_test(
+    behavior = "resolve_extension_source",
+    verify = "a local path is refused by add, init, publish and extension validate with one code and message per cause"
+)]
 fn every_verb_refuses_a_path_alike() {
     let t = TempDir::new().unwrap();
     let scratch = t.path();
@@ -117,7 +120,6 @@ fn every_verb_refuses_a_path_alike() {
 
 #[cfg(unix)]
 #[test]
-#[ignore = "flipped by T7"]
 fn an_unreadable_component_is_refused_alike() {
     use std::os::unix::fs::PermissionsExt;
 

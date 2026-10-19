@@ -107,9 +107,9 @@ fn init_reads_its_specifiers_as_add_reads_them() {
     let scratch = TempDir::new().unwrap();
     let missing = scratch.path().join("missing.wasm").display().to_string();
     let cases = [
-        ("Bad Name", "E054"),
+        ("Bad Name", "E040"),
         ("@acme/x@>>1", "R-RES-003"),
-        (missing.as_str(), "E054"),
+        (missing.as_str(), "E040"),
         ("git+https://x/y", "E064"),
         ("@acme/x", "E063"),
     ];

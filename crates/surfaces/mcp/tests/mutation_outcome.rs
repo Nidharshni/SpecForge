@@ -701,7 +701,7 @@ fn add_extension_adds_every_specifier_as_one_change() {
         error["message"]
             .as_str()
             .unwrap()
-            .contains(&format!("adding '{missing}': file not found")),
+            .contains(&format!("adding '{missing}': no extension binary at")),
         "{reply}"
     );
     assert!(changed.is_empty(), "{changed:?}");

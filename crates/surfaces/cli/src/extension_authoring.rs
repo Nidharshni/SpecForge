@@ -11,6 +11,7 @@ use crate::terminal::{Terminal, errln, outln};
 use serde_json::json;
 use specforge_common::{Code, codes};
 use specforge_ops::OpErrorKind;
+use specforge_ops::extension::LocalComponent;
 use specforge_package::PackageName;
 use std::path::{Path, PathBuf};
 
@@ -196,11 +197,12 @@ fn run_build(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit {
         Notes::new(terminal, format).person(format_args!("{}", stderr.trim_end()));
         return Refusal::of(format).coded(terminal, OpErrorKind::Internal, NOT_BUILT, message);
     }
-    let binary = match specforge_ops::extension::binary_at(path) {
-        Ok(binary) => binary,
-        Err(error) => {
-            return Refusal::of(format).report(terminal, &error);
-        }
+    let binary = match LocalComponent::read(
+        path,
+        crate::caller::of(false, format, terminal).containment(),
+    ) {
+        Ok(component) => component.path,
+        Err(error) => return Refusal::of(format).report(terminal, &error),
     };
 
     match format {

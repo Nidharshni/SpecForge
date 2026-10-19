@@ -23,7 +23,9 @@ pub use add::{
     AddDocument, AddField, AddOutcome, AddRequest, AddResult, Added, AddedExtension, BuiltinSource,
     DuplicateSpecifier, EnabledBuiltin, InstalledPackage, PlannedAdd, PresentExtension, add,
 };
-pub use candidate::{Installable, LocalFile, binary_at, builtin_declaration};
+pub use candidate::{
+    Installable, LocalComponent, LocalFile, WASM_TARGET, builtin_declaration, target_dir,
+};
 pub use inventory::{Inventory, ProjectExtension, Selection, Status, inventory};
 pub use list::{
     ExtensionInfo, ExtensionsDocument, LockedExtension, ProviderRow, ProviderStatus,

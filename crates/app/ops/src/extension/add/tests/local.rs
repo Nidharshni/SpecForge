@@ -129,7 +129,7 @@ fn add_refuses_a_binary_that_claims_a_builtins_name() {
     behavior = "add_extension_to_existing_project",
     verify = "add unresolvable extension rejects with diagnostic"
 )]
-fn a_local_file_add_cannot_read_is_e054() {
+fn a_local_path_that_names_nothing_is_e040() {
     use crate::config::testing::files_under;
     let dir = project_with(EMPTY_PROJECT);
     let registry = crate::registry::Unconfigured("add");
@@ -145,10 +145,10 @@ fn a_local_file_add_cannot_read_is_e054() {
         &runtime(),
     )
     .unwrap_err();
-    assert_eq!(error.error.code, "E054");
+    assert_eq!(error.error.code, "E040");
     assert_eq!(
         error.error.message,
-        format!("file not found: {}", missing.display())
+        format!("no extension binary at {}", missing.display())
     );
     assert_eq!(files_under(dir.path()), before);
     assert_eq!(files_under(dir.path()), before);
