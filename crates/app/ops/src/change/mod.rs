@@ -19,6 +19,13 @@ use std::path::PathBuf;
 
 use crate::{Held, OpError, Writes};
 
+/// A file an operation planned on no longer holds what it read: nothing was written.
+pub const FILE_CHANGED: &str = "file_changed";
+/// A project file an operation must read could not be read.
+pub const FILE_UNREADABLE: &str = "file_unreadable";
+/// A project file an operation must write could not be written.
+pub const FILE_UNWRITABLE: &str = "file_unwritable";
+
 /// Project files staged to be written together.
 pub(crate) struct ProjectChange {
     staged: Vec<Staged>,

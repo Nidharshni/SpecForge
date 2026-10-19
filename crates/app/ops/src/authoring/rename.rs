@@ -27,9 +27,6 @@ pub enum RenameField {
 pub const INVALID_ID: &str = "invalid_name";
 /// The new ID already names an entity.
 pub const TAKEN: &str = "entity_exists";
-/// A file the rename must edit cannot be read (or written).
-pub const UNREADABLE: &str = "file_unreadable";
-
 /// The shortest and longest entity IDs (E014).
 pub const ID_LENGTH: std::ops::RangeInclusive<usize> = 2..=60;
 
@@ -168,7 +165,7 @@ pub fn plan(
         let files: Vec<&str> = unreadable.into_iter().collect();
         return Err(OpError::new(
             OpErrorKind::Internal,
-            UNREADABLE,
+            crate::FILE_UNREADABLE,
             format!(
                 "cannot rename '{old_id}': {} do not spell it where the graph says",
                 files.join(", ")
@@ -222,7 +219,7 @@ pub fn apply(plan: &RenamePlan, caller: Caller<'_>) -> Result<crate::Writes, OpE
         let Some(planned) = plan.planned.get(file) else {
             return Err(OpError::new(
                 OpErrorKind::Internal,
-                UNREADABLE,
+                crate::FILE_UNREADABLE,
                 format!(
                     "cannot rename '{}': no text was planned for {file}",
                     plan.old_id
@@ -252,12 +249,12 @@ pub fn apply(plan: &RenamePlan, caller: Caller<'_>) -> Result<crate::Writes, OpE
             ),
             Cause::Unreadable { file, error } => OpError::new(
                 OpErrorKind::of_io(&error),
-                UNREADABLE,
+                crate::FILE_UNREADABLE,
                 format!("failed to read {}: {error}", file.display()),
             ),
             Cause::Unwritable { file, error } => OpError::new(
                 OpErrorKind::of_io(&error),
-                UNREADABLE,
+                crate::FILE_UNREADABLE,
                 format!("failed to write {}: {error}", file.display()),
             ),
             Cause::Then(never) => match never {},
@@ -441,7 +438,7 @@ mod tests {
 
         let error = apply(&plan, crate::testing::caller()).unwrap_err();
 
-        assert_eq!(error.code, UNREADABLE);
+        assert_eq!(error.code, crate::FILE_UNREADABLE);
         assert_eq!(
             std::fs::read_to_string(dir.path().join("limit.spec")).unwrap(),
             LIMIT
@@ -490,7 +487,7 @@ mod tests {
         assert_eq!(code(plan(&navigator, "session_limit", "login")), TAKEN);
         let without_limit = without_limit(&project);
         let refused = plan(&nav(&without_limit), "session_limit", "session_cap").unwrap_err();
-        assert_eq!(refused.error.code, UNREADABLE);
+        assert_eq!(refused.error.code, crate::FILE_UNREADABLE);
         assert!(
             refused.error.message.contains("limit.spec"),
             "{}",
@@ -507,7 +504,7 @@ mod tests {
             (k, text)
         }));
         let refused = plan(&nav(&stale), "session_limit", "session_cap").unwrap_err();
-        assert_eq!(refused.error.code, UNREADABLE);
+        assert_eq!(refused.error.code, crate::FILE_UNREADABLE);
         assert!(
             refused.error.message.contains("login.spec"),
             "{}",

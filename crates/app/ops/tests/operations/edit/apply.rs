@@ -60,7 +60,7 @@ fn apply_writes_every_file_or_none() {
     let before = files_under(&root);
     let error = edit::apply(&planned, specforge_ops::testing::caller()).unwrap_err();
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
-    assert_eq!(error.code, "file_unreadable", "{error:?}");
+    assert_eq!(error.code, specforge_ops::FILE_UNREADABLE, "{error:?}");
     assert!(changed_since(&root, &before).is_empty());
 }
 
@@ -131,7 +131,7 @@ fn apply_creates_the_new_file_and_removes_it_on_failure() {
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
     let error = edit::apply(&planned, specforge_ops::testing::caller()).unwrap_err();
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
-    assert_eq!(error.code, "file_unreadable", "{error:?}");
+    assert_eq!(error.code, specforge_ops::FILE_UNREADABLE, "{error:?}");
     assert!(changed_since(&root, &before).is_empty());
     assert!(
         !root.join("fresh").exists(),
@@ -178,7 +178,7 @@ fn an_edit_that_cannot_write_a_file_is_unwritable() {
     let before = files_under(&root);
     let error = edit::apply(&planned, specforge_ops::testing::caller()).unwrap_err();
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
-    assert_eq!(error.code, "file_unwritable", "{error:?}");
+    assert_eq!(error.code, specforge_ops::FILE_UNWRITABLE, "{error:?}");
     assert_eq!(error.kind, OpErrorKind::PermissionDenied, "{error:?}");
     assert!(
         error

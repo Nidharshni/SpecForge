@@ -114,7 +114,7 @@ impl Opened {
         let bytes = held.read_if_there().map_err(|error| {
             OpError::new(
                 OpErrorKind::of_io(&error),
-                "file_unreadable",
+                crate::FILE_UNREADABLE,
                 format!("failed to read {}: {error}", held.spelled.display()),
             )
         })?;

@@ -649,7 +649,7 @@ fn an_init_that_cannot_read_gitignore_is_unreadable() {
     std::fs::set_permissions(&gitignore, std::fs::Permissions::from_mode(0o644)).unwrap();
 
     let error = refused.error;
-    assert_eq!(error.code, "file_unreadable", "{error:?}");
+    assert_eq!(error.code, specforge_ops::FILE_UNREADABLE, "{error:?}");
     assert_eq!(
         error.kind,
         specforge_ops::OpErrorKind::PermissionDenied,

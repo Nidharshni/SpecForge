@@ -263,7 +263,7 @@ fn refused(
         ),
         Cause::Unreadable { file, error } => OpError::new(
             OpErrorKind::of_io(&error),
-            "file_unreadable",
+            crate::FILE_UNREADABLE,
             format!("failed to read {}: {error}", file.display()),
         ),
         Cause::Unwritable { file, error } => {
@@ -272,7 +272,7 @@ fn refused(
             } else {
                 also.iter()
                     .find(|(path, _)| *path == file)
-                    .map_or("file_unreadable", |(_, code)| code)
+                    .map_or(crate::FILE_UNREADABLE, |(_, code)| code)
             };
             OpError::new(
                 OpErrorKind::of_io(&error),

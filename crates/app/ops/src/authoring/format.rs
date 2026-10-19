@@ -19,5 +19,5 @@ pub use document::{
 };
 pub use run::{
     Failure, FileChange, FileDiff, FileFailure, FormatDocument, FormatField, Mode, Outcome,
-    Request, UNREADABLE, UNWRITABLE, run,
+    Request, run,
 };

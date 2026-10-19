@@ -9,7 +9,6 @@ mod defaults;
 mod validate;
 pub mod write;
 
-use crate::authoring::rename::UNREADABLE;
 use crate::change::{Cause, ProjectChange};
 use crate::view::ProjectView;
 use crate::{Caller, OpError, OpErrorKind, Refusal, Writes};
@@ -255,7 +254,7 @@ impl<'v> Planner<'v> {
         let text = self.text(&located.key).ok_or_else(|| {
             OpError::new(
                 OpErrorKind::Internal,
-                UNREADABLE,
+                crate::FILE_UNREADABLE,
                 format!("no text was read for {}", located.key),
             )
         })?;
@@ -456,12 +455,12 @@ pub fn apply(plan: &EditPlan, caller: Caller<'_>) -> Result<Writes, OpError> {
             ),
             Cause::Unreadable { file, error } => OpError::new(
                 OpErrorKind::of_io(&error),
-                UNREADABLE,
+                crate::FILE_UNREADABLE,
                 format!("failed to read {}: {error}", file.display()),
             ),
             Cause::Unwritable { file, error } => OpError::new(
                 OpErrorKind::of_io(&error),
-                UNREADABLE,
+                crate::FILE_UNREADABLE,
                 format!("failed to write {}: {error}", file.display()),
             ),
             Cause::Then(never) => match never {},

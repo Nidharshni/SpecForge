@@ -106,13 +106,6 @@ pub enum Failure {
     },
 }
 
-/// The code of a [`Failure::Read`] as an [`OpError`]: the file could not be
-/// read.
-pub const UNREADABLE: &str = crate::authoring::rename::UNREADABLE;
-/// The code of a [`Failure::Write`] as an [`OpError`]: the file could not be
-/// written.
-pub const UNWRITABLE: &str = "file_unwritable";
-
 impl Failure {
     /// A read of `path` failed with `error`.
     pub(super) fn read(path: PathBuf, error: &std::io::Error) -> Self {
@@ -177,13 +170,13 @@ impl Failure {
     }
 
     /// The failure as every operation reports one: its kind, its own code
-    /// ([`UNREADABLE`], [`UNWRITABLE`]) and the message [`Display`] gives.
+    /// ([`FILE_UNREADABLE`], [`FILE_UNWRITABLE`]) and the message [`Display`] gives.
     ///
     /// [`Display`]: std::fmt::Display
     pub fn to_op_error(&self) -> OpError {
         let code = match self {
-            Failure::Read { .. } => UNREADABLE,
-            Failure::Write { .. } => UNWRITABLE,
+            Failure::Read { .. } => crate::FILE_UNREADABLE,
+            Failure::Write { .. } => crate::FILE_UNWRITABLE,
         };
         OpError::new(self.kind(), code, self.to_string())
     }

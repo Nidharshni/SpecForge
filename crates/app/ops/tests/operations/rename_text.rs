@@ -52,7 +52,7 @@ fn a_rename_that_cannot_write_a_file_is_unwritable() {
     let error = rename::apply(&plan, specforge_ops::testing::caller()).unwrap_err();
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
 
-    assert_eq!(error.code, "file_unwritable", "{error:?}");
+    assert_eq!(error.code, specforge_ops::FILE_UNWRITABLE, "{error:?}");
     assert_eq!(error.kind, OpErrorKind::PermissionDenied, "{error:?}");
     assert!(
         error
