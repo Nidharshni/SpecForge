@@ -279,7 +279,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   builtin from its embedded binary, an installed extension from its pinned module, a `.wasm` file
   entry from its file under the name it declares. Which extension each entry names is decided once
   (`Installed::resolve`: a builtin's name before a lock entry, `.wasm` file entries after every named
-  entry), and the lock plan reads the same decision. Its declarations come in entry order; the registry
+  entry), and the lock plan reads the same decision: a named entry names an
+  extension by its text (`ExtensionEntry::names`), a `.wasm` file entry only by what its component declares, once
+  admitted (ADR 0160). Its declarations come in entry order; the registry
   build puts them in load order. What does not load is a typed `LoadFailure` on its
   entry with one diagnostic and leaves nothing loaded, and what an entry reports though it loaded (W149, W153, W138) is on the
   entry too; the runtime keeps none, and `Installed::load_diagnostics` orders them, entry by entry. Without a runtime nothing loads, and each entry
@@ -316,9 +318,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   kept, and refuses (`file_changed`) when the file no longer holds what the plan opened with (ADR 0126). Its writes land inside its own project: it is opened with the operation's **Caller** and narrows the caller's **Containment** to the project root itself (ADR 0137)
   (`specforge_ops::extension::lock_plan::LockPlan`, ADR 0041, ADR 0065). An
   operation names what it asks for, each an **ask**; refusals and outcomes are answered per ask.
-  An ask the project already has (an entry enables it; for an install, the lock pins it as asked with its module on disk
+  An ask the project already has (a named entry names it; for an install, the lock pins it as asked with its module on disk
   the one pinned) is answered **unchanged** and stages nothing, and a plan whose asks change nothing is neither judged
-  nor written (ADR 0138).
+  nor written (ADR 0138). An
+  `add` or `init` of an extension a `.wasm` file entry already loads is refused (`extension_conflict`), nothing
+  written (ADR 0160).
   `add` and `init` first enable the builtins what they add requires, dependencies first;
   `update` enables nothing. The peer rule then judges the **project peer set** as the change leaves it,
   once: every declared peer whose dependent or peer the change touches. A required peer no member

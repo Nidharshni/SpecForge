@@ -2,7 +2,7 @@
 
 **Status:** accepted (2026-10-17, architecture round 14, plan 06). Amends [ADR 0065](0065-every-extension-change-is-one-lock-plan-change.md)
 D1 (the per-ask outcomes) and [ADR 0126](0126-a-lock-plan-writes-the-specforge-json-entries-it-judged.md) D1 (the per-ask
-`appended`).
+`appended`). D1's "an entry enables it" is a named entry naming it ([ADR 0160](0160-what-an-extension-entry-enables-is-the-loads-decision.md)).
 
 `add` decided "already there" before it asked its lock plan: a builtin already enabled, a local install or a registry
 package whose lock entry, module on disk and `specforge.json` entry all matched. Only the rest reached the plan, which

@@ -158,6 +158,8 @@ the user's publisher-key pins. A failure there puts every file back; `config` is
   builtin's name before a lock entry; `.wasm` file entries after every named entry; a file declaring a
   name already loaded refused). The extension load, the watched module paths (`Installed::modules`) and
   the lock plan's project peer set read it (ADR 0041, amendment round 7).
+  **Amended by ADR 0160 (2026-10-19):** the lock plan's other questions (append, unchanged, drops, companions) read the
+  same rule: a named entry by its text, a `.wasm` file entry by what its component declares.
 - **D7**, first bullet: enabling the builtins an extension requires is the lock plan's (ADR 0041 B3),
   for a builtin, a local file and a registry package alike, in `add` and `init`; `candidate::
   required_builtins` is gone. A builtin that does not load still refuses the operation (E028).
