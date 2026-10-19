@@ -9,6 +9,7 @@ mod beside;
 mod build_cache;
 mod check_surfaces;
 mod cli;
+mod cli_only_documents;
 mod collect;
 mod config_schema;
 mod contracts;
