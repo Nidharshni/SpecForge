@@ -104,12 +104,12 @@ fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<Payload>, Box<Mc
         };
 
     // What the seeds' chains reach, and which of it is unverified.
-    let reach = specforge_ops::read::trace::reach(&view, seeds.iter().map(String::as_str))
+    let affected = trace::affected(&view, seeds.iter().map(String::as_str))
         .map_err(|error| Box::new(McpError::from(error)))?;
     let payload = Payload {
         coverage_gaps,
-        unverified_entities: reach.unverified,
-        affected_entities: reach.affected,
+        unverified_entities: affected.unverified,
+        affected_entities: affected.entities,
     };
 
     let instruction = format!(

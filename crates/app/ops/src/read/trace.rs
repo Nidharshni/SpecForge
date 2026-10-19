@@ -269,38 +269,38 @@ pub fn every(view: &ProjectView) -> Noticed<Traces> {
 /// What the trace chains of some entities reach, and which of it is
 /// unverified: the trace prompt's read view (ADR 0015 D4, P1).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Reach {
+pub struct Affected {
     /// The seeds and every entity their chains reach, sorted by ID.
-    pub affected: Vec<String>,
+    pub entities: Vec<String>,
     /// The affected entities that count toward coverage and are not
     /// proven (`ProjectCoverage::is_unverified`), sorted by ID.
     pub unverified: Vec<String>,
 }
 
-/// The reach of `seeds` over `view`: each seed's chain as
+/// The entities affected by `seeds` over `view`: each seed's chain as
 /// `trace(view, Target::Entity(seed))` computes it. A seed the graph lacks
 /// is `view::not_found` (E003, with its
 /// did-you-mean); a recorded report that cannot be used is the coverage
 /// view's (E045).
-pub fn reach<'s>(
+pub fn affected<'s>(
     view: &ProjectView,
     seeds: impl IntoIterator<Item = &'s str>,
-) -> Result<Reach, OpError> {
+) -> Result<Affected, OpError> {
     let expectations = TraceExpectations::of(view.registries());
     let graph = view.graph();
-    let mut affected = BTreeSet::new();
+    let mut entities = BTreeSet::new();
     for seed in seeds {
         let chain = traced(graph, seed, &expectations).ok_or_else(|| not_found(graph, seed))?;
-        affected.extend(chain.reached().map(str::to_string));
+        entities.extend(chain.reached().map(str::to_string));
     }
     let coverage = view.coverage()?;
-    let unverified = affected
+    let unverified = entities
         .iter()
         .filter(|id| coverage.is_unverified(id))
         .cloned()
         .collect();
-    Ok(Reach {
-        affected: affected.into_iter().collect(),
+    Ok(Affected {
+        entities: entities.into_iter().collect(),
         unverified,
     })
 }

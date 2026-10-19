@@ -635,7 +635,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Read view**: an operation that only reads the project view: stats, trace, the coverage view, the
   model and outline diagrams, the versioned schema, inspect, query, list and search (the entities a
   selection over the view returns, `specforge_ops::read::query`), the exploration and the review
-  (`specforge_ops::read::{explore, review}`), the reach of a trace (`specforge_ops::read::trace::reach`, the trace prompt's
+  (`specforge_ops::read::{explore, review}`), the entities a trace's chains reach (`specforge_ops::read::trace::affected`, the trace prompt's
   affected and unverified entities), the plan check (`specforge_ops::read::plan::check`), the anchors of a source file and of an entity
   (`specforge_ops::read::navigate::{anchors_of_file, anchors_of_entity}`, ADR 0140), and the inference guide and plan
   (`specforge_ops::read::infer::{guide, kind_guide, inference_plan}`). Each returns a typed outcome; the CLI,
