@@ -48,3 +48,5 @@ E063; the next rule about how a specifier becomes an ask lands once.
 
 An operation that must act between its asks and the check beyond what the plan reads at check time (then `ask` returns
 the unchecked plan); an operation whose specifiers are asked of something other than a lock plan.
+
+**Amended by [ADR 0165](0165-the-lock-a-change-leaves-is-built-when-its-plan-is-checked.md) (2026-10-19):** D2: the operation still opens its plan and hands it to `ask`; `ask` asks it, before it reads a file, whether it can install (`LockPlan::can_install`), so a lock that cannot be read refuses first. The rejected "`names` opening the plan" stands.

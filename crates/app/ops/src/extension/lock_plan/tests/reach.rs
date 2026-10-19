@@ -21,9 +21,7 @@ fn adding_app<'a>(
         fetching(registry),
         caller,
         purpose,
-        true,
-    )
-    .unwrap();
+    );
     stage_fetched(&mut plan, &app(), Version::new(1, 0, 0));
     plan
 }

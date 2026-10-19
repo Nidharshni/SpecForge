@@ -12,9 +12,7 @@ fn the_plan_judges_and_answers_one_set_of_entries() {
         fetching(no_registry()),
         crate::testing::caller(),
         Purpose::Commit,
-        false,
-    )
-    .unwrap();
+    );
     plan.disable(Ask(0), Disabled::Entry("./a.wasm".into()));
     plan.enable(Ask(0), "@acme/bar");
 
@@ -62,9 +60,7 @@ fn enabling<'a>(
         fetching(no_registry()),
         crate::testing::caller(),
         purpose,
-        false,
-    )
-    .unwrap();
+    );
     for (at, name) in names.iter().enumerate() {
         plan.enable(Ask(at), name);
     }

@@ -102,7 +102,6 @@ impl<'a> Checked<'a> {
         } = self;
         let LockPlan {
             installed,
-            lock,
             staged,
             config,
             appended,
@@ -114,7 +113,7 @@ impl<'a> Checked<'a> {
             caller,
             ..
         } = plan;
-        let changes_lock = lock.is_some();
+        let changes_lock = !staged.is_empty() || !uninstalled.is_empty();
         let pins = fetching.map(|(fetching, _)| {
             (
                 fetching.registry,
@@ -172,7 +171,7 @@ impl<'a> Checked<'a> {
                 .map(|held| config.unchanged(held, operation))
                 .transpose()?
                 .flatten();
-            // The plan's open refused a lock that can't be read (`writable_lock`); the change starts from the same lock.
+            // The check refused a lock that can't be read (`LockPlan::view`); the change starts from the same lock.
             let change = if changes_lock {
                 Some(
                     installed

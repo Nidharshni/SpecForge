@@ -20,9 +20,7 @@ fn base_plan<'a>(
         fetching(registry),
         crate::testing::caller(),
         purpose,
-        true,
     )
-    .unwrap()
 }
 
 fn answer(plan: LockPlan<'_>) -> (Answer, Done) {
@@ -126,9 +124,7 @@ fn a_plan_whose_asks_change_nothing_is_not_judged() {
             fetching(no_registry()),
             crate::testing::caller(),
             Purpose::Commit,
-            false,
-        )
-        .unwrap();
+        );
         plan.enable(Ask(0), name);
         plan
     };
@@ -155,9 +151,7 @@ fn a_change_that_changes_nothing_writes_nothing_and_ignores_a_later_edit_of_the_
         fetching(no_registry()),
         crate::testing::caller(),
         Purpose::Commit,
-        false,
-    )
-    .unwrap();
+    );
     plan.enable(Ask(0), "@specforge/product");
     let checked = plan.check().ok().unwrap();
     let edited = r#"{"extensions":["@specforge/product","@acme/x"]}"#;

@@ -334,9 +334,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Registry::pin`): a refused or failed plan pins nothing (ADR 0059). A **dry run** is the plan
   checked and not committed: it answers what the operation would, its refusal included, and writes,
   pins and downloads nothing; a registry package is judged by its published manifest
-  (`Registry::published`). A plan that may write the lock
-  opens it first: a `specforge.lock` that is there and can't be read refuses the change once (E033, the lock's own
-  remedy, `lock_plan::writable_lock`), and `update` and `remove` answer that refusal, never their own (ADR 0028).
+  (`Registry::published`). The lock the change leaves is built when the plan is checked, from the lock as read and what
+  it staged; a change that stages nothing accepts any lock (ADR 0165). A change that installs or uninstalls refuses a
+  `specforge.lock` that is there and can't be read once, before anything is read (E033, the lock's own remedy,
+  `lock_plan::writable_lock`), and `update` and `remove` answer that refusal, never their own (ADR 0028).
 - **Claim**: what one specifier of an `add` or `init` asks for an extension name: a second specifier naming it the
   same way is a duplicate, another way `extension_conflict` (`specforge_ops::extension::claims`, ADR 0098).
 - **Extension names**: what one change's extension strings name, read once by `specforge_ops::extension::names`

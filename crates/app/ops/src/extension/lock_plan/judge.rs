@@ -65,7 +65,8 @@ impl<'a> LockPlan<'a> {
             }
         }
         if !changing.names.is_empty() && !(self.verb == Verb::Remove && self.force) {
-            let (view, after) = (self.view(), self.entries_after());
+            let view = self.view().map_err(|error| Refused::of(&changing, error))?;
+            let after = self.entries_after();
             let set = match ProjectPeers::of(&view, &after, &mut self.declarations) {
                 Ok(set) => set,
                 Err(error) => return Err(Refused::of(&changing, error)),
@@ -135,7 +136,8 @@ impl<'a> LockPlan<'a> {
             &mut self.declarations,
         )
         .map_err(|error| Refused::of(&none(), error))?;
-        let after = ProjectPeers::of(&self.view(), &self.entries_after(), &mut self.declarations)
+        let view = self.view().map_err(|error| Refused::of(&none(), error))?;
+        let after = ProjectPeers::of(&view, &self.entries_after(), &mut self.declarations)
             .map_err(|error| Refused::of(&none(), error))?;
         let mut names: Vec<String> = Vec::new();
         for member in before.members().iter().chain(after.members()) {

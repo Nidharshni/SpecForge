@@ -196,9 +196,7 @@ fn each_ask_is_answered_with_the_builtins_its_extension_required() {
             fetching(no_registry()),
             crate::testing::caller(),
             Purpose::Commit,
-            false,
-        )
-        .unwrap();
+        );
         for (at, name) in asked.iter().enumerate() {
             plan.enable(Ask(at), name);
         }
@@ -311,9 +309,7 @@ fn an_entries_only_plan_accepts_an_unreadable_lock_and_puts_the_config_back() {
         fetching(no_registry()),
         crate::testing::caller(),
         Purpose::Commit,
-        false,
-    )
-    .unwrap();
+    );
     plan.enable(Ask(0), "@specforge/software");
 
     // The second file cannot be created: the config the change wrote is put back.

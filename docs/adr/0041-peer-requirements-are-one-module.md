@@ -194,3 +194,5 @@ version; a peer whose installed module may declare other peers than its lock ent
 `remove` judges the project peer set through the plan (B1 for removals; a locked extension no entry enables keeps
 nothing from being removed), the dry runs of `add` and `remove` are the plan checked and not committed (a registry
 package judged by its published manifest), and A5's init is one plan, committed once (ADR 0065).
+
+**Amended by [ADR 0165](0165-the-lock-a-change-leaves-is-built-when-its-plan-is-checked.md) (2026-10-19):** B4: a plan that stages no install or uninstall accepts any lock; it opens no change.

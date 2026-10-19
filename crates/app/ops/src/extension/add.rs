@@ -167,7 +167,7 @@ pub fn add(
     };
     let names = Names::read(&req.extensions, place).map_err(|e| e.about(AddField::Extensions))?;
     let installed = Installed::at(req.root.dir());
-    // A specforge.lock that can't be read refuses before a file is read or a registry asked.
+    // `names` refuses a specforge.lock that can't be read before it reads a file or asks a registry.
     let plan = LockPlan::adding(
         &installed,
         Opened::read(&config, found),
@@ -182,8 +182,7 @@ pub fn add(
         } else {
             Purpose::Commit
         },
-        names.installs(),
-    )?;
+    );
     let (checked, answers) = names
         .ask(
             plan,

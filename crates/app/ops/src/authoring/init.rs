@@ -178,8 +178,8 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     )
     .map_err(about)?;
 
-    // The lock plan the installs will be, `add`'s: an unreadable lock refuses here (E033), and the
-    // project's peer set is judged before anything is written.
+    // The lock plan the installs will be, `add`'s; `names` refuses a lock it cannot write before it reads a file
+    // (E033), and the project's peer set is judged before anything is written.
     let installed = Installed::at(req.dir);
     let document = json!({
         "$schema": "https://specforge.dev/schema/specforge.json",
@@ -187,8 +187,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
         "version": version,
         "spec_root": SPEC_ROOT,
     });
-    let mut plan =
-        LockPlan::initializing(&installed, runtime, req.caller, names.installs(), document)?;
+    let mut plan = LockPlan::initializing(&installed, runtime, req.caller, document);
     // Test obligations (`verify`) on software kinds come from @specforge/testing (ADR 0002), so
     // enabling software enables it too; the project's test runners get the extensions that
     // collect their results. The plan reads its companions when it is checked.

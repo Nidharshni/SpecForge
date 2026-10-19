@@ -20,7 +20,7 @@ impl<'a> LockPlan<'a> {
         }
         loop {
             let set =
-                ProjectPeers::of(&self.view(), &self.entries_after(), &mut self.declarations)?;
+                ProjectPeers::of(&self.view()?, &self.entries_after(), &mut self.declarations)?;
             let changing = Changing::of(&self.staged, &self.appended);
             let mut wanted: Vec<(String, &'static str)> = Vec::new();
             for name in &changing.names {

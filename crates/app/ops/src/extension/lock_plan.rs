@@ -5,8 +5,9 @@
 //! [`LockPlan::initializing`], [`LockPlan::removing`]) and names what it asks for, each charged to
 //! an [`Ask`]: it installs, enables, disables or fetches from the plan's registry; a removal names what
 //! it uninstalls when it opens. It never drives the plan's own steps: the plan
-//! stages each install into the lock as the operation will leave it (the package's previous entry
-//! is replaced, never counted beside it), closes over the builtins what it adds requires, and judges,
+//! judges the lock as the operation will leave it, built when it is checked from the lock as read
+//! and what was staged (the package's previous entry is replaced, never counted beside it; ADR
+//! 0165), closes over the builtins what it adds requires, and judges,
 //! once, the **project peer set** as the change leaves it (the extensions the project's
 //! `specforge.json` entries load, `peer_set`): every declared peer whose dependent or peer the
 //! change touches, a missing required peer included. An unsatisfied peer installed from a registry
@@ -143,6 +144,8 @@ struct Staged<'a> {
     version: String,
     module: Option<Module>,
     pin: Pin,
+    /// The SHA-256 its lock entry pins: the module's, or for a preview the one its registry publishes.
+    sha256: String,
     from: From<'a>,
 }
 
@@ -162,9 +165,6 @@ struct Appended {
 /// The lock and the `extensions` entries as the operation leaves them, staged in memory.
 pub(crate) struct LockPlan<'a> {
     installed: &'a Installed,
-    /// The lock as the change leaves it; `None` for a plan that installs nothing (it accepts any
-    /// lock: an unreadable one hides the installed extensions, as it hides them from the compile).
-    lock: Option<LockFile>,
     staged: Vec<Staged<'a>>,
     /// `specforge.json` as the plan opened it: what it enables before the change.
     config: Opened,
@@ -196,9 +196,9 @@ pub(crate) struct LockPlan<'a> {
 impl<'a> LockPlan<'a> {
     /// `add`'s plan over the project `installed` is rooted at, whose `specforge.json` enables
     /// `entries`. Builtins and `.wasm` file entries are read through `runtime`, as are the local
-    /// files it installs and, once the gate passed, what it fetched. `installs`: whether a
-    /// specifier installs; then an unreadable lock refuses here (E033), before a file is read or a
-    /// registry asked. A preview fetches nothing: a registry package is judged by its [`Manifest`].
+    /// files it installs and, once the gate passed, what it fetched. It reads no lock: `Names::ask`
+    /// asks [`Self::can_install`] before it reads a file. A preview fetches nothing: a registry
+    /// package is judged by its [`Manifest`].
     pub(crate) fn adding(
         installed: &'a Installed,
         config: Opened,
@@ -206,8 +206,7 @@ impl<'a> LockPlan<'a> {
         fetching: Fetching<'a>,
         caller: Caller<'a>,
         purpose: Purpose,
-        installs: bool,
-    ) -> Result<LockPlan<'a>, OpError> {
+    ) -> LockPlan<'a> {
         let mut plan = LockPlan::open(
             installed,
             config,
@@ -215,11 +214,10 @@ impl<'a> LockPlan<'a> {
             Verb::Install,
             Some((fetching, runtime)),
             "add",
-            installs,
             caller,
-        )?;
+        );
         plan.purpose = purpose;
-        Ok(plan)
+        plan
     }
 
     /// `update`'s plan: as [`Self::adding`], never enabling; an unreadable lock is refused here
@@ -231,28 +229,27 @@ impl<'a> LockPlan<'a> {
         fetching: Fetching<'a>,
         caller: Caller<'a>,
     ) -> Result<LockPlan<'a>, OpError> {
-        LockPlan::open(
+        writable_lock(installed)?;
+        Ok(LockPlan::open(
             installed,
             config,
             Declarations::through(runtime),
             Verb::Update,
             Some((fetching, runtime)),
             "update",
-            true,
             caller,
-        )
+        ))
     }
 
     /// `init`'s plan: a project with no `specforge.json` yet, which the commit creates from `document`
-    /// with the entries the change leaves. It installs local files only (no registry); `installs` as
-    /// in [`Self::adding`].
+    /// with the entries the change leaves. It installs local files only (no registry) and, as
+    /// [`Self::adding`], reads no lock.
     pub(crate) fn initializing(
         installed: &'a Installed,
         runtime: &'a dyn WasmRuntime,
         caller: Caller<'a>,
-        installs: bool,
         document: Value,
-    ) -> Result<LockPlan<'a>, OpError> {
+    ) -> LockPlan<'a> {
         LockPlan::open(
             installed,
             Opened::creating(document),
@@ -260,7 +257,6 @@ impl<'a> LockPlan<'a> {
             Verb::Install,
             None,
             "init",
-            installs,
             caller,
         )
     }
@@ -284,25 +280,28 @@ impl<'a> LockPlan<'a> {
             Verb::Remove,
             None,
             "remove",
-            uninstalling.is_some(),
             caller,
-        )?;
+        );
         plan.purpose = purpose;
         plan.force = force;
-        // `open` read a writable lock because `uninstalling` is `Some`: the lock is there.
+        // An uninstall reads the lock it changes: one that can't be read refuses here (E033), before the removal
+        // is judged; a package the lock does not hold changes nothing.
         if let Some(name) = uninstalling
-            && let Some(lock) = plan.lock.as_mut()
-            && lock.without(name)
+            && writable_lock(view.installed())?.without(name)
         {
             plan.uninstalled.push((Ask(0), name.clone()));
         }
         Ok(plan)
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the plan's whole input: the installed set, the entries, the declarations, the verb, the registry and its runtime, the operation, whether it installs and the caller"
-    )]
+    /// Whether the plan can stage an install: nothing when `specforge.lock` is readable or absent, else the one
+    /// refusal of a lock that is there and can't be read ([`writable_lock`]: E033, the lock's own remedy, about no
+    /// field). `Names::ask` asks it before it reads a file a specifier names or asks a registry (ADR 0028 D4); the
+    /// check refuses the same lock for an install staged without asking ([`Self::view`]).
+    pub(crate) fn can_install(&self) -> Result<(), OpError> {
+        writable_lock(self.installed).map(drop)
+    }
+
     fn open(
         installed: &'a Installed,
         config: Opened,
@@ -310,13 +309,10 @@ impl<'a> LockPlan<'a> {
         verb: Verb,
         fetching: Option<(Fetching<'a>, &'a dyn WasmRuntime)>,
         operation: &'static str,
-        installs: bool,
         caller: Caller<'a>,
-    ) -> Result<LockPlan<'a>, OpError> {
-        let lock = installs.then(|| writable_lock(installed)).transpose()?;
-        Ok(LockPlan {
+    ) -> LockPlan<'a> {
+        LockPlan {
             installed,
-            lock,
             staged: Vec::new(),
             config,
             appended: Vec::new(),
@@ -331,7 +327,7 @@ impl<'a> LockPlan<'a> {
             fetching,
             operation,
             caller,
-        })
+        }
     }
 
     /// Install `install` for `ask`: its lock entry replaces the package's previous one. A verb that
@@ -342,7 +338,6 @@ impl<'a> LockPlan<'a> {
     /// (`extension::claims`, ADR 0098), so two that name one extension never both reach the plan.
     ///
     /// # Panics
-    /// On a plan opened with `installs: false` (it changes no lock, so it accepted any lock).
     /// In a debug build, on a second install of one name.
     pub(crate) fn install(&mut self, ask: Ask, install: Install<'a>) {
         debug_assert!(
@@ -379,10 +374,6 @@ impl<'a> LockPlan<'a> {
             pin,
             from,
         } = install;
-        self.lock
-            .as_mut()
-            .expect("a plan opened with installs: false stages no install")
-            .put(pin.entry(&sha256));
         if self.verb.enables() {
             self.append(ask, pin.name.as_str());
         }
@@ -398,6 +389,7 @@ impl<'a> LockPlan<'a> {
             version: pin.version.clone(),
             module,
             pin,
+            sha256,
             from,
         });
     }
@@ -480,14 +472,25 @@ impl<'a> LockPlan<'a> {
         self.companions.push((trigger, companion));
     }
 
-    /// The project's installed extensions as the change leaves them.
-    fn view(&self) -> Installed {
-        match &self.lock {
-            Some(lock) => {
-                Installed::with_lock(self.installed.root(), LockState::Read(lock.clone()))
-            }
-            None => self.installed.clone(),
+    /// The project's installed extensions as the change leaves them: the lock as read, each staged install's entry
+    /// in place of its package's previous one, each uninstalled package's dropped. A change that stages neither
+    /// leaves them as the compile read them and accepts any lock (ADR 0041 B4); one that does refuses a lock that
+    /// can't be read (E033, [`writable_lock`]), whoever staged it (ADR 0165 D1).
+    fn view(&self) -> Result<Installed, OpError> {
+        if self.staged.is_empty() && self.uninstalled.is_empty() {
+            return Ok(self.installed.clone());
         }
+        let mut lock = writable_lock(self.installed)?;
+        for staged in &self.staged {
+            lock.put(staged.pin.entry(&staged.sha256));
+        }
+        for (_, name) in &self.uninstalled {
+            lock.without(name);
+        }
+        Ok(Installed::with_lock(
+            self.installed.root(),
+            LockState::Read(lock),
+        ))
     }
 
     /// The `extensions` items the change leaves, in order: the items the plan opened with without
@@ -513,8 +516,9 @@ impl<'a> LockPlan<'a> {
 /// The lock a change over `installed` starts from (empty when there is none), or the one refusal of a
 /// `specforge.lock` that is there and can't be read: E033, `SchemaMismatch`, the lock's own message and remedy,
 /// about no field of the request (ADR 0072), before anything is read, asked or written (ADR 0028 D4 as amended).
-/// The plan's open asks it when the change may write the lock; so does a removal that cannot tell, without the
-/// lock, whether what it removes is installed.
+/// Asked when a change is checked over a lock it stages into, and earlier, before anything is read, by `update`'s
+/// open, an uninstall's open, `add` and `init` for specifiers that install, and a removal whose answer only the lock
+/// could tell.
 pub(crate) fn writable_lock(installed: &Installed) -> Result<LockFile, OpError> {
     installed
         .writable_lock()

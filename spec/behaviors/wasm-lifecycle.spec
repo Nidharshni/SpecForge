@@ -128,7 +128,10 @@ behavior install_wasm_extension "Install Wasm Extension" {
     step, every file it changed MUST be put back — the previous binary,
     the previous lock, the previous specforge.json — so no partial install
     remains. A specforge.lock that is there and can't be read MUST refuse
-    the install (E033) before anything is written or downloaded. An
+    the install (E033) before anything is written or downloaded. The lock
+    is written, and resolved within the project, only by a change that
+    installs or uninstalls a module: an add whose installs are all already
+    present writes specforge.json alone. An
     extension already installed MUST be reinstalled when its binary is not
     the one its lock entry pins. Component compilation
     is NOT an install step: the engine compiles on first load and
@@ -148,6 +151,7 @@ behavior install_wasm_extension "Install Wasm Extension" {
   verify unit "rolls back on download failure"
   verify unit "a failed install puts back the binary, specforge.lock and specforge.json it changed"
   verify unit "an install over an unreadable specforge.lock is refused before anything is written"
+  verify unit "an add whose installs are all present writes only specforge.json, wherever its lock links"
   verify unit "an install of an extension whose binary changed after install replaces it"
   verify unit "an extension is installed under the extensions directory of its project, by its package name"
   verify unit "add, init and publish read a candidate's declaration in the runtime their surface passes"

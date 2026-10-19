@@ -157,7 +157,6 @@ fn plan_from<'a>(
             fetching(registry),
             crate::testing::caller(),
             Purpose::Commit,
-            true,
         ),
         Verb::Update => LockPlan::updating(
             installed,
@@ -165,10 +164,10 @@ fn plan_from<'a>(
             runtime,
             fetching(registry),
             crate::testing::caller(),
-        ),
+        )
+        .unwrap(),
         Verb::Remove => unreachable!("a removal is planned over a compiled project"),
     }
-    .unwrap()
 }
 
 /// [`plan_from`] a registry that serves nothing.
@@ -207,24 +206,31 @@ fn an_enabling_plan_accepts_an_unreadable_lock() {
         fetching(no_registry()),
         crate::testing::caller(),
         Purpose::Commit,
-        false,
-    )
-    .unwrap();
+    );
+    // One that would install refuses: writing a lock would drop what it records. `Names::ask` asks first.
+    assert_eq!(enabling.can_install().unwrap_err().code, "E033");
     enabling.enable(Ask(0), "@specforge/software");
     assert!(enabling.check().is_ok());
+}
 
-    // One that installs refuses: writing a lock would drop what it records.
-    let refused = LockPlan::adding(
+#[test]
+fn an_install_staged_without_asking_is_refused_at_check_not_a_panic() {
+    let installed = Installed::with_lock(
+        Path::new("/nowhere"),
+        LockState::Unreadable(specforge_common::Diagnostic::new(codes::E033, "unreadable")),
+    );
+    let runtime = runtime();
+    // Opened as a plan that only enables, then asked to install: the lock it would write can't be read.
+    let mut plan = LockPlan::adding(
         &installed,
         opened::<&str>(&[]),
         &runtime,
         fetching(no_registry()),
         crate::testing::caller(),
         Purpose::Commit,
-        true,
-    )
-    .map(drop);
-    assert_eq!(refused.unwrap_err().code, "E033");
+    );
+    stage(&mut plan, local(&runtime, APP, "app.wasm"));
+    assert_eq!(refused(plan).code, "E033");
 }
 
 mod close;
