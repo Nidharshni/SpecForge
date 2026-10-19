@@ -6,6 +6,8 @@ Amended by ADR 0092: a `path` that names another project must lie inside the ser
 
 Amended by ADR 0024 (round-5 amendment): the reaches are Served and AnyProject; Unscoped and NewProject are targets of their own, and WritesAnyProject is gone.
 
+Amended by ADR 0159: apply makes one update for everything a batch names (an environment reload covers the rest; otherwise the changed sources and, once, the checks), not one of three.
+
 Which project an MCP call served, and whether that project was current with disk, was decided in a
 dozen places. Each handler resolved its `path` against a public `McpState::project_root`, picked one
 of three staleness predicates (`use_cached || diagnostics.is_empty()`, `node_count() == 0`,

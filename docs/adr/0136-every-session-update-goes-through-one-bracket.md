@@ -1,6 +1,7 @@
 # Every session update goes through one bracket
 
 **Status:** accepted (2026-10-17, architecture round 14, plan 04). Amends [ADR 0046](0046-the-project-session-holds-the-editor-buffers.md) D3 (the sentence "A disk update always applies: what an import names is read from disk") and [ADR 0109](0109-reopening-a-project-in-place-is-one-session-operation.md) D2 (where the skipped-checks flag lives). Keeps ADR 0030 D2, [ADR 0100](0100-a-session-takes-a-change-from-disk-only-as-changes.md) D1 and ADR 0106 D4.
+*Amended (2026-10-19, round 16, plan 02): D5 (a disk change is one update over all it names, ADR 0159).*
 
 Whether an update changed the session's inputs was decided three ways: a `bool` threaded by hand through 11 functions
 and 50 places (`set_hops`, `finish_source`, `read_source`, `reread`, `forget_source`, `applied`, ...), a

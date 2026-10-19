@@ -212,7 +212,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   ADR 0032). An update says whether the session's inputs changed (`inputs_changed`), what the session
   reported before it and reports after (its diagnostics delta), and, when it was verified, how it differs
   from a cold rebuild (`divergence`). An update that changes no file (a held buffer, a
-  released one or a file on disk whose text is already the one it was built from) runs no check.
+  released one or a file on disk whose text is already the one it was built from) runs no check, unless a check input changed with it or an earlier update skipped them. One batch of changes is one update: an environment change reloads and covers the rest (ADR 0159).
 - **Graph delta**: what an update or a reload changed in the graph: added and removed nodes (each with its
   kind, file and line), modified nodes (the fields whose values differ, and apart from them which of its
   kind, title, methods and outgoing edges differ), added and removed edges, and the affected files; source
