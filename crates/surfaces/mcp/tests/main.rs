@@ -13,6 +13,7 @@ mod events;
 mod export_markdown;
 mod failure_kinds;
 mod fake_extension;
+mod format_config_links;
 mod hard_links;
 mod infer_sources;
 mod invariants;

@@ -149,6 +149,8 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
   verify unit "a mutation writes no file through a hard link to a file outside the project"
   verify unit "a file the project keeps at its root is read only from inside the project"
   verify unit "a source of the served project is read only from inside the project"
+  verify unit "no format configuration a call reads leaves the project, and none with more than one name is read"
+  verify unit "format reads no file with more than one name: it is a failed file, named, without its content"
   verify unit "a path that leaves the project through a symlink is outside it, whether or not the file it names exists"
   verify unit "init creates its project inside the server's root and never inside the served project"
   verify unit "a server whose root lies in no project serves nothing, and a handshake init then serves the project it creates"
