@@ -1,25 +1,21 @@
 //! Own and inherited fields (ADR 0149): a block that does not write a field takes its file's `defaults <kind>`
 //! entry for it. A typed edit copies an inherited list into an own field before it changes it, removes an own
-//! field that equals the default (W161), and never writes a `defaults` block.
+//! field that restates the default (W161, asked of the graph's `FileDefaults` over the text being planned), and
+//! never writes a `defaults` block.
 
 use super::EditField;
 use super::block::{Block, Items, Site, items_of, put_list};
 use super::write::not_editable;
 use crate::Refusal;
-use specforge_common::structural;
-use specforge_graph::field_form::{self, Reading};
-use specforge_parser::{FieldEntry, SpecFile};
+use specforge_graph::FileDefaults;
+use specforge_graph::field_form::Reading;
+use specforge_parser::SpecFile;
 use specforge_protocol_types::FieldType;
 
-/// The file's `defaults <kind>` entry for `field`.
-pub fn default_entry<'f>(file: &'f SpecFile, kind: &str, field: &str) -> Option<&'f FieldEntry> {
-    file.entities
-        .iter()
-        .find(|e| e.kind.raw.as_str() == structural::DEFAULTS && e.id.raw.as_str() == kind)?
-        .fields
-        .entries()
-        .iter()
-        .find(|e| e.key.as_str() == field)
+/// The file's defaults as the graph build applies them (ADR 0149), read from `file`: the text being planned, as the
+/// earlier edits of the list left it (ADR 0154).
+pub fn of<'f>(site: &Site<'_>, file: &'f SpecFile) -> FileDefaults<'f> {
+    FileDefaults::of(file, site.view.registries().field_forms()).0
 }
 
 /// `text` with the own `field` of the entity removed when it equals the file's default for it.
@@ -29,15 +25,9 @@ pub fn without_repeat(
     field: &str,
 ) -> Result<String, Refusal<EditField>> {
     let block = Block::open(site, text)?;
-    let repeats = match (
-        block.entry(field),
-        default_entry(block.file(), site.kind, field),
-    ) {
-        (Some(own), Some(default)) => {
-            field_form::write(&own.value) == field_form::write(&default.value)
-        }
-        _ => false,
-    };
+    let repeats = block
+        .entry(field)
+        .is_some_and(|own| of(site, block.file()).restates(site.kind, own));
     if repeats {
         put_list(site, text, &block.text(), field, None)
     } else {
@@ -55,7 +45,7 @@ pub fn write_list(
     items: &Items,
 ) -> Result<String, Refusal<EditField>> {
     let block = Block::open(site, text)?;
-    let default = default_entry(block.file(), site.kind, field);
+    let default = of(site, block.file()).entry(site.kind, field);
     let same_as_default = default
         .and_then(|d| items_of(&d.value))
         .is_some_and(|d| d.texts == items.texts);
@@ -72,7 +62,7 @@ pub fn unset_inherited(
     field: &str,
 ) -> Result<String, Refusal<EditField>> {
     let block = Block::open(site, text)?;
-    if default_entry(block.file(), site.kind, field).is_none() {
+    if of(site, block.file()).entry(site.kind, field).is_none() {
         return Ok(text.to_string());
     }
     let is_list = matches!(

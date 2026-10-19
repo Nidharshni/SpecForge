@@ -156,8 +156,10 @@ failure_mode slow_disk "Slow Disk" {
 }
 "#;
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test_macros::test(
+    behavior = "create_entity",
+    verify = "new compares what it writes with the default, not what it was given"
+)]
 fn new_writes_a_string_list_item_that_holds_a_comma() {
     let c = project(&[(
         "d.spec",
@@ -179,8 +181,10 @@ fn new_writes_a_string_list_item_that_holds_a_comma() {
     assert!(text.contains("[\"a, b\"]"), "{text}");
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test_macros::test(
+    behavior = "create_entity",
+    verify = "new never writes a field that restates its default"
+)]
 fn new_leaves_out_an_integer_equal_to_its_default() {
     let c = compile(&["@specforge/governance"], &[("fm.spec", FM)]);
     let edit = new_block(
@@ -194,7 +198,7 @@ fn new_leaves_out_an_integer_equal_to_its_default() {
             ("rpn", one("100")),
         ],
     );
-    let text = after(&c, "fm.spec", &[edit.clone()]);
+    let text = after(&c, "fm.spec", std::slice::from_ref(&edit));
     assert_eq!(text.matches("rpn").count(), 1, "{text}");
     assert!(!added(&c, &[edit]).contains(&"W161".to_string()));
 }
