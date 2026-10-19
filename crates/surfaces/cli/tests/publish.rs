@@ -176,16 +176,16 @@ fn publishing_a_version_twice_is_refused_with_r007() {
         keys,
         [
             "action",
+            "extension",
             "key_created",
             "key_id",
-            "name",
             "registry",
-            "signed",
             "size_bytes",
             "url",
             "version"
         ]
     );
+    assert_eq!(published["action"], "published");
     assert_eq!(published["key_created"], true);
     assert_eq!(published["registry"], "local");
 

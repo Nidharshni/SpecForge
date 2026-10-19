@@ -27,8 +27,10 @@ fn keys_of(diagnostic: &serde_json::Value) -> Vec<String> {
     keys
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "search_registry",
+    verify = "search's document writes its diagnostics as check does and carries no null"
+)]
 fn search_writes_its_diagnostics_as_check_does() {
     let dir = TestProject::new().config(|c| {
         c["registries"] = serde_json::json!([

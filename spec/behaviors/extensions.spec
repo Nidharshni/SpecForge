@@ -765,7 +765,9 @@ behavior search_registry "Search Registry" {
     wins, and each result names that registry. Output MUST be
     deterministic — sorted by name, then version. Each registry that
     fails MUST be reported once, with its code (on stderr under human
-    output, in the document's diagnostics under --format json); the others are still
+    output, in the document's diagnostics under --format json, each in the shape
+    every command writes a diagnostic); the document names --contributes only
+    when it is given; the others are still
     asked, and the search fails only when every registry failed. Each
     registry is asked with the credential kept for it
     (support_private_registries).
@@ -783,6 +785,7 @@ behavior search_registry "Search Registry" {
   verify unit "a registry lists each package at the version add installs from it"
   verify unit "each failed registry is reported once, and search fails when every registry failed"
   verify integration "under --format json a failed registry is reported once, in the document's diagnostics, and not on stderr"
+  verify integration "search's document writes its diagnostics as check does and carries no null"
   verify unit "deduplicates results across registries"
   verify unit "output is deterministic"
   verify unit "error from one registry does not abort search of others"

@@ -394,3 +394,42 @@ fn validate_and_publish_refuse_a_missing_binary_alike() {
     assert_eq!(validate_error.code, refused(&published).code);
     assert_eq!(validate_error.message, refused(&published).message);
 }
+
+#[specforge_test(
+    behavior = "publish_to_registry",
+    verify = "publish refuses in one order, each refusal before anything after it is read or asked"
+)]
+fn the_publish_document_names_the_extension_and_what_was_done() {
+    let dir = tempfile::tempdir().unwrap();
+    let wasm = bytes("@acme/x 1.0.0");
+    let runtime = InProcessRuntime::new().binary(&wasm, declaring("@acme/x", "1.0.0", &[]));
+    let outcome = report(&binary(dir.path(), &wasm), &MemoryRegistry::new(), &runtime)
+        .result
+        .expect("published");
+
+    let json = serde_json::to_value(outcome.document()).unwrap();
+
+    let mut keys: Vec<&str> = json
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        [
+            "action",
+            "extension",
+            "key_created",
+            "key_id",
+            "registry",
+            "size_bytes",
+            "url",
+            "version"
+        ]
+    );
+    assert_eq!(json["action"], "published");
+    assert_eq!(json["extension"], "@acme/x");
+    assert_eq!(json["size_bytes"], wasm.len());
+}

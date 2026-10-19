@@ -3,7 +3,6 @@
 use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, outln};
-use serde_json::json;
 use specforge_component::ComponentRuntime;
 use specforge_ops::extension::{PublishOutcome, publish};
 use specforge_ops_registry::ConfiguredRegistry;
@@ -58,20 +57,7 @@ impl Args {
 fn present(outcome: &PublishOutcome, format: OutputFormat, terminal: &Terminal) {
     let published = &outcome.published;
     match format {
-        OutputFormat::Json => {
-            let output = json!({
-                "action": "publish",
-                "name": outcome.name.as_str(),
-                "version": outcome.version.to_string(),
-                "registry": published.registry,
-                "url": published.url,
-                "size_bytes": outcome.size_bytes,
-                "key_id": published.key_id,
-                "signed": true,
-                "key_created": published.key_created,
-            });
-            terminal.json(&output);
-        }
+        OutputFormat::Json => terminal.json(&outcome.document()),
         OutputFormat::Human => {
             if published.key_created {
                 outln!(

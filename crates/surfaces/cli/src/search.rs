@@ -2,8 +2,7 @@ use crate::notes::Notes;
 use crate::options;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, outln};
-use serde_json::json;
-use specforge_ops::registry::{Found, Registry};
+use specforge_ops::registry::{Registry, Searched};
 use specforge_ops_registry::ConfiguredRegistry;
 use specforge_protocol_types::DeclaredCategory;
 
@@ -43,14 +42,7 @@ impl Args {
         };
         // Each registry that failed, once: here for a person, in `diagnostics` for a JSON reader.
         notes.carried(&searched.failures);
-        print_found(
-            query,
-            contributes,
-            &searched.found,
-            &searched.failures,
-            format,
-            terminal,
-        );
+        print_found(query, contributes, &searched, format, terminal);
         Exit::of_verdict(!searched.failed())
     }
 }
@@ -58,26 +50,13 @@ impl Args {
 fn print_found(
     query: &str,
     contributes: Option<DeclaredCategory>,
-    found: &[Found],
-    failures: &[specforge_common::Diagnostic],
+    searched: &Searched,
     format: OutputFormat,
     terminal: &Terminal,
 ) {
+    let found = &searched.found;
     match format {
-        OutputFormat::Json => {
-            let output = json!({
-                "query": query,
-                "contributes": contributes.map(DeclaredCategory::name),
-                "results": found.iter().map(|r| json!({
-                    "name": r.name,
-                    "version": r.version,
-                    "description": r.description,
-                    "registry": r.registry,
-                })).collect::<Vec<_>>(),
-                "diagnostics": failures,
-            });
-            terminal.json(&output);
-        }
+        OutputFormat::Json => terminal.json(&searched.document(query, contributes)),
         OutputFormat::Human => {
             let clause = contributes
                 .map(|c| format!(" that declare {}", c.name()))

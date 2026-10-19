@@ -13,7 +13,9 @@
 use crate::asking::Asking;
 use crate::options::{Choice, OptionTable};
 use crate::{OpError, OpErrorKind};
-use specforge_common::{Code, Diagnostic, codes};
+use serde::Serialize;
+use specforge_common::shape::Shape;
+use specforge_common::{Code, Diagnostic, DiagnosticList, codes};
 use specforge_package::{PackageName, Version};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 
@@ -231,7 +233,7 @@ pub struct Published {
 }
 
 /// One package a search found.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Shape)]
 pub struct Found {
     pub name: String,
     pub version: String,
@@ -249,7 +251,29 @@ pub struct Searched {
     pub asked: usize,
 }
 
+/// What `specforge search --format json` prints (CLI-only, ADR 0052 D5).
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct SearchDocument {
+    pub query: String,
+    /// The `--contributes` category's name; absent when none was given.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contributes: Option<String>,
+    pub results: Vec<Found>,
+    /// Each registry that failed, once (the shared diagnostic shape).
+    pub diagnostics: DiagnosticList,
+}
+
 impl Searched {
+    /// The document `specforge search` prints for `query`.
+    pub fn document(&self, query: &str, contributes: Option<DeclaredCategory>) -> SearchDocument {
+        SearchDocument {
+            query: query.to_string(),
+            contributes: contributes.map(|c| c.name().to_string()),
+            results: self.found.clone(),
+            diagnostics: DiagnosticList(self.failures.clone()),
+        }
+    }
+
     /// Every registry asked failed: nothing was searched (the CLI exits 1).
     pub fn failed(&self) -> bool {
         self.asked > 0 && self.failures.len() == self.asked

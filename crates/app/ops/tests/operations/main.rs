@@ -55,6 +55,7 @@ mod project_files;
 mod publish;
 mod query;
 mod refusals;
+mod registry_search;
 mod remedy_wording;
 mod rename_refusals;
 mod rename_text;

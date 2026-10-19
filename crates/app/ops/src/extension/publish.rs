@@ -39,6 +39,42 @@ pub struct PublishOutcome {
     pub published: Published,
 }
 
+impl PublishOutcome {
+    /// The document `specforge publish` prints.
+    pub fn document(&self) -> PublishDocument {
+        PublishDocument {
+            action: PublishAction::Published,
+            extension: self.name.to_string(),
+            version: self.version.to_string(),
+            registry: self.published.registry.clone(),
+            url: self.published.url.clone(),
+            size_bytes: self.size_bytes,
+            key_id: self.published.key_id.clone(),
+            key_created: self.published.key_created,
+        }
+    }
+}
+
+/// What `specforge publish --format json` prints (CLI-only, ADR 0052 D5).
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct PublishDocument {
+    pub action: PublishAction,
+    pub extension: String,
+    pub version: String,
+    pub registry: String,
+    pub url: String,
+    pub size_bytes: usize,
+    pub key_id: String,
+    pub key_created: bool,
+}
+
+/// What a publish did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Shape)]
+#[serde(rename_all = "snake_case")]
+pub enum PublishAction {
+    Published,
+}
+
 /// Publish the extension at `extension` (a `.wasm` component, or the crate
 /// directory that builds one) to `registry`.
 ///

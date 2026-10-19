@@ -30,7 +30,8 @@ pub use list::{
     ProviderListing, ProviderRow, ProviderStatus, ProvidersDocument, list, providers,
 };
 pub use publish::{
-    PublishOutcome, PublishReport, ValidateDocument, Validated, declare, publish, validate,
+    PublishAction, PublishDocument, PublishOutcome, PublishReport, ValidateDocument, Validated,
+    declare, publish, validate,
 };
 pub use remove::{
     RemoveDocument, RemoveField, RemoveOutcome, RemoveRequest, StrandedEntity, remove,
