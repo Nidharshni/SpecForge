@@ -7,6 +7,7 @@
 use specforge_migrate::{MigrationRecord, RecordChange, migrate_project, restore, run_rollback};
 use specforge_parser::CURRENT_FORMAT_VERSION;
 use specforge_test_macros::test as specforge_test;
+use std::path::Path;
 use tempfile::TempDir;
 
 const OLD: &str = "// specforge-format: 0.9\nbehavior alpha \"Alpha\" {\n}\n";
@@ -32,6 +33,7 @@ fn migrated(dir: &TempDir) {
         &CURRENT_FORMAT_VERSION,
         false,
         false,
+        &|path: &Path| std::fs::read_to_string(path),
     );
     assert!(summary.migrated_count >= 1, "{summary:?}");
     MigrationRecord::of(dir.path(), &CURRENT_FORMAT_VERSION, &summary.backups)
@@ -109,6 +111,7 @@ fn restore_writes_back_the_texts_a_run_read_without_any_backup() {
         &CURRENT_FORMAT_VERSION,
         false,
         true,
+        &|path: &Path| std::fs::read_to_string(path),
     );
     assert_eq!(summary.originals.len(), 1);
     assert!(!dir.path().join("spec/a.spec.bak").exists());
@@ -136,6 +139,7 @@ fn a_migrated_file_is_read_once() {
         &CURRENT_FORMAT_VERSION,
         false,
         false,
+        &|path: &Path| std::fs::read_to_string(path),
     );
 
     assert_eq!(summary.originals.len(), 1);
@@ -160,7 +164,14 @@ fn migrate_project_rewrites_only_the_sources_it_is_given() {
     let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
     let given = [dir.path().join("spec/a.spec")];
 
-    let summary = migrate_project(&root, &given, &CURRENT_FORMAT_VERSION, false, true);
+    let summary = migrate_project(
+        &root,
+        &given,
+        &CURRENT_FORMAT_VERSION,
+        false,
+        true,
+        &|path: &Path| std::fs::read_to_string(path),
+    );
 
     assert_eq!(summary.results.len(), 1, "{summary:?}");
     assert_eq!(summary.results[0].file_path, "spec/a.spec");

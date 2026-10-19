@@ -23,7 +23,7 @@ use specforge_parser::{
     CURRENT_FORMAT_VERSION, FormatVersion, MAX_SUPPORTED_VERSION, MIN_SUPPORTED_VERSION,
 };
 use specforge_project::{CompiledProject, SharedRuntime};
-use specforge_registry::RegistryBuild;
+use specforge_registry::{Disk as _, RegistryBuild};
 use specforge_wasm::WasmRuntime;
 use std::path::{Path, PathBuf};
 
@@ -77,7 +77,7 @@ pub struct Request<'a> {
     pub no_backup: bool,
     /// What the migration may reach (`caller.containment()`, ADR 0104): a source that lands
     /// outside it, by a symlink in the project, refuses the run (`invalid_input`, nothing read or
-    /// written; ADR 0092 D8).
+    /// written; ADR 0092 D8); one with more than one name fails that file.
     pub caller: Caller<'a>,
 }
 
@@ -328,7 +328,8 @@ pub use specforge_protocol_types::MigrationInput;
 /// refused (`config_invalid`, nothing read or written) when it does not say
 /// which files are the project's sources or which extensions it loads; each
 /// other problem is one E069 in [`Outcome::diagnostics`] and fails
-/// [`Outcome::ok`]. The preview and the migration rewrite the same sources.
+/// [`Outcome::ok`]. The preview and the migration rewrite the same sources. Each source is read through the
+/// caller's containment: over MCP a source with more than one name fails its file (ADR 0146, ADR 0158).
 pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome, OpError> {
     // The project the files are migrated in and the one the hooks and the checks compile.
     let project = request.root;
@@ -378,7 +379,18 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
             }
         }
     }
-    let preview = migrate_project(project, &sources, target, true, true);
+    // Every source is read through the caller's containment: over MCP a file with more than one name fails
+    // (ADR 0146, ADR 0158); a link that leaves was refused above.
+    let bound = request.caller.containment().disk();
+    let read_source = |path: &Path| -> std::io::Result<String> {
+        String::from_utf8(bound.read(path)?).map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "stream did not contain valid UTF-8",
+            )
+        })
+    };
+    let preview = migrate_project(project, &sources, target, true, true, &read_source);
     let from = preview
         .results
         .iter()
@@ -409,7 +421,14 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
     // The graph before any file is touched.
     let pre = CompiledProject::compile(project, runtime.clone());
 
-    outcome.summary = migrate_project(project, &sources, target, false, request.no_backup);
+    outcome.summary = migrate_project(
+        project,
+        &sources,
+        target,
+        false,
+        request.no_backup,
+        &read_source,
+    );
     outcome.applied = true;
     outcome.writes = summary_writes(project.dir(), &outcome.summary);
     if outcome.summary.failed_count > 0 {

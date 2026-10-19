@@ -409,7 +409,6 @@ fn migrating_scene() -> (TempDir, std::path::PathBuf, std::path::PathBuf) {
 }
 
 #[cfg(unix)]
-#[ignore = "flipped by T4"]
 #[specforge_test_macros::test(
     invariant = "mcp_served_project_consistency",
     verify = "a source of the served project is read only from inside the project"
@@ -429,7 +428,6 @@ fn a_migration_previews_no_hard_linked_source() {
 }
 
 #[cfg(unix)]
-#[ignore = "flipped by T4"]
 #[specforge_test_macros::test(
     invariant = "mcp_served_project_consistency",
     verify = "a source of the served project is read only from inside the project"

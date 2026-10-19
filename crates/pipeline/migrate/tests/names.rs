@@ -5,6 +5,8 @@
     reason = "a test's unwrap is its assertion: a None or an Err fails the test"
 )]
 
+use std::path::Path;
+
 use specforge_common::{ProjectPath, ProjectRoot};
 use specforge_migrate::{
     MigrationRecord, MigrationStatus, Original, migrate_project, restore, written_beside,
@@ -60,6 +62,7 @@ fn the_record_reads_a_backup_through_the_root() {
         &CURRENT_FORMAT_VERSION,
         false,
         false,
+        &|path: &Path| std::fs::read_to_string(path),
     );
     assert_eq!(summary.backups[0].original_path, "spec/a.spec");
     assert_eq!(summary.backups[0].backup_path, "spec/a.spec.bak");
@@ -106,6 +109,7 @@ fn an_inside_link_at_a_temp_name_is_not_written_through() {
         &CURRENT_FORMAT_VERSION,
         false,
         false,
+        &|path: &Path| std::fs::read_to_string(path),
     );
 
     assert_eq!(summary.results[0].status, MigrationStatus::Migrated);
@@ -134,6 +138,7 @@ fn an_inside_link_at_the_backup_name_is_not_written_through() {
         &CURRENT_FORMAT_VERSION,
         false,
         false,
+        &|path: &Path| std::fs::read_to_string(path),
     );
 
     assert_eq!(summary.results[0].status, MigrationStatus::Migrated);
