@@ -157,3 +157,40 @@ fn an_empty_plan_writes_nothing() {
     assert!(writes.is_empty());
     assert!(changed_since(&root, &before).is_empty());
 }
+
+#[cfg(unix)]
+#[test]
+#[ignore = "flipped by T4"]
+fn an_edit_that_cannot_write_a_file_is_unwritable() {
+    use std::os::unix::fs::PermissionsExt;
+    let c = two_dirs();
+    let root = root(&c);
+    let planned = plan(&c, &unlink_both()).unwrap();
+    let locked = root.join("b/two.spec");
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o444)).unwrap();
+    if std::fs::OpenOptions::new()
+        .append(true)
+        .open(&locked)
+        .is_ok()
+    {
+        return; // permissions do not bind (root)
+    }
+    let before = files_under(&root);
+    let error = edit::apply(&planned, specforge_ops::testing::caller()).unwrap_err();
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert_eq!(error.code, "file_unwritable", "{error:?}");
+    assert_eq!(error.kind, OpErrorKind::PermissionDenied, "{error:?}");
+    assert!(
+        error
+            .message
+            .starts_with("cannot apply the edits: failed to write b/two.spec: "),
+        "{}",
+        error.message
+    );
+    assert!(
+        error.message.ends_with("; nothing was written"),
+        "{}",
+        error.message
+    );
+    assert!(changed_since(&root, &before).is_empty());
+}
