@@ -198,9 +198,9 @@ fn the_providers_listing_reports_what_the_environment_registered() {
             .map(|d| (d.code.clone(), d.message.clone()))
             .collect()
     };
-    assert_eq!(w118(&listing.diagnostics).len(), 2, "{listing:?}");
+    assert_eq!(w118(&listing.diagnostics.0).len(), 2, "{listing:?}");
     assert_eq!(
-        w118(&listing.diagnostics),
+        w118(&listing.diagnostics.0),
         w118(
             &compiled
                 .environment()
@@ -235,7 +235,7 @@ fn the_providers_listing_reads_the_registration() {
     let listing = extension::providers(&ProjectView::of(&compiled));
     let aliases: Vec<&str> = listing.providers.iter().map(|p| p.alias.as_str()).collect();
     assert_eq!(aliases, ["work"], "{listing:?}");
-    assert_eq!(listing.diagnostics.len(), 1, "{listing:?}");
+    assert_eq!(listing.diagnostics.0.len(), 1, "{listing:?}");
 }
 
 #[specforge_test(

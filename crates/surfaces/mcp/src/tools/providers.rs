@@ -26,7 +26,6 @@ impl CoreTool for Tool {
     fn call(project: ProjectRef<'_>, _args: NoArgs) -> Answered<Reply> {
         // The providers specforge.json configures, as the scheme registry built
         // from the loaded extensions sees them: the listing the CLI prints.
-        let listing = specforge_ops::extension::providers(&project.view());
-        Ok(listing.document().into())
+        Ok(specforge_ops::extension::providers(&project.view()).into())
     }
 }

@@ -26,8 +26,8 @@ pub use add::{
 pub use candidate::{Candidate, Installable, LocalFile, binary_at};
 pub use inventory::{Inventory, ProjectExtension, Selection, Status, inventory};
 pub use list::{
-    ExtensionInfo, ExtensionsDocument, LockedExtension, ProviderEntry, ProviderListing,
-    ProviderRow, ProviderStatus, ProvidersDocument, list, providers,
+    ExtensionInfo, ExtensionsDocument, LockedExtension, ProviderRow, ProviderStatus,
+    ProvidersDocument, list, providers,
 };
 pub use publish::{
     PublishAction, PublishDocument, PublishOutcome, PublishReport, ValidateDocument, Validated,

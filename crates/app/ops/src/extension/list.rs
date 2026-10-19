@@ -5,8 +5,8 @@
 
 use crate::view::ProjectView;
 use serde::Serialize;
+use specforge_common::DiagnosticList;
 use specforge_common::shape::Shape;
-use specforge_common::{Diagnostic, DiagnosticList};
 use std::collections::BTreeSet;
 
 pub use super::Status;
@@ -105,40 +105,7 @@ pub fn list(view: &ProjectView) -> ExtensionsDocument {
     }
 }
 
-/// One configured provider, as the environment registered it.
-pub use specforge_project::providers::Provider as ProviderEntry;
 pub use specforge_project::providers::ProviderStatus;
-
-/// The providers the view's config configures, in declaration order, with
-/// their status, and what loading and registering them reported.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ProviderListing {
-    pub providers: Vec<ProviderEntry>,
-    /// W118 (a malformed entry, or an extension that is not loaded or
-    /// contributes no providers) and E057 (a scheme declared twice).
-    pub diagnostics: Vec<Diagnostic>,
-}
-
-impl ProviderListing {
-    /// `{providers, count, diagnostics}`: the document both surfaces
-    /// answer with.
-    pub fn document(&self) -> ProvidersDocument {
-        ProvidersDocument {
-            count: self.providers.len(),
-            providers: self
-                .providers
-                .iter()
-                .map(|p| ProviderRow {
-                    scheme: p.scheme.to_string(),
-                    alias: p.alias.to_string(),
-                    extension: p.extension.to_string(),
-                    status: p.status,
-                })
-                .collect(),
-            diagnostics: DiagnosticList(self.diagnostics.clone()),
-        }
-    }
-}
 
 /// The providers listing as both surfaces answer it (`McpProvidersResult`).
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
@@ -160,12 +127,25 @@ pub struct ProviderRow {
 /// The providers the view's environment registered when the project was
 /// compiled, in declaration order (the first to declare a scheme wins it),
 /// each with its status, and the diagnostics reading and registering them
-/// produced (W118, E057). Never `specforge.json` again.
-pub fn providers(view: &ProjectView) -> ProviderListing {
+/// produced (W118 for a malformed entry or an extension that is not loaded
+/// or contributes no providers, E057 for a scheme declared twice): the
+/// document both surfaces answer with. A provider's settings are the
+/// environment's and are not listed. Never `specforge.json` again.
+pub fn providers(view: &ProjectView) -> ProvidersDocument {
     let registered = view.env().providers();
-    ProviderListing {
-        providers: registered.iter().cloned().collect(),
-        diagnostics: registered.diagnostics().cloned().collect(),
+    let providers: Vec<ProviderRow> = registered
+        .iter()
+        .map(|p| ProviderRow {
+            scheme: p.scheme.to_string(),
+            alias: p.alias.to_string(),
+            extension: p.extension.to_string(),
+            status: p.status,
+        })
+        .collect();
+    ProvidersDocument {
+        count: providers.len(),
+        providers,
+        diagnostics: DiagnosticList(registered.diagnostics().cloned().collect()),
     }
 }
 
@@ -312,10 +292,11 @@ mod tests {
         assert_eq!(entry.status.as_str(), "extension_not_loaded");
         let codes: Vec<&str> = listing
             .diagnostics
+            .0
             .iter()
             .map(|d| d.code.as_str())
             .collect();
         assert_eq!(codes, ["W118"], "{listing:?}");
-        assert_eq!(listing.document().count, 1);
+        assert_eq!(listing.count, 1);
     }
 }
