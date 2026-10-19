@@ -1,0 +1,67 @@
+---
+source: crates/surfaces/cli/tests/parity.rs
+expression: snapshot
+---
+{
+  "both": {
+    "check": {
+      "diagnostics": [
+        "Error E069"
+      ],
+      "ok": false
+    },
+    "config": {
+      "exclude": [
+        "["
+      ],
+      "extensions": [
+        "@specforge/software"
+      ],
+      "name": "demo",
+      "registries": [
+        {
+          "alias": "offline",
+          "default_registry": true,
+          "url": "http://127.0.0.1:9"
+        }
+      ],
+      "spec_root": "spec",
+      "version": "0.1.0"
+    },
+    "document": {
+      "all_clean": false,
+      "changed_files": [
+        "spec/messy.spec"
+      ],
+      "diagnostics": [
+        {
+          "code": "E069",
+          "column": null,
+          "file": null,
+          "line": null,
+          "message": "specforge.json: \"exclude\"[0] in [ROOT]/specforge.json, \"[\", is not a glob pattern (Pattern syntax error near position 0: invalid range pattern); it is ignored",
+          "severity": "Error",
+          "span": null,
+          "suggestion": "fix specforge.json; `specforge explain E069` says what it must be",
+          "title": "Unusable specforge.json"
+        }
+      ],
+      "dry_run": false,
+      "files_written": [
+        "spec/messy.spec"
+      ],
+      "ok": false,
+      "total_checked": 2
+    },
+    "files": {
+      "spec/main.spec": "behavior alpha \"Alpha\" {\n  category core\n  contract \"The system MUST work\"\n}\n",
+      "spec/messy.spec": "behavior messy \"Messy\" {\n  category core\n  contract \"The system MUST work\"\n}\n"
+    }
+  },
+  "cli": {
+    "ok": false
+  },
+  "mcp": {
+    "ok": true
+  }
+}

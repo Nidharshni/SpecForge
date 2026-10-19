@@ -23,6 +23,7 @@ mod explore;
 mod export_cache;
 mod export_written;
 mod extension_calls;
+mod failed_run;
 mod failures;
 mod field_references;
 mod field_types;

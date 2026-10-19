@@ -35,7 +35,7 @@ use crate::support::pairing::{self, mcp_on};
 use crate::support::{Cli, TestProject};
 
 mod scenarios;
-use scenarios::{SCENARIOS, Scenario};
+use scenarios::{EXPECTED_DIVERGENCES, SCENARIOS, Scenario};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 enum Aspect {
@@ -54,49 +54,6 @@ const ASPECTS: [Aspect; 6] = [
     Aspect::Check,
     Aspect::Verdict,
     Aspect::Document,
-];
-
-/// Where the CLI and MCP behave differently today, and why. Later steps of
-/// plan 03 delete rows; only spec-sanctioned differences should remain.
-const EXPECTED_DIVERGENCES: &[(&str, Aspect, &str)] = &[
-    // export: both surfaces export through `specforge_ops::read::export` (O2) and
-    // report its notices, but only the CLI keeps `.specforge/schema-cache.json`.
-    // The MCP export tool is a read-only query: if it rewrote the cache, the
-    // next CLI export would miss its W053.
-    (
-        "export",
-        Aspect::Files,
-        "only the CLI writes the schema cache",
-    ),
-    // check: both surfaces run `specforge_ops::analysis::check` (plan 08, ADR 0018).
-    // Finding errors fails `specforge check` (exit 1) but is a successful
-    // MCP call, whose verdict is `_meta["specforge/check"].ok`.
-    (
-        "check_failing",
-        Aspect::Outcome,
-        "MCP validate finding errors is a successful call (ADR 0004 D4-a); the CLI exits 1",
-    ),
-    // format --check: a file that would change fails `specforge format
-    // --check` (exit 1); over MCP it is a successful call (ADR 0004 D4-a).
-    (
-        "format_check",
-        Aspect::Outcome,
-        "a format check that finds a change is a successful MCP call (ADR 0004 D4-a); the CLI exits 1",
-    ),
-    // analyze --min: a gate below its minimum fails `specforge analyze`
-    // (exit 1); over MCP it is a successful call whose verdict is `ok`
-    // (false) and whose `gate` says where it landed (ADR 0004 D4-a, 0029 D3a).
-    (
-        "analyze_gate_below",
-        Aspect::Outcome,
-        "an analysis whose gate is below its minimum is a successful MCP call (ADR 0004 D4-a); the CLI exits 1",
-    ),
-    // The build cache is opt-in and the CLI's: validate never writes it.
-    (
-        "check_cache",
-        Aspect::Files,
-        "only `check --cache` writes the build cache (write_build_cache opt_in)",
-    ),
 ];
 
 /// An empty directory with a HOME of its own: the project each surface starts from.

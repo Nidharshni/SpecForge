@@ -784,7 +784,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Mutation outcome**: what one MCP mutation call produced, typed: a run (`specforge_mcp::mutation::Mutated`:
   its reply and what it wrote — the files its operation changed, the entities it changed and the domain
   event it produces, `Written`) or a failure (`mutation::Failed`: its McpError and the files it left
-  written). Whether the call only previews is read from its tool arguments before it runs
+  written; a writing operation's failed run arrives as its `OpError`, ADR 0170). Whether the call only previews is read from its tool arguments before it runs
   (`MutationArgs::previews`); a preview is no mutation, whatever its operation answered. The request
   pipeline's tools adapter alone (`mutation::complete`) turns it into the call target's refresh, the reply
   sent once (`WrittenReply`: the tool reply, `files_written` — the one place a client learns which files
@@ -864,13 +864,19 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   computed by the operation (`ok()`, or `verdict()` → `specforge_ops::RunVerdict` where it can be
   unjudged): check (no error reported), analyze (no error finding, and with a minimum the coverage
   gate met; unjudged when the gate has no figure), format (every target read and written, nothing
-  left unformatted, and under `--check` nothing that would change), migrate (no file failed, nothing
-  rolled back), doctor (no error-level finding: an error the environment reports, E013, a binary that
+  left unformatted, every `specforge.json` it read used as written (no E069), and under `--check`
+  nothing that would change), migrate (no file failed, nothing rolled back, `specforge.json` used as
+  written), doctor (no error-level finding: an error the environment reports, E013, a binary that
   does not match the lock, an unreadable lock). The CLI exits 0, 1 or 2 by it (`specforge_cli::outcome::Exit`, the only value a core
   command ends with); MCP returns it as `ok`
-  (`specforge.validate`: `_meta["specforge/check"].ok`) and keeps `isError` for refusals (ADR 0004
-  D4-a). A refusal (`OpError`) is not a verdict; a measuring command's (stats, analyze) refusal exits 2. Not to be
-  confused with an entity's coverage **Verdict** (ADR 0029).
+  (`specforge.validate`: `_meta["specforge/check"].ok`) and keeps `isError` for refusals and failed runs
+  (ADR 0004 D4-a, ADR 0170). A refusal (`OpError`) is not a verdict; a measuring command's (stats, analyze)
+  refusal exits 2. Not to be confused with an entity's coverage **Verdict** (ADR 0029).
+- **Failed run**: a run of a writing operation that did not do all it was asked: a file it could not read,
+  write or migrate, or a change it undid (a rollback). Its outcome answers it (`format::Outcome::failed`,
+  `migrate::Outcome::failed`: an `OpError` carrying the run's document as `data` and its writes); MCP returns
+  it as the failed call (`isError`). A finding (a problem in `specforge.json` the run went around, a region
+  left unformatted, a change under `--check`) fails the **Run verdict** and is no failed run (ADR 0170).
 - **Terminal**: where a core CLI command writes and whom it asks: its stdout, its stderr, the input a
   prompt reads (or `specforge mcp` serves, byte for byte), whether each stream is coloured (`NO_COLOR`, then `CLICOLOR_FORCE`, then whether it is
   a terminal) and whether anyone can answer, fixed when `main` makes it from the process

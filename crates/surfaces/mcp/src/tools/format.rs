@@ -7,12 +7,8 @@ use std::path::PathBuf;
 use crate::refusal::ArgumentOf;
 
 use crate::args::Arguments;
-use crate::mutation::{
-    Failed, Mutated, Mutation, MutationArgs, MutationReply, NoDiagnostics, Written,
-};
+use crate::mutation::{Mutated, Mutation, MutationArgs, MutationReply, NoDiagnostics, Written};
 use crate::target::ProjectRef;
-use crate::tool::{ErrorCode, McpError};
-use specforge_ops::OpErrorKind;
 use specforge_ops::authoring::format::{self, FormatField, Request};
 
 /// `specforge.format`'s arguments.
@@ -99,19 +95,14 @@ impl CoreTool for Tool {
         })
         .map_err(Self::failed)?;
 
-        let reply = outcome.document(args.diff);
-        if outcome.succeeded() {
-            return Ok(Mutated::new(reply, Written::of(outcome.wrote())));
+        // A target it could not read or write fails the call, the others still formatted: its
+        // error is the run's, the document its data and what it wrote reported (ADR 0170).
+        if let Some(failed) = outcome.failed(args.diff) {
+            return Err(failed.into());
         }
-
-        // Every other file was still formatted, and what was written is
-        // reported; the call failed for these (read or write), with the kind
-        // the files share (permission denied for locked files, not found for
-        // missing ones), else an internal failure. The failed call's `data`
-        // is the reply.
-        let code = ErrorCode::from(outcome.failure_kind().unwrap_or(OpErrorKind::Internal));
-        let error = McpError::new(code, reply.message.clone().unwrap_or_default())
-            .with_data(serde_json::to_value(&reply).expect("a reply serializes"));
-        Err(Failed::after(error, outcome.writes()))
+        Ok(Mutated::new(
+            outcome.document(args.diff),
+            Written::of(outcome.wrote()),
+        ))
     }
 }

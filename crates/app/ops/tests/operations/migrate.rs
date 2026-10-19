@@ -418,11 +418,8 @@ fn a_problem_the_migration_goes_around_fails_it_after_it_ran() {
     assert_eq!(outcome.diagnostics.len(), 1, "{:?}", outcome.diagnostics);
     assert!(outcome.diagnostics[0].is(specforge_common::codes::E069));
     assert!(!outcome.ok());
-    let failure = outcome.failure().expect("a failed run");
-    assert!(matches!(failure, Failure::ConfigNotUsedAsWritten { .. }));
-    let error = OpError::from(failure);
-    assert_eq!(error.code, "config_invalid");
-    assert_eq!(error.kind, OpErrorKind::SchemaMismatch);
+    // A problem the run went around fails its verdict, not the run (ADR 0170).
+    assert_eq!(outcome.failure(), None);
     assert!(outcome.document().diagnostics.0.len() == 1);
 }
 

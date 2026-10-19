@@ -130,9 +130,6 @@ pub enum Failure {
     ChangedGraph { differences: usize },
     /// Files that could not be migrated (each shown path and its error); the others were.
     FilesFailed { files: Vec<(String, String)> },
-    /// `specforge.json` is not used as written (each E069's message); the
-    /// run did what it could around it.
-    ConfigNotUsedAsWritten { problems: Vec<String> },
 }
 
 impl From<Failure> for OpError {
@@ -172,12 +169,6 @@ impl From<Failure> for OpError {
                     format!("{} file(s) could not be migrated{first}", files.len()),
                 )
             }
-            Failure::ConfigNotUsedAsWritten { problems } => OpError::new(
-                OpErrorKind::SchemaMismatch,
-                "config_invalid",
-                problems.join("; "),
-            )
-            .with_suggestion("fix specforge.json; `specforge explain E069` says what it must be"),
         }
     }
 }
@@ -266,23 +257,20 @@ impl Outcome {
     /// The run's verdict: no file failed to migrate, nothing was rolled
     /// back, and `specforge.json` is used as written (no E069).
     /// `specforge migrate` exits by it; MCP `specforge.migrate` returns it
-    /// as `ok`.
+    /// as `ok`. A failed run ([`Self::failure`]) always fails it; an E069 alone
+    /// fails only it.
     pub fn ok(&self) -> bool {
         self.summary.failed_count == 0 && self.rollback.is_none() && self.diagnostics.is_empty()
     }
 
-    /// Why the run failed; `None` when [`Self::ok`]. A rollback's cause first (a hook that failed,
-    /// a project that does not compile, a graph that changed), then files that failed, then the
-    /// config.
+    /// Why the run failed (ADR 0170): a rollback's cause first (a hook that failed, a project that
+    /// does not compile, a graph that changed), then files that could not be migrated. `None` when
+    /// every file migrated and nothing was rolled back: an E069 the run went around fails
+    /// [`Self::ok`], not the run.
     pub fn failure(&self) -> Option<Failure> {
-        if self.ok() {
-            return None;
-        }
         if self.rollback.is_none() {
             if self.summary.failed_count == 0 {
-                return Some(Failure::ConfigNotUsedAsWritten {
-                    problems: self.diagnostics.iter().map(|d| d.message.clone()).collect(),
-                });
+                return None;
             }
             let files = self
                 .summary
@@ -305,6 +293,19 @@ impl Outcome {
         Some(Failure::ChangedGraph {
             differences: self.structural_differences().len(),
         })
+    }
+
+    /// The run failed (ADR 0170), as every operation reports a failure: [`Self::failure`]'s kind,
+    /// code and message, its data the migration document ([`Self::document`]) and its writes what
+    /// the run left changed ([`Self::writes`]). `None` when [`Self::failure`] is.
+    pub fn failed(&self) -> Option<OpError> {
+        let failure = self.failure()?;
+        let data = serde_json::to_value(self.document()).expect("a migration document serializes");
+        Some(
+            OpError::from(failure)
+                .with_data(data)
+                .with_writes(self.writes.clone()),
+        )
     }
 
     /// The errors compiling the migrated project reported.

@@ -125,6 +125,55 @@ fn clean_needs_every_file_read_and_canonical() {
     assert!(error.message.starts_with("failed to read "), "{error:?}");
 }
 
+#[test]
+fn a_failed_run_is_a_target_the_run_could_not_read() {
+    let dir = project_with("{}", &[("spec/a.spec", MESSY)]);
+    let missing = [dir.path().join("spec/missing.spec")];
+    let outcome = run(&Request {
+        root: &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+        paths: &missing,
+        mode: Mode::Check,
+        caller: crate::testing::caller(),
+        runtime: None,
+    });
+
+    let error = outcome.failed(false).expect("a failed run");
+
+    assert_eq!(error.kind, OpErrorKind::FileNotFound);
+    assert_eq!(error.code, "format_file_failed");
+    assert_eq!(error.message, outcome.document(false).message.unwrap());
+    assert_eq!(
+        *error.data.expect("the document"),
+        serde_json::to_value(outcome.document(false)).unwrap()
+    );
+    assert_eq!(error.writes, outcome.writes());
+    assert!(error.suggestion.is_none());
+    assert!(!outcome.ok());
+}
+
+#[test]
+fn a_finding_is_no_failed_run() {
+    let canonical = "behavior messy \"Messy\" {\n  contract \"The system MUST work\"\n}\n";
+    let broken = format!("{canonical}\n}}}}}}\n");
+    let findings = [
+        // An E069 the run goes around.
+        (r#"{"exclude": ["["]}"#, canonical, Mode::Write),
+        // A region left unformatted (W142).
+        ("{}", broken.as_str(), Mode::Write),
+        // A change under --check.
+        ("{}", MESSY, Mode::Check),
+    ];
+    for (config, text, mode) in findings {
+        let dir = project_with(config, &[("spec/a.spec", text)]);
+        let outcome = run(&request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            mode,
+        ));
+        assert!(!outcome.ok(), "{config} {mode:?}");
+        assert!(outcome.failed(true).is_none(), "{config} {mode:?}");
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn written_lists_only_files_on_disk() {
