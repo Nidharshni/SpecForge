@@ -273,3 +273,46 @@ fn unify_no_requirers_picks_highest_available() {
     let result = unified(&["1.0.0", "2.0.0"], &[]).unwrap();
     assert_eq!(result, "2.0.0");
 }
+
+#[test]
+fn a_peer_a_file_entry_loads_is_refused_naming_the_entry() {
+    const BASE_FILE: &[u8] = b"\0asm in-process @acme/base 1.0.0";
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("base.wasm"), BASE_FILE).unwrap();
+    let installed = Installed::with_lock(
+        dir.path(),
+        LockState::Read(LockFile {
+            lockfile_version: 1,
+            entries: vec![],
+        }),
+    );
+    let runtime = runtime().binary(BASE_FILE, declaring("@acme/base", "1.0.0", &[]));
+    let registry = base_registry().serving(Published::new(
+        b"\0asm app".to_vec(),
+        declaration("@acme/app", "1.0.0", &[("@acme/base", "^2.0")]),
+    ));
+    let entries = ["base.wasm".to_string()];
+    let mut plan = LockPlan::adding(
+        &installed,
+        opened(&entries),
+        &runtime,
+        fetching(&registry),
+        crate::testing::caller(),
+        Purpose::Commit,
+    );
+    stage_fetched(
+        &mut plan,
+        &PackageName::parse("@acme/app").unwrap(),
+        Version::new(1, 0, 0),
+    );
+
+    let err = refused(plan);
+
+    assert_eq!(err.code, "E027", "{err:?}");
+    assert!(
+        err.suggestion
+            .as_deref()
+            .is_some_and(|s| s.contains("file entry 'base.wasm' at 1.0.0")),
+        "{err:?}"
+    );
+}
