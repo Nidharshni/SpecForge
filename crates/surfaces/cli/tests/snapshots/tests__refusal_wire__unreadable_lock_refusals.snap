@@ -40,14 +40,16 @@ $ specforge remove @sdk/greet
 [exit 1]
 [stdout]
 [stderr]
-error[extension_not_found]: extension '@sdk/greet' is not installed (corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2)
+error[E033]: corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2
+  hint: fix specforge.lock, or delete it and install the extensions again with `specforge add`
 
 $ specforge remove @sdk/greet --format json
 [exit 1]
 [stdout]
 {
-  "error": "extension '@sdk/greet' is not installed (corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2)",
-  "code": "extension_not_found"
+  "error": "corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2",
+  "code": "E033",
+  "suggestion": "fix specforge.lock, or delete it and install the extensions again with `specforge add`"
 }
 [stderr]
 
@@ -55,7 +57,8 @@ $ specforge remove @acme/absent
 [exit 1]
 [stdout]
 [stderr]
-error[extension_not_found]: extension '@acme/absent' is not installed (corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2)
+error[E033]: corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2
+  hint: fix specforge.lock, or delete it and install the extensions again with `specforge add`
 
 $ specforge check
 [exit 1]
@@ -79,6 +82,6 @@ hint: run `specforge explain <code>` for details on any diagnostic code
 $ mcp specforge.add_extension
 {"code":"schema_mismatch","data":{"files_written":[]},"diagnostic":{"code":"E033","column":null,"file":null,"line":null,"message":"corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2","severity":"Error","span":null,"suggestion":"fix specforge.lock, or delete it and install the extensions again with `specforge add`","title":"Lock file error"},"message":"corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2","tool":"specforge.add_extension"}
 $ mcp specforge.remove_extension
-{"argument":"name","code":"extension_not_found","data":{"extension":"@sdk/greet","files_written":[]},"message":"extension '@sdk/greet' is not installed (corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2)","tool":"specforge.remove_extension"}
+{"code":"schema_mismatch","data":{"files_written":[]},"diagnostic":{"code":"E033","column":null,"file":null,"line":null,"message":"corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2","severity":"Error","span":null,"suggestion":"fix specforge.lock, or delete it and install the extensions again with `specforge add`","title":"Lock file error"},"message":"corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2","tool":"specforge.remove_extension"}
 $ mcp specforge.remove_extension
-{"argument":"name","code":"extension_not_found","data":{"extension":"@acme/absent","files_written":[]},"message":"extension '@acme/absent' is not installed (corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2)","tool":"specforge.remove_extension"}
+{"code":"schema_mismatch","data":{"files_written":[]},"diagnostic":{"code":"E033","column":null,"file":null,"line":null,"message":"corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2","severity":"Error","span":null,"suggestion":"fix specforge.lock, or delete it and install the extensions again with `specforge add`","title":"Lock file error"},"message":"corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2","tool":"specforge.remove_extension"}

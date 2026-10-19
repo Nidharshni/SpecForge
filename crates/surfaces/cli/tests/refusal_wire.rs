@@ -258,7 +258,10 @@ fn project_change_refusals_print_as_pinned() {
 }
 
 #[cfg(unix)]
-#[test]
+#[specforge_test_macros::test(
+    behavior = "read_lock_file",
+    verify = "every surface refuses an unreadable lock as pinned: one code and one remedy on the CLI and over MCP"
+)]
 fn an_unreadable_lock_refusals_print_as_pinned() {
     let p = TestProject::new()
         .enabling(&["@sdk/greet"])

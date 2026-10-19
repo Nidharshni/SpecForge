@@ -876,13 +876,16 @@ behavior read_lock_file "Read Lock File" {
     E033, naming one remedy whatever made it unreadable (fix specforge.lock, or
     delete it and install the extensions again with specforge add): no installed extension loads from it (each is E028 naming the
     lock), and add, update and remove refuse to change what is installed
-    until it is fixed or deleted, so it is never silently replaced.
+    with one refusal, that E033 and its remedy, until it is fixed or deleted, so it is never silently replaced; a
+    change the lock does not decide (enabling or disabling a builtin or a .wasm file entry) still runs.
   """
   produces   [lock_file_read]
   verify unit "locked versions used when lock file exists"
   verify unit "missing lock entry triggers resolution"
   verify unit "an unreadable lock file is E033 and is never replaced by a change"
   verify unit "a lock file that can't be read names one remedy, whatever made it unreadable"
+  verify unit "add, update and remove refuse an unreadable lock with one refusal and the lock's own remedy"
+  verify unit "every surface refuses an unreadable lock as pinned: one code and one remedy on the CLI and over MCP"
   verify contract "Read Lock File: lock file reading holds — all_files_parsed_fired, filesystem_available, lock_file_read_emitted, locked_versions_used, malformed_lock_reported"
 }
 

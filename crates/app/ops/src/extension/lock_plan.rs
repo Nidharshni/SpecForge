@@ -273,7 +273,7 @@ impl<'a> LockPlan<'a> {
     /// `remove`'s plan over the compiled project `view`: its lock as the compile read it, its
     /// entries, the declarations its compile loaded (read again through the view's runtime only
     /// for an entry the removal lets load). `uninstalls`: whether it uninstalls (then an
-    /// unreadable lock is E033). `force`: the peer rule is not applied (`remove --force`).
+    /// unreadable lock is refused here, [`writable_lock`]). `force`: the peer rule is not applied (`remove --force`).
     pub(crate) fn removing(
         view: &ProjectView<'a>,
         caller: Caller<'a>,
@@ -312,15 +312,7 @@ impl<'a> LockPlan<'a> {
         installs: bool,
         caller: Caller<'a>,
     ) -> Result<LockPlan<'a>, OpError> {
-        let lock = if installs {
-            Some(
-                installed
-                    .writable_lock()
-                    .map_err(|why| OpError::of(OpErrorKind::SchemaMismatch, why))?,
-            )
-        } else {
-            None
-        };
+        let lock = installs.then(|| writable_lock(installed)).transpose()?;
         Ok(LockPlan {
             installed,
             lock,
@@ -525,6 +517,17 @@ impl<'a> LockPlan<'a> {
         );
         Opened::entries_of(&items)
     }
+}
+
+/// The lock a change over `installed` starts from (empty when there is none), or the one refusal of a
+/// `specforge.lock` that is there and can't be read: E033, `SchemaMismatch`, the lock's own message and remedy,
+/// about no field of the request (ADR 0072), before anything is read, asked or written (ADR 0028 D4 as amended).
+/// The plan's open asks it when the change may write the lock; so does a removal that cannot tell, without the
+/// lock, whether what it removes is installed.
+pub(crate) fn writable_lock(installed: &Installed) -> Result<LockFile, OpError> {
+    installed
+        .writable_lock()
+        .map_err(|why| OpError::of(OpErrorKind::SchemaMismatch, why))
 }
 
 /// What a change touches: each staged install, then each appended entry that is not also staged

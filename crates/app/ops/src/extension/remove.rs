@@ -1,6 +1,6 @@
 //! `specforge remove` and `specforge.remove_extension`.
 
-use super::lock_plan::{Ask, Disabled, LockPlan, Purpose};
+use super::lock_plan::{Ask, Disabled, LockPlan, Purpose, writable_lock};
 use super::{NOT_FOUND, Origin, ProjectExtension, Selection, not_installed};
 use crate::view::ProjectView;
 use crate::{Caller, OpError, OpErrorKind, Refusal, Writes, Wrote};
@@ -8,7 +8,7 @@ use serde::Serialize;
 use specforge_common::ExtensionEntry;
 use specforge_common::shape::Shape;
 use specforge_graph::Graph;
-use specforge_installed::{Installed, LockFileEntry, LockState};
+use specforge_installed::{Installed, LockFileEntry};
 use specforge_package::PackageName;
 use specforge_project::EnabledExtension;
 use specforge_registry::KindRegistry;
@@ -136,7 +136,9 @@ pub enum RemoveField {
 /// nothing: the binary, the lock entry and the `specforge.json` entry go as
 /// one change, and a failure at any step puts every file back (the error's
 /// [`OpError::writes`] names what the rollback could not, normally
-/// nothing). Without a root: `no_project`. The removal is one lock-plan change
+/// nothing). While `specforge.lock` can't be read, a removal whose answer the lock would decide (an entry of
+/// unknown origin, a name the project has nothing under) is refused with the lock plan's E033, as `add` and
+/// `update` refuse it. Without a root: `no_project`. The removal is one lock-plan change
 /// ([`LockPlan::removing`]): a dry run is the same plan checked and not
 /// committed.
 pub fn remove(
@@ -169,7 +171,7 @@ pub fn remove(
             Err(ambiguous(req.name, &entries).about(RemoveField::Name))
         }
         Selection::Nothing => {
-            Err(nothing_named(req.name, view.installed().lock()).about(RemoveField::Name))
+            Err(nothing_named(req.name, view.installed()).about(RemoveField::Name))
         }
     }
 }
@@ -195,10 +197,10 @@ fn ambiguous(name: &str, entries: &[&EnabledExtension]) -> OpError {
 }
 
 /// The refusal for an argument the project has nothing under: a file no
-/// entry names; E072 for a name that could never be installed; else
-/// `extension_not_found`, saying why nothing is locked when there is no
-/// readable lock.
-fn nothing_named(name: &str, lock: &LockState) -> OpError {
+/// entry names; E072 for a name that could never be installed; while the lock can't be read, the lock plan's
+/// refusal of it (whether a lock entry holds the name is not known); else `extension_not_found`, saying when
+/// there is no lock file.
+fn nothing_named(name: &str, installed: &Installed) -> OpError {
     if ExtensionEntry::parse(name).file(Path::new("")).is_some() {
         return OpError::new(
             OpErrorKind::ExtensionNotFound,
@@ -214,12 +216,17 @@ fn nothing_named(name: &str, lock: &LockState) -> OpError {
             specforge_common::package::invalid(&why),
         );
     }
-    let why = match lock {
-        LockState::Absent => Some("no lock file found"),
-        LockState::Unreadable(problem) => Some(problem.message.as_str()),
-        LockState::Read(_) => None,
-    };
-    not_installed(name, why)
+    if let Err(refused) = writable_lock(installed) {
+        return refused;
+    }
+    not_installed(
+        name,
+        installed
+            .lock()
+            .file()
+            .is_none()
+            .then_some("no lock file found"),
+    )
 }
 
 /// Remove the extension `extension` names: its lock entry, binary and
@@ -229,14 +236,10 @@ fn remove_named(
     req: &Removing,
     extension: &ProjectExtension,
 ) -> Result<RemoveOutcome, Refusal<RemoveField>> {
-    // Neither builtin nor locked while the lock can't be read: whether it
-    // is installed is not known, so nothing is removed.
-    if extension.origin == Origin::Unknown
-        && let Some(problem) = req.installed.lock().problem()
-    {
-        return Err(
-            not_installed(extension.name, Some(problem.message.as_str())).about(RemoveField::Name),
-        );
+    // Neither builtin nor locked: while the lock can't be read, whether it is installed is not known, so
+    // nothing is removed (ADR 0028 D10) and the refusal is the lock plan's.
+    if extension.origin == Origin::Unknown {
+        writable_lock(req.installed)?;
     }
     // Loaded, but neither enabled nor locked (a view assembled in a test).
     if !extension.enabled() && extension.lock.is_none() {

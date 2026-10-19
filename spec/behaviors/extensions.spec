@@ -428,7 +428,11 @@ behavior remove_extension "Remove Extension" {
     nothing. An entry that enables an extension neither builtin nor
     installed (it does not load, E028) MUST be removable by its name,
     dropping only its specforge.json entry; a name no entry or lock entry
-    has is extension_not_found (E072 when it is no package name). Every
+    has is extension_not_found (E072 when it is no package name); while
+    specforge.lock is there and can't be read, a removal whose answer the lock
+    would decide (an entry of unknown origin, a name the project has nothing
+    under) MUST be refused with the lock's E033, the refusal add and update
+    give. Every
     refusal MUST be decided before anything is
     written, and a specforge.json the compile could not read refuses every
     removal (config_invalid), changing nothing. A removal writes the

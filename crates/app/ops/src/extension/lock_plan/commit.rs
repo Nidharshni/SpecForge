@@ -161,7 +161,7 @@ impl<'a> Checked<'a> {
                 .map(|held| config.unchanged(held, operation))
                 .transpose()?
                 .flatten();
-            // The installed change opens first: an unreadable lock is E033 before anything is judged.
+            // The plan's open refused a lock that can't be read (`writable_lock`); the change starts from the same lock.
             let change = if changes_lock {
                 Some(
                     installed

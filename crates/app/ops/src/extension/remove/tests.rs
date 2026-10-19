@@ -363,7 +363,9 @@ fn an_entry_of_unknown_origin_is_not_removed_under_an_unreadable_lock() {
 
     let refused = remove(&fixture.view(), &removing("@acme/x")).unwrap_err();
 
-    assert_eq!(refused.error.code, NOT_FOUND);
+    assert_eq!(refused.error.code, "E033");
+    assert_eq!(refused.error.kind, OpErrorKind::SchemaMismatch);
+    assert!(refused.subject.is_none(), "{refused:?}");
     assert!(
         refused.error.message.contains("corrupt lock file"),
         "{refused:?}"
@@ -371,8 +373,10 @@ fn an_entry_of_unknown_origin_is_not_removed_under_an_unreadable_lock() {
     assert_eq!(files_under(fixture.root()), before);
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "read_lock_file",
+    verify = "add, update and remove refuse an unreadable lock with one refusal and the lock's own remedy"
+)]
 fn remove_refuses_an_unreadable_lock_as_add_and_update_do() {
     use crate::extension::{AddRequest, UpdateRequest, add, update};
 
@@ -497,7 +501,9 @@ fn an_unreadable_lock_is_why_nothing_is_installed() {
 
     let refused = remove(&fixture.view(), &removing("@acme/x")).unwrap_err();
 
-    assert_eq!(refused.error.code, NOT_FOUND);
+    assert_eq!(refused.error.code, "E033");
+    assert_eq!(refused.error.kind, OpErrorKind::SchemaMismatch);
+    assert!(refused.subject.is_none(), "{refused:?}");
     assert!(
         refused.error.message.contains("corrupt lock file"),
         "{refused:?}"

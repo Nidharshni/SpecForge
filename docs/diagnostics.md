@@ -433,10 +433,14 @@ Level: error
 E033: Lock file error
 
 `specforge.lock` couldn't be serialized, written, read, or parsed; `specforge
-update` reports it when there is no lock file to update. A lock that can't be
-read loads no installed extension and refuses `add`, `update` and `remove` until
-it is fixed or deleted (then reinstall the extensions). Delete the lock file and
-reinstall extensions, or run `specforge add` first.
+update` also reports it when there is no lock file to update (run `specforge
+add` first). A lock that is there and can't be read loads no installed extension
+(each entry that needs it is E028), and every change whose answer it would
+decide is refused with this code before anything is read or written: an `add` or
+`init` that installs, any `update`, a `remove` of an extension whose origin only
+the lock could tell. Enabling or disabling a builtin, or a `.wasm` file entry,
+still works. Fix specforge.lock, or delete it and install the extensions again
+with `specforge add`.
 
 Owner: core
 Level: error
