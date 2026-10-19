@@ -443,7 +443,13 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   view, export and check hold the resolved value; its spans stay the default's, so diagnostics, references and
   rename point at the default's line. `defaults` is a structural keyword: never a kind, never an id. A typed edit
   asks the graph's defaults module (`specforge_graph::FileDefaults`) over the text it plans which default applies and
-  whether a field restates it, so it never writes what W161 would flag (ADR 0154).
+  whether a field restates it, through one module of its own (**Own field**), so it never writes what W161 would
+  flag (ADR 0154, ADR 0175).
+- **Own field**: a field a block writes, as opposed to one it inherits from its file's default (ADR 0149). A typed
+  edit changes a field through one module (`edit::defaults::change`, ADR 0175): an inherited list or block field is
+  copied into an own field first, the verb changes it, an own field that then restates the default is removed, and a
+  field left empty over a default holds none (`[]`, `{}`; a field of one value is refused). `unset` leaves a field
+  holding none.
 - **Custom verdict**: an extension's answer, through its `wasm_function`, on one entity for a
   `check: "custom"` rule: pass, or fail naming a field and value. The rule set asks for it through
   the `CustomVerdicts` port; the project's adapter calls the extension (`ExtensionCalls::validate`),
