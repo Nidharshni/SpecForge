@@ -6,6 +6,7 @@ use specforge_ops::analysis::collect::{CollectField, Mode, Outcome};
 use specforge_ops::asking::Asking;
 use specforge_ops::testing::ScriptedMachine;
 use specforge_ops::{Containment, OpErrorKind, Refusal};
+use specforge_test_macros::test as specforge_test;
 
 /// Collect `mine.json` as `--report` would, for runner `acme`, reaching `containment`.
 fn given(fx: &Fixture, containment: &Containment) -> Result<Outcome, Refusal<CollectField>> {
@@ -33,8 +34,10 @@ fn link_out(fx: &Fixture) -> tempfile::TempDir {
     outside
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "dispatch_collector",
+    verify = "--report reads only the named files, whatever the collector declares"
+)]
 fn reports_mode_reads_past_a_report_location_declared_outside() {
     let fx = Fixture::new(vec![
         Runner::new("acme").report("../x.json").proving("a", "t"),
@@ -46,7 +49,6 @@ fn reports_mode_reads_past_a_report_location_declared_outside() {
 }
 
 #[test]
-#[ignore = "flipped by T4"]
 fn reports_mode_reads_past_an_unknown_capture() {
     let fx = Fixture::new(vec![
         Runner::new("acme").capturing("stderr").proving("a", "t"),
@@ -65,7 +67,6 @@ fn reports_mode_reads_past_an_unknown_capture() {
 
 #[cfg(unix)]
 #[test]
-#[ignore = "flipped by T4"]
 fn reports_mode_reads_past_a_report_location_that_lands_outside() {
     let fx = Fixture::new(vec![
         Runner::new("acme").report("out2/a.json").proving("a", "t"),

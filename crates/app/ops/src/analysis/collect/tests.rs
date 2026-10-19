@@ -1,4 +1,4 @@
-use super::collector::wildcard;
+use super::collector::{report_path, wildcard};
 use super::*;
 use crate::Containment;
 use crate::testing::Viewed;
