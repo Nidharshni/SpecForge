@@ -347,6 +347,36 @@ mod containment_tests {
 
     #[cfg(unix)]
     #[test]
+    #[ignore = "flipped by T7"]
+    fn a_component_with_another_name_is_not_read_through_a_bound() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = std::fs::canonicalize(dir.path()).unwrap();
+        std::fs::write(base.join("outside.wasm"), testing::GREET).unwrap();
+        std::fs::create_dir_all(base.join("proj")).unwrap();
+        std::fs::hard_link(base.join("outside.wasm"), base.join("proj/linked.wasm")).unwrap();
+        let runtime = testing::candidates();
+
+        let bound = Containment::within(&base.join("proj"));
+        let error = LocalFile::read(&runtime, Path::new("linked.wasm"), &bound).unwrap_err();
+        assert_eq!(error.code, "E040", "{error:?}");
+        assert!(
+            error.message.contains("it has 2 names"),
+            "{}",
+            error.message
+        );
+        // The CLI still reads it (ADR 0146 D5).
+        assert!(
+            LocalFile::read(
+                &runtime,
+                &base.join("proj/linked.wasm"),
+                &Containment::unbounded()
+            )
+            .is_ok()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn a_crate_directory_whose_build_leaves_the_containment_is_outside() {
         let dir = tempfile::tempdir().unwrap();
         let base = std::fs::canonicalize(dir.path()).unwrap();

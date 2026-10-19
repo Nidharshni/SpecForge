@@ -39,6 +39,7 @@ mod init_specifiers;
 mod init_writes;
 mod inspect;
 mod kinds;
+mod local_component;
 mod machine_reach;
 mod management;
 mod migrate;
