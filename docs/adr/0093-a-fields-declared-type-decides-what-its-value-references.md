@@ -2,7 +2,7 @@
 
 **Status:** accepted (2026-10-15, architecture round 10, plan 02). Extends ADR 0064 D1 from a field's storage and
 wire form to what its value references. Amends ADR 0032 (the graph inputs: `single_reference_fields` is gone,
-`FieldForms` carries the member kinds) and ADR 0019 (the field text of an open-fields kind's list). D9 is reopened by [ADR 0117](0117-a-reference-is-decided-in-the-linker.md): E022 is reported at the reference, by the linker.
+`FieldForms` carries the member kinds) and ADR 0019 (the field text of an open-fields kind's list). D9 is reopened by [ADR 0117](0117-a-reference-is-decided-in-the-linker.md): E022 is reported at the reference, by the linker. D2 extended by [ADR 0156](0156-a-delete-finds-references-by-the-one-reference-rule.md): a typed edit's referrer scan asks the rule, of the stored value.
 
 Whether a written value named an entity was decided by how it was written, not by what its field declares. The
 parser turned any unquoted list (numbers and booleans included) into a reference list, a list under a field named

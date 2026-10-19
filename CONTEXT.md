@@ -1061,7 +1061,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `reference_list` field's items, a scheme ref ID in a `string_list`, ADR 0093), an occurrence of an entity's ID in another entity's field that resolves to it (one
   edge; where it is written is the edge's written span). The references *to* an entity are incoming; what an entity
   *refers to* are its outgoing references. "Find references" means incoming, with the declaration
-  only on request (`specforge_ops::read::navigate`).
+  only on request (`specforge_ops::read::navigate`). Navigation answers the references to an entity two ways: one per
+  holder (an inherited reference once per block that inherits it, `Navigator::references`, what find-references
+  returns) and one per written token (`Navigator::tokens`, what rename edits and an editor shows) (ADR 0149 D11, ADR 0156).
 - **Written span** (of an edge): where one of an edge's references is written: a reference's token (a list
   item, a single reference's value) or a name inside a type expression a derived field reads (a parameter or
   return type, a field written as a type, a union member). The linker records every edge's written spans, in
@@ -1086,6 +1088,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   it left), each value written in its field's form (a multi-line one laid out with the file's format configuration, and left out when it restates its file's default)
   and each touched block formatted; the plan is refused with E080
   when the edited project reports an error the project did not, and is written as one project change (ADR 0151).
+  A delete with `unlink_references` removes every reference the graph build would link, found by `Reading::references`
+  in the planned texts; one written in a `defaults` block or an undeclared field refuses it (`not_editable`, ADR 0156).
 - **Lexeme**: one token of a `.spec` text as the language's one lexer reads it without a parse
   (`specforge_parser::lex`): an identifier, a scheme ref ID (one lexeme), a number, a string (read as
   the grammar reads it, across lines; one the grammar would not close is marked unclosed and, if a
