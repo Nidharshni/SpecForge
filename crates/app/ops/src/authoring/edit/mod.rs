@@ -21,7 +21,6 @@ use serde::{Deserialize, Serialize};
 use specforge_common::DiagnosticList;
 use specforge_common::shape::{Definitions, Shape};
 use specforge_formatter::FormatConfig;
-use specforge_registry::PlainDisk;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -429,7 +428,8 @@ fn describe(edit: &Edit) -> String {
 
 /// Plan `edits`, in order, over the project `view` reads: each edit reads the text the ones before it left.
 /// Refused with the first edit that cannot be made (with several edits its message starts with
-/// `edit <n> (<op> <entity>): `).
+/// `edit <n> (<op> <entity>): `). Each file is laid out with its format configuration, read once per plan
+/// through the view's disk (ADR 0169).
 pub fn plan(view: &ProjectView<'_>, edits: &[Edit]) -> Result<EditPlan, Refusal<EditField>> {
     if let Some(problem) = view
         .env()
@@ -440,7 +440,7 @@ pub fn plan(view: &ProjectView<'_>, edits: &[Edit]) -> Result<EditPlan, Refusal<
         return Err(crate::config::refusal(problem).into());
     }
     view.project_root()?;
-    let disk = PlainDisk;
+    let disk = view.containment().disk();
     let mut planner = Planner {
         view,
         configs: Configs::new(None, &disk),

@@ -86,7 +86,6 @@ fn format_reports_a_hard_linked_configuration_without_its_content() {
 }
 
 #[cfg(unix)]
-#[ignore = "flipped by T5"]
 #[specforge_test_macros::test(
     invariant = "mcp_served_project_consistency",
     verify = "no format configuration a call reads leaves the project, and none with more than one name is read"

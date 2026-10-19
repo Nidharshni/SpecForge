@@ -107,3 +107,57 @@ fn a_value_within_the_projects_max_width_stays_on_one_line() {
     );
     assert!(text.contains(&format!("  contract \"{LONG}\"\n")), "{text}");
 }
+
+/// A project whose `.specforgefmt.toml` is a link to `indent_width = 4`, held outside the project.
+#[cfg(unix)]
+fn linked() -> (Compiled, tempfile::TempDir) {
+    let c = project(&[("tasks.spec", TASKS)]);
+    let outside = tempfile::TempDir::new().unwrap();
+    let target = outside.path().join("c.toml");
+    std::fs::write(&target, "indent_width = 4\n").unwrap();
+    let link = c.project.root().unwrap().join(".specforgefmt.toml");
+    std::os::unix::fs::symlink(target, link).unwrap();
+    (c, outside)
+}
+
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    behavior = "load_format_config",
+    verify = "a typed edit and init lay out with the defaults when their bound refuses the configuration"
+)]
+fn a_contained_view_lays_out_with_the_defaults_when_the_configuration_links_outside() {
+    let (c, _outside) = linked();
+
+    let planned = edit::plan(
+        &ProjectView::of(&c.project).contained(),
+        &[set("list_tasks", "contract", one(LONG))],
+    )
+    .unwrap();
+    let text = planned.after().remove("tasks.spec").unwrap();
+
+    assert!(
+        text.contains(&format!("  contract \"\"\"\n    {LONG}\n  \"\"\"")),
+        "{text}"
+    );
+    assert!(!text.contains("    contract"), "{text}");
+}
+
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    behavior = "load_format_config",
+    verify = "an unbounded caller follows a linked configuration"
+)]
+fn an_uncontained_view_follows_a_linked_configuration() {
+    let (c, _outside) = linked();
+
+    let text = after(
+        &c,
+        "tasks.spec",
+        &[set("list_tasks", "contract", one(LONG))],
+    );
+
+    assert!(
+        text.contains(&format!("    contract \"\"\"\n        {LONG}\n    \"\"\"")),
+        "{text}"
+    );
+}
