@@ -258,6 +258,20 @@ pub(super) const SCENARIOS: &[Scenario] = &[
         mcp_rooted: true,
     },
     Scenario {
+        name: "format_config_problem",
+        setup: project_unformatted_with_a_config_problem,
+        cli: |root| args(&["format", "--path", &s(root), "--format", "json"]),
+        mcp: |root| ("specforge.format", json!({"path": s(root)})),
+        mcp_rooted: true,
+    },
+    Scenario {
+        name: "migrate_config_problem",
+        setup: project_at_old_format_with_a_config_problem,
+        cli: |root| args(&["migrate", "--path", &s(root), "--format", "json"]),
+        mcp: |root| ("specforge.migrate", json!({"path": s(root)})),
+        mcp_rooted: true,
+    },
+    Scenario {
         name: "export",
         setup: project,
         cli: |root| args(&["export", "--path", &s(root), "--format", "graph"]),
@@ -336,6 +350,61 @@ pub(super) const SCENARIOS: &[Scenario] = &[
         mcp: |_| ("specforge.explain", json!({"code": "W024"})),
         mcp_rooted: true,
     },
+];
+
+/// Where the CLI and MCP behave differently today, and why. Later steps of
+/// plan 03 delete rows; only spec-sanctioned differences should remain.
+pub(super) const EXPECTED_DIVERGENCES: &[(&str, Aspect, &str)] = &[
+    // export: both surfaces export through `specforge_ops::read::export` (O2) and
+    // report its notices, but only the CLI keeps `.specforge/schema-cache.json`.
+    // The MCP export tool is a read-only query: if it rewrote the cache, the
+    // next CLI export would miss its W053.
+    (
+        "export",
+        Aspect::Files,
+        "only the CLI writes the schema cache",
+    ),
+    // check: both surfaces run `specforge_ops::analysis::check` (plan 08, ADR 0018).
+    // Finding errors fails `specforge check` (exit 1) but is a successful
+    // MCP call, whose verdict is `_meta["specforge/check"].ok`.
+    (
+        "check_failing",
+        Aspect::Outcome,
+        "MCP validate finding errors is a successful call (ADR 0004 D4-a); the CLI exits 1",
+    ),
+    // format --check: a file that would change fails `specforge format
+    // --check` (exit 1); over MCP it is a successful call (ADR 0004 D4-a).
+    (
+        "format_check",
+        Aspect::Outcome,
+        "a format check that finds a change is a successful MCP call (ADR 0004 D4-a); the CLI exits 1",
+    ),
+    // analyze --min: a gate below its minimum fails `specforge analyze`
+    // (exit 1); over MCP it is a successful call whose verdict is `ok`
+    // (false) and whose `gate` says where it landed (ADR 0004 D4-a, 0029 D3a).
+    (
+        "analyze_gate_below",
+        Aspect::Outcome,
+        "an analysis whose gate is below its minimum is a successful MCP call (ADR 0004 D4-a); the CLI exits 1",
+    ),
+    // A run that goes around a problem in specforge.json fails its verdict (exit 1, ok false) but is no failed run:
+    // a successful MCP call (ADR 0004 D4-a, ADR 0170).
+    (
+        "format_config_problem",
+        Aspect::Outcome,
+        "a run that goes around a specforge.json problem is a successful MCP call whose ok is false; the CLI exits 1",
+    ),
+    (
+        "migrate_config_problem",
+        Aspect::Outcome,
+        "a run that goes around a specforge.json problem is a successful MCP call whose ok is false; the CLI exits 1",
+    ),
+    // The build cache is opt-in and the CLI's: validate never writes it.
+    (
+        "check_cache",
+        Aspect::Files,
+        "only `check --cache` writes the build cache (write_build_cache opt_in)",
+    ),
 ];
 
 #[test]
@@ -471,4 +540,33 @@ fn parity_explain_retired() {
 #[test]
 fn parity_explain_retired_gone() {
     parity("explain_retired_gone");
+}
+
+/// `CONFIG` with an exclude entry that can match no source: an E069 every run goes around.
+fn config_with_a_problem(proj: &TestProject) {
+    let config = CONFIG.replace(
+        r#""spec_root": "spec","#,
+        r#""spec_root": "spec", "exclude": ["["],"#,
+    );
+    std::fs::write(proj.root().join("specforge.json"), config).unwrap();
+}
+
+fn project_unformatted_with_a_config_problem(proj: &TestProject) {
+    project_unformatted(proj);
+    config_with_a_problem(proj);
+}
+
+fn project_at_old_format_with_a_config_problem(proj: &TestProject) {
+    project_at_old_format(proj);
+    config_with_a_problem(proj);
+}
+
+#[test]
+fn parity_format_config_problem() {
+    parity("format_config_problem");
+}
+
+#[test]
+fn parity_migrate_config_problem() {
+    parity("migrate_config_problem");
 }

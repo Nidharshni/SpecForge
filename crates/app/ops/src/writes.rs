@@ -93,7 +93,7 @@ impl Wrote {
     }
 
     /// `write` run unless `dry_run`; a preview runs nothing.
-    pub fn unless_preview<E>(
+    pub(crate) fn unless_preview<E>(
         dry_run: bool,
         write: impl FnOnce() -> Result<Writes, E>,
     ) -> Result<Wrote, E> {

@@ -482,7 +482,9 @@ fn removal_project(
 )]
 fn remove_and_check_agree_on_the_project_peer_set() {
     use specforge_ops::extension::{self, RemoveRequest};
-    use specforge_ops::testing::{BASE_1, DEP_1, NEEDS_SOFTWARE_1, NEEDS_SOFTWARE_9, probes};
+    use specforge_ops::testing::{
+        BASE_1, BASE_2, DEP_1, NEEDS_SOFTWARE_1, NEEDS_SOFTWARE_9, probes,
+    };
 
     let software_needs_9: Locked = (
         "@probe/needs-software",
@@ -497,6 +499,7 @@ fn remove_and_check_agree_on_the_project_peer_set() {
         &[("@specforge/software", "^1.0")],
     );
     let dep_needs_base: Locked = ("@probe/dep", DEP_1, "1.0.0", &[("@probe/base", "^1.0")]);
+    let base_locked: Locked = ("@probe/base", BASE_1, "1.2.0", &[]);
     // name, config, files, locked, the argument, force, whether it is refused
     #[expect(
         clippy::type_complexity,
@@ -554,6 +557,24 @@ fn remove_and_check_agree_on_the_project_peer_set() {
             vec![software_needs_1],
             "@specforge/software",
             true,
+            false,
+        ),
+        (
+            "a removal is judged against the file entry it lets load",
+            &["@probe/base", "dep.wasm", "base2.wasm"],
+            &[("dep.wasm", DEP_1), ("base2.wasm", BASE_2)],
+            vec![base_locked],
+            "@probe/base",
+            false,
+            true,
+        ),
+        (
+            "a removal that lets a file entry load what its dependents accept goes",
+            &["@probe/base", "dep.wasm", "base2.wasm"],
+            &[("dep.wasm", DEP_1), ("base2.wasm", BASE_1)],
+            vec![base_locked],
+            "@probe/base",
+            false,
             false,
         ),
     ];

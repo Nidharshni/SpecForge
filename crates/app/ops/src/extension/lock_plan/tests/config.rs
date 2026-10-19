@@ -12,9 +12,7 @@ fn the_plan_judges_and_answers_one_set_of_entries() {
         fetching(no_registry()),
         crate::testing::caller(),
         Purpose::Commit,
-        false,
-    )
-    .unwrap();
+    );
     plan.disable(Ask(0), Disabled::Entry("./a.wasm".into()));
     plan.enable(Ask(0), "@acme/bar");
 
@@ -54,7 +52,7 @@ fn enabling<'a>(
     root: &Path,
     purpose: Purpose,
     names: &[&str],
-) -> Checked<'a> {
+) -> (Checked<'a>, Vec<Answer>) {
     let mut plan = LockPlan::adding(
         installed,
         opened_at(root),
@@ -62,13 +60,11 @@ fn enabling<'a>(
         fetching(no_registry()),
         crate::testing::caller(),
         purpose,
-        false,
-    )
-    .unwrap();
-    for (at, name) in names.iter().enumerate() {
-        plan.enable(Ask(at), name);
-    }
-    plan.check().ok().unwrap()
+    );
+    let asked = (names.iter().enumerate())
+        .map(|(at, name)| plan.enable(Ask(at), name))
+        .collect();
+    (plan.check().ok().unwrap(), asked)
 }
 
 fn software() -> InProcessRuntime {
@@ -94,7 +90,7 @@ fn a_commit_writes_the_entries_the_plan_judged_and_keeps_the_rest() {
         r#"{"name":"p","version":"0.1.0","spec_root":"spec","extensions":["@acme/foo@1.0.0",7]}"#,
     );
     let (runtime, installed) = (software(), Installed::at(dir.path()));
-    let checked = enabling(
+    let (checked, asked) = enabling(
         &installed,
         &runtime,
         dir.path(),
@@ -119,7 +115,7 @@ fn a_commit_writes_the_entries_the_plan_judged_and_keeps_the_rest() {
         String::from_utf8(crate::config::render(&written).unwrap()).unwrap()
     );
     assert_eq!(done.enabled, 2);
-    assert!(matches!(done.asked(Ask(0)), Answer::Changes { .. }));
+    assert_eq!(asked, [Answer::Changes]);
 }
 
 #[test]
@@ -127,29 +123,28 @@ fn an_unchanged_set_of_entries_writes_nothing() {
     let dir = project_with(r#"{"extensions":["@specforge/software@1.0.0"]}"#);
     let (runtime, installed) = (software(), Installed::at(dir.path()));
 
-    let done = enabling(
+    let (checked, asked) = enabling(
         &installed,
         &runtime,
         dir.path(),
         Purpose::Commit,
         &["@specforge/software"],
-    )
-    .finish()
-    .unwrap();
+    );
+    let done = checked.finish().unwrap();
 
     assert_eq!(
         std::fs::read_to_string(dir.path().join("specforge.json")).unwrap(),
         r#"{"extensions":["@specforge/software@1.0.0"]}"#
     );
     assert!(done.writes.is_empty());
-    assert_eq!(done.asked(Ask(0)), Answer::Unchanged { locked: None });
+    assert_eq!(asked, [Answer::Unchanged]);
 }
 
 #[test]
 fn a_preview_over_a_changed_config_answers_what_was_judged() {
     let dir = project_with(r#"{"extensions":[]}"#);
     let (runtime, installed) = (software(), Installed::at(dir.path()));
-    let checked = enabling(
+    let (checked, asked) = enabling(
         &installed,
         &runtime,
         dir.path(),
@@ -164,7 +159,7 @@ fn a_preview_over_a_changed_config_answers_what_was_judged() {
 
     let done = checked.finish().unwrap();
 
-    assert!(matches!(done.asked(Ask(0)), Answer::Changes { .. }));
+    assert_eq!(asked, [Answer::Changes]);
     assert!(done.writes.is_empty());
     assert_eq!(
         std::fs::read_to_string(dir.path().join("specforge.json")).unwrap(),
@@ -214,15 +209,14 @@ fn an_entry_whose_name_prefixes_an_enabled_one_is_appended() {
     let dir = project_with(r#"{"name":"p","extensions":["@specforge/software-ish@1.0.0"]}"#);
     let (runtime, installed) = (software(), Installed::at(dir.path()));
 
-    let done = enabling(
+    let (checked, asked) = enabling(
         &installed,
         &runtime,
         dir.path(),
         Purpose::Commit,
         &["@specforge/software"],
-    )
-    .finish()
-    .unwrap();
+    );
+    checked.finish().unwrap();
 
     let written: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(dir.path().join("specforge.json")).unwrap())
@@ -231,7 +225,7 @@ fn an_entry_whose_name_prefixes_an_enabled_one_is_appended() {
         written["extensions"],
         serde_json::json!(["@specforge/software-ish@1.0.0", "@specforge/software"])
     );
-    assert!(matches!(done.asked(Ask(0)), Answer::Changes { .. }));
+    assert_eq!(asked, [Answer::Changes]);
 }
 
 #[test]
@@ -291,6 +285,7 @@ fn a_config_write_goes_to_the_file_it_was_handed() {
         Purpose::Commit,
         &["@specforge/software"],
     )
+    .0
     .finish()
     .unwrap();
 

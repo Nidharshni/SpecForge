@@ -99,6 +99,7 @@ behavior provide_mcp_format_tool "Provide MCP Format Tool" {
   verify unit "the format tool advertises no default for write, and check or diff without write writes nothing"
   verify unit "ok is the verdict specforge format exits by, in every mode"
   verify unit "a directory that is no project is formatted with the defaults, as specforge format formats it"
+  verify unit "a problem in specforge.json the call goes around does not fail the call, and the files it formatted are listed"
   verify contract "Provide MCP Format Tool: MCP format tool holds — filesystem_available, files_formatted, check_mode_readonly, mutation_completed_emitted, tool_invoked_emitted"
   verify unit "a specforge.json that does not say which files are the project's sources fails the call as config_invalid and writes nothing"
   verify unit "a problem in specforge.json the call goes around is an E069 among the diagnostics and makes ok false"
@@ -457,8 +458,10 @@ behavior provide_mcp_migrate_tool "Provide MCP Migrate Tool" {
     migration's error names its cause: a migration hook that failed
     (internal_error), a migrated project whose graph changed (W054) or that
     does not compile (compilation_failed), or files that could not be
-    migrated or a specforge.json not used as written (config_invalid,
-    schema_mismatch); its data is the migration document. A path
+    migrated (schema_mismatch); its data is the migration document. A
+    problem in specforge.json the run went around fails ok and not the
+    call: the call succeeds with the migration document, its E069 among
+    the diagnostics, dry run included (ADR 0170). A path
     naming a directory that is no project
     MUST be migrated as specforge migrate migrates it. A project with nothing to
     migrate MUST be reported as already at the target version, without
@@ -476,6 +479,7 @@ behavior provide_mcp_migrate_tool "Provide MCP Migrate Tool" {
   verify unit "ok is the verdict specforge migrate exits by, and a failed migration's kind is the operation's"
   verify unit "a failed migration's error names its cause: a hook, a changed graph, a project that does not compile, or files that could not be migrated"
   verify unit "a directory that is no project is migrated as specforge migrate migrates it"
+  verify unit "a problem in specforge.json the migration goes around makes ok false and does not fail the call, dry run included"
   verify contract "Provide MCP Migrate Tool: MCP migrate tool holds — filesystem_available, migrations_applied, post_migration_validated, dry_run_safe, mutation_completed_emitted, tool_invoked_emitted"
   verify unit "a specforge.json that does not say which files are the project's sources fails the call as config_invalid and writes nothing"
 }

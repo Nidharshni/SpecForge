@@ -196,31 +196,21 @@ fn each_ask_is_answered_with_the_builtins_its_extension_required() {
             fetching(no_registry()),
             crate::testing::caller(),
             Purpose::Commit,
-            false,
-        )
-        .unwrap();
+        );
         for (at, name) in asked.iter().enumerate() {
-            plan.enable(Ask(at), name);
+            assert_eq!(plan.enable(Ask(at), name), Answer::Changes);
         }
         plan.check().ok().unwrap().finish().unwrap()
     };
 
     // software first: formal's requirement is already met by the earlier ask.
     let done = enabling(&["@specforge/software", "@specforge/formal"]);
-    let none = Answer::Changes {
-        peers_enabled: Vec::new(),
-    };
-    assert_eq!(done.asked(Ask(0)), none);
-    assert_eq!(done.asked(Ask(1)), none);
+    assert!(done.peers_enabled(Ask(0)).is_empty());
+    assert!(done.peers_enabled(Ask(1)).is_empty());
 
     // formal alone enables software with it.
     let done = enabling(&["@specforge/formal"]);
-    assert_eq!(
-        done.asked(Ask(0)),
-        Answer::Changes {
-            peers_enabled: vec!["@specforge/software"]
-        }
-    );
+    assert_eq!(done.peers_enabled(Ask(0)), ["@specforge/software"]);
     assert_eq!(done.enabled, 2);
 }
 
@@ -311,9 +301,7 @@ fn an_entries_only_plan_accepts_an_unreadable_lock_and_puts_the_config_back() {
         fetching(no_registry()),
         crate::testing::caller(),
         Purpose::Commit,
-        false,
-    )
-    .unwrap();
+    );
     plan.enable(Ask(0), "@specforge/software");
 
     // The second file cannot be created: the config the change wrote is put back.

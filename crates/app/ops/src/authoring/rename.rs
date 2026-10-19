@@ -1,6 +1,7 @@
 //! Renaming an entity ID: the MCP `specforge.rename` tool and the LSP's
 //! `textDocument/rename` plan the same edits under the same rules. MCP
-//! applies them ([`apply`]) and recompiles; the LSP hands them to the
+//! runs it ([`run`]: planned, then written as one project change unless the
+//! request previews) and recompiles; the LSP hands the plan's edits to the
 //! editor. The edits are exactly the tokens the graph's finder reads (ADR 0163: the
 //! declaration's name and each reference's token): text in strings,
 //! comments and verify statements that mentions the ID is not a reference,
@@ -9,7 +10,9 @@
 use crate::change::ProjectChange;
 use crate::read::navigate::{Navigator, Precision, TextEdit, apply_edits};
 use crate::view::EntityField;
-use crate::{Caller, OpError, OpErrorKind, Refusal};
+use crate::{Caller, OpError, OpErrorKind, Refusal, Wrote};
+use serde::Serialize;
+use specforge_common::shape::Shape;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -204,6 +207,57 @@ pub fn apply(plan: &RenamePlan, caller: Caller<'_>) -> Result<crate::Writes, OpE
         change.stage(held, Some(planned.as_bytes().to_vec()), edited.into_bytes());
     }
     change.commit()
+}
+
+/// What a rename did: the plan it made, and whether it wrote (ADR 0162).
+#[derive(Debug, Clone)]
+pub struct Renamed {
+    pub plan: RenamePlan,
+    pub wrote: Wrote,
+}
+
+/// Plan renaming `old_id` to `new_id` over `nav` ([`plan`]) and write its edits as one project change ([`apply`])
+/// unless `dry_run`. Refused as [`plan`] refuses, before anything is written, or with [`apply`]'s error: about no
+/// field, its writes the files it could not put back.
+pub fn run(
+    nav: &Navigator<'_>,
+    old_id: &str,
+    new_id: &str,
+    dry_run: bool,
+    caller: Caller<'_>,
+) -> Result<Renamed, Refusal<RenameField>> {
+    let plan = plan(nav, old_id, new_id)?;
+    let wrote = Wrote::unless_preview(dry_run, || apply(&plan, caller))?;
+    Ok(Renamed { plan, wrote })
+}
+
+/// What `specforge.rename` answers (`McpRenameResult`) but its edits, which are the spec's `TextEdit` and MCP's to
+/// spell, flattened beside it (ADR 0164 D3, ADR 0052 D2).
+#[derive(Debug, Clone, Serialize, Shape)]
+pub struct RenameDocument {
+    pub old_name: String,
+    pub new_name: String,
+    /// The files the edits touch, relative to the spec root, sorted.
+    pub affected_files: Vec<String>,
+    /// The rename was only planned: nothing was written.
+    pub dry_run: bool,
+}
+
+impl Renamed {
+    /// The document `specforge.rename` answers.
+    pub fn document(&self) -> RenameDocument {
+        RenameDocument {
+            old_name: self.plan.old_id.clone(),
+            new_name: self.plan.new_id.clone(),
+            affected_files: self
+                .plan
+                .affected_files()
+                .into_iter()
+                .map(String::from)
+                .collect(),
+            dry_run: self.wrote.previewed(),
+        }
+    }
 }
 
 #[cfg(test)]

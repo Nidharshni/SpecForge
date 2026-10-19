@@ -13,9 +13,7 @@ fn a_builtin_that_does_not_load_refuses_the_plan_e028() {
         fetching(no_registry()),
         crate::testing::caller(),
         Purpose::Commit,
-        true,
-    )
-    .unwrap();
+    );
     stage(&mut plan, local(&runtime, APP, "app.wasm"));
 
     let err = refused(plan);
@@ -62,9 +60,7 @@ fn close_enables_required_builtins_dependencies_first() {
         fetching(no_registry()),
         crate::testing::caller(),
         Purpose::Commit,
-        true,
-    )
-    .unwrap();
+    );
     stage(&mut plan, local(&runtime, APP_NEEDS_FORMAL, "app.wasm"));
     plan.close().unwrap();
 
@@ -93,9 +89,7 @@ fn close_enables_required_builtins_dependencies_first() {
         fetching(no_registry()),
         crate::testing::caller(),
         Purpose::Commit,
-        false,
-    )
-    .unwrap();
+    );
     plan.enable(Ask(0), "@specforge/formal");
     plan.enable(Ask(0), "@specforge/software");
     plan.close().unwrap();

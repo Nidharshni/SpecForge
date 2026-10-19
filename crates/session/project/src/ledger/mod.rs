@@ -21,6 +21,7 @@
 //! [`Run::finish`], told what it recorded ([`Recording`]), and [`Ledger::record`] is the
 //! one writer of the rows and the stamps it covers.
 
+mod chain;
 mod disk;
 mod inputs;
 mod key;
@@ -94,6 +95,8 @@ impl Changes {
 /// once, the lock and modules after it), the sources after discovery, the check
 /// inputs before the checks. A step never fails: an unreadable file is in what it
 /// returns (a `ConfigRead` with its problems, `Read::Unreadable`, `Read::Gone`).
+/// Both read each source through the disk the caller hands them (none: the plain
+/// file system), and the environment and the checks plain (ADR 0145 D3, ADR 0166).
 pub(crate) trait Reads {
     /// Run `load` (the environment load: `specforge.json` read once, the
     /// runtime built from it, the lock and the modules) with the disk it reads
@@ -117,10 +120,30 @@ pub(crate) trait Reads {
 }
 
 /// A one-shot compile's reads: the same steps, nothing recorded, no stamp (ADR
-/// 0030, ADR 0047 D1).
-pub(crate) struct Unrecorded;
+/// 0030, ADR 0047 D1). Each source is read through the disk it is handed, as the
+/// ledger reads one through the surface's (ADR 0166); the environment and the
+/// checks read the plain file system, as the ledger's do (ADR 0145 D3).
+pub(crate) struct Unrecorded<'d> {
+    sources: &'d dyn Disk,
+}
 
-impl Reads for Unrecorded {
+impl<'d> Unrecorded<'d> {
+    /// Reads each source through `sources`.
+    pub(crate) fn through(sources: &'d dyn Disk) -> Self {
+        Unrecorded { sources }
+    }
+}
+
+impl Unrecorded<'static> {
+    /// Reads every step from the plain file system (the CLI's compile; a step that reads no source).
+    pub(crate) fn plain() -> Self {
+        Unrecorded {
+            sources: &PlainDisk,
+        }
+    }
+}
+
+impl Reads for Unrecorded<'_> {
     fn environment(
         &mut self,
         _root: &ProjectRoot,
@@ -134,7 +157,7 @@ impl Reads for Unrecorded {
     }
 
     fn source(&mut self, spec_root: &Path, key: &str) -> Read {
-        sources::read(&PlainDisk, spec_root, key)
+        sources::read(self.sources, spec_root, key)
     }
 
     fn run_checks(&mut self, check: impl FnOnce(&dyn Disk)) {
@@ -355,12 +378,18 @@ impl Ledger {
     /// What changed on disk among what `paths` reach (ADR 0073).
     pub(crate) fn changes<'p>(&self, paths: impl IntoIterator<Item = &'p Path>) -> Changes {
         let reach = self.inputs.reach(paths);
-        self.stamps.changes(&self.inputs, Scope::Reached(&reach))
+        let disk = self.source_disk();
+        let sources: &dyn Disk = disk.as_deref().map_or(&PlainDisk, |d| d);
+        self.stamps
+            .changes(&self.inputs, Scope::Reached(&reach), sources)
     }
 
     /// Everything that differs from what was read.
     pub(crate) fn stale(&self) -> Changes {
-        self.stamps.changes(&self.inputs, Scope::Everything)
+        let disk = self.source_disk();
+        let sources: &dyn Disk = disk.as_deref().map_or(&PlainDisk, |d| d);
+        self.stamps
+            .changes(&self.inputs, Scope::Everything, sources)
     }
 }
 
@@ -387,12 +416,18 @@ pub(crate) struct Run<'l> {
 }
 
 impl Run<'_> {
-    /// Stamp `path`, then run `read` on it (the read the caller performs)
-    /// and return its result. A detached ledger's run stamps nothing and
+    /// Stamp `path` (a racy stamp hashes its content through `disk`, the disk `read` reads
+    /// with), then run `read` on it (the read the caller performs) and return its result. A detached ledger's run stamps nothing and
     /// still runs `read`.
-    pub(crate) fn read<T>(&self, input: Reading, path: &Path, read: impl FnOnce(&Path) -> T) -> T {
+    pub(crate) fn read<T>(
+        &self,
+        input: Reading,
+        path: &Path,
+        disk: &dyn Disk,
+        read: impl FnOnce(&Path) -> T,
+    ) -> T {
         if self.records {
-            let entry = Entry::stamp(path);
+            let entry = Entry::stamp(path, disk);
             self.read
                 .borrow_mut()
                 .push((input, path.to_path_buf(), entry));

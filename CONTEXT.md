@@ -30,11 +30,13 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   report order: the environment's, the imports', the graph build's, the checks', then surface conflicts
   (`specforge_project::CompiledProject`). A one-shot compile (every CLI command) is one and keeps no
   stamp; a project session holds one and keeps it current (`ProjectSession::project`, ADR 0047); it is
-  compiled from a project root (`CompiledProject::compile(&ProjectRoot, …)`). A copy shares all but its graph
+  compiled from a project root (`CompiledProject::compile(&ProjectRoot, …)`), or with its sources read through a
+  disk the surface hands it (`compile_through`, ADR 0166). A copy shares all but its graph
   (`Clone`, ADR 0108). Rooted or detached is its `root()` (a detached project has none and resolves no
   import); the project root it was loaded at is its environment's (`Environment::project_root`), read to reopen
   it and to hand an operation a project root (ADR 0121). It reads its recorded test report through the disk it is
-  handed (`CompiledProject::recorded`, ADR 0139).
+  handed (`CompiledProject::recorded`, ADR 0139). After an update that skipped the checks its report has none; its
+  checked report runs them over a copy (`CompiledProject::checked_diagnostics`, ADR 0167).
 - **Project root**: the directory holding the `specforge.json` a path is in, located from any path inside the
   project (a subdirectory, a file) by walking up, the nearest winning
   (`specforge_common::ProjectRoot::of`, ADR 0053). Only `specforge.json` marks a project. With none at or
@@ -103,7 +105,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Read ledger**: what a project session read and when (`specforge_project::ledger`, crate-private): its session
   inputs and the stamp of each file, taken in the call that reads it. It does every disk read the session makes
   (the config, the lock and modules, the sources, the check inputs), each through the one recording adapter, derives every source key, and answers `changes`
-  and `stale`. A one-shot compile runs the same steps through an adapter that records nothing (ADR 0106).
+  and `stale`. A one-shot compile runs the same steps through an adapter that records nothing and reads each source through the disk it is handed (ADR 0106, ADR 0166).
 - **Check reads**: every file-system read a check, a rule or a check pass makes, through the `Disk` in `RuleInput`
   (`exists`, `list`, `read`; `specforge_registry::Disk`, ADR 0107). A project session's ledger stamps and records each
   one; its check inputs are the reads its checks made the last time they ran. Tests give the checks a `MemoryDisk`.
@@ -116,8 +118,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`ProjectSession::open_through`, ADR 0145). A project session's ledger stamps each source by its key, with the link
   chain it followed, and records each link
   hop the read followed. A held buffer's file is not read, so nothing of it is recorded until it is released.
-  A migration reads each source through the request's containment (`migrate_project`'s `read`, ADR 0158); an edited
-  project reads none.
+  A migration reads each source, and compiles the project before and after, through the request's containment
+  (`migrate_project`'s `read`, `CompiledProject::compile_through`; ADR 0158, ADR 0166); an edited project reads none.
 - **Session inputs**: everything a project session depends on besides its sources' text: where its
   sources are discovered (the spec root and `exclude`), its **environment inputs**
   (the environment reads of its last load) and its **check inputs**
@@ -133,11 +135,17 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   a detached session's inputs are empty (ADR 0030). Nothing else: an import names one of the sources,
   never a file on disk (ADR 0055).
 - **Recorded input**: one row of a session's inputs: a file or directory a recorded read touched, as the read
-  spelled it, keyed by its own name in its canonical directory, with its class (an environment input, a check
+  spelled it, keyed by its own name in its canonical directory, with the directory links on the way to it
+  (its way, ADR 0173), with its class (an environment input, a check
   input, a directory the checks listed, or a hop of one source). The class decides what reaches it, which
   directory is watched for it and what its change is; a missing directory on the way to it outside the root is
   watched from its nearest existing ancestor (`specforge_project::ledger`, crate-private; ADR 0133). A source
   read as gone still records the hops it followed (ADR 0141).
+- **Link chain**: what a read of a name follows on the file system: its **hops** (each link at the name, in order,
+  at most 40, its target included) and its **way** (each directory link it goes through before its own name, below
+  the project root as opened). A stamp records where each hop lands; a recorded input keeps its way, and a change at
+  a link of either is that input's change (`specforge_project` `ledger::chain`, crate-private; ADR 0129, ADR 0173).
+  The containment's walk (ADR 0104) answers a different question: where a name lands.
 - **Dangling source link**: a `.spec` symlink whose target does not exist. It is no source (`SourceRoot::files`
   omits it) but the session reads it (`SourceRoot::dangling`), finds it gone and records its chain, so it is that
   source's change when its target appears (ADR 0141).
@@ -317,15 +325,18 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   dropped one removed; the change writes exactly those entries into the `specforge.json` it read, other keys
   kept, and refuses (`file_changed`) when the file no longer holds what the plan opened with (ADR 0126). Its writes land inside its own project: it is opened with the operation's **Caller** and narrows the caller's **Containment** to the project root itself (ADR 0137)
   (`specforge_ops::extension::lock_plan::LockPlan`, ADR 0041, ADR 0065). An
-  operation names what it asks for, each an **ask**; refusals and outcomes are answered per ask.
-  An ask the project already has (a named entry names it; for an install, the lock pins it as asked with its module on disk
-  the one pinned) is answered **unchanged** and stages nothing, and a plan whose asks change nothing is neither judged
+  operation names what it asks for, each an **ask** (its position among the operation's requests), and the plan answers
+  it when it is asked: **changes**, or **unchanged** when the project already has it (a named entry names it; for an
+  install, the lock pins it at the version asked, with the same bytes and kind of source, and its module on disk is
+  the one pinned), which stages nothing. A finished plan answers the builtins it enabled for each ask; a refused one,
+  the asks it refused (ADR 0168). A plan whose asks change nothing is neither judged
   nor written (ADR 0138). An
   `add` or `init` of an extension a `.wasm` file entry already loads is refused (`extension_conflict`), nothing
   written (ADR 0160).
   `add` and `init` first enable the builtins what they add requires, dependencies first;
   `update` enables nothing. The peer rule then judges the **project peer set** as the change leaves it,
-  once: every declared peer whose dependent or peer the change touches. A required peer no member
+  once: every declared peer whose dependent or peer the change touches (what it stages or appends; for a removal,
+  each member the set loses or loads instead, ADR 0041). A required peer no member
   provides is E027; a peer installed from a registry is unified against the registry the install came
   from (R-RES-006/005, ADR 0001); anything else out of range (a local install, a builtin, a `.wasm`
   file entry) is E027. Lock order and entry order decide nothing. A registry install's binary loads
@@ -334,9 +345,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Registry::pin`): a refused or failed plan pins nothing (ADR 0059). A **dry run** is the plan
   checked and not committed: it answers what the operation would, its refusal included, and writes,
   pins and downloads nothing; a registry package is judged by its published manifest
-  (`Registry::published`). A plan that may write the lock
-  opens it first: a `specforge.lock` that is there and can't be read refuses the change once (E033, the lock's own
-  remedy, `lock_plan::writable_lock`), and `update` and `remove` answer that refusal, never their own (ADR 0028).
+  (`Registry::published`). The lock the change leaves is built when the plan is checked, from the lock as read and what
+  it staged; a change that stages nothing accepts any lock (ADR 0165). A change that installs or uninstalls refuses a
+  `specforge.lock` that is there and can't be read once, before anything is read (E033, the lock's own remedy,
+  `lock_plan::writable_lock`), and `update` and `remove` answer that refusal, never their own (ADR 0028).
 - **Claim**: what one specifier of an `add` or `init` asks for an extension name: a second specifier naming it the
   same way is a duplicate, another way `extension_conflict` (`specforge_ops::extension::claims`, ADR 0098).
 - **Extension names**: what one change's extension strings name, read once by `specforge_ops::extension::names`
@@ -783,7 +795,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Mutation outcome**: what one MCP mutation call produced, typed: a run (`specforge_mcp::mutation::Mutated`:
   its reply and what it wrote — the files its operation changed, the entities it changed and the domain
   event it produces, `Written`) or a failure (`mutation::Failed`: its McpError and the files it left
-  written). Whether the call only previews is read from its tool arguments before it runs
+  written; a writing operation's failed run arrives as its `OpError`, ADR 0170). Whether the call only previews is read from its tool arguments before it runs
   (`MutationArgs::previews`); a preview is no mutation, whatever its operation answered. The request
   pipeline's tools adapter alone (`mutation::complete`) turns it into the call target's refresh, the reply
   sent once (`WrittenReply`: the tool reply, `files_written` — the one place a client learns which files
@@ -796,11 +808,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Outcome document**: the one typed JSON document of an operation's outcome, defined in ops beside
   the operation and deriving `Serialize` and `Shape`: the outcome itself when it is plain data
   (`stats::Stats`), else its `document()` (`AddDocument`, `RemoveDocument`, `UpdateDocument`,
-  `InitDocument`, `ExtensionsDocument`, `MigrateDocument`, `AnalyzeDocument`, `DoctorDocument`,
+  `InitDocument`, `ExtensionsDocument`, `MigrateDocument`, `RenameDocument`, `AnalyzeDocument`, `DoctorDocument`,
   `ValidateDocument`, `SearchDocument`, `PublishDocument`, `explain::Explanation`, …). A command with no ops
   operation (extension init, build, login, logout) keeps its document in its command module.
   The CLI prints it under `--format json` and MCP answers it as the tool reply; a surface adds only
-  what it alone knows, typed and flattened beside it (MCP's `note` on an add, a mutation's
+  what it alone knows, typed and flattened beside it (MCP's `note` on an add, rename's `edits`, the spec's `TextEdit`, a mutation's
   `files_written`, the CLI's credential health on doctor), and never renames, drops or re-derives a
   key. It carries no `null`. Its spec type is the tool's `Mcp*` reply type (ADR 0052).
 - **Graph export**: the project's graph, or the subgraph of a scope, written in one export format by
@@ -863,13 +875,19 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   computed by the operation (`ok()`, or `verdict()` → `specforge_ops::RunVerdict` where it can be
   unjudged): check (no error reported), analyze (no error finding, and with a minimum the coverage
   gate met; unjudged when the gate has no figure), format (every target read and written, nothing
-  left unformatted, and under `--check` nothing that would change), migrate (no file failed, nothing
-  rolled back), doctor (no error-level finding: an error the environment reports, E013, a binary that
+  left unformatted, every `specforge.json` it read used as written (no E069), and under `--check`
+  nothing that would change), migrate (no file failed, nothing rolled back, `specforge.json` used as
+  written), doctor (no error-level finding: an error the environment reports, E013, a binary that
   does not match the lock, an unreadable lock). The CLI exits 0, 1 or 2 by it (`specforge_cli::outcome::Exit`, the only value a core
   command ends with); MCP returns it as `ok`
-  (`specforge.validate`: `_meta["specforge/check"].ok`) and keeps `isError` for refusals (ADR 0004
-  D4-a). A refusal (`OpError`) is not a verdict; a measuring command's (stats, analyze) refusal exits 2. Not to be
-  confused with an entity's coverage **Verdict** (ADR 0029).
+  (`specforge.validate`: `_meta["specforge/check"].ok`) and keeps `isError` for refusals and failed runs
+  (ADR 0004 D4-a, ADR 0170). A refusal (`OpError`) is not a verdict; a measuring command's (stats, analyze)
+  refusal exits 2. Not to be confused with an entity's coverage **Verdict** (ADR 0029).
+- **Failed run**: a run of a writing operation that did not do all it was asked: a file it could not read,
+  write or migrate, or a change it undid (a rollback). Its outcome answers it (`format::Outcome::failed`,
+  `migrate::Outcome::failed`: an `OpError` carrying the run's document as `data` and its writes); MCP returns
+  it as the failed call (`isError`). A finding (a problem in `specforge.json` the run went around, a region
+  left unformatted, a change under `--check`) fails the **Run verdict** and is no failed run (ADR 0170).
 - **Terminal**: where a core CLI command writes and whom it asks: its stdout, its stderr, the input a
   prompt reads (or `specforge mcp` serves, byte for byte), whether each stream is coloured (`NO_COLOR`, then `CLICOLOR_FORCE`, then whether it is
   a terminal) and whether anyone can answer, fixed when `main` makes it from the process
@@ -1094,7 +1112,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   now. The navigator reads it from its view's compiled project; no surface hands it a text, and outline answers
   only for the compile's sources (ADR 0116). The LSP converts spans to UTF-16 ranges through that text's line index (a file the compile holds
   no text of has no range), MCP renders them as JSON (ADR 0016, ADR 0023).
-- **Rename plan**: the edits that rename one entity (`specforge_ops::authoring::rename::RenamePlan`), text edits:
+- **Rename plan**: the edits that rename one entity (`specforge_ops::authoring::rename::RenamePlan`), text edits (`rename::run` plans it and writes it unless its request previews: `Renamed`, whose document is `RenameDocument`; ADR 0162):
   the declaration's name and each incoming reference's token, positions in the text the project was compiled from,
   which the plan keeps, with the spec root they are relative to. MCP writes it only to files that still hold that text, refusing `conflict` otherwise; the LSP
   hands it to the editor only over buffers that are that text (`ContentModified` otherwise; ADR 0116, ADR 0023 D3).
@@ -1110,7 +1128,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   A list of them is planned over the texts the project was compiled from (each edit reading what the ones before
   it left), each value written in its field's form (a multi-line one laid out with the file's format configuration, and left out when it restates its file's default)
   and each touched block formatted; the plan is refused with E080
-  when the edited project reports an error the project did not (the **edited project** being compiled from what the project holds: the text of each source it read, the E025 of each it could not read, the planned texts; it reads no source, `CompiledProject::edited`, ADR 0158), and is written as one project change (ADR 0151).
+  when the edited project reports an error the project's **checked report** did not (its report with every check run, even after an update that skipped them: `CompiledProject::checked_diagnostics`, ADR 0167) (the **edited project** being compiled from what the project holds: the text of each source it read, the E025 of each it could not read, the planned texts; it reads no source, `CompiledProject::edited`, ADR 0158), and is written as one project change (ADR 0151).
   A delete with `unlink_references` removes every reference the graph build would link, found by the graph's finder
   in the planned texts (ADR 0163); one written in a `defaults` block, an undeclared field or as a derived type name refuses it (`not_editable`, ADR 0156).
   A list value is taken by its field's type: a reference list's items split at commas however given, a string list's never (ADR 0157). The stub fixes are typed edits too (ADR 0161).
@@ -1118,7 +1136,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Fix**: an edit offered for a diagnostic or an entity, the same as an LSP code action and from MCP `suggest_fixes`
   (`specforge_ops::authoring::fix`): a replacement of an unresolved token by its close match, or a stub (a create of the
   unresolved target's kind, a verify obligation) planned as a typed edit and offered as the position edits that apply it
-  (`EditPlan::edits`); a stub the plan refuses is not offered (ADR 0161).
+  (`EditPlan::edits`); a stub the plan refuses is not offered (ADR 0161); the LSP lists none over a buffer typed since the compile (ADR 0023 D3).
 - **Lexeme**: one token of a `.spec` text as the language's one lexer reads it without a parse
   (`specforge_parser::lex`): an identifier, a scheme ref ID (one lexeme), a number, a string (read as
   the grammar reads it, across lines; one the grammar would not close is marked unclosed and, if a

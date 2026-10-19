@@ -927,7 +927,10 @@ behavior update_all_extensions "Update All Extensions" {
     newer is up_to_date, also when its locked version is no longer
     published. A lock entry whose version is not SemVer moves to the
     version specforge add <name> installs. After upgrading, the system
-    MUST refresh the lock file with the new binary hashes. Peer dependency
+    MUST refresh the lock file with the new binary hashes. An extension is
+    reported updated only when its new binary is written: one served with
+    the bytes the lock already pins under another version is refused as add
+    refuses it (E028). Peer dependency
     conflicts introduced by upgrades MUST be detected and reported before
     applying changes. Every upgrade is judged against the lock as the
     whole update leaves it, whatever order the lock lists the extensions
@@ -984,6 +987,7 @@ behavior update_all_extensions "Update All Extensions" {
   verify unit "a write that fails while applying fails the update, naming what it could not write, and nothing is applied"
   verify integration "update never replaces a locally installed extension from a registry"
   verify unit "the update document lists every locked extension's status, held back when another failed"
+  verify unit "an upgrade served with the bytes the lock already pins is refused, never reported updated"
   verify integration "update --format json prints every locked extension's status and the batch_update_completed payload"
   verify contract "Update All Extensions: batch extension update holds — extensions_installed, registries_reachable, batch_update_completed_emitted, semver_constraints_respected, lock_hashes_refreshed, atomic_rollback_on_failure"
 }

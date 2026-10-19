@@ -80,7 +80,7 @@ fn a_staged_package_replaces_its_previous_entry() {
     );
 
     // The staged entry replaced the previous one: base has one requirer, at ^2.
-    let view = plan.view();
+    let view = plan.view().unwrap();
     let entries = ["@acme/base".to_string(), "@acme/app".to_string()];
     let set = ProjectPeers::of(&view, &entries, &mut Declarations::through(&runtime)).unwrap();
     let listed = set.requirers("@acme/base");
@@ -177,9 +177,7 @@ fn a_locked_extension_no_entry_enables_is_not_judged() {
         fetching(no_registry()),
         crate::testing::caller(),
         Purpose::Commit,
-        true,
-    )
-    .unwrap();
+    );
     stage(&mut plan, local(&runtime, BASE, "base.wasm"));
 
     assert!(plan.check().is_ok());
@@ -330,9 +328,7 @@ fn a_builtin_peer_out_of_range_is_e027_naming_the_embedded_version() {
         fetching(&registry),
         crate::testing::caller(),
         Purpose::Commit,
-        true,
-    )
-    .unwrap();
+    );
     stage_fetched(
         &mut plan,
         &PackageName::parse("@probe/needs-software").unwrap(),
@@ -406,9 +402,7 @@ fn a_file_entry_is_a_member_both_ways() {
         fetching(no_registry()),
         crate::testing::caller(),
         Purpose::Commit,
-        true,
-    )
-    .unwrap();
+    );
     stage(
         &mut plan,
         local(&runtime, crate::testing::BASE_2, "base.wasm"),
@@ -431,9 +425,7 @@ fn a_file_entry_is_a_member_both_ways() {
         fetching(no_registry()),
         crate::testing::caller(),
         Purpose::Commit,
-        true,
-    )
-    .unwrap();
+    );
     stage(
         &mut plan,
         local(&runtime, crate::testing::DEP_1, "dep.wasm"),

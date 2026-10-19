@@ -23,6 +23,7 @@ mod explore;
 mod export_cache;
 mod export_written;
 mod extension_calls;
+mod failed_run;
 mod failures;
 mod field_references;
 mod field_types;
@@ -41,6 +42,8 @@ mod kinds;
 mod machine_reach;
 mod management;
 mod migrate;
+#[cfg(unix)]
+mod migrate_bound;
 mod migrate_sources;
 mod migrate_titles;
 mod model;

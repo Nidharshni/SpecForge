@@ -3864,10 +3864,10 @@ expression: listing
         }
       },
       "required": [
+        "edits",
         "old_name",
         "new_name",
         "affected_files",
-        "edits",
         "dry_run"
       ],
       "type": "object"

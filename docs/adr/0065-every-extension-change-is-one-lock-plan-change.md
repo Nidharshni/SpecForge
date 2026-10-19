@@ -88,3 +88,7 @@ protocol whose manifest is not the declaration the gate judges; a surface that p
 **Amended by ADR 0137 (2026-10-17):** D1: the plan is opened with the operation's `Caller`; `Checked::finish` takes no argument and bounds every write to the plan's project.
 
 **Amended (2026-10-19, architecture round 16, plan 10):** D1: a removal's plan is opened with the package it uninstalls (`LockPlan::removing`); it is not asked of an open plan.
+
+**Amended by [ADR 0165](0165-the-lock-a-change-leaves-is-built-when-its-plan-is-checked.md) (2026-10-19):** D1: the plan keeps no staged lock; the lock the change leaves is built when the plan is checked (`LockFile::put` and `without`, the rule `Change` writes by).
+
+**Amended by [ADR 0168](0168-the-lock-plan-answers-an-ask-when-it-is-asked.md) (2026-10-19):** D1: each ask is answered when it is asked; `Checked::finish` answers the builtins each ask enabled.

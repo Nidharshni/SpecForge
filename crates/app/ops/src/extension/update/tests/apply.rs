@@ -384,3 +384,46 @@ fn an_update_writes_nothing_outside_its_project_whatever_bound_its_caller_lends(
     );
     assert!(registry.pins().is_empty());
 }
+
+#[specforge_test(
+    behavior = "update_all_extensions",
+    verify = "an upgrade served with the bytes the lock already pins is refused, never reported updated"
+)]
+fn an_upgrade_served_as_the_locked_bytes_is_refused_not_reported_updated() {
+    // Locked at 0.1.0 with greet's bytes, which declare 0.1.0; the registry serves them as 0.2.0.
+    let dir = enabled_project(vec![LockFileEntry {
+        wasm_hash: hex_sha256(&greet()),
+        ..entry("@sdk/greet", "0.1.0", "registry", &[])
+    }]);
+    std::fs::write(installed(dir.path(), "@sdk/greet"), greet()).unwrap();
+    let lock_before = std::fs::read(lock_path(dir.path())).unwrap();
+    let registry = MemoryRegistry::new().serving(Published::new(
+        greet(),
+        declaration("@sdk/greet", "0.2.0", &[]),
+    ));
+
+    let outcome = update(
+        &request(
+            &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
+            Reach::Major,
+        ),
+        &registry,
+        &runtime(),
+    )
+    .unwrap();
+
+    assert!(!outcome.applied(), "{outcome:?}");
+    let failures: Vec<(&str, &str)> = outcome
+        .failures()
+        .map(|(n, e)| (n, e.message.as_str()))
+        .collect();
+    assert_eq!(
+        failures,
+        [(
+            "@sdk/greet",
+            "registry package @sdk/greet@0.2.0 declares itself @sdk/greet@0.1.0"
+        )]
+    );
+    assert!(outcome.extension_upgrade_completed().is_empty());
+    assert_eq!(std::fs::read(lock_path(dir.path())).unwrap(), lock_before);
+}

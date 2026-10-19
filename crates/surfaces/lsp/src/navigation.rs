@@ -137,29 +137,49 @@ pub(crate) fn code_action_kind(kind: FixKind) -> CodeActionKind {
     }
 }
 
-/// A fix as the code action that applies it; `None` when one of its edits
-/// cannot be placed (its file's text is unknown, or the open buffer is no
-/// longer the text the fix was computed on): a fix applies whole or not at
-/// all.
-pub(crate) fn fix_to_code_action(ranges: &Compiled, fix: Fix) -> Option<CodeAction> {
-    let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
-    for edit in &fix.edits {
-        let file = edit.span.file.as_str();
-        if ranges.is_stale(file) {
-            return None;
+/// A file an edit of the compile cannot be placed in: the editor's text of it (its open buffer,
+/// else the disk) is not the text the project was compiled from, or the compile holds no text of
+/// it ([`Compiled::is_stale`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Unplaced(pub(crate) Sym);
+
+impl Compiled<'_> {
+    /// `edits`, positions in the compiled text (ADR 0164), as one workspace edit: every edit
+    /// placed, in the order given within its file, or none: the first edit whose file is
+    /// [`Self::is_stale`] answers its file.
+    pub(crate) fn workspace_edit(
+        &self,
+        edits: impl IntoIterator<Item = specforge_ops::read::navigate::TextEdit>,
+    ) -> Result<WorkspaceEdit, Unplaced> {
+        let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+        for edit in edits {
+            let file = edit.span.file;
+            // `is_stale` holds whenever the compile has no text of `file`, so `range` is then `Some`.
+            let range = (!self.is_stale(file.as_str()))
+                .then(|| self.range(&edit.span))
+                .flatten()
+                .ok_or(Unplaced(file))?;
+            changes
+                .entry(self.uri(file.as_str()))
+                .or_default()
+                .push(TextEdit {
+                    range,
+                    new_text: edit.new_text,
+                });
         }
-        changes.entry(ranges.uri(file)).or_default().push(TextEdit {
-            range: ranges.range(&edit.span)?,
-            new_text: edit.new_text.clone(),
-        });
-    }
-    Some(CodeAction {
-        title: fix.title,
-        kind: Some(code_action_kind(fix.kind)),
-        edit: Some(WorkspaceEdit {
+        Ok(WorkspaceEdit {
             changes: Some(changes),
             ..Default::default()
-        }),
+        })
+    }
+}
+
+/// A fix as the code action that applies it, whole ([`Compiled::workspace_edit`]).
+pub(crate) fn fix_to_code_action(ranges: &Compiled, fix: Fix) -> Result<CodeAction, Unplaced> {
+    Ok(CodeAction {
+        title: fix.title,
+        kind: Some(code_action_kind(fix.kind)),
+        edit: Some(ranges.workspace_edit(fix.edits)?),
         ..Default::default()
     })
 }
@@ -436,12 +456,18 @@ mod tests {
         let changes = action.edit.unwrap().changes.unwrap();
         assert_eq!(changes[&uri][0].range.start.character, 21);
         // One edit with no text refuses the whole fix.
-        assert!(fix_to_code_action(&ranges, fix(&["a.spec", "ghost.spec"])).is_none());
+        assert_eq!(
+            fix_to_code_action(&ranges, fix(&["a.spec", "ghost.spec"])).err(),
+            Some(Unplaced(Sym::new("ghost.spec")))
+        );
 
         // The editor typed since: the edits are positions in a text it no
         // longer has.
         state.change_document(&uri, 2, &[whole(TYPED)]);
         let ranges = Compiled::new(&state);
-        assert!(fix_to_code_action(&ranges, fix(&["a.spec"])).is_none());
+        assert_eq!(
+            fix_to_code_action(&ranges, fix(&["a.spec"])).err(),
+            Some(Unplaced(Sym::new("a.spec")))
+        );
     }
 }

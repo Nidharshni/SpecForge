@@ -5,19 +5,13 @@ use crate::extension::lock_plan::{Asked, LockPlan};
 use crate::testing::{declaring, serving_builtin};
 use specforge_installed::Installed;
 
-fn init_plan<'a>(
-    installed: &'a Installed,
-    runtime: &'a InProcessRuntime,
-    names: &Names<'_>,
-) -> LockPlan<'a> {
+fn init_plan<'a>(installed: &'a Installed, runtime: &'a InProcessRuntime) -> LockPlan<'a> {
     LockPlan::initializing(
         installed,
         runtime,
         crate::testing::caller(),
-        names.installs(),
         serde_json::json!({"name": "p"}),
     )
-    .unwrap()
 }
 
 fn product_runtime() -> InProcessRuntime {
@@ -43,7 +37,7 @@ fn each_specifier_is_asked_under_its_position() {
 
     let (checked, answers) = names
         .ask(
-            init_plan(&installed, &runtime, &names),
+            init_plan(&installed, &runtime),
             &runtime,
             &mut no_packages,
             &mut |install| install.name().to_string(),
@@ -53,9 +47,13 @@ fn each_specifier_is_asked_under_its_position() {
     assert_eq!(
         answers,
         [
-            Answer::Builtin("@specforge/product"),
+            Answer::Builtin {
+                name: "@specforge/product",
+                asked: Asked::Changes
+            },
             Answer::Installed {
                 recorded: "@sdk/greet".to_string(),
+                asked: Asked::Changes,
                 starter: None
             },
             Answer::Duplicate {
@@ -66,11 +64,12 @@ fn each_specifier_is_asked_under_its_position() {
     );
     assert_eq!(checked.entries(), ["@specforge/product", "@sdk/greet"]);
     let done = checked.finish().unwrap();
-    assert!(matches!(done.asked(Ask(0)), Asked::Changes { .. }));
-    assert!(matches!(done.asked(Ask(1)), Asked::Changes { .. }));
-    // The duplicate asked nothing, so its ask was never answered.
-    let unanswered = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| done.asked(Ask(2))));
-    assert!(unanswered.is_err());
+    assert!(done.peers_enabled(Ask(0)).is_empty());
+    assert!(done.peers_enabled(Ask(1)).is_empty());
+    assert!(
+        done.peers_enabled(Ask(2)).is_empty(),
+        "the duplicate asked nothing, so nothing was enabled for it"
+    );
 }
 
 #[test]
@@ -86,7 +85,7 @@ fn a_plan_refusal_is_named_by_the_specifier_it_is_charged_to() {
         let names = Names::read(strings, place(dir.path(), &UNBOUNDED)).unwrap();
         names
             .ask(
-                init_plan(&installed, &runtime, &names),
+                init_plan(&installed, &runtime),
                 &runtime,
                 &mut no_packages,
                 &mut |_| (),
@@ -111,7 +110,7 @@ fn a_package_a_plan_cannot_fetch_is_refused_named() {
 
     let error = names
         .ask(
-            init_plan(&installed, &runtime, &names),
+            init_plan(&installed, &runtime),
             &runtime,
             &mut |_, _| Ok(Version::parse("1.0.0").unwrap()),
             &mut |_| (),
@@ -126,4 +125,30 @@ fn a_package_a_plan_cannot_fetch_is_refused_named() {
             .starts_with("adding '@acme/x': no registry configured: `init` needs one"),
         "{error:?}"
     );
+}
+
+#[test]
+fn a_lock_the_change_cannot_write_refuses_before_any_file_is_read() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("specforge.lock"), "not a lock {{{").unwrap();
+    let missing = dir.path().join("missing.wasm").display().to_string();
+    let (runtime, installed) = (product_runtime(), Installed::at(dir.path()));
+    let asked = |strings: &[String]| {
+        let names = Names::read(strings, place(dir.path(), &UNBOUNDED)).unwrap();
+        names
+            .ask(
+                init_plan(&installed, &runtime),
+                &runtime,
+                &mut no_packages,
+                &mut |_| (),
+            )
+            .map(drop)
+    };
+
+    // Not E054 for the missing file, and not named by a specifier: the lock refuses first.
+    let error = asked(&["@specforge/product".to_string(), missing]).unwrap_err();
+    assert_eq!(error.code, "E033", "{error:?}");
+    assert!(!error.message.starts_with("adding '"), "{error:?}");
+    // A change that installs nothing accepts the lock (ADR 0041 B4).
+    assert!(asked(&["@specforge/product".to_string()]).is_ok());
 }

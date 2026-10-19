@@ -198,3 +198,5 @@ lock's remedy as its suggestion (the code would still say the extension is missi
 Consequences: `specforge remove` and `specforge.remove_extension` answer E033 / `schema_mismatch` there (was
 `extension_not_found`, about `name`); `specforge update` answers it with the hint (was ". Run `specforge add`
 first." in the message, kind `precondition_failed`).
+
+**Amended by [ADR 0165](0165-the-lock-a-change-leaves-is-built-when-its-plan-is-checked.md) (2026-10-19):** D4 (round 16): `writable_lock` is asked when a plan that staged is checked, and before anything is read by `update`'s open, an uninstall's open, `Names::ask` for specifiers that install and a removal only the lock could answer.

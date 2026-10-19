@@ -192,7 +192,7 @@ impl Environment {
     /// `runtime` (none without one), which the environment then holds, then
     /// build the registries from them. The environment keeps `root`.
     pub fn load(root: &ProjectRoot, runtime: Option<SharedRuntime>) -> Self {
-        Self::read_through(&mut Unrecorded, root, |_| runtime)
+        Self::read_through(&mut Unrecorded::plain(), root, |_| runtime)
     }
 
     /// The one environment load: the config read once, the runtime built from

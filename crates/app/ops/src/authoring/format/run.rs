@@ -11,6 +11,9 @@ use super::document::{Configs, FormattedDocument, format_text};
 use super::targets::{Targets, targets};
 use crate::{Caller, OpError, OpErrorKind, Refusal};
 
+/// The code a run that failed on files reports under; no diagnostic code, so no surface prints it.
+const FILE_FAILED: &str = "format_file_failed";
+
 /// What the run does with a file whose formatting would change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Mode {
@@ -244,10 +247,28 @@ impl Outcome {
         self.failures.is_empty()
     }
 
+    /// The run failed (ADR 0170): a target it could not read or write, the others still
+    /// formatted. The error has the kind the failed files share, else [`OpErrorKind::Internal`];
+    /// its message is each failed file's reason, its data the document ([`Self::document`] with
+    /// `diffs`) and its writes the run's ([`Self::writes`]). `None` when every target was read and
+    /// written, whatever the verdict ([`Self::ok`]): an E069 the run went around, a region left
+    /// unformatted (W142) or a change under [`Mode::Check`] fails the verdict, not the run.
+    pub fn failed(&self, diffs: bool) -> Option<OpError> {
+        let kind = self.failure_kind()?;
+        let document = self.document(diffs);
+        let message = document.message.clone().unwrap_or_default();
+        let data = serde_json::to_value(&document).expect("a format document serializes");
+        Some(
+            OpError::new(kind, FILE_FAILED, message)
+                .with_data(data)
+                .with_writes(self.writes()),
+        )
+    }
+
     /// What kind of failure the run is, when files failed: the kind they
     /// all share (every file locked is permission denied), else
     /// [`OpErrorKind::Internal`]. `None` when no file failed.
-    pub fn failure_kind(&self) -> Option<OpErrorKind> {
+    pub(super) fn failure_kind(&self) -> Option<OpErrorKind> {
         let (first, rest) = self.failures.split_first()?;
         Some(if rest.iter().all(|f| f.kind() == first.kind()) {
             first.kind()

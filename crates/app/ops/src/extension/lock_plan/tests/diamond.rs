@@ -163,9 +163,7 @@ fn a_diamond_counts_a_file_entrys_range_among_the_requirers() {
         fetching(&registry),
         crate::testing::caller(),
         Purpose::Commit,
-        true,
-    )
-    .unwrap();
+    );
     stage_fetched(
         &mut plan,
         &PackageName::parse("@acme/app").unwrap(),

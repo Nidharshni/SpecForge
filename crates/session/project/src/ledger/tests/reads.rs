@@ -60,7 +60,7 @@ fn a_source_written_between_its_stamp_and_its_read_is_seen_next_time() {
 fn the_unrecorded_reads_are_the_ledgers() {
     let (_dir, root) = project();
     let mut ledger = Ledger::opening_through(None);
-    let mut unrecorded = Unrecorded;
+    let mut unrecorded = Unrecorded::plain();
     let from_ledger = Environment::read_through(&mut ledger, &root, |_| None);
     let from_unrecorded = Environment::read_through(&mut unrecorded, &root, |_| None);
     assert_eq!(
@@ -80,6 +80,52 @@ fn the_unrecorded_reads_are_the_ledgers() {
     let env = Environment::load(&root, None);
     let mut project = CompiledProject::read(Arc::new(env), &BTreeMap::new(), &mut unrecorded);
     project.check(&mut unrecorded);
+}
+
+/// Refuses every read as a bound does (`InvalidInput`).
+struct Refusing;
+
+impl specforge_registry::Disk for Refusing {
+    fn exists(&self, _: &std::path::Path) -> bool {
+        false
+    }
+    fn list(&self, _: &std::path::Path) -> Option<Vec<String>> {
+        None
+    }
+    fn read(&self, _: &std::path::Path) -> std::io::Result<Vec<u8>> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "refused",
+        ))
+    }
+}
+
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a source of the served project is read only from inside the project"
+)]
+fn both_reads_read_each_source_through_the_disk_they_are_handed() {
+    let (_dir, root) = project();
+    let mut ledger = Ledger::opening_through(Some(Arc::new(Refusing)));
+    let mut unrecorded = Unrecorded::through(&Refusing);
+    // The environment is read plain by both (ADR 0145 D3).
+    let env = Environment::read_through(&mut ledger, &root, |_| None);
+    assert_eq!(env.config().name.as_deref(), Some("d"));
+    let sources = env.config().sources(root.dir());
+    let keys = ledger.discover(&sources);
+    assert_eq!(keys, unrecorded.discover(&sources));
+    assert!(!keys.is_empty());
+    for key in &keys {
+        let one = ledger.source(sources.dir(), key);
+        let two = unrecorded.source(sources.dir(), key);
+        // The same E025, with the bound's suggestion, from both adapters.
+        match (&one, &two) {
+            (Read::Unreadable(a), Read::Unreadable(b)) => {
+                assert_eq!(format!("{a:?}"), format!("{b:?}"), "{key}")
+            }
+            _ => panic!("{key} was read through a disk that refuses"),
+        }
+    }
 }
 
 #[test]
@@ -106,7 +152,7 @@ fn a_dangling_link_is_read_as_gone_and_records_its_chain() {
     )
     .unwrap();
     let mut ledger = Ledger::opening_through(None);
-    let mut unrecorded = Unrecorded;
+    let mut unrecorded = Unrecorded::plain();
     let env = Environment::read_through(&mut ledger, &root, |_| None);
     let sources = env.config().sources(root.dir());
 

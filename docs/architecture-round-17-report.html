@@ -1,0 +1,136 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>SpecForge architecture round 17</title>
+<script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";mermaid.initialize({startOnLoad:true,theme:"neutral",securityLevel:"loose"});</script>
+<style>
+  :root { --bg:#fafaf9; --fg:#0f172a; --mut:#64748b; --line:#e2e8f0; --card:#fff; --ok:#047857; --bad:#b91c1c; --warn:#b45309; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0b1020; --fg:#e5e7eb; --mut:#94a3b8; --line:#1f2937; --card:#111827; --ok:#34d399; --bad:#f87171; --warn:#fbbf24; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font: 700 2rem/1.2 Georgia, serif; margin: 0 0 4px; }
+  h2 { font: 600 1.4rem/1.3 Georgia, serif; margin: 0; }
+  h3 { font: 600 1.1rem/1.3 Georgia, serif; margin: 28px 0 10px; }
+  .sub { color: var(--mut); margin: 0 0 24px; }
+  .kpis { display:grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin: 0 0 32px; }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+  .kpi b { display:block; font-size:1.6rem; }
+  .kpi span { color:var(--mut); font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; }
+  article { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:20px; margin: 0 0 28px; }
+  .head { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:baseline; justify-content:space-between; margin-bottom:6px; }
+  .tags span { font-size:.75rem; padding:2px 8px; border-radius:999px; border:1px solid var(--line); color:var(--mut); margin-left:6px; }
+  .cols { display:grid; grid-template-columns: 1fr 1fr; gap:14px; margin: 14px 0; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+  .col { border:1px solid var(--line); border-radius:8px; padding:12px; overflow-x:auto; }
+  .lbl { font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; color:var(--mut); margin-bottom:6px; }
+  .bad .lbl { color: var(--bad); } .good .lbl { color: var(--ok); }
+  ul { margin: 6px 0 0; padding-left: 20px; } li { margin: 2px 0; }
+  code { font: .85em ui-monospace, monospace; background: color-mix(in srgb, var(--mut) 15%, transparent); padding: 1px 5px; border-radius: 4px; }
+  .def { color: var(--bad); } .fix { color: var(--ok); }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { color: var(--mut); font-weight: 600; font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; }
+  .mermaid { text-align: center; }
+</style></head><body>
+<main>
+<h1>Architecture round 17</h1>
+<p class="sub">Base <code>c4d7ed4a</code> (PR #78, round 16) · 9 plans · 9 commits (one per plan) · 37 tickets · defects pinned before their fix · no re-vendor, no new diagnostic code.</p>
+<div class="kpis"><div class="kpi"><b>9</b><span>plans</span></div><div class="kpi"><b>37</b><span>tickets</span></div><div class="kpi"><b>13</b><span>defects (D1–D13)</span></div><div class="kpi"><b>6</b><span>new ADRs (0165–0168, 0170, 0173)</span></div><div class="kpi"><b>106 files changed, 2973 insertions(+), 763 deletions(-)</b><span>diff</span></div></div>
+<article><div class="head"><h2>01 · The lock plan opens itself</h2><div class="tags"><span>4 tickets</span><span>ADR 0165</span><span>lane X</span><span><code>5d493711</code></span></div></div><p>A plan opened with an <code>installs</code> flag held the lock: an add that writes only <code>specforge.json</code> was refused for a lock outside the root (D1).</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ OP[op computes installs flag] --> LP[LockPlan::open holds lock]
+ LP --> X1[refuse unreadable lock]
+ LP --> X2[expect panics if flag wrong]
+ LP --> X3[commit bounds lock even if nothing staged]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ OP[op] --> LP[LockPlan: no lock, no flag]
+ LP --> V[view builds the lock at check]
+ V --> W[only a change that stages or uninstalls writes and bounds it]
+</div></div></div>
+<table><tr><th>ticket</th></tr><tr><td>test(ops): pin an add refused for a lock it does not write, and an install that panics (ignored)</td></tr><tr><td>fix(ops)!: the lock a change leaves is built when its plan is checked; only a change that stages writes it</td></tr><tr><td>refactor(ops): names refuses a lock it cannot write before it reads a file; a plan opens with no installs flag</td></tr><tr><td>docs(adr): 0165 the lock a change leaves is built when its plan is checked</td></tr></table>
+</article>
+<article><div class="head"><h2>06 · A failed run is an outcome&#x27;s fact</h2><div class="tags"><span>6 tickets</span><span>ADR 0170</span><span>lane B</span><span><code>1eac84bd</code></span></div></div><p>Over E069, MCP <code>migrate</code> failed the call while format, edit, rename, add and remove succeeded with <code>ok:false</code> (D5).</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ M[migrate over E069] --> E[isError / schema_mismatch]
+ F[format over E069] --> OK[ok:false, call succeeds]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ O[Outcome] --> FD[failed: did not do all it was asked]
+ FD --> T[every tool returns it the same way]
+ E69[E069, W142, --check] --> OKF[fail ok only]
+</div></div></div>
+<table><tr><th>ticket</th></tr><tr><td>T1 test(cli): the parity table&#x27;s divergences move beside its scenarios</td></tr><tr><td>T2 test: pin a specforge.json problem the run goes around, over MCP and in the parity</td></tr><tr><td>table (ignored)</td></tr><tr><td>T3 fix(ops,mcp)!: a problem in specforge.json a migration goes around fails its verdict,</td></tr><tr><td>not the call (U1)</td></tr><tr><td>T4 feat(ops): a format or migrate outcome answers its failed run</td></tr><tr><td>T5 refactor(mcp): format and migrate return the failed run their outcome answers</td></tr><tr><td>T6 docs(adr): 0170 a failed run is an outcome&#x27;s fact</td></tr></table>
+</article>
+<article><div class="head"><h2>02 · The bound lives at the reads seam</h2><div class="tags"><span>4 tickets</span><span>ADR 0166</span><span>lane S</span><span><code>4b2d6ae8</code></span></div></div><p>MCP migrate compiled the project before migrating through a plain disk and read a hard-linked outside source past the bound (D2).</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ MG[migrate pre-compile] --> PD[PlainDisk] --> OUT[(hard-linked source outside root)]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ MG[migrate] --> CT[compile_through disk] --> B[caller's bound] -. refuses .-> OUT[(outside source)]
+</div></div></div>
+<table><tr><th>ticket</th></tr><tr><td>T1 test(ops): pin a bounded migration that compiles a source the bound refuses (ignored)</td></tr><tr><td>T2 refactor(project): a one-shot compile reads its sources through the disk it is handed</td></tr><tr><td>T3 fix(ops): a migration compiles the project through the caller&#x27;s bound</td></tr><tr><td>T4 docs(adr): 0166 a one-shot compile reads its sources through the disk it is handed</td></tr></table>
+</article>
+<article><div class="head"><h2>05 · Rename has an outcome</h2><div class="tags"><span>3 tickets</span><span>ADR (amends 0052, 0162)</span><span>lane B</span><span><code>480764c2</code></span></div></div><p>The MCP tool decided rename's preview and built its document; no ops outcome existed.</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ T[MCP tool] --> PV[decides preview] --> D[builds document] --> P[rename::plan/apply]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ T[MCP tool] --> R[rename::run dry_run, caller] --> RN[Renamed + document]
+ T --> FL[flattens edits]
+</div></div></div>
+<table><tr><th>ticket</th></tr><tr><td>T1 feat(ops): a rename runs, writing unless it previews, and has one document</td></tr><tr><td>T2 refactor(mcp,ops)!: specforge.rename answers rename::run; no surface decides a preview</td></tr><tr><td>T3 docs(adr): rename&#x27;s run takes its preview and its document is ops&#x27; (0052, 0162 amended)</td></tr></table>
+</article>
+<article><div class="head"><h2>07 · One workspace edit</h2><div class="tags"><span>4 tickets</span><span>ADR (amends 0161, 0164, 0023)</span><span>lane L</span><span><code>7d8017b7</code></span></div></div><p>A resolving LSP client was listed a stub over a stale buffer, then resolve failed -32801; non-resolving clients paid a compile per dropped stub (D6, D7).</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ CA[code_actions stale buffer] --> L[lists stub] --> RS[resolve fails -32801]
+ CA --> C[compile per stub, then dropped]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ CA[code_actions] --> S{buffer stale?}
+ S -- yes --> N[lists nothing]
+ S -- no --> WE[Compiled::workspace_edit]
+</div></div></div>
+<table><tr><th>ticket</th></tr><tr><td>T1 test(lsp): pin that a resolving client is listed a stub over a stale buffer</td></tr><tr><td>T2 fix(lsp): a code-action request over a stale buffer lists and plans nothing</td></tr><tr><td>T3 refactor(lsp): one conversion makes a compile&#x27;s text edits a workspace edit</td></tr><tr><td>T4 docs(adr): amend ADR 0161 D5 and ADR 0164 D4 (0023 status line, CONTEXT.md Fix)</td></tr></table>
+</article>
+<article><div class="head"><h2>04 · The lock plan answers rows</h2><div class="tags"><span>5 tickets</span><span>ADR 0168</span><span>lane X</span><span><code>791aa5c3</code></span></div></div><p><code>install</code> counted locked bytes at any version as already there: update reported 0.1→0.2 while the lock stayed 0.1 (D4); <code>Done::asked</code> could panic (D13).</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ U[update to 0.2] --> I[install: same bytes?] --> AP[already there] --> REP[reports 0.1 to 0.2, lock keeps 0.1]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ U[update to 0.2] --> I[install: bytes AND version] --> E[E028 refused]
+ A[Done::peers_enabled ask] --> T[total, no panic]
+</div></div></div>
+<table><tr><th>ticket</th></tr><tr><td>T1 test(ops): pin that another version served with the bytes the lock pins is refused</td></tr><tr><td>T2 fix(ops)!: an install the lock pins at another version is not the project&#x27;s already</td></tr><tr><td>T3 refactor(ops): the lock plan answers an ask when it is asked; a finished plan answers the</td></tr><tr><td>builtins each ask enabled</td></tr><tr><td>T4 refactor(ops): add&#x27;s outcome is one match over the answers names returns</td></tr><tr><td>T5 docs(adr): 0168 the lock plan answers an ask when it is asked (amends 0138, 0134, 0065)</td></tr></table>
+</article>
+<article><div class="head"><h2>03 · An edited compile is an apply</h2><div class="tags"><span>3 tickets</span><span>ADR 0167</span><span>lane S</span><span><code>11508ab8</code></span></div></div><p>E080 compared an edit with a report whose checks the LSP fast path skipped, so a stub fix vanished while another buffer failed to parse (D3).</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ ED[typed edit] --> BASE[baseline: checks skipped] --> E80[E080 false positive]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ ED[typed edit] --> CD[checked_diagnostics] --> RUN[checks on a copy only when skipped] --> OK[correct baseline]
+</div></div></div>
+<table><tr><th>ticket</th></tr><tr><td>T1 test(ops,lsp,project): pin a typed edit planned while the checks are skipped (ignored)</td></tr><tr><td>T2 docs(adr): 0167 a typed edit is compared with the checked report; the edited compile</td></tr><tr><td>stays cold (amends ADR 0151 D3, ADR 0136 D4; CONTEXT.md)</td></tr><tr><td>T3 fix(project,ops): a typed edit is compared with the checked report (pins flipped,</td></tr><tr><td>spec verify lines in authoring.spec and lsp.spec)</td></tr></table>
+</article>
+<article><div class="head"><h2>08 · One judge for every verb</h2><div class="tags"><span>3 tickets</span><span>ADR (amends 0041)</span><span>lane X</span><span><code>0d71ec4a</code></span></div></div><p>Two 'touched' rules in the judge; a removal judged against a shadowed .wasm entry had no test (D12). Refactor rejected after analysis: tests pin that the rules agree.</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ J[judge] --> R1[touched rule A]
+ J --> R2[touched rule B]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ J[judge] --> R1[touched rule A]
+ J --> R2[touched rule B]
+ T[tests pin they agree] --> J
+</div></div></div>
+<table><tr><th>ticket</th></tr><tr><td>T1  test(ops): a removal is judged against the file entry it lets load</td></tr><tr><td>T2  test(ops): every member an enabling change moves is a name it touches</td></tr><tr><td>T3  docs(adr): 0041 says what a removal touches</td></tr></table>
+</article>
+<article><div class="head"><h2>09 · One link chain</h2><div class="tags"><span>6 tickets</span><span>ADR 0173</span><span>lane S</span><span><code>b70113b7</code></span></div></div><p>Directory links on a link chain were never named: watch and <code>stale()</code> missed a retarget; check inputs read through a directory link were missed (D8-D10); a racy stamp hashed past the bound (O1).</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ W[watch / stale] --> F[file link only] -. misses .-> DL[directory link retarget]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ CH[ledger/chain.rs] --> HOPS[every link the FS follows]
+ HOPS --> ST[stamps record each hop]
+ ST --> W[watch / stale / checks]
+</div></div></div>
+<table><tr><th>ticket</th></tr><tr><td>T1 test(project,watch): pin a directory link on the way to an input pointed elsewhere</td></tr><tr><td>T2 refactor(project): one module walks a name&#x27;s link chain</td></tr><tr><td>T3 docs(adr): 0173 a link chain is every link the file system follows</td></tr><tr><td>T4 fix(project): a stamp records where each hop of its chain lands</td></tr><tr><td>T5 fix(project): a directory link on the way to an input is that input&#x27;s change</td></tr><tr><td>T6 fix(project): a racy stamp hashes a source through the disk it is read with (O1)</td></tr></table>
+</article>
+<h3>Verification</h3><ul><li><code>cargo clippy --workspace --all-targets -- -D warnings</code></li><li><code>cargo nextest run --workspace</code></li><li><code>cargo gate full</code></li></ul><p class="sub">Not verified: Windows and cold Linux; O2, O3 left as follow-ups.</p></main></body></html>

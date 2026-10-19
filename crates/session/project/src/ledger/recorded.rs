@@ -1,6 +1,6 @@
 //! A recorded input: one row of a session's inputs, and the class that decides how a
 //! changed path reaches it, which directory is watched for it and what its change is
-//! (ADR 0114 D3, ADR 0129 D3, ADR 0133).
+//! (ADR 0114 D3, ADR 0129 D3, ADR 0133), and the directory links on the way to it (ADR 0173).
 
 use std::path::{Path, PathBuf};
 
@@ -67,6 +67,10 @@ pub(super) struct Recorded {
     /// Its directory does not exist, outside the root: where creating the next directory
     /// toward it is seen (ADR 0030 D6).
     pub(super) pending: Option<Pending>,
+    /// The directory links on the way to it (`chain::way`), own names, taken when it is recorded:
+    /// a changed path at one (or above one, below the root) is its change whatever the stamps say,
+    /// and each one's directory is watched for its own entries (ADR 0173).
+    pub(super) way: Vec<PathBuf>,
 }
 
 /// An input whose directory does not exist yet, outside the root: what creating the

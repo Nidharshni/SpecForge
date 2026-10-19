@@ -403,3 +403,68 @@ fn an_add_writes_nothing_outside_its_project_whatever_bound_its_caller_lends() {
     assert_eq!(std::fs::read(&target).unwrap(), lock_before);
     assert_eq!(files_under(dir.path()), files_before);
 }
+
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "install_wasm_extension",
+    verify = "an add whose installs are all present writes only specforge.json, wherever its lock links"
+)]
+fn an_add_whose_installs_are_all_present_writes_no_lock_and_is_not_bounded_by_it() {
+    use crate::config::testing::files_under;
+    let dir = project_with(EMPTY_PROJECT);
+    let (_files, wasm) = greet_file();
+    let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+    let runtime = serving_builtin(
+        runtime(),
+        "@specforge/product",
+        declaring("@specforge/product", "1.0.0", &[]),
+    );
+    // Installed and enabled first, by an unbounded caller.
+    add(
+        &local_request(&root, &wasm),
+        &crate::registry::Unconfigured("add"),
+        &runtime,
+    )
+    .unwrap();
+    // Then the lock is moved to a sibling and linked back: reading it is fine, writing it would leave the project.
+    let sibling = tempfile::tempdir().unwrap();
+    let target = sibling.path().join("specforge.lock");
+    std::fs::rename(dir.path().join("specforge.lock"), &target).unwrap();
+    std::os::unix::fs::symlink(&target, dir.path().join("specforge.lock")).unwrap();
+    let (lock_before, files_before) = (std::fs::read(&target).unwrap(), files_under(dir.path()));
+    let wide = crate::Containment::within(&std::env::temp_dir());
+
+    let added = add(
+        &AddRequest {
+            extensions: vec![
+                Source::Local(wasm.clone()).into(),
+                Source::Builtin("@specforge/product").into(),
+            ],
+            caller: crate::testing::bounded(&wide),
+            ..local_request(&root, &wasm)
+        },
+        &crate::registry::Unconfigured("add"),
+        &runtime,
+    )
+    .unwrap();
+
+    assert!(
+        matches!(added.added[0].outcome, AddOutcome::AlreadyPresent { .. }),
+        "{added:?}"
+    );
+    assert!(
+        matches!(
+            added.added[1].outcome,
+            AddOutcome::Builtin { changed: true, .. }
+        ),
+        "{added:?}"
+    );
+    assert_eq!(added.writes.named(Some(dir.path())), ["specforge.json"]);
+    assert_eq!(std::fs::read(&target).unwrap(), lock_before);
+    // Only specforge.json changed in the project.
+    let after = files_under(dir.path());
+    assert_eq!(after.len(), files_before.len());
+    assert!(after.iter().all(|(path, bytes)| {
+        path.ends_with("specforge.json") || files_before.get(path) == Some(bytes)
+    }));
+}

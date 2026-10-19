@@ -126,3 +126,59 @@ fn every_planned_file_is_format_clean() {
         assert!(is_canonical(&c, &text), "{file}");
     }
 }
+
+/// The editor's typing fast path skipped the checks (ADR 0136 D4): a plan is not refused for the error another file
+/// already had.
+#[specforge_test_macros::test(
+    behavior = "validate_typed_edit",
+    verify = "an edit planned while the checks are skipped is compared with the checked report"
+)]
+fn an_edit_planned_while_the_checks_are_skipped_is_not_refused_for_an_error_the_project_had() {
+    use specforge_project::testing::TestProject;
+    use specforge_project::{Buffer, CheckMode};
+    let dir = TestProject::new()
+        .enabling(&["@specforge/software"])
+        .files(&[
+            ("tasks.spec", TASKS),
+            (
+                "lonely.spec",
+                "behavior lonely \"Lonely\" {\n  category query\n}\n",
+            ),
+            (
+                "draft.spec",
+                "behavior draft \"Draft\" {\n  category query\n}\n",
+            ),
+        ]);
+    let mut session = dir.session_in(dir.runtime());
+    assert!(
+        session
+            .project()
+            .diagnostics()
+            .iter()
+            .any(|d| d.code == "E006"),
+        "{:?}",
+        session.project().diagnostics()
+    );
+    session.hold_with(
+        &[Buffer::new(
+            dir.root().join("draft.spec"),
+            "behavior draft \"Draft\" {\n",
+        )],
+        CheckMode::SyntaxOnlyIfParseErrors,
+    );
+    assert!(
+        !session
+            .project()
+            .diagnostics()
+            .iter()
+            .any(|d| d.code == "E006"),
+        "the checks were skipped"
+    );
+    let view = ProjectView::of(session.project());
+    let planned = edit::plan(&view, &[set("list_tasks", "category", one("command"))]);
+    assert!(
+        planned.is_ok(),
+        "{:?}",
+        planned.err().map(|r| r.error.message)
+    );
+}

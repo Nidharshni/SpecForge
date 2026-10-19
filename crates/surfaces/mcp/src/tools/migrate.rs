@@ -1,15 +1,11 @@
 //! `specforge.migrate`: run the migration pipeline (`specforge_ops::authoring::migrate`).
 
 use crate::args::Arguments;
-use crate::mutation::{
-    Failed, Mutated, Mutation, MutationArgs, MutationReply, NoDiagnostics, Written,
-};
+use crate::mutation::{Mutated, Mutation, MutationArgs, MutationReply, NoDiagnostics, Written};
 use crate::refusal::ArgumentOf;
 use crate::target::ProjectRef;
 use crate::target::{AnyProject, Project};
-use crate::tool::McpError;
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
-use specforge_ops::OpError;
 use specforge_ops::authoring::migrate::MigrateField;
 
 /// `specforge.migrate`'s arguments.
@@ -84,17 +80,14 @@ impl CoreTool for Tool {
             caller: project.caller(),
         };
         let outcome = specforge_ops::authoring::migrate::run(&request, Some(runtime.clone()))?;
-        // A failed run's report rides in `data`, and what it left written (its
-        // backups after a rollback, the files migrated before a failure) is
-        // reported.
-        let reply = outcome.document();
-        match outcome.failure() {
-            None => Ok(Mutated::new(reply, Written::of(outcome.wrote()))),
-            Some(failure) => Err(Failed::after(
-                McpError::from(OpError::from(failure))
-                    .with_data(serde_json::to_value(&reply).expect("a reply serializes")),
-                outcome.writes,
-            )),
+        // A file it could not migrate, or a migration it rolled back, fails the call: its error is
+        // the run's, the document its data and what it left written reported (ADR 0170).
+        if let Some(failed) = outcome.failed() {
+            return Err(failed.into());
         }
+        Ok(Mutated::new(
+            outcome.document(),
+            Written::of(outcome.wrote()),
+        ))
     }
 }

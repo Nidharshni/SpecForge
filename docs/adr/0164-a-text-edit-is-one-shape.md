@@ -3,7 +3,7 @@
 **Status:** accepted (2026-10-19, architecture round 16, plan 07). Amends [ADR 0016](0016-navigation-is-one-module.md)
 (its rejected item "0-based byte columns"), [ADR 0032](0032-one-graph-build.md) (its consequence that `RenameEdit`
 lives with the rename operation) and [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) (round 15 plan 06's
-amendment: MCP returns the spec's `TextEdit`, not `McpRenameEdit`).
+amendment: MCP returns the spec's `TextEdit`, not `McpRenameEdit`). Amended by round 17 plan 07 (2026-10-19): D4 is one conversion.
 
 ## Context
 
@@ -29,6 +29,10 @@ pre-release project does not honour.
 - **D3.** MCP renders it once, as the spec's `TextEdit` (`reply::TextEdit`, `{file_path, range, new_text}`), for
   `suggest_fixes` and `rename`. `McpRenameEdit` is deleted from the spec.
 - **D4.** The LSP converts an edit's span with `Compiled::range` and nothing else.
+
+  > **Amended by round 17 plan 07 (2026-10-19):** `Compiled::workspace_edit` turns a request's edits into one
+  > workspace edit, whole, or answers the first file whose editor text is not the compiled text (`Unplaced`); rename
+  > and code actions both use it.
 
 Rejected: 1-based columns under the old keys (a silent meaning change); folding the formatter's `format::Edit` into
 `TextEdit` (it edits one buffer, possibly detached, with byte ranges the LSP converts straight to UTF-16; ADR 0021 D8

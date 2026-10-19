@@ -15,7 +15,7 @@ pub(crate) use specifier::{
 };
 
 use super::candidate::LocalFile;
-use super::lock_plan::{Ask, Checked, LockPlan};
+use super::lock_plan::{Ask, Asked, Checked, LockPlan};
 use super::{Claimed, Claims, Install};
 use crate::{Containment, OpError};
 use specforge_package::{PackageName, PackageRef, Version};
@@ -46,12 +46,14 @@ pub(crate) struct Names<'r> {
 pub(crate) enum Answer<R> {
     /// An earlier specifier (`first`) names `name` the same way: nothing was asked (ADR 0098).
     Duplicate { name: String, first: String },
-    /// A builtin, enabled under its `Ask` (its position).
-    Builtin(&'static str),
+    /// A builtin, enabled under its `Ask` (its position), and what the plan answered.
+    Builtin { name: &'static str, asked: Asked },
     /// A local file or a registry package installed under its `Ask`: what `record` kept of the
-    /// install, and, for a local file, the starter template it declares (`None` for a package).
+    /// install, what the plan answered, and, for a local file, the starter template it declares
+    /// (`None` for a package).
     Installed {
         recorded: R,
+        asked: Asked,
         starter: Option<String>,
     },
 }
@@ -104,12 +106,6 @@ impl<'r> Names<'r> {
         &self.wanted[at].specifier
     }
 
-    /// Whether any specifier installs a module (a local file or a package): the lock plan reads the
-    /// lock then.
-    pub(crate) fn installs(&self) -> bool {
-        self.wanted.iter().any(|wanted| wanted.source.installs())
-    }
-
     /// `error`, naming the specifier at `at` when there are several (for the plan's refusals).
     fn named(&self, at: usize, error: OpError) -> OpError {
         named(self.wanted.len() > 1, self.specifier(at), error)
@@ -121,8 +117,8 @@ impl<'r> Names<'r> {
     /// Every specifier is read and claimed first ([`Self::name_each`]), then each is asked of `plan`
     /// in order, charged to `Ask(at)`, `at` its position: a builtin enabled, a local file installed,
     /// a registry package fetched from the plan's registry and installed; a duplicate asks nothing.
-    /// `plan` was opened by the operation for its verb, with `installs: self.installs()`, so a lock
-    /// it cannot read has refused before any file is read.
+    /// When a specifier installs, `ask` first asks the plan ([`LockPlan::can_install`]), so a lock it
+    /// cannot write refuses before any file is read or registry asked.
     ///
     /// Refusals are named by the specifier they are charged to when there are several ("adding
     /// '<s>': "): reading or `packages`, a fetch, and the plan's decisive refusal (the first ask the
@@ -130,7 +126,9 @@ impl<'r> Names<'r> {
     /// specifiers and is not prefixed. The caller states the refusal's subject.
     ///
     /// `record` is handed each install (a local file's, or the one `fetch` returned) just before the
-    /// plan takes it; what it returns comes back in [`Answer::Installed`].
+    /// plan takes it; what it returns comes back in [`Answer::Installed`]. Each answer carries what
+    /// the plan answered its ask; the builtins it enabled are the finished plan's, by the same
+    /// `Ask(at)`.
     pub(crate) fn ask<'a, R>(
         &self,
         mut plan: LockPlan<'a>,
@@ -138,29 +136,39 @@ impl<'r> Names<'r> {
         packages: &mut dyn FnMut(&str, &PackageRef) -> Result<Version, OpError>,
         record: &mut dyn FnMut(&Install<'a>) -> R,
     ) -> Result<(Checked<'a>, Vec<Answer<R>>), OpError> {
+        // A change that installs refuses a lock it could not write before any file is read or registry asked (ADR 0028
+        // D4): the refusal is about no specifier, so it is not named by one.
+        if self.wanted.iter().any(|wanted| wanted.source.installs()) {
+            plan.can_install()?;
+        }
         let named = self.name_each(runtime, packages)?;
         let mut answers = Vec::with_capacity(named.len());
         for (at, named) in named.into_iter().enumerate() {
             let ask = Ask(at);
             answers.push(match named {
                 Named::Duplicate { name, first } => Answer::Duplicate { name, first },
-                Named::Builtin(name) => {
-                    plan.enable(ask, name);
-                    Answer::Builtin(name)
-                }
+                Named::Builtin(name) => Answer::Builtin {
+                    name,
+                    asked: plan.enable(ask, name),
+                },
                 Named::Local { install, starter } => {
                     let recorded = record(&install);
-                    plan.install(ask, *install);
-                    Answer::Installed { recorded, starter }
+                    let asked = plan.install(ask, *install);
+                    Answer::Installed {
+                        recorded,
+                        asked,
+                        starter,
+                    }
                 }
                 Named::Package { name, version } => {
                     let install = plan
                         .fetch(&name, &version)
                         .map_err(|error| self.named(at, error))?;
                     let recorded = record(&install);
-                    plan.install(ask, install);
+                    let asked = plan.install(ask, install);
                     Answer::Installed {
                         recorded,
+                        asked,
                         starter: None,
                     }
                 }

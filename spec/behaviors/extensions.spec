@@ -955,6 +955,10 @@ behavior check_registry_reply "Check Registry Reply" {
     be refused (R-OPS-004) rather than read as declaring no peers. Once
     loaded, the binary's declaration MUST equal the served one, else the
     package is refused (R-TRUST-004) naming the first differing category.
+    A package served with the bytes the project's lock already pins, under
+    another version, is loaded and checked as any other: the lock's bytes
+    never make another version already present (E028 when the binary
+    declares another version).
     A refused reply pins no key and installs nothing.
   """
   verify unit "a reply that is not the protocol's JSON is refused with R009, even with --allow-unsigned"
@@ -965,6 +969,7 @@ behavior check_registry_reply "Check Registry Reply" {
   verify integration "the peers the served manifest declares reach the package"
   verify unit "add refuses a package whose binary declares other than its published declaration"
   verify unit "the diamond gate decides on the published declaration's peers"
+  verify unit "add refuses another version served with the bytes the lock already pins"
   verify integration "a package published with a legacy manifest is refused with a re-publish suggestion"
 }
 

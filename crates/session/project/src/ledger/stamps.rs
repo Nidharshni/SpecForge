@@ -15,9 +15,10 @@
 //! too, and compared whenever its stamp is unchanged, so such a rewrite is
 //! still seen, and an unchanged file is not reported.
 //!
-//! A stamp also records the link chain it followed (each hop's path): a
-//! source swapped for a link, or a link retargeted, to a file with the same
-//! length and modification time is still a change (ADR 0129).
+//! A stamp also records where each link hop it followed lands: a source swapped
+//! for a link, a link retargeted, or a directory link on the way to a hop
+//! pointed elsewhere, to a file with the same length and modification time is
+//! still a change (ADR 0129, ADR 0173).
 //!
 //! A batch of changed paths narrows the same comparison
 //! ([`ProjectSession::changes`]): only what the paths reach is compared.
@@ -30,8 +31,10 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
+use specforge_registry::{Disk, PlainDisk};
+
 use super::Changes;
-use super::disk::link_hops;
+use super::chain::followed;
 use super::inputs::SessionInputs;
 use super::reach::Reach;
 use super::recorded::{Class, Recording};
@@ -47,13 +50,14 @@ pub(crate) struct Entry {
     modified: Option<SystemTime>,
     /// The content's hash, for a racy entry only.
     racy_hash: Option<u64>,
-    /// The link hops the path followed: empty for a plain file.
+    /// Where each link hop the path followed lands (chain::followed): empty for a plain file.
     links: Vec<PathBuf>,
 }
 
 impl Entry {
-    /// Stamp `path` now: `None` when it does not exist.
-    pub(crate) fn stamp(path: &Path) -> Option<Entry> {
+    /// Stamp `path` now: `None` when it does not exist. A racy entry's content is hashed through
+    /// `disk`, the disk the read goes through, so a read it refuses is never made below it.
+    pub(crate) fn stamp(path: &Path, disk: &dyn Disk) -> Option<Entry> {
         let (metadata, links) = followed(path)?;
         let modified = metadata.modified().ok();
         let now = SystemTime::now();
@@ -63,13 +67,17 @@ impl Entry {
         Some(Entry {
             len: metadata.len(),
             modified,
-            racy_hash: if racy { Some(content_hash(path)) } else { None },
+            racy_hash: if racy {
+                Some(content_hash(path, disk))
+            } else {
+                None
+            },
             links,
         })
     }
 
-    /// Whether `path` still holds what this entry recorded.
-    fn holds(&self, path: &Path) -> bool {
+    /// Whether `path` still holds what this entry recorded (its content read through `disk`).
+    fn holds(&self, path: &Path, disk: &dyn Disk) -> bool {
         let Some((metadata, links)) = followed(path) else {
             return false;
         };
@@ -79,44 +87,27 @@ impl Entry {
         {
             return false;
         }
-        self.racy_hash.is_none_or(|hash| content_hash(path) == hash)
-    }
-}
-
-/// What `path` means now: the metadata of the file a read reaches and the
-/// hops to it. A plain file costs one `lstat`, as one `stat` did.
-fn followed(path: &Path) -> Option<(std::fs::Metadata, Vec<PathBuf>)> {
-    let own = std::fs::symlink_metadata(path).ok()?;
-    if own.file_type().is_symlink() {
-        Some((std::fs::metadata(path).ok()?, link_hops(path)))
-    } else {
-        Some((own, Vec::new()))
+        self.racy_hash
+            .is_none_or(|hash| content_hash(path, disk) == hash)
     }
 }
 
 /// Whether `path` is as `recorded` says: absent when it recorded nothing.
-fn unchanged(path: &Path, recorded: Option<&Entry>) -> bool {
+fn unchanged(path: &Path, recorded: Option<&Entry>, disk: &dyn Disk) -> bool {
     match recorded {
-        Some(entry) => entry.holds(path),
+        Some(entry) => entry.holds(path, disk),
         None => !path.exists(),
     }
 }
 
-/// A file's bytes, or a directory's sorted entry names, hashed.
-fn content_hash(path: &Path) -> u64 {
+/// A file's bytes, or a directory's sorted entry names, read through `disk` and hashed: a read the
+/// disk refuses hashes as the refusal (ADR 0173 D5).
+fn content_hash(path: &Path, disk: &dyn Disk) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     if path.is_dir() {
-        let mut names: Vec<_> = std::fs::read_dir(path)
-            .map(|entries| {
-                entries
-                    .filter_map(|e| e.ok().map(|e| e.file_name()))
-                    .collect()
-            })
-            .unwrap_or_default();
-        names.sort();
-        names.hash(&mut hasher);
+        disk.list(path).hash(&mut hasher);
     } else {
-        std::fs::read(path).ok().hash(&mut hasher);
+        disk.read(path).ok().hash(&mut hasher);
     }
     hasher.finish()
 }
@@ -165,18 +156,19 @@ impl Stamps {
 
     /// Whether the row (`class`, `recorded`) differs from its stamp: a hop
     /// compares its source's stamp, by key, as the read that recorded it does.
-    fn moved(&self, class: &Class, recorded: &Path, spec_root: &Path) -> bool {
+    fn moved(&self, class: &Class, recorded: &Path, spec_root: &Path, sources: &dyn Disk) -> bool {
         match class {
             Class::Hop(key) => !unchanged(
                 &spec_root.join(key),
                 self.sources.get(key).and_then(Option::as_ref),
+                sources,
             ),
             _ => {
                 let entry = self
                     .inputs
                     .get(&(class.clone(), recorded.to_path_buf()))
                     .and_then(Option::as_ref);
-                !unchanged(recorded, entry)
+                !unchanged(recorded, entry, &PlainDisk)
             }
         }
     }
@@ -184,7 +176,12 @@ impl Stamps {
     /// What differs from what was read, among `scope`: the sources `inputs`
     /// discovers now (and those recorded) in each region, and the recorded
     /// inputs.
-    pub(super) fn changes(&self, inputs: &SessionInputs, scope: Scope<'_>) -> Changes {
+    pub(super) fn changes(
+        &self,
+        inputs: &SessionInputs,
+        scope: Scope<'_>,
+        sources: &dyn Disk,
+    ) -> Changes {
         let Some(spec_root) = inputs.spec_root() else {
             return Changes::default();
         };
@@ -202,7 +199,7 @@ impl Stamps {
                 let moved = self
                     .sources
                     .get(key)
-                    .is_none_or(|entry| !unchanged(&spec_root.join(key), entry.as_ref()));
+                    .is_none_or(|entry| !unchanged(&spec_root.join(key), entry.as_ref(), sources));
                 if seen.insert(key.clone()) && moved {
                     changes.sources.push(key.clone());
                 }
@@ -222,7 +219,7 @@ impl Stamps {
         match scope {
             Scope::Everything => {
                 for ((class, path), entry) in &self.inputs {
-                    if !unchanged(path, entry.as_ref()) {
+                    if !unchanged(path, entry.as_ref(), &PlainDisk) {
                         note(&mut changes, class, path);
                     }
                 }
@@ -233,7 +230,7 @@ impl Stamps {
                     for (class, recorded) in reached {
                         let moved = *memo
                             .entry((class, recorded.as_path()))
-                            .or_insert_with(|| self.moved(class, recorded, spec_root));
+                            .or_insert_with(|| self.moved(class, recorded, spec_root, sources));
                         if moved {
                             note(&mut changes, class, path);
                         }

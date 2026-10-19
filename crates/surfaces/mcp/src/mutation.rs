@@ -136,7 +136,8 @@ impl<R> Mutated<R> {
 /// A mutation that failed: its McpError and the files it left written (a
 /// format that failed on one file, a migration rolled back), which a failure
 /// that is no preview lists as `data.files_written`. A failure changes no
-/// entity and produces no domain event.
+/// entity and produces no domain event. A writing operation's failed run
+/// arrives as its `OpError` (ADR 0170).
 #[derive(Debug)]
 pub struct Failed {
     pub(crate) error: Box<McpError>,
@@ -145,7 +146,7 @@ pub struct Failed {
 
 impl Failed {
     /// `error`, having left `files` written.
-    pub fn after(error: impl Into<Box<McpError>>, files: Writes) -> Self {
+    pub(crate) fn after(error: impl Into<Box<McpError>>, files: Writes) -> Self {
         Failed {
             error: error.into(),
             files,

@@ -1,6 +1,6 @@
 # Recorded inputs are one table, and the class decides
 
-**Status:** accepted (2026-10-17, architecture round 14, plan 01). Implements [ADR 0114](0114-environment-inputs-are-recorded-as-read.md) D3 and [ADR 0129](0129-a-source-read-is-a-recorded-read.md) D3 in one place. Amends ADR 0030 D6 and ADR 0106 D5. Keeps ADR 0106 D4, ADR 0129's rejected "a stamp per hop" and ADR 0114's rejected "`read_link` on the port".
+**Status:** accepted (2026-10-17, architecture round 14, plan 01). Amended by [ADR 0173](0173-a-link-chain-is-every-link-the-file-system-follows.md): a recorded input also keeps the directory links on the way to it; a change at one is its change, and each one's directory is watched for its own entries. Implements [ADR 0114](0114-environment-inputs-are-recorded-as-read.md) D3 and [ADR 0129](0129-a-source-read-is-a-recorded-read.md) D3 in one place. Amends ADR 0030 D6 and ADR 0106 D5. Keeps ADR 0106 D4, ADR 0129's rejected "a stamp per hop" and ADR 0114's rejected "`read_link` on the port".
 
 ADR 0114 D3 and ADR 0129 D3 give one rule for what a session read: every input is keyed by its own name in its
 canonical directory, and each link hop it followed is an input of its own. The ledger wrote that rule once per kind:

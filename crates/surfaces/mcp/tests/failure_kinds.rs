@@ -370,3 +370,52 @@ fn served_with_old() -> Served {
     );
     served
 }
+
+/// A `specforge.json` with an exclude entry that is no glob pattern: an E069 every run goes around.
+const CONFIG_WITH_A_PROBLEM: &str = r#"{"extensions": ["@specforge/software"], "exclude": ["["]}"#;
+
+#[specforge_test(
+    behavior = "provide_mcp_format_tool",
+    verify = "a problem in specforge.json the call goes around does not fail the call, and the files it formatted are listed"
+)]
+fn format_goes_around_a_config_problem_without_failing_the_call() {
+    let mut served = served();
+    served.write("messy.spec", MESSY);
+    served.write("specforge.json", CONFIG_WITH_A_PROBLEM);
+
+    let response = call_tool(&mut served, "specforge.format", json!({}));
+    let result = tool_json(&response);
+
+    assert_ne!(response["result"]["isError"], true, "{response}");
+    assert_eq!(result["ok"], false, "{result}");
+    assert_eq!(result["diagnostics"][0]["code"], "E069", "{result}");
+    assert_eq!(result["files_written"], json!(["messy.spec"]), "{result}");
+}
+
+#[specforge_test(
+    behavior = "provide_mcp_migrate_tool",
+    verify = "a problem in specforge.json the migration goes around makes ok false and does not fail the call, dry run included"
+)]
+fn migrate_goes_around_a_config_problem_without_failing_the_call() {
+    let mut preview = served_with_old();
+    preview.write("specforge.json", CONFIG_WITH_A_PROBLEM);
+    let response = call_tool(&mut preview, "specforge.migrate", json!({"dry_run": true}));
+    assert_ne!(response["result"]["isError"], true, "{response}");
+    let dry = tool_json(&response);
+    assert_eq!(dry["ok"], false, "{dry}");
+    assert_eq!(dry["diagnostics"][0]["code"], "E069", "{dry}");
+    assert!(dry.get("files_written").is_none(), "{dry}");
+
+    let mut applying = served_with_old();
+    applying.write("specforge.json", CONFIG_WITH_A_PROBLEM);
+    let response = call_tool(&mut applying, "specforge.migrate", json!({}));
+    assert_ne!(response["result"]["isError"], true, "{response}");
+    let applied = tool_json(&response);
+    assert_eq!(applied["ok"], false, "{applied}");
+    assert_eq!(applied["migrated"], true, "{applied}");
+    assert_eq!(
+        applied["files_written"],
+        json!([".specforge/migration.json", "old.spec", "old.spec.bak"]),
+        "{applied}"
+    );
+}
