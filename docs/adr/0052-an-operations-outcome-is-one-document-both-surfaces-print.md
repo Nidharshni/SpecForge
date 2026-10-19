@@ -1,7 +1,7 @@
 # An operation's outcome is one document both surfaces print
 
 **Status:** accepted (2026-10-11). Amends ADR 0015 D6 and ADR 0004 D1-c; extends the list in
-ADR 0048 D2. D5 extended by ADR 0058 to watch's lines. D1 and D5 amended in round 16 (plan 11); D1 and D2 in round 17 (plan 05): rename's document.
+ADR 0048 D2. D5 extended by ADR 0058 to watch's lines. D1 and D5 amended in round 16 (plan 11); D1 and D2 in round 17 (plan 05): rename's document. D1 amended in round 18 (plan 10): the extensions, providers and schema listings answer their documents.
 D8's "nothing goes to stderr" is a case of [ADR 0120](0120-what-a-cli-command-says-beside-its-document-is-said-once.md).
 Amended by [ADR 0162](0162-a-mutations-preview-is-a-fact-of-its-outcome.md) (round 16, plan 05): every previewable document says `dry_run` (D4, D8's `check_only`).
 ADR 0102: every file a document names follows one rule. D1's documents include the anchors read view's ([ADR 0140](0140-source-anchors-are-a-read-view.md)).
@@ -135,3 +135,16 @@ whole set. The spec type is `McpAddExtensionResult { added: McpAddedExtension[],
   `affected_files`, `dry_run`. MCP is the only surface that prints it (D5).
 - **D2's MCP extras** gain rename's `edits`: the spec's `TextEdit`, which MCP spells (ADR 0164 D3: no `Serialize`
   on ops' `TextEdit`), flattened beside the document as the add's `note` is.
+
+## Amendment (architecture round 18, plan 10): an outcome that is only its document is the document
+
+- **D1's test.** An outcome whose every field reaches its document, and that no reader reads past its document, is
+  that document: the operation answers it. A `document()` stays where the outcome holds what its document does not
+  print (the files a mutation wrote, a typed fact a human rendering matches on, a verdict, a borrowed view) or
+  where the document needs more than the outcome (a request's field, a clock).
+- **D1's list.** `extension::list` answers `ExtensionsDocument`, `extension::providers` `ProvidersDocument` (a
+  provider's settings stay the environment's and are not listed), `read::schema::schema`
+  `Noticed<SchemaDocument>`; `ExtensionListing`, `ProviderListing` and `SchemaOutcome` are gone.
+- **D5's update.** `UpdateOutcome::batch_update_completed(ended_at)` answers the one `batch_update_completed`
+  payload (`BatchUpdateCompletedPayload`); `BatchUpdateEvent` is gone.
+- No printed document changed.

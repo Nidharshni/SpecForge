@@ -698,7 +698,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   project's sources or which extensions it loads (`ConfigProblem::blocks_rewrites`), and report every
   other problem as its E069, which fails their verdict.
 - **Stranded entity**: an entity whose kind only the extension being removed declares: `remove` lists it
-  (`specforge_ops::extension::StrandedEntity`), still removes, and the next compile reports it E024.
+  (`specforge_ops::extension::StrandedEntity`), still removes, and the next compile reports it E024. They are the
+  same entities `specforge extensions` counts as the extension's `entity_count` (`extension::entities_of`).
 - **Recorded test report**: `<root>/specforge-report.json`, what `specforge collect` last wrote: per entity id,
   its recorded tests, each the protocol's `TestResult` (name, status, the obligation it names, duration) with the
   collector that recorded it. A status is `passed`, `failed` or `skipped`, the one vocabulary of the collect wire,
@@ -812,8 +813,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `Wrote::Ran` with no file, `files_written: []` (ADR 0162).
 - **Outcome document**: the one typed JSON document of an operation's outcome, defined in ops beside
   the operation and deriving `Serialize` and `Shape`: the outcome itself when it is plain data
-  (`stats::Stats`), else its `document()` (`AddDocument`, `RemoveDocument`, `UpdateDocument`,
-  `InitDocument`, `ExtensionsDocument`, `MigrateDocument`, `RenameDocument`, `AnalyzeDocument`, `DoctorDocument`,
+  (`stats::Stats`, `ExtensionsDocument`, `ProvidersDocument`, `SchemaDocument`; an outcome whose every field reaches its
+  document and that no reader reads past it is that document), else its `document()` (`AddDocument`,
+  `RemoveDocument`, `UpdateDocument`, `InitDocument`, `MigrateDocument`, `RenameDocument`, `AnalyzeDocument`, `DoctorDocument`,
   `ValidateDocument`, `SearchDocument`, `PublishDocument`, `explain::Explanation`, …). A command with no ops
   operation (extension init, build, login, logout) keeps its document in its command module.
   The CLI prints it under `--format json` and MCP answers it as the tool reply; a surface adds only
