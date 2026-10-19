@@ -351,3 +351,45 @@ fn a_symlinked_directory_inside_the_spec_root_is_not_entered() {
 
 #[allow(dead_code, reason = "keeps Value in scope for non-unix builds")]
 fn _unused(_: Value) {}
+
+const PROBE_SPEC: &str = "use \"SECRETWORD_IMPORT\"\nbehavior alpha \"SECRETWORD_TITLE\" { }\n";
+
+fn retitle(server: &mut McpServer) -> Value {
+    call_tool(
+        server,
+        "specforge.edit",
+        json!({"edits": [{"op": "retitle", "entity_id": "alpha", "title": "Alpha Two"}], "dry_run": true}),
+    )
+}
+
+#[cfg(unix)]
+#[ignore = "flipped by T3"]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a source of the served project is read only from inside the project"
+)]
+fn an_edit_validates_over_no_source_symlink_that_leaves_the_project() {
+    let (_scene, project, outside) = scene();
+    fs::write(outside.join("probe.spec"), PROBE_SPEC).unwrap();
+    link(&outside.join("probe.spec"), &project.join("spec/leak.spec"));
+    let mut server = serve(&project);
+    let reply = retitle(&mut server);
+    assert_nothing_of(&reply.to_string(), &[SECRET]);
+    assert_ne!(reply["result"]["isError"], json!(true), "{reply}");
+}
+
+#[cfg(unix)]
+#[ignore = "flipped by T3"]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a source of the served project is read only from inside the project"
+)]
+fn an_edit_validates_over_no_hard_linked_source() {
+    let (_scene, project, outside) = scene();
+    fs::write(outside.join("probe.spec"), PROBE_SPEC).unwrap();
+    fs::hard_link(outside.join("probe.spec"), project.join("spec/leak.spec")).unwrap();
+    let mut server = serve(&project);
+    let reply = retitle(&mut server);
+    assert_nothing_of(&reply.to_string(), &[SECRET]);
+    assert_ne!(reply["result"]["isError"], json!(true), "{reply}");
+}
