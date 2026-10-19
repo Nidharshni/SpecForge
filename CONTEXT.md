@@ -380,7 +380,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Owning field**: the one reference field that writes a relation's edges, declared by an extension (ADR 0150).
   A relation is written there and nowhere else; its other side is derived.
 - **Other side** (of a relation): what the target entity reads the relation as: its incoming edges, which `query`
-  and `trace` (upstream) show. Never a field; an `inverse_of` may name it. Writing it is E079.
+  and `trace` (upstream) show. Never a field; an `inverse_of` may name it. Writing it is E079. A typed edit naming it is refused `other_side`, naming the owning field (ADR 0157).
 - **Entity enhancement**: fields and verify kinds one extension declares on an entity kind another extension declares
   (`c.enhance(kind, ..)`). Its fields are the declaring extension's: trace treats them as opt-in for the kind, and
   the model and schema name their extension. The kind stays its declarer's. An enhancement of a kind no loaded
@@ -1090,6 +1090,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   when the edited project reports an error the project did not, and is written as one project change (ADR 0151).
   A delete with `unlink_references` removes every reference the graph build would link, found by `Reading::references`
   in the planned texts; one written in a `defaults` block or an undeclared field refuses it (`not_editable`, ADR 0156).
+  A list value is taken by its field's type: a reference list's items split at commas however given, a string list's never (ADR 0157).
 - **Lexeme**: one token of a `.spec` text as the language's one lexer reads it without a parse
   (`specforge_parser::lex`): an identifier, a scheme ref ID (one lexeme), a number, a string (read as
   the grammar reads it, across lines; one the grammar would not close is marked unclosed and, if a
