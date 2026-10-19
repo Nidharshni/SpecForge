@@ -15,7 +15,7 @@ use specforge_graph::Node;
 
 use crate::authoring::edit::{self, Edit, EditField, Input};
 use crate::read::navigate::{Navigator, SourceText, TextEdit, is_about, overlaps};
-use crate::view::ProjectView;
+use crate::view::{EntityField, ProjectView};
 use crate::{OpError, OpErrorKind, Refusal};
 
 /// What a fix is to an editor: a quick fix of the diagnostic, or a
@@ -70,7 +70,8 @@ pub struct Fix {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FixQuery<'q> {
     /// Fixes about this entity: its diagnostics' ([`is_about`]) and its
-    /// verify stub.
+    /// verify stub. [`fixes`] refuses one the graph lacks
+    /// (`view::not_found`); [`offers`] takes it as a plain filter.
     pub entity: Option<&'q str>,
     /// Fixes whose diagnostic (or, for a verify stub, whose entity) is in
     /// this spec file.
@@ -127,12 +128,24 @@ impl Offer {
 /// statements) offer, filtered by `query`, sorted by where they apply
 /// then title. Every fix has at least one edit; a diagnostic whose
 /// data names no fix offers none. A stub is planned (one compile of the
-/// edited project, E080): one whose plan is refused is not offered.
-pub fn fixes(navigator: &Navigator<'_>, diagnostics: &[Diagnostic], query: &FixQuery) -> Vec<Fix> {
-    offers(navigator, diagnostics, query)
+/// edited project, E080): one whose plan is refused is not offered. A
+/// `query.entity` the graph lacks is [`crate::view::not_found`] (E003),
+/// refused before any stub is planned.
+pub fn fixes(
+    navigator: &Navigator<'_>,
+    diagnostics: &[Diagnostic],
+    query: &FixQuery,
+) -> Result<Vec<Fix>, Refusal<EntityField>> {
+    let graph = navigator.view().graph();
+    if let Some(id) = query.entity {
+        graph
+            .node(id)
+            .ok_or_else(|| crate::view::not_found(graph, id).about(EntityField::EntityId))?;
+    }
+    Ok(offers(navigator, diagnostics, query)
         .into_iter()
         .filter_map(|offer| offer.fix(navigator).ok())
-        .collect()
+        .collect())
 }
 
 /// The fixes [`fixes`] offers, chosen but not made: what a client that

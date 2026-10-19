@@ -3,7 +3,9 @@
 
 use crate::view_support::{Assembled, Viewed, registries};
 use specforge_ops::OpErrorKind;
+use specforge_ops::authoring::fix::{self, FixQuery};
 use specforge_ops::read::coverage::{CoverageQuery, coverage};
+use specforge_ops::read::navigate::Navigator;
 use specforge_ops::view::EntityField;
 use specforge_test::prelude::*;
 
@@ -73,4 +75,21 @@ fn coverage_kind_is_a_filter_like_every_kind_filter() {
     };
     assert!(ids("feature").is_empty());
     assert_eq!(ids("behavior"), ["login"]);
+}
+
+// The invariant's own verify line: a missing entity is one refusal on every read view.
+#[test]
+fn fixes_refuse_an_entity_the_graph_lacks() {
+    let project = project();
+    let query = FixQuery {
+        entity: Some("logn"),
+        ..Default::default()
+    };
+    let refusal = fix::fixes(&Navigator::new(project.view()), &[], &query).unwrap_err();
+    assert_eq!(refusal.subject, Some(EntityField::EntityId));
+    assert_eq!(refusal.error.code, "E003");
+    assert_eq!(
+        refusal.error.suggestion.as_deref(),
+        Some("did you mean 'login'?")
+    );
 }

@@ -150,6 +150,19 @@ fn a_missing_entity_is_one_refusal() {
             .unwrap_err()
             .error,
         ),
+        (
+            "fixes",
+            specforge_ops::authoring::fix::fixes(
+                &navigator,
+                &[],
+                &specforge_ops::authoring::fix::FixQuery {
+                    entity: Some("logn"),
+                    ..Default::default()
+                },
+            )
+            .unwrap_err()
+            .error,
+        ),
         ("navigator", navigator.definition("logn").unwrap_err().error),
         (
             "rename",

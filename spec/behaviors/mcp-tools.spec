@@ -696,7 +696,8 @@ behavior provide_mcp_suggest_fixes_tool "Provide MCP Suggest Fixes Tool" {
   }
   contract   """
     In MCP server mode, the system MUST register a specforge.suggest_fixes tool
-    that accepts entity_id? (optional), file_path? (optional), and
+    that accepts entity_id? (optional; one the graph lacks is an entity_not_found
+    error on entity_id, E003), file_path? (optional), and
     diagnostic_code? (optional). When all three parameters are omitted, the
     system MUST return all fix suggestions for the current project. The tool
     MUST return an object whose fixes are the applicable fix suggestions, McpFixSuggestion items, each

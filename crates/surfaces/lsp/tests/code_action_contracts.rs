@@ -26,6 +26,7 @@ fn code_action_create_entity_stub_contract() {
             &diagnostics,
             &specforge_ops::authoring::fix::FixQuery::default(),
         )
+        .unwrap()
     };
 
     let fixes = fixes_with(Some("invariant"));
@@ -91,7 +92,8 @@ fn code_actions_for_missing_verify_contract() {
         &nav,
         &[],
         &specforge_ops::authoring::fix::FixQuery::default(),
-    );
+    )
+    .unwrap();
 
     assert!(
         !fixes.is_empty(),
