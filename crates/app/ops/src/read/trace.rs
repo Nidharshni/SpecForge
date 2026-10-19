@@ -5,9 +5,9 @@
 use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
 use specforge_common::shape::Shape;
-use specforge_graph::Graph;
+use specforge_graph::{Direction, Graph};
 use specforge_registry::RegistryBuild;
-use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet};
 
 mod ask;
 
@@ -332,8 +332,8 @@ fn chain(graph: &Graph, entity_id: &str, expectations: &TraceExpectations) -> Op
     Some(TraceChain {
         entity_id: entity_id.to_string(),
         entity_kind: root.kind.raw.to_string(),
-        upstream: directed_bfs(graph, entity_id, Direction::Upstream),
-        downstream: directed_bfs(graph, entity_id, Direction::Downstream),
+        upstream: links(graph, entity_id, Direction::Incoming),
+        downstream: links(graph, entity_id, Direction::Outgoing),
         missing: missing_links(graph, entity_id, expectations),
     })
 }
@@ -421,53 +421,24 @@ fn missing_links(
         .collect()
 }
 
-enum Direction {
-    Upstream,
-    Downstream,
-}
-
-fn directed_bfs(graph: &Graph, start: &str, direction: Direction) -> Vec<TraceLink> {
-    let mut visited = HashSet::new();
-    let mut queue = VecDeque::new();
-    let mut links = Vec::new();
-
-    visited.insert(start.to_string());
-    queue.push_back((start.to_string(), 0usize));
-
-    while let Some((current, depth)) = queue.pop_front() {
-        for edge in graph.edges() {
-            let (neighbor, label) = match direction {
-                Direction::Upstream => {
-                    if edge.target == *current {
-                        (&edge.source, &edge.label)
-                    } else {
-                        continue;
-                    }
-                }
-                Direction::Downstream => {
-                    if edge.source == *current {
-                        (&edge.target, &edge.label)
-                    } else {
-                        continue;
-                    }
-                }
-            };
-
-            if visited.insert(neighbor.to_string())
-                && let Some(node) = graph.node(neighbor.as_str())
-            {
-                links.push(TraceLink {
-                    entity_id: neighbor.to_string(),
-                    entity_kind: node.kind.raw.to_string(),
-                    edge_label: label.to_string(),
-                    depth: depth + 1,
-                    status: TraceLinkStatus::Resolved,
-                });
-                queue.push_back((neighbor.to_string(), depth + 1));
-            }
-        }
-    }
-
+/// `entity_id`'s links one way: what the graph's directed reach reaches, by depth, then id.
+fn links(graph: &Graph, entity_id: &str, direction: Direction) -> Vec<TraceLink> {
+    let mut links: Vec<TraceLink> = graph
+        .reach_directed(entity_id, direction)
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|reached| {
+            let (_, label) = reached.via?; // the root has none
+            let node = graph.node(reached.id.as_str())?;
+            Some(TraceLink {
+                entity_id: reached.id.to_string(),
+                entity_kind: node.kind.raw.to_string(),
+                edge_label: label.to_string(),
+                depth: reached.depth,
+                status: TraceLinkStatus::Resolved,
+            })
+        })
+        .collect();
     links.sort_by(|a, b| a.depth.cmp(&b.depth).then(a.entity_id.cmp(&b.entity_id)));
     links
 }
