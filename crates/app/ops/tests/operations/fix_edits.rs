@@ -51,7 +51,7 @@ fn indent_four() -> FormatConfig {
 fn added_errors(p: &Compiled, file: &str, text: &str) -> Vec<(String, String)> {
     let mut had: Vec<_> = p
         .project
-        .diagnostics()
+        .checked_diagnostics()
         .into_iter()
         .map(|d| (d.code, d.message))
         .collect();

@@ -145,6 +145,8 @@ impl CompiledProject {
     /// every check. What `specforge check` reports once those texts are written. Reads no source: every
     /// other source is what this project holds (the text it read, or the E025 it recorded for one it could
     /// not read: over MCP, one the bound refused, ADR 0158); the checks read the disk as a compile's do.
+    /// Compare it with [`Self::checked_diagnostics`], not [`Self::diagnostics`]: after an update that skipped the
+    /// checks, only the former has them.
     pub fn edited(&self, texts: &BTreeMap<String, String>) -> CompiledProject {
         let mut keys: BTreeSet<String> =
             self.sources.keys().into_iter().map(String::from).collect();
@@ -161,6 +163,21 @@ impl CompiledProject {
         });
         project.check(&mut Unrecorded::plain());
         project
+    }
+
+    /// What `specforge check` reports for this project now: [`Self::diagnostics`], or, when the last
+    /// update skipped the checks (the editor's typing fast path, ADR 0136 D4), that report with every
+    /// check run now over a copy; this project keeps skipping them. What [`Self::edited`]'s report is
+    /// compared with (ADR 0151 D3, ADR 0167). Reads no source.
+    pub fn checked_diagnostics(&self) -> Vec<Diagnostic> {
+        if !self.checks_skipped {
+            return self.diagnostics();
+        }
+        // shortcut: not memoized, so each edit planned while the checks are skipped runs them once more;
+        // memoize beside `reported` if an eager client's code actions make that measurable.
+        let mut checked = self.clone();
+        checked.check(&mut Unrecorded::plain());
+        checked.diagnostics()
     }
 
     /// The root it was compiled from; `None` for a detached project.

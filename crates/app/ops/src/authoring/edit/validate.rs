@@ -1,5 +1,6 @@
 //! Validating a plan (ADR 0151): the edited project is compiled from the planned texts; an error it reports that the
-//! project did not report refuses the plan (E080). Diagnostics are matched without their positions, since an inserted
+//! project's checked report (`CompiledProject::checked_diagnostics`: every check run, even after an update that
+//! skipped them) does not have refuses the plan (E080). Diagnostics are matched without their positions, since an inserted
 //! block moves every later diagnostic of its file.
 
 use super::EditField;
@@ -36,13 +37,13 @@ fn added(before: &[Diagnostic], after: Vec<Diagnostic>) -> (Vec<Diagnostic>, Vec
     (errors, rest)
 }
 
-/// What the project reports once `texts` are written that it does not report now: the warnings and infos, or E080
+/// What the project reports once `texts` are written that its checked report does not have now: the warnings and infos, or E080
 /// (`CompilationFailed`, about no field) naming each new error.
 pub fn check(
     view: &ProjectView<'_>,
     texts: &BTreeMap<String, String>,
 ) -> Result<Vec<Diagnostic>, Refusal<EditField>> {
-    let before = view.project().diagnostics();
+    let before = view.project().checked_diagnostics();
     let (errors, rest) = added(&before, view.project().edited(texts).diagnostics());
     if errors.is_empty() {
         return Ok(rest);

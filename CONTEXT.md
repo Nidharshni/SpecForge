@@ -35,7 +35,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Clone`, ADR 0108). Rooted or detached is its `root()` (a detached project has none and resolves no
   import); the project root it was loaded at is its environment's (`Environment::project_root`), read to reopen
   it and to hand an operation a project root (ADR 0121). It reads its recorded test report through the disk it is
-  handed (`CompiledProject::recorded`, ADR 0139).
+  handed (`CompiledProject::recorded`, ADR 0139). After an update that skipped the checks its report has none; its
+  checked report runs them over a copy (`CompiledProject::checked_diagnostics`, ADR 0167).
 - **Project root**: the directory holding the `specforge.json` a path is in, located from any path inside the
   project (a subdirectory, a file) by walking up, the nearest winning
   (`specforge_common::ProjectRoot::of`, ADR 0053). Only `specforge.json` marks a project. With none at or
@@ -1120,7 +1121,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   A list of them is planned over the texts the project was compiled from (each edit reading what the ones before
   it left), each value written in its field's form (a multi-line one laid out with the file's format configuration, and left out when it restates its file's default)
   and each touched block formatted; the plan is refused with E080
-  when the edited project reports an error the project did not (the **edited project** being compiled from what the project holds: the text of each source it read, the E025 of each it could not read, the planned texts; it reads no source, `CompiledProject::edited`, ADR 0158), and is written as one project change (ADR 0151).
+  when the edited project reports an error the project's **checked report** did not (its report with every check run, even after an update that skipped them: `CompiledProject::checked_diagnostics`, ADR 0167) (the **edited project** being compiled from what the project holds: the text of each source it read, the E025 of each it could not read, the planned texts; it reads no source, `CompiledProject::edited`, ADR 0158), and is written as one project change (ADR 0151).
   A delete with `unlink_references` removes every reference the graph build would link, found by the graph's finder
   in the planned texts (ADR 0163); one written in a `defaults` block, an undeclared field or as a derived type name refuses it (`not_editable`, ADR 0156).
   A list value is taken by its field's type: a reference list's items split at commas however given, a string list's never (ADR 0157). The stub fixes are typed edits too (ADR 0161).

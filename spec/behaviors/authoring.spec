@@ -134,8 +134,9 @@ behavior validate_typed_edit "Validate a Typed Edit" {
     each source it read, the E025 of each it could not read, and the planned
     texts, reading no source again, so its verdict never depends on a file
     the project could not read; an edit that leaves an error-severity
-    diagnostic the project did not have is refused with E080 and writes
-    nothing. Warnings and infos it adds are written and reported. A preview
+    diagnostic the project did not have, with every check run (after an
+    editor update that skipped the checks they are run for the comparison),
+    is refused with E080 and writes nothing. Warnings and infos it adds are written and reported. A preview
     refuses exactly what the write would. The files are written as one project
     change: a file changed since the compile refuses the whole plan, and a
     failed write puts every file already written back.
@@ -145,4 +146,5 @@ behavior validate_typed_edit "Validate a Typed Edit" {
   verify unit "a preview refuses what the write would"
   verify unit "every block an edit touches is format-clean"
   verify unit "a failed write puts every file back"
+  verify unit "an edit planned while the checks are skipped is compared with the checked report"
 }

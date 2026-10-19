@@ -169,3 +169,52 @@ fn a_resolving_client_is_listed_nothing_over_a_buffer_typed_since() {
     served.type_text("a.spec", &format!("// typed\n{TEXT}"));
     assert_eq!(titles(&listed(&served)), Vec::<&str>::new());
 }
+
+/// A check-phase error in `b.spec` (E006) and a dangling feature in `c.spec` (E003): while `a.spec` does not parse the
+/// session skips its checks, and the stub for `c.spec` is still offered (ADR 0167).
+#[specforge_test_macros::test(
+    behavior = "code_action_create_entity_stub",
+    verify = "a stub is offered while another open buffer does not parse"
+)]
+fn a_stub_is_offered_while_another_buffer_does_not_parse() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [
+        (
+            "specforge.json",
+            "{\"name\": \"t\", \"extensions\": [\"@specforge/software\", \"@specforge/product\"]}",
+        ),
+        (
+            "a.spec",
+            "behavior alpha \"A\" {\n  contract \"The system MUST a\"\n  category command\n}\n",
+        ),
+        ("b.spec", "term beta \"B\" {\n}\n"),
+        (
+            "c.spec",
+            "behavior gamma \"G\" {\n  contract \"The system MUST g\"\n  category command\n  features [nope_feature]\n}\n",
+        ),
+    ];
+    for (name, text) in files {
+        std::fs::write(dir.path().join(name), text).unwrap();
+    }
+    let mut served = Served::at(dir)
+        .client(ClientSupport::default())
+        .open(&["a.spec", "c.spec"]);
+    served.edit(
+        "a.spec",
+        "behavior alpha \"A\" {\n  contract \"The system MUST a\"\n",
+    );
+    let whole = Range::new(Position::new(0, 0), Position::new(10, 0));
+    let actions =
+        answers::code_actions(&served.state(), &served.uri("c.spec"), whole).unwrap_or_default();
+    let titles: Vec<String> = actions
+        .into_iter()
+        .filter_map(|a| match a {
+            CodeActionOrCommand::CodeAction(a) => Some(a.title),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        titles.contains(&"Create feature stub for nope_feature".to_string()),
+        "{titles:?}"
+    );
+}
