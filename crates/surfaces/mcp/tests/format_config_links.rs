@@ -43,7 +43,6 @@ fn outside(text: &str) -> (TempDir, std::path::PathBuf) {
 }
 
 #[cfg(unix)]
-#[ignore = "flipped by T4"]
 #[specforge_test_macros::test(
     invariant = "mcp_served_project_consistency",
     verify = "no format configuration a call reads leaves the project, and none with more than one name is read"
@@ -66,7 +65,6 @@ fn format_reports_a_configuration_linked_outside_without_its_content() {
 }
 
 #[cfg(unix)]
-#[ignore = "flipped by T4"]
 #[specforge_test_macros::test(
     invariant = "mcp_served_project_consistency",
     verify = "no format configuration a call reads leaves the project, and none with more than one name is read"

@@ -229,3 +229,107 @@ fn a_configuration_the_disk_cannot_read_is_a_w141_and_the_walk_stops() {
         "{diags:?}"
     );
 }
+
+/// A project (`specforge.json` = `{}`, `spec/a.spec` = `MESSY`) and a directory beside it that is outside.
+#[cfg(unix)]
+fn scene() -> (tempfile::TempDir, PathBuf, PathBuf) {
+    let dir = project_with("{}", &[("spec/a.spec", MESSY)]);
+    let proj = dir.path().join("proj");
+    let outside = dir.path().join("outside");
+    std::fs::create_dir_all(&proj).unwrap();
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::rename(
+        dir.path().join("specforge.json"),
+        proj.join("specforge.json"),
+    )
+    .unwrap();
+    std::fs::rename(dir.path().join("spec"), proj.join("spec")).unwrap();
+    (dir, proj, outside)
+}
+
+/// A check run over `proj` under `caller`; what the file `spec/a.spec` would become, and the run's W141s.
+#[cfg(unix)]
+fn check_a(proj: &Path, caller: crate::Caller<'_>) -> (String, Vec<Diagnostic>) {
+    let outcome = super::super::run(&Request {
+        root: &ProjectRoot::of(proj).unwrap(),
+        paths: &[],
+        mode: Mode::Check,
+        caller,
+        runtime: None,
+    })
+    .unwrap();
+    let w141 = outcome
+        .diagnostics
+        .iter()
+        .filter(|d| d.is(codes::W141))
+        .cloned()
+        .collect();
+    (outcome.changes[0].after.clone(), w141)
+}
+
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "load_format_config",
+    verify = "a bounded caller's configuration that leaves the bound or has more than one name is a W141 naming where it lands or how many names it has, never its content"
+)]
+fn a_bounded_run_reports_a_configuration_linked_outside_naming_where_it_lands() {
+    let (_scene, proj, outside) = scene();
+    std::fs::write(outside.join("c.toml"), "indent_width = 4\nSECRET = = x\n").unwrap();
+    std::os::unix::fs::symlink(outside.join("c.toml"), proj.join(".specforgefmt.toml")).unwrap();
+    let held = crate::Containment::within(&proj);
+
+    let (after, w141) = check_a(&proj, crate::testing::bounded(&held));
+
+    assert_eq!(w141.len(), 1, "{w141:?}");
+    let message = &w141[0].message;
+    assert!(
+        message.contains(
+            outside
+                .join("c.toml")
+                .canonicalize()
+                .unwrap()
+                .to_str()
+                .unwrap()
+        ),
+        "{message}"
+    );
+    assert!(message.contains("outside"), "{message}");
+    assert!(!message.contains("SECRET"), "{message}");
+    assert!(after.contains("\n  contract"), "the defaults: {after}");
+}
+
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "load_format_config",
+    verify = "a bounded caller's configuration that leaves the bound or has more than one name is a W141 naming where it lands or how many names it has, never its content"
+)]
+fn a_bounded_run_reports_a_hard_linked_configuration_by_its_count() {
+    let (_scene, proj, outside) = scene();
+    std::fs::write(outside.join("c.toml"), "indent_width = 4\nSECRET = = x\n").unwrap();
+    std::fs::hard_link(outside.join("c.toml"), proj.join(".specforgefmt.toml")).unwrap();
+    let held = crate::Containment::within(&proj);
+
+    let (after, w141) = check_a(&proj, crate::testing::bounded(&held));
+
+    assert_eq!(w141.len(), 1, "{w141:?}");
+    assert!(w141[0].message.contains("2 names"), "{w141:?}");
+    assert!(!w141[0].message.contains("SECRET"), "{w141:?}");
+    assert!(after.contains("\n  contract"), "the defaults: {after}");
+}
+
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "load_format_config",
+    verify = "an unbounded caller follows a linked configuration"
+)]
+fn an_unbounded_run_follows_a_linked_configuration() {
+    let (_scene, proj, outside) = scene();
+    std::fs::write(outside.join("c.toml"), "indent_width = 4\nSECRET = = x\n").unwrap();
+    std::os::unix::fs::symlink(outside.join("c.toml"), proj.join(".specforgefmt.toml")).unwrap();
+
+    let (_, w141) = check_a(&proj, crate::testing::caller());
+
+    // The CLI follows the link (ADR 0092 D6): the file is read, and its own TOML error is the W141.
+    assert_eq!(w141.len(), 1, "{w141:?}");
+    assert!(w141[0].message.contains("Invalid TOML"), "{w141:?}");
+}

@@ -5,7 +5,6 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{Diagnostic, DiagnosticList, ProjectPath, ProjectRoot, codes};
 use specforge_project::SharedRuntime;
-use specforge_registry::PlainDisk;
 use std::path::{Path, PathBuf};
 
 use super::document::{Configs, FormattedDocument, format_text};
@@ -68,7 +67,9 @@ pub struct Request<'a> {
     /// What the run may reach (`caller.containment()`, ADR 0104): a named path that leaves it is
     /// refused before anything is read ([`FormatField::Paths`]); a target (a walked one, a
     /// symlinked source) that lands outside it is neither read nor written but a failure of kind
-    /// [`OpErrorKind::InvalidInput`], and the other targets are formatted (ADR 0092 D8).
+    /// [`OpErrorKind::InvalidInput`], and the other targets are formatted (ADR 0092 D8). Each
+    /// configuration file it uses is read through it: one that leaves it or, bounded, has more than
+    /// one name, is a W141 naming why, and the defaults apply (ADR 0169).
     pub caller: Caller<'a>,
     /// Where each project's extensions load, to read the forms its fields
     /// take (ADR 0147); `None` formats layout only.
@@ -451,8 +452,10 @@ pub fn run(request: &Request) -> Result<Outcome, Refusal<FormatField>> {
         })?;
     // One set of configurations for the run: each file gets the one
     // `document(Place::File(file), ..)` gives it (no editor: the CLI and
-    // MCP have none), and each configuration file is read once.
-    let mut configs = Configs::new(request.runtime.clone(), &PlainDisk);
+    // MCP have none), and each configuration file is read once, through the
+    // run's bound (ADR 0169).
+    let disk = request.caller.containment().disk();
+    let mut configs = Configs::new(request.runtime.clone(), &disk);
     let mut outcome = Outcome {
         root: request.root.dir().to_path_buf(),
         mode: request.mode,
