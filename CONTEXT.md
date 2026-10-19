@@ -1094,12 +1094,17 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   now. The navigator reads it from its view's compiled project; no surface hands it a text, and outline answers
   only for the compile's sources (ADR 0116). The LSP converts spans to UTF-16 ranges through that text's line index (a file the compile holds
   no text of has no range), MCP renders them as JSON (ADR 0016, ADR 0023).
-- **Rename plan**: the edits that rename one entity (`specforge_ops::authoring::rename::RenamePlan`):
+- **Rename plan**: the edits that rename one entity (`specforge_ops::authoring::rename::RenamePlan`), text edits:
   the declaration's name and each incoming reference's token, positions in the text the project was compiled from,
   which the plan keeps, with the spec root they are relative to. MCP writes it only to files that still hold that text, refusing `conflict` otherwise; the LSP
   hands it to the editor only over buffers that are that text (`ContentModified` otherwise; ADR 0116, ADR 0023 D3).
   The new ID is refused when it is not an identifier of 2–60 characters, is a reserved word (E013) or is taken. A
   rename is not a typed edit and is not checked by E080 (ADR 0151, amended).
+- **Text edit**: one change of a project file's text, a span of the text the project was compiled from and the
+  text it becomes (`specforge_ops::read::navigate::TextEdit`; an empty span inserts). Navigation's fixes and a
+  rename plan answer them; `navigate::apply_edits` applies a file's edits whole or not at all; the LSP converts
+  their spans to UTF-16 ranges and MCP returns them as the spec's `TextEdit`. The formatter's edits are byte ranges
+  of one buffer instead (ADR 0021 D8, ADR 0164).
 - **Typed edit**: one change to a project's entities, named by what it does rather than by text: create, set,
   unset, retitle, link, unlink, add or remove a verify obligation, delete (`specforge_ops::authoring::edit::Edit`).
   A list of them is planned over the texts the project was compiled from (each edit reading what the ones before
