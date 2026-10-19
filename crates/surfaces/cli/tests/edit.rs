@@ -354,8 +354,10 @@ fn link_on_the_other_side_is_refused_naming_the_owning_field() {
     assert_eq!(project.read(file), before);
 }
 
-#[test]
-#[ignore = "flipped by T8"]
+#[specforge_test(
+    behavior = "create_entity",
+    verify = "new reads its field flags from the project its --path names, wherever --path stands"
+)]
 fn new_with_path_after_the_kind_reads_that_projects_fields() {
     let project = todo();
     let outside = tempfile::TempDir::new().unwrap();

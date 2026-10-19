@@ -19,7 +19,8 @@ behavior create_entity "Create an Entity" {
     is created. The id MUST be an identifier of 2 to 60 characters that is not a
     reserved word (E013), and MUST NOT be taken, the kind MUST be declared, and the file MUST be a project source.
     A field whose written value restates its file's default for the kind (W161)
-    is not written: the block inherits it.
+    is not written: the block inherits it. The field flags of `specforge new` are the kind's fields in the project
+    the command acts on.
   """
   verify unit "new writes the block in the canonical form after the last block of its kind"
   verify unit "new creates a missing source file"
@@ -28,6 +29,7 @@ behavior create_entity "Create an Entity" {
   verify unit "new refuses a reserved id before the edited project is compiled"
   verify unit "new compares what it writes with the default, not what it was given"
   verify unit "new never writes a field that restates its default"
+  verify integration "new reads its field flags from the project its --path names, wherever --path stands"
 }
 
 behavior edit_entity_field "Edit an Entity Field" {

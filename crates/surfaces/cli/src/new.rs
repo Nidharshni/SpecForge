@@ -1,9 +1,9 @@
 //! `specforge new <kind> <id> "<title>" --in <file> [--<field> <value>]… [--verify kind:text]…`: create an entity
 //! (ADR 0151). The field flags are the kind's declared fields, read from the project's extensions at run time, so
 //! `specforge new behavior --help` lists `--contract`, `--invariants`, … and a misspelt flag gets clap's "did you
-//! mean". An open kind's members are set with `specforge set` afterwards.
+//! mean". An open kind's members are set with `specforge set` afterwards. `--path` may stand anywhere.
 
-use crate::edit::execute;
+use crate::edit::execute_on;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::project::ProjectArg;
 use crate::terminal::{Terminal, err, outln};
@@ -155,7 +155,8 @@ fn inputs(fields: &[FieldInfo], matches: &ArgMatches) -> Result<BTreeMap<String,
 impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let format = self.output.format;
-        let compiled = match self.project.compile() {
+        let project = self.project.overridden_by(&self.rest);
+        let compiled = match project.compile() {
             Ok(compiled) => compiled,
             Err(error) => return Refusal::of(format).report(terminal, &error),
         };
@@ -172,22 +173,18 @@ impl Args {
                 return Exit::Unjudged;
             }
         };
-        let edit = self.edit(&kind, &fields, &matches);
-        let (project, dry_run, format) = (
-            matches.get_one::<String>("path").map_or_else(
-                || self.project.clone(),
-                |p| ProjectArg::scan(&["--path".into(), p.clone()]),
-            ),
-            self.dry_run || matches.get_flag("dry-run"),
-            matches.get_one::<String>("format").map_or(format, |f| {
-                if f == "json" {
-                    OutputFormat::Json
-                } else {
-                    OutputFormat::Human
-                }
-            }),
-        );
-        execute(&project, edit.map(|e| vec![e]), dry_run, format, terminal)
+        let format = matches.get_one::<String>("format").map_or(format, |f| {
+            if f == "json" {
+                OutputFormat::Json
+            } else {
+                OutputFormat::Human
+            }
+        });
+        let dry_run = self.dry_run || matches.get_flag("dry-run");
+        match self.edit(&kind, &fields, &matches) {
+            Ok(edit) => execute_on(&compiled, vec![edit], dry_run, format, terminal),
+            Err(error) => Refusal::of(format).report(terminal, &error),
+        }
     }
 
     fn edit(
