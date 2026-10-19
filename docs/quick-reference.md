@@ -34,7 +34,7 @@ specforge new behavior <id> "<title>" --in <file> --contract "…" --invariants 
 specforge set <id> <field> <value>   # set a field; `field.entry` edits one entry of a block field
 specforge set <id> --title "<title>" # change the header title
 specforge unset <id> <field>         # remove a field
-specforge link <id> <field> <target> # add a reference; unlink removes it
+specforge link <id> <field> <target> # add a reference (on the relation's owning side); unlink removes it
 specforge link <id> --verify unit:"<text>"   # add a verify obligation; unlink removes it
 specforge delete <id> [--unlink-references]  # delete an entity (and, with the flag, every reference to it)
 # Every edit takes --dry-run (print the diff, write nothing) and --format json. MCP: specforge.edit takes a list.

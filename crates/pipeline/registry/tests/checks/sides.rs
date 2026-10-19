@@ -95,3 +95,25 @@ fn an_unknown_field_naming_its_own_kind_stays_w020() {
     assert_eq!(coded_in(&diags, "W020").len(), 1, "{diags:?}");
     assert!(coded_in(&diags, "E079").is_empty(), "{diags:?}");
 }
+
+/// Six owners into `event`: E079 names them in (kind, field) order on every registry built.
+#[spec(
+    behavior = "detect_unknown_entity_fields",
+    verify = "E079 names its owning fields in kind and field order"
+)]
+fn e079_names_its_owning_fields_in_kind_and_field_order() {
+    let names = ["f_six", "e_five", "d_four", "c_three", "b_two", "a_one"];
+    let owned: Vec<(&str, &str, Option<&str>)> =
+        names.iter().map(|n| (*n, "event", None)).collect();
+    let text = "event paid \"P\" {\n  trigger pay\n}\nbehavior pay \"P\" {\n}\n";
+    let expected = "the other side of behavior.a_one or behavior.b_two or behavior.c_three or behavior.d_four \
+                    or behavior.e_five or behavior.f_six:";
+    for _ in 0..8 {
+        // Each build holds fresh hash maps, so an unsorted answer shows within a few rounds.
+        let build = build([owner(&owned, "event")]);
+        let diags = checked(&build, &[("test.spec", text)]);
+        let e079 = coded_in(&diags, "E079");
+        assert_eq!(e079.len(), 1, "{diags:?}");
+        assert!(e079[0].message.contains(expected), "{}", e079[0].message);
+    }
+}

@@ -184,3 +184,30 @@ fn a_string_is_laid_out_with_the_configuration() {
     };
     assert_eq!(string("contract", long, "  ", &wide), spell::quoted(long));
 }
+
+#[specforge_test_macros::test(
+    behavior = "edit_entity_link",
+    verify = "a reference list's items are split at commas however they are given"
+)]
+fn a_list_value_is_taken_by_its_field_type() {
+    assert_eq!(
+        declared(
+            FieldType::ReferenceList,
+            "features",
+            many(&["a_one, b_two", "c_three"])
+        ),
+        "[a_one, b_two, c_three]"
+    );
+    assert_eq!(
+        declared(FieldType::ReferenceList, "features", one("a_one,,b_two ")),
+        "[a_one, b_two]"
+    );
+    assert_eq!(
+        declared(FieldType::StringList, "tags", one("a, b")),
+        r#"["a, b"]"#
+    );
+    assert_eq!(
+        declared(FieldType::StringList, "tags", many(&["a, b", "c"])),
+        r#"["a, b", "c"]"#
+    );
+}

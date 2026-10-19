@@ -19,7 +19,8 @@ behavior create_entity "Create an Entity" {
     is created. The id MUST be an identifier of 2 to 60 characters that is not a
     reserved word (E013), and MUST NOT be taken, the kind MUST be declared, and the file MUST be a project source.
     A field whose written value restates its file's default for the kind (W161)
-    is not written: the block inherits it.
+    is not written: the block inherits it. The field flags of `specforge new` are the kind's fields in the project
+    the command acts on.
   """
   verify unit "new writes the block in the canonical form after the last block of its kind"
   verify unit "new creates a missing source file"
@@ -28,6 +29,9 @@ behavior create_entity "Create an Entity" {
   verify unit "new refuses a reserved id before the edited project is compiled"
   verify unit "new compares what it writes with the default, not what it was given"
   verify unit "new never writes a field that restates its default"
+  verify integration "new reads its field flags from the project its --path names, wherever --path stands"
+  verify integration "new refuses a field given twice that takes one value"
+  verify integration "new refuses an unknown kind as unknown_kind"
 }
 
 behavior edit_entity_field "Edit an Entity Field" {
@@ -42,13 +46,15 @@ behavior edit_entity_field "Edit an Entity Field" {
     block fields, then triple-quoted text, in the kind's declared order). An
     unset edit removes the field and the comment lines directly above it. A
     dotted field name edits one entry of a block field. A retitle edit
-    replaces the header title. A field the kind does not declare is refused.
+    replaces the header title. A field the kind does not declare is refused. A field that is the other
+    side of a relation another kind owns is refused naming the owning field (ADR 0157).
   """
   verify unit "set writes the value in the form its field declares"
   verify unit "a multi-line value is laid out with the project's format configuration"
   verify unit "set of an absent field inserts it at its rank"
   verify unit "unset removes the field and the comment above it"
   verify unit "set refuses a field the kind does not declare"
+  verify unit "set refuses the other side of a relation naming its owning field"
   verify unit "set of a nested entry edits one line of the block field"
   verify unit "retitle replaces the header title"
 }
@@ -63,6 +69,8 @@ behavior edit_entity_link "Edit an Entity Reference List" {
     from its file's defaults is copied into an own field before it changes, as
     the earlier edits of the list left the file, and an own field equal to the default is removed.
   """
+  verify unit "link on the other side of a relation names the owning field of the target's kind"
+  verify unit "a reference list's items are split at commas however they are given"
   verify unit "link appends the target and keeps the items as written"
   verify unit "unlink of the last item removes the field"
   verify unit "link of an inherited field copies the default"

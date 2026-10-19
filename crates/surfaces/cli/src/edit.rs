@@ -9,6 +9,7 @@ use crate::terminal::{Terminal, outln};
 use specforge_ops::authoring::edit::{self, Edit, EditReport, Input, Obligation};
 use specforge_ops::view::ProjectView;
 use specforge_ops::{OpError, OpErrorKind};
+use specforge_project::CompiledProject;
 
 /// What a command prints under `--format json`: the plan's report, and whether it is a preview.
 #[derive(serde::Serialize)]
@@ -40,7 +41,19 @@ pub(crate) fn execute(
         Ok(compiled) => compiled,
         Err(error) => return Refusal::of(format).report(terminal, &error),
     };
-    let view = ProjectView::of(&compiled);
+    execute_on(&compiled, edits, dry_run, format, terminal)
+}
+
+/// Plan `edits` over `compiled`, write them unless `dry_run`, and print what they did. It never compiles: the
+/// caller's project is the one planned, validated and written.
+pub(crate) fn execute_on(
+    compiled: &CompiledProject,
+    edits: Vec<Edit>,
+    dry_run: bool,
+    format: OutputFormat,
+    terminal: &Terminal,
+) -> Exit {
+    let view = ProjectView::of(compiled);
     let root = match view.project_root() {
         Ok(root) => root,
         Err(error) => return Refusal::of(format).report(terminal, &error),
@@ -92,7 +105,7 @@ pub(crate) struct SetArgs {
     #[arg(conflicts_with = "title")]
     field: Option<String>,
 
-    /// The value; a list field takes several, or one separated by commas
+    /// The value; a list field takes several (a reference list also one separated by commas)
     #[arg(num_args = 0.., conflicts_with = "title")]
     values: Vec<String>,
 
