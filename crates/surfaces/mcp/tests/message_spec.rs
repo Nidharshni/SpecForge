@@ -721,7 +721,7 @@ reply_type! {
     mcp_coverage_result => "McpCoverageResult", "McpCoverageResult schema is valid",
     mcp_edit_result => "McpEditResult", "McpEditResult schema is valid",
     mcp_rename_result => "McpRenameResult", "McpRenameResult schema is valid",
-    mcp_rename_edit => "McpRenameEdit", "McpRenameEdit schema is valid",
+    text_edit => "TextEdit", "TextEdit schema is valid",
     mcp_trace_link => "McpTraceLink", "McpTraceLink schema is valid",
     mcp_missing_link => "McpMissingLink", "McpMissingLink schema is valid",
     mcp_analyze_result => "McpAnalyzeResult", "McpAnalyzeResult schema is valid",

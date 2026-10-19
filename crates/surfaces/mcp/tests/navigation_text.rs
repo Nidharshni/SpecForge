@@ -148,7 +148,6 @@ fn rename_refuses_a_file_changed_since_the_compile() {
 /// A rename's edits are the spans find_references answers, in the shape suggest_fixes answers an edit: the
 /// spec's `TextEdit`, `{file_path, range, new_text}`.
 #[test]
-#[ignore = "flipped by T3"]
 fn rename_edits_are_the_spans_find_references_answers() {
     let mut server = served_old(&[("limit.spec", LIMIT), ("login.spec", LOGIN)]);
     let found = call_tool(

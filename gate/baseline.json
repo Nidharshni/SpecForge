@@ -26,7 +26,7 @@
     "crates/surfaces/cli/tests/init.rs": 1431,
     "crates/surfaces/cli/tests/installed_extensions.rs": 1224,
     "crates/surfaces/cli/tests/migrate.rs": 1633,
-    "crates/surfaces/cli/tests/navigation_parity.rs": 1293,
+    "crates/surfaces/cli/tests/navigation_parity.rs": 1289,
     "crates/surfaces/cli/tests/parity.rs": 1274,
     "crates/surfaces/cli/tests/read_views.rs": 1288,
     "crates/surfaces/cli/tests/registry.rs": 1624,

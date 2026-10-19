@@ -560,7 +560,8 @@ type McpRenameResult "Mcp Rename Result" {
   new_name       string       @readonly
   /// The files the rename edits, relative to the spec root.
   affected_files string[]
-  edits          McpRenameEdit[]
+  /// The tokens it replaces: each the span find_references answers.
+  edits          TextEdit[]
   /// True for a preview.
   dry_run        boolean
   /// What specforge check reports for the project once the edits are made;
@@ -583,18 +584,6 @@ type McpEditResult "Mcp Edit Result" {
   /// What specforge check reports once the edits are written; absent from a preview.
   diagnostics    Diagnostic[] @optional
   verify unit "McpEditResult schema is valid"
-}
-
-type McpRenameEdit "One occurrence of the old identifier a rename replaces" {
-  /// The file, relative to the spec root.
-  file      string @readonly
-  /// 1-based line.
-  line      integer
-  /// Byte columns of the occurrence on its line.
-  start_col integer
-  end_col   integer
-  new_text  string
-  verify unit "McpRenameEdit schema is valid"
 }
 
 type McpTraceResult "Mcp Trace Result" = McpTraceChainResult | McpTracePlanResult

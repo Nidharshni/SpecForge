@@ -113,7 +113,7 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
     dry_run_side_effect_freedom,
   ]
   category   mutation
-  types      [McpRenameResult, McpRenameEdit, McpToolDescriptor]
+  types      [McpRenameResult, TextEdit, McpToolDescriptor]
   produces   [mcp_tool_invoked, mcp_mutation_completed]
   requires {
     graph_available      "Compiled graph is available via CompilerApi"
@@ -142,8 +142,9 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
     find-references returns them;
     text in strings, comments and verify statements that mentions the ID
     is not a reference and is not edited. The response MUST include the list of
-    McpRenameEdit operations applied. When dry_run is true, the tool MUST return
-    the rename plan (affected files and McpRenameEdit operations) without applying
+    TextEdit operations applied, each a span as find_references returns it
+    (1-based lines and byte columns). When dry_run is true, the tool MUST return
+    the rename plan (affected files and TextEdit operations) without applying
     any changes. If the entity does not exist, the tool MUST return an error.
     If new_name is not a legal entity ID (t_entity_id: 2-60 letters, digits
     and underscores, starting with a letter or underscore) or is a reserved

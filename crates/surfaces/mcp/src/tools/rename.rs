@@ -40,19 +40,9 @@ pub struct Reply {
     old_name: String,
     new_name: String,
     affected_files: Vec<String>,
-    edits: Vec<Edit>,
+    edits: Vec<crate::reply::TextEdit>,
     /// Whether the call previewed: nothing was written.
     dry_run: bool,
-}
-
-/// One text edit (`McpRenameEdit`).
-#[derive(Debug, Serialize, Shape)]
-pub struct Edit {
-    file: String,
-    line: usize,
-    start_col: usize,
-    end_col: usize,
-    new_text: String,
 }
 
 pub(crate) struct Tool;
@@ -105,18 +95,7 @@ impl CoreTool for Tool {
                 .into_iter()
                 .map(String::from)
                 .collect(),
-            edits: plan
-                .edits
-                .iter()
-                .map(|e| Edit {
-                    file: e.span.file.to_string(),
-                    line: e.span.start_line,
-                    // The wire's 0-based columns until T3 answers the spec's TextEdit.
-                    start_col: e.span.start_col - 1,
-                    end_col: e.span.end_col - 1,
-                    new_text: e.new_text.clone(),
-                })
-                .collect(),
+            edits: plan.edits.iter().map(Into::into).collect(),
             dry_run: false,
         };
         // A failed write puts back what it wrote; a file it could not put back is the failure's `files_written`.

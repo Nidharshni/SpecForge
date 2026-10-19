@@ -275,22 +275,18 @@ fn workspace_edit_keys(project: &Project, edit: &Value) -> Vec<String> {
     keys
 }
 
-/// MCP rename edits (1-based line, 0-based byte columns) as 1-based keys,
-/// sorted.
+/// MCP rename edits (the spec's `TextEdit`) as keys, sorted.
 fn mcp_rename_keys(result: &Value) -> Vec<String> {
     let mut keys: Vec<String> = result["edits"]
         .as_array()
         .unwrap_or_else(|| panic!("no edits in {result}"))
         .iter()
         .map(|e| {
-            let line = e["line"].as_u64().unwrap();
+            let mut range = e["range"].clone();
+            range["file"] = e["file_path"].clone();
             format!(
                 "{} {}",
-                span_key(
-                    e["file"].as_str().unwrap(),
-                    (line, e["start_col"].as_u64().unwrap() + 1),
-                    (line, e["end_col"].as_u64().unwrap() + 1),
-                ),
+                mcp_span_key(&range),
                 e["new_text"].as_str().unwrap()
             )
         })

@@ -3831,30 +3831,19 @@ expression: listing
           "items": {
             "additionalProperties": false,
             "properties": {
-              "end_col": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "file": {
+              "file_path": {
                 "type": "string"
-              },
-              "line": {
-                "minimum": 0,
-                "type": "integer"
               },
               "new_text": {
                 "type": "string"
               },
-              "start_col": {
-                "minimum": 0,
-                "type": "integer"
+              "range": {
+                "$ref": "#/$defs/SourceSpan"
               }
             },
             "required": [
-              "file",
-              "line",
-              "start_col",
-              "end_col",
+              "file_path",
+              "range",
               "new_text"
             ],
             "type": "object"
