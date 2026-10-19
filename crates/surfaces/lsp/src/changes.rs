@@ -39,19 +39,30 @@ pub enum Change {
     CatchUp,
 }
 
-/// What a change will apply.
-pub struct Plan {
-    /// The project to open (`Change::Open`).
-    root: Option<ProjectRoot>,
-    /// What the watched paths amount to, applied first.
-    disk: Option<Changes>,
-    /// The absolute path of the document that was closed: the session
-    /// releases its buffer.
-    released: Option<PathBuf>,
-    /// The open buffers to hold, by absolute path: the session keys them.
-    held: Vec<Buffer>,
-    /// The session key of the document an anchorless diagnostic goes to.
-    edited: Option<String>,
+/// What a change will apply: exactly one step ([`Plan::of`]).
+pub struct Plan(Step);
+
+enum Step {
+    /// Reopen the session at this root (`Change::Open`), holding the buffers it held.
+    Open(ProjectRoot),
+    /// Apply what the watched paths, or the catch-up, found changed on disk; never empty.
+    Disk(Changes),
+    /// Release the buffer of the document closed at this absolute path.
+    Release(PathBuf),
+    /// Hold these open buffers (by absolute path, the session keys them; never empty) as one
+    /// update. `edited` is the session key of the last one edited, where a diagnostic about no
+    /// entity goes.
+    Hold {
+        buffers: Vec<Buffer>,
+        edited: String,
+    },
+}
+
+impl Step {
+    /// The step for changes found on disk; `None` when there are none.
+    fn on_disk(changes: Changes) -> Option<Step> {
+        (!changes.is_empty()).then_some(Step::Disk(changes))
+    }
 }
 
 impl Plan {
@@ -74,18 +85,8 @@ impl Plan {
     /// watched path is an input of the project.
     pub fn of(change: Change, state: &LspState) -> Option<Plan> {
         let session = state.session()?;
-        let nothing = Plan {
-            root: None,
-            disk: None,
-            released: None,
-            held: Vec::new(),
-            edited: None,
-        };
-        match change {
-            Change::Open(root) => Some(Plan {
-                root: Some(root),
-                ..nothing
-            }),
+        let step = match change {
+            Change::Open(root) => Step::Open(root),
             Change::Edited(uris) => {
                 // The distinct documents still open, in the order they were last edited.
                 let files = state.files();
@@ -98,9 +99,9 @@ impl Plan {
                     }
                 }
                 let edited = open.last().cloned()?;
-                Some(Plan {
+                Step::Hold {
                     // The buffer of each, as the path it was opened as.
-                    held: open
+                    buffers: open
                         .iter()
                         .filter_map(|key| {
                             let document = files.document(key)?;
@@ -108,93 +109,63 @@ impl Plan {
                             Some(buffer.at_version(document.version()))
                         })
                         .collect(),
-                    edited: Some(edited),
-                    ..nothing
-                })
+                    edited,
+                }
             }
             Change::Closed(uri) => {
                 if state.document(&uri).is_some() {
                     return None;
                 }
-                Some(Plan {
-                    released: Some(uri::path_of(&uri)),
-                    ..nothing
-                })
+                Step::Release(uri::path_of(&uri))
             }
             Change::Watched(events) => {
                 let paths: Vec<PathBuf> = events
                     .iter()
                     .map(|event| uri::path_of(&event.uri))
                     .collect();
-                Plan::on_disk(session.changes(paths.iter().map(PathBuf::as_path)))
+                Step::on_disk(session.changes(paths.iter().map(PathBuf::as_path)))?
             }
-            Change::CatchUp => Plan::on_disk(session.stale()),
-        }
+            Change::CatchUp => Step::on_disk(session.stale())?,
+        };
+        Some(Plan(step))
     }
 
-    /// The plan for changes found on disk, applied first; `None` when there
-    /// are none.
-    fn on_disk(changes: Changes) -> Option<Plan> {
-        if changes.is_empty() {
-            return None;
-        }
-        Some(Plan {
-            root: None,
-            disk: Some(changes),
-            released: None,
-            held: Vec::new(),
-            edited: None,
-        })
-    }
-
-    /// Apply the plan to `session`. Blocking: it reads files and runs the
-    /// checks. A `Change::Open` first reopens the session at its root
-    /// (`ProjectSession::reopen`: the project's extensions from `runtime`,
-    /// its environment handed to `loaded` before any source is read, the
-    /// session's buffers carried over); then the watched changes
-    /// (`ProjectSession::apply`), the released buffer
-    /// (`ProjectSession::release`), and every buffer as one update
-    /// (`ProjectSession::hold_with`).
+    /// Apply the step to `session`. Blocking: it reads files and runs the checks. `Open` reopens
+    /// the session at its root (`ProjectSession::reopen`: the project's extensions from `runtime`,
+    /// its environment handed to `loaded` before any source is read, the session's buffers carried
+    /// over); `Disk` applies the changes found on disk (`ProjectSession::apply`); `Release`
+    /// releases the closed document's buffer (`ProjectSession::release`); `Hold` holds every edited
+    /// buffer as one update (`ProjectSession::hold_with`).
     pub fn apply(
         self,
         session: &mut ProjectSession,
         runtime: RuntimeSource,
         loaded: impl FnOnce(&Arc<Environment>),
     ) -> Applied {
-        let mut applied = Applied {
-            environment: false,
-            changed: false,
-            inputs_changed: false,
-            divergences: Vec::new(),
-            edited: self.edited,
-            touched: Vec::new(),
-            closed: false,
-        };
-        if let Some(root) = &self.root {
-            applied.opened(session.reopen(root, runtime, loaded));
-        }
-        if let Some(changes) = &self.disk {
-            if let Some(update) = session.apply(changes) {
-                applied.environment |= update.kind == UpdateKind::Environment;
-                applied.record(update);
-                applied.changed = true;
+        let mut applied = Applied::default();
+        match self.0 {
+            Step::Open(root) => applied.opened(session.reopen(&root, runtime, loaded)),
+            Step::Disk(changes) => {
+                if let Some(update) = session.apply(&changes) {
+                    applied.environment |= update.kind == UpdateKind::Environment;
+                    applied.record(update);
+                    applied.changed = true;
+                }
+                applied.touched.extend(changes.sources().iter().cloned());
             }
-            applied.touched.extend(changes.sources().iter().cloned());
-        }
-        if let Some(path) = &self.released {
-            applied.close(session, path);
-        }
-        if !self.held.is_empty() {
-            // The syntax-only fast path (C4-07): no checks while an edited
-            // file does not parse.
-            let update = session.hold_with(&self.held, CheckMode::SyntaxOnlyIfParseErrors);
-            applied.record(update);
-            applied.touched.extend(
-                self.held
-                    .iter()
-                    .map(|buffer| session.source_key(&buffer.path)),
-            );
-            applied.changed = true;
+            Step::Release(path) => applied.close(session, &path),
+            Step::Hold { buffers, edited } => {
+                // The syntax-only fast path (C4-07): no checks while an edited file does not parse.
+                let update = session.hold_with(&buffers, CheckMode::SyntaxOnlyIfParseErrors);
+                applied.record(update);
+                applied.touched.extend(
+                    buffers
+                        .iter()
+                        .map(|buffer| session.source_key(&buffer.path)),
+                );
+                applied.changed = true;
+                applied.edited = Some(edited);
+            }
         }
         applied
     }
