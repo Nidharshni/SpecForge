@@ -1,0 +1,178 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>SpecForge architecture round 15</title>
+<script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";mermaid.initialize({startOnLoad:true,theme:"neutral",securityLevel:"loose"});</script>
+<style>
+  :root { --bg:#fafaf9; --fg:#0f172a; --mut:#64748b; --line:#e2e8f0; --card:#fff; --ok:#047857; --bad:#b91c1c; --warn:#b45309; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0b1020; --fg:#e5e7eb; --mut:#94a3b8; --line:#1f2937; --card:#111827; --ok:#34d399; --bad:#f87171; --warn:#fbbf24; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font: 700 2rem/1.2 Georgia, serif; margin: 0 0 4px; }
+  h2 { font: 600 1.4rem/1.3 Georgia, serif; margin: 0; }
+  h3 { font: 600 1.1rem/1.3 Georgia, serif; margin: 28px 0 10px; }
+  .sub { color: var(--mut); margin: 0 0 24px; }
+  .kpis { display:grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin: 0 0 32px; }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+  .kpi b { display:block; font-size:1.6rem; }
+  .kpi span { color:var(--mut); font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; }
+  article { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:20px; margin: 0 0 28px; }
+  .head { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:baseline; justify-content:space-between; margin-bottom:6px; }
+  .tags span { font-size:.75rem; padding:2px 8px; border-radius:999px; border:1px solid var(--line); color:var(--mut); margin-left:6px; }
+  .cols { display:grid; grid-template-columns: 1fr 1fr; gap:14px; margin: 14px 0; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+  .col { border:1px solid var(--line); border-radius:8px; padding:12px; overflow-x:auto; }
+  .lbl { font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; color:var(--mut); margin-bottom:6px; }
+  .bad .lbl { color: var(--bad); } .good .lbl { color: var(--ok); }
+  ul { margin: 6px 0 0; padding-left: 20px; } li { margin: 2px 0; }
+  code { font: .85em ui-monospace, monospace; background: color-mix(in srgb, var(--mut) 15%, transparent); padding: 1px 5px; border-radius: 4px; }
+  .def { color: var(--bad); } .fix { color: var(--ok); }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { color: var(--mut); font-weight: 600; font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; }
+  .mermaid { text-align: center; }
+</style></head><body><main>
+
+<h1>Architecture round 16</h1>
+<p class="sub">Base <code>1c97d5a7</code> (PR #77, round 15) · 11 plans · 60 commits · 28 defects found, each pinned before its fix · no re-vendor, no new diagnostic code.</p>
+<div class="kpis">
+<div class="kpi"><b>11</b><span>plans</span></div><div class="kpi"><b>60</b><span>commits</span></div>
+<div class="kpi"><b>28</b><span>defects (D1–D28)</span></div><div class="kpi"><b>7</b><span>new ADRs (0158–0164)</span></div>
+<div class="kpi"><b>204</b><span>files changed</span></div><div class="kpi"><b>+7074 / −2934</b><span>lines</span></div>
+</div>
+<h3>Order</h3>
+<div class="mermaid">
+flowchart LR
+ P01 --> P02 --> P03 --> P05 --> P04 --> P06 --> P08 --> P09 --> P11 --> P07 --> P10
+</div>
+<p class="sub">Applied in this order on one branch, one plan per commit range. Most serious: D1–D4 (a containment escape) and D26 (<code>login</code> clobbering an unreadable credential store).</p>
+<article><div class="head"><h2>01 · An edited compile reads no disk</h2><div class="tags"><span>5 commits</span><span>ADR 0158</span><span>lane S</span></div></div>
+<p>Containment escape: MCP edit and migrate read past the project bound through a symlink or hard link (D1–D4).</p>
+<div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ E[edit preview] --> K[Keyed reads] --> D[(disk, past the bound)]
+ M[migrate] --> D
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ E[edit preview] --> C[CompiledProject::edited] --> H[(what the project holds)]
+ M[migrate] --> R[caller's bounded read] --> H
+</div></div></div>
+<table><tr><th>commit</th><th>title</th></tr><tr><td><code>d01d4341</code></td><td>test(project,mcp): pin an edited compile that reads a source the bound refused (ignored)</td></tr><tr><td><code>b5623544</code></td><td>test(migrate,mcp): pin a migration that reads a hard-linked source (ignored)</td></tr><tr><td><code>9cb91c56</code></td><td>fix(project): an edited compile rebuilds from what the project holds</td></tr><tr><td><code>4e56fd26</code></td><td>fix(migrate,ops)!: a migration reads each source through the caller&#x27;s bound</td></tr><tr><td><code>75d74ce6</code></td><td>docs(adr): 0158 an edited compile and a migration read no source past the bound</td></tr></table></article><article><div class="head"><h2>02 · A session update is one update</h2><div class="tags"><span>3 commits</span><span>ADR 0159</span><span>lane S</span></div></div>
+<p>A check-input change was dropped when a source was current (D5, D6).</p>
+<div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ A[apply] --> R1[reread] --> X[none]
+ A --> R2[recheck]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ A[apply] --> U[one update: sources + rechecks] --> N{changed nothing?}
+</div></div></div>
+<table><tr><th>commit</th><th>title</th></tr><tr><td><code>8abab0b5</code></td><td>test(project,watch): pin a check-input change that a current source drops</td></tr><tr><td><code>ddc13d1f</code></td><td>docs(adr): 0159 one batch of changes is one session update</td></tr><tr><td><code>26087324</code></td><td>fix(project): apply is one update, and a check input is never dropped</td></tr></table></article><article><div class="head"><h2>03 · What an entry enables</h2><div class="tags"><span>4 commits</span><span>ADR 0160</span><span>lane X</span></div></div>
+<p>add over a .wasm file entry installed modules that never load (D7–D10).</p>
+<div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ ADD[add] --> N[extension_entry_name: guesses] --> W[(lock + module that never loads)]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ ADD[add] --> J[ExtensionEntry::names + judge] --> F[refused: extension_conflict]
+</div></div></div>
+<table><tr><th>commit</th><th>title</th></tr><tr><td><code>640e99eb</code></td><td>test(ops): pin what add does over each specforge.json entry form</td></tr><tr><td><code>1226c10a</code></td><td>fix(ops)!: an add of what a .wasm file entry loads is refused</td></tr><tr><td><code>1e85e64d</code></td><td>refactor!: a named entry names an extension, a .wasm file entry only by its component; extension_entry_name goes</td></tr><tr><td><code>a386bf03</code></td><td>docs(adr): 0160 what an extension entry enables is the load&#x27;s decision</td></tr></table></article><article><div class="head"><h2>05 · A preview is a fact of the outcome</h2><div class="tags"><span>9 commits</span><span>ADR 0162</span><span>lane B</span></div></div>
+<p>files_written and the preview marker disagreed across CLI and MCP (D13–D15).</p>
+<div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ C[CLI] --> a[files_written: []]
+ M[MCP] --> b[absent]
+ R[remove / add] --> c[no marker]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ O[Outcome::wrote -> Wrote] --> C[CLI Written::of]
+ O --> M[MCP Written::of]
+ O --> D[dry_run: bool everywhere]
+</div></div></div>
+<table><tr><th>commit</th><th>title</th></tr><tr><td><code>94b10a35</code></td><td>test(cli): the parity scenarios and their tests move to parity/scenarios.rs</td></tr><tr><td><code>2d72bd87</code></td><td>test(cli): pin add and remove dry runs in the parity table (ignored)</td></tr><tr><td><code>28f765b1</code></td><td>test: pin what a no-op run and a preview print, on the CLI and in ops (ignored)</td></tr><tr><td><code>08930281</code></td><td>feat(ops): a mutation&#x27;s outcome answers what it wrote, or that it previewed</td></tr><tr><td><code>e99ebb71</code></td><td>feat(ops): a list of typed edits runs, writing unless it previews, and has one document</td></tr><tr><td><code>51d5780b</code></td><td>fix(cli)!: files_written is the outcome&#x27;s: absent from a preview, listed for every run</td></tr><tr><td><code>e0032bcf</code></td><td>refactor(mcp): a mutation&#x27;s Written is its outcome&#x27;s, checked against its arguments</td></tr><tr><td><code>872a84dc</code></td><td>fix!: every preview&#x27;s document says dry_run (U1)</td></tr><tr><td><code>95823c03</code></td><td>docs(adr): 0162 a mutation&#x27;s preview is a fact of its outcome</td></tr></table></article><article><div class="head"><h2>04 · Stub fixes are typed edits</h2><div class="tags"><span>8 commits</span><span>ADR 0161</span><span>lane A</span></div></div>
+<p>Hand-spelled stub fixes skipped canonical form, id check and E080 (D11, D12).</p>
+<div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ L[LSP / MCP fix] --> H[hand-spelled text] --> F[(append at EOF)]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ L[LSP / MCP fix] --> T[authoring::fix: typed add_verify / create] --> P[EditPlan::edits] --> R[codeAction/resolve]
+</div></div></div>
+<table><tr><th>commit</th><th>title</th></tr><tr><td><code>91d213f3</code></td><td>test(ops,lsp): the fix tests move to files of their own</td></tr><tr><td><code>3a5056af</code></td><td>test(ops): pin what the hand-spelled stub fixes skip</td></tr><tr><td><code>e3457b00</code></td><td>refactor(ops,lsp,mcp)!: the fixes are an authoring module</td></tr><tr><td><code>05b6e3f4</code></td><td>feat(ops): an edit plan answers the position edits that apply it</td></tr><tr><td><code>5d74b0ef</code></td><td>fix(ops,lsp): the verify stub is the typed add_verify edit</td></tr><tr><td><code>ef0bd4e9</code></td><td>fix(ops,lsp,mcp)!: the entity stub is the typed create edit, offered only when it plans</td></tr><tr><td><code>b35807e1</code></td><td>perf(lsp): a typed fix&#x27;s edits are made when the editor resolves it</td></tr><tr><td><code>a9ee51c1</code></td><td>docs(adr): 0161 a stub fix is a typed edit, offered as position edits</td></tr></table></article><article><div class="head"><h2>06 · One finder for written tokens</h2><div class="tags"><span>7 commits</span><span>ADR 0163</span><span>lane R</span></div></div>
+<p>Rename and delete each searched for tokens their own way and missed some (D16–D18).</p>
+<div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ RN[rename] --> s1[search A]
+ RF[references] --> s2[search B]
+ DL[delete] --> s3[search C]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ RN[rename] --> W[[written_tokens]]
+ RF[references] --> W
+ DL[delete] --> W
+</div></div></div>
+<table><tr><th>commit</th><th>title</th></tr><tr><td><code>bbd94995</code></td><td>docs(adr): 0163 a written token is found by one finder</td></tr><tr><td><code>6b42d4da</code></td><td>test(ops,lsp): pin rename, tokens and the editor&#x27;s references missing a default no block takes, and delete missing a derived type name</td></tr><tr><td><code>8d7fdacf</code></td><td>refactor(graph): the derived walk&#x27;s type expressions are one function</td></tr><tr><td><code>2f2f0cc5</code></td><td>feat(graph): one finder answers every token of a file that names an entity</td></tr><tr><td><code>7e9f5dd2</code></td><td>fix(ops,lsp,project)!: navigation&#x27;s tokens ask the finder; rename and the editor see a default no block takes</td></tr><tr><td><code>872041c7</code></td><td>fix(ops)!: delete&#x27;s referrers ask the finder; a derived type name refuses the delete</td></tr><tr><td><code>31977638</code></td><td>test(ops): rename and delete answer the same tokens over one table of fixtures</td></tr></table></article><article><div class="head"><h2>08 · An unreadable lock is refused once</h2><div class="tags"><span>6 commits</span><span>ADR amends 0028</span><span>lane X</span></div></div>
+<p>update, add, remove and doctor each answered an unreadable lock differently (D20–D22).</p>
+<div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ U[update] --> a[precondition_failed]
+ R[remove] --> b[extension_not_found]
+ A[add] --> c[E033: 'run specforge install']
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ U[update] --> W[[writable_lock]]
+ R[remove] --> W
+ A[add] --> W
+ W --> E[E033 schema_mismatch, one remedy]
+</div></div></div>
+<table><tr><th>commit</th><th>title</th></tr><tr><td><code>4b7f7251</code></td><td>test(cli): pin what update, add, remove and check print over an unreadable lock, on the CLI and over MCP</td></tr><tr><td><code>14411cf5</code></td><td>test(installed,ops): pin one code, kind and remedy for an unreadable lock (ignored)</td></tr><tr><td><code>c89ab3fc</code></td><td>fix(installed)!: a lock that can&#x27;t be read names one remedy, whatever made it unreadable</td></tr><tr><td><code>166484cc</code></td><td>fix(ops)!: update opens its lock plan first; an unreadable lock is the plan&#x27;s refusal</td></tr><tr><td><code>93f0d74d</code></td><td>fix(ops)!: remove refuses an unreadable lock with the lock plan&#x27;s refusal</td></tr><tr><td><code>dbf93906</code></td><td>docs(adr): amend 0028, an unreadable lock is refused once</td></tr></table></article><article><div class="head"><h2>09 · One field-path resolver</h2><div class="tags"><span>3 commits</span><span>ADR amends 0151</span><span>lane A</span></div></div>
+<p>Five verbs each parsed field.entry their own way (D23–D25).</p>
+<div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ set --> p1[split]
+ unset --> p2[split]
+ link --> p3[split]
+ create --> p4[split]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ set --> P[[edit/path::resolve]]
+ unset --> P
+ link --> P
+ create --> P
+</div></div></div>
+<table><tr><th>commit</th><th>title</th></tr><tr><td><code>984d6e11</code></td><td>test(ops): pin how set, unset, link, unlink and create read a field.entry path (ignored)</td></tr><tr><td><code>24f40293</code></td><td>fix(ops)!: an edit&#x27;s field.entry path is read once; set and unset act on an entry, link, unlink and create refuse it</td></tr><tr><td><code>d53654e9</code></td><td>docs(adr): 0151 amended: a field.entry path is read once, for every verb</td></tr></table></article><article><div class="head"><h2>11 · CLI-only documents in ops</h2><div class="tags"><span>8 commits</span><span>ADR amends 0045, 0052</span><span>lane B</span></div></div>
+<p>login over an unreadable credential store clobbered it; three document shapes (D26–D28).</p>
+<div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ login --> O[overwrites store, drops other registries]
+ search --> j1[own JSON]
+ validate --> j2[own JSON]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ login --> R[R012 refusal]
+ search --> D[typed Document in ops]
+ validate --> D
+ publish --> D
+</div></div></div>
+<table><tr><th>commit</th><th>title</th></tr><tr><td><code>825ce428</code></td><td>test(cli,registry-client): pin login, logout and doctor over an unreadable credential store</td></tr><tr><td><code>36091f38</code></td><td>fix(cli,registry-client)!: an unreadable credential store is refused by login and logout and fails doctor (R012)</td></tr><tr><td><code>8db3c3aa</code></td><td>test(cli): pin the diagnostics and the null in search&#x27;s and validate&#x27;s documents</td></tr><tr><td><code>1bbae39b</code></td><td>refactor(ops,cli)!: extension validate and publish read a binary through one ops step</td></tr><tr><td><code>7b0391f9</code></td><td>refactor(ops,cli)!: search&#x27;s and publish&#x27;s documents are typed beside their outcomes</td></tr><tr><td><code>861ec0ae</code></td><td>refactor(ops,cli)!: the trace&#x27;s and the plan check&#x27;s terminal text is the CLI&#x27;s</td></tr><tr><td><code>538bc4d9</code></td><td>docs(adr): amend ADR 0045 and ADR 0052 (0168 released)</td></tr><tr><td><code>9aea202c</code></td><td>test(cli): publish_stores_the_declaration reads the publish document&#x27;s `extension`</td></tr></table></article><article><div class="head"><h2>07 · One text edit shape</h2><div class="tags"><span>4 commits</span><span>ADR 0164</span><span>lane R</span></div></div>
+<p>MCP rename answered 0-based columns and its own keys (D19).</p>
+<div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ RN[rename] --> RE[RenameEdit 0-based]
+ FX[fixes] --> TE[TextEdit 1-based]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ RN[rename] --> T[[read::navigate::TextEdit + apply_edits]]
+ FX[fixes] --> T
+</div></div></div>
+<table><tr><th>commit</th><th>title</th></tr><tr><td><code>fca08e51</code></td><td>test(ops,mcp): pin a rename&#x27;s edits to the spans find-references answers</td></tr><tr><td><code>29078c91</code></td><td>refactor(ops,lsp)!: a rename plan&#x27;s edits are TextEdits, applied by navigation&#x27;s one applier</td></tr><tr><td><code>af5d9d0d</code></td><td>fix(mcp)!: specforge.rename answers the spec&#x27;s TextEdit, as suggest_fixes does</td></tr><tr><td><code>68d2baeb</code></td><td>docs(adr): 0164 a text edit is one shape</td></tr></table></article><article><div class="head"><h2>10 · A lock plan knows its verb</h2><div class="tags"><span>3 commits</span><span>ADR amends 0065</span><span>lane X</span></div></div>
+<p>Checked held 14 fields; the plan took a runtime by expect (refactor).</p>
+<div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ C[Checked: 14 fields] --> F[finish recomputes]
+ L[LockPlan: expect runtime]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ C[Checked: plan + changes + also] --> I[items_after once]
+ L[fetching holds its runtime]
+</div></div></div>
+<table><tr><th>commit</th><th>title</th></tr><tr><td><code>3939edaa</code></td><td>refactor(ops): a checked plan is the plan it judged; the items it leaves are computed once</td></tr><tr><td><code>7cd10d21</code></td><td>refactor(ops): a plan that fetches holds the runtime its fetches load in</td></tr><tr><td><code>50fdd139</code></td><td>refactor(ops): a removal&#x27;s plan is opened with the package it uninstalls</td></tr></table></article>
+</main></body></html>
