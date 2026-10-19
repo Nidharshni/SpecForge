@@ -1,0 +1,78 @@
+---
+source: crates/surfaces/cli/tests/refusal_wire.rs
+expression: out
+---
+$ specforge set user status active
+[exit 1]
+[stdout]
+[stderr]
+error[file_unreadable]: failed to write <root>/spec/hello.spec: Permission denied (os error 13)
+
+$ specforge set user status active --format json
+[exit 1]
+[stdout]
+{
+  "error": "failed to write <root>/spec/hello.spec: Permission denied (os error 13)",
+  "code": "file_unreadable"
+}
+[stderr]
+
+$ specforge new type account Account --in fresh.spec
+[exit 1]
+[stdout]
+[stderr]
+error[file_unreadable]: failed to write <root>/spec/fresh.spec: Permission denied (os error 13)
+
+$ specforge add @specforge/product
+[exit 1]
+[stdout]
+[stderr]
+error[config_write_failed]: failed to write <root>/specforge.json: Permission denied (os error 13)
+
+$ specforge add @specforge/product --format json
+[exit 1]
+[stdout]
+{
+  "error": "failed to write <root>/specforge.json: Permission denied (os error 13)",
+  "code": "config_write_failed"
+}
+[stderr]
+
+$ specforge init
+[exit 1]
+[stdout]
+[stderr]
+error[init_write_failed]: failed to write <root>/.gitignore: Permission denied (os error 13)
+
+$ specforge init --format json
+[exit 1]
+[stdout]
+{
+  "error": "failed to write <root>/.gitignore: Permission denied (os error 13)",
+  "code": "init_write_failed"
+}
+[stderr]
+
+$ specforge init
+[exit 1]
+[stdout]
+[stderr]
+error[config_write_failed]: failed to write <root>/specforge.json: Permission denied (os error 13)
+
+$ specforge init
+[exit 1]
+[stdout]
+[stderr]
+error[init_write_failed]: cannot write .gitignore: Permission denied (os error 13)
+
+$ specforge format
+[exit 1]
+[stdout]
+[stderr]
+error[file_unwritable]: failed to write <root>/spec/hello.spec: Permission denied (os error 13)
+Formatted 2 file(s), 1 changed
+
+$ mcp specforge.rename
+{"code":"permission_denied","data":{"files_written":[]},"message":"failed to write <root>/spec/hello.spec: Permission denied (os error 13)","tool":"specforge.rename"}
+$ mcp specforge.edit
+{"code":"permission_denied","data":{"files_written":[]},"message":"failed to write <root>/spec/hello.spec: Permission denied (os error 13)","tool":"specforge.edit"}
