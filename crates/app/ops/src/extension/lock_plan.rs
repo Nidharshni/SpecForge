@@ -3,8 +3,8 @@
 //!
 //! An operation opens the plan for its verb ([`LockPlan::adding`], [`LockPlan::updating`],
 //! [`LockPlan::initializing`], [`LockPlan::removing`]) and names what it asks for, each charged to
-//! an [`Ask`]: it installs, enables, disables, uninstalls, or fetches from the plan's registry. It
-//! never drives the plan's own steps: the plan
+//! an [`Ask`]: it installs, enables, disables or fetches from the plan's registry; a removal names what
+//! it uninstalls when it opens. It never drives the plan's own steps: the plan
 //! stages each install into the lock as the operation will leave it (the package's previous entry
 //! is replaced, never counted beside it), closes over the builtins what it adds requires, and judges,
 //! once, the **project peer set** as the change leaves it (the extensions the project's
@@ -267,14 +267,15 @@ impl<'a> LockPlan<'a> {
 
     /// `remove`'s plan over the compiled project `view`: its lock as the compile read it, its
     /// entries, the declarations its compile loaded (read again through the view's runtime only
-    /// for an entry the removal lets load). `uninstalls`: whether it uninstalls (then an
-    /// unreadable lock is refused here, [`writable_lock`]). `force`: the peer rule is not applied (`remove --force`).
+    /// for an entry the removal lets load). `uninstalling`: the package it uninstalls (its module and
+    /// lock entry; then an unreadable lock is refused here, [`writable_lock`]); one the lock does not
+    /// hold changes nothing. `force`: the peer rule is not applied (`remove --force`).
     pub(crate) fn removing(
         view: &ProjectView<'a>,
         caller: Caller<'a>,
         purpose: Purpose,
         force: bool,
-        uninstalls: bool,
+        uninstalling: Option<&PackageName>,
     ) -> Result<LockPlan<'a>, OpError> {
         let mut plan = LockPlan::open(
             view.installed(),
@@ -283,11 +284,18 @@ impl<'a> LockPlan<'a> {
             Verb::Remove,
             None,
             "remove",
-            uninstalls,
+            uninstalling.is_some(),
             caller,
         )?;
         plan.purpose = purpose;
         plan.force = force;
+        // `open` read a writable lock because `uninstalling` is `Some`: the lock is there.
+        if let Some(name) = uninstalling
+            && let Some(lock) = plan.lock.as_mut()
+            && lock.without(name)
+        {
+            plan.uninstalled.push((Ask(0), name.clone()));
+        }
         Ok(plan)
     }
 
@@ -463,21 +471,6 @@ impl<'a> LockPlan<'a> {
     /// Drop the entries `disabled` selects, for `ask`.
     pub(crate) fn disable(&mut self, ask: Ask, disabled: Disabled) {
         self.disabled.push((ask, disabled));
-    }
-
-    /// Uninstall `name` (its module and lock entry), for `ask`. A name the lock does not hold
-    /// changes nothing.
-    ///
-    /// # Panics
-    /// On a plan opened with `uninstalls: false` (it changes no lock, so it accepted any lock).
-    pub(crate) fn uninstall(&mut self, ask: Ask, name: &PackageName) {
-        let lock = self
-            .lock
-            .as_mut()
-            .expect("a plan opened with uninstalls: false uninstalls nothing");
-        if lock.without(name) {
-            self.uninstalled.push((ask, name.clone()));
-        }
     }
 
     /// Enable `companion` whenever the change leaves `trigger` enabled (`init`: `@specforge/testing`

@@ -274,12 +274,15 @@ fn change(
     } else {
         Purpose::Commit
     };
-    let mut plan = LockPlan::removing(req.view, req.caller, purpose, req.force, locked.is_some())?;
     // Its directory is named by the lock entry's package name, which the lock read validated
     // (ADR 0036): nothing outside `.specforge/extensions` can be deleted.
-    if let Some(locked) = locked {
-        plan.uninstall(Ask(0), &locked.name);
-    }
+    let mut plan = LockPlan::removing(
+        req.view,
+        req.caller,
+        purpose,
+        req.force,
+        locked.map(|locked| &locked.name),
+    )?;
     plan.disable(Ask(0), disabled);
     let done = plan
         .check()
