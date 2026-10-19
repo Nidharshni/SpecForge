@@ -307,7 +307,11 @@ fn refusal(
                         }
                     }
                 }
-                Some(Origin::File { .. } | Origin::Unknown) | None => checks(),
+                Some(Origin::File { path }) => checks().with_suggestion(format!(
+                    "'{peer}' is loaded from the file entry '{path}' at {installed}: change that entry, or install a version of '{}' that accepts it",
+                    edge.dependent
+                )),
+                Some(Origin::Unknown) | None => checks(),
             }
         }
         Verdict::Satisfied => unreachable!("filtered by `unsatisfied`"),
