@@ -3,6 +3,8 @@ use specforge_parser::{EntityId, EntityKind, FieldMap};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 mod link;
+mod reach;
+pub use reach::Direction;
 
 #[derive(Debug, Clone)]
 pub struct Node {
@@ -44,7 +46,7 @@ pub struct Edge {
     pub label: Sym,
 }
 
-/// An entity [`Graph::reach`] reached.
+/// An entity a reach ([`Graph::reach`], [`Graph::reach_directed`]) reached.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Reached {
     pub id: Sym,
@@ -247,33 +249,7 @@ impl Graph {
     /// nothing beyond `max_depth` hops (unbounded when `None`; depth 0 is
     /// the root alone). `None` when `root_id` is not a node.
     pub fn reach(&self, root_id: &str, max_depth: Option<usize>) -> Option<Vec<Reached>> {
-        let root = Sym::new(root_id);
-        if !self.nodes.contains_key(&root) {
-            return None;
-        }
-        let mut reached = vec![Reached {
-            id: root,
-            depth: 0,
-            via: None,
-        }];
-        let mut seen: HashSet<Sym> = HashSet::from([root]);
-        let mut next = 0;
-        while let Some(&Reached { id, depth, .. }) = reached.get(next) {
-            next += 1;
-            if max_depth.is_some_and(|max| depth >= max) {
-                continue;
-            }
-            for (neighbor, label) in self.labelled_neighbors(id) {
-                if self.nodes.contains_key(&neighbor) && seen.insert(neighbor) {
-                    reached.push(Reached {
-                        id: neighbor,
-                        depth: depth + 1,
-                        via: Some((id, label)),
-                    });
-                }
-            }
-        }
-        Some(reached)
+        self.breadth_first(root_id, max_depth, |id| self.labelled_neighbors(id))
     }
 
     /// The edge labels on the path [`Self::reach`] found to `id`, root

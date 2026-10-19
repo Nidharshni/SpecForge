@@ -84,11 +84,14 @@ invariant graph_traversal_integrity "Graph Traversal Integrity" {
     Graph traversal operations (trace, subgraph extraction, delta
     computation) MUST produce complete and deterministic results. Every
     reachable node along a traversal path MUST be included. Traversal
-    order MUST be deterministic for identical graph inputs.
+    order MUST be deterministic for identical graph inputs. A traversal
+    reads only the edges of the entities it reaches, never every edge of
+    the graph for each of them.
   """
   risk      high
   verify property "traversal from any node visits every reachable node exactly once"
   verify unit "identical graph inputs produce identical traversal results"
+  verify unit "a directed reach reads only the edges of the entities it reaches"
 }
 
 invariant incremental_correctness "Incremental Correctness" {
