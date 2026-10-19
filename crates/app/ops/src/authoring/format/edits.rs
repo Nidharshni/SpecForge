@@ -9,7 +9,7 @@ use similar::{DiffTag, TextDiff};
 use super::Edit;
 
 /// The edits that turn `source` into `formatted` (see [`super::FormattedDocument::edits`]).
-pub(super) fn between(source: &str, formatted: &str) -> Vec<Edit> {
+pub(crate) fn between(source: &str, formatted: &str) -> Vec<Edit> {
     if source == formatted {
         return Vec::new();
     }

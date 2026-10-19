@@ -8,6 +8,7 @@ mod fields;
 mod layout;
 mod links;
 mod obligations;
+mod positions;
 mod replay;
 mod sides;
 mod validate;

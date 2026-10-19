@@ -17,6 +17,7 @@ mod tests;
 pub use document::{
     ConfigSource, Edit, EditorOptions, FormattedDocument, Lines, Place, config, document, forms,
 };
+pub(crate) use edits::between;
 pub use run::{
     Failure, FileChange, FileDiff, FileFailure, FormatDocument, FormatField, Mode, Outcome,
     Request, run,
