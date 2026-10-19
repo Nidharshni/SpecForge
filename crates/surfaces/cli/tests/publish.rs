@@ -30,7 +30,7 @@ fn publish_stores_the_declaration_the_binary_declares() {
     let output = publish_greet(&project, Some(registry.token()));
     assert_eq!(output.code, 0, "{}{}", output.stdout, output.stderr);
     let published = output.json();
-    assert_eq!(published["name"], "@sdk/greet");
+    assert_eq!(published["extension"], "@sdk/greet");
     assert_eq!(published["version"], "0.1.0");
 
     // The stored manifest is exactly greet's declaration.
