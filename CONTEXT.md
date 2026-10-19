@@ -513,7 +513,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Registry credential**: the token a request to one registry carries, kept per registry alias in
   `~/.specforge/credentials.json`, never in `specforge.json`: a secret `specforge login --token` stored in the OS
   keyring (a 0600 file without one), or a reference to an environment variable (`--token-env`) or a file
-  (`--token-file`), resolved before any request (`CredentialStore::credential`; R010, R011). Every read carries
+  (`--token-file`), resolved before any request (`CredentialStore::credential`; R010, R011). A `credentials.json` that cannot be read is R012 for every reader: login and logout refuse and leave it, doctor counts it unusable (ADR 0045 as amended). Every read carries
   it; a publish takes `SPECFORGE_REGISTRY_TOKEN` first (ADR 0045 as amended).
 - **Fetch policy**: what a package passes before an operation sees it: the registry's reply reads as the protocol's JSON (R009 else;
   a malformed signature is that) and names the package and version asked for, the binary hashes to the served SHA-256, the served manifest reads as that
@@ -797,7 +797,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the operation and deriving `Serialize` and `Shape`: the outcome itself when it is plain data
   (`stats::Stats`), else its `document()` (`AddDocument`, `RemoveDocument`, `UpdateDocument`,
   `InitDocument`, `ExtensionsDocument`, `MigrateDocument`, `AnalyzeDocument`, `DoctorDocument`,
-  `explain::Explanation`, …).
+  `ValidateDocument`, `SearchDocument`, `PublishDocument`, `explain::Explanation`, …). A command with no ops
+  operation (extension init, build, login, logout) keeps its document in its command module.
   The CLI prints it under `--format json` and MCP answers it as the tool reply; a surface adds only
   what it alone knows, typed and flattened beside it (MCP's `note` on an add, a mutation's
   `files_written`, the CLI's credential health on doctor), and never renames, drops or re-derives a
