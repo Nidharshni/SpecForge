@@ -250,5 +250,25 @@ fn refusal(kind: OpErrorKind, code: &'static str, what: &str, left: &[String]) -
     OpError::new(kind, code, format!("{what}; {tail}"))
 }
 
+/// `file` changed since the operation read it, found before anything was staged: Conflict, `file_changed`.
+pub(crate) fn changed(file: &Path) -> OpError {
+    refusal(
+        OpErrorKind::Conflict,
+        FILE_CHANGED,
+        &format!("{} changed since it was read", file.display()),
+        &[],
+    )
+}
+
+/// `file` could not be read before anything was staged: the OS error's kind, `file_unreadable`.
+pub(crate) fn unreadable(file: &Path, error: &std::io::Error) -> OpError {
+    refusal(
+        OpErrorKind::of_io(error),
+        FILE_UNREADABLE,
+        &format!("failed to read {}: {error}", file.display()),
+        &[],
+    )
+}
+
 #[cfg(test)]
 mod tests;

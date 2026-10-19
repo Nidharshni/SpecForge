@@ -624,7 +624,6 @@ fn init_writes_the_entries_its_plan_judged() {
 /// A `.gitignore` init cannot read is a read failure, not a write one (ADR 0155).
 #[cfg(unix)]
 #[test]
-#[ignore = "flipped by T5"]
 fn an_init_that_cannot_read_gitignore_is_unreadable() {
     use specforge_ops::authoring::init;
     use std::os::unix::fs::PermissionsExt;

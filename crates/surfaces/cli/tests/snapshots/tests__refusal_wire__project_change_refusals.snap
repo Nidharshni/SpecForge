@@ -63,7 +63,7 @@ $ specforge init
 [exit 1]
 [stdout]
 [stderr]
-error[init_write_failed]: cannot write .gitignore: Permission denied (os error 13)
+error[file_unreadable]: failed to read .gitignore: Permission denied (os error 13); nothing was written
 
 $ specforge format
 [exit 1]
