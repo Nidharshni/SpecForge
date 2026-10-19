@@ -3,7 +3,7 @@
 use super::lock_plan::{Ask, Disabled, LockPlan, Purpose};
 use super::{NOT_FOUND, Origin, ProjectExtension, Selection, not_installed};
 use crate::view::ProjectView;
-use crate::{Caller, OpError, OpErrorKind, Refusal, Writes};
+use crate::{Caller, OpError, OpErrorKind, Refusal, Writes, Wrote};
 use serde::Serialize;
 use specforge_common::ExtensionEntry;
 use specforge_common::shape::Shape;
@@ -75,6 +75,11 @@ pub struct RemoveOutcome {
 }
 
 impl RemoveOutcome {
+    /// Whether the removal only previewed, or ran and wrote [`Self::writes`].
+    pub fn wrote(&self) -> Wrote {
+        Wrote::of(self.dry_run, self.writes.clone())
+    }
+
     /// The document both surfaces print.
     pub fn document(&self) -> RemoveDocument {
         RemoveDocument {

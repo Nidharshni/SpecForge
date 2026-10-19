@@ -80,6 +80,7 @@ fn add_document_names_what_the_add_did() {
             .collect(),
         writes: Writes::none(),
         extensions_enabled: 1,
+        dry_run: false,
     };
     assert_eq!(
         serde_json::to_value(added.document()).unwrap(),

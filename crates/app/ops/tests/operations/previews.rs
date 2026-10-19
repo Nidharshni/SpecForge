@@ -5,6 +5,7 @@ use serde_json::json;
 use specforge_ops::authoring::format::{self, Mode};
 use specforge_ops::authoring::migrate;
 use specforge_ops::extension::{self, AddRequest};
+use specforge_ops::{Writes, Wrote};
 
 use crate::writes::{
     OLD, TIDY, candidates, compiled_with_builtins, migration, project, remove_over,
@@ -89,4 +90,52 @@ fn every_preview_document_says_dry_run() {
 fn every_run_document_says_dry_run_false() {
     let marks = marks(false);
     assert_eq!(marks, vec![json!(false); marks.len()], "{marks:?}");
+}
+
+#[test]
+fn each_preview_answers_previewed() {
+    let on_product = project(&["@specforge/product"], &[]);
+    assert_eq!(
+        add_over(on_product.path(), "@specforge/product", true).wrote(),
+        Wrote::Previewed
+    );
+    let compiled = compiled_with_builtins(on_product.path());
+    assert_eq!(
+        remove_over(&compiled, "@specforge/product", true).wrote(),
+        Wrote::Previewed
+    );
+    let old = project(&[], &[("old.spec", OLD)]);
+    assert_eq!(migrate_over(old.path(), true).wrote(), Wrote::Previewed);
+    for mode in [Mode::Check, Mode::Preview] {
+        assert_eq!(format_over(old.path(), mode).wrote(), Wrote::Previewed);
+    }
+}
+
+#[test]
+fn a_run_that_changes_nothing_ran() {
+    let on_product = project(&["@specforge/product"], &[]);
+    let none = Wrote::Ran(Writes::none());
+    assert_eq!(
+        add_over(on_product.path(), "@specforge/product", false).wrote(),
+        none
+    );
+    let tidy = project(&[], &[("tidy.spec", TIDY)]);
+    assert_eq!(migrate_over(tidy.path(), false).wrote(), none);
+    assert_eq!(format_over(tidy.path(), Mode::Write).wrote(), none);
+}
+
+#[test]
+fn a_run_that_changed_files_ran_with_them() {
+    let on_product = project(&["@specforge/product"], &[]);
+    let removed = remove_over(
+        &compiled_with_builtins(on_product.path()),
+        "@specforge/product",
+        false,
+    );
+    assert_eq!(removed.wrote(), Wrote::Ran(removed.writes.clone()));
+    assert!(!removed.writes.is_empty());
+    let old = project(&[], &[("old.spec", OLD)]);
+    let migrated = migrate_over(old.path(), false);
+    assert_eq!(migrated.wrote(), Wrote::Ran(migrated.writes.clone()));
+    assert!(!migrated.writes.is_empty());
 }

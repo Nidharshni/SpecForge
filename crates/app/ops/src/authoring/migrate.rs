@@ -27,7 +27,7 @@ use specforge_registry::{Disk as _, RegistryBuild};
 use specforge_wasm::WasmRuntime;
 use std::path::{Path, PathBuf};
 
-use crate::{Caller, OpError, OpErrorKind, Refusal, Writes};
+use crate::{Caller, OpError, OpErrorKind, Refusal, Writes, Wrote};
 
 /// The field of a migration request a refusal can be about (ADR 0072).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -221,6 +221,11 @@ pub struct MigrateDocument {
 }
 
 impl Outcome {
+    /// Whether the migration only previewed, or ran and wrote [`Self::writes`].
+    pub fn wrote(&self) -> Wrote {
+        Wrote::of(self.dry_run, self.writes.clone())
+    }
+
     /// How the migrated graph differs from the one before: one W054 per change in [`Self::graph_delta`]; empty
     /// exactly when it is.
     pub fn structural_differences(&self) -> Vec<Diagnostic> {

@@ -54,4 +54,4 @@ pub use error::{OpError, OpErrorKind};
 pub use noticed::Noticed;
 pub use refusal::Refusal;
 pub use verdict::RunVerdict;
-pub use writes::Writes;
+pub use writes::{Writes, Wrote};

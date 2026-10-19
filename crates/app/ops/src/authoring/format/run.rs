@@ -234,6 +234,11 @@ impl Outcome {
         self.written().collect()
     }
 
+    /// Whether the run only previewed (check or diff), or wrote [`Self::writes`].
+    pub fn wrote(&self) -> crate::Wrote {
+        crate::Wrote::of(!self.mode.writes(), self.writes())
+    }
+
     /// No file failed.
     pub fn succeeded(&self) -> bool {
         self.failures.is_empty()
