@@ -1,6 +1,7 @@
 # Installed extensions are one module
 
 **Status:** accepted (2026-10-07)
+D4, D6 and D10 amended (round 16): an unreadable lock is refused once, by the lock plan's open, with the lock's own remedy.
 D4 amended by [ADR 0128](0128-one-project-change-over-held-files.md): the change places modules and writes the lock; the project files of its last step are a project change that puts back its own files.
 The round-7 D3's 'watched module paths (`Installed::modules`)' is replaced by [ADR 0114](0114-environment-inputs-are-recorded-as-read.md) (`Installed` reads through the disk it is handed).
 
@@ -158,6 +159,8 @@ the user's publisher-key pins. A failure there puts every file back; `config` is
   builtin's name before a lock entry; `.wasm` file entries after every named entry; a file declaring a
   name already loaded refused). The extension load, the watched module paths (`Installed::modules`) and
   the lock plan's project peer set read it (ADR 0041, amendment round 7).
+  **Amended by ADR 0160 (2026-10-19):** the lock plan's other questions (append, unchanged, drops, companions) read the
+  same rule: a named entry by its text, a `.wasm` file entry by what its component declares.
 - **D7**, first bullet: enabling the builtins an extension requires is the lock plan's (ADR 0041 B3),
   for a builtin, a local file and a registry package alike, in `add` and `init`; `candidate::
   required_builtins` is gone. A builtin that does not load still refuses the operation (E028).
@@ -172,3 +175,26 @@ the user's publisher-key pins. A failure there puts every file back; `config` is
   its first entry in load order (ADR 0065 D5).
 
 **Amended by ADR 0126 (2026-10-16):** D4's last step writes the `specforge.json` entries the lock plan judged, after checking the file still holds what the plan opened with.
+
+## Amendment (round 16): an unreadable lock is refused once
+
+`update` read the lock itself and refused one that can't be read with its own wording ("Run `specforge add`
+first", which refuses the same lock); `remove` refused it as `extension_not_found`, about its argument; the lock
+plan's open refused it with a third remedy, and the lock's own diagnostic named a fourth, `specforge install`, a
+command that does not exist.
+
+- **D4:** a change over an unreadable lock is refused once: `lock_plan::writable_lock`, which the plan's open asks
+  whenever the change may write the lock, is E033, `schema_mismatch`, the lock's own message and remedy, about no
+  field of the request (ADR 0072), before anything is read, asked or written. `update` opens its plan before it
+  reads an entry; each verb words only its own empty case (`update` over no lock file).
+- **D6:** the lock's E033 carries one remedy whatever made it unreadable: "fix specforge.lock, or delete it and
+  install the extensions again with `specforge add`". `check`, doctor and every refused change name it.
+- **D10:** the refusal of an entry of unknown origin under an unreadable lock, and of a name the project has
+  nothing under, is that same refusal.
+
+Rejected: routing `remove` through the plan's open with a widened `uninstalls` (a name with nothing under it opens
+no plan, and a readable lock would open a change that writes nothing); keeping `extension_not_found` with the
+lock's remedy as its suggestion (the code would still say the extension is missing when nobody can tell).
+Consequences: `specforge remove` and `specforge.remove_extension` answer E033 / `schema_mismatch` there (was
+`extension_not_found`, about `name`); `specforge update` answers it with the hint (was ". Run `specforge add`
+first." in the message, kind `precondition_failed`).

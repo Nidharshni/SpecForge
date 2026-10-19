@@ -709,7 +709,11 @@ behavior report_command_outcome "Report a Command's Outcome" {
     written; under --format json it MUST instead be the
     error document {error, code}, with suggestion when the refusal has one
     and files_written when files were left written, on stdout, with
-    nothing on stderr. A project file a command could not write MUST be
+    nothing on stderr. Under --format json a command that changes project
+    files prints files_written beside its document: absent from a preview
+    (--dry-run, format --check or --diff), and otherwise every file it
+    wrote, [] when it wrote none, as specforge's MCP reply does (ADR 0022,
+    ADR 0162). A project file a command could not write MUST be
     refused as file_unwritable, one it could not read as file_unreadable,
     and one that changed since the command read it as file_changed,
     whichever command it is; the message names the file from the project's
@@ -746,6 +750,7 @@ behavior report_command_outcome "Report a Command's Outcome" {
   verify unit "a project file a command could not write, read or found changed is file_unwritable, file_unreadable or file_changed on every command"
   verify integration "the CLI's exit code and MCP's ok agree for check, analyze, format and migrate"
   verify integration "the CLI's --format json and MCP's reply are one outcome document for every operation both surfaces run"
+  verify integration "a preview lists no files_written and a run lists every file it wrote, none included, on the command line as over MCP"
   verify contract "Report a Command's Outcome: command outcome holds — operation_ran, one_refusal_shape, one_exit_table, surfaces_agree"
 }
 

@@ -300,6 +300,11 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     and locked by its own path, as publish reads it; a directory with no
     built component is E040.
     The system MUST NOT duplicate an already-installed extension.
+    An extension a .wasm file entry of specforge.json loads (its component declares that name and
+    the extension load admits it) MUST NOT be installed or enabled beside it: the add is refused
+    with extension_conflict, naming the entry's file, and writes nothing, a dry run included.
+    Only a named entry (name, or name@version as older adds wrote it) makes an extension already
+    enabled or already present.
     A dry run is the add's lock plan judged and not committed: it answers
     what the add would answer for each specifier (planned, with the
     builtins it would enable as peers_enabled), or the refusal the add
@@ -350,18 +355,19 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     with no registry configured in specforge.json MUST make no network call
     and MUST fail with E063, whose suggestion names the registries key.
     Its JSON output is the add document specforge.add_extension answers
-    (McpAddExtensionResult: added, one entry per specifier in the order
+    (McpAddExtensionResult: dry_run, added, one entry per specifier in the order
     given, each naming its specifier, its action enabled, installed,
     already_present, planned or duplicate; no note; an enabled builtin,
     an installed package or a planned one lists the required builtins the
     add enabled with it as peers_enabled), with the files it
     wrote as files_written (empty when every extension was already
-    enabled). A registry package's source is registry, and its key_id is
+    enabled; absent from a dry run). A registry package's source is registry, and its key_id is
     present only when the package is signed.
   """
   verify unit "with no registry configured, add makes no network call and reports how to configure one"
   verify unit "add extension appends to extensions list"
   verify unit "an add over a specforge.json changed since it was read writes nothing"
+  verify unit "a .wasm file entry never makes an install already present"
   verify integration "add --format json lists the files it wrote in files_written"
   verify integration "specforge add with several specifiers prints one entry per specifier and writes them as one change, or nothing"
   verify unit "the add document lists what the add did for each specifier by action, with source always and key_id only for a signed package"
@@ -396,6 +402,7 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   verify unit "an install that breaks a .wasm file entry, or that a .wasm file entry does not satisfy, is refused with E027"
   verify unit "an install enables the builtins it requires first, whatever its source"
   verify unit "an extension no specforge.json entry enables is not judged"
+  verify unit "an add of an extension a .wasm file entry loads is refused, naming the entry, and writes nothing"
   verify integration "add and check agree: an add check would report E027 or E073 for is refused, and an add that passes leaves none"
   verify integration "a local .wasm install is locked at its declared version with source local:<path> and enabled by its bare name"
   verify unit "a local crate directory installs the component its crate builds"

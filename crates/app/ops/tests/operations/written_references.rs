@@ -27,11 +27,11 @@ fn held_by(p: &crate::navigate::Compiled, target: &str, holder: &str) -> Vec<Str
         .collect()
 }
 
-/// Each edit as `(line, start_col, end_col)`.
+/// Each edit's span as `(line, start_col, end_col)`.
 fn columns(plan: &rename::RenamePlan) -> Vec<(usize, usize, usize)> {
     plan.edits
         .iter()
-        .map(|e| (e.line, e.start_col, e.end_col))
+        .map(|e| (e.span.start_line, e.span.start_col, e.span.end_col))
         .collect()
 }
 
@@ -74,7 +74,10 @@ fn a_rename_edits_signature_types_and_no_parameter_name() {
     let plan = rename::plan(&p.navigator(), "Task", "Job").unwrap();
     let edits = columns(&plan);
 
-    assert_eq!(edits, [(1, 5, 9), (11, 9, 13), (12, 20, 24), (17, 20, 24)]);
+    assert_eq!(
+        edits,
+        [(1, 6, 10), (11, 10, 14), (12, 21, 25), (17, 21, 25)]
+    );
 }
 
 #[specforge_test(
@@ -92,5 +95,26 @@ fn a_quoted_union_variant_is_no_reference() {
     );
     let plan = rename::plan(&p.navigator(), "Task", "Job").unwrap();
     let edits = columns(&plan);
-    assert_eq!(edits, [(1, 5, 9)]);
+    assert_eq!(edits, [(1, 6, 10)]);
+}
+
+/// A rename edits the spans navigation answers for the entity and its declaration, in their convention.
+#[test]
+fn a_rename_edits_the_spans_find_references_answers() {
+    let p = compile(SOFTWARE, &[("store.spec", STORE)]);
+    let with_declaration = ReferenceQuery {
+        include_declaration: true,
+        ..INCOMING
+    };
+    let mut found: Vec<(usize, usize, usize)> = p
+        .navigator()
+        .references("Task", with_declaration)
+        .unwrap()
+        .iter()
+        .map(|o| (o.span.start_line, o.span.start_col, o.span.end_col))
+        .collect();
+    found.sort_unstable();
+    let mut edits = columns(&rename::plan(&p.navigator(), "Task", "Job").unwrap());
+    edits.sort_unstable();
+    assert_eq!(edits, found);
 }

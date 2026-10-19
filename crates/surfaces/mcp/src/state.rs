@@ -239,11 +239,11 @@ impl McpState {
 
     /// Bring the served project up to date with disk (behavior
     /// `bring_session_up_to_date`): exactly what changed since it was last
-    /// built is applied, an update for changed sources, an environment
-    /// reload (its extension tools and resources registered again) for a
-    /// changed `specforge.json`, `specforge.lock` or extension module, a
-    /// re-check for a changed check input. Subscribed clients learn what
-    /// changed. `None` when nothing did.
+    /// built is applied as one update (ADR 0159): an environment reload
+    /// (its extension tools and resources registered again) when
+    /// `specforge.json`, `specforge.lock` or an extension module changed,
+    /// which covers the rest; otherwise the changed sources, and the checks
+    /// once. Subscribed clients learn what changed. `None` when nothing did.
     pub(crate) fn ensure_fresh(&mut self) {
         if let Some(update) = self.session.ensure_fresh() {
             self.applied(update);

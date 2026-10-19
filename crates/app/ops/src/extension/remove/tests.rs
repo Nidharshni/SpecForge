@@ -363,11 +363,71 @@ fn an_entry_of_unknown_origin_is_not_removed_under_an_unreadable_lock() {
 
     let refused = remove(&fixture.view(), &removing("@acme/x")).unwrap_err();
 
-    assert_eq!(refused.error.code, NOT_FOUND);
+    assert_eq!(refused.error.code, "E033");
+    assert_eq!(refused.error.kind, OpErrorKind::SchemaMismatch);
+    assert!(refused.subject.is_none(), "{refused:?}");
     assert!(
         refused.error.message.contains("corrupt lock file"),
         "{refused:?}"
     );
+    assert_eq!(files_under(fixture.root()), before);
+}
+
+#[specforge_test(
+    behavior = "read_lock_file",
+    verify = "add, update and remove refuse an unreadable lock with one refusal and the lock's own remedy"
+)]
+fn remove_refuses_an_unreadable_lock_as_add_and_update_do() {
+    use crate::extension::{AddRequest, UpdateRequest, add, update};
+
+    let mut fixture = Assembled::new().config(&["@acme/x"]);
+    write_config(&fixture, r#"{"extensions": ["@acme/x"]}"#);
+    std::fs::write(
+        specforge_installed::lock_path(fixture.root()),
+        "not valid json {{{",
+    )
+    .unwrap();
+    fixture = fixture.read_lock();
+    let before = files_under(fixture.root());
+    let unconfigured = crate::registry::Unconfigured("both");
+    let root = specforge_common::ProjectRoot::of(fixture.root()).unwrap();
+    let lock = fixture.view().installed().lock().problem().unwrap().clone();
+
+    let unknown = remove(&fixture.view(), &removing("@acme/x")).unwrap_err();
+    let nothing = remove(&fixture.view(), &removing("@acme/absent")).unwrap_err();
+    let added = add(
+        &AddRequest {
+            root: &root,
+            extensions: vec![fixture.root().join("missing.wasm").display().to_string()],
+            base: None,
+            allow_unsigned: false,
+            dry_run: false,
+            caller: crate::testing::caller(),
+        },
+        &unconfigured,
+        &specforge_wasm::testing::InProcessRuntime::new(),
+    )
+    .unwrap_err();
+    let updated = update(
+        &UpdateRequest {
+            root: &root,
+            name: None,
+            reach: specforge_package::Reach::Compatible,
+            allow_unsigned: true,
+            caller: crate::testing::caller(),
+        },
+        &unconfigured,
+        &specforge_wasm::testing::InProcessRuntime::new(),
+    )
+    .unwrap_err();
+
+    for e in [&unknown.error, &nothing.error, &added.error, &updated] {
+        assert_eq!(e.code, lock.code, "{e:?}");
+        assert_eq!(e.kind, OpErrorKind::SchemaMismatch, "{e:?}");
+        assert_eq!(e.suggestion, lock.suggestion, "{e:?}");
+        assert!(e.message.starts_with("corrupt lock file at '"), "{e:?}");
+    }
+    assert!(unknown.subject.is_none() && nothing.subject.is_none());
     assert_eq!(files_under(fixture.root()), before);
 }
 
@@ -441,7 +501,9 @@ fn an_unreadable_lock_is_why_nothing_is_installed() {
 
     let refused = remove(&fixture.view(), &removing("@acme/x")).unwrap_err();
 
-    assert_eq!(refused.error.code, NOT_FOUND);
+    assert_eq!(refused.error.code, "E033");
+    assert_eq!(refused.error.kind, OpErrorKind::SchemaMismatch);
+    assert!(refused.subject.is_none(), "{refused:?}");
     assert!(
         refused.error.message.contains("corrupt lock file"),
         "{refused:?}"
@@ -476,7 +538,7 @@ fn remove_document_names_source_and_version() {
 
     assert_eq!(
         document(outcome(Origin::Builtin, Some("1.0.0"), false)),
-        serde_json::json!({"action": "removed", "extension": "@acme/x", "source": "builtin",
+        serde_json::json!({"dry_run": false, "extension": "@acme/x", "source": "builtin",
             "version": "1.0.0", "stranded": stranded})
     );
     assert_eq!(
@@ -487,7 +549,7 @@ fn remove_document_names_source_and_version() {
             Some("0.1.0"),
             false
         )),
-        serde_json::json!({"action": "removed", "extension": "@acme/x", "source": "registry",
+        serde_json::json!({"dry_run": false, "extension": "@acme/x", "source": "registry",
             "version": "0.1.0", "stranded": stranded})
     );
     assert_eq!(
@@ -498,12 +560,12 @@ fn remove_document_names_source_and_version() {
             None,
             false
         )),
-        serde_json::json!({"action": "removed", "extension": "@acme/x", "source": "file:x.wasm",
+        serde_json::json!({"dry_run": false, "extension": "@acme/x", "source": "file:x.wasm",
             "stranded": stranded})
     );
     assert_eq!(
-        document(outcome(Origin::Unknown, None, true))["action"],
-        "planned"
+        document(outcome(Origin::Unknown, None, true))["dry_run"],
+        true
     );
 }
 

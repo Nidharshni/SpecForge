@@ -1,8 +1,9 @@
 # An operation's outcome is one document both surfaces print
 
 **Status:** accepted (2026-10-11). Amends ADR 0015 D6 and ADR 0004 D1-c; extends the list in
-ADR 0048 D2. D5 extended by ADR 0058 to watch's lines.
+ADR 0048 D2. D5 extended by ADR 0058 to watch's lines. D1 and D5 amended in round 16 (plan 11).
 D8's "nothing goes to stderr" is a case of [ADR 0120](0120-what-a-cli-command-says-beside-its-document-is-said-once.md).
+Amended by [ADR 0162](0162-a-mutations-preview-is-a-fact-of-its-outcome.md) (round 16, plan 05): every previewable document says `dry_run` (D4, D8's `check_only`).
 ADR 0102: every file a document names follows one rule. D1's documents include the anchors read view's ([ADR 0140](0140-source-anchors-are-a-read-view.md)).
 
 ADR 0048 typed every MCP reply, and its round typed the documents both surfaces already shared
@@ -114,3 +115,16 @@ whole set. The spec type is `McpAddExtensionResult { added: McpAddedExtension[],
   `invalid_input` on argument `code`). The human rendering ends with the docs link the document
   carries. The CLI's refusal document follows D1's rule too: `suggestion` is absent when the
   refusal has none, never `null`.
+
+## Amendment (architecture round 16, plan 11): the CLI-only documents
+
+- **D1's list** gains `ValidateDocument` (beside `extension::validate`, publish's first two steps), `SearchDocument`
+  (`Searched::document`) and `PublishDocument` (`PublishOutcome::document`: action `published`, the extension named
+  `extension`, no constant `signed`). They were `json!` literals in the CLI, with a `null` (search's `contributes`),
+  `name` for the extension (D3) and a second and a third diagnostic shape.
+- **D5's reach.** D5's rule holds for the outcome of an operation ops performs. A command with no operation in ops
+  keeps its document in its command module, under D3's vocabulary and with no `null`. Those commands are
+  `extension init` and `build` (a scaffold write, a cargo build) and `login` and `logout` (the credential store,
+  which ops never names: ADR 0010, and Rejected "Doctor's credentials").
+- **A document's diagnostics** are `DiagnosticList`, the one shape every surface prints.
+- Terminal text is the CLI's: `PlanOutcome::to_human` and `TraceOutcome::to_human` left ops.

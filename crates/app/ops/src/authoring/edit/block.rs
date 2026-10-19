@@ -2,6 +2,7 @@
 //! member starts on its own line) and again after it is changed (so it is laid out canonically); no byte outside it
 //! changes.
 
+use super::path::{self, FieldPath};
 use super::write::{not_editable, written};
 use super::{EditField, Input};
 use crate::authoring::format::{self, Lines, Place};
@@ -32,12 +33,8 @@ pub struct Site<'a> {
 }
 
 impl Site<'_> {
-    /// How `field` of the entity's kind reads; refused when the kind does not declare it.
-    pub fn reading(&self, field: &str) -> Result<Reading<'_>, Refusal<EditField>> {
-        self.reading_toward(field, None)
-    }
-
-    /// [`Self::reading`] for a value naming `target` (a link's or unlink's): an undeclared `field` whose target's
+    /// How `field` of the entity's kind reads; refused when the kind does not declare it. A value naming `target`
+    /// (a link's or unlink's): an undeclared `field` whose target's
     /// kind owns a relation into this kind is told as that relation's other side, as E079 tells it by its values.
     pub fn reading_toward(
         &self,
@@ -431,19 +428,6 @@ fn block_form() -> FieldForm {
     FieldForm::new(FieldType::String, Vec::new())
 }
 
-/// The dotted `field.entry` split, and the entry looked up in its block field.
-fn nested<'b>(block: &'b Block, field: &str) -> Option<(&'b FieldEntry, Option<&'b FieldEntry>)> {
-    let (outer, inner) = field.split_once('.')?;
-    let outer = block.entry(outer)?;
-    let FieldValue::Block(map) = &outer.value else {
-        return Some((outer, None));
-    };
-    Some((
-        outer,
-        map.entries().iter().find(|e| e.key.as_str() == inner),
-    ))
-}
-
 fn finish_edit(
     site: &Site<'_>,
     original: &str,
@@ -466,78 +450,76 @@ pub fn set(
     input: &Input,
     annotations: Option<&[String]>,
 ) -> Result<String, Refusal<EditField>> {
+    let path = path::resolve(site, field, None)?;
     let mut block = Block::open(site, text)?;
     let before = block.text();
-    if let Some((outer, inner)) = field.split_once('.') {
-        match site.reading(outer)? {
-            Reading::Declared(form) if form.field_type() == FieldType::Block => {}
-            _ => {
+    let (field, reading) = match path {
+        FieldPath::Field { name, reading } => (name, reading),
+        FieldPath::Entry {
+            field: outer,
+            entry: inner,
+            form,
+        } => {
+            let Input::One(_) = input else {
                 return Err(not_editable(
-                    EditField::Field,
-                    format!("'{outer}' is not a block field, so it has no entry '{inner}'"),
+                    EditField::Value,
+                    format!("'{outer}.{inner}' takes one text"),
                 ));
+            };
+            match path::nested(site, &block, outer, inner)? {
+                Some((_, Some(entry))) => {
+                    let span = entry
+                        .value_span
+                        .clone()
+                        .ok_or_else(|| unreadable(site.id))?;
+                    let lead = block.lead(span.start_line - 1).to_string();
+                    let new = written(
+                        Reading::Declared(&block_form()),
+                        inner,
+                        input,
+                        &lead,
+                        &block.config,
+                    )?;
+                    block.replace_value(&span, &new, annotations);
+                }
+                Some((outer_entry, None)) => {
+                    let span = outer_entry
+                        .value_span
+                        .clone()
+                        .ok_or_else(|| unreadable(site.id))?;
+                    let lead = format!(
+                        "{}{}",
+                        block.lead(span.start_line - 1),
+                        block.config.indent_str()
+                    );
+                    let new = written(
+                        Reading::Declared(&block_form()),
+                        inner,
+                        input,
+                        &lead,
+                        &block.config,
+                    )?;
+                    let line = format!("{lead}{inner} {new}");
+                    block.insert(span.end_line - 1, &line);
+                }
+                None => {
+                    let Input::One(text) = input else {
+                        unreachable!("checked above")
+                    };
+                    let entries = Input::Entries([(inner.to_string(), text.clone())].into());
+                    let value = written(
+                        Reading::Declared(form),
+                        outer,
+                        &entries,
+                        &block.member_lead(),
+                        &block.config,
+                    )?;
+                    block.insert_member(site, outer, &value, &[]);
+                }
             }
+            return finish_edit(site, text, &before, &block);
         }
-        let Input::One(_) = input else {
-            return Err(not_editable(
-                EditField::Value,
-                format!("'{field}' takes one text"),
-            ));
-        };
-        match nested(&block, field) {
-            Some((_, Some(entry))) => {
-                let span = entry
-                    .value_span
-                    .clone()
-                    .ok_or_else(|| unreadable(site.id))?;
-                let lead = block.lead(span.start_line - 1).to_string();
-                let new = written(
-                    Reading::Declared(&block_form()),
-                    inner,
-                    input,
-                    &lead,
-                    &block.config,
-                )?;
-                block.replace_value(&span, &new, annotations);
-            }
-            Some((outer_entry, None)) => {
-                let span = outer_entry
-                    .value_span
-                    .clone()
-                    .ok_or_else(|| unreadable(site.id))?;
-                let lead = format!(
-                    "{}{}",
-                    block.lead(span.start_line - 1),
-                    block.config.indent_str()
-                );
-                let new = written(
-                    Reading::Declared(&block_form()),
-                    inner,
-                    input,
-                    &lead,
-                    &block.config,
-                )?;
-                let line = format!("{lead}{inner} {new}");
-                block.insert(span.end_line - 1, &line);
-            }
-            None => {
-                let Input::One(text) = input else {
-                    unreachable!("checked above")
-                };
-                let entries = Input::Entries([(inner.to_string(), text.clone())].into());
-                let value = written(
-                    site.reading(outer)?,
-                    outer,
-                    &entries,
-                    &block.member_lead(),
-                    &block.config,
-                )?;
-                block.insert_member(site, outer, &value, &[]);
-            }
-        }
-        return finish_edit(site, text, &before, &block);
-    }
-    let reading = site.reading(field)?;
+    };
     match block.entry(field).and_then(|e| e.value_span.clone()) {
         Some(span) => {
             let lead = block.lead(span.start_line - 1).to_string();
@@ -556,10 +538,17 @@ pub fn set(
 /// `field` (or `field.entry`) removed, with the comment lines directly above it. The text unchanged when it is not
 /// there. An inherited list becomes `[]`.
 pub fn unset(site: &Site<'_>, text: &str, field: &str) -> Result<String, Refusal<EditField>> {
+    let path = path::resolve(site, field, None)?;
     let mut block = Block::open(site, text)?;
     let before = block.text();
-    if field.contains('.') {
-        let Some((outer, Some(entry))) = nested(&block, field) else {
+    if let FieldPath::Entry {
+        field: outer,
+        entry: inner,
+        ..
+    } = path
+    {
+        // The block field, or its entry, is not written: nothing to change (ADR 0151).
+        let Some((outer, Some(entry))) = path::nested(site, &block, outer, inner)? else {
             return Ok(text.to_string());
         };
         let alone = matches!(&outer.value, FieldValue::Block(m) if m.entries().len() == 1);
@@ -571,7 +560,6 @@ pub fn unset(site: &Site<'_>, text: &str, field: &str) -> Result<String, Refusal
         block.remove(first, last);
         return finish_edit(site, text, &before, &block);
     }
-    site.reading(field)?;
     let Some(span) = block.entry(field).and_then(|e| e.value_span.clone()) else {
         return super::defaults::unset_inherited(site, text, field);
     };
@@ -674,7 +662,17 @@ pub fn link(
     target: &str,
     add: bool,
 ) -> Result<String, Refusal<EditField>> {
-    let Reading::Declared(form) = site.reading_toward(field, Some(target))? else {
+    let reading = match path::resolve(site, field, Some(target))? {
+        FieldPath::Entry { field, entry, .. } => {
+            return Err(path::whole_field(
+                if add { "link" } else { "unlink" },
+                field,
+                entry,
+            ));
+        }
+        FieldPath::Field { reading, .. } => reading,
+    };
+    let Reading::Declared(form) = reading else {
         return Err(not_editable(
             EditField::Field,
             format!("'{field}' takes any text; use set"),

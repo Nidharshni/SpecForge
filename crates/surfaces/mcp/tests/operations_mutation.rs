@@ -101,7 +101,7 @@ fn format_check_mode_reports_without_writing() {
 
     let parsed = format_result(&mut server, json!({"check": true}));
 
-    assert_eq!(parsed["check_only"], true);
+    assert_eq!(parsed["dry_run"], true);
     assert_eq!(parsed["all_clean"], false, "{parsed}");
     assert_eq!(
         parsed["changed_files"].as_array().unwrap().len(),
@@ -465,7 +465,7 @@ fn rename_edits_exactly_the_occurrences() {
             (
                 s["file"].as_str().unwrap().to_string(),
                 s["start_line"].as_u64().unwrap(),
-                s["start_col"].as_u64().unwrap() - 1,
+                s["start_col"].as_u64().unwrap(),
             )
         })
         .collect();
@@ -481,9 +481,9 @@ fn rename_edits_exactly_the_occurrences() {
         .iter()
         .map(|e| {
             (
-                e["file"].as_str().unwrap().to_string(),
-                e["line"].as_u64().unwrap(),
-                e["start_col"].as_u64().unwrap(),
+                e["file_path"].as_str().unwrap().to_string(),
+                e["range"]["start_line"].as_u64().unwrap(),
+                e["range"]["start_col"].as_u64().unwrap(),
             )
         })
         .collect();
@@ -493,9 +493,9 @@ fn rename_edits_exactly_the_occurrences() {
     assert_eq!(
         edits,
         [
-            ("spec/audit.spec".to_string(), 3, 14),
-            ("spec/login.spec".to_string(), 4, 14),
-            ("spec/tokens.spec".to_string(), 1, 10),
+            ("spec/audit.spec".to_string(), 3, 15),
+            ("spec/login.spec".to_string(), 4, 15),
+            ("spec/tokens.spec".to_string(), 1, 11),
         ]
     );
 }
@@ -624,12 +624,12 @@ fn rename_dry_run_returns_the_plan_and_changes_nothing() {
     assert_eq!(edits.len(), 2, "{parsed}");
     let declaration = edits
         .iter()
-        .find(|e| e["file"].as_str().unwrap().ends_with("tokens.spec"))
+        .find(|e| e["file_path"].as_str().unwrap().ends_with("tokens.spec"))
         .unwrap();
     // `invariant token_unique`: the identifier alone, on line 1.
-    assert_eq!(declaration["line"], 1);
-    assert_eq!(declaration["start_col"], 10);
-    assert_eq!(declaration["end_col"], 22);
+    assert_eq!(declaration["range"]["start_line"], 1);
+    assert_eq!(declaration["range"]["start_col"], 11);
+    assert_eq!(declaration["range"]["end_col"], 23);
     assert_eq!(parsed["affected_files"].as_array().unwrap().len(), 2);
     assert_eq!(
         std::fs::read_to_string(root.join("spec/tokens.spec")).unwrap(),
@@ -1418,7 +1418,7 @@ fn remove_extension_dry_run_writes_nothing() {
     );
 
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(parsed["action"], "planned", "{parsed}");
+    assert_eq!(parsed["dry_run"], true, "{parsed}");
     assert_eq!(parsed["extension"], GREET, "{parsed}");
     assert!(parsed["stranded"].is_array(), "{parsed}");
     assert_eq!(files_under(&root), before, "a dry run writes nothing");
@@ -1723,7 +1723,7 @@ fn remove_extension_dry_run() {
     );
     let text = tool_text(&resp);
     let parsed: Value = serde_json::from_str(&text).unwrap();
-    assert_eq!(parsed["action"], "planned", "{parsed}");
+    assert_eq!(parsed["dry_run"], true, "{parsed}");
 }
 
 // --- Contract tests ---
@@ -1740,7 +1740,7 @@ fn format_contract() {
 
     // check_mode_readonly: reported, not written, and no mutation.
     let check = format_result(&mut server, json!({"check": true}));
-    assert_eq!(check["check_only"], true);
+    assert_eq!(check["dry_run"], true);
     assert_eq!(
         check["changed_files"].as_array().unwrap().len(),
         2,

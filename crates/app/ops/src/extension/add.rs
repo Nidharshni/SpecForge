@@ -5,7 +5,7 @@ use super::lock_plan::{Ask, Asked, Fetching, Install, LockPlan, Opened, Purpose}
 use super::names::no_specifier;
 use super::{Answer, Names, Place};
 use crate::registry::{Publisher, Registry};
-use crate::{Caller, Refusal, Writes};
+use crate::{Caller, Refusal, Writes, Wrote};
 use specforge_installed::Installed;
 use specforge_wasm::WasmRuntime;
 
@@ -112,6 +112,15 @@ pub struct Added {
     /// How many extensions `specforge.json` enables after the add (`0`
     /// without one): `extension_added`'s `totalExtensions`.
     pub extensions_enabled: usize,
+    /// The request asked for a preview (`AddRequest::dry_run`).
+    pub dry_run: bool,
+}
+
+impl Added {
+    /// Whether the add only previewed, or ran and wrote [`Self::writes`].
+    pub fn wrote(&self) -> Wrote {
+        Wrote::of(self.dry_run, self.writes.clone())
+    }
 }
 
 /// Add the extensions `req` names to the project at `req.root.dir()`, as one change.
@@ -136,7 +145,8 @@ pub struct Added {
 ///
 /// A specifier naming an extension an earlier one names, as that one adds it, is a
 /// [`AddOutcome::Duplicate`]; two that add one extension differently (another version, other
-/// bytes, another source) are refused with `extension_conflict`.
+/// bytes, another source) are refused with `extension_conflict`. An extension a `.wasm` file
+/// entry already loads is refused the same way (ADR 0160).
 pub fn add(
     req: &AddRequest,
     registry: &dyn Registry,
@@ -203,6 +213,7 @@ pub fn add(
         added,
         extensions_enabled: done.enabled,
         writes: done.writes,
+        dry_run: req.dry_run,
     })
 }
 

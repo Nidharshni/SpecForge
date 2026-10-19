@@ -707,7 +707,7 @@ behavior run_doctor_check "Run Doctor Check" {
     MUST carry its verdict (no
     error-level finding), and specforge doctor --format json and
     specforge.doctor MUST return the same report (the CLI adds the user's
-    credentials). Each peer requirement the compile reports unsatisfied
+    credentials; a credential store that cannot be read is one unusable credential). Each peer requirement the compile reports unsatisfied
     (E027, E073) MUST be an error finding with the remedy its diagnostic
     suggests: doctor and check judge peers by one rule over the loaded
     extensions (ADR 0041), so a peer a builtin or a .wasm file entry
@@ -737,6 +737,7 @@ behavior run_doctor_check "Run Doctor Check" {
   verify integration "doctor fails whenever check fails on a diagnostic of the project's setup"
   verify unit "doctor --format json produces valid JSON output"
   verify unit "doctor reports an extension that fails to load (E028, E070) as an error"
+  verify unit "an unreadable credential store is a credential failure in doctor"
   verify unit "doctor reports a missing or changed installed binary once, with the remedy its load gives"
   verify unit "doctor reports the peer requirements check reports, with the remedy each suggests"
   verify unit "a peer a builtin satisfies is not reported"
@@ -873,14 +874,19 @@ behavior read_lock_file "Read Lock File" {
   contract   """
     When a specforge.lock file exists, the system MUST use the versions and
     hashes it records. A lock file that exists and can't be read or parsed is
-    E033: no installed extension loads from it (each is E028 naming the
+    E033, naming one remedy whatever made it unreadable (fix specforge.lock, or
+    delete it and install the extensions again with specforge add): no installed extension loads from it (each is E028 naming the
     lock), and add, update and remove refuse to change what is installed
-    until it is fixed or deleted, so it is never silently replaced.
+    with one refusal, that E033 and its remedy, until it is fixed or deleted, so it is never silently replaced; a
+    change the lock does not decide (enabling or disabling a builtin or a .wasm file entry) still runs.
   """
   produces   [lock_file_read]
   verify unit "locked versions used when lock file exists"
   verify unit "missing lock entry triggers resolution"
   verify unit "an unreadable lock file is E033 and is never replaced by a change"
+  verify unit "a lock file that can't be read names one remedy, whatever made it unreadable"
+  verify unit "add, update and remove refuse an unreadable lock with one refusal and the lock's own remedy"
+  verify unit "every surface refuses an unreadable lock as pinned: one code and one remedy on the CLI and over MCP"
   verify contract "Read Lock File: lock file reading holds — all_files_parsed_fired, filesystem_available, lock_file_read_emitted, locked_versions_used, malformed_lock_reported"
 }
 
@@ -943,6 +949,10 @@ behavior update_all_extensions "Update All Extensions" {
     refuse a name the lock does not hold, before any registry is asked:
     extension_not_found naming it (E072 when it is no package name; a
     builtin's name is told that builtins update with specforge).
+    A specforge.lock that is there and can't be read MUST refuse the update
+    before any registry is asked, with the refusal add gives (E033, the
+    lock's own remedy); with no lock file the update is refused E033 naming
+    specforge add.
     When a registry-installed extension is
     to be updated and no registry is configured in specforge.json, update
     MUST make no network call and MUST fail with E063, whose suggestion
@@ -969,6 +979,7 @@ behavior update_all_extensions "Update All Extensions" {
   verify unit "every upgrade is judged against the lock as the whole update leaves it, whatever order the lock lists them in"
   verify unit "an upgrade whose required peer no entry enables is refused, and update enables nothing"
   verify unit "an update of a name the lock does not hold is refused before any registry is asked"
+  verify unit "an update over an unreadable specforge.lock is refused as add refuses it, before any registry is asked"
   verify unit "failed upgrade rolls back all changes"
   verify unit "a write that fails while applying fails the update, naming what it could not write, and nothing is applied"
   verify integration "update never replaces a locally installed extension from a registry"

@@ -1,7 +1,7 @@
 # specforge-ops is four module groups over a base, and their edges are a DAG
 
 **Status:** accepted (2026-10-14, structure round, plan 06). Amends ADR 0010, 0011, 0015, 0016, 0045 and 0076 (the
-paths they name).
+paths they name). Amended by [ADR 0161](0161-a-stub-fix-is-a-typed-edit.md): the fixes are in `authoring`.
 
 `specforge-ops` (36,910 lines) declared 38 modules side by side, and `lib.rs` also held the failure types. Nothing
 said which modules every operation is written with and which are operations. A proposed grouping had 60

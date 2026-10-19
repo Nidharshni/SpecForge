@@ -84,7 +84,7 @@ fn initialize_answers_a_static_result() {
         serde_json::to_value(initialize_result()).unwrap(),
         serde_json::json!({
             "capabilities": {
-                "codeActionProvider": true,
+                "codeActionProvider": {"resolveProvider": true},
                 "completionProvider": {"triggerCharacters": [" ", "["]},
                 "definitionProvider": true,
                 "documentFormattingProvider": true,

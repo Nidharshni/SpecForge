@@ -218,6 +218,8 @@ invariant dry_run_side_effect_freedom "Dry-Run Side-Effect Freedom" {
   verify unit "--dry-run produces output without modifying files"
   verify unit "--check produces output without modifying files"
   verify unit "an MCP dry run, check or diff asked for with the string true writes nothing"
+  verify integration "a dry run of an extension already present is told from the add, on the command line"
+  verify integration "every preview's document says dry_run, and every run's says it did not preview"
   verify property "no file write operations occur during dry-run execution"
 }
 

@@ -101,9 +101,9 @@ impl CoreTool for Tool {
         .map_err(Self::failed)?;
         let written = match &recorded {
             Recorded::Marked { entities, .. } => {
-                Written::files(writes).with_entities(entities.clone())
+                Written::of(writes).with_entities(entities.clone())
             }
-            _ => Written::files(writes),
+            _ => Written::of(writes),
         };
         Ok(Mutated::new(reply(&recorded), written))
     }

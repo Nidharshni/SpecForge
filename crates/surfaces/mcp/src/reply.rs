@@ -12,11 +12,31 @@
 
 use serde::Serialize;
 use serde_json::{Map, Value, json};
-use specforge_common::Diagnostic;
 pub use specforge_common::shape::{Object, Shape};
+use specforge_common::{Diagnostic, SourceSpan};
 use specforge_ops::Noticed;
 
 use crate::tool::{ErrorCode, McpError, Payload, ToolOutcome};
+
+/// The spec's `TextEdit` (`spec/types/core.spec`): one edit of a spec file, its span as navigation
+/// answers spans (1-based lines, 1-based byte columns, end exclusive). `suggest_fixes` and `rename`
+/// answer it.
+#[derive(Debug, Serialize, Shape)]
+pub(crate) struct TextEdit {
+    file_path: String,
+    range: SourceSpan,
+    new_text: String,
+}
+
+impl From<&specforge_ops::read::navigate::TextEdit> for TextEdit {
+    fn from(edit: &specforge_ops::read::navigate::TextEdit) -> Self {
+        TextEdit {
+            file_path: edit.span.file.to_string(),
+            range: edit.span.clone(),
+            new_text: edit.new_text.clone(),
+        }
+    }
+}
 
 /// What a core tool's handler answers: its reply, the diagnostics that ride
 /// in `_meta.diagnostics`, and other `_meta` entries (`specforge/`-prefixed).

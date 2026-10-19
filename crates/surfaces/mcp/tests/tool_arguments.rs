@@ -72,7 +72,7 @@ fn refusal(error: &Value) -> String {
 fn fact(tool: &str, result: &Value, response: &Value) -> String {
     let count = |value: &Value| value.as_array().map_or(0, Vec::len);
     match tool {
-        "specforge.format" => format!("check_only={}", result["check_only"]),
+        "specforge.format" => format!("dry_run={}", result["dry_run"]),
         "specforge.rename" => format!("dry_run={}", result["dry_run"]),
         "specforge.migrate" => format!("dry_run={}", result["dry_run"]),
         "specforge.query" | "specforge.export" => format!("nodes={}", count(&result["nodes"])),
@@ -419,10 +419,7 @@ fn a_preview_asked_for_with_a_string_writes_nothing() {
         );
         // It answered as the preview it was asked for.
         let result = tool_json(&reply);
-        let previewed = result["check_only"] == true
-            || result["dry_run"] == true
-            || result["action"] == "planned"
-            || result["diffs"].is_array();
+        let previewed = result["dry_run"] == true || result["diffs"].is_array();
         assert!(previewed, "{tool} {arguments}: {result}");
     }
 }

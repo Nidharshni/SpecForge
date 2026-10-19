@@ -2,10 +2,10 @@
 source: crates/surfaces/mcp/tests/tool_arguments.rs
 expression: "rows.join(\"\\n\")"
 ---
-format | {"check":true} | ok check_only=true | wrote []
-format | {"check":true,"write":true} | ok check_only=false | wrote ["main.spec"]
-format | {"check":"true"} | ok check_only=true | wrote []
-format | {"diff":"true"} | ok check_only=true | wrote []
+format | {"check":true} | ok dry_run=true | wrote []
+format | {"check":true,"write":true} | ok dry_run=false | wrote ["main.spec"]
+format | {"check":"true"} | ok dry_run=true | wrote []
+format | {"diff":"true"} | ok dry_run=true | wrote []
 rename | {"entity_id":"alpha","new_name":"gamma","dry_run":"true"} | ok dry_run=true | wrote []
 migrate | {"dry_run":"true"} | ok dry_run=true | wrote []
 query | {"entity_id":"alpha","depth":"0"} | ok nodes=1 | wrote []

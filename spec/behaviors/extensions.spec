@@ -428,7 +428,11 @@ behavior remove_extension "Remove Extension" {
     nothing. An entry that enables an extension neither builtin nor
     installed (it does not load, E028) MUST be removable by its name,
     dropping only its specforge.json entry; a name no entry or lock entry
-    has is extension_not_found (E072 when it is no package name). Every
+    has is extension_not_found (E072 when it is no package name); while
+    specforge.lock is there and can't be read, a removal whose answer the lock
+    would decide (an entry of unknown origin, a name the project has nothing
+    under) MUST be refused with the lock's E033, the refusal add and update
+    give. Every
     refusal MUST be decided before anything is
     written, and a specforge.json the compile could not read refuses every
     removal (config_invalid), changing nothing. A removal writes the
@@ -456,8 +460,8 @@ behavior remove_extension "Remove Extension" {
     reference). The user MUST either reinstall the extension or remove
     the affected entity blocks. Its JSON output is the remove document
     specforge.remove_extension answers (McpRemoveExtensionResult: the
-    extension, its source and version, the stranded entities), with the
-    files it wrote or deleted as files_written.
+    extension, dry_run, its source and version, the stranded entities), with the
+    files it wrote or deleted as files_written (absent from a dry run).
   """
   verify unit "delegates to uninstall_wasm_extension for lifecycle cleanup"
   verify unit "extension is removed from extensions list"
@@ -761,7 +765,9 @@ behavior search_registry "Search Registry" {
     wins, and each result names that registry. Output MUST be
     deterministic — sorted by name, then version. Each registry that
     fails MUST be reported once, with its code (on stderr under human
-    output, in the document's diagnostics under --format json); the others are still
+    output, in the document's diagnostics under --format json, each in the shape
+    every command writes a diagnostic); the document names --contributes only
+    when it is given; the others are still
     asked, and the search fails only when every registry failed. Each
     registry is asked with the credential kept for it
     (support_private_registries).
@@ -779,6 +785,7 @@ behavior search_registry "Search Registry" {
   verify unit "a registry lists each package at the version add installs from it"
   verify unit "each failed registry is reported once, and search fails when every registry failed"
   verify integration "under --format json a failed registry is reported once, in the document's diagnostics, and not on stderr"
+  verify integration "search's document writes its diagnostics as check does and carries no null"
   verify unit "deduplicates results across registries"
   verify unit "output is deterministic"
   verify unit "error from one registry does not abort search of others"
@@ -1257,7 +1264,8 @@ behavior validate_registry_credentials "Validate Registry Credentials" {
     ~/.specforge/secrets/ when no keyring is available) and --token-env and
     --token-file are kept as references, so the variable's or the file's
     token is read on each use. The raw token MUST never be stored in
-    specforge.json or in credentials.json. The system MUST confirm successful authentication
+    specforge.json or in credentials.json. A credentials.json that cannot be
+    read MUST be refused (R012) before any network call, and left as it is. The system MUST confirm successful authentication
     with an info message including the registry alias and authenticated scope.
     With no registry configured, login MUST make no network call and MUST
     fail with E063, whose suggestion names the specforge.json registries key.
@@ -1266,6 +1274,7 @@ behavior validate_registry_credentials "Validate Registry Credentials" {
   verify unit "valid credentials stored as RegistryCredential reference"
   verify unit "login with a token file keeps the file's path, not its content"
   verify unit "login takes exactly one token source"
+  verify unit "login refuses an unreadable credential store before any request, and keeps it"
   verify unit "invalid credentials produce error with guidance"
   verify unit "raw token never stored in specforge.json"
   verify unit "success message includes registry alias and scope"
@@ -1299,8 +1308,11 @@ behavior logout_registry "Logout Registry" {
     The removal MUST delete only the RegistryCredential entry whose alias matches —
     credentials for other aliases (and their scopes) MUST remain untouched.
     If no credential exists for the specified alias, the command MUST succeed
-    silently. The system MUST NOT attempt any network requests during logout.
+    silently. A credentials.json that cannot be read MUST be refused (R012):
+    no entry is removed and no secret deleted. The system MUST NOT attempt
+    any network requests during logout.
   """
+  verify unit "logout refuses an unreadable credential store and deletes no secret"
   verify unit "credential reference removed for matching alias"
   verify unit "credentials for other aliases and scopes remain untouched"
   verify unit "no credential for alias succeeds silently"

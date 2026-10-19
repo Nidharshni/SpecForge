@@ -2,8 +2,14 @@
 //! validates before it writes (ADR 0151).
 
 use std::collections::BTreeMap;
+use std::io;
+use std::path::Path;
+use std::sync::Arc;
 
 use specforge_project::testing::TestProject;
+use specforge_project::{ProjectSession, RuntimeSource};
+use specforge_registry::{Disk, PlainDisk};
+use specforge_test::prelude::*;
 
 const A: &str = "behavior alpha \"A\" {\n  contract \"\"\"\n    A MUST work.\n  \"\"\"\n}\n";
 
@@ -107,4 +113,50 @@ fn edited_reports_what_check_reports_after_the_write() {
     dir.write("alpha.spec", &dangling);
     dir.write("b.spec", "term bee \"Bee\" {\n}\n");
     assert_eq!(edited.diagnostics(), dir.compile().diagnostics());
+}
+
+/// Refuses `leak.spec` as a bound refuses a source that leaves the project; reads everything else plainly.
+struct RefusesLeak;
+
+impl Disk for RefusesLeak {
+    fn exists(&self, path: &Path) -> bool {
+        PlainDisk.exists(path)
+    }
+    fn list(&self, dir: &Path) -> Option<Vec<String>> {
+        PlainDisk.list(dir)
+    }
+    fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
+        if path.ends_with("leak.spec") {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "refused by the bound",
+            ));
+        }
+        PlainDisk.read(path)
+    }
+}
+
+const LEAK: &str = "use \"SECRETWORD_IMPORT\"\nbehavior alpha \"SECRETWORD_TITLE\" {\n}\n";
+
+#[specforge_test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a source of the served project is read only from inside the project"
+)]
+fn an_edited_compile_reads_no_source_the_project_could_not_read() {
+    let dir = TestProject::new().files(&[
+        ("a.spec", "behavior alpha \"Alpha\" {\n}\n"),
+        ("leak.spec", LEAK),
+    ]);
+    let session = ProjectSession::open_through(
+        &dir.project_root(),
+        RuntimeSource::Fixed(None),
+        Some(Arc::new(RefusesLeak)),
+    );
+    let project = session.project();
+    let before = format!("{:?}", project.diagnostics());
+    assert!(before.contains("cannot read leak.spec: refused by the bound"));
+    assert!(!before.contains("SECRETWORD"));
+    let edited = project.edited(&texts(&[("a.spec", "behavior alpha \"Alpha Two\" {\n}\n")]));
+    assert!(!format!("{:?}", edited.diagnostics()).contains("SECRETWORD"));
+    assert_eq!(edited.diagnostics(), project.diagnostics());
 }

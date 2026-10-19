@@ -1,6 +1,6 @@
 # Publish is one operation over the registry port; one registry serves a name
 
-**Status:** accepted (2026-10-08). Amends ADR 0010 (the port's methods) and ADR 0036 (D3).
+**Status:** accepted (2026-10-08). Amends ADR 0010 (the port's methods) and ADR 0036 (D3). Amended in round 16 (plan 11): one credential store, one read rule.
 
 `specforge publish` was decided in the CLI: it found and read the binary (E040), checked the
 declaration, refused an unscoped name or a non-SemVer version (E072), read the registry
@@ -103,3 +103,17 @@ D2's port also reads a version's published manifest without its binary (`Registr
 registry operation (E067) instead of being skipped, so the scope it claims never falls to the default registry.
 
 **Amended by ADR 0086 (2026-10-14):** `publish` is `specforge_ops::extension::publish`, with `declare`.
+
+## Amendment (architecture round 16, plan 11): an unreadable credential store is refused by every reader
+
+`credentials.json` either reads, or every reader treats it as R012. Fetch, search and publish already refused it
+(Consequences, above). `login` and `logout` read it as an empty store: login then wrote that store back over the
+file and dropped every other alias's credential, and logout deleted the alias's secret and said `not_found`. `doctor`
+read it as empty too and said "No issues found". Now:
+
+- `login` reads the store before any request and refuses R012; the file is left as it is.
+- `logout` reads the store before it removes an entry or deletes a secret, and refuses R012.
+- `doctor` counts the unreadable store as one unusable credential (an error line; it exits 1).
+
+No reader writes over a store it could not read. This parallels ADR 0075 D1's rule for an unreadable `registries`
+entry. Login and logout stay in the CLI: ops may not name the credential store (ADR 0010).

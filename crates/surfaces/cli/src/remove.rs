@@ -51,10 +51,9 @@ impl Args {
         };
 
         match format {
-            OutputFormat::Json => terminal.json(&Written::of(
-                outcome.document(),
-                outcome.writes.named(Some(path)),
-            )),
+            OutputFormat::Json => {
+                terminal.json(&Written::of(outcome.document(), &outcome.wrote(), path));
+            }
             OutputFormat::Human => {
                 let (removed, disabled) = if outcome.dry_run {
                     ("Would remove", "Would disable")

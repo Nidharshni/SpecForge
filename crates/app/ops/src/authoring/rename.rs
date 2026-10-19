@@ -1,13 +1,13 @@
 //! Renaming an entity ID: the MCP `specforge.rename` tool and the LSP's
 //! `textDocument/rename` plan the same edits under the same rules. MCP
 //! applies them ([`apply`]) and recompiles; the LSP hands them to the
-//! editor. The edits are exactly the tokens navigation finds (the
+//! editor. The edits are exactly the tokens the graph's finder reads (ADR 0163: the
 //! declaration's name and each reference's token): text in strings,
 //! comments and verify statements that mentions the ID is not a reference,
 //! and is left alone (ADR 0016).
 
 use crate::change::ProjectChange;
-use crate::read::navigate::{Direction, Navigator, Precision, ReferenceQuery};
+use crate::read::navigate::{Navigator, Precision, TextEdit, apply_edits};
 use crate::view::EntityField;
 use crate::{Caller, OpError, OpErrorKind, Refusal};
 use std::collections::{BTreeMap, BTreeSet};
@@ -62,50 +62,14 @@ pub fn validate_id(id: &str, kinds: &specforge_registry::KindRegistry) -> Result
     Ok(())
 }
 
-/// A text edit for a rename operation: `start_col..end_col` (0-based
-/// byte columns) on the 1-based `line` of `file` becomes `new_text`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenameEdit {
-    pub file: String,
-    pub line: usize,
-    pub start_col: usize,
-    pub end_col: usize,
-    pub new_text: String,
-}
-
-/// `text` with `edits` applied: each replaces its byte range on its 1-based
-/// line. The edits must all belong to `text`'s file (callers filter by
-/// `file`); an edit whose line is past the end is ignored.
-fn apply_edits<'a>(text: &str, edits: impl IntoIterator<Item = &'a RenameEdit>) -> String {
-    let mut by_line: std::collections::BTreeMap<usize, Vec<&RenameEdit>> =
-        std::collections::BTreeMap::new();
-    for edit in edits {
-        by_line.entry(edit.line).or_default().push(edit);
-    }
-    let mut out = String::with_capacity(text.len());
-    for (index, line) in text.split_inclusive('\n').enumerate() {
-        let Some(line_edits) = by_line.get_mut(&(index + 1)) else {
-            out.push_str(line);
-            continue;
-        };
-        // Right to left, so earlier columns stay valid.
-        line_edits.sort_by_key(|e| std::cmp::Reverse(e.start_col));
-        let mut line = line.to_string();
-        for edit in line_edits.iter() {
-            line.replace_range(edit.start_col..edit.end_col, &edit.new_text);
-        }
-        out.push_str(&line);
-    }
-    out
-}
-
 /// The edits that rename one entity: its declaration and every reference.
 #[derive(Debug, Clone)]
 pub struct RenamePlan {
     pub old_id: String,
     pub new_id: String,
-    /// One per occurrence; files are relative to the spec root.
-    pub edits: Vec<RenameEdit>,
+    /// One per occurrence: the token's span as navigation found it, relative to the spec root; its
+    /// text becomes the new ID.
+    pub edits: Vec<TextEdit>,
     /// Each affected file's text, as the plan read it: the text the edits are positions in.
     planned: BTreeMap<String, Arc<str>>,
     /// Where the edits' files are keyed from: the spec root of the view the plan read.
@@ -115,7 +79,7 @@ pub struct RenamePlan {
 impl RenamePlan {
     /// The files the edits touch, sorted.
     pub fn affected_files(&self) -> BTreeSet<&str> {
-        self.edits.iter().map(|e| e.file.as_str()).collect()
+        self.edits.iter().map(|e| e.span.file.as_str()).collect()
     }
 }
 
@@ -160,12 +124,8 @@ pub fn plan(
         .with_entity(old_id)
         .about(RenameField::NewId));
     }
-    let query = ReferenceQuery {
-        direction: Direction::Incoming,
-        include_declaration: true,
-    };
     let occurrences = nav
-        .tokens(old_id, query)
+        .tokens(old_id, true)
         .map_err(|refusal| refusal.map_subject(|EntityField::EntityId| Some(RenameField::OldId)))?;
     let unreadable: BTreeSet<&str> = occurrences
         .iter()
@@ -184,14 +144,10 @@ pub fn plan(
         )
         .into());
     }
-    // A token is one line; RenameEdit columns are 0-based bytes.
-    let edits: Vec<RenameEdit> = occurrences
+    let edits: Vec<TextEdit> = occurrences
         .iter()
-        .map(|o| RenameEdit {
-            file: o.span.file.to_string(),
-            line: o.span.start_line,
-            start_col: o.span.start_col - 1,
-            end_col: o.span.end_col - 1,
+        .map(|o| TextEdit {
+            span: o.span.clone(),
             new_text: new_id.to_string(),
         })
         .collect();
@@ -234,7 +190,17 @@ pub fn apply(plan: &RenamePlan, caller: Caller<'_>) -> Result<crate::Writes, OpE
                 ),
             ));
         };
-        let edited = apply_edits(planned, plan.edits.iter().filter(|e| e.file == file));
+        let Some(edited) = apply_edits(planned, plan.edits.iter().filter(|e| e.span.file == file))
+        else {
+            return Err(OpError::new(
+                OpErrorKind::Internal,
+                crate::FILE_UNREADABLE,
+                format!(
+                    "cannot rename '{}': its edits do not lie in the text planned for {file}",
+                    plan.old_id
+                ),
+            ));
+        };
         change.stage(held, Some(planned.as_bytes().to_vec()), edited.into_bytes());
     }
     change.commit()
@@ -244,40 +210,6 @@ pub fn apply(plan: &RenamePlan, caller: Caller<'_>) -> Result<crate::Writes, OpE
 mod tests {
     use super::*;
     use specforge_test_macros::test as specforge_test;
-
-    fn edit(line: usize, start_col: usize, end_col: usize, new_text: &str) -> RenameEdit {
-        RenameEdit {
-            file: "a.spec".to_string(),
-            line,
-            start_col,
-            end_col,
-            new_text: new_text.to_string(),
-        }
-    }
-
-    #[test]
-    fn several_edits_on_one_line_keep_their_columns() {
-        let text = "uses [ab, ab]\nab\n";
-        // Given left to right; applied right to left.
-        let edits = [edit(1, 6, 8, "alpha"), edit(1, 10, 12, "alpha")];
-        assert_eq!(apply_edits(text, &edits), "uses [alpha, alpha]\nab\n");
-    }
-
-    #[test]
-    fn byte_columns_after_multibyte_text_land_on_the_identifier() {
-        // "é" and "→" are 2 and 3 bytes: the columns are byte offsets.
-        let text = "title \"é→\" ab\n";
-        let start = text.find("ab").unwrap();
-        let edits = [edit(1, start, start + 2, "beta")];
-        assert_eq!(apply_edits(text, &edits), "title \"é→\" beta\n");
-    }
-
-    #[test]
-    fn edits_on_other_lines_leave_the_rest_and_a_missing_newline_alone() {
-        let text = "ab\nkeep\nab";
-        let edits = [edit(3, 0, 2, "gamma"), edit(9, 0, 2, "never")];
-        assert_eq!(apply_edits(text, &edits), "ab\nkeep\ngamma");
-    }
 
     #[test]
     fn an_entity_id_follows_the_grammar_and_e014() {
@@ -398,8 +330,12 @@ mod tests {
         let (dir, project) = project(&[("a.spec", text)]);
 
         let plan = plan(&nav(&project), "session_limit", "session_cap").unwrap();
-        let at: Vec<(usize, usize)> = plan.edits.iter().map(|e| (e.line, e.start_col)).collect();
-        assert_eq!(at, [(1, 10), (5, 14)], "the declaration and the reference");
+        let at: Vec<(usize, usize)> = plan
+            .edits
+            .iter()
+            .map(|e| (e.span.start_line, e.span.start_col))
+            .collect();
+        assert_eq!(at, [(1, 11), (5, 15)], "the declaration and the reference");
         apply(&plan, crate::testing::caller()).unwrap();
         assert_eq!(
             std::fs::read_to_string(dir.path().join("a.spec")).unwrap(),

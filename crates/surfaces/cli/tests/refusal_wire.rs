@@ -256,3 +256,45 @@ fn project_change_refusals_print_as_pinned() {
 
     insta::assert_snapshot!("project_change_refusals", out);
 }
+
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    behavior = "read_lock_file",
+    verify = "every surface refuses an unreadable lock as pinned: one code and one remedy on the CLI and over MCP"
+)]
+fn an_unreadable_lock_refusals_print_as_pinned() {
+    let p = TestProject::new()
+        .enabling(&["@sdk/greet"])
+        .file("specforge.lock", "not json");
+    let mut out = String::new();
+    for args in [
+        &["update"][..],
+        &["update", "--format", "json"],
+        &["add", "./ext.wasm"],
+        &["add", "./ext.wasm", "--format", "json"],
+        &["remove", "@sdk/greet"],
+        &["remove", "@sdk/greet", "--format", "json"],
+        &["remove", "@acme/absent"],
+        &["check"],
+    ] {
+        out.push_str(&printed(&p, args));
+    }
+    out.push_str(&printed_mcp(
+        &p,
+        &[
+            (
+                "specforge.add_extension",
+                serde_json::json!({"specifiers": ["./ext.wasm"]}),
+            ),
+            (
+                "specforge.remove_extension",
+                serde_json::json!({"name": "@sdk/greet"}),
+            ),
+            (
+                "specforge.remove_extension",
+                serde_json::json!({"name": "@acme/absent"}),
+            ),
+        ],
+    ));
+    insta::assert_snapshot!("unreadable_lock_refusals", out);
+}

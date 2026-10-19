@@ -43,7 +43,7 @@ fn link(target: &Path, at: &Path) {
     std::os::unix::fs::symlink(target, at).unwrap();
 }
 
-/// Every reply of the views that read the graph or its diagnostics, as one string.
+/// Every reply of the views that read the graph or its diagnostics, and of a typed edit's preview, as one string.
 fn views(server: &mut McpServer) -> String {
     let mut all = String::new();
     for (name, arguments) in [
@@ -51,6 +51,10 @@ fn views(server: &mut McpServer) -> String {
         ("specforge.list", json!({})),
         ("specforge.search", json!({"query": "leaked"})),
         ("specforge.export", json!({})),
+        (
+            "specforge.edit",
+            json!({"edits": [{"op": "retitle", "entity_id": "alpha", "title": "Alpha Two"}], "dry_run": true}),
+        ),
     ] {
         all += &call_tool(server, name, arguments).to_string();
     }
@@ -351,3 +355,99 @@ fn a_symlinked_directory_inside_the_spec_root_is_not_entered() {
 
 #[allow(dead_code, reason = "keeps Value in scope for non-unix builds")]
 fn _unused(_: Value) {}
+
+const PROBE_SPEC: &str = "use \"SECRETWORD_IMPORT\"\nbehavior alpha \"SECRETWORD_TITLE\" { }\n";
+
+fn retitle(server: &mut McpServer) -> Value {
+    call_tool(
+        server,
+        "specforge.edit",
+        json!({"edits": [{"op": "retitle", "entity_id": "alpha", "title": "Alpha Two"}], "dry_run": true}),
+    )
+}
+
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a source of the served project is read only from inside the project"
+)]
+fn an_edit_validates_over_no_source_symlink_that_leaves_the_project() {
+    let (_scene, project, outside) = scene();
+    fs::write(outside.join("probe.spec"), PROBE_SPEC).unwrap();
+    link(&outside.join("probe.spec"), &project.join("spec/leak.spec"));
+    let mut server = serve(&project);
+    let reply = retitle(&mut server);
+    assert_nothing_of(&reply.to_string(), &[SECRET]);
+    assert_ne!(reply["result"]["isError"], json!(true), "{reply}");
+}
+
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a source of the served project is read only from inside the project"
+)]
+fn an_edit_validates_over_no_hard_linked_source() {
+    let (_scene, project, outside) = scene();
+    fs::write(outside.join("probe.spec"), PROBE_SPEC).unwrap();
+    fs::hard_link(outside.join("probe.spec"), project.join("spec/leak.spec")).unwrap();
+    let mut server = serve(&project);
+    let reply = retitle(&mut server);
+    assert_nothing_of(&reply.to_string(), &[SECRET]);
+    assert_ne!(reply["result"]["isError"], json!(true), "{reply}");
+}
+
+const OLD_PROBE: &str =
+    "// specforge-format: 0.9\nuse \"SECRETWORD_IMPORT\"\nbehavior secretword_id {\n}\n";
+
+/// A scene whose `leak.spec` is a second name of an outside file that needs migrating.
+#[cfg(unix)]
+fn migrating_scene() -> (TempDir, std::path::PathBuf, std::path::PathBuf) {
+    let (scene, project, outside) = scene();
+    fs::write(outside.join("probe.spec"), OLD_PROBE).unwrap();
+    fs::hard_link(outside.join("probe.spec"), project.join("spec/leak.spec")).unwrap();
+    (scene, project, outside)
+}
+
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a source of the served project is read only from inside the project"
+)]
+fn a_migration_previews_no_hard_linked_source() {
+    let (_scene, project, _outside) = migrating_scene();
+    let before = files_under(&project);
+    let mut server = serve(&project);
+    let reply = call_tool(&mut server, "specforge.migrate", json!({"dry_run": true}));
+    let text = reply.to_string();
+    assert_nothing_of(&text, &[SECRET, "secretword"]);
+    assert!(
+        text.contains("spec/leak.spec") && text.contains("2 names"),
+        "{text}"
+    );
+    assert_eq!(files_under(&project), before);
+}
+
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "a source of the served project is read only from inside the project"
+)]
+fn a_migration_copies_no_hard_linked_source_into_the_project() {
+    use std::os::unix::fs::MetadataExt;
+    let (_scene, project, outside) = migrating_scene();
+    let mut server = serve(&project);
+    let migrated = call_tool(&mut server, "specforge.migrate", json!({}));
+    let all = migrated.to_string() + &views(&mut server);
+    assert_nothing_of(&all, &[SECRET, "secretword"]);
+    assert_eq!(
+        fs::metadata(project.join("spec/leak.spec"))
+            .unwrap()
+            .nlink(),
+        2
+    );
+    assert!(!project.join("spec/leak.spec.bak").exists());
+    assert_eq!(
+        fs::read_to_string(outside.join("probe.spec")).unwrap(),
+        OLD_PROBE
+    );
+}

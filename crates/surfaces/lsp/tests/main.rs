@@ -5,6 +5,8 @@
 
 mod answers;
 mod changes;
+mod code_action_contracts;
+mod code_action_resolve;
 mod code_actions;
 mod completion;
 mod concurrency;

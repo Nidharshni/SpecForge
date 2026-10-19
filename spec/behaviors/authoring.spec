@@ -20,7 +20,7 @@ behavior create_entity "Create an Entity" {
     reserved word (E013), and MUST NOT be taken, the kind MUST be declared, and the file MUST be a project source.
     A field whose written value restates its file's default for the kind (W161)
     is not written: the block inherits it. The field flags of `specforge new` are the kind's fields in the project
-    the command acts on.
+    the command acts on. A create takes whole fields; a `field.entry` path is refused.
   """
   verify unit "new writes the block in the canonical form after the last block of its kind"
   verify unit "new creates a missing source file"
@@ -29,6 +29,7 @@ behavior create_entity "Create an Entity" {
   verify unit "new refuses a reserved id before the edited project is compiled"
   verify unit "new compares what it writes with the default, not what it was given"
   verify unit "new never writes a field that restates its default"
+  verify unit "new refuses a field.entry path"
   verify integration "new reads its field flags from the project its --path names, wherever --path stands"
   verify integration "new refuses a field given twice that takes one value"
   verify integration "new refuses an unknown kind as unknown_kind"
@@ -45,7 +46,10 @@ behavior edit_entity_field "Edit an Entity Field" {
     at its rank (one-line values, then
     block fields, then triple-quoted text, in the kind's declared order). An
     unset edit removes the field and the comment lines directly above it. A
-    dotted field name edits one entry of a block field. A retitle edit
+    dotted `field.entry` path edits one entry of a block field the kind
+    declares; its field is refused as any field is, a field that is not a declared block field, or a path whose
+    parts are not each one identifier, is refused not_editable, and so is a path into a block field the entity
+    writes as a value. An unset of an entry, or of a block field, the block does not write changes nothing. A retitle edit
     replaces the header title. A field the kind does not declare is refused. A field that is the other
     side of a relation another kind owns is refused naming the owning field (ADR 0157).
   """
@@ -56,6 +60,8 @@ behavior edit_entity_field "Edit an Entity Field" {
   verify unit "set refuses a field the kind does not declare"
   verify unit "set refuses the other side of a relation naming its owning field"
   verify unit "set of a nested entry edits one line of the block field"
+  verify unit "every verb reads a field.entry path the same way"
+  verify unit "an entry of a block field written as a value is refused"
   verify unit "retitle replaces the header title"
 }
 
@@ -67,7 +73,9 @@ behavior edit_entity_link "Edit an Entity Reference List" {
     an unlink edit removes it, and removes the field when the last item goes.
     A link to a target already there changes nothing. A list written as one value is its one item. A field a block inherits
     from its file's defaults is copied into an own field before it changes, as
-    the earlier edits of the list left the file, and an own field equal to the default is removed.
+    the earlier edits of the list left the file, and an own field equal to the default is removed. A link or unlink
+    takes a whole list field: a `field.entry` path names an entry of a block field, which holds one text, and is
+    refused not_editable, naming set and unset.
   """
   verify unit "link on the other side of a relation names the owning field of the target's kind"
   verify unit "a reference list's items are split at commas however they are given"
@@ -79,6 +87,7 @@ behavior edit_entity_link "Edit an Entity Reference List" {
   verify unit "a link after new starts from the file's default"
   verify unit "a link after unset starts from the file's default"
   verify unit "link and unlink read a list written as one value as its one item"
+  verify unit "link and unlink refuse a field.entry path as an entry of a block field"
 }
 
 behavior edit_entity_obligation "Edit an Entity Obligation" {
@@ -100,11 +109,11 @@ behavior delete_entity "Delete an Entity" {
     A delete edit removes the entity's block and the comment lines directly
     above it. Deleting an entity that is still referenced leaves the project
     with an error, so it is refused with E080 unless the edit asks to remove
-    every reference to the entity in the same change. The references are those
-    the graph build links, found by the rule that decides what a value
-    references (ADR 0093) in the texts the earlier edits left. A reference
-    written where no typed edit writes, in a defaults block or in a field its
-    kind does not declare, refuses the delete as not_editable, naming where it
+    every reference to the entity in the same change. The references are every
+    token that names the entity, as the graph's one finder reads the texts the
+    earlier edits left (ADR 0163). A token written where no typed edit writes,
+    in a defaults block, in a field its kind does not declare or as a type name
+    a derived field reads, refuses the delete as not_editable, naming where it
     is written.
   """
   verify unit "delete removes the block and the comment above it"
@@ -113,6 +122,7 @@ behavior delete_entity "Delete an Entity" {
   verify unit "delete with unlink_references removes a scheme ref ID from a string list"
   verify unit "delete with unlink_references removes a reference list written as one value"
   verify unit "delete with unlink_references refuses a reference no typed edit writes"
+  verify unit "delete with unlink_references refuses a type name a derived field reads"
 }
 
 behavior validate_typed_edit "Validate a Typed Edit" {
@@ -120,7 +130,10 @@ behavior validate_typed_edit "Validate a Typed Edit" {
   category   validation
   contract   """
     Edits are planned in order over the texts the project was compiled from.
-    The edited project is compiled; an edit that leaves an error-severity
+    The edited project is compiled from what the project holds: the text of
+    each source it read, the E025 of each it could not read, and the planned
+    texts, reading no source again, so its verdict never depends on a file
+    the project could not read; an edit that leaves an error-severity
     diagnostic the project did not have is refused with E080 and writes
     nothing. Warnings and infos it adds are written and reported. A preview
     refuses exactly what the write would. The files are written as one project

@@ -101,7 +101,7 @@ impl CoreTool for Tool {
 
         let reply = outcome.document(args.diff);
         if outcome.succeeded() {
-            return Ok(Mutated::new(reply, Written::files(outcome.writes())));
+            return Ok(Mutated::new(reply, Written::of(outcome.wrote())));
         }
 
         // Every other file was still formatted, and what was written is

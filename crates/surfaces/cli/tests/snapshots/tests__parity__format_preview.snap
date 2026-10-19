@@ -28,7 +28,6 @@ expression: snapshot
       "changed_files": [
         "spec/messy.spec"
       ],
-      "check_only": true,
       "diagnostics": [],
       "diffs": [
         {
@@ -39,6 +38,7 @@ expression: snapshot
           "insertions": 2
         }
       ],
+      "dry_run": true,
       "ok": true,
       "total_checked": 2
     },

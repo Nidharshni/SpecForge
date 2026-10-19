@@ -1,14 +1,14 @@
 //! `specforge remove` and `specforge.remove_extension`.
 
-use super::lock_plan::{Ask, Disabled, LockPlan, Purpose};
+use super::lock_plan::{Ask, Disabled, LockPlan, Purpose, writable_lock};
 use super::{NOT_FOUND, Origin, ProjectExtension, Selection, not_installed};
 use crate::view::ProjectView;
-use crate::{Caller, OpError, OpErrorKind, Refusal, Writes};
+use crate::{Caller, OpError, OpErrorKind, Refusal, Writes, Wrote};
 use serde::Serialize;
 use specforge_common::ExtensionEntry;
 use specforge_common::shape::Shape;
 use specforge_graph::Graph;
-use specforge_installed::{Installed, LockFileEntry, LockState};
+use specforge_installed::{Installed, LockFileEntry};
 use specforge_package::PackageName;
 use specforge_project::EnabledExtension;
 use specforge_registry::KindRegistry;
@@ -75,15 +75,16 @@ pub struct RemoveOutcome {
 }
 
 impl RemoveOutcome {
+    /// Whether the removal only previewed, or ran and wrote [`Self::writes`].
+    pub fn wrote(&self) -> Wrote {
+        Wrote::of(self.dry_run, self.writes.clone())
+    }
+
     /// The document both surfaces print.
     pub fn document(&self) -> RemoveDocument {
         RemoveDocument {
-            action: if self.dry_run {
-                RemoveAction::Planned
-            } else {
-                RemoveAction::Removed
-            },
             extension: self.name.clone(),
+            dry_run: self.dry_run,
             source: self.origin.source(),
             version: self.version.clone(),
             stranded: self.stranded.clone(),
@@ -95,8 +96,9 @@ impl RemoveOutcome {
 /// print (`McpRemoveExtensionResult`).
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 pub struct RemoveDocument {
-    pub action: RemoveAction,
     pub extension: String,
+    /// The removal only previewed: nothing changed.
+    pub dry_run: bool,
     /// `builtin`, the lock entry's source, `file:<path>` or `unknown`
     /// ([`Origin::source`]).
     pub source: String,
@@ -106,15 +108,6 @@ pub struct RemoveDocument {
     pub version: Option<String>,
     /// The entities the removal strands, in id order.
     pub stranded: Vec<StrandedEntity>,
-}
-
-/// Whether the removal was made or only previewed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Shape)]
-#[serde(rename_all = "snake_case")]
-pub enum RemoveAction {
-    Removed,
-    /// A dry run: nothing changed.
-    Planned,
 }
 
 /// The field of a removal's request a refusal can be about (ADR 0072).
@@ -143,7 +136,9 @@ pub enum RemoveField {
 /// nothing: the binary, the lock entry and the `specforge.json` entry go as
 /// one change, and a failure at any step puts every file back (the error's
 /// [`OpError::writes`] names what the rollback could not, normally
-/// nothing). Without a root: `no_project`. The removal is one lock-plan change
+/// nothing). While `specforge.lock` can't be read, a removal whose answer the lock would decide (an entry of
+/// unknown origin, a name the project has nothing under) is refused with the lock plan's E033, as `add` and
+/// `update` refuse it. Without a root: `no_project`. The removal is one lock-plan change
 /// ([`LockPlan::removing`]): a dry run is the same plan checked and not
 /// committed.
 pub fn remove(
@@ -176,7 +171,7 @@ pub fn remove(
             Err(ambiguous(req.name, &entries).about(RemoveField::Name))
         }
         Selection::Nothing => {
-            Err(nothing_named(req.name, view.installed().lock()).about(RemoveField::Name))
+            Err(nothing_named(req.name, view.installed()).about(RemoveField::Name))
         }
     }
 }
@@ -202,10 +197,10 @@ fn ambiguous(name: &str, entries: &[&EnabledExtension]) -> OpError {
 }
 
 /// The refusal for an argument the project has nothing under: a file no
-/// entry names; E072 for a name that could never be installed; else
-/// `extension_not_found`, saying why nothing is locked when there is no
-/// readable lock.
-fn nothing_named(name: &str, lock: &LockState) -> OpError {
+/// entry names; E072 for a name that could never be installed; while the lock can't be read, the lock plan's
+/// refusal of it (whether a lock entry holds the name is not known); else `extension_not_found`, saying when
+/// there is no lock file.
+fn nothing_named(name: &str, installed: &Installed) -> OpError {
     if ExtensionEntry::parse(name).file(Path::new("")).is_some() {
         return OpError::new(
             OpErrorKind::ExtensionNotFound,
@@ -221,12 +216,17 @@ fn nothing_named(name: &str, lock: &LockState) -> OpError {
             specforge_common::package::invalid(&why),
         );
     }
-    let why = match lock {
-        LockState::Absent => Some("no lock file found"),
-        LockState::Unreadable(problem) => Some(problem.message.as_str()),
-        LockState::Read(_) => None,
-    };
-    not_installed(name, why)
+    if let Err(refused) = writable_lock(installed) {
+        return refused;
+    }
+    not_installed(
+        name,
+        installed
+            .lock()
+            .file()
+            .is_none()
+            .then_some("no lock file found"),
+    )
 }
 
 /// Remove the extension `extension` names: its lock entry, binary and
@@ -236,14 +236,10 @@ fn remove_named(
     req: &Removing,
     extension: &ProjectExtension,
 ) -> Result<RemoveOutcome, Refusal<RemoveField>> {
-    // Neither builtin nor locked while the lock can't be read: whether it
-    // is installed is not known, so nothing is removed.
-    if extension.origin == Origin::Unknown
-        && let Some(problem) = req.installed.lock().problem()
-    {
-        return Err(
-            not_installed(extension.name, Some(problem.message.as_str())).about(RemoveField::Name),
-        );
+    // Neither builtin nor locked: while the lock can't be read, whether it is installed is not known, so
+    // nothing is removed (ADR 0028 D10) and the refusal is the lock plan's.
+    if extension.origin == Origin::Unknown {
+        writable_lock(req.installed)?;
     }
     // Loaded, but neither enabled nor locked (a view assembled in a test).
     if !extension.enabled() && extension.lock.is_none() {
@@ -278,12 +274,15 @@ fn change(
     } else {
         Purpose::Commit
     };
-    let mut plan = LockPlan::removing(req.view, req.caller, purpose, req.force, locked.is_some())?;
     // Its directory is named by the lock entry's package name, which the lock read validated
     // (ADR 0036): nothing outside `.specforge/extensions` can be deleted.
-    if let Some(locked) = locked {
-        plan.uninstall(Ask(0), &locked.name);
-    }
+    let mut plan = LockPlan::removing(
+        req.view,
+        req.caller,
+        purpose,
+        req.force,
+        locked.map(|locked| &locked.name),
+    )?;
     plan.disable(Ask(0), disabled);
     let done = plan
         .check()

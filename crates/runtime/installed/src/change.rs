@@ -79,8 +79,9 @@ pub struct Failed<E> {
 
 impl Installed {
     /// Begin changing what is installed; the change starts from the lock as
-    /// read (empty when absent). Refused with E033 when `specforge.lock` is
-    /// there but can't be read: writing one now would drop what it records.
+    /// read (empty when absent). Refused with E033, the lock's own diagnostic
+    /// and remedy, when `specforge.lock` is there but can't be read: writing
+    /// one now would drop what it records.
     pub fn change(&self) -> Result<Change<'_>, Diagnostic> {
         Ok(Change {
             installed: self,
@@ -89,17 +90,14 @@ impl Installed {
         })
     }
 
-    /// The lock a change starts from: the lock as read, empty when absent. E033 when
-    /// `specforge.lock` is there but can't be read: writing one now would drop what it records.
+    /// The lock a change starts from: the lock as read, empty when absent. E033, the lock's own
+    /// diagnostic with its remedy, when `specforge.lock` is there but can't be read: writing one
+    /// now would drop what it records.
     pub fn writable_lock(&self) -> Result<LockFile, Diagnostic> {
         match &self.lock {
             LockState::Read(lock) => Ok(lock.clone()),
             LockState::Absent => Ok(LockFile::default()),
-            LockState::Unreadable(problem) => Err(problem.clone().with_suggestion(
-                "fix specforge.lock, or delete it and install the extensions again; \
-                 nothing was changed"
-                    .to_string(),
-            )),
+            LockState::Unreadable(problem) => Err(problem.clone()),
         }
     }
 }

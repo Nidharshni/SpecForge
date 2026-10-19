@@ -39,6 +39,14 @@ fn a_bare_path_is_a_local_source() {
     );
 }
 
+#[test]
+fn a_name_file_specifier_is_a_local_path_not_a_builtin() {
+    assert_eq!(
+        parse("@specforge/product=./a.wasm").unwrap(),
+        Source::Local("@specforge/product=./a.wasm".into())
+    );
+}
+
 /// A registry whose every answer for a name's versions is R008, the registry's own refusal
 /// of a request (a 400); everything else is as `Unconfigured`.
 struct Refusing;

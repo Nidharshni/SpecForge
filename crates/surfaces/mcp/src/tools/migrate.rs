@@ -89,7 +89,7 @@ impl CoreTool for Tool {
         // reported.
         let reply = outcome.document();
         match outcome.failure() {
-            None => Ok(Mutated::new(reply, Written::files(outcome.writes))),
+            None => Ok(Mutated::new(reply, Written::of(outcome.wrote()))),
             Some(failure) => Err(Failed::after(
                 McpError::from(OpError::from(failure))
                     .with_data(serde_json::to_value(&reply).expect("a reply serializes")),

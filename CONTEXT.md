@@ -116,6 +116,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`ProjectSession::open_through`, ADR 0145). A project session's ledger stamps each source by its key, with the link
   chain it followed, and records each link
   hop the read followed. A held buffer's file is not read, so nothing of it is recorded until it is released.
+  A migration reads each source through the request's containment (`migrate_project`'s `read`, ADR 0158); an edited
+  project reads none.
 - **Session inputs**: everything a project session depends on besides its sources' text: where its
   sources are discovered (the spec root and `exclude`), its **environment inputs**
   (the environment reads of its last load) and its **check inputs**
@@ -210,7 +212,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   ADR 0032). An update says whether the session's inputs changed (`inputs_changed`), what the session
   reported before it and reports after (its diagnostics delta), and, when it was verified, how it differs
   from a cold rebuild (`divergence`). An update that changes no file (a held buffer, a
-  released one or a file on disk whose text is already the one it was built from) runs no check.
+  released one or a file on disk whose text is already the one it was built from) runs no check, unless a check input changed with it or an earlier update skipped them. One batch of changes is one update: an environment change reloads and covers the rest (ADR 0159).
 - **Graph delta**: what an update or a reload changed in the graph: added and removed nodes (each with its
   kind, file and line), modified nodes (the fields whose values differ, and apart from them which of its
   kind, title, methods and outgoing edges differ), added and removed edges, and the affected files; source
@@ -277,7 +279,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   builtin from its embedded binary, an installed extension from its pinned module, a `.wasm` file
   entry from its file under the name it declares. Which extension each entry names is decided once
   (`Installed::resolve`: a builtin's name before a lock entry, `.wasm` file entries after every named
-  entry), and the lock plan reads the same decision. Its declarations come in entry order; the registry
+  entry), and the lock plan reads the same decision: a named entry names an
+  extension by its text (`ExtensionEntry::names`), a `.wasm` file entry only by what its component declares, once
+  admitted (ADR 0160). Its declarations come in entry order; the registry
   build puts them in load order. What does not load is a typed `LoadFailure` on its
   entry with one diagnostic and leaves nothing loaded, and what an entry reports though it loaded (W149, W153, W138) is on the
   entry too; the runtime keeps none, and `Installed::load_diagnostics` orders them, entry by entry. Without a runtime nothing loads, and each entry
@@ -314,9 +318,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   kept, and refuses (`file_changed`) when the file no longer holds what the plan opened with (ADR 0126). Its writes land inside its own project: it is opened with the operation's **Caller** and narrows the caller's **Containment** to the project root itself (ADR 0137)
   (`specforge_ops::extension::lock_plan::LockPlan`, ADR 0041, ADR 0065). An
   operation names what it asks for, each an **ask**; refusals and outcomes are answered per ask.
-  An ask the project already has (an entry enables it; for an install, the lock pins it as asked with its module on disk
+  An ask the project already has (a named entry names it; for an install, the lock pins it as asked with its module on disk
   the one pinned) is answered **unchanged** and stages nothing, and a plan whose asks change nothing is neither judged
-  nor written (ADR 0138).
+  nor written (ADR 0138). An
+  `add` or `init` of an extension a `.wasm` file entry already loads is refused (`extension_conflict`), nothing
+  written (ADR 0160).
   `add` and `init` first enable the builtins what they add requires, dependencies first;
   `update` enables nothing. The peer rule then judges the **project peer set** as the change leaves it,
   once: every declared peer whose dependent or peer the change touches. A required peer no member
@@ -328,7 +334,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Registry::pin`): a refused or failed plan pins nothing (ADR 0059). A **dry run** is the plan
   checked and not committed: it answers what the operation would, its refusal included, and writes,
   pins and downloads nothing; a registry package is judged by its published manifest
-  (`Registry::published`).
+  (`Registry::published`). A plan that may write the lock
+  opens it first: a `specforge.lock` that is there and can't be read refuses the change once (E033, the lock's own
+  remedy, `lock_plan::writable_lock`), and `update` and `remove` answer that refusal, never their own (ADR 0028).
 - **Claim**: what one specifier of an `add` or `init` asks for an extension name: a second specifier naming it the
   same way is a duplicate, another way `extension_conflict` (`specforge_ops::extension::claims`, ADR 0098).
 - **Extension names**: what one change's extension strings name, read once by `specforge_ops::extension::names`
@@ -505,7 +513,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Registry credential**: the token a request to one registry carries, kept per registry alias in
   `~/.specforge/credentials.json`, never in `specforge.json`: a secret `specforge login --token` stored in the OS
   keyring (a 0600 file without one), or a reference to an environment variable (`--token-env`) or a file
-  (`--token-file`), resolved before any request (`CredentialStore::credential`; R010, R011). Every read carries
+  (`--token-file`), resolved before any request (`CredentialStore::credential`; R010, R011). A `credentials.json` that cannot be read is R012 for every reader: login and logout refuse and leave it, doctor counts it unusable (ADR 0045 as amended). Every read carries
   it; a publish takes `SPECFORGE_REGISTRY_TOKEN` first (ADR 0045 as amended).
 - **Fetch policy**: what a package passes before an operation sees it: the registry's reply reads as the protocol's JSON (R009 else;
   a malformed signature is that) and names the package and version asked for, the binary hashes to the served SHA-256, the served manifest reads as that
@@ -780,12 +788,17 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   pipeline's tools adapter alone (`mutation::complete`) turns it into the call target's refresh, the reply
   sent once (`WrittenReply`: the tool reply, `files_written` — the one place a client learns which files
   the call wrote — and what its reply type adds after the write, rename's fresh diagnostics), the domain
-  event and `mcp_mutation_completed` (ADR 0022).
+  event and `mcp_mutation_completed` (ADR 0022); its outcome says the same (ADR 0162).
+- **Preview**: a mutation asked only to report (`--dry-run`/`dry_run`; format's `--check` or `--diff`). It writes
+  nothing; its operation's outcome answers `Wrote::Previewed` (`specforge_ops::Wrote`), its document says
+  `dry_run: true`, and neither surface lists `files_written`. A run that found nothing to change is no preview:
+  `Wrote::Ran` with no file, `files_written: []` (ADR 0162).
 - **Outcome document**: the one typed JSON document of an operation's outcome, defined in ops beside
   the operation and deriving `Serialize` and `Shape`: the outcome itself when it is plain data
   (`stats::Stats`), else its `document()` (`AddDocument`, `RemoveDocument`, `UpdateDocument`,
   `InitDocument`, `ExtensionsDocument`, `MigrateDocument`, `AnalyzeDocument`, `DoctorDocument`,
-  `explain::Explanation`, …).
+  `ValidateDocument`, `SearchDocument`, `PublishDocument`, `explain::Explanation`, …). A command with no ops
+  operation (extension init, build, login, logout) keeps its document in its command module.
   The CLI prints it under `--format json` and MCP answers it as the tool reply; a surface adds only
   what it alone knows, typed and flattened beside it (MCP's `note` on an add, a mutation's
   `files_written`, the CLI's credential health on doctor), and never renames, drops or re-derives a
@@ -1063,12 +1076,17 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   *refers to* are its outgoing references. "Find references" means incoming, with the declaration
   only on request (`specforge_ops::read::navigate`). Navigation answers the references to an entity two ways: one per
   holder (an inherited reference once per block that inherits it, `Navigator::references`, what find-references
-  returns) and one per written token (`Navigator::tokens`, what rename edits and an editor shows) (ADR 0149 D11, ADR 0156).
+  returns) and one per written token (`Navigator::tokens`, read by the graph's finder, a default no block takes
+  included: what rename edits and an editor shows) (ADR 0149 D11, ADR 0156, ADR 0163).
 - **Written span** (of an edge): where one of an edge's references is written: a reference's token (a list
   item, a single reference's value) or a name inside a type expression a derived field reads (a parameter or
   return type, a field written as a type, a union member). The linker records every edge's written spans, in
   written order (`Graph::written`); navigation's occurrences, rename and the LSP read them and never re-derive
   them. An edge added by hand has none (ADR 0127).
+- **Written token**: a place a file writes an entity's ID as a reference: a field's reference (a block's own, or a
+  `defaults` entry whether or not a block takes it) or a type name a derived field reads. The graph's one finder answers
+  them per parsed file (`specforge_graph::written_tokens`), with who writes each and how; rename, the editor's
+  find-references and a delete's referrer scan ask it, the first two through `Navigator::tokens` (ADR 0163).
 - **Navigation**: where an entity is declared, its references, entity lookup and ranking, which
   entities a diagnostic is about, and the fixes a diagnostic's data names. The LSP and MCP answer
   from one module (`specforge_ops::read::navigate`) in source spans. A span is a position in the text the
@@ -1076,21 +1094,31 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   now. The navigator reads it from its view's compiled project; no surface hands it a text, and outline answers
   only for the compile's sources (ADR 0116). The LSP converts spans to UTF-16 ranges through that text's line index (a file the compile holds
   no text of has no range), MCP renders them as JSON (ADR 0016, ADR 0023).
-- **Rename plan**: the edits that rename one entity (`specforge_ops::authoring::rename::RenamePlan`):
+- **Rename plan**: the edits that rename one entity (`specforge_ops::authoring::rename::RenamePlan`), text edits:
   the declaration's name and each incoming reference's token, positions in the text the project was compiled from,
   which the plan keeps, with the spec root they are relative to. MCP writes it only to files that still hold that text, refusing `conflict` otherwise; the LSP
   hands it to the editor only over buffers that are that text (`ContentModified` otherwise; ADR 0116, ADR 0023 D3).
   The new ID is refused when it is not an identifier of 2–60 characters, is a reserved word (E013) or is taken. A
   rename is not a typed edit and is not checked by E080 (ADR 0151, amended).
+- **Text edit**: one change of a project file's text, a span of the text the project was compiled from and the
+  text it becomes (`specforge_ops::read::navigate::TextEdit`; an empty span inserts). Navigation's fixes and a
+  rename plan answer them; `navigate::apply_edits` applies a file's edits whole or not at all; the LSP converts
+  their spans to UTF-16 ranges and MCP returns them as the spec's `TextEdit`. The formatter's edits are byte ranges
+  of one buffer instead (ADR 0021 D8, ADR 0164).
 - **Typed edit**: one change to a project's entities, named by what it does rather than by text: create, set,
   unset, retitle, link, unlink, add or remove a verify obligation, delete (`specforge_ops::authoring::edit::Edit`).
   A list of them is planned over the texts the project was compiled from (each edit reading what the ones before
   it left), each value written in its field's form (a multi-line one laid out with the file's format configuration, and left out when it restates its file's default)
   and each touched block formatted; the plan is refused with E080
-  when the edited project reports an error the project did not, and is written as one project change (ADR 0151).
-  A delete with `unlink_references` removes every reference the graph build would link, found by `Reading::references`
-  in the planned texts; one written in a `defaults` block or an undeclared field refuses it (`not_editable`, ADR 0156).
-  A list value is taken by its field's type: a reference list's items split at commas however given, a string list's never (ADR 0157).
+  when the edited project reports an error the project did not (the **edited project** being compiled from what the project holds: the text of each source it read, the E025 of each it could not read, the planned texts; it reads no source, `CompiledProject::edited`, ADR 0158), and is written as one project change (ADR 0151).
+  A delete with `unlink_references` removes every reference the graph build would link, found by the graph's finder
+  in the planned texts (ADR 0163); one written in a `defaults` block, an undeclared field or as a derived type name refuses it (`not_editable`, ADR 0156).
+  A list value is taken by its field's type: a reference list's items split at commas however given, a string list's never (ADR 0157). The stub fixes are typed edits too (ADR 0161).
+  A `field.entry` path names one entry of a block field the kind declares; `set` and `unset` take one, `link`, `unlink` and `create` refuse it (ADR 0151, amended).
+- **Fix**: an edit offered for a diagnostic or an entity, the same as an LSP code action and from MCP `suggest_fixes`
+  (`specforge_ops::authoring::fix`): a replacement of an unresolved token by its close match, or a stub (a create of the
+  unresolved target's kind, a verify obligation) planned as a typed edit and offered as the position edits that apply it
+  (`EditPlan::edits`); a stub the plan refuses is not offered (ADR 0161).
 - **Lexeme**: one token of a `.spec` text as the language's one lexer reads it without a parse
   (`specforge_parser::lex`): an identifier, a scheme ref ID (one lexeme), a number, a string (read as
   the grammar reads it, across lines; one the grammar would not close is marked unclosed and, if a

@@ -7,6 +7,7 @@
 use specforge_migrate::migrate_project;
 use specforge_parser::{CURRENT_FORMAT_VERSION, detect_format_version};
 use specforge_test_macros::test as specforge_test;
+use std::path::Path;
 use tempfile::TempDir;
 
 #[specforge_test(
@@ -34,6 +35,7 @@ fn a_header_below_blank_lines_is_rewritten_where_it_stands() {
         &CURRENT_FORMAT_VERSION,
         false,
         true,
+        &|path: &Path| std::fs::read_to_string(path),
     );
 
     assert_eq!(summary.migrated_count, 1, "{summary:?}");

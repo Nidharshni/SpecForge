@@ -2,6 +2,7 @@
 
 **Status:** accepted (2026-10-15, round 10, plan 09). Amends ADR 0046 D1 and finishes ADR 0073 D1.
 *Amended (2026-10-17, round 14, plan 10): D5.*
+*Amended (2026-10-19, round 16, plan 02): D1.*
 
 `ProjectSession::update(SourceChange::Disk(keys))` was public, but its only production caller was
 `ProjectSession::apply`. 58 test call sites used it and skipped the step every surface goes through: turning paths
@@ -13,7 +14,7 @@ that reaches only an excluded file, and `apply` returns `None`).
 ## Decision
 
 - **D1.** A session takes a change from disk only as `Changes` (`changes`, `stale`) through `apply` or
-  `ensure_fresh`. The key door is a private method (`reread`).
+  `ensure_fresh`. The key door is a private method (`reread`). *ADR 0159: the key door is gone; apply reads the keys inside its one update.*
 - **D2.** Buffers go in through `hold`, `hold_with` and `release`. `SourceChange`, `update` and `update_with` are
   gone.
 - **D3.** Tests take the surfaces' doors. `specforge_project::testing::disk_changed` names keys for `changes` plus

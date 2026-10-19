@@ -1119,7 +1119,7 @@ fn add_dry_run_prints_the_plan_and_writes_nothing() {
         json!(["@specforge/software"]),
         "{document}"
     );
-    assert_eq!(document["files_written"], json!([]), "{document}");
+    assert!(document.get("files_written").is_none(), "{document}");
 
     assert_eq!(tree(dir.root()), before, "a dry run writes nothing");
 }
@@ -1146,8 +1146,8 @@ fn remove_dry_run_prints_the_plan_and_writes_nothing() {
 
     let (ok, output) = remove(&dir, "greet.wasm", &["--dry-run"]);
     assert!(ok, "{output}");
-    assert_eq!(output["action"], "planned", "{output}");
-    assert_eq!(output["files_written"], json!([]), "{output}");
+    assert_eq!(output["dry_run"], true, "{output}");
+    assert!(output.get("files_written").is_none(), "{output}");
 
     assert_eq!(tree(dir.root()), before, "a dry run writes nothing");
 }

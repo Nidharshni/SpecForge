@@ -129,6 +129,13 @@ impl<'f> FileDefaults<'f> {
         (defaults, diagnostics)
     }
 
+    /// Each applied default (kind, entry), in written order: what the finder reads, whether or not a block takes it.
+    pub(crate) fn applied(&self) -> impl Iterator<Item = (Sym, &'f FieldEntry)> + '_ {
+        self.by_kind
+            .iter()
+            .flat_map(|(kind, entries)| entries.iter().map(|entry| (*kind, *entry)))
+    }
+
     /// The entry `kind`'s defaults apply for `field`, as written (its spans are in the defaults block): `None` when the
     /// file states none, or states it where it is not applied (an undeclared field or kind, E077; a second block for
     /// the kind; a key given twice, after its first).

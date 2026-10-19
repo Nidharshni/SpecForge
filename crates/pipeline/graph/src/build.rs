@@ -445,7 +445,7 @@ fn node_from_entity(entity: &Entity, defaults: Option<&FileDefaults<'_>>) -> Nod
 /// supported (ADR 0005): every entity kind comes from an extension. The
 /// grammar still parses them so they can be reported (W143); they never
 /// become graph nodes.
-fn is_define_block(entity: &Entity) -> bool {
+pub(crate) fn is_define_block(entity: &Entity) -> bool {
     entity.kind.raw == structural::DEFINE
 }
 

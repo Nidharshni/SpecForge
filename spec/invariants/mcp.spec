@@ -94,7 +94,10 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
     project keeps at its root (the inference and anchors manifests, the
     test report) is read only from inside it. A source of the served
     project, and the recorded report, is also read only from a file that has
-    one name: a hard link to a file outside is another name for it. init creates
+    one name: a hard link to a file outside is another name for it. A typed
+    edit is validated over the sources the served project read, and a
+    migration reads each source through the call's bound, so neither a
+    preview nor a refusal carries what a refused source holds. init creates
     its project inside the server's root and never inside the served
     project. The CLI is not bounded: its user is already at the file system.
     A call

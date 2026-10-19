@@ -1,4 +1,4 @@
-//! The LSP's adapter over `specforge_ops::read::navigate`: it builds the
+//! The LSP's adapter over `specforge_ops::read::navigate` (and `authoring::fix` for code actions): it builds the
 //! navigator over the session (the text the project was compiled from) and converts
 //! its answers, `SourceSpan`s, to LSP locations and UTF-16 ranges. What
 //! the answers are is navigation's to say (ADR 0016); `use`-path
@@ -6,7 +6,8 @@
 //! (`answers::definition`).
 
 use specforge_common::{SourceSpan, Sym, structural};
-use specforge_ops::read::navigate::{Fix, FixKind, Navigator, OutlineEntry};
+use specforge_ops::authoring::fix::{Fix, FixKind};
+use specforge_ops::read::navigate::{Navigator, OutlineEntry};
 use specforge_registry::KindRegistry;
 use std::collections::HashMap;
 use tower_lsp::lsp_types::{
@@ -128,6 +129,14 @@ impl<'s> Compiled<'s> {
     }
 }
 
+/// The LSP kind of a fix's kind.
+pub(crate) fn code_action_kind(kind: FixKind) -> CodeActionKind {
+    match kind {
+        FixKind::QuickFix => CodeActionKind::QUICKFIX,
+        FixKind::Refactor => CodeActionKind::REFACTOR,
+    }
+}
+
 /// A fix as the code action that applies it; `None` when one of its edits
 /// cannot be placed (its file's text is unknown, or the open buffer is no
 /// longer the text the fix was computed on): a fix applies whole or not at
@@ -146,10 +155,7 @@ pub(crate) fn fix_to_code_action(ranges: &Compiled, fix: Fix) -> Option<CodeActi
     }
     Some(CodeAction {
         title: fix.title,
-        kind: Some(match fix.kind {
-            FixKind::QuickFix => CodeActionKind::QUICKFIX,
-            FixKind::Refactor => CodeActionKind::REFACTOR,
-        }),
+        kind: Some(code_action_kind(fix.kind)),
         edit: Some(WorkspaceEdit {
             changes: Some(changes),
             ..Default::default()
@@ -408,7 +414,7 @@ mod tests {
         let fix = |files: &[&str]| Fix {
             title: "fix".into(),
             kind: FixKind::QuickFix,
-            source: specforge_ops::read::navigate::FixSource::ReplaceUnresolved,
+            source: specforge_ops::authoring::fix::FixSource::ReplaceUnresolved,
             diagnostic_code: None,
             subject: None,
             edits: files

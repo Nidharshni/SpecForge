@@ -9,6 +9,7 @@ use crate::args::Arguments;
 use crate::mutation::{FreshDiagnostics, Mutated, Mutation, MutationArgs, MutationReply, Written};
 use crate::refusal::ArgumentOf;
 use crate::target::ProjectRef;
+use specforge_ops::Wrote;
 use specforge_ops::authoring::rename::RenameField;
 use specforge_ops::read::navigate::Navigator;
 
@@ -39,20 +40,9 @@ pub struct Reply {
     old_name: String,
     new_name: String,
     affected_files: Vec<String>,
-    edits: Vec<Edit>,
-    /// Present (true) for a preview.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    dry_run: Option<bool>,
-}
-
-/// One text edit (`McpRenameEdit`).
-#[derive(Debug, Serialize, Shape)]
-pub struct Edit {
-    file: String,
-    line: usize,
-    start_col: usize,
-    end_col: usize,
-    new_text: String,
+    edits: Vec<crate::reply::TextEdit>,
+    /// Whether the call previewed: nothing was written.
+    dry_run: bool,
 }
 
 pub(crate) struct Tool;
@@ -105,32 +95,19 @@ impl CoreTool for Tool {
                 .into_iter()
                 .map(String::from)
                 .collect(),
-            edits: plan
-                .edits
-                .iter()
-                .map(|e| Edit {
-                    file: e.file.to_string(),
-                    line: e.line,
-                    start_col: e.start_col,
-                    end_col: e.end_col,
-                    new_text: e.new_text.clone(),
-                })
-                .collect(),
-            dry_run: None,
+            edits: plan.edits.iter().map(Into::into).collect(),
+            dry_run: false,
         };
-        if args.dry_run {
-            reply.dry_run = Some(true);
-            return Ok(Mutated::new(reply, Written::nothing()));
-        }
         // A failed write puts back what it wrote; a file it could not put back is the failure's `files_written`.
-        let writes = rename::apply(&plan, project.caller())?;
+        let wrote = Wrote::unless_preview(args.dry_run, || rename::apply(&plan, project.caller()))?;
+        reply.dry_run = wrote.previewed();
         // The reply's `diagnostics` are what `specforge check` reports for the
         // project as it is on disk now, edits made since the last call
         // included (`FreshDiagnostics`, filled in once the target is brought up
         // to date).
         Ok(Mutated::new(
             reply,
-            Written::files(writes).with_entities([args.new_name]),
+            Written::of(wrote).with_entities([args.new_name]),
         ))
     }
 }

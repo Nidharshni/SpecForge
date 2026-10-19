@@ -7,14 +7,13 @@
 
 use std::collections::HashMap;
 
-use specforge_common::{SourceSpan, Sym};
+use specforge_common::Sym;
+use specforge_ops::authoring::fix::{self, FixQuery};
 use specforge_ops::authoring::format;
-use specforge_ops::read::navigate::{
-    Direction, EntityQuery, FixQuery, MatchScope, ReferenceQuery, find_entities, outline,
-};
+use specforge_ops::read::navigate::{EntityQuery, MatchScope, find_entities, outline};
 use tower_lsp::jsonrpc::{Error, ErrorCode};
 use tower_lsp::lsp_types::{
-    ClientCapabilities, CodeActionOrCommand, CodeActionResponse, CompletionResponse,
+    ClientCapabilities, CodeAction, CodeActionOrCommand, CodeActionResponse, CompletionResponse,
     DocumentSymbolResponse, FormattingOptions, GotoDefinitionResponse, Hover, HoverContents,
     Location, LocationLink, MarkupContent, MarkupKind, Position, PrepareRenameResponse, Range,
     SemanticTokens, SemanticTokensResult, SymbolInformation, TextEdit, Url, WorkspaceEdit,
@@ -23,7 +22,8 @@ use tower_lsp::lsp_types::{
 use crate::document::{LineIndex, Target};
 use crate::files::Findings;
 use crate::navigation::{
-    Compiled, fix_to_code_action, outline_to_document_symbols, symbol_kind_from_entity,
+    Compiled, code_action_kind, fix_to_code_action, outline_to_document_symbols,
+    symbol_kind_from_entity,
 };
 use crate::publish::diagnostic_to_lsp;
 use crate::{LspState, hover};
@@ -50,6 +50,9 @@ pub struct ClientSupport {
     /// watchers are patterns relative to each input's directory, else
     /// absolute globs.
     pub relative_patterns: bool,
+    /// `textDocument.codeAction.resolveSupport` names `edit`: a stub's edits
+    /// are made when the editor resolves the action, not when it lists them.
+    pub code_action_resolve: bool,
 }
 
 impl ClientSupport {
@@ -79,6 +82,10 @@ impl ClientSupport {
                 .and_then(|w| w.did_change_watched_files.as_ref())
                 .and_then(|w| w.relative_pattern_support)
                 .unwrap_or(false),
+            code_action_resolve: text_document
+                .and_then(|t| t.code_action.as_ref())
+                .and_then(|c| c.resolve_support.as_ref())
+                .is_some_and(|r| r.properties.iter().any(|p| p == "edit")),
         }
     }
 }
@@ -217,7 +224,8 @@ pub fn definition(
 /// The references to the entity the cursor names: incoming, its
 /// declaration when asked (ADR 0016); an occurrence whose file has no
 /// compiled text is left out; each written token once (an inherited
-/// reference is one location, ADR 0149 D11); `None` when none.
+/// reference is one location, ADR 0149 D11), a token in a defaults block
+/// no block takes included (ADR 0163); `None` when none.
 pub fn references(
     state: &LspState,
     uri: &Url,
@@ -226,13 +234,9 @@ pub fn references(
 ) -> Option<Vec<Location>> {
     let compiled = Compiled::new(state);
     let id = entity_under_cursor(&compiled, &state.key_of(uri), position)?;
-    let query = ReferenceQuery {
-        direction: Direction::Incoming,
-        include_declaration,
-    };
     let refs = compiled
         .navigator()
-        .tokens(id.as_str(), query)
+        .tokens(id.as_str(), include_declaration)
         .unwrap_or_default();
     // An occurrence whose file's text is unknown is left out.
     let locations: Vec<Location> = refs
@@ -314,30 +318,24 @@ pub fn rename(
         // editor's buffer: a buffer typed in since the compile is not that
         // text, so the rename waits for the compile (LSP's
         // ContentModified).
-        if compiled.is_stale(&edit.file) {
-            return Err(content_modified(&edit.file));
+        let file = edit.span.file.as_str();
+        if compiled.is_stale(file) {
+            return Err(content_modified(file));
         }
-        let file_uri = compiled.uri(&edit.file);
-        // A 1-based line and byte columns of the file's text.
-        let span = SourceSpan {
-            file: Sym::new(&edit.file),
-            start_line: edit.line,
-            start_col: edit.start_col + 1,
-            end_line: edit.line,
-            end_col: edit.end_col + 1,
-        };
         // A rename is all or nothing: an edit that cannot be placed
         // refuses it.
-        let Some(range) = compiled.range(&span) else {
+        let Some(range) = compiled.range(&edit.span) else {
             return Err(Error::invalid_params(format!(
-                "cannot rename: the text of {} is not known",
-                edit.file
+                "cannot rename: the text of {file} is not known"
             )));
         };
-        changes.entry(file_uri).or_default().push(TextEdit {
-            range,
-            new_text: new_name.to_string(),
-        });
+        changes
+            .entry(compiled.uri(file))
+            .or_default()
+            .push(TextEdit {
+                range,
+                new_text: edit.new_text,
+            });
     }
 
     Ok(Some(WorkspaceEdit {
@@ -362,17 +360,73 @@ pub fn code_actions(state: &LspState, uri: &Url, range: Range) -> Option<CodeAct
         within: within.as_ref(),
         ..FixQuery::default()
     };
-    let fixes = compiled
-        .navigator()
-        .fixes(state.files().compile_diagnostics(&file), &query);
-    // A fix that cannot be placed whole (see `fix_to_code_action`) is not
-    // offered.
-    let actions: Vec<CodeActionOrCommand> = fixes
+    let navigator = compiled.navigator();
+    let offers = fix::offers(&navigator, state.files().compile_diagnostics(&file), &query);
+    // A client that resolves `edit` is shown a stub without its edits: planning one costs a
+    // compile of the project, made when the editor resolves the action (ADR 0161). A fix that
+    // cannot be placed whole (see `fix_to_code_action`) is not offered.
+    let lazily = state.client().code_action_resolve;
+    let actions: Vec<CodeActionOrCommand> = offers
         .into_iter()
-        .filter_map(|fix| fix_to_code_action(&compiled, fix))
+        .filter_map(|offer| {
+            if lazily && offer.is_typed() {
+                return Some(CodeAction {
+                    title: offer.title().to_string(),
+                    kind: Some(code_action_kind(offer.kind())),
+                    data: Some(
+                        serde_json::json!({"uri": uri, "range": range, "title": offer.title()}),
+                    ),
+                    ..Default::default()
+                });
+            }
+            fix_to_code_action(&compiled, offer.fix(&navigator).ok()?)
+        })
         .map(CodeActionOrCommand::CodeAction)
         .collect();
     (!actions.is_empty()).then_some(actions)
+}
+
+/// A code action listed without its edits, with them: the offers for the file and range it
+/// names are chosen again over the current compile, the one titled so is planned, and a
+/// refused plan answers why (E080, ...).
+pub fn resolve_code_action(state: &LspState, action: CodeAction) -> Result<CodeAction, Error> {
+    let data = action.data.clone().unwrap_or_default();
+    let (Some(uri), Some(range)) = (
+        data.get("uri")
+            .and_then(|u| u.as_str())
+            .and_then(|u| Url::parse(u).ok()),
+        data.get("range")
+            .and_then(|r| serde_json::from_value::<Range>(r.clone()).ok()),
+    ) else {
+        return Err(Error::invalid_params(
+            "the code action carries no uri and range to resolve",
+        ));
+    };
+    let compiled = Compiled::new(state);
+    let file = state.key_of(&uri);
+    if compiled.is_stale(&file) {
+        return Err(content_modified(&file));
+    }
+    let within = state
+        .files()
+        .document(&file)
+        .map(|doc| doc.index().span(Sym::new(&file), range));
+    let query = FixQuery {
+        file: Some(&file),
+        within: within.as_ref(),
+        ..FixQuery::default()
+    };
+    let navigator = compiled.navigator();
+    let offer = fix::offers(&navigator, state.files().compile_diagnostics(&file), &query)
+        .into_iter()
+        .find(|offer| offer.title() == action.title)
+        .ok_or_else(|| {
+            Error::invalid_params(format!("the fix '{}' is no longer offered", action.title))
+        })?;
+    let fix = offer
+        .fix(&navigator)
+        .map_err(|refusal| Error::invalid_params(refusal.error.message))?;
+    fix_to_code_action(&compiled, fix).ok_or_else(|| content_modified(&file))
 }
 
 /// The document's outline (`specforge_ops::read::navigate::outline`, what MCP

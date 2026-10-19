@@ -1,9 +1,9 @@
 use crate::target::View;
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
-use specforge_common::SourceSpan;
 use specforge_common::shape::Shape;
-use specforge_ops::read::navigate::{Fix, FixKind, FixQuery, Navigator};
+use specforge_ops::authoring::fix::{self, Fix, FixKind, FixQuery};
+use specforge_ops::read::navigate::Navigator;
 
 use crate::args::Arguments;
 use crate::reply::Answered;
@@ -38,15 +38,7 @@ pub struct Suggestion {
     /// The entity the fix is about.
     #[serde(skip_serializing_if = "Option::is_none")]
     entity_id: Option<String>,
-    edits: Vec<Edit>,
-}
-
-/// What applying a fix changes.
-#[derive(Debug, Serialize, Shape)]
-pub struct Edit {
-    file_path: String,
-    range: SourceSpan,
-    new_text: String,
+    edits: Vec<crate::reply::TextEdit>,
 }
 
 impl Suggestion {
@@ -56,15 +48,7 @@ impl Suggestion {
             kind: fix.kind,
             diagnostic_code: fix.diagnostic_code.clone(),
             entity_id: fix.subject.as_ref().map(ToString::to_string),
-            edits: fix
-                .edits
-                .iter()
-                .map(|edit| Edit {
-                    file_path: edit.span.file.to_string(),
-                    range: edit.span.clone(),
-                    new_text: edit.new_text.clone(),
-                })
-                .collect(),
+            edits: fix.edits.iter().map(Into::into).collect(),
         }
     }
 }
@@ -101,7 +85,7 @@ impl CoreTool for Tool {
             code: args.diagnostic_code.as_deref(),
             within: None,
         };
-        let fixes = Navigator::new(view).fixes(&diagnostics, &query);
+        let fixes = fix::fixes(&Navigator::new(view), &diagnostics, &query);
         Ok(Reply {
             fixes: fixes.iter().map(Suggestion::of).collect(),
         }

@@ -1,0 +1,87 @@
+---
+source: crates/surfaces/cli/tests/refusal_wire.rs
+expression: out
+---
+$ specforge update
+[exit 1]
+[stdout]
+[stderr]
+error[E033]: corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2
+  hint: fix specforge.lock, or delete it and install the extensions again with `specforge add`
+
+$ specforge update --format json
+[exit 1]
+[stdout]
+{
+  "error": "corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2",
+  "code": "E033",
+  "suggestion": "fix specforge.lock, or delete it and install the extensions again with `specforge add`"
+}
+[stderr]
+
+$ specforge add ./ext.wasm
+[exit 1]
+[stdout]
+[stderr]
+error[E033]: corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2
+  hint: fix specforge.lock, or delete it and install the extensions again with `specforge add`
+
+$ specforge add ./ext.wasm --format json
+[exit 1]
+[stdout]
+{
+  "error": "corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2",
+  "code": "E033",
+  "suggestion": "fix specforge.lock, or delete it and install the extensions again with `specforge add`"
+}
+[stderr]
+
+$ specforge remove @sdk/greet
+[exit 1]
+[stdout]
+[stderr]
+error[E033]: corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2
+  hint: fix specforge.lock, or delete it and install the extensions again with `specforge add`
+
+$ specforge remove @sdk/greet --format json
+[exit 1]
+[stdout]
+{
+  "error": "corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2",
+  "code": "E033",
+  "suggestion": "fix specforge.lock, or delete it and install the extensions again with `specforge add`"
+}
+[stderr]
+
+$ specforge remove @acme/absent
+[exit 1]
+[stdout]
+[stderr]
+error[E033]: corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2
+  hint: fix specforge.lock, or delete it and install the extensions again with `specforge add`
+
+$ specforge check
+[exit 1]
+[stdout]
+[stderr]
+error[E033]: corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2
+  = help: fix specforge.lock, or delete it and install the extensions again with `specforge add`
+
+error[E028]: extension '@sdk/greet' is enabled in specforge.json but not loaded: specforge.lock can't be read
+  = help: fix specforge.lock, or delete it and install the extension again: specforge add @sdk/greet
+
+info[I002]: the configured extension did not load — operating in structural-only mode
+  = help: fix the extension load errors above (`specforge doctor` checks the setup)
+2 errors, 0 warnings, 1 info
+  E028 (1)
+  E033 (1)
+  I002 (1)
+
+hint: run `specforge explain <code>` for details on any diagnostic code
+
+$ mcp specforge.add_extension
+{"code":"schema_mismatch","data":{"files_written":[]},"diagnostic":{"code":"E033","column":null,"file":null,"line":null,"message":"corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2","severity":"Error","span":null,"suggestion":"fix specforge.lock, or delete it and install the extensions again with `specforge add`","title":"Lock file error"},"message":"corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2","tool":"specforge.add_extension"}
+$ mcp specforge.remove_extension
+{"code":"schema_mismatch","data":{"files_written":[]},"diagnostic":{"code":"E033","column":null,"file":null,"line":null,"message":"corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2","severity":"Error","span":null,"suggestion":"fix specforge.lock, or delete it and install the extensions again with `specforge add`","title":"Lock file error"},"message":"corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2","tool":"specforge.remove_extension"}
+$ mcp specforge.remove_extension
+{"code":"schema_mismatch","data":{"files_written":[]},"diagnostic":{"code":"E033","column":null,"file":null,"line":null,"message":"corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2","severity":"Error","span":null,"suggestion":"fix specforge.lock, or delete it and install the extensions again with `specforge add`","title":"Lock file error"},"message":"corrupt lock file at '<root>/specforge.lock': expected ident at line 1 column 2","tool":"specforge.remove_extension"}

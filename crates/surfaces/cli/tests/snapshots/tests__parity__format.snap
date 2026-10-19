@@ -28,8 +28,8 @@ expression: snapshot
       "changed_files": [
         "spec/messy.spec"
       ],
-      "check_only": false,
       "diagnostics": [],
+      "dry_run": false,
       "files_written": [
         "spec/messy.spec"
       ],

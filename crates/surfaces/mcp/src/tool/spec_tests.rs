@@ -11,6 +11,7 @@ use crate::target::{CallTarget, Unscoped};
 use crate::testing::EventLog;
 use serde::Serialize;
 use specforge_common::shape::Shape;
+use specforge_ops::{Writes, Wrote};
 
 #[derive(Debug, Serialize, Shape)]
 struct Probe {
@@ -82,10 +83,10 @@ impl CoreTool for MutationProbe {
     type Input = Unscoped;
     type Returns = Mutation<MutationProbeReply>;
 
-    fn call(_: (), _: MutationProbeArgs) -> Mutation<MutationProbeReply> {
+    fn call(_: (), args: MutationProbeArgs) -> Mutation<MutationProbeReply> {
         Ok(Mutated::new(
             Answer::new(MutationProbeReply { ok: true }),
-            Written::nothing(),
+            Written::of(Wrote::of(args.dry_run, Writes::none())),
         ))
     }
 }

@@ -30,7 +30,10 @@ pub fn initialize_result() -> InitializeResult {
                 prepare_provider: Some(true),
                 work_done_progress_options: Default::default(),
             })),
-            code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
+            code_action_provider: Some(CodeActionProviderCapability::Options(CodeActionOptions {
+                resolve_provider: Some(true),
+                ..Default::default()
+            })),
             document_symbol_provider: Some(OneOf::Left(true)),
             workspace_symbol_provider: Some(OneOf::Left(true)),
             semantic_tokens_provider: Some(

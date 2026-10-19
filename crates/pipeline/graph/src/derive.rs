@@ -11,7 +11,7 @@
 use crate::{Edge, Graph, Reading};
 use specforge_common::{SourceSpan, Sym};
 use specforge_parser::lex::{LexemeKind, lex};
-use specforge_parser::{FieldEntry, FieldValue, Written};
+use specforge_parser::{FieldEntry, FieldValue, MethodDecl, Written};
 
 /// Where a derived reference field takes its targets from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -84,9 +84,45 @@ pub(crate) fn expressions<'v>(reading: &Reading, entry: &'v FieldEntry) -> Vec<T
     }
 }
 
+/// The type expressions `reference` reads from a block of `kind`: its entries written as types
+/// ([`DerivedFrom::TypeExpressions`]), or its methods' parameter and return types
+/// ([`DerivedFrom::MethodSignatures`]). The derived walk links the names in them; the finder reports them.
+pub(crate) fn type_expressions<'v>(
+    reference: &DerivedReference,
+    forms: &crate::FieldForms,
+    kind: &str,
+    entries: &'v [FieldEntry],
+    methods: &'v [MethodDecl],
+) -> Vec<TypeExpression<'v>> {
+    let mut written = Vec::new();
+    match reference.from {
+        DerivedFrom::TypeExpressions => {
+            for entry in entries {
+                let reading = forms.reading(kind, entry.key.as_str());
+                written.extend(expressions(&reading, entry));
+            }
+        }
+        DerivedFrom::MethodSignatures => {
+            for method in methods {
+                written.extend(method.params.iter().map(|p| TypeExpression {
+                    text: &p.ty,
+                    at: p.ty_span.as_ref(),
+                }));
+                written.extend(method.returns.as_deref().map(|text| TypeExpression {
+                    text,
+                    at: method.returns_span.as_ref(),
+                }));
+            }
+        }
+    }
+    written
+}
+
 /// The names inside a type expression, each with where it is written: the identifiers of the language's lexer
 /// (`Result<A, B[]>` -> Result, A, B), at the expression's position plus the identifier's offset.
-fn names(expression: TypeExpression<'_>) -> impl Iterator<Item = (&str, Option<SourceSpan>)> {
+pub(crate) fn names(
+    expression: TypeExpression<'_>,
+) -> impl Iterator<Item = (&str, Option<SourceSpan>)> {
     lex(expression.text)
         .into_iter()
         .filter(|lexeme| lexeme.kind == LexemeKind::Ident)
@@ -140,27 +176,8 @@ impl Graph {
             };
             for node in self.nodes_by_kind(&reference.source_kind) {
                 let kind = node.kind.raw.as_str();
-                let mut written: Vec<TypeExpression> = Vec::new();
-                match reference.from {
-                    DerivedFrom::TypeExpressions => {
-                        for entry in node.fields.entries() {
-                            let reading = forms.reading(kind, entry.key.as_str());
-                            written.extend(expressions(&reading, entry));
-                        }
-                    }
-                    DerivedFrom::MethodSignatures => {
-                        for method in &node.methods {
-                            written.extend(method.params.iter().map(|p| TypeExpression {
-                                text: &p.ty,
-                                at: p.ty_span.as_ref(),
-                            }));
-                            written.extend(method.returns.as_deref().map(|text| TypeExpression {
-                                text,
-                                at: method.returns_span.as_ref(),
-                            }));
-                        }
-                    }
-                }
+                let written =
+                    type_expressions(reference, forms, kind, node.fields.entries(), &node.methods);
                 for (name, at) in written.into_iter().flat_map(names) {
                     if name == node.id.raw.as_str() {
                         continue;

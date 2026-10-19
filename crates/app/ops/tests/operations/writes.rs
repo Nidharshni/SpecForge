@@ -138,7 +138,7 @@ pub(crate) fn compiled(root: &Path) -> CompiledProject {
 
 /// The project at `root`, compiled with the component runtime that loads
 /// the builtins.
-fn compiled_with_builtins(root: &Path) -> CompiledProject {
+pub(crate) fn compiled_with_builtins(root: &Path) -> CompiledProject {
     compile_at(root, Some(specforge_project::testing::component_runtime()))
 }
 
@@ -146,7 +146,11 @@ fn remove(root: &Path, name: &str, dry_run: bool) -> extension::RemoveOutcome {
     remove_over(&compiled(root), name, dry_run)
 }
 
-fn remove_over(project: &CompiledProject, name: &str, dry_run: bool) -> extension::RemoveOutcome {
+pub(crate) fn remove_over(
+    project: &CompiledProject,
+    name: &str,
+    dry_run: bool,
+) -> extension::RemoveOutcome {
     let request = RemoveRequest {
         name,
         force: false,
@@ -157,7 +161,7 @@ fn remove_over(project: &CompiledProject, name: &str, dry_run: bool) -> extensio
 }
 
 const MESSY: &str = "behavior messy \"Messy\" {\ncontract \"The system MUST work\"\n}\n";
-const TIDY: &str = "behavior tidy \"Tidy\" {\n  contract \"The system MUST work\"\n}\n";
+pub(crate) const TIDY: &str = "behavior tidy \"Tidy\" {\n  contract \"The system MUST work\"\n}\n";
 
 #[cfg(unix)]
 #[test]
@@ -493,9 +497,9 @@ fn stranded_lists_the_entities_by_id() {
     );
 }
 
-const OLD: &str = "// specforge-format: 0.9\nbehavior gamma \"Gamma\" {\n}\n";
+pub(crate) const OLD: &str = "// specforge-format: 0.9\nbehavior gamma \"Gamma\" {\n}\n";
 
-fn migration(
+pub(crate) fn migration(
     root: &specforge_common::ProjectRoot,
     dry_run: bool,
 ) -> specforge_ops::authoring::migrate::Request<'_> {

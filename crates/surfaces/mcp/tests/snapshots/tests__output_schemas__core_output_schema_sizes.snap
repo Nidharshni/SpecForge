@@ -16,12 +16,12 @@ specforge.find_definition 778
 specforge.find_references 1015
 specforge.outline 1081
 specforge.suggest_fixes 943
-specforge.format 3513
-specforge.rename 3096
-specforge.edit 2845
+specforge.format 3507
+specforge.rename 3011
+specforge.edit 2855
 specforge.init 434
-specforge.add_extension 1998
-specforge.remove_extension 500
+specforge.add_extension 2037
+specforge.remove_extension 474
 specforge.migrate 5132
 specforge.extensions 931
 specforge.providers 2922
@@ -33,4 +33,4 @@ specforge.infer_gaps 1101
 specforge.infer_session 295
 specforge.find_implementation 502
 specforge.find_spec_for_source 642
-total 57513
+total 57445

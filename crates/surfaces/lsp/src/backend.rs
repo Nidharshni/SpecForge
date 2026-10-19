@@ -249,6 +249,13 @@ impl LanguageServer for Backend {
         .await
     }
 
+    async fn code_action_resolve(&self, params: CodeAction) -> Result<CodeAction> {
+        self.answering("codeAction/resolve", |state| {
+            answers::resolve_code_action(state, params)
+        })
+        .await
+    }
+
     async fn document_symbol(
         &self,
         params: DocumentSymbolParams,

@@ -2,14 +2,15 @@
 //! out canonically; a deleted block takes the comment lines above it and one blank line with it.
 
 use super::block::{self, Block, Site, group_of_text, rank};
+use super::path::{self, FieldPath};
 use super::write::{not_editable, written};
 use super::{EditField, Input, Obligation, Planner};
 use crate::authoring::rename::{self, validate_id};
 use crate::{OpError, OpErrorKind, Refusal};
-use specforge_common::structural;
-use specforge_graph::field_form::{Reading, spell};
-use specforge_parser::{FieldEntry, parse};
-use specforge_protocol_types::FieldType;
+use specforge_common::Sym;
+use specforge_graph::field_form::spell;
+use specforge_graph::{Form, Holder, written_tokens};
+use specforge_parser::parse;
 use std::collections::BTreeSet;
 
 /// `Create`'s file is not a project source.
@@ -69,7 +70,12 @@ impl Planner<'_> {
         let config = block::layout(&site);
         let mut members: Vec<((u8, usize), String, String)> = Vec::new();
         for (name, input) in fields {
-            let reading = site.reading(name)?;
+            let reading = match path::resolve(&site, name, None)? {
+                FieldPath::Entry { field, entry, .. } => {
+                    return Err(path::whole_field("create", field, entry));
+                }
+                FieldPath::Field { reading, .. } => reading,
+            };
             let value = written(reading, name, input, &config.indent_str(), &config)?;
             members.push((
                 rank(&order, name, group_of_text(&value)),
@@ -112,9 +118,9 @@ impl Planner<'_> {
         id: &str,
         unlink_references: bool,
     ) -> Result<(), Refusal<EditField>> {
-        self.locate(id)?;
+        let located = self.locate(id)?;
         if unlink_references {
-            for (referrer, field, list) in self.referrers(id)? {
+            for (referrer, field, list) in self.referrers(id, &located.kind)? {
                 self.on(&referrer, |site, text| {
                     if list {
                         block::link(site, text, &field, id, false)
@@ -134,12 +140,18 @@ impl Planner<'_> {
         Ok(())
     }
 
-    /// Every field of another entity whose value references `id` as the graph build reads it ([`names`]): (entity,
-    /// field, whether it is a list), in file order, over the texts the plan holds so far. A reference written where no
-    /// typed edit writes refuses the delete, naming each place: an entry of a `defaults` block (ADR 0151 D5) or a
-    /// field its holder's kind does not declare.
-    fn referrers(&self, id: &str) -> Result<Vec<(String, String, bool)>, Refusal<EditField>> {
-        let forms = self.view.registries().field_forms();
+    /// Every field of another block that names `id` (of kind `kind`), as the graph's finder reads the texts the plan
+    /// holds so far (ADR 0163): (entity, field, whether it is a list), in file order. A token no typed edit writes
+    /// refuses the delete, naming each place: an entry of a `defaults` block (ADR 0151 D5), a field its holder's kind
+    /// does not declare, or a type name a derived field reads.
+    fn referrers(
+        &self,
+        id: &str,
+        kind: &str,
+    ) -> Result<Vec<(String, String, bool)>, Refusal<EditField>> {
+        let inputs = self.view.registries().graph_inputs();
+        let kind = Sym::new(kind);
+        let kind_of = |name: &str| (name == id).then_some(kind);
         let mut keys: BTreeSet<String> = self.texts.keys().cloned().collect();
         keys.extend(
             self.view
@@ -153,45 +165,30 @@ impl Planner<'_> {
             let Some(text) = self.text(&key) else {
                 continue;
             };
-            let file = parse(&text, &key);
-            for entity in &file.entities {
-                let defaults = entity.kind.raw.as_str() == structural::DEFAULTS;
-                if !defaults && entity.id.raw.as_str() == id {
+            for token in written_tokens(&parse(&text, &key), inputs, kind_of) {
+                if token.target.as_str() != id {
                     continue;
                 }
-                // A defaults block's entries read as the kind it names (ADR 0149).
-                let kind = if defaults {
-                    entity.id.raw.as_str()
-                } else {
-                    entity.kind.raw.as_str()
-                };
-                for entry in entity.fields.entries() {
-                    let reading = forms.reading(kind, entry.key.as_str());
-                    // A default for an undeclared field is E077 and is not applied: it names nothing.
-                    if (defaults && !matches!(reading, Reading::Declared(_)))
-                        || !names(&reading, entry, id)
-                    {
+                let place = match (token.holder, token.form) {
+                    // The block being deleted takes its own tokens with it.
+                    (Holder::Block(holder), _) if holder.as_str() == id => continue,
+                    (Holder::Block(holder), Form::Single | Form::Item) => {
+                        let referrer = (
+                            holder.to_string(),
+                            token.field.to_string(),
+                            token.form == Form::Item,
+                        );
+                        if !found.contains(&referrer) {
+                            found.push(referrer);
+                        }
                         continue;
                     }
-                    match reading {
-                        Reading::Declared(form) if !defaults => found.push((
-                            entity.id.raw.to_string(),
-                            entry.key.to_string(),
-                            form.field_type() != FieldType::Reference,
-                        )),
-                        _ => {
-                            let line = entry
-                                .value_span
-                                .as_ref()
-                                .map_or(entity.span.start_line, |s| s.start_line);
-                            let holder = if defaults {
-                                format!("defaults {kind}")
-                            } else {
-                                entity.id.raw.to_string()
-                            };
-                            elsewhere.push(format!("{key}:{line} ({holder}, {})", entry.key));
-                        }
-                    }
+                    (Holder::Block(holder), _) => holder.to_string(),
+                    (Holder::Defaults(of), _) => format!("defaults {of}"),
+                };
+                let at = format!("{key}:{} ({place}, {})", token.span.start_line, token.field);
+                if !elsewhere.contains(&at) {
+                    elsewhere.push(at);
                 }
             }
         }
@@ -206,21 +203,6 @@ impl Planner<'_> {
             ),
         ))
     }
-}
-
-/// Whether `entry`, read as `reading`, references `id`: ADR 0093's one rule, asked of the value as the graph build
-/// stores it (a list written as one value is its one item), as the linker asks it of a node's entries.
-fn names(reading: &Reading<'_>, entry: &FieldEntry, id: &str) -> bool {
-    let stored = reading
-        .coerce(&entry.value, entry.value_span.as_ref())
-        .map(|value| FieldEntry {
-            value,
-            ..entry.clone()
-        });
-    reading
-        .references(stored.as_ref().unwrap_or(entry))
-        .iter()
-        .any(|r| r.id == id)
 }
 
 /// `existing` with `block` after the last block of `kind`, else at the end, one blank line between.

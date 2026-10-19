@@ -71,6 +71,68 @@ impl Writes {
     }
 }
 
+/// What a mutation did to disk (ADR 0162): it only previewed, because its request asked for a preview (`dry_run`;
+/// format's check or diff), and wrote nothing; or it ran and wrote these files, none when it found nothing to
+/// change. Copied from the request, never inferred from what the operation answered (ADR 0022 M2).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Wrote {
+    Previewed,
+    Ran(Writes),
+}
+
+impl Wrote {
+    /// A run its request asked as `dry_run`, having written `writes`. A preview that wrote is a bug: debug builds
+    /// panic.
+    pub fn of(dry_run: bool, writes: Writes) -> Wrote {
+        if dry_run {
+            debug_assert!(writes.is_empty(), "a preview wrote: {writes:?}");
+            Wrote::Previewed
+        } else {
+            Wrote::Ran(writes)
+        }
+    }
+
+    /// `write` run unless `dry_run`; a preview runs nothing.
+    pub fn unless_preview<E>(
+        dry_run: bool,
+        write: impl FnOnce() -> Result<Writes, E>,
+    ) -> Result<Wrote, E> {
+        if dry_run {
+            Ok(Wrote::Previewed)
+        } else {
+            write().map(Wrote::Ran)
+        }
+    }
+
+    pub fn previewed(&self) -> bool {
+        matches!(self, Wrote::Previewed)
+    }
+
+    /// The files written: none for a preview.
+    pub fn into_files(self) -> Writes {
+        match self {
+            Wrote::Previewed => Writes::none(),
+            Wrote::Ran(writes) => writes,
+        }
+    }
+
+    /// `files_written` as both surfaces print it: `None` for a preview, else every file written, named from `root`
+    /// ([`Writes::named`]); `Some([])` for a run that wrote nothing.
+    pub fn named(&self, root: Option<&Path>) -> Option<Vec<ProjectPath>> {
+        match self {
+            Wrote::Previewed => None,
+            Wrote::Ran(writes) => Some(writes.named(root)),
+        }
+    }
+}
+
+/// An operation that cannot preview ran (init, a rollback, an inference step).
+impl From<Writes> for Wrote {
+    fn from(writes: Writes) -> Wrote {
+        Wrote::Ran(writes)
+    }
+}
+
 impl<P: Into<PathBuf>> FromIterator<P> for Writes {
     fn from_iter<I: IntoIterator<Item = P>>(paths: I) -> Self {
         Writes(paths.into_iter().map(Into::into).collect())
@@ -142,5 +204,34 @@ mod tests {
             .map(ProjectPath::into_string)
             .collect();
         assert_eq!(named, ["/p/b.spec", "/p/spec/a.spec"]);
+    }
+
+    #[test]
+    fn wrote_names_no_file_for_a_preview_and_every_file_for_a_run() {
+        assert_eq!(Wrote::Previewed.named(None), None);
+        assert_eq!(Wrote::Ran(Writes::none()).named(None), Some(vec![]));
+        let two = Wrote::Ran(Writes::from_iter(["/p/specforge.json", "/p/a.spec"]));
+        let named: Vec<String> = two
+            .named(Some(Path::new("/p")))
+            .unwrap()
+            .into_iter()
+            .map(ProjectPath::into_string)
+            .collect();
+        assert_eq!(named, ["a.spec", "specforge.json"]);
+    }
+
+    #[test]
+    fn unless_preview_runs_nothing_for_a_preview() {
+        let ran = Wrote::unless_preview(true, || -> Result<Writes, ()> { panic!("ran") });
+        assert_eq!(ran, Ok(Wrote::Previewed));
+        let ran = Wrote::unless_preview(false, || -> Result<Writes, ()> { Ok(Writes::none()) });
+        assert_eq!(ran, Ok(Wrote::Ran(Writes::none())));
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "a preview wrote")]
+    fn a_preview_that_wrote_is_a_bug() {
+        let _ = Wrote::of(true, Writes::from_iter(["/p/a.spec"]));
     }
 }

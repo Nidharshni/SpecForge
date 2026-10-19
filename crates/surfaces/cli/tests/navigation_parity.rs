@@ -275,22 +275,18 @@ fn workspace_edit_keys(project: &Project, edit: &Value) -> Vec<String> {
     keys
 }
 
-/// MCP rename edits (1-based line, 0-based byte columns) as 1-based keys,
-/// sorted.
+/// MCP rename edits (the spec's `TextEdit`) as keys, sorted.
 fn mcp_rename_keys(result: &Value) -> Vec<String> {
     let mut keys: Vec<String> = result["edits"]
         .as_array()
         .unwrap_or_else(|| panic!("no edits in {result}"))
         .iter()
         .map(|e| {
-            let line = e["line"].as_u64().unwrap();
+            let mut range = e["range"].clone();
+            range["file"] = e["file_path"].clone();
             format!(
                 "{} {}",
-                span_key(
-                    e["file"].as_str().unwrap(),
-                    (line, e["start_col"].as_u64().unwrap() + 1),
-                    (line, e["end_col"].as_u64().unwrap() + 1),
-                ),
+                mcp_span_key(&range),
                 e["new_text"].as_str().unwrap()
             )
         })
@@ -506,7 +502,7 @@ struct Divergence {
 /// The fixes for `logout`'s reference to `sesion_limit`, which exists
 /// nowhere: replace it with the close match, or create it.
 const FIXES_FOR_THE_UNRESOLVED_REFERENCE: &[&str] = &[
-    "Create invariant stub for sesion_limit refactor login.spec 8:1-8:1 \\ninvariant sesion_limit \\\"sesion_limit\\\" {\\n  // TODO: fill in fields\\n}\\n",
+    "Create invariant stub for sesion_limit refactor login.spec 8:1-8:1 \\ninvariant sesion_limit \\\"sesion_limit\\\" {\\n  guarantee \\\"TODO\\\"\\n}\\n",
     "Replace with 'session_limit' quickfix login.spec 6:15-6:27 session_limit",
 ];
 
@@ -1217,7 +1213,7 @@ fn lsp_offers_a_stub_for_a_reference_to_nothing() {
     assert_eq!(
         lsp_actions(&p, &lsp),
         [
-            "Create invariant stub for session_limit refactor auth.spec 5:1-5:1 \\ninvariant session_limit \\\"session_limit\\\" {\\n  // TODO: fill in fields\\n}\\n"
+            "Create invariant stub for session_limit refactor auth.spec 5:1-5:1 \\ninvariant session_limit \\\"session_limit\\\" {\\n  guarantee \\\"TODO\\\"\\n}\\n"
         ],
         "{lsp}"
     );

@@ -234,6 +234,11 @@ impl Outcome {
         self.written().collect()
     }
 
+    /// Whether the run only previewed (check or diff), or wrote [`Self::writes`].
+    pub fn wrote(&self) -> crate::Wrote {
+        crate::Wrote::of(!self.mode.writes(), self.writes())
+    }
+
     /// No file failed.
     pub fn succeeded(&self) -> bool {
         self.failures.is_empty()
@@ -296,7 +301,7 @@ impl Outcome {
             total_checked: self.checked,
             ok: self.ok(),
             all_clean: self.clean(),
-            check_only: !self.mode.writes(),
+            dry_run: !self.mode.writes(),
             diagnostics: DiagnosticList(self.diagnostics.clone()),
             diffs: diffs.then(|| {
                 let of = |change| FileDiff::of(change, named(&change.path));
@@ -330,8 +335,8 @@ pub struct FormatDocument {
     pub ok: bool,
     /// Every file was read and is in canonical form ([`Outcome::clean`]).
     pub all_clean: bool,
-    /// The run did not write (check or diff).
-    pub check_only: bool,
+    /// The run did not write (check or diff): a preview.
+    pub dry_run: bool,
     /// E069 per problem in a specforge.json the run went around, then W141
     /// per configuration file used, W142 per region kept verbatim.
     pub diagnostics: DiagnosticList,

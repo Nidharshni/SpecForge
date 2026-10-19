@@ -1,8 +1,8 @@
 //! The typed entity graph. A `GraphBuild` turns parsed `.spec` files into a `Graph` of nodes and edges and reports
 //! what building it found (duplicates, unknown ref schemes, unresolved references, reference cycles), kept current
 //! one whole file at a time (ADR 0032). `compute_graph_delta` says what changed between two graphs, `FieldForm` how
-//! a declared field is written, `FileDefaults` what a file's `defaults` blocks give its blocks, and `Obligation` how an
-//! entity's `verify` statements are written.
+//! a declared field is written, `FileDefaults` what a file's `defaults` blocks give its blocks, `written_tokens` which
+//! tokens of a file name an entity, and `Obligation` how an entity's `verify` statements are written.
 
 mod build;
 mod defaults;
@@ -20,6 +20,8 @@ mod derive;
 pub use derive::{DerivedFrom, DerivedReference};
 mod graph;
 mod obligations;
+mod tokens;
+pub use tokens::{Form, Holder, WrittenToken, written_tokens};
 // The cycle walker lives in specforge-common (the registry's rules use it
 // without linking the graph); re-exported here unchanged.
 pub use obligations::Obligation;

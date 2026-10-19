@@ -338,7 +338,7 @@ impl FileMigration {
     }
 }
 
-/// Migrate one file of the project at `root`, reading it once: the version detected, the transform, the diff, the
+/// Migrate one file of the project at `root`, reading it once, through `read`: the version detected, the transform, the diff, the
 /// backup and what a rollback restores are all that one text. The diff labels the file with its path from `root`,
 /// so `patch -p1` applies it there.
 fn migrate_file(
@@ -347,12 +347,13 @@ fn migrate_file(
     target_version: &FormatVersion,
     dry_run: bool,
     no_backup: bool,
+    read: &dyn Fn(&Path) -> std::io::Result<String>,
 ) -> FileMigration {
     let name = ProjectPath::of(root, path);
     let label = diff_label(path, root);
 
     // Read file
-    let content = match std::fs::read_to_string(path) {
+    let content = match read(path) {
         Ok(c) => c,
         Err(e) => {
             return FileMigration::of(
@@ -691,13 +692,15 @@ pub fn run_rollback(root: &ProjectRoot) -> RollbackSummary {
 
 /// Migrate `sources`, files of the project at `root` (the project's
 /// sources, which the caller selected), in order. `root` labels the diffs
-/// and backups.
+/// and backups. Each file is read once, through `read`: the caller decides the disk (ops reads through the
+/// request's containment, ADR 0158).
 pub fn migrate_project(
     root: &ProjectRoot,
     sources: &[PathBuf],
     target_version: &FormatVersion,
     dry_run: bool,
     no_backup: bool,
+    read: &dyn Fn(&Path) -> std::io::Result<String>,
 ) -> MigrationSummary {
     let project_root = root.dir();
 
@@ -716,6 +719,7 @@ pub fn migrate_project(
             target_version,
             dry_run,
             no_backup,
+            read,
         );
 
         match file.result.status {

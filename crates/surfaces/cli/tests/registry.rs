@@ -1020,7 +1020,7 @@ fn search_names_the_registry_of_each_hit() {
     assert!(output.status.success());
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["results"][0]["registry"], "local", "{json}");
-    assert_eq!(json["contributes"], serde_json::Value::Null, "{json}");
+    assert!(json.get("contributes").is_none(), "{json}");
     assert_eq!(json["diagnostics"], serde_json::json!([]), "{json}");
 }
 

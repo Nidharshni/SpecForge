@@ -39,7 +39,7 @@ fn renaming_an_inherited_reference_edits_it_once() {
     let on_line = plan
         .edits
         .iter()
-        .filter(|e| e.file == "a.spec" && e.line == 2)
+        .filter(|e| e.span.file == "a.spec" && e.span.start_line == 2)
         .count();
     assert_eq!(on_line, 1, "{:?}", plan.edits);
 }
@@ -56,7 +56,7 @@ fn tokens_hold_an_inherited_reference_once() {
     };
     let mut at: Vec<String> = p
         .navigator()
-        .tokens("Repo", query)
+        .tokens("Repo", true)
         .unwrap()
         .iter()
         .map(|o| crate::navigate::at(&o.span))
@@ -114,9 +114,10 @@ fn query_trace_and_export_show_the_inherited_list() {
     );
 
     assert!(
-        plain(trace(&view, Target::Entity("b")).unwrap())
-            .to_human()
-            .contains("Repo")
+        plain(trace(&view, Target::Entity("b")).unwrap()).chains[0]
+            .downstream
+            .iter()
+            .any(|link| link.entity_id == "Repo")
     );
 
     let exported = plain(

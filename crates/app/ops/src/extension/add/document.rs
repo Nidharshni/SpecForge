@@ -83,6 +83,9 @@ impl AddedExtension {
 /// (`McpAddExtensionResult`): what the add did for each specifier.
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 pub struct AddDocument {
+    /// The add only previewed: nothing was written. An entry's `planned` action says the same for an entry the add
+    /// would change; this says it for every entry, one already present included.
+    pub dry_run: bool,
     /// One entry per specifier, in the order given.
     pub added: Vec<AddResult>,
 }
@@ -176,6 +179,7 @@ impl Added {
     /// The add document: [`AddedExtension::document`] for each specifier.
     pub fn document(&self) -> AddDocument {
         AddDocument {
+            dry_run: self.dry_run,
             added: self.added.iter().map(AddedExtension::document).collect(),
         }
     }

@@ -7,6 +7,7 @@
 use specforge_migrate::migrate_project;
 use specforge_parser::CURRENT_FORMAT_VERSION;
 use specforge_test_macros::test as specforge_test;
+use std::path::Path;
 use tempfile::TempDir;
 
 /// `text` as a project's one source, migrated to the current version; what the file holds after.
@@ -26,6 +27,7 @@ fn migrated(text: &str) -> String {
         &CURRENT_FORMAT_VERSION,
         false,
         true,
+        &|path: &Path| std::fs::read_to_string(path),
     );
     std::fs::read_to_string(&a).unwrap()
 }

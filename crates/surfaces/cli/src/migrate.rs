@@ -1,10 +1,10 @@
 use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::terminal::{Terminal, outln};
-use specforge_common::ProjectPath;
 use specforge_ops::authoring::migrate::{
     self, MigrateDocument, MigrationStatus, Request, RollbackSummary,
 };
+use specforge_ops::{Writes, Wrote};
 use std::path::Path;
 
 // `specforge migrate`'s command line.
@@ -57,7 +57,7 @@ impl Args {
             print_rollback(
                 path,
                 &outcome.summary,
-                &outcome.writes.named(Some(path)),
+                &outcome.writes,
                 format,
                 terminal,
                 &notes,
@@ -86,8 +86,14 @@ impl Args {
             Err(error) => return Refusal::of(format).at(path).report(terminal, &error),
         };
         // Each migrated file and each backup (none for a dry run).
-        let written = (!dry_run).then(|| outcome.writes.named(Some(path)));
-        print_migration(&outcome.document(), written, format, terminal, &notes);
+        print_migration(
+            &outcome.document(),
+            &outcome.wrote(),
+            path,
+            format,
+            terminal,
+            &notes,
+        );
 
         if outcome.summary.failed_count != 0 {
             return Exit::of_verdict(outcome.ok());
@@ -116,14 +122,14 @@ impl Args {
 fn print_rollback(
     root: &Path,
     summary: &RollbackSummary,
-    files_written: &[ProjectPath],
+    writes: &Writes,
     format: OutputFormat,
     terminal: &Terminal,
     notes: &Notes<'_>,
 ) {
     match format {
         OutputFormat::Json => {
-            terminal.json(&Written::of(summary, files_written.to_vec()));
+            terminal.json(&Written::ran(summary, writes, root));
         }
         OutputFormat::Human => {
             for w in &summary.warnings {
@@ -160,16 +166,16 @@ fn print_rollback(
 /// (absent from a dry run).
 fn print_migration(
     document: &MigrateDocument,
-    files_written: Option<Vec<ProjectPath>>,
+    wrote: &Wrote,
+    root: &Path,
     format: OutputFormat,
     terminal: &Terminal,
     notes: &Notes<'_>,
 ) {
     match format {
-        OutputFormat::Json => terminal.json(&Written {
-            document,
-            files_written,
-        }),
+        OutputFormat::Json => {
+            terminal.json(&Written::of(document, wrote, root));
+        }
         OutputFormat::Human => {
             if document.dry_run {
                 for d in &document.diffs {

@@ -163,15 +163,10 @@ fn a_file_entry_resolves_against_the_root_and_names_what_it_writes() {
     let bare = ExtensionEntry::parse("ext/greet.wasm");
     assert_eq!(bare.file(root), Some(PathBuf::from("/p/ext/greet.wasm")));
     assert_eq!(bare.name(), None);
-    assert_eq!(extension_entry_name("ext/greet.wasm"), "ext/greet.wasm");
 
     let named = ExtensionEntry::parse("@sdk/greet=/abs/greet.wasm");
     assert_eq!(named.file(root), Some(PathBuf::from("/abs/greet.wasm")));
     assert_eq!(named.name(), Some("@sdk/greet"));
-    assert_eq!(
-        extension_entry_name("@sdk/greet=/abs/greet.wasm"),
-        "@sdk/greet"
-    );
 
     assert_eq!(ExtensionEntry::parse("@acme/foo@1.0.0").file(root), None);
 }
@@ -519,17 +514,17 @@ fn e069_text_is_the_problem_s() {
 }
 
 #[test]
-fn extension_entry_name_strips_only_a_version_suffix() {
-    assert_eq!(extension_entry_name("@acme/foo"), "@acme/foo");
-    assert_eq!(extension_entry_name("@acme/foo@1.2.0"), "@acme/foo");
-    assert_eq!(
-        extension_entry_name(" @specforge/formal@latest "),
-        "@specforge/formal"
+fn a_named_entry_names_its_extension_and_a_file_entry_none() {
+    let names = |entry: &str, name: &str| ExtensionEntry::parse(entry).names(name);
+    assert!(names("@acme/foo", "@acme/foo"));
+    assert!(names("@acme/foo@1.2.0", "@acme/foo"));
+    assert!(names(" @specforge/formal@latest ", "@specforge/formal"));
+    assert!(names("plain@0.0.0", "plain"));
+    assert!(!names("@acme/foobar", "@acme/foo"));
+    assert!(
+        !names("@sdk/greet=./a.wasm", "@sdk/greet"),
+        "a file entry names nothing by its text"
     );
-    assert_eq!(extension_entry_name("plain@0.0.0"), "plain");
-    assert_eq!(extension_entry_name("./ext/local.wasm"), "./ext/local.wasm");
-    assert_eq!(
-        extension_entry_name("./ext@2/local.wasm"),
-        "./ext@2/local.wasm"
-    );
+    assert!(!names("./ext/local.wasm", "./ext/local.wasm"));
+    assert!(!names("./ext@2/local.wasm", "./ext"));
 }

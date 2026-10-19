@@ -1,7 +1,7 @@
 //! Registry credential health, which `specforge doctor` reports: the
 //! user's, not the project's.
 
-use crate::credentials::{CredentialEntry, credentials_path, read_credentials};
+use crate::credentials::{CredentialEntry, CredentialStore, credentials_path, read_credentials};
 use crate::signing::signing_key_path;
 use serde::Serialize;
 use specforge_common::codes;
@@ -51,7 +51,15 @@ pub fn credential_health(
 ) -> CredentialHealth {
     let mut lines = Vec::new();
     let mut failures = 0usize;
-    let store = read_credentials(credentials).unwrap_or_default();
+    // An unreadable store is one unusable credential: every reader refuses it (R012).
+    let store = read_credentials(credentials).unwrap_or_else(|diag| {
+        failures += 1;
+        lines.push(CredentialLine {
+            level: CredentialLevel::Error,
+            text: format!("{} — {}", diag.message, diag.suggestion.unwrap_or_default()),
+        });
+        CredentialStore::default()
+    });
     let mut aliases: Vec<String> = store.registries.keys().cloned().collect();
     aliases.sort();
     for alias in aliases {
@@ -222,5 +230,27 @@ mod tests {
         let empty = credential_health(&dir.path().join("none.json"), &store, chrono::Utc::now());
         assert!(empty.lines.is_empty() && empty.failures == 0);
         assert!(empty.signing_key_present);
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "run_doctor_check",
+        verify = "an unreadable credential store is a credential failure in doctor"
+    )]
+    fn an_unreadable_store_is_a_credential_failure() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let store = dir.path().join("credentials.json");
+        std::fs::write(&store, r#"{"registries": {"a": {"token": "t"},}}"#).unwrap();
+
+        let health = credential_health(&store, &dir.path().join("no-key"), chrono::Utc::now());
+
+        assert_eq!(health.failures, 1, "{health:?}");
+        assert_eq!(health.lines.len(), 1, "{health:?}");
+        assert_eq!(health.lines[0].level, CredentialLevel::Error);
+        assert!(
+            health.lines[0]
+                .text
+                .contains("invalid credentials file format"),
+            "{health:?}"
+        );
     }
 }

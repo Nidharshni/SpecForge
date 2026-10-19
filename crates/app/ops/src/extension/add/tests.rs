@@ -105,6 +105,7 @@ fn greet_file() -> (tempfile::TempDir, PathBuf) {
 mod builtin;
 mod document;
 mod dry_run;
+mod entry_forms;
 mod local;
 mod registry;
 mod several;

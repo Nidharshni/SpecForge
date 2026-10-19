@@ -1,6 +1,6 @@
 //! Navigating a project: where an entity is declared, what references it,
-//! which entities match a text, which entities a diagnostic is about, and
-//! the edits that fix a diagnostic. The LSP and MCP answer from here; they
+//! which entities match a text, and which entities a
+//! diagnostic is about. The LSP and MCP answer from here; they
 //! convert spans (UTF-16 ranges, JSON) and nothing else. Positions are
 //! `SourceSpan`s: 1-based lines, 1-based byte columns, end exclusive.
 //!
@@ -12,9 +12,9 @@
 
 mod anchors;
 mod attribution;
+mod edits;
 mod files;
 mod find;
-mod fixes;
 mod occurrences;
 mod references;
 mod text;
@@ -32,18 +32,18 @@ pub use anchors::{
     AnchoredEntity, EntityAnchors, FileAnchors, Implementation, anchors_of_entity, anchors_of_file,
 };
 pub use attribution::{is_about, subjects};
+pub use edits::{TextEdit, apply_edits};
 pub use files::{FileMatch, OutlineEntry, OutlineMethod, match_file, outline};
 pub use find::{
     EntityMatch, EntityQuery, FUZZY_THRESHOLD, MatchScope, MatchedOn, Tier, find_entities, snippet,
     within_fuzzy_threshold,
 };
-pub use fixes::{Fix, FixKind, FixQuery, FixSource, TextEdit};
 pub use occurrences::{
-    DIRECTION, Definition, Direction, Occurrence, Precision, ReferenceQuery, Role,
+    DIRECTION, Definition, Direction, Occurrence, Precision, ReferenceQuery, Role, Token,
 };
 pub use references::{Reference, References};
 
-use text::SourceText;
+pub(crate) use text::SourceText;
 
 /// What navigation reads: the project view, and each spec file's text as the
 /// view's compiled project read it (`CompiledProject::source_text`): the text
@@ -70,7 +70,7 @@ impl<'a> Navigator<'a> {
     }
 
     /// The text of `file` as the compile read it, indexed once.
-    fn text(&self, file: Sym) -> Option<Rc<SourceText>> {
+    pub(crate) fn text(&self, file: Sym) -> Option<Rc<SourceText>> {
         if let Some(text) = self.texts.borrow().get(&file) {
             return text.clone();
         }

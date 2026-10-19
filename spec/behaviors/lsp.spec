@@ -237,9 +237,10 @@ behavior find_all_references "Find All References" {
   }
   contract   """
     When a user triggers find-references on an entity ID, the LSP MUST
-    return every location across all .spec files where another entity's
-    field names that entity: the identifier token as written, one location
-    per occurrence. What the entity itself references is not a reference
+    return every location across all .spec files where that entity's ID is
+    written as a reference: another entity's field, or a file's defaults
+    block whether or not a block takes it; the identifier token as written, one
+    location per occurrence. What the entity itself references is not a reference
     to it. The entity's own declaration (its name token) MUST be included
     when the request asks for it (includeDeclaration) and MUST NOT be
     otherwise. The LSP and MCP specforge.find_references answer from the
@@ -443,8 +444,10 @@ behavior rename_entity_id "Rename Entity ID" {
     or none are. The new ID follows the same rule as the MCP rename tool's:
     a name that is not a legal entity ID, that is a reserved word (a structural
     keyword or a declared kind's keyword, E013), or that is taken, MUST be refused
-    with an error saying why. The edits are exactly the entity's
-    declaration name and its references, as find-references returns them;
+    with an error saying why. The edits are exactly every token that names the
+    entity: its declaration's name and each reference, a reference written in
+    a defaults block that no block takes included, as the editor's
+    find-references returns them;
     text in strings, comments and verify statements that mentions the ID
     is not a reference and is not edited. The edits are positions in the
     text the project was compiled from: a rename over a file whose text (an
@@ -567,7 +570,11 @@ behavior code_actions_for_missing_verify "Code Actions for Missing Verify" {
     CodeActionKind::QuickFix. The LSP MUST NOT generate test source files
     or application code — SpecForge provides context, agents produce
     output. The set of testable kinds comes from extension manifests, not
-    hardcoded logic.
+    hardcoded logic. The stub is the typed add_verify edit (ADR 0151, ADR
+    0161) planned over the text the project was compiled from: laid out
+    with the file's format configuration, and not offered when its plan is
+    refused. A client that resolves code actions receives a stub's edits
+    when it resolves it.
   """
   verify unit "code action offered on untested testable entity"
   verify unit "generated verify stubs added to entity block in .spec file"
@@ -578,6 +585,8 @@ behavior code_actions_for_missing_verify "Code Actions for Missing Verify" {
   verify unit "code actions are those whose diagnostic or entity overlaps the requested range"
   verify unit "no verify stub is offered for an entity a union body or an exempting flag exempts"
   verify unit "a verify stub fixes the diagnostic that reports its entity, or none when nothing reports it"
+  verify unit "the verify stub is laid out with the file's format configuration"
+  verify unit "a client that resolves code actions gets a stub's edits on resolve"
   verify contract "Code Actions for Missing Verify: missing verify code actions holds — kind_registry_available, graph_available, quickfix_offered, verify_stubs_produced, no_code_generated"
 }
 
@@ -924,7 +933,7 @@ behavior code_action_create_entity_stub "Code Action: Create Entity Stub" {
     field_registry_available "FieldRegistry is populated with target_kind constraints for kind inference"
   }
   ensures {
-    stub_created      "a structural entity block stub is inserted at the end of the current file"
+    stub_created      "a block of the target kind is created by the typed create edit in the current file: after its last block of that kind, else at its end, laid out with the file's format configuration"
     kind_inferred     "entity kind is inferred from the enclosing field's target_kind constraint in the FieldRegistry"
     no_code_generated "no application code, test files, or implementation scaffolding are generated"
   }
@@ -939,8 +948,14 @@ behavior code_action_create_entity_stub "Code Action: Create Entity Stub" {
     knowledge). The unresolved target, the entity that names it and the
     field it is named in MUST be read from the diagnostic's data
     (DiagnosticData), never parsed from its message, which is
-    presentation. The stub MUST be placed in the current file. The code
-    action MUST use CodeActionKind::Refactor.
+    presentation. The stub MUST be placed in the current file, after the
+    file's last block of its kind, else at its end. The stub is the typed
+    create edit (ADR 0151): it is offered only when its plan succeeds, so
+    an ID the create refuses, or a stub after which the project would
+    report a new error (E080), offers none. Each field the kind requires is
+    written TODO. A client that resolves code actions receives a stub's
+    edits when it resolves it. The code action MUST use
+    CodeActionKind::Refactor.
     The generated stub MUST contain only the structural entity block
     (keyword, ID, placeholder fields). It MUST NOT generate application
     code, test files, or implementation scaffolding. SpecForge provides
@@ -950,9 +965,12 @@ behavior code_action_create_entity_stub "Code Action: Create Entity Stub" {
   verify unit "the stub is read from the diagnostic's data, whatever its message says"
   verify unit "stub uses correct entity kind from FieldRegistry target_kind"
   verify unit "no code action when enclosing field has no target_kind"
-  verify unit "stub is inserted at end of current file"
+  verify unit "stub goes after the last block of its kind in the current file"
   verify unit "code action kind is Refactor"
   verify unit "generated stub contains no application code or test files"
+  verify unit "an offered stub adds no error to the project"
+  verify unit "stub is laid out with the file's format configuration"
+  verify unit "stub writes TODO in each required field"
   verify contract "Code Action: Create Entity Stub: create entity stub holds — graph_available, field_registry_available, stub_created, kind_inferred, no_code_generated"
 }
 

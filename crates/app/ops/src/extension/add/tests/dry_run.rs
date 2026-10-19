@@ -199,6 +199,7 @@ fn a_dry_run_reports_the_builtins_it_would_enable() {
     .unwrap();
 
     let document = serde_json::to_value(added.document()).unwrap();
+    assert_eq!(document["dry_run"], true);
     assert_eq!(document["added"][0]["action"], "planned");
     assert_eq!(
         document["added"][0]["peers_enabled"],

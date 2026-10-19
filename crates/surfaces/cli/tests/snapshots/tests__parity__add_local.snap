@@ -36,6 +36,7 @@ expression: snapshot
           "version": "0.1.0"
         }
       ],
+      "dry_run": false,
       "files_written": [
         ".specforge/extensions/@sdk/greet/extension.wasm",
         "specforge.json",

@@ -6,8 +6,12 @@
 mod block;
 mod create;
 mod defaults;
+mod outcome;
+mod path;
 mod validate;
 pub mod write;
+
+pub use outcome::{EditDocument, Edited, run};
 
 use crate::change::ProjectChange;
 use crate::view::ProjectView;
@@ -207,6 +211,21 @@ impl EditPlan {
         self.files
             .iter()
             .map(|(key, (_, after))| (key.clone(), after.clone()))
+            .collect()
+    }
+
+    /// Each file the plan changes, by path relative to the spec root, and the edits that turn the text it was planned
+    /// on into the text it will hold: byte ranges of the planned-on text, in order, none overlapping (the formatter's
+    /// minimal diff, ADR 0021 D8). A new file is one insertion at 0.
+    pub fn edits(&self) -> Vec<(&str, Vec<crate::authoring::format::Edit>)> {
+        self.files
+            .iter()
+            .map(|(key, (before, after))| {
+                (
+                    key.as_str(),
+                    crate::authoring::format::between(before.as_deref().unwrap_or(""), after),
+                )
+            })
             .collect()
     }
 }

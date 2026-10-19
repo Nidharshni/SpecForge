@@ -2,9 +2,11 @@
 //! (ADR 0012), uploaded to the registry that serves its name (ADR 0045).
 //! Every check that needs no registry runs before the registry is asked.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use specforge_common::{Code, Diagnostic, Severity, codes};
+use serde::Serialize;
+use specforge_common::shape::Shape;
+use specforge_common::{Code, Diagnostic, DiagnosticList, Severity, codes};
 use specforge_package::{PackageName, Version};
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_wasm::WasmRuntime;
@@ -37,6 +39,42 @@ pub struct PublishOutcome {
     pub published: Published,
 }
 
+impl PublishOutcome {
+    /// The document `specforge publish` prints.
+    pub fn document(&self) -> PublishDocument {
+        PublishDocument {
+            action: PublishAction::Published,
+            extension: self.name.to_string(),
+            version: self.version.to_string(),
+            registry: self.published.registry.clone(),
+            url: self.published.url.clone(),
+            size_bytes: self.size_bytes,
+            key_id: self.published.key_id.clone(),
+            key_created: self.published.key_created,
+        }
+    }
+}
+
+/// What `specforge publish --format json` prints (CLI-only, ADR 0052 D5).
+#[derive(Debug, Clone, PartialEq, Serialize, Shape)]
+pub struct PublishDocument {
+    pub action: PublishAction,
+    pub extension: String,
+    pub version: String,
+    pub registry: String,
+    pub url: String,
+    pub size_bytes: usize,
+    pub key_id: String,
+    pub key_created: bool,
+}
+
+/// What a publish did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Shape)]
+#[serde(rename_all = "snake_case")]
+pub enum PublishAction {
+    Published,
+}
+
 /// Publish the extension at `extension` (a `.wasm` component, or the crate
 /// directory that builds one) to `registry`.
 ///
@@ -64,8 +102,12 @@ fn run(
     runtime: &dyn WasmRuntime,
     warnings: &mut Vec<Diagnostic>,
 ) -> Result<PublishOutcome, OpError> {
-    let wasm = read(&crate::extension::binary_at(extension)?)?;
-    let (declaration, diagnostics) = declare(runtime, &wasm)?;
+    let Validated {
+        wasm,
+        declaration,
+        diagnostics,
+        ..
+    } = validate(extension, runtime)?;
     *warnings = diagnostics
         .iter()
         .filter(|d| d.severity != Severity::Error)
@@ -85,6 +127,70 @@ fn run(
         size_bytes: wasm.len(),
         published,
     })
+}
+
+/// The extension at `extension` (a `.wasm` component, or the crate directory that builds one), read and declared as
+/// publish reads it. Refused, in this order: E040 (no binary at the path, none built, unreadable), E028 (not a
+/// loadable extension, read through `runtime`). Its diagnostics are [`declare`]'s.
+pub fn validate(extension: &Path, runtime: &dyn WasmRuntime) -> Result<Validated, OpError> {
+    let binary = crate::extension::binary_at(extension)?;
+    let wasm = read(&binary)?;
+    let (declaration, diagnostics) = declare(runtime, &wasm)?;
+    Ok(Validated {
+        binary,
+        wasm,
+        declaration,
+        diagnostics,
+    })
+}
+
+/// An extension binary read and declared: what `specforge extension validate` reports and publish's first two steps.
+#[derive(Debug)]
+pub struct Validated {
+    pub binary: PathBuf,
+    pub wasm: Vec<u8>,
+    pub declaration: ExtensionDeclaration,
+    /// [`declare`]'s: the load warnings, then what the registry build of the declaration alone reports.
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+impl Validated {
+    /// No error-level diagnostic: `extension validate` exits 0, and publish's step 2 lets it through.
+    pub fn valid(&self) -> bool {
+        !self.diagnostics.iter().any(is_error)
+    }
+
+    /// What `specforge extension validate --format json` prints.
+    pub fn document(&self) -> ValidateDocument {
+        ValidateDocument {
+            valid: self.valid(),
+            extension: self.declaration.name().to_string(),
+            version: self.declaration.version().to_string(),
+            short: self.declaration.short().to_string(),
+            component: self.binary.display().to_string(),
+            diagnostics: DiagnosticList(self.diagnostics.clone()),
+            declaration: self.declaration.clone(),
+        }
+    }
+}
+
+/// `specforge extension validate --format json` (CLI-only, ADR 0052 D5).
+#[derive(Debug, Serialize, Shape)]
+pub struct ValidateDocument {
+    pub valid: bool,
+    pub extension: String,
+    pub version: String,
+    pub short: String,
+    /// The component read, as given or as the crate built it.
+    pub component: String,
+    pub diagnostics: DiagnosticList,
+    /// `ExtensionDeclaration` is a leaf type without a `Shape`.
+    #[shape(as = serde_json::Value)]
+    pub declaration: ExtensionDeclaration,
+}
+
+fn is_error(d: &Diagnostic) -> bool {
+    d.severity == Severity::Error
 }
 
 fn read(binary: &Path) -> Result<Vec<u8>, OpError> {
@@ -159,10 +265,7 @@ fn refuse_errors(
     declaration: &ExtensionDeclaration,
     diagnostics: &[Diagnostic],
 ) -> Result<(), OpError> {
-    let errors: Vec<&Diagnostic> = diagnostics
-        .iter()
-        .filter(|d| d.severity == Severity::Error)
-        .collect();
+    let errors: Vec<&Diagnostic> = diagnostics.iter().filter(|d| is_error(d)).collect();
     let Some(first) = errors.first() else {
         return Ok(());
     };

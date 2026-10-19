@@ -3398,9 +3398,6 @@ expression: listing
           },
           "type": "array"
         },
-        "check_only": {
-          "type": "boolean"
-        },
         "diagnostics": {
           "items": {
             "$ref": "#/$defs/Diagnostic"
@@ -3439,6 +3436,9 @@ expression: listing
             "type": "object"
           },
           "type": "array"
+        },
+        "dry_run": {
+          "type": "boolean"
         },
         "failed_files": {
           "items": {
@@ -3495,7 +3495,7 @@ expression: listing
         "total_checked",
         "ok",
         "all_clean",
-        "check_only",
+        "dry_run",
         "diagnostics"
       ],
       "type": "object"
@@ -3831,30 +3831,19 @@ expression: listing
           "items": {
             "additionalProperties": false,
             "properties": {
-              "end_col": {
-                "minimum": 0,
-                "type": "integer"
-              },
-              "file": {
+              "file_path": {
                 "type": "string"
-              },
-              "line": {
-                "minimum": 0,
-                "type": "integer"
               },
               "new_text": {
                 "type": "string"
               },
-              "start_col": {
-                "minimum": 0,
-                "type": "integer"
+              "range": {
+                "$ref": "#/$defs/SourceSpan"
               }
             },
             "required": [
-              "file",
-              "line",
-              "start_col",
-              "end_col",
+              "file_path",
+              "range",
               "new_text"
             ],
             "type": "object"
@@ -3878,7 +3867,8 @@ expression: listing
         "old_name",
         "new_name",
         "affected_files",
-        "edits"
+        "edits",
+        "dry_run"
       ],
       "type": "object"
     },
@@ -4526,6 +4516,7 @@ expression: listing
         }
       },
       "required": [
+        "dry_run",
         "entities",
         "affected_files",
         "diff",
@@ -4855,6 +4846,9 @@ expression: listing
           },
           "type": "array"
         },
+        "dry_run": {
+          "type": "boolean"
+        },
         "files_written": {
           "items": {
             "type": "string"
@@ -4866,6 +4860,7 @@ expression: listing
         }
       },
       "required": [
+        "dry_run",
         "added"
       ],
       "type": "object"
@@ -4912,12 +4907,8 @@ expression: listing
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
-        "action": {
-          "enum": [
-            "removed",
-            "planned"
-          ],
-          "type": "string"
+        "dry_run": {
+          "type": "boolean"
         },
         "extension": {
           "type": "string"
@@ -4955,8 +4946,8 @@ expression: listing
         }
       },
       "required": [
-        "action",
         "extension",
+        "dry_run",
         "source",
         "stranded"
       ],

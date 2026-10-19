@@ -233,16 +233,6 @@ impl TraceOutcome {
             })
     }
 
-    /// The chains as terminal text, one block per chain ([`render_human`]),
-    /// separated by a blank line.
-    pub fn to_human(&self) -> String {
-        self.chains
-            .iter()
-            .map(render_human)
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-
     /// The missing links of every chain, as gaps.
     pub fn gaps(&self) -> Vec<Gap> {
         self.chains
@@ -429,45 +419,6 @@ fn missing_links(
             status: TraceLinkStatus::Missing,
         })
         .collect()
-}
-
-/// A chain as terminal text: the entity, then its upstream, downstream and
-/// missing links, one per line. Missing links are marked `MISSING`.
-fn render_human(chain: &TraceChain) -> String {
-    let mut out = format!("{} [{}]\n", chain.entity_id, chain.entity_kind);
-    let section = |out: &mut String, name: &str, links: &[TraceLink], arrow: fn(&str) -> String| {
-        out.push_str(&format!("  {name}:\n"));
-        if links.is_empty() {
-            out.push_str("    (none)\n");
-        }
-        for link in links {
-            out.push_str(&format!(
-                "    {} {} [{}] (depth {})\n",
-                arrow(&link.edge_label),
-                link.entity_id,
-                link.entity_kind,
-                link.depth
-            ));
-        }
-    };
-    section(&mut out, "upstream", &chain.upstream, |l| format!("<-{l}-"));
-    section(&mut out, "downstream", &chain.downstream, |l| {
-        format!("-{l}->")
-    });
-    if !chain.missing.is_empty() {
-        out.push_str("  missing:\n");
-        for link in &chain.missing {
-            out.push_str(&format!(
-                "    MISSING {} -{}-> [{}]{} (depth {})\n",
-                link.from,
-                link.edge_label,
-                link.expected_kind,
-                if link.required { " required" } else { "" },
-                link.depth
-            ));
-        }
-    }
-    out
 }
 
 enum Direction {
