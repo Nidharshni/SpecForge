@@ -53,9 +53,10 @@ fn each_declared_type_spells_its_value() {
         (FieldType::Identifier, "api/lsp", r#""api/lsp""#),
         (FieldType::Enum, "true", r#""true""#),
         (FieldType::Reference, "alpha", "alpha"),
-        (FieldType::Reference, "gh.issue:7", "gh.issue:7"),
+        (FieldType::Reference, "gh.issue:7", r#""gh.issue:7""#),
         (FieldType::Reference, "true", r#""true""#),
         (FieldType::ReferenceList, "a_one", "a_one"),
+        (FieldType::ReferenceList, "gh.issue:7", "gh.issue:7"),
         (FieldType::StringList, "RFC 1", r#""RFC 1""#),
         (FieldType::StringList, "gh.issue:7", "gh.issue:7"),
         (FieldType::Integer, " 42 ", "42"),
@@ -111,11 +112,6 @@ fn a_spelled_value_reads_back_and_is_left_by_rewrite() {
             "x-y",
             "é",
         ] {
-            // A scheme ref id stands bare only as a list item; as a scalar it does not parse, and the
-            // typed-edit writer refuses it at its own read-back.
-            if !is_list && text == "gh.issue:7" && *field_type == FieldType::Reference {
-                continue;
-            }
             let spelled = spell::value(&form, text);
             let value = if is_list {
                 format!("[{spelled}]")

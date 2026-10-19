@@ -95,6 +95,20 @@ fn rewrite_leaves_what_it_cannot_write() {
     // A path, or true/false, cannot be a bare word.
     assert_eq!(forms.rewrite("k", "ref_", Written::Quoted, "api/lsp"), None);
     assert_eq!(forms.rewrite("k", "id_", Written::Quoted, "true"), None);
+    // A scheme ref id is a reference list item's bare form (ADR 0153); a scalar reference takes a word only,
+    // and an identifier too, as a scheme ref id does not parse bare outside a list.
+    assert_eq!(
+        forms.rewrite("k", "refs", Written::Quoted, "gh.issue:1"),
+        Some(Written::Bare)
+    );
+    assert_eq!(
+        forms.rewrite("k", "ref_", Written::Quoted, "gh.issue:1"),
+        None
+    );
+    assert_eq!(
+        forms.rewrite("k", "id_", Written::Quoted, "gh.issue:1"),
+        None
+    );
     // A scheme ref or a literal is neither form.
     assert_eq!(
         forms.rewrite("k", "texts", Written::SchemeRef, "gh.issue:1"),

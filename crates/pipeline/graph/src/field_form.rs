@@ -377,7 +377,8 @@ impl FieldForms {
     /// is not it (ADR 0147); `None` leaves the value as written: the field
     /// has no declared form, the value is already in it or is neither bare
     /// nor quoted, a bare form cannot hold `text` ([`spell::holds_bare`]: not
-    /// a word, or `true` / `false`, which would read back as a boolean), or a bare word sits on
+    /// a word (on a `reference_list` not an entity id), or `true` / `false`, which would read back as a
+    /// boolean), or a bare word sits on
     /// a kind that takes members (it may be a member's type).
     pub fn rewrite(
         &self,

@@ -36,10 +36,14 @@ pub fn spelled(text: &str, written: Written) -> String {
 }
 
 /// Whether `text` may stand bare as a value of a field of `field_type` whose form is bare (ADR 0147 D1): a word,
-/// never `true` / `false` (they read back as booleans).
-pub fn holds_bare(_field_type: FieldType, text: &str) -> bool {
-    // T7 (ADR 0153 D3) reads the field type: an entity id on a reference field.
-    is_word(text) && !matches!(text, "true" | "false")
+/// or on a `reference_list` an entity id (a scheme ref id too, ADR 0153 D3); never `true` / `false` (they read back
+/// as booleans). A scalar `reference` takes a word only: a scheme ref id does not parse bare outside a list.
+pub fn holds_bare(field_type: FieldType, text: &str) -> bool {
+    !matches!(text, "true" | "false")
+        && match field_type {
+            FieldType::ReferenceList => is_entity_id(text),
+            _ => is_word(text),
+        }
 }
 
 /// How `text`, one value of a field of `form` or one item of its list, is written on one line:
@@ -49,8 +53,8 @@ pub fn holds_bare(_field_type: FieldType, text: &str) -> bool {
 /// | `integer` | the integer, when `text` is one; else quoted (E061 reports it) |
 /// | `bool` | `true` / `false`; anything else quoted (E061) |
 /// | `string_list` item | a scheme ref id bare (it then names an entity, ADR 0093); else quoted |
-/// | `reference`, `reference_list` item | an entity id bare (a word or a scheme ref id), never `true` / `false`; else quoted |
-/// | `enum`, `identifier` | bare when [`holds_bare`]; else quoted |
+/// | `reference_list` item | an entity id bare (a word or a scheme ref id), never `true` / `false`; else quoted |
+/// | `reference`, `enum`, `identifier` | bare when [`holds_bare`] (a word); else quoted |
 /// | `string`, `block` | quoted |
 pub fn value(form: &FieldForm, text: &str) -> String {
     let field_type = form.field_type();
@@ -61,12 +65,6 @@ pub fn value(form: &FieldForm, text: &str) -> String {
             .map_or_else(|_| quoted(text), |n| n.to_string()),
         FieldType::Bool if matches!(text, "true" | "false") => text.to_string(),
         FieldType::StringList if text.contains(':') && is_entity_id(text) => text.to_string(),
-        // T7 deletes this arm: holds_bare answers it.
-        FieldType::Reference | FieldType::ReferenceList
-            if is_entity_id(text) && !matches!(text, "true" | "false") =>
-        {
-            text.to_string()
-        }
         _ => match form.written() {
             Some(Written::Bare) if holds_bare(field_type, text) => text.to_string(),
             _ => quoted(text),

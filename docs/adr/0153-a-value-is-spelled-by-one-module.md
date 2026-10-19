@@ -1,6 +1,6 @@
 # A value is spelled by one module
 
-**Status:** accepted (2026-10-19, architecture round 15, plan 01). Amends [ADR 0147](0147-a-value-is-written-in-its-fields-one-form.md) D1 (a scheme ref id on a reference field is bare) and D4 (the rule is read from one module, the typed-edit writer reads it too) and [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) D2 (a multi-line value is laid out with the file's format configuration).
+**Status:** accepted (2026-10-19, architecture round 15, plan 01). Amends [ADR 0147](0147-a-value-is-written-in-its-fields-one-form.md) D1 (a scheme ref id on a reference list is bare) and D4 (the rule is read from one module, the typed-edit writer reads it too) and [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) D2 (a multi-line value is laid out with the file's format configuration).
 
 ## Context
 
@@ -28,8 +28,9 @@ a scheme ref, a member type, a block's entries) it would not.
 - **D2.** The typed-edit writer lays a multi-line value out with the file's format configuration (ADR 0021): a text goes
   triple-quoted when it holds a line break or its one-line form passes the configuration's `max_width`; its lines are
   one indent of the configuration past the key's, its closing quotes at the key's.
-- **D3.** On a `reference` or `reference_list` field a scheme ref id is written bare, as a word is: `format` unquotes it
-  and W159 reports it quoted. Elsewhere the bare rule is unchanged (a word, never `true` or `false`).
+- **D3.** On a `reference_list` field a scheme ref id is written bare, as a word is: `format` unquotes it and W159
+  reports it quoted. Elsewhere the bare rule is unchanged (a word, never `true` or `false`); a scalar `reference`
+  keeps a scheme ref id quoted, because it does not parse bare outside a list.
 
 ## Rejected
 
@@ -43,7 +44,7 @@ a scheme ref, a member type, a block's entries) it would not.
 ## Consequences
 
 A typed edit never produces W159, and a multi-line value follows `.specforgefmt.toml`; with the defaults the output is
-byte for byte what it was. `format` unquotes a quoted scheme ref id on a reference field (no tracked value changes: every
+byte for byte what it was. `format` unquotes a quoted scheme ref id on a reference list (no tracked value changes: every
 builtin reference field declares a target kind, so a scheme ref there is already E022).
 
 ## What would reopen it
