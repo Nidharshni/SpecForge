@@ -85,8 +85,10 @@ const TYPO: &str = "behavior login \"Login\" {\n  invariants [session_limt]\n}\n
 
 /// A line typed above the block: the compile's E003 is at line 1 of the text it read, and line 1 of
 /// the buffer is the block's header now.
-#[test]
-#[ignore = "flipped by T4"]
+#[spec(
+    behavior = "hover_diagnostic",
+    verify = "hovering a buffer typed since the compile shows none of the compile's diagnostics"
+)]
 fn hover_over_a_buffer_typed_since_shows_no_diagnostic_of_the_compile() {
     let mut served =
         Served::new(&[("limit.spec", LIMIT), ("login.spec", TYPO)]).open(&["login.spec"]);

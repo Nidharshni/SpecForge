@@ -121,8 +121,8 @@ fn entity_under_cursor(compiled: &Compiled, key: &str, position: Position) -> Op
 }
 
 /// The hover at `position` of the open document `uri`: the published
-/// diagnostics under it (their ranges are positions in the compiled text)
-/// explained from the catalog, then what the cursor names: an entity's
+/// diagnostics under it while the document is the compiled text (their
+/// ranges are positions in that text) explained from the catalog, then what the cursor names: an entity's
 /// facts (the inspect read view reporting what was published; while the
 /// project rebuilds, the last complete compile's coverage) or a field's help. Sections are
 /// joined by a rule. `None` for a document that is not open or a position
@@ -132,10 +132,13 @@ pub fn hover(state: &LspState, uri: &Url, position: Position) -> Option<Hover> {
     let files = state.files();
     let doc = files.document(&key)?;
     let compiled = Compiled::new(state);
-    let mut shown = compiled
-        .index_of(&key)
-        .map(|index| hover::diagnostics_at(files.compile_diagnostics(&key), &index, position))
-        .unwrap_or_default();
+    // The compile's diagnostics are positions in the text it read: under the cursor only while the
+    // document is that text, through its own index (ADR 0023 D3).
+    let mut shown = if compiled.is_stale(&key) {
+        Vec::new()
+    } else {
+        hover::diagnostics_at(files.compile_diagnostics(&key), doc.index(), position)
+    };
     // The formatter's findings are positions in the buffer it formatted, which is this one.
     shown.extend(hover::diagnostics_at(
         files.formatter_diagnostics(&key),

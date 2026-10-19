@@ -322,12 +322,16 @@ behavior hover_diagnostic "Hover a Diagnostic" {
     does not have shows its code and message only. The entity hover that
     follows does not list that diagnostic again. A region the formatter
     left unformatted (W142) is such a diagnostic while the document is the
-    text formatting reported it on.
+    text formatting reported it on. A diagnostic of the compile is such a
+    diagnostic while the document is the text the project was compiled from:
+    over a buffer typed since, its range is a position in another text, and
+    the hover shows none of the compile's diagnostics.
   """
   verify unit "hovering a diagnostic shows its catalogued title and explanation"
   verify unit "an uncatalogued diagnostic's hover shows its code and message only"
   verify unit "the diagnostic under the cursor comes before the entity's hover, which does not list it again"
   verify unit "hovering a region the formatter left unformatted shows its W142"
+  verify unit "hovering a buffer typed since the compile shows none of the compile's diagnostics"
 }
 
 // Completion behaviors (autocomplete_entity_ids, complete_field_names, complete_keywords)
