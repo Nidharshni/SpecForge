@@ -13,12 +13,15 @@ pub mod write;
 
 pub use outcome::{EditDocument, Edited, run};
 
+use crate::authoring::format::{Configs, Place};
 use crate::change::ProjectChange;
 use crate::view::ProjectView;
 use crate::{Caller, OpError, OpErrorKind, Refusal, Writes};
 use serde::{Deserialize, Serialize};
 use specforge_common::DiagnosticList;
 use specforge_common::shape::{Definitions, Shape};
+use specforge_formatter::FormatConfig;
+use specforge_registry::PlainDisk;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -233,6 +236,8 @@ impl EditPlan {
 /// The part of the plan being made: the edited texts, and what the earlier edits created or deleted.
 struct Planner<'v> {
     view: &'v ProjectView<'v>,
+    /// The plan's one configuration lookup, through the view's disk (ADR 0169).
+    configs: Configs<'v>,
     texts: BTreeMap<String, String>,
     entities: BTreeSet<String>,
     created: BTreeMap<String, (String, String)>,
@@ -246,6 +251,12 @@ struct Located {
 }
 
 impl<'v> Planner<'v> {
+    /// The format configuration of the file `key` names (relative to the spec root).
+    fn config_of(&mut self, key: &str) -> FormatConfig {
+        let path = self.view.env().spec_root().join(key);
+        self.configs.layout(Place::File(&path))
+    }
+
     fn text(&self, key: &str) -> Option<String> {
         match self.texts.get(key) {
             Some(text) => Some(text.clone()),
@@ -289,6 +300,7 @@ impl<'v> Planner<'v> {
             key: &located.key,
             id,
             kind: &located.kind,
+            config: self.config_of(&located.key),
         };
         let new = change(&site, &text)?;
         if new != text {
@@ -428,8 +440,10 @@ pub fn plan(view: &ProjectView<'_>, edits: &[Edit]) -> Result<EditPlan, Refusal<
         return Err(crate::config::refusal(problem).into());
     }
     view.project_root()?;
+    let disk = PlainDisk;
     let mut planner = Planner {
         view,
+        configs: Configs::new(None, &disk),
         texts: BTreeMap::new(),
         entities: BTreeSet::new(),
         created: BTreeMap::new(),

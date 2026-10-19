@@ -5,10 +5,9 @@
 use super::path::{self, FieldPath};
 use super::write::{not_editable, written};
 use super::{EditField, Input};
-use crate::authoring::format::{self, Lines, Place};
 use crate::view::ProjectView;
 use crate::{OpError, OpErrorKind, Refusal};
-use specforge_common::{SourceSpan, find_close_match};
+use specforge_common::{SourceSpan, codes, find_close_match};
 use specforge_formatter::FormatConfig;
 use specforge_graph::field_form::{FieldForm, Reading, spell};
 use specforge_parser::lex::{LexemeKind, lex};
@@ -30,6 +29,8 @@ pub struct Site<'a> {
     pub key: &'a str,
     pub id: &'a str,
     pub kind: &'a str,
+    /// The format configuration of the entity's file, looked up once per plan (ADR 0169).
+    pub config: FormatConfig,
 }
 
 impl Site<'_> {
@@ -127,10 +128,6 @@ impl Site<'_> {
         .with_suggestion(suggestion)
         .about(EditField::Field)
     }
-
-    fn path(&self) -> std::path::PathBuf {
-        self.view.env().spec_root().join(self.key)
-    }
 }
 
 /// The fields `kind` declares, in the order a block writes them: the kind's own in declaration order, then every
@@ -181,25 +178,22 @@ pub struct Block {
     config: FormatConfig,
 }
 
-/// The format configuration of the file `site` is in.
-pub fn layout(site: &Site<'_>) -> FormatConfig {
-    format::config(Place::File(&site.path()))
-}
-
-/// `text` with the block of `site` laid out canonically.
+/// `text` with the block of `site` laid out canonically, with its file's configuration.
 pub fn canonical(site: &Site<'_>, text: &str) -> Result<String, Refusal<EditField>> {
     let file = parse(text, site.key);
     let span = &file.entities[position(&file, site).ok_or_else(|| unreadable(site.id))?].span;
-    let lines = Lines {
-        first: span.start_line - 1,
-        last: span.end_line - 1,
-    };
-    let forms = site.view.registries().field_forms();
-    let formatted = format::document(Place::File(&site.path()), text, Some(lines), None, forms);
-    if formatted.complete() {
-        Ok(formatted.formatted)
-    } else {
+    let formatted = specforge_formatter::format_range(
+        text,
+        span.start_line - 1,
+        span.end_line - 1,
+        &site.config,
+        site.view.registries().field_forms(),
+    );
+    // A region the parser could not read whole (W142) is kept as written: the block cannot be edited.
+    if formatted.diagnostics.iter().any(|d| d.is(codes::W142)) {
         Err(unreadable(site.id))
+    } else {
+        Ok(formatted.formatted)
     }
 }
 
@@ -213,7 +207,7 @@ impl Block {
             lines,
             file,
             index,
-            config: layout(site),
+            config: site.config.clone(),
         })
     }
 

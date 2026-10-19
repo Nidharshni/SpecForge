@@ -141,11 +141,6 @@ pub fn document<'a>(
     format_text(resolved, text, lines, file, forms)
 }
 
-/// The configuration [`document`] formats `place` with (T3 of ADR 0169 replaces this lookup per call).
-pub fn config(place: Place<'_>) -> FormatConfig {
-    Configs::new(None, &PlainDisk).layout(place)
-}
-
 /// The directory `file` is in (`.` for a bare file name).
 pub(super) fn directory_of(file: &Path) -> PathBuf {
     match file.parent() {
@@ -184,7 +179,7 @@ pub(crate) struct Configs<'d> {
     runtime: Option<SharedRuntime>,
     forms: HashMap<PathBuf, FieldForms>,
     none: FieldForms,
-    projects: HashMap<PathBuf, Option<PathBuf>>,
+    projects: HashMap<PathBuf, Option<ProjectRoot>>,
     found: HashMap<(PathBuf, PathBuf), Option<PathBuf>>,
     read: HashMap<PathBuf, FormatConfig>,
 }
@@ -230,10 +225,9 @@ impl<'d> Configs<'d> {
         let Some(root) = self.project_of(&dir) else {
             return &self.none;
         };
-        self.forms.entry(root.clone()).or_insert_with(|| {
-            ProjectRoot::enclosing(&dir)
-                .map_or_else(FieldForms::default, |root| forms(&root, Some(runtime)))
-        })
+        self.forms
+            .entry(root.dir().to_path_buf())
+            .or_insert_with(|| forms(&root, Some(runtime)))
     }
 
     /// The configuration of `file`: its own project's (discovery from its
@@ -242,16 +236,16 @@ impl<'d> Configs<'d> {
     pub(super) fn for_file(&mut self, file: &Path, editor: Option<EditorOptions>) -> Resolved {
         let dir = directory_of(file);
         match self.project_of(&dir) {
-            Some(root) => self.resolve(&dir, &root),
+            Some(root) => self.resolve(&dir, root.dir()),
             None => Resolved::editor(editor),
         }
     }
 
     /// The root of the project `dir` is in.
-    fn project_of(&mut self, dir: &Path) -> Option<PathBuf> {
+    fn project_of(&mut self, dir: &Path) -> Option<ProjectRoot> {
         self.projects
             .entry(dir.to_path_buf())
-            .or_insert_with(|| ProjectRoot::enclosing(dir).map(|r| r.dir().to_path_buf()))
+            .or_insert_with(|| ProjectRoot::enclosing(dir))
             .clone()
     }
 

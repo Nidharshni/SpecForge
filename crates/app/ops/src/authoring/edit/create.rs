@@ -65,9 +65,10 @@ impl Planner<'_> {
             key: file,
             id,
             kind,
+            config: self.config_of(file),
         };
         let order = block::order(self.view, kind);
-        let config = block::layout(&site);
+        let config = site.config.clone();
         let mut members: Vec<((u8, usize), String, String)> = Vec::new();
         for (name, input) in fields {
             let reading = match path::resolve(&site, name, None)? {
