@@ -27,32 +27,6 @@ pub struct PlanOutcome {
     pub gaps: Vec<PlanGap>,
 }
 
-impl PlanOutcome {
-    /// The outcome as `specforge trace --plan --format human` prints it.
-    pub fn to_human(&self) -> String {
-        let mut text = String::new();
-        if self.resolved_entries.is_empty() {
-            text.push_str("resolved: none\n");
-        } else {
-            text.push_str(&format!("resolved: {}\n", self.resolved_entries.join(", ")));
-        }
-        if self.gaps.is_empty() {
-            text.push_str("gaps: none\n");
-        } else {
-            text.push_str(&format!("gaps ({}):\n", self.gaps.len()));
-            for gap in &self.gaps {
-                text.push_str(&format!("  - {}: {}\n", gap.kind.as_str(), gap.context));
-            }
-        }
-        text.push_str(if self.ok {
-            "plan check: passed\n"
-        } else {
-            "plan check: failed\n"
-        });
-        text
-    }
-}
-
 /// What an agent intends to do, entity by entity, in the order it will do it
 /// (`AgentPlan`, spec/types/graph.spec). Its entry order is its dependency
 /// order; the graph's edges are the dependencies.

@@ -114,9 +114,10 @@ fn query_trace_and_export_show_the_inherited_list() {
     );
 
     assert!(
-        plain(trace(&view, Target::Entity("b")).unwrap())
-            .to_human()
-            .contains("Repo")
+        plain(trace(&view, Target::Entity("b")).unwrap()).chains[0]
+            .downstream
+            .iter()
+            .any(|link| link.entity_id == "Repo")
     );
 
     let exported = plain(

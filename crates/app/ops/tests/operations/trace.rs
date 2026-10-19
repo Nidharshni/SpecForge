@@ -331,33 +331,6 @@ fn the_other_side_of_a_relation_is_upstream() {
     assert!(trace.missing.is_empty(), "{:?}", trace.missing);
 }
 
-// B:compute_traceability_chain — human output marks each missing link.
-#[specforge_test(behavior = "compute_traceability_chain")]
-fn trace_human_output_marks_missing_links() {
-    let mut graph = Graph::new();
-    graph.add_node(node("a", "feature"));
-    graph.add_node(node("b", "behavior"));
-    graph.add_edge(Edge {
-        source: "b".into(),
-        target: "a".into(),
-        label: "features".into(),
-    });
-    let project = Assembled::over(crate::trace_support::build()).graph(graph);
-    let outcome = specforge_ops::read::trace::trace(&project.view(), Target::Entity("b")).unwrap();
-    assert_eq!(
-        plain(outcome).to_human(),
-        concat!(
-            "b [behavior]\n",
-            "  upstream:\n",
-            "    (none)\n",
-            "  downstream:\n",
-            "    -features-> a [feature] (depth 1)\n",
-            "  missing:\n",
-            "    MISSING b -invariants-> [invariant] (depth 1)\n",
-        )
-    );
-}
-
 // B:read_views_over_the_project_view — verify unit "the reach of some entities is every entity their trace chains reach, the seeds included, and its unverified entities are those that count toward coverage and are not proven"
 #[specforge_test(
     behavior = "read_views_over_the_project_view",
