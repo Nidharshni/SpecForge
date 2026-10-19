@@ -367,11 +367,13 @@ behavior compute_the_coverage_view "Compute the Coverage View" {
     entities stats counts as testable. An entity_id names one entity
     whether it counts or not; each row says whether the entity is exempt;
     one the graph lacks is E003 naming the closest entity.
-    kind and status narrow the rows.
+    kind and status narrow the rows, with an entity_id too; a kind the
+    project does not know matches nothing and is an I020 notice.
   """
   verify unit "with no filters the rows are the entities that count toward coverage"
   verify unit "an exempt entity named by entity_id is returned with exempt true"
   verify unit "an entity_id the graph lacks is E003 naming the closest entity"
+  verify unit "an unknown kind matches nothing and is an I020 notice; kind narrows an entity_id's row as status does"
   verify unit "an entity with an unproven obligation is partial, not covered"
   verify unit "a failing recorded test keeps an entity from being covered"
   verify unit "a field named verify does not hide an entity's verify statements"

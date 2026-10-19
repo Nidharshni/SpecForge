@@ -139,7 +139,6 @@ fn coverage_refuses_an_entity_the_graph_lacks_on_entity_id() {
 }
 
 #[test]
-#[ignore = "flipped by T3"]
 fn coverage_kind_reports_i020_and_narrows_an_entity_id() {
     let mut served = served();
     let reply = call_tool(

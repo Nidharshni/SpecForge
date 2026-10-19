@@ -13,7 +13,7 @@ use specforge_registry::{EntityRecord, Standing};
 
 use crate::options::{Choice, OptionTable};
 use crate::view::{EntityField, ProjectView, not_found};
-use crate::{OpError, Refusal};
+use crate::{Noticed, OpError, Refusal};
 
 /// Which rows to list.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -21,7 +21,8 @@ pub struct CoverageQuery<'q> {
     /// That entity alone, whether it counts toward coverage or not; one the
     /// graph lacks is refused.
     pub entity_id: Option<&'q str>,
-    /// Without `entity_id`: only entities of this kind.
+    /// Only entities of this kind, with `entity_id` too. A kind the project
+    /// does not know matches nothing and is an I020 notice.
     pub kind: Option<&'q str>,
     /// Only rows with this status.
     pub status: Option<Status>,
@@ -124,6 +125,18 @@ pub struct CoverageOutcome {
 pub fn coverage(
     view: &ProjectView,
     query: &CoverageQuery,
+) -> Result<Noticed<CoverageOutcome>, Refusal<EntityField>> {
+    let notices = query
+        .kind
+        .map(|kind| view.kinds().unknown_in(&[kind]))
+        .unwrap_or_default();
+    Ok(Noticed::new(selected(view, query)?, notices))
+}
+
+/// [`coverage`]'s rows without its notices, for the reads that compose them.
+pub(crate) fn selected(
+    view: &ProjectView,
+    query: &CoverageQuery,
 ) -> Result<CoverageOutcome, Refusal<EntityField>> {
     if let Some(id) = query.entity_id {
         view.graph()
@@ -134,9 +147,11 @@ pub fn coverage(
     let rows = view
         .entities()
         .iter()
-        .filter(|(record, standing)| match query.entity_id {
-            Some(entity_id) => record.id == entity_id,
-            None => standing.counts() && query.kind.is_none_or(|kind| record.kind == kind),
+        .filter(|(record, standing)| {
+            query
+                .entity_id
+                .map_or(standing.counts(), |id| record.id == id)
+                && query.kind.is_none_or(|kind| record.kind == kind)
         })
         .filter_map(|(record, standing)| {
             Some(CoverageRow::of(

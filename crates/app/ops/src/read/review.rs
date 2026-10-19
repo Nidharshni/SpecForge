@@ -8,7 +8,7 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 
 use crate::Refusal;
-use crate::read::coverage::{CoverageQuery, CoverageRow, CoverageRowDocument, coverage};
+use crate::read::coverage::{CoverageQuery, CoverageRow, CoverageRowDocument, selected};
 use crate::view::{EntityField, ProjectView};
 
 /// Hops around the reviewed entity when a request names none.
@@ -135,7 +135,7 @@ pub fn review(view: &ProjectView, request: &ReviewRequest) -> Result<Review, Ref
         .map(|id| view.neighbourhood(id, Some(request.depth)))
         .transpose()?
         .map(|reached| reached.iter().map(|r| r.id.as_str()).collect());
-    let rows: Vec<CoverageRow> = coverage(view, &CoverageQuery::default())?
+    let rows: Vec<CoverageRow> = selected(view, &CoverageQuery::default())?
         .rows
         .into_iter()
         .filter(|row| {

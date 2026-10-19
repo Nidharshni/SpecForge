@@ -7,7 +7,7 @@ use specforge_project::coverage::Status;
 
 use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
-use crate::reply::Answered;
+use crate::reply::{Answer, Answered};
 use specforge_ops::view::{EntityField, ProjectView};
 
 /// `specforge.coverage`'s arguments.
@@ -32,7 +32,8 @@ pub struct Reply {
 /// recorded tests read at its root; with nothing served there is no root,
 /// so none). With no filter, the entities that count toward
 /// coverage, the ones stats counts as testable. An `entity_id` the graph lacks
-/// is `entity_not_found` (E003) on `entity_id`.
+/// is `entity_not_found` (E003) on `entity_id`; a `kind` the project does not
+/// know rides in `_meta.diagnostics` (I020).
 pub(crate) struct Tool;
 
 impl ArgumentOf<EntityField> for Tool {
@@ -62,9 +63,8 @@ impl CoreTool for Tool {
         };
         let outcome =
             specforge_ops::read::coverage::coverage(&view, &query).map_err(Self::refused)?;
-        Ok(Reply {
+        Ok(Answer::noticed(outcome.map(|outcome| Reply {
             entities: outcome.rows.iter().map(|row| row.document()).collect(),
-        }
-        .into())
+        })))
     }
 }

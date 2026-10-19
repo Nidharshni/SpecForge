@@ -9,7 +9,8 @@ use specforge_test::prelude::*;
 
 /// A project with one behavior, `login`.
 fn project() -> Assembled {
-    Assembled::over(registries(&["behavior"], &[])).source("behavior login \"Log in\" {\n}\n")
+    Assembled::over(registries(&["behavior", "feature"], &[]))
+        .source("behavior login \"Log in\" {\n}\n")
 }
 
 #[specforge_test(
@@ -30,4 +31,46 @@ fn coverage_refuses_an_entity_the_graph_lacks() {
         refusal.error.suggestion.as_deref(),
         Some("did you mean 'login'?")
     );
+}
+
+#[specforge_test(
+    behavior = "compute_the_coverage_view",
+    verify = "an unknown kind matches nothing and is an I020 notice; kind narrows an entity_id's row as status does"
+)]
+fn coverage_kind_is_a_filter_like_every_kind_filter() {
+    let project = project();
+    let view = project.view();
+    let unknown = coverage(
+        &view,
+        &CoverageQuery {
+            kind: Some("behaviour"),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let codes: Vec<_> = unknown
+        .notices()
+        .iter()
+        .map(|n| n.code.to_string())
+        .collect();
+    assert_eq!(codes, ["I020"]);
+    assert!(unknown.into_value_and_notices().0.rows.is_empty());
+
+    let ids = |kind| {
+        let query = CoverageQuery {
+            entity_id: Some("login"),
+            kind: Some(kind),
+            ..Default::default()
+        };
+        let read = coverage(&view, &query).unwrap();
+        assert!(read.notices().is_empty());
+        read.into_value_and_notices()
+            .0
+            .rows
+            .into_iter()
+            .map(|row| row.entity_id)
+            .collect::<Vec<_>>()
+    };
+    assert!(ids("feature").is_empty());
+    assert_eq!(ids("behavior"), ["login"]);
 }

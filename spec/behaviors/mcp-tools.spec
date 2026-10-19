@@ -372,7 +372,8 @@ behavior provide_mcp_coverage_tool "Provide MCP Coverage Tool" {
     In MCP server mode, the system MUST register a specforge.coverage tool
     that accepts entity_id? (optional, single entity; one the graph lacks is an
     entity_not_found error on entity_id, E003), kind? (optional, filter
-    by entity kind), and status_filter? (optional: covered|uncovered|partial).
+    by entity kind; an unknown kind is an I-level diagnostic in the response
+    metadata, as specforge.search reports it), and status_filter? (optional: covered|uncovered|partial).
     The tool MUST return the coverage view's rows (compute_the_coverage_view)
     as an object whose entities are the rows.
     A specforge-report.json that exists but cannot be read or parsed MUST be
