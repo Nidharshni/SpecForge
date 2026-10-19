@@ -67,3 +67,5 @@ A third writer below app must change several files, or a project file is opened 
 name.
 
 **Amended by ADR 0137 (2026-10-17):** D4: the `Also` files are handed to the checked plan (`Checked::writing`), not to `finish`; the order is unchanged.
+
+**Amended by [ADR 0155](0155-a-project-change-words-its-own-failures.md) (2026-10-19):** D2: the change words its failures (one code per cause, files named from the root it was opened under); `Failed::error` is gone and `commit` returns the `OpError`.
