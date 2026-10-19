@@ -5,7 +5,7 @@
 use crate::fixes::{apply, fixes_of};
 use crate::navigate::{Compiled, compile};
 use specforge_formatter::FormatConfig;
-use specforge_ops::read::navigate::{Fix, FixQuery};
+use specforge_ops::authoring::fix::{Fix, FixQuery};
 use std::collections::BTreeMap;
 
 const TESTING: &[&str] = &["@specforge/software", "@specforge/testing"];

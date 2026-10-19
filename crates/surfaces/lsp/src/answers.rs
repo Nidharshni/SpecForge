@@ -8,9 +8,10 @@
 use std::collections::HashMap;
 
 use specforge_common::{SourceSpan, Sym};
+use specforge_ops::authoring::fix::{self, FixQuery};
 use specforge_ops::authoring::format;
 use specforge_ops::read::navigate::{
-    Direction, EntityQuery, FixQuery, MatchScope, ReferenceQuery, find_entities, outline,
+    Direction, EntityQuery, MatchScope, ReferenceQuery, find_entities, outline,
 };
 use tower_lsp::jsonrpc::{Error, ErrorCode};
 use tower_lsp::lsp_types::{
@@ -362,9 +363,11 @@ pub fn code_actions(state: &LspState, uri: &Url, range: Range) -> Option<CodeAct
         within: within.as_ref(),
         ..FixQuery::default()
     };
-    let fixes = compiled
-        .navigator()
-        .fixes(state.files().compile_diagnostics(&file), &query);
+    let fixes = fix::fixes(
+        &compiled.navigator(),
+        state.files().compile_diagnostics(&file),
+        &query,
+    );
     // A fix that cannot be placed whole (see `fix_to_code_action`) is not
     // offered.
     let actions: Vec<CodeActionOrCommand> = fixes

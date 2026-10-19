@@ -25,16 +25,17 @@ fn code_action_create_entity_stub_contract() {
             .with_source_texts(state.session().unwrap().project().source_texts());
         let view = specforge_ops::view::ProjectView::of(&texts);
         let nav = specforge_ops::read::navigate::Navigator::new(view);
-        nav.fixes(
+        specforge_ops::authoring::fix::fixes(
+            &nav,
             &diagnostics,
-            &specforge_ops::read::navigate::FixQuery::default(),
+            &specforge_ops::authoring::fix::FixQuery::default(),
         )
     };
 
     let fixes = fixes_with(Some("invariant"));
     let stub = fixes
         .iter()
-        .find(|f| f.kind == specforge_ops::read::navigate::FixKind::Refactor)
+        .find(|f| f.kind == specforge_ops::authoring::fix::FixKind::Refactor)
         .expect("entity stub must be created with target_kind");
     assert_eq!(stub.title, "Create invariant stub for missing_inv");
     let edit = &stub.edits[0];
@@ -51,7 +52,7 @@ fn code_action_create_entity_stub_contract() {
     assert!(
         fixes_with(None)
             .iter()
-            .all(|f| f.kind != specforge_ops::read::navigate::FixKind::Refactor),
+            .all(|f| f.kind != specforge_ops::authoring::fix::FixKind::Refactor),
         "no stub without target_kind"
     );
 }
@@ -91,7 +92,11 @@ fn code_actions_for_missing_verify_contract() {
         .with_source_texts(state.session().unwrap().project().source_texts());
     let view = specforge_ops::view::ProjectView::of(&texts);
     let nav = specforge_ops::read::navigate::Navigator::new(view);
-    let fixes = nav.fixes(&[], &specforge_ops::read::navigate::FixQuery::default());
+    let fixes = specforge_ops::authoring::fix::fixes(
+        &nav,
+        &[],
+        &specforge_ops::authoring::fix::FixQuery::default(),
+    );
 
     assert!(
         !fixes.is_empty(),
@@ -100,7 +105,7 @@ fn code_actions_for_missing_verify_contract() {
     assert_eq!(fixes[0].subject, Some("my_behavior".into()));
     assert_eq!(
         fixes[0].kind,
-        specforge_ops::read::navigate::FixKind::QuickFix,
+        specforge_ops::authoring::fix::FixKind::QuickFix,
         "must be quickfix action"
     );
     let edit = &fixes[0].edits[0];

@@ -4,7 +4,8 @@ use crate::navigate::{Compiled, LIMIT, LOGIN, SOFTWARE, at, compile, nav, span};
 use crate::view_support::Assembled;
 use specforge_common::{Diagnostic, DiagnosticData, SourceSpan, Sym};
 use specforge_extension_sdk::prelude::*;
-use specforge_ops::read::navigate::{Fix, FixKind, FixQuery, FixSource, Navigator, TextEdit};
+use specforge_ops::authoring::fix::{self, Fix, FixKind, FixQuery, FixSource, TextEdit};
+use specforge_ops::read::navigate::Navigator;
 use specforge_ops::view::ProjectView;
 use specforge_project::CompiledProject;
 use specforge_project::testing::compile_at;
@@ -35,7 +36,7 @@ pub(crate) fn apply(text: &str, edits: &[TextEdit]) -> String {
 
 /// The fixes of `p`'s own diagnostics for `query`.
 pub(crate) fn fixes_of(p: &Compiled, query: &FixQuery) -> Vec<Fix> {
-    p.navigator().fixes(&p.project.diagnostics(), query)
+    fix::fixes(&p.navigator(), &p.project.diagnostics(), query)
 }
 
 fn titles(fixes: &[Fix]) -> Vec<String> {
@@ -206,7 +207,11 @@ fn an_untargeted_obligation_rule_stubs_every_kind_that_accepts_verify() {
     // exempts it), not epsilon (its kind accepts no verify).
     let navigator = Navigator::new(ProjectView::of(&project));
     assert_eq!(
-        stubs(navigator.fixes(&project.diagnostics(), &FixQuery::default())),
+        stubs(fix::fixes(
+            &navigator,
+            &project.diagnostics(),
+            &FixQuery::default()
+        )),
         [
             ("beta".to_string(), Some("P300".to_string())),
             ("gamma".to_string(), Some("P300".to_string())),
@@ -285,8 +290,11 @@ fn the_verify_stub_uses_the_kinds_first_allowed_verify_kind() {
     );
     let project = Assembled::over(verifiable(&["invariant"], &["property", "unit"]))
         .graph(p.project.graph().clone());
-    let fixes = Navigator::new(ProjectView::of(&with_texts_of(&p, project.detached())))
-        .fixes(&[], &FixQuery::default());
+    let fixes = fix::fixes(
+        &Navigator::new(ProjectView::of(&with_texts_of(&p, project.detached()))),
+        &[],
+        &FixQuery::default(),
+    );
     assert_eq!(
         titles(&fixes),
         ["Add verify stub for unique_ids"],
@@ -449,8 +457,11 @@ fn no_stub_without_a_target_kind() {
     let p = compile(TESTING, &[("auth.spec", DANGLING)]);
     let diagnostics = p.project.diagnostics();
     let project = Assembled::over(invariants_field(None)).graph(p.project.graph().clone());
-    let fixes = Navigator::new(ProjectView::of(&with_texts_of(&p, project.detached())))
-        .fixes(&diagnostics, &FixQuery::default());
+    let fixes = fix::fixes(
+        &Navigator::new(ProjectView::of(&with_texts_of(&p, project.detached()))),
+        &diagnostics,
+        &FixQuery::default(),
+    );
     assert!(
         fixes.iter().all(|f| f.source != FixSource::CreateStub),
         "{:?}",
@@ -458,8 +469,11 @@ fn no_stub_without_a_target_kind() {
     );
     let targeted =
         Assembled::over(invariants_field(Some("invariant"))).graph(p.project.graph().clone());
-    let fixes = Navigator::new(ProjectView::of(&with_texts_of(&p, targeted.detached())))
-        .fixes(&diagnostics, &FixQuery::default());
+    let fixes = fix::fixes(
+        &Navigator::new(ProjectView::of(&with_texts_of(&p, targeted.detached()))),
+        &diagnostics,
+        &FixQuery::default(),
+    );
     assert!(fixes.iter().any(|f| f.source == FixSource::CreateStub));
 }
 
@@ -540,7 +554,7 @@ fn the_stub_reads_target_entity_and_field_from_the_data() {
         reworded_e003(token.clone(), Some(data.clone())),
         reworded_e003(token.clone(), Some(data)),
     ];
-    let fixes = p.navigator().fixes(&reworded, &FixQuery::default());
+    let fixes = fix::fixes(&p.navigator(), &reworded, &FixQuery::default());
     let stubs: Vec<&Fix> = fixes
         .iter()
         .filter(|f| f.source == FixSource::CreateStub)
@@ -551,7 +565,7 @@ fn the_stub_reads_target_entity_and_field_from_the_data() {
     // The diagnostic as text alone, in the compiler's wording: no stub.
     let mut text_only = reworded_e003(token, None);
     text_only.message = "unresolved reference 'session_limit' in entity 'login'".into();
-    let fixes = p.navigator().fixes(&[text_only], &FixQuery::default());
+    let fixes = fix::fixes(&p.navigator(), &[text_only], &FixQuery::default());
     assert!(fixes.iter().all(|f| f.source != FixSource::CreateStub));
 }
 
@@ -562,7 +576,7 @@ fn no_stub_for_a_target_that_exists() {
         span("auth.spec", (2, 15), (2, 28)),
         Some(unresolved("session_limit", "login", "invariants", None)),
     );
-    let fixes = p.navigator().fixes(&[stale], &FixQuery::default());
+    let fixes = fix::fixes(&p.navigator(), &[stale], &FixQuery::default());
     assert!(fixes.iter().all(|f| f.source != FixSource::CreateStub));
 }
 
@@ -635,7 +649,7 @@ fn the_replacement_is_read_from_the_data() {
             Some("session_limit"),
         )),
     );
-    let fixes = p.navigator().fixes(&[reworded], &FixQuery::default());
+    let fixes = fix::fixes(&p.navigator(), &[reworded], &FixQuery::default());
     let replace: Vec<&Fix> = fixes
         .iter()
         .filter(|f| f.source == FixSource::ReplaceUnresolved)
@@ -647,9 +661,5 @@ fn the_replacement_is_read_from_the_data() {
     let mut text_only = reworded_e003(token, None);
     text_only.message = "unresolved reference 'sesion_limit' in entity 'logout'".into();
     text_only.suggestion = Some("did you mean 'session_limit'?".into());
-    assert!(
-        p.navigator()
-            .fixes(&[text_only], &FixQuery::default())
-            .is_empty()
-    );
+    assert!(fix::fixes(&p.navigator(), &[text_only], &FixQuery::default()).is_empty());
 }

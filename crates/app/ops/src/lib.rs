@@ -21,7 +21,7 @@
 //! | [`read`] | the read views over the project view (ADR 0015), navigation (ADR 0016), inference, explain | base |
 //! | [`extension`] | what a project installs, enables and lists, what an author publishes, the commands extensions declare | base |
 //! | [`analysis`] | check, analyze with its passes and the prove pass, collect, doctor | base, read, extension |
-//! | [`authoring`] | the operations that write a project's sources: init, format, rename, migrate | base, read, extension |
+//! | [`authoring`] | the operations that write a project's sources: init, format, rename, migrate, the typed edits, and the fixes offered for a diagnostic (ADR 0161) | base, read, extension |
 
 pub mod analysis;
 pub mod asking;

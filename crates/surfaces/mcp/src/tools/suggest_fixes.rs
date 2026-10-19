@@ -3,7 +3,8 @@ use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::SourceSpan;
 use specforge_common::shape::Shape;
-use specforge_ops::read::navigate::{Fix, FixKind, FixQuery, Navigator};
+use specforge_ops::authoring::fix::{self, Fix, FixKind, FixQuery};
+use specforge_ops::read::navigate::Navigator;
 
 use crate::args::Arguments;
 use crate::reply::Answered;
@@ -101,7 +102,7 @@ impl CoreTool for Tool {
             code: args.diagnostic_code.as_deref(),
             within: None,
         };
-        let fixes = Navigator::new(view).fixes(&diagnostics, &query);
+        let fixes = fix::fixes(&Navigator::new(view), &diagnostics, &query);
         Ok(Reply {
             fixes: fixes.iter().map(Suggestion::of).collect(),
         }
