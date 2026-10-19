@@ -1,14 +1,14 @@
 //! Creating and deleting entities (ADR 0151): a new block goes after the last block of its kind in its file, laid
 //! out canonically; a deleted block takes the comment lines above it and one blank line with it.
 
-use super::block::{self, Block, Site, group_of_text, items_of, rank};
-use super::write::written;
+use super::block::{self, Block, Site, group_of_text, rank};
+use super::write::{not_editable, written};
 use super::{EditField, Input, Obligation, Planner};
 use crate::authoring::rename::{self, validate_id};
 use crate::{OpError, OpErrorKind, Refusal};
-use specforge_graph::FieldValue;
+use specforge_common::structural;
 use specforge_graph::field_form::{Reading, spell};
-use specforge_parser::parse;
+use specforge_parser::{FieldEntry, parse};
 use specforge_protocol_types::FieldType;
 use std::collections::BTreeSet;
 
@@ -114,7 +114,7 @@ impl Planner<'_> {
     ) -> Result<(), Refusal<EditField>> {
         self.locate(id)?;
         if unlink_references {
-            for (referrer, field, list) in self.referrers(id) {
+            for (referrer, field, list) in self.referrers(id)? {
                 self.on(&referrer, |site, text| {
                     if list {
                         block::link(site, text, &field, id, false)
@@ -134,8 +134,11 @@ impl Planner<'_> {
         Ok(())
     }
 
-    /// Every field of another entity that references `id`: (entity, field, whether it is a list), in file order.
-    fn referrers(&self, id: &str) -> Vec<(String, String, bool)> {
+    /// Every field of another entity whose value references `id` as the graph build reads it ([`names`]): (entity,
+    /// field, whether it is a list), in file order, over the texts the plan holds so far. A reference written where no
+    /// typed edit writes refuses the delete, naming each place: an entry of a `defaults` block (ADR 0151 D5) or a
+    /// field its holder's kind does not declare.
+    fn referrers(&self, id: &str) -> Result<Vec<(String, String, bool)>, Refusal<EditField>> {
         let forms = self.view.registries().field_forms();
         let mut keys: BTreeSet<String> = self.texts.keys().cloned().collect();
         keys.extend(
@@ -145,44 +148,79 @@ impl Planner<'_> {
                 .into_iter()
                 .map(String::from),
         );
-        let mut found = Vec::new();
+        let (mut found, mut elsewhere) = (Vec::new(), Vec::new());
         for key in keys {
             let Some(text) = self.text(&key) else {
                 continue;
             };
             let file = parse(&text, &key);
-            for entity in file.entities.iter().filter(|e| {
-                e.kind.raw.as_str() != specforge_common::structural::DEFAULTS
-                    && e.id.raw.as_str() != id
-            }) {
+            for entity in &file.entities {
+                let defaults = entity.kind.raw.as_str() == structural::DEFAULTS;
+                if !defaults && entity.id.raw.as_str() == id {
+                    continue;
+                }
+                // A defaults block's entries read as the kind it names (ADR 0149).
+                let kind = if defaults {
+                    entity.id.raw.as_str()
+                } else {
+                    entity.kind.raw.as_str()
+                };
                 for entry in entity.fields.entries() {
-                    let Reading::Declared(form) =
-                        forms.reading(entity.kind.raw.as_str(), entry.key.as_str())
-                    else {
+                    let reading = forms.reading(kind, entry.key.as_str());
+                    // A default for an undeclared field is E077 and is not applied: it names nothing.
+                    if (defaults && !matches!(reading, Reading::Declared(_)))
+                        || !names(&reading, entry, id)
+                    {
                         continue;
-                    };
-                    let refers = match (form.field_type(), &entry.value) {
-                        (FieldType::ReferenceList, value @ FieldValue::List(_)) => {
-                            items_of(value).is_some_and(|i| i.texts.iter().any(|t| t == id))
-                        }
-                        (
-                            FieldType::Reference,
-                            FieldValue::Identifier(t) | FieldValue::String(t),
-                        ) => t == id,
-                        _ => false,
-                    };
-                    if refers {
-                        found.push((
+                    }
+                    match reading {
+                        Reading::Declared(form) if !defaults => found.push((
                             entity.id.raw.to_string(),
                             entry.key.to_string(),
-                            form.field_type() == FieldType::ReferenceList,
-                        ));
+                            form.field_type() != FieldType::Reference,
+                        )),
+                        _ => {
+                            let line = entry
+                                .value_span
+                                .as_ref()
+                                .map_or(entity.span.start_line, |s| s.start_line);
+                            let holder = if defaults {
+                                format!("defaults {kind}")
+                            } else {
+                                entity.id.raw.to_string()
+                            };
+                            elsewhere.push(format!("{key}:{line} ({holder}, {})", entry.key));
+                        }
                     }
                 }
             }
         }
-        found
+        if elsewhere.is_empty() {
+            return Ok(found);
+        }
+        Err(not_editable(
+            EditField::Entity,
+            format!(
+                "cannot unlink '{id}' where no typed edit writes: {}; remove it there first",
+                elsewhere.join(", ")
+            ),
+        ))
     }
+}
+
+/// Whether `entry`, read as `reading`, references `id`: ADR 0093's one rule, asked of the value as the graph build
+/// stores it (a list written as one value is its one item), as the linker asks it of a node's entries.
+fn names(reading: &Reading<'_>, entry: &FieldEntry, id: &str) -> bool {
+    let stored = reading
+        .coerce(&entry.value, entry.value_span.as_ref())
+        .map(|value| FieldEntry {
+            value,
+            ..entry.clone()
+        });
+    reading
+        .references(stored.as_ref().unwrap_or(entry))
+        .iter()
+        .any(|r| r.id == id)
 }
 
 /// `existing` with `block` after the last block of `kind`, else at the end, one blank line between.

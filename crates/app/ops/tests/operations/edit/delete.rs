@@ -87,8 +87,10 @@ const ONE_VALUE: &str = "invariant inv_a \"A\" {\n  guarantee \"x\"\n}\n\nbehavi
 const UNDECLARED: &str = "invariant inv_a \"A\" {\n  guarantee \"x\"\n}\n\nbehavior b9 \"B9\" {\n  category c\n  watchers [inv_a]\n}\n";
 const DEFAULTED: &str = "defaults behavior {\n  invariants [inv_a]\n}\n\ninvariant inv_a \"A\" {\n  guarantee \"x\"\n}\n\nbehavior b1 \"B1\" {\n  category c\n}\n\nbehavior b2 \"B2\" {\n  category   c\n  invariants [inv_a]\n}\n";
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test_macros::test(
+    behavior = "delete_entity",
+    verify = "delete with unlink_references removes a scheme ref ID from a string list"
+)]
 fn delete_with_unlink_references_removes_a_scheme_ref_from_a_string_list() {
     let c = project(&[("a.spec", SCHEME)]);
     let text = after(&c, "a.spec", &[delete("gh.issue:42", true)]);
@@ -97,8 +99,10 @@ fn delete_with_unlink_references_removes_a_scheme_ref_from_a_string_list() {
     assert!(is_canonical(&c, &text));
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test_macros::test(
+    behavior = "delete_entity",
+    verify = "delete with unlink_references removes a reference list written as one value"
+)]
 fn delete_with_unlink_references_removes_a_list_written_as_one_value() {
     let c = project(&[("a.spec", ONE_VALUE)]);
     let text = after(&c, "a.spec", &[delete("inv_a", true)]);
@@ -109,7 +113,6 @@ fn delete_with_unlink_references_removes_a_list_written_as_one_value() {
 }
 
 #[test]
-#[ignore = "flipped by T4"]
 fn delete_with_unlink_references_refuses_an_undeclared_field() {
     let c = project(&[("a.spec", UNDECLARED)]);
     let (code, message) = refused(&c, &[delete("inv_a", true)]);
@@ -117,8 +120,10 @@ fn delete_with_unlink_references_refuses_an_undeclared_field() {
     assert!(message.contains("a.spec:7 (b9, watchers)"), "{message}");
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test_macros::test(
+    behavior = "delete_entity",
+    verify = "delete with unlink_references refuses a reference no typed edit writes"
+)]
 fn delete_with_unlink_references_refuses_a_reference_written_in_a_default() {
     let c = project(&[("a.spec", DEFAULTED)]);
     let (code, message) = refused(&c, &[delete("inv_a", true)]);
