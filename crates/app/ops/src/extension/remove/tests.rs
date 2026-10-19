@@ -372,6 +372,62 @@ fn an_entry_of_unknown_origin_is_not_removed_under_an_unreadable_lock() {
 }
 
 #[test]
+#[ignore = "flipped by T5"]
+fn remove_refuses_an_unreadable_lock_as_add_and_update_do() {
+    use crate::extension::{AddRequest, UpdateRequest, add, update};
+
+    let mut fixture = Assembled::new().config(&["@acme/x"]);
+    write_config(&fixture, r#"{"extensions": ["@acme/x"]}"#);
+    std::fs::write(
+        specforge_installed::lock_path(fixture.root()),
+        "not valid json {{{",
+    )
+    .unwrap();
+    fixture = fixture.read_lock();
+    let before = files_under(fixture.root());
+    let unconfigured = crate::registry::Unconfigured("both");
+    let root = specforge_common::ProjectRoot::of(fixture.root()).unwrap();
+    let lock = fixture.view().installed().lock().problem().unwrap().clone();
+
+    let unknown = remove(&fixture.view(), &removing("@acme/x")).unwrap_err();
+    let nothing = remove(&fixture.view(), &removing("@acme/absent")).unwrap_err();
+    let added = add(
+        &AddRequest {
+            root: &root,
+            extensions: vec![fixture.root().join("missing.wasm").display().to_string()],
+            base: None,
+            allow_unsigned: false,
+            dry_run: false,
+            caller: crate::testing::caller(),
+        },
+        &unconfigured,
+        &specforge_wasm::testing::InProcessRuntime::new(),
+    )
+    .unwrap_err();
+    let updated = update(
+        &UpdateRequest {
+            root: &root,
+            name: None,
+            reach: specforge_package::Reach::Compatible,
+            allow_unsigned: true,
+            caller: crate::testing::caller(),
+        },
+        &unconfigured,
+        &specforge_wasm::testing::InProcessRuntime::new(),
+    )
+    .unwrap_err();
+
+    for e in [&unknown.error, &nothing.error, &added.error, &updated] {
+        assert_eq!(e.code, lock.code, "{e:?}");
+        assert_eq!(e.kind, OpErrorKind::SchemaMismatch, "{e:?}");
+        assert_eq!(e.suggestion, lock.suggestion, "{e:?}");
+        assert!(e.message.starts_with("corrupt lock file at '"), "{e:?}");
+    }
+    assert!(unknown.subject.is_none() && nothing.subject.is_none());
+    assert_eq!(files_under(fixture.root()), before);
+}
+
+#[test]
 fn a_builtin_named_by_a_stray_lock_entry_is_uninstalled_as_a_builtin() {
     let fixture = installed(
         Assembled::new().config(&["@specforge/product"]),

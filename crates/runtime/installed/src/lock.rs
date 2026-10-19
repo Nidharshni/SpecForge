@@ -409,6 +409,37 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "flipped by T3"]
+    fn a_lock_that_cannot_be_read_names_one_remedy() {
+        const ONE: &str = "fix specforge.lock, or delete it and install the extensions again with `specforge add`";
+        let dir = TempDir::new().unwrap();
+        let bad_name = r#"{"lockfile_version": 1, "entries": [{"name": "Bad Name", "version": "1.0.0", "source": "registry", "wasm_hash": "h"}]}"#;
+        for cause in [Some("not valid json {{{"), None, Some(bad_name)] {
+            let path = lock_path(dir.path());
+            match cause {
+                Some(text) => std::fs::write(&path, text).unwrap(),
+                None => {
+                    std::fs::remove_file(&path).unwrap();
+                    std::fs::create_dir(&path).unwrap();
+                }
+            }
+            let problem = LockState::read(dir.path(), &PlainDisk)
+                .problem()
+                .cloned()
+                .unwrap();
+            assert_eq!(problem.suggestion.as_deref(), Some(ONE), "{cause:?}");
+            let refused = crate::Installed::read(dir.path(), &PlainDisk)
+                .writable_lock()
+                .unwrap_err();
+            assert_eq!(refused, problem, "{cause:?}");
+            if cause.is_none() {
+                std::fs::remove_dir(&path).unwrap();
+                std::fs::write(&path, "x").unwrap();
+            }
+        }
+    }
+
+    #[test]
     fn a_source_reads_and_writes_as_the_lock_spells_it() {
         for (text, source) in [
             ("registry", LockSource::Registry),

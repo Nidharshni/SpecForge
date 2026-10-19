@@ -96,3 +96,37 @@ fn an_unusable_config_is_refused_before_the_lock_is_read() {
         }
     }
 }
+
+#[test]
+#[ignore = "flipped by T4"]
+fn an_update_over_an_unreadable_lock_is_refused_as_add_refuses_it() {
+    use crate::extension::{AddRequest, add};
+
+    let dir = enabled_project(vec![entry("@sdk/greet", "0.0.9", "registry", &[])]);
+    std::fs::write(lock_path(dir.path()), "not a lock {{{").unwrap();
+    let registry = MemoryRegistry::new().serving(greet_published());
+    let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+
+    let updated = update(&request(&root, Reach::Major), &registry, &runtime()).unwrap_err();
+    let added = add(
+        &AddRequest {
+            root: &root,
+            extensions: vec![dir.path().join("missing.wasm").display().to_string()],
+            base: None,
+            allow_unsigned: false,
+            dry_run: false,
+            caller: crate::testing::caller(),
+        },
+        &registry,
+        &runtime(),
+    )
+    .unwrap_err();
+
+    assert_eq!(updated, added.error);
+    assert_eq!(updated.kind, OpErrorKind::SchemaMismatch);
+    assert!(registry.asked().is_empty(), "no registry is asked");
+    assert_eq!(
+        std::fs::read_to_string(lock_path(dir.path())).unwrap(),
+        "not a lock {{{"
+    );
+}
