@@ -1100,7 +1100,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   when the edited project reports an error the project did not (the **edited project** being compiled from what the project holds: the text of each source it read, the E025 of each it could not read, the planned texts; it reads no source, `CompiledProject::edited`, ADR 0158), and is written as one project change (ADR 0151).
   A delete with `unlink_references` removes every reference the graph build would link, found by `Reading::references`
   in the planned texts; one written in a `defaults` block or an undeclared field refuses it (`not_editable`, ADR 0156).
-  A list value is taken by its field's type: a reference list's items split at commas however given, a string list's never (ADR 0157).
+  A list value is taken by its field's type: a reference list's items split at commas however given, a string list's never (ADR 0157). The stub fixes are typed edits too (ADR 0161).
+- **Fix**: an edit offered for a diagnostic or an entity, the same as an LSP code action and from MCP `suggest_fixes`
+  (`specforge_ops::authoring::fix`): a replacement of an unresolved token by its close match, or a stub (a create of the
+  unresolved target's kind, a verify obligation) planned as a typed edit and offered as the position edits that apply it
+  (`EditPlan::edits`); a stub the plan refuses is not offered (ADR 0161).
 - **Lexeme**: one token of a `.spec` text as the language's one lexer reads it without a parse
   (`specforge_parser::lex`): an identifier, a scheme ref ID (one lexeme), a number, a string (read as
   the grammar reads it, across lines; one the grammar would not close is marked unclosed and, if a
