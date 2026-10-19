@@ -3,6 +3,7 @@
 
 use crate::support::registry::project_on;
 use crate::support::{Cli, TestProject};
+use specforge_test_macros::test as specforge_test;
 
 /// A trailing comma: the file exists, and does not parse.
 const BROKEN: &str = r#"{"registries": {"local": {"token_env": "P11_LOGIN_TOKEN"}, "other": {"token_file": "/x"},}}"#;
@@ -17,8 +18,10 @@ fn stored(dir: &TestProject) -> String {
     std::fs::read_to_string(dir.home().join(".specforge/credentials.json")).unwrap()
 }
 
-#[test]
-#[ignore = "flipped by T2"]
+#[specforge_test(
+    behavior = "validate_registry_credentials",
+    verify = "login refuses an unreadable credential store before any request, and keeps it"
+)]
 fn login_refuses_an_unreadable_credential_store_and_keeps_it() {
     let registry = crate::support::registry::serve(vec![]);
     let dir = project_on(&registry);
@@ -44,8 +47,10 @@ fn login_refuses_an_unreadable_credential_store_and_keeps_it() {
     assert_eq!(stored(&dir), BROKEN);
 }
 
-#[test]
-#[ignore = "flipped by T2"]
+#[specforge_test(
+    behavior = "logout_registry",
+    verify = "logout refuses an unreadable credential store and deletes no secret"
+)]
 fn logout_refuses_an_unreadable_credential_store_and_keeps_the_secret() {
     let dir = TestProject::new().without_config();
     write_broken_store(&dir);

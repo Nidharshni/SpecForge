@@ -1261,7 +1261,8 @@ behavior validate_registry_credentials "Validate Registry Credentials" {
     ~/.specforge/secrets/ when no keyring is available) and --token-env and
     --token-file are kept as references, so the variable's or the file's
     token is read on each use. The raw token MUST never be stored in
-    specforge.json or in credentials.json. The system MUST confirm successful authentication
+    specforge.json or in credentials.json. A credentials.json that cannot be
+    read MUST be refused (R012) before any network call, and left as it is. The system MUST confirm successful authentication
     with an info message including the registry alias and authenticated scope.
     With no registry configured, login MUST make no network call and MUST
     fail with E063, whose suggestion names the specforge.json registries key.
@@ -1270,6 +1271,7 @@ behavior validate_registry_credentials "Validate Registry Credentials" {
   verify unit "valid credentials stored as RegistryCredential reference"
   verify unit "login with a token file keeps the file's path, not its content"
   verify unit "login takes exactly one token source"
+  verify unit "login refuses an unreadable credential store before any request, and keeps it"
   verify unit "invalid credentials produce error with guidance"
   verify unit "raw token never stored in specforge.json"
   verify unit "success message includes registry alias and scope"
@@ -1303,8 +1305,11 @@ behavior logout_registry "Logout Registry" {
     The removal MUST delete only the RegistryCredential entry whose alias matches —
     credentials for other aliases (and their scopes) MUST remain untouched.
     If no credential exists for the specified alias, the command MUST succeed
-    silently. The system MUST NOT attempt any network requests during logout.
+    silently. A credentials.json that cannot be read MUST be refused (R012):
+    no entry is removed and no secret deleted. The system MUST NOT attempt
+    any network requests during logout.
   """
+  verify unit "logout refuses an unreadable credential store and deletes no secret"
   verify unit "credential reference removed for matching alias"
   verify unit "credentials for other aliases and scopes remain untouched"
   verify unit "no credential for alias succeeds silently"

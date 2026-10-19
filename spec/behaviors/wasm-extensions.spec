@@ -707,7 +707,7 @@ behavior run_doctor_check "Run Doctor Check" {
     MUST carry its verdict (no
     error-level finding), and specforge doctor --format json and
     specforge.doctor MUST return the same report (the CLI adds the user's
-    credentials). Each peer requirement the compile reports unsatisfied
+    credentials; a credential store that cannot be read is one unusable credential). Each peer requirement the compile reports unsatisfied
     (E027, E073) MUST be an error finding with the remedy its diagnostic
     suggests: doctor and check judge peers by one rule over the loaded
     extensions (ADR 0041), so a peer a builtin or a .wasm file entry
@@ -737,6 +737,7 @@ behavior run_doctor_check "Run Doctor Check" {
   verify integration "doctor fails whenever check fails on a diagnostic of the project's setup"
   verify unit "doctor --format json produces valid JSON output"
   verify unit "doctor reports an extension that fails to load (E028, E070) as an error"
+  verify unit "an unreadable credential store is a credential failure in doctor"
   verify unit "doctor reports a missing or changed installed binary once, with the remedy its load gives"
   verify unit "doctor reports the peer requirements check reports, with the remedy each suggests"
   verify unit "a peer a builtin satisfies is not reported"

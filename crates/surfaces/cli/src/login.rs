@@ -151,6 +151,13 @@ fn login(
         (None, None) => unreachable!("exactly one source was checked"),
     };
 
+    // An unreadable store is refused before any request, as publish refuses it (ADR 0045).
+    let cred_path = credentials_path();
+    let mut store = match read_credentials(&cred_path) {
+        Ok(store) => store,
+        Err(diag) => return refuse(&specforge_ops_registry::unusable_credential(diag)),
+    };
+
     let client = Retrying::new(HttpRegistryClient::new());
     let expires_at = match client.authenticate(&registry, &credential) {
         Ok(expires_at) => expires_at,
@@ -160,8 +167,6 @@ fn login(
     // Store credentials: a secret goes into the OS keyring (0600-file fallback) and the file keeps
     // only metadata; a reference is kept as it is. Any legacy plaintext entry for this alias is
     // replaced by this write.
-    let cred_path = credentials_path();
-    let mut store = read_credentials(&cred_path).unwrap_or_default();
     match reference {
         Some(reference) => store.set_reference(alias, reference),
         None => {
@@ -240,7 +245,10 @@ fn logout(
     let alias = alias.as_str();
     let cred_path = credentials_path();
 
-    let mut store = read_credentials(&cred_path).unwrap_or_default();
+    let mut store = match read_credentials(&cred_path) {
+        Ok(store) => store,
+        Err(diag) => return refuse(&specforge_ops_registry::unusable_credential(diag)),
+    };
     let removed = store.remove(alias);
     specforge_registry_client::secrets::delete_secret(alias);
 
