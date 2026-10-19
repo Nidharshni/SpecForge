@@ -343,7 +343,6 @@ fn no_builtin_field_shadows_a_new_option() {
 }
 
 #[test]
-#[ignore = "flipped by T6"]
 fn link_on_the_other_side_is_refused_naming_the_owning_field() {
     let project = todo();
     let file = "spec/invariants/task.spec";

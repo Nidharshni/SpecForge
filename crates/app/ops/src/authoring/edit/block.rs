@@ -13,9 +13,12 @@ use specforge_graph::field_form::{FieldForm, Reading, spell};
 use specforge_parser::lex::{LexemeKind, lex};
 use specforge_parser::{Entity, FieldEntry, FieldValue, SpecFile, parse};
 use specforge_protocol_types::FieldType;
+use specforge_registry::FieldRegistryEntry;
 
 /// The edit names a field its kind does not declare.
 pub const UNKNOWN_FIELD: &str = "unknown_field";
+/// The edit names the other side of a relation another kind owns (ADR 0150, ADR 0157).
+pub const OTHER_SIDE: &str = "other_side";
 /// The entity's block holds a region the parser could not read whole.
 pub const BLOCK_UNREADABLE: &str = "block_unreadable";
 
@@ -29,20 +32,43 @@ pub struct Site<'a> {
 }
 
 impl Site<'_> {
-    /// How `field` of the entity's kind reads; `unknown_field` for one it does not declare.
+    /// How `field` of the entity's kind reads; refused when the kind does not declare it.
     pub fn reading(&self, field: &str) -> Result<Reading<'_>, Refusal<EditField>> {
+        self.reading_toward(field, None)
+    }
+
+    /// [`Self::reading`] for a value naming `target` (a link's or unlink's): an undeclared `field` whose target's
+    /// kind owns a relation into this kind is told as that relation's other side, as E079 tells it by its values.
+    pub fn reading_toward(
+        &self,
+        field: &str,
+        target: Option<&str>,
+    ) -> Result<Reading<'_>, Refusal<EditField>> {
         match self
             .view
             .registries()
             .field_forms()
             .reading(self.kind, field)
         {
-            Reading::Undeclared => Err(self.unknown_field(field)),
+            Reading::Undeclared => Err(self.unknown_field(field, target)),
             reading => Ok(reading),
         }
     }
 
-    fn unknown_field(&self, field: &str) -> Refusal<EditField> {
+    /// `other_side` when `owning_fields` names an owner, else `unknown_field` with its near miss.
+    fn unknown_field(&self, field: &str, target: Option<&str>) -> Refusal<EditField> {
+        let target = target.and_then(|id| {
+            let node = self.view.graph().node(id)?;
+            Some((id, node.kind.raw.as_str()))
+        });
+        let owners = self.view.registries().fields().owning_fields(
+            self.kind,
+            field,
+            target.map(|(_, kind)| kind),
+        );
+        if !owners.is_empty() {
+            return self.other_side(field, &owners, target);
+        }
         let declared = order(self.view, self.kind);
         let error = OpError::new(
             OpErrorKind::InvalidInput,
@@ -53,6 +79,55 @@ impl Site<'_> {
             Some(near) => error.with_suggestion(format!("did you mean '{near}'?")),
             None => error,
         }
+        .about(EditField::Field)
+    }
+
+    /// The `other_side` refusal: the owners as E079 names them, and where to change it instead. `target` is
+    /// `(id, kind)` when the graph knows the link's target.
+    fn other_side(
+        &self,
+        field: &str,
+        owners: &[&FieldRegistryEntry],
+        target: Option<(&str, &str)>,
+    ) -> Refusal<EditField> {
+        let names = |owners: &mut dyn Iterator<Item = &&FieldRegistryEntry>| {
+            owners
+                .map(|o| format!("'{}'", o.name()))
+                .collect::<Vec<_>>()
+                .join(" or ")
+        };
+        let of_target = target.map(|(id, kind)| {
+            let names = names(&mut owners.iter().filter(|o| o.kind_name() == kind));
+            (names, kind, id)
+        });
+        let suggestion = match of_target {
+            Some((names, kind, id)) if !names.is_empty() => {
+                format!("change it on the owning side: {names} of {kind} '{id}'")
+            }
+            _ => {
+                let each: Vec<String> = owners
+                    .iter()
+                    .map(|o| format!("'{}' of each {} it names", o.name(), o.kind_name()))
+                    .collect();
+                format!("change it on the owning side: {}", each.join(" or "))
+            }
+        };
+        let owned: Vec<String> = owners
+            .iter()
+            .map(|o| format!("{}.{}", o.kind_name(), o.name()))
+            .collect();
+        OpError::new(
+            OpErrorKind::InvalidInput,
+            OTHER_SIDE,
+            format!(
+                "field '{field}' on {} '{}' is the other side of {}: a relation is written on its owning side only",
+                self.kind,
+                self.id,
+                owned.join(" or ")
+            ),
+        )
+        .with_entity(self.id)
+        .with_suggestion(suggestion)
         .about(EditField::Field)
     }
 
@@ -599,7 +674,7 @@ pub fn link(
     target: &str,
     add: bool,
 ) -> Result<String, Refusal<EditField>> {
-    let Reading::Declared(form) = site.reading(field)? else {
+    let Reading::Declared(form) = site.reading_toward(field, Some(target))? else {
         return Err(not_editable(
             EditField::Field,
             format!("'{field}' takes any text; use set"),

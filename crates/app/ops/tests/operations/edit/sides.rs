@@ -2,8 +2,10 @@
 
 use super::*;
 
-#[test]
-#[ignore = "flipped by T6"]
+#[specforge_test_macros::test(
+    behavior = "edit_entity_link",
+    verify = "link on the other side of a relation names the owning field of the target's kind"
+)]
 fn link_on_the_other_side_names_the_owning_field() {
     let c = project(&[("tasks.spec", TASKS)]);
     let error = plan(&c, &[link("task_unique", "enforced_by", "complete_task")])
@@ -20,8 +22,10 @@ fn link_on_the_other_side_names_the_owning_field() {
     );
 }
 
-#[test]
-#[ignore = "flipped by T6"]
+#[specforge_test_macros::test(
+    behavior = "edit_entity_field",
+    verify = "set refuses the other side of a relation naming its owning field"
+)]
 fn set_on_the_other_side_names_the_owning_field() {
     let c = project(&[("tasks.spec", TASKS)]);
     let error = plan(
@@ -38,7 +42,6 @@ fn set_on_the_other_side_names_the_owning_field() {
 }
 
 #[test]
-#[ignore = "flipped by T6"]
 fn a_link_target_tells_the_other_side_by_its_kind() {
     let c = project(&[
         ("tasks.spec", TASKS),
