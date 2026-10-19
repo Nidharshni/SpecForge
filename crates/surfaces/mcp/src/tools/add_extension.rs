@@ -37,8 +37,9 @@ impl MutationReply for Reply {
 }
 
 /// `specforge.add_extension`'s reply: the add
-/// document `specforge add --format json` prints (ADR 0052), and whether the
-/// server serves the extensions (absent for a preview).
+/// document `specforge add --format json` prints (ADR 0052, its `dry_run` says
+/// the call previewed), and whether the server serves the extensions (absent
+/// for a preview).
 #[derive(Debug, Serialize, Shape)]
 pub struct Reply {
     #[serde(flatten)]

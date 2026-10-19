@@ -476,7 +476,7 @@ fn remove_document_names_source_and_version() {
 
     assert_eq!(
         document(outcome(Origin::Builtin, Some("1.0.0"), false)),
-        serde_json::json!({"action": "removed", "extension": "@acme/x", "source": "builtin",
+        serde_json::json!({"dry_run": false, "extension": "@acme/x", "source": "builtin",
             "version": "1.0.0", "stranded": stranded})
     );
     assert_eq!(
@@ -487,7 +487,7 @@ fn remove_document_names_source_and_version() {
             Some("0.1.0"),
             false
         )),
-        serde_json::json!({"action": "removed", "extension": "@acme/x", "source": "registry",
+        serde_json::json!({"dry_run": false, "extension": "@acme/x", "source": "registry",
             "version": "0.1.0", "stranded": stranded})
     );
     assert_eq!(
@@ -498,12 +498,12 @@ fn remove_document_names_source_and_version() {
             None,
             false
         )),
-        serde_json::json!({"action": "removed", "extension": "@acme/x", "source": "file:x.wasm",
+        serde_json::json!({"dry_run": false, "extension": "@acme/x", "source": "file:x.wasm",
             "stranded": stranded})
     );
     assert_eq!(
-        document(outcome(Origin::Unknown, None, true))["action"],
-        "planned"
+        document(outcome(Origin::Unknown, None, true))["dry_run"],
+        true
     );
 }
 

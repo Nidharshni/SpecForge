@@ -41,9 +41,8 @@ pub struct Reply {
     new_name: String,
     affected_files: Vec<String>,
     edits: Vec<Edit>,
-    /// Present (true) for a preview.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    dry_run: Option<bool>,
+    /// Whether the call previewed: nothing was written.
+    dry_run: bool,
 }
 
 /// One text edit (`McpRenameEdit`).
@@ -117,11 +116,11 @@ impl CoreTool for Tool {
                     new_text: e.new_text.clone(),
                 })
                 .collect(),
-            dry_run: None,
+            dry_run: false,
         };
         // A failed write puts back what it wrote; a file it could not put back is the failure's `files_written`.
         let wrote = Wrote::unless_preview(args.dry_run, || rename::apply(&plan, project.caller()))?;
-        reply.dry_run = wrote.previewed().then_some(true);
+        reply.dry_run = wrote.previewed();
         // The reply's `diagnostics` are what `specforge check` reports for the
         // project as it is on disk now, edits made since the last call
         // included (`FreshDiagnostics`, filled in once the target is brought up

@@ -101,7 +101,7 @@ fn format_check_mode_reports_without_writing() {
 
     let parsed = format_result(&mut server, json!({"check": true}));
 
-    assert_eq!(parsed["check_only"], true);
+    assert_eq!(parsed["dry_run"], true);
     assert_eq!(parsed["all_clean"], false, "{parsed}");
     assert_eq!(
         parsed["changed_files"].as_array().unwrap().len(),
@@ -1418,7 +1418,7 @@ fn remove_extension_dry_run_writes_nothing() {
     );
 
     let parsed: Value = serde_json::from_str(&tool_text(&resp)).unwrap();
-    assert_eq!(parsed["action"], "planned", "{parsed}");
+    assert_eq!(parsed["dry_run"], true, "{parsed}");
     assert_eq!(parsed["extension"], GREET, "{parsed}");
     assert!(parsed["stranded"].is_array(), "{parsed}");
     assert_eq!(files_under(&root), before, "a dry run writes nothing");
@@ -1723,7 +1723,7 @@ fn remove_extension_dry_run() {
     );
     let text = tool_text(&resp);
     let parsed: Value = serde_json::from_str(&text).unwrap();
-    assert_eq!(parsed["action"], "planned", "{parsed}");
+    assert_eq!(parsed["dry_run"], true, "{parsed}");
 }
 
 // --- Contract tests ---
@@ -1740,7 +1740,7 @@ fn format_contract() {
 
     // check_mode_readonly: reported, not written, and no mutation.
     let check = format_result(&mut server, json!({"check": true}));
-    assert_eq!(check["check_only"], true);
+    assert_eq!(check["dry_run"], true);
     assert_eq!(
         check["changed_files"].as_array().unwrap().len(),
         2,

@@ -355,7 +355,7 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     with no registry configured in specforge.json MUST make no network call
     and MUST fail with E063, whose suggestion names the registries key.
     Its JSON output is the add document specforge.add_extension answers
-    (McpAddExtensionResult: added, one entry per specifier in the order
+    (McpAddExtensionResult: dry_run, added, one entry per specifier in the order
     given, each naming its specifier, its action enabled, installed,
     already_present, planned or duplicate; no note; an enabled builtin,
     an installed package or a planned one lists the required builtins the

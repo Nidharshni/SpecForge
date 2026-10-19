@@ -83,12 +83,8 @@ impl RemoveOutcome {
     /// The document both surfaces print.
     pub fn document(&self) -> RemoveDocument {
         RemoveDocument {
-            action: if self.dry_run {
-                RemoveAction::Planned
-            } else {
-                RemoveAction::Removed
-            },
             extension: self.name.clone(),
+            dry_run: self.dry_run,
             source: self.origin.source(),
             version: self.version.clone(),
             stranded: self.stranded.clone(),
@@ -100,8 +96,9 @@ impl RemoveOutcome {
 /// print (`McpRemoveExtensionResult`).
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 pub struct RemoveDocument {
-    pub action: RemoveAction,
     pub extension: String,
+    /// The removal only previewed: nothing changed.
+    pub dry_run: bool,
     /// `builtin`, the lock entry's source, `file:<path>` or `unknown`
     /// ([`Origin::source`]).
     pub source: String,
@@ -111,15 +108,6 @@ pub struct RemoveDocument {
     pub version: Option<String>,
     /// The entities the removal strands, in id order.
     pub stranded: Vec<StrandedEntity>,
-}
-
-/// Whether the removal was made or only previewed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Shape)]
-#[serde(rename_all = "snake_case")]
-pub enum RemoveAction {
-    Removed,
-    /// A dry run: nothing changed.
-    Planned,
 }
 
 /// The field of a removal's request a refusal can be about (ADR 0072).

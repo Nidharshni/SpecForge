@@ -38,7 +38,6 @@ pub struct EditDocument {
     #[serde(flatten)]
     pub report: EditReport,
     /// The edits were only planned: nothing was written.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub dry_run: bool,
 }
 

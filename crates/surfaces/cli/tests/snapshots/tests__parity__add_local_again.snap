@@ -33,6 +33,7 @@ expression: snapshot
           "version": "0.1.0"
         }
       ],
+      "dry_run": false,
       "files_written": []
     },
     "files": {

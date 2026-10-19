@@ -724,7 +724,7 @@ fn json_prints_the_format_document_and_the_files_written() {
     assert_eq!(document["total_checked"], 2);
     assert_eq!(document["ok"], true);
     assert_eq!(document["all_clean"], false);
-    assert_eq!(document["check_only"], false);
+    assert_eq!(document["dry_run"], false);
     assert_eq!(document["diagnostics"], serde_json::json!([]));
     assert_eq!(
         document["files_written"],
@@ -779,7 +779,7 @@ fn json_check_that_finds_a_change_exits_one() {
     assert_eq!(code, Some(1), "{document}");
     assert_eq!(stderr, "");
     assert_eq!(document["ok"], false);
-    assert_eq!(document["check_only"], true);
+    assert_eq!(document["dry_run"], true);
     assert_eq!(document["changed_files"].as_array().unwrap().len(), 1);
     assert!(
         document.get("files_written").is_none(),

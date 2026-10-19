@@ -456,7 +456,7 @@ behavior remove_extension "Remove Extension" {
     reference). The user MUST either reinstall the extension or remove
     the affected entity blocks. Its JSON output is the remove document
     specforge.remove_extension answers (McpRemoveExtensionResult: the
-    extension, its source and version, the stranded entities), with the
+    extension, dry_run, its source and version, the stranded entities), with the
     files it wrote or deleted as files_written (absent from a dry run).
   """
   verify unit "delegates to uninstall_wasm_extension for lifecycle cleanup"

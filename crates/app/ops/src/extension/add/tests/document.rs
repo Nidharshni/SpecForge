@@ -84,7 +84,7 @@ fn add_document_names_what_the_add_did() {
     };
     assert_eq!(
         serde_json::to_value(added.document()).unwrap(),
-        serde_json::json!({ "added": documents })
+        serde_json::json!({ "dry_run": false, "added": documents })
     );
     assert!(
         AddOutcome::AlreadyPresent {

@@ -2033,7 +2033,7 @@ fn contract_format() {
         "specforge.format",
         json!({"paths": only_messy}),
     );
-    assert_eq!(write["check_only"], false, "{write}");
+    assert_eq!(write["dry_run"], false, "{write}");
     assert_eq!(
         std::fs::read_to_string(&messy).unwrap(),
         "behavior gamma \"Gamma\" {\n  contract \"x\"\n}\n"

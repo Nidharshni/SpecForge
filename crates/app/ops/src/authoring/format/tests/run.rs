@@ -237,7 +237,7 @@ fn the_document_is_the_run_both_surfaces_print() {
     assert_eq!(plain["changed_files"].as_array().unwrap().len(), 2);
     assert_eq!(plain["ok"], false, "a check that finds a change fails");
     assert_eq!(plain["all_clean"], false);
-    assert_eq!(plain["check_only"], true);
+    assert_eq!(plain["dry_run"], true);
     assert_eq!(plain["diagnostics"], serde_json::json!([]));
     // No null: what the run did not do is absent.
     for absent in ["diffs", "message", "failed_files", "failures"] {

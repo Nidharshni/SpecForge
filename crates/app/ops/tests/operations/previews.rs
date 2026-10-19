@@ -80,15 +80,19 @@ fn marks(dry_run: bool) -> Vec<serde_json::Value> {
     marks
 }
 
-#[test]
-#[ignore = "flipped by T8"]
+#[specforge_test_macros::test(
+    invariant = "dry_run_side_effect_freedom",
+    verify = "every preview's document says dry_run, and every run's says it did not preview"
+)]
 fn every_preview_document_says_dry_run() {
     let marks = marks(true);
     assert_eq!(marks, vec![json!(true); marks.len()], "{marks:?}");
 }
 
-#[test]
-#[ignore = "flipped by T8"]
+#[specforge_test_macros::test(
+    invariant = "dry_run_side_effect_freedom",
+    verify = "every preview's document says dry_run, and every run's says it did not preview"
+)]
 fn every_run_document_says_dry_run_false() {
     let marks = marks(false);
     assert_eq!(marks, vec![json!(false); marks.len()], "{marks:?}");

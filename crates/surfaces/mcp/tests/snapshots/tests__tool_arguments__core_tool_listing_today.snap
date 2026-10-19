@@ -3398,9 +3398,6 @@ expression: listing
           },
           "type": "array"
         },
-        "check_only": {
-          "type": "boolean"
-        },
         "diagnostics": {
           "items": {
             "$ref": "#/$defs/Diagnostic"
@@ -3439,6 +3436,9 @@ expression: listing
             "type": "object"
           },
           "type": "array"
+        },
+        "dry_run": {
+          "type": "boolean"
         },
         "failed_files": {
           "items": {
@@ -3495,7 +3495,7 @@ expression: listing
         "total_checked",
         "ok",
         "all_clean",
-        "check_only",
+        "dry_run",
         "diagnostics"
       ],
       "type": "object"
@@ -3878,7 +3878,8 @@ expression: listing
         "old_name",
         "new_name",
         "affected_files",
-        "edits"
+        "edits",
+        "dry_run"
       ],
       "type": "object"
     },
@@ -4526,6 +4527,7 @@ expression: listing
         }
       },
       "required": [
+        "dry_run",
         "entities",
         "affected_files",
         "diff",
@@ -4855,6 +4857,9 @@ expression: listing
           },
           "type": "array"
         },
+        "dry_run": {
+          "type": "boolean"
+        },
         "files_written": {
           "items": {
             "type": "string"
@@ -4866,6 +4871,7 @@ expression: listing
         }
       },
       "required": [
+        "dry_run",
         "added"
       ],
       "type": "object"
@@ -4912,12 +4918,8 @@ expression: listing
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
-        "action": {
-          "enum": [
-            "removed",
-            "planned"
-          ],
-          "type": "string"
+        "dry_run": {
+          "type": "boolean"
         },
         "extension": {
           "type": "string"
@@ -4955,8 +4957,8 @@ expression: listing
         }
       },
       "required": [
-        "action",
         "extension",
+        "dry_run",
         "source",
         "stranded"
       ],

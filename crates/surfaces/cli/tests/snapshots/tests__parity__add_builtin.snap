@@ -37,6 +37,7 @@ expression: snapshot
           "specifier": "@specforge/product"
         }
       ],
+      "dry_run": false,
       "files_written": [
         "specforge.json"
       ]

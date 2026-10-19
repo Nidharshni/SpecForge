@@ -179,7 +179,8 @@ type McpPromptArgument "Mcp Prompt Argument" {
 // type below to the schema its tool's reply type derives. Where the CLI
 // prints the same operation's outcome under --format json, it prints the same
 // document, with only its own keys added (ADR 0052): McpStatsResult,
-// McpAddExtensionResult, McpRemoveExtensionResult, McpInitResult,
+// McpAddExtensionResult, McpRemoveExtensionResult, McpEditResult,
+// McpFormatResult, McpInitResult,
 // McpExtensionsResult, McpMigrateResult, McpAnalyzeResult, McpCollectResult,
 // McpProvidersResult, McpDoctorReport, McpInferProgressResult,
 // McpInferGapsResult and McpTraceChainResult.
@@ -478,8 +479,8 @@ type McpFormatResult "Mcp Format Result" {
   /// True only when every file was read and is in canonical form: no change,
   /// no failure, no region left unformatted.
   all_clean     boolean
-  /// The call did not write (check or diff).
-  check_only    boolean
+  /// The call did not write (check or diff): a preview.
+  dry_run       boolean
   /// E069 per problem in a specforge.json the run went around, then W141 per
   /// configuration file used, W142 per region kept verbatim.
   diagnostics   Diagnostic[]
@@ -560,8 +561,8 @@ type McpRenameResult "Mcp Rename Result" {
   /// The files the rename edits, relative to the spec root.
   affected_files string[]
   edits          McpRenameEdit[]
-  /// Present (true) for a preview.
-  dry_run        boolean      @optional
+  /// True for a preview.
+  dry_run        boolean
   /// What specforge check reports for the project once the edits are made;
   /// absent from a preview.
   diagnostics    Diagnostic[] @optional
@@ -577,8 +578,8 @@ type McpEditResult "Mcp Edit Result" {
   diff           string
   /// The warnings and infos the edited project reports that the project did not.
   added          Diagnostic[]
-  /// Present (true) for a preview.
-  dry_run        boolean      @optional
+  /// True for a preview.
+  dry_run        boolean
   /// What specforge check reports once the edits are written; absent from a preview.
   diagnostics    Diagnostic[] @optional
   verify unit "McpEditResult schema is valid"
@@ -770,11 +771,13 @@ type McpRenderResult "Mcp Render Result" {
 }
 
 type McpAddExtensionResult "What an add did for each of its specifiers" {
+  /// A dry run: nothing was written.
+  dry_run boolean
   /// One entry per specifier, in the order given.
-  added McpAddedExtension[]
+  added   McpAddedExtension[]
   /// Whether the server serves the extensions from the next call on;
   /// absent for a preview (MCP only).
-  note  string @optional
+  note    string @optional
   verify unit "McpAddExtensionResult schema is valid"
 }
 
@@ -854,9 +857,9 @@ type McpAddExtensionDuplicate "A specifier naming an extension an earlier specif
 }
 
 type McpRemoveExtensionResult "Mcp Remove Extension Result" {
-  /// "planned" for a dry run, which changes nothing.
-  action    "removed" | "planned"
   extension string @readonly
+  /// A dry run: nothing changed.
+  dry_run   boolean
   /// builtin, the lock entry's source (registry, local:<path>), file:<path> or unknown.
   source    string
   /// The locked version, or a builtin's loaded one; absent when neither is known.

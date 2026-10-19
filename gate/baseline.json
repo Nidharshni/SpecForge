@@ -45,7 +45,7 @@
     "crates/surfaces/mcp/tests/subscriptions.rs": 1044,
     "crates/surfaces/mcp/tests/surface_call.rs": 995,
     "crates/surfaces/mcp/tests/surface_wiring.rs": 1718,
-    "crates/surfaces/mcp/tests/tool_arguments.rs": 879,
+    "crates/surfaces/mcp/tests/tool_arguments.rs": 876,
     "crates/surfaces/mcp/tests/tools_core.rs": 2152,
     "crates/surfaces/mcp/tests/tools_inference.rs": 822,
     "crates/surfaces/mcp/tests/tools_navigation.rs": 820,

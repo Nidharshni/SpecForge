@@ -31,7 +31,7 @@ pub use list::{
 };
 pub use publish::{PublishOutcome, PublishReport, declare, publish};
 pub use remove::{
-    RemoveAction, RemoveDocument, RemoveField, RemoveOutcome, RemoveRequest, StrandedEntity, remove,
+    RemoveDocument, RemoveField, RemoveOutcome, RemoveRequest, StrandedEntity, remove,
 };
 pub use resolve::{resolve, upgrade};
 pub use update::{
