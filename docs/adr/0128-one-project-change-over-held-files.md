@@ -5,6 +5,8 @@ D4, [ADR 0112](0112-every-project-file-an-operation-opens-goes-through-the-reque
 [ADR 0059](0059-trust-pins-are-written-with-the-lock-plan.md) D2's `commit_with(config, last)` sentence. Keeps
 [ADR 0022](0022-a-mutation-reports-what-it-wrote.md) D1 and D4, which the code did not.
 
+**Amended by [ADR 0171](0171-a-migration-writes-through-the-project-change.md) (round 18):** D1: a change stages a name the operation owns (`stage_owned`); 'Reopen when' answered: the third writer moved to app.
+
 "Write several project files as one change, put each back on failure, report what could not be put back"
 (ADR 0022 D1/D4, ADR 0028 D4) was written twice, with two rules. Rename wrote in place, ignored every failed restore
 (`let _ = written.write(old)`) and returned an error with no writes. The installed crate snapshotted and restored

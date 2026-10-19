@@ -3,6 +3,8 @@
 **Status:** accepted (2026-10-19, architecture round 17, plan 06). Amends [ADR 0029](0029-operations-decide-their-failure-and-verdict.md)
 (D3: "failed runs" is defined here).
 
+**Amended by [ADR 0171](0171-a-migration-writes-through-the-project-change.md) (round 18):** F4: a migration's write failure is the project change's `Err`.
+
 ## Context
 
 ADR 0029 D3 says MCP "keeps `isError` for refusals and failed runs" and never says what a failed run is. The two MCP

@@ -82,7 +82,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Migration record**: `<root>/.specforge/migration.json`, what `specforge migrate --rollback` undoes: the
   last kept migration made with backups, each file with its backup and the SHA-256 of the file as the migration
   left it (`specforge_migrate::MigrationRecord`). A rollback restores only a recorded file that still holds that
-  text; an automatic rollback restores the texts its own run read. Backups are never removed.
+  text; an automatic rollback is the project change's put-back. `--rollback` never removes a backup; an undone
+  migration leaves none (ADR 0171).
 - **Project session**: a compiled project kept current, plus what it is built from: its **session
   inputs**, the stamps of what it last read, and where each environment load gets its extension runtime
   (ADR 0047). It turns any batch of changed paths into **changes**
@@ -203,8 +204,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Project file**: a file of the project an operation reads or writes. It is opened only as a `Held`
   (`specforge_ops::Containment::resolve`): at where its name landed (`real`), named as given (`spelled`), and replaced
   atomically through a temp created new beside it, keeping its permissions (ADR 0104, ADR 0112, ADR 0128).
+- **Owned name**: a project file name only one operation writes (a migration's backup, `<source>.spec.bak`): staged
+  in the project change as owned, never read, created new at the name (whatever is there, a link or a file, is
+  unlinked first, never its target) with the permissions it is staged with, and removed when the change is put back
+  (`ProjectChange::stage_owned`, ADR 0171).
 - **Project change**: several project files written as one change: each staged as a `Held` with what it holds and will
-  hold, checked, replaced in order, put back in reverse on any failure; what it could not put back is the operation's
+  hold (or as an owned name), checked, replaced in order, put back in reverse on any failure; what it could not put back is the operation's
   writes (`specforge_ops::change::ProjectChange`, ADR 0128). Its failure is its own: one code per cause
   (`file_changed`, `file_unreadable`, `file_unwritable`), the file named from the root the change was opened under,
   after what the operation was doing (ADR 0155).
@@ -886,7 +891,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (ADR 0004 D4-a, ADR 0170). A refusal (`OpError`) is not a verdict; a measuring command's (stats, analyze)
   refusal exits 2. Not to be confused with an entity's coverage **Verdict** (ADR 0029).
 - **Failed run**: a run of a writing operation that did not do all it was asked: a file it could not read,
-  write or migrate, or a change it undid (a rollback). Its outcome answers it (`format::Outcome::failed`,
+  write or migrate (a migration's write failure is its project change's error, ADR 0171), or a change it undid (a
+  rollback). Its outcome answers it (`format::Outcome::failed`,
   `migrate::Outcome::failed`: an `OpError` carrying the run's document as `data` and its writes); MCP returns
   it as the failed call (`isError`). A finding (a problem in `specforge.json` the run went around, a region
   left unformatted, a change under `--check`) fails the **Run verdict** and is no failed run (ADR 0170).
