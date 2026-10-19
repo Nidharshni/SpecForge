@@ -26,6 +26,7 @@ mod extension_calls;
 mod failures;
 mod field_references;
 mod field_types;
+mod fixes;
 mod formal_diagnostics;
 mod graph_edges;
 mod groups;
