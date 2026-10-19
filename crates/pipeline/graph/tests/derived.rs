@@ -26,46 +26,51 @@ pub(crate) fn derived() -> Vec<DerivedReference> {
     ]
 }
 
+/// The graph inputs these tests build with.
+pub(crate) fn inputs(derived: Vec<DerivedReference>) -> GraphInputs {
+    GraphInputs {
+        derived_references: derived,
+        field_forms: specforge_graph::FieldForms::new(
+            [
+                (
+                    ("shape".to_string(), "base".to_string()),
+                    specforge_graph::FieldForm::new(
+                        specforge_protocol_types::FieldType::Reference,
+                        Vec::new(),
+                    ),
+                ),
+                (
+                    ("shape".to_string(), "parts".to_string()),
+                    specforge_graph::FieldForm::new(
+                        specforge_protocol_types::FieldType::ReferenceList,
+                        Vec::new(),
+                    )
+                    .targeting("shape"),
+                ),
+                (
+                    ("iface".to_string(), "uses".to_string()),
+                    specforge_graph::FieldForm::new(
+                        specforge_protocol_types::FieldType::ReferenceList,
+                        Vec::new(),
+                    )
+                    .targeting("shape"),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            Default::default(),
+            Default::default(),
+        ),
+        ..Default::default()
+    }
+}
+
 pub(crate) fn build(
     source: &str,
     derived: Vec<DerivedReference>,
 ) -> (Graph, Vec<specforge_graph::Diagnostic>) {
     let config = GraphConfig {
-        inputs: GraphInputs {
-            derived_references: derived,
-            field_forms: specforge_graph::FieldForms::new(
-                [
-                    (
-                        ("shape".to_string(), "base".to_string()),
-                        specforge_graph::FieldForm::new(
-                            specforge_protocol_types::FieldType::Reference,
-                            Vec::new(),
-                        ),
-                    ),
-                    (
-                        ("shape".to_string(), "parts".to_string()),
-                        specforge_graph::FieldForm::new(
-                            specforge_protocol_types::FieldType::ReferenceList,
-                            Vec::new(),
-                        )
-                        .targeting("shape"),
-                    ),
-                    (
-                        ("iface".to_string(), "uses".to_string()),
-                        specforge_graph::FieldForm::new(
-                            specforge_protocol_types::FieldType::ReferenceList,
-                            Vec::new(),
-                        )
-                        .targeting("shape"),
-                    ),
-                ]
-                .into_iter()
-                .collect(),
-                Default::default(),
-                Default::default(),
-            ),
-            ..Default::default()
-        },
+        inputs: inputs(derived),
         ..Default::default()
     };
     build_graph_with_config(&[parse(source, "main.spec")], &config)

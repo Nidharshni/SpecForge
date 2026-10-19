@@ -82,6 +82,7 @@ behavior apply_file_defaults "Apply File Defaults" {
   verify unit "query, trace and the graph export show the inherited list"
   verify unit "a defaults block completes, hovers and navigates as the kind it names"
   verify unit "the editor shows an inherited reference's location once"
+  verify unit "the written tokens of a file include a default no block takes"
 }
 
 behavior link_derived_references "Link Derived References" {
@@ -139,6 +140,7 @@ behavior link_derived_references "Link Derived References" {
   verify unit "a recursive type derives no reference cycle"
   verify unit "a kind with no derived field derives no edge"
   verify unit "a derived edge is written at each name it was derived from"
+  verify unit "the written tokens of a file include every name a derived field links"
   verify integration "a field's derived_from reaches the graph from the extension's manifest"
 }
 

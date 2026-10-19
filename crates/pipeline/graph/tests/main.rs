@@ -16,5 +16,6 @@ mod resolution;
 mod spell;
 mod stress;
 mod titles;
+mod tokens;
 mod value_forms;
 mod written;

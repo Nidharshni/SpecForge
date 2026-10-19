@@ -12,7 +12,7 @@ use specforge_test_macros::test as specforge_test;
 
 /// Kinds `behavior` (`ports`, `features`: reference lists; `owner` is not
 /// declared), `port` and `feature`, standing in for an extension.
-fn forms() -> FieldForms {
+pub(crate) fn forms() -> FieldForms {
     let list =
         |target: &str| FieldForm::new(FieldType::ReferenceList, Vec::new()).targeting(target);
     FieldForms::new(
