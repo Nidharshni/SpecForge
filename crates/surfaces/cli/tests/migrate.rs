@@ -99,7 +99,7 @@ fn migrate_json_output_contains_summary_fields() {
     assert_eq!(status_of(&json, "old.spec"), "migrated");
     assert_eq!(status_of(&json, "current.spec"), "skipped");
     assert_eq!(status_of(&json, "future.spec"), "failed");
-    assert_eq!(json["backups"].as_array().unwrap().len(), 1, "{json}");
+    assert_eq!(json["backups"].as_array().unwrap().len(), 0, "{json}");
     assert_eq!(output.status.code(), Some(1), "a failed file fails the run");
 }
 
@@ -786,12 +786,12 @@ fn double_migrate_is_idempotent() {
     );
 }
 
-// H3: Failure in one file does not block others
+// H3: A file that cannot be migrated stops the migration
 #[specforge_test(
     behavior = "migrate_spec_files_in_place",
-    verify = "failure in one file does not block others"
+    verify = "a file that cannot be migrated leaves every file as it was"
 )]
-fn failure_in_one_file_does_not_block_others() {
+fn a_file_that_cannot_be_migrated_stops_the_migration() {
     let tmp = project();
     let root = tmp.root();
     let good = "// specforge-format: 0.1\nbehavior good \"Good\" {\n  contract \"ok\"\n}\n";
@@ -806,8 +806,8 @@ fn failure_in_one_file_does_not_block_others() {
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
 
     assert_eq!(output.status.code(), Some(1), "{json}");
-    assert_eq!(json["files_migrated"], 1, "{json}");
     assert_eq!(json["files_failed"], 1, "{json}");
+    assert_eq!(json["files_written"], serde_json::json!([]), "{json}");
     let failed = json["results"]
         .as_array()
         .unwrap()
@@ -819,11 +819,10 @@ fn failure_in_one_file_does_not_block_others() {
         failed["error"].as_str().unwrap().starts_with("E019"),
         "{json}"
     );
-    assert!(
-        fs::read_to_string(root.join("spec/good.spec"))
-            .unwrap()
-            .starts_with("// specforge-format: 1.0"),
-        "good.spec is migrated despite bad.spec"
+    assert_eq!(
+        fs::read_to_string(root.join("spec/good.spec")).unwrap(),
+        good,
+        "good.spec is left as it was"
     );
     assert_eq!(
         fs::read_to_string(root.join("spec/bad.spec")).unwrap(),

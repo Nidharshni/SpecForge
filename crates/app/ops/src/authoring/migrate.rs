@@ -91,8 +91,8 @@ pub struct Outcome {
     pub dry_run: bool,
     /// Whether any file needed migrating. When not, nothing else ran.
     pub pending: bool,
-    /// Whether files were rewritten (not a dry run, and not every file
-    /// failed). A rolled-back migration was applied, then undone.
+    /// Whether files were rewritten (not a dry run, and no file failed to migrate). A rolled-back migration
+    /// was applied, then undone.
     pub applied: bool,
     /// The per-file migration (the preview, in a dry run or with nothing
     /// pending).
@@ -129,7 +129,7 @@ pub enum Failure {
     DoesNotCompile { errors: usize },
     /// The migrated project compiles to another graph (W054); every migrated file was restored.
     ChangedGraph { differences: usize },
-    /// Files that could not be migrated (each shown path and its error); the others were.
+    /// Files that could not be migrated (each shown path and its error); nothing was written.
     FilesFailed { files: Vec<(String, String)> },
 }
 
@@ -167,7 +167,10 @@ impl From<Failure> for OpError {
                 OpError::new(
                     OpErrorKind::SchemaMismatch,
                     "migration_file_failed",
-                    format!("{} file(s) could not be migrated{first}", files.len()),
+                    format!(
+                        "{} file(s) could not be migrated{first}; nothing was written",
+                        files.len()
+                    ),
                 )
             }
         }
@@ -423,7 +426,8 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
         rollback: None,
         writes: Writes::none(),
     };
-    if !pending || request.dry_run {
+    // A file that cannot be migrated leaves every file as it was (ADR 0171): the plan reports each one.
+    if !pending || request.dry_run || outcome.summary.failed_count > 0 {
         return Ok(outcome);
     }
 
@@ -440,9 +444,6 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
     );
     outcome.applied = true;
     outcome.writes = summary_writes(project.dir(), &outcome.summary);
-    if outcome.summary.failed_count > 0 {
-        return Ok(outcome);
-    }
 
     // Extension hooks run on the migrated files, before validation.
     let input = MigrationInput {

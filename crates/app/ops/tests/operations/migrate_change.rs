@@ -5,6 +5,7 @@
 use specforge_common::ProjectRoot;
 use specforge_ops::OpErrorKind;
 use specforge_ops::authoring::migrate::{MigrationStatus, rollback};
+use specforge_test_macros::test as specforge_test;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 use std::sync::Arc;
@@ -176,8 +177,10 @@ fn a_rollback_keeps_a_files_permissions_and_refuses_a_read_only_one() {
     assert!(record.contains("other.spec"), "{record}");
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test(
+    behavior = "migrate_spec_files_in_place",
+    verify = "a file that cannot be migrated leaves every file as it was"
+)]
 fn a_file_that_cannot_be_migrated_leaves_every_file_as_it_was() {
     let dir = project();
     std::fs::write(

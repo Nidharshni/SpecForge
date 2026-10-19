@@ -106,8 +106,9 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
     The system MUST transform .spec files from the detected source version
     to the target version. Before modifying any file, the system MUST
     create a backup copy with a .bak extension unless --no-backup is
-    specified. Each file MUST be migrated independently — a failure in one
-    file MUST NOT prevent migration of others. Each file MUST be written
+    specified. A migration MUST be written all or nothing: when any file
+    cannot be read or migrated, no file is written, and the report names every
+    such file with its error (a dry run reports the same). Each file MUST be written
     atomically (write to temporary file, then rename) to prevent corruption
     from interrupted migrations. The backup and the temporary file are
     created new (a link at either name is unlinked first, never its
@@ -159,7 +160,7 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
   verify unit "files migrated from source to target version"
   verify unit "backup created before modification"
   verify unit "--no-backup skips backup creation"
-  verify unit "failure in one file does not block others"
+  verify unit "a file that cannot be migrated leaves every file as it was"
   verify unit "summary reports migrated, failed, and skipped counts"
   verify unit "interrupted migration leaves no partially written files"
   verify unit "the backup and temporary file are created new, never through a planted link"

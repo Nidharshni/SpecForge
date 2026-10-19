@@ -31,7 +31,8 @@ feature spec_file_migration "Spec File Migration" {
     for previewing changes as POSIX unified diffs, and validates post-migration
     integrity by comparing pre and post graph structures. A pre-migration
     snapshot is captured before any transforms to enable structural comparison.
-    Individual file failures do not block the migration of other files; files
+    A file that cannot be migrated leaves every file as it was, and the report
+    names each such file; files
     already at the target version are skipped (idempotency). Extension schema
     migration (when extension manifests evolve) is delegated to extension
     authors via Wasm migration hooks declared in ExtensionDeclaration.migration_hook.
