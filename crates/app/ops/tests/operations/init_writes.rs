@@ -620,3 +620,44 @@ fn init_writes_the_entries_its_plan_judged() {
         ["$schema", "extensions", "name", "spec_root", "version"]
     );
 }
+
+/// A `.gitignore` init cannot read is a read failure, not a write one (ADR 0155).
+#[cfg(unix)]
+#[test]
+fn an_init_that_cannot_read_gitignore_is_unreadable() {
+    use specforge_ops::authoring::init;
+    use std::os::unix::fs::PermissionsExt;
+    let scratch = TempDir::new().unwrap();
+    let dir = scratch.path().join("proj");
+    std::fs::create_dir_all(&dir).unwrap();
+    let gitignore = dir.join(".gitignore");
+    std::fs::write(&gitignore, "x\n").unwrap();
+    std::fs::set_permissions(&gitignore, std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::read(&gitignore).is_ok() {
+        return; // permissions do not bind (root)
+    }
+    let request = init::Request {
+        dir: &dir,
+        name: Some("demo"),
+        version: init::DEFAULT_VERSION,
+        extensions: &[],
+        caller: specforge_ops::testing::caller(),
+    };
+
+    let refused = init::init(&request, &candidates()).unwrap_err();
+    std::fs::set_permissions(&gitignore, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+    let error = refused.error;
+    assert_eq!(error.code, specforge_ops::FILE_UNREADABLE, "{error:?}");
+    assert_eq!(
+        error.kind,
+        specforge_ops::OpErrorKind::PermissionDenied,
+        "{error:?}"
+    );
+    assert!(
+        error.message.starts_with("failed to read .gitignore: "),
+        "{}",
+        error.message
+    );
+    assert_eq!(files_under(&dir).len(), 1, "only the .gitignore");
+}

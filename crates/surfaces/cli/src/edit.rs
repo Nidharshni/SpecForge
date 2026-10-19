@@ -6,9 +6,10 @@ use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal, Written};
 use crate::project::ProjectArg;
 use crate::terminal::{Terminal, outln};
-use specforge_ops::authoring::edit::{self, Edit, EditReport, Input};
+use specforge_ops::authoring::edit::{self, Edit, EditReport, Input, Obligation};
 use specforge_ops::view::ProjectView;
 use specforge_ops::{OpError, OpErrorKind};
+use specforge_project::CompiledProject;
 
 /// What a command prints under `--format json`: the plan's report, and whether it is a preview.
 #[derive(serde::Serialize)]
@@ -40,7 +41,19 @@ pub(crate) fn execute(
         Ok(compiled) => compiled,
         Err(error) => return Refusal::of(format).report(terminal, &error),
     };
-    let view = ProjectView::of(&compiled);
+    execute_on(&compiled, edits, dry_run, format, terminal)
+}
+
+/// Plan `edits` over `compiled`, write them unless `dry_run`, and print what they did. It never compiles: the
+/// caller's project is the one planned, validated and written.
+pub(crate) fn execute_on(
+    compiled: &CompiledProject,
+    edits: Vec<Edit>,
+    dry_run: bool,
+    format: OutputFormat,
+    terminal: &Terminal,
+) -> Exit {
+    let view = ProjectView::of(compiled);
     let root = match view.project_root() {
         Ok(root) => root,
         Err(error) => return Refusal::of(format).report(terminal, &error),
@@ -92,7 +105,7 @@ pub(crate) struct SetArgs {
     #[arg(conflicts_with = "title")]
     field: Option<String>,
 
-    /// The value; a list field takes several, or one separated by commas
+    /// The value; a list field takes several (a reference list also one separated by commas)
     #[arg(num_args = 0.., conflicts_with = "title")]
     values: Vec<String>,
 
@@ -217,31 +230,12 @@ pub(crate) struct LinkArgs {
     output: OutputArg,
 }
 
-/// A letter or `_`, then letters, digits and `_`.
-fn is_word(text: &str) -> bool {
-    let mut chars = text.chars();
-    chars
-        .next()
-        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
-}
-
-/// `kind:text` as an obligation's parts: the kind is a word before the first colon.
-pub(crate) fn obligation(text: &str) -> (Option<String>, String) {
-    match text.split_once(':') {
-        Some((kind, rest)) if is_word(kind) => {
-            (Some(kind.to_string()), rest.trim_start().to_string())
-        }
-        _ => (None, text.to_string()),
-    }
-}
-
 impl LinkArgs {
     pub(crate) fn run(self, add: bool, terminal: &Terminal) -> Exit {
         let entity_id = self.entity.clone();
         let edit = match (&self.verify, &self.field, &self.target) {
             (Some(verify), _, _) => {
-                let (kind, text) = obligation(verify);
+                let Obligation { kind, text } = Obligation::parse(verify);
                 if add {
                     Edit::AddVerify {
                         entity_id,

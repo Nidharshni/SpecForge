@@ -34,7 +34,7 @@ specforge new behavior <id> "<title>" --in <file> --contract "…" --invariants 
 specforge set <id> <field> <value>   # set a field; `field.entry` edits one entry of a block field
 specforge set <id> --title "<title>" # change the header title
 specforge unset <id> <field>         # remove a field
-specforge link <id> <field> <target> # add a reference; unlink removes it
+specforge link <id> <field> <target> # add a reference (on the relation's owning side); unlink removes it
 specforge link <id> --verify unit:"<text>"   # add a verify obligation; unlink removes it
 specforge delete <id> [--unlink-references]  # delete an entity (and, with the flag, every reference to it)
 # Every edit takes --dry-run (print the diff, write nothing) and --format json. MCP: specforge.edit takes a list.
@@ -83,7 +83,7 @@ A file states a kind's shared fields once (ADR 0149): `defaults <kind> { <field>
 2. It applies to every block of that kind in the same file: not another kind, file or importer.
 3. A block that writes a field keeps its own value whole; `ports []` says "none".
 4. A default sets a field the kind declares (else E077, not applied).
-5. A block field equal to its default, and a default no block takes, is W161.
+5. A block field equal to its default, and a default no block takes, is W161. A typed edit never writes one.
 6. `defaults` is reserved: never a kind, E013 as an id.
 7. The graph holds the resolved value; its spans stay the default's, so diagnostics, references and rename point at the default's line.
 

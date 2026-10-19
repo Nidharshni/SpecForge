@@ -293,7 +293,7 @@ fn a_failed_builtin_edit_enables_no_peer() {
     .unwrap_err();
     std::fs::set_permissions(&config, std::fs::Permissions::from_mode(0o644)).unwrap();
 
-    assert_eq!(error.error.code, "config_write_failed", "{error:?}");
+    assert_eq!(error.error.code, crate::FILE_UNWRITABLE, "{error:?}");
     assert!(error.error.writes.is_empty());
     assert_eq!(std::fs::read(&config).unwrap(), before);
 }

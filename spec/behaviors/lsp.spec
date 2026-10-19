@@ -441,7 +441,8 @@ behavior rename_entity_id "Rename Entity ID" {
     update the entity declaration and every reference to it across
     all .spec files. The rename MUST be atomic — all files are updated
     or none are. The new ID follows the same rule as the MCP rename tool's:
-    a name that is not a legal entity ID, or that is taken, MUST be refused
+    a name that is not a legal entity ID, that is a reserved word (a structural
+    keyword or a declared kind's keyword, E013), or that is taken, MUST be refused
     with an error saying why. The edits are exactly the entity's
     declaration name and its references, as find-references returns them;
     text in strings, comments and verify statements that mentions the ID
@@ -463,6 +464,8 @@ behavior rename_entity_id "Rename Entity ID" {
   verify unit "rename across multiple files"
   verify unit "rename rejects new name that duplicates existing entity ID"
   verify unit "rename to an illegal entity ID is refused with why"
+  verify unit "rename to a reserved word is refused with why"
+  verify unit "rename refuses a reserved word as the new ID before anything is planned"
   verify unit "a rename is refused when specforge.json does not say which files are the project's sources"
   verify contract "Rename Entity ID: entity rename holds — graph_available, prepare_rename_ready, all_references_updated, rename_atomic, entity_renamed_emitted"
 }

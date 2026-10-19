@@ -165,8 +165,8 @@ impl FieldRegistry {
     /// write from the other side (ADR 0150): every reference field of another
     /// kind that targets `kind` and names `name` its `inverse_of`; then, when
     /// `value_kind` is another kind, every reference field of `value_kind` that
-    /// targets `kind`. Each once, the `inverse_of` matches first, then by
-    /// (kind, field). Empty when `kind` registers `name`; never a field of
+    /// targets `kind`. Each once, the `inverse_of` matches first; each group
+    /// by (kind, field). Empty when `kind` registers `name`; never a field of
     /// `kind` itself (a self-relation's other side cannot be told from a new
     /// one).
     pub fn owning_fields(
@@ -185,16 +185,23 @@ impl FieldRegistry {
                     && entry.declared().target_kind.as_deref() == Some(kind)
             })
         };
+        let by_owner = |a: &&FieldRegistryEntry, b: &&FieldRegistryEntry| {
+            (a.kind_name(), a.name()).cmp(&(b.kind_name(), b.name()))
+        };
         let mut owning: Vec<&FieldRegistryEntry> = into_kind()
             .filter(|(_, _, entry)| entry.declared().inverse_of.as_deref() == Some(name))
             .map(|(_, _, entry)| entry)
             .collect();
+        owning.sort_by(by_owner);
         if let Some(value_kind) = value_kind.filter(|value_kind| *value_kind != kind) {
-            for (owner, _, entry) in into_kind() {
-                if owner == value_kind && !owning.iter().any(|seen| std::ptr::eq(*seen, entry)) {
-                    owning.push(entry);
-                }
-            }
+            let mut by_value: Vec<&FieldRegistryEntry> = into_kind()
+                .filter(|(owner, _, entry)| {
+                    *owner == value_kind && !owning.iter().any(|seen| std::ptr::eq(*seen, *entry))
+                })
+                .map(|(_, _, entry)| entry)
+                .collect();
+            by_value.sort_by(by_owner);
+            owning.extend(by_value);
         }
         owning
     }

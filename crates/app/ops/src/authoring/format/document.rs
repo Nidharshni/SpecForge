@@ -136,13 +136,25 @@ pub fn document<'a>(
     editor: Option<EditorOptions>,
     forms: &FieldForms,
 ) -> FormattedDocument<'a> {
+    let (file, resolved) = resolve(place, editor);
+    format_text(resolved, text, lines, file, forms)
+}
+
+/// The configuration [`document`] formats `place` with: inside a project the nearest `.specforgefmt.toml` up to
+/// its root, else the defaults; outside one, the defaults. An invalid file gives its defaults (W141 is
+/// [`document`]'s to report, not this function's).
+pub fn config(place: Place<'_>) -> FormatConfig {
+    resolve(place, None).1.config
+}
+
+/// The file `place` names (if it is one) and its resolved configuration, from a fresh lookup.
+fn resolve(place: Place<'_>, editor: Option<EditorOptions>) -> (Option<&Path>, Resolved) {
     let mut configs = Configs::new(None);
-    let (file, resolved) = match place {
+    match place {
         Place::File(path) => (Some(path), configs.for_file(path, editor)),
         Place::InProject { root, dir } => (None, configs.resolve(dir, root)),
         Place::Detached => (None, Resolved::editor(editor)),
-    };
-    format_text(resolved, text, lines, file, forms)
+    }
 }
 
 /// The directory `file` is in (`.` for a bare file name).

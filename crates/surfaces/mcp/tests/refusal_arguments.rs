@@ -423,6 +423,22 @@ fn mutation_refusals_name_their_argument() {
 }
 
 #[specforge_test(
+    behavior = "provide_mcp_rename_tool",
+    verify = "a new_name that is a reserved word is refused as invalid input naming new_name"
+)]
+fn a_rename_to_a_reserved_word_is_refused_naming_new_name() {
+    assert_refused(
+        &call_served(
+            "specforge.rename",
+            json!({"entity_id": "login", "new_name": "defaults"}),
+        ),
+        "invalid_input",
+        Some("new_name"),
+        None,
+    );
+}
+
+#[specforge_test(
     invariant = "mcp_structured_error_responses",
     verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
 )]

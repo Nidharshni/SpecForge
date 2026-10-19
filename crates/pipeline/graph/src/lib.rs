@@ -1,10 +1,12 @@
 //! The typed entity graph. A `GraphBuild` turns parsed `.spec` files into a `Graph` of nodes and edges and reports
 //! what building it found (duplicates, unknown ref schemes, unresolved references, reference cycles), kept current
 //! one whole file at a time (ADR 0032). `compute_graph_delta` says what changed between two graphs, `FieldForm` how
-//! a declared field is written, and `Obligation` how an entity's `verify` statements are written.
+//! a declared field is written, `FileDefaults` what a file's `defaults` blocks give its blocks, and `Obligation` how an
+//! entity's `verify` statements are written.
 
 mod build;
 mod defaults;
+pub use defaults::FileDefaults;
 pub mod field_form;
 pub use field_form::{
     FieldForm, FieldForms, FieldJson, Reading, Reference, Rewrite, Target, ValueShape,

@@ -1,7 +1,7 @@
 # A relation is written on one side
 
 **Status:** accepted (2026-10-18, syntax round R4). Amends [ADR 0060](0060-edge-types-resolved-once.md) (D6: the inverse
-reading of `inverse_of`) and [ADR 0032](0032-one-graph-build.md) (the inverse pairs of the graph inputs).
+reading of `inverse_of`) and [ADR 0032](0032-one-graph-build.md) (the inverse pairs of the graph inputs). Consequences amended by [ADR 0157](0157-a-typed-edit-names-a-relations-owning-side.md) (a typed edit refuses the other side, naming the owning field).
 
 The builtin extensions declare every relation from one side: 53 reference fields, 53 relations, none declared from both
 ends. What authors and agents read said otherwise. `docs/quick-reference.md` made `behaviors` a required field of
@@ -50,7 +50,7 @@ gave the graph two bogus bidirectional pairs and trace a "declared from the othe
 
 - A project written to the old docs fails `check` until edited; the suggestion carries the edit. Tracked projects: 0.
 - Extension authors get W162 for a relation declared from both ends.
-- Plan 05's `link` writes on `FieldRegistry::owning_fields`.
+- A typed edit on the other side is refused naming the owning field ([ADR 0157](0157-a-typed-edit-names-a-relations-owning-side.md)).
 
 ## What would reopen it
 

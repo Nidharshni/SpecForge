@@ -14,7 +14,7 @@ Arguments:
           The field, or `field.entry` for one entry of a block field
 
   [VALUES]...
-          The value; a list field takes several, or one separated by commas
+          The value; a list field takes several (a reference list also one separated by commas)
 
 Options:
       --title <TITLE>

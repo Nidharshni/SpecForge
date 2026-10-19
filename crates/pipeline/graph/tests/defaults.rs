@@ -3,7 +3,7 @@
 //! `apply_file_defaults`).
 
 use specforge_graph::{
-    FieldForm, FieldForms, FileChange, Graph, GraphBuild, GraphConfig, GraphInputs,
+    FieldForm, FieldForms, FileChange, FileDefaults, Graph, GraphBuild, GraphConfig, GraphInputs,
     build_graph_with_config,
 };
 use specforge_parser::parse;
@@ -264,4 +264,69 @@ fn changing_a_default_changes_every_block_that_inherits_it() {
         modified,
         ["a", "b", "c"].map(|id| (id.to_string(), vec!["ports".to_string()]))
     );
+}
+
+const ASKED: &str = "defaults behavior {\n  ports [Repo]\n  ports [Store]\n  owner x\n}\n\n\
+     defaults behavior {\n  features [f]\n}\n\n\
+     behavior a \"A\" {\n  ports [\"Repo\"]\n}\n\n\
+     behavior b \"B\" {\n  ports [Store]\n}\n\n\
+     behavior c \"C\" {\n  ports []\n}\n";
+
+#[specforge_test(
+    behavior = "apply_file_defaults",
+    verify = "the defaults answer which entry applies and whether a field restates it"
+)]
+fn the_defaults_answer_which_entry_applies_and_whether_a_field_restates_it() {
+    let file = parse(ASKED, "a.spec");
+    let (defaults, _) = FileDefaults::of(&file, &forms());
+    let first = defaults
+        .entry("behavior", "ports")
+        .expect("the first ports");
+    assert_eq!(first.value_span.as_ref().map(|s| s.start_line), Some(2));
+    assert!(defaults.entry("behavior", "owner").is_none(), "E077");
+    assert!(
+        defaults.entry("behavior", "features").is_none(),
+        "a second block"
+    );
+    assert!(defaults.entry("port", "ports").is_none());
+
+    let own = |id: &str| {
+        let block = file.entities.iter().find(|e| e.id.raw == id).unwrap();
+        block.fields.entries()[0].clone()
+    };
+    assert!(
+        defaults.restates("behavior", &own("a")),
+        "quoted, same value"
+    );
+    assert!(!defaults.restates("behavior", &own("b")));
+    assert!(!defaults.restates("behavior", &own("c")), "[] says none");
+}
+
+#[test]
+fn w161_flags_exactly_what_restates_answers() {
+    let file = parse(ASKED, "a.spec");
+    let (defaults, _) = FileDefaults::of(&file, &forms());
+    let answered: Vec<&str> = file
+        .entities
+        .iter()
+        .filter(|e| e.kind.raw == "behavior")
+        .filter(|e| defaults.restates("behavior", &e.fields.entries()[0]))
+        .map(|e| e.id.raw.as_str())
+        .collect();
+    let (_, diagnostics) = build(&[("a.spec", ASKED)]);
+    let flagged: Vec<&str> = coded(&diagnostics, "W161")
+        .into_iter()
+        .filter(|m| m.contains("restates"))
+        .map(|m| {
+            if m.contains("'a'") {
+                "a"
+            } else if m.contains("'b'") {
+                "b"
+            } else {
+                "c"
+            }
+        })
+        .collect();
+    assert_eq!(answered, ["a"]);
+    assert_eq!(flagged, answered);
 }

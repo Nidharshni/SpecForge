@@ -144,8 +144,8 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
     the rename plan (affected files and McpRenameEdit operations) without applying
     any changes. If the entity does not exist, the tool MUST return an error.
     If new_name is not a legal entity ID (t_entity_id: 2-60 letters, digits
-    and underscores, starting with a letter or underscore), the tool MUST
-    return a validation error. After a successful rename, the tool MUST trigger
+    and underscores, starting with a letter or underscore) or is a reserved
+    word (E013), the tool MUST return a validation error. After a successful rename, the tool MUST trigger
     recompilation and return updated diagnostics in the response; a preview
     and a failed rename return none.
     A specforge.json that does not say which files are the project's
@@ -160,6 +160,7 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
   verify unit "specforge.rename renames entity and all references"
   verify unit "non-existent entity returns error response"
   verify unit "invalid new_name returns validation error"
+  verify unit "a new_name that is a reserved word is refused as invalid input naming new_name"
   verify unit "dry_run returns rename plan without applying changes"
   verify contract "Provide MCP Rename Tool: MCP rename tool holds — graph_available, filesystem_available, references_updated, recompilation_triggered, dry_run_safe, mutation_completed_emitted, tool_invoked_emitted"
   verify unit "rename plans on the project as it is on disk, references added since the last call included"

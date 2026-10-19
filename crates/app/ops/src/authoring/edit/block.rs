@@ -2,20 +2,23 @@
 //! member starts on its own line) and again after it is changed (so it is laid out canonically); no byte outside it
 //! changes.
 
-use super::write::{list_item, not_editable, quoted, written};
+use super::write::{not_editable, written};
 use super::{EditField, Input};
 use crate::authoring::format::{self, Lines, Place};
 use crate::view::ProjectView;
 use crate::{OpError, OpErrorKind, Refusal};
 use specforge_common::{SourceSpan, find_close_match};
-use specforge_graph::FieldMap;
-use specforge_graph::field_form::{FieldForm, Reading};
+use specforge_formatter::FormatConfig;
+use specforge_graph::field_form::{FieldForm, Reading, spell};
 use specforge_parser::lex::{LexemeKind, lex};
 use specforge_parser::{Entity, FieldEntry, FieldValue, SpecFile, parse};
 use specforge_protocol_types::FieldType;
+use specforge_registry::FieldRegistryEntry;
 
 /// The edit names a field its kind does not declare.
 pub const UNKNOWN_FIELD: &str = "unknown_field";
+/// The edit names the other side of a relation another kind owns (ADR 0150, ADR 0157).
+pub const OTHER_SIDE: &str = "other_side";
 /// The entity's block holds a region the parser could not read whole.
 pub const BLOCK_UNREADABLE: &str = "block_unreadable";
 
@@ -26,27 +29,47 @@ pub struct Site<'a> {
     pub key: &'a str,
     pub id: &'a str,
     pub kind: &'a str,
-    /// The entity's fields as the graph resolved them (the file defaults' included); `None` for one this plan
-    /// created.
-    pub resolved: Option<&'a FieldMap>,
 }
 
 impl Site<'_> {
-    /// How `field` of the entity's kind reads; `unknown_field` for one it does not declare.
+    /// How `field` of the entity's kind reads; refused when the kind does not declare it.
     pub fn reading(&self, field: &str) -> Result<Reading<'_>, Refusal<EditField>> {
+        self.reading_toward(field, None)
+    }
+
+    /// [`Self::reading`] for a value naming `target` (a link's or unlink's): an undeclared `field` whose target's
+    /// kind owns a relation into this kind is told as that relation's other side, as E079 tells it by its values.
+    pub fn reading_toward(
+        &self,
+        field: &str,
+        target: Option<&str>,
+    ) -> Result<Reading<'_>, Refusal<EditField>> {
         match self
             .view
             .registries()
             .field_forms()
             .reading(self.kind, field)
         {
-            Reading::Undeclared => Err(self.unknown_field(field)),
+            Reading::Undeclared => Err(self.unknown_field(field, target)),
             reading => Ok(reading),
         }
     }
 
-    fn unknown_field(&self, field: &str) -> Refusal<EditField> {
-        let declared = self.order();
+    /// `other_side` when `owning_fields` names an owner, else `unknown_field` with its near miss.
+    fn unknown_field(&self, field: &str, target: Option<&str>) -> Refusal<EditField> {
+        let target = target.and_then(|id| {
+            let node = self.view.graph().node(id)?;
+            Some((id, node.kind.raw.as_str()))
+        });
+        let owners = self.view.registries().fields().owning_fields(
+            self.kind,
+            field,
+            target.map(|(_, kind)| kind),
+        );
+        if !owners.is_empty() {
+            return self.other_side(field, &owners, target);
+        }
+        let declared = order(self.view, self.kind);
         let error = OpError::new(
             OpErrorKind::InvalidInput,
             UNKNOWN_FIELD,
@@ -59,29 +82,79 @@ impl Site<'_> {
         .about(EditField::Field)
     }
 
-    /// The kind's declared fields, in declaration order, then the enhancements' by name.
-    pub fn order(&self) -> Vec<String> {
-        let registries = self.view.registries();
-        let mut order: Vec<String> = registries
-            .kinds()
-            .get(self.kind)
-            .map(|k| k.declared.fields.iter().map(|f| f.name.clone()).collect())
-            .unwrap_or_default();
-        let mut more: Vec<String> = registries
-            .fields()
-            .fields_for_kind(self.kind)
+    /// The `other_side` refusal: the owners as E079 names them, and where to change it instead. `target` is
+    /// `(id, kind)` when the graph knows the link's target.
+    fn other_side(
+        &self,
+        field: &str,
+        owners: &[&FieldRegistryEntry],
+        target: Option<(&str, &str)>,
+    ) -> Refusal<EditField> {
+        let names = |owners: &mut dyn Iterator<Item = &&FieldRegistryEntry>| {
+            owners
+                .map(|o| format!("'{}'", o.name()))
+                .collect::<Vec<_>>()
+                .join(" or ")
+        };
+        let of_target = target.map(|(id, kind)| {
+            let names = names(&mut owners.iter().filter(|o| o.kind_name() == kind));
+            (names, kind, id)
+        });
+        let suggestion = match of_target {
+            Some((names, kind, id)) if !names.is_empty() => {
+                format!("change it on the owning side: {names} of {kind} '{id}'")
+            }
+            _ => {
+                let each: Vec<String> = owners
+                    .iter()
+                    .map(|o| format!("'{}' of each {} it names", o.name(), o.kind_name()))
+                    .collect();
+                format!("change it on the owning side: {}", each.join(" or "))
+            }
+        };
+        let owned: Vec<String> = owners
             .iter()
-            .map(|f| f.name().to_string())
-            .filter(|name| !order.contains(name))
+            .map(|o| format!("{}.{}", o.kind_name(), o.name()))
             .collect();
-        more.sort();
-        order.extend(more);
-        order
+        OpError::new(
+            OpErrorKind::InvalidInput,
+            OTHER_SIDE,
+            format!(
+                "field '{field}' on {} '{}' is the other side of {}: a relation is written on its owning side only",
+                self.kind,
+                self.id,
+                owned.join(" or ")
+            ),
+        )
+        .with_entity(self.id)
+        .with_suggestion(suggestion)
+        .about(EditField::Field)
     }
 
     fn path(&self) -> std::path::PathBuf {
         self.view.env().spec_root().join(self.key)
     }
+}
+
+/// The fields `kind` declares, in the order a block writes them: the kind's own in declaration order, then every
+/// other registered field (shared, enhancements') by name. Empty for a kind no loaded extension declares.
+pub fn order(view: &ProjectView<'_>, kind: &str) -> Vec<String> {
+    let registries = view.registries();
+    let mut order: Vec<String> = registries
+        .kinds()
+        .get(kind)
+        .map(|k| k.declared.fields.iter().map(|f| f.name.clone()).collect())
+        .unwrap_or_default();
+    let mut more: Vec<String> = registries
+        .fields()
+        .fields_for_kind(kind)
+        .iter()
+        .map(|f| f.name().to_string())
+        .filter(|name| !order.contains(name))
+        .collect();
+    more.sort();
+    order.extend(more);
+    order
 }
 
 fn unreadable(id: &str) -> Refusal<EditField> {
@@ -107,6 +180,13 @@ pub struct Block {
     lines: Vec<String>,
     file: SpecFile,
     index: usize,
+    /// The file's format configuration: what a multi-line value is laid out with.
+    config: FormatConfig,
+}
+
+/// The format configuration of the file `site` is in.
+pub fn layout(site: &Site<'_>) -> FormatConfig {
+    format::config(Place::File(&site.path()))
 }
 
 /// `text` with the block of `site` laid out canonically.
@@ -132,7 +212,12 @@ impl Block {
         let file = parse(&text, site.key);
         let index = position(&file, site).ok_or_else(|| unreadable(site.id))?;
         let lines = text.split('\n').map(String::from).collect();
-        Ok(Block { lines, file, index })
+        Ok(Block {
+            lines,
+            file,
+            index,
+            config: layout(site),
+        })
     }
 
     pub fn text(&self) -> String {
@@ -169,19 +254,21 @@ impl Block {
             .find(|e| e.key.as_str() == name)
     }
 
-    fn indent_of(&self, line: usize) -> usize {
+    /// The leading whitespace of `line`.
+    fn lead(&self, line: usize) -> &str {
         let text = &self.lines[line];
-        text.len() - text.trim_start().len()
+        &text[..text.len() - text.trim_start().len()]
     }
 
-    /// The indent of the block's members.
-    fn member_indent(&self) -> usize {
+    /// The leading whitespace of the block's members.
+    fn member_lead(&self) -> String {
+        let one_in = self.config.indent_str();
         match self.entity().fields.entries().first() {
             Some(entry) => entry
                 .value_span
                 .as_ref()
-                .map_or(2, |s| self.indent_of(s.start_line - 1)),
-            None => self.indent_of(self.header()) + 2,
+                .map_or(one_in, |s| self.lead(s.start_line - 1).to_string()),
+            None => format!("{}{one_in}", self.lead(self.header())),
         }
     }
 
@@ -278,7 +365,7 @@ fn annotation_text(annotations: &[String]) -> String {
     annotations
         .iter()
         .map(|a| match a.split_once('=') {
-            Some((name, value)) => format!(" @{name} {}", quoted(value)),
+            Some((name, value)) => format!(" @{name} {}", spell::quoted(value)),
             None => format!(" @{a}"),
         })
         .collect()
@@ -314,12 +401,11 @@ impl Block {
 
     /// A new member `name value` at its rank (`(group, declared index)`).
     fn insert_member(&mut self, site: &Site<'_>, name: &str, value: &str, annotations: &[String]) {
-        let order = site.order();
+        let order = order(site.view, site.kind);
         let new_rank = rank(&order, name, group_of_text(value));
-        let indent = self.member_indent();
         let text = format!(
             "{}{name} {value}{}",
-            " ".repeat(indent),
+            self.member_lead(),
             annotation_text(annotations)
         );
         let entries = self.entity().fields.entries();
@@ -404,8 +490,14 @@ pub fn set(
                     .value_span
                     .clone()
                     .ok_or_else(|| unreadable(site.id))?;
-                let indent = block.indent_of(span.start_line - 1);
-                let new = written(Reading::Declared(&block_form()), inner, input, indent)?;
+                let lead = block.lead(span.start_line - 1).to_string();
+                let new = written(
+                    Reading::Declared(&block_form()),
+                    inner,
+                    input,
+                    &lead,
+                    &block.config,
+                )?;
                 block.replace_value(&span, &new, annotations);
             }
             Some((outer_entry, None)) => {
@@ -413,9 +505,19 @@ pub fn set(
                     .value_span
                     .clone()
                     .ok_or_else(|| unreadable(site.id))?;
-                let indent = block.indent_of(span.start_line - 1) + 2;
-                let new = written(Reading::Declared(&block_form()), inner, input, indent)?;
-                let line = format!("{}{inner} {new}", " ".repeat(indent));
+                let lead = format!(
+                    "{}{}",
+                    block.lead(span.start_line - 1),
+                    block.config.indent_str()
+                );
+                let new = written(
+                    Reading::Declared(&block_form()),
+                    inner,
+                    input,
+                    &lead,
+                    &block.config,
+                )?;
+                let line = format!("{lead}{inner} {new}");
                 block.insert(span.end_line - 1, &line);
             }
             None => {
@@ -423,7 +525,13 @@ pub fn set(
                     unreachable!("checked above")
                 };
                 let entries = Input::Entries([(inner.to_string(), text.clone())].into());
-                let value = written(site.reading(outer)?, outer, &entries, block.member_indent())?;
+                let value = written(
+                    site.reading(outer)?,
+                    outer,
+                    &entries,
+                    &block.member_lead(),
+                    &block.config,
+                )?;
                 block.insert_member(site, outer, &value, &[]);
             }
         }
@@ -432,12 +540,12 @@ pub fn set(
     let reading = site.reading(field)?;
     match block.entry(field).and_then(|e| e.value_span.clone()) {
         Some(span) => {
-            let indent = block.indent_of(span.start_line - 1);
-            let new = written(reading, field, input, indent)?;
+            let lead = block.lead(span.start_line - 1).to_string();
+            let new = written(reading, field, input, &lead, &block.config)?;
             block.replace_value(&span, &new, annotations);
         }
         None => {
-            let new = written(reading, field, input, block.member_indent())?;
+            let new = written(reading, field, input, &block.member_lead(), &block.config)?;
             block.insert_member(site, field, &new, annotations.unwrap_or_default());
         }
     }
@@ -479,7 +587,7 @@ pub fn retitle(site: &Site<'_>, text: &str, title: &str) -> Result<String, Refus
     let at = block.header();
     let line = block.lines[at].clone();
     let lexemes = lex(&line);
-    let quoted_title = quoted(title);
+    let quoted_title = spell::quoted(title);
     let new = match lexemes.iter().find(|l| l.kind.is_str()) {
         Some(old) => format!("{}{}{}", &line[..old.start], quoted_title, &line[old.end..]),
         None => {
@@ -515,7 +623,6 @@ pub fn verify(
         if found.is_some() {
             return Ok(text.to_string());
         }
-        let indent = block.member_indent();
         let kind_text = if kind.is_empty() {
             String::new()
         } else {
@@ -523,8 +630,8 @@ pub fn verify(
         };
         let line = format!(
             "{}verify {kind_text}{}",
-            " ".repeat(indent),
-            quoted(description)
+            block.member_lead(),
+            spell::quoted(description)
         );
         let at = lines.last().map_or(block.close(), |(_, last)| last + 1);
         block.insert(at, &line);
@@ -553,10 +660,7 @@ pub fn items_of(value: &FieldValue) -> Option<Items> {
     Some(Items {
         written: items
             .iter()
-            .map(|i| match i.written {
-                specforge_parser::Written::Quoted => quoted(&i.text),
-                _ => i.text.clone(),
-            })
+            .map(|i| spell::spelled(&i.text, i.written))
             .collect(),
         texts: items.iter().map(|i| i.text.clone()).collect(),
     })
@@ -570,14 +674,14 @@ pub fn link(
     target: &str,
     add: bool,
 ) -> Result<String, Refusal<EditField>> {
-    let Reading::Declared(form) = site.reading(field)? else {
+    let Reading::Declared(form) = site.reading_toward(field, Some(target))? else {
         return Err(not_editable(
             EditField::Field,
             format!("'{field}' takes any text; use set"),
         ));
     };
     let item = match form.field_type() {
-        FieldType::ReferenceList | FieldType::StringList => list_item(form.field_type(), target),
+        FieldType::ReferenceList | FieldType::StringList => spell::value(form, target),
         FieldType::Reference if !add => String::new(),
         _ => {
             return Err(not_editable(
@@ -589,19 +693,26 @@ pub fn link(
     let block = Block::open(site, text)?;
     let before = block.text();
     let own = block.entry(field);
-    let inherited = own.is_none().then(|| site.resolved?.get(field)).flatten();
+    let inherited = match own {
+        None => super::defaults::inherited(site, &block, form, field),
+        Some(_) => None,
+    };
     let current = match (own, inherited) {
-        (Some(entry), _) => match &entry.value {
-            FieldValue::List(_) => items_of(&entry.value),
-            _ if matches!(form.field_type(), FieldType::Reference) => None,
-            _ => {
-                return Err(not_editable(
-                    EditField::Field,
-                    format!("'{field}' is not a list"),
-                ));
+        (Some(entry), _) => {
+            // A list written as one value is its one item, as the graph build stores it (ADR 0093).
+            let stored = form.coerce(&entry.value, entry.value_span.as_ref());
+            match stored.as_ref().unwrap_or(&entry.value) {
+                value @ FieldValue::List(_) => items_of(value),
+                _ if matches!(form.field_type(), FieldType::Reference) => None,
+                _ => {
+                    return Err(not_editable(
+                        EditField::Field,
+                        format!("'{field}' is not a list"),
+                    ));
+                }
             }
-        },
-        (None, Some(value)) => items_of(value),
+        }
+        (None, Some(value)) => items_of(&value),
         (None, None) => Some(Items {
             written: Vec::new(),
             texts: Vec::new(),

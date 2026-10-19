@@ -315,7 +315,8 @@ behavior apply_format_rules "Apply Format Rules" {
     (CRLF line endings become LF, inside string literals too) and ends with
     exactly one newline; no blank line opens or closes it, and a blank text
     formats to the empty text. A value is written in its field's form
-    (ADR 0147): a quoted word on a field whose declared type writes it bare
+    (ADR 0147): a quoted word (on a reference list, a quoted entity id, scheme
+    refs included) on a field whose declared type writes it bare
     loses its quotes, and a bare word on a text field gains them, read from
     the project's declarations; nothing else in a string literal changes, and
     a triple-quoted one is kept byte-for-byte. Statements keep their source

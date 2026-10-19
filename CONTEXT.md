@@ -195,7 +195,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   atomically through a temp created new beside it, keeping its permissions (ADR 0104, ADR 0112, ADR 0128).
 - **Project change**: several project files written as one change: each staged as a `Held` with what it holds and will
   hold, checked, replaced in order, put back in reverse on any failure; what it could not put back is the operation's
-  writes (`specforge_ops::change::ProjectChange`, ADR 0128).
+  writes (`specforge_ops::change::ProjectChange`, ADR 0128). Its failure is its own: one code per cause
+  (`file_changed`, `file_unreadable`, `file_unwritable`), the file named from the root the change was opened under,
+  after what the operation was doing (ADR 0155).
 - **Served project**: the project an MCP server serves to every call that names none: the nearest project (a
   directory holding `specforge.json`) at or above the server's root (the path `specforge mcp` was started with, or
   a handshake client's `projectRoot`), else nothing; while none is served, every request looks there again first
@@ -378,7 +380,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Owning field**: the one reference field that writes a relation's edges, declared by an extension (ADR 0150).
   A relation is written there and nowhere else; its other side is derived.
 - **Other side** (of a relation): what the target entity reads the relation as: its incoming edges, which `query`
-  and `trace` (upstream) show. Never a field; an `inverse_of` may name it. Writing it is E079.
+  and `trace` (upstream) show. Never a field; an `inverse_of` may name it. Writing it is E079. A typed edit naming it is refused `other_side`, naming the owning field (ADR 0157).
 - **Entity enhancement**: fields and verify kinds one extension declares on an entity kind another extension declares
   (`c.enhance(kind, ..)`). Its fields are the declaring extension's: trace treats them as opt-in for the kind, and
   the model and schema name their extension. The kind stays its declarer's. An enhancement of a kind no loaded
@@ -406,7 +408,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **File default**: a field value a `defaults <kind> { … }` block states once for every block of that kind in
   its file (ADR 0149). A block's own field replaces it whole. The graph build resolves it, so the graph, every read
   view, export and check hold the resolved value; its spans stay the default's, so diagnostics, references and
-  rename point at the default's line. `defaults` is a structural keyword: never a kind, never an id.
+  rename point at the default's line. `defaults` is a structural keyword: never a kind, never an id. A typed edit
+  asks the graph's defaults module (`specforge_graph::FileDefaults`) over the text it plans which default applies and
+  whether a field restates it, so it never writes what W161 would flag (ADR 0154).
 - **Custom verdict**: an extension's answer, through its `wasm_function`, on one entity for a
   `check: "custom"` rule: pass, or fail naming a field and value. The rule set asks for it through
   the `CustomVerdicts` port; the project's adapter calls the extension (`ExtensionCalls::validate`),
@@ -443,7 +447,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (ADR 0064).
 - **Value form**: how a field's value is written: bare for an `enum`, `identifier`, `reference` and each
   `reference_list` item, quoted for a `string` and each `string_list` item (ADR 0147). `specforge format` writes it;
-  W159 reports a value written otherwise. Read through `FieldForms::rewrite`, never decided elsewhere.
+  W159 reports a value written otherwise. Spelled by one module, `specforge_graph::field_form::spell` (the escape
+  table, the bare rule and each declared type's one-line spelling); `FieldForms::rewrite` reads its bare rule, and
+  `format`, W159, migrate's `titles` step and the typed-edit writer spell through it (ADR 0153).
 - **Field vocabulary**: the closed set of values an enum field takes, in their order, and the value an absent one
   counts as (its declared `default_value`), declared once by the extension that declares the field, as a `const`
   (`specforge_extension_sdk::Vocabulary`, through `FieldBuilder::vocabulary`, the only way to declare an enum).
@@ -820,7 +826,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Format configuration**: how one `.spec` document is laid out: inside a project, the nearest
   `.specforgefmt.toml` from the document's directory up to its own project root, else the defaults;
   outside any project, the editor's tab settings. `specforge format`, MCP `specforge.format` and the
-  LSP all format through `specforge_ops::authoring::format::document` (ADR 0021).
+  LSP all format through `specforge_ops::authoring::format::document` (ADR 0021). A typed edit lays a multi-line
+  value out with it (`specforge_ops::authoring::format::config`, ADR 0153).
 - **Formatted document**: one `.spec` text formatted with its format configuration, whole or in the
   blocks a range touches (`specforge_ops::authoring::format::document` → `FormattedDocument`): the formatted text,
   the configuration and where it came from, what formatting reported (W141, W142), and the edits that
@@ -1054,7 +1061,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `reference_list` field's items, a scheme ref ID in a `string_list`, ADR 0093), an occurrence of an entity's ID in another entity's field that resolves to it (one
   edge; where it is written is the edge's written span). The references *to* an entity are incoming; what an entity
   *refers to* are its outgoing references. "Find references" means incoming, with the declaration
-  only on request (`specforge_ops::read::navigate`).
+  only on request (`specforge_ops::read::navigate`). Navigation answers the references to an entity two ways: one per
+  holder (an inherited reference once per block that inherits it, `Navigator::references`, what find-references
+  returns) and one per written token (`Navigator::tokens`, what rename edits and an editor shows) (ADR 0149 D11, ADR 0156).
 - **Written span** (of an edge): where one of an edge's references is written: a reference's token (a list
   item, a single reference's value) or a name inside a type expression a derived field reads (a parameter or
   return type, a field written as a type, a union member). The linker records every edge's written spans, in
@@ -1071,11 +1080,17 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the declaration's name and each incoming reference's token, positions in the text the project was compiled from,
   which the plan keeps, with the spec root they are relative to. MCP writes it only to files that still hold that text, refusing `conflict` otherwise; the LSP
   hands it to the editor only over buffers that are that text (`ContentModified` otherwise; ADR 0116, ADR 0023 D3).
+  The new ID is refused when it is not an identifier of 2–60 characters, is a reserved word (E013) or is taken. A
+  rename is not a typed edit and is not checked by E080 (ADR 0151, amended).
 - **Typed edit**: one change to a project's entities, named by what it does rather than by text: create, set,
   unset, retitle, link, unlink, add or remove a verify obligation, delete (`specforge_ops::authoring::edit::Edit`).
   A list of them is planned over the texts the project was compiled from (each edit reading what the ones before
-  it left), each value written in its field's form and each touched block formatted; the plan is refused with E080
+  it left), each value written in its field's form (a multi-line one laid out with the file's format configuration, and left out when it restates its file's default)
+  and each touched block formatted; the plan is refused with E080
   when the edited project reports an error the project did not, and is written as one project change (ADR 0151).
+  A delete with `unlink_references` removes every reference the graph build would link, found by `Reading::references`
+  in the planned texts; one written in a `defaults` block or an undeclared field refuses it (`not_editable`, ADR 0156).
+  A list value is taken by its field's type: a reference list's items split at commas however given, a string list's never (ADR 0157).
 - **Lexeme**: one token of a `.spec` text as the language's one lexer reads it without a parse
   (`specforge_parser::lex`): an identifier, a scheme ref ID (one lexeme), a number, a string (read as
   the grammar reads it, across lines; one the grammar would not close is marked unclosed and, if a
@@ -1132,6 +1147,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   commands. Its adapters are a child process with the user-level consent store (`ProcessMachine`) and a scripted
   machine (tests). The caller passes it; collect decides every refusal that needs no run before the machine runs
   anything (ADR 0125).
+- **Collect mode**: how `collect` gets each collector's evidence (`specforge_ops::analysis::collect::Mode`): run
+  the declared command and read its report (`Run`), read the report it already wrote (`NoRun`, `--no-run`), or
+  read only the files the request names (`Reports`, `--report`). Collect checks only what the mode reads: under
+  `--report` the collector's declared report, capture and command are not looked at (ADR 0125 D7).
 - **Risk grading**: the coverage owner's policy for one kind: its entities' risk is tallied, and
   one with no obligations is A002, an error at the grading's error level
   (`specforge_coverage::RiskGrading`, supplied by `@specforge/testing`; ADR 0009).

@@ -161,7 +161,7 @@ fn run_stdin(root: &ProjectRoot, dir: &Path, runtime: SharedRuntime, terminal: &
                 terminal,
                 &OpError::new(
                     OpErrorKind::of_io(&e),
-                    "file_unreadable",
+                    specforge_ops::FILE_UNREADABLE,
                     format!("failed to read stdin: {e}"),
                 ),
             );

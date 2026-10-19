@@ -1,7 +1,7 @@
 # A `.spec` file is changed by a typed edit that writes the canonical form
 
 **Status:** accepted (2026-10-18, syntax round, plan 05). Extends [ADR 0128](0128-one-project-change-over-held-files.md)
-(a project change) and [ADR 0021](0021-formatting-is-one-operation.md) (format) to a new writer.
+(a project change) and [ADR 0021](0021-formatting-is-one-operation.md) (format) to a new writer. Amended by [ADR 0153](0153-a-value-is-spelled-by-one-module.md) (D2: a multi-line value is laid out with the file's format configuration), by [ADR 0154](0154-a-typed-edit-asks-its-files-defaults-over-the-text-it-plans.md) (D5: an edit reads the defaults from the text it plans, and removes a field that restates its default by W161's comparison of what it wrote) and by round 15 plan 06 (2026-10-19): rename stays its own operation. D5 extended by [ADR 0156](0156-a-delete-finds-references-by-the-one-reference-rule.md): a delete whose entity is named in a `defaults` block is refused (`not_editable`), naming where. Amended by [ADR 0157](0157-a-typed-edit-names-a-relations-owning-side.md) (the other side of a relation; how a list value is taken).
 
 ## Context
 
@@ -42,3 +42,11 @@ doc comments are not covered yet, and a create writes no annotation (a set does)
 
 A project large enough that a second compile per edit is too slow: validation would then move to the session's
 incremental update.
+
+> **Amended by round 15 plan 06 (2026-10-19):** rename is not a typed edit. Its plan is token positions: the LSP
+> hands them to the editor, and MCP returns them (`McpRenameEdit`). A typed edit's plan is file texts. E080's
+> position-free match would count an error the project already has about the renamed entity as a new one, since
+> its message names the ID. What a rename can add that `check` refuses is a reserved word (E013), so rename and
+> create refuse one before anything is planned (`KindRegistry::reserves`). The write path is shared below both
+> (ADR 0128, and the change entry point of round 15 plan 03). Reopen if a second ID-dependent error class
+> appears, or if typed edits must rename inside a list.

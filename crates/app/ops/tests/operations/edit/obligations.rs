@@ -103,3 +103,17 @@ fn an_equal_verify_line_is_not_added_twice() {
         .is_empty()
     );
 }
+
+#[test]
+fn an_obligation_names_its_kind_before_the_first_colon() {
+    use specforge_ops::authoring::edit::Obligation;
+    let parsed = |text| Obligation::parse(text);
+    let with = |kind: Option<&str>, text: &str| Obligation {
+        kind: kind.map(String::from),
+        text: text.into(),
+    };
+    assert_eq!(parsed("unit: rejects x"), with(Some("unit"), "rejects x"));
+    assert_eq!(parsed("rejects: a b"), with(Some("rejects"), "a b"));
+    assert_eq!(parsed("two words: x"), with(None, "two words: x"));
+    assert_eq!(parsed("plain"), with(None, "plain"));
+}

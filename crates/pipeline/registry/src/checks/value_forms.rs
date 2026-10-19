@@ -2,6 +2,7 @@
 //! gives it (ADR 0147).
 
 use specforge_common::{Diagnostic, codes};
+use specforge_graph::field_form::spell;
 use specforge_parser::Written;
 
 use crate::entity::EntityRecord;
@@ -29,10 +30,11 @@ pub(super) fn off_form(
                 continue;
             }
             for rewrite in &field.rewrites {
-                let (what, fix, as_written) = match rewrite.to {
-                    Written::Bare => ("a word", "write it bare", rewrite.text.clone()),
-                    _ => ("text", "quote it", format!("\"{}\"", rewrite.text)),
+                let (what, fix) = match rewrite.to {
+                    Written::Bare => ("a word", "write it bare"),
+                    _ => ("text", "quote it"),
                 };
+                let as_written = spell::spelled(&rewrite.text, rewrite.to);
                 let mut diagnostic = Diagnostic::new(
                     codes::W159,
                     format!(

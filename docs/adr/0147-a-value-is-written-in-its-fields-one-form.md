@@ -1,6 +1,6 @@
 # A value is written in its field's one form
 
-**Status:** accepted (2026-10-18, syntax round, plan 01). Amends [ADR 0064](0064-a-declared-field-type-decides-one-wire-form.md) D2 (the admission table gains `identifier`), [ADR 0093](0093-a-fields-declared-type-decides-what-its-value-references.md) D3 (a quoted id still references; it is no longer the written form, W159) and [ADR 0021](0021-formatting-is-one-operation.md) (format reads the project's declarations; a value's quotes are layout of the declared type).
+**Status:** accepted (2026-10-18, syntax round, plan 01). Amends [ADR 0064](0064-a-declared-field-type-decides-one-wire-form.md) D2 (the admission table gains `identifier`), [ADR 0093](0093-a-fields-declared-type-decides-what-its-value-references.md) D3 (a quoted id still references; it is no longer the written form, W159) and [ADR 0021](0021-formatting-is-one-operation.md) (format reads the project's declarations; a value's quotes are layout of the declared type). Amended by [ADR 0153](0153-a-value-is-spelled-by-one-module.md) (D1: on a reference list a scheme ref id is bare too; D4: `rewrite` reads the speller's bare rule, which the typed-edit writer reads too).
 
 The grammar takes a field value quoted or bare, the graph stores both the same way, and neither `check` nor `format`
 says which is right, so the corpus holds both. The cause is in the declarations: ten fields whose values are words

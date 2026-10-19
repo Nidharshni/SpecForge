@@ -709,7 +709,12 @@ behavior report_command_outcome "Report a Command's Outcome" {
     written; under --format json it MUST instead be the
     error document {error, code}, with suggestion when the refusal has one
     and files_written when files were left written, on stdout, with
-    nothing on stderr. Beside its document a command MUST write a note
+    nothing on stderr. A project file a command could not write MUST be
+    refused as file_unwritable, one it could not read as file_unreadable,
+    and one that changed since the command read it as file_changed,
+    whichever command it is; the message names the file from the project's
+    or the spec root, after what the command was doing. Beside its document
+    a command MUST write a note
     for a person only under human output, and a notice once: in the
     document when the document carries it, else on stderr as
     severity[CODE]: message before the document, under every format.
@@ -738,6 +743,7 @@ behavior report_command_outcome "Report a Command's Outcome" {
   verify unit "every core command with a JSON form takes --format human|json, and none takes --json"
   verify unit "under --format json a note is never written and a notice is written once: in the document when it carries it, else on stderr"
   verify unit "a closed stdout ends the output quietly and keeps the command's exit"
+  verify unit "a project file a command could not write, read or found changed is file_unwritable, file_unreadable or file_changed on every command"
   verify integration "the CLI's exit code and MCP's ok agree for check, analyze, format and migrate"
   verify integration "the CLI's --format json and MCP's reply are one outcome document for every operation both surfaces run"
   verify contract "Report a Command's Outcome: command outcome holds — operation_ran, one_refusal_shape, one_exit_table, surfaces_agree"

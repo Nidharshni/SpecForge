@@ -274,7 +274,6 @@ pub(super) fn staging(at: &Path, text: &'static str) -> Also<'static> {
             change.stage(held, None, text.as_bytes().to_vec());
             Ok(())
         }),
-        code: "init_write_failed",
     }
 }
 
@@ -327,7 +326,7 @@ fn an_entries_only_plan_accepts_an_unreadable_lock_and_puts_the_config_back() {
         .unwrap_err();
 
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
-    assert_eq!(error.code, "init_write_failed", "{error:?}");
+    assert_eq!(error.code, crate::FILE_UNWRITABLE, "{error:?}");
     assert!(error.writes.is_empty(), "{error:?}");
     assert_eq!(std::fs::read_to_string(&config).unwrap(), before);
     assert_eq!(std::fs::read_to_string(&lock).unwrap(), "{ not a lock");
@@ -353,7 +352,6 @@ fn a_failed_change_puts_back_every_project_file_and_the_directories_it_made() {
                 change.stage(held, before, b"target\n.specforge\n".to_vec());
                 Ok(())
             }),
-            code: "init_write_failed",
         },
     ];
 

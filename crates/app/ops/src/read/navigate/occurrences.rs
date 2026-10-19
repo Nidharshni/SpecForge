@@ -174,6 +174,20 @@ impl Navigator<'_> {
         Ok(sorted(occurrences))
     }
 
+    /// The occurrences of `id` once per written token, sorted by (file, line, column): what a rename edits and an
+    /// editor shows. An inherited reference is one token that [`Self::references`] answers once per block that
+    /// inherits it (ADR 0149 D11); here the first of those blocks, in sort order, holds it.
+    pub fn tokens(
+        &self,
+        id: &str,
+        query: ReferenceQuery,
+    ) -> Result<Vec<Occurrence>, Refusal<EntityField>> {
+        let mut occurrences = self.references(id, query)?;
+        // `Occurrence::key` starts with the span, so the occurrences of one token are adjacent.
+        occurrences.dedup_by(|a, b| a.span == b.span);
+        Ok(occurrences)
+    }
+
     /// The declaration of `node`, as an occurrence.
     fn declaration(&self, node: &Node) -> Occurrence {
         let definition = self.definition_of(node);

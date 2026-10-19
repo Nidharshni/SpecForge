@@ -3,8 +3,11 @@
 use serde_json::Value;
 use specforge_common::{ConfigRead, ProjectConfig, project_config_from};
 
+use std::path::Path;
+
 use super::Appended;
-use crate::{Held, OpError, OpErrorKind};
+use crate::change;
+use crate::{Held, OpError};
 
 /// `specforge.json` as a lock plan opened it: the document and its `extensions` items as read. The peer judgement,
 /// the dry run's answers and the commit's write all read [`Self::items_after`], so what is judged is what is written.
@@ -111,13 +114,11 @@ impl Opened {
         held: &Held,
         operation: &'static str,
     ) -> Result<Option<Vec<u8>>, OpError> {
-        let bytes = held.read_if_there().map_err(|error| {
-            OpError::new(
-                OpErrorKind::of_io(&error),
-                "file_unreadable",
-                format!("failed to read {}: {error}", held.spelled.display()),
-            )
-        })?;
+        let file = Path::new(crate::config::CONFIG_FILE);
+        let said = |error: OpError| error.prefixed(format!("cannot {operation}: "));
+        let bytes = held
+            .read_if_there()
+            .map_err(|error| said(change::unreadable(file, &error)))?;
         let now = match &bytes {
             Some(bytes) => project_config_from(&held.spelled, Ok(bytes.clone())),
             None => ConfigRead::default(),
@@ -126,15 +127,7 @@ impl Opened {
         if now == self.found {
             return Ok(bytes);
         }
-        Err(OpError::new(
-            OpErrorKind::Conflict,
-            crate::FILE_CHANGED,
-            format!(
-                "{} changed after {operation} read it; nothing was written",
-                held.spelled.display()
-            ),
-        )
-        .with_suggestion(format!("run {operation} again")))
+        Err(said(change::changed(file)).with_suggestion(format!("run {operation} again")))
     }
 
     /// The strings of `items`: what `specforge.json` enables as the change leaves it.

@@ -1,7 +1,7 @@
 # A file states a kind's shared fields once
 
 **Status:** accepted (2026-10-18, syntax round, plan 03). Builds on [ADR 0127](0127-the-linker-records-where-each-edge-is-written.md)
-(written spans), [ADR 0032](0032-one-graph-build.md) (the graph delta) and [ADR 0084](0084-a-crates-layer-is-its-folder.md) (layers).
+(written spans), [ADR 0032](0032-one-graph-build.md) (the graph delta) and [ADR 0084](0084-a-crates-layer-is-its-folder.md) (layers). Amended by [ADR 0154](0154-a-typed-edit-asks-its-files-defaults-over-the-text-it-plans.md) (D8: the graph's defaults module answers a typed edit too: which default applies, and whether a field restates it). D11 amended by [ADR 0156](0156-a-delete-finds-references-by-the-one-reference-rule.md): navigation answers each token once (`Navigator::tokens`); rename and the editor ask it.
 
 A block that shares its references with its neighbours restates them: 1,511 tracked lines repeat word for word inside
 one file, 948 of them reference lists. `defaults behavior { ... }` already parses, as an entity of the unknown kind

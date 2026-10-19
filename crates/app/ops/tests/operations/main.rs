@@ -53,6 +53,7 @@ mod publish;
 mod query;
 mod refusals;
 mod remedy_wording;
+mod rename_refusals;
 mod rename_text;
 mod review;
 mod schema;

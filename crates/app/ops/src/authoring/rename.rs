@@ -1,17 +1,17 @@
 //! Renaming an entity ID: the MCP `specforge.rename` tool and the LSP's
 //! `textDocument/rename` plan the same edits under the same rules. MCP
 //! applies them ([`apply`]) and recompiles; the LSP hands them to the
-//! editor. The edits are exactly the occurrences navigation finds (the
+//! editor. The edits are exactly the tokens navigation finds (the
 //! declaration's name and each reference's token): text in strings,
 //! comments and verify statements that mentions the ID is not a reference,
 //! and is left alone (ADR 0016).
 
-use crate::change::{Cause, ProjectChange};
+use crate::change::ProjectChange;
 use crate::read::navigate::{Direction, Navigator, Precision, ReferenceQuery};
 use crate::view::EntityField;
 use crate::{Caller, OpError, OpErrorKind, Refusal};
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// The field of a rename's request a refusal can be about (ADR 0072).
@@ -27,32 +27,39 @@ pub enum RenameField {
 pub const INVALID_ID: &str = "invalid_name";
 /// The new ID already names an entity.
 pub const TAKEN: &str = "entity_exists";
-/// A file the rename must edit cannot be read (or written).
-pub const UNREADABLE: &str = "file_unreadable";
-
 /// The shortest and longest entity IDs (E014).
 pub const ID_LENGTH: std::ops::RangeInclusive<usize> = 2..=60;
 
 /// Whether `id` is a legal entity ID: what the grammar's identifier accepts
 /// (an ASCII letter or `_`, then letters, digits and `_`) within E014's
-/// 2-60 characters.
-pub fn validate_id(id: &str) -> Result<(), OpError> {
+/// 2-60 characters, and no word `kinds` reserves (E013).
+pub fn validate_id(id: &str, kinds: &specforge_registry::KindRegistry) -> Result<(), OpError> {
     let mut chars = id.chars();
     let starts = chars
         .next()
         .is_some_and(|c| c.is_ascii_alphabetic() || c == '_');
     let rest = chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
-    if starts && rest && ID_LENGTH.contains(&id.len()) {
-        return Ok(());
+    if !(starts && rest && ID_LENGTH.contains(&id.len())) {
+        return Err(OpError::new(
+            OpErrorKind::InvalidInput,
+            INVALID_ID,
+            format!(
+                "invalid entity ID '{id}': it must be 2-60 characters, letters, digits and \
+                 underscores, starting with a letter or underscore"
+            ),
+        ));
     }
-    Err(OpError::new(
-        OpErrorKind::InvalidInput,
-        INVALID_ID,
-        format!(
-            "invalid entity ID '{id}': it must be 2-60 characters, letters, digits and \
-             underscores, starting with a letter or underscore"
-        ),
-    ))
+    if kinds.reserves(id) {
+        return Err(OpError::new(
+            OpErrorKind::InvalidInput,
+            INVALID_ID,
+            format!(
+                "invalid entity ID '{id}': it is a reserved word (E013), a structural keyword or the keyword \
+                 of a declared kind"
+            ),
+        ));
+    }
+    Ok(())
 }
 
 /// A text edit for a rename operation: `start_col..end_col` (0-based
@@ -138,7 +145,8 @@ pub fn plan(
     {
         return Err(crate::config::refusal(problem).into());
     }
-    validate_id(new_id).map_err(|error| error.about(RenameField::NewId))?;
+    validate_id(new_id, nav.view().registries().kinds())
+        .map_err(|error| error.about(RenameField::NewId))?;
     let graph = nav.view().graph();
     if graph.node(old_id).is_none() {
         return Err(crate::view::not_found(graph, old_id).about(RenameField::OldId));
@@ -157,7 +165,7 @@ pub fn plan(
         include_declaration: true,
     };
     let occurrences = nav
-        .references(old_id, query)
+        .tokens(old_id, query)
         .map_err(|refusal| refusal.map_subject(|EntityField::EntityId| Some(RenameField::OldId)))?;
     let unreadable: BTreeSet<&str> = occurrences
         .iter()
@@ -168,7 +176,7 @@ pub fn plan(
         let files: Vec<&str> = unreadable.into_iter().collect();
         return Err(OpError::new(
             OpErrorKind::Internal,
-            UNREADABLE,
+            crate::FILE_UNREADABLE,
             format!(
                 "cannot rename '{old_id}': {} do not spell it where the graph says",
                 files.join(", ")
@@ -177,7 +185,7 @@ pub fn plan(
         .into());
     }
     // A token is one line; RenameEdit columns are 0-based bytes.
-    let mut edits: Vec<RenameEdit> = occurrences
+    let edits: Vec<RenameEdit> = occurrences
         .iter()
         .map(|o| RenameEdit {
             file: o.span.file.to_string(),
@@ -187,9 +195,6 @@ pub fn plan(
             new_text: new_id.to_string(),
         })
         .collect();
-    // An inherited reference is one token for every block that inherits it (ADR 0149); occurrences come sorted
-    // by span, so equal edits are adjacent.
-    edits.dedup();
     let planned = occurrences
         .iter()
         .filter_map(|o| {
@@ -208,21 +213,21 @@ pub fn plan(
 
 /// Write `plan`'s edits to the files under the spec root it was planned from as one project change (ADR 0128): every file is checked
 /// against the text the plan was made on, then replaced; if a write fails, every file already written is put back,
-/// and one that cannot be is the error's writes. Returns the files it wrote.
+/// and one that cannot be is the error's writes. A failure is the change's own (ADR 0155). Returns the files it wrote.
 ///
 /// Every file is resolved through the caller's containment first (ADR 0104), and read and written where it
 /// landed: one that leaves it, by a symlink, refuses the rename (`outside_root`) before any file is
 /// written.
 pub fn apply(plan: &RenamePlan, caller: Caller<'_>) -> Result<crate::Writes, OpError> {
     let spec_root = plan.spec_root.as_path();
-    let mut change = ProjectChange::new();
+    let mut change = ProjectChange::new(spec_root, format!("cannot rename '{}'", plan.old_id));
     for file in plan.affected_files() {
         let held = caller.containment().resolve(&spec_root.join(file))?;
         // The edits are positions in the planned text: another text refuses the whole rename.
         let Some(planned) = plan.planned.get(file) else {
             return Err(OpError::new(
                 OpErrorKind::Internal,
-                UNREADABLE,
+                crate::FILE_UNREADABLE,
                 format!(
                     "cannot rename '{}': no text was planned for {file}",
                     plan.old_id
@@ -232,37 +237,7 @@ pub fn apply(plan: &RenamePlan, caller: Caller<'_>) -> Result<crate::Writes, OpE
         let edited = apply_edits(planned, plan.edits.iter().filter(|e| e.file == file));
         change.stage(held, Some(planned.as_bytes().to_vec()), edited.into_bytes());
     }
-    let named = |file: &Path| {
-        file.strip_prefix(spec_root)
-            .unwrap_or(file)
-            .display()
-            .to_string()
-    };
-    change.commit().map_err(|failed| {
-        failed.error(|cause| match cause {
-            Cause::Changed { file } => OpError::new(
-                OpErrorKind::Conflict,
-                crate::FILE_CHANGED,
-                format!(
-                    "cannot rename '{}': {} changed since the project was compiled; \
-                     nothing was written",
-                    plan.old_id,
-                    named(&file)
-                ),
-            ),
-            Cause::Unreadable { file, error } => OpError::new(
-                OpErrorKind::of_io(&error),
-                UNREADABLE,
-                format!("failed to read {}: {error}", file.display()),
-            ),
-            Cause::Unwritable { file, error } => OpError::new(
-                OpErrorKind::of_io(&error),
-                UNREADABLE,
-                format!("failed to write {}: {error}", file.display()),
-            ),
-            Cause::Then(never) => match never {},
-        })
-    })
+    change.commit()
 }
 
 #[cfg(test)]
@@ -306,8 +281,9 @@ mod tests {
 
     #[test]
     fn an_entity_id_follows_the_grammar_and_e014() {
+        let none = specforge_registry::KindRegistry::new();
         for ok in ["ab", "_x", "auth_token", "A1", &"a".repeat(60)] {
-            assert!(validate_id(ok).is_ok(), "{ok}");
+            assert!(validate_id(ok, &none).is_ok(), "{ok}");
         }
         for bad in [
             "",
@@ -316,9 +292,15 @@ mod tests {
             "has-dash",
             "has space",
             "émile",
+            "defaults",
+            "spec",
             &"a".repeat(61),
         ] {
-            assert_eq!(validate_id(bad).unwrap_err().code, INVALID_ID, "{bad}");
+            assert_eq!(
+                validate_id(bad, &none).unwrap_err().code,
+                INVALID_ID,
+                "{bad}"
+            );
         }
     }
 
@@ -441,7 +423,7 @@ mod tests {
 
         let error = apply(&plan, crate::testing::caller()).unwrap_err();
 
-        assert_eq!(error.code, UNREADABLE);
+        assert_eq!(error.code, crate::FILE_UNWRITABLE);
         assert_eq!(
             std::fs::read_to_string(dir.path().join("limit.spec")).unwrap(),
             LIMIT
@@ -490,7 +472,7 @@ mod tests {
         assert_eq!(code(plan(&navigator, "session_limit", "login")), TAKEN);
         let without_limit = without_limit(&project);
         let refused = plan(&nav(&without_limit), "session_limit", "session_cap").unwrap_err();
-        assert_eq!(refused.error.code, UNREADABLE);
+        assert_eq!(refused.error.code, crate::FILE_UNREADABLE);
         assert!(
             refused.error.message.contains("limit.spec"),
             "{}",
@@ -507,7 +489,7 @@ mod tests {
             (k, text)
         }));
         let refused = plan(&nav(&stale), "session_limit", "session_cap").unwrap_err();
-        assert_eq!(refused.error.code, UNREADABLE);
+        assert_eq!(refused.error.code, crate::FILE_UNREADABLE);
         assert!(
             refused.error.message.contains("login.spec"),
             "{}",

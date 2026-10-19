@@ -395,6 +395,7 @@ behavior detect_unknown_entity_fields "Detect Unknown Entity Fields" {
   verify unit "a field written on the non-owning side of a relation is E079 naming the owning field"
   verify unit "a reverse name an inverse_of declares is E079 even when its ids do not resolve"
   verify unit "an event's trigger is E079 naming the produces and consumes fields"
+  verify unit "E079 names its owning fields in kind and field order"
   verify unit "an unknown field of a kind's own relation stays W020"
   verify unit "field validation skipped when entity kind is unregistered"
   verify contract "Detect Unknown Entity Fields: unknown field detection holds — registries_populated_fired, unknown_fields_diagnosed, cascading_avoided"
