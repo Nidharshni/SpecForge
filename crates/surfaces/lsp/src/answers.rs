@@ -15,7 +15,7 @@ use specforge_ops::read::navigate::{
 };
 use tower_lsp::jsonrpc::{Error, ErrorCode};
 use tower_lsp::lsp_types::{
-    ClientCapabilities, CodeActionOrCommand, CodeActionResponse, CompletionResponse,
+    ClientCapabilities, CodeAction, CodeActionOrCommand, CodeActionResponse, CompletionResponse,
     DocumentSymbolResponse, FormattingOptions, GotoDefinitionResponse, Hover, HoverContents,
     Location, LocationLink, MarkupContent, MarkupKind, Position, PrepareRenameResponse, Range,
     SemanticTokens, SemanticTokensResult, SymbolInformation, TextEdit, Url, WorkspaceEdit,
@@ -24,7 +24,8 @@ use tower_lsp::lsp_types::{
 use crate::document::{LineIndex, Target};
 use crate::files::Findings;
 use crate::navigation::{
-    Compiled, fix_to_code_action, outline_to_document_symbols, symbol_kind_from_entity,
+    Compiled, code_action_kind, fix_to_code_action, outline_to_document_symbols,
+    symbol_kind_from_entity,
 };
 use crate::publish::diagnostic_to_lsp;
 use crate::{LspState, hover};
@@ -51,6 +52,9 @@ pub struct ClientSupport {
     /// watchers are patterns relative to each input's directory, else
     /// absolute globs.
     pub relative_patterns: bool,
+    /// `textDocument.codeAction.resolveSupport` names `edit`: a stub's edits
+    /// are made when the editor resolves the action, not when it lists them.
+    pub code_action_resolve: bool,
 }
 
 impl ClientSupport {
@@ -80,6 +84,10 @@ impl ClientSupport {
                 .and_then(|w| w.did_change_watched_files.as_ref())
                 .and_then(|w| w.relative_pattern_support)
                 .unwrap_or(false),
+            code_action_resolve: text_document
+                .and_then(|t| t.code_action.as_ref())
+                .and_then(|c| c.resolve_support.as_ref())
+                .is_some_and(|r| r.properties.iter().any(|p| p == "edit")),
         }
     }
 }
@@ -363,19 +371,73 @@ pub fn code_actions(state: &LspState, uri: &Url, range: Range) -> Option<CodeAct
         within: within.as_ref(),
         ..FixQuery::default()
     };
-    let fixes = fix::fixes(
-        &compiled.navigator(),
-        state.files().compile_diagnostics(&file),
-        &query,
-    );
-    // A fix that cannot be placed whole (see `fix_to_code_action`) is not
-    // offered.
-    let actions: Vec<CodeActionOrCommand> = fixes
+    let navigator = compiled.navigator();
+    let offers = fix::offers(&navigator, state.files().compile_diagnostics(&file), &query);
+    // A client that resolves `edit` is shown a stub without its edits: planning one costs a
+    // compile of the project, made when the editor resolves the action (ADR 0161). A fix that
+    // cannot be placed whole (see `fix_to_code_action`) is not offered.
+    let lazily = state.client().code_action_resolve;
+    let actions: Vec<CodeActionOrCommand> = offers
         .into_iter()
-        .filter_map(|fix| fix_to_code_action(&compiled, fix))
+        .filter_map(|offer| {
+            if lazily && offer.is_typed() {
+                return Some(CodeAction {
+                    title: offer.title().to_string(),
+                    kind: Some(code_action_kind(offer.kind())),
+                    data: Some(
+                        serde_json::json!({"uri": uri, "range": range, "title": offer.title()}),
+                    ),
+                    ..Default::default()
+                });
+            }
+            fix_to_code_action(&compiled, offer.fix(&navigator).ok()?)
+        })
         .map(CodeActionOrCommand::CodeAction)
         .collect();
     (!actions.is_empty()).then_some(actions)
+}
+
+/// A code action listed without its edits, with them: the offers for the file and range it
+/// names are chosen again over the current compile, the one titled so is planned, and a
+/// refused plan answers why (E080, ...).
+pub fn resolve_code_action(state: &LspState, action: CodeAction) -> Result<CodeAction, Error> {
+    let data = action.data.clone().unwrap_or_default();
+    let (Some(uri), Some(range)) = (
+        data.get("uri")
+            .and_then(|u| u.as_str())
+            .and_then(|u| Url::parse(u).ok()),
+        data.get("range")
+            .and_then(|r| serde_json::from_value::<Range>(r.clone()).ok()),
+    ) else {
+        return Err(Error::invalid_params(
+            "the code action carries no uri and range to resolve",
+        ));
+    };
+    let compiled = Compiled::new(state);
+    let file = state.key_of(&uri);
+    if compiled.is_stale(&file) {
+        return Err(content_modified(&file));
+    }
+    let within = state
+        .files()
+        .document(&file)
+        .map(|doc| doc.index().span(Sym::new(&file), range));
+    let query = FixQuery {
+        file: Some(&file),
+        within: within.as_ref(),
+        ..FixQuery::default()
+    };
+    let navigator = compiled.navigator();
+    let offer = fix::offers(&navigator, state.files().compile_diagnostics(&file), &query)
+        .into_iter()
+        .find(|offer| offer.title() == action.title)
+        .ok_or_else(|| {
+            Error::invalid_params(format!("the fix '{}' is no longer offered", action.title))
+        })?;
+    let fix = offer
+        .fix(&navigator)
+        .map_err(|refusal| Error::invalid_params(refusal.error.message))?;
+    fix_to_code_action(&compiled, fix).ok_or_else(|| content_modified(&file))
 }
 
 /// The document's outline (`specforge_ops::read::navigate::outline`, what MCP

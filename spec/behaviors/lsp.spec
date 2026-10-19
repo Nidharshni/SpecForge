@@ -570,7 +570,8 @@ behavior code_actions_for_missing_verify "Code Actions for Missing Verify" {
     hardcoded logic. The stub is the typed add_verify edit (ADR 0151, ADR
     0161) planned over the text the project was compiled from: laid out
     with the file's format configuration, and not offered when its plan is
-    refused.
+    refused. A client that resolves code actions receives a stub's edits
+    when it resolves it.
   """
   verify unit "code action offered on untested testable entity"
   verify unit "generated verify stubs added to entity block in .spec file"
@@ -582,6 +583,7 @@ behavior code_actions_for_missing_verify "Code Actions for Missing Verify" {
   verify unit "no verify stub is offered for an entity a union body or an exempting flag exempts"
   verify unit "a verify stub fixes the diagnostic that reports its entity, or none when nothing reports it"
   verify unit "the verify stub is laid out with the file's format configuration"
+  verify unit "a client that resolves code actions gets a stub's edits on resolve"
   verify contract "Code Actions for Missing Verify: missing verify code actions holds — kind_registry_available, graph_available, quickfix_offered, verify_stubs_produced, no_code_generated"
 }
 
@@ -948,7 +950,9 @@ behavior code_action_create_entity_stub "Code Action: Create Entity Stub" {
     create edit (ADR 0151): it is offered only when its plan succeeds, so
     an ID the create refuses, or a stub after which the project would
     report a new error (E080), offers none. Each field the kind requires is
-    written TODO. The code action MUST use CodeActionKind::Refactor.
+    written TODO. A client that resolves code actions receives a stub's
+    edits when it resolves it. The code action MUST use
+    CodeActionKind::Refactor.
     The generated stub MUST contain only the structural entity block
     (keyword, ID, placeholder fields). It MUST NOT generate application
     code, test files, or implementation scaffolding. SpecForge provides

@@ -129,6 +129,14 @@ impl<'s> Compiled<'s> {
     }
 }
 
+/// The LSP kind of a fix's kind.
+pub(crate) fn code_action_kind(kind: FixKind) -> CodeActionKind {
+    match kind {
+        FixKind::QuickFix => CodeActionKind::QUICKFIX,
+        FixKind::Refactor => CodeActionKind::REFACTOR,
+    }
+}
+
 /// A fix as the code action that applies it; `None` when one of its edits
 /// cannot be placed (its file's text is unknown, or the open buffer is no
 /// longer the text the fix was computed on): a fix applies whole or not at
@@ -147,10 +155,7 @@ pub(crate) fn fix_to_code_action(ranges: &Compiled, fix: Fix) -> Option<CodeActi
     }
     Some(CodeAction {
         title: fix.title,
-        kind: Some(match fix.kind {
-            FixKind::QuickFix => CodeActionKind::QUICKFIX,
-            FixKind::Refactor => CodeActionKind::REFACTOR,
-        }),
+        kind: Some(code_action_kind(fix.kind)),
         edit: Some(WorkspaceEdit {
             changes: Some(changes),
             ..Default::default()

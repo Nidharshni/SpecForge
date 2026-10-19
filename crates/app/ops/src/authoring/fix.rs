@@ -13,9 +13,10 @@ use specforge_common::shape::Shape;
 use specforge_common::{Diagnostic, DiagnosticData, SourceSpan, Sym};
 use specforge_graph::Node;
 
-use crate::authoring::edit::{self, Edit, Input};
+use crate::authoring::edit::{self, Edit, EditField, Input};
 use crate::read::navigate::{Navigator, SourceText, is_about, overlaps};
 use crate::view::ProjectView;
+use crate::{OpError, OpErrorKind, Refusal};
 
 /// One edit: `span`'s text becomes `new_text` (an empty span inserts).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,13 +89,68 @@ pub struct FixQuery<'q> {
     pub within: Option<&'q SourceSpan>,
 }
 
+/// A fix chosen for a diagnostic or an entity, its edits not yet made: a
+/// replacement carries its token edit, a stub its typed edit. Choosing costs
+/// what choosing a replacement costs; making a stub's edits costs one compile
+/// of the edited project (ADR 0161).
+#[derive(Debug, Clone)]
+pub struct Offer {
+    /// The fix; a stub's edits are empty until [`Offer::fix`].
+    fix: Fix,
+    typed: Option<Edit>,
+}
+
+impl Offer {
+    pub fn title(&self) -> &str {
+        &self.fix.title
+    }
+
+    pub fn kind(&self) -> FixKind {
+        self.fix.kind
+    }
+
+    pub fn anchor(&self) -> Option<&SourceSpan> {
+        self.fix.anchor.as_ref()
+    }
+
+    /// Whether its edits are made by [`Offer::fix`] (a stub) rather than carried (a replacement).
+    pub fn is_typed(&self) -> bool {
+        self.typed.is_some()
+    }
+
+    /// The fix with its edits; a stub whose plan is refused is the refusal (E080, invalid_name, ...).
+    pub fn fix(self, navigator: &Navigator<'_>) -> Result<Fix, Refusal<EditField>> {
+        match self.typed {
+            None => Ok(self.fix),
+            Some(edit) => Ok(Fix {
+                edits: typed(navigator, edit)?,
+                ..self.fix
+            }),
+        }
+    }
+}
+
 /// The fixes `diagnostics` (and the graph's entities missing verify
 /// statements) offer, filtered by `query`, sorted by where they apply
 /// then title. Every fix has at least one edit; a diagnostic whose
-/// data names no fix offers none.
+/// data names no fix offers none. A stub is planned (one compile of the
+/// edited project, E080): one whose plan is refused is not offered.
 pub fn fixes(navigator: &Navigator<'_>, diagnostics: &[Diagnostic], query: &FixQuery) -> Vec<Fix> {
+    offers(navigator, diagnostics, query)
+        .into_iter()
+        .filter_map(|offer| offer.fix(navigator).ok())
+        .collect()
+}
+
+/// The fixes [`fixes`] offers, chosen but not made: what a client that
+/// resolves them later is shown.
+pub fn offers(
+    navigator: &Navigator<'_>,
+    diagnostics: &[Diagnostic],
+    query: &FixQuery,
+) -> Vec<Offer> {
     let graph = navigator.view().graph();
-    let mut fixes = Vec::new();
+    let mut fixes: Vec<Offer> = Vec::new();
     let mut stubbed: BTreeSet<String> = BTreeSet::new();
     for diagnostic in diagnostics {
         if query.code.is_some_and(|code| code != diagnostic.code)
@@ -110,7 +166,7 @@ pub fn fixes(navigator: &Navigator<'_>, diagnostics: &[Diagnostic], query: &FixQ
         {
             continue;
         }
-        fixes.extend(replacement(navigator, diagnostic));
+        fixes.extend(replacement(navigator, diagnostic).map(|fix| Offer { fix, typed: None }));
         fixes.extend(entity_stub(navigator, diagnostic, &mut stubbed));
     }
     let verify_stubs = graph
@@ -124,19 +180,15 @@ pub fn fixes(navigator: &Navigator<'_>, diagnostics: &[Diagnostic], query: &FixQ
                 .is_none_or(|range| overlaps(&n.source_span, range))
         })
         .filter_map(|n| verify_stub(navigator, n))
-        .filter(|fix| {
+        .filter(|offer| {
             query
                 .code
-                .is_none_or(|code| fix.diagnostic_code.as_deref() == Some(code))
+                .is_none_or(|code| offer.fix.diagnostic_code.as_deref() == Some(code))
         });
     fixes.extend(verify_stubs);
     fixes.sort_by(|a, b| {
-        let at = |fix: &Fix| {
-            fix.anchor
-                .as_ref()
-                .map(|s| (s.file, s.start_line, s.start_col))
-        };
-        at(a).cmp(&at(b)).then_with(|| a.title.cmp(&b.title))
+        let at = |offer: &Offer| offer.anchor().map(|s| (s.file, s.start_line, s.start_col));
+        at(a).cmp(&at(b)).then_with(|| a.title().cmp(b.title()))
     });
     fixes
 }
@@ -184,7 +236,7 @@ fn entity_stub(
     navigator: &Navigator<'_>,
     diagnostic: &Diagnostic,
     stubbed: &mut BTreeSet<String>,
-) -> Option<Fix> {
+) -> Option<Offer> {
     let DiagnosticData::UnresolvedReference {
         target,
         entity,
@@ -211,27 +263,26 @@ fn entity_stub(
         .span
         .as_ref()
         .map_or(holder.source_span.file, |s| s.file);
-    let edits = typed(
-        navigator,
-        Edit::Create {
-            kind: kind.clone(),
-            id: target.clone(),
-            title: target.clone(),
-            file: file.to_string(),
-            fields: placeholders(navigator.view(), &kind),
-            verify: Vec::new(),
-        },
-    )?;
-    // After the plan: a refused stub is not "stubbed".
+    let create = Edit::Create {
+        kind: kind.clone(),
+        id: target.clone(),
+        title: target.clone(),
+        file: file.to_string(),
+        fields: placeholders(navigator.view(), &kind),
+        verify: Vec::new(),
+    };
     stubbed.insert(target.clone());
-    Some(Fix {
-        title: format!("Create {kind} stub for {target}"),
-        kind: FixKind::Refactor,
-        source: FixSource::CreateStub,
-        diagnostic_code: Some(diagnostic.code.clone()),
-        subject: Some(holder.id.raw),
-        edits,
-        anchor: diagnostic.span.clone(),
+    Some(Offer {
+        fix: Fix {
+            title: format!("Create {kind} stub for {target}"),
+            kind: FixKind::Refactor,
+            source: FixSource::CreateStub,
+            diagnostic_code: Some(diagnostic.code.clone()),
+            subject: Some(holder.id.raw),
+            edits: Vec::new(),
+            anchor: diagnostic.span.clone(),
+        },
+        typed: Some(create),
     })
 }
 
@@ -242,7 +293,7 @@ fn entity_stub(
 /// hold one). The stub is of the kind's first allowed verify kind
 /// (`unit` when it names none), placed by the typed add_verify edit;
 /// it fixes the rule that obliges the entity's kind, if any.
-fn verify_stub(navigator: &Navigator<'_>, node: &Node) -> Option<Fix> {
+fn verify_stub(navigator: &Navigator<'_>, node: &Node) -> Option<Offer> {
     let registries = navigator.view().registries();
     let kind = registries
         .kinds()
@@ -256,25 +307,25 @@ fn verify_stub(navigator: &Navigator<'_>, node: &Node) -> Option<Fix> {
         .allowed_verify_kinds
         .first()
         .map_or("unit", String::as_str);
-    let edits = typed(
-        navigator,
-        Edit::AddVerify {
-            entity_id: node.id.raw.to_string(),
-            kind: Some(verify_kind.to_string()),
-            text: format!("{} — TODO", node.id.raw),
-        },
-    )?;
+    let add = Edit::AddVerify {
+        entity_id: node.id.raw.to_string(),
+        kind: Some(verify_kind.to_string()),
+        text: format!("{} — TODO", node.id.raw),
+    };
     let block = &node.source_span;
     // The rule that reports it, if any.
     let code = standing.reported_by().map(str::to_string);
-    Some(Fix {
-        title: format!("Add verify stub for {}", node.id.raw),
-        kind: FixKind::QuickFix,
-        source: FixSource::AddVerifyStub,
-        diagnostic_code: code,
-        subject: Some(node.id.raw),
-        edits,
-        anchor: Some(block.clone()),
+    Some(Offer {
+        fix: Fix {
+            title: format!("Add verify stub for {}", node.id.raw),
+            kind: FixKind::QuickFix,
+            source: FixSource::AddVerifyStub,
+            diagnostic_code: code,
+            subject: Some(node.id.raw),
+            edits: Vec::new(),
+            anchor: Some(block.clone()),
+        },
+        typed: Some(add),
     })
 }
 
@@ -308,19 +359,34 @@ fn placeholders(view: &ProjectView<'_>, kind: &str) -> BTreeMap<String, Input> {
 }
 
 /// `edit` planned over the navigator's view (ADR 0151), as position edits in the text each file was compiled from;
-/// `None` when the plan is refused (an ID `validate_id` refuses, a taken ID, E080, no project root, a configuration
-/// that blocks rewrites) or changes nothing.
-fn typed(navigator: &Navigator<'_>, edit: Edit) -> Option<Vec<TextEdit>> {
-    let plan = edit::plan(navigator.view(), std::slice::from_ref(&edit)).ok()?;
+/// the refusal when the plan is refused (an ID `validate_id` refuses, a taken ID, E080, no project root, a
+/// configuration that blocks rewrites) or changes nothing.
+fn typed(navigator: &Navigator<'_>, edit: Edit) -> Result<Vec<TextEdit>, Refusal<EditField>> {
+    let plan = edit::plan(navigator.view(), std::slice::from_ref(&edit))?;
     let mut edits = Vec::new();
     for (key, changes) in plan.edits() {
         let file = Sym::new(key);
         // The plan read each file's compiled text (`Planner::text`): the text navigation's spans are positions in.
-        let text = navigator.text(file)?;
+        let text = navigator.text(file).ok_or_else(|| {
+            OpError::new(
+                OpErrorKind::PreconditionFailed,
+                "text_unknown",
+                format!("the text of {key} is not known"),
+            )
+            .about(EditField::File)
+        })?;
         edits.extend(changes.into_iter().map(|change| TextEdit {
             span: text.span(file, change.range.start, change.range.end),
             new_text: change.new_text,
         }));
     }
-    (!edits.is_empty()).then_some(edits)
+    if edits.is_empty() {
+        return Err(OpError::new(
+            OpErrorKind::InvalidInput,
+            "not_editable",
+            "the fix changes nothing",
+        )
+        .about(EditField::Entity));
+    }
+    Ok(edits)
 }
