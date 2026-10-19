@@ -4,8 +4,7 @@
 use super::{EditField, Input};
 use crate::{OpError, OpErrorKind, Refusal};
 use specforge_graph::FieldValue;
-use specforge_graph::field_form::{Reading, is_word};
-use specforge_parser::lex::is_entity_id;
+use specforge_graph::field_form::{Reading, spell};
 use specforge_protocol_types::FieldType;
 
 /// A one-line `key "…"` longer than this is written triple-quoted (the formatter's default `max_width`).
@@ -19,29 +18,11 @@ pub fn not_editable(field: EditField, message: impl Into<String>) -> Refusal<Edi
     OpError::new(OpErrorKind::InvalidInput, NOT_EDITABLE, message).about(field)
 }
 
-/// `text` as a one-line `"…"` string.
-pub fn quoted(text: &str) -> String {
-    let mut out = String::with_capacity(text.len() + 2);
-    out.push('"');
-    for c in text.chars() {
-        match c {
-            '\\' => out.push_str("\\\\"),
-            '"' => out.push_str("\\\""),
-            '\n' => out.push_str("\\n"),
-            '\t' => out.push_str("\\t"),
-            '\r' => out.push_str("\\r"),
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
-}
-
 /// `text` as a string value of `key` at `indent`: triple-quoted (content two columns in, the closing quotes at
 /// `indent`) when it holds a line break or `key "…"` passes the width; else, or when the triple-quoted form does
 /// not read back, `"…"`.
 pub fn string(key: &str, text: &str, indent: usize) -> String {
-    let one = quoted(text);
+    let one = spell::quoted(text);
     if !text.contains('\n') && indent + key.len() + 1 + one.len() <= MAX_WIDTH {
         return one;
     }
@@ -94,42 +75,6 @@ fn reads_back(key: &str, written: &str, indent: usize, expect: &Expect<'_>) -> b
         }
         (Expect::Any, _) => true,
         _ => false,
-    }
-}
-
-/// A bare word, else quoted.
-fn word_or_quoted(text: &str) -> String {
-    if is_word(text) && !matches!(text, "true" | "false") {
-        text.to_string()
-    } else {
-        quoted(text)
-    }
-}
-
-/// An entity id (a word or a scheme reference), bare; else quoted.
-fn id_or_quoted(text: &str) -> String {
-    if is_entity_id(text) {
-        text.to_string()
-    } else {
-        quoted(text)
-    }
-}
-
-/// A string-list item: quoted, except a scheme reference id (`gh.issue:7`), which stays bare.
-fn string_item(text: &str) -> String {
-    if text.contains(':') && is_entity_id(text) {
-        text.to_string()
-    } else {
-        quoted(text)
-    }
-}
-
-/// One item of a list field of type `field_type`, as it is written.
-pub fn list_item(field_type: FieldType, text: &str) -> String {
-    if field_type == FieldType::ReferenceList {
-        id_or_quoted(text)
-    } else {
-        string_item(text)
     }
 }
 
@@ -187,7 +132,7 @@ pub fn written(
             let text = if reads_back(key, text, indent, &Expect::Any) {
                 text.to_string()
             } else {
-                quoted(text)
+                spell::quoted(text)
             };
             (text, Expect::Any)
         }
@@ -196,32 +141,27 @@ pub fn written(
                 let text = one(input, key, "text")?;
                 (string(key, text, indent), Expect::Text(text))
             }
-            FieldType::Identifier | FieldType::Enum => {
-                (word_or_quoted(one(input, key, "word")?), Expect::Any)
+            FieldType::Identifier
+            | FieldType::Enum
+            | FieldType::Integer
+            | FieldType::Bool
+            | FieldType::Reference => {
+                let what = match form.field_type() {
+                    FieldType::Integer => "integer",
+                    FieldType::Bool => "boolean",
+                    FieldType::Reference => "id",
+                    _ => "word",
+                };
+                (spell::value(form, one(input, key, what)?), Expect::Any)
             }
-            FieldType::Integer => {
-                let text = one(input, key, "integer")?;
-                match text.trim().parse::<i64>() {
-                    Ok(n) => (n.to_string(), Expect::Any),
-                    Err(_) => (quoted(text), Expect::Any),
-                }
-            }
-            FieldType::Bool => {
-                let text = one(input, key, "boolean")?;
-                match text {
-                    "true" | "false" => (text.to_string(), Expect::Any),
-                    _ => (quoted(text), Expect::Any),
-                }
-            }
-            FieldType::Reference => (id_or_quoted(one(input, key, "id")?), Expect::Any),
             FieldType::ReferenceList => {
                 items = items_of(input, key, true)?;
-                let written: Vec<String> = items.iter().map(|i| id_or_quoted(i)).collect();
+                let written: Vec<String> = items.iter().map(|i| spell::value(form, i)).collect();
                 (list(&written), Expect::Items(&items))
             }
             FieldType::StringList => {
                 items = items_of(input, key, false)?;
-                let written: Vec<String> = items.iter().map(|i| string_item(i)).collect();
+                let written: Vec<String> = items.iter().map(|i| spell::value(form, i)).collect();
                 (list(&written), Expect::Items(&items))
             }
             FieldType::Block => return block(key, input, indent),

@@ -118,7 +118,6 @@ fn a_string_that_cannot_round_trip_triple_quoted_is_escaped() {
 }
 
 #[test]
-#[ignore = "flipped by T4"]
 fn a_reference_spelled_true_or_false_is_quoted() {
     assert_eq!(
         declared(FieldType::Reference, "refines", one("true")),

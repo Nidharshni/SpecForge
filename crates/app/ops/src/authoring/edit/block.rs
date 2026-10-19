@@ -2,14 +2,14 @@
 //! member starts on its own line) and again after it is changed (so it is laid out canonically); no byte outside it
 //! changes.
 
-use super::write::{list_item, not_editable, quoted, written};
+use super::write::{not_editable, written};
 use super::{EditField, Input};
 use crate::authoring::format::{self, Lines, Place};
 use crate::view::ProjectView;
 use crate::{OpError, OpErrorKind, Refusal};
 use specforge_common::{SourceSpan, find_close_match};
 use specforge_graph::FieldMap;
-use specforge_graph::field_form::{FieldForm, Reading};
+use specforge_graph::field_form::{FieldForm, Reading, spell};
 use specforge_parser::lex::{LexemeKind, lex};
 use specforge_parser::{Entity, FieldEntry, FieldValue, SpecFile, parse};
 use specforge_protocol_types::FieldType;
@@ -278,7 +278,7 @@ fn annotation_text(annotations: &[String]) -> String {
     annotations
         .iter()
         .map(|a| match a.split_once('=') {
-            Some((name, value)) => format!(" @{name} {}", quoted(value)),
+            Some((name, value)) => format!(" @{name} {}", spell::quoted(value)),
             None => format!(" @{a}"),
         })
         .collect()
@@ -479,7 +479,7 @@ pub fn retitle(site: &Site<'_>, text: &str, title: &str) -> Result<String, Refus
     let at = block.header();
     let line = block.lines[at].clone();
     let lexemes = lex(&line);
-    let quoted_title = quoted(title);
+    let quoted_title = spell::quoted(title);
     let new = match lexemes.iter().find(|l| l.kind.is_str()) {
         Some(old) => format!("{}{}{}", &line[..old.start], quoted_title, &line[old.end..]),
         None => {
@@ -524,7 +524,7 @@ pub fn verify(
         let line = format!(
             "{}verify {kind_text}{}",
             " ".repeat(indent),
-            quoted(description)
+            spell::quoted(description)
         );
         let at = lines.last().map_or(block.close(), |(_, last)| last + 1);
         block.insert(at, &line);
@@ -553,10 +553,7 @@ pub fn items_of(value: &FieldValue) -> Option<Items> {
     Some(Items {
         written: items
             .iter()
-            .map(|i| match i.written {
-                specforge_parser::Written::Quoted => quoted(&i.text),
-                _ => i.text.clone(),
-            })
+            .map(|i| spell::spelled(&i.text, i.written))
             .collect(),
         texts: items.iter().map(|i| i.text.clone()).collect(),
     })
@@ -577,7 +574,7 @@ pub fn link(
         ));
     };
     let item = match form.field_type() {
-        FieldType::ReferenceList | FieldType::StringList => list_item(form.field_type(), target),
+        FieldType::ReferenceList | FieldType::StringList => spell::value(form, target),
         FieldType::Reference if !add => String::new(),
         _ => {
             return Err(not_editable(
