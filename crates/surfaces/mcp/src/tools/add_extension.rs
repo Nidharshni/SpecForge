@@ -113,25 +113,26 @@ impl CoreTool for Tool {
         };
         // Once they are enabled, the server serves them (the next request brings the
         // project up to date); another project only has them on disk.
+        let wrote = added.wrote();
         let reply = Reply {
             added: added.document(),
-            note: (!args.dry_run).then_some(if project.is_served() {
+            note: (!wrote.previewed()).then_some(if project.is_served() {
                 SERVED
             } else {
                 ELSEWHERE
             }),
         };
         let answer = Answer::new(reply).with_diagnostics(reported);
-        let written = added.added.iter().fold(
-            Written::files(added.writes.clone()),
-            |written, extension| {
+        let written = added
+            .added
+            .iter()
+            .fold(Written::of(wrote), |written, extension| {
                 written.with_event(MutationEvent::ExtensionAdded(ExtensionAdded {
                     extension_specifier: extension.specifier.clone(),
                     total_extensions: added.extensions_enabled,
                     was_duplicate: extension.outcome.is_duplicate(),
                 }))
-            },
-        );
+            });
         Ok(Mutated::new(answer, written))
     }
 }

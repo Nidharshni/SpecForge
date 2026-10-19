@@ -2,15 +2,12 @@
 
 use crate::target::{AnyProject, Project};
 use crate::tool::{CoreTool, Effect, ReplySpec, WriteHints};
-use serde::Serialize;
-use specforge_common::DiagnosticList;
-use specforge_common::shape::Shape;
 
 use crate::args::{Arguments, Edits};
 use crate::mutation::{FreshDiagnostics, Mutated, Mutation, MutationArgs, MutationReply, Written};
 use crate::refusal::ArgumentOf;
 use crate::target::ProjectRef;
-use specforge_ops::authoring::edit::{self, EditField};
+use specforge_ops::authoring::edit::{self, EditDocument, EditField};
 
 /// `specforge.edit`'s arguments.
 #[derive(Debug, Arguments)]
@@ -28,20 +25,8 @@ impl MutationArgs for Args {
     }
 }
 
-impl MutationReply for Reply {
+impl MutationReply for EditDocument {
     type After = FreshDiagnostics;
-}
-
-/// `specforge.edit`'s reply.
-#[derive(Debug, Serialize, Shape)]
-pub struct Reply {
-    entities: Vec<String>,
-    affected_files: Vec<String>,
-    diff: String,
-    added: DiagnosticList,
-    /// Present (true) for a preview.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    dry_run: Option<bool>,
 }
 
 pub(crate) struct Tool;
@@ -66,28 +51,21 @@ impl CoreTool for Tool {
     const SPEC: ReplySpec = ReplySpec::Type("McpEditResult");
     type Args = Args;
     type Input = Project<AnyProject>;
-    type Returns = Mutation<Reply>;
+    type Returns = Mutation<EditDocument>;
 
-    fn call(project: ProjectRef<'_>, args: Args) -> Mutation<Reply> {
+    fn call(project: ProjectRef<'_>, args: Args) -> Mutation<EditDocument> {
         // Planned on the call's project as it is on disk; an edit list that leaves an error the project did not
         // have is refused (E080) and nothing is written.
-        let plan = edit::plan(&project.view(), &args.edits.0).map_err(Self::failed)?;
-        let report = plan.report();
-        let mut reply = Reply {
-            entities: report.entities.clone(),
-            affected_files: report.affected_files.clone(),
-            diff: report.diff.clone(),
-            added: report.added.clone(),
-            dry_run: None,
-        };
-        if args.dry_run {
-            reply.dry_run = Some(true);
-            return Ok(Mutated::new(reply, Written::nothing()));
-        }
-        let writes = edit::apply(&plan, project.caller())?;
+        let edited = edit::run(
+            &project.view(),
+            &args.edits.0,
+            args.dry_run,
+            project.caller(),
+        )
+        .map_err(Self::failed)?;
         Ok(Mutated::new(
-            reply,
-            Written::files(writes).with_entities(plan.report().entities.iter().cloned()),
+            edited.document(),
+            Written::of(edited.wrote.clone()).with_entities(edited.report.entities.iter().cloned()),
         ))
     }
 }

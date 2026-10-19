@@ -73,7 +73,7 @@ impl CoreTool for Tool {
             specforge_ops::extension::remove(&project.view(), &request).map_err(Self::failed)?;
         Ok(Mutated::new(
             outcome.document(),
-            Written::files(outcome.writes)
+            Written::of(outcome.wrote())
                 .with_entities(outcome.stranded.into_iter().map(|entity| entity.entity_id)),
         ))
     }

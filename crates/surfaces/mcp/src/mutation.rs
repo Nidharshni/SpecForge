@@ -5,7 +5,9 @@
 //! a [`Mutation`]: a run ([`Mutated::new`]: its reply and what it
 //! [`Written`]) or a failure ([`Failed`]: its McpError and the files it left
 //! written). Whether the call only previews is its arguments'
-//! ([`MutationArgs::previews`]), read before the handler runs; what the reply
+//! ([`MutationArgs::previews`]), read before the handler runs, and its
+//! operation's outcome says the same ([`Written::of`]; debug builds check
+//! they agree, ADR 0162); what the reply
 //! carries after the write is its type's ([`MutationReply::After`]). The
 //! tools adapter then calls [`complete`]: it brings the target up to date,
 //! sends the reply once as a [`WrittenReply`], checks it against the tool's
@@ -26,7 +28,7 @@ use serde::Serialize;
 use serde_json::Value;
 use specforge_common::shape::{Object, Shape};
 use specforge_common::{Diagnostic, DiagnosticList, ProjectPath};
-use specforge_ops::{OpError, Writes};
+use specforge_ops::{OpError, Writes, Wrote};
 
 use crate::events::{EventSink, ExtensionAdded, McpEvent, ProjectInitialized};
 use crate::reply::Answer;
@@ -50,13 +52,18 @@ pub struct Written {
     /// The domain events the call produces, in order (add_extension's one per
     /// specifier); recorded only when it succeeded.
     pub events: Vec<MutationEvent>,
+    /// Its operation answered that the call only previewed (ADR 0162); `complete` checks it against the arguments'.
+    previewed: bool,
 }
 
 impl Written {
-    /// The call wrote `files`.
-    pub fn files(files: Writes) -> Self {
+    /// What its operation says the call did to disk: it previewed, or ran and wrote these files. A mutation that
+    /// cannot preview passes its [`Writes`].
+    pub fn of(wrote: impl Into<Wrote>) -> Self {
+        let wrote = wrote.into();
         Written {
-            files,
+            previewed: wrote.previewed(),
+            files: wrote.into_files(),
             ..Written::default()
         }
     }
@@ -317,6 +324,10 @@ pub(crate) fn complete<R: MutationReply>(
     preview: bool,
     mutation: Mutation<R>,
 ) -> ToolOutcome {
+    debug_assert!(
+        agrees(preview, &mutation),
+        "{tool}: its arguments and its operation disagree on whether the call previews"
+    );
     if preview {
         return previewed(tool, schema, mutation);
     }
@@ -348,6 +359,13 @@ pub(crate) fn refused(
     events: &mut dyn EventSink,
 ) -> ToolOutcome {
     failure(tool, None, Failed::from(error.into()), events)
+}
+
+/// Whether a run's operation answered what its arguments asked: preview or not (a failure has no outcome to say).
+fn agrees<R>(preview: bool, mutation: &Mutation<R>) -> bool {
+    mutation
+        .as_ref()
+        .map_or(true, |mutated| mutated.written.previewed == preview)
 }
 
 /// A preview's reply, checked against `schema`.
@@ -413,7 +431,7 @@ fn failure(
 ) -> ToolOutcome {
     let Failed { mut error, files } = failed;
     error.set_data_field(FILES_WRITTEN, listed(&files.named(root)));
-    record(events, tool, false, &Written::files(files));
+    record(events, tool, false, &Written::of(files));
     ToolOutcome::Refused(error)
 }
 
@@ -535,6 +553,18 @@ mod tests {
     }
 
     #[test]
+    fn a_run_that_says_it_previewed_disagrees_with_its_arguments() {
+        let run =
+            |wrote: Wrote| -> Mutation<Probe> { Ok(Mutated::new(probe("x"), Written::of(wrote))) };
+        assert!(agrees(true, &run(Wrote::Previewed)));
+        assert!(agrees(false, &run(Wrote::Ran(Writes::none()))));
+        assert!(!agrees(false, &run(Wrote::Previewed)));
+        assert!(!agrees(true, &run(Wrote::Ran(Writes::none()))));
+        let failure: Mutation<Probe> = Err(McpError::new(ErrorCode::Conflict, "no").into());
+        assert!(agrees(true, &failure) && agrees(false, &failure));
+    }
+
+    #[test]
     fn a_failure_reports_its_writes_and_no_domain_event() {
         let failure = McpError::new(ErrorCode::InternalError, "failed to write /p/a.spec");
         let schema = output_schema::<Probe>();
@@ -564,7 +594,7 @@ mod tests {
 
     #[test]
     fn the_domain_event_precedes_the_mutation_event() {
-        let written = Written::files(Writes::from_iter(["/p/specforge.json"])).with_event(added());
+        let written = Written::of(Writes::from_iter(["/p/specforge.json"])).with_event(added());
         let schema = output_schema::<Probe>();
 
         let mut log = EventLog::new();
@@ -643,7 +673,7 @@ mod tests {
             Some(Path::new("/p")),
             Ok(Mutated::new(
                 FreshProbe { name: "x".into() },
-                Written::files(Writes::from_iter(["/p/a.spec"])),
+                Written::of(Writes::from_iter(["/p/a.spec"])),
             )),
             Some(vec![w001.clone()]),
             &mut EventLog::new(),
@@ -680,7 +710,7 @@ mod tests {
             Some(Path::new("/p")),
             Ok(Mutated::new(
                 probe("x"),
-                Written::files(Writes::from_iter(["/p/a.spec"])),
+                Written::of(Writes::from_iter(["/p/a.spec"])),
             )),
             None,
             &mut log,

@@ -95,7 +95,7 @@ impl CoreTool for Tool {
         });
         Ok(Mutated::new(
             reply,
-            Written::files(outcome.writes).with_event(event),
+            Written::of(outcome.writes).with_event(event),
         ))
     }
 }
