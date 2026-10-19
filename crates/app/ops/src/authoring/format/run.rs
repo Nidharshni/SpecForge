@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use super::document::{Configs, FormattedDocument, format_text};
 use super::targets::{Targets, targets};
-use crate::{Caller, OpError, OpErrorKind, Refusal};
+use crate::{Caller, OpError, OpErrorKind, ReadFailure, Refusal};
 
 /// The code a run that failed on files reports under; no diagnostic code, so no surface prints it.
 const FILE_FAILED: &str = "format_file_failed";
@@ -69,7 +69,8 @@ pub struct Request<'a> {
     /// symlinked source) that lands outside it is neither read nor written but a failure of kind
     /// [`OpErrorKind::InvalidInput`], and the other targets are formatted (ADR 0092 D8). Each
     /// configuration file it uses is read through it: one that leaves it or, bounded, has more than
-    /// one name, is a W141 naming why, and the defaults apply (ADR 0169).
+    /// one name, is a W141 naming why, and the defaults apply (ADR 0169). A target with more than one
+    /// name is, bounded, a failure of kind [`OpErrorKind::InvalidInput`] (ADR 0146 D1).
     pub caller: Caller<'a>,
     /// Where each project's extensions load, to read the forms its fields
     /// take (ADR 0147); `None` formats layout only.
@@ -116,7 +117,11 @@ impl Failure {
     pub(super) fn read(path: PathBuf, error: &std::io::Error) -> Self {
         Failure::Read {
             path,
-            kind: OpErrorKind::of_io(error),
+            kind: match error.kind() {
+                // The bound refused it (a second name, ADR 0146): the caller's input, like a landing outside.
+                std::io::ErrorKind::InvalidInput => OpErrorKind::InvalidInput,
+                _ => OpErrorKind::of_io(error),
+            },
             error: error.to_string(),
         }
     }
@@ -463,22 +468,28 @@ pub fn run(request: &Request) -> Result<Outcome, Refusal<FormatField>> {
         ..Outcome::default()
     };
     for target in files {
-        // What is read and written is what the containment resolved: the target, named as given.
-        let held = match request.caller.containment().resolve(&target) {
-            Ok(held) => held,
-            Err(outside) => {
+        // What is read and written is what the containment resolved, opened once through the checked read:
+        // a bounded run refuses a file with more than one name (ADR 0146 D1, ADR 0169).
+        let (held, bytes) = match request.caller.containment().read(&target) {
+            Ok(read) => read,
+            Err(ReadFailure::Outside(outside)) => {
                 outcome
                     .failures
                     .push(Failure::outside(target, outside.landed(), outside.root()));
                 continue;
             }
-        };
-        let source = match held.read_to_string() {
-            Ok(source) => source,
-            Err(e) => {
-                outcome.failures.push(Failure::read(target, &e));
+            Err(ReadFailure::Io { error, .. }) => {
+                outcome.failures.push(Failure::read(target, &error));
                 continue;
             }
+        };
+        let Ok(source) = String::from_utf8(bytes) else {
+            let error = std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "stream did not contain valid UTF-8",
+            );
+            outcome.failures.push(Failure::read(target, &error));
+            continue;
         };
         outcome.checked += 1;
         let resolved = configs.for_file(&target, None);
