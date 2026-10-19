@@ -5,7 +5,7 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{SourceSpan, Sym};
-use specforge_graph::{Edge, Node};
+use specforge_graph::{Edge, Node, written_tokens};
 
 use super::references::reference_edges;
 use super::text::SourceText;
@@ -24,6 +24,14 @@ pub struct Definition {
     /// The ID as written in the declaration; the block when it could not
     /// be found there ([`Precision::Entity`]).
     pub name: SourceSpan,
+    pub precision: Precision,
+}
+
+/// One place an entity's ID is written: what a rename edits and an editor shows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Token {
+    pub span: SourceSpan,
+    /// [`Precision::Entity`] when the compiled text does not spell the ID there (a stale or unread text).
     pub precision: Precision,
 }
 
@@ -174,18 +182,60 @@ impl Navigator<'_> {
         Ok(sorted(occurrences))
     }
 
-    /// The occurrences of `id` once per written token, sorted by (file, line, column): what a rename edits and an
-    /// editor shows. An inherited reference is one token that [`Self::references`] answers once per block that
-    /// inherits it (ADR 0149 D11); here the first of those blocks, in sort order, holds it.
+    /// Every written token that names `id`, once each, sorted by (file, line, column): each reference the graph's
+    /// finder reads in the compiled parses (`specforge_graph::written_tokens`, ADR 0163), a `defaults` entry no block
+    /// takes included, and its declaration's name when `include_declaration`. What a rename edits and an editor
+    /// shows; who holds each reference is [`Self::references`]' answer.
     pub fn tokens(
         &self,
         id: &str,
-        query: ReferenceQuery,
-    ) -> Result<Vec<Occurrence>, Refusal<EntityField>> {
-        let mut occurrences = self.references(id, query)?;
-        // `Occurrence::key` starts with the span, so the occurrences of one token are adjacent.
-        occurrences.dedup_by(|a, b| a.span == b.span);
-        Ok(occurrences)
+        include_declaration: bool,
+    ) -> Result<Vec<Token>, Refusal<EntityField>> {
+        let node = self
+            .node(id)
+            .map_err(|error| error.about(EntityField::EntityId))?;
+        let graph = self.view.graph();
+        let kind_of = |name: &str| graph.node(name).map(|n| n.kind.raw);
+        let inputs = self.view.registries().graph_inputs();
+        let mut tokens: Vec<Token> = self
+            .view
+            .project()
+            .parsed()
+            .flat_map(|(_, file)| written_tokens(file, inputs, kind_of))
+            .filter(|t| t.target.as_str() == id)
+            .map(|t| {
+                let spelled = self
+                    .text(t.span.file)
+                    .is_some_and(|text| text.spells(&t.span, id));
+                let precision = if spelled {
+                    Precision::Token
+                } else {
+                    Precision::Entity
+                };
+                Token {
+                    span: t.span,
+                    precision,
+                }
+            })
+            .collect();
+        if include_declaration {
+            let definition = self.definition_of(node);
+            tokens.push(Token {
+                span: definition.name,
+                precision: definition.precision,
+            });
+        }
+        tokens.sort_by_key(|t| {
+            (
+                t.span.file,
+                t.span.start_line,
+                t.span.start_col,
+                t.span.end_line,
+                t.span.end_col,
+            )
+        });
+        tokens.dedup();
+        Ok(tokens)
     }
 
     /// The declaration of `node`, as an occurrence.

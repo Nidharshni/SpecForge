@@ -10,9 +10,7 @@ use std::collections::HashMap;
 use specforge_common::{SourceSpan, Sym};
 use specforge_ops::authoring::fix::{self, FixQuery};
 use specforge_ops::authoring::format;
-use specforge_ops::read::navigate::{
-    Direction, EntityQuery, MatchScope, ReferenceQuery, find_entities, outline,
-};
+use specforge_ops::read::navigate::{EntityQuery, MatchScope, find_entities, outline};
 use tower_lsp::jsonrpc::{Error, ErrorCode};
 use tower_lsp::lsp_types::{
     ClientCapabilities, CodeAction, CodeActionOrCommand, CodeActionResponse, CompletionResponse,
@@ -226,7 +224,8 @@ pub fn definition(
 /// The references to the entity the cursor names: incoming, its
 /// declaration when asked (ADR 0016); an occurrence whose file has no
 /// compiled text is left out; each written token once (an inherited
-/// reference is one location, ADR 0149 D11); `None` when none.
+/// reference is one location, ADR 0149 D11), a token in a defaults block
+/// no block takes included (ADR 0163); `None` when none.
 pub fn references(
     state: &LspState,
     uri: &Url,
@@ -235,13 +234,9 @@ pub fn references(
 ) -> Option<Vec<Location>> {
     let compiled = Compiled::new(state);
     let id = entity_under_cursor(&compiled, &state.key_of(uri), position)?;
-    let query = ReferenceQuery {
-        direction: Direction::Incoming,
-        include_declaration,
-    };
     let refs = compiled
         .navigator()
-        .tokens(id.as_str(), query)
+        .tokens(id.as_str(), include_declaration)
         .unwrap_or_default();
     // An occurrence whose file's text is unknown is left out.
     let locations: Vec<Location> = refs

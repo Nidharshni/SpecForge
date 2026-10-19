@@ -237,9 +237,10 @@ behavior find_all_references "Find All References" {
   }
   contract   """
     When a user triggers find-references on an entity ID, the LSP MUST
-    return every location across all .spec files where another entity's
-    field names that entity: the identifier token as written, one location
-    per occurrence. What the entity itself references is not a reference
+    return every location across all .spec files where that entity's ID is
+    written as a reference: another entity's field, or a file's defaults
+    block whether or not a block takes it; the identifier token as written, one
+    location per occurrence. What the entity itself references is not a reference
     to it. The entity's own declaration (its name token) MUST be included
     when the request asks for it (includeDeclaration) and MUST NOT be
     otherwise. The LSP and MCP specforge.find_references answer from the
@@ -443,8 +444,10 @@ behavior rename_entity_id "Rename Entity ID" {
     or none are. The new ID follows the same rule as the MCP rename tool's:
     a name that is not a legal entity ID, that is a reserved word (a structural
     keyword or a declared kind's keyword, E013), or that is taken, MUST be refused
-    with an error saying why. The edits are exactly the entity's
-    declaration name and its references, as find-references returns them;
+    with an error saying why. The edits are exactly every token that names the
+    entity: its declaration's name and each reference, a reference written in
+    a defaults block that no block takes included, as the editor's
+    find-references returns them;
     text in strings, comments and verify statements that mentions the ID
     is not a reference and is not edited. The edits are positions in the
     text the project was compiled from: a rename over a file whose text (an

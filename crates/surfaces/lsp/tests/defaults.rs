@@ -149,8 +149,10 @@ fn the_kind_a_defaults_block_names_is_no_reference() {
 /// A default no block takes: no behavior in the file (W161).
 const UNTAKEN: &str = "defaults behavior {\n  ports [Repo]\n}\n\nport Repo \"Repo\" {\n}\n";
 
-#[test]
-#[ignore = "flipped by T5"]
+#[spec(
+    behavior = "apply_file_defaults",
+    verify = "the editor shows a default no block takes"
+)]
 fn references_show_a_default_no_block_takes() {
     let served = served(UNTAKEN);
     let (state, uri) = (served.state(), served.uri("main.spec"));

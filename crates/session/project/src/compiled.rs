@@ -201,6 +201,11 @@ impl CompiledProject {
         self.graph.files().len()
     }
 
+    /// Every source it parsed, by key, in key order: the parses its graph was built from (the finder reads them).
+    pub fn parsed(&self) -> impl ExactSizeIterator<Item = (&str, &specforge_graph::SpecFile)> {
+        self.graph.files()
+    }
+
     /// The graph's entity snapshot (ADR 0019): the one its checks read, or
     /// one taken on first use after an update that skipped them.
     pub fn entities(&self) -> &EntitySnapshot {

@@ -1,13 +1,13 @@
 //! Renaming an entity ID: the MCP `specforge.rename` tool and the LSP's
 //! `textDocument/rename` plan the same edits under the same rules. MCP
 //! applies them ([`apply`]) and recompiles; the LSP hands them to the
-//! editor. The edits are exactly the tokens navigation finds (the
+//! editor. The edits are exactly the tokens the graph's finder reads (ADR 0163: the
 //! declaration's name and each reference's token): text in strings,
 //! comments and verify statements that mentions the ID is not a reference,
 //! and is left alone (ADR 0016).
 
 use crate::change::ProjectChange;
-use crate::read::navigate::{Direction, Navigator, Precision, ReferenceQuery};
+use crate::read::navigate::{Navigator, Precision};
 use crate::view::EntityField;
 use crate::{Caller, OpError, OpErrorKind, Refusal};
 use std::collections::{BTreeMap, BTreeSet};
@@ -160,12 +160,8 @@ pub fn plan(
         .with_entity(old_id)
         .about(RenameField::NewId));
     }
-    let query = ReferenceQuery {
-        direction: Direction::Incoming,
-        include_declaration: true,
-    };
     let occurrences = nav
-        .tokens(old_id, query)
+        .tokens(old_id, true)
         .map_err(|refusal| refusal.map_subject(|EntityField::EntityId| Some(RenameField::OldId)))?;
     let unreadable: BTreeSet<&str> = occurrences
         .iter()

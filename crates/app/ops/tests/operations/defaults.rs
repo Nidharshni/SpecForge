@@ -56,7 +56,7 @@ fn tokens_hold_an_inherited_reference_once() {
     };
     let mut at: Vec<String> = p
         .navigator()
-        .tokens("Repo", query)
+        .tokens("Repo", true)
         .unwrap()
         .iter()
         .map(|o| crate::navigate::at(&o.span))

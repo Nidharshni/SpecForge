@@ -64,7 +64,10 @@ behavior apply_file_defaults "Apply File Defaults" {
     kind MUST be E077 and MUST NOT be applied. A title, a verify or method member, a
     field given twice, a second block for the kind, or a block after the file's
     first entity block MUST be E078. A block field equal to its default, and a
-    default no block takes, MUST be W161. A defaults block is never a node.
+    default no block takes, MUST be W161. A defaults block is never a node. A
+    token in a defaults block names its entity whether or not a block takes the
+    default: a rename edits it, the editor's find-references shows it, and a
+    delete refuses it.
   """
   verify unit "a default reaches every block of its kind in its file"
   verify unit "a block's own field replaces the default whole"
@@ -82,6 +85,8 @@ behavior apply_file_defaults "Apply File Defaults" {
   verify unit "query, trace and the graph export show the inherited list"
   verify unit "a defaults block completes, hovers and navigates as the kind it names"
   verify unit "the editor shows an inherited reference's location once"
+  verify unit "rename edits a default no block takes"
+  verify unit "the editor shows a default no block takes"
   verify unit "the written tokens of a file include a default no block takes"
 }
 
