@@ -29,7 +29,9 @@ pub use list::{
     ExtensionInfo, ExtensionListing, ExtensionsDocument, LockedExtension, ProviderEntry,
     ProviderListing, ProviderRow, ProviderStatus, ProvidersDocument, list, providers,
 };
-pub use publish::{PublishOutcome, PublishReport, declare, publish};
+pub use publish::{
+    PublishOutcome, PublishReport, ValidateDocument, Validated, declare, publish, validate,
+};
 pub use remove::{
     RemoveDocument, RemoveField, RemoveOutcome, RemoveRequest, StrandedEntity, remove,
 };

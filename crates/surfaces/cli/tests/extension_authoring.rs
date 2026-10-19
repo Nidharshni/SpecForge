@@ -341,7 +341,7 @@ fn a_scaffolded_extension_builds_and_validates() {
     let json = json_of(&output);
     assert!(output.status.success(), "{json}");
     assert_eq!(json["valid"], true);
-    assert_eq!(json["name"], "@local/round-trip");
+    assert_eq!(json["extension"], "@local/round-trip");
     assert_eq!(json["short"], "round-trip");
     assert_eq!(json["declaration"]["entities"][0]["name"], "thing");
 }
@@ -394,7 +394,7 @@ fn extension_validate_reports_the_registry_build_diagnostics() {
         .unwrap();
     let json = json_of(&output);
     assert!(output.status.success(), "{json}");
-    assert_eq!(json["name"], "@specforge/formal");
+    assert_eq!(json["extension"], "@specforge/formal");
     let codes: Vec<&str> = json["diagnostics"]
         .as_array()
         .unwrap()
@@ -430,7 +430,7 @@ fn extension_validate_a_valid_declaration() {
     let json = json_of(&output);
     assert!(output.status.success(), "{json}");
     assert_eq!(json["valid"], true);
-    assert_eq!(json["name"], "@sdk/greet");
+    assert_eq!(json["extension"], "@sdk/greet");
     assert_eq!(json["version"], "0.1.0");
     assert_eq!(json["short"], "greet");
     assert_eq!(json["diagnostics"], serde_json::json!([]));

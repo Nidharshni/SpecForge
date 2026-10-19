@@ -9,7 +9,7 @@ use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, errln, outln};
 use serde_json::json;
-use specforge_common::{Code, Diagnostic, Severity, codes};
+use specforge_common::{Code, codes};
 use specforge_ops::OpErrorKind;
 use specforge_package::PackageName;
 use std::path::{Path, PathBuf};
@@ -215,78 +215,29 @@ fn run_build(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit {
 }
 
 fn run_validate(path: &Path, format: OutputFormat, terminal: &Terminal) -> Exit {
-    let binary = match specforge_ops::extension::binary_at(path) {
-        Ok(binary) => binary,
-        Err(error) => {
-            return Refusal::of(format).report(terminal, &error);
-        }
-    };
-    let wasm = match std::fs::read(&binary) {
-        Ok(wasm) => wasm,
-        Err(e) => {
-            return Refusal::of(format).coded(
-                terminal,
-                OpErrorKind::Internal,
-                NOT_BUILT,
-                format!("cannot read {}: {e}", binary.display()),
-            );
-        }
-    };
     let runtime = specforge_component::ComponentRuntime::with_user_cache();
-    let (declaration, diagnostics) = match specforge_ops::extension::declare(&runtime, &wasm) {
-        Ok(declared) => declared,
-        Err(error) => {
-            return Refusal::of(format).report(terminal, &error);
-        }
+    let validated = match specforge_ops::extension::validate(path, &runtime) {
+        Ok(validated) => validated,
+        Err(error) => return Refusal::of(format).report(terminal, &error),
     };
-    let valid = !diagnostics.iter().any(|d| d.severity == Severity::Error);
+    Notes::new(terminal, format).carried(&validated.diagnostics);
 
+    let declaration = &validated.declaration;
     match format {
-        OutputFormat::Json => {
-            let output = json!({
-                "valid": valid,
-                "name": declaration.name(),
-                "version": declaration.version(),
-                "short": declaration.short(),
-                "component": binary.display().to_string(),
-                "diagnostics": diagnostics.iter().map(diagnostic_json).collect::<Vec<_>>(),
-                "declaration": declaration,
-            });
-            terminal.json(&output);
-        }
-        OutputFormat::Human => {
-            for d in &diagnostics {
-                errln!(terminal, "{}[{}]: {}", level(d), d.code, d.message);
-            }
-            if valid {
-                outln!(
-                    terminal,
-                    "{} v{} declares a valid extension ({})",
-                    declaration.name(),
-                    declaration.version(),
-                    binary.display()
-                );
-            } else {
-                errln!(
-                    terminal,
-                    "{} v{}: the declaration has errors",
-                    declaration.name(),
-                    declaration.version()
-                );
-            }
-        }
+        OutputFormat::Json => terminal.json(&validated.document()),
+        OutputFormat::Human if validated.valid() => outln!(
+            terminal,
+            "{} v{} declares a valid extension ({})",
+            declaration.name(),
+            declaration.version(),
+            validated.binary.display()
+        ),
+        OutputFormat::Human => errln!(
+            terminal,
+            "{} v{}: the declaration has errors",
+            declaration.name(),
+            declaration.version()
+        ),
     }
-    Exit::of_verdict(valid)
-}
-
-fn level(d: &Diagnostic) -> &'static str {
-    match d.severity {
-        Severity::Error => "error",
-        Severity::Warning => "warning",
-        _ => "info",
-    }
-}
-
-fn diagnostic_json(d: &Diagnostic) -> serde_json::Value {
-    json!({ "code": d.code, "severity": level(d), "message": d.message })
+    Exit::of_verdict(validated.valid())
 }

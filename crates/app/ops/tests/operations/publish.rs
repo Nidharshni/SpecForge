@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
 use specforge_ops::asking::Asking;
-use specforge_ops::extension::{PublishReport, publish};
+use specforge_ops::extension::{PublishReport, publish, validate};
 use specforge_ops::registry::testing::{Asked, MemoryRegistry};
 use specforge_ops::registry::{Registry, TrustPolicy, Unconfigured};
 use specforge_ops::testing::declaring;
@@ -339,4 +339,58 @@ fn what_publish_uploads_is_what_add_installs() {
             .iter()
             .any(|a| matches!(a, Asked::Fetch(..)))
     );
+}
+
+#[specforge_test(
+    behavior = "validate_wasm_extension_locally",
+    verify = "specforge extension validate reports the declaration's registry build diagnostics"
+)]
+fn validate_reads_and_declares_the_binary_publish_reads() {
+    let dir = tempfile::tempdir().unwrap();
+    let good = bytes("v");
+    let runtime = InProcessRuntime::new().binary(&good, declaring("@acme/x", "1.0.0", &[]));
+    let path = binary(dir.path(), &good);
+
+    let validated = validate(&path, &runtime).unwrap();
+
+    assert_eq!(validated.binary, path);
+    assert_eq!(validated.wasm, good);
+    assert_eq!(validated.declaration.name(), "@acme/x");
+    assert!(validated.valid());
+    assert!(validated.document().diagnostics.0.is_empty());
+
+    // A declaration with a registry-build error: not valid, and publish refuses the same binary with its code.
+    let bad = bytes("with an error");
+    let runtime = InProcessRuntime::new().binary(&bad, || {
+        let mut meta = ExtensionMeta::new("@acme/y", "0.1.0");
+        meta.short = Some("Friendly greetings".into());
+        ContributionsBuilder::new(meta)
+    });
+    let path = binary(dir.path(), &bad);
+    let validated = validate(&path, &runtime).unwrap();
+    assert!(!validated.valid());
+    let first_error = validated
+        .diagnostics
+        .iter()
+        .find(|d| d.severity == specforge_common::Severity::Error)
+        .unwrap();
+    let published = report(&path, &MemoryRegistry::new(), &runtime);
+    assert_eq!(refused(&published).code, first_error.code, "{published:?}");
+}
+
+#[specforge_test(
+    behavior = "publish_to_registry",
+    verify = "publish refuses in one order, each refusal before anything after it is read or asked"
+)]
+fn validate_and_publish_refuse_a_missing_binary_alike() {
+    let dir = tempfile::tempdir().unwrap();
+    let missing = dir.path().join("missing.wasm");
+    let runtime = InProcessRuntime::new();
+
+    let validate_error = validate(&missing, &runtime).unwrap_err();
+    let published = report(&missing, &MemoryRegistry::new(), &runtime);
+
+    assert_eq!(validate_error.code, "E040");
+    assert_eq!(validate_error.code, refused(&published).code);
+    assert_eq!(validate_error.message, refused(&published).message);
 }

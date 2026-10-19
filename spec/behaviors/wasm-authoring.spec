@@ -106,7 +106,9 @@ behavior validate_wasm_extension_locally "Validate Wasm Extension Locally" {
     (load_extension_declaration) and report what the registry build of
     that declaration alone reports (E030, W021, W138, ...; missing peers
     are not reported, they are installed beside it), with the declaration
-    itself under --format json. No built component is an error (E040), and
+    itself and its diagnostics, in the shape every command writes a
+    diagnostic, under --format json; it reads and declares the binary as
+    publish does. No built component is an error (E040), and
     a binary that is not an extension is E028.
   """
   produces   [extension_fixtures_validated]
@@ -116,6 +118,7 @@ behavior validate_wasm_extension_locally "Validate Wasm Extension Locally" {
   verify unit "validation failure reported as ExtensionError"
   verify unit "specforge extension validate reports the declaration's registry build diagnostics"
   verify unit "specforge extension validate errors when no built component is found"
+  verify unit "specforge extension validate writes its diagnostics as check does"
   verify contract "Validate Wasm Extension Locally: local Wasm extension validation holds — wasm_binary_available, wasm_runtime_available, fixtures_available, production_sandbox_used, export_failures_diagnosed, extension_fixtures_validated_emitted"
 }
 

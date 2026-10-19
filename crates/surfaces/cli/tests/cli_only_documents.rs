@@ -3,6 +3,7 @@
 
 use crate::support::{Cli, TestProject};
 use specforge_repo_root::repo_root;
+use specforge_test_macros::test as specforge_test;
 
 /// The sorted keys of one diagnostic `check --format json` writes without its `data`.
 fn shared_keys() -> Vec<String> {
@@ -48,8 +49,10 @@ fn search_writes_its_diagnostics_as_check_does() {
     assert_eq!(diagnostic["severity"], "Error");
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test(
+    behavior = "validate_wasm_extension_locally",
+    verify = "specforge extension validate writes its diagnostics as check does"
+)]
 fn validate_writes_its_diagnostics_as_check_does() {
     let dir = TestProject::new().without_config();
     let formal = repo_root().join("extensions/formal/wasm/specforge_ext_formal.wasm");
