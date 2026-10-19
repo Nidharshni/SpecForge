@@ -183,6 +183,41 @@ async fn rename_to_an_illegal_id_is_refused_with_why() {
     assert!(message.contains("invalid entity ID 'log-in'"), "{refused}");
 }
 
+/// A reserved word is no entity ID either: the editor gets the reason, and no edit.
+#[tokio::test]
+#[ignore = "flipped by T2"]
+async fn rename_to_a_reserved_word_is_refused_with_why() {
+    use crate::session::{Session, uri_of};
+    use serde_json::json;
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let login = dir.path().join("login.spec");
+    let text = "behavior login \"Login\" {\n}\n";
+    std::fs::write(&login, text).unwrap();
+    let (mut session, _) = Session::start(Some(dir.path())).await;
+    let uri = uri_of(&login);
+    session.open(&uri, text).await;
+    session.diagnostics(&uri).await;
+
+    let refused = session
+        .request(
+            "textDocument/rename",
+            json!({
+                "textDocument": {"uri": uri},
+                "position": {"line": 0, "character": 10},
+                "newName": "defaults",
+            }),
+        )
+        .await;
+    assert!(refused["result"].is_null(), "{refused}");
+    let message = refused["error"]["message"].as_str().unwrap_or_default();
+    assert!(
+        message.contains("invalid entity ID 'defaults'"),
+        "{refused}"
+    );
+    assert!(message.contains("reserved"), "{refused}");
+}
+
 #[spec(behavior = "rename_entity_id", verify = "rename across multiple files")]
 fn rename_across_files() {
     let state = buffers(&[
