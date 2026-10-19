@@ -498,7 +498,8 @@ impl Reading<'_> {
     }
 
     /// What `entry`'s value references, in written order, each with its
-    /// span (ADR 0093). The one rule every reader asks:
+    /// span (ADR 0093). The one rule every reader asks, of an entry as the graph build stores it: a written entry is
+    /// first coerced ([`Self::coerce`]), as a typed edit's referrer scan does:
     ///
     /// | reading | a single value | a list item |
     /// |---|---|---|

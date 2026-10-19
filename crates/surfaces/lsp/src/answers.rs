@@ -216,7 +216,8 @@ pub fn definition(
 
 /// The references to the entity the cursor names: incoming, its
 /// declaration when asked (ADR 0016); an occurrence whose file has no
-/// compiled text is left out; `None` when none.
+/// compiled text is left out; each written token once (an inherited
+/// reference is one location, ADR 0149 D11); `None` when none.
 pub fn references(
     state: &LspState,
     uri: &Url,
@@ -231,15 +232,13 @@ pub fn references(
     };
     let refs = compiled
         .navigator()
-        .references(id.as_str(), query)
+        .tokens(id.as_str(), query)
         .unwrap_or_default();
     // An occurrence whose file's text is unknown is left out.
-    let mut locations: Vec<Location> = refs
+    let locations: Vec<Location> = refs
         .iter()
         .filter_map(|o| compiled.location(&o.span))
         .collect();
-    // An inherited reference is one token for every block that inherits it (ADR 0149).
-    locations.dedup();
     (!locations.is_empty()).then_some(locations)
 }
 

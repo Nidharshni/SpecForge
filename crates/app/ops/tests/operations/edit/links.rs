@@ -118,3 +118,23 @@ fn a_long_list_is_rewrapped_by_the_formatter() {
     assert!(text.lines().all(|l| l.len() <= 100), "{text}");
     assert!(is_canonical(&c, &text));
 }
+
+const ONE_VALUE: &str = "invariant inv_a \"A\" {\n  guarantee \"x\"\n}\n\ninvariant inv_b \"B\" {\n  guarantee \"y\"\n}\n\nbehavior b4 \"B4\" {\n  category   c\n  invariants inv_a\n}\n";
+
+#[specforge_test_macros::test(
+    behavior = "edit_entity_link",
+    verify = "link and unlink read a list written as one value as its one item"
+)]
+fn unlink_reads_a_list_written_as_one_value() {
+    let c = project(&[("a.spec", ONE_VALUE)]);
+    let text = after(&c, "a.spec", &[unlink("b4", "invariants", "inv_a")]);
+    assert!(!text.contains("invariants"), "{text}");
+}
+
+#[test]
+fn link_appends_to_a_list_written_as_one_value() {
+    let c = project(&[("a.spec", ONE_VALUE)]);
+    let text = after(&c, "a.spec", &[link("b4", "invariants", "inv_b")]);
+    assert!(text.contains("invariants [inv_a, inv_b]"), "{text}");
+    assert!(is_canonical(&c, &text));
+}

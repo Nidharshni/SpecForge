@@ -59,7 +59,7 @@ behavior edit_entity_link "Edit an Entity Reference List" {
   contract   """
     A link edit adds a target to a list field and keeps the items as written;
     an unlink edit removes it, and removes the field when the last item goes.
-    A link to a target already there changes nothing. A field a block inherits
+    A link to a target already there changes nothing. A list written as one value is its one item. A field a block inherits
     from its file's defaults is copied into an own field before it changes, as
     the earlier edits of the list left the file, and an own field equal to the default is removed.
   """
@@ -70,6 +70,7 @@ behavior edit_entity_link "Edit an Entity Reference List" {
   verify unit "link of a target already there writes nothing"
   verify unit "a link after new starts from the file's default"
   verify unit "a link after unset starts from the file's default"
+  verify unit "link and unlink read a list written as one value as its one item"
 }
 
 behavior edit_entity_obligation "Edit an Entity Obligation" {
@@ -91,11 +92,19 @@ behavior delete_entity "Delete an Entity" {
     A delete edit removes the entity's block and the comment lines directly
     above it. Deleting an entity that is still referenced leaves the project
     with an error, so it is refused with E080 unless the edit asks to remove
-    every reference to the entity in the same change.
+    every reference to the entity in the same change. The references are those
+    the graph build links, found by the rule that decides what a value
+    references (ADR 0093) in the texts the earlier edits left. A reference
+    written where no typed edit writes, in a defaults block or in a field its
+    kind does not declare, refuses the delete as not_editable, naming where it
+    is written.
   """
   verify unit "delete removes the block and the comment above it"
   verify unit "delete of a referenced entity is E080"
   verify unit "delete with unlink_references removes every reference"
+  verify unit "delete with unlink_references removes a scheme ref ID from a string list"
+  verify unit "delete with unlink_references removes a reference list written as one value"
+  verify unit "delete with unlink_references refuses a reference no typed edit writes"
 }
 
 behavior validate_typed_edit "Validate a Typed Edit" {

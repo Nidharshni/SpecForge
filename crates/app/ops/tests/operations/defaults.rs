@@ -46,6 +46,29 @@ fn renaming_an_inherited_reference_edits_it_once() {
 
 #[specforge_test(
     behavior = "apply_file_defaults",
+    verify = "navigation answers an inherited reference's token once"
+)]
+fn tokens_hold_an_inherited_reference_once() {
+    let p = compile(SOFTWARE, &[("a.spec", BLOCKS), ("port.spec", PORT)]);
+    let query = ReferenceQuery {
+        direction: Direction::Incoming,
+        include_declaration: true,
+    };
+    let mut at: Vec<String> = p
+        .navigator()
+        .tokens("Repo", query)
+        .unwrap()
+        .iter()
+        .map(|o| crate::navigate::at(&o.span))
+        .collect();
+    at.sort();
+    assert_eq!(at, ["a.spec 2:10-2:14", "port.spec 1:6-1:10"]);
+    // A holder per block stays with `references` (ADR 0149 D11).
+    assert_eq!(p.navigator().references("Repo", query).unwrap().len(), 4);
+}
+
+#[specforge_test(
+    behavior = "apply_file_defaults",
     verify = "find-references lists an inherited reference once per block"
 )]
 fn find_references_lists_an_inherited_reference_once_per_block() {
