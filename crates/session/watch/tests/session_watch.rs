@@ -356,6 +356,41 @@ fn a_source_rewritten_with_its_own_text_reports_nothing() {
 }
 
 #[test]
+#[ignore = "flipped by T3"]
+fn an_unchanged_source_and_a_created_named_file_are_rechecked() {
+    let fixture = Fixture::new(NAMES_INSIDE);
+    let (mut watch, recorder) = fixture.watch();
+    assert!(
+        watch
+            .session()
+            .project()
+            .diagnostics()
+            .iter()
+            .any(|d| d.code == "E016")
+    );
+    fixture.write("spec/a.spec", NAMES_INSIDE);
+    let a = fixture.root.join("spec/a.spec");
+    let file = fs::OpenOptions::new().write(true).open(&a).unwrap();
+    let modified = fs::metadata(&a).unwrap().modified().unwrap();
+    file.set_modified(modified + std::time::Duration::from_secs(3))
+        .unwrap();
+    fixture.write("docs/guide.md", "# guide\n");
+
+    let events = watch.changed(&[a, fixture.root.join("docs/guide.md")]);
+
+    assert_eq!(events.len(), 1, "{events:?}");
+    let event = applied(&events[0]);
+    assert_eq!(event.update.kind, UpdateKind::Checks);
+    assert!(!codes(event).contains(&"E016"), "{:?}", codes(event));
+    assert!(
+        event.changed.iter().any(|c| c == "docs/guide.md"),
+        "{:?}",
+        event.changed
+    );
+    assert_eq!(recorder.armed().len(), 1);
+}
+
+#[test]
 fn start_refuses_a_session_built_from_no_directory() {
     let Err(e) = SessionWatch::start(ProjectSession::detached(), Recorder::default()) else {
         panic!("a detached session is built from no directory");
