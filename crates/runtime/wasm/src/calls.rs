@@ -213,7 +213,8 @@ impl<'r> ExtensionCalls<'r> {
     }
 
     /// `__handshake`: the extension's identity and what it declares, with the
-    /// sandbox reading its `sandbox_policy` gives. Reading it applies
+    /// sandbox reading its `sandbox_policy` gives (its warnings name the
+    /// extension as its handshake does). Reading it applies
     /// nothing; the loader applies the limits
     /// ([`crate::protocol::load_declaration`]).
     pub fn handshake(&self, extension: &str) -> Result<Handshake, CallError> {
@@ -230,7 +231,7 @@ impl<'r> ExtensionCalls<'r> {
         // succeeded: the sandbox reads the policy as sent.
         let wire: Value = serde_json::from_slice(&answer).expect("a decoded handshake is JSON");
         let sandbox = Sandbox::of(
-            extension,
+            &response.name,
             wire.get("sandbox_policy")
                 .filter(|policy| !policy.is_null()),
         );

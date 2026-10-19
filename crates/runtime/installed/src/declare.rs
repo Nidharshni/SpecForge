@@ -10,7 +10,8 @@ const CANDIDATE: &str = "__candidate";
 /// What the binary `bytes` declare, loaded as every environment loads an
 /// extension (under a candidate name, then unloaded): its declaration and
 /// the warnings its load reports. E028 "not a loadable SpecForge extension:
-/// …" when it doesn't load or answer its declaration. `add`, `publish` and
+/// …" when it doesn't load or answer its declaration. Its warnings name what
+/// it declares, not the candidate name. `add`, `publish` and
 /// `init` read a candidate through it.
 pub fn declaration_of(bytes: &[u8], runtime: &dyn WasmRuntime) -> Result<Loaded, Diagnostic> {
     let invalid = |why: String| {
@@ -51,7 +52,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "flipped by T5"]
     fn a_candidates_warnings_name_the_extension_it_declares() {
         let bytes = b"\0asm a candidate that asks";
         let runtime = InProcessRuntime::new().binary(bytes, || {

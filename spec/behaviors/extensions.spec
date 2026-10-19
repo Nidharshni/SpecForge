@@ -85,7 +85,7 @@ behavior load_extension_manifests "Load Extension Manifests" {
     An entry refused at any step — its bytes not a component, its
     declaration unreadable, or the name it declares not the one its entry
     admits — MUST leave nothing loaded. A .wasm file entry's load warnings
-    (W153, W138) name the entry. A
+    (W153, W138) name the extension it declares. A
     specforge.json that is there and is not used as written MUST produce
     the error E069 naming why, one per problem, before any other
     diagnostic. When the file is not readable, not JSON or not a JSON
@@ -124,7 +124,7 @@ behavior load_extension_manifests "Load Extension Manifests" {
   verify unit "a .wasm file entry that cannot be read is E028 saying it cannot be read"
   verify unit "an entry refused at any step of its load leaves nothing loaded"
   verify unit "an entry's declaration is read once, with one handshake"
-  verify unit "a .wasm file entry's load warnings name the entry"
+  verify unit "a .wasm file entry's load warnings name the extension it declares"
   verify unit "missing extension produces diagnostic"
   verify unit "every builtin is listed once, by the directory its crate lives in"
   verify unit "every fixture crate is listed once, by its directory under fixtures/"

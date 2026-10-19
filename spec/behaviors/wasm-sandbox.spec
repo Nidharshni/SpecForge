@@ -161,6 +161,8 @@ behavior configure_sandbox_policy "Configure Sandbox Policy" {
     reported. The warnings are load warnings: check, the LSP and MCP
     report them with the environment's diagnostics, and specforge publish
     and specforge extension validate show them to the extension's author.
+    Each warning names the extension by the name its handshake declares,
+    whatever key it was loaded under (a candidate's, a .wasm file entry's).
     No project-level override exists: the ceiling bounds every extension.
   """
   produces   []
@@ -170,5 +172,6 @@ behavior configure_sandbox_policy "Configure Sandbox Policy" {
   verify unit "a sandbox_policy key that asks for a capability is W153"
   verify unit "a sandbox_policy key that asks for nothing is not reported"
   verify unit "a surface's sandbox override is W153"
+  verify unit "a load's warnings name the extension by the name its handshake declares"
   verify contract "Configure Sandbox Policy: sandbox policy configuration holds — handshake_read, limits_held_to_ceiling, above_ceiling_warned, capabilities_never_granted, limits_applied_at_handshake"
 }

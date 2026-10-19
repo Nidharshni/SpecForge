@@ -159,9 +159,9 @@ fn a_file_entry_that_cannot_be_read_says_so() {
 
 #[specforge_test_macros::test(
     behavior = "load_extension_manifests",
-    verify = "a .wasm file entry's load warnings name the entry"
+    verify = "a .wasm file entry's load warnings name the extension it declares"
 )]
-fn a_file_entrys_load_warnings_name_the_entry() {
+fn a_file_entrys_load_warnings_name_the_extension_it_declares() {
     let dir = TempDir::new().unwrap();
     file(dir.path(), "typo.wasm", b"\0asm typo");
     let typo = || {
@@ -186,7 +186,7 @@ fn a_file_entrys_load_warnings_name_the_entry() {
     assert_eq!(warnings.len(), 1, "{warnings:?}");
     assert_eq!(warnings[0].code, "W138");
     assert!(
-        warnings[0].message.contains("extension 'typo.wasm'"),
+        warnings[0].message.contains("extension '@acme/typo'"),
         "{:?}",
         warnings[0]
     );
