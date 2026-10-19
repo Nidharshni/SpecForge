@@ -1,0 +1,298 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>SpecForge architecture round 15</title>
+<script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";mermaid.initialize({startOnLoad:true,theme:"neutral",securityLevel:"loose"});</script>
+<style>
+  :root { --bg:#fafaf9; --fg:#0f172a; --mut:#64748b; --line:#e2e8f0; --card:#fff; --ok:#047857; --bad:#b91c1c; --warn:#b45309; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0b1020; --fg:#e5e7eb; --mut:#94a3b8; --line:#1f2937; --card:#111827; --ok:#34d399; --bad:#f87171; --warn:#fbbf24; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font: 700 2rem/1.2 Georgia, serif; margin: 0 0 4px; }
+  h2 { font: 600 1.4rem/1.3 Georgia, serif; margin: 0; }
+  h3 { font: 600 1.1rem/1.3 Georgia, serif; margin: 28px 0 10px; }
+  .sub { color: var(--mut); margin: 0 0 24px; }
+  .kpis { display:grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin: 0 0 32px; }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+  .kpi b { display:block; font-size:1.6rem; }
+  .kpi span { color:var(--mut); font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; }
+  article { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:20px; margin: 0 0 28px; }
+  .head { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:baseline; justify-content:space-between; margin-bottom:6px; }
+  .tags span { font-size:.75rem; padding:2px 8px; border-radius:999px; border:1px solid var(--line); color:var(--mut); margin-left:6px; }
+  .cols { display:grid; grid-template-columns: 1fr 1fr; gap:14px; margin: 14px 0; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+  .col { border:1px solid var(--line); border-radius:8px; padding:12px; overflow-x:auto; }
+  .lbl { font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; color:var(--mut); margin-bottom:6px; }
+  .bad .lbl { color: var(--bad); } .good .lbl { color: var(--ok); }
+  ul { margin: 6px 0 0; padding-left: 20px; } li { margin: 2px 0; }
+  code { font: .85em ui-monospace, monospace; background: color-mix(in srgb, var(--mut) 15%, transparent); padding: 1px 5px; border-radius: 4px; }
+  .def { color: var(--bad); } .fix { color: var(--ok); }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { color: var(--mut); font-weight: 600; font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; }
+  .mermaid { text-align: center; }
+</style></head><body><main>
+
+<h1>Architecture round 15</h1>
+<p class="sub">Base <code>8a0a867f</code> (PR #76, the syntax round) · 8 plans · 41 commits · 20 defects found, each with a pin before its fix · no re-vendor, no new diagnostic code.</p>
+
+<div class="kpis">
+  <div class="kpi"><b>8</b><span>plans, all merged</span></div>
+  <div class="kpi"><b>41</b><span>commits (one per ticket)</span></div>
+  <div class="kpi"><b>20</b><span>defects, pinned then fixed</span></div>
+  <div class="kpi"><b>5</b><span>new ADRs (0153–0157)</span></div>
+  <div class="kpi"><b>100</b><span>files changed</span></div>
+  <div class="kpi"><b>+3217 / −1001</b><span>lines</span></div>
+  <div class="kpi"><b>4</b><span>cards reshaped or rejected</span></div>
+</div>
+
+<h3>Order</h3>
+<div class="mermaid">
+flowchart LR
+  subgraph W1[wave 1]
+    P01[01 value speller]:::a
+    P03[03 change failures]:::b
+    P07[07 collect by mode]:::c
+    P08[08 opening a session]:::c
+  end
+  subgraph W2[wave 2]
+    P02[02 defaults restate]:::a
+    P06[06 rename reserved word]:::b
+  end
+  subgraph W3[wave 3]
+    P04[04 one reference rule]:::a
+  end
+  subgraph W4[wave 4]
+    P05[05 kind vocabulary]:::a
+  end
+  P01 --> P02 --> P04 --> P05
+  P03 --> P06
+  classDef a fill:#dbeafe,stroke:#2563eb,color:#0f172a
+  classDef b fill:#dcfce7,stroke:#16a34a,color:#0f172a
+  classDef c fill:#fef3c7,stroke:#d97706,color:#0f172a
+</div>
+<p class="sub">Lane A (01 → 02 → 04 → 05) edits <code>ops/authoring/edit/</code>, so it is serial. Lane B and lane C are independent of it.</p>
+
+<article>
+  <div class="head"><h2>01 · One module spells a value</h2><div class="tags"><span>7 commits</span><span>ADR 0153</span><span>wave 1</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div>
+<div class="mermaid">
+flowchart TB
+  E[edit writer: write.rs] -->|own escapes, own bare rule| T[(.spec text)]
+  F[formatter] -->|its escapes| T
+  W[W159 / titles step / CLI] -->|copies of the rule| T
+  C[.specforge fmt config] -.ignored by the writer.-> E
+</div></div>
+    <div class="col good"><div class="lbl">After</div>
+<div class="mermaid">
+flowchart TB
+  S[[field_form::spell]]
+  E[edit writer] --> S
+  F[formatter] --> S
+  W[W159 / titles / CLI] --> S
+  C[format config] --> E
+  S --> T[(.spec text)]
+</div></div>
+  </div>
+  <ul>
+    <li class="def">D1 · the edit writer ignored <code>.specforgefmt.toml</code> for multi-line values (<code>use_tabs</code>, <code>indent_width</code>, <code>max_width</code>).</li>
+    <li class="def">D2 · <code>set … payload true</code> wrote <code>true</code> bare on a reference field, so E080 reported E061 instead of the unresolved reference.</li>
+    <li class="fix">Fixed: <code>field_form::spell::{quoted, spelled, holds_bare, value}</code> is the one escape table and bare rule. A scheme-ref id is bare on a <code>reference_list</code> only; a scalar <code>reference</code> quotes it, because bare does not parse there.</li>
+  </ul>
+</article>
+
+<article>
+  <div class="head"><h2>02 · The file's defaults answer "does this restate it?"</h2><div class="tags"><span>5 commits</span><span>ADR 0154</span><span>wave 2</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div>
+<div class="mermaid">
+flowchart TB
+  G[graph: W161 restates] --- D1[defaults lookup A]
+  O[ops create: is_default] --- D2[defaults lookup B, compares what was GIVEN]
+  L[ops link: Site::resolved] --- D3[defaults of the OLD text]
+</div></div>
+    <div class="col good"><div class="lbl">After</div>
+<div class="mermaid">
+flowchart TB
+  FD[[FileDefaults: of / entry / restates]]
+  G[graph: W161] --> FD
+  O[ops create: without_repeat] --> FD
+  L[ops link: inherited] --> FD
+</div></div>
+  </div>
+  <ul>
+    <li class="def">D3 · MCP create split a <code>string_list</code> "a, b" against the default and dropped the field.</li>
+    <li class="def">D4 · create wrote an integer equal to its default and its own output got W161.</li>
+    <li class="def">D5, D6 · create-then-link lost the default's items; unset-then-link started from the removed value.</li>
+    <li class="fix">Fixed: <code>FileDefaults</code> is public; create compares what it <em>writes</em>; <code>link</code> reads inheritance from the planned text. <code>Site::resolved</code> and <code>Located::node</code> are gone.</li>
+  </ul>
+</article>
+
+<article>
+  <div class="head"><h2>03 · A project change words its own failures</h2><div class="tags"><span>6 commits</span><span>ADR 0155</span><span>wave 1</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div>
+<div class="mermaid">
+flowchart TB
+  A[set / new] -->|file_unreadable for a WRITE| X((user))
+  B[add] -->|config_write_failed| X
+  C[init] -->|init_write_failed x2 causes| X
+  D[format] -->|file_unwritable| X
+  M[MCP rename / edit] -->|permission_denied, absolute path| X
+</div></div>
+    <div class="col good"><div class="lbl">After</div>
+<div class="mermaid">
+flowchart TB
+  PC[[ProjectChange::new root, doing<br/>commit → Result Writes, OpError]]
+  PC -->|file_changed / file_unreadable / file_unwritable| X((user))
+  A[set new add init format rename edit] --> PC
+</div></div>
+  </div>
+  <ul>
+    <li class="def">D7–D9 · one write failure reached the CLI as four codes; <code>init</code> said "cannot write" when it failed to <em>read</em> <code>.gitignore</code>; MCP showed an absolute path with no context.</li>
+    <li class="fix">Fixed: one code per cause. <code>config_write_failed</code> and <code>init_write_failed</code> are deleted. <code>ProjectChange</code> keeps its <code>Cause</code> private.</li>
+  </ul>
+</article>
+
+<article>
+  <div class="head"><h2>04 · A delete finds references by the one reference rule</h2><div class="tags"><span>5 commits</span><span>ADR 0156</span><span>wave 3</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div>
+<div class="mermaid">
+flowchart TB
+  DEL[delete --unlink-references] -->|reads the value AS WRITTEN| R[referrers]
+  R -->|defaults block, string_list scheme ref,<br/>one-value list, undeclared field| E080[generic E080]
+  NAV[navigation] -->|duplicates a token| DD[rename and LSP de-duplicate]
+</div></div>
+    <div class="col good"><div class="lbl">After</div>
+<div class="mermaid">
+flowchart TB
+  RULE[[Reading::references: coerce, then ask]]
+  DEL[delete referrers] --> RULE
+  LINK[link / unlink] --> RULE
+  RULE -->|unfixable| NE[not_editable at file:line]
+  NAV[Navigator::tokens] -->|one occurrence per span| REN[rename, LSP]
+</div></div>
+  </div>
+  <ul>
+    <li class="def">D10–D12 · four cases ended in a generic E080; <code>link</code>/<code>unlink</code> refused a list written as one value as "not a list".</li>
+    <li class="fix">Fixed: delete succeeds for a scheme ref and a one-value list, and answers <code>not_editable</code> (naming the line) for a reference in a <code>defaults</code> block or an undeclared field.</li>
+  </ul>
+</article>
+
+<article>
+  <div class="head"><h2>05 · A kind's vocabulary</h2><div class="tags"><span>9 commits</span><span>ADR 0157</span><span>wave 4</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div>
+<div class="mermaid">
+flowchart TB
+  S[set / link on a relation's OTHER side] --> UF[unknown_field, owner unnamed]
+  N[new --path P] --> CW[reads flags from the cwd project]
+  N2[new --problem a --problem b] --> LB[keeps b silently]
+  OF[owning_fields] --> H[hash order, E079 flips]
+</div></div>
+    <div class="col good"><div class="lbl">After</div>
+<div class="mermaid">
+flowchart TB
+  S[set / link other side] --> OS[other_side, names the owning field]
+  N[new] --> ONE[one compiled project, flags from P]
+  N2[new repeated one-value flag] --> RF[refused]
+  OF[owning_fields] --> ORD[kind, field order]
+</div></div>
+  </div>
+  <ul>
+    <li class="def">D13–D17 · all reproduced and pinned first (<code>other_side</code>, <code>new --path</code>, a repeated flag, owner order, unknown kind with a field flag).</li>
+    <li class="fix">Fixed. The proposed registry module was rejected (deletion test: it only moved code); <code>block::order</code> and <code>Site::reading_toward</code> stay in <code>ops</code>. Breaking: a repeated one-value flag on <code>new</code> is refused.</li>
+  </ul>
+</article>
+
+<article>
+  <div class="head"><h2>06 · Rename stays its own operation</h2><div class="tags"><span>3 commits</span><span>amends ADR 0151</span><span>wave 2</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div>
+<div class="mermaid">
+flowchart TB
+  RN[rename to 'behavior' / 'spec' / 'defaults'] -->|MCP and LSP succeed| W[(project that fails E013)]
+  CR[create with a reserved id] -->|caught only by E080's extra compile| E080
+</div></div>
+    <div class="col good"><div class="lbl">After</div>
+<div class="mermaid">
+flowchart TB
+  K[[KindRegistry::reserves id]]
+  RN[rename] --> V[validate_id id, kinds]
+  CR[create] --> V
+  V --> K
+  V -->|reserved| IN[invalid_input / -32602 / invalid_name]
+</div></div>
+  </div>
+  <ul>
+    <li class="def">D18 · renaming to a reserved word succeeded and wrote an unloadable project.</li>
+    <li class="fix">Fixed. The card's idea (fold rename into the typed edit) was rejected: LSP and MCP need token positions, <code>McpRenameResult</code> is a wire type, and E080 on rename would refuse a working rename.</li>
+  </ul>
+</article>
+
+<article>
+  <div class="head"><h2>07 · Collect checks only what its mode reads</h2><div class="tags"><span>4 commits</span><span>amends ADR 0125</span><span>wave 1</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div>
+<div class="mermaid">
+flowchart TB
+  C[collect --report FILE] --> CHK[checks the collector's DECLARED report paths and captures]
+  CHK -->|../x.json, unknown capture| E058[E058 / outside_root]
+</div></div>
+    <div class="col good"><div class="lbl">After</div>
+<div class="mermaid">
+flowchart TB
+  C[collect] --> SRC[[Source: Run, Written, Given]]
+  SRC -->|--report| G[reads only the named files]
+</div></div>
+  </div>
+  <ul>
+    <li class="def">D19 · <code>collect --report</code> refused over declared locations it never reads.</li>
+    <li class="fix">Fixed. "One module per mode" was rejected; <code>evidence.rs</code> holds one <code>Source</code> enum. CLI only: <code>--report</code> now succeeds where it refused.</li>
+  </ul>
+</article>
+
+<article>
+  <div class="head"><h2>08 · Opening a session</h2><div class="tags"><span>2 commits</span><span>no ADR</span><span>wave 1</span></div></div>
+  <div class="cols">
+    <div class="col bad"><div class="lbl">Before</div>
+<div class="mermaid">
+flowchart TB
+  SD[tests/source_disk.rs] -.in no test target.-> N[never compiled]
+  ADR[ADR 0145 + 3 commits] -->|cite as proof| SD
+  M[session.rs reload keeps the disk] -.nothing guards it.-> N
+</div></div>
+    <div class="col good"><div class="lbl">After</div>
+<div class="mermaid">
+flowchart TB
+  MOD[tests/main.rs: mod source_disk] --> SD[4 tests compile and run]
+  SD --> G[guards: a reload keeps the handed disk]
+</div></div>
+  </div>
+  <ul>
+    <li class="def">D20 · a fake proof: the file the ADR cites was never built.</li>
+    <li class="fix">Fixed. The card (shrink the seven constructors) was dropped: they funnel into one private <code>begin_open</code>. Dead <code>TestProject::session_from</code> deleted.</li>
+  </ul>
+</article>
+
+<h3>Verification</h3>
+<table>
+  <tr><th>Check</th><th>Result</th></tr>
+  <tr><td>Waves 1: clippy, nextest, <code>cargo gate full</code></td><td>clippy clean · 5908 / 5908 · 22 / 22 steps ok</td></tr>
+  <tr><td>Wave 2: nextest</td><td>5919 / 5919 (12 skipped)</td></tr>
+  <tr><td>Final tip</td><td>clippy clean · nextest 5936 / 5936 (12 skipped) · <code>cargo gate full</code> 22 / 22 steps ok</td></tr>
+  <tr><td>Not verified</td><td>Windows; permission-based tests skip as root, so CI must run them as a normal user; the pin repros were not re-run against a built CLI</td></tr>
+</table>
+
+<h3>Decisions taken (the plans' recommended answers)</h3>
+<table>
+  <tr><th>ID</th><th>Decision</th></tr>
+  <tr><td>01-U1</td><td>a scheme-ref id is written bare — on <code>reference_list</code> only (a scalar <code>reference</code> quotes it)</td></tr>
+  <tr><td>02-U1 / U2</td><td>new ADR 0154; "restates" compares written forms, not coerced values</td></tr>
+  <tr><td>03-U1</td><td><code>config_write_failed</code> and <code>init_write_failed</code> deleted</td></tr>
+  <tr><td>04-U1</td><td>delete with the entity named in a defaults block → <code>not_editable</code></td></tr>
+  <tr><td>05-U1 / U2 / U3</td><td><code>other_side</code> refusal · no new module · a repeated one-value flag is refused</td></tr>
+  <tr><td>06-U1, 07-U1/U2, 08-U1</td><td>rename stays separate · <code>Source</code> enum, amend ADR 0125 · constructors kept</td></tr>
+</table>
+
+</main></body></html>
