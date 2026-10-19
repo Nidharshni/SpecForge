@@ -25,13 +25,13 @@ use std::sync::Arc;
 /// (ADR 0023 D3): `Compiled` converts it against that text (byte columns
 /// to UTF-16, through that text's [`LineIndex`], built once per file per
 /// request, or the open document's own index when the document is that
-/// text) and says whether the editor still has that text. A file the
+/// text) and says what the editor's text is to it ([`EditorText`]). A file the
 /// compile holds no text of cannot be converted: its range is `None`,
 /// never byte columns passed off as UTF-16.
 pub(crate) struct Compiled<'s> {
     state: &'s LspState,
     indexes: RefCell<HashMap<Sym, Option<Arc<LineIndex>>>>,
-    stale: RefCell<HashMap<Sym, bool>>,
+    texts: RefCell<HashMap<Sym, EditorText>>,
 }
 
 impl<'s> Compiled<'s> {
@@ -39,7 +39,7 @@ impl<'s> Compiled<'s> {
         Compiled {
             state,
             indexes: RefCell::new(HashMap::new()),
-            stale: RefCell::new(HashMap::new()),
+            texts: RefCell::new(HashMap::new()),
         }
     }
 
@@ -107,26 +107,56 @@ impl<'s> Compiled<'s> {
         }
     }
 
-    /// Whether the text the editor has for session file `file` (its open
-    /// buffer, else the file on disk) is not the text the project was
-    /// compiled from: no edit computed from the compile applies to it. True
-    /// when the editor has typed since (the compile is still to come), when
-    /// a closed file changed or went away on disk (the watcher's event is
-    /// still to come), and when the compile holds no text of the file. Read
-    /// once per file per request.
-    pub(crate) fn is_stale(&self, file: &str) -> bool {
+    /// What the editor's text of session file `file` (its open buffer, else the file on disk) is to
+    /// the compile ([`EditorText`]). Read once per file per request.
+    pub(crate) fn editor_text(&self, file: &str) -> EditorText {
         let key = Sym::new(file);
-        *self.stale.borrow_mut().entry(key).or_insert_with(|| {
+        *self.texts.borrow_mut().entry(key).or_insert_with(|| {
+            let document = self.state.files().document(file);
             let Some(compiled) = self.state.compiled_text(file) else {
-                return true;
+                // The session holds this very buffer and built nothing from it: no compile is coming.
+                return match document {
+                    Some(doc)
+                        if doc.version().is_some()
+                            && self.state.compiled_version(file) == doc.version() =>
+                    {
+                        EditorText::Unbuilt
+                    }
+                    _ => EditorText::Changed,
+                };
             };
-            match self.state.files().document(file) {
-                Some(doc) => doc.text() != &*compiled,
+            let same = match document {
+                Some(doc) => doc.text() == &*compiled,
                 None => std::fs::read_to_string(self.state.files().file_path(file))
-                    .map_or(true, |disk| disk != *compiled),
+                    .is_ok_and(|disk| disk == *compiled),
+            };
+            if same {
+                EditorText::Compiled
+            } else {
+                EditorText::Changed
             }
         })
     }
+
+    /// Whether the editor's text of `file` is not the compiled text ([`Self::editor_text`]): no
+    /// position of the compile is a position in it.
+    pub(crate) fn is_stale(&self, file: &str) -> bool {
+        self.editor_text(file) != EditorText::Compiled
+    }
+}
+
+/// What the editor's text of a session file (its open buffer, else the file on disk) is to the
+/// compile (ADR 0023 D3, D7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum EditorText {
+    /// The text the project was compiled from: a position of the compile is a position in it.
+    Compiled,
+    /// Not that text, and a compile that reads it is still to come: a buffer typed since, a closed
+    /// file changed or gone on disk, a document opened since that the session does not hold yet.
+    Changed,
+    /// A text the project does not build, and no compile is coming: the session holds this very
+    /// buffer and compiled none of it (outside the spec root, excluded, not `.spec`).
+    Unbuilt,
 }
 
 /// The LSP kind of a fix's kind.

@@ -4,6 +4,7 @@
 
 use specforge_lsp::answers;
 use specforge_lsp::changes::Change;
+use specforge_test_macros::test as spec;
 use tempfile::TempDir;
 use tower_lsp::lsp_types::{Position, Url};
 
@@ -14,8 +15,10 @@ const OUTSIDE: &str = "invariant outside_one \"Out\" {\n}\n";
 
 /// A document outside the project's root, opened as `didOpen` opens it: the session holds its buffer
 /// and builds nothing from it (`ProjectSession::hold_with`).
-#[test]
-#[ignore = "flipped by T2"]
+#[spec(
+    behavior = "prepare_rename",
+    verify = "prepare rename from a document the project does not build answers that rename is not available"
+)]
 fn a_rename_from_a_document_outside_the_root_answers_nothing() {
     let mut served = Served::new(&[("limit.spec", LIMIT)]).open(&["limit.spec"]);
     let elsewhere = TempDir::new().unwrap();
@@ -31,8 +34,10 @@ fn a_rename_from_a_document_outside_the_root_answers_nothing() {
 }
 
 /// A document inside the root that the configuration excludes.
-#[test]
-#[ignore = "flipped by T2"]
+#[spec(
+    behavior = "rename_entity_id",
+    verify = "rename from a document the project does not build answers no edit"
+)]
 fn a_rename_from_an_excluded_document_answers_nothing() {
     let dir = TempDir::new().unwrap();
     std::fs::write(
@@ -54,7 +59,10 @@ fn a_rename_from_an_excluded_document_answers_nothing() {
 
 /// A source opened before its compile (the debounce window): its compile is coming, so the rename
 /// waits for it.
-#[test]
+#[spec(
+    behavior = "prepare_rename",
+    verify = "prepare rename from a document opened since the compile waits for it"
+)]
 fn a_rename_from_a_document_opened_since_the_compile_waits_for_it() {
     let mut served = Served::new(&[("limit.spec", LIMIT)]).open(&["limit.spec"]);
     // Written after the project opened, and held as `didOpen` holds it, not reacted to yet.

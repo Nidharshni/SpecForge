@@ -20,8 +20,8 @@ use tower_lsp::lsp_types::{
 use crate::document::{LineIndex, Target};
 use crate::files::Findings;
 use crate::navigation::{
-    Compiled, Unplaced, code_action_kind, fix_to_code_action, outline_to_document_symbols,
-    symbol_kind_from_entity,
+    Compiled, EditorText, Unplaced, code_action_kind, fix_to_code_action,
+    outline_to_document_symbols, symbol_kind_from_entity,
 };
 use crate::publish::diagnostic_to_lsp;
 use crate::{LspState, hover};
@@ -96,6 +96,18 @@ fn content_modified(file: &str) -> Error {
         code: ErrorCode::ServerError(-32801),
         message: format!("{file} changed since the project was compiled; try again").into(),
         data: None,
+    }
+}
+
+/// Whether a rename may be asked from the open document `file` (ADR 0023 D7): yes while it is the
+/// compiled text; while its compile is still to come, `ContentModified` (the client tries again); a
+/// document the project does not build has nothing that renames, and no compile will give it any:
+/// `Ok(false)`, answered as no rename.
+fn renames_in(compiled: &Compiled, file: &str) -> tower_lsp::jsonrpc::Result<bool> {
+    match compiled.editor_text(file) {
+        EditorText::Compiled => Ok(true),
+        EditorText::Changed => Err(content_modified(file)),
+        EditorText::Unbuilt => Ok(false),
     }
 }
 
@@ -245,8 +257,8 @@ pub fn references(
 }
 
 /// The range of the declaration or reference token under the cursor.
-/// Refused as `ContentModified` (-32801) while the document is not the
-/// compiled text (ADR 0023 D7).
+/// Refused as `ContentModified` (-32801) while the document is typed since the
+/// compile; `None` for a document the project does not build (ADR 0023 D7).
 pub fn prepare_rename(
     state: &LspState,
     uri: &Url,
@@ -263,8 +275,8 @@ pub fn prepare_rename(
     let compiled = Compiled::new(state);
     // Any range it gives is a position in a text the editor no longer has
     // while the document is typed in (ADR 0023 D7).
-    if compiled.is_stale(&file) {
-        return Err(content_modified(&file));
+    if !renames_in(&compiled, &file)? {
+        return Ok(None);
     }
     // The token as written under the cursor, declaration or reference;
     // nothing else renames.
@@ -289,8 +301,8 @@ pub fn rename(
     let key = state.key_of(uri);
     // The edits come from the compile: asked from a document typed in since,
     // the rename waits for it, whatever the cursor names (ADR 0023 D7).
-    if state.files().document(&key).is_some() && compiled.is_stale(&key) {
-        return Err(content_modified(&key));
+    if state.files().document(&key).is_none() || !renames_in(&compiled, &key)? {
+        return Ok(None);
     }
     let Some(id) = entity_under_cursor(&compiled, &key, position) else {
         return Ok(None);

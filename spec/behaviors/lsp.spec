@@ -407,11 +407,16 @@ behavior prepare_rename "Prepare Rename" {
     that rename is not available at that position. While the document is
     not the text the project was compiled from, prepareRename MUST be
     refused as ContentModified (-32801): a range in the compiled text is not
-    a range in the buffer.
+    a range in the buffer. A document the project does not build (outside the
+    spec root, or excluded) has nothing to rename: prepareRename answers that
+    rename is not available there, never ContentModified, which no compile
+    would end. A document opened since the compile waits for it.
   """
   verify unit "prepare rename on entity ID returns token range"
   verify unit "prepare rename on non-renameable token returns not available"
   verify unit "prepare rename over a buffer typed since the compile is refused as content modified"
+  verify unit "prepare rename from a document the project does not build answers that rename is not available"
+  verify unit "prepare rename from a document opened since the compile waits for it"
   verify contract "Prepare Rename: prepare rename holds — graph_available, token_range_returned, non_renameable_rejected"
 }
 
@@ -453,7 +458,8 @@ behavior rename_entity_id "Rename Entity ID" {
     text the project was compiled from: a rename over a file whose text (an
     open buffer, else the file on disk) is no longer that text MUST be
     refused as ContentModified (-32801), never applied from stale positions;
-    so is a rename asked from a document typed since the compile.
+    so is a rename asked from a document typed since the compile. A rename
+    asked from a document the project does not build answers no edit.
     A rename over a project whose specforge.json does not say which files
     are its sources MUST be refused with config_invalid's reason, as the
     MCP rename tool refuses it.
@@ -464,6 +470,7 @@ behavior rename_entity_id "Rename Entity ID" {
   verify unit "rename is atomic — all or nothing"
   verify unit "rename is refused as content modified when a file it edits changed since the compile"
   verify unit "rename from a buffer typed since the compile is refused as content modified"
+  verify unit "rename from a document the project does not build answers no edit"
   verify unit "rename across multiple files"
   verify unit "rename rejects new name that duplicates existing entity ID"
   verify unit "rename to an illegal entity ID is refused with why"
