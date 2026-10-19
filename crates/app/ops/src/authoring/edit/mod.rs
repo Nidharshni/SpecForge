@@ -151,13 +151,7 @@ pub struct FieldInfo {
 /// The fields `kind` declares, in the order a new block writes them (the kind's own, then its enhancements');
 /// none for a kind no loaded extension declares.
 pub fn fields_of(view: &ProjectView<'_>, kind: &str) -> Vec<FieldInfo> {
-    let site = block::Site {
-        view,
-        key: "",
-        id: "",
-        kind,
-    };
-    site.order()
+    block::order(view, kind)
         .into_iter()
         .filter_map(|name| {
             let entry = view.registries().fields().get(kind, &name)?;

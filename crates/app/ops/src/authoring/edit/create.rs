@@ -65,7 +65,7 @@ impl Planner<'_> {
             id,
             kind,
         };
-        let order = site.order();
+        let order = block::order(self.view, kind);
         let config = block::layout(&site);
         let mut members: Vec<((u8, usize), String, String)> = Vec::new();
         for (name, input) in fields {

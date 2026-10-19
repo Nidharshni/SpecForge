@@ -43,7 +43,7 @@ impl Site<'_> {
     }
 
     fn unknown_field(&self, field: &str) -> Refusal<EditField> {
-        let declared = self.order();
+        let declared = order(self.view, self.kind);
         let error = OpError::new(
             OpErrorKind::InvalidInput,
             UNKNOWN_FIELD,
@@ -56,29 +56,30 @@ impl Site<'_> {
         .about(EditField::Field)
     }
 
-    /// The kind's declared fields, in declaration order, then the enhancements' by name.
-    pub fn order(&self) -> Vec<String> {
-        let registries = self.view.registries();
-        let mut order: Vec<String> = registries
-            .kinds()
-            .get(self.kind)
-            .map(|k| k.declared.fields.iter().map(|f| f.name.clone()).collect())
-            .unwrap_or_default();
-        let mut more: Vec<String> = registries
-            .fields()
-            .fields_for_kind(self.kind)
-            .iter()
-            .map(|f| f.name().to_string())
-            .filter(|name| !order.contains(name))
-            .collect();
-        more.sort();
-        order.extend(more);
-        order
-    }
-
     fn path(&self) -> std::path::PathBuf {
         self.view.env().spec_root().join(self.key)
     }
+}
+
+/// The fields `kind` declares, in the order a block writes them: the kind's own in declaration order, then every
+/// other registered field (shared, enhancements') by name. Empty for a kind no loaded extension declares.
+pub fn order(view: &ProjectView<'_>, kind: &str) -> Vec<String> {
+    let registries = view.registries();
+    let mut order: Vec<String> = registries
+        .kinds()
+        .get(kind)
+        .map(|k| k.declared.fields.iter().map(|f| f.name.clone()).collect())
+        .unwrap_or_default();
+    let mut more: Vec<String> = registries
+        .fields()
+        .fields_for_kind(kind)
+        .iter()
+        .map(|f| f.name().to_string())
+        .filter(|name| !order.contains(name))
+        .collect();
+    more.sort();
+    order.extend(more);
+    order
 }
 
 fn unreadable(id: &str) -> Refusal<EditField> {
@@ -325,7 +326,7 @@ impl Block {
 
     /// A new member `name value` at its rank (`(group, declared index)`).
     fn insert_member(&mut self, site: &Site<'_>, name: &str, value: &str, annotations: &[String]) {
-        let order = site.order();
+        let order = order(site.view, site.kind);
         let new_rank = rank(&order, name, group_of_text(value));
         let text = format!(
             "{}{name} {value}{}",
