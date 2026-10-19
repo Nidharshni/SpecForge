@@ -120,7 +120,7 @@ fn clean_needs_every_file_read_and_canonical() {
     let error = outcome.failures[0].to_op_error();
     assert_eq!(
         (error.kind, &*error.code),
-        (OpErrorKind::FileNotFound, UNREADABLE)
+        (OpErrorKind::FileNotFound, crate::FILE_UNREADABLE)
     );
     assert!(error.message.starts_with("failed to read "), "{error:?}");
 }
@@ -146,7 +146,10 @@ fn written_lists_only_files_on_disk() {
     // A file the OS refused to write is permission denied.
     assert_eq!(outcome.failures[0].kind(), OpErrorKind::PermissionDenied);
     assert_eq!(outcome.failure_kind(), Some(OpErrorKind::PermissionDenied));
-    assert_eq!(&*outcome.failures[0].to_op_error().code, UNWRITABLE);
+    assert_eq!(
+        &*outcome.failures[0].to_op_error().code,
+        crate::FILE_UNWRITABLE
+    );
     let written: Vec<&Path> = outcome.written().collect();
     assert_eq!(written, [dir.path().join("spec/b.spec").as_path()]);
 }

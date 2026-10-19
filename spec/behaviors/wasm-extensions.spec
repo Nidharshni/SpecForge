@@ -534,6 +534,7 @@ behavior dispatch_collector "Dispatch Collector" {
     collector_dispatched_emitted "collector_dispatched event is emitted after the export returns"
     report_files_passed          "the export receives every report file with its project-relative path and text"
     traps_reported               "a trap or malformed answer is E028"
+    named_reports_only           "with --report only the named files are read: nothing the collector declares about its report, capture or command is resolved or refused"
   }
   contract   """
     The host reads the report (the file itself, or every `*.json` file
@@ -552,12 +553,16 @@ behavior dispatch_collector "Dispatch Collector" {
     test without a name, a status outside passed, failed and skipped, an
     empty object) is E028 naming the collector, never empty results or a
     skipped test. `--no-run`
-    and `--report` skip running and dispatch an existing report.
+    skips running and dispatches the report (and captured output) the runner
+    already wrote at the declared location; `--report` dispatches only the
+    files it names, so a collector's declared report, capture and command are
+    neither resolved nor refused.
   """
   produces   [collector_dispatched]
   verify unit "reads a file or every json file in a directory"
   verify unit "the collector receives a CollectInput and answers a CollectOutput, and an answer that is not one is an error naming the collector"
-  verify contract "Dispatch Collector: collector dispatch holds — report_available, collector_dispatched_emitted, report_files_passed, traps_reported"
+  verify unit "--report reads only the named files, whatever the collector declares"
+  verify contract "Dispatch Collector: collector dispatch holds — report_available, collector_dispatched_emitted, report_files_passed, traps_reported, named_reports_only"
 }
 
 behavior ingest_collector_report "Ingest Collector Report" {

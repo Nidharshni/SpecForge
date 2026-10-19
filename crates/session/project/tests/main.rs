@@ -39,6 +39,7 @@ mod reopen;
 mod rooted;
 mod rules;
 mod session;
+mod source_disk;
 mod source_hops;
 mod structural_checks;
 mod symlinked_directory;

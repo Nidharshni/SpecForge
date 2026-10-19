@@ -72,7 +72,7 @@ fn a_change_writes_each_staged_file_and_names_it() {
     old.set_modified(stamp).unwrap();
     drop(old);
 
-    let mut change = ProjectChange::new();
+    let mut change = ProjectChange::new(&root, "cannot test");
     change.stage(held(&root, "a.txt"), Some(bytes("old")), bytes("new"));
     change.stage(held(&root, "deep/er/b.txt"), None, bytes("fresh"));
     change.stage(held(&root, "same.txt"), Some(bytes("same")), bytes("same"));
@@ -97,7 +97,7 @@ fn a_file_that_changed_since_it_was_staged_refuses_the_change_writing_nothing() 
     let (_dir, root) = scene();
     std::fs::write(root.join("first.txt"), "first").unwrap();
     for case in ["edited", "appeared", "gone"] {
-        let mut change = ProjectChange::new();
+        let mut change = ProjectChange::new(&root, "cannot test");
         change.stage(
             held(&root, "first.txt"),
             Some(bytes("first")),
@@ -120,13 +120,21 @@ fn a_file_that_changed_since_it_was_staged_refuses_the_change_writing_nothing() 
             }
         }
 
-        let failed = change.commit().unwrap_err();
+        let error = change.commit().unwrap_err();
 
-        assert!(
-            matches!(&failed.cause, Cause::Changed { file } if file.starts_with(&root)),
-            "{case}: {failed:?}"
+        let file = match case {
+            "edited" => "second.txt",
+            "appeared" => "third.txt",
+            _ => "fourth.txt",
+        };
+        assert_eq!(error.code, FILE_CHANGED, "{case}: {error:?}");
+        assert_eq!(error.kind, OpErrorKind::Conflict, "{case}");
+        assert_eq!(
+            error.message,
+            format!("cannot test: {file} changed since it was read; nothing was written"),
+            "{case}"
         );
-        assert!(failed.left.is_empty(), "{case}");
+        assert!(error.writes.is_empty(), "{case}");
         assert_eq!(read(&root, "first.txt"), "first", "{case}: nothing written");
     }
     assert_eq!(read(&root, "second.txt"), "edited since");
@@ -144,7 +152,7 @@ fn a_change_that_fails_at_file_k_puts_back_every_file_before_it() {
     }
     for k in 0..3 {
         let names = ["f0.txt", "f1.txt", "f2.txt"];
-        let mut change = ProjectChange::new();
+        let mut change = ProjectChange::new(&root, "cannot test");
         for name in names {
             std::fs::write(root.join(name), format!("old {name}")).unwrap();
         }
@@ -157,13 +165,23 @@ fn a_change_that_fails_at_file_k_puts_back_every_file_before_it() {
             );
         }
 
-        let failed = change.commit().unwrap_err();
+        let error = change.commit().unwrap_err();
 
+        assert_eq!(error.code, FILE_UNWRITABLE, "k = {k}: {error:?}");
+        assert_eq!(error.kind, OpErrorKind::PermissionDenied, "k = {k}");
         assert!(
-            matches!(&failed.cause, Cause::Unwritable { file, .. } if *file == root.join(names[k])),
-            "k = {k}: {failed:?}"
+            error
+                .message
+                .starts_with(&format!("cannot test: failed to write {}: ", names[k])),
+            "k = {k}: {}",
+            error.message
         );
-        assert!(failed.left.is_empty(), "k = {k}");
+        assert!(
+            error.message.ends_with("; nothing was written"),
+            "k = {k}: {}",
+            error.message
+        );
+        assert!(error.writes.is_empty(), "k = {k}");
         for name in names {
             assert_eq!(read(&root, name), format!("old {name}"), "k = {k}");
         }
@@ -184,18 +202,22 @@ fn a_change_that_cannot_create_file_k_removes_the_files_it_created() {
     lock(&root.join("locked"), 0o555);
     std::fs::create_dir(root.join("existing")).unwrap();
 
-    let mut change = ProjectChange::new();
+    let mut change = ProjectChange::new(&root, "cannot test");
     change.stage(held(&root, "made/deeper/new0.txt"), None, bytes("0"));
     change.stage(held(&root, "existing/new1.txt"), None, bytes("1"));
     change.stage(held(&root, "kept.txt"), Some(bytes("old")), bytes("new"));
     change.stage(held(&root, "locked/new3.txt"), None, bytes("3"));
-    let failed = change.commit().unwrap_err();
+    let error = change.commit().unwrap_err();
 
+    assert_eq!(error.code, FILE_UNWRITABLE, "{error:?}");
     assert!(
-        matches!(&failed.cause, Cause::Unwritable { file, .. } if *file == root.join("locked/new3.txt")),
-        "{failed:?}"
+        error
+            .message
+            .starts_with("cannot test: failed to write locked/new3.txt: "),
+        "{}",
+        error.message
     );
-    assert!(failed.left.is_empty());
+    assert!(error.writes.is_empty());
     assert!(
         !root.join("made").exists(),
         "the directories it made are gone"
@@ -210,33 +232,34 @@ fn a_change_that_cannot_create_file_k_removes_the_files_it_created() {
     lock(&root.join("locked"), 0o755);
 }
 
+fn pin_refused() -> OpError {
+    OpError::new(OpErrorKind::Internal, "pin_refused", "pin refused")
+}
+
 #[test]
 fn a_last_step_that_fails_puts_back_every_file() {
     let (_dir, root) = scene();
     std::fs::write(root.join("a.txt"), "old").unwrap();
     std::fs::create_dir(root.join("existing")).unwrap();
-    let mut change = ProjectChange::new();
+    let mut change = ProjectChange::new(&root, "cannot test");
     change.stage(held(&root, "a.txt"), Some(bytes("old")), bytes("new"));
     change.stage(held(&root, "made/b.txt"), None, bytes("b"));
     change.stage(held(&root, "existing/c.txt"), None, bytes("c"));
     let seen = root.clone();
 
-    let failed = change
+    let error = change
         .commit_then(|| {
             assert_eq!(
                 read(&seen, "a.txt"),
                 "new",
                 "the last step runs after the writes"
             );
-            Err("pin refused")
+            Err(pin_refused())
         })
         .unwrap_err();
 
-    assert!(
-        matches!(failed.cause, Cause::Then("pin refused")),
-        "{failed:?}"
-    );
-    assert!(failed.left.is_empty());
+    assert_eq!(error, pin_refused(), "the step's own error, unprefixed");
+    assert!(error.writes.is_empty());
     assert_eq!(read(&root, "a.txt"), "old");
     assert!(!root.join("made").exists());
     assert!(!root.join("existing/c.txt").exists());
@@ -254,7 +277,7 @@ fn a_file_the_change_cannot_put_back_is_left_and_named() {
     for name in ["f0.txt", "f1.txt"] {
         std::fs::write(root.join(name), format!("old {name}")).unwrap();
     }
-    let mut change = ProjectChange::new();
+    let mut change = ProjectChange::new(&root, "cannot test");
     for name in ["f0.txt", "f1.txt"] {
         change.stage(
             held(&root, name),
@@ -264,15 +287,16 @@ fn a_file_the_change_cannot_put_back_is_left_and_named() {
     }
     let path = root.join("f0.txt");
 
-    let failed = change
+    let error = change
         .commit_then(|| {
             lock(&path, 0o444);
-            Err(())
+            Err(pin_refused())
         })
         .unwrap_err();
 
+    assert_eq!(error.message, "pin refused", "the step's own message");
     assert_eq!(
-        failed.left.paths().collect::<Vec<_>>(),
+        error.writes.paths().collect::<Vec<_>>(),
         [root.join("f0.txt")]
     );
     assert_eq!(
@@ -285,35 +309,13 @@ fn a_file_the_change_cannot_put_back_is_left_and_named() {
     lock(&path, 0o644);
 }
 
-#[test]
-fn a_failed_change_reports_what_it_left_as_the_errors_writes() {
-    let failed: Failed<()> = Failed {
-        cause: Cause::Then(()),
-        left: Writes::of([PathBuf::from("/p/a.spec")]),
-    };
-
-    let error = failed.error(|cause| {
-        assert!(matches!(cause, Cause::Then(())));
-        OpError::new(
-            OpErrorKind::Internal,
-            "last_step_failed",
-            "the last step failed",
-        )
-    });
-
-    assert_eq!(
-        error.writes.paths().collect::<Vec<_>>(),
-        [Path::new("/p/a.spec")]
-    );
-}
-
 #[cfg(unix)]
 #[test]
 fn a_file_staged_through_an_inside_link_keeps_the_link() {
     let (_dir, root) = scene();
     std::fs::write(root.join("real.txt"), "old").unwrap();
     std::os::unix::fs::symlink(root.join("real.txt"), root.join("link.txt")).unwrap();
-    let mut change = ProjectChange::new();
+    let mut change = ProjectChange::new(&root, "cannot test");
     change.stage(held(&root, "link.txt"), Some(bytes("old")), bytes("new"));
 
     let writes = change.commit().unwrap();
@@ -328,10 +330,10 @@ fn a_file_staged_through_an_inside_link_keeps_the_link() {
 
     // A file created through a dangling link: a failure removes what was created, not the link.
     std::os::unix::fs::symlink(root.join("target.txt"), root.join("dangling.txt")).unwrap();
-    let mut change = ProjectChange::new();
+    let mut change = ProjectChange::new(&root, "cannot test");
     change.stage(held(&root, "dangling.txt"), None, bytes("created"));
-    let failed = change.commit_then(|| Err(())).unwrap_err();
-    assert!(failed.left.is_empty());
+    let error = change.commit_then(|| Err(pin_refused())).unwrap_err();
+    assert!(error.writes.is_empty());
     assert!(
         !root.join("target.txt").exists(),
         "the created target is removed"
@@ -342,4 +344,79 @@ fn a_file_staged_through_an_inside_link_keeps_the_link() {
             .is_symlink(),
         "the link stays"
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_file_that_cannot_be_read_to_check_it_is_unreadable_and_nothing_is_written() {
+    let (_dir, root) = scene();
+    if !permissions_bind(&root) {
+        return;
+    }
+    std::fs::write(root.join("a.txt"), "a").unwrap();
+    std::fs::write(root.join("b.txt"), "b").unwrap();
+    let mut change = ProjectChange::new(&root, "cannot test");
+    change.stage(held(&root, "a.txt"), Some(bytes("a")), bytes("A"));
+    change.stage(held(&root, "b.txt"), Some(bytes("b")), bytes("B"));
+    lock(&root.join("b.txt"), 0o000);
+
+    let error = change.commit().unwrap_err();
+    lock(&root.join("b.txt"), 0o644);
+
+    assert_eq!(error.code, FILE_UNREADABLE, "{error:?}");
+    assert_eq!(error.kind, OpErrorKind::PermissionDenied);
+    assert!(
+        error
+            .message
+            .starts_with("cannot test: failed to read b.txt: "),
+        "{}",
+        error.message
+    );
+    assert!(error.message.ends_with("; nothing was written"));
+    assert_eq!(read(&root, "a.txt"), "a");
+}
+
+#[test]
+fn a_file_outside_the_root_is_named_as_spelled() {
+    let (_dir, root) = scene();
+    std::fs::create_dir(root.join("sub")).unwrap();
+    std::fs::write(root.join("x.txt"), "x").unwrap();
+    let mut change = ProjectChange::new(&root.join("sub"), "");
+    change.stage(held(&root, "x.txt"), Some(bytes("x")), bytes("X"));
+    std::fs::write(root.join("x.txt"), "moved").unwrap();
+
+    let error = change.commit().unwrap_err();
+
+    assert_eq!(
+        error.message,
+        format!(
+            "{} changed since it was read; nothing was written",
+            root.join("x.txt").display()
+        ),
+        "no prefix for an empty `doing`"
+    );
+}
+
+#[test]
+fn a_file_left_behind_is_named_in_the_message_from_the_root() {
+    let (_dir, root) = scene();
+    let change = ProjectChange::new(&root, "cannot test");
+    let cause = Cause::Unwritable {
+        file: root.join("f1.txt"),
+        error: std::io::Error::from(std::io::ErrorKind::PermissionDenied),
+    };
+
+    let error = change.failed(
+        cause,
+        Writes::of([root.join("f0.txt"), root.join("d/f2.txt")]),
+    );
+
+    assert!(
+        error
+            .message
+            .ends_with("; d/f2.txt, f0.txt could not be put back"),
+        "{}",
+        error.message
+    );
+    assert_eq!(error.writes.len(), 2);
 }

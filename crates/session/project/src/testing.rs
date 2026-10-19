@@ -3,7 +3,9 @@
 //! A [`TestProject`] is a directory holding `specforge.json` and the files a test writes, plus a second, empty
 //! directory a test's processes use as `HOME` ([`TestProject::home`]). It compiles and opens exactly as the
 //! surfaces do. [`TestProject::compile`] is what every CLI command holds (the component runtime with the per-user
-//! compile cache), and [`TestProject::session`] is what MCP and the LSP open ([`ProjectSession::open`]). With
+//! compile cache), and [`TestProject::session`] opens the project as the LSP and watch do (the plain disk), with
+//! the runtime MCP and the LSP serve ([`ProjectSession::open`], [`ProjectSession::open_with_runtime`]). MCP reads
+//! sources through a contained disk (ADR 0145); its tests go through `specforge_mcp::testing::Served`. With
 //! [`TestProject::serving`], both run the extensions an in-process runtime serves instead, installed as a project
 //! that enables them has them. Both directories live as long as the value.
 //!
@@ -29,7 +31,7 @@ use serde_json::{Value, json};
 use specforge_common::{ExtensionEntry, ProjectRoot};
 use specforge_wasm::testing::InProcessRuntime;
 
-use crate::{CompiledProject, ProjectSession, RuntimeSource, SharedRuntime, Update};
+use crate::{CompiledProject, ProjectSession, SharedRuntime, Update};
 
 /// A project on disk with its own HOME. Built by value (`TestProject::new().enabling(..).file(..)`); every
 /// builder call writes through to disk at once, so the directory is always what the value says.
@@ -263,8 +265,8 @@ impl TestProject {
         CompiledProject::compile(&self.project_root(), None)
     }
 
-    /// The project opened as MCP and the LSP open it: the served runtime, else the project's own
-    /// ([`RuntimeSource::project`]).
+    /// The project opened as the LSP and watch open it (the plain disk): the served runtime, else the
+    /// project's own ([`crate::RuntimeSource::project`]).
     pub fn session(&self) -> ProjectSession {
         match &self.served {
             Some(served) => ProjectSession::open_with_runtime(
@@ -278,11 +280,6 @@ impl TestProject {
     /// The project opened with `runtime` for every load.
     pub fn session_in(&self, runtime: SharedRuntime) -> ProjectSession {
         ProjectSession::open_with_runtime(&self.project_root(), Some(runtime))
-    }
-
-    /// The project opened with each load's runtime from `source`.
-    pub fn session_from(&self, source: RuntimeSource) -> ProjectSession {
-        ProjectSession::open_from(&self.project_root(), source)
     }
 
     /// The project opened with no runtime.

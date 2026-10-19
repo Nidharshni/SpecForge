@@ -186,10 +186,13 @@ fn a_config_that_appeared_or_no_longer_parses_is_changed() {
     let opened_file = opened_at(dir.path());
 
     // A file that was not there when the plan opened is changed.
+    let error = opened_none.unchanged(&held, "add").unwrap_err();
+    assert_eq!(error.code, crate::FILE_CHANGED);
     assert_eq!(
-        opened_none.unchanged(&held, "add").unwrap_err().code,
-        crate::FILE_CHANGED
+        error.message,
+        "cannot add: specforge.json changed since it was read; nothing was written"
     );
+    assert_eq!(error.suggestion.as_deref(), Some("run add again"));
     // Formatting is not a change; a document that no longer parses is.
     std::fs::write(held.spelled.clone(), "{ \"extensions\" :\n [\"@acme/x\"] }").unwrap();
     assert!(opened_file.unchanged(&held, "add").is_ok());

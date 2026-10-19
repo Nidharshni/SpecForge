@@ -195,7 +195,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   atomically through a temp created new beside it, keeping its permissions (ADR 0104, ADR 0112, ADR 0128).
 - **Project change**: several project files written as one change: each staged as a `Held` with what it holds and will
   hold, checked, replaced in order, put back in reverse on any failure; what it could not put back is the operation's
-  writes (`specforge_ops::change::ProjectChange`, ADR 0128).
+  writes (`specforge_ops::change::ProjectChange`, ADR 0128). Its failure is its own: one code per cause
+  (`file_changed`, `file_unreadable`, `file_unwritable`), the file named from the root the change was opened under,
+  after what the operation was doing (ADR 0155).
 - **Served project**: the project an MCP server serves to every call that names none: the nearest project (a
   directory holding `specforge.json`) at or above the server's root (the path `specforge mcp` was started with, or
   a handshake client's `projectRoot`), else nothing; while none is served, every request looks there again first
@@ -1136,6 +1138,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   commands. Its adapters are a child process with the user-level consent store (`ProcessMachine`) and a scripted
   machine (tests). The caller passes it; collect decides every refusal that needs no run before the machine runs
   anything (ADR 0125).
+- **Collect mode**: how `collect` gets each collector's evidence (`specforge_ops::analysis::collect::Mode`): run
+  the declared command and read its report (`Run`), read the report it already wrote (`NoRun`, `--no-run`), or
+  read only the files the request names (`Reports`, `--report`). Collect checks only what the mode reads: under
+  `--report` the collector's declared report, capture and command are not looked at (ADR 0125 D7).
 - **Risk grading**: the coverage owner's policy for one kind: its entities' risk is tallied, and
   one with no obligations is A002, an error at the grading's error level
   (`specforge_coverage::RiskGrading`, supplied by `@specforge/testing`; ADR 0009).

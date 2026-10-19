@@ -99,17 +99,24 @@ fn codes(session: &ProjectSession) -> Vec<String> {
 )]
 fn a_source_the_handed_disk_refuses_is_unreadable_and_not_in_the_graph() {
     let (_dir, _outside, session) = linked_outside(bounded);
-    assert!(codes(&session).contains(&"E025".to_string()), "{:?}", codes(&session));
+    assert!(
+        codes(&session).contains(&"E025".to_string()),
+        "{:?}",
+        codes(&session)
+    );
     // The suggestion fits a refusal by the bound, not a file that is not UTF-8 text.
     let e025 = session
         .project()
         .diagnostics()
         .iter()
-        .find(|d| d.code.to_string() == "E025")
+        .find(|d| d.code == "E025")
         .cloned()
         .expect("the refused source's E025");
     let suggestion = e025.suggestion.clone().unwrap_or_default();
-    assert!(suggestion.contains("inside the served project as a plain file"), "{suggestion}");
+    assert!(
+        suggestion.contains("inside the served project as a plain file"),
+        "{suggestion}"
+    );
     assert!(!suggestion.contains("UTF-8"), "{suggestion}");
     assert!(session.project().graph().node("alpha_one").is_none());
     assert!(session.project().graph().node("beta_one").is_some());
@@ -138,7 +145,10 @@ fn a_refused_source_keeps_its_stamp_and_hops() {
 )]
 fn the_handed_disk_does_not_read_the_environment_or_the_checks() {
     let (_dir, _outside, session) = linked_outside(|_| Arc::new(Refusing));
-    assert_eq!(session.project().environment().config().name, "c");
+    assert_eq!(
+        session.project().environment().config().name.as_deref(),
+        Some("c")
+    );
     assert!(session.project().graph().node("beta_one").is_none());
 }
 
@@ -157,7 +167,10 @@ fn an_environment_reload_keeps_the_handed_disk() {
     set_time(&config, 1_000_000_000);
 
     session.ensure_fresh().expect("the config changed");
-    assert_eq!(session.project().environment().config().name, "d");
+    assert_eq!(
+        session.project().environment().config().name.as_deref(),
+        Some("d")
+    );
     assert!(codes(&session).contains(&"E025".to_string()));
     assert!(session.project().graph().node("alpha_one").is_none());
 }
