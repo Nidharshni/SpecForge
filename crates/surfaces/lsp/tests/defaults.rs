@@ -168,7 +168,6 @@ fn references_show_a_default_no_block_takes() {
     behavior = "prepare_rename",
     verify = "prepare rename answers on a default no block takes"
 )]
-#[ignore = "flipped by T4"]
 fn prepare_rename_on_a_default_no_block_takes_has_a_rename_range() {
     let served = served(UNTAKEN);
     let (state, uri) = (served.state(), served.uri("main.spec"));

@@ -1,7 +1,7 @@
 //! What the LSP knows about one position of a document (ADR 0023).
 
 use specforge_common::Sym;
-use specforge_ops::read::navigate::{Navigator, Occurrence};
+use specforge_ops::read::navigate::{Navigator, Token};
 use specforge_ops::view::ProjectView;
 use specforge_parser::lex::LexemeKind;
 use tower_lsp::lsp_types::{Position, Range};
@@ -376,7 +376,7 @@ impl<'d> Cursor<'d> {
 
     /// The declaration or reference token under the cursor, as navigation
     /// reads it: what prepareRename answers and rename may edit.
-    pub fn occurrence(&self, nav: &Navigator<'_>, file: &str) -> Option<Occurrence> {
+    pub fn occurrence(&self, nav: &Navigator<'_>, file: &str) -> Option<Token> {
         let (line, col) = self.index.source_position(self.position)?;
         nav.occurrence_at(file, line, col)
     }
@@ -409,7 +409,7 @@ impl<'d> Cursor<'d> {
     fn resolve(
         &self,
         view: &ProjectView<'_>,
-        occurrence: impl FnOnce() -> Option<Occurrence>,
+        occurrence: impl FnOnce() -> Option<Token>,
     ) -> Option<Target> {
         let word = self.word_index();
         let entity = |i: usize| {

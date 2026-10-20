@@ -3,7 +3,7 @@
 
 use specforge_ops::authoring::rename;
 use specforge_ops::read::export::{Format, Request, export};
-use specforge_ops::read::navigate::{Direction, ReferenceQuery, Role};
+use specforge_ops::read::navigate::{Direction, ReferenceQuery};
 use specforge_ops::read::query::{QueryRequest, query};
 use specforge_ops::read::trace::chain;
 use specforge_ops::view::ProjectView;
@@ -25,8 +25,8 @@ const PORT: &str = "port Repo \"Repo\" {\n}\n";
 fn the_occurrence_at_a_defaults_token_is_its_reference() {
     let p = compile(SOFTWARE, &[("a.spec", BLOCKS), ("port.spec", PORT)]);
     let occurrence = p.navigator().occurrence_at("a.spec", 2, 10).unwrap();
-    assert_eq!(occurrence.role, Role::Reference);
     assert_eq!(occurrence.target, "Repo");
+    assert_eq!(crate::navigate::at(&occurrence.span), "a.spec 2:10-2:14");
 }
 
 #[specforge_test(

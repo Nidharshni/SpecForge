@@ -10,7 +10,6 @@ const DUPLICATE: &str = "behavior a \"A\" {\n  ports [Repo]\n}\n\nbehavior a \"A
                          port Repo \"Repo\" {\n  direction inbound\n}\n";
 
 #[test]
-#[ignore = "flipped by T4"]
 fn the_token_at_a_default_no_block_takes_names_its_entity() {
     let p = compile(SOFTWARE, &[("main.spec", UNTAKEN)]);
     let token = p.navigator().occurrence_at("main.spec", 2, 10).unwrap();
@@ -19,7 +18,6 @@ fn the_token_at_a_default_no_block_takes_names_its_entity() {
 }
 
 #[test]
-#[ignore = "flipped by T4"]
 fn the_token_at_a_reference_in_a_duplicate_declaration_names_its_entity() {
     let p = compile(SOFTWARE, &[("main.spec", DUPLICATE)]);
     let token = p.navigator().occurrence_at("main.spec", 6, 10).unwrap();

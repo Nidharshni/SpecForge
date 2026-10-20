@@ -405,7 +405,9 @@ behavior prepare_rename "Prepare Rename" {
   contract   """
     When a user initiates a rename, the LSP MUST first respond to
     textDocument/prepareRename to validate that the cursor is on a
-    renameable token (entity ID in a declaration or reference). The
+    renameable token (entity ID in a declaration or reference; every token a
+    rename edits is renameable, a reference in a defaults block that no block
+    takes and one in a duplicate declaration included). The
     response MUST include the range of the token to be renamed. If
     the cursor is not on a renameable token, the response MUST indicate
     that rename is not available at that position. While the document is

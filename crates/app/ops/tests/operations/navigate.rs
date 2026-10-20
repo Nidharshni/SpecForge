@@ -406,7 +406,6 @@ fn the_occurrence_at_a_position_is_the_token_there() {
     let p = nav();
     let nav = p.navigator();
     let declaration = nav.occurrence_at("limit.spec", 1, 11).unwrap();
-    assert_eq!(declaration.role, Role::Declaration);
     assert_eq!(at(&declaration.span), "limit.spec 1:11-1:24");
     // Just past the token's end still names it.
     assert_eq!(
@@ -414,8 +413,7 @@ fn the_occurrence_at_a_position_is_the_token_there() {
         "session_limit"
     );
     let reference = nav.occurrence_at("login.spec", 2, 15).unwrap();
-    assert_eq!(reference.role, Role::Reference);
-    assert_eq!(reference.holder, "login");
+    assert_eq!(reference.target, "session_limit");
     // The title, a keyword, and an unresolved reference are no occurrence.
     assert_eq!(nav.occurrence_at("limit.spec", 1, 27), None);
     assert_eq!(nav.occurrence_at("limit.spec", 1, 3), None);

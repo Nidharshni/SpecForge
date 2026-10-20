@@ -12,7 +12,6 @@ const DUPLICATE: &str = "behavior a \"A\" {\n  ports [Repo]\n}\n\nbehavior a \"A
     behavior = "prepare_rename",
     verify = "prepare rename answers on a reference in a duplicate declaration"
 )]
-#[ignore = "flipped by T4"]
 fn prepare_rename_on_a_reference_in_a_duplicate_declaration_has_a_rename_range() {
     let served = served(DUPLICATE);
     let (state, uri) = (served.state(), served.uri("main.spec"));
