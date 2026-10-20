@@ -1,0 +1,155 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>SpecForge architecture round 18</title>
+<script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";mermaid.initialize({startOnLoad:true,theme:"neutral",securityLevel:"loose"});</script>
+<style>
+  :root { --bg:#fafaf9; --fg:#0f172a; --mut:#64748b; --line:#e2e8f0; --card:#fff; --ok:#047857; --bad:#b91c1c; --warn:#b45309; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0b1020; --fg:#e5e7eb; --mut:#94a3b8; --line:#1f2937; --card:#111827; --ok:#34d399; --bad:#f87171; --warn:#fbbf24; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 system-ui, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font: 700 2rem/1.2 Georgia, serif; margin: 0 0 4px; }
+  h2 { font: 600 1.4rem/1.3 Georgia, serif; margin: 0; }
+  h3 { font: 600 1.1rem/1.3 Georgia, serif; margin: 28px 0 10px; }
+  .sub { color: var(--mut); margin: 0 0 24px; }
+  .kpis { display:grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin: 0 0 32px; }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+  .kpi b { display:block; font-size:1.6rem; }
+  .kpi span { color:var(--mut); font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; }
+  article { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:20px; margin: 0 0 28px; }
+  .head { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:baseline; justify-content:space-between; margin-bottom:6px; }
+  .tags span { font-size:.75rem; padding:2px 8px; border-radius:999px; border:1px solid var(--line); color:var(--mut); margin-left:6px; }
+  .cols { display:grid; grid-template-columns: 1fr 1fr; gap:14px; margin: 14px 0; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+  .col { border:1px solid var(--line); border-radius:8px; padding:12px; overflow-x:auto; }
+  .lbl { font-size:.7rem; text-transform:uppercase; letter-spacing:.08em; color:var(--mut); margin-bottom:6px; }
+  .bad .lbl { color: var(--bad); } .good .lbl { color: var(--ok); }
+  ul { margin: 6px 0 0; padding-left: 20px; } li { margin: 2px 0; }
+  code { font: .85em ui-monospace, monospace; background: color-mix(in srgb, var(--mut) 15%, transparent); padding: 1px 5px; border-radius: 4px; }
+  .def { color: var(--bad); } .fix { color: var(--ok); }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { color: var(--mut); font-weight: 600; font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; }
+  .mermaid { text-align: center; }
+</style></head><body>
+<main>
+<h1>Architecture round 18</h1>
+<p class="sub">Base <code>6ba2b433</code> (PR #80) · 12 plans · 91 commits, one commit group per plan · each defect pinned before its fix · no re-vendor, no new diagnostic code.</p>
+<div class="kpis"><div class="kpi"><b>12</b><span>plans</span></div><div class="kpi"><b>91</b><span>commits</span></div><div class="kpi"><b>43</b><span>defects (D1–D43)</span></div><div class="kpi"><b>7</b><span>new ADRs (0169 0171 0172 0174 0175 0176 0179)</span></div><div class="kpi"><b>1:12 → 2.4 s</b><span>trace of every entity</span></div><div class="kpi"><b>280 files changed, 7902 insertions(+), 3957 deletions(-)</b><span>diff</span></div></div>
+<article><div class="head"><h2>01 · The format configuration is read through the caller&#x27;s disk</h2><div class="tags"><span>8 commits</span><span>ADR 0169</span><span><code>4a33a380</code></span></div></div><p>Over MCP <code>.specforgefmt.toml</code> was opened by name below every containment: a symlink or hard link to an outside file was read and quoted back in W141, and steered typed-edit and init layout. A bounded format run read a hard-linked source past the bound and returned it in <code>diffs</code>.</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ F[format / init / Block::open] -->|std::fs by name| C[".specforgefmt.toml<br/>link to outside"]
+ C -->|W141 quotes the line| M[MCP reply]
+ B[Block] -->|2 to 12 lookups per edit| C
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ F[format run / typed-edit plan / init] --> K["Configs over the caller's Disk<br/>one per run"]
+ K --> D[ContainedDisk refuses the link]
+ S[Site carries its config] --> B[Block]
+</div></div></div></article>
+<article><div class="head"><h2>02 · Migrate writes through the one writer</h2><div class="tags"><span>6 commits</span><span>ADR 0171</span><span><code>d60b0b99</code></span></div></div><p><code>specforge_migrate</code> kept its own writer: it made 0444 sources writable, widened 0600 files and their backups, swallowed an unwritable record, and left a half-migrated project when one file failed.</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ M[specforge_migrate] -->|own writer| F["files chmod-ed, partial run"]
+ R[--rollback] -->|own writer| F
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ M[migrate plans only] --> C[ops: one ProjectChange over held files]
+ C --> A["all or nothing;<br/>backups are owned names"]
+ R[rollback takes a Caller] --> C
+</div></div></div></article>
+<article><div class="head"><h2>10 · The outcome is the document</h2><div class="tags"><span>8 commits</span><span>amends ADR 0052</span><span><code>01e78b74</code></span></div></div><p>Four ops outcomes copied their fields into a second type the surfaces printed; the CLI called every extension row "installed" and a dry-run removal claimed a file entry "loaded".</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart LR
+ O[ops listing] --> X[Outcome copy type] --> S[surface prints]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart LR
+ O[ops listing is its Document] --> S[surface prints]
+ E[entities_of: one count] --> O
+</div></div></div></article>
+<article><div class="head"><h2>03 · One reader for the extension a path names</h2><div class="tags"><span>8 commits</span><span>ADR 0172</span><span><code>c03a0563</code></span></div></div><p>The extension a path names was read in five places: one missing file was E054 from <code>add</code> and E040 from <code>publish</code>; a bounded add installed a hard-linked <code>.wasm</code>; warnings leaked the key <code>__candidate</code>.</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ A[add] --> R1[reader 1]
+ I[init] --> R2[reader 2]
+ P[publish] --> R3[reader 3]
+ V[validate] --> R4[reader 4]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ A[add / init / publish / validate] --> L["LocalComponent::read<br/>E040 per cause, path as spelled"]
+</div></div></div></article>
+<article><div class="head"><h2>04 · The graph owns directed reach</h2><div class="tags"><span>8 commits</span><span>ADR 0174</span><span><code>c7c94c3d</code></span></div></div><p>A trace of every entity rescanned all 6,011 edges per popped entity (381 million reads, 1:05); export's token budget and the connectivity view counted degree differently.</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ T[trace] -->|scan every edge per node| G[(edges)]
+ X[export budget] --> D1[degree rule 1]
+ V[connectivity] --> D2[degree rule 2]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ T[trace / affected] --> R["Graph::reach_directed<br/>over the index"]
+ X[export budget] --> D[Graph::degree]
+ V[connectivity] --> D
+</div></div></div></article>
+<article><div class="head"><h2>07 · Requests own their arguments&#x27; meaning</h2><div class="tags"><span>7 commits</span><span>amends ADR 0101, 0015</span><span><code>d51a8683</code></span></div></div><p>Coverage <code>entity_id</code>, search <code>references</code> and suggest_fixes answered empty for a ghost entity where every other read gave E003; coverage ignored <code>kind</code> beside <code>entity_id</code>; explore and review ignored <code>--depth</code> without an entity.</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart LR
+ Q[request with a ghost entity] --> E["empty answer"]
+ D[depth without entity] --> I[ignored]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart LR
+ Q[request] --> O["ops refuses: E003 + did-you-mean,<br/>I020, depth needs its entity"]
+ O --> S[MCP / CLI map the field]
+</div></div></div></article>
+<article><div class="head"><h2>08 · The LSP change plan is one of four</h2><div class="tags"><span>8 commits</span><span>amends ADR 0023, 0046, 0004</span><span><code>4c904e31</code></span></div></div><p>The change plan admitted 32 shapes but built 4; staleness was one bool, so rename from an unbuilt document answered "try again" forever and hover showed a diagnostic of another line.</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart LR
+ P["Plan: 32 shapes"] --> S{stale: bool}
+ S --> R[rename -32801 forever]
+ S --> H[hover: wrong line]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart LR
+ P["Plan(Step): four steps, one match"] --> E{"editor_text:<br/>Compiled | Changed | Unbuilt"}
+ E --> R[rename null when unbuilt]
+ E --> H[hover drops stale diagnostics]
+</div></div></div></article>
+<article><div class="head"><h2>05 · One module answers what a field holds</h2><div class="tags"><span>5 commits</span><span>ADR 0175</span><span><code>8ab8ebe6</code></span></div></div><p>Whether a block's field was its own or its file's default was decided per verb: set and unset of a <code>field.entry</code> dropped inherited entries or wrote W161, and unset over a default toggled across runs.</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart TB
+ S[set] --> A[own rule]
+ U[unset] --> B[own rule]
+ L[link] --> C[own rule]
+ C2[create] --> D[own rule]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart TB
+ V[every verb] --> C["defaults::change<br/>Unchanged | Changed | Emptied"]
+</div></div></div></article>
+<article><div class="head"><h2>09 · A publish states its identity once</h2><div class="tags"><span>7 commits</span><span>ADR 0179</span><span><code>a3ba2789</code></span></div></div><p>The package name and version were derived at four sites, three per publish: routing could disagree with the declaration uploaded, and the in-memory client kept a manifest naming another version.</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart LR
+ D[declaration] --> I1[identity 1] --> R[routing]
+ D --> I2[identity 2] --> U[Upload]
+ D --> I3[identity 3] --> C[client]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart LR
+ D[declaration] --> P["DeclaredPackage::of, once"] --> R[Registry port] --> C["client seam<br/>contract K12 on both adapters"]
+</div></div></div></article>
+<article><div class="head"><h2>06 · The finder is the only record of where a name is written</h2><div class="tags"><span>6 commits</span><span>ADR 0176</span><span><code>701d23a1</code></span></div></div><p>Two records answered "where is this name written": the linker's <code>Graph::written</code> and the finder. On an untaken default and inside an E002 duplicate, prepareRename answered null and find_references omitted the token rename edits.</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart LR
+ L[linker] --> W[Graph::written] --> O[prepareRename / references]
+ F[finder] --> N[rename]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart LR
+ F["finder: WrittenToken.held_by"] --> O[prepareRename / references / rename]
+</div></div></div></article>
+<article><div class="head"><h2>11 · The linker and the finder read every block alike</h2><div class="tags"><span>5 commits</span><span>amends ADR 0163</span><span><code>5e25812e</code></span></div></div><p>A declared list written as one bare word was a list to the linker and a type name to the finder: delete --unlink-references refused, find_references said [], and rename edited the word.</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart LR
+ B[one-word list] --> L[linker: list]
+ B --> F[finder: type name]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart LR
+ B[block] --> S["stored values, coerced once"] --> D[derived_names]
+ D --> L[linker]
+ D --> F[finder]
+ T[14-row agreement test] -.- D
+</div></div></div></article>
+<article><div class="head"><h2>12 · The smaller findings</h2><div class="tags"><span>15 commits</span><span>no ADR</span><span><code>4c532af7</code></span></div></div><p>E074's hint had a 22-space gap; the CLI lowercased camelCase extension args; rename left dangling references in files that do not parse and failed <code>spec "x"</code> with a false internal_error; <code>edited</code> rooted detached projects.</p><div class="cols"><div class="col bad"><div class="lbl">Before</div><div class="mermaid">
+flowchart LR
+ R[rename over an unparsed source] --> D[dangling reference]
+ S[spec block rename] --> I[internal_error]
+</div></div><div class="col good"><div class="lbl">After</div><div class="mermaid">
+flowchart LR
+ R[rename] --> U[source_unparsed refusal]
+ S[spec block] --> N[not_renameable, with why]
+ G[one config gate, one ID rule]
+</div></div></div></article>
+<h3>Verification</h3><ul><li><code>cargo clippy --workspace --all-targets -- -D warnings</code></li><li><code>cargo nextest run --workspace</code></li><li><code>cargo gate full</code></li></ul><p class="sub">Not verified: Windows and cold Linux. Not this round: a <code>specforge rename</code> CLI verb (12-U1); search keeps its field/value pair (07-U1).</p></main></body></html>
