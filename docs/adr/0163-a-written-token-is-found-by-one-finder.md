@@ -4,7 +4,7 @@
 D5 (navigation's tokens ask the graph's finder; its holders still read `Graph::written`), extends
 [ADR 0149](0149-a-file-states-a-kinds-shared-fields-once.md) D11 (a default no block takes is one token, held by none)
 and [ADR 0156](0156-a-delete-finds-references-by-the-one-reference-rule.md) D1 and D2 (the referrer scan is the finder;
-a derived type name refuses too), as ADR 0156's "Reopen when" foresaw.
+a derived type name refuses too), as ADR 0156's "Reopen when" foresaw. D2 amended by [ADR 0176](0176-the-finder-is-the-only-record-of-where-a-name-is-written.md): `Navigator::references` and the token at a position ask the finder too, which names the blocks that hold each token.
 
 "Which written tokens name entity X" was answered by two walks that disagreed both ways:
 

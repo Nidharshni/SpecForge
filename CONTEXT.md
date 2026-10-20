@@ -1126,21 +1126,18 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   none parses the message, which is presentation.
 - **Reference**: an id a field's declared type reads as a reference (a `reference` field's value, a
   `reference_list` field's items, a scheme ref ID in a `string_list`, ADR 0093), an occurrence of an entity's ID in another entity's field that resolves to it (one
-  edge; where it is written is the edge's written span). The references *to* an entity are incoming; what an entity
+  edge; where it is written is a written token the graph's finder reads). The references *to* an entity are incoming; what an entity
   *refers to* are its outgoing references. "Find references" means incoming, with the declaration
   only on request (`specforge_ops::read::navigate`). Navigation answers the references to an entity two ways: one per
-  holder (an inherited reference once per block that inherits it, `Navigator::references`, what find-references
-  returns) and one per written token (`Navigator::tokens`, read by the graph's finder, a default no block takes
-  included: what rename edits and an editor shows) (ADR 0149 D11, ADR 0156, ADR 0163).
-- **Written span** (of an edge): where one of an edge's references is written: a reference's token (a list
-  item, a single reference's value) or a name inside a type expression a derived field reads (a parameter or
-  return type, a field written as a type, a union member). The linker records every edge's written spans, in
-  written order (`Graph::written`); navigation's occurrences, rename and the LSP read them and never re-derive
-  them. An edge added by hand has none (ADR 0127).
+  holder (each block the finder says holds the token: an inherited reference once per block that takes it, none for a
+  default no block takes; `Navigator::references`, what find-references returns) and one per written token (`Navigator::tokens`, read by the graph's finder, a default no block takes
+  included: what rename edits and an editor shows) (ADR 0149 D11, ADR 0156, ADR 0163, ADR 0176).
 - **Written token**: a place a file writes an entity's ID as a reference: a field's reference (a block's own, or a
   `defaults` entry whether or not a block takes it) or a type name a derived field reads. The graph's one finder answers
-  them per parsed file (`specforge_graph::written_tokens`), with who writes each and how; rename, the editor's
-  find-references and a delete's referrer scan ask it, the first two through `Navigator::tokens` (ADR 0163).
+  them per parsed file (`specforge_graph::written_tokens`), with who writes each and how, and the blocks that hold it (`held_by`). Every question of where a name is written asks
+  it: rename and the editor's references (`Navigator::tokens`), find-references (`Navigator::references`), the token at
+  a position (`Navigator::occurrence_at`: prepareRename, hover, definition) and a delete's referrer scan (ADR 0163,
+  ADR 0176). The graph keeps no position of its own.
 - **Navigation**: where an entity is declared, its references, entity lookup and ranking, which
   entities a diagnostic is about, and the fixes a diagnostic's data names. The LSP and MCP answer
   from one module (`specforge_ops::read::navigate`) in source spans. A span is a position in the text the

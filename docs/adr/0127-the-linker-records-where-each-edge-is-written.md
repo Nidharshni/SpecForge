@@ -2,7 +2,7 @@
 
 **Status:** accepted (2026-10-16, architecture round 13, plan 05). Refines [ADR 0016](0016-navigation-is-one-module.md) D2 (the
 token of a reference is the graph's, decided once) and drops its block scan; agrees with [ADR 0117](0117-a-reference-is-decided-in-the-linker.md)
-(D3's span is the one recorded) and [ADR 0116](0116-navigation-reads-the-text-the-project-was-compiled-from.md) (positions are in the compiled text). D5 amended by [ADR 0163](0163-a-written-token-is-found-by-one-finder.md): navigation's tokens ask the graph's finder over the compiled parses; its holders still read `Graph::written`.
+(D3's span is the one recorded) and [ADR 0116](0116-navigation-reads-the-text-the-project-was-compiled-from.md) (positions are in the compiled text). D5 amended by [ADR 0163](0163-a-written-token-is-found-by-one-finder.md): navigation's tokens ask the graph's finder over the compiled parses; its holders still read `Graph::written`. D1, D2, D5 and D7 superseded by [ADR 0176](0176-the-finder-is-the-only-record-of-where-a-name-is-written.md): the graph records no written span; navigation reads the finder; debug builds assert every edge is held by a token.
 
 ## Context
 
