@@ -189,7 +189,6 @@ fn rename_edits_are_the_spans_find_references_answers() {
     behavior = "provide_mcp_find_references_tool",
     verify = "find_references lists a reference written in a duplicate declaration"
 )]
-#[ignore = "flipped by T5"]
 fn find_references_and_rename_agree_on_a_duplicate_declaration() {
     let duplicate = "behavior a \"A\" {\n  ports [Repo]\n}\n\nbehavior a \"Again\" {\n  ports [Repo]\n}\n\n\
                      port Repo \"Repo\" {\n  direction inbound\n}\n";

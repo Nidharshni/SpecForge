@@ -61,8 +61,8 @@ impl Location {
     }
 }
 
-/// `specforge.find_references`: each occurrence of the entity's ID, as
-/// the LSP's references answer it (ADR 0016). Incoming by default, the
+/// `specforge.find_references`: each occurrence of the entity's ID, held by
+/// each block that holds it, as the LSP's references answer it (ADR 0016, ADR 0176). Incoming by default, the
 /// declaration only when asked for.
 pub(crate) struct Tool;
 

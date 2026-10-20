@@ -560,7 +560,10 @@ behavior provide_mcp_find_references_tool "Provide MCP Find References Tool" {
     referenced entity's id, the field, its role (declaration or reference)
     and the identifier token's source span. LSP equivalence: with the
     defaults it returns the occurrences textDocument/references returns
-    with includeDeclaration false. An entity with no references MUST return
+    with includeDeclaration false, but a token in a defaults block that no
+    block takes, which no entity holds, is not listed, and a default the
+    blocks take is listed once per block. A reference written in a duplicate
+    declaration (E002, W060) is listed, held by its id. An entity with no references MUST return
     an empty list, not an error.
   """
   verify unit "specforge.find_references returns all reference locations"

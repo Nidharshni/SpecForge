@@ -1,7 +1,8 @@
 //! An entity's references without their tokens: who references it, what
 //! it refers to, through which field (ADR 0016 D2). The navigator's
-//! occurrences and this list select the same edges ([`reference_edges`]);
-//! this one needs no file text.
+//! occurrences read the graph's finder; this list reads the edges. They name the
+//! same entities (`references_list_the_same_entities_the_navigator_finds`); this
+//! one needs no file text.
 
 use std::collections::BTreeSet;
 
@@ -80,8 +81,7 @@ fn distinct(references: &[Reference]) -> Vec<&str> {
 /// The edges that are references of `id` in `direction`, each with its
 /// holder (the edge's source): an edge whose holder the graph has, in
 /// graph edge order, incoming before outgoing for [`Direction::Both`].
-/// [`super::Navigator::references`] and [`References::of`] both select
-/// through it, so the holder is looked up once, here.
+/// [`References::of`] selects through it, so the holder is looked up once, here.
 pub(crate) fn reference_edges<'g>(
     graph: &'g Graph,
     id: &str,

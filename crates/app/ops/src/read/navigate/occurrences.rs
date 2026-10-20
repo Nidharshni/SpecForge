@@ -5,9 +5,8 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{SourceSpan, Sym};
-use specforge_graph::{Edge, Node, SpecFile, WrittenToken, written_tokens};
+use specforge_graph::{Node, SpecFile, WrittenToken, written_tokens};
 
-use super::references::reference_edges;
 use super::text::SourceText;
 use super::{Navigator, contains};
 use crate::Refusal;
@@ -165,7 +164,13 @@ impl Navigator<'_> {
         }
     }
 
-    /// The occurrences of `id`, sorted by (file, line, column).
+    /// The occurrences of `id`, sorted by (file, line, column): each token the graph's finder reads, once per block
+    /// that holds it (`held_by`: an inherited reference once per block that takes it; a default no block takes not at
+    /// all), and the declaration when asked. A token the compiled text does not spell is its holder's block with
+    /// [`Precision::Entity`].
+    ///
+    /// shortcut: this walks every compiled file per call; add a per-project token index if a project of ~20k
+    /// entities makes find_references slow.
     pub fn references(
         &self,
         id: &str,
@@ -174,10 +179,33 @@ impl Navigator<'_> {
         let node = self
             .node(id)
             .map_err(|error| error.about(EntityField::EntityId))?;
-        let mut occurrences: Vec<Occurrence> =
-            reference_edges(self.view.graph(), id, query.direction)
-                .flat_map(|(holder, edge)| self.edge_occurrences(holder, edge))
-                .collect();
+        let incoming = matches!(query.direction, Direction::Incoming | Direction::Both);
+        let outgoing = matches!(query.direction, Direction::Outgoing | Direction::Both);
+        let graph = self.view.graph();
+        let mut occurrences = Vec::new();
+        for (_, file) in self.view.project().parsed() {
+            for token in self.found(file) {
+                let shown = self.token(&token);
+                for &holder in &token.held_by {
+                    let wanted = (incoming && token.target.as_str() == id)
+                        || (outgoing && holder.as_str() == id);
+                    let Some(block) = graph.node(holder.as_str()).filter(|_| wanted) else {
+                        continue;
+                    };
+                    occurrences.push(Occurrence {
+                        holder,
+                        target: token.target,
+                        field: Some(token.field),
+                        role: Role::Reference,
+                        span: match shown.precision {
+                            Precision::Token => shown.span.clone(),
+                            Precision::Entity => block.source_span.clone(),
+                        },
+                        precision: shown.precision,
+                    });
+                }
+            }
+        }
         if query.include_declaration {
             occurrences.push(self.declaration(node));
         }
@@ -302,41 +330,6 @@ impl Navigator<'_> {
         declarations
             .chain(references)
             .find(|t| t.precision == Precision::Token && contains(&t.span, &at))
-    }
-
-    /// The occurrences of `edge`'s target in its source: each place the graph records it is written
-    /// (`Graph::written`: a reference list item, a single reference's value, a name in a type expression a derived
-    /// field reads), when the text spells the target there. Without any, or with one the text does not spell, the
-    /// holder's block with [`Precision::Entity`]. `holder` is the edge's source.
-    pub(crate) fn edge_occurrences(&self, holder: &Node, edge: &Edge) -> Vec<Occurrence> {
-        let target = edge.target.as_str();
-        let block = &holder.source_span;
-        let occurrence = |span: SourceSpan, precision: Precision| Occurrence {
-            holder: edge.source,
-            target: edge.target,
-            field: Some(edge.label),
-            role: Role::Reference,
-            span,
-            precision,
-        };
-        let entity = || vec![occurrence(block.clone(), Precision::Entity)];
-        let Some(text) = self.text(block.file) else {
-            return entity();
-        };
-
-        let mut occurrences = Vec::new();
-        let mut stale = false;
-        for span in self.view.graph().written(edge) {
-            if text.spells(span, target) {
-                occurrences.push(occurrence(span.clone(), Precision::Token));
-            } else {
-                stale = true;
-            }
-        }
-        if stale || occurrences.is_empty() {
-            occurrences.extend(entity());
-        }
-        occurrences
     }
 }
 
