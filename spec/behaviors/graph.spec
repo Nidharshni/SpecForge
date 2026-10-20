@@ -114,6 +114,8 @@ behavior link_derived_references "Link Derived References" {
       `A | B`, with generics inside them. Quoted strings, numbers, lists,
       blocks and the entity's single-reference fields (which link on their
       own) don't count.
+      A list field written as one value is a list (ADR 0156): its word is
+      no type name, to the linker and to the finder alike.
     - `method_signatures`: the names in the parameter and return types of
       the entity's methods.
 
@@ -144,6 +146,7 @@ behavior link_derived_references "Link Derived References" {
   verify unit "a recursive type derives no reference cycle"
   verify unit "a kind with no derived field derives no edge"
   verify unit "the written tokens of a file include every name a derived field links"
+  verify unit "the written tokens of a file read a list written as one value as a list"
   verify integration "a field's derived_from reaches the graph from the extension's manifest"
 }
 

@@ -7,6 +7,7 @@ use crate::derive::{names, type_expressions};
 use crate::{FieldForms, FileDefaults, GraphInputs, Reading};
 use specforge_common::{SourceSpan, Sym};
 use specforge_parser::{FieldEntry, MethodDecl, SpecFile};
+use std::borrow::Cow;
 
 /// Who writes a token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,9 +50,10 @@ pub struct WrittenToken {
 /// Every token of `file` that names an entity, in written order, read the way the graph build reads it:
 /// - each applied entry of a `defaults` block, whether or not a block takes it (an E077 or E078 entry is not applied
 ///   and names nothing, ADR 0149 D4/D5), as [`Holder::Defaults`];
-/// - each block's own entries, coerced as the build stores them, then [`Reading::references`] (ADR 0093);
-/// - each type name a derived field of the holder's kind reads that names an entity its target admits, `kind_of`
-///   answering an entity's kind (`None`: no such entity); never the block's own id;
+/// - each block's own entries, as the build stores them (coerced once, ADR 0163): their references
+///   ([`Reading::references`], ADR 0093) and the type names a derived field of the holder's kind reads in them, that
+///   name an entity its target admits, `kind_of` answering an entity's kind (`None`: no such entity); never the
+///   block's own id;
 /// - each names the blocks that hold it (`held_by`).
 ///
 /// A `define` block (never a node, W143) is skipped. A reference without a span (a value built without a position)
@@ -71,15 +73,11 @@ pub fn written_tokens(
     let mut tokens = Vec::new();
     for (kind, entry) in defaults.applied() {
         let holder = Holder::Defaults(kind);
-        read_entry(forms, kind.as_str(), entry, holder, &mut tokens);
-        read.derived(
-            kind.as_str(),
-            std::slice::from_ref(entry),
-            &[],
-            holder,
-            None,
-            &mut tokens,
-        );
+        let entries = stored(forms, kind.as_str(), std::slice::from_ref(entry));
+        for entry in entries.iter() {
+            read_entry(forms, kind.as_str(), entry, holder, &mut tokens);
+        }
+        read.derived(kind.as_str(), &entries, &[], holder, None, &mut tokens);
     }
     for entity in &file.entities {
         if is_defaults_block(entity) || is_define_block(entity) {
@@ -87,12 +85,13 @@ pub fn written_tokens(
         }
         let (id, kind) = (entity.id.raw, entity.kind.raw.as_str());
         let holder = Holder::Block(id);
-        for entry in entity.fields.entries() {
+        let entries = stored(forms, kind, entity.fields.entries());
+        for entry in entries.iter() {
             read_entry(forms, kind, entry, holder, &mut tokens);
         }
         read.derived(
             kind,
-            entity.fields.entries(),
+            &entries,
             &entity.methods,
             holder,
             Some(id),
@@ -126,6 +125,19 @@ pub fn written_tokens(
         };
     }
     tokens
+}
+
+/// `entries` as the graph build stores them (`Graph::coerce_field_values`): each value its reading coerces, coerced;
+/// borrowed when none is.
+fn stored<'e>(forms: &FieldForms, kind: &str, entries: &'e [FieldEntry]) -> Cow<'e, [FieldEntry]> {
+    let mut owned: Option<Vec<FieldEntry>> = None;
+    for (i, entry) in entries.iter().enumerate() {
+        let reading = forms.reading(kind, entry.key.as_str());
+        if let Some(value) = reading.coerce(&entry.value, entry.value_span.as_ref()) {
+            owned.get_or_insert_with(|| entries.to_vec())[i].value = value;
+        }
+    }
+    owned.map_or(Cow::Borrowed(entries), Cow::Owned)
 }
 
 /// What a derived name needs from the graph: its inputs and the kind of an entity.
@@ -175,7 +187,7 @@ impl Reader<'_> {
     }
 }
 
-/// The references `entry` writes, read as the graph build stores it (a list written as one value is its one item).
+/// The references `entry` writes; `entry` is already as the graph build stores it (see [`stored`]).
 fn read_entry(
     forms: &FieldForms,
     kind: &str,
@@ -184,18 +196,12 @@ fn read_entry(
     out: &mut Vec<WrittenToken>,
 ) {
     let reading = forms.reading(kind, entry.key.as_str());
-    let stored = reading
-        .coerce(&entry.value, entry.value_span.as_ref())
-        .map(|value| FieldEntry {
-            value,
-            ..entry.clone()
-        });
     let form = match reading {
         _ if reading.is_single_reference() => Form::Single,
         Reading::Undeclared => Form::Undeclared,
         _ => Form::Item,
     };
-    for reference in reading.references(stored.as_ref().unwrap_or(entry)) {
+    for reference in reading.references(entry) {
         if let Some(span) = reference.span {
             out.push(WrittenToken {
                 target: Sym::new(reference.id),

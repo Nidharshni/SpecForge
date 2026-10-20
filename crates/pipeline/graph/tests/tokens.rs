@@ -106,8 +106,10 @@ fn a_single_reference_is_a_single_token() {
     assert_eq!(show(&tokens), ["Wheel a base Single 2:8-2:13"]);
 }
 
-#[test]
-#[ignore = "flipped by T2"]
+#[specforge_test(
+    behavior = "link_derived_references",
+    verify = "the written tokens of a file read a list written as one value as a list"
+)]
 fn a_list_written_as_one_value_is_no_type_name() {
     let source =
         "shape Car \"Car\" {\n  parts Wheel\n}\n\nshape Wheel \"Wheel\" {\n  size number\n}\n";
@@ -116,7 +118,6 @@ fn a_list_written_as_one_value_is_no_type_name() {
 }
 
 #[test]
-#[ignore = "flipped by T2"]
 fn a_word_in_a_string_list_is_no_type_name() {
     for source in [
         "shape Car \"Car\" {\n  tags Wheel\n}\n\nshape Wheel \"Wheel\" {\n  size number\n}\n",

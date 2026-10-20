@@ -227,7 +227,6 @@ fn rename_and_delete_find_the_same_tokens() {
 const TYPE_WORD: &str = "type Customer \"Customer\" {\n  id string\n}\n\ntype Invoice \"Invoice\" {\n  refs Customer\n}\n";
 
 #[test]
-#[ignore = "flipped by T2"]
 fn rename_and_find_references_agree_on_a_word_a_string_list_holds() {
     let p = compile(SOFTWARE, &[("a.spec", TYPE_WORD)]);
     let nav = p.navigator();

@@ -167,7 +167,6 @@ const TYPE_ONE_VALUE: &str = "type Customer \"Customer\" {\n  id string\n}\n\nty
 const TYPE_WORD: &str = "type Customer \"Customer\" {\n  id string\n}\n\ntype Invoice \"Invoice\" {\n  refs Customer\n}\n";
 
 #[test]
-#[ignore = "flipped by T2"]
 fn delete_with_unlink_references_removes_a_type_list_written_as_one_value() {
     let c = project(&[("a.spec", TYPE_ONE_VALUE)]);
     let text = after(&c, "a.spec", &[delete("Customer", true)]);
@@ -178,7 +177,6 @@ fn delete_with_unlink_references_removes_a_type_list_written_as_one_value() {
 }
 
 #[test]
-#[ignore = "flipped by T2"]
 fn delete_with_unlink_references_leaves_a_word_a_string_list_holds() {
     let c = project(&[("a.spec", TYPE_WORD)]);
     let unlinked = after(&c, "a.spec", &[delete("Customer", true)]);
