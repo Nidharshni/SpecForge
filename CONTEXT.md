@@ -1137,7 +1137,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   them per parsed file (`specforge_graph::written_tokens`), with who writes each and how, and the blocks that hold it (`held_by`). Every question of where a name is written asks
   it: rename and the editor's references (`Navigator::tokens`), find-references (`Navigator::references`), the token at
   a position (`Navigator::occurrence_at`: prepareRename, hover, definition) and a delete's referrer scan (ADR 0163,
-  ADR 0176). The graph keeps no position of its own.
+  ADR 0176). The graph keeps no position of its own. The finder reads each block the way the graph build stores it
+  (its entries coerced), so a list written as one value is one item, never a type name.
+- **Derived name**: a type name a derived field links from one block, other than the block's own id, naming an entity of
+  the field's target kind: `specforge_graph`'s `derive::derived_names`, which the linker makes an edge and the finder a
+  token (ADR 0127 D3, ADR 0163).
 - **Navigation**: where an entity is declared, its references, entity lookup and ranking, which
   entities a diagnostic is about, and the fixes a diagnostic's data names. The LSP and MCP answer
   from one module (`specforge_ops::read::navigate`) in source spans. A span is a position in the text the
