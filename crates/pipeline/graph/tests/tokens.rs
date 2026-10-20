@@ -4,7 +4,7 @@
 use crate::defaults::forms;
 use crate::derived::{derived, inputs};
 use specforge_graph::{
-    Form, GraphConfig, GraphInputs, Holder, WrittenToken, build_graph_with_config, written_tokens,
+    GraphConfig, GraphInputs, Holder, WrittenToken, build_graph_with_config, written_tokens,
 };
 use specforge_parser::parse;
 use specforge_test_macros::test as specforge_test;
@@ -109,46 +109,6 @@ fn a_single_reference_is_a_single_token() {
 const SHAPES: &str = "shape Wheel \"Wheel\" {\n  size number\n}\n\nshape Axle \"Axle\" {\n  ends Wheel\n}\n\n\
 shape Car \"Car\" {\n  wheels Wheel[]\n  front  Axle | Wheel\n  nested Option<Axle>[]\n  quoted \"Wheel\" | Axle\n}\n\n\
 iface Detector \"Detector\" {\n  method detect(Wheel: Axle) -> Result<Wheel, Error>\n}\n";
-
-#[specforge_test(
-    behavior = "link_derived_references",
-    verify = "the written tokens of a file include every name a derived field links"
-)]
-fn every_written_span_of_an_edge_is_a_token() {
-    for (source, make) in [
-        (SHAPES, derived_inputs as fn() -> GraphInputs),
-        (
-            "defaults behavior {\n  ports [Repo]\n}\n\nbehavior a \"A\" {\n}\n\nbehavior b \"B\" {\n}\n\nport Repo \"Repo\" {\n}\n",
-            defaults_inputs,
-        ),
-    ] {
-        let (graph, tokens) = find(source, make);
-        assert!(!graph.edges().is_empty(), "{source}");
-        for edge in graph.edges() {
-            for span in graph.written(edge) {
-                assert!(
-                    tokens
-                        .iter()
-                        .any(|t| t.target == edge.target && &t.span == span),
-                    "{edge:?} written at {span:?} is no token: {tokens:?}"
-                );
-            }
-        }
-        for token in tokens.iter().filter(|t| t.form == Form::Derived) {
-            let Holder::Block(holder) = token.holder else {
-                panic!("a derived token of a block: {token:?}");
-            };
-            assert!(
-                graph.edges_from(holder.as_str()).iter().any(|e| {
-                    e.target == token.target
-                        && e.label == token.field
-                        && graph.written(e).contains(&token.span)
-                }),
-                "{token:?} has no edge"
-            );
-        }
-    }
-}
 
 #[test]
 fn a_derived_name_of_another_kind_or_the_block_itself_is_no_token() {
@@ -264,4 +224,119 @@ fn every_edge_is_held_by_a_token() {
             }
         }
     }
+}
+
+#[specforge_test(
+    behavior = "build_in_memory_graph",
+    verify = "every edge is a token the graph's finder reads"
+)]
+fn a_list_item_is_a_token_at_the_item() {
+    let source =
+        "shape Wheel \"Wheel\" {\n  size number\n}\nshape Car \"Car\" {\n  parts [Wheel]\n}\n";
+    let (_, tokens) = find(source, derived_inputs);
+    assert_eq!(show(&tokens), ["Wheel Car parts Item 5:10-5:15"]);
+}
+
+#[test]
+fn a_name_written_twice_is_two_tokens() {
+    let source = "shape Wheel \"Wheel\" {\n  size number\n}\nshape Car \"Car\" {\n  parts [Wheel, Wheel]\n}\n";
+    let (graph, tokens) = find(source, derived_inputs);
+    assert_eq!(graph.edges_from("Car").len(), 1);
+    assert_eq!(
+        show(&tokens),
+        [
+            "Wheel Car parts Item 5:10-5:15",
+            "Wheel Car parts Item 5:17-5:22"
+        ]
+    );
+}
+
+/// The delta compares methods through their serialized form, which has no positions.
+#[test]
+fn a_methods_positions_are_not_serialized() {
+    let file = parse("port P {\n  method run(c: Config) -> Out\n}\n", "p.spec");
+    let method = &file.entities[0].methods[0];
+    assert!(method.params[0].ty_span.is_some());
+
+    let json = serde_json::to_value(method).unwrap().to_string();
+
+    assert!(
+        !json.contains("ty_span") && !json.contains("returns_span"),
+        "{json}"
+    );
+}
+
+#[specforge_test(
+    behavior = "link_derived_references",
+    verify = "the written tokens of a file include every name a derived field links"
+)]
+fn every_name_of_a_signature_is_a_token() {
+    let source = r#"
+shape Config "Config" {
+  root string
+}
+shape Project "Project" {
+  name string
+}
+shape Report "Report" {
+  ok boolean
+}
+iface Detector "Detector" {
+  method detect(config: Config) -> Result<Project, Error>
+  method report(items: Project[]) -> Report
+}
+"#;
+    let (_, tokens) = find(source, derived_inputs);
+    assert_eq!(
+        show(&tokens),
+        [
+            "Config Detector uses Derived 12:25-12:31",
+            "Project Detector uses Derived 12:43-12:50",
+            "Project Detector uses Derived 13:24-13:31",
+            "Report Detector uses Derived 13:38-13:44",
+        ]
+    );
+}
+
+#[test]
+fn a_parameters_name_is_no_token_and_its_type_is() {
+    let source = "shape Config \"Config\" {\n  root string\n}\niface X \"X\" {\n  method keep(Config: Config) -> Config\n}\n";
+    let (_, tokens) = find(source, derived_inputs);
+    assert_eq!(
+        show(&tokens),
+        [
+            "Config X uses Derived 5:23-5:29",
+            "Config X uses Derived 5:34-5:40"
+        ]
+    );
+}
+
+#[test]
+fn a_union_member_is_a_token_at_its_name() {
+    let source = "shape Wheel \"Wheel\" {\n  size number\n}\nshape Config \"Config\" {\n  root string\n}\n\
+shape Kind = Wheel | Config\nshape Holder \"Holder\" {\n  slot Wheel | Config\n}\n";
+    let (_, tokens) = find(source, derived_inputs);
+    assert_eq!(
+        show(&tokens),
+        [
+            "Wheel Kind parts Derived 7:14-7:19",
+            "Config Kind parts Derived 7:22-7:28",
+            "Wheel Holder parts Derived 9:8-9:13",
+            "Config Holder parts Derived 9:16-9:22",
+        ]
+    );
+}
+
+#[test]
+fn a_name_on_a_later_line_is_a_token_on_its_line() {
+    let source = "shape Config \"Config\" {\n  root string\n}\nshape Project \"Project\" {\n  name string\n}\n\
+iface X \"X\" {\n  method run() -> Result<\n    Config,\n    Project>\n}\n";
+    let (_, tokens) = find(source, derived_inputs);
+    assert_eq!(
+        show(&tokens),
+        [
+            "Config X uses Derived 9:5-9:11",
+            "Project X uses Derived 10:5-10:12"
+        ]
+    );
 }

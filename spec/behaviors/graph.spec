@@ -21,7 +21,7 @@ behavior build_in_memory_graph "Build In-Memory Graph" {
     one_node_per_entity    "Graph contains exactly one node per declared entity"
     one_edge_per_reference "Graph contains one edge per resolved reference"
     no_dangling_edges      "No dangling edges exist (every edge connects two existing nodes)"
-    edges_written          "every edge the linker makes records where each of its references is written"
+    edges_found            "every edge the linker makes is a token the graph's finder reads"
   }
   contract   """
     After resolution, the compiler MUST construct an in-memory directed
@@ -35,8 +35,6 @@ behavior build_in_memory_graph "Build In-Memory Graph" {
   verify unit "graph contains one edge per resolved reference"
   verify unit "edge types match relationship semantics"
   verify unit "every edge connects two existing nodes"
-  verify unit "an edge records the span of each reference it was linked from"
-  verify unit "an incremental build records what a cold build records"
   verify unit "every edge is a token the graph's finder reads"
   verify contract "Build In-Memory Graph: in-memory graph construction holds — resolution_complete, one_node_per_entity, one_edge_per_reference, no_dangling_edges"
   verify unit "W060 carries actionable suggestion"
@@ -104,7 +102,7 @@ behavior link_derived_references "Link Derived References" {
     field_type_names_linked       "every name in the entity's type-syntax field values that resolves to an entity of the field's target kind gets an edge labelled with the field"
     method_signature_names_linked "every name in the entity's method parameter and return types that resolves to an entity of the field's target kind gets an edge labelled with the field"
     unresolved_names_unlinked     "a primitive, a generic wrapper or an undeclared name creates no edge"
-    derived_names_written         "each derived edge records where every name it was derived from is written"
+    derived_names_found           "every name a derived edge is derived from is a token the graph's finder reads"
   }
   contract   """
     A field an extension registers MAY declare `derived_from`. The host
@@ -133,8 +131,8 @@ behavior link_derived_references "Link Derived References" {
     derive edges, from where and to which kind comes only from the fields
     extensions register. Derived edges join the graph after reference
     cycle detection, so a recursive type is not a reference cycle (W061).
-    Each such name is where the edge is written: navigation and rename read
-    it (ADR 0127).
+    Each such name is a token the graph's finder reads: navigation and rename
+    find it there (ADR 0176).
   """
   verify unit "a name in a type-syntax field value links through the derived field"
   verify unit "a name in a method parameter or return type links through the derived field"
@@ -145,7 +143,6 @@ behavior link_derived_references "Link Derived References" {
   verify unit "an entity naming itself creates no edge"
   verify unit "a recursive type derives no reference cycle"
   verify unit "a kind with no derived field derives no edge"
-  verify unit "a derived edge is written at each name it was derived from"
   verify unit "the written tokens of a file include every name a derived field links"
   verify integration "a field's derived_from reaches the graph from the extension's manifest"
 }

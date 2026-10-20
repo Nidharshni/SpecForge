@@ -240,6 +240,23 @@ impl GraphBuild {
         place(&mut self.graph, &declared, ids);
         let mut diagnostics = declared.diagnostics;
         diagnostics.extend(link_and_diagnose(&mut self.graph, &self.config));
+        #[cfg(debug_assertions)]
+        {
+            let unheld = unheld_edges(
+                &self.graph,
+                self.files.values().map(Arc::as_ref),
+                &self.config.inputs,
+            );
+            assert!(
+                unheld.is_empty(),
+                "SpecForge bug: edges no written token holds (source, target, field): {}",
+                unheld
+                    .iter()
+                    .map(|(source, target, field)| format!("({source}, {target}, {field})"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
         self.by_file = partition_by_file(&diagnostics);
         self.diagnostics = diagnostics;
     }
@@ -526,7 +543,8 @@ fn partition_by_file(diagnostics: &[Diagnostic]) -> HashMap<String, Vec<Diagnost
 /// The incremental graph is the cold one: every node's kind, file, position, title, fields and methods, and every
 /// edge. It is the graph delta's comparison plus positions (each node's file, line and column, and the spans in its
 /// expressions and methods): the delta ignores them by contract, and an incremental build that misplaces a node is
-/// wrong even when nothing changed (ADR 0032, round 7 amendment).
+/// wrong even when nothing changed (ADR 0032, round 7 amendment). Where names are written is not the graph's: the
+/// finder reads the build's own parses (ADR 0176).
 fn compare_graph_contents(incremental: &Graph, cold: &Graph) -> Result<(), String> {
     let node_sigs = |g: &Graph| -> BTreeMap<String, String> {
         g.nodes()
@@ -560,13 +578,6 @@ fn compare_graph_contents(incremental: &Graph, cold: &Graph) -> Result<(), Strin
             cold_nodes.get(id)
         ));
     }
-    let written = |g: &Graph| -> BTreeMap<delta::EdgeKey, Vec<SourceSpan>> {
-        g.edges()
-            .iter()
-            .map(|e| ((e.source, e.target, e.label), g.written(e).to_vec()))
-            .collect()
-    };
-    let (inc_at, cold_at) = (written(incremental), written(cold));
     let (inc, cold) = (delta::edge_keys(incremental), delta::edge_keys(cold));
     if let Some((s, t, l)) = inc.symmetric_difference(&cold).next() {
         let side = if inc.contains(&(*s, *t, *l)) {
@@ -578,18 +589,33 @@ fn compare_graph_contents(incremental: &Graph, cold: &Graph) -> Result<(), Strin
             "incremental/cold mismatch on edge {s} -{l}-> {t} ({side})"
         ));
     }
-    // Where each edge is written is part of the graph too (ADR 0127).
-    if let Some((s, t, l)) = inc_at
-        .keys()
-        .find(|key| inc_at.get(*key) != cold_at.get(*key))
-    {
-        return Err(format!(
-            "incremental/cold mismatch on where edge {s} -{l}-> {t} is written: incremental {:?}, cold {:?}",
-            inc_at.get(&(*s, *t, *l)),
-            cold_at.get(&(*s, *t, *l))
-        ));
-    }
     Ok(())
+}
+
+/// The edges no token of `files` holds (source, target, field): empty after every build, the finder reading each
+/// reference and derived name the linker links (ADR 0176). A token no edge matches is not checked: an E002 or W060
+/// loser's, or a reference that resolves to nothing, is a token and no edge, on purpose.
+#[cfg(any(debug_assertions, test))]
+fn unheld_edges<'a>(
+    graph: &Graph,
+    files: impl Iterator<Item = &'a SpecFile>,
+    inputs: &crate::GraphInputs,
+) -> Vec<(Sym, Sym, Sym)> {
+    let kind_of = |name: &str| graph.node(name).map(|n| n.kind.raw);
+    let held: HashSet<(Sym, Sym, Sym)> = files
+        .flat_map(|file| crate::written_tokens(file, inputs, kind_of))
+        .flat_map(|t| {
+            t.held_by
+                .into_iter()
+                .map(move |holder| (holder, t.target, t.field))
+        })
+        .collect();
+    graph
+        .edges()
+        .iter()
+        .map(|e| (e.source, e.target, e.label))
+        .filter(|key| !held.contains(key))
+        .collect()
 }
 
 #[cfg(test)]
@@ -635,6 +661,31 @@ mod tests {
         assert!(
             err.contains("'other'") && err.contains("Stale Title"),
             "{err}"
+        );
+    }
+
+    #[test]
+    fn an_edge_no_token_holds_is_named() {
+        let mut build = build(&[(
+            "a.spec",
+            "behavior alpha \"A\" { contract \"x\" }\nbehavior ghost \"G\" { contract \"y\" }",
+        )]);
+        let held = |build: &GraphBuild| {
+            unheld_edges(
+                &build.graph,
+                build.files.values().map(Arc::as_ref),
+                &build.config.inputs,
+            )
+        };
+        assert!(held(&build).is_empty());
+        build.graph.add_edge(crate::Edge {
+            source: Sym::new("alpha"),
+            target: Sym::new("ghost"),
+            label: Sym::new("invariants"),
+        });
+        assert_eq!(
+            held(&build),
+            [(Sym::new("alpha"), Sym::new("ghost"), Sym::new("invariants"))]
         );
     }
 

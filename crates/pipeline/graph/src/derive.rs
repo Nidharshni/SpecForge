@@ -5,8 +5,8 @@
 //! method signatures, as if the entity had listed them in the field. The
 //! core names no kind: which kinds derive which edges comes only from
 //! [`DerivedReference`]s, built from the field registry. Each name is read
-//! with the position it is written at, so the edge records where (`Graph::written`,
-//! ADR 0127).
+//! with the position it is written at, so the graph's finder reports it
+//! (`written_tokens`, ADR 0176).
 
 use crate::{Edge, Graph, Reading};
 use specforge_common::{SourceSpan, Sym};
@@ -168,7 +168,7 @@ impl Graph {
         derived: &[DerivedReference],
         forms: &crate::FieldForms,
     ) {
-        let mut edges: Vec<(Edge, Option<SourceSpan>)> = Vec::new();
+        let mut edges: Vec<Edge> = Vec::new();
         for reference in derived {
             // The kind a name must resolve to for an edge: the field's declared target.
             let Some(target) = forms.target(&reference.source_kind, &reference.field) else {
@@ -178,7 +178,7 @@ impl Graph {
                 let kind = node.kind.raw.as_str();
                 let written =
                     type_expressions(reference, forms, kind, node.fields.entries(), &node.methods);
-                for (name, at) in written.into_iter().flat_map(names) {
+                for (name, _) in written.into_iter().flat_map(names) {
                     if name == node.id.raw.as_str() {
                         continue;
                     }
@@ -191,13 +191,13 @@ impl Graph {
                             target: Sym::new(name),
                             label: Sym::new(&reference.field),
                         };
-                        edges.push((edge, at));
+                        edges.push(edge);
                     }
                 }
             }
         }
-        for (edge, at) in edges {
-            self.add_written(edge, at.as_ref());
+        for edge in edges {
+            self.add_edge(edge);
         }
     }
 }
