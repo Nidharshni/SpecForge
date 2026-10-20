@@ -368,24 +368,7 @@ fn placeholders(view: &ProjectView<'_>, kind: &str) -> BTreeMap<String, Input> {
 /// the refusal when the plan is refused (an ID `validate_id` refuses, a taken ID, E080, no project root, a
 /// configuration that blocks rewrites) or changes nothing.
 fn typed(navigator: &Navigator<'_>, edit: Edit) -> Result<Vec<TextEdit>, Refusal<EditField>> {
-    let plan = edit::plan(navigator.view(), std::slice::from_ref(&edit))?;
-    let mut edits = Vec::new();
-    for (key, changes) in plan.edits() {
-        let file = Sym::new(key);
-        // The plan read each file's compiled text (`Planner::text`): the text navigation's spans are positions in.
-        let text = navigator.text(file).ok_or_else(|| {
-            OpError::new(
-                OpErrorKind::PreconditionFailed,
-                "text_unknown",
-                format!("the text of {key} is not known"),
-            )
-            .about(EditField::File)
-        })?;
-        edits.extend(changes.into_iter().map(|change| TextEdit {
-            span: text.span(file, change.range.start, change.range.end),
-            new_text: change.new_text,
-        }));
-    }
+    let edits = edit::plan(navigator.view(), std::slice::from_ref(&edit))?.text_edits();
     if edits.is_empty() {
         return Err(OpError::new(
             OpErrorKind::InvalidInput,

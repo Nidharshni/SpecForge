@@ -15,11 +15,12 @@ pub use outcome::{EditDocument, Edited, run};
 
 use crate::authoring::format::{Configs, Place};
 use crate::change::ProjectChange;
+use crate::read::navigate::{SourceText, TextEdit};
 use crate::view::ProjectView;
 use crate::{Caller, OpError, OpErrorKind, Refusal, Writes};
 use serde::{Deserialize, Serialize};
-use specforge_common::DiagnosticList;
 use specforge_common::shape::{Definitions, Shape};
+use specforge_common::{DiagnosticList, Sym};
 use specforge_formatter::FormatConfig;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -217,19 +218,25 @@ impl EditPlan {
             .collect()
     }
 
-    /// Each file the plan changes, by path relative to the spec root, and the edits that turn the text it was planned
-    /// on into the text it will hold: byte ranges of the planned-on text, in order, none overlapping (the formatter's
-    /// minimal diff, ADR 0021 D8). A new file is one insertion at 0.
-    pub fn edits(&self) -> Vec<(&str, Vec<crate::authoring::format::Edit>)> {
-        self.files
-            .iter()
-            .map(|(key, (before, after))| {
-                (
-                    key.as_str(),
-                    crate::authoring::format::between(before.as_deref().unwrap_or(""), after),
-                )
-            })
-            .collect()
+    /// The edits that turn each file's planned-on text into the text it will hold, as navigation's `TextEdit`s:
+    /// spans in the planned-on text (a new file's: one insertion at its start), each file's in order, none
+    /// overlapping (the formatter's minimal diff, ADR 0021 D8), files in key order.
+    pub fn text_edits(&self) -> Vec<TextEdit> {
+        let mut edits = Vec::new();
+        for (key, (before, after)) in &self.files {
+            let before = before.clone().unwrap_or_else(|| Arc::from(""));
+            let text = SourceText::new(Arc::clone(&before));
+            let file = Sym::new(key);
+            edits.extend(
+                crate::authoring::format::between(&before, after)
+                    .into_iter()
+                    .map(|change| TextEdit {
+                        span: text.span(file, change.range.start, change.range.end),
+                        new_text: change.new_text,
+                    }),
+            );
+        }
+        edits
     }
 }
 
