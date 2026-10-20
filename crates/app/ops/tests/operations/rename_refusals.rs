@@ -65,3 +65,24 @@ fn a_rename_is_refused_while_a_source_that_spells_the_id_does_not_parse() {
     let plan = rename::plan(&p.navigator(), "session_limit", "session_cap").unwrap();
     assert_eq!(plan.edits.len(), 1);
 }
+
+#[test]
+#[ignore = "flipped by the fix of the spec block refusal"]
+fn a_spec_blocks_name_is_not_renamed() {
+    let p = crate::navigate::compile(
+        crate::navigate::SOFTWARE,
+        &[
+            ("main.spec", "spec \"specforge\" {\n}\n"),
+            ("limit.spec", LIMIT),
+        ],
+    );
+    let refused = rename::plan(&p.navigator(), "specforge", "specforge_two").unwrap_err();
+    assert_eq!(refused.error.code, "not_renameable");
+    assert_eq!(refused.error.kind, OpErrorKind::InvalidInput);
+    assert_eq!(refused.subject, Some(RenameField::OldId));
+    let message = &refused.error.message;
+    assert!(
+        message.contains("main.spec") && message.contains("string"),
+        "{message}"
+    );
+}
