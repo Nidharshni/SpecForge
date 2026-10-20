@@ -130,7 +130,7 @@ pub fn unset(site: &Site<'_>, text: &str, field: &str) -> Result<String, Refusal
                 return Ok(Change::Unchanged);
             };
             if matches!(&outer.value, FieldValue::Block(m) if m.entries().len() == 1) {
-                return Ok(Change::Dropped);
+                return Ok(Change::Emptied);
             }
             let span = entry
                 .value_span
@@ -140,7 +140,7 @@ pub fn unset(site: &Site<'_>, text: &str, field: &str) -> Result<String, Refusal
             Ok(Change::Changed)
         }),
         FieldPath::Field { name, .. } => {
-            defaults::change(site, text, name, |_, _| Ok(Change::Dropped))
+            defaults::change(site, text, name, |_, _| Ok(Change::Emptied))
         }
     }
 }
@@ -268,7 +268,7 @@ pub fn link(
             // A single `reference` field: unlink removes it when it names the target.
             return Ok(match own.as_ref().map(|e| &e.value) {
                 Some(FieldValue::Identifier(t) | FieldValue::String(t)) if t == target => {
-                    Change::Dropped
+                    Change::Emptied
                 }
                 _ => Change::Unchanged,
             });

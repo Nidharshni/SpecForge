@@ -45,7 +45,9 @@ behavior edit_entity_field "Edit an Entity Field" {
     project's format configuration past its key, and inserts an absent field
     at its rank (one-line values, then
     block fields, then triple-quoted text, in the kind's declared order). An
-    unset edit removes the field and the comment lines directly above it. A
+    unset edit leaves the field holding none: it removes the field and the comment lines directly above it, or, over
+    a file default, writes `[]` for a list and `{}` for a block field; a field of one value with a default cannot
+    hold none and is refused. A second unset changes nothing. A
     dotted `field.entry` path edits one entry of a block field the kind
     declares; its field is refused as any field is, a field that is not a declared block field, or a path whose
     parts are not each one identifier, is refused not_editable, and so is a path into a block field the entity
@@ -60,6 +62,7 @@ behavior edit_entity_field "Edit an Entity Field" {
   verify unit "a multi-line value is laid out with the project's format configuration"
   verify unit "set of an absent field inserts it at its rank"
   verify unit "unset removes the field and the comment above it"
+  verify unit "unset leaves a field holding none, once"
   verify unit "set refuses a field the kind does not declare"
   verify unit "set refuses the other side of a relation naming its owning field"
   verify unit "set of a nested entry edits one line of the block field"
@@ -89,7 +92,7 @@ behavior edit_entity_link "Edit an Entity Reference List" {
   verify unit "an own field equal to the default is removed"
   verify unit "link of a target already there writes nothing"
   verify unit "a link after new starts from the file's default"
-  verify unit "a link after unset starts from the file's default"
+  verify unit "a link after unset starts from none"
   verify unit "link and unlink read a list written as one value as its one item"
   verify unit "link and unlink refuse a field.entry path as an entry of a block field"
 }

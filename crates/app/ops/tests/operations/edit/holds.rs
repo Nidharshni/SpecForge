@@ -197,8 +197,10 @@ fn every_verb_leaves_a_field_holding_what_it_says() {
     assert!(bad.is_empty(), "{}", bad.join("\n"));
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test_macros::test(
+    behavior = "edit_entity_field",
+    verify = "unset leaves a field holding none, once"
+)]
 fn unset_leaves_a_field_holding_none_once() {
     let c = compile(SOFTWARE_FORMAL, &[("g.spec", HOLDS)]);
     let rows: Vec<Row<'_>> = vec![

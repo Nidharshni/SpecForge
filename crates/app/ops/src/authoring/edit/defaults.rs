@@ -22,9 +22,6 @@ pub enum Change {
     Changed,
     /// The field is to hold nothing: its last item or entry went, or it was unset. The verb did not touch the block.
     Emptied,
-    /// The block's own field is to be removed, so its default applies again; on a field the block only inherits,
-    /// read as `Emptied`. The verb did not touch the block.
-    Dropped,
 }
 
 /// The file's defaults as the graph build applies them (ADR 0149), read from `file`: the text being planned, as the
@@ -41,8 +38,8 @@ fn of<'f>(site: &Site<'_>, file: &'f SpecFile) -> FileDefaults<'f> {
 /// - **What `verb` gets.** The block, laid out, with the copy already in it, and the block's own entry for `field`
 ///   (cloned: the verb may mutate the block). `None` only when the block does not write the field and its file gives
 ///   no default the module can copy (no default, or a default of one value, which no verb needs to read).
-/// - **What `verb` returns.** `Changed` after writing into the block; `Unchanged`, `Emptied` and `Dropped` without
-///   touching it.
+/// - **What `verb` returns.** `Changed` after writing into the block; `Unchanged` and `Emptied` without touching
+///   it.
 /// - **The result.** Only `site`'s block changes; it is canonical; no own field of it restates its default; a field
 ///   emptied over a default holds none (`[]` for a list, `{}` for a block field); the original `text` comes back
 ///   byte for byte when the block's canonical text did not change.
@@ -57,8 +54,7 @@ pub fn change(
     let mut block = Block::open(site, text)?;
     let before = block.text();
     let default = of(site, block.file()).entry(site.kind, field).cloned();
-    let written = block.entry(field).is_some();
-    if !written
+    if block.entry(field).is_none()
         && let Some(default) = &default
         && let Some(copy) = copy(site, &block, field, default)
     {
@@ -69,11 +65,7 @@ pub fn change(
     let after = match verb(&mut block, own)? {
         Change::Unchanged => return Ok(text.to_string()),
         Change::Changed => block.finish(site)?,
-        Change::Dropped if written => {
-            remove_own(&mut block, field);
-            block.finish(site)?
-        }
-        Change::Emptied | Change::Dropped => emptied(site, block, field, default.is_some())?,
+        Change::Emptied => emptied(site, block, field, default.is_some())?,
     };
     let after = without_repeat(site, &after, field)?;
     Ok(if after == before {

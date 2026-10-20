@@ -50,7 +50,8 @@ pub enum Edit {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         annotations: Option<Vec<String>>,
     },
-    /// `field` (or `field.entry`) is removed. No change when it is absent.
+    /// `field` (or `field.entry`) holds none afterwards: removed, or, over a file default, written `[]` (a list) or
+    /// `{}` (a block field); refused for a field of one value with a default. A second unset changes nothing.
     Unset { entity_id: String, field: String },
     /// The header's title becomes `title`.
     Retitle { entity_id: String, title: String },

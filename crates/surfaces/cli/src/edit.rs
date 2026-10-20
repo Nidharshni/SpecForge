@@ -158,7 +158,8 @@ pub(crate) struct UnsetArgs {
     /// The entity to change
     entity: String,
 
-    /// The field to remove, or `field.entry` for one entry of a block field
+    /// The field to clear, or `field.entry` for one entry of a block field; over a file default it is written as none
+    /// ([] or {})
     field: String,
 
     /// Print the diff and write nothing
