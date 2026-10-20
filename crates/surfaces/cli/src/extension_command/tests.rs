@@ -334,7 +334,6 @@ fn a_count_below_its_minimum_is_refused_and_a_negative_integer_is_a_value() {
 }
 
 #[test]
-#[ignore = "flipped by the fix of the declared-arg lookup"]
 fn a_usage_error_names_an_arg_as_it_is_declared() {
     let mut c = contribution();
     c.args.push(CommandArgDescriptor {
@@ -358,6 +357,14 @@ fn a_usage_error_names_an_arg_as_it_is_declared() {
     assert_eq!(
         usage_error(&refused, Some(&command))["message"],
         "missing required args 'milestone', 'projectId'"
+    );
+    let mut c = contribution();
+    c.args
+        .push(arg("with-all", CommandArgType::Bool, false, None));
+    let command = ExtensionCommand::new("@acme/x", "x", &c);
+    assert_eq!(
+        shown_arg(&command, "--with-all").map(|a| a.name.as_str()),
+        Some("with-all")
     );
 }
 
