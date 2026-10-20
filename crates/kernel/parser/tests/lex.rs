@@ -2,8 +2,8 @@
 //! checked against tree-sitter's grammar over the repository's spec.
 
 use specforge_parser::lex::{
-    Lexeme, LexemeKind, form_starts, is_entity_id, is_ref_id_prefix, lex, line_indent,
-    runs_into_text, starts_top_level_form,
+    Lexeme, LexemeKind, form_starts, is_entity_id, is_identifier, is_ref_id_prefix, lex,
+    line_indent, runs_into_text, starts_top_level_form,
 };
 use specforge_parser::parse_incremental;
 use specforge_test_macros::test as specforge_test;
@@ -677,5 +677,23 @@ fn an_entity_id_is_an_identifier_or_a_scheme_ref_id() {
         "", "1abc", "a.b", "a.b-c:d", "a:b", "a b", "x.y:", "x.y:a b", "x.y:a\"b", "émile", "!@#$",
     ] {
         assert!(!is_entity_id(text), "{text:?}");
+    }
+}
+
+#[test]
+fn an_identifier_is_the_grammars_identifier_whole() {
+    for id in ["ab", "_x", "a1", "A_B9"] {
+        assert!(is_identifier(id), "{id}");
+    }
+    for text in [
+        "",
+        "1abc",
+        "a-b",
+        "a.b",
+        "jira.issue:ABC-123",
+        "émile",
+        "a b",
+    ] {
+        assert!(!is_identifier(text), "{text:?}");
     }
 }

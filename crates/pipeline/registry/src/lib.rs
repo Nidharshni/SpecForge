@@ -44,6 +44,9 @@ pub use entity::{
     ObligationRecord, ParamRecord, RuleInput,
 };
 
+// --- E014: the shortest and longest entity IDs ---
+pub use checks::ID_LENGTH;
+
 // --- The entity snapshot: every entity of one built graph as the checks read it (ADR 0019, ADR 0115) ---
 pub use snapshot::{EntitySnapshot, Standing};
 

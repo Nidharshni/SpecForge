@@ -158,7 +158,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     // The starter declares `spec "<id>"`: an ID outside the identifier
     // contract would fail its first check (E014).
     let spec_id = sanitize_entity_id(&name);
-    if !(2..=60).contains(&spec_id.chars().count()) {
+    if !specforge_registry::ID_LENGTH.contains(&spec_id.chars().count()) {
         return Err(invalid_name(
             &name,
             "it must be 2-60 characters, as the starter's spec ID must",

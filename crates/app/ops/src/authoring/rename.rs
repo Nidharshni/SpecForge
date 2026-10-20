@@ -13,7 +13,8 @@ use crate::view::EntityField;
 use crate::{Caller, OpError, OpErrorKind, Refusal, Wrote};
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_parser::lex::lex;
+use specforge_parser::lex::{is_identifier, lex};
+use specforge_registry::ID_LENGTH;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -33,19 +34,11 @@ pub const INVALID_ID: &str = "invalid_name";
 pub const TAKEN: &str = "entity_exists";
 /// A source that does not parse spells the ID: the rename cannot see its references.
 pub const UNPARSED: &str = "source_unparsed";
-/// The shortest and longest entity IDs (E014).
-pub const ID_LENGTH: std::ops::RangeInclusive<usize> = 2..=60;
-
-/// Whether `id` is a legal entity ID: what the grammar's identifier accepts
-/// (an ASCII letter or `_`, then letters, digits and `_`) within E014's
-/// 2-60 characters, and no word `kinds` reserves (E013).
+/// Whether `id` is a legal entity ID: the grammar's identifier
+/// ([`is_identifier`]) within E014's length ([`ID_LENGTH`]), and no word
+/// `kinds` reserves (E013).
 pub fn validate_id(id: &str, kinds: &specforge_registry::KindRegistry) -> Result<(), OpError> {
-    let mut chars = id.chars();
-    let starts = chars
-        .next()
-        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_');
-    let rest = chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
-    if !(starts && rest && ID_LENGTH.contains(&id.len())) {
+    if !(is_identifier(id) && ID_LENGTH.contains(&id.len())) {
         return Err(OpError::new(
             OpErrorKind::InvalidInput,
             INVALID_ID,

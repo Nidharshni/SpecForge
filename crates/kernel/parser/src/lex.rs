@@ -327,11 +327,15 @@ pub fn is_ref_id_prefix(text: &str) -> bool {
     }
 }
 
+/// Whether `text` is the grammar's `identifier` (`[a-zA-Z_][a-zA-Z0-9_]*`), whole.
+pub fn is_identifier(text: &str) -> bool {
+    ascii_ident_end(text.as_bytes(), 0) == Some(text.len())
+}
+
 /// Whether `text` is one entity ID as the grammar reads one, whole: an `identifier`
-/// (`[a-zA-Z_][a-zA-Z0-9_]*`) or a `scheme_ref_id` (`scheme.kind:id`, `gh.issue:42`).
+/// ([`is_identifier`]) or a `scheme_ref_id` (`scheme.kind:id`, `gh.issue:42`).
 pub fn is_entity_id(text: &str) -> bool {
-    let bytes = text.as_bytes();
-    [ascii_ident_end(bytes, 0), ref_id_end(bytes, 0)].contains(&Some(bytes.len()))
+    is_identifier(text) || ref_id_end(text.as_bytes(), 0) == Some(text.len())
 }
 
 /// The end of the `"…"` string opening at `open`, and whether the grammar
