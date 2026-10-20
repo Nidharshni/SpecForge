@@ -147,6 +147,7 @@ behavior link_derived_references "Link Derived References" {
   verify unit "a kind with no derived field derives no edge"
   verify unit "the written tokens of a file include every name a derived field links"
   verify unit "the written tokens of a file read a list written as one value as a list"
+  verify unit "the linker and the finder read every block alike"
   verify integration "a field's derived_from reaches the graph from the extension's manifest"
 }
 
