@@ -16,7 +16,7 @@ use crate::{OpError, OpErrorKind};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{Code, Diagnostic, DiagnosticList, codes};
-use specforge_package::{PackageName, Version};
+use specforge_package::{DeclaredPackage, PackageName, Version};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 
 /// The diagnostic a registry operation reports when no registry is
@@ -208,17 +208,6 @@ pub enum Acceptance {
     Repinned,
 }
 
-/// A package `publish` hands the registry: a scoped package name and a full
-/// version (both checked by ops, E072), the binary, and the declaration read
-/// from it, which the registry stores as the package's manifest (ADR 0012).
-#[derive(Debug, Clone, Copy)]
-pub struct Upload<'a> {
-    pub name: &'a PackageName,
-    pub version: &'a Version,
-    pub wasm: &'a [u8],
-    pub declaration: &'a ExtensionDeclaration,
-}
-
 /// What a registry answered a publish with.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Published {
@@ -369,8 +358,8 @@ pub trait Registry {
     /// with R-TRUST-006 when the pins can't be saved or the store can't be read, and nothing is
     /// saved then. Each pin that replaces another is reported as W156 by an adapter that reports.
     fn pin(&self, pins: &[KeyPin]) -> Result<(), OpError>;
-    /// Publish `package` to the registry that serves its name (the one
-    /// `fetch` asks for it), signed with the user's publisher key and
+    /// Publish `package` (its declaration is the manifest, ADR 0012) with its binary `wasm` to the
+    /// registry that serves its name (the one `fetch` asks for it), signed with the user's publisher key and
     /// authenticated as the user is to that registry.
     ///
     /// Refused before any request, in this order:
@@ -382,7 +371,7 @@ pub trait Registry {
     ///
     /// Then the registry's own refusals: R007 for a version it holds,
     /// R001/R002 for a credential it refuses.
-    fn publish(&self, package: &Upload<'_>) -> Result<Published, OpError>;
+    fn publish(&self, package: &DeclaredPackage<'_>, wasm: &[u8]) -> Result<Published, OpError>;
     /// The latest version of each package whose name, description or keywords contain `query`, in every
     /// configured registry: one entry per name and version, from the first registry `specforge.json` lists
     /// that has it, sorted by name, then version. `contributes`: only packages whose declaration declares
@@ -419,7 +408,7 @@ impl Registry for Unconfigured {
         Err(no_registry(self.0))
     }
 
-    fn publish(&self, _: &Upload<'_>) -> Result<Published, OpError> {
+    fn publish(&self, _: &DeclaredPackage<'_>, _: &[u8]) -> Result<Published, OpError> {
         Err(no_registry(self.0))
     }
 
@@ -480,16 +469,10 @@ mod tests {
 
     #[test]
     fn an_unconfigured_registry_refuses_a_publish_with_e063() {
-        let name = PackageName::parse("@acme/x").unwrap();
-        let version = Version::new(1, 0, 0);
         let declaration = testing::declaration("@acme/x", "1.0.0", &[]);
+        let package = DeclaredPackage::of(&declaration).unwrap();
         let error = Unconfigured("publish")
-            .publish(&Upload {
-                name: &name,
-                version: &version,
-                wasm: b"\0asm",
-                declaration: &declaration,
-            })
+            .publish(&package, b"\0asm")
             .unwrap_err();
         assert!(error.is(NO_REGISTRY), "{error:?}");
         assert!(error.message.contains("`publish`"), "{error:?}");

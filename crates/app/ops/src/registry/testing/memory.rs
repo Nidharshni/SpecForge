@@ -5,12 +5,12 @@ use std::sync::Mutex;
 
 use specforge_common::codes;
 use specforge_installed::hex_sha256;
-use specforge_package::{PackageName, Version, VersionRequirement};
+use specforge_package::{DeclaredPackage, PackageName, Version, VersionRequirement};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 
 use super::super::{
     Found, KeyPin, Manifest, Package, Published as Receipt, Publisher, Registry, Searched,
-    TrustPolicy, Upload,
+    TrustPolicy,
 };
 use crate::OpError;
 use crate::asking::{ExpectedFrom, Question};
@@ -377,32 +377,31 @@ impl Registry for MemoryRegistry {
     /// "Version {version} already exists for package {name}." (suggestion "Bump the version number
     /// before publishing."). The receipt names registry and key `"in-memory"` and the url
     /// `memory://{name}/{version}`; no key is created.
-    fn publish(&self, package: &Upload<'_>) -> Result<Receipt, OpError> {
+    fn publish(&self, package: &DeclaredPackage<'_>, wasm: &[u8]) -> Result<Receipt, OpError> {
         let mut held = self.held.lock().unwrap();
         if held
             .iter()
-            .any(|p| p.name() == *package.name && p.version() == *package.version)
+            .any(|p| p.name() == *package.name() && p.version() == *package.version())
         {
             return Err(OpError::coded(
                 crate::OpErrorKind::Conflict,
                 codes::R007,
                 format!(
                     "Version {} already exists for package {}.",
-                    package.version, package.name
+                    package.version(),
+                    package.name()
                 ),
             )
             .with_suggestion("Bump the version number before publishing."));
         }
-        held.push(
-            Published::new(package.wasm, package.declaration.clone()).signed_by(IN_MEMORY_KEY),
-        );
+        held.push(Published::new(wasm, package.declaration().clone()).signed_by(IN_MEMORY_KEY));
         self.accepted
             .lock()
             .unwrap()
-            .push((package.name.clone(), package.version.clone()));
+            .push((package.name().clone(), package.version().clone()));
         Ok(Receipt {
             registry: IN_MEMORY_KEY.to_string(),
-            url: format!("memory://{}/{}", package.name, package.version),
+            url: format!("memory://{}/{}", package.name(), package.version()),
             key_id: IN_MEMORY_KEY.to_string(),
             key_created: false,
         })

@@ -7,13 +7,13 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{Diagnostic, DiagnosticList, Severity, codes};
-use specforge_package::{PackageName, Version};
+use specforge_package::{DeclaredPackage, PackageName, Version};
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_wasm::WasmRuntime;
 use specforge_wasm::protocol::Loaded;
 
 use super::candidate::LocalComponent;
-use crate::registry::{Published, Registry, Upload};
+use crate::registry::{Published, Registry};
 use crate::{Containment, OpError, OpErrorKind};
 
 /// What a publish found and how it ended. Its warnings are reported whatever
@@ -113,16 +113,16 @@ fn run(
         .cloned()
         .collect();
     refuse_errors(&declaration, &diagnostics)?;
-    let (name, version) = super::candidate::registry_identity(&declaration)?;
-    let published = registry.publish(&Upload {
-        name: &name,
-        version: &version,
-        wasm: &wasm,
-        declaration: &declaration,
+    let package = DeclaredPackage::of(&declaration).map_err(|why| {
+        OpError::of(
+            OpErrorKind::InvalidInput,
+            specforge_common::package::invalid(&why),
+        )
     })?;
+    let published = registry.publish(&package, &wasm)?;
     Ok(PublishOutcome {
-        name,
-        version,
+        name: package.name().clone(),
+        version: package.version().clone(),
         size_bytes: wasm.len(),
         published,
     })

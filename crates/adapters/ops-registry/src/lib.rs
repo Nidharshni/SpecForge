@@ -15,11 +15,11 @@ use specforge_ops::asking::{ExpectedFrom, Question};
 use specforge_ops::registry::{
     Found, KeyPin, METADATA_MISMATCH, Manifest, NO_REGISTRY, NO_REGISTRY_FOR_NAME,
     NOT_AUTHENTICATED, Package, Published, Publisher, Registry, Searched, TrustPolicy,
-    UNREADABLE_MANIFEST, UNUSABLE_SIGNING_KEY, Upload, no_registry,
+    UNREADABLE_MANIFEST, UNUSABLE_SIGNING_KEY, no_registry,
 };
 use specforge_ops::{OpError, OpErrorKind};
-use specforge_package::PackageName;
 use specforge_package::Version;
+use specforge_package::{DeclaredPackage, PackageName};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 use specforge_registry_client::credentials::{read_credentials, user_dir};
 use specforge_registry_client::signing::load_or_create_signing_key_at;
@@ -499,13 +499,13 @@ impl Registry for ConfiguredRegistry {
         })
     }
 
-    fn publish(&self, package: &Upload<'_>) -> Result<Published, OpError> {
-        let registry = self.registry_for(package.name)?; // E063, E067, R-OPS-001
+    fn publish(&self, package: &DeclaredPackage<'_>, wasm: &[u8]) -> Result<Published, OpError> {
+        let registry = self.registry_for(package.name())?; // E063, E067, R-OPS-001
         let credential = self.credential_for(registry)?; // R001, R012, R-AUTH-020/021
         let (key, key_created) = self.signing_key()?; // E074
         let url = publish_to_registry(
-            package.wasm,
-            package.declaration,
+            wasm,
+            package.declaration(),
             registry,
             Some(&credential),
             &*self.client,

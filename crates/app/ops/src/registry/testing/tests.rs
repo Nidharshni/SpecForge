@@ -1,10 +1,10 @@
-use super::super::{KeyPin, Publisher, Registry, TrustPolicy, Upload};
+use super::super::{KeyPin, Publisher, Registry, TrustPolicy};
 use super::contract::refuse;
 use super::*;
 use crate::asking::Asking;
 use specforge_common::codes;
 use specforge_installed::hex_sha256;
-use specforge_package::{PackageName, Version};
+use specforge_package::{DeclaredPackage, PackageName, Version};
 use specforge_protocol_types::DeclaredCategory;
 
 #[specforge_test_macros::test(port = "Registry", verify = "Registry contract is satisfied")]
@@ -93,12 +93,7 @@ fn a_published_version_is_listed_served_and_recorded() {
     let version = Version::new(1, 0, 0);
     let declaration = declaration("@acme/tool", "1.0.0", &[]);
     let receipt = registry
-        .publish(&Upload {
-            name: &name,
-            version: &version,
-            wasm: b"\0asm",
-            declaration: &declaration,
-        })
+        .publish(&DeclaredPackage::of(&declaration).unwrap(), b"\0asm")
         .unwrap();
     assert_eq!(receipt.registry, IN_MEMORY_KEY);
     assert_eq!(receipt.url, "memory://@acme/tool/1.0.0");
@@ -235,17 +230,10 @@ fn it_refuses_every_pin_when_told_to() {
 #[test]
 fn publishing_twice_is_r007() {
     let registry = MemoryRegistry::new();
-    let name = PackageName::parse("@acme/tool").unwrap();
-    let version = Version::new(1, 0, 0);
     let declaration = declaration("@acme/tool", "1.0.0", &[]);
-    let upload = Upload {
-        name: &name,
-        version: &version,
-        wasm: b"\0asm",
-        declaration: &declaration,
-    };
-    registry.publish(&upload).unwrap();
-    let error = registry.publish(&upload).unwrap_err();
+    let package = DeclaredPackage::of(&declaration).unwrap();
+    registry.publish(&package, b"\0asm").unwrap();
+    let error = registry.publish(&package, b"\0asm").unwrap_err();
     assert!(error.is(super::super::ALREADY_PUBLISHED), "{error:?}");
     assert_eq!(error.kind, crate::OpErrorKind::Conflict);
     assert_eq!(registry.accepted_publishes().len(), 1);

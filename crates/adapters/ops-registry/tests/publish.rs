@@ -9,10 +9,9 @@
 use specforge_ops::OpErrorKind;
 use specforge_ops::asking::Asking;
 use specforge_ops::registry::testing::declaration;
-use specforge_ops::registry::{Registry, TrustPolicy, Upload};
+use specforge_ops::registry::{Registry, TrustPolicy};
 use specforge_ops_registry::{ConfiguredRegistry, User};
-use specforge_package::PackageName;
-use specforge_package::Version;
+use specforge_package::DeclaredPackage;
 use specforge_project::testing::TestProject;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry_client::credentials::{CredentialEntry, CredentialStore};
@@ -72,29 +71,23 @@ impl World {
     }
 }
 
+/// The binary every publish here uploads.
+const WASM: &[u8] = b"\0asm publish test";
+
 /// A package to publish.
 struct Pkg {
-    name: PackageName,
-    version: Version,
     declaration: ExtensionDeclaration,
 }
 
 fn pkg(name: &str, version: &str) -> Pkg {
     Pkg {
-        name: PackageName::parse(name).unwrap(),
-        version: Version::parse(version).unwrap(),
         declaration: declaration(name, version, &[]),
     }
 }
 
 impl Pkg {
-    fn upload(&self) -> Upload<'_> {
-        Upload {
-            name: &self.name,
-            version: &self.version,
-            wasm: b"\0asm publish test",
-            declaration: &self.declaration,
-        }
+    fn package(&self) -> DeclaredPackage<'_> {
+        DeclaredPackage::of(&self.declaration).unwrap()
     }
 }
 
@@ -110,7 +103,7 @@ fn the_adapter_refuses_before_any_request_in_this_order() {
     let error = ConfiguredRegistry::for_project(&empty.project_root(), "publish")
         .as_user(User::at(home.path(), Some("t".into())))
         .with_client(client.clone())
-        .publish(&pkg("@acme/x", "1.0.0").upload())
+        .publish(&pkg("@acme/x", "1.0.0").package(), WASM)
         .unwrap_err();
     assert!(
         error.is(specforge_ops::registry::NO_REGISTRY),
@@ -122,7 +115,7 @@ fn the_adapter_refuses_before_any_request_in_this_order() {
     let world = World::acme();
     let error = world
         .registry(Some("t"))
-        .publish(&pkg("@other/x", "1.0.0").upload())
+        .publish(&pkg("@other/x", "1.0.0").package(), WASM)
         .unwrap_err();
     assert_eq!(error.code, "R-OPS-001", "2: {error:?}");
     assert!(world.client.calls().is_empty());
@@ -131,7 +124,7 @@ fn the_adapter_refuses_before_any_request_in_this_order() {
     // 3. acme serves it, there is no credential: R001, naming the registry and how to log in.
     let error = world
         .registry(None)
-        .publish(&pkg("@acme/x", "1.0.0").upload())
+        .publish(&pkg("@acme/x", "1.0.0").package(), WASM)
         .unwrap_err();
     assert_eq!(error.code, "R001", "3: {error:?}");
     assert_eq!(error.kind, OpErrorKind::PreconditionFailed, "3: {error:?}");
@@ -152,7 +145,7 @@ fn the_adapter_refuses_before_any_request_in_this_order() {
     std::fs::write(world.project.home().join("credentials.json"), "{").unwrap();
     let error = world
         .registry(None)
-        .publish(&pkg("@acme/x", "1.0.0").upload())
+        .publish(&pkg("@acme/x", "1.0.0").package(), WASM)
         .unwrap_err();
     assert_eq!(error.code, "R012", "4: {error:?}");
     assert!(world.client.calls().is_empty());
@@ -162,7 +155,7 @@ fn the_adapter_refuses_before_any_request_in_this_order() {
     world.store_credential("acme", "stored", Some("2000-01-01T00:00:00Z"));
     let error = world
         .registry(None)
-        .publish(&pkg("@acme/x", "1.0.0").upload())
+        .publish(&pkg("@acme/x", "1.0.0").package(), WASM)
         .unwrap_err();
     assert_eq!(error.code, "R-AUTH-020", "5: {error:?}");
     assert!(world.client.calls().is_empty());
@@ -172,7 +165,7 @@ fn the_adapter_refuses_before_any_request_in_this_order() {
     std::fs::write(world.signing_key(), "not json").unwrap();
     let error = world
         .registry(Some("t"))
-        .publish(&pkg("@acme/x", "1.0.0").upload())
+        .publish(&pkg("@acme/x", "1.0.0").package(), WASM)
         .unwrap_err();
     assert_eq!(error.code, "E074", "6: {error:?}");
     assert_eq!(error.kind, OpErrorKind::PreconditionFailed, "6: {error:?}");
@@ -186,7 +179,7 @@ fn the_adapter_refuses_before_any_request_in_this_order() {
     // 7. all good: one publish call to acme, the user's first key created; the second reuses it.
     let first = world
         .registry(Some("t"))
-        .publish(&pkg("@acme/x", "1.0.0").upload())
+        .publish(&pkg("@acme/x", "1.0.0").package(), WASM)
         .unwrap();
     assert_eq!(first.registry, "acme");
     assert!(first.key_created);
@@ -197,7 +190,7 @@ fn the_adapter_refuses_before_any_request_in_this_order() {
     assert_eq!(calls[0].registry.as_deref(), Some("acme"));
     let second = world
         .registry(Some("t"))
-        .publish(&pkg("@acme/x", "1.0.1").upload())
+        .publish(&pkg("@acme/x", "1.0.1").package(), WASM)
         .unwrap();
     assert!(!second.key_created);
     assert_eq!(second.key_id, first.key_id);
@@ -211,7 +204,7 @@ fn with_no_credential_the_adapter_sends_nothing_and_creates_no_key() {
     let world = World::acme();
     let error = world
         .registry(None)
-        .publish(&pkg("@acme/x", "1.0.0").upload())
+        .publish(&pkg("@acme/x", "1.0.0").package(), WASM)
         .unwrap_err();
     assert_eq!(error.code, "R001", "{error:?}");
     assert!(world.client.calls().is_empty());
@@ -226,7 +219,7 @@ fn the_environment_token_wins_over_the_stored_credential() {
     let published_with = |world: &World, token: Option<&str>, version: &str| {
         world
             .registry(token)
-            .publish(&pkg("@acme/x", version).upload())
+            .publish(&pkg("@acme/x", version).package(), WASM)
             .map(|_| {
                 world
                     .client
@@ -269,7 +262,7 @@ fn a_corrupt_signing_key_is_refused_with_e074_before_any_request() {
     std::fs::write(world.signing_key(), "not json").unwrap();
     let error = world
         .registry(Some("t"))
-        .publish(&pkg("@acme/x", "1.0.0").upload())
+        .publish(&pkg("@acme/x", "1.0.0").package(), WASM)
         .unwrap_err();
     assert_eq!(error.code, "E074", "{error:?}");
     assert_eq!(error.kind, OpErrorKind::PreconditionFailed);
@@ -294,17 +287,19 @@ fn publish_asks_the_registry_fetch_asks() {
     ]));
     let registry = world.registry(Some("t"));
     let acme = pkg("@acme/x", "1.0.0");
-    registry.publish(&acme.upload()).unwrap();
+    let acme = acme.package();
+    registry.publish(&acme, WASM).unwrap();
     registry
         .fetch(
-            &acme.name,
-            &acme.version,
+            acme.name(),
+            acme.version(),
             TrustPolicy::new(false, Asking::Nobody),
         )
         .unwrap();
     let other = pkg("@other/y", "1.0.0");
-    registry.publish(&other.upload()).unwrap();
-    registry.versions(&other.name).unwrap();
+    let other = other.package();
+    registry.publish(&other, WASM).unwrap();
+    registry.versions(other.name()).unwrap();
 
     let asked: Vec<(CallKind, String)> = world
         .client
@@ -330,7 +325,7 @@ fn a_package_is_signed_with_the_users_key() {
     let package = pkg("@acme/x", "1.0.0");
     let published = world
         .registry(Some("t"))
-        .publish(&package.upload())
+        .publish(&package.package(), WASM)
         .unwrap();
 
     let call = world.client.calls().remove(0);
@@ -340,7 +335,7 @@ fn a_package_is_signed_with_the_users_key() {
         .verify(&SignedContent::of(
             "@acme/x",
             "1.0.0",
-            package.upload().wasm,
+            WASM,
             &call.manifest.unwrap(),
         ))
         .unwrap();
@@ -359,7 +354,7 @@ fn a_version_the_registry_holds_is_r007() {
     );
     let error = world
         .registry(Some("t"))
-        .publish(&pkg("@acme/x", "1.0.0").upload())
+        .publish(&pkg("@acme/x", "1.0.0").package(), WASM)
         .unwrap_err();
     assert_eq!(error.code, "R007", "{error:?}");
     assert_eq!(error.kind, OpErrorKind::Conflict);
@@ -370,7 +365,7 @@ fn a_credential_the_registry_refuses_is_a_permission_error() {
     let world = World::acme();
     let error = world
         .registry(Some("not accepted"))
-        .publish(&pkg("@acme/x", "1.0.0").upload())
+        .publish(&pkg("@acme/x", "1.0.0").package(), WASM)
         .unwrap_err();
     assert_eq!(error.code, "R001", "{error:?}");
     assert_eq!(error.kind, OpErrorKind::PermissionDenied);
@@ -401,11 +396,11 @@ fn a_retry_after_beyond_the_longest_backoff_is_not_waited_for() {
         .as_user(User::at(home.path(), Some(server.token().to_string())));
 
     registry
-        .publish(&pkg("@acme/x", "1.0.0").upload())
+        .publish(&pkg("@acme/x", "1.0.0").package(), WASM)
         .expect("the first publish is within the limit");
     let started = std::time::Instant::now();
     let error = registry
-        .publish(&pkg("@acme/x", "1.0.1").upload())
+        .publish(&pkg("@acme/x", "1.0.1").package(), WASM)
         .unwrap_err();
 
     assert_eq!(error.code, "R003", "{error:?}");
@@ -435,10 +430,10 @@ fn a_rate_limited_publish_is_sent_again_after_its_wait() {
         .as_user(User::at(home.path(), Some(server.token().to_string())));
 
     registry
-        .publish(&pkg("@acme/x", "1.0.0").upload())
+        .publish(&pkg("@acme/x", "1.0.0").package(), WASM)
         .expect("the first publish is within the limit");
     registry
-        .publish(&pkg("@acme/x", "1.0.1").upload())
+        .publish(&pkg("@acme/x", "1.0.1").package(), WASM)
         .expect("the second is sent again after the window");
 
     let puts = server
@@ -470,7 +465,7 @@ fn an_unset_token_variable_is_r010_before_any_request() {
         .with_client(world.client.clone());
 
     let error = registry
-        .publish(&pkg("@acme/x", "1.0.0").upload())
+        .publish(&pkg("@acme/x", "1.0.0").package(), WASM)
         .unwrap_err();
 
     assert_eq!(error.code, "R010", "{error:?}");
@@ -499,7 +494,9 @@ fn a_token_variable_is_sent_as_the_bearer_token() {
         .as_user(User::at(home.path(), None))
         .with_client(world.client.clone());
 
-    registry.publish(&pkg("@acme/x", "1.0.0").upload()).unwrap();
+    registry
+        .publish(&pkg("@acme/x", "1.0.0").package(), WASM)
+        .unwrap();
 
     let calls = world.client.calls();
     assert_eq!(calls[0].credential.as_ref().unwrap().token(), "t");
@@ -524,7 +521,9 @@ fn a_token_file_is_sent_as_the_bearer_token() {
         .as_user(User::at(home.path(), None))
         .with_client(world.client.clone());
 
-    registry.publish(&pkg("@acme/x", "1.0.0").upload()).unwrap();
+    registry
+        .publish(&pkg("@acme/x", "1.0.0").package(), WASM)
+        .unwrap();
 
     let calls = world.client.calls();
     assert_eq!(calls[0].credential.as_ref().unwrap().token(), "t");
@@ -543,7 +542,7 @@ fn an_unreadable_token_file_is_r011_before_any_request() {
         .with_client(world.client.clone());
 
     let error = registry
-        .publish(&pkg("@acme/x", "1.0.0").upload())
+        .publish(&pkg("@acme/x", "1.0.0").package(), WASM)
         .unwrap_err();
 
     assert_eq!(error.code, "R011", "{error:?}");

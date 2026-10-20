@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use specforge_common::codes;
 use specforge_installed::{Module, declaration_of};
-use specforge_package::{PackageName, Version};
+use specforge_package::PackageName;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_wasm::WasmRuntime;
 use specforge_wasm::protocol::Loaded;
@@ -60,32 +60,6 @@ pub(crate) fn package(declaration: &ExtensionDeclaration) -> Result<PackageName,
             specforge_common::package::invalid(&why),
         )
     })
-}
-
-/// What a registry holds `declaration` as: a scoped package name and a full
-/// SemVer version (E072).
-pub(crate) fn registry_identity(
-    declaration: &ExtensionDeclaration,
-) -> Result<(PackageName, Version), OpError> {
-    let name = package(declaration)?;
-    if name.scope().is_none() {
-        return Err(OpError::of(
-            OpErrorKind::InvalidInput,
-            specforge_common::package::invalid(&format_args!(
-                "'{name}' is not a registry package name: registry packages are named @scope/name"
-            )),
-        ));
-    }
-    let version = Version::parse(declaration.version()).map_err(|why| {
-        OpError::of(
-            OpErrorKind::InvalidInput,
-            specforge_common::package::invalid(&format_args!(
-                "'{}' is not a SemVer version: {why}",
-                declaration.version()
-            )),
-        )
-    })?;
-    Ok((name, version))
 }
 
 /// A binary to install (`add`, `update`, `init`): its module and what it
