@@ -14,7 +14,7 @@ mod site;
 mod verbs;
 
 pub use site::{Site, order};
-pub use verbs::{link, put_list, retitle, set, unset, verify};
+pub use verbs::{link, retitle, set, unset, verify};
 
 /// The entity's block holds a region the parser could not read whole.
 pub const BLOCK_UNREADABLE: &str = "block_unreadable";
@@ -88,6 +88,19 @@ impl Block {
         canonical(site, &self.text())
     }
 
+    /// The text `span` covers.
+    pub(super) fn text_of(&self, span: &SourceSpan) -> String {
+        let (first, last) = (span.start_line - 1, span.end_line - 1);
+        let mut lines: Vec<&str> = self.lines[first..=last]
+            .iter()
+            .map(String::as_str)
+            .collect();
+        let end = lines.len() - 1;
+        lines[end] = &lines[end][..span.end_col - 1];
+        lines[0] = &lines[0][span.start_col - 1..];
+        lines.join("\n")
+    }
+
     pub fn entity(&self) -> &Entity {
         &self.file.entities[self.index]
     }
@@ -157,7 +170,7 @@ impl Block {
         self.lines.drain(first..=last);
     }
 
-    fn remove(&mut self, first: usize, last: usize) {
+    pub(super) fn remove(&mut self, first: usize, last: usize) {
         let first = self.with_comments_above(first);
         self.lines.drain(first..=last);
     }
@@ -245,7 +258,12 @@ fn trailing_comment(suffix: &str) -> &str {
 impl Block {
     /// `span` (a value) replaced by `new`; with `annotations`, the text after it becomes them (a trailing comment
     /// is kept).
-    fn replace_value(&mut self, span: &SourceSpan, new: &str, annotations: Option<&[String]>) {
+    pub(super) fn replace_value(
+        &mut self,
+        span: &SourceSpan,
+        new: &str,
+        annotations: Option<&[String]>,
+    ) {
         let (first, last) = (span.start_line - 1, span.end_line - 1);
         let prefix = &self.lines[first][..span.start_col - 1];
         let suffix = &self.lines[last][span.end_col - 1..];
@@ -259,7 +277,13 @@ impl Block {
     }
 
     /// A new member `name value` at its rank (`(group, declared index)`).
-    fn insert_member(&mut self, site: &Site<'_>, name: &str, value: &str, annotations: &[String]) {
+    pub(super) fn insert_member(
+        &mut self,
+        site: &Site<'_>,
+        name: &str,
+        value: &str,
+        annotations: &[String],
+    ) {
         let order = order(site.view, site.kind);
         let new_rank = rank(&order, name, group_of_text(value));
         let text = format!(
@@ -308,6 +332,6 @@ pub fn items_of(value: &FieldValue) -> Option<Items> {
     })
 }
 
-fn list_text(items: &Items) -> String {
+pub(super) fn list_text(items: &Items) -> String {
     format!("[{}]", items.written.join(", "))
 }

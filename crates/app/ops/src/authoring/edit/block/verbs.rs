@@ -1,6 +1,6 @@
 //! The edits that change a block: `set`, `unset`, `retitle`, `verify` and `link` (with `unlink`).
 
-use super::super::defaults;
+use super::super::defaults::{self, Change};
 use super::super::path::{self, FieldPath};
 use super::super::write::{not_editable, written};
 use super::super::{EditField, Input};
@@ -37,23 +37,33 @@ pub fn set(
     input: &Input,
     annotations: Option<&[String]>,
 ) -> Result<String, Refusal<EditField>> {
-    let path = path::resolve(site, field, None)?;
-    let mut block = Block::open(site, text)?;
-    let before = block.text();
-    let (field, reading) = match path {
-        FieldPath::Field { name, reading } => (name, reading),
+    match path::resolve(site, field, None)? {
+        FieldPath::Field { name, reading } => defaults::change(site, text, name, |block, own| {
+            match own.and_then(|e| e.value_span) {
+                Some(span) => {
+                    let lead = block.lead(span.start_line - 1).to_string();
+                    let new = written(reading, name, input, &lead, &block.config)?;
+                    block.replace_value(&span, &new, annotations);
+                }
+                None => {
+                    let new = written(reading, name, input, &block.member_lead(), &block.config)?;
+                    block.insert_member(site, name, &new, annotations.unwrap_or_default());
+                }
+            }
+            Ok(Change::Changed)
+        }),
         FieldPath::Entry {
             field: outer,
             entry: inner,
             form,
-        } => {
-            let Input::One(_) = input else {
+        } => defaults::change(site, text, outer, |block, _| {
+            let Input::One(one) = input else {
                 return Err(not_editable(
                     EditField::Value,
                     format!("'{outer}.{inner}' takes one text"),
                 ));
             };
-            match path::nested(site, &block, outer, inner)? {
+            match path::nested(site, block, outer, inner)? {
                 Some((_, Some(entry))) => {
                     let span = entry
                         .value_span
@@ -90,10 +100,7 @@ pub fn set(
                     block.insert(span.end_line - 1, &line);
                 }
                 None => {
-                    let Input::One(text) = input else {
-                        unreachable!("checked above")
-                    };
-                    let entries = Input::Entries([(inner.to_string(), text.clone())].into());
+                    let entries = Input::Entries([(inner.to_string(), one.clone())].into());
                     let value = written(
                         Reading::Declared(form),
                         outer,
@@ -104,55 +111,38 @@ pub fn set(
                     block.insert_member(site, outer, &value, &[]);
                 }
             }
-            return finish_edit(site, text, &before, &block);
-        }
-    };
-    match block.entry(field).and_then(|e| e.value_span.clone()) {
-        Some(span) => {
-            let lead = block.lead(span.start_line - 1).to_string();
-            let new = written(reading, field, input, &lead, &block.config)?;
-            block.replace_value(&span, &new, annotations);
-        }
-        None => {
-            let new = written(reading, field, input, &block.member_lead(), &block.config)?;
-            block.insert_member(site, field, &new, annotations.unwrap_or_default());
-        }
+            Ok(Change::Changed)
+        }),
     }
-    let after = finish_edit(site, text, &before, &block)?;
-    defaults::without_repeat(site, &after, field)
 }
 
-/// `field` (or `field.entry`) removed, with the comment lines directly above it. The text unchanged when it is not
-/// there. An inherited list becomes `[]`.
+/// `field` (or `field.entry`) removed, with the comment lines directly above it. The text unchanged when neither the
+/// block nor its file's defaults hold it. An inherited list becomes `[]`, an inherited block field `{}`.
 pub fn unset(site: &Site<'_>, text: &str, field: &str) -> Result<String, Refusal<EditField>> {
-    let path = path::resolve(site, field, None)?;
-    let mut block = Block::open(site, text)?;
-    let before = block.text();
-    if let FieldPath::Entry {
-        field: outer,
-        entry: inner,
-        ..
-    } = path
-    {
-        // The block field, or its entry, is not written: nothing to change (ADR 0151).
-        let Some((outer, Some(entry))) = path::nested(site, &block, outer, inner)? else {
-            return Ok(text.to_string());
-        };
-        let alone = matches!(&outer.value, FieldValue::Block(m) if m.entries().len() == 1);
-        let span = if alone { outer } else { entry }
-            .value_span
-            .clone()
-            .ok_or_else(|| unreadable(site.id))?;
-        let (first, last) = (span.start_line - 1, span.end_line - 1);
-        block.remove(first, last);
-        return finish_edit(site, text, &before, &block);
+    match path::resolve(site, field, None)? {
+        FieldPath::Entry {
+            field: outer,
+            entry: inner,
+            ..
+        } => defaults::change(site, text, outer, |block, _| {
+            // Neither the block nor its file's defaults hold the entry: nothing to change (ADR 0151, ADR 0175).
+            let Some((outer, Some(entry))) = path::nested(site, block, outer, inner)? else {
+                return Ok(Change::Unchanged);
+            };
+            if matches!(&outer.value, FieldValue::Block(m) if m.entries().len() == 1) {
+                return Ok(Change::Dropped);
+            }
+            let span = entry
+                .value_span
+                .clone()
+                .ok_or_else(|| unreadable(site.id))?;
+            block.remove(span.start_line - 1, span.end_line - 1);
+            Ok(Change::Changed)
+        }),
+        FieldPath::Field { name, .. } => {
+            defaults::change(site, text, name, |_, _| Ok(Change::Dropped))
+        }
     }
-    let Some(span) = block.entry(field).and_then(|e| e.value_span.clone()) else {
-        return defaults::unset_inherited(site, text, field);
-    };
-    block.remove(span.start_line - 1, span.end_line - 1);
-    let after = finish_edit(site, text, &before, &block)?;
-    Ok(after)
 }
 
 /// The header title replaced, or added.
@@ -253,89 +243,71 @@ pub fn link(
             ));
         }
     };
-    let block = Block::open(site, text)?;
-    let before = block.text();
-    let own = block.entry(field);
-    let inherited = match own {
-        None => defaults::inherited(site, &block, form, field),
-        Some(_) => None,
-    };
-    let current = match (own, inherited) {
-        (Some(entry), _) => {
-            // A list written as one value is its one item, as the graph build stores it (ADR 0093).
-            let stored = form.coerce(&entry.value, entry.value_span.as_ref());
-            match stored.as_ref().unwrap_or(&entry.value) {
-                value @ FieldValue::List(_) => items_of(value),
-                _ if matches!(form.field_type(), FieldType::Reference) => None,
-                _ => {
-                    return Err(not_editable(
-                        EditField::Field,
-                        format!("'{field}' is not a list"),
-                    ));
+    defaults::change(site, text, field, |block, own| {
+        let current = match &own {
+            Some(entry) => {
+                // A list written as one value is its one item, as the graph build stores it (ADR 0093).
+                let stored = form.coerce(&entry.value, entry.value_span.as_ref());
+                match stored.as_ref().unwrap_or(&entry.value) {
+                    value @ FieldValue::List(_) => items_of(value),
+                    _ if matches!(form.field_type(), FieldType::Reference) => None,
+                    _ => {
+                        return Err(not_editable(
+                            EditField::Field,
+                            format!("'{field}' is not a list"),
+                        ));
+                    }
                 }
             }
-        }
-        (None, Some(value)) => items_of(&value),
-        (None, None) => Some(Items {
-            written: Vec::new(),
-            texts: Vec::new(),
-        }),
-    };
-    let Some(mut items) = current else {
-        // A single `reference` field: unlink removes it when it names the target.
-        return match block.entry(field).map(|e| &e.value) {
-            Some(FieldValue::Identifier(t) | FieldValue::String(t)) if t == target => {
-                unset(site, text, field)
-            }
-            _ => Ok(text.to_string()),
+            None => Some(Items {
+                written: Vec::new(),
+                texts: Vec::new(),
+            }),
         };
-    };
-    if let Some(entry) = own
-        && let Some(span) = &entry.value_span
-        && lex(&block.lines[span.start_line - 1..span.end_line].join("\n"))
-            .iter()
-            .any(|l| l.kind == LexemeKind::Comment)
-    {
-        return Err(not_editable(
-            EditField::Field,
-            format!("'{field}' holds a comment; edit it by hand"),
-        ));
-    }
-    let present = items.texts.iter().any(|t| t == target);
-    if add == present {
-        return Ok(text.to_string());
-    }
-    if add {
-        items.texts.push(target.to_string());
-        items.written.push(item);
-    } else {
-        let mut keep = items
-            .texts
-            .iter()
-            .map(|t| t != target)
-            .collect::<Vec<_>>()
-            .into_iter();
-        items.written.retain(|_| keep.next().unwrap_or(true));
-        items.texts.retain(|t| t != target);
-    }
-    defaults::write_list(site, text, &before, field, &items)
-}
-
-/// The own field `field` replaced by (or added with) the list `items`, or removed when `items` is `None`.
-pub fn put_list(
-    site: &Site<'_>,
-    text: &str,
-    before: &str,
-    field: &str,
-    items: Option<&Items>,
-) -> Result<String, Refusal<EditField>> {
-    let mut block = Block::open(site, text)?;
-    let span = block.entry(field).and_then(|e| e.value_span.clone());
-    match (span, items) {
-        (Some(span), None) => block.remove(span.start_line - 1, span.end_line - 1),
-        (Some(span), Some(items)) => block.replace_value(&span, &list_text(items), None),
-        (None, Some(items)) => block.insert_member(site, field, &list_text(items), &[]),
-        (None, None) => {}
-    }
-    finish_edit(site, text, before, &block)
+        let Some(mut items) = current else {
+            // A single `reference` field: unlink removes it when it names the target.
+            return Ok(match own.as_ref().map(|e| &e.value) {
+                Some(FieldValue::Identifier(t) | FieldValue::String(t)) if t == target => {
+                    Change::Dropped
+                }
+                _ => Change::Unchanged,
+            });
+        };
+        if let Some(span) = own.as_ref().and_then(|e| e.value_span.as_ref())
+            && lex(&block.lines[span.start_line - 1..span.end_line].join("\n"))
+                .iter()
+                .any(|l| l.kind == LexemeKind::Comment)
+        {
+            return Err(not_editable(
+                EditField::Field,
+                format!("'{field}' holds a comment; edit it by hand"),
+            ));
+        }
+        let present = items.texts.iter().any(|t| t == target);
+        if add == present {
+            return Ok(Change::Unchanged);
+        }
+        if add {
+            items.texts.push(target.to_string());
+            items.written.push(item);
+        } else {
+            let mut keep = items
+                .texts
+                .iter()
+                .map(|t| t != target)
+                .collect::<Vec<_>>()
+                .into_iter();
+            items.written.retain(|_| keep.next().unwrap_or(true));
+            items.texts.retain(|t| t != target);
+        }
+        if items.texts.is_empty() {
+            return Ok(Change::Emptied);
+        }
+        let new = list_text(&items);
+        match own.and_then(|e| e.value_span) {
+            Some(span) => block.replace_value(&span, &new, None),
+            None => block.insert_member(site, field, &new, &[]),
+        }
+        Ok(Change::Changed)
+    })
 }

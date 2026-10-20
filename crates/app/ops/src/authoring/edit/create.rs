@@ -104,7 +104,9 @@ impl Planner<'_> {
         let mut text = block::canonical(&site, &text)?;
         // A field that restates its file's default is not written (W161), judged on what was written (ADR 0154).
         for name in fields.keys() {
-            text = super::defaults::without_repeat(&site, &text, name)?;
+            text = super::defaults::change(&site, &text, name, |_, _| {
+                Ok(super::defaults::Change::Changed)
+            })?;
         }
         self.texts.insert(file.to_string(), text);
         self.created

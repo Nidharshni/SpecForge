@@ -110,8 +110,10 @@ fn mismatches(c: &Compiled, rows: Vec<Row<'_>>) -> Vec<String> {
         .collect()
 }
 
-#[test]
-#[ignore = "flipped by T4"]
+#[specforge_test_macros::test(
+    behavior = "edit_entity_field",
+    verify = "every verb leaves a field holding what it says, own or inherited"
+)]
 fn every_verb_leaves_a_field_holding_what_it_says() {
     let c = compile(SOFTWARE_FORMAL, &[("g.spec", HOLDS)]);
     let rows: Vec<Row<'_>> = vec![
