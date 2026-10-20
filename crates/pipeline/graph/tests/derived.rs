@@ -48,6 +48,13 @@ pub(crate) fn inputs(derived: Vec<DerivedReference>) -> GraphInputs {
                     .targeting("shape"),
                 ),
                 (
+                    ("shape".to_string(), "tags".to_string()),
+                    specforge_graph::FieldForm::new(
+                        specforge_protocol_types::FieldType::StringList,
+                        Vec::new(),
+                    ),
+                ),
+                (
                     ("iface".to_string(), "uses".to_string()),
                     specforge_graph::FieldForm::new(
                         specforge_protocol_types::FieldType::ReferenceList,

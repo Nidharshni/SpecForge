@@ -106,6 +106,28 @@ fn a_single_reference_is_a_single_token() {
     assert_eq!(show(&tokens), ["Wheel a base Single 2:8-2:13"]);
 }
 
+#[test]
+#[ignore = "flipped by T2"]
+fn a_list_written_as_one_value_is_no_type_name() {
+    let source =
+        "shape Car \"Car\" {\n  parts Wheel\n}\n\nshape Wheel \"Wheel\" {\n  size number\n}\n";
+    let (_, tokens) = find(source, derived_inputs);
+    assert_eq!(show(&tokens), ["Wheel Car parts Item 2:9-2:14"]);
+}
+
+#[test]
+#[ignore = "flipped by T2"]
+fn a_word_in_a_string_list_is_no_type_name() {
+    for source in [
+        "shape Car \"Car\" {\n  tags Wheel\n}\n\nshape Wheel \"Wheel\" {\n  size number\n}\n",
+        "defaults shape {\n  tags Wheel\n}\n\nshape Car \"Car\" {\n}\n\nshape Wheel \"Wheel\" {\n  size number\n}\n",
+    ] {
+        let (graph, tokens) = find(source, derived_inputs);
+        assert_eq!(show(&tokens), Vec::<String>::new(), "{source}");
+        assert!(graph.edges_from("Car").is_empty(), "{source}");
+    }
+}
+
 const SHAPES: &str = "shape Wheel \"Wheel\" {\n  size number\n}\n\nshape Axle \"Axle\" {\n  ends Wheel\n}\n\n\
 shape Car \"Car\" {\n  wheels Wheel[]\n  front  Axle | Wheel\n  nested Option<Axle>[]\n  quoted \"Wheel\" | Axle\n}\n\n\
 iface Detector \"Detector\" {\n  method detect(Wheel: Axle) -> Result<Wheel, Error>\n}\n";
