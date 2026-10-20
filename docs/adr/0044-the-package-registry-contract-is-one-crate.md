@@ -2,6 +2,8 @@
 
 **Status:** accepted (2026-10-08)
 
+**Amended by [ADR 0179](0179-a-publish-states-its-package-identity-once.md) (architecture round 18, plan 09):** D2, the client's publish takes the declared package it uploads; D4, the client contract gains K12.
+
 A package registry was reached through two stacked seams, the ops `Registry` port (ADR 0010) and the
 client's `RegistryClient` trait, with the code that matters between them. The fetch policy (the reply names
 what was asked, integrity, the manifest read as the package's declaration, the legacy refusal, the publisher

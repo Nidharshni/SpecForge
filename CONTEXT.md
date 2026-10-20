@@ -530,8 +530,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   publish over HTTP, credentials in the OS keyring, publisher trust and package signing
   (`specforge-registry-client`). Not the Registry build, which is pure and needs none of it.
   Operations reach it only through the `Registry` port, which lists a package's versions, fetches
-  one, pins the publisher keys a committed install accepted, and publishes one, by package name and
-  version (ADR 0036, 0045, 0059); its adapter,
+  one, pins the publisher keys a committed install accepted, and publishes a declared package
+  (ADR 0036, 0045, 0059, 0179); its adapter,
   `specforge_ops_registry::ConfiguredRegistry`, reads the project's registries, asks the one that
   serves a name and runs the fetch policy over the `RegistryClient` seam (ADR 0044). It is linked by
   the CLI and MCP, never the LSP (ADR 0010), and holds what needs the user's `~/.specforge`: the
@@ -593,6 +593,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   digit, so it is always a relative path inside the directory it is joined to and one URL segment
   (`specforge_package::PackageName`, ADR 0036, 0050). A declaration's `name` is checked as one where
   `add` installs and `publish` uploads it; a `specforge.json` entry and a lock entry are read as one.
+- **Declared package**: an extension declaration read as a registry package: its name a scoped package name, its
+  version a full SemVer version, parsed once and carried with the declaration
+  (`specforge_package::DeclaredPackage`, E072 when it is none, ADR 0179). `publish` builds one and it is what the
+  registry port, the registry client and the signed upload are addressed by; the registry checks the upload again.
 - **Version requirement**: which version of a package is asked for: `latest` (the highest release,
   a pre-release only when there is none), one full version, or a SemVer requirement read as Cargo
   reads one (`VersionRequirement`); `pick` is the one rule that chooses among published versions:
