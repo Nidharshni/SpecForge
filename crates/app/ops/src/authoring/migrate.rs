@@ -1,11 +1,11 @@
 //! `specforge migrate` and the MCP `specforge.migrate` tool: one migration: the format version header and the
 //! migration steps (`titles`).
 //!
-//! The run previews first: a project with nothing to migrate is left alone
-//! (no compile, no hooks). Otherwise it compiles the project, migrates the
-//! files, runs the extensions' migration hooks, and compiles again. When a
-//! hook fails, or the graph delta from before to after is not empty, the
-//! migrated files are restored from their backups.
+//! The run plans first: a project with nothing to migrate, or with a file that cannot be migrated, is left alone
+//! (no compile, no hooks, nothing written). Otherwise it compiles the project, writes the plan as one project
+//! change (each source and the record staged, each backup a name the migration owns, ADR 0171), runs the
+//! extensions' migration hooks, and compiles again. When a hook fails, or the graph delta from before to after is
+//! not empty, the change is put back: every source has its text, the backups are gone.
 
 use serde::Serialize;
 use specforge_common::shape::Shape;
@@ -17,7 +17,7 @@ pub use specforge_migrate::{
     MigrationSummary, RecordChange, RollbackSummary,
 };
 use specforge_migrate::{
-    beyond_steps, migrate_project, restore, run_rollback, structural_differences,
+    Rewrite, backup_of, beyond_steps, migrate_project, run_rollback, structural_differences,
 };
 use specforge_parser::{
     CURRENT_FORMAT_VERSION, FormatVersion, MAX_SUPPORTED_VERSION, MIN_SUPPORTED_VERSION,
@@ -25,9 +25,11 @@ use specforge_parser::{
 use specforge_project::{CompiledProject, SharedRuntime};
 use specforge_registry::{Disk as _, RegistryBuild};
 use specforge_wasm::WasmRuntime;
-use std::path::{Path, PathBuf};
+use std::collections::HashMap;
+use std::path::Path;
 
-use crate::{Caller, OpError, OpErrorKind, Refusal, Writes, Wrote};
+use crate::change::{ProjectChange, unreadable, unwritable};
+use crate::{Caller, Held, OpError, OpErrorKind, ReadFailure, Refusal, Writes, Wrote};
 
 /// The field of a migration request a refusal can be about (ADR 0072).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,9 +67,6 @@ pub fn parse_target(raw: Option<&str>) -> Result<FormatVersion, Refusal<MigrateF
     }
 }
 
-/// A source that resolves outside the project (`InvalidInput`).
-pub const SOURCE_OUTSIDE_ROOT: &str = "source_outside_root";
-
 pub struct Request<'a> {
     pub root: &'a specforge_common::ProjectRoot,
     pub target: FormatVersion,
@@ -75,9 +74,9 @@ pub struct Request<'a> {
     pub dry_run: bool,
     /// Skip the `.bak` copy of each migrated file (nothing to roll back to).
     pub no_backup: bool,
-    /// What the migration may reach (`caller.containment()`, ADR 0104): a source that lands
-    /// outside it, by a symlink in the project, refuses the run (`invalid_input`, nothing read or
-    /// written; ADR 0092 D8); one with more than one name fails that file, and the compiles before and
+    /// What the migration may reach (`caller.containment()`, ADR 0104): a source, a backup or the record that
+    /// lands outside it, by a symlink in the project, refuses the run (`outside_root`, nothing read or
+    /// written; ADR 0092 D8); a source with more than one name fails that file, and the compiles before and
     /// after read none it refuses.
     pub caller: Caller<'a>,
 }
@@ -91,8 +90,8 @@ pub struct Outcome {
     pub dry_run: bool,
     /// Whether any file needed migrating. When not, nothing else ran.
     pub pending: bool,
-    /// Whether files were rewritten (not a dry run, and not every file
-    /// failed). A rolled-back migration was applied, then undone.
+    /// Whether the change was committed (not a dry run, and no file failed to migrate): kept, or undone by its
+    /// put-back.
     pub applied: bool,
     /// The per-file migration (the preview, in a dry run or with nothing
     /// pending).
@@ -113,9 +112,9 @@ pub struct Outcome {
     pub diagnostics: Vec<Diagnostic>,
     /// The restore, when the migration was rolled back.
     pub rollback: Option<RollbackSummary>,
-    /// The files the run left changed: each migrated file and each backup;
-    /// after a rollback, the backups (the migrated files hold their old
-    /// text again). Nothing for a dry run or with nothing pending.
+    /// The files the run left changed: each backup, each migrated file and the record (or the removed record
+    /// under `--no-backup`); after an undone run, what could not be put back. Nothing for a dry run, with nothing
+    /// pending, or when a file could not be migrated.
     pub writes: Writes,
 }
 
@@ -129,7 +128,7 @@ pub enum Failure {
     DoesNotCompile { errors: usize },
     /// The migrated project compiles to another graph (W054); every migrated file was restored.
     ChangedGraph { differences: usize },
-    /// Files that could not be migrated (each shown path and its error); the others were.
+    /// Files that could not be migrated (each shown path and its error); nothing was written.
     FilesFailed { files: Vec<(String, String)> },
 }
 
@@ -167,7 +166,10 @@ impl From<Failure> for OpError {
                 OpError::new(
                     OpErrorKind::SchemaMismatch,
                     "migration_file_failed",
-                    format!("{} file(s) could not be migrated{first}", files.len()),
+                    format!(
+                        "{} file(s) could not be migrated{first}; nothing was written",
+                        files.len()
+                    ),
                 )
             }
         }
@@ -250,6 +252,11 @@ impl Outcome {
         }
     }
 
+    /// Whether the change was put back because a check failed (a hook, the graph comparison).
+    fn undone(&self) -> bool {
+        !self.hook_failures.is_empty() || !self.graph_delta.is_empty()
+    }
+
     /// Whether the migrated files are on disk now.
     pub fn migrated(&self) -> bool {
         self.applied && self.summary.migrated_count > 0 && self.rollback.is_none()
@@ -325,72 +332,34 @@ pub type HookRun = (Vec<String>, Vec<String>);
 /// the files the core migration rewrote.
 pub use specforge_protocol_types::MigrationInput;
 
-/// Migrate the project at `request.root`: preview, compile, rewrite the files,
-/// run the extensions' migration hooks in `runtime` in dependency order,
-/// compile again and compare. A failing hook or a non-empty graph delta
-/// restores every migrated file from its backup. With no runtime no
-/// extension is loaded, so no hook runs.
+/// Migrate the project at `request.root`: plan, compile, write the plan as one project change, run the
+/// extensions' migration hooks in `runtime` in dependency order, compile again and compare. A failing hook or a
+/// non-empty graph delta puts the change back: every migrated file has its text again and the run's backups are
+/// removed. With no runtime no extension is loaded, so no hook runs.
 ///
 /// Its `specforge.json` is read once, through [`crate::config::rewritable`]:
 /// refused (`config_invalid`, nothing read or written) when it does not say
 /// which files are the project's sources or which extensions it loads; each
 /// other problem is one E069 in [`Outcome::diagnostics`] and fails
-/// [`Outcome::ok`]. The preview and the migration rewrite the same sources. Each source is read through the
-/// caller's containment: over MCP a source with more than one name fails its file (ADR 0146, ADR 0158),
-/// and the project is compiled through it before and after (ADR 0166).
+/// [`Outcome::ok`]. Each source is read once, through the caller's containment: over MCP a source with more
+/// than one name fails its file (ADR 0146, ADR 0158), and the project is compiled through it before and after
+/// (ADR 0166). A file that cannot be migrated leaves every file as it was. A write that fails (a read-only
+/// source, a changed one) is the project change's `Err` (ADR 0155, ADR 0171).
 pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome, OpError> {
     // The project the files are migrated in and the one the hooks and the checks compile.
     let project = request.root;
     let target = &request.target;
     let read = crate::config::rewritable(project.dir())?;
     let sources = read.config.sources(project.dir()).files();
-    // Every file the migration writes is held before anything is: the sources, and (unless it
-    // only previews) each source's backup and temporary files and the migration record.
-    if let Some(within) = request.caller.containment().root() {
-        let mut files: Vec<(String, PathBuf)> = Vec::new();
-        for source in &sources {
-            files.push((format!("source {}", source.display()), source.clone()));
-            if request.dry_run {
-                continue;
-            }
-            let [backup, temporary, restoring] = specforge_migrate::written_beside(source);
-            if !request.no_backup {
-                files.push((format!("the backup of {}", source.display()), backup));
-            }
-            files.push((
-                format!("the temporary file of {}", source.display()),
-                temporary,
-            ));
-            files.push((
-                format!("the rollback file of {}", source.display()),
-                restoring,
-            ));
-        }
-        if !request.dry_run {
-            files.push((
-                "the migration record".to_string(),
-                project.dir().join(MigrationRecord::PATH),
-            ));
-        }
-        for (what, file) in &files {
-            if let Err(outside) = request.caller.containment().resolve(file) {
-                return Err(OpError::new(
-                    OpErrorKind::InvalidInput,
-                    SOURCE_OUTSIDE_ROOT,
-                    format!(
-                        "{what}, {}, resolves to {}, outside {}: a symlink that leaves the project is not written",
-                        file.display(),
-                        outside.landed().display(),
-                        within.display()
-                    ),
-                ));
-            }
-        }
-    }
+    let containment = request.caller.containment();
+    // Every source is held before any is read: one that lands outside the bound refuses the run (ADR 0092 D8).
+    let held: HashMap<&Path, Held> = sources
+        .iter()
+        .map(|source| Ok((source.as_path(), containment.resolve(source)?)))
+        .collect::<Result<_, OpError>>()?;
     // Every source is read, and the project compiled before and after, through the caller's containment: over
-    // MCP a file with more than one name fails its file and is E025 in the compiles (ADR 0146, 0158, 0166); a
-    // link that leaves was refused above.
-    let bound = request.caller.containment().disk();
+    // MCP a file with more than one name fails its file and is E025 in the compiles (ADR 0146, 0158, 0166).
+    let bound = containment.disk();
     let read_source = |path: &Path| -> std::io::Result<String> {
         String::from_utf8(bound.read(path)?).map_err(|_| {
             std::io::Error::new(
@@ -399,21 +368,21 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
             )
         })
     };
-    let preview = migrate_project(project, &sources, target, true, true, &read_source);
-    let from = preview
+    let plan = migrate_project(project, &sources, target, &read_source);
+    let from = plan
         .results
         .iter()
         .filter_map(|r| r.from_version.clone())
         .min()
         .unwrap_or_else(|| target.clone());
-    let pending = preview.migrated_count > 0 || preview.failed_count > 0;
+    let pending = plan.migrated_count > 0 || plan.failed_count > 0;
     let mut outcome = Outcome {
         from,
         to: target.clone(),
         dry_run: request.dry_run,
         pending,
         applied: false,
-        summary: preview,
+        summary: plan,
         hooks_invoked: Vec::new(),
         hook_failures: Vec::new(),
         validated: false,
@@ -423,25 +392,67 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
         rollback: None,
         writes: Writes::none(),
     };
-    if !pending || request.dry_run {
+    // A file that cannot be migrated leaves every file as it was (ADR 0171): the plan reports each one.
+    if !pending || request.dry_run || outcome.summary.failed_count > 0 {
         return Ok(outcome);
     }
 
     // The graph before any file is touched, read through the same bound: a refused source is its E025 (ADR 0166).
     let pre = CompiledProject::compile_through(project, runtime.clone(), &bound);
 
-    outcome.summary = migrate_project(
-        project,
-        &sources,
-        target,
-        false,
-        request.no_backup,
-        &read_source,
-    );
-    outcome.applied = true;
-    outcome.writes = summary_writes(project.dir(), &outcome.summary);
-    if outcome.summary.failed_count > 0 {
-        return Ok(outcome);
+    // The plan as one change: per file its backup (a name the migration owns, with its source's permissions),
+    // then the source; then the record.
+    let rewrites = std::mem::take(&mut outcome.summary.rewrites);
+    let record_name = project.dir().join(MigrationRecord::PATH);
+    let (record, record_was) = if request.no_backup {
+        (containment.resolve(&record_name)?, None)
+    } else {
+        match containment.read(&record_name) {
+            Ok((record, was)) => (record, Some(was)),
+            Err(ReadFailure::Outside(outside)) => return Err(outside.into()),
+            Err(ReadFailure::Io { held, error })
+                if error.kind() == std::io::ErrorKind::NotFound =>
+            {
+                (held, None)
+            }
+            Err(ReadFailure::Io { error, .. }) => {
+                return Err(unreadable(&record_name, &error).prefixed("cannot migrate: "));
+            }
+        }
+    };
+    let recorded = (!request.no_backup).then(|| {
+        MigrationRecord::of(project.dir(), target, &rewrites)
+            .render()
+            .into_bytes()
+    });
+    let mut change = ProjectChange::new(project.dir(), "cannot migrate");
+    let mut staged: Vec<(Rewrite, Held)> = Vec::new();
+    for rewrite in rewrites {
+        let source = held[rewrite.path.as_path()].clone();
+        // Two names for one file (an inside link that is also a source) are written once.
+        if staged.iter().any(|(_, other)| other.real == source.real) {
+            continue;
+        }
+        if !request.no_backup {
+            let backup = containment.resolve(&backup_of(&rewrite.path))?;
+            let mode = source
+                .permissions()
+                .map_err(|e| unreadable(&source.spelled, &e).prefixed("cannot migrate: "))?;
+            outcome.summary.backups.push(MigrationBackup {
+                original_path: rewrite.name.clone(),
+                backup_path: specforge_common::ProjectPath::of(project.dir(), &backup.spelled),
+            });
+            change.stage_owned(backup, rewrite.before.clone().into_bytes(), mode);
+        }
+        change.stage(
+            source.clone(),
+            Some(rewrite.before.clone().into_bytes()),
+            rewrite.after.clone().into_bytes(),
+        );
+        staged.push((rewrite, source));
+    }
+    if let Some(recorded) = recorded {
+        change.stage(record.clone(), record_was.clone(), recorded);
     }
 
     // Extension hooks run on the migrated files, before validation.
@@ -456,74 +467,90 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
             .map(|r| r.file_path.under(project.dir()).display().to_string())
             .collect(),
     };
-    let (invoked, failures) = match pre.environment().runtime().map(|r| r.as_ref()) {
-        Some(runtime) => invoke_hooks(pre.environment().registries(), runtime, &input),
-        None => (Vec::new(), Vec::new()),
-    };
-    outcome.hooks_invoked = invoked;
-    outcome.hook_failures = failures;
-    if !outcome.hook_failures.is_empty() {
-        roll_back(project.dir(), &mut outcome);
-        return Ok(outcome);
+    let committed = change.commit_then(|| {
+        let (invoked, failures) = match pre.environment().runtime().map(|r| r.as_ref()) {
+            Some(runtime) => invoke_hooks(pre.environment().registries(), runtime, &input),
+            None => (Vec::new(), Vec::new()),
+        };
+        outcome.hooks_invoked = invoked;
+        outcome.hook_failures = failures;
+        if !outcome.hook_failures.is_empty() {
+            return Err(Failure::HookFailed {
+                hooks: outcome.hook_failures.clone(),
+            }
+            .into());
+        }
+        // The migrated project must have the graph it had before.
+        let post = CompiledProject::compile_through(project, runtime, &bound);
+        outcome.validated = true;
+        outcome.graph_delta =
+            beyond_steps(compute_graph_delta(pre.graph(), post.graph()), pre.graph());
+        outcome.post_diagnostics = post.diagnostics();
+        if !outcome.graph_delta.is_empty() {
+            return Err(Failure::ChangedGraph {
+                differences: outcome.structural_differences().len(),
+            }
+            .into());
+        }
+        // A kept migration made without backups removes the record, since a rollback after it would mix versions.
+        if request.no_backup {
+            return match record.remove() {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                    Err(unwritable(&record.spelled, &e).prefixed("cannot migrate: "))
+                }
+                _ => Ok(()),
+            };
+        }
+        Ok(())
+    });
+    outcome.applied = true;
+    match committed {
+        Ok(writes) => outcome.writes = writes,
+        Err(error) if outcome.undone() => {
+            outcome.rollback = Some(put_back_summary(&staged, &error.writes));
+            outcome.writes = error.writes;
+            outcome.summary.backups.clear();
+        }
+        Err(error) => {
+            outcome.applied = false;
+            return Err(error);
+        }
     }
-
-    // The migrated project must have the graph it had before.
-    let post = CompiledProject::compile_through(project, runtime, &bound);
-    outcome.validated = true;
-    outcome.graph_delta = beyond_steps(compute_graph_delta(pre.graph(), post.graph()), pre.graph());
-    outcome.post_diagnostics = post.diagnostics();
-    if !outcome.graph_delta.is_empty() {
-        roll_back(project.dir(), &mut outcome);
-        return Ok(outcome);
-    }
-    keep_record(project.dir(), request, &mut outcome);
     Ok(outcome)
 }
 
-/// A kept migration made with backups is recorded for a later `--rollback`; one made without removes
-/// the record, since a rollback after it would mix versions.
-fn keep_record(root: &Path, request: &Request, outcome: &mut Outcome) {
-    if outcome.summary.migrated_count == 0 {
-        return;
-    }
-    let record = root.join(MigrationRecord::PATH);
-    if request.no_backup {
-        if matches!(MigrationRecord::remove(root), Ok(true)) {
-            outcome.writes.record(&record);
-        }
-        return;
-    }
-    let made = MigrationRecord::of(root, &request.target, &outcome.summary.backups)
-        .and_then(|record| record.write(root));
-    if made.is_ok() {
-        outcome.writes.record(&record);
-    }
-}
-
-/// What `migrate_project` wrote: each file it migrated and each backup
-/// it made.
-fn summary_writes(root: &Path, summary: &MigrationSummary) -> Writes {
-    let migrated = summary
-        .results
+/// The automatic rollback's summary: each rewritten source, restored by the change's put-back, or failed when it
+/// is among the files `left` that could not be put back.
+fn put_back_summary(staged: &[(Rewrite, Held)], left: &Writes) -> RollbackSummary {
+    let results: Vec<MigrationResult> = staged
         .iter()
-        .filter(|r| r.status == MigrationStatus::Migrated)
-        .map(|r| r.file_path.under(root));
-    let backups = summary.backups.iter().map(|b| b.backup_path.under(root));
-    migrated.chain(backups).collect()
-}
-
-/// Restore the files this run migrated, with the text it read before them (backups or not) after a
-/// failed check: each is forgotten as a write. No other file is touched.
-fn roll_back(root: &Path, outcome: &mut Outcome) {
-    let summary = restore(&outcome.summary.originals);
-    for restored in summary
-        .results
+        .map(|(rewrite, source)| {
+            let stuck = left.paths().any(|path| path == source.spelled);
+            MigrationResult {
+                file_path: rewrite.name.clone(),
+                status: if stuck {
+                    MigrationStatus::Failed
+                } else {
+                    MigrationStatus::Restored
+                },
+                from_version: None,
+                to_version: None,
+                error: stuck.then(|| "could not be put back".to_string()),
+            }
+        })
+        .collect();
+    let failed_count = results
         .iter()
-        .filter(|r| r.status == MigrationStatus::Restored)
-    {
-        outcome.writes.forget(&restored.file_path.under(root));
+        .filter(|r| r.status == MigrationStatus::Failed)
+        .count();
+    RollbackSummary {
+        restored_count: results.len() - failed_count,
+        skipped_count: 0,
+        failed_count,
+        results,
+        warnings: Vec::new(),
+        record: RecordChange::Unchanged,
     }
-    outcome.rollback = Some(summary);
 }
 
 /// What a rollback rewrote: each file it restored from its backup.
@@ -552,15 +579,69 @@ impl RollbackOutcome {
     }
 }
 
-/// Restore every migrated file of the project `root` is in from its `.bak`
-/// backup.
-pub fn rollback(root: &specforge_common::ProjectRoot) -> RollbackOutcome {
-    let summary = run_rollback(root);
+/// Restore every migrated file of the project `root` is in from its `.bak` backup, each by replacing its name
+/// through `caller`'s containment: a file keeps its permissions and one the process may not write fails its own
+/// restore (ADR 0171). The record is read, and rewritten or removed, through the same containment; a record that
+/// lands outside it refuses the call (`outside_root`, nothing read or written).
+pub fn rollback(
+    root: &specforge_common::ProjectRoot,
+    caller: Caller<'_>,
+) -> Result<RollbackOutcome, OpError> {
+    let containment = caller.containment();
+    let bound = containment.disk();
+    let record_name = root.dir().join(MigrationRecord::PATH);
+    let (held, record) = match containment.read(&record_name) {
+        Ok((held, bytes)) => {
+            let record = String::from_utf8(bytes)
+                .map_err(|e| e.to_string())
+                .and_then(|text| MigrationRecord::parse(&text))
+                .map(Some);
+            (held, record)
+        }
+        Err(ReadFailure::Outside(outside)) => return Err(outside.into()),
+        Err(ReadFailure::Io { held, error }) if error.kind() == std::io::ErrorKind::NotFound => {
+            (held, Ok(None))
+        }
+        Err(ReadFailure::Io { held, error }) => (
+            held,
+            Err(format!("can't read {}: {error}", MigrationRecord::PATH)),
+        ),
+    };
+    let read = |path: &Path| -> std::io::Result<String> {
+        String::from_utf8(bound.read(path)?).map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "stream did not contain valid UTF-8",
+            )
+        })
+    };
+    let write = |target: &Path, text: &str| -> Result<(), String> {
+        containment
+            .resolve(target)
+            .map_err(|outside| OpError::from(outside).message)
+            .and_then(|held| held.replace(text).map_err(|e| e.to_string()))
+            .map_err(|e| format!("failed to restore: {e}"))
+    };
+    let mut summary = run_rollback(root, record, &read, &write);
+    let applied = match &summary.record {
+        RecordChange::Unchanged => Ok(()),
+        RecordChange::Removed => held.remove().or_else(|e| match e.kind() {
+            std::io::ErrorKind::NotFound => Ok(()),
+            _ => Err(e),
+        }),
+        RecordChange::Rewritten(kept) => held.replace(kept.render()),
+    };
+    if let Err(e) = applied {
+        summary.record = RecordChange::Unchanged;
+        summary
+            .warnings
+            .push(format!("could not update {}: {e}", MigrationRecord::PATH));
+    }
     let mut writes = restored_writes(root.dir(), &summary);
     if summary.record != RecordChange::Unchanged {
-        writes.record(root.dir().join(MigrationRecord::PATH));
+        writes.record(&record_name);
     }
-    RollbackOutcome { summary, writes }
+    Ok(RollbackOutcome { summary, writes })
 }
 
 /// Run each extension's declared migration hook, in the registry build's load order (ADR 0041).

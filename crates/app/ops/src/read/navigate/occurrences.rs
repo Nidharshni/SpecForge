@@ -5,9 +5,8 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{SourceSpan, Sym};
-use specforge_graph::{Edge, Node, written_tokens};
+use specforge_graph::{Node, SpecFile, WrittenToken, written_tokens};
 
-use super::references::reference_edges;
 use super::text::SourceText;
 use super::{Navigator, contains};
 use crate::Refusal;
@@ -30,6 +29,8 @@ pub struct Definition {
 /// One place an entity's ID is written: what a rename edits and an editor shows.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token {
+    /// The entity it names.
+    pub target: Sym,
     pub span: SourceSpan,
     /// [`Precision::Entity`] when the compiled text does not spell the ID there (a stale or unread text).
     pub precision: Precision,
@@ -163,7 +164,13 @@ impl Navigator<'_> {
         }
     }
 
-    /// The occurrences of `id`, sorted by (file, line, column).
+    /// The occurrences of `id`, sorted by (file, line, column): each token the graph's finder reads, once per block
+    /// that holds it (`held_by`: an inherited reference once per block that takes it; a default no block takes not at
+    /// all), and the declaration when asked. A token the compiled text does not spell is its holder's block with
+    /// [`Precision::Entity`].
+    ///
+    /// shortcut: this walks every compiled file per call; add a per-project token index if a project of ~20k
+    /// entities makes find_references slow.
     pub fn references(
         &self,
         id: &str,
@@ -172,10 +179,33 @@ impl Navigator<'_> {
         let node = self
             .node(id)
             .map_err(|error| error.about(EntityField::EntityId))?;
-        let mut occurrences: Vec<Occurrence> =
-            reference_edges(self.view.graph(), id, query.direction)
-                .flat_map(|(holder, edge)| self.edge_occurrences(holder, edge))
-                .collect();
+        let incoming = matches!(query.direction, Direction::Incoming | Direction::Both);
+        let outgoing = matches!(query.direction, Direction::Outgoing | Direction::Both);
+        let graph = self.view.graph();
+        let mut occurrences = Vec::new();
+        for (_, file) in self.view.project().parsed() {
+            for token in self.found(file) {
+                let shown = self.token(&token);
+                for &holder in &token.held_by {
+                    let wanted = (incoming && token.target.as_str() == id)
+                        || (outgoing && holder.as_str() == id);
+                    let Some(block) = graph.node(holder.as_str()).filter(|_| wanted) else {
+                        continue;
+                    };
+                    occurrences.push(Occurrence {
+                        holder,
+                        target: token.target,
+                        field: Some(token.field),
+                        role: Role::Reference,
+                        span: match shown.precision {
+                            Precision::Token => shown.span.clone(),
+                            Precision::Entity => block.source_span.clone(),
+                        },
+                        precision: shown.precision,
+                    });
+                }
+            }
+        }
         if query.include_declaration {
             occurrences.push(self.declaration(node));
         }
@@ -194,33 +224,18 @@ impl Navigator<'_> {
         let node = self
             .node(id)
             .map_err(|error| error.about(EntityField::EntityId))?;
-        let graph = self.view.graph();
-        let kind_of = |name: &str| graph.node(name).map(|n| n.kind.raw);
-        let inputs = self.view.registries().graph_inputs();
         let mut tokens: Vec<Token> = self
             .view
             .project()
             .parsed()
-            .flat_map(|(_, file)| written_tokens(file, inputs, kind_of))
+            .flat_map(|(_, file)| self.found(file))
             .filter(|t| t.target.as_str() == id)
-            .map(|t| {
-                let spelled = self
-                    .text(t.span.file)
-                    .is_some_and(|text| text.spells(&t.span, id));
-                let precision = if spelled {
-                    Precision::Token
-                } else {
-                    Precision::Entity
-                };
-                Token {
-                    span: t.span,
-                    precision,
-                }
-            })
+            .map(|t| self.token(&t))
             .collect();
         if include_declaration {
             let definition = self.definition_of(node);
             tokens.push(Token {
+                target: node.id.raw,
                 span: definition.name,
                 precision: definition.precision,
             });
@@ -238,6 +253,32 @@ impl Navigator<'_> {
         Ok(tokens)
     }
 
+    /// The tokens the graph's finder reads in `file` (a compiled parse) that name an entity of the graph.
+    fn found(&self, file: &SpecFile) -> Vec<WrittenToken> {
+        let graph = self.view.graph();
+        let inputs = self.view.registries().graph_inputs();
+        let kind_of = |name: &str| graph.node(name).map(|n| n.kind.raw);
+        let mut tokens = written_tokens(file, inputs, kind_of);
+        tokens.retain(|t| graph.node(t.target.as_str()).is_some());
+        tokens
+    }
+
+    /// `token`'s span as a [`Token`]: [`Precision::Entity`] when the compiled text does not spell its target there.
+    fn token(&self, token: &WrittenToken) -> Token {
+        let spelled = self
+            .text(token.span.file)
+            .is_some_and(|text| text.spells(&token.span, token.target.as_str()));
+        Token {
+            target: token.target,
+            span: token.span.clone(),
+            precision: if spelled {
+                Precision::Token
+            } else {
+                Precision::Entity
+            },
+        }
+    }
+
     /// The declaration of `node`, as an occurrence.
     fn declaration(&self, node: &Node) -> Occurrence {
         let definition = self.definition_of(node);
@@ -251,12 +292,11 @@ impl Navigator<'_> {
         }
     }
 
-    /// The occurrence (declaration or reference) whose token holds the
-    /// byte position (1-based `line` and `col` of `file`; the position
-    /// just past a token's end counts): what prepareRename and a precise
-    /// "go to" read. Only tokens as written answer.
-    pub fn occurrence_at(&self, file: &str, line: usize, col: usize) -> Option<Occurrence> {
-        let graph = self.view.graph();
+    /// The token (declaration or reference) whose span holds the byte position (1-based `line` and `col` of `file`;
+    /// the position just past a token's end counts): each declaration of a node of the file, then each token the
+    /// graph's finder reads in the file's compiled parse (a default no block takes and a duplicate declaration's
+    /// references included). What prepareRename and a precise "go to" read. Only tokens as written answer.
+    pub fn occurrence_at(&self, file: &str, line: usize, col: usize) -> Option<Token> {
         let at = SourceSpan {
             file: Sym::new(file),
             start_line: line,
@@ -264,57 +304,32 @@ impl Navigator<'_> {
             end_line: line,
             end_col: col,
         };
-        // Every node of the file: a token in a defaults block lies outside every block and answers for the first
-        // block that inherits it (ADR 0149).
-        for holder in graph.nodes_in_file(file) {
-            let declaration = self.declaration(holder);
-            let mut candidates = vec![declaration];
-            for edge in graph.edges_from(holder.id.raw.as_str()) {
-                candidates.extend(self.edge_occurrences(holder, edge));
-            }
-            let hit = candidates
-                .into_iter()
-                .find(|o| o.precision == Precision::Token && contains(&o.span, &at));
-            if hit.is_some() {
-                return hit;
-            }
-        }
-        None
-    }
-
-    /// The occurrences of `edge`'s target in its source: each place the graph records it is written
-    /// (`Graph::written`: a reference list item, a single reference's value, a name in a type expression a derived
-    /// field reads), when the text spells the target there. Without any, or with one the text does not spell, the
-    /// holder's block with [`Precision::Entity`]. `holder` is the edge's source.
-    pub(crate) fn edge_occurrences(&self, holder: &Node, edge: &Edge) -> Vec<Occurrence> {
-        let target = edge.target.as_str();
-        let block = &holder.source_span;
-        let occurrence = |span: SourceSpan, precision: Precision| Occurrence {
-            holder: edge.source,
-            target: edge.target,
-            field: Some(edge.label),
-            role: Role::Reference,
-            span,
-            precision,
-        };
-        let entity = || vec![occurrence(block.clone(), Precision::Entity)];
-        let Some(text) = self.text(block.file) else {
-            return entity();
-        };
-
-        let mut occurrences = Vec::new();
-        let mut stale = false;
-        for span in self.view.graph().written(edge) {
-            if text.spells(span, target) {
-                occurrences.push(occurrence(span.clone(), Precision::Token));
-            } else {
-                stale = true;
-            }
-        }
-        if stale || occurrences.is_empty() {
-            occurrences.extend(entity());
-        }
-        occurrences
+        let declarations = self
+            .view
+            .graph()
+            .nodes_in_file(file)
+            .into_iter()
+            .map(|node| {
+                let definition = self.definition_of(node);
+                Token {
+                    target: node.id.raw,
+                    span: definition.name,
+                    precision: definition.precision,
+                }
+            });
+        let parsed = self
+            .view
+            .project()
+            .parsed()
+            .find(|(key, _)| *key == file)
+            .map(|(_, parse)| parse);
+        let references = parsed
+            .into_iter()
+            .flat_map(|parse| self.found(parse))
+            .map(|t| self.token(&t));
+        declarations
+            .chain(references)
+            .find(|t| t.precision == Precision::Token && contains(&t.span, &at))
     }
 }
 

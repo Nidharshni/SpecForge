@@ -102,7 +102,7 @@ fn plan_text(outcome: &PlanOutcome) -> String {
 /// The chains as terminal text, one block per chain, separated by a blank line.
 fn trace_text(outcome: &TraceOutcome) -> String {
     outcome
-        .chains
+        .chains()
         .iter()
         .map(chain_text)
         .collect::<Vec<_>>()

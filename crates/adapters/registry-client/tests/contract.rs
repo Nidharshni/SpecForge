@@ -1,7 +1,7 @@
 //! Every adapter of the `RegistryClient` seam keeps one contract (ADR 0044): the HTTP client against the
 //! real server in process, and the in-memory client.
 
-use specforge_package::{PackageName, Version};
+use specforge_package::{DeclaredPackage, PackageName, Version};
 use specforge_registry_client::registry_config::{RegistryConfig, RegistryCredential};
 use specforge_registry_client::registry_ops::PublishError;
 use specforge_registry_client::testing::{
@@ -113,8 +113,8 @@ fn an_address_no_registry_serves_is_not_a_registry() {
     }))
     .unwrap();
     let published = publish_to_registry(
+        &DeclaredPackage::of(&declaration).unwrap(),
         b"\0asm contract tool",
-        &declaration,
         &registry,
         Some(&credential),
         &client,

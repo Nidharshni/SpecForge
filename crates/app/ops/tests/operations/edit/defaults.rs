@@ -103,9 +103,17 @@ fn unset_of_an_inherited_list_writes_an_empty_list() {
 }
 
 #[test]
-fn unset_of_an_own_field_over_a_default_returns_to_the_default() {
+fn unset_of_an_own_field_over_a_default_writes_none() {
     let c = defaulted();
     let text = after(&c, "tasks.spec", &[unset("list_tasks", "invariants")]);
+    assert!(text.contains("invariants []"), "{text}");
+    assert_eq!(text.matches("invariants").count(), 2, "{text}");
+    // The way back to the default is a set to its value.
+    let text = after(
+        &c,
+        "tasks.spec",
+        &[set("list_tasks", "invariants", many(&["done_stamped"]))],
+    );
     assert_eq!(text.matches("invariants").count(), 1, "{text}");
 }
 
@@ -234,22 +242,29 @@ fn a_link_after_new_starts_from_the_default() {
 
 #[specforge_test_macros::test(
     behavior = "edit_entity_link",
-    verify = "a link after unset starts from the file's default"
+    verify = "a link after unset starts from none"
 )]
-fn a_link_after_unset_starts_from_the_default() {
+fn a_link_after_unset_starts_from_none() {
     let c = defaulted();
-    let text = after(
+    // Unset leaves `[]`, the link writes `[task_unique]` back: the block as it was.
+    let planned = plan(
         &c,
-        "tasks.spec",
         &[
             unset("list_tasks", "invariants"),
             link("list_tasks", "invariants", "task_unique"),
         ],
+    )
+    .unwrap();
+    assert!(planned.is_empty());
+    let text = after(
+        &c,
+        "tasks.spec",
+        &[
+            unset("complete_task", "invariants"),
+            link("complete_task", "invariants", "task_unique"),
+        ],
     );
-    assert!(
-        text.contains("invariants [done_stamped, task_unique]"),
-        "{text}"
-    );
+    assert!(text.contains("invariants [task_unique]"), "{text}");
 }
 
 #[test]

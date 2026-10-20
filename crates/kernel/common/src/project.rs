@@ -184,7 +184,7 @@ impl ConfigProblem {
     /// The file does not say which files are the project's sources, or which
     /// extensions it loads: it could not be used at all, or `spec_root`,
     /// `exclude` or `extensions` has the wrong type. A run that rewrites the
-    /// project's sources (`format`, `migrate`, `rename`) refuses
+    /// project's sources (`format`, `migrate`, `rename`, a typed edit) refuses
     /// (`config_invalid`): it would rewrite files the config leaves out, or
     /// migrate without the hooks of extensions it means to load. Every other
     /// problem leaves an item or a name the run does not read, and the run

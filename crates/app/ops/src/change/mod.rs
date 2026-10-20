@@ -9,15 +9,17 @@
 //! The four steps of [`ProjectChange::commit_then`]:
 //! 1. **Check.** Each staged file is read through its [`Held`], in stage order, and compared with the bytes it was
 //!    staged over. Any difference is [`FILE_CHANGED`]; a read that fails is [`FILE_UNREADABLE`]. Nothing has
-//!    been written.
+//!    been written. An owned name (a migration's backup) is never read.
 //! 2. **Write**, in stage order. The missing directories are made (and remembered). A file that was there is
 //!    [`Held::replace`]d, so it holds the new content or the old, never part of either; one that was not is
 //!    [`Held::create_new`]d, so a file that appeared since the check is changed. A write that fails is
-//!    [`FILE_UNWRITABLE`].
+//!    [`FILE_UNWRITABLE`]. An owned name is [`Held::create_owned`]d: whatever is at it is unlinked, and it is
+//!    created new with the permissions it was staged with.
 //! 3. **Then.** The caller's last step runs once every file is written.
 //! 4. **Put back**, on any failure, in reverse stage order: a file that was there gets its bytes back, one that was
 //!    not is unlinked where it landed, and the directories the change made are removed when empty. A file that
-//!    cannot be put back is named in the message and is the error's writes.
+//!    cannot be put back is named in the message and is the error's writes. An owned name is unlinked; what was
+//!    there is not restored (it was the operation's, and superseded).
 
 use std::path::{Path, PathBuf};
 
@@ -39,8 +41,19 @@ pub(crate) struct ProjectChange {
 
 struct Staged {
     held: Held,
-    before: Option<Vec<u8>>,
+    was: Was,
     after: Vec<u8>,
+}
+
+/// What a staged file was when the change was planned.
+enum Was {
+    /// Not there: created new, unlinked on put-back.
+    Missing,
+    /// The bytes the caller planned on: checked, replaced, written back on put-back.
+    Planned(Vec<u8>),
+    /// A name the operation owns (a migration's backup): never read; written new at the name with these
+    /// permissions (whatever is there, a link or a file, is unlinked first, never its target); unlinked on put-back.
+    Owned(std::fs::Permissions),
 }
 
 /// What stopped a change. A file is named as its caller spelled it.
@@ -77,7 +90,9 @@ impl ProjectChange {
     /// not there. A file whose `after` is its `before` is not staged. Each `real` is staged at most once.
     pub(crate) fn stage(&mut self, held: Held, before: Option<Vec<u8>>, after: Vec<u8>) {
         debug_assert!(
-            self.staged.iter().all(|s| s.held.real != held.real),
+            self.staged
+                .iter()
+                .all(|s| matches!(s.was, Was::Owned(_)) || s.held.real != held.real),
             "{} is staged twice",
             held.spelled.display()
         );
@@ -86,7 +101,27 @@ impl ProjectChange {
         }
         self.staged.push(Staged {
             held,
-            before,
+            was: before.map_or(Was::Missing, Was::Planned),
+            after,
+        });
+    }
+
+    /// Stage a name the operation owns (see [`Was::Owned`]) to hold `after`, with `permissions`. Each owned
+    /// `spelled` is staged at most once.
+    pub(crate) fn stage_owned(
+        &mut self,
+        held: Held,
+        after: Vec<u8>,
+        permissions: std::fs::Permissions,
+    ) {
+        debug_assert!(
+            self.staged.iter().all(|s| s.held.spelled != held.spelled),
+            "{} is staged twice",
+            held.spelled.display()
+        );
+        self.staged.push(Staged {
+            held,
+            was: Was::Owned(permissions),
             after,
         });
     }
@@ -104,8 +139,13 @@ impl ProjectChange {
         then: impl FnOnce() -> Result<(), OpError>,
     ) -> Result<Writes, OpError> {
         for staged in &self.staged {
+            let expected = match &staged.was {
+                Was::Owned(_) => continue,
+                Was::Missing => None,
+                Was::Planned(bytes) => Some(bytes),
+            };
             match staged.held.read_if_there() {
-                Ok(now) if now == staged.before => {}
+                Ok(now) if now.as_ref() == expected => {}
                 Ok(_) => {
                     return Err(self.failed(
                         Cause::Changed {
@@ -148,19 +188,20 @@ impl ProjectChange {
     fn write(staged: &Staged, made: &mut Vec<PathBuf>) -> Result<(), Cause> {
         let held = &staged.held;
         let file = || held.spelled.clone();
-        held.create_parents(made)
-            .map_err(|error| Cause::Unwritable {
-                file: file(),
-                error,
-            })?;
-        match &staged.before {
-            Some(_) => held
-                .replace(&staged.after)
-                .map_err(|error| Cause::Unwritable {
-                    file: file(),
-                    error,
-                }),
-            None => match held.create_new(&staged.after) {
+        let unwritable = |error| Cause::Unwritable {
+            file: file(),
+            error,
+        };
+        // An owned name lies beside a file that is there: its directory exists.
+        if !matches!(staged.was, Was::Owned(_)) {
+            held.create_parents(made).map_err(unwritable)?;
+        }
+        match &staged.was {
+            Was::Owned(permissions) => held
+                .create_owned(&staged.after, permissions.clone())
+                .map_err(unwritable),
+            Was::Planned(_) => held.replace(&staged.after).map_err(unwritable),
+            Was::Missing => match held.create_new(&staged.after) {
                 Ok(()) => Ok(()),
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                     Err(Cause::Changed { file: file() })
@@ -182,15 +223,17 @@ impl ProjectChange {
         let mut left = Writes::none();
         for staged in self.staged[..written].iter().rev() {
             let held = &staged.held;
-            let restored = match &staged.before {
-                Some(before) => match held.read_if_there() {
+            let not_found_passes = |result: std::io::Result<()>| match result {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
+                _ => Ok(()),
+            };
+            let restored = match &staged.was {
+                Was::Planned(before) => match held.read_if_there() {
                     Ok(Some(now)) if now == *before => Ok(()),
                     _ => held.replace(before),
                 },
-                None => match held.remove_created() {
-                    Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
-                    _ => Ok(()),
-                },
+                Was::Missing => not_found_passes(held.remove_created()),
+                Was::Owned(_) => not_found_passes(held.remove()),
             };
             if restored.is_err() {
                 left.record(held.spelled.clone());
@@ -270,5 +313,17 @@ pub(crate) fn unreadable(file: &Path, error: &std::io::Error) -> OpError {
     )
 }
 
+/// `file` could not be removed by an operation's last step: the OS error's kind, `file_unwritable`.
+pub(crate) fn unwritable(file: &Path, error: &std::io::Error) -> OpError {
+    refusal(
+        OpErrorKind::of_io(error),
+        FILE_UNWRITABLE,
+        &format!("failed to write {}: {error}", file.display()),
+        &[],
+    )
+}
+
+#[cfg(test)]
+mod owned_tests;
 #[cfg(test)]
 mod tests;

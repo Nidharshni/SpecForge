@@ -24,11 +24,11 @@ impl Args {
             Err(error) => return Refusal::of(format).report(terminal, &error),
         };
         let listing = extension::providers(&ProjectView::of(&project));
-        let (providers, diagnostics) = (&listing.providers, &listing.diagnostics);
+        let (providers, diagnostics) = (&listing.providers, &listing.diagnostics.0);
 
         match format {
             OutputFormat::Json => {
-                terminal.json(&listing.document());
+                terminal.json(&listing);
             }
             OutputFormat::Human => {
                 for diagnostic in diagnostics {

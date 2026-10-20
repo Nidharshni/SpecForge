@@ -71,6 +71,7 @@ behavior format_spec_files "Format Spec Files" {
   verify unit "the format document names each changed file, each failed file with its kind, and the run's verdict"
   verify unit "under --format json the run prints the format document on stdout and nothing on stderr"
   verify unit "the format document names each file from the project root, whatever the working directory"
+  verify unit "an unbounded run formats a file with more than one name; a bounded one fails it and formats the others"
   verify contract "Format Spec Files: spec file formatting holds — spec_files_available, format_config_loaded, formatted_output_written, unchanged_files_preserved, format_complete_emitted, summary_printed"
   verify unit "a problem in specforge.json the run goes around is reported as E069 and makes the run exit 1, the files still formatted"
 }
@@ -258,7 +259,13 @@ behavior load_format_config "Load Format Configuration" {
     diagnostics and fall back to defaults. If no config file is found
     within the project root boundary, defaults MUST be used. The walk
     stops at the file's own project root, the nearest directory holding
-    specforge.json, whichever project the run started in.
+    specforge.json, whichever project the run started in. The
+    configuration MUST be read through the disk of the caller: over MCP a
+    configuration file that resolves outside the project, or that has more
+    than one name, MUST NOT be read; it is reported as W141 naming where
+    it lands or how many names it has, never what it holds, and the
+    defaults apply. The CLI and the LSP follow it. A run, a typed edit and
+    init read each configuration file once.
   """
   verify unit "config file in project root is loaded"
   verify unit "config file in parent directory is discovered"
@@ -268,6 +275,11 @@ behavior load_format_config "Load Format Configuration" {
   verify unit "missing config file uses defaults"
   verify unit "a file's configuration does not depend on where format runs"
   verify unit "a file is formatted with the configuration of its own project"
+  verify unit "a configuration file is read once per lookup, whichever directories share it"
+  verify unit "a configuration the disk cannot read is a W141 naming why, and its defaults apply"
+  verify unit "a bounded caller's configuration that leaves the bound or has more than one name is a W141 naming where it lands or how many names it has, never its content"
+  verify unit "an unbounded caller follows a linked configuration"
+  verify unit "a typed edit and init lay out with the defaults when their bound refuses the configuration"
   verify contract "Load Format Configuration: format config loading holds — project_root_available, filesystem_accessible, config_resolved, walk_bounded, invalid_values_diagnosed"
 }
 

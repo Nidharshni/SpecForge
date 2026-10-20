@@ -13,12 +13,15 @@ pub mod write;
 
 pub use outcome::{EditDocument, Edited, run};
 
+use crate::authoring::format::{Configs, Place};
 use crate::change::ProjectChange;
+use crate::read::navigate::{SourceText, TextEdit};
 use crate::view::ProjectView;
 use crate::{Caller, OpError, OpErrorKind, Refusal, Writes};
 use serde::{Deserialize, Serialize};
-use specforge_common::DiagnosticList;
 use specforge_common::shape::{Definitions, Shape};
+use specforge_common::{DiagnosticList, Sym};
+use specforge_formatter::FormatConfig;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -48,7 +51,8 @@ pub enum Edit {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         annotations: Option<Vec<String>>,
     },
-    /// `field` (or `field.entry`) is removed. No change when it is absent.
+    /// `field` (or `field.entry`) holds none afterwards: removed, or, over a file default, written `[]` (a list) or
+    /// `{}` (a block field); refused for a field of one value with a default. A second unset changes nothing.
     Unset { entity_id: String, field: String },
     /// The header's title becomes `title`.
     Retitle { entity_id: String, title: String },
@@ -214,25 +218,33 @@ impl EditPlan {
             .collect()
     }
 
-    /// Each file the plan changes, by path relative to the spec root, and the edits that turn the text it was planned
-    /// on into the text it will hold: byte ranges of the planned-on text, in order, none overlapping (the formatter's
-    /// minimal diff, ADR 0021 D8). A new file is one insertion at 0.
-    pub fn edits(&self) -> Vec<(&str, Vec<crate::authoring::format::Edit>)> {
-        self.files
-            .iter()
-            .map(|(key, (before, after))| {
-                (
-                    key.as_str(),
-                    crate::authoring::format::between(before.as_deref().unwrap_or(""), after),
-                )
-            })
-            .collect()
+    /// The edits that turn each file's planned-on text into the text it will hold, as navigation's `TextEdit`s:
+    /// spans in the planned-on text (a new file's: one insertion at its start), each file's in order, none
+    /// overlapping (the formatter's minimal diff, ADR 0021 D8), files in key order.
+    pub fn text_edits(&self) -> Vec<TextEdit> {
+        let mut edits = Vec::new();
+        for (key, (before, after)) in &self.files {
+            let before = before.clone().unwrap_or_else(|| Arc::from(""));
+            let text = SourceText::new(Arc::clone(&before));
+            let file = Sym::new(key);
+            edits.extend(
+                crate::authoring::format::between(&before, after)
+                    .into_iter()
+                    .map(|change| TextEdit {
+                        span: text.span(file, change.range.start, change.range.end),
+                        new_text: change.new_text,
+                    }),
+            );
+        }
+        edits
     }
 }
 
 /// The part of the plan being made: the edited texts, and what the earlier edits created or deleted.
 struct Planner<'v> {
     view: &'v ProjectView<'v>,
+    /// The plan's one configuration lookup, through the view's disk (ADR 0169).
+    configs: Configs<'v>,
     texts: BTreeMap<String, String>,
     entities: BTreeSet<String>,
     created: BTreeMap<String, (String, String)>,
@@ -246,6 +258,12 @@ struct Located {
 }
 
 impl<'v> Planner<'v> {
+    /// The format configuration of the file `key` names (relative to the spec root).
+    fn config_of(&mut self, key: &str) -> FormatConfig {
+        let path = self.view.env().spec_root().join(key);
+        self.configs.layout(Place::File(&path))
+    }
+
     fn text(&self, key: &str) -> Option<String> {
         match self.texts.get(key) {
             Some(text) => Some(text.clone()),
@@ -289,6 +307,7 @@ impl<'v> Planner<'v> {
             key: &located.key,
             id,
             kind: &located.kind,
+            config: self.config_of(&located.key),
         };
         let new = change(&site, &text)?;
         if new != text {
@@ -417,19 +436,15 @@ fn describe(edit: &Edit) -> String {
 
 /// Plan `edits`, in order, over the project `view` reads: each edit reads the text the ones before it left.
 /// Refused with the first edit that cannot be made (with several edits its message starts with
-/// `edit <n> (<op> <entity>): `).
+/// `edit <n> (<op> <entity>): `). Each file is laid out with its format configuration, read once per plan
+/// through the view's disk (ADR 0169).
 pub fn plan(view: &ProjectView<'_>, edits: &[Edit]) -> Result<EditPlan, Refusal<EditField>> {
-    if let Some(problem) = view
-        .env()
-        .config_problems()
-        .iter()
-        .find(|problem| problem.blocks_rewrites())
-    {
-        return Err(crate::config::refusal(problem).into());
-    }
+    crate::config::refuse_rewrite(view.env().config_problems())?;
     view.project_root()?;
+    let disk = view.containment().disk();
     let mut planner = Planner {
         view,
+        configs: Configs::new(None, &disk),
         texts: BTreeMap::new(),
         entities: BTreeSet::new(),
         created: BTreeMap::new(),

@@ -291,12 +291,12 @@ fn usage_error(e: &clap::Error, command: Option<&ExtensionCommand>) -> Value {
     };
     // The declared arg clap names, and the value it refused.
     let declared = text(ContextKind::InvalidArg).and_then(|shown| {
-        let name = declared_name(&shown);
+        let arg = shown_arg(command?, &shown)?;
         command?
             .declaration()
             .args
             .iter()
-            .find(|arg| arg.name == name)
+            .find(|d| d.name == arg.name)
     });
     let refused = match (e.kind(), declared) {
         (ErrorKind::InvalidValue | ErrorKind::ValueValidation, Some(declared)) => {
@@ -305,9 +305,14 @@ fn usage_error(e: &clap::Error, command: Option<&ExtensionCommand>) -> Value {
         }
         (ErrorKind::MissingRequiredArgument, _) => {
             let names = match e.get(ContextKind::InvalidArg) {
-                Some(ContextValue::Strings(args)) => {
-                    args.iter().map(|a| declared_name(a)).collect()
-                }
+                Some(ContextValue::Strings(args)) => args
+                    .iter()
+                    .map(|a| {
+                        command
+                            .and_then(|c| shown_arg(c, a))
+                            .map_or_else(|| a.clone(), |arg| arg.name.clone())
+                    })
+                    .collect(),
                 _ => Vec::new(),
             };
             Some(ArgError::Missing { names })
@@ -348,19 +353,25 @@ fn usage_error(e: &clap::Error, command: Option<&ExtensionCommand>) -> Value {
     .expect("a command error serializes to a JSON object")
 }
 
-/// The declared name of an arg as clap shows it: `<MILESTONE>` is
-/// `milestone`, `--sort-order <SORT_ORDER>` is `sort_order`, `--details`
-/// is `details` (a value name is the declared name upper-cased).
-fn declared_name(shown: &str) -> String {
-    match shown.split_once('<') {
-        Some((_, rest)) => rest.split('>').next().unwrap_or_default().to_lowercase(),
-        None => shown
-            .trim_start_matches('-')
-            .split(['=', ' '])
-            .next()
-            .unwrap_or_default()
-            .replace('-', "_"),
-    }
+/// The value name clap shows for `arg` (`<SORT_ORDER>`'s `SORT_ORDER`): its
+/// declared name upper-cased.
+fn value_name(arg: &ExtensionArg) -> String {
+    arg.name.to_uppercase()
+}
+
+/// The declared arg clap names `shown` in a usage error: the one
+/// [`declared_arg`] renders so (`<MILESTONE>`, `--sort-order <SORT_ORDER>`,
+/// `--details`). Matching the rendering, not undoing it, keeps a declared
+/// name's case (`sortOrder`) and its hyphens.
+fn shown_arg<'c>(command: &'c ExtensionCommand, shown: &str) -> Option<&'c ExtensionArg> {
+    command.args().iter().find(|arg| {
+        let rendered = match &arg.shape {
+            ArgShape::Positional { .. } => format!("<{}>", value_name(arg)),
+            ArgShape::Option { long } => format!("--{long} <{}>", value_name(arg)),
+            ArgShape::Flag { long } => format!("--{long}"),
+        };
+        rendered == shown
+    })
 }
 
 /// `specforge <ext>`'s command line: one subcommand per command the host
@@ -405,10 +416,8 @@ fn command_line(ext: &str, commands: &[&ExtensionCommand]) -> Command {
 fn declared_arg(declared: &ExtensionArg) -> Arg {
     let mut arg = Arg::new(declared.name.clone());
     arg = match &declared.shape {
-        ArgShape::Positional { .. } => arg.value_name(declared.name.to_uppercase()).required(true),
-        ArgShape::Option { long } => arg
-            .long(long.clone())
-            .value_name(declared.name.to_uppercase()),
+        ArgShape::Positional { .. } => arg.value_name(value_name(declared)).required(true),
+        ArgShape::Option { long } => arg.long(long.clone()).value_name(value_name(declared)),
         ArgShape::Flag { long } => arg.long(long.clone()).action(ArgAction::SetTrue),
     };
     if let Some(help) = &declared.description {

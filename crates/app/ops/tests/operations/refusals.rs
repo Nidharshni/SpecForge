@@ -1,4 +1,4 @@
-//! Every refusal of `check`, `trace` and `reach`, field by field: the kind,
+//! Every refusal of `check`, `trace` and `affected`, field by field: the kind,
 //! the code, the message, the suggestion, the entity and the subject each
 //! states. They are pinned once, before any refusal moves (round 13, plan 10).
 
@@ -9,7 +9,7 @@ use specforge_ops::OpError;
 use specforge_ops::analysis::check::{
     CheckField, CheckOptions, check, parse_lint_profiles, parse_severity,
 };
-use specforge_ops::read::trace::{Target, reach, trace};
+use specforge_ops::read::trace::{Target, affected, trace};
 use specforge_parser::{EntityId, EntityKind, FieldMap};
 use specforge_project::LintProfile;
 use specforge_registry::RegistryBuild;
@@ -136,8 +136,8 @@ fn check_and_trace_refusals_are_pinned_field_by_field() {
             "EntityNotFound E003 | unresolved entity 'zzzzzzzz' — not found in graph | - | zzzzzzzz | Some(EntityId)",
         ),
         (
-            "reach, a near id (an OpError: no subject)",
-            line(&reach(&view, ["logn"]).unwrap_err(), None::<CheckField>),
+            "affected, a near id (an OpError: no subject)",
+            line(&affected(&view, ["logn"]).unwrap_err(), None::<CheckField>),
             "EntityNotFound E003 | unresolved entity 'logn' — not found in graph | did you mean 'login'? | logn | -",
         ),
     ];

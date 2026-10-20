@@ -10,7 +10,8 @@ const CANDIDATE: &str = "__candidate";
 /// What the binary `bytes` declare, loaded as every environment loads an
 /// extension (under a candidate name, then unloaded): its declaration and
 /// the warnings its load reports. E028 "not a loadable SpecForge extension:
-/// …" when it doesn't load or answer its declaration. `add`, `publish` and
+/// …" when it doesn't load or answer its declaration. Its warnings name what
+/// it declares, not the candidate name. `add`, `publish` and
 /// `init` read a candidate through it.
 pub fn declaration_of(bytes: &[u8], runtime: &dyn WasmRuntime) -> Result<Loaded, Diagnostic> {
     let invalid = |why: String| {
@@ -29,7 +30,8 @@ pub fn declaration_of(bytes: &[u8], runtime: &dyn WasmRuntime) -> Result<Loaded,
 #[cfg(test)]
 mod tests {
     use super::*;
-    use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta};
+    use specforge_extension_sdk::{ContributionsBuilder, ExtensionMeta, SandboxPolicy};
+    use specforge_protocol_types::DeclaredCategory;
     use specforge_wasm::testing::InProcessRuntime;
 
     #[test]
@@ -47,6 +49,44 @@ mod tests {
             !runtime.unload(CANDIDATE),
             "the candidate is not left loaded"
         );
+    }
+
+    #[test]
+    fn a_candidates_warnings_name_the_extension_it_declares() {
+        let bytes = b"\0asm a candidate that asks";
+        let runtime = InProcessRuntime::new().binary(bytes, || {
+            let mut meta = ExtensionMeta::new("@acme/candidate", "2.1.0");
+            meta.sandbox_policy = Some(SandboxPolicy {
+                max_memory_mb: Some(4096),
+                max_execution_ms: None,
+            });
+            let mut b = ContributionsBuilder::new(meta);
+            b.raw_category(
+                DeclaredCategory::Entities,
+                serde_json::json!([{ "name": "x", "testabel": true }]),
+            );
+            b
+        });
+
+        let loaded = declaration_of(bytes, &runtime).unwrap();
+
+        let codes: Vec<&str> = loaded.warnings.iter().map(|w| w.code.as_str()).collect();
+        assert_eq!(codes, ["W153", "W138"]);
+        for warning in &loaded.warnings {
+            assert!(
+                warning.message.starts_with("extension '@acme/candidate': "),
+                "{}",
+                warning.message
+            );
+        }
+    }
+
+    #[test]
+    fn a_candidate_that_does_not_load_names_no_load_key() {
+        let error = declaration_of(b"not wasm", &InProcessRuntime::new()).unwrap_err();
+
+        assert_eq!(error.code, "E028");
+        assert!(!error.message.contains(CANDIDATE), "{}", error.message);
     }
 
     #[test]

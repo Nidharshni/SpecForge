@@ -28,3 +28,63 @@ fn a_rename_to_a_reserved_word_is_refused_about_the_new_id() {
         );
     }
 }
+
+#[specforge_test_macros::test(
+    behavior = "rename_entity_id",
+    verify = "a rename is refused while a source that spells the ID does not parse"
+)]
+fn a_rename_is_refused_while_a_source_that_spells_the_id_does_not_parse() {
+    let p = crate::navigate::compile(
+        crate::navigate::SOFTWARE,
+        &[
+            ("limit.spec", LIMIT),
+            (
+                "login.spec",
+                "behavior login \"Login\" {\n  invariants [session_limit\n",
+            ),
+        ],
+    );
+    let refused = rename::plan(&p.navigator(), "session_limit", "session_cap").unwrap_err();
+    assert_eq!(refused.error.code, rename::UNPARSED);
+    assert!(
+        refused.error.message.contains("login.spec"),
+        "{}",
+        refused.error.message
+    );
+    // The ID inside a string of a source that does not parse is not a reference.
+    let p = crate::navigate::compile(
+        crate::navigate::SOFTWARE,
+        &[
+            ("limit.spec", LIMIT),
+            (
+                "other.spec",
+                "behavior other \"O\" {\n  contract \"session_limit\"\n",
+            ),
+        ],
+    );
+    let plan = rename::plan(&p.navigator(), "session_limit", "session_cap").unwrap();
+    assert_eq!(plan.edits.len(), 1);
+}
+
+#[specforge_test_macros::test(
+    behavior = "provide_mcp_rename_tool",
+    verify = "renaming a spec block is refused: its name is a string, not an entity ID"
+)]
+fn a_spec_blocks_name_is_not_renamed() {
+    let p = crate::navigate::compile(
+        crate::navigate::SOFTWARE,
+        &[
+            ("main.spec", "spec \"specforge\" {\n}\n"),
+            ("limit.spec", LIMIT),
+        ],
+    );
+    let refused = rename::plan(&p.navigator(), "specforge", "specforge_two").unwrap_err();
+    assert_eq!(refused.error.code, rename::NOT_RENAMEABLE);
+    assert_eq!(refused.error.kind, OpErrorKind::InvalidInput);
+    assert_eq!(refused.subject, Some(RenameField::OldId));
+    let message = &refused.error.message;
+    assert!(
+        message.contains("main.spec") && message.contains("string"),
+        "{message}"
+    );
+}

@@ -24,7 +24,6 @@ similar = { workspace = true }
 specforge-parser = { workspace = true, features = ["testing"] }
 proptest = { version = "1.11", default-features = false, features = ["std"] }
 regex = { workspace = true }
-tempfile = { workspace = true }
 specforge-protocol-types = { path = "../../leaf/protocol-types" }
 specforge-test = { workspace = true }
 specforge-test-macros = { workspace = true }

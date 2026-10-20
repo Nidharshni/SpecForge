@@ -183,7 +183,7 @@ impl<'r> Names<'r> {
 
     /// What each specifier names, in order: one [`Named`] per string, index for index. `packages`
     /// resolves a registry package (`(specifier, package) -> version`). Refusals of one specifier
-    /// are named among several: reading a local file (E054, E040, E028, E072, a binary declaring a
+    /// are named among several: reading a local file (E040, E028, E072, a binary declaring a
     /// builtin's name, a path outside the containment), git (E064), and whatever `packages` returns.
     /// A claim conflict is `extension_conflict`, naming both specifiers and not prefixed.
     fn name_each<'a>(
@@ -208,9 +208,10 @@ impl<'r> Names<'r> {
                         .map_err(|error| self.named(at, error))?;
                     let starter = local
                         .binary
-                        .candidate()
-                        .starter_template()
-                        .map(str::to_string);
+                        .declaration()
+                        .handshake
+                        .starter_template
+                        .clone();
                     let install = Install::local(self.place.root, local)
                         .map_err(|error| self.named(at, error))?;
                     claims.local(wanted, &install)?.into_named(|| Named::Local {

@@ -1,6 +1,6 @@
 # The read views are operations over the project view
 
-**Status:** accepted (2026-10-05); P7: tools are named by their typed constants (ADR 0049). Amended by ADR 0111 (D2 reaffirmed with a measurement; D10: every reader reports the versioning's notices). Amended by ADR 0130 (the noticing reads return `Noticed<T>`; `QueryOutcome`, `Listing`, `SearchOutcome` and `ModelOutcome` are gone). D11: `TraceError` is gone (ADR 0132); trace refuses with `view::not_found` about `EntityField::EntityId`. M14 and P1 name `navigate::anchors_of_file` / `anchors_of_entity` over the view ([ADR 0140](0140-source-anchors-are-a-read-view.md)). Amended by round 14, plan 09 (tools' tests).
+**Status:** accepted (2026-10-05); amended by round 18, plan 07 (Q3, Q5, P4); P7: tools are named by their typed constants (ADR 0049). Amended by ADR 0111 (D2 reaffirmed with a measurement; D10: every reader reports the versioning's notices). Amended by ADR 0130 (the noticing reads return `Noticed<T>`; `QueryOutcome`, `Listing`, `SearchOutcome` and `ModelOutcome` are gone). D11: `TraceError` is gone (ADR 0132); trace refuses with `view::not_found` about `EntityField::EntityId`. M14 and P1 name `navigate::anchors_of_file` / `anchors_of_entity` over the view ([ADR 0140](0140-source-anchors-are-a-read-view.md)). Amended by round 14, plan 09 (tools' tests). Its `ExtensionListing` and `ProviderListing` (the listings section) and `SchemaOutcome` are gone: each listing answers its document ([ADR 0052](0052-an-operations-outcome-is-one-document-both-surfaces-print.md), round-18 amendment). Amended by [ADR 0174](0174-the-graph-owns-directed-reach-and-degree.md) (P3's degree is `Graph::degree`, which the export's budget reads too; `trace::reach` is `trace::affected`; `TraceOutcome` is `Chain` or `Every`).
 
 `specforge-ops` handed the read views out as building blocks and each surface chained them on its
 own: the CLI's `stats` built a `CoverageRegistries` by hand and called `compute_project_stats`, MCP
@@ -478,3 +478,12 @@ holds what the recorded tests prove; standings are read through `ProjectView::en
   in ops and are the obligations of an ops-level behaviour (`compute_the_coverage_view`,
   `select_entities_over_the_view`, `inspect_entity_facts`, `compute_project_statistics`,
   `compute_traceability_chain`, `query_graph_multi_resolution`, `serve_schema_resource`), never of the tool's.
+
+## Amendment (architecture round 18, plan 07)
+
+- **Q3.** Coverage's `kind` is a filter over entities like the others: an unknown kind matches nothing and is an I020
+  notice (`coverage` returns `Noticed`); it narrows an `entity_id`'s row as `status` does.
+- **Q5.** The raisers of `view::not_found` add coverage (`entity_id`), the fixes (`FixQuery::entity`) and search
+  (`references`, about `SearchField::Referencing`); each checks before reading anything else.
+- **P4.** `depth` without `entity_id` is refused by explore and review (`view::depth_without_entity`, invalid input
+  about `entity_id`); review's depth is `Option<usize>`, `DEFAULT_DEPTH` with an entity.

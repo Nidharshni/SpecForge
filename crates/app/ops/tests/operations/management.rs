@@ -106,14 +106,14 @@ fn management_operations_read_the_project_from_their_view() {
     assert_eq!(failures, ["E028"]);
 
     // root_for_disk: the lock is read at the view's root ...
-    assert_eq!(listing.locked.len(), 1);
+    assert_eq!(listing.lock_file_entries.len(), 1);
     assert_eq!(report.installed_count, 1);
 
     // ... and a view without one: the listings and doctor answer from what
     // the view enabled and loaded; the others refuse with no_project.
     let rootless = project.rootless_view().reporting(&e028);
     let listing = extension::list(&rootless);
-    assert!(listing.locked.is_empty());
+    assert!(listing.lock_file_entries.is_empty());
     assert_eq!(listing.extensions.len(), 1);
     assert_eq!(
         specforge_ops::analysis::doctor::diagnose(&rootless, &ScriptedSolver::ready())
@@ -198,9 +198,9 @@ fn the_providers_listing_reports_what_the_environment_registered() {
             .map(|d| (d.code.clone(), d.message.clone()))
             .collect()
     };
-    assert_eq!(w118(&listing.diagnostics).len(), 2, "{listing:?}");
+    assert_eq!(w118(&listing.diagnostics.0).len(), 2, "{listing:?}");
     assert_eq!(
-        w118(&listing.diagnostics),
+        w118(&listing.diagnostics.0),
         w118(
             &compiled
                 .environment()
@@ -235,7 +235,7 @@ fn the_providers_listing_reads_the_registration() {
     let listing = extension::providers(&ProjectView::of(&compiled));
     let aliases: Vec<&str> = listing.providers.iter().map(|p| p.alias.as_str()).collect();
     assert_eq!(aliases, ["work"], "{listing:?}");
-    assert_eq!(listing.diagnostics.len(), 1, "{listing:?}");
+    assert_eq!(listing.diagnostics.0.len(), 1, "{listing:?}");
 }
 
 #[specforge_test(

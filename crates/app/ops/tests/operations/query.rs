@@ -12,7 +12,7 @@ use specforge_ops::read::query::{
 use specforge_ops::read::{export::Format, schema::json_schema};
 use specforge_test::prelude::*;
 
-use crate::view_support::{Assembled, Viewed, plain, registries};
+use crate::view_support::{Assembled, Viewed, answered, ok, plain, registries};
 
 fn node(id: &str, kind: &str) -> Node {
     Node {
@@ -491,7 +491,7 @@ fn search_defaults_to_twenty() {
     }
     let project = Assembled::over(Default::default()).graph(graph);
     let found = |limit| {
-        plain(search(
+        answered(search(
             &project.view(),
             &SearchRequest {
                 text: "item",
@@ -511,7 +511,7 @@ fn search_defaults_to_twenty() {
 fn search_filters_by_a_field_pair_and_snippets_the_match() {
     let project = behaviors();
     let view = project.view();
-    let hits = plain(search(
+    let hits = answered(search(
         &view,
         &SearchRequest {
             text: "",
@@ -529,14 +529,14 @@ fn search_filters_by_a_field_pair_and_snippets_the_match() {
     assert_eq!(found, ["b1", "b3"]);
 
     // A match in a string field carries the text around it.
-    let outcome = search(
+    let outcome = ok(search(
         &view,
         &SearchRequest {
             text: "y",
             kinds: vec!["behaviour"],
             ..SearchRequest::default()
         },
-    );
+    ));
     assert_eq!(outcome.notices()[0].code, "I020");
     assert!(plain(outcome).is_empty());
 }

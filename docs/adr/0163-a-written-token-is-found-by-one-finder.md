@@ -4,7 +4,8 @@
 D5 (navigation's tokens ask the graph's finder; its holders still read `Graph::written`), extends
 [ADR 0149](0149-a-file-states-a-kinds-shared-fields-once.md) D11 (a default no block takes is one token, held by none)
 and [ADR 0156](0156-a-delete-finds-references-by-the-one-reference-rule.md) D1 and D2 (the referrer scan is the finder;
-a derived type name refuses too), as ADR 0156's "Reopen when" foresaw.
+a derived type name refuses too), as ADR 0156's "Reopen when" foresaw. D2 amended by [ADR 0176](0176-the-finder-is-the-only-record-of-where-a-name-is-written.md): `Navigator::references` and the token at a position ask the finder too, which names the blocks that hold each token.
+Amended again by the round 18 amendment below (plan 11, citing ADR 0176): the finder reads each block as the build stores it; the derived names one block links are one function.
 
 "Which written tokens name entity X" was answered by two walks that disagreed both ways:
 
@@ -41,3 +42,36 @@ refuses a type name a derived field reads. `Navigator::tokens` takes `include_de
 
 What would reopen it: a typed edit that writes `defaults` blocks or type expressions (then D3 edits instead of
 refusing); a third walk over parsed files appearing outside the graph crate.
+
+## The finder reads a block as the build stores it (amendment, architecture round 18, plan 11)
+
+**Context.** The linker reads each node's entries after the build coerced them; the finder's derived walk read the
+block's entries as parsed. A declared list field written as one bare word (`composed_types Customer`, `refs Customer`)
+was a list to the graph and a type name to the finder, so `delete --unlink-references` refused where `delete` succeeded,
+MCP `find_references` answered `[]` while `rename` edited the word, and the LSP answered `null` at the token yet renamed
+it from the declaration. The only parity test ran over fixtures that wrote no such list.
+
+**Decision.**
+- D1 is sharpened: the finder reads each block's and each default's entries coerced once, as the build stores them, for
+  its references **and** its derived names, so a list written as one value is a list (ADR 0156 D1). A `string_list`
+  word is no reference and no type name.
+- `derive::derived_names` answers which names a derived field links from one block; the linker makes each an edge and
+  the finder a token.
+- `graph/tests/agreement.rs` holds the two walks to agreement, in both directions, over the cases where their inputs
+  differ on purpose (defaults taken or not, E002 and W060 losers, unresolved and mistyped references, the block's own
+  name). It reads the blocks that hold each token from `held_by` ([ADR 0176](0176-the-finder-is-the-only-record-of-where-a-name-is-written.md)).
+
+**Rejected.**
+- The linker reading the finder's walk: the two read different inputs by design (merged, coerced nodes with the taken
+  defaults against every parsed block, losers included, and each default once); every other output reads node fields, so
+  edges equal what the nodes say; diagnostics come in node order; the finder would add a second `FileDefaults::of`, a
+  sort and a `Vec` to every compile; and it would not have caught this defect, which is in the finder's input.
+- A guard in `derive::expressions` that skips what a reading would coerce: it would rely on a fact about `coerce`'s
+  outputs that `expressions` cannot see.
+- A debug assertion in the build that runs the finder: the cost lands on every debug compile and the build holds no
+  parsed files at that point.
+
+**Reopen when.** The linker stops reading node fields (then one per-block reader is free), or a third reader of a
+block's references over parsed files appears.
+
+ADR 0181 was reserved for this decision and is unused.

@@ -368,7 +368,7 @@ fn trace_data_contract_all_entities_traced() {
 )]
 fn trace_data_full_trace_covers_all_roots() {
     let graph = build_graph();
-    let traces = crate::view_support::every_chain(&graph, Default::default()).chains;
+    let traces = crate::view_support::every_chain(&graph, Default::default()).traces;
     let ids: Vec<&str> = traces.iter().map(|t| t.entity_id.as_str()).collect();
     assert!(ids.contains(&"a"), "root entity a must be traced");
     assert!(ids.contains(&"b"), "mid entity b must be traced");
@@ -414,7 +414,7 @@ fn trace_data_gaps_highlighted() {
     );
 
     // Without expectations nothing is missing.
-    let bare = crate::view_support::every_chain(&graph, Default::default()).chains;
+    let bare = crate::view_support::every_chain(&graph, Default::default()).traces;
     assert!(bare[0].missing.is_empty());
 }
 

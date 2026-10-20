@@ -3,8 +3,8 @@
 //! of entities per kind.
 
 use specforge_common::{SourceSpan, Sym};
+use specforge_graph::Degree;
 use specforge_graph::{Edge, Graph, Node};
-use specforge_ops::view::Degree;
 use specforge_parser::{EntityId, EntityKind, FieldMap};
 use specforge_registry::RegistryBuild;
 use specforge_test::prelude::*;

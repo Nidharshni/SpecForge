@@ -7,10 +7,8 @@
 
 use std::path::Path;
 
-use specforge_common::{ProjectPath, ProjectRoot};
-use specforge_migrate::{
-    MigrationRecord, MigrationStatus, Original, migrate_project, restore, written_beside,
-};
+use specforge_common::ProjectRoot;
+use specforge_migrate::{MigrationRecord, backup_of, migrate_project};
 use specforge_parser::CURRENT_FORMAT_VERSION;
 use specforge_test_macros::test as specforge_test;
 use tempfile::TempDir;
@@ -34,140 +32,29 @@ fn project() -> TempDir {
     behavior = "migrate_spec_files_in_place",
     verify = "the migrate document names each file and backup from the project root"
 )]
-fn a_rollback_names_what_it_restores_from_the_root() {
-    let dir = project();
-    let file = dir.path().join("spec/a.spec");
-
-    let summary = restore(&[Original {
-        path: file.clone(),
-        name: ProjectPath::of(dir.path(), &file),
-        text: "restored\n".to_string(),
-    }]);
-
-    assert_eq!(summary.results[0].status, MigrationStatus::Restored);
-    assert_eq!(summary.results[0].file_path, "spec/a.spec");
-    assert_eq!(std::fs::read_to_string(&file).unwrap(), "restored\n");
-}
-
-#[specforge_test(
-    behavior = "migrate_spec_files_in_place",
-    verify = "the migrate document names each file and backup from the project root"
-)]
-fn the_record_reads_a_backup_through_the_root() {
+fn the_record_names_each_file_and_its_backup_from_the_root() {
     let dir = project();
     let root = ProjectRoot::of(dir.path()).unwrap();
     let summary = migrate_project(
         &root,
         &[dir.path().join("spec/a.spec")],
         &CURRENT_FORMAT_VERSION,
-        false,
-        false,
         &|path: &Path| std::fs::read_to_string(path),
     );
-    assert_eq!(summary.backups[0].original_path, "spec/a.spec");
-    assert_eq!(summary.backups[0].backup_path, "spec/a.spec.bak");
+    assert_eq!(summary.rewrites[0].name, "spec/a.spec");
 
-    let record =
-        MigrationRecord::of(dir.path(), &CURRENT_FORMAT_VERSION, &summary.backups).unwrap();
+    let record = MigrationRecord::of(dir.path(), &CURRENT_FORMAT_VERSION, &summary.rewrites);
 
     assert_eq!(record.files[0].path, "spec/a.spec");
     assert_eq!(record.files[0].backup, "spec/a.spec.bak");
-    let migrated = std::fs::read_to_string(dir.path().join("spec/a.spec")).unwrap();
-    assert!(!migrated.contains("0.9"), "{migrated}");
+    assert!(!summary.rewrites[0].after.contains("0.9"));
     assert_eq!(record.files[0].sha256.len(), 64);
 }
 
 #[test]
-fn written_beside_names_the_backup_and_both_temporary_files() {
-    let names = written_beside(std::path::Path::new("spec/a.spec"));
+fn backup_of_names_the_backup_beside_its_source() {
     assert_eq!(
-        names.map(|p| p.display().to_string()),
-        [
-            "spec/a.spec.bak",
-            "spec/a.spec.tmp",
-            "spec/a.spec.restore.tmp"
-        ]
+        backup_of(Path::new("spec/a.spec")),
+        Path::new("spec/a.spec.bak")
     );
-}
-
-#[cfg(unix)]
-#[specforge_test(
-    behavior = "migrate_spec_files_in_place",
-    verify = "the backup and temporary file are created new, never through a planted link"
-)]
-fn an_inside_link_at_a_temp_name_is_not_written_through() {
-    let dir = project();
-    let notes = dir.path().join("notes.txt");
-    std::fs::write(&notes, "notes\n").unwrap();
-    let source = dir.path().join("spec/a.spec");
-    std::os::unix::fs::symlink("../notes.txt", dir.path().join("spec/a.spec.tmp")).unwrap();
-    let root = ProjectRoot::of(dir.path()).unwrap();
-
-    let summary = migrate_project(
-        &root,
-        std::slice::from_ref(&source),
-        &CURRENT_FORMAT_VERSION,
-        false,
-        false,
-        &|path: &Path| std::fs::read_to_string(path),
-    );
-
-    assert_eq!(summary.results[0].status, MigrationStatus::Migrated);
-    assert_eq!(std::fs::read_to_string(&notes).unwrap(), "notes\n");
-    assert!(!std::fs::symlink_metadata(&source).unwrap().is_symlink());
-    assert!(!std::fs::read_to_string(&source).unwrap().contains("0.9"));
-}
-
-#[cfg(unix)]
-#[specforge_test(
-    behavior = "migrate_spec_files_in_place",
-    verify = "the backup and temporary file are created new, never through a planted link"
-)]
-fn an_inside_link_at_the_backup_name_is_not_written_through() {
-    let dir = project();
-    let notes = dir.path().join("notes.txt");
-    std::fs::write(&notes, "notes\n").unwrap();
-    let source = dir.path().join("spec/a.spec");
-    let backup = dir.path().join("spec/a.spec.bak");
-    std::os::unix::fs::symlink("../notes.txt", &backup).unwrap();
-    let root = ProjectRoot::of(dir.path()).unwrap();
-
-    let summary = migrate_project(
-        &root,
-        std::slice::from_ref(&source),
-        &CURRENT_FORMAT_VERSION,
-        false,
-        false,
-        &|path: &Path| std::fs::read_to_string(path),
-    );
-
-    assert_eq!(summary.results[0].status, MigrationStatus::Migrated);
-    assert_eq!(std::fs::read_to_string(&notes).unwrap(), "notes\n");
-    assert!(!std::fs::symlink_metadata(&backup).unwrap().is_symlink());
-    assert_eq!(std::fs::read_to_string(&backup).unwrap(), OLD);
-}
-
-#[cfg(unix)]
-#[specforge_test(
-    behavior = "migrate_spec_files_in_place",
-    verify = "the backup and temporary file are created new, never through a planted link"
-)]
-fn an_inside_link_at_the_restore_temp_name_is_not_written_through() {
-    let dir = project();
-    let notes = dir.path().join("notes.txt");
-    std::fs::write(&notes, "notes\n").unwrap();
-    let file = dir.path().join("spec/a.spec");
-    let [_, _, restore_tmp] = written_beside(&file);
-    std::os::unix::fs::symlink("../notes.txt", &restore_tmp).unwrap();
-
-    let summary = restore(&[Original {
-        path: file.clone(),
-        name: ProjectPath::of(dir.path(), &file),
-        text: "restored\n".to_string(),
-    }]);
-
-    assert_eq!(summary.results[0].status, MigrationStatus::Restored);
-    assert_eq!(std::fs::read_to_string(&notes).unwrap(), "notes\n");
-    assert_eq!(std::fs::read_to_string(&file).unwrap(), "restored\n");
-    assert!(!std::fs::symlink_metadata(&file).unwrap().is_symlink());
 }

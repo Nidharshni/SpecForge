@@ -34,6 +34,7 @@ mod init;
 mod inspect_views;
 mod installed_extensions;
 mod isolation;
+mod listing_wording;
 mod mcp;
 mod mcp_add;
 mod migrate;

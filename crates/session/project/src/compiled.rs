@@ -158,9 +158,13 @@ impl CompiledProject {
             }
         }
         let keys: Vec<String> = keys.into_iter().collect();
-        let mut project = Self::built(Arc::clone(&self.env), &keys, &planned, |key| {
-            self.sources.as_read(key)
-        });
+        let mut project = Self::built(
+            Arc::clone(&self.env),
+            &keys,
+            &planned,
+            self.on_disk,
+            |key| self.sources.as_read(key),
+        );
         project.check(&mut Unrecorded::plain());
         project
     }
@@ -359,16 +363,21 @@ impl CompiledProject {
     ) -> Self {
         let keys = reads.discover(env.sources());
         let spec_root = env.spec_root().to_path_buf();
-        Self::built(env, &keys, held, |key| reads.source(&spec_root, key))
+        let rooted = env.project_root().is_some();
+        Self::built(env, &keys, held, rooted, |key| {
+            reads.source(&spec_root, key)
+        })
     }
 
     /// The cold build of `keys` in `env` (ADR 0032's one cold pipeline, [`Environment::build_sources`]): each
     /// key a `held` text, else what `source` gives for it; the graph built, the imports resolved. The checks
-    /// have not run.
+    /// have not run. `on_disk` is the project's answer to rooted ([`Self::root`]): the environment's for a
+    /// project read from disk, the edited project's own for its copy.
     fn built(
         env: Arc<Environment>,
         keys: &[String],
         held: &BTreeMap<String, &str>,
+        on_disk: bool,
         source: impl FnMut(&str) -> Read,
     ) -> Self {
         let SourceBuild {
@@ -384,7 +393,7 @@ impl CompiledProject {
             check_diagnostics: Vec::new(),
             recorded: OnceLock::new(),
             reported: OnceLock::new(),
-            on_disk: true,
+            on_disk,
             checks_skipped: false,
         }
     }

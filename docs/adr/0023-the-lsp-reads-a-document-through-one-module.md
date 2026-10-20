@@ -1,6 +1,6 @@
 # The LSP reads a document through one module
 
-**Status:** accepted (2026-10-06) Amended by [ADR 0161](0161-a-stub-fix-is-a-typed-edit.md) D5: code actions resolve a stub's edits. Amended by round 17 plan 07: the code-action request checks its document first (via ADR 0161 D5's amendment).
+**Status:** accepted (2026-10-06) Amended by [ADR 0161](0161-a-stub-fix-is-a-typed-edit.md) D5: code actions resolve a stub's edits. Amended by round 17 plan 07: the code-action request checks its document first (via ADR 0161 D5's amendment). Amended by round 18 plan 08 (2026-10-19): what a buffer is to the compile has three states (D7), hover's diagnostics follow D3, and a change plan is one step (D9).
 
 The LSP answered questions about a `.spec` buffer with seven scanners of its own: a bracket scanner for
 completion that counted `[` inside strings, a brace scanner that respected strings but not `"""`, a
@@ -47,6 +47,10 @@ the same text. A file the compile holds no text of has no range: its location or
 diagnostic stays at its file's start as one without a span does, a code action with such an edit, or over
 a buffer typed since the compile, is not offered, and a rename over a stale buffer is refused as
 `ContentModified` (-32801). There is no byte-column fallback.
+
+**Amended by round 18 plan 08 (2026-10-19):** the hover shows the compile's diagnostics under the cursor only
+while the document is the compiled text. The cursor is a position in the buffer, and their ranges are positions
+in the compiled text.
 
 **D4. Structure from the text, identity from navigation.** The graph lags the buffer while the user
 types, and loses a block the parser rejects, so where the cursor is (entity body, field, list, string,
@@ -123,6 +127,13 @@ navigation's occurrence at its position. Hover, definition and references answer
 prepareRename and rename are refused as `ContentModified`. Locations stay positions in the compiled text
 (D3). One type owns the rule (`navigation::Compiled`: ranges, locations, staleness, the cursor's target).
 
+**Amended by round 18 plan 08 (2026-10-19):** `Compiled::editor_text` says what the editor's text of a file is
+to the compile: the compiled text, changed since (a compile is coming: the request is refused as
+`ContentModified`), or a text the project does not build (the session holds the buffer and compiled none of
+it; none is coming). prepareRename and rename from such a document answer no rename. Before, the three were one
+`is_stale`, and that document was told "changed since the project was compiled; try again" forever. The
+code-action list and its resolve choose offers through one function that asks first.
+
 **D8. Answers are synchronous.** `specforge_lsp::answers` answers every request over `&LspState` (one
 function per request, `ClientSupport` holding what the client declared that shapes an answer); the
 `LanguageServer` methods take a lock and return the answer. Tests ask the same functions over a project
@@ -135,6 +146,9 @@ A closed project source is read from disk again; any other closed file leaves th
 applies every open buffer once.
 *(ADR 0046: the session holds the buffers; a closed document's buffer is released through the session's one
 read, and a reload keeps the held buffers in its one cold build instead of applying them after it.)*
+
+**Amended by round 18 plan 08 (2026-10-19):** the plan is exactly one step (`Open`, `Disk`, `Release`, `Hold`),
+and applying it is one match. `Plan::of` is its only constructor.
 
 ### Consequences
 

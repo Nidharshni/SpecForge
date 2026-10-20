@@ -6,9 +6,9 @@ use specforge_ops::read::coverage::{CoverageQuery, CoverageRowDocument};
 use specforge_project::coverage::Status;
 
 use crate::args::Arguments;
-use crate::reply::Answered;
-use crate::tool::McpError;
-use specforge_ops::view::ProjectView;
+use crate::refusal::ArgumentOf;
+use crate::reply::{Answer, Answered};
+use specforge_ops::view::{EntityField, ProjectView};
 
 /// `specforge.coverage`'s arguments.
 #[derive(Debug, Arguments)]
@@ -31,8 +31,18 @@ pub struct Reply {
 /// `specforge.coverage`: the coverage view of the served project (its
 /// recorded tests read at its root; with nothing served there is no root,
 /// so none). With no filter, the entities that count toward
-/// coverage, the ones stats counts as testable.
+/// coverage, the ones stats counts as testable. An `entity_id` the graph lacks
+/// is `entity_not_found` (E003) on `entity_id`; a `kind` the project does not
+/// know rides in `_meta.diagnostics` (I020).
 pub(crate) struct Tool;
+
+impl ArgumentOf<EntityField> for Tool {
+    fn argument(field: EntityField) -> Option<&'static str> {
+        match field {
+            EntityField::EntityId => Some("entity_id"),
+        }
+    }
+}
 
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.coverage";
@@ -52,10 +62,9 @@ impl CoreTool for Tool {
             status: args.status_filter,
         };
         let outcome =
-            specforge_ops::read::coverage::coverage(&view, &query).map_err(McpError::from)?;
-        Ok(Reply {
+            specforge_ops::read::coverage::coverage(&view, &query).map_err(Self::refused)?;
+        Ok(Answer::noticed(outcome.map(|outcome| Reply {
             entities: outcome.rows.iter().map(|row| row.document()).collect(),
-        }
-        .into())
+        })))
     }
 }

@@ -771,9 +771,9 @@ behavior parse_extension_specifier "Parse Extension Specifier" {
     starts with @ and does not end in .wasm), where the name is a
     PackageName and the requirement a VersionRequirement (latest when
     absent), or else a local path (a .wasm file or an extension's crate
-    directory, with or without ./). A package reference that is not one,
-    and a path that names nothing, MUST be refused with E054 before any
-    registry is asked; a requirement that is not one MUST be refused with
+    directory, with or without ./). A package reference that is not one
+    MUST be refused with E054 before any registry is asked; a path that
+    names nothing is refused when it is read (resolve_extension_source); a requirement that is not one MUST be refused with
     R-RES-003 before any registry is asked. No other code may split
     name@requirement. Each string a change names (an add argument, an
     add_extension specifier, an init extension) is one specifier: no
@@ -813,13 +813,19 @@ behavior resolve_extension_source "Resolve Extension Source" {
     concrete manifest and .wasm binary. Registry sources MUST query the
     registry API. Local sources MUST read from the filesystem. Git sources
     MUST clone or fetch the repository at the specified ref. Resolution
-    failures MUST produce a ExtensionError diagnostic.
+    failures MUST produce a ExtensionError diagnostic. A local source is
+    read as publish and extension validate read a path (ADR 0172): nothing
+    at the path, a crate directory with no built component (or several,
+    none the crate's), and a file that can't be read are each one E040
+    with one message in every verb, naming the path as given; a bounded
+    read refuses a file with more than one name.
   """
   produces   [extension_source_resolved]
   verify unit "registry source resolves via registry API"
   verify unit "local source resolves from filesystem"
   verify unit "git source resolves from repository"
   verify unit "resolution failure produces ExtensionError"
+  verify unit "a local path is refused by add, init, publish and extension validate with one code and message per cause"
   verify contract "Resolve Extension Source: extension source resolution holds — extension_specifier_parsed_fired, source_ports_available, extension_source_resolved_emitted, resolution_failure_diagnosed"
 }
 

@@ -156,7 +156,7 @@ fn trace_on_root_has_downstream_only() {
 )]
 fn tracing_every_entity_covers_all_root_entities() {
     let graph = build_chain();
-    let traces = every_chain(&graph, RegistryBuild::default()).chains;
+    let traces = every_chain(&graph, RegistryBuild::default()).traces;
     // All 3 entities should have a trace
     assert_eq!(traces.len(), 3);
     let ids: Vec<&str> = traces.iter().map(|t| t.entity_id.as_str()).collect();
@@ -347,19 +347,19 @@ fn reach_lists_what_the_chains_reach_and_what_is_unverified() {
         label: "features".into(),
     });
 
-    let reach = specforge_ops::read::trace::reach(&project.view(), ["beta"]).unwrap();
-    assert_eq!(reach.affected, ["alpha", "beta"]);
+    let affected = specforge_ops::read::trace::affected(&project.view(), ["beta"]).unwrap();
+    assert_eq!(affected.entities, ["alpha", "beta"]);
     // alpha is testable and unproven; beta, a feature, is not obligated.
-    assert_eq!(reach.unverified, ["alpha"]);
+    assert_eq!(affected.unverified, ["alpha"]);
 
     let project = {
         project.record_passing(&[("alpha", "test alpha")]);
         project
     };
-    let reach = specforge_ops::read::trace::reach(&project.view(), ["beta"]).unwrap();
-    assert_eq!(reach.unverified, Vec::<String>::new());
+    let affected = specforge_ops::read::trace::affected(&project.view(), ["beta"]).unwrap();
+    assert_eq!(affected.unverified, Vec::<String>::new());
 
-    let refused = specforge_ops::read::trace::reach(&project.view(), ["nope"]).unwrap_err();
+    let refused = specforge_ops::read::trace::affected(&project.view(), ["nope"]).unwrap_err();
     assert_eq!(refused.code, "E003", "{refused:?}");
 }
 

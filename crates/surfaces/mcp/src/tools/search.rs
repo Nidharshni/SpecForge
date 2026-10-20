@@ -2,9 +2,10 @@ use crate::target::View;
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_ops::read::query::{FieldHolds, Hit, SearchRequest, search};
+use specforge_ops::read::query::{FieldHolds, Hit, SearchField, SearchRequest, search};
 
 use crate::args::Arguments;
+use crate::refusal::ArgumentOf;
 use crate::reply::{Answer, Answered};
 use crate::tool::McpError;
 use specforge_ops::view::ProjectView;
@@ -69,8 +70,17 @@ impl Found {
 /// the entities the query finds, ranked as the LSP's workspace symbols and
 /// completion rank them, over names and string fields. Every filter is
 /// ANDed: kinds, a field's text (`field` with `value`: one without the other
-/// is refused), and `references` (the entities that reference that one).
+/// is refused), and `references` (the entities that reference that one; one the
+/// graph lacks is `entity_not_found` on `references`).
 pub(crate) struct Tool;
+
+impl ArgumentOf<SearchField> for Tool {
+    fn argument(field: SearchField) -> Option<&'static str> {
+        match field {
+            SearchField::Referencing => Some("references"),
+        }
+    }
+}
 
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.search";
@@ -107,8 +117,12 @@ impl CoreTool for Tool {
             referencing: args.references.as_deref(),
             limit: Some(args.limit),
         };
-        Ok(Answer::noticed(search(&view, &request).map(|hits| Reply {
-            results: hits.iter().map(Found::of).collect(),
-        })))
+        Ok(Answer::noticed(
+            search(&view, &request)
+                .map_err(Self::refused)?
+                .map(|hits| Reply {
+                    results: hits.iter().map(Found::of).collect(),
+                }),
+        ))
     }
 }

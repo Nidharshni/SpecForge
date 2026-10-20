@@ -1,5 +1,5 @@
 use specforge_common::{Diagnostic, codes};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// Formatter configuration, loaded from `.specforgefmt.toml` or defaults.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,24 +30,23 @@ impl FormatConfig {
     }
 }
 
-/// Load format configuration by walking from `file_dir` up to `project_root`.
-///
-/// The walk stops at `project_root` and does NOT continue beyond it. The
-/// `.specforgefmt.toml` it finds ([`find_config_path`]) is read once
-/// ([`read_config_file`]); without one, the defaults apply.
-pub fn load_config(file_dir: &Path, project_root: &Path) -> (FormatConfig, Vec<Diagnostic>) {
-    find_config_path(file_dir, project_root).map_or_else(
-        || (FormatConfig::default(), Vec::new()),
-        |path| read_config_file(&path),
-    )
-}
+/// The name of a formatter configuration file: looked up from a document's directory up to its project root by
+/// `specforge_ops`' configuration lookup, which hands [`parse`] what its disk read (ADR 0169).
+pub const FILE: &str = ".specforgefmt.toml";
 
-/// Read and validate the `.specforgefmt.toml` at `path`. A file that can't
-/// be read or parsed, and every invalid value, is a W141 naming the file;
-/// what is invalid falls back to its default.
-pub fn read_config_file(path: &Path) -> (FormatConfig, Vec<Diagnostic>) {
+/// The configuration `read` gives: the bytes of the `.specforgefmt.toml` at `path`, or why they could not be read.
+/// A read that failed, text that is not UTF-8 or not TOML, and every invalid value are a W141 naming `path`; what
+/// is invalid falls back to its default. Never opens a file: `path` only names it in the messages.
+pub fn parse(path: &Path, read: std::io::Result<Vec<u8>>) -> (FormatConfig, Vec<Diagnostic>) {
     let invalid = |message: String| Diagnostic::new(codes::W141, message);
-    let content = match std::fs::read_to_string(path) {
+    let content = match read.and_then(|bytes| {
+        String::from_utf8(bytes).map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "stream did not contain valid UTF-8",
+            )
+        })
+    }) {
         Ok(content) => content,
         Err(e) => {
             let message = format!("Failed to read config file {}: {e}", path.display());
@@ -110,33 +109,12 @@ pub fn read_config_file(path: &Path) -> (FormatConfig, Vec<Diagnostic>) {
     (config, diagnostics)
 }
 
-/// Find the `.specforgefmt.toml` config file path, if it exists, walking from
-/// `file_dir` up to `project_root` (inclusive, never beyond it).
-pub fn find_config_path(file_dir: &Path, project_root: &Path) -> Option<PathBuf> {
-    let project_root = project_root.canonicalize().ok()?;
-    let mut current = file_dir.canonicalize().ok()?;
-    if !current.starts_with(&project_root) {
-        return None;
-    }
-
-    loop {
-        let config_path = current.join(".specforgefmt.toml");
-        if config_path.exists() {
-            return Some(config_path);
-        }
-        if current == project_root || !current.pop() {
-            return None;
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
 
-    fn write_file(dir: &Path, name: &str, content: &str) {
-        std::fs::write(dir.join(name), content).unwrap();
+    fn text(source: &str) -> std::io::Result<Vec<u8>> {
+        Ok(source.as_bytes().to_vec())
     }
 
     #[specforge_test_macros::test(
@@ -144,19 +122,13 @@ mod tests {
         verify = "default FormatConfig passes validation"
     )]
     fn the_default_config_reads_back_without_a_diagnostic() {
-        let tmp = TempDir::new().unwrap();
-        let path = tmp.path().join(".specforgefmt.toml");
         let d = FormatConfig::default();
-        std::fs::write(
-            &path,
-            format!(
-                "indent_width = {}\nuse_tabs = {}\nmax_width = {}\n",
-                d.indent_width, d.use_tabs, d.max_width
-            ),
-        )
-        .unwrap();
+        let source = format!(
+            "indent_width = {}\nuse_tabs = {}\nmax_width = {}\n",
+            d.indent_width, d.use_tabs, d.max_width
+        );
 
-        let (config, diagnostics) = read_config_file(&path);
+        let (config, diagnostics) = parse(Path::new(FILE), text(&source));
 
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         assert_eq!(config, d);
@@ -175,111 +147,16 @@ mod tests {
 
     #[specforge_test_macros::test(
         behavior = "load_format_config",
-        verify = "config file in project root is loaded"
-    )]
-    fn test_config_file_in_project_root_is_loaded() {
-        let tmp = TempDir::new().unwrap();
-        let root = tmp.path();
-        write_file(root, "specforge.json", "{}");
-        write_file(
-            root,
-            ".specforgefmt.toml",
-            "indent_width = 4\nmax_width = 80\n",
-        );
-
-        let (config, diags) = load_config(root, root);
-        assert!(diags.is_empty());
-        assert_eq!(config.indent_width, 4);
-        assert_eq!(config.max_width, 80);
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "load_format_config",
-        verify = "config file in parent directory is discovered"
-    )]
-    fn test_config_file_in_parent_directory_is_discovered() {
-        let tmp = TempDir::new().unwrap();
-        let root = tmp.path();
-        write_file(root, "specforge.json", "{}");
-        write_file(root, ".specforgefmt.toml", "indent_width = 3\n");
-
-        let subdir = root.join("spec").join("behaviors");
-        std::fs::create_dir_all(&subdir).unwrap();
-
-        let (config, diags) = load_config(&subdir, root);
-        assert!(diags.is_empty());
-        assert_eq!(config.indent_width, 3);
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "load_format_config",
-        verify = "config outside project root is not discovered"
-    )]
-    fn test_config_outside_project_root_is_not_discovered() {
-        let tmp = TempDir::new().unwrap();
-        let root = tmp.path();
-        // Config is in tmp root, but project root is a subdirectory
-        write_file(root, ".specforgefmt.toml", "indent_width = 8\n");
-
-        let project = root.join("project");
-        std::fs::create_dir_all(&project).unwrap();
-        write_file(&project, "specforge.json", "{}");
-
-        let (config, diags) = load_config(&project, &project);
-        assert!(diags.is_empty());
-        // Should use defaults since config is outside project root
-        assert_eq!(config.indent_width, 2);
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "load_format_config",
-        verify = "invalid indent_width produces diagnostic and uses default"
-    )]
-    fn test_invalid_indent_width_produces_diagnostic_and_uses_default() {
-        let tmp = TempDir::new().unwrap();
-        let root = tmp.path();
-        write_file(root, "specforge.json", "{}");
-        write_file(
-            root,
-            ".specforgefmt.toml",
-            "indent_width = \"not_a_number\"\n",
-        );
-
-        let (config, diags) = load_config(root, root);
-        assert_eq!(config.indent_width, 2); // default
-        assert_eq!(diags.len(), 1);
-        assert_eq!(diags[0].code, "W141");
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "load_format_config",
-        verify = "missing config file uses defaults"
-    )]
-    fn test_missing_config_file_uses_defaults() {
-        let tmp = TempDir::new().unwrap();
-        let root = tmp.path();
-        write_file(root, "specforge.json", "{}");
-        // No .specforgefmt.toml created
-
-        let (config, diags) = load_config(root, root);
-        assert!(diags.is_empty());
-        assert_eq!(config, FormatConfig::default());
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "load_format_config",
         verify = "invalid indent_width produces diagnostic and uses default"
     )]
     #[specforge_test_macros::test(
         invariant = "config_defaults_valid",
         verify = "fallback from invalid config produces usable FormatConfig"
     )]
-    fn read_config_file_reports_an_invalid_value() {
-        let tmp = TempDir::new().unwrap();
-        let path = tmp.path().join(".specforgefmt.toml");
-        std::fs::write(&path, "indent_width = 99\nuse_tabs = true\n").unwrap();
+    fn parse_reports_an_invalid_value_and_keeps_the_valid_ones() {
+        let path = Path::new("/p/.specforgefmt.toml");
 
-        let (config, diags) = read_config_file(&path);
+        let (config, diags) = parse(path, text("indent_width = 99\nuse_tabs = true\n"));
 
         assert_eq!(config.indent_width, 2, "the default replaces 99");
         assert!(config.use_tabs, "a valid value still applies");
@@ -290,6 +167,41 @@ mod tests {
             diags[0].message.contains(&path.display().to_string()),
             "the message names the file: {diags:?}"
         );
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "load_format_config",
+        verify = "a configuration the disk cannot read is a W141 naming why, and its defaults apply"
+    )]
+    fn parse_reports_a_failed_read_as_one_w141_naming_the_file_and_the_reason() {
+        let path = Path::new("/p/.specforgefmt.toml");
+        let refused = std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "it has 2 names, so no bound can say where its content is",
+        );
+
+        let (config, diags) = parse(path, Err(refused));
+
+        assert_eq!(config, FormatConfig::default());
+        assert_eq!(diags.len(), 1, "{diags:?}");
+        assert_eq!(diags[0].code, "W141");
+        assert!(
+            diags[0].message.contains("/p/.specforgefmt.toml"),
+            "{diags:?}"
+        );
+        assert!(diags[0].message.contains("2 names"), "{diags:?}");
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "load_format_config",
+        verify = "a configuration the disk cannot read is a W141 naming why, and its defaults apply"
+    )]
+    fn parse_reports_text_that_is_not_utf8() {
+        let (config, diags) = parse(Path::new(FILE), Ok(vec![0xff]));
+
+        assert_eq!(config, FormatConfig::default());
+        assert_eq!(diags.len(), 1, "{diags:?}");
+        assert!(diags[0].message.contains("valid UTF-8"), "{diags:?}");
     }
 
     #[specforge_test_macros::test(
@@ -316,94 +228,5 @@ mod tests {
             max_width: 100,
         };
         assert_eq!(config.indent_str(), "\t");
-    }
-
-    // --- Contract: load_format_config ---
-
-    #[specforge_test_macros::test(
-        behavior = "load_format_config",
-        verify = "Load Format Configuration: format config loading holds — project_root_available, filesystem_accessible, config_resolved, walk_bounded, invalid_values_diagnosed"
-    )]
-    fn test_load_format_config_contract_requires_ensures() {
-        let tmp = TempDir::new().unwrap();
-        let root = tmp.path();
-        // requires: project_root_available
-        write_file(root, "specforge.json", "{}");
-        write_file(
-            root,
-            ".specforgefmt.toml",
-            "indent_width = 4\nmax_width = 80\n",
-        );
-
-        let subdir = root.join("spec").join("behaviors");
-        std::fs::create_dir_all(&subdir).unwrap();
-
-        // ensures: config_resolved
-        let (config, diags) = load_config(&subdir, root);
-        assert_eq!(config.indent_width, 4, "config should be resolved");
-        assert_eq!(config.max_width, 80);
-        assert!(
-            diags.is_empty(),
-            "valid config should produce no diagnostics"
-        );
-
-        // ensures: walk_bounded (config outside project root not found)
-        let isolated = TempDir::new().unwrap();
-        let iso_root = isolated.path();
-        write_file(iso_root, "specforge.json", "{}");
-        // No config file in isolated project
-        let (default_config, default_diags) = load_config(iso_root, iso_root);
-        assert_eq!(
-            default_config,
-            FormatConfig::default(),
-            "should use defaults when no config"
-        );
-        assert!(default_diags.is_empty());
-
-        // ensures: invalid_values_diagnosed
-        let invalid_tmp = TempDir::new().unwrap();
-        let inv_root = invalid_tmp.path();
-        write_file(inv_root, "specforge.json", "{}");
-        write_file(inv_root, ".specforgefmt.toml", "indent_width = 999\n");
-        let (inv_config, inv_diags) = load_config(inv_root, inv_root);
-        assert_eq!(
-            inv_config.indent_width, 2,
-            "invalid value should fall back to default"
-        );
-        assert!(
-            !inv_diags.is_empty(),
-            "invalid value should produce diagnostic"
-        );
-    }
-
-    #[specforge_test_macros::test(
-        behavior = "load_format_config",
-        verify = "config discovery walks from formatted file directory up to specforge.json parent then stops"
-    )]
-    fn test_config_discovery_walks_from_file_dir_up_to_project_root_then_stops() {
-        let tmp = TempDir::new().unwrap();
-        let root = tmp.path();
-        write_file(root, "specforge.json", "{}");
-
-        // Place config in project root
-        write_file(root, ".specforgefmt.toml", "indent_width = 3\n");
-
-        // Create deeply nested subdirectory
-        let deep = root.join("spec").join("behaviors").join("auth");
-        std::fs::create_dir_all(&deep).unwrap();
-
-        // Should find the config by walking up
-        let (config, _) = load_config(&deep, root);
-        assert_eq!(config.indent_width, 3, "should find config by walking up");
-
-        // Config placed ABOVE project root should NOT be found
-        let parent = tmp.path();
-        let project = parent.join("project");
-        std::fs::create_dir_all(&project).unwrap();
-        write_file(&project, "specforge.json", "{}");
-        // Config is in parent (above project root), should not be found
-        let (config2, _) = load_config(&project, &project);
-        // If there's no .specforgefmt.toml in project, should use defaults
-        assert_eq!(config2, FormatConfig::default());
     }
 }

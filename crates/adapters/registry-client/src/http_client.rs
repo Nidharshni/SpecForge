@@ -12,9 +12,9 @@ use specforge_registry_wire::{
 
 use super::registry_client::{RegistryClient, RegistryError};
 use super::registry_config::{RegistryConfig, RegistryCredential};
+use specforge_package::DeclaredPackage;
 use specforge_package::PackageName;
 use specforge_package::Version;
-use specforge_protocol_types::ExtensionDeclaration;
 
 pub struct HttpRegistryClient {
     client: Client,
@@ -140,22 +140,15 @@ impl RegistryClient for HttpRegistryClient {
 
     fn publish(
         &self,
-        package: &[u8],
-        declaration: &ExtensionDeclaration,
+        package: &DeclaredPackage<'_>,
+        wasm: &[u8],
         manifest_json: &str,
         signature: &PackageSignature,
         registry: &RegistryConfig,
         credential: Option<&RegistryCredential>,
     ) -> Result<PublishReceipt, RegistryError> {
-        let name =
-            PackageName::declared_by(declaration).map_err(|why| RegistryError::InvalidPackage {
-                message: why.to_string(),
-            })?;
-        let version =
-            Version::parse(declaration.version()).map_err(|why| RegistryError::InvalidPackage {
-                message: format!("'{}' is not a SemVer version: {why}", declaration.version()),
-            })?;
-        let url = registry.url.address(&Call::Version(&name, &version));
+        let (name, version) = (package.name(), package.version());
+        let url = registry.url.address(&Call::Version(name, version));
 
         // Build the multipart body explicitly: reqwest's blocking multipart
         // wrapper can fail with a body error on large wasm parts, while an
@@ -167,12 +160,7 @@ impl RegistryClient for HttpRegistryClient {
                 .map(|d| d.as_nanos())
                 .unwrap_or(0)
         );
-        let body = form::body(
-            &boundary,
-            manifest_json,
-            package,
-            Some(&signature.to_json()),
-        );
+        let body = form::body(&boundary, manifest_json, wasm, Some(&signature.to_json()));
 
         let mut request = self
             .client
@@ -186,8 +174,8 @@ impl RegistryClient for HttpRegistryClient {
         let resp = self.send(request, &url)?;
         if resp.status() == StatusCode::CONFLICT {
             return Err(RegistryError::DuplicateVersion {
-                name: declaration.name().to_string(),
-                version: declaration.version().to_string(),
+                name: name.to_string(),
+                version: version.to_string(),
             });
         }
         answer(resp, &url, &format!("{name}@{version}"))

@@ -74,11 +74,11 @@ pub const DOCS_URL: &str = concat!(
     "/blob/main/docs/diagnostics.md"
 );
 
-/// The docs link for `code`: its section of [`DOCS_URL`], or `None` when
-/// the catalog has no entry for it (a third-party code, or anything
-/// outside the catalog).
-pub fn docs_href(code: &str) -> Option<String> {
-    lookup(code).map(|entry| format!("{DOCS_URL}#{}", entry.code.to_lowercase()))
+impl CodeEntry {
+    /// This code's section of [`DOCS_URL`].
+    pub fn docs_href(&self) -> String {
+        format!("{DOCS_URL}#{}", self.code.to_lowercase())
+    }
 }
 
 /// Look up a code (case-insensitive).

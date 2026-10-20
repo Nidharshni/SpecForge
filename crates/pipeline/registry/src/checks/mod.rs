@@ -5,6 +5,7 @@
 
 mod fields;
 mod identifiers;
+pub use identifiers::ID_LENGTH;
 mod kinds;
 mod obligations;
 mod refs;

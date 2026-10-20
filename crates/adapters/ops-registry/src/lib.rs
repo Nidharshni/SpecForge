@@ -15,11 +15,11 @@ use specforge_ops::asking::{ExpectedFrom, Question};
 use specforge_ops::registry::{
     Found, KeyPin, METADATA_MISMATCH, Manifest, NO_REGISTRY, NO_REGISTRY_FOR_NAME,
     NOT_AUTHENTICATED, Package, Published, Publisher, Registry, Searched, TrustPolicy,
-    UNREADABLE_MANIFEST, UNUSABLE_SIGNING_KEY, Upload, no_registry,
+    UNREADABLE_MANIFEST, UNUSABLE_SIGNING_KEY, no_registry,
 };
 use specforge_ops::{OpError, OpErrorKind};
-use specforge_package::PackageName;
 use specforge_package::Version;
+use specforge_package::{DeclaredPackage, PackageName};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 use specforge_registry_client::credentials::{read_credentials, user_dir};
 use specforge_registry_client::signing::load_or_create_signing_key_at;
@@ -499,13 +499,13 @@ impl Registry for ConfiguredRegistry {
         })
     }
 
-    fn publish(&self, package: &Upload<'_>) -> Result<Published, OpError> {
-        let registry = self.registry_for(package.name)?; // E063, E067, R-OPS-001
+    fn publish(&self, package: &DeclaredPackage<'_>, wasm: &[u8]) -> Result<Published, OpError> {
+        let registry = self.registry_for(package.name())?; // E063, E067, R-OPS-001
         let credential = self.credential_for(registry)?; // R001, R012, R-AUTH-020/021
         let (key, key_created) = self.signing_key()?; // E074
         let url = publish_to_registry(
-            package.wasm,
-            package.declaration,
+            package,
+            wasm,
             registry,
             Some(&credential),
             &*self.client,
@@ -576,7 +576,7 @@ impl ConfiguredRegistry {
         load_or_create_signing_key_at(&path).map_err(|why| {
             OpError::coded(OpErrorKind::PreconditionFailed, UNUSABLE_SIGNING_KEY, why)
                 .with_suggestion(format!(
-                    "move {} aside: the next publish creates a new key, and whoever pinned the                      old one then sees a changed key (R-TRUST-003)",
+                    "move {} aside: the next publish creates a new key, and whoever pinned the old one then sees a changed key (R-TRUST-003)",
                     path.display()
                 ))
         })
@@ -595,10 +595,8 @@ pub fn failure(error: RegistryError) -> OpError {
         RegistryError::NotFound { .. } => OpErrorKind::ExtensionNotFound,
         RegistryError::DuplicateVersion { .. } => OpErrorKind::Conflict,
         RegistryError::Refused { .. } => OpErrorKind::InvalidInput,
-        // The registry's reply names a package that is no package: not a value the caller gave.
-        RegistryError::InvalidPackage { .. } | RegistryError::InvalidReply { .. } => {
-            OpErrorKind::SchemaMismatch
-        }
+        // The registry's answer is not the call's wire type: not a value the caller gave.
+        RegistryError::InvalidReply { .. } => OpErrorKind::SchemaMismatch,
     };
     OpError::of(kind, error.to_diagnostic())
 }
@@ -731,10 +729,6 @@ mod tests {
                 OpErrorKind::Conflict,
             ),
             (
-                RegistryError::InvalidPackage { message: s() },
-                OpErrorKind::SchemaMismatch,
-            ),
-            (
                 RegistryError::InvalidReply {
                     subject: s(),
                     message: s(),
@@ -773,10 +767,11 @@ mod tests {
         invariant = "mcp_structured_error_responses",
         verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
     )]
-    fn a_registry_reply_naming_no_package_is_a_schema_mismatch() {
+    fn a_registry_reply_that_is_no_wire_type_is_a_schema_mismatch() {
         // The reply is the registry's fault, not a value the caller gave: no argument is about
         // it. The registry's own refusal of a request (a 400) is the caller's.
-        let invalid = failure(RegistryError::InvalidPackage {
+        let invalid = failure(RegistryError::InvalidReply {
+            subject: "x".to_string(),
             message: "x".to_string(),
         });
         assert_eq!(invalid.kind, OpErrorKind::SchemaMismatch);

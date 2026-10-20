@@ -45,11 +45,16 @@ behavior edit_entity_field "Edit an Entity Field" {
     project's format configuration past its key, and inserts an absent field
     at its rank (one-line values, then
     block fields, then triple-quoted text, in the kind's declared order). An
-    unset edit removes the field and the comment lines directly above it. A
+    unset edit leaves the field holding none: it removes the field and the comment lines directly above it, or, over
+    a file default, writes `[]` for a list and `{}` for a block field; a field of one value with a default cannot
+    hold none and is refused. A second unset changes nothing. A
     dotted `field.entry` path edits one entry of a block field the kind
     declares; its field is refused as any field is, a field that is not a declared block field, or a path whose
     parts are not each one identifier, is refused not_editable, and so is a path into a block field the entity
-    writes as a value. An unset of an entry, or of a block field, the block does not write changes nothing. A retitle edit
+    writes as a value. A block field the block inherits from its
+    file's defaults is copied into an own field before an entry of it is set or unset, and an own field that then
+    restates the default is removed; a block field left with no entry over a default is written `{}`. An unset of an
+    entry, or of a block field, that neither the block nor its file's defaults hold changes nothing. A retitle edit
     replaces the header title. A field the kind does not declare is refused. A field that is the other
     side of a relation another kind owns is refused naming the owning field (ADR 0157).
   """
@@ -57,11 +62,13 @@ behavior edit_entity_field "Edit an Entity Field" {
   verify unit "a multi-line value is laid out with the project's format configuration"
   verify unit "set of an absent field inserts it at its rank"
   verify unit "unset removes the field and the comment above it"
+  verify unit "unset leaves a field holding none, once"
   verify unit "set refuses a field the kind does not declare"
   verify unit "set refuses the other side of a relation naming its owning field"
   verify unit "set of a nested entry edits one line of the block field"
   verify unit "every verb reads a field.entry path the same way"
   verify unit "an entry of a block field written as a value is refused"
+  verify unit "every verb leaves a field holding what it says, own or inherited"
   verify unit "retitle replaces the header title"
 }
 
@@ -85,7 +92,7 @@ behavior edit_entity_link "Edit an Entity Reference List" {
   verify unit "an own field equal to the default is removed"
   verify unit "link of a target already there writes nothing"
   verify unit "a link after new starts from the file's default"
-  verify unit "a link after unset starts from the file's default"
+  verify unit "a link after unset starts from none"
   verify unit "link and unlink read a list written as one value as its one item"
   verify unit "link and unlink refuse a field.entry path as an entry of a block field"
 }

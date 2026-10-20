@@ -10,14 +10,16 @@
 //! needs a configured registry, which a project that doesn't exist yet can't have, so it is added
 //! afterwards with `specforge add`.
 
+use crate::authoring::format::{Configs, Place as FormatPlace};
 use crate::change;
-use crate::extension::{self, Also, Candidate, LockPlan, Names, Place};
+use crate::extension::{self, Also, LockPlan, Names, Place};
 use crate::{Caller, Containment, OpError, OpErrorKind, Refusal, Writes};
 use serde::Serialize;
 use serde_json::{Value, json};
 use specforge_common::shape::Shape;
 use specforge_common::{PROJECT_FILE, ProjectRoot, validate_project_name};
 use specforge_installed::Installed;
+use specforge_registry::Disk;
 use specforge_wasm::WasmRuntime;
 use std::path::{Path, PathBuf};
 
@@ -156,7 +158,7 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     // The starter declares `spec "<id>"`: an ID outside the identifier
     // contract would fail its first check (E014).
     let spec_id = sanitize_entity_id(&name);
-    if !(2..=60).contains(&spec_id.chars().count()) {
+    if !specforge_registry::ID_LENGTH.contains(&spec_id.chars().count()) {
         return Err(invalid_name(
             &name,
             "it must be 2-60 characters, as the starter's spec ID must",
@@ -223,8 +225,13 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
         None => structural_starter(&spec_id, &version),
     };
     // Whatever the extensions contribute, the file is written as the
-    // formatter writes it, so `specforge format --check` accepts it.
-    let starter = canonical(&starter, req.dir);
+    // formatter writes it, so `specforge format --check` accepts it, with the
+    // configuration init's bound reads (ADR 0169).
+    let starter = canonical(
+        &starter,
+        req.dir,
+        &req.caller.containment().narrowed(req.dir).disk(),
+    );
     let dir = req.dir;
     let files = vec![
         Also {
@@ -309,9 +316,12 @@ fn starter_template(
             Some((_, template)) => template.clone(),
             // A builtin that does not load refuses the init (E028).
             None => match extension::builtin_name(name) {
-                Some(builtin) => Candidate::builtin(runtime, builtin)?
-                    .starter_template()
-                    .map(str::to_string),
+                Some(builtin) => {
+                    extension::builtin_declaration(runtime, builtin)?
+                        .declaration
+                        .handshake
+                        .starter_template
+                }
                 None => None,
             },
         };
@@ -335,8 +345,8 @@ fn sanitize_entity_id(name: &str) -> String {
 }
 
 /// `starter`, formatted as the project at `dir` formats its files.
-fn canonical(starter: &str, dir: &Path) -> String {
-    let (config, _) = specforge_formatter::load_config(dir, dir);
+fn canonical(starter: &str, dir: &Path, disk: &dyn Disk) -> String {
+    let config = Configs::new(None, disk).layout(FormatPlace::InProject { root: dir, dir });
     specforge_formatter::format_source(starter, &config, &specforge_graph::FieldForms::default())
         .formatted
 }

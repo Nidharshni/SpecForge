@@ -1026,9 +1026,9 @@ fn add_rejects_invalid_specifier() {
     fs::write(dir.root().join("specforge.json"), config).unwrap();
 
     // A package reference that is not one; a bare word that is no `@scope/name` is a path.
-    for (specifier, prefix) in [
-        ("@scope", "invalid extension specifier: "),
-        ("not-valid", "file not found: "),
+    for (specifier, code, prefix) in [
+        ("@scope", "E054", "invalid extension specifier: "),
+        ("not-valid", "E040", "no extension binary at "),
     ] {
         let output = Cli::on(&dir)
             .command(&["add"])
@@ -1039,7 +1039,7 @@ fn add_rejects_invalid_specifier() {
             .unwrap();
         assert_eq!(output.status.code(), Some(1));
         let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-        assert_eq!(json["code"], "E054", "{json}");
+        assert_eq!(json["code"], code, "{json}");
         let message = json["error"].as_str().unwrap();
         assert!(
             message.starts_with(prefix) && message.contains(specifier),
@@ -1052,7 +1052,7 @@ fn add_rejects_invalid_specifier() {
         .assert()
         .code(1)
         .stderr(
-            predicates::str::is_match(r"error\[E054\]: file not found: .*not-valid").unwrap(),
+            predicates::str::is_match(r"error\[E040\]: no extension binary at .*not-valid").unwrap(),
         )
         .stderr(predicates::str::contains(
             "use a builtin's name, './local/path.wasm', 'git+https://...', or '@scope/name[@version]'",
@@ -1087,15 +1087,15 @@ fn add_refuses_what_is_not_a_package_before_the_registry() {
         ("@acme/tool@1.2", "E063"),            // I6
         ("@acme/tool@1.0.0/x", "R-RES-003"),   // I7
         ("@acme/tool@1.0.0?x=1", "R-RES-003"), // I8
-        ("foo@/bar", "E054"),                  // I9
-        ("tool@1.0.0", "E054"),                // I10
-        ("tool", "E054"),                      // I11
+        ("foo@/bar", "E040"),                  // I9
+        ("tool@1.0.0", "E040"),                // I10
+        ("tool", "E040"),                      // I11
         ("@acme/..", "E054"),                  // I12
         ("@acme/aa/bb", "E054"),               // I13
         ("@acme/a/b", "E054"),                 // I14
         ("@a/x", "E063"),                      // I15
         ("@acme/T ool", "E054"),               // I16
-        ("Acme@1", "E054"),                    // I17
+        ("Acme@1", "E040"),                    // I17
         ("@acme/tool@latest", "E063"),         // I18
         ("@acme/tool@*", "E063"),              // I18
         ("@acme/tool@>=1, <2", "E063"),        // I19
@@ -2027,7 +2027,7 @@ fn add_with_several_specifiers_is_one_change() {
             String::from_utf8_lossy(&output.stderr)
         );
         assert!(
-            shown.contains(&format!("adding '{missing}': file not found")),
+            shown.contains(&format!("adding '{missing}': no extension binary at")),
             "{format}: {shown}"
         );
         assert_eq!(changed_since(root, &before), Vec::<String>::new());

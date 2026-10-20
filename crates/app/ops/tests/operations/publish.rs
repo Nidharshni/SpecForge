@@ -215,17 +215,17 @@ fn a_publish_uploads_the_binary_and_the_declaration_read_from_it() {
 
     let published = report(&binary(dir.path(), &wasm), &registry, &runtime);
 
-    let outcome = published.result.expect("published");
+    let document = published.result.expect("published");
     let name = PackageName::parse("@acme/x").unwrap();
     let version = Version::parse("1.0.0").unwrap();
     assert_eq!(
         registry.accepted_publishes(),
         [(name.clone(), version.clone())]
     );
-    assert_eq!(outcome.name, name);
-    assert_eq!(outcome.version, version);
-    assert_eq!(outcome.size_bytes, wasm.len());
-    assert_eq!(outcome.published.registry, "in-memory");
+    assert_eq!(document.extension, "@acme/x");
+    assert_eq!(document.version, "1.0.0");
+    assert_eq!(document.size_bytes, wasm.len());
+    assert_eq!(document.registry, "in-memory");
 
     let held = registry
         .fetch(&name, &version, TrustPolicy::new(false, Asking::Nobody))
@@ -403,11 +403,11 @@ fn the_publish_document_names_the_extension_and_what_was_done() {
     let dir = tempfile::tempdir().unwrap();
     let wasm = bytes("@acme/x 1.0.0");
     let runtime = InProcessRuntime::new().binary(&wasm, declaring("@acme/x", "1.0.0", &[]));
-    let outcome = report(&binary(dir.path(), &wasm), &MemoryRegistry::new(), &runtime)
+    let document = report(&binary(dir.path(), &wasm), &MemoryRegistry::new(), &runtime)
         .result
         .expect("published");
 
-    let json = serde_json::to_value(outcome.document()).unwrap();
+    let json = serde_json::to_value(document).unwrap();
 
     let mut keys: Vec<&str> = json
         .as_object()

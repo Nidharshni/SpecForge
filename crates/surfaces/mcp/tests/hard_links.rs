@@ -82,23 +82,26 @@ fn migrate_writes_no_backup_or_temporary_file_through_a_hard_link() {
     invariant = "mcp_served_project_consistency",
     verify = "a mutation writes no file through a hard link to a file outside the project"
 )]
-fn format_replaces_a_hard_linked_source_and_keeps_the_other_name() {
+fn format_fails_a_hard_linked_source_and_writes_neither_name() {
     let project = plain_project();
     let outside = TempDir::new().unwrap();
     let victim = outside.path().join("victim.txt");
-    fs::write(&victim, "behavior   alpha   \"Alpha\"   {\n}\n").unwrap();
+    let text = "behavior   alpha   \"Alpha\"   {\n}\n";
+    fs::write(&victim, text).unwrap();
     fs::remove_file(project.path().join("spec/main.spec")).unwrap();
     fs::hard_link(&victim, project.path().join("spec/main.spec")).unwrap();
     let mut server = serve(project.path());
 
-    let _ = call_tool(&mut server, "specforge.format", json!({}));
+    // A bounded format run reads no file with two names (ADR 0146 D1, ADR 0169): it fails that file.
+    let resp = call_tool(&mut server, "specforge.format", json!({}));
 
+    let error = crate::tool_errors::mcp_error(&resp);
+    assert_eq!(error["code"], "invalid_input", "{error}");
+    assert_eq!(fs::read_to_string(&victim).unwrap(), text);
     assert_eq!(
-        fs::read_to_string(&victim).unwrap(),
-        "behavior   alpha   \"Alpha\"   {\n}\n"
+        fs::read_to_string(project.path().join("spec/main.spec")).unwrap(),
+        text
     );
-    let mine = fs::read_to_string(project.path().join("spec/main.spec")).unwrap();
-    assert!(mine.starts_with("behavior alpha \"Alpha\" {"), "{mine}");
 }
 
 #[cfg(unix)]

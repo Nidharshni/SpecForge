@@ -83,9 +83,10 @@ impl Registry for Refusing {
 
     fn publish(
         &self,
-        upload: &crate::registry::Upload<'_>,
+        package: &specforge_package::DeclaredPackage<'_>,
+        wasm: &[u8],
     ) -> Result<crate::registry::Published, OpError> {
-        crate::registry::Unconfigured("add").publish(upload)
+        crate::registry::Unconfigured("add").publish(package, wasm)
     }
 
     fn search(

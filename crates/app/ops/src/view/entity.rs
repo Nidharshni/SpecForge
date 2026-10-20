@@ -4,10 +4,10 @@
 use specforge_common::{codes, find_close_match};
 use specforge_graph::Graph;
 
-use crate::{OpError, OpErrorKind};
+use crate::{OpError, OpErrorKind, Refusal};
 
 /// The field of a read view's request a refusal can be about (ADR 0072): the one entity the
-/// view is asked about (inspect, definition, references, neighbourhood, explore, review, trace).
+/// view is asked about (inspect, definition, references, neighbourhood, explore, review, trace, coverage, fixes).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntityField {
     /// The entity the view is about.
@@ -18,7 +18,7 @@ pub enum EntityField {
 /// `EntityNotFound`, about `id`, worded `unresolved entity '<id>' - not
 /// found in graph`, with `did you mean '<closest>'?` when an id of `graph`
 /// is close. The one refusal for it: export's scope, inspect, the
-/// navigator, rename, trace, and every MCP tool and prompt.
+/// navigator, rename, trace, coverage, the fixes, and every MCP tool and prompt.
 pub fn not_found(graph: &Graph, id: &str) -> OpError {
     let error = OpError::coded(
         OpErrorKind::EntityNotFound,
@@ -30,4 +30,18 @@ pub fn not_found(graph: &Graph, id: &str) -> OpError {
         Some(near) => error.with_suggestion(format!("did you mean '{near}'?")),
         None => error,
     }
+}
+
+/// The code of a depth given without the entity it counts hops from.
+pub const DEPTH_WITHOUT_ENTITY: &str = "depth_without_entity";
+
+/// A depth needs the entity it counts from: invalid input about the missing
+/// `entity_id`, as export's and model's depth without their anchor.
+pub fn depth_without_entity() -> Refusal<EntityField> {
+    OpError::new(
+        OpErrorKind::InvalidInput,
+        DEPTH_WITHOUT_ENTITY,
+        "a depth counts hops from an entity: give an entity too",
+    )
+    .about(EntityField::EntityId)
 }

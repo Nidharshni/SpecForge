@@ -62,6 +62,28 @@ impl Held {
         specforge_common::fresh::replace_file(&self.real, contents.as_ref())
     }
 
+    /// A name the operation owns (ADR 0171): whatever is at `spelled` (a link, or a file left by an earlier run)
+    /// is unlinked, never its target, and the file is created new with `permissions`, set before the first byte
+    /// is written. A write that fails unlinks the name again. Opens `spelled`, not `real`: a link at an owned
+    /// name is replaced, not followed.
+    pub fn create_owned(
+        &self,
+        contents: impl AsRef<[u8]>,
+        permissions: std::fs::Permissions,
+    ) -> std::io::Result<()> {
+        let mut file = specforge_common::fresh::create_fresh(&self.spelled)?;
+        file.set_permissions(permissions)
+            .and_then(|()| file.write_all(contents.as_ref()))
+            .inspect_err(|_| {
+                let _ = std::fs::remove_file(&self.spelled);
+            })
+    }
+
+    /// The permissions of the file at `real`.
+    pub fn permissions(&self) -> std::io::Result<std::fs::Permissions> {
+        Ok(std::fs::metadata(&self.real)?.permissions())
+    }
+
     /// Unlink the name (`spelled`): a link is removed, never its target. `NotFound` passes through.
     pub fn remove(&self) -> std::io::Result<()> {
         std::fs::remove_file(&self.spelled)

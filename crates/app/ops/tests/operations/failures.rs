@@ -50,7 +50,9 @@ fn every_view(view: &ProjectView) -> Vec<(&'static str, OpError)> {
         ),
         (
             "coverage",
-            specforge_ops::read::coverage::coverage(&view, &Default::default()).unwrap_err(),
+            specforge_ops::read::coverage::coverage(&view, &Default::default())
+                .unwrap_err()
+                .error,
         ),
         (
             "row",

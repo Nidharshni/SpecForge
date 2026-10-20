@@ -3,7 +3,7 @@
 //! references is its [`Reading`](crate::Reading)'s answer, never the
 //! parser's shape (ADR 0093).
 
-use specforge_common::{Diagnostic, DiagnosticData, SourceSpan, Sym, codes};
+use specforge_common::{Diagnostic, DiagnosticData, Sym, codes};
 use std::collections::BTreeMap;
 
 use crate::{Edge, FieldForms, Graph};
@@ -13,8 +13,6 @@ mod reference;
 /// An edge as written, and whether a declared single reference wrote it.
 struct WrittenEdge {
     edge: Edge,
-    /// Where the reference is written.
-    at: Option<SourceSpan>,
     single: bool,
 }
 
@@ -25,8 +23,6 @@ impl Graph {
     /// target kind no loaded extension declares, naming the extension in
     /// `owners` that does. Then W061 over the edges but the declared single
     /// references': a single reference is never part of a reference cycle.
-    ///
-    /// Records where each edge is written (`Graph::written`, ADR 0127): the span of each reference it was linked from.
     ///
     /// Clears all existing edges first. Diagnostics come in node order
     /// (the graph's nodes are sorted), then the cycles'.
@@ -55,7 +51,6 @@ impl Graph {
                                 target: Sym::new(reference.id),
                                 label: entry.key,
                             },
-                            at: reference.span.cloned(),
                             single,
                         });
                     }
@@ -71,7 +66,7 @@ impl Graph {
         // The single references join, keeping the edges in written order.
         self.clear_edges();
         for written in edges {
-            self.add_written(written.edge, written.at.as_ref());
+            self.add_edge(written.edge);
         }
         diagnostics
     }
@@ -129,24 +124,8 @@ impl Graph {
         unlinked
     }
 
-    /// The edges with no written place (source, target, field). Empty after
-    /// every link: each reference and each derived name records its span.
-    #[cfg_attr(
-        not(debug_assertions),
-        allow(dead_code, reason = "only debug assertions call it")
-    )]
-    pub(crate) fn unwritten_edges(&self) -> Vec<(Sym, Sym, Sym)> {
-        self.edges
-            .iter()
-            .zip(&self.written)
-            .filter(|(_, places)| places.is_empty())
-            .map(|(edge, _)| (edge.source, edge.target, edge.label))
-            .collect()
-    }
-
-    /// Panic, naming them, when [`Self::unlinked_references`] or
-    /// [`Self::unwritten_edges`] is not empty: a SpecForge bug, never a spec
-    /// error.
+    /// Panic, naming them, when [`Self::unlinked_references`] is not empty: a
+    /// SpecForge bug, never a spec error.
     #[cfg_attr(
         not(debug_assertions),
         allow(dead_code, reason = "only debug assertions call it")
@@ -157,16 +136,6 @@ impl Graph {
             unlinked.is_empty(),
             "SpecForge bug: references to existing entities without their edge (source, target, field): {}",
             unlinked
-                .iter()
-                .map(|(source, target, field)| format!("({source}, {target}, {field})"))
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
-        let unwritten = self.unwritten_edges();
-        assert!(
-            unwritten.is_empty(),
-            "SpecForge bug: edges the linker made with no written place (source, target, field): {}",
-            unwritten
                 .iter()
                 .map(|(source, target, field)| format!("({source}, {target}, {field})"))
                 .collect::<Vec<_>>()
@@ -190,7 +159,7 @@ invariant inv_one "Invariant One" {
 }
 "#;
 
-    /// The graph and diagnostics of `source`, built the way a compile builds it.
+    /// The graph and diagnostics of `source`, built with no extension loaded.
     fn built(source: &str) -> (Graph, Vec<Diagnostic>) {
         crate::build_graph(&[specforge_parser::parse(source, "main.spec")])
     }
@@ -220,21 +189,6 @@ invariant inv_one "Invariant One" {
             .collect();
 
         assert_eq!(unlinked, [("alpha", "inv_one", "invariants")]);
-    }
-
-    #[test]
-    #[should_panic(expected = "no written place")]
-    fn an_edge_without_a_written_place_fails_the_assertion() {
-        let (mut graph, _) = built(REFERENCING);
-        // What a linker that forgot a span leaves behind.
-        graph.clear_edges();
-        graph.add_edge(Edge {
-            source: Sym::new("alpha"),
-            target: Sym::new("inv_one"),
-            label: Sym::new("invariants"),
-        });
-
-        graph.assert_linked(&FieldForms::default());
     }
 
     #[specforge_test(

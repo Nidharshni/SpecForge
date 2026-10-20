@@ -146,14 +146,7 @@ pub fn remove(
     req: &RemoveRequest,
 ) -> Result<RemoveOutcome, Refusal<RemoveField>> {
     view.project_root()?;
-    if let Some(problem) = view
-        .env()
-        .config_problems()
-        .iter()
-        .find(|problem| problem.blocks_edits())
-    {
-        return Err(crate::config::refusal(problem).into());
-    }
+    crate::config::refuse_edit(view.env().config_problems())?;
     let inventory = super::inventory(view);
     let removing = &Removing {
         view,
@@ -312,17 +305,10 @@ fn remove_file(
     })
 }
 
-/// The entities whose kind only `extension` defines, in id order.
+/// The entities whose kind only `extension` defines, in id order
+/// ([`super::entities_of`]).
 fn stranded(graph: &Graph, kinds: &KindRegistry, extension: &str) -> Vec<StrandedEntity> {
-    // `Graph::nodes` is in id order.
-    graph
-        .nodes()
-        .into_iter()
-        .filter(|node| {
-            kinds
-                .get(node.kind.raw.as_str())
-                .is_some_and(|kind| kind.source_extension == extension)
-        })
+    super::entities_of(graph, kinds, extension)
         .map(|node| StrandedEntity {
             entity_id: node.id.raw.to_string(),
             kind: node.kind.raw.to_string(),

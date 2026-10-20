@@ -106,18 +106,21 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
     The system MUST transform .spec files from the detected source version
     to the target version. Before modifying any file, the system MUST
     create a backup copy with a .bak extension unless --no-backup is
-    specified. Each file MUST be migrated independently — a failure in one
-    file MUST NOT prevent migration of others. Each file MUST be written
-    atomically (write to temporary file, then rename) to prevent corruption
-    from interrupted migrations. The backup and the temporary file are
-    created new (a link at either name is unlinked first, never its
-    target), so a migration never writes through a file planted at a name
-    it owns. Each file MUST be read once: its backup,
-    its diff and the text an automatic rollback restores are that one
-    read, so a save made while the migration runs is never split between
-    them. Over MCP, a source, its backup, either temporary file or the
-    migration record that would land outside the project, by a symlink,
-    refuses the whole call before anything is written.
+    specified. A migration MUST be written all or nothing: when any file
+    cannot be read or migrated, no file is written, and the report names every
+    such file with its error (a dry run reports the same). The run is one
+    project change: each source is replaced by its name, keeping its
+    permissions, and a source the process may not write refuses the run
+    (file_unwritable), as a typed edit refuses it; a source changed since
+    the migration read it refuses the run (file_changed). Each backup is a
+    name the migration owns: whatever is at it (a link, or a file left by an
+    earlier run) is unlinked, never its target, and the backup is created
+    new with its source's permissions. Each file MUST be read once per run:
+    its backup, its diff and the text an automatic rollback restores are
+    that one read, so a save made while the migration runs is never split
+    between them. Over MCP, a source, its backup or the migration record
+    that would land outside the project, by a symlink, refuses the whole
+    call before anything is written.
 
     The header is rewritten where the parser reads it, the file's first
     non-blank line; a file with none gets one as its first line. No other
@@ -138,8 +141,8 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
     A migration that is kept (no file failed, its hooks and checks
     passed) and made backups MUST record each migrated file, its backup
     and the SHA-256 of the file as the migration left it in
-    .specforge/migration.json, replacing any earlier record, and lists
-    that file as written. A kept migration made with --no-backup removes
+    .specforge/migration.json as part of the same change, replacing any
+    earlier record, and lists that file as written. A kept migration made with --no-backup removes
     the record.
     The project's specforge.json is read once, through the read the compile
     uses, before any file: one that does not say which files are the
@@ -159,7 +162,12 @@ behavior migrate_spec_files_in_place "Migrate Spec Files In Place" {
   verify unit "files migrated from source to target version"
   verify unit "backup created before modification"
   verify unit "--no-backup skips backup creation"
-  verify unit "failure in one file does not block others"
+  verify unit "a file that cannot be migrated leaves every file as it was"
+  verify unit "a migrated source keeps its permissions"
+  verify unit "a backup has its source's permissions"
+  verify unit "a read-only source refuses the migration and nothing is written"
+  verify unit "a record the migration cannot write refuses it"
+  verify unit "a source changed since the migration read it refuses the migration"
   verify unit "summary reports migrated, failed, and skipped counts"
   verify unit "interrupted migration leaves no partially written files"
   verify unit "the backup and temporary file are created new, never through a planted link"
@@ -357,7 +365,7 @@ behavior rollback_failed_migration "Rollback Failed Migration" {
     rollback_event_emitted "migration_rolled_back event is emitted with accurate restored, skipped, and failed counts"
   }
   maintains {
-    backup_file_preservation ".bak backup files are never deleted during rollback (preserved for user inspection)"
+    backup_file_preservation ".bak backup files are never deleted by --rollback (preserved for user inspection)"
   }
   contract   """
     Rollback runs automatically when an extension migration hook fails
@@ -365,7 +373,9 @@ behavior rollback_failed_migration "Rollback Failed Migration" {
     demand via the --rollback CLI flag. An automatic rollback MUST
     restore exactly the files its own run migrated, to the text the run
     read before migrating them, with or without backups, and MUST NOT
-    touch any other file. --rollback MUST undo the migration recorded in
+    touch any other file; it is the project change's put-back: each source
+    gets back the text it held, with its permissions, and the run's
+    backups are removed. --rollback MUST undo the migration recorded in
     .specforge/migration.json and nothing else: each recorded file whose
     SHA-256 is still the one recorded MUST be restored from its backup;
     a recorded file changed since MUST be left as it is with a warning
@@ -373,7 +383,8 @@ behavior rollback_failed_migration "Rollback Failed Migration" {
     MUST be skipped with a warning naming the backup. With no record,
     nothing is restored and one warning says so. The record then keeps
     only the files not restored, and is removed when none is left. Each
-    file MUST be restored atomically (write to temp, then rename). If a
+    file MUST be restored by replacing its name, keeping its permissions;
+    a file the process may not write fails its restore. If a
     restore fails for one file, the system MUST emit an E-level
     diagnostic and continue with the remaining files — a single restore
     failure MUST NOT block others. After rollback, .bak files MUST be
@@ -387,6 +398,8 @@ behavior rollback_failed_migration "Rollback Failed Migration" {
   verify unit "restores migrated files from .bak backups"
   verify unit "missing .bak file produces warning and skips"
   verify unit "restore is atomic per file"
+  verify unit "a rollback keeps a file's permissions and refuses a read-only one"
+  verify unit "an automatic rollback keeps a file's permissions"
   verify unit "rollback failure for one file does not block others"
   verify unit "summary reports restored, skipped, and failed counts"
   verify unit "a migration whose graph changes structure is rolled back automatically"

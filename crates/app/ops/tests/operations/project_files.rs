@@ -65,18 +65,6 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
         1,
         "the export's schema record: written by `specforge export` only",
     ),
-    (
-        "extension/publish.rs",
-        "fs::read(",
-        1,
-        "an author's built binary, `specforge publish` only",
-    ),
-    (
-        "extension/candidate.rs",
-        "fs::read_to_string(",
-        1,
-        "a held crate directory's Cargo.toml: only its name is read, and the binary it names is held",
-    ),
 ];
 
 /// Files and directories that are test support, or the module itself.
@@ -161,28 +149,43 @@ fn unlisted(files: &[(String, String)], allowed: &[(&str, &str, usize, &str)]) -
     problems
 }
 
-#[test]
-fn every_file_an_operation_opens_is_held() {
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+/// The Rust files under `src` (name relative to it with `/`, text), in path order.
+fn sources(src: &Path) -> Vec<(String, String)> {
     let mut paths = Vec::new();
-    rust_files(&src, &mut paths);
+    rust_files(src, &mut paths);
     paths.sort();
-    let files: Vec<(String, String)> = paths
+    paths
         .iter()
         .map(|path| {
             let name = path
-                .strip_prefix(&src)
+                .strip_prefix(src)
                 .unwrap()
                 .to_string_lossy()
                 .replace('\\', "/");
             (name, std::fs::read_to_string(path).unwrap())
         })
-        .collect();
-    let problems = unlisted(&files, ALLOWED);
+        .collect()
+}
+
+#[test]
+fn every_file_an_operation_opens_is_held() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let problems = unlisted(&sources(&src), ALLOWED);
     assert!(
         problems.is_empty(),
         "{} opens bypass the held-file module:\n{}",
         problems.len(),
+        problems.join("\n")
+    );
+}
+
+#[test]
+fn the_formatter_opens_no_file() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../pipeline/formatter/src");
+    let problems = unlisted(&sources(&src), &[]);
+    assert!(
+        problems.is_empty(),
+        "the formatter parses what ops' `Configs` reads through the caller's disk (ADR 0169):\n{}",
         problems.join("\n")
     );
 }

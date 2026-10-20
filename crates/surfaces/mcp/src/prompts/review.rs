@@ -2,7 +2,7 @@
 //! neighbourhood, or of the whole graph. It renders the review
 //! (`specforge_ops::read::review`).
 
-use specforge_ops::read::review::{DEFAULT_DEPTH, ReviewDocument, ReviewRequest, review};
+use specforge_ops::read::review::{ReviewDocument, ReviewRequest, review};
 
 use crate::args::Arguments;
 use crate::prompt::{CorePrompt, Prompted};
@@ -44,9 +44,8 @@ pub struct Args {
     entity_id: Option<String>,
     // MCP prompt arguments have no `default` field, so the description
     // says it (ADR 0033 D9).
-    /// Neighbor hops around entity_id to include (default 1)
-    #[arg(default = DEFAULT_DEPTH)]
-    depth: usize,
+    /// Neighbor hops around entity_id to include (default 1; needs entity_id)
+    depth: Option<usize>,
 }
 
 fn render(view: ProjectView<'_>, args: Args) -> Result<Prompted<ReviewDocument>, Box<McpError>> {

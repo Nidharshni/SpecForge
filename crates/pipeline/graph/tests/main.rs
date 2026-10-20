@@ -3,14 +3,17 @@
     reason = "a test's unwrap is its assertion: a None or an Err fails the test"
 )]
 
+mod agreement;
 mod build;
 mod contracts;
 mod copy;
 mod defaults;
+mod degree;
 mod derived;
 mod field_form;
 mod graph;
 mod obligations;
+mod reach;
 mod reading;
 mod resolution;
 mod spell;
@@ -18,4 +21,3 @@ mod stress;
 mod titles;
 mod tokens;
 mod value_forms;
-mod written;

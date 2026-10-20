@@ -103,3 +103,16 @@ fn the_component_runtime_keeps_the_module_contract() {
 
     specforge_wasm::testing::assert_module_contract(&ComponentRuntime::new(), &bytes, "@sdk/greet");
 }
+
+#[test]
+fn a_refused_load_names_no_load_key() {
+    let reason = ComponentRuntime::new()
+        .load("@acme/the-key", b"not wasm")
+        .unwrap_err();
+
+    assert!(
+        reason.starts_with("failed to compile component: "),
+        "{reason}"
+    );
+    assert!(!reason.contains("@acme/the-key"), "{reason}");
+}

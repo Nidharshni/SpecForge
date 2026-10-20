@@ -941,7 +941,7 @@ fn non_interactive_unknown_extension_rejected() {
         ])
         .assert()
         .failure()
-        .stderr(predicates::str::contains("error[E054]"));
+        .stderr(predicates::str::contains("error[E040]"));
     assert!(!dir.root().join("specforge.json").exists());
 
     // Empty extension

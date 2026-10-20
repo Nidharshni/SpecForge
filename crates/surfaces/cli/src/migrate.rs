@@ -4,7 +4,7 @@ use crate::terminal::{Terminal, outln};
 use specforge_ops::authoring::migrate::{
     self, MigrateDocument, MigrationStatus, Request, RollbackSummary,
 };
-use specforge_ops::{Writes, Wrote};
+use specforge_ops::{OpError, Writes, Wrote};
 use std::path::Path;
 
 // `specforge migrate`'s command line.
@@ -53,7 +53,11 @@ impl Args {
         let notes = Notes::new(terminal, format);
         // Handle rollback mode
         if self.rollback {
-            let outcome = migrate::rollback(&root);
+            let outcome = match migrate::rollback(&root, crate::caller::of(false, format, terminal))
+            {
+                Ok(outcome) => outcome,
+                Err(error) => return Refusal::of(format).at(path).report(terminal, &error),
+            };
             print_rollback(
                 path,
                 &outcome.summary,
@@ -95,7 +99,8 @@ impl Args {
             &notes,
         );
 
-        if outcome.summary.failed_count != 0 {
+        if let Some(failure) = outcome.failure().filter(|_| outcome.rollback.is_none()) {
+            notes.person(format_args!("{}", OpError::from(failure).message));
             return Exit::of_verdict(outcome.ok());
         }
         // The document carries the hook failures and the structural differences; the restore is a person's line.

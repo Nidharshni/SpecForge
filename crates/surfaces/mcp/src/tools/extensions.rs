@@ -1,4 +1,4 @@
-//! `specforge.extensions`: the installed extensions (`specforge_ops::extension::list`).
+//! `specforge.extensions`: the project's extensions: enabled, locked or loaded (`specforge_ops::extension::list`).
 
 use crate::args::NoArgs;
 use crate::reply::Answered;
@@ -14,7 +14,7 @@ pub(crate) struct Tool;
 
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.extensions";
-    const DESCRIPTION: &'static str = "List installed extensions";
+    const DESCRIPTION: &'static str = "List the project's extensions: enabled, locked or loaded";
     const EFFECT: Effect = Effect::Reads {
         group: ToolGroup::Management,
     };
@@ -26,8 +26,6 @@ impl CoreTool for Tool {
     fn call(project: ProjectRef<'_>, _args: NoArgs) -> Answered<Reply> {
         // The shared listing, over the project view: what the project
         // compiled, its lock and the kinds its graph uses.
-        Ok(specforge_ops::extension::list(&project.view())
-            .document()
-            .into())
+        Ok(specforge_ops::extension::list(&project.view()).into())
     }
 }

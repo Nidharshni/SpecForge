@@ -220,8 +220,8 @@ fn a_trace_carries_the_projects_schema_version() {
     let view = project.view();
     let entity = serde_json::to_value(plain(trace(&view, Target::Entity("b")).unwrap())).unwrap();
     assert_eq!(entity["schema_version"], "2.0.0", "{entity}");
-    let chain = plain(trace(&view, Target::Entity("b")).unwrap()).into_chain();
-    assert_eq!(chain.unwrap().schema_version, "2.0.0");
+    let chain = plain(specforge_ops::read::trace::chain(&view, "b").unwrap());
+    assert_eq!(chain.schema_version, "2.0.0");
     let every = serde_json::to_value(plain(trace(&view, Target::Every).unwrap())).unwrap();
     assert_eq!(every["schema_version"], "2.0.0", "{every}");
 }

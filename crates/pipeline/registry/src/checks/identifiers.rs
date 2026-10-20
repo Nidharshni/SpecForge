@@ -34,28 +34,36 @@ pub(super) fn reserved(entities: &[EntityRecord], kinds: &KindRegistry) -> Vec<D
     diagnostics
 }
 
-/// E014: identifier length contract (2-60 chars) — the documented naming
-/// convention (the grammar terminal accepts 1+).
+/// E014: the shortest and longest entity IDs (the grammar terminal accepts 1+).
+pub const ID_LENGTH: std::ops::RangeInclusive<usize> = 2..=60;
+
+/// E014: identifier length contract ([`ID_LENGTH`] chars) — the documented naming
+/// convention.
 pub(super) fn length(entities: &[EntityRecord]) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     for entity in entities {
         let (id, span) = (entity.id.as_str(), &entity.span);
         let len = id.chars().count();
-        if (2..=60).contains(&len) {
+        if ID_LENGTH.contains(&len) {
             continue;
         }
         diagnostics.push(
             Diagnostic::new(
                 codes::E014,
                 format!(
-                    "entity ID '{}' violates the identifier length contract (2-60 chars, got {len}) at {}",
-                    id, span.file
+                    "entity ID '{}' violates the identifier length contract ({}-{} chars, got {len}) at {}",
+                    id,
+                    ID_LENGTH.start(),
+                    ID_LENGTH.end(),
+                    span.file
                 ),
             )
             .with_span(span.clone())
-            .with_suggestion(
-                "pick a descriptive identifier between 2 and 60 characters".to_string(),
-            ),
+            .with_suggestion(format!(
+                "pick a descriptive identifier between {} and {} characters",
+                ID_LENGTH.start(),
+                ID_LENGTH.end()
+            )),
         );
     }
     diagnostics

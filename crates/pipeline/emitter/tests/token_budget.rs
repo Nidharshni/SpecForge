@@ -380,3 +380,45 @@ fn a_budget_counts_each_nodes_coverage_status() {
         assert_eq!(node["coverage_status"], "covered", "{node}");
     }
 }
+
+#[specforge_test(
+    behavior = "enforce_token_budget",
+    verify = "an edge from an entity to itself adds nothing to its centrality"
+)]
+fn a_self_reference_adds_nothing_to_centrality() {
+    use specforge_emitter::{EmitOptions, estimate_tokens};
+
+    // selfish -depends_on-> selfish, a -depends_on-> b, lone: all the same size
+    let mut graph = Graph::new();
+    for id in ["selfish", "a", "b", "lone"] {
+        graph.add_node(node_with_contract(id, "feature", "same size"));
+    }
+    for (source, target) in [("selfish", "selfish"), ("a", "b")] {
+        graph.add_edge(Edge {
+            source: Sym::new(source),
+            target: Sym::new(target),
+            label: Sym::new("depends_on"),
+        });
+    }
+    let full = estimate_tokens(&crate::support::budgeted_json(&graph, 100_000));
+    // At every budget that cuts something, the cut is a prefix of the one priority order.
+    let order = ["lone", "selfish", "a", "b"];
+    for budget in (1..full).rev() {
+        // E062 below the cheapest export: stop there.
+        let Ok(text) = specforge_emitter::emit(
+            &graph,
+            &EmitOptions {
+                token_budget: Some(budget),
+                ..Default::default()
+            },
+        ) else {
+            break;
+        };
+        let parsed: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let cut: Vec<&str> = parsed["token_budget"]["truncated_entities"]
+            .as_array()
+            .map(|ids| ids.iter().map(|v| v.as_str().unwrap()).collect())
+            .unwrap_or_default();
+        assert_eq!(cut, order[..cut.len()], "budget {budget}");
+    }
+}

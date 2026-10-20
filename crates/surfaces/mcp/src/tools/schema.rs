@@ -58,9 +58,7 @@ impl CoreTool for Tool {
             validation_rules: args.include_validation_rules,
         };
         Ok(Answer::noticed(
-            specforge_ops::read::schema::schema(&view, &request)
-                .map_err(Self::refused)?
-                .map(|outcome| outcome.document()),
+            specforge_ops::read::schema::schema(&view, &request).map_err(Self::refused)?,
         ))
     }
 }

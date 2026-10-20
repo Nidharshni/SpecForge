@@ -43,7 +43,7 @@ pub struct Args {
     entity_id: Option<String>,
     /// Filter by entity kind
     kind: Option<String>,
-    /// Hops from entity_id the exploration reaches (unbounded if omitted)
+    /// Hops from entity_id the exploration reaches (unbounded if omitted; needs entity_id)
     depth: Option<usize>,
 }
 

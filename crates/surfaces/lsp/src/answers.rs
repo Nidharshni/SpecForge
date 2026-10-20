@@ -6,9 +6,9 @@
 //! answers; it decides nothing (ADR 0023).
 
 use specforge_common::Sym;
-use specforge_ops::authoring::fix::{self, FixQuery};
+use specforge_ops::authoring::fix::{self, FixQuery, Offer};
 use specforge_ops::authoring::format;
-use specforge_ops::read::navigate::{EntityQuery, MatchScope, find_entities, outline};
+use specforge_ops::read::navigate::{EntityQuery, MatchScope, Navigator, find_entities, outline};
 use tower_lsp::jsonrpc::{Error, ErrorCode};
 use tower_lsp::lsp_types::{
     ClientCapabilities, CodeAction, CodeActionOrCommand, CodeActionResponse, CompletionResponse,
@@ -20,8 +20,8 @@ use tower_lsp::lsp_types::{
 use crate::document::{LineIndex, Target};
 use crate::files::Findings;
 use crate::navigation::{
-    Compiled, Unplaced, code_action_kind, fix_to_code_action, outline_to_document_symbols,
-    symbol_kind_from_entity,
+    Compiled, EditorText, Unplaced, code_action_kind, fix_to_code_action,
+    outline_to_document_symbols, symbol_kind_from_entity,
 };
 use crate::publish::diagnostic_to_lsp;
 use crate::{LspState, hover};
@@ -99,6 +99,18 @@ fn content_modified(file: &str) -> Error {
     }
 }
 
+/// Whether a rename may be asked from the open document `file` (ADR 0023 D7): yes while it is the
+/// compiled text; while its compile is still to come, `ContentModified` (the client tries again); a
+/// document the project does not build has nothing that renames, and no compile will give it any:
+/// `Ok(false)`, answered as no rename.
+fn renames_in(compiled: &Compiled, file: &str) -> tower_lsp::jsonrpc::Result<bool> {
+    match compiled.editor_text(file) {
+        EditorText::Compiled => Ok(true),
+        EditorText::Changed => Err(content_modified(file)),
+        EditorText::Unbuilt => Ok(false),
+    }
+}
+
 /// The entity the cursor at `position` of the open document `key` names
 /// ([`Compiled::target`]): what references and rename act on.
 fn entity_under_cursor(compiled: &Compiled, key: &str, position: Position) -> Option<Sym> {
@@ -109,8 +121,8 @@ fn entity_under_cursor(compiled: &Compiled, key: &str, position: Position) -> Op
 }
 
 /// The hover at `position` of the open document `uri`: the published
-/// diagnostics under it (their ranges are positions in the compiled text)
-/// explained from the catalog, then what the cursor names: an entity's
+/// diagnostics under it while the document is the compiled text (their
+/// ranges are positions in that text) explained from the catalog, then what the cursor names: an entity's
 /// facts (the inspect read view reporting what was published; while the
 /// project rebuilds, the last complete compile's coverage) or a field's help. Sections are
 /// joined by a rule. `None` for a document that is not open or a position
@@ -120,10 +132,13 @@ pub fn hover(state: &LspState, uri: &Url, position: Position) -> Option<Hover> {
     let files = state.files();
     let doc = files.document(&key)?;
     let compiled = Compiled::new(state);
-    let mut shown = compiled
-        .index_of(&key)
-        .map(|index| hover::diagnostics_at(files.compile_diagnostics(&key), &index, position))
-        .unwrap_or_default();
+    // The compile's diagnostics are positions in the text it read: under the cursor only while the
+    // document is that text, through its own index (ADR 0023 D3).
+    let mut shown = if compiled.is_stale(&key) {
+        Vec::new()
+    } else {
+        hover::diagnostics_at(files.compile_diagnostics(&key), doc.index(), position)
+    };
     // The formatter's findings are positions in the buffer it formatted, which is this one.
     shown.extend(hover::diagnostics_at(
         files.formatter_diagnostics(&key),
@@ -245,8 +260,8 @@ pub fn references(
 }
 
 /// The range of the declaration or reference token under the cursor.
-/// Refused as `ContentModified` (-32801) while the document is not the
-/// compiled text (ADR 0023 D7).
+/// Refused as `ContentModified` (-32801) while the document is typed since the
+/// compile; `None` for a document the project does not build (ADR 0023 D7).
 pub fn prepare_rename(
     state: &LspState,
     uri: &Url,
@@ -263,8 +278,8 @@ pub fn prepare_rename(
     let compiled = Compiled::new(state);
     // Any range it gives is a position in a text the editor no longer has
     // while the document is typed in (ADR 0023 D7).
-    if compiled.is_stale(&file) {
-        return Err(content_modified(&file));
+    if !renames_in(&compiled, &file)? {
+        return Ok(None);
     }
     // The token as written under the cursor, declaration or reference;
     // nothing else renames.
@@ -289,8 +304,8 @@ pub fn rename(
     let key = state.key_of(uri);
     // The edits come from the compile: asked from a document typed in since,
     // the rename waits for it, whatever the cursor names (ADR 0023 D7).
-    if state.files().document(&key).is_some() && compiled.is_stale(&key) {
-        return Err(content_modified(&key));
+    if state.files().document(&key).is_none() || !renames_in(&compiled, &key)? {
+        return Ok(None);
     }
     let Some(id) = entity_under_cursor(&compiled, &key, position) else {
         return Ok(None);
@@ -318,29 +333,44 @@ pub fn rename(
         .map_err(|Unplaced(file)| content_modified(file.as_str()))
 }
 
+/// The fixes offered for the published diagnostics of `file` overlapping `range` (the editor's own
+/// positions), read by `navigator` over the compile. Every fix edits `file` (`fix::offers`), so over
+/// a text the editor no longer has none is chosen and none is planned (ADR 0023 D3):
+/// `ContentModified`. What both code-action requests ask (ADR 0161 D5: a resolve chooses again what
+/// the list chose).
+fn offered(
+    compiled: &Compiled,
+    navigator: &Navigator,
+    file: &str,
+    range: Range,
+) -> Result<Vec<Offer>, Error> {
+    if compiled.is_stale(file) {
+        return Err(content_modified(file));
+    }
+    let files = compiled.state().files();
+    let within = files
+        .document(file)
+        .map(|doc| doc.index().span(Sym::new(file), range));
+    let query = FixQuery {
+        file: Some(file),
+        within: within.as_ref(),
+        ..FixQuery::default()
+    };
+    Ok(fix::offers(
+        navigator,
+        files.compile_diagnostics(file),
+        &query,
+    ))
+}
+
 /// The fixes for the published diagnostics of `uri` overlapping `range`
 /// (the editor's own positions), each offered whole or not at all (ADR
 /// 0016: the fixes MCP suggest_fixes returns for the same diagnostics).
 pub fn code_actions(state: &LspState, uri: &Url, range: Range) -> Option<CodeActionResponse> {
     let compiled = Compiled::new(state);
     let file = state.key_of(uri);
-    // Every fix edits the file its diagnostic or entity is in (`fix::offers`): over a text the
-    // editor no longer has, none is offered, typed or not, and none is planned (ADR 0023 D3).
-    if compiled.is_stale(&file) {
-        return None;
-    }
-    // The request's range is the editor's own: positions in its buffer.
-    let within = state
-        .files()
-        .document(&file)
-        .map(|doc| doc.index().span(Sym::new(&file), range));
-    let query = FixQuery {
-        file: Some(&file),
-        within: within.as_ref(),
-        ..FixQuery::default()
-    };
     let navigator = compiled.navigator();
-    let offers = fix::offers(&navigator, state.files().compile_diagnostics(&file), &query);
+    let offers = offered(&compiled, &navigator, &file, range).ok()?;
     // A client that resolves `edit` is shown a stub without its edits: planning one costs a
     // compile of the project, made when the editor resolves the action (ADR 0161). A fix that
     // cannot be placed whole (`Compiled::workspace_edit`) is not offered.
@@ -383,20 +413,8 @@ pub fn resolve_code_action(state: &LspState, action: CodeAction) -> Result<CodeA
     };
     let compiled = Compiled::new(state);
     let file = state.key_of(&uri);
-    if compiled.is_stale(&file) {
-        return Err(content_modified(&file));
-    }
-    let within = state
-        .files()
-        .document(&file)
-        .map(|doc| doc.index().span(Sym::new(&file), range));
-    let query = FixQuery {
-        file: Some(&file),
-        within: within.as_ref(),
-        ..FixQuery::default()
-    };
     let navigator = compiled.navigator();
-    let offer = fix::offers(&navigator, state.files().compile_diagnostics(&file), &query)
+    let offer = offered(&compiled, &navigator, &file, range)?
         .into_iter()
         .find(|offer| offer.title() == action.title)
         .ok_or_else(|| {

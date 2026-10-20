@@ -23,6 +23,15 @@ fn old(name: &str, version: &str) -> Published {
     Published::new(b"\0asm old".to_vec(), declaration(name, version, &[]))
 }
 
+/// When the tests' updates end.
+fn ended() -> chrono::DateTime<chrono::Utc> {
+    chrono::DateTime::parse_from_rfc3339(ENDED)
+        .unwrap()
+        .with_timezone(&chrono::Utc)
+}
+
+const ENDED: &str = "2026-10-11T12:00:00.123Z";
+
 fn request(root: &specforge_common::ProjectRoot, reach: Reach) -> UpdateRequest<'_> {
     UpdateRequest {
         root,

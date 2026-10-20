@@ -195,10 +195,10 @@ fn a_relative_local_path_is_joined_onto_the_base() {
     let named = names.name_each(&runtime, &mut no_packages).err();
     // The second file does not exist: refused named among several, naming the path as given.
     let error = named.unwrap();
-    assert_eq!(error.code, "E054");
+    assert_eq!(error.code, "E040");
     assert_eq!(
         error.message,
-        "adding '/abs/b.wasm': file not found: /abs/b.wasm"
+        "adding '/abs/b.wasm': no extension binary at /abs/b.wasm"
     );
 }
 

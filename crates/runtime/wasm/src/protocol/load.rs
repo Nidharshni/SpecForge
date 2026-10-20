@@ -23,7 +23,8 @@ pub struct Loaded {
     pub declaration: ExtensionDeclaration,
     /// W153 (what its sandbox declaration asks for that the host does not
     /// honour), then W138 (describe item keys the protocol does not
-    /// define), in the order the handshake and the categories were read.
+    /// define), in the order the handshake and the categories were read,
+    /// each naming the extension by the name its handshake declares.
     pub warnings: Vec<Diagnostic>,
 }
 
@@ -49,6 +50,8 @@ pub fn load_declaration(
     // none) hold every call after the handshake.
     runtime.apply_limits(extension, sandbox.limits);
     let mut warnings = sandbox.unhonoured;
+    // The warnings name the extension as its handshake declares it, whatever key it is loaded under.
+    let declared = response.name.clone();
     let declaration = ExtensionDeclaration::from_wire(
         response,
         |category| {
@@ -61,8 +64,8 @@ pub fn load_declaration(
         },
         |key| {
             warnings.push(
-                sandbox::unhonoured_surface_key(extension, &key)
-                    .unwrap_or_else(|| unknown_key(extension, key)),
+                sandbox::unhonoured_surface_key(&declared, &key)
+                    .unwrap_or_else(|| unknown_key(&declared, key)),
             )
         },
     )?;

@@ -14,6 +14,7 @@ mod contracts;
 mod cursor;
 mod defaults;
 mod document;
+mod duplicates;
 mod e2e;
 mod field_references;
 mod follow;
@@ -34,6 +35,7 @@ mod rename;
 mod semantic_tokens;
 mod served;
 mod session;
+mod stale;
 mod state;
 mod union_title;
 

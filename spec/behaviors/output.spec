@@ -177,6 +177,10 @@ behavior compute_traceability_chain "Compute Traceability Chain" {
     The JSON trace output MUST carry the Graph Protocol schema_version.
     Tracing an entity the graph does not have MUST be E003, naming the
     closest entity when one is near.
+    Each direction is walked breadth-first: a link's depth is its distance
+    from the traced entity, and its edge label is the label of the edge it
+    was first reached over, nearer entities first and each entity's edges
+    in the order they are written. Links are listed by depth, then id.
   """
   verify unit "trace from entity shows upstream and downstream connections"
   verify unit "trace shows full chain depth"
@@ -185,6 +189,7 @@ behavior compute_traceability_chain "Compute Traceability Chain" {
   verify unit "trace output includes schema version"
   verify unit "tracing an entity the graph lacks is E003 naming the closest entity"
   verify unit "a reference field another extension adds to a kind is not an expected link"
+  verify unit "a link carries the label of the edge it was first reached over, nearer entities first and each entity's edges in written order"
   verify contract "Compute Traceability Chain: traceability chain computation holds — validation_complete_fired, full_chain_traversed, missing_links_flagged, trace_chain_computed_emitted"
 }
 
@@ -360,11 +365,15 @@ behavior compute_the_coverage_view "Compute the Coverage View" {
     declare testable, less the entities W004 exempts that declare no
     obligations (union types, abstract entities, governance kinds), the
     entities stats counts as testable. An entity_id names one entity
-    whether it counts or not; each row says whether the entity is exempt.
-    kind and status narrow the rows.
+    whether it counts or not; each row says whether the entity is exempt;
+    one the graph lacks is E003 naming the closest entity.
+    kind and status narrow the rows, with an entity_id too; a kind the
+    project does not know matches nothing and is an I020 notice.
   """
   verify unit "with no filters the rows are the entities that count toward coverage"
   verify unit "an exempt entity named by entity_id is returned with exempt true"
+  verify unit "an entity_id the graph lacks is E003 naming the closest entity"
+  verify unit "an unknown kind matches nothing and is an I020 notice; kind narrows an entity_id's row as status does"
   verify unit "an entity with an unproven obligation is partial, not covered"
   verify unit "a failing recorded test keeps an entity from being covered"
   verify unit "a field named verify does not hide an entity's verify statements"
@@ -393,7 +402,8 @@ behavior select_entities_over_the_view "Select Entities over the Project View" {
     title. An empty text matches every entity. Every filter is ANDed: kinds,
     a field's text (by the one field-text rule: a list by its items, an
     expression by its written form, a block by its keys), and references
-    (the entities that reference the named one). At most limit hits are
+    (the entities that reference the named one; an entity the graph lacks is
+    E003 naming the closest entity). At most limit hits are
     returned, twenty when none is given. List MUST return the entities of a
     kind, sorted by id, those whose fields hold every where value, from
     offset, at most limit.
@@ -401,6 +411,7 @@ behavior select_entities_over_the_view "Select Entities over the Project View" {
   verify unit "text search finds entities matching by name or contract"
   verify unit "empty query returns all entities up to limit"
   verify unit "the references filter combines with the other filters"
+  verify unit "a references entity the graph lacks is E003 naming the closest entity"
   verify unit "the field filter reads a field's text: a list by its items, an expression by its written form, a block by its keys; never the export's JSON"
   verify unit "a search returns at most limit hits, twenty when no limit is given"
   verify unit "list pages the entities of a kind sorted by id, from offset, at most limit"
@@ -462,7 +473,8 @@ behavior explore_the_graph "Explore the Graph" {
     unconnected entities (read_views_over_the_project_view). Degrees count
     every edge of the project. A kind the project does not know selects
     nothing and is an I020 notice naming the closest kind; an entity_id
-    the graph lacks is E003 naming the closest entity. The exploration
+    the graph lacks is E003 naming the closest entity; a depth without
+    entity_id is refused as invalid input about entity_id. The exploration
     reaches exactly the entities the review reaches at the same depth.
   """
   verify unit "the exploration selects the entities entity_id reaches within depth, of kind when given, and every list is about that selection"
@@ -471,6 +483,7 @@ behavior explore_the_graph "Explore the Graph" {
   verify unit "unconnected lists the selected entities no edge links to another entity"
   verify unit "relationship paths run from entity_id to each selected entity it reaches, nearest first, with their edge labels"
   verify unit "an unknown kind selects nothing and is an I020 notice naming the closest kind"
+  verify unit "a depth without entity_id is refused as invalid input about entity_id"
   verify unit "the exploration and the review reach the same entities at the same depth"
 }
 
@@ -488,7 +501,8 @@ behavior review_coverage_gaps "Review Coverage Gaps" {
   contract   """
     The review (specforge_ops::read::review) MUST list the coverage view's rows
     of the entities that count toward coverage within depth hops of
-    entity_id (default one hop), or of the whole project without
+    entity_id (default one hop; a depth without entity_id is refused as
+    invalid input about entity_id), or of the whole project without
     entity_id, in id order, and for each row a warning finding when it
     declares no obligation and an info finding when it is unconnected
     (read_views_over_the_project_view). An entity_id the graph lacks is
@@ -499,6 +513,7 @@ behavior review_coverage_gaps "Review Coverage Gaps" {
   verify unit "an entity that declares no obligation is a warning finding"
   verify unit "an unconnected entity is an info finding"
   verify unit "the review's depth defaults to one hop"
+  verify unit "a depth without entity_id is refused as invalid input about entity_id"
   verify unit "a project with nothing that counts toward coverage has no rows and no findings"
   verify unit "a recorded report that cannot be read is the review's E045 failure"
 }
@@ -515,7 +530,7 @@ behavior provide_explore_cli "Provide CLI Explore Command" {
     with their edge counts, the unconnected entities and, with ENTITY, the
     paths from it. Notices go to stderr under human output; under --format
     json the document carries them and stderr is empty. An unknown ENTITY is E003 naming
-    the closest entity, exit 1.
+    the closest entity, exit 1. --depth without ENTITY is a usage error, exit 2.
   """
   verify integration "specforge explore --format json is the explore prompt's payload for the same arguments"
   verify integration "an unknown entity is E003 naming the closest entity, exit 1"
@@ -532,8 +547,8 @@ behavior provide_review_cli "Provide CLI Review Command" {
     project compiled at PATH: --format json prints the document the review
     prompt's payload is for the same arguments; human output lists each
     row (entity, kind, status, proven obligations) and each finding. An
-    unknown ENTITY is E003, exit 1; a recorded report that cannot be read
-    is E045, exit 1.
+    unknown ENTITY is E003, exit 1; --depth without ENTITY is a usage error,
+    exit 2; a recorded report that cannot be read is E045, exit 1.
   """
   verify integration "specforge review --format json is the review prompt's payload for the same arguments"
   verify integration "a recorded report that cannot be read is E045, exit 1"
@@ -1316,8 +1331,10 @@ behavior enforce_token_budget "Enforce Token Budget" {
     entities before serialization. The remaining subgraph MUST be a valid
     graph with no dangling edge references. The truncated_entities list in
     TokenBudgetResult records which entities were removed. Centrality is
-    degree centrality (count of incoming + outgoing edges); neither the
-    strategy nor the metric is configurable.
+    degree centrality: the number of edges to and from other entities, the
+    degree read_views_over_the_project_view counts (an edge from an entity
+    to itself counts in neither); neither the strategy nor the metric is
+    configurable.
 
     The graph, context and brief exports are budgeted alike: each lists the
     entities it dropped under `token_budget`, keeps no entity when only its
@@ -1329,6 +1346,7 @@ behavior enforce_token_budget "Enforce Token Budget" {
   verify unit "TokenBudgetResult included in metadata when budget applied"
   verify unit "truncated_entities lists omitted entity IDs"
   verify unit "no --max-tokens skips budget enforcement"
+  verify unit "an edge from an entity to itself adds nothing to its centrality"
   verify integration "export with max_tokens produces output within budget and includes metadata"
   verify integration "the graph export honours --max-tokens with the schema left out unless --with-schema is given"
   verify integration "an embedded schema counts toward the token budget"

@@ -6,8 +6,9 @@ use specforge_ops::authoring::fix::{self, Fix, FixKind, FixQuery};
 use specforge_ops::read::navigate::Navigator;
 
 use crate::args::Arguments;
+use crate::refusal::ArgumentOf;
 use crate::reply::Answered;
-use specforge_ops::view::ProjectView;
+use specforge_ops::view::{EntityField, ProjectView};
 
 /// `specforge.suggest_fixes`'s arguments.
 #[derive(Debug, Arguments)]
@@ -59,6 +60,14 @@ impl Suggestion {
 /// text stays on the diagnostic (validate, inspect).
 pub(crate) struct Tool;
 
+impl ArgumentOf<EntityField> for Tool {
+    fn argument(field: EntityField) -> Option<&'static str> {
+        match field {
+            EntityField::EntityId => Some("entity_id"),
+        }
+    }
+}
+
 impl CoreTool for Tool {
     const NAME: &'static str = "specforge.suggest_fixes";
     const DESCRIPTION: &'static str = "The fixes the LSP offers as code actions for the project's diagnostics and entities, each with its edits";
@@ -71,13 +80,6 @@ impl CoreTool for Tool {
     type Returns = Answered<Reply>;
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
-        if let Some(entity_id) = args.entity_id.as_deref()
-            && view.graph().node(entity_id).is_none()
-        {
-            return Err(crate::tool::entity_not_found(view.graph(), entity_id)
-                .with_argument("entity_id")
-                .into());
-        }
         let diagnostics = view.reported();
         let query = FixQuery {
             entity: args.entity_id.as_deref(),
@@ -85,7 +87,8 @@ impl CoreTool for Tool {
             code: args.diagnostic_code.as_deref(),
             within: None,
         };
-        let fixes = fix::fixes(&Navigator::new(view), &diagnostics, &query);
+        let fixes =
+            fix::fixes(&Navigator::new(view), &diagnostics, &query).map_err(Self::refused)?;
         Ok(Reply {
             fixes: fixes.iter().map(Suggestion::of).collect(),
         }

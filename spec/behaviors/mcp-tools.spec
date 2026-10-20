@@ -261,7 +261,8 @@ behavior provide_mcp_search_tool "Provide MCP Search Tool" {
     one field-text rule, contains the value, ignoring case: a list item by
     item, an expression in its written form, a block by its keys; one without the other MUST be an invalid-input
     error naming the missing one), references? (an entity id: only
-    entities that reference it), and limit? (default 20). The tool MUST
+    entities that reference it; one the graph lacks is an entity_not_found
+    error on references), and limit? (default 20). The tool MUST
     return what select_entities_over_the_view selects. Unknown kind values
     in the kinds[] array MUST be silently filtered out and an I-level
     diagnostic MUST be included in the response metadata listing the
@@ -370,8 +371,10 @@ behavior provide_mcp_coverage_tool "Provide MCP Coverage Tool" {
   }
   contract   """
     In MCP server mode, the system MUST register a specforge.coverage tool
-    that accepts entity_id? (optional, single entity), kind? (optional, filter
-    by entity kind), and status_filter? (optional: covered|uncovered|partial).
+    that accepts entity_id? (optional, single entity; one the graph lacks is an
+    entity_not_found error on entity_id, E003), kind? (optional, filter
+    by entity kind; an unknown kind is an I-level diagnostic in the response
+    metadata, as specforge.search reports it), and status_filter? (optional: covered|uncovered|partial).
     The tool MUST return the coverage view's rows (compute_the_coverage_view)
     as an object whose entities are the rows.
     A specforge-report.json that exists but cannot be read or parsed MUST be
@@ -557,13 +560,17 @@ behavior provide_mcp_find_references_tool "Provide MCP Find References Tool" {
     referenced entity's id, the field, its role (declaration or reference)
     and the identifier token's source span. LSP equivalence: with the
     defaults it returns the occurrences textDocument/references returns
-    with includeDeclaration false. An entity with no references MUST return
+    with includeDeclaration false, but a token in a defaults block that no
+    block takes, which no entity holds, is not listed, and a default the
+    blocks take is listed once per block. A reference written in a duplicate
+    declaration (E002, W060) is listed, held by its id. An entity with no references MUST return
     an empty list, not an error.
   """
   verify unit "specforge.find_references returns all reference locations"
   verify unit "non-existent entity returns error response"
   verify unit "direction and include_declaration select which occurrences are returned"
   verify integration "find_references and the LSP's references answer the same occurrences"
+  verify unit "find_references lists a reference written in a duplicate declaration"
   verify contract "Provide MCP Find References Tool: MCP find references tool holds — graph_available, references_returned, empty_list_for_unreferenced, tool_invoked_emitted"
 }
 
@@ -694,7 +701,8 @@ behavior provide_mcp_suggest_fixes_tool "Provide MCP Suggest Fixes Tool" {
   }
   contract   """
     In MCP server mode, the system MUST register a specforge.suggest_fixes tool
-    that accepts entity_id? (optional), file_path? (optional), and
+    that accepts entity_id? (optional; one the graph lacks is an entity_not_found
+    error on entity_id, E003), file_path? (optional), and
     diagnostic_code? (optional). When all three parameters are omitted, the
     system MUST return all fix suggestions for the current project. The tool
     MUST return an object whose fixes are the applicable fix suggestions, McpFixSuggestion items, each

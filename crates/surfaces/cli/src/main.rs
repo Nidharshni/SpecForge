@@ -95,7 +95,7 @@ enum Commands {
     Add(add::Args),
     /// Remove an installed extension
     Remove(remove::Args),
-    /// List installed extensions
+    /// List the project's extensions: enabled, locked or loaded
     Extensions(extensions::Args),
     /// Publish an extension to the registry that serves its name: its binary,
     /// and the declaration read from it as the package's manifest

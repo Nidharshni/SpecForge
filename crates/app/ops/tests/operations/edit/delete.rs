@@ -162,3 +162,27 @@ fn delete_with_unlink_references_refuses_a_type_named_in_a_signature() {
     assert!(message.contains("a.spec:8 (Users, types)"), "{message}");
     assert_eq!(refused(&c, &[delete("User", false)]).0, "E080");
 }
+
+const TYPE_ONE_VALUE: &str = "type Customer \"Customer\" {\n  id string\n}\n\ntype Order \"Order\" {\n  composed_types Customer\n}\n";
+const TYPE_WORD: &str = "type Customer \"Customer\" {\n  id string\n}\n\ntype Invoice \"Invoice\" {\n  refs Customer\n}\n";
+
+#[test]
+fn delete_with_unlink_references_removes_a_type_list_written_as_one_value() {
+    let c = project(&[("a.spec", TYPE_ONE_VALUE)]);
+    let text = after(&c, "a.spec", &[delete("Customer", true)]);
+    assert!(
+        !text.contains("Customer") && !text.contains("composed_types"),
+        "{text}"
+    );
+}
+
+#[test]
+fn delete_with_unlink_references_leaves_a_word_a_string_list_holds() {
+    let c = project(&[("a.spec", TYPE_WORD)]);
+    let unlinked = after(&c, "a.spec", &[delete("Customer", true)]);
+    assert_eq!(unlinked, after(&c, "a.spec", &[delete("Customer", false)]));
+    assert!(
+        unlinked.contains("  refs Customer\n") && !unlinked.contains("type Customer"),
+        "{unlinked}"
+    );
+}

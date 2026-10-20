@@ -326,8 +326,9 @@ fn init_enables_each_builtin_after_the_builtins_it_requires() {
                 continue;
             };
             let position = |name: &str| extensions.iter().position(|e| e == name);
-            for required in extension::Candidate::builtin(&*runtime, enabled)
+            for required in extension::builtin_declaration(&*runtime, enabled)
                 .unwrap()
+                .declaration
                 .peers()
                 .iter()
                 .filter(|peer| !peer.optional)
@@ -660,4 +661,62 @@ fn an_init_that_cannot_read_gitignore_is_unreadable() {
         error.message
     );
     assert_eq!(files_under(&dir).len(), 1, "only the .gitignore");
+}
+
+/// `init` of `scratch/created`, which already holds a `.specforgefmt.toml` linked to a file outside
+/// that sets `indent_width = 8`, under `containment`; the starter it wrote.
+#[cfg(unix)]
+fn starter_with_a_linked_configuration(
+    scratch: &Path,
+    containment: &specforge_ops::Containment,
+) -> String {
+    use specforge_ops::authoring::init;
+    let elsewhere = TempDir::new().unwrap();
+    let configuration = elsewhere.path().join("c.toml");
+    std::fs::write(&configuration, "indent_width = 8\n").unwrap();
+    let dir = scratch.join("created");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::os::unix::fs::symlink(&configuration, dir.join(".specforgefmt.toml")).unwrap();
+    let request = init::Request {
+        dir: &dir,
+        name: Some("demo"),
+        version: init::DEFAULT_VERSION,
+        extensions: &[],
+        caller: specforge_ops::testing::bounded(containment),
+    };
+    init::init(&request, &candidates()).unwrap();
+    std::fs::read_to_string(dir.join("spec/hello.spec")).unwrap()
+}
+
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    behavior = "load_format_config",
+    verify = "a typed edit and init lay out with the defaults when their bound refuses the configuration"
+)]
+fn a_bounded_init_lays_its_starter_out_with_the_defaults_when_the_configuration_links_outside() {
+    let scratch = TempDir::new().unwrap();
+
+    let starter = starter_with_a_linked_configuration(
+        scratch.path(),
+        &specforge_ops::Containment::within(scratch.path()),
+    );
+
+    assert!(starter.contains("\n  version"), "{starter}");
+    assert!(!starter.contains("\n        version"), "{starter}");
+}
+
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    behavior = "load_format_config",
+    verify = "an unbounded caller follows a linked configuration"
+)]
+fn an_unbounded_init_lays_its_starter_out_with_a_linked_configuration() {
+    let scratch = TempDir::new().unwrap();
+
+    let starter = starter_with_a_linked_configuration(
+        scratch.path(),
+        &specforge_ops::Containment::unbounded(),
+    );
+
+    assert!(starter.contains("\n        version"), "{starter}");
 }

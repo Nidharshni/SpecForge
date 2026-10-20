@@ -1,5 +1,5 @@
-use specforge_package::PackageName;
 use specforge_package::Version;
+use specforge_package::{DeclaredPackage, PackageName};
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry_wire::{
     ErrorCode, PackageSignature, PublishReceipt, SearchQuery, SignedContent, address, sha256_hex,
@@ -49,8 +49,8 @@ pub fn assert_client_contract(
         let declaration = contract_declaration(version);
         let wasm = format!("\0asm contract tool {version}").into_bytes();
         let url = crate::publish_to_registry(
+            &DeclaredPackage::of(&declaration).unwrap(),
             &wasm,
-            &declaration,
             registry,
             Some(credential),
             client,
@@ -131,8 +131,8 @@ pub fn assert_client_contract(
     ));
     let error = client
         .publish(
+            &DeclaredPackage::of(declaration).unwrap(),
             wasm,
-            declaration,
             &manifest,
             &signature,
             registry,
@@ -191,7 +191,14 @@ pub fn assert_client_contract(
         &manifest,
     ));
     let error = client
-        .publish(b"\0asm next", &next, &manifest, &signature, registry, None)
+        .publish(
+            &DeclaredPackage::of(&next).unwrap(),
+            b"\0asm next",
+            &manifest,
+            &signature,
+            registry,
+            None,
+        )
         .unwrap_err();
     assert!(
         matches!(error, RegistryError::Unauthorized { .. }),
@@ -208,8 +215,8 @@ pub fn assert_client_contract(
     ));
     let error = client
         .publish(
+            &DeclaredPackage::of(&next).unwrap(),
             next_wasm,
-            &next,
             &manifest,
             &mismatched,
             registry,
@@ -241,8 +248,8 @@ pub fn assert_client_contract(
     ));
     let receipt = client
         .publish(
+            &DeclaredPackage::of(&next).unwrap(),
             next_wasm,
-            &next,
             &manifest,
             &signature,
             registry,
@@ -260,6 +267,58 @@ pub fn assert_client_contract(
         },
         "K11: the receipt names what was stored"
     );
+
+    // K12: an upload is the package its manifest declares: a manifest naming another version than the upload,
+    // or one that is no declaration, is refused and stores nothing.
+    let four = contract_declaration("4.0.0");
+    let package = DeclaredPackage::of(&four).unwrap();
+    let wasm = b"\0asm four";
+    let three = serde_json::to_string(&contract_declaration("3.0.0")).unwrap();
+    let signature = key.sign(&SignedContent::of("@contract/tool", "4.0.0", wasm, &three));
+    let error = client
+        .publish(
+            &package,
+            wasm,
+            &three,
+            &signature,
+            registry,
+            Some(credential),
+        )
+        .unwrap_err();
+    assert!(
+        matches!(
+            error,
+            RegistryError::Refused {
+                code: ErrorCode::NameMismatch,
+                ..
+            }
+        ),
+        "K12: a manifest naming another version is Refused(NameMismatch), not {error:?}"
+    );
+    let junk = "not a declaration";
+    let signature = key.sign(&SignedContent::of("@contract/tool", "4.0.0", wasm, junk));
+    let error = client
+        .publish(&package, wasm, junk, &signature, registry, Some(credential))
+        .unwrap_err();
+    assert!(
+        matches!(
+            error,
+            RegistryError::Refused {
+                code: ErrorCode::InvalidManifest,
+                ..
+            }
+        ),
+        "K12: a manifest that is no declaration is Refused(InvalidManifest), not {error:?}"
+    );
+    for version in [Version::new(3, 0, 0), Version::new(4, 0, 0)] {
+        let error = client
+            .metadata(&tool, &version, registry, None)
+            .unwrap_err();
+        assert!(
+            matches!(error, RegistryError::NotFound { .. }),
+            "K12: a refused publish stores nothing, not {error:?}"
+        );
+    }
 }
 
 /// The private client contract (plan 16): what every `RegistryClient` adapter does against a registry that
@@ -328,8 +387,8 @@ pub fn assert_private_client_contract(
     let wasm = b"\0asm contract tool private".to_vec();
     let key = SigningKey::generate();
     crate::publish_to_registry(
+        &DeclaredPackage::of(&declaration).unwrap(),
         &wasm,
-        &declaration,
         registry,
         Some(credential),
         client,

@@ -6,17 +6,15 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_common::{Code, Diagnostic, DiagnosticList, Severity, codes};
-use specforge_package::{PackageName, Version};
+use specforge_common::{Diagnostic, DiagnosticList, Severity, codes};
+use specforge_package::DeclaredPackage;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_wasm::WasmRuntime;
+use specforge_wasm::protocol::Loaded;
 
-use crate::extension::Candidate;
-use crate::registry::{Published, Registry, Upload};
-use crate::{OpError, OpErrorKind};
-
-/// The diagnostic for an extension that can't be found or read.
-const UNREADABLE: Code = codes::E040;
+use super::candidate::LocalComponent;
+use crate::registry::Registry;
+use crate::{Containment, OpError, OpErrorKind};
 
 /// What a publish found and how it ended. Its warnings are reported whatever
 /// the result.
@@ -26,36 +24,10 @@ pub struct PublishReport {
     /// build alone reports (W021, ...), without E027. Empty when the binary
     /// could not be read or loaded.
     pub warnings: Vec<Diagnostic>,
-    pub result: Result<PublishOutcome, OpError>,
+    pub result: Result<PublishDocument, OpError>,
 }
 
-/// A package published.
-#[derive(Debug, Clone, PartialEq)]
-pub struct PublishOutcome {
-    pub name: PackageName,
-    pub version: Version,
-    /// The binary's size in bytes.
-    pub size_bytes: usize,
-    pub published: Published,
-}
-
-impl PublishOutcome {
-    /// The document `specforge publish` prints.
-    pub fn document(&self) -> PublishDocument {
-        PublishDocument {
-            action: PublishAction::Published,
-            extension: self.name.to_string(),
-            version: self.version.to_string(),
-            registry: self.published.registry.clone(),
-            url: self.published.url.clone(),
-            size_bytes: self.size_bytes,
-            key_id: self.published.key_id.clone(),
-            key_created: self.published.key_created,
-        }
-    }
-}
-
-/// What `specforge publish --format json` prints (CLI-only, ADR 0052 D5).
+/// What a publish answers, and what `specforge publish --format json` prints (CLI-only, ADR 0052 D5).
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 pub struct PublishDocument {
     pub action: PublishAction,
@@ -63,6 +35,7 @@ pub struct PublishDocument {
     pub version: String,
     pub registry: String,
     pub url: String,
+    /// The binary's size in bytes.
     pub size_bytes: usize,
     pub key_id: String,
     pub key_created: bool,
@@ -79,7 +52,8 @@ pub enum PublishAction {
 /// directory that builds one) to `registry`.
 ///
 /// Refused in this order, each before anything after it is read or asked:
-/// 1. the binary: E040 (none at the path, none built, unreadable), E028 (not
+/// 1. the binary: E040 (nothing at the path, none built, several, unreadable: the
+///    candidate's reader), E028 (not
 ///    a loadable extension, read through `runtime`);
 /// 2. its declaration's errors, as the registry build of it alone reports
 ///    them (E030, a refused tool schema, ...), naming every error;
@@ -101,7 +75,7 @@ fn run(
     registry: &dyn Registry,
     runtime: &dyn WasmRuntime,
     warnings: &mut Vec<Diagnostic>,
-) -> Result<PublishOutcome, OpError> {
+) -> Result<PublishDocument, OpError> {
     let Validated {
         wasm,
         declaration,
@@ -114,31 +88,36 @@ fn run(
         .cloned()
         .collect();
     refuse_errors(&declaration, &diagnostics)?;
-    let (name, version) = identity(&declaration)?;
-    let published = registry.publish(&Upload {
-        name: &name,
-        version: &version,
-        wasm: &wasm,
-        declaration: &declaration,
+    let package = DeclaredPackage::of(&declaration).map_err(|why| {
+        OpError::of(
+            OpErrorKind::InvalidInput,
+            specforge_common::package::invalid(&why),
+        )
     })?;
-    Ok(PublishOutcome {
-        name,
-        version,
+    let published = registry.publish(&package, &wasm)?;
+    Ok(PublishDocument {
+        action: PublishAction::Published,
+        extension: package.name().to_string(),
+        version: package.version().to_string(),
+        registry: published.registry,
+        url: published.url,
         size_bytes: wasm.len(),
-        published,
+        key_id: published.key_id,
+        key_created: published.key_created,
     })
 }
 
 /// The extension at `extension` (a `.wasm` component, or the crate directory that builds one), read and declared as
-/// publish reads it. Refused, in this order: E040 (no binary at the path, none built, unreadable), E028 (not a
+/// publish reads it. Refused, in this order: E040 (nothing at the path, none built, several, unreadable: the candidate's reader), E028 (not a
 /// loadable extension, read through `runtime`). Its diagnostics are [`declare`]'s.
 pub fn validate(extension: &Path, runtime: &dyn WasmRuntime) -> Result<Validated, OpError> {
-    let binary = crate::extension::binary_at(extension)?;
-    let wasm = read(&binary)?;
-    let (declaration, diagnostics) = declare(runtime, &wasm)?;
+    // publish and extension validate are the CLI's only (ADR 0045 D6): unbounded, as the CLI is (ADR 0092 D6).
+    let LocalComponent { path, bytes } =
+        LocalComponent::read(extension, &Containment::unbounded())?;
+    let (declaration, diagnostics) = declare(runtime, &bytes)?;
     Ok(Validated {
-        binary,
-        wasm,
+        binary: path,
+        wasm: bytes,
         declaration,
         diagnostics,
     })
@@ -193,48 +172,6 @@ fn is_error(d: &Diagnostic) -> bool {
     d.severity == Severity::Error
 }
 
-fn read(binary: &Path) -> Result<Vec<u8>, OpError> {
-    std::fs::read(binary).map_err(|error| {
-        OpError::coded(
-            OpErrorKind::of_io(&error),
-            UNREADABLE,
-            format!("failed to read {}: {error}", binary.display()),
-        )
-    })
-}
-
-/// What is uploaded is a registry package: a scoped name and a full version
-/// (E072).
-fn identity(declaration: &ExtensionDeclaration) -> Result<(PackageName, Version), OpError> {
-    let name = match PackageName::declared_by(declaration) {
-        Ok(name) if name.scope().is_some() => name,
-        Ok(name) => {
-            return Err(OpError::of(
-                OpErrorKind::InvalidInput,
-                specforge_common::package::invalid(&format_args!(
-                    "'{name}' is not a registry package name: registry packages are named @scope/name"
-                )),
-            ));
-        }
-        Err(why) => {
-            return Err(OpError::of(
-                OpErrorKind::InvalidInput,
-                specforge_common::package::invalid(&why),
-            ));
-        }
-    };
-    let version = Version::parse(declaration.version()).map_err(|why| {
-        OpError::of(
-            OpErrorKind::InvalidInput,
-            specforge_common::package::invalid(&format_args!(
-                "'{}' is not a SemVer version: {why}",
-                declaration.version()
-            )),
-        )
-    })?;
-    Ok((name, version))
-}
-
 /// Load `wasm` and read its declaration, with what the registry build
 /// alone reports of it (its load warnings, W153 and W138, first). A binary
 /// that isn't a loadable extension is E028. Missing peers (E027) are left
@@ -243,7 +180,10 @@ pub fn declare(
     runtime: &dyn WasmRuntime,
     wasm: &[u8],
 ) -> Result<(ExtensionDeclaration, Vec<Diagnostic>), OpError> {
-    let (declaration, warnings) = Candidate::read(runtime, wasm)?.into_parts();
+    let Loaded {
+        declaration,
+        warnings,
+    } = super::candidate::read_declaration(runtime, wasm)?;
     let diagnostics = diagnostics_of(&declaration, warnings);
     Ok((declaration, diagnostics))
 }

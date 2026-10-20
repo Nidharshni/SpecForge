@@ -1,6 +1,7 @@
-//! A plan answers the position edits that apply it (`EditPlan::edits`).
+//! A plan answers the text edits that apply it (`EditPlan::text_edits`).
 
 use super::*;
+use specforge_ops::read::navigate::apply_edits;
 
 fn create(id: &str, file: &str) -> Edit {
     Edit::Create {
@@ -34,22 +35,13 @@ fn a_plans_edits_turn_each_planned_on_text_into_its_after_text() {
     )
     .unwrap();
     let after = planned.after();
-    let edits = planned.edits();
-    assert_eq!(edits.len(), 1);
-    for (key, changes) in edits {
-        let mut text = c.project.source_text(key).unwrap().to_string();
-        let mut end = text.len() + 1;
-        for change in changes.iter().rev() {
-            assert!(change.range.end < end, "sorted, apart: {changes:?}");
-            assert!(
-                text[change.range.clone()] != change.new_text,
-                "a no-op: {change:?}"
-            );
-            end = change.range.start;
-            text.replace_range(change.range.clone(), &change.new_text);
-        }
-        assert_eq!(text, after[key]);
-    }
+    let edits = planned.text_edits();
+    assert!(edits.iter().all(|e| e.span.file == "tasks.spec"));
+    let text = c.project.source_text("tasks.spec").unwrap();
+    assert_eq!(
+        apply_edits(&text, &edits).as_deref(),
+        Some(after["tasks.spec"].as_str())
+    );
 }
 
 #[test]
@@ -57,17 +49,15 @@ fn a_new_files_edits_are_one_insertion_at_its_start() {
     let c = project(&[("tasks.spec", TASKS)]);
     let planned = plan(&c, &[create("new_rule", "new.spec")]).unwrap();
     let after = planned.after().remove("new.spec").unwrap();
-    let edits = planned.edits();
+    let edits = planned.text_edits();
     assert_eq!(edits.len(), 1);
-    let (key, changes) = &edits[0];
-    assert_eq!(*key, "new.spec");
+    let span = &edits[0].span;
+    assert_eq!(span.file, "new.spec");
     assert_eq!(
-        changes,
-        &[specforge_ops::authoring::format::Edit {
-            range: 0..0,
-            new_text: after
-        }]
+        (span.start_line, span.start_col, span.end_line, span.end_col),
+        (1, 1, 1, 1)
     );
+    assert_eq!(edits[0].new_text, after);
 }
 
 #[test]
@@ -75,5 +65,5 @@ fn an_empty_plan_has_no_edits() {
     let c = project(&[("tasks.spec", TASKS)]);
     let planned = plan(&c, &[link("complete_task", "invariants", "done_stamped")]).unwrap();
     assert!(planned.is_empty());
-    assert!(planned.edits().is_empty());
+    assert!(planned.text_edits().is_empty());
 }

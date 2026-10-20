@@ -2,7 +2,11 @@ use specforge_common::{SourceSpan, Sym};
 use specforge_parser::{EntityId, EntityKind, FieldMap};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+mod degree;
 mod link;
+mod reach;
+pub use degree::Degree;
+pub use reach::Direction;
 
 #[derive(Debug, Clone)]
 pub struct Node {
@@ -44,7 +48,7 @@ pub struct Edge {
     pub label: Sym,
 }
 
-/// An entity [`Graph::reach`] reached.
+/// An entity a reach ([`Graph::reach`], [`Graph::reach_directed`]) reached.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Reached {
     pub id: Sym,
@@ -62,10 +66,6 @@ pub struct Graph {
     /// compensation (C5-12).
     nodes: BTreeMap<Sym, Node>,
     edges: Vec<Edge>,
-    /// Where each edge is written, parallel to `edges` (index for index): the span of every reference and every
-    /// derived name the linker made it from, in the order it read them, no span twice. Empty for an edge added
-    /// with `add_edge` (a graph assembled by hand, an emitter's filtered copy) (ADR 0127).
-    written: Vec<Vec<SourceSpan>>,
     /// Index: source sym -> indices into `edges`
     source_index: HashMap<Sym, Vec<usize>>,
     /// Index: target sym -> indices into `edges`
@@ -83,7 +83,6 @@ impl Graph {
         Self {
             nodes: BTreeMap::new(),
             edges: Vec::new(),
-            written: Vec::new(),
             source_index: HashMap::new(),
             target_index: HashMap::new(),
         }
@@ -102,8 +101,6 @@ impl Graph {
     /// Insert an edge. Idempotent on the (source, target, label) triple —
     /// duplicate edges corrupted cycle reporting and inflated renderers
     /// (C5-09/C5-02).
-    ///
-    /// A new edge is written nowhere; [`Self::add_written`] is the linker's way in.
     pub fn add_edge(&mut self, edge: Edge) {
         if self.index_of(&edge).is_some() {
             return;
@@ -112,28 +109,6 @@ impl Graph {
         self.source_index.entry(edge.source).or_default().push(idx);
         self.target_index.entry(edge.target).or_default().push(idx);
         self.edges.push(edge);
-        self.written.push(Vec::new());
-    }
-
-    /// Insert `edge` if new, and record `at` where it is written, unless it is already recorded (the linker's and
-    /// the derived walk's one way in).
-    pub(crate) fn add_written(&mut self, edge: Edge, at: Option<&SourceSpan>) {
-        self.add_edge(edge);
-        let (Some(at), Some(index)) = (at, self.index_of(&edge)) else {
-            return;
-        };
-        let places = &mut self.written[index];
-        if !places.contains(at) {
-            places.push(at.clone());
-        }
-    }
-
-    /// Where `edge` is written, in written order: one span per reference token or derived name. Empty when the
-    /// graph does not know (an edge added by hand) or does not hold the edge. Spans are positions in the text
-    /// the graph was built from (ADR 0127).
-    pub fn written(&self, edge: &Edge) -> &[SourceSpan] {
-        self.index_of(edge)
-            .map_or(&[], |index| self.written[index].as_slice())
     }
 
     /// The index of the edge with `edge`'s (source, target, label), if the graph holds it.
@@ -147,7 +122,6 @@ impl Graph {
 
     fn clear_edges(&mut self) {
         self.edges.clear();
-        self.written.clear();
         self.source_index.clear();
         self.target_index.clear();
     }
@@ -247,33 +221,7 @@ impl Graph {
     /// nothing beyond `max_depth` hops (unbounded when `None`; depth 0 is
     /// the root alone). `None` when `root_id` is not a node.
     pub fn reach(&self, root_id: &str, max_depth: Option<usize>) -> Option<Vec<Reached>> {
-        let root = Sym::new(root_id);
-        if !self.nodes.contains_key(&root) {
-            return None;
-        }
-        let mut reached = vec![Reached {
-            id: root,
-            depth: 0,
-            via: None,
-        }];
-        let mut seen: HashSet<Sym> = HashSet::from([root]);
-        let mut next = 0;
-        while let Some(&Reached { id, depth, .. }) = reached.get(next) {
-            next += 1;
-            if max_depth.is_some_and(|max| depth >= max) {
-                continue;
-            }
-            for (neighbor, label) in self.labelled_neighbors(id) {
-                if self.nodes.contains_key(&neighbor) && seen.insert(neighbor) {
-                    reached.push(Reached {
-                        id: neighbor,
-                        depth: depth + 1,
-                        via: Some((id, label)),
-                    });
-                }
-            }
-        }
-        Some(reached)
+        self.breadth_first(root_id, max_depth, |id| self.labelled_neighbors(id))
     }
 
     /// The edge labels on the path [`Self::reach`] found to `id`, root
@@ -303,12 +251,9 @@ impl Graph {
                 sub.add_node(node.clone());
             }
         }
-        for (edge, places) in self.edges.iter().zip(&self.written) {
+        for edge in &self.edges {
             if ids.contains(&edge.source) && ids.contains(&edge.target) {
                 sub.add_edge(*edge);
-                for place in places {
-                    sub.add_written(*edge, Some(place));
-                }
             }
         }
         sub

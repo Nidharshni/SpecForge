@@ -486,11 +486,12 @@ Level: error
 E040: Extension project not found or not built
 
 `specforge extension build`, `extension validate`, `publish`, or `add`/`init
---extensions` given a crate directory, found no extension to work on: the
-directory has no `Cargo.toml`, the build (`cargo build --release --target
-wasm32-wasip2`) failed, no built component is in `target/wasm32-wasip2/release/`
-(or several are, and none is the crate's), or the `.wasm` file couldn't be read.
-Build the extension, fix the build error the message quotes, or name the
+--extensions` given a local path, found no extension to work on: nothing is at
+the path, the directory has no `Cargo.toml`, the build (`cargo build --release
+--target wasm32-wasip2`) failed, no built component is in
+`target/wasm32-wasip2/release/` (or several are, and none is the crate's), or
+the `.wasm` file couldn't be read (over MCP, also a file with more than one
+name). Build the extension, fix the build error the message quotes, or name the
 component to use.
 
 Owner: core
@@ -594,10 +595,10 @@ E054: Invalid extension specifier
 The argument given to `specforge add` (or `specforge.add_extension`, or `init
 --extensions`) isn't a builtin's name, a local path (ending in `.wasm`, or
 starting with `./`, `../` or `/`), a `git+https://...` URL, or a registry
-package `@scope/name` with an optional `@version` or `@requirement`, or a local
-install path didn't exist on disk. A registry package name is lowercase letters,
-digits, `.`, `_` or `-` in two parts that each start with a letter or digit.
-Nothing is asked of any registry.
+package `@scope/name` with an optional `@version` or `@requirement`. A registry
+package name is lowercase letters, digits, `.`, `_` or `-` in two parts that
+each start with a letter or digit. A local path that names nothing, or no
+readable component, is E040. Nothing is asked of any registry.
 
 Owner: core
 Level: error

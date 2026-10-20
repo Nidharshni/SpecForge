@@ -476,7 +476,8 @@ fn stranded_lists_the_entities_by_id() {
     let root = dir.path();
     add(root, blobs.greet()).unwrap();
 
-    let outcome = remove(root, GREET, true);
+    let project = compiled(root);
+    let outcome = remove_over(&project, GREET, true);
 
     assert_eq!(
         outcome.stranded,
@@ -494,6 +495,13 @@ fn stranded_lists_the_entities_by_id() {
     assert_eq!(
         outcome.stranded[0].warning(GREET),
         format!("greeting 'hello' uses a kind only {GREET} defines")
+    );
+    let listed = extension::list(&ProjectView::of(&project));
+    let greet = listed.extensions.iter().find(|e| e.name == GREET).unwrap();
+    assert_eq!(
+        greet.entity_count,
+        outcome.stranded.len(),
+        "the listing counts what a removal strands"
     );
 }
 
@@ -551,7 +559,7 @@ fn a_migration_writes_each_file_and_its_backup() {
 }
 
 #[test]
-fn a_rolled_back_migration_keeps_only_its_backups() {
+fn a_rolled_back_migration_leaves_nothing() {
     let dir = project(&["@t/x"], &[("old.spec", OLD)]);
     let root = dir.path();
     specforge_installed::testing::install(root, &["@t/x"]);
@@ -571,6 +579,6 @@ fn a_rolled_back_migration_keeps_only_its_backups() {
     .unwrap();
 
     assert!(outcome.rollback.is_some());
-    assert_eq!(listed(&outcome.writes, root), ["old.spec.bak"]);
-    assert_eq!(changed_since(root, &before), ["old.spec.bak"]);
+    assert_eq!(listed(&outcome.writes, root), Vec::<String>::new());
+    assert_eq!(changed_since(root, &before), Vec::<String>::new());
 }

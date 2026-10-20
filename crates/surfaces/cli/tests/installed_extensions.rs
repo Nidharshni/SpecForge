@@ -1140,7 +1140,7 @@ fn remove_dry_run_prints_the_plan_and_writes_nothing() {
     assert!(human.status.success(), "{human:?}");
     let text = String::from_utf8(human.stdout).unwrap();
     assert!(
-        text.starts_with("Would disable extension '@sdk/greet' loaded from greet.wasm"),
+        text.starts_with("Would disable extension '@sdk/greet' (the .wasm file entry greet.wasm;"),
         "{text}"
     );
 

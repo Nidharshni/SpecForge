@@ -65,9 +65,10 @@ impl Planner<'_> {
             key: file,
             id,
             kind,
+            config: self.config_of(file),
         };
         let order = block::order(self.view, kind);
-        let config = block::layout(&site);
+        let config = site.config.clone();
         let mut members: Vec<((u8, usize), String, String)> = Vec::new();
         for (name, input) in fields {
             let reading = match path::resolve(&site, name, None)? {
@@ -103,7 +104,9 @@ impl Planner<'_> {
         let mut text = block::canonical(&site, &text)?;
         // A field that restates its file's default is not written (W161), judged on what was written (ADR 0154).
         for name in fields.keys() {
-            text = super::defaults::without_repeat(&site, &text, name)?;
+            text = super::defaults::change(&site, &text, name, |_, _| {
+                Ok(super::defaults::Change::Changed)
+            })?;
         }
         self.texts.insert(file.to_string(), text);
         self.created

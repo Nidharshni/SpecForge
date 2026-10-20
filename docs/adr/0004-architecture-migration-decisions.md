@@ -1,6 +1,6 @@
 # One project, four surfaces: the migration's decisions
 
-**Status:** accepted (2026-09-30); amended the same day after the decision research
+**Status:** accepted (2026-09-30); amended the same day after the decision research. Amended by round 18 plan 08 (2026-10-19): D6-d's docs link is `CodeEntry::docs_href`, the entry's own.
 
 The architecture review in `.planning/architecture/` found that the CLI, `specforge watch`, the LSP
 and the MCP server each assemble the compiler on their own, and so drift apart. It plans six

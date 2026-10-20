@@ -98,11 +98,11 @@ fn a_refused_specifier_writes_nothing_and_is_named() {
         )
         .unwrap_err();
 
-        assert_eq!(error.error.code, "E054", "{error:?}");
+        assert_eq!(error.error.code, "E040", "{error:?}");
         assert_eq!(
             error.error.message,
             format!(
-                "adding '{}': file not found: {}",
+                "adding '{}': no extension binary at {}",
                 missing.display(),
                 missing.display()
             )
@@ -123,7 +123,7 @@ fn a_refused_specifier_writes_nothing_and_is_named() {
     .unwrap_err();
     assert_eq!(
         error.error.message,
-        format!("file not found: {}", missing.display())
+        format!("no extension binary at {}", missing.display())
     );
 }
 

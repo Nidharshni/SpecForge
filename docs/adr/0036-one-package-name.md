@@ -2,6 +2,8 @@
 
 **Status:** accepted (2026-10-07)
 
+**Amended by [ADR 0179](0179-a-publish-states-its-package-identity-once.md) (architecture round 18, plan 09), D1:** a declaration being published is parsed once into a `DeclaredPackage` and passed as itself to the registry port and the registry client.
+
 What an extension package is called, and which of its versions `specforge add` asks for, was read by
 twelve pieces of code in seven crates: three `rfind('@')` splitters (the wasm specifier, the registry
 client, the `specforge.json` entry), an ops pre-check for `@scope/name`, an `is_range` test, two

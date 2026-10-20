@@ -1,9 +1,9 @@
 use specforge_common::{Diagnostic, codes};
 
 use super::registry_config::{RegistryConfig, RegistryCredential};
+use specforge_package::DeclaredPackage;
 use specforge_package::PackageName;
 use specforge_package::Version;
-use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry_wire::{
     ErrorCode, PackageMetadata, PackageSignature, PublishReceipt, SearchHit, SearchQuery,
 };
@@ -32,11 +32,6 @@ pub enum RegistryError {
     DuplicateVersion {
         name: String,
         version: String,
-    },
-    /// The declaration to publish names no package: its name or version is
-    /// not one (E072).
-    InvalidPackage {
-        message: String,
     },
     /// The registry read the request and refused it (HTTP 400), saying why (R008).
     Refused {
@@ -92,9 +87,6 @@ impl RegistryError {
                 format!("Version {version} already exists for package {name}."),
             )
             .with_suggestion("Bump the version number before publishing.".to_string()),
-            RegistryError::InvalidPackage { message } => {
-                specforge_common::package::invalid(message)
-            }
             RegistryError::Refused { code, message } => Diagnostic::new(
                 codes::R008,
                 format!("the registry refused the request ({code}): {message}"),
@@ -167,13 +159,14 @@ pub trait RegistryClient: Send + Sync {
         credential: Option<&RegistryCredential>,
     ) -> Result<Vec<SearchHit>, RegistryError>;
 
-    /// Upload `package` with `manifest_json` (the exact text `signature` covers) and `signature`; `credential`,
+    /// Upload `wasm` as `package`, with `manifest_json` (the exact text `signature` covers, the serialization of
+    /// `package.declaration()`) and `signature`; `credential`,
     /// when given, authenticates it as an `Authorization: Bearer` header. A publish is always signed. The
     /// registry's receipt: what it stored.
     fn publish(
         &self,
-        package: &[u8],
-        declaration: &ExtensionDeclaration,
+        package: &DeclaredPackage<'_>,
+        wasm: &[u8],
         manifest_json: &str,
         signature: &PackageSignature,
         registry: &RegistryConfig,

@@ -207,3 +207,41 @@ fn the_in_process_runtime_maps_guest_failures_to_traps() {
 fn no_findings(_: &PassInput) -> Vec<PassDiagnostic> {
     Vec::new()
 }
+
+#[specforge_test_macros::test(
+    behavior = "configure_sandbox_policy",
+    verify = "a load's warnings name the extension by the name its handshake declares"
+)]
+fn a_loads_warnings_name_the_extension_its_handshake_declares() {
+    let runtime = InProcessRuntime::new().binary(b"\0asm named", || {
+        let mut meta = ExtensionMeta::new("@acme/named", "1.0.0");
+        meta.sandbox_policy = Some(SandboxPolicy {
+            max_memory_mb: Some(4096),
+            max_execution_ms: None,
+        });
+        let mut b = ContributionsBuilder::new(meta);
+        b.raw_category(
+            DeclaredCategory::Entities,
+            serde_json::json!([{ "name": "x", "testabel": true }]),
+        );
+        b
+    });
+    runtime.load("entry.wasm", b"\0asm named").unwrap();
+
+    let loaded = load_declaration(&runtime, "entry.wasm").unwrap();
+
+    let codes: Vec<&str> = loaded.warnings.iter().map(|w| w.code.as_str()).collect();
+    assert_eq!(codes, ["W153", "W138"]);
+    for warning in &loaded.warnings {
+        assert!(
+            warning.message.starts_with("extension '@acme/named': "),
+            "{}",
+            warning.message
+        );
+        assert!(
+            !warning.message.contains("entry.wasm"),
+            "{}",
+            warning.message
+        );
+    }
+}

@@ -30,10 +30,10 @@ use specforge_graph::Graph;
 use specforge_installed::{Installed, LockState};
 use specforge_project::coverage::{ProjectCoverage, Recorded, ReportError, TestReport};
 use specforge_project::{CompiledProject, Environment, SharedRuntime};
-use specforge_registry::{Disk, EntitySnapshot, PlainDisk, RegistryBuild};
+use specforge_registry::{Disk, EntitySnapshot, RegistryBuild};
 
-pub use connectivity::{Connectivity, Degree};
-pub use entity::{EntityField, not_found};
+pub use connectivity::Connectivity;
+pub use entity::{DEPTH_WITHOUT_ENTITY, EntityField, depth_without_entity, not_found};
 pub use kinds::{KnownKinds, UNKNOWN_KIND};
 
 use crate::schema_version::{SchemaCache, VersionedSchema};
@@ -195,17 +195,23 @@ impl<'a> ProjectView<'a> {
         self.read_report(|disk| self.project.recorded(disk))
     }
 
+    /// What this view's project files are read through: inside its root when contained (MCP, ADR 0139), else
+    /// every path. The recorded report and a typed edit's format configuration are read through its disk
+    /// (ADR 0169).
+    pub(crate) fn containment(&self) -> Containment {
+        match self.root().filter(|_| self.contained) {
+            Some(root) => Containment::within(root),
+            None => Containment::unbounded(),
+        }
+    }
+
     /// `read` over the disk this view reads the report through: held inside the root when
     /// contained, else the file system as the user sees it.
     fn read_report<T>(
         &self,
         read: impl FnOnce(&dyn Disk) -> Result<T, ReportError>,
     ) -> Result<T, OpError> {
-        match self.root().filter(|_| self.contained) {
-            Some(root) => read(&Containment::within(root).disk()),
-            None => read(&PlainDisk),
-        }
-        .map_err(crate::report::unusable)
+        read(&self.containment().disk()).map_err(crate::report::unusable)
     }
 
     /// This view, reading the project's recorded report only from inside its root: a report

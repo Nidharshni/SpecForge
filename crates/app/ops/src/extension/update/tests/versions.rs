@@ -143,11 +143,12 @@ fn a_vanished_lock_holds_back_no_other_upgrade() {
         }
     );
     assert_eq!(
-        outcome.batch_update_completed(),
+        outcome.batch_update_completed(ended()),
         BatchUpdateCompleted {
             updated_count: 1,
             failed_count: 0,
             skipped_count: 1,
+            timestamp: ENDED.into(),
         }
     );
     assert_eq!(

@@ -1,6 +1,6 @@
 # A typed edit asks its file's defaults over the text it plans
 
-**Status:** accepted (2026-10-19, architecture round 15, plan 02). Amends [ADR 0149](0149-a-file-states-a-kinds-shared-fields-once.md) D8 (the graph's defaults module also answers the edit path) and [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) D5 (how "copied" and "equal to the default" are decided).
+**Status:** accepted (2026-10-19, architecture round 15, plan 02). Amends [ADR 0149](0149-a-file-states-a-kinds-shared-fields-once.md) D8 (the graph's defaults module also answers the edit path) and [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) D5 (how "copied" and "equal to the default" are decided). D3 amended by [ADR 0175](0175-a-typed-edit-changes-a-blocks-field-through-one-module.md) (every typed edit of a field, entries included, ends with the restatement check, in one module).
 
 ## Context
 

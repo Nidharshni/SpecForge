@@ -2,10 +2,10 @@
 
 use specforge_common::codes;
 use specforge_installed::hex_sha256;
-use specforge_package::{PackageName, Version};
+use specforge_package::{DeclaredPackage, PackageName, Version};
 use specforge_protocol_types::DeclaredCategory;
 
-use super::super::{KeyPin, Publisher, Registry, TrustPolicy, Upload};
+use super::super::{KeyPin, Publisher, Registry, TrustPolicy};
 use super::{Published, declaration};
 use crate::asking::testing::{Asked, Scripted};
 use crate::asking::{Asking, ExpectedFrom};
@@ -135,14 +135,9 @@ pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]
     let fresh_version = Version::parse("1.0.0").unwrap();
     let wasm = b"\0asm @contract/fresh 1.0.0";
     let declaration = declaration("@contract/fresh", "1.0.0", &[]);
-    let upload = Upload {
-        name: &fresh,
-        version: &fresh_version,
-        wasm,
-        declaration: &declaration,
-    };
+    let package = DeclaredPackage::of(&declaration).unwrap();
     let receipt = registry
-        .publish(&upload)
+        .publish(&package, wasm)
         .unwrap_or_else(|e| panic!("C7: publish fails: {e:?}"));
     assert!(!receipt.url.is_empty(), "C7: the receipt names a url");
     assert!(!receipt.key_id.is_empty(), "C7: the receipt names the key");
@@ -160,7 +155,7 @@ pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]
         Some(receipt.key_id.as_str()),
         "C7: signed by the key the receipt names"
     );
-    let again = registry.publish(&upload).unwrap_err();
+    let again = registry.publish(&package, wasm).unwrap_err();
     assert!(again.is(codes::R007), "C7: a held version: {again:?}");
     assert_eq!(
         again.kind,

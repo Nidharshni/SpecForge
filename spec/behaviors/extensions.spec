@@ -85,7 +85,7 @@ behavior load_extension_manifests "Load Extension Manifests" {
     An entry refused at any step — its bytes not a component, its
     declaration unreadable, or the name it declares not the one its entry
     admits — MUST leave nothing loaded. A .wasm file entry's load warnings
-    (W153, W138) name the entry. A
+    (W153, W138) name the extension it declares. A
     specforge.json that is there and is not used as written MUST produce
     the error E069 naming why, one per problem, before any other
     diagnostic. When the file is not readable, not JSON or not a JSON
@@ -124,7 +124,7 @@ behavior load_extension_manifests "Load Extension Manifests" {
   verify unit "a .wasm file entry that cannot be read is E028 saying it cannot be read"
   verify unit "an entry refused at any step of its load leaves nothing loaded"
   verify unit "an entry's declaration is read once, with one handshake"
-  verify unit "a .wasm file entry's load warnings name the entry"
+  verify unit "a .wasm file entry's load warnings name the extension it declares"
   verify unit "missing extension produces diagnostic"
   verify unit "every builtin is listed once, by the directory its crate lives in"
   verify unit "every fixture crate is listed once, by its directory under fixtures/"
@@ -477,6 +477,7 @@ behavior remove_extension "Remove Extension" {
   verify integration "removing an installed extension drops its specforge.json entry"
   verify integration "removing an extension another installed extension requires fails with E027 unless --force"
   verify integration "a .wasm file entry is removed by the name it declares or by its entry as written, leaving its file in place"
+  verify integration "a dry-run removal of a .wasm file entry names the entry without saying it loaded"
   verify integration "a name more than one specforge.json entry enables is refused as ambiguous, naming the entries"
   verify integration "removing a .wasm file entry another extension requires fails with E027 unless --force"
   verify unit "remove and check agree: a removal check would report E027 for is refused, and a removal that passes leaves none"
@@ -496,13 +497,13 @@ behavior list_installed_extensions "List Installed Extensions" {
     kind_registry_ready "KindRegistry is populated with entity kinds from loaded extensions"
   }
   ensures {
-    all_extensions_listed  "All installed extensions are included in the output"
+    all_extensions_listed  "Every extension the project enables, locks or loads is included in the output"
     entity_counts_included "Each extension entry includes entity count and registered entity types"
     output_deterministic   "Output order is alphabetical by extension name"
   }
   contract   """
-    When specforge extensions is invoked, the system MUST list all installed
-    extensions with their name, version, entity count, and registered entity types.
+    When specforge extensions is invoked, the system MUST list every extension
+    the project has (enabled by a specforge.json entry, locked in specforge.lock, or loaded: the extension inventory) with their name, version, entity count, and registered entity types.
     The listing MUST query the KindRegistry to enumerate entity kinds per
     extension. Each entry MUST carry its source: where the extension load
     loaded it from (the entry that loaded it, read by the load's one rule,
@@ -524,6 +525,8 @@ behavior list_installed_extensions "List Installed Extensions" {
   verify integration "a .wasm file entry is listed under the name it declares, loaded, with source file:<path>"
   verify unit "an extension's source is where the extension load takes it from, whatever order its entries are in"
   verify integration "the CLI and the MCP extensions tool answer the same document"
+  verify integration "the human listing names its rows the project's extensions, never installed ones, and counts those loaded"
+  verify integration "the human listing counts one entity as one entity"
   verify contract "List Installed Extensions: extension listing holds — kind_registry_ready, all_extensions_listed, entity_counts_included, output_deterministic"
 }
 
@@ -822,7 +825,8 @@ behavior publish_to_registry "Publish to Registry" {
     with the .wasm binary and its SHA256 hash, before any network call
     deciding whether to refuse; the request MUST be authenticated. The
     registry MUST refuse a manifest that is not an extension declaration,
-    and takes the description and keywords it shows from the declaration.
+    or that names another package or version than the upload path
+    (NAME_MISMATCH), and takes the description and keywords it shows from the declaration.
     The registry MUST refuse an upload with no signature (UNSIGNED_PACKAGE),
     or whose signature is not a package signature or does not verify over
     the name and version in the upload path, the binary and the exact

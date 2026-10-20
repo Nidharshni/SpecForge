@@ -23,7 +23,8 @@ pub struct WasmTrapInfo {
 pub trait WasmRuntime: Send + Sync {
     /// Compile the component `bytes` and register it under `name`,
     /// replacing what was loaded under it. The bytes are the ones the
-    /// caller checked: the runtime reads nothing else.
+    /// caller checked: the runtime reads nothing else. A refusal's reason
+    /// names no key: the caller names its subject.
     fn load(&self, name: &str, bytes: &[u8]) -> Result<(), String>;
 
     /// Register what is loaded as `from` under `to` instead, without

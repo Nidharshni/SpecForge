@@ -162,7 +162,7 @@ fn a_dry_run_of_several_specifiers_previews_each() {
         &runtime_with_product(),
     )
     .unwrap_err();
-    assert_eq!(error.error.code, "E054");
+    assert_eq!(error.error.code, "E040");
     assert!(error.error.message.starts_with("adding '"), "{error:?}");
     assert_eq!(files_under(dir.path()), before);
 }

@@ -9,7 +9,7 @@ use specforge_ops::view::ProjectView;
 use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
 use crate::reply::{Answer, Answered};
-use crate::tool::{ErrorCode, McpError};
+use crate::tool::McpError;
 use specforge_ops::Refusal;
 use specforge_ops::view::EntityField;
 
@@ -103,16 +103,8 @@ impl CoreTool for Tool {
             Ask::Trace(Target::Entity(entity_id)) => entity_id,
             Ask::Trace(Target::Every) => return Err(every_is_not_offered()),
         };
-        let traced = specforge_ops::read::trace::trace(&view, Target::Entity(entity_id))
+        let chain = specforge_ops::read::trace::chain(&view, entity_id)
             .map_err(|refusal: Refusal<EntityField>| Self::refused(refusal))?;
-        let chain = traced.try_map(|outcome| {
-            outcome.into_chain().ok_or_else(|| {
-                Box::new(McpError::new(
-                    ErrorCode::InternalError,
-                    "trace of one entity answered no chain",
-                ))
-            })
-        })?;
         Ok(Answer::noticed(chain.map(Reply::Chain)))
     }
 }

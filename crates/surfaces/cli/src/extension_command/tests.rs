@@ -333,6 +333,41 @@ fn a_count_below_its_minimum_is_refused_and_a_negative_integer_is_a_value() {
     );
 }
 
+#[test]
+fn a_usage_error_names_an_arg_as_it_is_declared() {
+    let mut c = contribution();
+    c.args.push(CommandArgDescriptor {
+        minimum: Some(0),
+        ..arg("sortOrder", CommandArgType::Integer, false, None)
+    });
+    c.args
+        .push(arg("projectId", CommandArgType::String, true, None));
+    let command = ExtensionCommand::new("@acme/x", "x", &c);
+    let refused = sent_by(
+        &c,
+        &["milestone-completion", "m1", "p1", "--sortOrder", "abc"],
+    )
+    .unwrap_err();
+    assert_eq!(
+        usage_error(&refused, Some(&command)),
+        serde_json::json!({"code": "INVALID_INPUT",
+            "message": "sortOrder must be a non-negative integer, got 'abc'"})
+    );
+    let refused = sent_by(&c, &["milestone-completion"]).unwrap_err();
+    assert_eq!(
+        usage_error(&refused, Some(&command))["message"],
+        "missing required args 'milestone', 'projectId'"
+    );
+    let mut c = contribution();
+    c.args
+        .push(arg("with-all", CommandArgType::Bool, false, None));
+    let command = ExtensionCommand::new("@acme/x", "x", &c);
+    assert_eq!(
+        shown_arg(&command, "--with-all").map(|a| a.name.as_str()),
+        Some("with-all")
+    );
+}
+
 #[specforge_test(
     behavior = "dispatch_surface_command",
     verify = "under --format json a command whose export trapped prints one JSON error object"

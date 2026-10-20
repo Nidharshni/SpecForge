@@ -277,7 +277,7 @@ impl ComponentRuntime {
         component: Component,
         fuel: u64,
     ) -> Result<(), String> {
-        let (store, bindings) = self.fresh_instance(name, &component, fuel, Limits::CEILING)?;
+        let (store, bindings) = self.fresh_instance(&component, fuel, Limits::CEILING)?;
         let mut plugins = self.plugins.lock().map_err(|e| e.to_string())?;
         plugins.insert(
             name.to_string(),
@@ -296,7 +296,6 @@ impl ComponentRuntime {
     /// and its wall-clock budget armed.
     fn fresh_instance(
         &self,
-        name: &str,
         component: &Component,
         fuel: u64,
         limits: Limits,
@@ -317,14 +316,14 @@ impl ComponentRuntime {
         store.limiter(|state| &mut state.memory);
         store
             .set_fuel(fuel)
-            .map_err(|e| format!("failed to set fuel for {name}: {e}"))?;
+            .map_err(|e| format!("failed to set fuel: {e}"))?;
         // With epoch interruption enabled, stores start with a deadline of
         // zero ticks and would trap immediately — arm the plugin's
         // wall-clock budget before any guest code can run.
         store.set_epoch_deadline(ms_to_ticks(u64::from(limits.execution_ms)));
 
         let bindings = Bridge::instantiate(&mut store, component, &linker)
-            .map_err(|e| format!("failed to instantiate component {name}: {e}"))?;
+            .map_err(|e| format!("failed to instantiate component: {e}"))?;
         Ok((store, bindings))
     }
 }
@@ -352,7 +351,7 @@ impl WasmRuntime for ComponentRuntime {
     /// atomically replacing any existing plugin (hot reload / H1).
     fn load(&self, name: &str, bytes: &[u8]) -> Result<(), String> {
         let component = Component::from_binary(&self.engine, bytes)
-            .map_err(|e| format!("failed to compile component {name}: {e}"))?;
+            .map_err(|e| format!("failed to compile component: {e}"))?;
         self.instantiate_with_fuel(name, component, self.fuel)
     }
 
@@ -465,7 +464,7 @@ impl WasmRuntime for ComponentRuntime {
                 // the extension down for the rest of the process (an MCP
                 // session).
                 if let Ok((fresh_store, fresh_bindings)) =
-                    self.fresh_instance(name, component, *fuel, *limits)
+                    self.fresh_instance(component, *fuel, *limits)
                 {
                     *store = fresh_store;
                     *bindings = fresh_bindings;

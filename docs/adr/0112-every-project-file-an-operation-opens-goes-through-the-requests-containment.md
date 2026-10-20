@@ -4,6 +4,8 @@
 and ADR 0029 D8. D2 (collect's request and `SessionRequest`) and D4 (`ProjectRef::caller`) amended by [ADR 0124](0124-what-the-caller-lends-an-operation-is-one-value.md); its Rejected line stands.
 D1 (`replace`) amended by [ADR 0128](0128-one-project-change-over-held-files.md): it keeps the file's permissions and refuses a file the process may not write. Its reopen condition (the session's recorded report) is answered by [ADR 0139](0139-a-compiled-project-reads-its-recorded-report-through-the-disk-it-is-handed.md): the session reads the report through the `Disk` port and ops supplies the containment adapter; the Rejected kernel move stands. The Consequences bullet on `coverage::read_report` no longer holds.
 
+**Amended by [ADR 0171](0171-a-migration-writes-through-the-project-change.md) (round 18):** D1: an owned name is opened at its spelling; the Rejected 'Opening migrate's sources as `Held`' is reversed.
+
 ADR 0104 applied containment at an enumerated list of sites, so every reader or writer of a project file left off the
 list still opened the file by name, through whatever symlink was there. Eight commits in three days (`4a75cee8`,
 `e096e7e5`, `ceff78dc`, `00ea1740`, `3da57fb3`, `c8671d2e`, `a760cb30`, `cd97d186`) each added one site. Six more

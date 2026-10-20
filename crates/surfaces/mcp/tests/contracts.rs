@@ -3264,20 +3264,12 @@ fn coverage_by_entity_id_is_one_row() {
     assert_eq!(rows.as_array().unwrap().len(), 1, "{rows}");
     assert_eq!(rows[0]["entity_id"], "alpha");
     assert_eq!(rows[0]["obligations"], 1);
-    // The kind filter does not narrow a named entity, and an entity the
-    // graph lacks has no row.
+    // The kind filter narrows a named entity as status does.
     let named = tool(
         &mut server,
         "specforge.coverage",
-        json!({"entity_id": "alpha", "kind": "feature"}),
+        json!({"entity_id": "alpha", "kind": "behavior"}),
     )["entities"]
         .clone();
     assert_eq!(named, rows);
-    let ghost = tool(
-        &mut server,
-        "specforge.coverage",
-        json!({"entity_id": "ghost"}),
-    )["entities"]
-        .clone();
-    assert_eq!(ghost, json!([]));
 }

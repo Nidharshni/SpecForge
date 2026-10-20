@@ -179,6 +179,13 @@ pub struct FieldHolds<'a> {
     pub value: &'a str,
 }
 
+/// The field of a search request a refusal can be about (ADR 0072).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SearchField {
+    /// `SearchRequest::referencing`.
+    Referencing,
+}
+
 /// Entities a text finds, ranked as the LSP ranks completion and
 /// workspace symbols ([`find_entities`], over names and string fields),
 /// every filter ANDed.
@@ -188,7 +195,8 @@ pub struct SearchRequest<'a> {
     pub text: &'a str,
     pub kinds: Vec<&'a str>,
     pub field: Option<FieldHolds<'a>>,
-    /// Only entities that reference this entity.
+    /// Only entities that reference this entity; one the graph lacks is
+    /// refused (`view::not_found`).
     pub referencing: Option<&'a str>,
     /// `None` is [`DEFAULT_SEARCH_LIMIT`].
     pub limit: Option<usize>,
@@ -203,8 +211,17 @@ pub struct Hit<'v> {
 }
 
 /// The entities `request` finds, best first, at most the limit, with I020
-/// for a kind of the filter the project does not know.
-pub fn search<'v>(view: &ProjectView<'v>, request: &SearchRequest) -> Noticed<Vec<Hit<'v>>> {
+/// for a kind of the filter the project does not know. A `referencing`
+/// entity the graph lacks is [`crate::view::not_found`] (E003).
+pub fn search<'v>(
+    view: &ProjectView<'v>,
+    request: &SearchRequest,
+) -> Result<Noticed<Vec<Hit<'v>>>, Refusal<SearchField>> {
+    if let Some(id) = request.referencing {
+        view.graph().node(id).ok_or_else(|| {
+            crate::view::not_found(view.graph(), id).about(SearchField::Referencing)
+        })?;
+    }
     let notices = view.kinds().unknown_in(&request.kinds);
     let query = EntityQuery {
         text: request.text,
@@ -224,5 +241,5 @@ pub fn search<'v>(view: &ProjectView<'v>, request: &SearchRequest) -> Noticed<Ve
             Hit { found, snippet }
         })
         .collect();
-    Noticed::new(hits, notices)
+    Ok(Noticed::new(hits, notices))
 }

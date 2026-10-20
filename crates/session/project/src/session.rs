@@ -225,7 +225,9 @@ impl ProjectSession {
     }
 
     /// Open the project at `root` with `runtime` (none: no extension
-    /// loads). A reload keeps using the same runtime.
+    /// loads). A reload keeps using the same runtime (tests: production opens with [`Self::open`] or
+    /// [`Self::open_through`]).
+    #[cfg(feature = "testing")]
     pub fn open_with_runtime(root: &ProjectRoot, runtime: Option<SharedRuntime>) -> Self {
         Self::open_from(root, RuntimeSource::Fixed(runtime))
     }

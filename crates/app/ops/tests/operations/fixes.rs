@@ -18,7 +18,7 @@ pub(crate) fn apply(text: &str, edits: &[TextEdit]) -> String {
 
 /// The fixes of `p`'s own diagnostics for `query`.
 pub(crate) fn fixes_of(p: &Compiled, query: &FixQuery) -> Vec<Fix> {
-    fix::fixes(&p.navigator(), &p.project.diagnostics(), query)
+    fix::fixes(&p.navigator(), &p.project.diagnostics(), query).unwrap()
 }
 
 fn titles(fixes: &[Fix]) -> Vec<String> {
@@ -189,11 +189,7 @@ fn an_untargeted_obligation_rule_stubs_every_kind_that_accepts_verify() {
     // exempts it), not epsilon (its kind accepts no verify).
     let navigator = Navigator::new(ProjectView::of(&project));
     assert_eq!(
-        stubs(fix::fixes(
-            &navigator,
-            &project.diagnostics(),
-            &FixQuery::default()
-        )),
+        stubs(fix::fixes(&navigator, &project.diagnostics(), &FixQuery::default()).unwrap()),
         [
             ("beta".to_string(), Some("P300".to_string())),
             ("gamma".to_string(), Some("P300".to_string())),
@@ -258,7 +254,8 @@ fn the_verify_stub_uses_the_kinds_first_allowed_verify_kind() {
         &Navigator::new(ProjectView::of(&project)),
         &[],
         &FixQuery::default(),
-    );
+    )
+    .unwrap();
     assert_eq!(
         titles(&fixes),
         ["Add verify stub for unique_ids"],
@@ -453,6 +450,7 @@ fn no_stub_without_a_target_kind() {
             &project.diagnostics(),
             &FixQuery::default(),
         )
+        .unwrap()
         .into_iter()
         .filter(|f| f.source == FixSource::CreateStub)
         .collect::<Vec<_>>()
@@ -541,7 +539,7 @@ fn the_stub_reads_target_entity_and_field_from_the_data() {
         reworded_e003(token.clone(), Some(data.clone())),
         reworded_e003(token.clone(), Some(data)),
     ];
-    let fixes = fix::fixes(&p.navigator(), &reworded, &FixQuery::default());
+    let fixes = fix::fixes(&p.navigator(), &reworded, &FixQuery::default()).unwrap();
     let stubs: Vec<&Fix> = fixes
         .iter()
         .filter(|f| f.source == FixSource::CreateStub)
@@ -552,7 +550,7 @@ fn the_stub_reads_target_entity_and_field_from_the_data() {
     // The diagnostic as text alone, in the compiler's wording: no stub.
     let mut text_only = reworded_e003(token, None);
     text_only.message = "unresolved reference 'session_limit' in entity 'login'".into();
-    let fixes = fix::fixes(&p.navigator(), &[text_only], &FixQuery::default());
+    let fixes = fix::fixes(&p.navigator(), &[text_only], &FixQuery::default()).unwrap();
     assert!(fixes.iter().all(|f| f.source != FixSource::CreateStub));
 }
 
@@ -563,7 +561,7 @@ fn no_stub_for_a_target_that_exists() {
         span("auth.spec", (2, 15), (2, 28)),
         Some(unresolved("session_limit", "login", "invariants", None)),
     );
-    let fixes = fix::fixes(&p.navigator(), &[stale], &FixQuery::default());
+    let fixes = fix::fixes(&p.navigator(), &[stale], &FixQuery::default()).unwrap();
     assert!(fixes.iter().all(|f| f.source != FixSource::CreateStub));
 }
 
@@ -636,7 +634,7 @@ fn the_replacement_is_read_from_the_data() {
             Some("session_limit"),
         )),
     );
-    let fixes = fix::fixes(&p.navigator(), &[reworded], &FixQuery::default());
+    let fixes = fix::fixes(&p.navigator(), &[reworded], &FixQuery::default()).unwrap();
     let replace: Vec<&Fix> = fixes
         .iter()
         .filter(|f| f.source == FixSource::ReplaceUnresolved)
@@ -648,5 +646,9 @@ fn the_replacement_is_read_from_the_data() {
     let mut text_only = reworded_e003(token, None);
     text_only.message = "unresolved reference 'sesion_limit' in entity 'logout'".into();
     text_only.suggestion = Some("did you mean 'session_limit'?".into());
-    assert!(fix::fixes(&p.navigator(), &[text_only], &FixQuery::default()).is_empty());
+    assert!(
+        fix::fixes(&p.navigator(), &[text_only], &FixQuery::default())
+            .unwrap()
+            .is_empty()
+    );
 }

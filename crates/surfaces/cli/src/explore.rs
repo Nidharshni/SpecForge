@@ -17,8 +17,8 @@ pub(crate) struct Args {
     #[arg(long)]
     kind: Option<String>,
 
-    /// Hops from the entity (unbounded when omitted)
-    #[arg(long)]
+    /// Hops from the entity, unbounded when omitted (requires ENTITY)
+    #[arg(long, requires = "entity")]
     depth: Option<usize>,
 
     #[command(flatten)]

@@ -210,3 +210,13 @@ fn the_checked_report_runs_the_checks_an_update_skipped() {
     );
     assert!(!has_e006(&project.diagnostics()), "no side effect");
 }
+
+#[test]
+fn an_edited_project_keeps_its_answer_to_rooted() {
+    let assembled = specforge_project::testing::Assembled::new().source(A);
+    assert_eq!(assembled.detached().edited(&BTreeMap::new()).root(), None);
+    assert_eq!(
+        assembled.compiled().edited(&BTreeMap::new()).root(),
+        Some(assembled.root())
+    );
+}

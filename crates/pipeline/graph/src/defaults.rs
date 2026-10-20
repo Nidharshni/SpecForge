@@ -172,10 +172,9 @@ impl<'f> FileDefaults<'f> {
                 continue;
             };
             for default in applied {
-                let mut reached = false;
                 for block in &blocks {
                     match block.fields.entries().iter().find(|e| e.key == default.key) {
-                        None => reached = true,
+                        None => {}
                         Some(own) if self.restates(kind.as_str(), own) => {
                             diagnostics.push(
                                 Diagnostic::new(
@@ -191,7 +190,7 @@ impl<'f> FileDefaults<'f> {
                         Some(_) => {}
                     }
                 }
-                if !reached {
+                if takers(file, *kind, default.key).next().is_none() {
                     diagnostics.push(
                         Diagnostic::new(
                             codes::W161,
@@ -229,4 +228,19 @@ impl<'f> FileDefaults<'f> {
         }
         fields
     }
+}
+
+/// The blocks of `kind` in `file` that take its default for `field`: every block of the kind that does not write the
+/// field, in file order (a duplicate declaration's block included: one file cannot tell which wins). What `resolve`
+/// gives a default to and what W161's "reaches no block" asks.
+pub(crate) fn takers<'a>(
+    file: &'a SpecFile,
+    kind: Sym,
+    field: Sym,
+) -> impl Iterator<Item = &'a Entity> + 'a {
+    file.entities.iter().filter(move |block| {
+        block.kind.raw == kind
+            && !is_defaults_block(block)
+            && block.fields.entries().iter().all(|own| own.key != field)
+    })
 }

@@ -5,8 +5,8 @@
 
 use crate::view::ProjectView;
 use serde::Serialize;
+use specforge_common::DiagnosticList;
 use specforge_common::shape::Shape;
-use specforge_common::{Diagnostic, DiagnosticList};
 use std::collections::BTreeSet;
 
 pub use super::Status;
@@ -47,38 +47,14 @@ pub struct ExtensionsDocument {
     pub entity_kinds_in_graph: BTreeSet<String>,
 }
 
-impl ExtensionListing {
-    /// The document both surfaces print.
-    pub fn document(&self) -> ExtensionsDocument {
-        ExtensionsDocument {
-            extensions: self.extensions.clone(),
-            count: self.extensions.len(),
-            lock_file_entries: self.locked.clone(),
-            entity_kinds_in_graph: self.kinds_in_graph.clone(),
-        }
-    }
-}
-
-/// Every extension the project enables, has locked at its root, or
-/// loaded; the lock's entries; the kinds its graph uses.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExtensionListing {
-    /// Sorted by name.
-    pub extensions: Vec<ExtensionInfo>,
-    /// In lock order; empty without a lock or a root.
-    pub locked: Vec<LockedExtension>,
-    /// The kinds of the graph's entities.
-    pub kinds_in_graph: BTreeSet<String>,
-}
-
 /// Every extension of the project ([`super::inventory`]), sorted by name,
 /// with the entity kinds each registered (from the kind registry), how many
 /// of the graph's entities use them, and its rule count; the lock's
-/// entries; the kinds its graph uses. The lock is the view's
-/// ([`ProjectView::lock`]): none without a root.
-pub fn list(view: &ProjectView) -> ExtensionListing {
+/// entries; the kinds its graph uses: the document both surfaces print. The
+/// lock is the view's ([`ProjectView::lock`]): none without a root.
+pub fn list(view: &ProjectView) -> ExtensionsDocument {
     let kinds = view.registries().kinds();
-    let extensions = super::inventory(view)
+    let extensions: Vec<ExtensionInfo> = super::inventory(view)
         .rows()
         .iter()
         .map(|extension| {
@@ -88,12 +64,7 @@ pub fn list(view: &ProjectView) -> ExtensionListing {
                 .map(|(kind, _)| kind.clone())
                 .collect();
             entity_kinds.sort();
-            let entity_count = view
-                .graph()
-                .nodes()
-                .iter()
-                .filter(|n| entity_kinds.iter().any(|k| k == n.kind.raw.as_str()))
-                .count();
+            let entity_count = super::entities_of(view.graph(), kinds, extension.name).count();
             ExtensionInfo {
                 name: extension.name.to_string(),
                 version: extension.version().map(str::to_string),
@@ -108,9 +79,10 @@ pub fn list(view: &ProjectView) -> ExtensionListing {
         })
         .collect();
 
-    ExtensionListing {
+    ExtensionsDocument {
+        count: extensions.len(),
         extensions,
-        locked: view
+        lock_file_entries: view
             .lock()
             .entries()
             .iter()
@@ -119,7 +91,7 @@ pub fn list(view: &ProjectView) -> ExtensionListing {
                 version: e.version.clone(),
             })
             .collect(),
-        kinds_in_graph: view
+        entity_kinds_in_graph: view
             .graph()
             .nodes()
             .iter()
@@ -128,40 +100,7 @@ pub fn list(view: &ProjectView) -> ExtensionListing {
     }
 }
 
-/// One configured provider, as the environment registered it.
-pub use specforge_project::providers::Provider as ProviderEntry;
 pub use specforge_project::providers::ProviderStatus;
-
-/// The providers the view's config configures, in declaration order, with
-/// their status, and what loading and registering them reported.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ProviderListing {
-    pub providers: Vec<ProviderEntry>,
-    /// W118 (a malformed entry, or an extension that is not loaded or
-    /// contributes no providers) and E057 (a scheme declared twice).
-    pub diagnostics: Vec<Diagnostic>,
-}
-
-impl ProviderListing {
-    /// `{providers, count, diagnostics}`: the document both surfaces
-    /// answer with.
-    pub fn document(&self) -> ProvidersDocument {
-        ProvidersDocument {
-            count: self.providers.len(),
-            providers: self
-                .providers
-                .iter()
-                .map(|p| ProviderRow {
-                    scheme: p.scheme.to_string(),
-                    alias: p.alias.to_string(),
-                    extension: p.extension.to_string(),
-                    status: p.status,
-                })
-                .collect(),
-            diagnostics: DiagnosticList(self.diagnostics.clone()),
-        }
-    }
-}
 
 /// The providers listing as both surfaces answer it (`McpProvidersResult`).
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
@@ -183,12 +122,25 @@ pub struct ProviderRow {
 /// The providers the view's environment registered when the project was
 /// compiled, in declaration order (the first to declare a scheme wins it),
 /// each with its status, and the diagnostics reading and registering them
-/// produced (W118, E057). Never `specforge.json` again.
-pub fn providers(view: &ProjectView) -> ProviderListing {
+/// produced (W118 for a malformed entry or an extension that is not loaded
+/// or contributes no providers, E057 for a scheme declared twice): the
+/// document both surfaces answer with. A provider's settings are the
+/// environment's and are not listed. Never `specforge.json` again.
+pub fn providers(view: &ProjectView) -> ProvidersDocument {
     let registered = view.env().providers();
-    ProviderListing {
-        providers: registered.iter().cloned().collect(),
-        diagnostics: registered.diagnostics().cloned().collect(),
+    let providers: Vec<ProviderRow> = registered
+        .iter()
+        .map(|p| ProviderRow {
+            scheme: p.scheme.to_string(),
+            alias: p.alias.to_string(),
+            extension: p.extension.to_string(),
+            status: p.status,
+        })
+        .collect();
+    ProvidersDocument {
+        count: providers.len(),
+        providers,
+        diagnostics: DiagnosticList(registered.diagnostics().cloned().collect()),
     }
 }
 
@@ -235,7 +187,7 @@ mod tests {
         let listing = list(&fixture.view());
 
         assert_eq!(
-            listing.locked,
+            listing.lock_file_entries,
             [LockedExtension {
                 name: "@acme/locked".into(),
                 version: "1.0.0".into()
@@ -289,12 +241,15 @@ mod tests {
                 ("@specforge/product", Status::NotLoaded),
             ]
         );
-        assert!(rootless.locked.is_empty(), "no lock is read without a root");
+        assert!(
+            rootless.lock_file_entries.is_empty(),
+            "no lock is read without a root"
+        );
 
         // Rooted, the lock is read at the root.
         let rooted = list(&fixture.view());
         assert_eq!(
-            rooted.locked,
+            rooted.lock_file_entries,
             [LockedExtension {
                 name: "@acme/locked".into(),
                 version: "1.0.0".into()
@@ -332,10 +287,11 @@ mod tests {
         assert_eq!(entry.status.as_str(), "extension_not_loaded");
         let codes: Vec<&str> = listing
             .diagnostics
+            .0
             .iter()
             .map(|d| d.code.as_str())
             .collect();
         assert_eq!(codes, ["W118"], "{listing:?}");
-        assert_eq!(listing.document().count, 1);
+        assert_eq!(listing.count, 1);
     }
 }

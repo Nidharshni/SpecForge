@@ -1,7 +1,7 @@
 # An operation's request owns its meaning; a surface only spells it
 
 **Status:** accepted (2026-10-15, round 10, plan 10). Extends ADR 0027 (option tables) and ADR 0033 D4 (one
-default) from names and defaults to every rule a request's values follow. Amended by round 13, plan 12 (D1, D2). D4 is extended by [ADR 0135](0135-a-remedy-names-a-command-or-the-requests-words-never-a-flag.md): an operation's remedy names a command or the request's words, never a surface's flag. Amended by round 14, plan 12 (D1: a relation the request's type states). Amended by round 14, plan 09 (D5: one in-process MCP harness).
+default) from names and defaults to every rule a request's values follow. Amended by round 13, plan 12 (D1, D2). D4 is extended by [ADR 0135](0135-a-remedy-names-a-command-or-the-requests-words-never-a-flag.md): an operation's remedy names a command or the request's words, never a surface's flag. Amended by round 14, plan 12 (D1: a relation the request's type states). Amended by round 14, plan 09 (D5: one in-process MCP harness). Amended by round 18, plan 07 (D1: an entity a request names, and a depth without its entity).
 
 The CLI and MCP each build an operation's request by hand. Most of that is spelling: copying a field, reading a
 shared constant. Three times a surface decided what the arguments *mean*, and the two disagreed:
@@ -83,3 +83,12 @@ A relation the request's type makes unrepresentable is stated in ops by that typ
 
 **D5.** Every in-process MCP call in the CLI's tests goes through `support/pairing.rs` (`mcp_on`, `served`) and
 `specforge_mcp::testing::rpc`; no test file sends JSON-RPC by hand.
+
+## Amendment (architecture round 18, plan 07)
+
+**D1.** An argument that names an entity, as the request's subject or as a filter (coverage's `entity_id`, the fixes'
+entity, search's `references`), is checked by the operation: one the graph lacks is `view::not_found` about that
+field. A depth needs the entity it counts from: explore and review refuse it alone (`view::depth_without_entity`,
+about the entity), as export and model do; the CLI's `--depth` `requires` the entity (D3) and the pairing table has a
+row for each (D5). Arguments that compose are ANDed, never ranked (D4): coverage's `kind` narrows its `entity_id`.
+Search's field/value pair stays worded by `specforge.search` (round 14): its reopen trigger has not fired.

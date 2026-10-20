@@ -1,6 +1,6 @@
 # A value is spelled by one module
 
-**Status:** accepted (2026-10-19, architecture round 15, plan 01). Amends [ADR 0147](0147-a-value-is-written-in-its-fields-one-form.md) D1 (a scheme ref id on a reference list is bare) and D4 (the rule is read from one module, the typed-edit writer reads it too) and [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) D2 (a multi-line value is laid out with the file's format configuration).
+**Status:** accepted (2026-10-19, architecture round 15, plan 01). Amends [ADR 0147](0147-a-value-is-written-in-its-fields-one-form.md) D1 (a scheme ref id on a reference list is bare) and D4 (the rule is read from one module, the typed-edit writer reads it too) and [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) D2 (a multi-line value is laid out with the file's format configuration). **Amended by [ADR 0169](0169-the-format-configuration-is-read-through-the-callers-disk.md) (2026-10-19):** a typed edit's layout is its plan's one configuration lookup (`Site::config`), read through the view's disk.
 
 ## Context
 

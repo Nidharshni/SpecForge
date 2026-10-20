@@ -2,9 +2,10 @@
 //! fields to every block of that kind in its file (behavior
 //! `apply_file_defaults`).
 
+use specforge_common::Sym;
 use specforge_graph::{
     FieldForm, FieldForms, FileChange, FileDefaults, Graph, GraphBuild, GraphConfig, GraphInputs,
-    build_graph_with_config,
+    Holder, build_graph_with_config,
 };
 use specforge_parser::parse;
 use specforge_protocol_types::FieldType;
@@ -132,19 +133,29 @@ fn a_default_reaches_no_other_file_and_no_other_kind() {
 )]
 fn an_inherited_reference_is_written_at_the_default() {
     let (graph, _) = build(&[("a.spec", &blocks())]);
+    let inputs = GraphInputs {
+        field_forms: forms(),
+        ..Default::default()
+    };
+    let tokens = specforge_graph::written_tokens(&parse(&blocks(), "a.spec"), &inputs, |n| {
+        graph.node(n).map(|n| n.kind.raw)
+    });
+    assert_eq!(tokens.len(), 1, "{tokens:?}");
+    let token = &tokens[0];
+    let span = &token.span;
+    assert_eq!(
+        (span.start_line, span.start_col, span.end_line, span.end_col),
+        (2, 10, 2, 14)
+    );
+    assert_eq!(token.holder, Holder::Defaults(Sym::new("behavior")));
+    assert_eq!(token.held_by, ["a", "b", "c"].map(Sym::new));
     for id in ["a", "b", "c"] {
         let edge = graph.edges_from(id)[0];
-        let spans: Vec<String> = graph
-            .written(edge)
-            .iter()
-            .map(|s| {
-                format!(
-                    "{}:{}-{}:{}",
-                    s.start_line, s.start_col, s.end_line, s.end_col
-                )
-            })
-            .collect();
-        assert_eq!(spans, ["2:10-2:14"], "{id}");
+        assert_eq!(
+            (edge.target, edge.label),
+            (Sym::new("Repo"), Sym::new("ports")),
+            "{id}"
+        );
     }
 }
 

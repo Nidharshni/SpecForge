@@ -4,7 +4,7 @@ use specforge_ops::read::coverage::{CoverageQuery, CoverageRow, coverage, row};
 use specforge_project::coverage::Status;
 use specforge_test::prelude::*;
 
-use crate::view_support::{Assembled, Viewed, registries, registries_with};
+use crate::view_support::{Assembled, Viewed, answered, registries, registries_with};
 
 /// login (proven), logout (one unproven obligation), a union, an abstract
 /// behavior, a governance constraint that declares nothing and one that
@@ -62,7 +62,7 @@ fn ids(rows: &[CoverageRow]) -> Vec<&str> {
 )]
 fn the_view_lists_what_counts_toward_coverage() {
     let project = project();
-    let outcome = coverage(&project.view(), &CoverageQuery::default()).unwrap();
+    let outcome = answered(coverage(&project.view(), &CoverageQuery::default()));
     // The union, the abstract behavior and the constraint that declares
     // nothing owe nothing; the feature's kind is not testable.
     assert_eq!(ids(&outcome.rows), ["login", "logout", "uptime"]);
@@ -79,13 +79,13 @@ fn the_view_lists_what_counts_toward_coverage() {
         kind: Some("behavior"),
         ..Default::default()
     };
-    let rows = coverage(&project.view(), &behaviors).unwrap().rows;
+    let rows = answered(coverage(&project.view(), &behaviors)).rows;
     assert_eq!(ids(&rows), ["login", "logout"]);
     let uncovered = CoverageQuery {
         status: Some(Status::Uncovered),
         ..Default::default()
     };
-    let rows = coverage(&project.view(), &uncovered).unwrap().rows;
+    let rows = answered(coverage(&project.view(), &uncovered)).rows;
     assert_eq!(ids(&rows), ["logout", "uptime"]);
 }
 
@@ -96,7 +96,7 @@ fn the_view_lists_what_counts_toward_coverage() {
 fn coverage_rows_and_stats_read_one_standing() {
     let project = project();
     let view = project.view();
-    let outcome = coverage(&view, &CoverageQuery::default()).unwrap();
+    let outcome = answered(coverage(&view, &CoverageQuery::default()));
     let entities = view.entities();
     // Every listed row is its entity's standing, and only those that count
     // are listed.
@@ -133,7 +133,7 @@ fn an_exempt_entity_is_reachable_by_id() {
             entity_id: Some(exempt),
             ..Default::default()
         };
-        let rows = coverage(&project.view(), &query).unwrap().rows;
+        let rows = answered(coverage(&project.view(), &query)).rows;
         assert_eq!(ids(&rows), [exempt]);
         assert!(rows[0].testable && rows[0].exempt, "{exempt}");
         assert_eq!(row(&project.view(), exempt).unwrap(), Some(rows[0].clone()));
@@ -142,11 +142,6 @@ fn an_exempt_entity_is_reachable_by_id() {
     let signin = row(&project.view(), "signin").unwrap().unwrap();
     assert!(!signin.testable && !signin.exempt);
     // An entity the graph lacks has no row.
-    let ghost = CoverageQuery {
-        entity_id: Some("ghost"),
-        ..Default::default()
-    };
-    assert!(coverage(&project.view(), &ghost).unwrap().rows.is_empty());
     assert_eq!(row(&project.view(), "ghost").unwrap(), None);
 }
 
@@ -265,7 +260,7 @@ fn an_unproven_obligation_leaves_the_row_partial() {
         ..Default::default()
     };
     assert_eq!(
-        ids(&coverage(&project.view(), &partial).unwrap().rows),
+        ids(&answered(coverage(&project.view(), &partial)).rows),
         ["two"]
     );
     let both = two_with(&[("a", "passed"), ("b", "passed")]);

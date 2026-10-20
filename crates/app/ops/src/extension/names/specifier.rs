@@ -25,7 +25,7 @@ pub(crate) enum Source {
 /// not end in `.wasm`), or else a local path (a `.wasm` file or an extension's
 /// crate directory, with or without `./`). A package reference that is not one
 /// is E054, a requirement that is none R-RES-003, and a path that names
-/// nothing is E054 when it is read ([`LocalFile::read`](super::super::candidate::LocalFile::read)). No registry is
+/// nothing is E040 when it is read ([`LocalFile::read`](super::super::candidate::LocalFile::read)). No registry is
 /// asked for either.
 pub(crate) fn parse(specifier: &str) -> Result<Source, OpError> {
     let specifier = specifier.trim();

@@ -322,12 +322,16 @@ behavior hover_diagnostic "Hover a Diagnostic" {
     does not have shows its code and message only. The entity hover that
     follows does not list that diagnostic again. A region the formatter
     left unformatted (W142) is such a diagnostic while the document is the
-    text formatting reported it on.
+    text formatting reported it on. A diagnostic of the compile is such a
+    diagnostic while the document is the text the project was compiled from:
+    over a buffer typed since, its range is a position in another text, and
+    the hover shows none of the compile's diagnostics.
   """
   verify unit "hovering a diagnostic shows its catalogued title and explanation"
   verify unit "an uncatalogued diagnostic's hover shows its code and message only"
   verify unit "the diagnostic under the cursor comes before the entity's hover, which does not list it again"
   verify unit "hovering a region the formatter left unformatted shows its W142"
+  verify unit "hovering a buffer typed since the compile shows none of the compile's diagnostics"
 }
 
 // Completion behaviors (autocomplete_entity_ids, complete_field_names, complete_keywords)
@@ -401,17 +405,26 @@ behavior prepare_rename "Prepare Rename" {
   contract   """
     When a user initiates a rename, the LSP MUST first respond to
     textDocument/prepareRename to validate that the cursor is on a
-    renameable token (entity ID in a declaration or reference). The
+    renameable token (entity ID in a declaration or reference; every token a
+    rename edits is renameable, a reference in a defaults block that no block
+    takes and one in a duplicate declaration included). The
     response MUST include the range of the token to be renamed. If
     the cursor is not on a renameable token, the response MUST indicate
     that rename is not available at that position. While the document is
     not the text the project was compiled from, prepareRename MUST be
     refused as ContentModified (-32801): a range in the compiled text is not
-    a range in the buffer.
+    a range in the buffer. A document the project does not build (outside the
+    spec root, or excluded) has nothing to rename: prepareRename answers that
+    rename is not available there, never ContentModified, which no compile
+    would end. A document opened since the compile waits for it.
   """
   verify unit "prepare rename on entity ID returns token range"
   verify unit "prepare rename on non-renameable token returns not available"
+  verify unit "prepare rename answers on a default no block takes"
+  verify unit "prepare rename answers on a reference in a duplicate declaration"
   verify unit "prepare rename over a buffer typed since the compile is refused as content modified"
+  verify unit "prepare rename from a document the project does not build answers that rename is not available"
+  verify unit "prepare rename from a document opened since the compile waits for it"
   verify contract "Prepare Rename: prepare rename holds — graph_available, token_range_returned, non_renameable_rejected"
 }
 
@@ -453,10 +466,14 @@ behavior rename_entity_id "Rename Entity ID" {
     text the project was compiled from: a rename over a file whose text (an
     open buffer, else the file on disk) is no longer that text MUST be
     refused as ContentModified (-32801), never applied from stale positions;
-    so is a rename asked from a document typed since the compile.
+    so is a rename asked from a document typed since the compile. A rename
+    asked from a document the project does not build answers no edit.
     A rename over a project whose specforge.json does not say which files
     are its sources MUST be refused with config_invalid's reason, as the
-    MCP rename tool refuses it.
+    MCP rename tool refuses it. A rename while a .spec file that does not
+    parse spells the ID as a name (not in a string or a comment) MUST be
+    refused with why: its references cannot be read, and the rename would
+    leave them behind.
   """
   verify unit "rename updates declaration and all references"
   verify unit "rename leaves strings, comments and verify texts alone"
@@ -464,12 +481,14 @@ behavior rename_entity_id "Rename Entity ID" {
   verify unit "rename is atomic — all or nothing"
   verify unit "rename is refused as content modified when a file it edits changed since the compile"
   verify unit "rename from a buffer typed since the compile is refused as content modified"
+  verify unit "rename from a document the project does not build answers no edit"
   verify unit "rename across multiple files"
   verify unit "rename rejects new name that duplicates existing entity ID"
   verify unit "rename to an illegal entity ID is refused with why"
   verify unit "rename to a reserved word is refused with why"
   verify unit "rename refuses a reserved word as the new ID before anything is planned"
   verify unit "a rename is refused when specforge.json does not say which files are the project's sources"
+  verify unit "a rename is refused while a source that spells the ID does not parse"
   verify contract "Rename Entity ID: entity rename holds — graph_available, prepare_rename_ready, all_references_updated, rename_atomic, entity_renamed_emitted"
 }
 

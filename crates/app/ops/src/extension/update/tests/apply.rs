@@ -69,11 +69,12 @@ fn an_update_installs_the_newer_binary_and_locks_its_hash() {
         [("@sdk/greet", "0.0.9", "0.1.0")]
     );
     assert_eq!(
-        outcome.batch_update_completed(),
+        outcome.batch_update_completed(ended()),
         BatchUpdateCompleted {
             updated_count: 1,
             failed_count: 0,
             skipped_count: 0,
+            timestamp: ENDED.into(),
         }
     );
     let lock = specforge_installed::read_lock_file(&lock_path(dir.path())).unwrap();
@@ -121,11 +122,12 @@ fn one_failed_upgrade_applies_none() {
     assert_eq!(failures, [("@acme/liar", "E028")]);
     // greet would have moved but did not: it is skipped, not updated.
     assert_eq!(
-        outcome.batch_update_completed(),
+        outcome.batch_update_completed(ended()),
         BatchUpdateCompleted {
             updated_count: 0,
             failed_count: 1,
             skipped_count: 1,
+            timestamp: ENDED.into(),
         }
     );
     assert_eq!(std::fs::read(lock_path(dir.path())).unwrap(), lock_before);

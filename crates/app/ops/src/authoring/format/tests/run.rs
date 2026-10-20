@@ -539,3 +539,83 @@ fn a_named_path_that_leaves_the_containment_is_refused_on_paths() {
         MESSY
     );
 }
+
+/// A project (`a.spec`, `b.spec`) with `spec/c.spec` hard-linked to a messy file outside it.
+#[cfg(unix)]
+fn with_a_hard_linked_target() -> (tempfile::TempDir, tempfile::TempDir, PathBuf) {
+    let dir = project();
+    let outside = tempfile::TempDir::new().unwrap();
+    let victim = outside.path().join("victim.spec");
+    std::fs::write(&victim, MESSY).unwrap();
+    std::fs::hard_link(&victim, dir.path().join("spec/c.spec")).unwrap();
+    (dir, outside, victim)
+}
+
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "format_spec_files",
+    verify = "an unbounded run formats a file with more than one name; a bounded one fails it and formats the others"
+)]
+fn a_bounded_run_fails_a_hard_linked_target_and_formats_the_others() {
+    let (dir, _outside, victim) = with_a_hard_linked_target();
+    let held = crate::Containment::within(dir.path());
+
+    let outcome = super::super::run(&Request {
+        root: &ProjectRoot::of(dir.path()).unwrap(),
+        paths: &[],
+        mode: Mode::Write,
+        caller: crate::testing::bounded(&held),
+        runtime: None,
+    })
+    .unwrap();
+
+    assert_eq!(outcome.failures.len(), 1, "{:?}", outcome.failures);
+    assert!(outcome.failures[0].path().ends_with("spec/c.spec"));
+    assert_eq!(outcome.failures[0].kind(), OpErrorKind::InvalidInput);
+    assert!(
+        outcome.failures[0].error().contains("2 names"),
+        "{:?}",
+        outcome.failures
+    );
+    assert!(outcome.failed(false).is_some());
+    for (file, messy) in [
+        ("spec/a.spec", MESSY.to_string()),
+        ("spec/b.spec", MESSY.replace("messy", "b")),
+    ] {
+        assert_ne!(
+            std::fs::read_to_string(dir.path().join(file)).unwrap(),
+            messy
+        );
+    }
+    assert_eq!(std::fs::read_to_string(&victim).unwrap(), MESSY);
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("spec/c.spec")).unwrap(),
+        MESSY
+    );
+}
+
+#[cfg(unix)]
+#[specforge_test(
+    behavior = "format_spec_files",
+    verify = "an unbounded run formats a file with more than one name; a bounded one fails it and formats the others"
+)]
+fn an_unbounded_run_formats_a_hard_linked_target() {
+    let (dir, _outside, victim) = with_a_hard_linked_target();
+
+    let outcome = super::super::run(&Request {
+        root: &ProjectRoot::of(dir.path()).unwrap(),
+        paths: &[],
+        mode: Mode::Write,
+        caller: crate::testing::caller(),
+        runtime: None,
+    })
+    .unwrap();
+
+    assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
+    assert_ne!(
+        std::fs::read_to_string(dir.path().join("spec/c.spec")).unwrap(),
+        MESSY
+    );
+    // Written by name (ADR 0144): the outside file keeps its text.
+    assert_eq!(std::fs::read_to_string(&victim).unwrap(), MESSY);
+}

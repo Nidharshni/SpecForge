@@ -16,6 +16,7 @@ struct Pair {
     cli: &'static [&'static str],
     /// `specforge`'s exit: 0 answered, 1 refused by the operation or a failed verdict, 2 refused by clap.
     exit: i32,
+    /// A tool, or a prompt (`specforge://prompts/...`).
     tool: &'static str,
     arguments: fn() -> Value,
 }
@@ -105,6 +106,26 @@ const PAIRS: &[Pair] = &[
         exit: 2,
         tool: "specforge.export",
         arguments: || json!({"format": "graph", "depth": 2}),
+    },
+    Pair {
+        label: "explore_depth_without_entity",
+        project: rv1,
+        cli: &[
+            "explore", "--path", "{root}", "--depth", "1", "--format", "json",
+        ],
+        exit: 2,
+        tool: "specforge://prompts/explore",
+        arguments: || json!({"depth": "1"}),
+    },
+    Pair {
+        label: "review_depth_without_entity",
+        project: rv1,
+        cli: &[
+            "review", "--path", "{root}", "--depth", "1", "--format", "json",
+        ],
+        exit: 2,
+        tool: "specforge://prompts/review",
+        arguments: || json!({"depth": "1"}),
     },
     Pair {
         label: "model_depth_without_root",
@@ -484,7 +505,11 @@ fn pair(label: &str) -> (Outcome, Outcome) {
         "{label}: {args:?}\n{}{}",
         run.stdout, run.stderr
     );
-    let call = json!({"name": row.tool, "arguments": (row.arguments)()});
+    let call = if row.tool.starts_with("specforge://prompts/") {
+        json!({"method": "prompts/get", "params": {"name": row.tool, "arguments": (row.arguments)()}})
+    } else {
+        json!({"name": row.tool, "arguments": (row.arguments)()})
+    };
     let answer = mcp_calls(&mut served, &[call]).remove(0);
     let (cli, mcp) = (cli_outcome(&run, &root), mcp_outcome(&answer, &root));
     assert_eq!(
@@ -545,6 +570,16 @@ fn export_both_schema_flags_is_one_request() {
 #[test]
 fn export_depth_without_scope_is_refused_on_both() {
     assert_eq!(pair("export_depth_without_scope").0, Outcome::Refused);
+}
+
+#[test]
+fn explore_depth_without_entity_is_refused_on_both() {
+    assert_eq!(pair("explore_depth_without_entity").0, Outcome::Refused);
+}
+
+#[test]
+fn review_depth_without_entity_is_refused_on_both() {
+    assert_eq!(pair("review_depth_without_entity").0, Outcome::Refused);
 }
 
 #[test]

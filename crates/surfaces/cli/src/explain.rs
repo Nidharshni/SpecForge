@@ -64,9 +64,7 @@ fn print_entry(entry: &Entry, terminal: &Terminal) {
     outln!(terminal, "{}", wrap(&entry.explanation, WRAP_WIDTH));
     outln!(terminal, "\nOwner: {}", entry.owner);
     outln!(terminal, "Level: {}", entry.level);
-    if let Some(docs) = &entry.docs {
-        outln!(terminal, "Docs: {docs}");
-    }
+    outln!(terminal, "Docs: {}", entry.docs);
 }
 
 #[cfg(test)]

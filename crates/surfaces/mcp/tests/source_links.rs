@@ -314,27 +314,31 @@ fn a_cp_al_snapshot_served_directly_is_refused() {
     assert!(reply.contains("2 names"), "{reply}");
 }
 
-/// A writer replaces the name (ADR 0144), so a rewritten source has one name and reads again; the
-/// format's own read of the project's state before the rewrite is not bounded by the link count.
+/// A bounded format run reads no file with two names (ADR 0146 D1, ADR 0169): it fails that file,
+/// which is neither read into a reply nor rewritten, and the session still has none of its text.
 #[cfg(unix)]
 #[specforge_test_macros::test(
     invariant = "mcp_served_project_consistency",
     verify = "a source of the served project is read only from inside the project"
 )]
-fn a_source_rewritten_by_format_has_one_name_and_reads() {
+fn a_source_with_two_names_is_a_failed_file_for_format_and_is_not_rewritten() {
     let (_scene, project, outside) = scene();
-    fs::write(
-        outside.join("leaked.spec"),
-        "behavior   leaked   \"Leaked\"   {\n}\n",
-    )
-    .unwrap();
+    let text = "behavior   leaked   \"Leaked\"   {\n}\n";
+    fs::write(outside.join("leaked.spec"), text).unwrap();
     fs::hard_link(outside.join("leaked.spec"), project.join("spec/leak.spec")).unwrap();
     let mut server = serve(&project);
-    let reply = call_tool(&mut server, "specforge.format", json!({"write": true})).to_string();
+    let reply = call_tool(&mut server, "specforge.format", json!({"write": true}));
     let after = call_tool(&mut server, "specforge.list", json!({})).to_string();
-    assert!(reply.contains("spec/leak.spec"), "{reply}");
-    assert!(after.contains("leaked"), "{after}");
-    assert!(!after.contains("E025"), "{after}");
+    let error = crate::tool_errors::mcp_error(&reply);
+    assert_eq!(
+        error["data"]["failed_files"][0], "spec/leak.spec",
+        "{error}"
+    );
+    assert_eq!(
+        fs::read_to_string(outside.join("leaked.spec")).unwrap(),
+        text
+    );
+    assert!(!after.contains("leaked"), "{after}");
 }
 
 /// A symlinked directory inside the spec root is not entered at all.

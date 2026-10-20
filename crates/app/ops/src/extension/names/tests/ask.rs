@@ -145,7 +145,7 @@ fn a_lock_the_change_cannot_write_refuses_before_any_file_is_read() {
             .map(drop)
     };
 
-    // Not E054 for the missing file, and not named by a specifier: the lock refuses first.
+    // Not E040 for the missing file, and not named by a specifier: the lock refuses first.
     let error = asked(&["@specforge/product".to_string(), missing]).unwrap_err();
     assert_eq!(error.code, "E033", "{error:?}");
     assert!(!error.message.starts_with("adding '"), "{error:?}");

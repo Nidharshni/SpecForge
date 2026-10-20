@@ -1,46 +1,17 @@
 //! How the entities of a project view are linked: the one rule for an
-//! unconnected entity (CONTEXT.md "Unconnected entity"), the degrees the
-//! exploration ranks by, and the neighbourhood of one entity that the
+//! unconnected entity (CONTEXT.md "Unconnected entity", `specforge_graph::Degree`),
+//! the degrees the exploration ranks by, and the neighbourhood of one entity that the
 //! exploration and the review share (ADR 0015, "Prompt read views").
 
 use std::collections::BTreeMap;
 
 use specforge_common::Sym;
-use specforge_graph::{Graph, Reached};
+use specforge_graph::{Degree, Graph, Reached};
 
 use super::{EntityField, ProjectView, not_found};
 use crate::Refusal;
 
-/// An entity's edges to and from *other* entities. An edge from the entity
-/// to itself is in neither count; the graph holds no edge to a reference
-/// that does not resolve (E003, I004 report those), so none is counted.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Degree {
-    /// Edges from another entity to this one.
-    pub incoming: usize,
-    /// Edges from this entity to another one.
-    pub outgoing: usize,
-}
-
-impl Degree {
-    /// Every edge linking the entity to another one, both ways.
-    pub fn total(self) -> usize {
-        self.incoming + self.outgoing
-    }
-
-    /// No edge links the entity to another entity.
-    pub fn is_unconnected(self) -> bool {
-        self.total() == 0
-    }
-
-    /// How many more entities it references than reference it
-    /// (`outgoing - incoming`): the starting points' rank.
-    pub fn lead(self) -> isize {
-        self.outgoing as isize - self.incoming as isize
-    }
-}
-
-/// The degree of every entity of one graph, counted once over its edges.
+/// The degree of every entity of one graph (`specforge_graph::Degree`).
 #[derive(Debug, Clone, Default)]
 pub struct Connectivity {
     /// Every node of the graph, in id order (Sym orders by content).
@@ -48,26 +19,15 @@ pub struct Connectivity {
 }
 
 impl Connectivity {
-    /// The degrees of `graph`'s entities: one pass over its edges, skipping
-    /// each edge whose source is its target.
+    /// The degrees of `graph`'s entities (`Graph::degree`), every node in id order.
     pub fn of(graph: &Graph) -> Self {
-        let mut degrees: BTreeMap<Sym, Degree> = graph
-            .nodes()
-            .into_iter()
-            .map(|node| (node.id.raw, Degree::default()))
-            .collect();
-        for edge in graph.edges() {
-            if edge.source == edge.target {
-                continue;
-            }
-            if let Some(degree) = degrees.get_mut(&edge.source) {
-                degree.outgoing += 1;
-            }
-            if let Some(degree) = degrees.get_mut(&edge.target) {
-                degree.incoming += 1;
-            }
+        Connectivity {
+            degrees: graph
+                .nodes()
+                .into_iter()
+                .map(|node| (node.id.raw, graph.degree(node.id.raw.as_str())))
+                .collect(),
         }
-        Connectivity { degrees }
     }
 
     /// `id`'s degree; the zero degree for an id the graph lacks.

@@ -15,7 +15,7 @@ use specforge_graph::Node;
 
 use crate::authoring::edit::{self, Edit, EditField, Input};
 use crate::read::navigate::{Navigator, SourceText, TextEdit, is_about, overlaps};
-use crate::view::ProjectView;
+use crate::view::{EntityField, ProjectView};
 use crate::{OpError, OpErrorKind, Refusal};
 
 /// What a fix is to an editor: a quick fix of the diagnostic, or a
@@ -70,7 +70,8 @@ pub struct Fix {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FixQuery<'q> {
     /// Fixes about this entity: its diagnostics' ([`is_about`]) and its
-    /// verify stub.
+    /// verify stub. [`fixes`] refuses one the graph lacks
+    /// (`view::not_found`); [`offers`] takes it as a plain filter.
     pub entity: Option<&'q str>,
     /// Fixes whose diagnostic (or, for a verify stub, whose entity) is in
     /// this spec file.
@@ -127,12 +128,24 @@ impl Offer {
 /// statements) offer, filtered by `query`, sorted by where they apply
 /// then title. Every fix has at least one edit; a diagnostic whose
 /// data names no fix offers none. A stub is planned (one compile of the
-/// edited project, E080): one whose plan is refused is not offered.
-pub fn fixes(navigator: &Navigator<'_>, diagnostics: &[Diagnostic], query: &FixQuery) -> Vec<Fix> {
-    offers(navigator, diagnostics, query)
+/// edited project, E080): one whose plan is refused is not offered. A
+/// `query.entity` the graph lacks is [`crate::view::not_found`] (E003),
+/// refused before any stub is planned.
+pub fn fixes(
+    navigator: &Navigator<'_>,
+    diagnostics: &[Diagnostic],
+    query: &FixQuery,
+) -> Result<Vec<Fix>, Refusal<EntityField>> {
+    let graph = navigator.view().graph();
+    if let Some(id) = query.entity {
+        graph
+            .node(id)
+            .ok_or_else(|| crate::view::not_found(graph, id).about(EntityField::EntityId))?;
+    }
+    Ok(offers(navigator, diagnostics, query)
         .into_iter()
         .filter_map(|offer| offer.fix(navigator).ok())
-        .collect()
+        .collect())
 }
 
 /// The fixes [`fixes`] offers, chosen but not made: what a client that
@@ -355,24 +368,7 @@ fn placeholders(view: &ProjectView<'_>, kind: &str) -> BTreeMap<String, Input> {
 /// the refusal when the plan is refused (an ID `validate_id` refuses, a taken ID, E080, no project root, a
 /// configuration that blocks rewrites) or changes nothing.
 fn typed(navigator: &Navigator<'_>, edit: Edit) -> Result<Vec<TextEdit>, Refusal<EditField>> {
-    let plan = edit::plan(navigator.view(), std::slice::from_ref(&edit))?;
-    let mut edits = Vec::new();
-    for (key, changes) in plan.edits() {
-        let file = Sym::new(key);
-        // The plan read each file's compiled text (`Planner::text`): the text navigation's spans are positions in.
-        let text = navigator.text(file).ok_or_else(|| {
-            OpError::new(
-                OpErrorKind::PreconditionFailed,
-                "text_unknown",
-                format!("the text of {key} is not known"),
-            )
-            .about(EditField::File)
-        })?;
-        edits.extend(changes.into_iter().map(|change| TextEdit {
-            span: text.span(file, change.range.start, change.range.end),
-            new_text: change.new_text,
-        }));
-    }
+    let edits = edit::plan(navigator.view(), std::slice::from_ref(&edit))?.text_edits();
     if edits.is_empty() {
         return Err(OpError::new(
             OpErrorKind::InvalidInput,
