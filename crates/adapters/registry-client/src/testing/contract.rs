@@ -260,6 +260,50 @@ pub fn assert_client_contract(
         },
         "K11: the receipt names what was stored"
     );
+
+    // K12: an upload is the package its manifest declares: a manifest naming another version than the upload,
+    // or one that is no declaration, is refused and stores nothing.
+    let four = contract_declaration("4.0.0");
+    let wasm = b"\0asm four";
+    let three = serde_json::to_string(&contract_declaration("3.0.0")).unwrap();
+    let signature = key.sign(&SignedContent::of("@contract/tool", "4.0.0", wasm, &three));
+    let error = client
+        .publish(wasm, &four, &three, &signature, registry, Some(credential))
+        .unwrap_err();
+    assert!(
+        matches!(
+            error,
+            RegistryError::Refused {
+                code: ErrorCode::NameMismatch,
+                ..
+            }
+        ),
+        "K12: a manifest naming another version is Refused(NameMismatch), not {error:?}"
+    );
+    let junk = "not a declaration";
+    let signature = key.sign(&SignedContent::of("@contract/tool", "4.0.0", wasm, junk));
+    let error = client
+        .publish(wasm, &four, junk, &signature, registry, Some(credential))
+        .unwrap_err();
+    assert!(
+        matches!(
+            error,
+            RegistryError::Refused {
+                code: ErrorCode::InvalidManifest,
+                ..
+            }
+        ),
+        "K12: a manifest that is no declaration is Refused(InvalidManifest), not {error:?}"
+    );
+    for version in [Version::new(3, 0, 0), Version::new(4, 0, 0)] {
+        let error = client
+            .metadata(&tool, &version, registry, None)
+            .unwrap_err();
+        assert!(
+            matches!(error, RegistryError::NotFound { .. }),
+            "K12: a refused publish stores nothing, not {error:?}"
+        );
+    }
 }
 
 /// The private client contract (plan 16): what every `RegistryClient` adapter does against a registry that

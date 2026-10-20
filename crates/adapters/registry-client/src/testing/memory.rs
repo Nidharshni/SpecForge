@@ -405,6 +405,22 @@ impl RegistryClient for MemoryClient {
                 version: declaration.version().to_string(),
             });
         }
+        // As the registry server does: the manifest is the declaration of the package the upload names.
+        let manifest: ExtensionDeclaration =
+            serde_json::from_str(manifest_json).map_err(|why| RegistryError::Refused {
+                code: ErrorCode::InvalidManifest,
+                message: format!("manifest is not an extension declaration: {why}"),
+            })?;
+        if manifest.name() != name.as_str() || manifest.version() != version.to_string() {
+            return Err(RegistryError::Refused {
+                code: ErrorCode::NameMismatch,
+                message: format!(
+                    "manifest identifies {}@{} but the upload path is {name}@{version}",
+                    manifest.name(),
+                    manifest.version()
+                ),
+            });
+        }
         // As the registry server does: a signature that doesn't verify over the upload is refused.
         signature
             .verify(&SignedContent::of(

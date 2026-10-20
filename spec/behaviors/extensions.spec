@@ -825,7 +825,8 @@ behavior publish_to_registry "Publish to Registry" {
     with the .wasm binary and its SHA256 hash, before any network call
     deciding whether to refuse; the request MUST be authenticated. The
     registry MUST refuse a manifest that is not an extension declaration,
-    and takes the description and keywords it shows from the declaration.
+    or that names another package or version than the upload path
+    (NAME_MISMATCH), and takes the description and keywords it shows from the declaration.
     The registry MUST refuse an upload with no signature (UNSIGNED_PACKAGE),
     or whose signature is not a package signature or does not verify over
     the name and version in the upload path, the binary and the exact
