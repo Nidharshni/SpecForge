@@ -276,6 +276,24 @@ fn a_corrupt_signing_key_is_refused_with_e074_before_any_request() {
     assert!(world.client.calls().is_empty());
 }
 
+#[test]
+#[ignore = "flipped by the fix of E074's suggestion"]
+fn the_e074_suggestion_reads_as_one_sentence() {
+    let world = World::acme();
+    std::fs::write(world.signing_key(), "not json").unwrap();
+    let error = world
+        .registry(Some("t"))
+        .publish(&pkg("@acme/x", "1.0.0").package(), WASM)
+        .unwrap_err();
+    assert_eq!(error.code, "E074", "{error:?}");
+    let suggestion = error.suggestion.unwrap_or_default();
+    assert!(!suggestion.contains("  "), "{suggestion}");
+    assert!(
+        suggestion.ends_with("whoever pinned the old one then sees a changed key (R-TRUST-003)"),
+        "{suggestion}"
+    );
+}
+
 #[specforge_test(
     behavior = "publish_to_registry",
     verify = "publish asks the registry add fetches the same name from"
