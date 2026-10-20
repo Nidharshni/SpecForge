@@ -4,7 +4,7 @@ use crate::notes::Notes;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
 use crate::terminal::{Terminal, outln};
 use specforge_component::ComponentRuntime;
-use specforge_ops::extension::{PublishOutcome, publish};
+use specforge_ops::extension::{PublishDocument, publish};
 use specforge_ops_registry::ConfiguredRegistry;
 use std::path::PathBuf;
 
@@ -45,8 +45,8 @@ impl Args {
         notes.beside(&report.warnings);
         notes.beside(&registry.reported());
         match &report.result {
-            Ok(outcome) => {
-                present(outcome, format, terminal);
+            Ok(document) => {
+                present(document, format, terminal);
                 Exit::Passed
             }
             Err(error) => Refusal::of(format).report(terminal, error),
@@ -54,23 +54,27 @@ impl Args {
     }
 }
 
-fn present(outcome: &PublishOutcome, format: OutputFormat, terminal: &Terminal) {
-    let published = &outcome.published;
+fn present(document: &PublishDocument, format: OutputFormat, terminal: &Terminal) {
     match format {
-        OutputFormat::Json => terminal.json(&outcome.document()),
+        OutputFormat::Json => terminal.json(document),
         OutputFormat::Human => {
-            if published.key_created {
+            if document.key_created {
                 outln!(
                     terminal,
                     "generated publisher signing key {}",
-                    published.key_id
+                    document.key_id
                 );
             }
-            outln!(terminal, "published {} v{}", outcome.name, outcome.version);
-            outln!(terminal, "  registry: {}", published.registry);
-            outln!(terminal, "  url: {}", published.url);
-            outln!(terminal, "  size: {} bytes", outcome.size_bytes);
-            outln!(terminal, "  signed by key: {}", published.key_id);
+            outln!(
+                terminal,
+                "published {} v{}",
+                document.extension,
+                document.version
+            );
+            outln!(terminal, "  registry: {}", document.registry);
+            outln!(terminal, "  url: {}", document.url);
+            outln!(terminal, "  size: {} bytes", document.size_bytes);
+            outln!(terminal, "  signed by key: {}", document.key_id);
         }
     }
 }

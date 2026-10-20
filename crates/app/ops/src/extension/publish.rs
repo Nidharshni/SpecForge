@@ -7,13 +7,13 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{Diagnostic, DiagnosticList, Severity, codes};
-use specforge_package::{DeclaredPackage, PackageName, Version};
+use specforge_package::DeclaredPackage;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_wasm::WasmRuntime;
 use specforge_wasm::protocol::Loaded;
 
 use super::candidate::LocalComponent;
-use crate::registry::{Published, Registry};
+use crate::registry::Registry;
 use crate::{Containment, OpError, OpErrorKind};
 
 /// What a publish found and how it ended. Its warnings are reported whatever
@@ -24,36 +24,10 @@ pub struct PublishReport {
     /// build alone reports (W021, ...), without E027. Empty when the binary
     /// could not be read or loaded.
     pub warnings: Vec<Diagnostic>,
-    pub result: Result<PublishOutcome, OpError>,
+    pub result: Result<PublishDocument, OpError>,
 }
 
-/// A package published.
-#[derive(Debug, Clone, PartialEq)]
-pub struct PublishOutcome {
-    pub name: PackageName,
-    pub version: Version,
-    /// The binary's size in bytes.
-    pub size_bytes: usize,
-    pub published: Published,
-}
-
-impl PublishOutcome {
-    /// The document `specforge publish` prints.
-    pub fn document(&self) -> PublishDocument {
-        PublishDocument {
-            action: PublishAction::Published,
-            extension: self.name.to_string(),
-            version: self.version.to_string(),
-            registry: self.published.registry.clone(),
-            url: self.published.url.clone(),
-            size_bytes: self.size_bytes,
-            key_id: self.published.key_id.clone(),
-            key_created: self.published.key_created,
-        }
-    }
-}
-
-/// What `specforge publish --format json` prints (CLI-only, ADR 0052 D5).
+/// What a publish answers, and what `specforge publish --format json` prints (CLI-only, ADR 0052 D5).
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 pub struct PublishDocument {
     pub action: PublishAction,
@@ -61,6 +35,7 @@ pub struct PublishDocument {
     pub version: String,
     pub registry: String,
     pub url: String,
+    /// The binary's size in bytes.
     pub size_bytes: usize,
     pub key_id: String,
     pub key_created: bool,
@@ -100,7 +75,7 @@ fn run(
     registry: &dyn Registry,
     runtime: &dyn WasmRuntime,
     warnings: &mut Vec<Diagnostic>,
-) -> Result<PublishOutcome, OpError> {
+) -> Result<PublishDocument, OpError> {
     let Validated {
         wasm,
         declaration,
@@ -120,11 +95,15 @@ fn run(
         )
     })?;
     let published = registry.publish(&package, &wasm)?;
-    Ok(PublishOutcome {
-        name: package.name().clone(),
-        version: package.version().clone(),
+    Ok(PublishDocument {
+        action: PublishAction::Published,
+        extension: package.name().to_string(),
+        version: package.version().to_string(),
+        registry: published.registry,
+        url: published.url,
         size_bytes: wasm.len(),
-        published,
+        key_id: published.key_id,
+        key_created: published.key_created,
     })
 }
 
