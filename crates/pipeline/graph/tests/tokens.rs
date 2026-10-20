@@ -175,3 +175,93 @@ fn a_parameters_name_and_a_quoted_member_are_no_token() {
         ]
     );
 }
+
+/// `"target L:C-L:C held_by,…"` (an empty list prints nothing after the span).
+fn held(tokens: &[WrittenToken]) -> Vec<String> {
+    tokens
+        .iter()
+        .map(|t| {
+            let holders: Vec<&str> = t.held_by.iter().map(|id| id.as_str()).collect();
+            format!(
+                "{} {}:{}-{}:{} {}",
+                t.target,
+                t.span.start_line,
+                t.span.start_col,
+                t.span.end_line,
+                t.span.end_col,
+                holders.join(",")
+            )
+        })
+        .collect()
+}
+
+const TAKEN: &str = "defaults behavior {\n  ports [Repo]\n}\n\nbehavior a \"A\" {\n}\n\nbehavior b \"B\" {\n}\n\n\
+behavior c \"C\" {\n  ports [Repo]\n}\n\nport Repo \"Repo\" {\n}\n";
+const SELF_DEFAULT: &str =
+    "defaults shape {\n  slot Wheel\n}\n\nshape Wheel \"Wheel\" {\n}\n\nshape Car \"Car\" {\n}\n";
+const DUPLICATE: &str = "behavior a \"A\" {\n  ports [Repo]\n}\n\nbehavior a \"Again\" {\n  ports [Repo]\n}\n\n\
+port Repo \"Repo\" {\n}\n";
+
+#[test]
+fn a_default_is_held_by_every_block_that_takes_it() {
+    let (_, tokens) = find(TAKEN, defaults_inputs);
+    assert_eq!(held(&tokens), ["Repo 2:10-2:14 a,b", "Repo 12:10-12:14 c"]);
+}
+
+#[test]
+fn a_default_no_block_takes_is_held_by_none() {
+    let (_, tokens) = find("defaults behavior {\n  ports [Repo]\n}\n", defaults_inputs);
+    assert_eq!(held(&tokens), ["Repo 2:10-2:14 "]);
+}
+
+#[test]
+fn a_block_does_not_hold_a_default_type_that_names_it() {
+    let (_, tokens) = find(SELF_DEFAULT, derived_inputs);
+    assert_eq!(held(&tokens), ["Wheel 2:8-2:13 Car"]);
+}
+
+#[test]
+fn a_duplicate_declarations_tokens_are_held_by_its_id() {
+    let (_, tokens) = find(DUPLICATE, defaults_inputs);
+    assert_eq!(held(&tokens), ["Repo 2:10-2:14 a", "Repo 6:10-6:14 a"]);
+}
+
+#[specforge_test(
+    behavior = "build_in_memory_graph",
+    verify = "every edge is a token the graph's finder reads"
+)]
+fn every_edge_is_held_by_a_token() {
+    for (source, make, duplicate) in [
+        (SHAPES, derived_inputs as fn() -> GraphInputs, false),
+        (TAKEN, defaults_inputs, false),
+        (SELF_DEFAULT, derived_inputs, false),
+        (DUPLICATE, defaults_inputs, true),
+    ] {
+        let (graph, tokens) = find(source, make);
+        for edge in graph.edges() {
+            assert!(
+                tokens.iter().any(|t| t.target == edge.target
+                    && t.field == edge.label
+                    && t.held_by.contains(&edge.source)),
+                "{edge:?} is held by no token: {tokens:?}"
+            );
+        }
+        if duplicate {
+            continue;
+        }
+        for token in tokens
+            .iter()
+            .filter(|t| graph.node(t.target.as_str()).is_some())
+        {
+            for holder in &token.held_by {
+                assert!(
+                    graph
+                        .edges_from(holder.as_str())
+                        .iter()
+                        .any(|e| e.target == token.target && e.label == token.field),
+                    "{token:?} held by {holder} has no edge"
+                );
+            }
+        }
+    }
+}

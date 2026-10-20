@@ -37,6 +37,7 @@ behavior build_in_memory_graph "Build In-Memory Graph" {
   verify unit "every edge connects two existing nodes"
   verify unit "an edge records the span of each reference it was linked from"
   verify unit "an incremental build records what a cold build records"
+  verify unit "every edge is a token the graph's finder reads"
   verify contract "Build In-Memory Graph: in-memory graph construction holds — resolution_complete, one_node_per_entity, one_edge_per_reference, no_dangling_edges"
   verify unit "W060 carries actionable suggestion"
   verify unit "W061 carries actionable suggestion"

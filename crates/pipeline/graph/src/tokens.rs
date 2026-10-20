@@ -2,7 +2,7 @@
 //! the editor's find-references and a delete's referrer scan ask, over the compiled parses or the texts a plan holds.
 
 use crate::build::is_define_block;
-use crate::defaults::is_defaults_block;
+use crate::defaults::{is_defaults_block, takers};
 use crate::derive::{names, type_expressions};
 use crate::{FieldForms, FileDefaults, GraphInputs, Reading};
 use specforge_common::{SourceSpan, Sym};
@@ -36,6 +36,10 @@ pub struct WrittenToken {
     /// The id it names, as written.
     pub target: Sym,
     pub holder: Holder,
+    /// The blocks whose node holds it as a reference, sorted, once each: its block; each block that takes the default
+    /// (`Holder::Defaults`), but not one a derived name of the default names (a block never derives an edge to itself);
+    /// none for a default no block takes. The graph build links exactly these (the debug assertion of `GraphBuild`).
+    pub held_by: Vec<Sym>,
     /// The entry's key, or the derived field a type name links through.
     pub field: Sym,
     pub span: SourceSpan,
@@ -47,7 +51,8 @@ pub struct WrittenToken {
 ///   and names nothing, ADR 0149 D4/D5), as [`Holder::Defaults`];
 /// - each block's own entries, coerced as the build stores them, then [`Reading::references`] (ADR 0093);
 /// - each type name a derived field of the holder's kind reads that names an entity its target admits, `kind_of`
-///   answering an entity's kind (`None`: no such entity); never the block's own id.
+///   answering an entity's kind (`None`: no such entity); never the block's own id;
+/// - each names the blocks that hold it (`held_by`).
 ///
 /// A `define` block (never a node, W143) is skipped. A reference without a span (a value built without a position)
 /// is not a token. Unlike the linker, a declared reference is a token whatever it resolves to (E003, E022): it is
@@ -105,6 +110,21 @@ pub fn written_tokens(
     tokens.sort_by_key(at);
     // A name the build reads twice at one span (a default's derived name) is one token.
     tokens.dedup();
+    for token in &mut tokens {
+        token.held_by = match token.holder {
+            Holder::Block(id) => vec![id],
+            Holder::Defaults(kind) => {
+                let mut ids: Vec<Sym> = takers(file, kind, token.field)
+                    .map(|block| block.id.raw)
+                    // A block never derives an edge to itself (`link_derived_references`).
+                    .filter(|id| token.form != Form::Derived || *id != token.target)
+                    .collect();
+                ids.sort_unstable();
+                ids.dedup();
+                ids
+            }
+        };
+    }
     tokens
 }
 
@@ -144,6 +164,7 @@ impl Reader<'_> {
                     out.push(WrittenToken {
                         target: name,
                         holder,
+                        held_by: Vec::new(),
                         field: Sym::new(&reference.field),
                         span: at,
                         form: Form::Derived,
@@ -179,6 +200,7 @@ fn read_entry(
             out.push(WrittenToken {
                 target: Sym::new(reference.id),
                 holder,
+                held_by: Vec::new(),
                 field: entry.key,
                 span: span.clone(),
                 form,
