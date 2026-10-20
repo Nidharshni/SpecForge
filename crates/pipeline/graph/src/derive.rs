@@ -87,7 +87,7 @@ pub(crate) fn expressions<'v>(reading: &Reading, entry: &'v FieldEntry) -> Vec<T
 /// The type expressions `reference` reads from a block of `kind`: its entries written as types
 /// ([`DerivedFrom::TypeExpressions`]), or its methods' parameter and return types
 /// ([`DerivedFrom::MethodSignatures`]). The derived walk links the names in them; the finder reports them.
-pub(crate) fn type_expressions<'v>(
+fn type_expressions<'v>(
     reference: &DerivedReference,
     forms: &crate::FieldForms,
     kind: &str,
@@ -120,9 +120,7 @@ pub(crate) fn type_expressions<'v>(
 
 /// The names inside a type expression, each with where it is written: the identifiers of the language's lexer
 /// (`Result<A, B[]>` -> Result, A, B), at the expression's position plus the identifier's offset.
-pub(crate) fn names(
-    expression: TypeExpression<'_>,
-) -> impl Iterator<Item = (&str, Option<SourceSpan>)> {
+fn names(expression: TypeExpression<'_>) -> impl Iterator<Item = (&str, Option<SourceSpan>)> {
     lex(expression.text)
         .into_iter()
         .filter(|lexeme| lexeme.kind == LexemeKind::Ident)
@@ -134,6 +132,32 @@ pub(crate) fn names(
                     .map(|at| within(at, expression.text, lexeme.start, lexeme.end)),
             )
         })
+}
+
+/// The names `reference` links from one block of its kind, in written order, each with where it is written (`None`: a
+/// value built without a position): the type names of the block's type expressions (`entries` as the graph build
+/// stores them, and `methods`) that are not `own` and name an entity (`kind_of`) the field's declared target admits.
+/// None when the field declares no target. The linker makes each an edge, the finder a token (ADR 0163).
+pub(crate) fn derived_names(
+    reference: &DerivedReference,
+    forms: &crate::FieldForms,
+    entries: &[FieldEntry],
+    methods: &[MethodDecl],
+    own: Option<Sym>,
+    kind_of: &dyn Fn(&str) -> Option<Sym>,
+) -> Vec<(Sym, Option<SourceSpan>)> {
+    let kind = reference.source_kind.as_str();
+    let Some(target) = forms.target(kind, &reference.field) else {
+        return Vec::new();
+    };
+    type_expressions(reference, forms, kind, entries, methods)
+        .into_iter()
+        .flat_map(names)
+        .map(|(name, at)| (Sym::new(name), at))
+        .filter(|(name, _)| {
+            Some(*name) != own && kind_of(name.as_str()).is_some_and(|k| target.admits(k.as_str()))
+        })
+        .collect()
 }
 
 /// The span of bytes `start..end` of `text`, which is written from `at`'s start (lines counted from the newlines
@@ -170,30 +194,21 @@ impl Graph {
     ) {
         let mut edges: Vec<Edge> = Vec::new();
         for reference in derived {
-            // The kind a name must resolve to for an edge: the field's declared target.
-            let Some(target) = forms.target(&reference.source_kind, &reference.field) else {
-                continue;
-            };
             for node in self.nodes_by_kind(&reference.source_kind) {
-                let kind = node.kind.raw.as_str();
-                let written =
-                    type_expressions(reference, forms, kind, node.fields.entries(), &node.methods);
-                for (name, _) in written.into_iter().flat_map(names) {
-                    if name == node.id.raw.as_str() {
-                        continue;
-                    }
-                    let resolves = self
-                        .node(name)
-                        .is_some_and(|named| target.admits(named.kind.raw.as_str()));
-                    if resolves {
-                        let edge = Edge {
-                            source: node.id.raw,
-                            target: Sym::new(name),
-                            label: Sym::new(&reference.field),
-                        };
-                        edges.push(edge);
-                    }
-                }
+                let kind_of = |name: &str| self.node(name).map(|named| named.kind.raw);
+                let names = derived_names(
+                    reference,
+                    forms,
+                    node.fields.entries(),
+                    &node.methods,
+                    Some(node.id.raw),
+                    &kind_of,
+                );
+                edges.extend(names.into_iter().map(|(name, _)| Edge {
+                    source: node.id.raw,
+                    target: name,
+                    label: Sym::new(&reference.field),
+                }));
             }
         }
         for edge in edges {

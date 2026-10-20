@@ -3,7 +3,7 @@
 
 use crate::build::is_define_block;
 use crate::defaults::{is_defaults_block, takers};
-use crate::derive::{names, type_expressions};
+use crate::derive::derived_names;
 use crate::{FieldForms, FileDefaults, GraphInputs, Reading};
 use specforge_common::{SourceSpan, Sym};
 use specforge_parser::{FieldEntry, MethodDecl, SpecFile};
@@ -162,26 +162,16 @@ impl Reader<'_> {
             if reference.source_kind != kind {
                 continue;
             }
-            let Some(target) = forms.target(kind, &reference.field) else {
-                continue;
-            };
-            let written = type_expressions(reference, forms, kind, entries, methods);
-            for (name, at) in written.into_iter().flat_map(names) {
-                let (Some(at), name) = (at, Sym::new(name)) else {
-                    continue;
-                };
-                let resolves = Some(name) != own
-                    && (self.kind_of)(name.as_str()).is_some_and(|k| target.admits(k.as_str()));
-                if resolves {
-                    out.push(WrittenToken {
-                        target: name,
-                        holder,
-                        held_by: Vec::new(),
-                        field: Sym::new(&reference.field),
-                        span: at,
-                        form: Form::Derived,
-                    });
-                }
+            for (name, at) in derived_names(reference, forms, entries, methods, own, self.kind_of) {
+                let Some(at) = at else { continue };
+                out.push(WrittenToken {
+                    target: name,
+                    holder,
+                    held_by: Vec::new(),
+                    field: Sym::new(&reference.field),
+                    span: at,
+                    form: Form::Derived,
+                });
             }
         }
     }
