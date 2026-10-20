@@ -1,4 +1,5 @@
-//! What an extension package is called, which of its versions is asked for and what an update
+//! What an extension package is called, which of its versions is asked for, which declaration is a
+//! registry package, and what an update
 //! moves a locked package to, and what the peers an extension declares require (ADR 0036, 0041,
 //! 0050).
 //!
@@ -9,11 +10,13 @@
 //! Pure: no I/O and no diagnostics. Callers map its errors to their codes
 //! (`specforge_common::package`: E072; `specforge_common::peers`: E073, E027).
 
+mod declared;
 mod name;
 pub mod peers;
 pub mod search;
 pub mod upgrade;
 
+pub use declared::{DeclaredPackage, NotAPackage};
 pub use name::{
     MAX_NAME_LEN, PackageName, PackageNameError, PackageRef, SpecifierError, VersionRequirement,
     VersionRequirementError, highest_matching, split_requirement,

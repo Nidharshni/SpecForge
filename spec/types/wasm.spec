@@ -142,6 +142,16 @@ type PackageName "Package Name" {
   verify unit "a package name crosses a registry URL as one segment"
 }
 
+// A declaration read as a registry package: a scoped package name and a full SemVer version,
+// parsed once from the declaration they are carried with, so a publish is routed, addressed
+// and signed as the package whose manifest it uploads (ADR 0036, 0179).
+type DeclaredPackage "Declared Package" {
+  name        PackageName
+  version     string
+  declaration ExtensionDeclaration
+  verify unit "a declared package is a declaration whose name is a scoped package name and whose version is a full SemVer version"
+}
+
 type VersionRequirementKind "Version Requirement Kind" = latest | exact | range
 
 // Which version of a package is asked for: latest (or *), one full version,

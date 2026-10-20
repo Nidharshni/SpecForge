@@ -103,7 +103,7 @@ port Registry "Registry" {
   method published(name: PackageName, version: string) -> Result<RegistryManifest, ExtensionError>
   method fetch(name: PackageName, version: string, policy: TrustPolicy) -> Result<RegistryPackage, ExtensionError>
   method pin(pins: KeyPin[]) -> Result<void, ExtensionError>
-  method publish(name: PackageName, version: string, wasm: u8[], declaration: ExtensionDeclaration) -> Result<RegistryPublished, ExtensionError>
+  method publish(package: DeclaredPackage, wasm: u8[]) -> Result<RegistryPublished, ExtensionError>
   method search(query: string, contributes: string) -> Result<RegistrySearched, ExtensionError>
   verify integration "Registry contract is satisfied"
 }
