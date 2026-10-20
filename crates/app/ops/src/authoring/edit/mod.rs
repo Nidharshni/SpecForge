@@ -432,14 +432,7 @@ fn describe(edit: &Edit) -> String {
 /// `edit <n> (<op> <entity>): `). Each file is laid out with its format configuration, read once per plan
 /// through the view's disk (ADR 0169).
 pub fn plan(view: &ProjectView<'_>, edits: &[Edit]) -> Result<EditPlan, Refusal<EditField>> {
-    if let Some(problem) = view
-        .env()
-        .config_problems()
-        .iter()
-        .find(|problem| problem.blocks_rewrites())
-    {
-        return Err(crate::config::refusal(problem).into());
-    }
+    crate::config::refuse_rewrite(view.env().config_problems())?;
     view.project_root()?;
     let disk = view.containment().disk();
     let mut planner = Planner {

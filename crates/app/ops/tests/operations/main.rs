@@ -8,6 +8,7 @@
 mod anchors;
 mod collect;
 mod compiled_support;
+mod config_gate;
 mod connectivity;
 mod contracts;
 mod contracts_pass;

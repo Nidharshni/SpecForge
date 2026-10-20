@@ -107,15 +107,7 @@ pub fn plan(
     // A rename rewrites the project's sources: a config that does not say
     // which files they are refuses it, from the compile's problems (as
     // `remove` refuses from them, ADR 0015 M5), before anything is planned.
-    if let Some(problem) = nav
-        .view()
-        .env()
-        .config_problems()
-        .iter()
-        .find(|problem| problem.blocks_rewrites())
-    {
-        return Err(crate::config::refusal(problem).into());
-    }
+    crate::config::refuse_rewrite(nav.view().env().config_problems())?;
     validate_id(new_id, nav.view().registries().kinds())
         .map_err(|error| error.about(RenameField::NewId))?;
     let graph = nav.view().graph();

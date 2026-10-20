@@ -9,10 +9,14 @@
 //! [`refusal`], the refusal `remove` builds from the compile's problems:
 //! before anything is written, whatever the operation.
 //!
-//! `format`, `migrate` and `rename` rewrite the project's sources: they
-//! read the config through [`rewritable`], which refuses with [`refusal`]
-//! when a problem [`blocks_rewrites`](ConfigProblem::blocks_rewrites), and
-//! they report every other problem as its E069.
+//! Who asks which gate:
+//! - `add` and `update` read a fresh config through [`usable`] and
+//!   [`required`] ([`ConfigProblem::blocks_edits`]);
+//! - `remove` reads the compile's problems through [`refuse_edit`];
+//! - `format` and `migrate` rewrite the project's sources and read a fresh
+//!   config through [`rewritable`] ([`ConfigProblem::blocks_rewrites`]);
+//! - `rename` and a typed edit rewrite them too, and read the compile's
+//!   problems through [`refuse_rewrite`].
 
 use crate::{OpError, OpErrorKind};
 use serde_json::Value;
@@ -40,7 +44,9 @@ pub fn refusal(problem: &ConfigProblem) -> OpError {
 /// when it cannot be used. A missing file is not refused (it is the
 /// default config; [`ConfigRead::found`] says so).
 pub fn usable(root: &Path) -> Result<ConfigRead, OpError> {
-    first_blocking(read_project_config(root), ConfigProblem::blocks_edits)
+    let read = read_project_config(root);
+    refuse_edit(&read.problems)?;
+    Ok(read)
 }
 
 /// What a project's `specforge.json` is, for a run that rewrites the
@@ -51,18 +57,33 @@ pub fn usable(root: &Path) -> Result<ConfigRead, OpError> {
 /// ([`ConfigRead::diagnostics`] gives their E069s). A missing file is not
 /// refused: the default config, the root's sources.
 pub fn rewritable(root: &Path) -> Result<ConfigRead, OpError> {
-    first_blocking(read_project_config(root), ConfigProblem::blocks_rewrites)
+    let read = read_project_config(root);
+    refuse_rewrite(&read.problems)?;
+    Ok(read)
 }
 
-/// `read`, or the refusal of its first problem that `blocks`.
-fn first_blocking(
-    read: ConfigRead,
+/// Refused with [`refusal`] for the first of `problems` that leaves the project's sources unknown
+/// ([`ConfigProblem::blocks_rewrites`]): what every run that rewrites `.spec` files asks first, over a
+/// fresh read (`format`, `migrate`, through [`rewritable`]) or the compile's (`rename`, a typed edit).
+pub(crate) fn refuse_rewrite(problems: &[ConfigProblem]) -> Result<(), OpError> {
+    refuse_first(problems, ConfigProblem::blocks_rewrites)
+}
+
+/// Refused with [`refusal`] for the first of `problems` that leaves `specforge.json` uneditable as an
+/// `extensions` list ([`ConfigProblem::blocks_edits`]): `add`, `update` ([`usable`], [`required`]) and
+/// `remove` (the compile's problems).
+pub(crate) fn refuse_edit(problems: &[ConfigProblem]) -> Result<(), OpError> {
+    refuse_first(problems, ConfigProblem::blocks_edits)
+}
+
+fn refuse_first(
+    problems: &[ConfigProblem],
     blocks: fn(&ConfigProblem) -> bool,
-) -> Result<ConfigRead, OpError> {
-    match read.problems.iter().find(|problem| blocks(problem)) {
-        Some(problem) => Err(refusal(problem)),
-        None => Ok(read),
-    }
+) -> Result<(), OpError> {
+    problems
+        .iter()
+        .find(|p| blocks(p))
+        .map_or(Ok(()), |p| Err(refusal(p)))
 }
 
 /// [`usable`], and the project must have a `specforge.json`:

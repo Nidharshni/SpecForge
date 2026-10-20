@@ -146,14 +146,7 @@ pub fn remove(
     req: &RemoveRequest,
 ) -> Result<RemoveOutcome, Refusal<RemoveField>> {
     view.project_root()?;
-    if let Some(problem) = view
-        .env()
-        .config_problems()
-        .iter()
-        .find(|problem| problem.blocks_edits())
-    {
-        return Err(crate::config::refusal(problem).into());
-    }
+    crate::config::refuse_edit(view.env().config_problems())?;
     let inventory = super::inventory(view);
     let removing = &Removing {
         view,
