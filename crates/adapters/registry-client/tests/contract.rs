@@ -11,7 +11,7 @@ use specforge_registry_client::{
     HttpRegistryClient, RegistryClient, RegistryError, SigningKey, publish_to_registry,
 };
 use specforge_registry_server::testing::LocalRegistry;
-use specforge_registry_wire::{RegistryRoot, SearchQuery};
+use specforge_registry_wire::{ErrorCode, RegistryRoot, SearchQuery, SignedContent};
 
 #[specforge_test_macros::test(
     port = "RegistryClient",
@@ -42,6 +42,93 @@ fn the_memory_client_keeps_the_client_contract() {
     };
     let credential = RegistryCredential::new("memory", "contract-token");
     assert_client_contract(
+        &MemoryClient::new().accepting("contract-token"),
+        &registry,
+        &credential,
+    );
+}
+
+fn declaration_at(version: &str) -> specforge_protocol_types::ExtensionDeclaration {
+    serde_json::from_value(serde_json::json!({
+        "handshake": {
+            "protocol_version": "1.0.0",
+            "name": "@contract/tool",
+            "version": version,
+            "description": "Contract tool",
+            "keywords": ["contract"],
+            "peer_dependencies": [],
+            "sandbox_policy": null
+        }
+    }))
+    .unwrap()
+}
+
+fn refuses_a_manifest_naming_another_version(
+    client: &dyn RegistryClient,
+    registry: &RegistryConfig,
+    credential: &RegistryCredential,
+) {
+    let routed = declaration_at("4.0.0");
+    let manifest = serde_json::to_string(&declaration_at("3.0.0")).unwrap();
+    let wasm = b"\0asm four";
+    let signature = SigningKey::generate().sign(&SignedContent::of(
+        "@contract/tool",
+        "4.0.0",
+        wasm,
+        &manifest,
+    ));
+    let error = client
+        .publish(
+            wasm,
+            &routed,
+            &manifest,
+            &signature,
+            registry,
+            Some(credential),
+        )
+        .unwrap_err();
+    assert!(
+        matches!(
+            error,
+            RegistryError::Refused {
+                code: ErrorCode::NameMismatch,
+                ..
+            }
+        ),
+        "a manifest naming another version is Refused(NameMismatch), not {error:?}"
+    );
+    let tool = PackageName::parse("@contract/tool").unwrap();
+    let stored = client.metadata(&tool, &Version::new(4, 0, 0), registry, None);
+    assert!(
+        matches!(stored, Err(RegistryError::NotFound { .. })),
+        "{stored:?}"
+    );
+}
+
+#[test]
+fn over_http_a_manifest_naming_another_version_is_refused() {
+    let server = LocalRegistry::start();
+    let registry = RegistryConfig {
+        alias: "local".to_string(),
+        url: server.root().clone(),
+        scope_filter: None,
+        default_registry: true,
+    };
+    let credential = RegistryCredential::new("local", server.token());
+    refuses_a_manifest_naming_another_version(&HttpRegistryClient::new(), &registry, &credential);
+}
+
+#[test]
+#[ignore = "flipped by the next commit"]
+fn in_memory_a_manifest_naming_another_version_is_refused() {
+    let registry = RegistryConfig {
+        alias: "memory".to_string(),
+        url: RegistryRoot::parse("https://memory.invalid").unwrap(),
+        scope_filter: None,
+        default_registry: true,
+    };
+    let credential = RegistryCredential::new("memory", "contract-token");
+    refuses_a_manifest_naming_another_version(
         &MemoryClient::new().accepting("contract-token"),
         &registry,
         &credential,
