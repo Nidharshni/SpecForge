@@ -13,6 +13,7 @@ use crate::view::EntityField;
 use crate::{Caller, OpError, OpErrorKind, Refusal, Wrote};
 use serde::Serialize;
 use specforge_common::shape::Shape;
+use specforge_parser::lex::lex;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -30,6 +31,8 @@ pub enum RenameField {
 pub const INVALID_ID: &str = "invalid_name";
 /// The new ID already names an entity.
 pub const TAKEN: &str = "entity_exists";
+/// A source that does not parse spells the ID: the rename cannot see its references.
+pub const UNPARSED: &str = "source_unparsed";
 /// The shortest and longest entity IDs (E014).
 pub const ID_LENGTH: std::ops::RangeInclusive<usize> = 2..=60;
 
@@ -90,8 +93,9 @@ impl RenamePlan {
 /// finds, the declaration's name and each incoming reference's token,
 /// each file read through the navigator. A rename is all or nothing: one
 /// that cannot see every token (a file it cannot read, or whose text no
-/// longer spells the ID where the graph says) is refused, rather than
-/// guessing or leaving a reference behind. Refused with `config_invalid`
+/// longer spells the ID where the graph says, or a source that does not
+/// parse and spells the ID as a name) is refused, rather than guessing or
+/// leaving a reference behind. Refused with `config_invalid`
 /// when the compile's `specforge.json` does not say which files are the
 /// project's sources
 /// ([`ConfigProblem::blocks_rewrites`](specforge_common::ConfigProblem::blocks_rewrites)).
@@ -147,6 +151,20 @@ pub fn plan(
         )
         .into());
     }
+    let unparsed = unparsed(nav, old_id);
+    if !unparsed.is_empty() {
+        return Err(OpError::new(
+            OpErrorKind::PreconditionFailed,
+            UNPARSED,
+            format!(
+                "cannot rename '{old_id}': {} do not parse, and spell it where no reference can be read",
+                unparsed.join(", ")
+            ),
+        )
+        .with_suggestion("fix the syntax errors `specforge check` reports (E001), then rename")
+        .with_entity(old_id)
+        .into());
+    }
     let edits: Vec<TextEdit> = occurrences
         .iter()
         .map(|o| TextEdit {
@@ -168,6 +186,25 @@ pub fn plan(
         planned,
         spec_root: nav.view().env().spec_root().to_path_buf(),
     })
+}
+
+/// The sources whose parse failed (E001) and whose text spells `id` as a name (an identifier or ref
+/// ID lexeme, so not in a string or a comment), in key order: references the graph does not hold,
+/// which a rename would leave behind. A source whose text is unknown is not judged.
+fn unparsed<'n>(nav: &'n Navigator<'_>, id: &str) -> Vec<&'n str> {
+    nav.view()
+        .project()
+        .parsed()
+        .filter(|(_, file)| !file.errors.is_empty())
+        .filter(|(key, _)| {
+            nav.source_text(key).is_some_and(|text| {
+                lex(&text)
+                    .iter()
+                    .any(|l| l.is_name() && l.text(&text) == id)
+            })
+        })
+        .map(|(key, _)| key)
+        .collect()
 }
 
 /// Write `plan`'s edits to the files under the spec root it was planned from as one project change (ADR 0128): every file is checked

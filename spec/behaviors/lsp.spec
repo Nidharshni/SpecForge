@@ -470,7 +470,10 @@ behavior rename_entity_id "Rename Entity ID" {
     asked from a document the project does not build answers no edit.
     A rename over a project whose specforge.json does not say which files
     are its sources MUST be refused with config_invalid's reason, as the
-    MCP rename tool refuses it.
+    MCP rename tool refuses it. A rename while a .spec file that does not
+    parse spells the ID as a name (not in a string or a comment) MUST be
+    refused with why: its references cannot be read, and the rename would
+    leave them behind.
   """
   verify unit "rename updates declaration and all references"
   verify unit "rename leaves strings, comments and verify texts alone"
@@ -485,6 +488,7 @@ behavior rename_entity_id "Rename Entity ID" {
   verify unit "rename to a reserved word is refused with why"
   verify unit "rename refuses a reserved word as the new ID before anything is planned"
   verify unit "a rename is refused when specforge.json does not say which files are the project's sources"
+  verify unit "a rename is refused while a source that spells the ID does not parse"
   verify contract "Rename Entity ID: entity rename holds — graph_available, prepare_rename_ready, all_references_updated, rename_atomic, entity_renamed_emitted"
 }
 

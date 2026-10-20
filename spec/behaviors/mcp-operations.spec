@@ -156,6 +156,9 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
     sources (the compile reported it as E069: it can't be used, or
     spec_root, exclude or extensions has the wrong type) MUST fail the
     rename as config_invalid before anything is planned or written.
+    A .spec file that does not parse and spells the ID as a name (not in a
+    string or a comment) MUST fail the rename: its references cannot be
+    read, and the rename would leave them behind.
     The rename edits the project's sources only: a nested project's files
     are never edited, and an ID declared only there is not found.
     A rename whose write fails MUST put back every file it wrote; a file it
@@ -172,6 +175,7 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
   verify unit "rename's updated diagnostics follow a successful write only: a preview and a failure carry none"
   verify unit "a specforge.json that does not say which files are the project's sources fails the rename as config_invalid and writes nothing"
   verify unit "rename never edits a nested project's files"
+  verify unit "a rename is refused while a source that spells the ID does not parse"
   verify unit "a rename whose file changed on disk since the compile is refused as conflict, and nothing is written"
   verify integration "a rename that cannot put a file back names it in files_written"
 }

@@ -29,8 +29,10 @@ fn a_rename_to_a_reserved_word_is_refused_about_the_new_id() {
     }
 }
 
-#[test]
-#[ignore = "flipped by the fix of the unparsed-source refusal"]
+#[specforge_test_macros::test(
+    behavior = "rename_entity_id",
+    verify = "a rename is refused while a source that spells the ID does not parse"
+)]
 fn a_rename_is_refused_while_a_source_that_spells_the_id_does_not_parse() {
     let p = crate::navigate::compile(
         crate::navigate::SOFTWARE,
@@ -43,7 +45,7 @@ fn a_rename_is_refused_while_a_source_that_spells_the_id_does_not_parse() {
         ],
     );
     let refused = rename::plan(&p.navigator(), "session_limit", "session_cap").unwrap_err();
-    assert_eq!(refused.error.code, "source_unparsed");
+    assert_eq!(refused.error.code, rename::UNPARSED);
     assert!(
         refused.error.message.contains("login.spec"),
         "{}",
