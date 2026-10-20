@@ -576,7 +576,7 @@ impl ConfiguredRegistry {
         load_or_create_signing_key_at(&path).map_err(|why| {
             OpError::coded(OpErrorKind::PreconditionFailed, UNUSABLE_SIGNING_KEY, why)
                 .with_suggestion(format!(
-                    "move {} aside: the next publish creates a new key, and whoever pinned the                      old one then sees a changed key (R-TRUST-003)",
+                    "move {} aside: the next publish creates a new key, and whoever pinned the old one then sees a changed key (R-TRUST-003)",
                     path.display()
                 ))
         })

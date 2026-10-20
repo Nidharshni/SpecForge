@@ -277,7 +277,6 @@ fn a_corrupt_signing_key_is_refused_with_e074_before_any_request() {
 }
 
 #[test]
-#[ignore = "flipped by the fix of E074's suggestion"]
 fn the_e074_suggestion_reads_as_one_sentence() {
     let world = World::acme();
     std::fs::write(world.signing_key(), "not json").unwrap();
