@@ -2987,6 +2987,7 @@ dependencies = [
  "serde",
  "serde_json",
  "specforge-common",
+ "specforge-graph",
  "specforge-parser",
  "specforge-protocol-types",
  "specforge-test",

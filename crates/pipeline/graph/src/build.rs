@@ -289,14 +289,17 @@ impl GraphBuild {
     }
 }
 
-/// `GraphBuild::of(spec_files, GraphConfig::default()).into_parts()`.
+/// `GraphBuild::of(spec_files, GraphConfig::default()).into_parts()`: a graph with no extension loaded, which no
+/// compile builds (production builds through `RegistryBuild::graph_of`): a test convenience.
+#[cfg(any(test, feature = "testing"))]
 #[must_use = "diagnostics should be checked for errors"]
 pub fn build_graph(spec_files: &[SpecFile]) -> (Graph, Vec<Diagnostic>) {
     build_graph_with_config(spec_files, &GraphConfig::default())
 }
 
 /// `GraphBuild::of(spec_files, config.clone()).into_parts()`: files in
-/// path order, whatever order the slice gives.
+/// path order, whatever order the slice gives. A test convenience, as [`build_graph`].
+#[cfg(any(test, feature = "testing"))]
 #[must_use = "diagnostics should be checked for errors"]
 pub fn build_graph_with_config(
     spec_files: &[SpecFile],

@@ -13,7 +13,9 @@ path = "tests/main.rs"
 
 [features]
 # `GraphBuild::holding`: a build around a graph a test assembled node by node
-# (`specforge_project::testing::Assembled`). No production code reads it.
+# (`specforge_project::testing::Assembled`), and `build_graph` /
+# `build_graph_with_config`: a graph with no extension loaded, which no compile
+# builds. No production code reads them.
 testing = []
 
 [dependencies]
@@ -24,6 +26,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
+specforge-graph = { path = ".", features = ["testing"] }
 criterion = { workspace = true }
 tempfile = { workspace = true }
 specforge-test = { workspace = true }

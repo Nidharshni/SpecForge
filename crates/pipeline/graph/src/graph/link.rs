@@ -159,7 +159,7 @@ invariant inv_one "Invariant One" {
 }
 "#;
 
-    /// The graph and diagnostics of `source`, built the way a compile builds it.
+    /// The graph and diagnostics of `source`, built with no extension loaded.
     fn built(source: &str) -> (Graph, Vec<Diagnostic>) {
         crate::build_graph(&[specforge_parser::parse(source, "main.spec")])
     }

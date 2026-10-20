@@ -16,6 +16,7 @@ specforge-graph = { path = "../graph" }
 specforge-parser = { workspace = true }
 
 [dev-dependencies]
+specforge-graph = { path = "../graph", features = ["testing"] }
 specforge-test-macros = { workspace = true }
 specforge-test = { workspace = true }
 tempfile = { workspace = true }
