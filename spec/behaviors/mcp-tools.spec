@@ -567,6 +567,7 @@ behavior provide_mcp_find_references_tool "Provide MCP Find References Tool" {
   verify unit "non-existent entity returns error response"
   verify unit "direction and include_declaration select which occurrences are returned"
   verify integration "find_references and the LSP's references answer the same occurrences"
+  verify unit "find_references lists a reference written in a duplicate declaration"
   verify contract "Provide MCP Find References Tool: MCP find references tool holds — graph_available, references_returned, empty_list_for_unreferenced, tool_invoked_emitted"
 }
 

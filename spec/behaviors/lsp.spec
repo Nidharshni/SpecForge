@@ -418,6 +418,8 @@ behavior prepare_rename "Prepare Rename" {
   """
   verify unit "prepare rename on entity ID returns token range"
   verify unit "prepare rename on non-renameable token returns not available"
+  verify unit "prepare rename answers on a default no block takes"
+  verify unit "prepare rename answers on a reference in a duplicate declaration"
   verify unit "prepare rename over a buffer typed since the compile is refused as content modified"
   verify unit "prepare rename from a document the project does not build answers that rename is not available"
   verify unit "prepare rename from a document opened since the compile waits for it"

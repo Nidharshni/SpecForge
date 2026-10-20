@@ -28,6 +28,7 @@ mod failed_run;
 mod failures;
 mod field_references;
 mod field_types;
+mod finder_references;
 mod fix_edits;
 mod fixes;
 mod formal_diagnostics;

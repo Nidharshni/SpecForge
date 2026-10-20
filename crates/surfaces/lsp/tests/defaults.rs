@@ -4,7 +4,9 @@
 use specforge_extension_sdk::prelude::*;
 use specforge_lsp::{LspState, answers};
 use specforge_test_macros::test as spec;
-use tower_lsp::lsp_types::{CompletionResponse, GotoDefinitionResponse, Position, Url};
+use tower_lsp::lsp_types::{
+    CompletionResponse, GotoDefinitionResponse, Position, PrepareRenameResponse, Url,
+};
 
 use crate::served::Served;
 
@@ -12,7 +14,7 @@ const SOURCE: &str = "defaults behavior {\n  ports [Repo]\n}\n\n\
                       behavior a \"A\" {\n}\n\nbehavior b \"B\" {\n}\n\nbehavior c \"C\" {\n}\n\n\
                       port Repo \"Repo\" {\n}\n";
 
-fn declare(c: &mut ContributionsBuilder) {
+pub(crate) fn declare(c: &mut ContributionsBuilder) {
     c.kind("behavior", |k| {
         k.field("ports", |f| {
             f.field_type(FieldType::ReferenceList).target_kind("port");
@@ -26,7 +28,7 @@ fn declare(c: &mut ContributionsBuilder) {
     c.kind("feature", |_| {});
 }
 
-fn served(source: &str) -> Served {
+pub(crate) fn served(source: &str) -> Served {
     Served::new(&[("main.spec", source)])
         .extension("@t/defaults", declare)
         .open(&["main.spec"])
@@ -160,4 +162,22 @@ fn references_show_a_default_no_block_takes() {
     let found = answers::references(&state, &uri, at, true).unwrap();
     assert_eq!(found.len(), 2, "{found:?}");
     assert_eq!(edits(&state, &uri, at), ["1:9-13", "4:5-9"]);
+}
+
+#[spec(
+    behavior = "prepare_rename",
+    verify = "prepare rename answers on a default no block takes"
+)]
+#[ignore = "flipped by T4"]
+fn prepare_rename_on_a_default_no_block_takes_has_a_rename_range() {
+    let served = served(UNTAKEN);
+    let (state, uri) = (served.state(), served.uri("main.spec"));
+    let answer = answers::prepare_rename(&state, &uri, Position::new(1, 10)).unwrap();
+    let Some(PrepareRenameResponse::Range(range)) = answer else {
+        panic!("{answer:?}")
+    };
+    assert_eq!(
+        (range.start, range.end),
+        (Position::new(1, 9), Position::new(1, 13))
+    );
 }

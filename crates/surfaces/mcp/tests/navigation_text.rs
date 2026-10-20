@@ -183,3 +183,51 @@ fn rename_edits_are_the_spans_find_references_answers() {
     assert_eq!(spans.len(), 2, "{found}");
     assert_eq!(ranges, spans, "{renamed}");
 }
+
+/// A reference written in a duplicate declaration (E002) is a token rename edits and find_references lists (ADR 0176).
+#[specforge_test(
+    behavior = "provide_mcp_find_references_tool",
+    verify = "find_references lists a reference written in a duplicate declaration"
+)]
+#[ignore = "flipped by T5"]
+fn find_references_and_rename_agree_on_a_duplicate_declaration() {
+    let duplicate = "behavior a \"A\" {\n  ports [Repo]\n}\n\nbehavior a \"Again\" {\n  ports [Repo]\n}\n\n\
+                     port Repo \"Repo\" {\n  direction inbound\n}\n";
+    let mut server = TestProject::new()
+        .file("main.spec", duplicate)
+        .serve(&[TestExtension::software()]);
+    let found = call_tool(
+        &mut server,
+        "specforge.find_references",
+        json!({"entity_id": "Repo", "include_declaration": true}),
+    );
+    let found: Value = serde_json::from_str(&tool_text(&found)).unwrap();
+    let mut spans: Vec<(i64, i64, i64, i64)> = found["locations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| quad(&l["source_span"]))
+        .collect();
+    let renamed = call_tool(
+        &mut server,
+        "specforge.rename",
+        json!({"entity_id": "Repo", "new_name": "Store", "dry_run": true}),
+    );
+    let renamed: Value = serde_json::from_str(&tool_text(&renamed)).unwrap();
+    let mut ranges: Vec<(i64, i64, i64, i64)> = renamed["edits"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| quad(&e["range"]))
+        .collect();
+    spans.sort_unstable();
+    ranges.sort_unstable();
+    let want = vec![(2, 10, 2, 14), (6, 10, 6, 14), (9, 6, 9, 10)];
+    assert_eq!(ranges, want, "{renamed}");
+    assert_eq!(spans, want, "{found}");
+}
+
+fn quad(span: &Value) -> (i64, i64, i64, i64) {
+    let n = |k: &str| span[k].as_i64().unwrap();
+    (n("start_line"), n("start_col"), n("end_line"), n("end_col"))
+}
