@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use specforge_package::PackageName;
-use specforge_package::{Version, VersionRequirement};
+use specforge_package::{DeclaredPackage, Version, VersionRequirement};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 use specforge_registry_wire::{
     DEFAULT_SEARCH_LIMIT, ErrorCode, PackageMetadata, PackageSignature, PublishReceipt, SearchHit,
@@ -361,21 +361,14 @@ impl RegistryClient for MemoryClient {
 
     fn publish(
         &self,
-        package: &[u8],
-        declaration: &ExtensionDeclaration,
+        package: &DeclaredPackage<'_>,
+        wasm: &[u8],
         manifest_json: &str,
         signature: &PackageSignature,
         registry: &RegistryConfig,
         credential: Option<&RegistryCredential>,
     ) -> Result<PublishReceipt, RegistryError> {
-        let name =
-            PackageName::declared_by(declaration).map_err(|why| RegistryError::InvalidPackage {
-                message: why.to_string(),
-            })?;
-        let version =
-            Version::parse(declaration.version()).map_err(|why| RegistryError::InvalidPackage {
-                message: format!("'{}' is not a SemVer version: {why}", declaration.version()),
-            })?;
+        let (name, version) = (package.name(), package.version());
         self.begin(
             Call {
                 credential: credential.cloned(),
@@ -401,8 +394,8 @@ impl RegistryClient for MemoryClient {
             .any(|m| m.name == name.as_str() && m.version == version.to_string());
         if held {
             return Err(RegistryError::DuplicateVersion {
-                name: declaration.name().to_string(),
-                version: declaration.version().to_string(),
+                name: name.to_string(),
+                version: version.to_string(),
             });
         }
         // As the registry server does: the manifest is the declaration of the package the upload names.
@@ -424,9 +417,9 @@ impl RegistryClient for MemoryClient {
         // As the registry server does: a signature that doesn't verify over the upload is refused.
         signature
             .verify(&SignedContent::of(
-                declaration.name(),
+                name.as_str(),
                 &version.to_string(),
-                package,
+                wasm,
                 manifest_json,
             ))
             .map_err(|why| RegistryError::Refused {
@@ -434,21 +427,21 @@ impl RegistryClient for MemoryClient {
                 message: why.to_string(),
             })?;
         let mut metadata = package_metadata(
-            declaration.name(),
+            name.as_str(),
             &version.to_string(),
-            package,
+            wasm,
             manifest_json,
             None,
         );
         metadata.signature = Some(signature.clone());
         let receipt = PublishReceipt {
-            name: declaration.name().to_string(),
+            name: name.to_string(),
             version: version.to_string(),
             sha256: metadata.sha256.clone(),
-            size_bytes: package.len() as u64,
+            size_bytes: wasm.len() as u64,
             key_id: signature.key_id(),
         };
-        self.store(registry, metadata, package.to_vec());
+        self.store(registry, metadata, wasm.to_vec());
         Ok(receipt)
     }
 

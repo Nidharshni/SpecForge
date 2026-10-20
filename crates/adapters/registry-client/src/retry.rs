@@ -3,9 +3,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use specforge_package::DeclaredPackage;
 use specforge_package::PackageName;
 use specforge_package::Version;
-use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry_wire::{
     PackageMetadata, PackageSignature, PublishReceipt, SearchHit, SearchQuery,
 };
@@ -146,8 +146,8 @@ impl<C: RegistryClient> RegistryClient for Retrying<C> {
 
     fn publish(
         &self,
-        package: &[u8],
-        declaration: &ExtensionDeclaration,
+        package: &DeclaredPackage<'_>,
+        wasm: &[u8],
         manifest_json: &str,
         signature: &PackageSignature,
         registry: &RegistryConfig,
@@ -156,7 +156,7 @@ impl<C: RegistryClient> RegistryClient for Retrying<C> {
         self.sent(|| {
             self.inner.publish(
                 package,
-                declaration,
+                wasm,
                 manifest_json,
                 signature,
                 registry,

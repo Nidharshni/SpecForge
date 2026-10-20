@@ -1,6 +1,5 @@
 use specforge_common::Severity;
-use specforge_package::PackageName;
-use specforge_package::Version;
+use specforge_package::{DeclaredPackage, PackageName, Version};
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry_client::registry_ops::{publish_to_registry, verify_registry_integrity};
 use specforge_registry_client::testing::{Call, CallKind, MemoryClient, package};
@@ -88,8 +87,8 @@ fn publish_computes_sha256() {
     let client = client();
 
     let url = publish_to_registry(
+        &DeclaredPackage::of(&manifest).unwrap(),
         package_bytes,
-        &manifest,
         &registry,
         Some(&accepted()),
         &client,
@@ -123,8 +122,8 @@ fn a_version_the_registry_holds_is_refused_with_r007() {
     store(&client, &registry, "@test/ext", "1.0.0", "");
 
     let err = publish_to_registry(
+        &DeclaredPackage::of(&manifest).unwrap(),
         b"fake-wasm-bytes",
-        &manifest,
         &registry,
         Some(&accepted()),
         &client,
@@ -155,8 +154,8 @@ fn publish_returns_registry_url_on_success() {
         &Version::new(1, 0, 0),
     ));
     let url = publish_to_registry(
+        &DeclaredPackage::of(&manifest).unwrap(),
         b"fake-wasm-bytes",
-        &manifest,
         &registry,
         Some(&accepted()),
         &client,
@@ -175,8 +174,8 @@ fn publish_threads_credential_to_client() {
 
     let client = client();
     publish_to_registry(
+        &DeclaredPackage::of(&manifest).unwrap(),
         b"fake-wasm-bytes",
-        &manifest,
         &registry,
         Some(&credential),
         &client,
@@ -194,8 +193,8 @@ fn publish_threads_credential_to_client() {
     // An anonymous publish carries no credential, and the registry refuses it.
     let anonymous = self::client();
     let err = publish_to_registry(
+        &DeclaredPackage::of(&manifest).unwrap(),
         b"fake-wasm-bytes",
-        &manifest,
         &registry,
         None,
         &anonymous,
@@ -284,8 +283,8 @@ fn publish_signs_package_when_key_provided() {
     let client = client();
 
     publish_to_registry(
+        &DeclaredPackage::of(&manifest).unwrap(),
         b"wasm-bytes",
-        &manifest,
         &registry,
         Some(&accepted()),
         &client,
@@ -322,8 +321,8 @@ fn the_memory_client_refuses_a_signature_that_does_not_verify() {
 
     let error = client
         .publish(
+            &DeclaredPackage::of(&declaration).unwrap(),
             b"\0asm wasm",
-            &declaration,
             &manifest,
             &signature,
             &registry,
@@ -394,8 +393,8 @@ impl RegistryClient for WrongReceipt {
 
     fn publish(
         &self,
-        package: &[u8],
-        declaration: &ExtensionDeclaration,
+        package: &DeclaredPackage<'_>,
+        wasm: &[u8],
         manifest_json: &str,
         signature: &PackageSignature,
         registry: &RegistryConfig,
@@ -403,7 +402,7 @@ impl RegistryClient for WrongReceipt {
     ) -> Result<specforge_registry_wire::PublishReceipt, RegistryError> {
         let mut receipt = self.0.publish(
             package,
-            declaration,
+            wasm,
             manifest_json,
             signature,
             registry,
@@ -428,8 +427,8 @@ impl RegistryClient for WrongReceipt {
 )]
 fn a_receipt_for_another_upload_is_refused() {
     let error = publish_to_registry(
+        &DeclaredPackage::of(&minimal_manifest()).unwrap(),
         b"fake-wasm-bytes",
-        &minimal_manifest(),
         &default_registry(),
         Some(&accepted()),
         &WrongReceipt(client()),

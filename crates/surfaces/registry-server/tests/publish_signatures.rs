@@ -10,6 +10,7 @@
     reason = "a test's unwrap is its assertion: a None or an Err fails the test"
 )]
 
+use specforge_package::DeclaredPackage;
 use specforge_protocol_types::ExtensionDeclaration;
 use specforge_registry_client::registry_config::{RegistryConfig, RegistryCredential};
 use specforge_registry_client::{HttpRegistryClient, SigningKey, publish_to_registry};
@@ -67,8 +68,8 @@ fn signed_publish_round_trips_through_http_boundary() {
 
     // Publish exactly as the CLI orchestrates it.
     let url = publish_to_registry(
+        &DeclaredPackage::of(&manifest).unwrap(),
         wasm_bytes,
-        &manifest,
         &registry,
         Some(&credential),
         &HttpRegistryClient::new(),
@@ -122,8 +123,8 @@ fn a_rate_limited_publish_is_r003() {
     let client = HttpRegistryClient::new();
     let publish = |version: &str| {
         publish_to_registry(
+            &DeclaredPackage::of(&manifest_of(version)).unwrap(),
             b"\0asm-fake-extension-bytes",
-            &manifest_of(version),
             &registry,
             Some(&credential),
             &client,
@@ -176,8 +177,8 @@ fn a_signature_the_client_would_refuse_is_refused_and_the_version_stays_publisha
     // 2. The version is still publishable, and what is published verifies and pins.
     let client = HttpRegistryClient::new();
     publish_to_registry(
+        &DeclaredPackage::of(&declaration).unwrap(),
         wasm,
-        &declaration,
         &registry,
         Some(&credential),
         &client,

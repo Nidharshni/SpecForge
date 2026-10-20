@@ -2,8 +2,7 @@ use specforge_common::{Diagnostic, codes};
 
 use super::registry_client::{RegistryClient, RegistryError};
 use super::registry_config::{RegistryConfig, RegistryCredential};
-use specforge_package::{PackageName, Version};
-use specforge_protocol_types::ExtensionDeclaration;
+use specforge_package::DeclaredPackage;
 use specforge_registry_wire::{
     PackageMetadata, PublishReceipt, SignedContent, address::Call, sha256_hex,
 };
@@ -11,7 +10,7 @@ use specforge_registry_wire::{
 /// Why a publish did not reach the registry, or what the registry answered.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PublishError {
-    /// The declaration is no package (E072) or cannot be serialized (R-OPS-003).
+    /// The declaration cannot be serialized (R-OPS-003).
     Invalid(Diagnostic),
     /// The registry's answer.
     Registry(RegistryError),
@@ -37,26 +36,15 @@ impl PublishError {
 /// is refused by the registry (R007): a published version is immutable.
 /// Returns the registry URL on success.
 pub fn publish_to_registry(
-    package: &[u8],
-    declaration: &ExtensionDeclaration,
+    package: &DeclaredPackage<'_>,
+    wasm: &[u8],
     registry: &RegistryConfig,
     credential: Option<&RegistryCredential>,
     client: &dyn RegistryClient,
     key: &crate::SigningKey,
 ) -> Result<String, PublishError> {
-    // What is published is a package: a name and a version (ADR 0036).
-    let invalid = |message: String| {
-        PublishError::Invalid(RegistryError::InvalidPackage { message }.to_diagnostic())
-    };
-    let name = PackageName::declared_by(declaration).map_err(|why| invalid(why.to_string()))?;
-    let version = Version::parse(declaration.version()).map_err(|why| {
-        invalid(format!(
-            "'{}' is not a SemVer version: {why}",
-            declaration.version()
-        ))
-    })?;
-
-    let manifest_json = serde_json::to_string(declaration).map_err(|e| {
+    let (name, version) = (package.name(), package.version().to_string());
+    let manifest_json = serde_json::to_string(package.declaration()).map_err(|e| {
         PublishError::Invalid(Diagnostic::new(
             codes::R_OPS_003,
             format!("failed to serialize the declaration: {}", e),
@@ -64,18 +52,13 @@ pub fn publish_to_registry(
     })?;
 
     // The signature binds the exact uploaded manifest bytes and the wasm hash to the publisher key.
-    let content = SignedContent::of(
-        declaration.name(),
-        declaration.version(),
-        package,
-        &manifest_json,
-    );
+    let content = SignedContent::of(name.as_str(), &version, wasm, &manifest_json);
     let signature = key.sign(&content);
 
     let receipt = client
         .publish(
             package,
-            declaration,
+            wasm,
             &manifest_json,
             &signature,
             registry,
@@ -83,10 +66,10 @@ pub fn publish_to_registry(
         )
         .map_err(PublishError::Registry)?;
     let expected = PublishReceipt {
-        name: declaration.name().to_string(),
-        version: declaration.version().to_string(),
+        name: name.to_string(),
+        version: version.clone(),
         sha256: content.wasm_sha256().to_string(),
-        size_bytes: package.len() as u64,
+        size_bytes: wasm.len() as u64,
         key_id: signature.key_id(),
     };
     if receipt != expected {
@@ -95,7 +78,9 @@ pub fn publish_to_registry(
             message: format!("its receipt describes another upload than the one sent: {receipt:?}"),
         }));
     }
-    Ok(registry.url.address(&Call::Version(&name, &version)))
+    Ok(registry
+        .url
+        .address(&Call::Version(package.name(), package.version())))
 }
 
 /// Verify SHA256 integrity of downloaded bytes against an expected hash.
