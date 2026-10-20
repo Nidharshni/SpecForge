@@ -32,6 +32,8 @@ pub enum RenameField {
 pub const INVALID_ID: &str = "invalid_name";
 /// The new ID already names an entity.
 pub const TAKEN: &str = "entity_exists";
+/// The entity's name is not an entity ID token (a spec block's name is a string): nothing to rename.
+pub const NOT_RENAMEABLE: &str = "not_renameable";
 /// A source that does not parse spells the ID: the rename cannot see its references.
 pub const UNPARSED: &str = "source_unparsed";
 /// Whether `id` is a legal entity ID: the grammar's identifier
@@ -86,9 +88,10 @@ impl RenamePlan {
 /// finds, the declaration's name and each incoming reference's token,
 /// each file read through the navigator. A rename is all or nothing: one
 /// that cannot see every token (a file it cannot read, or whose text no
-/// longer spells the ID where the graph says, or a source that does not
-/// parse and spells the ID as a name) is refused, rather than guessing or
-/// leaving a reference behind. Refused with `config_invalid`
+/// longer spells the ID where the graph says, or a source that does not parse
+/// and spells the ID as a name) is refused, rather than guessing or leaving a
+/// reference behind; so is a spec block, whose name is a string, not an
+/// entity ID (`not_renameable`). Refused with `config_invalid`
 /// when the compile's `specforge.json` does not say which files are the
 /// project's sources
 /// ([`ConfigProblem::blocks_rewrites`](specforge_common::ConfigProblem::blocks_rewrites)).
@@ -104,9 +107,9 @@ pub fn plan(
     validate_id(new_id, nav.view().registries().kinds())
         .map_err(|error| error.about(RenameField::NewId))?;
     let graph = nav.view().graph();
-    if graph.node(old_id).is_none() {
+    let Some(node) = graph.node(old_id) else {
         return Err(crate::view::not_found(graph, old_id).about(RenameField::OldId));
-    }
+    };
     if graph.node(new_id).is_some() {
         return Err(OpError::new(
             OpErrorKind::Conflict,
@@ -115,6 +118,18 @@ pub fn plan(
         )
         .with_entity(old_id)
         .about(RenameField::NewId));
+    }
+    if node.kind.raw.as_str() == specforge_common::structural::SPEC {
+        return Err(OpError::new(
+            OpErrorKind::InvalidInput,
+            NOT_RENAMEABLE,
+            format!(
+                "cannot rename '{old_id}': a spec block's name is a string, not an entity ID; edit the string in {}",
+                node.source_span.file
+            ),
+        )
+        .with_entity(old_id)
+        .about(RenameField::OldId));
     }
     let occurrences = nav
         .tokens(old_id, true)

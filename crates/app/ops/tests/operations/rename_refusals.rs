@@ -66,8 +66,10 @@ fn a_rename_is_refused_while_a_source_that_spells_the_id_does_not_parse() {
     assert_eq!(plan.edits.len(), 1);
 }
 
-#[test]
-#[ignore = "flipped by the fix of the spec block refusal"]
+#[specforge_test_macros::test(
+    behavior = "provide_mcp_rename_tool",
+    verify = "renaming a spec block is refused: its name is a string, not an entity ID"
+)]
 fn a_spec_blocks_name_is_not_renamed() {
     let p = crate::navigate::compile(
         crate::navigate::SOFTWARE,
@@ -77,7 +79,7 @@ fn a_spec_blocks_name_is_not_renamed() {
         ],
     );
     let refused = rename::plan(&p.navigator(), "specforge", "specforge_two").unwrap_err();
-    assert_eq!(refused.error.code, "not_renameable");
+    assert_eq!(refused.error.code, rename::NOT_RENAMEABLE);
     assert_eq!(refused.error.kind, OpErrorKind::InvalidInput);
     assert_eq!(refused.subject, Some(RenameField::OldId));
     let message = &refused.error.message;
