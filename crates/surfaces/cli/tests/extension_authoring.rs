@@ -151,6 +151,28 @@ fn extension_init_rejects_existing_directory() {
     assert_eq!(json_of(&output)["code"], "E065");
 }
 
+#[test]
+#[ignore = "flipped by T5"]
+fn extension_init_refuses_a_builtins_name() {
+    let dir = scratch();
+    let output = Cli::on(&dir)
+        .bare_command(&[
+            "extension",
+            "init",
+            "--name",
+            "@specforge/product",
+            "--format",
+            "json",
+            "--dir",
+        ])
+        .arg(dir.root())
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(json_of(&output)["code"], "extension_conflict");
+    assert!(!dir.root().join("product").exists());
+}
+
 #[specforge_test(
     behavior = "scaffold_wasm_extension_project",
     verify = "specforge extension init --format=json outputs structured JSON"
