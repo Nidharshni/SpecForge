@@ -320,6 +320,7 @@ impl Registry for ConfiguredRegistry {
             metadata,
             declaration,
         } = self.described(name, version)?; // 1, 3: checked before the signature, so a refused package pins no key
+        policy.admits(name, version, &metadata.sha256)?; // 1b: the lock's bytes, before the download or any question
         let wasm = self
             .client
             .download(&metadata.wasm_url, registry, credential.as_ref())

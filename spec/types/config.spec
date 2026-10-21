@@ -222,6 +222,7 @@ type LockedPin "Locked Pin" {
   sha256  string
   key_id  string @optional
   verify unit "LockedPin is what specforge.lock records for a name's registry install"
+  verify unit "a locked pin admits other bytes only at another version, or when it pins no hash"
 }
 
 // A publisher key a committed lock plan pins for a package name

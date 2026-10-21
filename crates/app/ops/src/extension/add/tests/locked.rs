@@ -34,7 +34,6 @@ fn add_greet_at(
     behavior = "check_registry_reply",
     verify = "add refuses the version specforge.lock pins served as other bytes, writing nothing, and its dry run says so"
 )]
-#[ignore = "flipped by T3"]
 fn the_locked_version_served_as_other_bytes_is_refused() {
     // A clone has no module; a module changed on disk is not the pinned one either.
     for tampered in [None, Some(&b"tampered"[..])] {

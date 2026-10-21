@@ -161,6 +161,10 @@ impl<'a> LockPlan<'a> {
         };
         if self.purpose == Purpose::Preview {
             let manifest = fetching.registry.published(name, version)?;
+            if let Some(pin) = self.installed.locked(name).map(LockedPin::of) {
+                // No download: the manifest names the bytes (ADR 0201).
+                pin.admits(name, version, &manifest.sha256)?;
+            }
             let pin = Pin {
                 name: manifest.name,
                 version: manifest.version.to_string(),

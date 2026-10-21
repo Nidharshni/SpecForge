@@ -71,6 +71,7 @@ it can only replay previously signed packages (see [residual risks](#residual-ri
 | Package unsigned | Refused. `--allow-unsigned` accepts the risk explicitly |
 | Signature doesn't verify (tampered wasm/manifest) | **Always refused** ([R-TRUST-002](diagnostics.md#r-trust-002)): `--allow-unsigned` does not bypass a broken signature |
 | Registry answer isn't the protocol's (e.g. a signature that isn't one, or a 404 without the protocol's NOT_FOUND error: the url isn't a registry's root) | **Always refused** ([R009](diagnostics.md#r009)), before any key is pinned |
+| The version `specforge.lock` pins, served as other bytes | **Always refused** ([R014](diagnostics.md#r014)) before the download and before any key question; `--yes` does not accept it; `--dry-run` reports it. Remove the extension and add it again to take the new bytes |
 | Key differs from the pinned key | Refused with both key ids; interactive re-pin offered (`y/N`); `--yes` accepts non-interactively for CI |
 | Key differs from the key `specforge.lock` records (no pin of yours) | Refused like a pinned key change, naming `specforge.lock`; `--yes` or a yes at the prompt accepts it |
 | `known-keys.json` can't be read | **Always refused** ([R-TRUST-006](diagnostics.md#r-trust-006)); the file is never overwritten |
@@ -99,7 +100,7 @@ All publisher key state lives in `~/.specforge/known-keys.json`:
 
 `specforge.lock` records the key id beside the wasm hash for every signed
 registry install. It is the project's pin: a machine with no pins of its own (a
-new teammate, CI) holds the package to it.
+new teammate, CI) holds the package to it, and the version it pins to the bytes it pins.
 
 ## Namespace ownership
 

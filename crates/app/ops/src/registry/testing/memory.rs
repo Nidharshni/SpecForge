@@ -324,6 +324,7 @@ impl Registry for MemoryRegistry {
     }
 
     /// The package published as `name@version`: R006 "Package not found: {name}@{version}" when there is none,
+    /// R014 when the policy's lock pin pins this version as other bytes (before anything else),
     /// R-TRUST-001 "package '{name}' is not signed" (suggestion "allow unsigned packages for this install to
     /// accept the risk") when unsigned and `!allow_unsigned`; else its bytes, `hex_sha256(bytes)`, its declaration and
     /// publisher. A signed package's publisher is decided against the key expected for `name` (the
@@ -348,6 +349,7 @@ impl Registry for MemoryRegistry {
         else {
             return Err(not_found(name, version));
         };
+        policy.admits(name, version, &hex_sha256(&published.wasm))?;
         if published.key_id.is_none() && !policy.allow_unsigned {
             return Err(OpError::coded(
                 crate::OpErrorKind::PermissionDenied,

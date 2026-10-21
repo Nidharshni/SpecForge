@@ -2119,6 +2119,24 @@ Owner: core
 Level: error
 ```
 
+## R014
+
+```
+R014: Locked package served as other bytes
+
+The registry serves the version of a package that `specforge.lock` pins, but not
+the binary the lock pins: its SHA-256 is another. A published version never
+changes (R007), so the registry, or the address `specforge.json` sends the
+package to, now serves something else under that version. Nothing was downloaded
+or installed, no publisher key was pinned or asked about, and the lock is left
+as it was; `specforge add --dry-run` reports it too. Check the registry. If you
+trust the bytes it now serves, remove the extension (`specforge remove <name>`)
+and add it again, which pins them.
+
+Owner: core
+Level: error
+```
+
 ## W001
 
 ```

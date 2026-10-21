@@ -145,7 +145,8 @@ invariant registry_integrity "Registry Integrity" {
     their declared SHA256 hash before installation. Hash mismatches MUST
     produce a hard error diagnostic and abort installation. The hash and,
     for a signed package, its publisher key id MUST be recorded in
-    specforge.lock.
+    specforge.lock. At the version specforge.lock pins, the bytes installed
+    MUST be the ones it pins.
   """
   risk      high
   verify unit "SHA256 match passes verification"

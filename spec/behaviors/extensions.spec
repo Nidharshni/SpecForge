@@ -965,6 +965,7 @@ behavior check_registry_reply "Check Registry Reply" {
     manifest_fails_closed  "A missing or unreadable served manifest is refused with R-OPS-004, never read as declaring no peers"
     peers_from_manifest    "The peers the served declaration declares are the ones the ADR-0001 diamond gate checks"
     declaration_matches    "A binary whose declaration differs from the served one is refused with R-TRUST-004 naming the first differing category"
+    locked_bytes_held      "A reply for the version specforge.lock pins whose SHA-256 is not the one the lock pins is refused with R014 before the binary is downloaded, its signature checked or a key change asked; a dry run refuses it from the published manifest"
     answer_from_registry   "A 404 without the protocol's NOT_FOUND error, and a wasm_url that is neither an http or https URL nor a path at the registry's root, are refused with R009: no registry gave that answer"
   }
   contract   """
@@ -993,6 +994,12 @@ behavior check_registry_reply "Check Registry Reply" {
     another version, is loaded and checked as any other: the lock's bytes
     never make another version already present (E028 when the binary
     declares another version).
+    The version the project's lock pins MUST be served as the bytes it pins:
+    a reply naming another SHA-256 MUST be refused (R014) before its binary
+    is downloaded, its signature checked or a key change asked, and a dry
+    run MUST refuse it from the published manifest; no flag or consent
+    accepts it, and the lock is left as it was. A lock entry that pins no
+    hash pins no bytes.
     A refused reply pins no key and installs nothing.
   """
   verify unit "a reply that is not the protocol's JSON is refused with R009, even with --allow-unsigned"
@@ -1006,6 +1013,7 @@ behavior check_registry_reply "Check Registry Reply" {
   verify unit "add refuses another version served with the bytes the lock already pins"
   verify unit "add refuses the version specforge.lock pins served as other bytes, writing nothing, and its dry run says so"
   verify unit "add of the version specforge.lock pins, served as its bytes, installs them and leaves the lock as it was"
+  verify integration "a fetch of the version specforge.lock pins served as other bytes is refused before its download"
   verify integration "a package published with a legacy manifest is refused with a re-publish suggestion"
 }
 

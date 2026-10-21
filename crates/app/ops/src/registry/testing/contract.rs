@@ -309,6 +309,51 @@ pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]
         "C10: the lock's key is accepted, and still pinned when the install is written"
     );
 
+    // C12: the lock's bytes hold the fetch, before the signature and before any question
+    let pin = |version, sha256| LockedPin {
+        version,
+        sha256,
+        key_id: None,
+    };
+    let error = registry
+        .fetch(
+            &plain,
+            &one,
+            refuse(false).locked(Some(pin("1.0.0", "other"))),
+        )
+        .unwrap_err();
+    assert!(
+        error.is(codes::R014),
+        "C12: other bytes at the locked version, before the signature: {error:?}"
+    );
+    let asker = Scripted::answering(true);
+    let error = registry
+        .fetch(
+            &app_name,
+            &app_version,
+            TrustPolicy::new(false, Asking::Ask(&asker)).locked(Some(pin("1.0.0", "other"))),
+        )
+        .unwrap_err();
+    assert!(
+        error.is(codes::R014),
+        "C12: other bytes at the locked version, before the key question: {error:?}"
+    );
+    assert!(asker.asked().is_empty(), "C12: nobody was asked");
+    let plain_bytes = hex_sha256(&find("@contract/plain", "1.0.0").wasm);
+    for (version, sha256, why) in [
+        ("1.0.0", plain_bytes.as_str(), "its bytes at its version"),
+        ("0.9.0", "other", "other bytes at another version"),
+        ("1.0.0", "", "an entry that pins no hash"),
+    ] {
+        registry
+            .fetch(
+                &plain,
+                &one,
+                refuse(true).locked(Some(pin(version, sha256))),
+            )
+            .unwrap_or_else(|e| panic!("C12: {why} is accepted: {e:?}"));
+    }
+
     // C11: the published manifest is what a fetch answers, without the binary
     let manifest = registry
         .published(&fresh, &fresh_version)
