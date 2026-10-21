@@ -104,3 +104,23 @@ async fn a_filled_keyword_snippet_is_the_block_new_writes() {
         );
     }
 }
+
+#[tokio::test]
+#[ignore = "flipped by T6"]
+async fn a_field_snippet_is_the_member_set_writes() {
+    let text = "failure_mode disk_full \"Disk full\" {\n    severity high\n    cause    \"c\"\n    effect   \"e\"\n    \n}\n\nprocess p1 \"P\" {\n    alphabet      [\"a\"]\n    initial_state \"s\"\n    \n}\n";
+    let found = items_at(text, &[(4, 4), (10, 4)]).await;
+
+    let block = item(&found[0], "post_mitigation");
+    assert_eq!(
+        block["insertText"], "post_mitigation {\n    $1\n}",
+        "{block}"
+    );
+    assert_eq!(block["insertTextMode"], 2, "{block}");
+    assert_eq!(item(&found[0], "rpn")["insertText"], "rpn ${1:0}");
+    assert_eq!(item(&found[0], "cause")["insertText"], "cause \"$1\"");
+    assert_eq!(
+        item(&found[1], "alphabet")["insertText"],
+        "alphabet [\"$1\"]"
+    );
+}
