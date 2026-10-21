@@ -844,7 +844,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Entity::obligation_spans`), never the graph's; an entry named `verify` inside a block field is a field, not an
   obligation (ADR 0187, amended).
 - **Unverified**: an entity that counts toward coverage and is not proven
-  (its standing counts and its verdict is not proven; `ProjectCoverage::is_unverified`).
+  (its standing counts and its verdict is not proven; `ProjectCoverage::is_unverified`). Stats reports no "verified" count; its proof figure is `proof_pct`.
 - **Delivery evidence**: what the recorded test report proves of a feature, beside the `status`
   its author declares (a claim): the behaviors that implement it (name it in `features`), how many
   the coverage rule counts proven, their obligations and failing tests. A feature is **proven** when
@@ -868,7 +868,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   place. The **plan check** (`specforge_ops::read::plan::check`) reads the graph and the entity snapshot, never the
   recorded test report; it passes (`ok`) when no entry is unresolved and none comes before an entry of another cycle or entity it depends on; its outcome lists the entries that resolve (`resolved_entries`).
 - **Plan gap**: how an agent plan falls short of the graph: an unresolved entry, a missing entry for
-  a testable entity with obligations, or an entry ordered before what it depends on (entities on one cycle never are) (`PlanGap`). An
+  an entity that counts toward coverage, or an entry ordered before what it depends on (entities on one cycle never are) (`PlanGap`). An
   edge to an entity that does not exist is neither: it is E003. Written as an `McpTraceGap`
   (`source_entity`, `target_entity`, `missing_link_type`, `gap_context`). A missing entry is a warning; an
   unresolved or misordered entry fails the plan.

@@ -3,6 +3,7 @@
 **Status:** accepted (2026-10-11). Amends ADR 0015 D6 and ADR 0004 D1-c; extends the list in
 ADR 0048 D2. D5 extended by ADR 0058 to watch's lines. D1 and D5 amended in round 16 (plan 11); D1 and D2 in round 17 (plan 05): rename's document. D1 amended in round 18 (plan 10): the extensions, providers and schema listings answer their documents.
 D8's "nothing goes to stderr" is a case of [ADR 0120](0120-what-a-cli-command-says-beside-its-document-is-said-once.md).
+Amended by round 22, plan 11 (stats has no `verified_count`).
 Amended by [ADR 0162](0162-a-mutations-preview-is-a-fact-of-its-outcome.md) (round 16, plan 05): every previewable document says `dry_run` (D4, D8's `check_only`).
 ADR 0102: every file a document names follows one rule. D1's documents include the anchors read view's ([ADR 0140](0140-source-anchors-are-a-read-view.md)).
 
@@ -50,6 +51,7 @@ type, matched neither surface.
 - `specforge stats --format json`: `entity_count`, `entity_counts` (array), `edge_count`,
   `diagnostic_summary`, no `proof_pct` without results. `specforge.stats` gains `entity_count`,
   `testable_count`, `declared_count`, `verified_count`.
+  *(Amended, round 22 plan 11: `verified_count` is gone; the glossary's "unverified" is what counts and is not proven.)*
 - `specforge add --format json` and `specforge.add_extension`: `action` (`enabled`, `installed`,
   `already_present`, `planned`), `extension`, `source` always (`registry` for a registry
   package), `key_id` only when signed; MCP loses `installed`, `already_present`, `dry_run` and the
