@@ -56,7 +56,10 @@ fn project() -> Assembled {
                                 "extension '@acme/missing' is not installed",
                             ),
                         }),
-                        ..EnabledExtension::unloaded("@acme/missing@1.2.0")
+                        ..EnabledExtension::unloaded(
+                            "@acme/missing@1.2.0",
+                            specforge_installed::Origin::Unknown,
+                        )
                     }],
                     declarations: Vec::new(),
                 },

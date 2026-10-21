@@ -91,7 +91,7 @@ pub fn builtin_vocabulary() -> CandidateVocabulary {
 /// runtime, which the environment then holds (ADR 0015 R1, R3).
 pub enum ExtensionLoad {
     /// No runtime, so no extension loads: each `extensions` entry enables
-    /// what it names, unloaded ([`Loaded::unloaded`]).
+    /// what it names, unloaded ([`Installed::unloaded`]).
     NoRuntime,
     /// What [`Installed::load`] loaded into `runtime`: each entry's
     /// outcome, the declarations in entry order, the load's diagnostics.
@@ -234,7 +234,10 @@ impl Environment {
     pub fn assemble(read: ConfigRead, installed: Installed, load: ExtensionLoad) -> Self {
         let config_diagnostics = read.diagnostics();
         let (loaded, runtime) = match load {
-            ExtensionLoad::NoRuntime => (Loaded::unloaded(&read.config.extensions), None),
+            ExtensionLoad::NoRuntime => (
+                installed.unloaded(&read.config.extensions, &builtins()),
+                None,
+            ),
             ExtensionLoad::In { runtime, loaded } => (loaded, Some(runtime)),
         };
         let Loaded {

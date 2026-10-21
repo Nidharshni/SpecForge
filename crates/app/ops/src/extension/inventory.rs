@@ -248,7 +248,7 @@ mod tests {
 
     /// What the load records for an entry it could not load.
     fn failing(entry: &str, problem: LoadProblem) -> EnabledExtension {
-        let entry = EnabledExtension::unloaded(entry);
+        let entry = crate::testing::unloaded(entry);
         EnabledExtension {
             failure: Some(LoadFailure {
                 diagnostic: Diagnostic::new(codes::E028, format!("{} did not load", entry.entry)),
@@ -319,11 +319,11 @@ mod tests {
         };
         let fixture = Assembled::new()
             .enabled(vec![
-                EnabledExtension::unloaded("@specforge/product"),
-                EnabledExtension::unloaded("@acme/locked"),
+                crate::testing::unloaded("@specforge/product"),
+                crate::testing::unloaded("@acme/locked"),
                 EnabledExtension {
                     name: "@sdk/greet".into(),
-                    ..EnabledExtension::unloaded("greet.wasm")
+                    ..crate::testing::unloaded("greet.wasm")
                 },
                 failing("@acme/missing@1.2.0", LoadProblem::NotInstalled),
                 failing("@acme/changed", changed.clone()),
@@ -444,7 +444,7 @@ mod tests {
                 declared: "@sdk/greet".into(),
             },
         );
-        let named = EnabledExtension::unloaded("@sdk/greet");
+        let named = crate::testing::unloaded("@sdk/greet");
         for enabled in [
             vec![refused.clone(), named.clone()],
             vec![named.clone(), refused.clone()],
@@ -489,13 +489,13 @@ mod tests {
     #[test]
     fn an_argument_selects_a_file_entry_a_name_or_both() {
         let fixture = Assembled::new().enabled(vec![
-            EnabledExtension::unloaded("@sdk/greet=greet.wasm"),
-            EnabledExtension::unloaded("@sdk/twice=twice.wasm"),
-            EnabledExtension::unloaded("@sdk/twice=twice.wasm"),
-            EnabledExtension::unloaded("@sdk/both"),
-            EnabledExtension::unloaded("@sdk/both=both.wasm"),
-            EnabledExtension::unloaded("@acme/named"),
-            EnabledExtension::unloaded("Bad Name"),
+            crate::testing::unloaded("@sdk/greet=greet.wasm"),
+            crate::testing::unloaded("@sdk/twice=twice.wasm"),
+            crate::testing::unloaded("@sdk/twice=twice.wasm"),
+            crate::testing::unloaded("@sdk/both"),
+            crate::testing::unloaded("@sdk/both=both.wasm"),
+            crate::testing::unloaded("@acme/named"),
+            crate::testing::unloaded("Bad Name"),
         ]);
         let view = fixture.view();
         let inventory = inventory(&view);

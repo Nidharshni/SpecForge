@@ -19,7 +19,7 @@ use specforge_wasm::protocol::load_declaration;
 use crate::Installed;
 use crate::lock::LockFileEntry;
 use crate::module::Module;
-use crate::resolve::Resolved;
+use crate::resolve::{Origin, Resolved};
 
 /// The builtin extensions the host embeds: name and component bytes.
 #[derive(Debug, Clone, Copy)]
@@ -61,20 +61,6 @@ pub struct Loaded {
     pub declarations: Vec<ExtensionDeclaration>,
 }
 
-impl Loaded {
-    /// What `entries` enable when nothing loads (no runtime): each entry
-    /// [`EnabledExtension::unloaded`], no declaration, no diagnostic.
-    pub fn unloaded(entries: &[String]) -> Loaded {
-        Loaded {
-            enabled: entries
-                .iter()
-                .map(|entry| EnabledExtension::unloaded(entry))
-                .collect(),
-            declarations: Vec::new(),
-        }
-    }
-}
-
 /// What one `specforge.json` `extensions` entry enables, as the load left it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnabledExtension {
@@ -85,7 +71,13 @@ pub struct EnabledExtension {
     pub name: String,
     /// The path a `.wasm` file entry names, as written.
     pub file: Option<String>,
-    /// Why it did not load. `None`: it loaded, or nothing was loaded
+    /// Where the load takes its extension from ([`Resolution::origin`](crate::Resolution::origin)):
+    /// a repeated entry's is the one it repeats'. It does not depend on whether the entry loaded.
+    pub origin: Origin,
+    /// Whether it loaded its extension: the registry build holds its declaration under `name`.
+    /// False when it failed, repeats another entry, or nothing was loaded.
+    pub loaded: bool,
+    /// Why it did not load. `None`: it loaded, it repeats another entry, or nothing was loaded
     /// ([`EnabledExtension::unloaded`]).
     pub failure: Option<LoadFailure>,
     /// What it reported though it loaded: W149 (its lock entry pins no
@@ -104,13 +96,15 @@ pub enum LoadSubject {
 }
 
 impl EnabledExtension {
-    /// What `entry` names when nothing is loaded (no runtime).
-    pub fn unloaded(entry: &str) -> Self {
+    /// What `entry` names when nothing is loaded (no runtime), from `origin`.
+    pub fn unloaded(entry: &str, origin: Origin) -> Self {
         match ExtensionEntry::parse(entry) {
             ExtensionEntry::Named(name) => EnabledExtension {
                 entry: entry.trim().to_string(),
                 name: name.to_string(),
                 file: None,
+                origin,
+                loaded: false,
                 failure: None,
                 warnings: Vec::new(),
             },
@@ -118,6 +112,8 @@ impl EnabledExtension {
                 entry: entry.trim().to_string(),
                 name: name.unwrap_or(path).to_string(),
                 file: Some(path.to_string()),
+                origin,
+                loaded: false,
                 failure: None,
                 warnings: Vec::new(),
             },
@@ -357,6 +353,16 @@ enum Slot {
 }
 
 impl Installed {
+    /// What `entries` enable when nothing loads (no runtime): each entry
+    /// [`EnabledExtension::unloaded`] with the origin [`Installed::load`] would record, no
+    /// declaration, no diagnostic. Reads nothing.
+    pub fn unloaded(&self, entries: &[String], builtins: &Builtins) -> Loaded {
+        Loaded {
+            enabled: self.resolve(entries, builtins).unloaded(entries),
+            declarations: Vec::new(),
+        }
+    }
+
     /// Load what `entries` enable into `runtime` and read each extension's
     /// declaration once:
     /// - a builtin from its embedded bytes;
@@ -377,12 +383,11 @@ impl Installed {
         runtime: &dyn WasmRuntime,
         disk: &dyn Disk,
     ) -> Loaded {
-        let mut enabled = Loaded::unloaded(entries).enabled;
-        let mut slots: Vec<Slot> = entries.iter().map(|_| Slot::Skipped).collect();
-
         // Named entries first: a `.wasm` file that declares a name they
         // loaded is refused, not swapped in. `resolve` decides the order.
         let resolution = self.resolve(entries, builtins);
+        let mut enabled = resolution.unloaded(entries);
+        let mut slots: Vec<Slot> = entries.iter().map(|_| Slot::Skipped).collect();
         let mut loaded_names = HashSet::new();
         for (i, resolved) in resolution.in_load_order() {
             let outcome = self.load_entry(resolved, &loaded_names, runtime, disk);
@@ -392,6 +397,7 @@ impl Installed {
                         enabled[i].name = declared.clone();
                     }
                     loaded_names.insert(declared);
+                    enabled[i].loaded = true;
                     slots[i] = Slot::Loaded(Box::new(done));
                 }
                 Err(failure) => {
@@ -611,7 +617,8 @@ mod tests {
 
     #[test]
     fn nothing_loaded_enables_each_entry_as_written() {
-        let loaded = Loaded::unloaded(&["@acme/a".to_string(), "x=ext.wasm".to_string()]);
+        let entries = ["@acme/a".to_string(), "x=ext.wasm".to_string()];
+        let loaded = Installed::none().unloaded(&entries, &Builtins::none());
         let names: Vec<&str> = loaded.enabled.iter().map(|e| e.name.as_str()).collect();
         let files: Vec<Option<&str>> = loaded.enabled.iter().map(|e| e.file.as_deref()).collect();
         assert_eq!(names, ["@acme/a", "x"]);

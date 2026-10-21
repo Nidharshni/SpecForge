@@ -77,6 +77,10 @@ behavior load_extension_manifests "Load Extension Manifests" {
     read that one decision. A file that does not exist, cannot be read, does not load as a
     component, declares another name than the one written, or declares an
     extension another entry already loads MUST produce E028 naming the entry.
+    Each entry's outcome MUST record where the load takes its extension from
+    (builtin, the lock entry's source, file:<path>, or unknown; a repeated
+    entry, the one it repeats') and whether it loaded, with or without a
+    runtime.
     An entry whose declaration can't be read (its handshake, a describe
     category or its protocol major) MUST produce one E028 that says so and
     names what failed, in the same words for every kind of entry. Each
@@ -119,6 +123,7 @@ behavior load_extension_manifests "Load Extension Manifests" {
   verify integration "an enabled extension with no installed binary produces E028 naming the command that installs it"
   verify integration "an entry naming a .wasm file loads that component from disk under the name it declares"
   verify unit "the extension load and the lock plan resolve an entry by one rule"
+  verify unit "each entry records where the load takes its extension from and whether it loaded"
   verify integration "a .wasm file entry that is missing, is not a component, names another extension or repeats a loaded one produces E028 naming the entry"
   verify unit "an entry whose declaration can't be read is E028 saying so and naming what failed"
   verify unit "a .wasm file entry that cannot be read is E028 saying it cannot be read"

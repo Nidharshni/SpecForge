@@ -9,7 +9,7 @@ use specforge_common::ExtensionEntry;
 use specforge_package::PackageName;
 
 use crate::Installed;
-use crate::load::{Builtins, LoadProblem};
+use crate::load::{Builtins, EnabledExtension, LoadProblem};
 use crate::lock::{LockFileEntry, LockSource, LockState};
 
 /// What one `extensions` entry names, decided as the extension load decides it, nothing loaded.
@@ -143,6 +143,19 @@ impl Resolution<'_> {
             Resolved::Unloadable { .. } => Origin::Unknown,
             Resolved::Again { first } => self.origin(*first),
         }
+    }
+}
+
+impl Resolution<'_> {
+    /// Each of `entries` as it enables what it names before anything loads: its origin, `loaded:
+    /// false`. `entries` are the texts this resolution was made from.
+    pub(crate) fn unloaded(&self, entries: &[String]) -> Vec<EnabledExtension> {
+        debug_assert_eq!(entries.len(), self.entries.len());
+        entries
+            .iter()
+            .enumerate()
+            .map(|(i, entry)| EnabledExtension::unloaded(entry, self.origin(i)))
+            .collect()
     }
 }
 

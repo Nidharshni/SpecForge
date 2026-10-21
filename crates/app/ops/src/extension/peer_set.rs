@@ -329,7 +329,8 @@ mod tests {
             )))
             .enabled(vec![EnabledExtension {
                 name: "@specforge/product".into(),
-                ..EnabledExtension::unloaded("p.wasm")
+                loaded: true,
+                ..crate::testing::unloaded("p.wasm")
             }])
             .declarations(vec![Assembled::declaration("@specforge/product", "9.9.9")]);
 

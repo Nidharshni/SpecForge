@@ -6,7 +6,7 @@ use std::sync::Arc;
 use serde_json::json;
 use specforge_common::parse_project_config;
 use specforge_extension_sdk::prelude::*;
-use specforge_installed::Installed;
+use specforge_installed::{Installed, Origin};
 use specforge_project::{
     EnabledExtension, Environment, ExtensionLoad, Loaded, SetupPart, SharedRuntime,
 };
@@ -109,16 +109,27 @@ fn without_a_runtime_nothing_loads_and_each_entry_is_enabled_as_written() {
 
     assert!(env.runtime().is_none());
     assert!(env.registries().declarations().is_empty());
-    let enabled: Vec<(&str, Option<&str>, bool)> = env
+    let enabled: Vec<(&str, Option<&str>, Origin, bool, bool)> = env
         .enabled()
         .iter()
-        .map(|e| (e.name.as_str(), e.file.as_deref(), e.failure.is_some()))
+        .map(|e| {
+            (
+                e.name.as_str(),
+                e.file.as_deref(),
+                e.origin.clone(),
+                e.loaded,
+                e.failure.is_some(),
+            )
+        })
         .collect();
+    let file = Origin::File {
+        path: "ext.wasm".into(),
+    };
     assert_eq!(
         enabled,
         [
-            ("@specforge/product", None, false),
-            ("x", Some("ext.wasm"), false)
+            ("@specforge/product", None, Origin::Builtin, false, false),
+            ("x", Some("ext.wasm"), file, false, false)
         ]
     );
     let messages: Vec<&str> = env.diagnostics().map(|d| d.message.as_str()).collect();
@@ -156,7 +167,10 @@ fn an_environment_assembles_from_the_parts_it_is_given() {
         ExtensionLoad::In {
             runtime: rt.clone(),
             loaded: Loaded {
-                enabled: vec![EnabledExtension::unloaded(RULES)],
+                enabled: vec![EnabledExtension {
+                    loaded: true,
+                    ..EnabledExtension::unloaded(RULES, Origin::Unknown)
+                }],
                 declarations: vec![declaration],
             },
         },

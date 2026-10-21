@@ -65,6 +65,15 @@ impl Viewed for specforge_project::testing::Assembled {
     }
 }
 
+/// What the load records for `entry` when nothing loads, with the origin it would take over no
+/// lock: a builtin's name `Builtin`, a `.wasm` file entry `File`, else `Unknown`.
+pub fn unloaded(entry: &str) -> specforge_project::EnabledExtension {
+    specforge_installed::Installed::none()
+        .unloaded(&[entry.to_string()], &specforge_project::builtins())
+        .enabled
+        .remove(0)
+}
+
 /// The bytes the in-process runtime serves as `@sdk/greet` 0.1.0.
 pub const GREET: &[u8] = b"\0asm in-process @sdk/greet 0.1.0";
 /// Other bytes that also serve `@sdk/greet` 0.1.0: a reinstall, a changed
