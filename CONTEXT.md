@@ -219,7 +219,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   after what the operation was doing (ADR 0155).
 - **Planned change**: what a plan of a project's sources will write: per file, relative to the spec root, the text it
   was planned on (none for a new file) and the text it will hold; an unchanged file is not in it. It answers the
-  affected files, the after texts, the text edits and the diff, and is written as one project change
+  affected files, the after texts, the text edits, the diff and the entities whose blocks it creates, changes or
+  deletes; a new file reads as empty, so one left empty is not in it (ADR 0184, amended). It is written as one project change
   (`specforge_ops::authoring::planned::PlannedChange`, ADR 0184). A typed edit's plan and a rename plan each hold one.
 - **Served project**: the project an MCP server serves to every call that names none: the nearest project (a
   directory holding `specforge.json`) at or above the server's root (the path `specforge mcp` was started with, or
@@ -1227,7 +1228,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   A list of them is planned over the texts the project was compiled from (each edit reading what the ones before
   it left), each value written in its field's form (a multi-line one laid out with the file's format configuration, and left out when it restates its file's default)
   and each touched block formatted; the plan is refused with E080
-  when the edited project reports an error the project's **checked report** did not (its report with every check run, even after an update that skipped them: `CompiledProject::checked_diagnostics`, ADR 0167) (the **edited project** being compiled from what the project holds: the text of each source it read, the E025 of each it could not read, the planned texts; it reads no source, `CompiledProject::edited`, ADR 0158), and is written as one project change (ADR 0151).
+  when the edited project reports an error the project's **checked report** did not (its report with every check run, even after an update that skipped them: `CompiledProject::checked_diagnostics`, ADR 0167) (the **edited project** being compiled from what the project holds: the text of each source it read, the E025 of each it could not read, the planned texts; it reads no source, `CompiledProject::edited`, ADR 0158), and is written as one project change (ADR 0151). Its report names the net change of the list: the entities and the files its planned change answers (ADR 0184, amended).
   A delete with `unlink_references` removes every reference the graph build would link, found by the graph's finder
   in the planned texts (ADR 0163); one written in a `defaults` block, an undeclared field or as a derived type name refuses it (`not_editable`, ADR 0156).
   A list value is taken by its field's type: a reference list's items split at commas however given, a string list's never (ADR 0157). The stub fixes are typed edits too (ADR 0161).

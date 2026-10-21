@@ -3,7 +3,8 @@
 **Status:** accepted (2026-10-21, architecture round 19, plan 07). Amends [ADR 0164](0164-a-text-edit-is-one-shape.md)
 (D2), [ADR 0116](0116-navigation-reads-the-text-the-project-was-compiled-from.md) (D3),
 [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) (the round-15 amendment) and
-[ADR 0124](0124-what-the-caller-lends-an-operation-is-one-value.md) (D2).
+[ADR 0124](0124-what-the-caller-lends-an-operation-is-one-value.md) (D2). Amended by round 20 plan 09 (2026-10-21):
+D1, a missing file reads as empty, and the change answers the entities its blocks change.
 
 ## Context
 
@@ -38,3 +39,13 @@ from the change; delegating accessors on `EditPlan`; a `debug_assert!` for the p
 
 A third planner of source texts appears (migrate stays on `ProjectChange`, since its backups are owned names, ADR
 0171), or a plan must be carried from a preview to an apply (ADR 0116's rejected re-plan).
+
+> **Amended by round 20 plan 09 (2026-10-21):** D1's "no unchanged file is in it" reads a new file's planned-on
+> text as empty, the way the diff and the text edits already did, so a list that creates a file and then empties
+> it writes nothing (it wrote a 0-byte file and its directory). The change also answers the **entities** its blocks
+> create, change or delete: every ID whose blocks (file and whole lines, as the parser reads each side) differ; a
+> typed edit's report takes its entities from it, as it takes its files and its diff, and the planner's per-step
+> record is deleted. A list whose later edits put things back names nothing. Rejected: a module for "the project
+> as the earlier edits left it" (the planner's overlay is private to the planner, has one reader and no fix in its
+> history; round 19 reached the same verdict); comparing parsed entities instead of their lines (a re-layout the
+> diff shows would go unnamed). Reopen if the overlay needs a fix, or a second planner needs it.
