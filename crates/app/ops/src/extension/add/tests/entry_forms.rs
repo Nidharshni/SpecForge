@@ -78,6 +78,56 @@ fn a_file_entry_never_makes_an_install_present() {
     assert_eq!(files_under(dir.path()), before);
 }
 
+#[specforge_test(
+    behavior = "add_extension_to_existing_project",
+    verify = "an add of an extension a .wasm file entry loads in place of a broken install is refused, naming the entry, and writes nothing"
+)]
+#[ignore = "flipped by T7"]
+fn an_add_of_what_a_file_entry_loads_in_place_of_a_broken_install_is_refused() {
+    use specforge_installed::{Installed, LoadProblem, Origin};
+    let dir = project_enabling(&[]);
+    let (_files, wasm) = greet_file();
+    add_file(dir.path(), &wasm, false).unwrap();
+    let module = Installed::at(dir.path()).module_path(&PackageName::parse("@sdk/greet").unwrap());
+    std::fs::remove_file(module).unwrap();
+    std::fs::write(
+        dir.path().join("specforge.json"),
+        r#"{"name":"p","extensions":["@sdk/greet","./a.wasm"]}"#,
+    )
+    .unwrap();
+
+    // The fact pinned: the load loads the file in place of the broken install.
+    let entries = ["@sdk/greet".to_string(), "./a.wasm".to_string()];
+    let loaded = Installed::at(dir.path()).load(
+        &entries,
+        &specforge_project::builtins(),
+        &runtime(),
+        &specforge_registry::PlainDisk,
+    );
+    let [broken, file] = &loaded.enabled[..] else {
+        panic!("{:?}", loaded.enabled);
+    };
+    assert!(!broken.loaded);
+    assert!(matches!(
+        broken.failure.as_ref().map(|f| &f.problem),
+        Some(LoadProblem::ModuleMissing { .. })
+    ));
+    assert!(file.loaded);
+    assert_eq!(file.name, "@sdk/greet");
+    assert_eq!(
+        file.origin,
+        Origin::File {
+            path: "./a.wasm".into()
+        }
+    );
+
+    let before = files_under(dir.path());
+    for dry_run in [true, false] {
+        assert_loaded_from_the_file(&add_file(dir.path(), &wasm, dry_run).unwrap_err());
+        assert_eq!(files_under(dir.path()), before);
+    }
+}
+
 /// Installing greet over `entry` writes the module and the lock, appends no entry, and a second
 /// add finds it present.
 fn assert_named_entry_is_enough(entry: &str) {

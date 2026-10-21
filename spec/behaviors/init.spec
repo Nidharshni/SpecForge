@@ -403,6 +403,7 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   verify unit "an install enables the builtins it requires first, whatever its source"
   verify unit "an extension no specforge.json entry enables is not judged"
   verify unit "an add of an extension a .wasm file entry loads is refused, naming the entry, and writes nothing"
+  verify unit "an add of an extension a .wasm file entry loads in place of a broken install is refused, naming the entry, and writes nothing"
   verify integration "add and check agree: an add check would report E027 or E073 for is refused, and an add that passes leaves none"
   verify integration "a local .wasm install is locked at its declared version with source local:<path> and enabled by its bare name"
   verify unit "a local crate directory installs the component its crate builds"
