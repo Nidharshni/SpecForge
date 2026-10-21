@@ -24,7 +24,8 @@ behavior create_entity "Create an Entity" {
     once. The field flags of `specforge new` are the kind's fields in the project
     the command acts on. Its command line is one command read once with the kind's fields: an option may stand anywhere
     and one given twice is refused, --help with a kind is that kind's help and an unknown kind is refused as unknown_kind,
-    and a line whose --path a field's value spells is refused. A create takes whole fields; a `field.entry` path is refused.
+    and a line whose --path a field's value spells is refused; a field named like one of its options is no flag of it, and
+    the kind's help says to set it with specforge set. A create takes whole fields; a `field.entry` path is refused.
     The skeleton of a new block of a kind is what a create of it writes with no values, with a slot where each value
     goes: the id, the title, each required field and the final cursor; a member's skeleton is its field written in its
     form (ADR 0191).
@@ -50,6 +51,7 @@ behavior create_entity "Create an Entity" {
   verify integration "new refuses a file named from the project root, naming its spec-root spelling"
   verify integration "new refuses a field given twice that takes one value"
   verify integration "new refuses an unknown kind as unknown_kind"
+  verify unit "a kind's field named like one of new's options is no flag of new, and the kind's help says to set it with set"
   verify integration "new --help begins with what new does"
   verify integration "new refuses one of its options given twice, wherever each stands"
   verify integration "new's help of a kind shows each of its options as every command declares it"

@@ -130,7 +130,15 @@ pub(crate) fn command(kind: Option<(&str, &[FieldInfo])>) -> Command {
             );
     };
     cmd = cmd.override_usage(format!("specforge new {kind} <ID> <TITLE> [OPTIONS]"));
-    for field in split(fields).0 {
+    let (flagged, unflagged) = split(fields);
+    if !unflagged.is_empty() {
+        let names: Vec<&str> = unflagged.iter().map(|f| f.name.as_str()).collect();
+        cmd = cmd.after_help(format!(
+            "{}: no flag of new (an option has the name); set with `specforge set <ID> <field> <value>` after creating.",
+            names.join(", ")
+        ));
+    }
+    for field in flagged {
         let mut arg = Arg::new(field.name.clone())
             .long(field.name.clone())
             .allow_hyphen_values(true)
@@ -283,4 +291,43 @@ fn edit(kind: &str, fields: &[FieldInfo], matches: &ArgMatches) -> Result<Edit, 
         fields: inputs(fields, matches)?,
         verify,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn field(name: &str) -> FieldInfo {
+        FieldInfo {
+            name: name.to_string(),
+            field_type: FieldType::String,
+            description: String::new(),
+            required: false,
+        }
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "create_entity",
+        verify = "a kind's field named like one of new's options is no flag of new, and the kind's help says to set it with set"
+    )]
+    fn a_field_named_like_an_option_of_new_is_no_flag_of_it() {
+        let fields = [field("path"), field("format"), field("body")];
+        let mut cmd = command(Some(("doc", &fields)));
+        let arg = |cmd: &Command, id: &str| cmd.get_arguments().find(|a| a.get_id() == id).cloned();
+        assert_eq!(
+            arg(&cmd, "path")
+                .unwrap()
+                .get_help()
+                .map(ToString::to_string),
+            ProjectArg::arg().get_help().map(ToString::to_string)
+        );
+        assert_eq!(
+            arg(&cmd, "format").unwrap().get_possible_values().len(),
+            OutputArg::arg().get_possible_values().len()
+        );
+        assert!(arg(&cmd, "body").is_some());
+        let help = cmd.render_long_help().to_string();
+        assert!(help.contains("path, format: no flag of new"), "{help}");
+        assert!(help.contains("specforge set"), "{help}");
+    }
 }
