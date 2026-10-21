@@ -17,6 +17,12 @@ expression: "normalized(value, root)"
       "target_entity": "Payload"
     },
     {
+      "gap_context": "testable entity 'logout' (behavior) is not covered by the plan",
+      "missing_link_type": "missing_plan_entry",
+      "source_entity": "plan",
+      "target_entity": "logout"
+    },
+    {
       "gap_context": "testable entity 'reset_password' (behavior) is not covered by the plan",
       "missing_link_type": "missing_plan_entry",
       "source_entity": "plan",

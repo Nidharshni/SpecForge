@@ -859,7 +859,7 @@ behavior validate_agent_plan "Validate Agent Implementation Plan" {
   }
   ensures {
     unresolvable_ids_diagnosed "Every plan entity ID that does not resolve to a declared entity produces an E003 diagnostic"
-    missing_entries_warned     "Every testable entity missing from the plan produces a warning"
+    missing_entries_warned     "Every entity that counts toward coverage and is missing from the plan produces a warning"
     ordering_validated         "Plan dependency order is validated against graph edge structure, the entities on one cycle in any order among themselves"
     structured_report_produced "Output is a structured JSON report listing validated entries, gaps, and ordering violations"
     plan_validated_emitted     "plan_validated event is emitted after validation completes"
@@ -871,9 +871,10 @@ behavior validate_agent_plan "Validate Agent Implementation Plan" {
     (types/graph.spec): a value that is not one MUST be refused, naming
     every place it departs from the type. Every entity ID referenced in the
     plan MUST resolve to a declared entity in the graph; an unresolvable ID
-    MUST produce an E003 gap. Every testable entity that declares
-    obligations MUST have an entry in the plan; a missing entry MUST be
-    reported as a warning gap. The plan's entry order is its dependency
+    MUST produce an E003 gap. Every entity that counts toward coverage
+    (testable, and owing or declaring obligations, as the coverage view lists it)
+    MUST have an entry in the plan; a missing entry MUST be reported as a
+    warning gap. The plan's entry order is its dependency
     order,
     and the graph's edges are the dependencies. Entities on one cycle of them
     depend on one another and MAY come in any order among themselves; every
@@ -888,6 +889,7 @@ behavior validate_agent_plan "Validate Agent Implementation Plan" {
     on the plan.
   """
   verify unit "plan with all valid entity IDs passes validation"
+  verify unit "an entity that counts toward coverage and has no entry is a missing entry, whether or not it declares obligations; an exempt one is not"
   verify unit "plan referencing nonexistent entity ID produces E003"
   verify unit "testable entity missing from plan produces warning"
   verify unit "plan dependency order contradicting graph produces diagnostic"

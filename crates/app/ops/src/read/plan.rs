@@ -22,8 +22,8 @@ pub struct PlanOutcome {
     pub ok: bool,
     /// Plan entries that name an entity in the graph, in plan order.
     pub resolved_entries: Vec<String>,
-    /// Unresolved entries (in entry order), then testable entities that
-    /// declare obligations and have no entry (in id order), then ordering
+    /// Unresolved entries (in entry order), then the entities that count
+    /// toward coverage and have no entry (in id order), then ordering
     /// gaps (in graph edge order).
     pub gaps: Vec<PlanGap>,
 }
@@ -132,7 +132,7 @@ pub struct PlanGap {
 pub enum PlanGapKind {
     /// An entry names no entity in the graph.
     UnresolvedEntity,
-    /// A testable entity with obligations has no entry.
+    /// An entity that counts toward coverage has no entry.
     MissingPlanEntry,
     /// An entry comes before an entity it depends on that is not on a cycle with it.
     Ordering,
@@ -158,7 +158,7 @@ impl PlanGapKind {
 const PLAN: &str = "plan";
 
 /// Check `plan` against the view's graph: entries naming no entity,
-/// testable entities with obligations it has no entry for, and entries
+/// entities that count toward coverage it has no entry for, and entries
 /// ordered before what they depend on (`ordering_gaps`). It reads the graph and the
 /// view's entity snapshot (`ProjectView::entities`), never the recorded
 /// test report, so it cannot fail.
@@ -191,13 +191,10 @@ pub fn check(view: &ProjectView, plan: &AgentPlan) -> PlanOutcome {
     }
     let plan_id_set: HashSet<String> = plan_ids.iter().cloned().collect();
 
-    // Testable entities that declare obligations, missing from the plan.
+    // The entities that count toward coverage, missing from the plan.
     for (record, standing) in view.entities().iter() {
         let id = &record.id;
-        if standing.testable
-            && standing.declares_obligations()
-            && !plan_id_set.contains(id.as_str())
-        {
+        if standing.counts() && !plan_id_set.contains(id.as_str()) {
             let message = format!(
                 "testable entity '{id}' ({}) is not covered by the plan",
                 record.kind

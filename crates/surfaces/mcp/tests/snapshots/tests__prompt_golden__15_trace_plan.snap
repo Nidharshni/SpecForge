@@ -26,6 +26,12 @@ expression: "shape(&reply, dir.path())"
         "target_entity": "alpha"
       },
       {
+        "gap_context": "testable entity 'delta' (behavior) is not covered by the plan",
+        "missing_link_type": "missing_plan_entry",
+        "source_entity": "plan",
+        "target_entity": "delta"
+      },
+      {
         "gap_context": "testable entity 'inv_session' (invariant) is not covered by the plan",
         "missing_link_type": "missing_plan_entry",
         "source_entity": "plan",

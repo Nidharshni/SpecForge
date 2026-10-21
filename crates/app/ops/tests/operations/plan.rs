@@ -500,8 +500,10 @@ fn an_entry_and_the_cycle_it_depends_on_are_ordered_as_components() {
     );
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "validate_agent_plan",
+    verify = "an entity that counts toward coverage and has no entry is a missing entry, whether or not it declares obligations; an exempt one is not"
+)]
 fn a_plan_must_cover_every_entity_that_counts_toward_coverage() {
     // pay owes obligations (W004's rule applies to behavior) and declares
     // none; log is of a testable kind no rule obligates and declares none
