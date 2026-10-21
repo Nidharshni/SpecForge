@@ -11,7 +11,7 @@ use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 use super::super::candidate::{Installable, LocalFile};
 use super::From;
 use super::{Install, LockPlan, Purpose, Staged};
-use crate::registry::{KeyPin, METADATA_MISMATCH, Publisher, Registry, TrustPolicy};
+use crate::registry::{KeyPin, LockedPin, METADATA_MISMATCH, Publisher, Registry, TrustPolicy};
 use crate::{OpError, OpErrorKind};
 
 impl<'a> Install<'a> {
@@ -178,7 +178,7 @@ impl<'a> LockPlan<'a> {
             });
         }
         let policy = TrustPolicy::new(fetching.allow_unsigned, self.caller.asking())
-            .locked(self.installed.locked_key(name));
+            .locked(self.installed.locked(name).map(LockedPin::of));
         let mut package = fetching.registry.fetch(name, version, policy)?;
         let module = Module::new(std::mem::take(&mut package.wasm));
         let pin = Pin {

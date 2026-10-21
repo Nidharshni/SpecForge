@@ -346,7 +346,7 @@ impl Registry for ConfiguredRegistry {
             policy.allow_unsigned,
             &decide,
             &self.user.known_keys(),
-            policy.locked_key,
+            policy.locked_key(),
         )
         .map_err(refused_by_trust)?; // 4: R-TRUST-001..006, writes nothing
         self.reported_by_policy.extend(trusted.diagnostics); // W155

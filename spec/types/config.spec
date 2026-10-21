@@ -203,14 +203,25 @@ type RegistryManifest "What a registry says it publishes as one version, without
 }
 
 // How a fetch decides a package's publisher (specforge_ops::registry::TrustPolicy):
-// the caller's choices and the key the project's lock records for the name,
-// which is the pin when the user has none of their own. `asking` is who can be
+// the caller's choices and the pin the project's lock records for the name (its
+// key is the pin when the user has none of their own). `asking` is who can be
 // asked about a key change (specforge_ops::asking::Asking).
 type TrustPolicy "Trust Policy" {
   allow_unsigned boolean
   asking         string
-  locked_key     string @optional
-  verify unit "TrustPolicy is what a fetch decides a publisher by: the caller's choices and the key the lock records"
+  locked         LockedPin @optional
+  verify unit "TrustPolicy is what a fetch decides a publisher by: the caller's choices and the pin the lock records"
+}
+
+// What specforge.lock records for a name's registry install
+// (specforge_ops::registry::LockedPin): every fetch of the name is held to its
+// key at any version and to its bytes at its own version. An empty sha256 pins
+// no bytes.
+type LockedPin "Locked Pin" {
+  version string
+  sha256  string
+  key_id  string @optional
+  verify unit "LockedPin is what specforge.lock records for a name's registry install"
 }
 
 // A publisher key a committed lock plan pins for a package name

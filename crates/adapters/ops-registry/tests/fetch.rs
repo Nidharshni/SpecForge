@@ -7,7 +7,7 @@
 
 use specforge_ops::asking::testing::{Asked, Scripted};
 use specforge_ops::asking::{Asking, ExpectedFrom};
-use specforge_ops::registry::{Publisher, Registry, TrustPolicy};
+use specforge_ops::registry::{LockedPin, Publisher, Registry, TrustPolicy};
 use specforge_ops_registry::{ConfiguredRegistry, User};
 use specforge_package::PackageName;
 use specforge_package::Version;
@@ -421,7 +421,7 @@ fn fetch_locked(
     registry.fetch(
         &PackageName::parse(NAME).expect("a valid literal"),
         &Version::parse(VERSION).expect("a valid literal"),
-        TrustPolicy::new(false, asking).locked(Some(locked)),
+        TrustPolicy::new(false, asking).locked(Some(LockedPin::key(locked))),
     )
 }
 

@@ -5,7 +5,7 @@ use specforge_installed::hex_sha256;
 use specforge_package::{DeclaredPackage, PackageName, Version};
 use specforge_protocol_types::DeclaredCategory;
 
-use super::super::{KeyPin, Publisher, Registry, TrustPolicy};
+use super::super::{KeyPin, LockedPin, Publisher, Registry, TrustPolicy};
 use super::{Published, declaration};
 use crate::asking::testing::{Asked, Scripted};
 use crate::asking::{Asking, ExpectedFrom};
@@ -282,7 +282,7 @@ pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]
         .fetch(
             &fresh,
             &fresh_version,
-            refuse(false).locked(Some("contract-other")),
+            refuse(false).locked(Some(LockedPin::key("contract-other"))),
         )
         .unwrap_err();
     assert!(
@@ -297,7 +297,7 @@ pub fn assert_registry_contract(registry: &dyn Registry, published: &[Published]
         .fetch(
             &fresh,
             &fresh_version,
-            refuse(false).locked(Some(receipt.key_id.as_str())),
+            refuse(false).locked(Some(LockedPin::key(&receipt.key_id))),
         )
         .unwrap_or_else(|e| panic!("C10: the locked key is accepted: {e:?}"));
     assert_eq!(
