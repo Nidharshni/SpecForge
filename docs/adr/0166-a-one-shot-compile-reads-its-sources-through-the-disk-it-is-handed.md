@@ -14,7 +14,7 @@ reached the reply, but the project's own extensions were handed its entities).
 ## Decision
 
 - **D1.** `Unrecorded` reads each source through the disk it is handed; the environment and the checks stay plain
-  (ADR 0145 D3). `CompiledProject::compile_through(root, runtime, &dyn Disk)` is the bounded one-shot compile;
+  (ADR 0145 D3). `CompiledProject::compile_through(env, &dyn Disk)` (round 22 plan 04: the caller loads the environment) is the bounded one-shot compile;
   `compile` and `of` read plain. The compiled project keeps no disk.
 - **D2.** A migration compiles the project before and after through the same disk it reads its sources with
   (`caller.containment().disk()`): over MCP a refused source is E025 in both compiles; on the CLI the unbounded disk

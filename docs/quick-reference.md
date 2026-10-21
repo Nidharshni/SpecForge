@@ -99,7 +99,7 @@ behavior create_task "Create a Task" {
 }
 ```
 
-`specforge migrate` hoists the reference lists a file's blocks repeat into its defaults.
+`specforge migrate` hoists the reference lists a file's blocks repeat, for the fields their kind declares, into its defaults.
 
 ---
 

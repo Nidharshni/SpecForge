@@ -80,8 +80,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   titles step lifts it into a missing title, and the defaults hoist writes its block above it. It never reaches the
   graph (ADR 0148, ADR 0202).
 - **Migration step**: a rewrite `specforge migrate` applies to every source it changes, whatever the file's format
-  version, after the header rewrite (`specforge_migrate::titles` today). The graph comparison keeps exactly the
-  changes the steps declare: for `titles`, a title where the block had none.
+  version, after the header rewrite (`specforge_migrate`'s `titles` and `defaults`).
+  The plan reads the environment the judge compiles in: the defaults step hoists only what `FileDefaults` applies
+  under its field forms (ADR 0186, amended). The graph comparison keeps exactly the changes the steps declare: for
+  `titles`, a title where the block had none.
 - **Migration verdict**: whether a planned migration is kept, decided before anything is written: its hooks pass, and
   the edited compile of its planned texts has the graph the project has, less the steps' declared changes
   (`specforge_ops::authoring::migrate::{judge, Verdict}`, ADR 0186). A dry run reports it; a refused migration writes
@@ -479,7 +481,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   its file (ADR 0149). A block's own field replaces it whole. The graph build resolves it, so the graph, every read
   view, export and check hold the resolved value; its spans stay the default's, so diagnostics, references and
   rename point at the default's line. `defaults` is a structural keyword: never a kind, never an id. A typed edit
-  asks the graph's defaults module (`specforge_graph::FileDefaults`) over the text it plans which default applies and
+  and the migrate defaults step ask the graph's defaults module (`specforge_graph::FileDefaults`) over the text it plans which default applies and
   whether a field restates it, through one module of its own (**Own field**), so it never writes what W161 would
   flag (ADR 0154, ADR 0175). `FileDefaults::held` answers what a block holds for a field: own, inherited or absent
   (ADR 0182).
