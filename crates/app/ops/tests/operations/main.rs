@@ -24,6 +24,7 @@ mod entity_arguments;
 mod errors;
 mod explore;
 mod export_cache;
+mod export_dot_styles;
 mod export_written;
 mod extension_calls;
 mod failed_run;
