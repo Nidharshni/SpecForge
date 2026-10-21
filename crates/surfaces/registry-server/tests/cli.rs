@@ -95,3 +95,76 @@ fn token_create_needs_an_account() {
     assert_eq!(output.status.code(), Some(2), "{stderr}");
     assert!(stderr.contains("--account"), "{stderr}");
 }
+
+#[specforge_test_macros::test(
+    behavior = "publish_to_registry",
+    verify = "a token's scope filter is a scope: text that is not one is refused where the token is issued, and a token issued with none covers every scope"
+)]
+#[ignore = "flipped by T5"]
+fn token_create_refuses_a_scope_filter_that_is_no_scope() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path().to_str().unwrap();
+    for (text, write) in [
+        ("", None),
+        ("sdk", Some("@sdk")),
+        ("@sdk/", Some("@sdk")),
+        ("@SDK", Some("@sdk")),
+        ("@org/soft", Some("@org")),
+    ] {
+        let output = registry(&[
+            "token",
+            "create",
+            "--account",
+            "acme",
+            "--scope",
+            text,
+            "--no-expiry",
+            "--data-dir",
+            data,
+        ]);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(2), "{text:?}: {stderr}");
+        assert!(
+            stderr.contains(&format!("'{text}' is not a scope")),
+            "{text:?}: {stderr}"
+        );
+        if let Some(write) = write {
+            assert!(
+                stderr.contains(&format!("write '{write}'")),
+                "{text:?}: {stderr}"
+            );
+        }
+    }
+    let listed = registry(&["token", "list", "--data-dir", data]);
+    assert!(
+        String::from_utf8_lossy(&listed.stdout).contains("No tokens found."),
+        "{listed:?}"
+    );
+    let help = registry(&["token", "create", "--help"]);
+    let help = String::from_utf8_lossy(&help.stdout);
+    assert!(!help.contains("empty means full access"), "{help}");
+    assert!(help.contains("omit it for every scope"), "{help}");
+}
+
+#[test]
+#[ignore = "flipped by T5"]
+fn token_list_lines_each_scope_up_under_its_header() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path().to_str().unwrap();
+    for extra in [
+        &["--account", "acme", "--scope", "@acme"][..],
+        &["--account", "a"],
+    ] {
+        let mut args = vec!["token", "create", "--no-expiry", "--data-dir", data];
+        args.extend_from_slice(extra);
+        assert_eq!(registry(&args).status.code(), Some(0));
+    }
+
+    let listed = registry(&["token", "list", "--data-dir", data]);
+    let stdout = String::from_utf8_lossy(&listed.stdout);
+    let column = stdout.lines().next().unwrap().find("SCOPE").unwrap();
+    for cell in ["@acme", "(all)"] {
+        let line = stdout.lines().find(|l| l.contains(cell)).unwrap();
+        assert_eq!(line.find(cell), Some(column), "{stdout}");
+    }
+}
