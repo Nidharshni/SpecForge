@@ -10,19 +10,22 @@ Every step has a done condition. Do not start the next step before it holds.
 
 ## 0. Base
 
-`scripts/unlanded-prs.sh` exits 0, then branch the round from `origin/main`. Done when the base SHA is in the
-round's `README.md`.
+`scripts/unlanded-prs.sh` exits 0, then branch the round from `origin/main` and run `cargo gate full --only audit` on
+it: `audit` reads the live advisory database, so `main` can turn red without a commit. Done when the base SHA is in
+the round's `README.md` and the audit is green, or its failure is a named open item there.
 
 ## 1. Explore
 
 Launch one explorer per area with `briefs/explore.md`. Explorers return their findings as their final reply; the
-coordinator saves them to `FINDINGS.md`. Done when every candidate has `path:line` evidence at the base SHA.
+coordinator saves them to `FINDINGS.md`. Done when every candidate has `path:line` evidence at the base SHA, and its
+card in the review carries a Mermaid before/after (beside any hand-drawn one): the PR report of step 7 reuses it.
 
 ## 2. Plan
 
 One agent per candidate, `briefs/plan.md`. Each writes its plan into the planning directory (that write works) and
 returns a summary. The coordinator writes `README.md`: order, shared files, reconciliations, open questions. Done when
-every plan has numbered tickets with test commands and the README orders them in waves.
+every plan has numbered tickets with test commands and the README orders them in waves. Each plan ends with the
+tracking block of [`round-tracking.md`](round-tracking.md); the coordinator gathers the blocks into `tracking.json`.
 
 ## 3. Implement
 
@@ -31,6 +34,12 @@ README. Agents report inline. Done per agent when its branch holds the integrati
 for the crates it touched, and its final reply is in.
 
 A dead agent (API error) resumes with `SendMessage`; its worktree survives.
+
+Each worktree agent builds into its own target directory, about 30 GB for the workspace. Before launching a wave,
+compare `df -h ..` with `du -sh ../SpecForge-targets/*`. When the disk holds fewer target directories than the wave
+has agents, run the plans **serially** instead: one agent at a time, in the README's merge order, committing straight
+onto the integration branch in the main checkout and sharing one target directory. Nothing is left to merge, so
+step 4 is skipped.
 
 ## 4. Merge
 
@@ -48,8 +57,17 @@ declaration diff, commit what it prints.
 
 ## 6. Gate
 
-`cargo gate full` is green, then the PR. A baseline that fell is lowered with `cargo gate baseline` in
-the same commit (`--only specs` or `--only file-size` for one section).
+`cargo gate full` is green, then the PR. It already runs the build, clippy and nextest, so a serial round runs it
+alone, not after a separate workspace clippy and nextest. A baseline that fell is lowered with `cargo gate baseline` in
+the same commit (`--only specs` or `--only file-size` for one section). `--only` takes a comma-separated list.
+
+## 7. PR
+
+One PR for the round, one commit group per plan. Every commit body (`briefs/execute.md` rule 2) carries boxed ASCII
+diagrams of the problem and the before/after. The PR body is the round's report: a Mermaid graph of the waves and
+dependencies, a table of plans (card, ADR, commits, defects fixed), a Mermaid before/after per plan (taken from the
+review's cards), the security fixes, the breaking changes, the decisions taken, the verification output and what
+stays open. Done when CI is green; after the merge, delete the round's target directories.
 
 ## Pitfalls round 7 paid for
 
