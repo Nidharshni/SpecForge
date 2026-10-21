@@ -184,6 +184,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `navigation::EditorText`) are all found by that key, so two spellings of one URI (VS Code writes `@` as `%40`) are one document. The
   URI the client opened it with is kept only to name the file back to the client (`specforge_lsp::files::Files`,
   ADR 0056). It is given to the project session as a held buffer.
+- **Editor text**: what the editor's text of a session file (its open buffer, else the file on disk) is to the compile (`navigation::EditorText`): the compiled text, changed since, or a text the project does not build. A span of the compile is a range only of an editor text that is the compiled text (`Compiled::range`): a list leaves the item out, an edit is refused `ContentModified`; a diagnostics publish, labelled with the compiled version, places its diagnostics in the compiled text (ADR 0205, ADR 0023).
 - **Published diagnostics**: what the LSP last told the editor about one file, kept by session key in two parts,
   each labelled with the version of the buffer it is positions in: the compile's (what the project reports) and the
   formatter's (a W142 per region formatting kept verbatim, while the document is the text it formatted). A publish
@@ -1247,8 +1248,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   from one module (`specforge_ops::read::navigate`) in source spans. A span is a position in the text the
   project was compiled from (`CompiledProject::source_text`), not in the buffer typed since nor the disk
   now. The navigator reads it from its view's compiled project; no surface hands it a text, and outline answers
-  only for the compile's sources (ADR 0116). The LSP converts spans to UTF-16 ranges through that text's line index (a file the compile holds
-  no text of has no range), MCP renders them as JSON (ADR 0016, ADR 0023).
+  only for the compile's sources (ADR 0116). The LSP converts spans to UTF-16 ranges through that text's line index (a span in a file
+  whose editor text is not the compiled text has no range, ADR 0205), MCP renders them as JSON (ADR 0016, ADR 0023).
 - **Rename plan**: the edits that rename one entity (`specforge_ops::authoring::rename::RenamePlan`), text edits and the planned change they make (ADR 0184) (`rename::run` plans it and writes it unless its request previews: `Renamed`, whose document is `RenameDocument`; ADR 0162):
   the declaration's name and each incoming reference's token, positions in the text the project was compiled from,
   which its planned change keeps, with the spec root they are relative to. MCP writes it only to files that still hold that text, refusing `conflict` otherwise; the LSP
