@@ -273,6 +273,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   node of its first declaration that is not a `define` block. A compile applies every file at once; a session
   applies each update's files to its own, and is then exactly the build of the same files at once; with
   verification on (every debug build) each update is checked against that (ADR 0032).
+- **Cycle**: a set of entities (or files) that reach one another through references (or imports), with one closed
+  walk through all of them, from the smallest id. W061, W113, E041, E042 and the cycle rules each read the one answer
+  (`specforge_cycles::cycles`, ADR 0196); which entity the walk starts from never depends on the written order.
 - **Extension declaration**: everything one extension declares — its handshake and every describe
   category — as the protocol types (`specforge_protocol_types::ExtensionDeclaration`). The SDK
   builds it, the guest serves it, the host loads it once, the Registry build reads it, a package
@@ -442,7 +445,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Rule set**: the extensions' declared validation rules plus the host's E006 rules for required
   fields and E016 rules for file-reference fields, each turned once per registry build into a typed rule that carries only what its check
   reads, resolved against the registries (a compiled regex, an edge rule's edge type and the fields that
-  write it). An edge rule counts the edges of its edge type; a cycle rule follows them. It runs itself over the entity snapshot's records (`RuleInput`, ADR
+  write it). An edge rule counts the edges of its edge type; a cycle rule follows them and reports every member of a cycle (ADR 0196). It runs itself over the entity snapshot's records (`RuleInput`, ADR
   0019), cycles included, and answers which rule applies to a kind, which the snapshot's standing
   reads (`specforge_registry::rules::Rules`, ADR 0020). A declared rule that cannot work is W112; a
   property its check does not read is W147.
