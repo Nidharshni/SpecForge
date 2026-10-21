@@ -327,10 +327,8 @@ fn export_versioned(
         schema: versioned.schema(),
         attach_schema: request.attaches_schema(),
         token_budget: request.max_tokens,
-        kind_registry: Some(view.registries().kinds()),
-        field_registry: Some(view.registries().fields()),
+        registries: view.registries(),
         coverage: request.coverage.map(|coverage| &coverage.verdicts),
-        field_forms: Some(view.registries().field_forms()),
     };
     let document = emit(view.graph(), &options).map_err(failure)?;
     Ok(Noticed::new(document, selection.into_notices()))

@@ -99,12 +99,12 @@ fn a_normative_field_is_quoted_whole() {
     string(&mut alpha, "contract", "line one\nline two");
     string(&mut alpha, "description", "first\nsecond");
     let graph = graph_of(vec![alpha], vec![]);
-    let registry = crate::support::headline_registry(&["behavior"]);
+    let registries = crate::support::headline_build(&["behavior"]);
 
     let doc = markdown(
         &graph,
         EmitOptions {
-            field_registry: Some(&registry),
+            registries: &registries,
             ..Default::default()
         },
     );
@@ -166,8 +166,7 @@ fn a_reference_that_does_not_resolve_is_listed() {
     let doc = markdown(
         ctx.graph(),
         EmitOptions {
-            field_registry: Some(registries.fields()),
-            field_forms: Some(registries.field_forms()),
+            registries,
             ..Default::default()
         },
     );
@@ -385,4 +384,21 @@ fn markdown_has_no_document_schema() {
     assert!(document_schema(EmitFormat::Markdown, &mut defs).is_none());
     let schema = specforge_emitter::GraphProtocolSchema::empty();
     assert!(publish(&schema, EmitFormat::Markdown).is_none());
+}
+
+#[test]
+fn an_undeclared_reference_is_listed_as_the_graph_reads_it() {
+    let mut alpha = node("alpha", "behavior", None);
+    alpha.fields.push(
+        Sym::new("depends_on"),
+        FieldValue::List(vec![item("ghost", Written::Bare)]),
+    );
+    let graph = graph_of(vec![alpha], vec![]);
+
+    let doc = markdown(&graph, EmitOptions::default());
+    assert!(
+        doc.contains("| depends_on | `ghost` | — | *unresolved* |"),
+        "{doc}"
+    );
+    assert!(!doc.contains("| depends_on | ghost |"), "{doc}");
 }

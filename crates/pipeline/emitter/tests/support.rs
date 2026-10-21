@@ -1,8 +1,11 @@
-//! Registries the export tests share.
+//! Registry builds the export tests share.
 
 use specforge_emitter::{EmitFormat, EmitOptions, EmitterError};
 use specforge_graph::Graph;
-use specforge_registry::{FieldRegistry, FieldRegistryEntry};
+use specforge_protocol_types::{
+    EdgeTypeDescriptor, EntityKindDescriptor, ExtensionDeclaration, FieldDescriptor,
+};
+use specforge_registry::{RegistryBuild, build_registries};
 
 /// The graph as a plain (format 1.0) export against the empty schema:
 /// `emit` with the default options.
@@ -57,29 +60,58 @@ pub fn budgeted_json(graph: &Graph, max_tokens: usize) -> String {
     .unwrap()
 }
 
-/// A field registry in which each of `kinds` declares `contract` and
-/// `status` as headline fields, as `@specforge/software` declares them on
-/// `behavior`.
-pub fn headline_registry(kinds: &[&str]) -> FieldRegistry {
-    let mut registry = FieldRegistry::new();
-    for (kind, field) in kinds
-        .iter()
-        .flat_map(|kind| ["contract", "status"].map(|field| (*kind, field)))
-    {
-        registry.register(
-            FieldRegistryEntry::new(
-                kind,
-                "@test/ext",
-                specforge_registry::FieldDescriptor {
-                    name: field.to_string(),
-                    field_type: "string".to_string(),
-                    normative: field == "contract",
-                    headline: true,
-                    ..Default::default()
-                },
-            )
-            .unwrap(),
-        );
+/// The extension `name` (version 1.0.0) declaring `entities` and `edges`.
+pub fn declaration(
+    name: &str,
+    entities: Vec<EntityKindDescriptor>,
+    edges: Vec<EdgeTypeDescriptor>,
+) -> ExtensionDeclaration {
+    let mut declaration = ExtensionDeclaration::default();
+    declaration.handshake.name = name.to_string();
+    declaration.handshake.version = "1.0.0".to_string();
+    declaration.entities = entities;
+    declaration.edges = edges;
+    declaration
+}
+
+/// A kind declaration: `name` is its keyword.
+pub fn kind(name: &str, fields: Vec<FieldDescriptor>) -> EntityKindDescriptor {
+    EntityKindDescriptor {
+        name: name.to_string(),
+        keyword: Some(name.to_string()),
+        fields,
+        ..Default::default()
     }
-    registry
+}
+
+/// A string field declaration.
+pub fn field(name: &str, normative: bool, headline: bool) -> FieldDescriptor {
+    FieldDescriptor {
+        name: name.to_string(),
+        field_type: "string".to_string(),
+        normative,
+        headline,
+        ..Default::default()
+    }
+}
+
+/// The Registry build of one extension, `@test/ext`, declaring `kinds`.
+pub fn build_of(kinds: Vec<EntityKindDescriptor>) -> RegistryBuild {
+    build_registries(vec![declaration("@test/ext", kinds, vec![])])
+}
+
+/// A build in which each of `kinds` declares `contract` and `status` as
+/// headline fields, as `@specforge/software` declares them on `behavior`.
+pub fn headline_build(kinds: &[&str]) -> RegistryBuild {
+    build_of(
+        kinds
+            .iter()
+            .map(|name| {
+                kind(
+                    name,
+                    vec![field("contract", true, true), field("status", false, true)],
+                )
+            })
+            .collect(),
+    )
 }

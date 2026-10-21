@@ -88,15 +88,16 @@ fn section(graph: &Graph, node: &Node, options: &EmitOptions<'_>) -> String {
     let span = &node.source_span;
     let mut blocks = vec![heading, format!("`{}:{}`", span.file, span.start_line)];
 
-    let links = links(graph, node, options.field_forms);
+    let links = links(graph, node, options.registries.field_forms());
     let linked: BTreeSet<&str> = links.iter().map(|r| r.field).collect();
     let mut fields = Vec::new();
     let mut prose = Vec::new();
     for entry in node.fields.entries() {
         let key = entry.key.as_str();
         let normative = options
-            .field_registry
-            .and_then(|r| r.get(kind, key))
+            .registries
+            .fields()
+            .get(kind, key)
             .is_some_and(|f| f.declared().normative);
         if normative {
             let text = field_text(&entry.value);
@@ -151,8 +152,8 @@ fn section(graph: &Graph, node: &Node, options: &EmitOptions<'_>) -> String {
 
 /// `node`'s references: each written reference in field and written order
 /// (linked, or unresolved), then each edge from it not listed yet (derived
-/// ones; all of them without `forms`), in edge order.
-fn links<'g>(graph: &'g Graph, node: &'g Node, forms: Option<&FieldForms>) -> Vec<Row<'g>> {
+/// ones), in edge order.
+fn links<'g>(graph: &'g Graph, node: &'g Node, forms: &FieldForms) -> Vec<Row<'g>> {
     let edges = graph.edges_from(node.id.raw.as_str());
     let linked = |field: &str, target: &str| {
         edges
@@ -160,22 +161,20 @@ fn links<'g>(graph: &'g Graph, node: &'g Node, forms: Option<&FieldForms>) -> Ve
             .any(|e| e.label.as_str() == field && e.target.as_str() == target)
     };
     let mut rows = Vec::new();
-    if let Some(forms) = forms {
-        for entry in node.fields.entries() {
-            let field = entry.key.as_str();
-            for reference in forms
-                .reading(node.kind.raw.as_str(), field)
-                .references(entry)
-            {
-                let entity = linked(field, reference.id)
-                    .then(|| graph.node(reference.id))
-                    .flatten();
-                rows.push(Row {
-                    field,
-                    id: reference.id,
-                    entity,
-                });
-            }
+    for entry in node.fields.entries() {
+        let field = entry.key.as_str();
+        for reference in forms
+            .reading(node.kind.raw.as_str(), field)
+            .references(entry)
+        {
+            let entity = linked(field, reference.id)
+                .then(|| graph.node(reference.id))
+                .flatten();
+            rows.push(Row {
+                field,
+                id: reference.id,
+                entity,
+            });
         }
     }
     for edge in &edges {

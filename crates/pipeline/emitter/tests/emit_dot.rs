@@ -171,25 +171,15 @@ fn dot_kind_filter_drops_nodes_and_edges() {
     verify = "clusters group by declaring extension"
 )]
 fn dot_cluster_by_extension_groups_nodes() {
-    let mut registry = specforge_registry::KindRegistry::new();
-    registry.register(specforge_registry::KindRegistryEntry {
-        kind_name: "behavior".to_string(),
-        source_extension: "@specforge/software".to_string(),
-        testable: false,
-        supports_verify: false,
-        allowed_verify_kinds: Vec::new(),
-        lifecycle_field: None,
-        ..Default::default()
-    });
-    registry.register(specforge_registry::KindRegistryEntry {
-        kind_name: "term".to_string(),
-        source_extension: "@specforge/product".to_string(),
-        testable: false,
-        supports_verify: false,
-        allowed_verify_kinds: Vec::new(),
-        lifecycle_field: None,
-        ..Default::default()
-    });
+    use crate::support::{declaration, kind};
+    let registries = specforge_registry::build_registries(vec![
+        declaration(
+            "@specforge/software",
+            vec![kind("behavior", vec![])],
+            vec![],
+        ),
+        declaration("@specforge/product", vec![kind("term", vec![])], vec![]),
+    ]);
     let mut graph = Graph::new();
     graph.add_node(node("beh_b", "behavior", None));
     graph.add_node(node("term_t", "term", None));
@@ -197,7 +187,7 @@ fn dot_cluster_by_extension_groups_nodes() {
     let dot = specforge_emitter::dot::emit_dot(
         &graph,
         &specforge_emitter::DotOptions {
-            kind_registry: Some(&registry),
+            registries: &registries,
             cluster_by_extension: true,
             ..Default::default()
         },

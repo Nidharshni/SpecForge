@@ -57,7 +57,7 @@ fn context_includes_contracts_and_verify() {
     let json = crate::export(
         &graph,
         specforge_emitter::EmitFormat::Context,
-        Some(&crate::support::headline_registry(&["behavior", "feature"])),
+        Some(&crate::support::headline_build(&["behavior", "feature"])),
     );
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
 
@@ -185,7 +185,7 @@ fn context_is_smaller_than_full_json() {
     verify = "context format keeps each entity's normative fields"
 )]
 fn context_keeps_normative_fields() {
-    use specforge_registry::{FieldRegistry, FieldRegistryEntry};
+    use crate::support::{build_of, field, kind};
 
     let mut fields = FieldMap::new();
     fields.push(
@@ -210,40 +210,29 @@ fn context_keeps_normative_fields() {
         methods: Vec::new(),
         obligations: Vec::new(),
     });
-    let mut registry = FieldRegistry::new();
-    for (field, normative) in [("guarantee", true), ("description", false)] {
-        registry.register(
-            FieldRegistryEntry::new(
-                "invariant",
-                "@test/ext",
-                specforge_registry::FieldDescriptor {
-                    name: field.to_string(),
-                    field_type: "string".to_string(),
-                    normative,
-                    ..Default::default()
-                },
-            )
-            .unwrap(),
-        );
-    }
+    let registries = build_of(vec![kind(
+        "invariant",
+        vec![
+            field("guarantee", true, false),
+            field("description", false, false),
+        ],
+    )]);
 
-    let emit = |registry| {
-        let options = specforge_emitter::EmitOptions {
-            format: specforge_emitter::EmitFormat::Context,
-            field_registry: registry,
-            ..Default::default()
-        };
-        let json = specforge_emitter::emit(&graph, &options).unwrap();
+    let emit = |registries| {
+        let json = crate::export(&graph, specforge_emitter::EmitFormat::Context, registries);
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         parsed["nodes"][0].clone()
     };
-    let node = emit(Some(&registry));
+    let node = emit(Some(&registries));
     assert_eq!(node["fields"]["guarantee"], "Ids MUST be unique", "{node}");
     assert!(
         node["fields"].get("description").is_none(),
         "prose stays out"
     );
-    assert!(emit(None).get("fields").is_none(), "no registry, no fields");
+    assert!(
+        emit(None).get("fields").is_none(),
+        "no extension, no fields"
+    );
 }
 
 #[specforge_test(
@@ -251,7 +240,7 @@ fn context_keeps_normative_fields() {
     verify = "context format includes entity IDs and contracts"
 )]
 fn context_lifts_the_fields_an_extension_declares_headline() {
-    use specforge_registry::{FieldRegistry, FieldRegistryEntry};
+    use crate::support::headline_build;
 
     let mut fields = FieldMap::new();
     fields.push(
@@ -278,29 +267,12 @@ fn context_lifts_the_fields_an_extension_declares_headline() {
     }
     // Only `behavior` declares the two as headline fields; on `type` they
     // are struct members.
-    let mut registry = FieldRegistry::new();
-    for field in ["contract", "status"] {
-        registry.register(
-            FieldRegistryEntry::new(
-                "behavior",
-                "@test/ext",
-                specforge_registry::FieldDescriptor {
-                    name: field.to_string(),
-                    field_type: "string".to_string(),
-                    normative: field == "contract",
-                    headline: true,
-                    ..Default::default()
-                },
-            )
-            .unwrap(),
-        );
-    }
-    let options = specforge_emitter::EmitOptions {
-        format: specforge_emitter::EmitFormat::Context,
-        field_registry: Some(&registry),
-        ..Default::default()
-    };
-    let json = specforge_emitter::emit(&graph, &options).unwrap();
+    let registries = headline_build(&["behavior"]);
+    let json = crate::export(
+        &graph,
+        specforge_emitter::EmitFormat::Context,
+        Some(&registries),
+    );
     let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
     let node = |id: &str| {
         parsed["nodes"]
@@ -324,7 +296,7 @@ fn context_lifts_the_fields_an_extension_declares_headline() {
 
 #[test]
 fn a_headline_field_named_coverage_status_is_not_lifted() {
-    use specforge_registry::{FieldRegistry, FieldRegistryEntry};
+    use crate::support::{build_of, field, kind};
     use std::collections::BTreeMap;
 
     let mut fields = FieldMap::new();
@@ -344,20 +316,10 @@ fn a_headline_field_named_coverage_status_is_not_lifted() {
         methods: Vec::new(),
         obligations: Vec::new(),
     });
-    let mut registry = FieldRegistry::new();
-    registry.register(
-        FieldRegistryEntry::new(
-            "behavior",
-            "@test/ext",
-            specforge_registry::FieldDescriptor {
-                name: "coverage_status".to_string(),
-                field_type: "string".to_string(),
-                headline: true,
-                ..Default::default()
-            },
-        )
-        .unwrap(),
-    );
+    let registries = build_of(vec![kind(
+        "behavior",
+        vec![field("coverage_status", false, true)],
+    )]);
     let verdicts = BTreeMap::from([(
         "b".to_string(),
         specforge_coverage::Verdict {
@@ -371,7 +333,7 @@ fn a_headline_field_named_coverage_status_is_not_lifted() {
             &graph,
             &specforge_emitter::EmitOptions {
                 format: specforge_emitter::EmitFormat::Context,
-                field_registry: Some(&registry),
+                registries: &registries,
                 coverage,
                 ..Default::default()
             },

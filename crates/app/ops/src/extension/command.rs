@@ -434,7 +434,7 @@ impl RunError {
 ///    reports; ADR 0039 D3);
 /// 4. the date is the host's, UTC, `YYYY-MM-DD` (ADR 0011 C);
 /// 5. the view's graph is rendered as the graph export
-///    (`specforge_emitter::emit`, at the project's versioned schema version)
+///    (`specforge_emitter::emit`, at the project's versioned schema version, in the view's registry build)
 ///    and the `cmd__` export called with that `CommandInput`.
 ///
 /// A command the host refuses ([`ExtensionCommand::refusal`]) is not routed
@@ -457,6 +457,7 @@ fn graph_export(view: &ProjectView<'_>) -> String {
         view.graph(),
         &specforge_emitter::EmitOptions {
             schema: versioned.schema(),
+            registries: view.registries(),
             ..specforge_emitter::EmitOptions::default()
         },
     )

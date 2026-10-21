@@ -2,8 +2,8 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use specforge_coverage::{Status, Verdict};
-use specforge_graph::{FieldForms, Graph, Node, Selected};
-use specforge_registry::{FieldRegistry, KindRegistry};
+use specforge_graph::{Graph, Node, Selected};
+use specforge_registry::{FieldRegistry, RegistryBuild};
 
 use crate::budget::TokenBudget;
 use crate::error::EmitterError;
@@ -49,21 +49,15 @@ pub struct EmitOptions<'a> {
     pub attach_schema: bool,
     /// Token budget for truncated output (default: None = no limit).
     pub token_budget: Option<usize>,
-    /// Kind registry for style lookups (DOT shape/color/fillcolor declared by
-    /// extensions; C13-00). Default: None — nodes use built-in defaults.
-    pub kind_registry: Option<&'a KindRegistry>,
-    /// Field registry, so the context format keeps each entity's normative
-    /// and headline fields. Default: None — context carries only title/verify.
-    pub field_registry: Option<&'a FieldRegistry>,
+    /// The Registry build the graph was built in (ADR 0123, amended in round 20): the kinds and
+    /// edge types DOT styles, the fields context and markdown keep, the forms markdown links by.
+    /// Default: the empty build, a project with no extension.
+    pub registries: &'a RegistryBuild,
     /// Each entity's coverage verdict, by id (`ProjectCoverage::verdicts`).
     /// With it, every node whose entity has a verdict carries its status as
     /// `coverage_status` (graph, context and brief; DOT draws none), and a
     /// token budget counts the key. Default: None — no node carries one.
     pub coverage: Option<&'a BTreeMap<String, Verdict>>,
-    /// How each field reads (ADR 0093): the markdown format lists a field's
-    /// references from it, linked or not. Default: None, so links come from
-    /// the edges alone.
-    pub field_forms: Option<&'a FieldForms>,
 }
 
 /// Default: graph format 1.0 of the whole graph against the unversioned
@@ -76,10 +70,8 @@ impl Default for EmitOptions<'_> {
             schema: unversioned(),
             attach_schema: false,
             token_budget: None,
-            kind_registry: None,
-            field_registry: None,
+            registries: no_extensions(),
             coverage: None,
-            field_forms: None,
         }
     }
 }
@@ -88,6 +80,13 @@ impl Default for EmitOptions<'_> {
 fn unversioned() -> &'static GraphProtocolSchema {
     static EMPTY: std::sync::LazyLock<GraphProtocolSchema> =
         std::sync::LazyLock::new(GraphProtocolSchema::empty);
+    &EMPTY
+}
+
+/// The empty Registry build, shared by every default.
+pub(crate) fn no_extensions() -> &'static RegistryBuild {
+    static EMPTY: std::sync::LazyLock<RegistryBuild> =
+        std::sync::LazyLock::new(RegistryBuild::default);
     &EMPTY
 }
 
@@ -114,7 +113,7 @@ pub fn emit(graph: &Graph, options: &EmitOptions<'_>) -> Result<String, EmitterE
         return Ok(crate::dot::emit_dot(
             &selected,
             &crate::dot::DotOptions {
-                kind_registry: options.kind_registry,
+                registries: options.registries,
                 ..Default::default()
             },
         ));
@@ -135,7 +134,7 @@ pub fn emit(graph: &Graph, options: &EmitOptions<'_>) -> Result<String, EmitterE
         format: options.format,
         schema: options.schema,
         attach: options.attach_schema.then_some(attach),
-        fields: options.field_registry,
+        fields: options.registries.fields(),
         coverage: options.coverage,
     };
     match options.token_budget {
@@ -185,7 +184,7 @@ struct Shape<'a> {
     schema: &'a GraphProtocolSchema,
     /// How the schema is carried; `None`: not at all.
     attach: Option<SchemaAttachment>,
-    fields: Option<&'a FieldRegistry>,
+    fields: &'a FieldRegistry,
     coverage: Option<&'a BTreeMap<String, Verdict>>,
 }
 
@@ -272,7 +271,7 @@ fn graph_nodes(
 
 fn context_nodes(
     graph: &Graph,
-    fields: Option<&FieldRegistry>,
+    fields: &FieldRegistry,
     coverage: Option<&BTreeMap<String, Verdict>>,
 ) -> Vec<crate::context::ContextNode> {
     graph
