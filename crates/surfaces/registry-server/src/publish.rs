@@ -43,6 +43,7 @@ pub(crate) fn publish_target(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use specforge_package::Scope;
 
     #[test]
     fn a_target_is_a_scoped_name_and_a_version() {
@@ -50,7 +51,7 @@ mod tests {
         assert_eq!(name.as_str(), "@acme/tool");
         assert_eq!(version.to_string(), "2.0.0+build.1");
         let (name, _) = publish_target("@acme/tool", "1.0.0").unwrap();
-        assert_eq!(name.scope(), Some("@acme"));
+        assert_eq!(name.scope(), Scope::parse("@acme").ok());
     }
 
     #[test]

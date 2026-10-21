@@ -1,7 +1,7 @@
 //! Who may write into a scope (publish, yank): the token's filter, then the scope's owner (ADR 0185).
 
 use rusqlite::{Connection, params};
-use specforge_package::PackageName;
+use specforge_package::{PackageName, Scope};
 
 use crate::db::TokenRecord;
 
@@ -137,7 +137,7 @@ pub(crate) fn may_write(
     let Some(scope) = package.scope() else {
         return Ok(Claim::Unclaimed);
     };
-    match owner(conn, scope)
+    match owner(conn, scope.as_str())
         .map_err(|e| WriteRefused::Storage(format!("scope query failed: {e}")))?
     {
         None => Ok(Claim::Unclaimed),
@@ -181,12 +181,8 @@ pub(crate) fn assign(
     scope: &str,
     account: &Account,
 ) -> Result<Option<String>, AssignRefused> {
-    // shortcut: no Scope type in specforge-package, upgrade when one exists.
-    let is_scope =
-        PackageName::parse(&format!("{scope}/x")).is_ok_and(|n| n.scope() == Some(scope));
-    if !is_scope {
-        return Err(AssignRefused::NotAScope(scope.to_string()));
-    }
+    let scope = Scope::parse(scope).map_err(|_| AssignRefused::NotAScope(scope.to_string()))?;
+    let scope = scope.as_str();
     let storage = |e: rusqlite::Error| AssignRefused::Storage(format!("failed to assign: {e}"));
     match conn.query_row(
         "SELECT 1 FROM accounts WHERE name = ?1",

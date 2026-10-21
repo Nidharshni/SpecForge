@@ -85,7 +85,10 @@ fn relative_path_never_leaves_its_directory() {
         );
     }
     let tool = PackageName::parse("@acme/tool").unwrap();
-    assert_eq!((tool.scope(), tool.base()), (Some("@acme"), "tool"));
+    assert_eq!(
+        (tool.scope().map(|s| s.to_string()), tool.base()),
+        (Some("@acme".to_string()), "tool")
+    );
     let local = PackageName::parse("greet").unwrap();
     assert_eq!((local.scope(), local.base()), (None, "greet"));
 }

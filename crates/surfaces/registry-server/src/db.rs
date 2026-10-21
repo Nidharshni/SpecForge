@@ -367,7 +367,7 @@ impl Database {
         if ownership::may_write(&tx, writer, package)? == Claim::Unclaimed
             && let Some(scope) = package.scope()
         {
-            claimed = ownership::claim(&tx, scope, writer).map_err(storage)?;
+            claimed = ownership::claim(&tx, scope.as_str(), writer).map_err(storage)?;
             if !claimed {
                 // Claimed between the read and the insert: ask again.
                 ownership::may_write(&tx, writer, package)?;

@@ -60,7 +60,7 @@ impl Configured {
             && let Some(registry) = self
                 .registries
                 .iter()
-                .find(|r| r.scope_filter.as_deref() == Some(scope))
+                .find(|r| r.scope_filter.as_deref() == Some(scope.as_str()))
         {
             return Ok(registry);
         }
