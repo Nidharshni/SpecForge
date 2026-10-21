@@ -106,7 +106,6 @@ behavior beta "B" { contract "first" features [alpha] }
     behavior = "validate_agent_plan",
     verify = "specforge trace --plan passes two mutually recursive types in either order"
 )]
-#[ignore = "flipped by T4"]
 fn trace_plan_passes_two_mutually_recursive_types_in_either_order() {
     let dir = TestProject::new().enabling(&["@specforge/software"]).file(
         "main.spec",

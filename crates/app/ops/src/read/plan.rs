@@ -16,7 +16,8 @@ use crate::view::ProjectView;
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 pub struct PlanOutcome {
     /// The plan passes: no entry names no entity and none comes before an
-    /// entity it depends on. A missing entry is a warning
+    /// entity it depends on, entities on one cycle in any order among
+    /// themselves (ADR 0204). A missing entry is a warning
     /// (`PlanGapKind::fails`).
     pub ok: bool,
     /// Plan entries that name an entity in the graph, in plan order.
@@ -133,7 +134,7 @@ pub enum PlanGapKind {
     UnresolvedEntity,
     /// A testable entity with obligations has no entry.
     MissingPlanEntry,
-    /// An entry comes before an entity it depends on.
+    /// An entry comes before an entity it depends on that is not on a cycle with it.
     Ordering,
 }
 
@@ -158,7 +159,7 @@ const PLAN: &str = "plan";
 
 /// Check `plan` against the view's graph: entries naming no entity,
 /// testable entities with obligations it has no entry for, and entries
-/// ordered before an entity they depend on. It reads the graph and the
+/// ordered before what they depend on (`ordering_gaps`). It reads the graph and the
 /// view's entity snapshot (`ProjectView::entities`), never the recorded
 /// test report, so it cannot fail.
 pub fn check(view: &ProjectView, plan: &AgentPlan) -> PlanOutcome {
@@ -210,40 +211,84 @@ pub fn check(view: &ProjectView, plan: &AgentPlan) -> PlanOutcome {
         }
     }
 
-    // Validate dependency ordering: if plan lists A before B, but graph has edge A->B
-    // (A depends on B), that's fine. But if B->A exists (B depends on A) and B comes
-    // before A in the plan, B would be implemented before its dependency A.
-    // Build position map for plan ordering
-    let position: HashMap<&str, usize> = plan_ids
-        .iter()
-        .enumerate()
-        .map(|(i, id)| (id.as_str(), i))
-        .collect();
-
-    for edge in graph.edges() {
-        // edge.source -> edge.target means source references target
-        // So target should be implemented before source
-        if let (Some(&src_pos), Some(&tgt_pos)) = (
-            position.get(edge.source.as_str()),
-            position.get(edge.target.as_str()),
-        ) && tgt_pos > src_pos
-        {
-            let message = format!(
-                "'{}' depends on '{}' (via {}), but '{}' appears later in the plan",
-                edge.source, edge.target, edge.label, edge.target
-            );
-            gaps.push(PlanGap {
-                source: edge.source.to_string(),
-                target: edge.target.to_string(),
-                kind: PlanGapKind::Ordering,
-                context: message,
-            });
-        }
-    }
+    gaps.extend(ordering_gaps(graph, &plan_ids));
 
     PlanOutcome {
         ok: !gaps.iter().any(|gap| gap.kind.fails()),
         resolved_entries: validated_entries,
         gaps,
     }
+}
+
+/// The ordering gaps of a plan whose entries name `plan_ids`, in graph edge
+/// order (ADR 0204). Every edge `a -> b` says `a` depends on `b`, and an
+/// entity's place is its last entry. Entities on one cycle depend on one
+/// another: they are one component, which the plan may list in any order.
+/// Every entry of a component comes after every entry of each component it
+/// has an edge to; a gap names the depending component's first entry and the
+/// needed component's last. A component of one entity is the entity itself,
+/// so on a graph without cycles this is the edge-by-edge check.
+fn ordering_gaps(graph: &specforge_graph::Graph, plan_ids: &[String]) -> Vec<PlanGap> {
+    let position: HashMap<&str, usize> = plan_ids
+        .iter()
+        .enumerate()
+        .map(|(i, id)| (id.as_str(), i))
+        .collect();
+    // Each entity on a cycle names its component by the cycle's smallest member.
+    let mut on_cycle: HashMap<&str, &'static str> = HashMap::new();
+    for cycle in graph.cycles() {
+        let name = cycle.members[0].as_str();
+        on_cycle.extend(cycle.members.iter().map(|member| (member.as_str(), name)));
+    }
+    // Each component's first and last entry: (place, entity).
+    let mut first: HashMap<&str, (usize, &str)> = HashMap::new();
+    let mut last: HashMap<&str, (usize, &str)> = HashMap::new();
+    for (&id, &at) in &position {
+        let component = component(&on_cycle, id);
+        let early = first.entry(component).or_insert((at, id));
+        if at < early.0 {
+            *early = (at, id);
+        }
+        let late = last.entry(component).or_insert((at, id));
+        if at > late.0 {
+            *late = (at, id);
+        }
+    }
+    let mut gaps = Vec::new();
+    for edge in graph.edges() {
+        let (source, target) = (edge.source.as_str(), edge.target.as_str());
+        let (from, to) = (component(&on_cycle, source), component(&on_cycle, target));
+        if from == to {
+            continue; // one component: no order between its entities
+        }
+        let (Some(&(early, entry)), Some(&(late, needed))) = (first.get(from), last.get(to)) else {
+            continue;
+        };
+        if late <= early {
+            continue;
+        }
+        let context = if (entry, needed) == (source, target) {
+            format!(
+                "'{source}' depends on '{target}' (via {}), but '{target}' appears later in the plan",
+                edge.label
+            )
+        } else {
+            format!(
+                "'{entry}' depends on '{needed}' ('{source}' depends on '{target}' via {}, and entities on one cycle are done together), but '{needed}' appears later in the plan",
+                edge.label
+            )
+        };
+        gaps.push(PlanGap {
+            source: entry.to_string(),
+            target: needed.to_string(),
+            kind: PlanGapKind::Ordering,
+            context,
+        });
+    }
+    gaps
+}
+
+/// The component `id` is in: its cycle's smallest member, or `id` itself.
+fn component<'a>(on_cycle: &HashMap<&str, &'static str>, id: &'a str) -> &'a str {
+    on_cycle.get(id).copied().unwrap_or(id)
 }

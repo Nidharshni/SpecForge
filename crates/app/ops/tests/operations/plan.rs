@@ -432,7 +432,6 @@ fn depending(ids: &[&str], edges: &[(&str, &str)]) -> Graph {
     behavior = "validate_agent_plan",
     verify = "entities on one cycle may come in any order in a plan"
 )]
-#[ignore = "flipped by T4"]
 fn entities_on_one_cycle_may_come_in_any_order() {
     let graph = depending(&["a", "b", "c"], &[("a", "b"), ("b", "a"), ("c", "a")]);
     let check = |ids: &[&str]| {
@@ -455,5 +454,48 @@ fn entities_on_one_cycle_may_come_in_any_order() {
     assert_eq!(
         gap_texts(&check(&["c", "b", "a"]), PlanGapKind::Ordering),
         ["'c' depends on 'a' (via depends_on), but 'a' appears later in the plan"]
+    );
+}
+
+// B:validate_agent_plan — verify unit "every entry of a cycle comes after every entry of what the cycle depends on, and before every entry that depends on it"
+#[specforge_test(
+    behavior = "validate_agent_plan",
+    verify = "every entry of a cycle comes after every entry of what the cycle depends on, and before every entry that depends on it"
+)]
+fn an_entry_and_the_cycle_it_depends_on_are_ordered_as_components() {
+    let graph = depending(
+        &["a", "b", "c", "d"],
+        &[("a", "b"), ("b", "a"), ("c", "a"), ("a", "d")],
+    );
+    let check = |ids: &[&str]| {
+        let entries: Vec<_> = ids
+            .iter()
+            .map(|id| serde_json::json!({"entity_id": id, "action": "implement"}))
+            .collect();
+        let plan = serde_json::json!({"plan_id": "p", "entries": entries});
+        crate::view_support::plan_check(&graph, &["behavior"], &plan)
+    };
+
+    let fine = check(&["d", "b", "a", "c"]);
+    assert!(fine.ok && fine.gaps.is_empty(), "{:?}", fine.gaps);
+
+    let late = check(&["a", "c", "b", "d"]);
+    assert_eq!(
+        gap_texts(&late, PlanGapKind::Ordering),
+        [
+            "'c' depends on 'b' ('c' depends on 'a' via depends_on, and entities on one cycle are done together), but 'b' appears later in the plan",
+            "'a' depends on 'd' (via depends_on), but 'd' appears later in the plan",
+        ]
+    );
+    assert_eq!(
+        (late.gaps[0].source.as_str(), late.gaps[0].target.as_str()),
+        ("c", "b")
+    );
+
+    assert_eq!(
+        gap_texts(&check(&["b", "d", "a", "c"]), PlanGapKind::Ordering),
+        [
+            "'b' depends on 'd' ('a' depends on 'd' via depends_on, and entities on one cycle are done together), but 'd' appears later in the plan"
+        ]
     );
 }

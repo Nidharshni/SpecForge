@@ -857,7 +857,7 @@ behavior validate_agent_plan "Validate Agent Implementation Plan" {
   ensures {
     unresolvable_ids_diagnosed "Every plan entity ID that does not resolve to a declared entity produces an E003 diagnostic"
     missing_entries_warned     "Every testable entity missing from the plan produces a warning"
-    ordering_validated         "Plan dependency order is validated against graph edge structure"
+    ordering_validated         "Plan dependency order is validated against graph edge structure, the entities on one cycle in any order among themselves"
     structured_report_produced "Output is a structured JSON report listing validated entries, gaps, and ordering violations"
     plan_validated_emitted     "plan_validated event is emitted after validation completes"
   }
@@ -871,8 +871,12 @@ behavior validate_agent_plan "Validate Agent Implementation Plan" {
     MUST produce an E003 gap. Every testable entity that declares
     obligations MUST have an entry in the plan; a missing entry MUST be
     reported as a warning gap. The plan's entry order is its dependency
-    order: an entry ordered before an entity it depends on in the graph
-    MUST produce an ordering gap. The check reads the graph and the entity
+    order,
+    and the graph's edges are the dependencies. Entities on one cycle of them
+    depend on one another and MAY come in any order among themselves; every
+    entry of such a set, or of an entity on no cycle, MUST come after every
+    entry of each set or entity it has an edge to, or the plan MUST have an
+    ordering gap naming the entry and the later one it depends on. The check reads the graph and the entity
     snapshot, never the recorded test report. The outcome MUST be one JSON
     document on every surface (McpTracePlanResult): ok (no unresolved entry
     and no ordering gap), the entries that name an entity, and the gaps;
@@ -890,6 +894,7 @@ behavior validate_agent_plan "Validate Agent Implementation Plan" {
   verify unit "a plan passes when every entry names an entity and none comes before what it depends on; a missing entry is a warning"
   verify unit "an entity and a plan together are invalid input about the plan, on every surface"
   verify unit "entities on one cycle may come in any order in a plan"
+  verify unit "every entry of a cycle comes after every entry of what the cycle depends on, and before every entry that depends on it"
   verify integration "specforge trace --plan and specforge.trace answer the same document for a plan"
   verify integration "specforge trace and specforge.trace both refuse an entity with a plan"
   verify integration "specforge trace --plan exits 1 when an entry names no entity or comes before what it depends on"
