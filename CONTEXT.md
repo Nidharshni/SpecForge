@@ -299,14 +299,12 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   build puts them in load order. What does not load is a typed `LoadFailure` on its
   entry with one diagnostic and leaves nothing loaded, and what an entry reports though it loaded (W149, W153, W138) is on the
   entry too; the runtime keeps none, and `Installed::load_diagnostics` orders them, entry by entry. Without a runtime nothing loads, and each entry
-  enables what it names (`Loaded::unloaded`); what an environment is assembled from says which
+  enables what it names (`Installed::unloaded`); each entry records where the load takes it from, its **origin** (`Origin`: `builtin`, the lock entry's source, `file:<path>`, `unknown`; `Resolution::origin`, a repeated entry the one it repeats'), and whether it loaded, with or without a runtime; what an environment is assembled from says which
   (`specforge_project::ExtensionLoad`: `NoRuntime`, or what was loaded `In` a runtime).
 - **Extension inventory**: every extension a project has, one row per name: enabled by a
   `specforge.json` entry, pinned in the `specforge.lock` the compile read, or loaded. Each row has its
-  origin (where the load loaded it from, by `Installed::resolve`: `builtin`, the lock entry's source,
-  `file:<path>`; else where its first entry in load order would; else its lock entry's source; else
-  `unknown`: `Origin::of`), its status (loaded, not loaded, not
-  configured), the entries that enable it, its declaration, its lock entry and why it did not load
+  origin (the origin the load recorded on the entry that loaded it, else on the first entry the load tried, `EnabledExtension::loader`; else its lock entry's source; else `builtin` for a builtin's name; else `unknown`), its status (loaded, not loaded, not
+  configured), the entries that enable it, its declaration (the registry build's, under its name), its lock entry and why it did not load
   (`specforge_ops::extension::inventory`, over the project view). The extensions listing, doctor and
   remove read it, so they cannot disagree about which extensions a project has, where one comes from
   or whether it loaded (ADR 0028).

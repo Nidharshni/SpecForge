@@ -1,6 +1,7 @@
 # Installed extensions are one module
 
 **Status:** accepted (2026-10-07)
+**Amended by [ADR 0180](0180-the-extension-load-records-where-each-entry-loads-from.md) (round 19):** D3: each entry's outcome records its origin and whether it loaded; D9: a row's origin is the one the load recorded on its loading entry (`EnabledExtension::loader`), and `Origin` lives in `specforge-installed`.
 **Amended by [ADR 0172](0172-the-extension-a-path-names-is-read-by-one-module.md) (round 18):** D7: a path is read by `LocalComponent::read` for add, init, publish and extension validate alike; a `.wasm` file that can't be read is E040 (was E054).
 D4, D6 and D10 amended (round 16): an unreadable lock is refused once, by the lock plan's open, with the lock's own remedy.
 D4 amended by [ADR 0128](0128-one-project-change-over-held-files.md): the change places modules and writes the lock; the project files of its last step are a project change that puts back its own files.

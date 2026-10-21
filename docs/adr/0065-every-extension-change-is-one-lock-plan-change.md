@@ -2,6 +2,7 @@
 
 **Status:** accepted (2026-10-13, architecture round 8, plan 02). Amends ADR 0041 (amendments A5, B1), ADR 0028 (D4, D8,
 D9, D10) and ADR 0045 (D2).
+**D5 amended by [ADR 0180](0180-the-extension-load-records-where-each-entry-loads-from.md) (round 19):** `Origin::of` is `Resolution::origin`, and the inventory reads the recorded origin.
 
 ADR 0041 made the lock plan the one way `add`, `update` and `init` install, and its round-7 amendment made it judge the
 project peer set. Each operation still drove the plan's protocol itself: which constructor, staging then enabling,
