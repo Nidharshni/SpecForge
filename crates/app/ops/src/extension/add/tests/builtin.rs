@@ -297,3 +297,62 @@ fn a_failed_builtin_edit_enables_no_peer() {
     assert!(error.error.writes.is_empty());
     assert_eq!(std::fs::read(&config).unwrap(), before);
 }
+
+#[test]
+#[ignore = "flipped by T6"]
+fn a_builtin_asked_at_a_version_this_specforge_does_not_embed_is_refused() {
+    use crate::config::testing::files_under;
+    let dir = project_with(EMPTY_PROJECT);
+    let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+    let registry = crate::registry::Unconfigured("add");
+    let runtime = runtime_with_product();
+    let before = files_under(dir.path());
+
+    for (specifier, code) in [
+        ("@specforge/product@9.0.0", "R-RES-004"),
+        ("@specforge/product@^2", "R-RES-004"),
+        ("@specforge/product@banana", "R-RES-003"),
+        ("@specforge/product@", "E054"),
+    ] {
+        let refused = add(
+            &several(&root, vec![specifier.into()], false),
+            &registry,
+            &runtime,
+        )
+        .unwrap_err();
+        assert_eq!(refused.error.code, code, "{specifier}: {:?}", refused.error);
+        if code == "R-RES-004" {
+            assert!(
+                refused.error.message.contains("Available: 1.0.0"),
+                "{}",
+                refused.error.message
+            );
+        }
+        assert_eq!(files_under(dir.path()), before, "{specifier}");
+    }
+
+    let dry = add(
+        &several(&root, vec!["@specforge/product@9.0.0".into()], true),
+        &registry,
+        &runtime,
+    )
+    .unwrap_err();
+    assert_eq!(dry.error.code, "R-RES-004");
+
+    for specifier in [
+        "@specforge/product@^1",
+        "@specforge/product@1.0.0",
+        "@specforge/product@latest",
+    ] {
+        let added = add(
+            &several(&root, vec![specifier.into()], true),
+            &registry,
+            &runtime,
+        )
+        .unwrap_or_else(|e| panic!("{specifier}: {:?}", e.error));
+        assert!(
+            matches!(added.added[0].outcome, AddOutcome::Builtin { .. }),
+            "{specifier}"
+        );
+    }
+}
