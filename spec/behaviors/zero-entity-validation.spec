@@ -93,7 +93,9 @@ behavior execute_validation_pattern "Execute Validation Pattern" {
     value predicate (non-empty, matches regex, or is one of an allowed set).
     cycle_detection MUST report each entity of the target kind (every
     entity when no target kind is set) that sits on a cycle of the edges
-    of its edge type, whichever fields write them.
+    of its edge type, whichever fields write them (every entity of a
+    strongly connected set of those edges, whichever entity the cycle
+    closes through).
     file_exists MUST check that file-reference fields point to existing
     files, a relative path resolved against the spec root (never the
     working directory). A list field's items are each a path, a scalar's text is one; an empty

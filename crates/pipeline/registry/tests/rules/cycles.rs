@@ -223,7 +223,6 @@ fn a_cycle_rules_field_reads_as_the_default_field_and_value() {
     behavior = "execute_validation_pattern",
     verify = "a cycle_detection rule reports an entity whose cycle closes through an entity already reported"
 )]
-#[ignore = "flipped by T3"]
 fn a_cycle_rule_reports_an_entity_whose_cycle_closes_through_a_reported_one() {
     let built = modules(vec![cycle_rule(
         "E007",

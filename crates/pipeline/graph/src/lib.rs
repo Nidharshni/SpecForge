@@ -21,11 +21,8 @@ pub use derive::{DerivedFrom, DerivedReference};
 mod graph;
 mod obligations;
 mod tokens;
-pub use tokens::{Form, Holder, WrittenToken, written_tokens};
-// The cycle walker lives in specforge-common (the registry's rules use it
-// without linking the graph); re-exported here unchanged.
 pub use obligations::Obligation;
-pub use specforge_common::cycles::{CycleOptions, find_cycles};
+pub use tokens::{Form, Holder, WrittenToken, written_tokens};
 
 pub use build::{Applied, FileChange, GraphBuild, GraphConfig, GraphInputs};
 #[cfg(any(test, feature = "testing"))]
