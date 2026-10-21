@@ -1254,7 +1254,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the declaration's name and each incoming reference's token, positions in the text the project was compiled from,
   which its planned change keeps, with the spec root they are relative to. MCP writes it only to files that still hold that text, refusing `conflict` otherwise; the LSP
   hands it to the editor only over buffers that are that text (`ContentModified` otherwise; ADR 0116, ADR 0023 D3).
-  The new ID is refused (`authoring::entity_id::validate_id`) when it is not an identifier of 2–60 characters, is a reserved word (E013) or is taken. A
+  The new ID is refused (`authoring::entity_id::validate_id`) when it is not an identifier of 2–60 characters, is a reserved word (E013), is taken, or the project already writes it for no entity (a capture, `name_captured`). A
   rename is not a typed edit and is not checked by E080 (ADR 0151, amended).
 - **Starter**: the spec file init writes (`spec/hello.spec`): the first template the extensions it enables declare,
   in `specforge.json` order, else the structural one, its `{project}` the project's spec ID and `{version}` its
@@ -1269,10 +1269,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   their spans to UTF-16 ranges and MCP returns them as the spec's `TextEdit`. The formatter's edits are byte ranges
   of one buffer instead (ADR 0021 D8, ADR 0164).
 - **Declared change**: what a typed edit may change in the graph: set, unset, link and unlink their field, retitle
-  the title, add-verify and remove-verify the obligations, create and delete their entity whole, a delete with
+  the title, add-verify and remove-verify the obligations, create and delete their entity whole (a create's every edge in, the names already written for it included), a delete with
   `unlink_references` each referrer's field; an edge by a declared field of its source or a created or deleted end
   (`specforge_ops::authoring::edit`, ADR 0198). The plan's graph delta over the files it changes, less the declared
-  changes, must be empty, as a migration's less its steps' (ADR 0186).
+  changes, must be empty, as a migration's less its steps' (ADR 0186). A rename declares a substitution of its new ID
+  for its old one, nothing else.
+- **Capture**: a name the project writes for no entity (an open-world type name, a reference that does not resolve, a
+  defaults entry) that a new entity ID makes name that entity. A create captures by design (a forward reference,
+  E004's remedy); a rename refuses one (`name_captured`, ADR 0198, amended).
 - **Typed edit**: one change to a project's entities, named by what it does rather than by text: create, set,
   unset, retitle, link, unlink, add or remove a verify obligation, delete (`specforge_ops::authoring::edit::Edit`).
   A list of them is planned over the texts the project was compiled from (each edit reading what the ones before
