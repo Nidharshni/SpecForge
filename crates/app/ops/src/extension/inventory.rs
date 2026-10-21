@@ -194,12 +194,12 @@ impl<'a> Inventory<'a> {
             .entries
             .iter()
             .filter(|e| {
-                e.file.as_deref().is_some_and(|path| {
+                e.file().is_some_and(|path| {
                     e.entry == argument || path == argument || e.name == argument
                 })
             })
             .collect();
-        let named = |e: &EnabledExtension| e.file.is_none() && e.name == argument;
+        let named = |e: &EnabledExtension| e.file().is_none() && e.name == argument;
         match (files.as_slice(), self.entries.iter().any(named)) {
             ([], _) => self
                 .get(argument)

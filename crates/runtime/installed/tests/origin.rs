@@ -56,6 +56,18 @@ fn the_load_records_each_entrys_origin_and_whether_it_loaded() {
             (file("b.wasm"), false, true),
         ]
     );
+    let files: Vec<Option<&str>> = loaded.enabled.iter().map(|e| e.file()).collect();
+    assert_eq!(
+        files,
+        [
+            None,
+            None,
+            None,
+            Some("tool.wasm"),
+            Some("tool.wasm"),
+            Some("b.wasm")
+        ]
+    );
     for entry in loaded.enabled.iter().filter(|e| e.loaded) {
         let declared = loaded
             .declarations

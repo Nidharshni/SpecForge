@@ -103,7 +103,6 @@ fn a_name_two_entries_enable_is_refused() {
         EnabledExtension {
             entry: "greet.wasm".into(),
             name: "@sdk/greet".into(),
-            file: Some("greet.wasm".into()),
             origin: Origin::File {
                 path: "greet.wasm".into(),
             },
@@ -463,7 +462,6 @@ fn remove_selects_a_file_entry_by_its_text_its_path_or_its_name() {
         .enabled(vec![EnabledExtension {
             entry: "@sdk/greet=greet.wasm".into(),
             name: "@sdk/greet".into(),
-            file: Some("greet.wasm".into()),
             origin: Origin::File {
                 path: "greet.wasm".into(),
             },
@@ -599,7 +597,6 @@ fn every_refusal_of_a_name_is_about_it() {
         EnabledExtension {
             entry: "greet.wasm".into(),
             name: "@sdk/greet".into(),
-            file: Some("greet.wasm".into()),
             origin: Origin::File {
                 path: "greet.wasm".into(),
             },

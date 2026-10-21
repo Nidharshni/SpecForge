@@ -339,7 +339,7 @@ fn a_file_entry_loads_under_the_name_it_declares() {
         reported(dir.path(), &loaded)
     );
     assert_eq!(loaded.enabled[0].name, "@acme/tool");
-    assert_eq!(loaded.enabled[0].file.as_deref(), Some("tool.wasm"));
+    assert_eq!(loaded.enabled[0].file(), Some("tool.wasm"));
     assert_eq!(loaded.declarations[0].name(), "@acme/tool");
     // It answers under the name it declares, not under the entry.
     assert!(matches!(

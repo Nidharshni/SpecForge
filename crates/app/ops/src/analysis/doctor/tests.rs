@@ -163,7 +163,6 @@ fn doctor_lists_the_extensions_the_listing_lists() {
             specforge_project::EnabledExtension {
                 entry: "greet.wasm".into(),
                 name: "@sdk/greet".into(),
-                file: Some("greet.wasm".into()),
                 origin: specforge_installed::Origin::File {
                     path: "greet.wasm".into(),
                 },

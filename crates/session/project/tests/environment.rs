@@ -115,7 +115,7 @@ fn without_a_runtime_nothing_loads_and_each_entry_is_enabled_as_written() {
         .map(|e| {
             (
                 e.name.as_str(),
-                e.file.as_deref(),
+                e.file(),
                 e.origin.clone(),
                 e.loaded,
                 e.failure.is_some(),

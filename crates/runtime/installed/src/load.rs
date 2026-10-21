@@ -69,8 +69,6 @@ pub struct EnabledExtension {
     /// A named entry's name; a `.wasm` file entry's declared name once it
     /// loaded, else the name written before `=`, else the path.
     pub name: String,
-    /// The path a `.wasm` file entry names, as written.
-    pub file: Option<String>,
     /// Where the load takes its extension from ([`Resolution::origin`](crate::Resolution::origin)):
     /// a repeated entry's is the one it repeats'. It does not depend on whether the entry loaded.
     pub origin: Origin,
@@ -96,6 +94,14 @@ pub enum LoadSubject {
 }
 
 impl EnabledExtension {
+    /// The path a `.wasm` file entry names, as written: its origin's.
+    pub fn file(&self) -> Option<&str> {
+        match &self.origin {
+            Origin::File { path } => Some(path),
+            _ => None,
+        }
+    }
+
     /// Of the entries that enable one extension, in entry order, the one whose origin is the
     /// extension's: the entry that loaded it, else the first the load tried (a named entry before
     /// a `.wasm` file entry, `Resolution::in_load_order`'s order). A repeat never wins over its
@@ -104,7 +110,7 @@ impl EnabledExtension {
         enabling
             .iter()
             .copied()
-            .min_by_key(|e| (!e.loaded, matches!(e.origin, Origin::File { .. })))
+            .min_by_key(|e| (!e.loaded, e.file().is_some()))
     }
 
     /// What `entry` names when nothing is loaded (no runtime), from `origin`.
@@ -113,7 +119,6 @@ impl EnabledExtension {
             ExtensionEntry::Named(name) => EnabledExtension {
                 entry: entry.trim().to_string(),
                 name: name.to_string(),
-                file: None,
                 origin,
                 loaded: false,
                 failure: None,
@@ -122,7 +127,6 @@ impl EnabledExtension {
             ExtensionEntry::File { name, path } => EnabledExtension {
                 entry: entry.trim().to_string(),
                 name: name.unwrap_or(path).to_string(),
-                file: Some(path.to_string()),
                 origin,
                 loaded: false,
                 failure: None,
@@ -420,7 +424,7 @@ impl Installed {
         // A repeated `.wasm` file entry takes its first's declared name.
         for (i, resolved) in resolution.entries().iter().enumerate() {
             if let Resolved::Again { first } = resolved
-                && enabled[*first].file.is_some()
+                && enabled[*first].file().is_some()
             {
                 enabled[i].name = enabled[*first].name.clone();
             }
@@ -631,7 +635,7 @@ mod tests {
         let entries = ["@acme/a".to_string(), "x=ext.wasm".to_string()];
         let loaded = Installed::none().unloaded(&entries, &Builtins::none());
         let names: Vec<&str> = loaded.enabled.iter().map(|e| e.name.as_str()).collect();
-        let files: Vec<Option<&str>> = loaded.enabled.iter().map(|e| e.file.as_deref()).collect();
+        let files: Vec<Option<&str>> = loaded.enabled.iter().map(|e| e.file()).collect();
         assert_eq!(names, ["@acme/a", "x"]);
         assert_eq!(files, [None, Some("ext.wasm")]);
         assert!(loaded.enabled.iter().all(|e| e.failure.is_none()));

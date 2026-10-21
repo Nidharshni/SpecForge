@@ -297,9 +297,7 @@ fn remove_file(
     Ok(RemoveOutcome {
         name: file.name.clone(),
         version: extension.version().map(str::to_string),
-        origin: Origin::File {
-            path: file.file.clone().unwrap_or_default(),
-        },
+        origin: file.origin.clone(),
         stranded: stranded(req.graph, req.kinds, &file.name),
         dry_run: req.dry_run,
         writes,
