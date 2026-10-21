@@ -192,4 +192,48 @@ mod tests {
             "@org%2Fsoftware"
         );
     }
+
+    #[test]
+    fn the_blob_of_a_version_needs_its_row_and_its_digest() {
+        use sha2::{Digest, Sha256};
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::open(&dir.path().join("registry.db")).unwrap();
+        let blobs = dir.path().join("packages");
+        let stored = Stored {
+            db: &db,
+            dir: &blobs,
+        };
+        let (package, version) = (name("@t/pkg"), Version::parse("1.0.0").unwrap());
+        let row = PackageVersion {
+            name: package.to_string(),
+            version: version.to_string(),
+            sha256: hex::encode(Sha256::digest(b"payload")),
+            size_bytes: 7,
+            description: String::new(),
+            keywords: String::new(),
+            publisher: "t".into(),
+            published_at: "2026-01-01T00:00:00Z".into(),
+            signature: None,
+            manifest: String::new(),
+        };
+
+        // A staged blob is not a version: no row, no blob, and discarding leaves nothing.
+        let staged = stored.stage(&package, &version, b"payload").unwrap();
+        assert_eq!(stored.blob(&package, &version), Ok(None));
+        staged.discard();
+        assert!(!blobs.join("@t%2Fpkg/1.0.0.wasm").exists());
+
+        stored.seed(&package, &version, &row, b"payload");
+        assert_eq!(
+            stored.blob(&package, &version),
+            Ok(Some(b"payload".to_vec()))
+        );
+        assert_eq!(
+            stored.blob(&package, &Version::parse("1.0.1").unwrap()),
+            Ok(None)
+        );
+
+        std::fs::write(blobs.join("@t%2Fpkg/1.0.0.wasm"), b"tampered").unwrap();
+        assert_eq!(stored.blob(&package, &version), Err(DigestMismatch));
+    }
 }
