@@ -64,7 +64,6 @@ fn refused_about_the_name(result: Result<init::Outcome, Refusal<InitField>>, dir
     behavior = "non_interactive_init",
     verify = "init refuses a project name whose starter spec ID a kind of an extension it enables reserves, before anything is written"
 )]
-#[ignore = "flipped by T4"]
 fn init_refuses_a_name_a_kind_it_enables_reserves() {
     let scratch = TempDir::new().unwrap();
     let runtime = specforge_project::testing::component_runtime();
@@ -83,7 +82,6 @@ fn init_refuses_a_name_a_kind_it_enables_reserves() {
     behavior = "non_interactive_init",
     verify = "init refuses a structural keyword as the starter's spec ID, whatever it enables"
 )]
-#[ignore = "flipped by T4"]
 fn init_refuses_a_structural_keyword_as_the_starter_id_whatever_it_enables() {
     let scratch = TempDir::new().unwrap();
     let runtime = specforge_project::testing::component_runtime();
@@ -97,7 +95,6 @@ fn init_refuses_a_structural_keyword_as_the_starter_id_whatever_it_enables() {
     behavior = "non_interactive_init",
     verify = "init refuses a project name whose starter spec ID a kind of an extension it enables reserves, before anything is written"
 )]
-#[ignore = "flipped by T4"]
 fn init_refuses_a_name_a_local_extensions_kind_reserves() {
     let scratch = TempDir::new().unwrap();
     let wasm = scratch.path().join("tpl.wasm");

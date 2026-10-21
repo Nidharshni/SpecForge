@@ -7,7 +7,6 @@ use specforge_test_macros::test as specforge_test;
     behavior = "non_interactive_init",
     verify = "a directory named after a kind init enables is refused as the project name, writing nothing"
 )]
-#[ignore = "flipped by T4"]
 fn a_directory_named_after_a_kind_init_enables_is_refused_writing_nothing() {
     let dir = TestProject::new().without_config();
     let release = dir.root().join("release");
