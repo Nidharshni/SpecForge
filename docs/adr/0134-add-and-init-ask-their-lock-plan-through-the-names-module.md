@@ -2,7 +2,7 @@
 
 **Status:** accepted (2026-10-17, architecture round 14, plan 02). Amends [ADR 0105](0105-one-reader-for-the-extensions-a-change-names.md)
 D1 (add's `apply` goes; the reader asks the opened plan) and [ADR 0065](0065-every-extension-change-is-one-lock-plan-change.md)
-D1 (add and init ask through `extension::names`). Keeps [ADR 0098](0098-one-claim-rule-for-the-extensions-a-change-names.md)
+D1 (add and init ask through `extension::names`). Amended by [ADR 0189](0189-init-checks-and-lays-out-its-starter-with-the-registry-build-of-the-extensions-it-enables.md) (D1: a local file's answer carries its declaration, not only its starter template). Keeps [ADR 0098](0098-one-claim-rule-for-the-extensions-a-change-names.md)
 D1 and its rejected option c. Builds on [ADR 0138](0138-the-lock-plan-answers-what-a-project-already-has.md), under which
 "already there" is the plan's answer, so no operation filters its asks.
 

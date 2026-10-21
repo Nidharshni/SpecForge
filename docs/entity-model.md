@@ -314,14 +314,14 @@ identifier = ( letter | "_" ) , { letter | digit | "_" } ;   (* 2-60 chars — e
 - **Reserved words (E013):** an identifier MUST NOT equal a reserved word —
   the structural keywords (`spec`, `ref`, `use`, `define`, `defaults`) or any
   extension-declared entity kind (e.g. `behavior`, `feature`). Enforced at
-  graph build with a rename suggestion; a collision makes `refs [behavior]`-
+  graph build with a rename suggestion (the rule is `specforge_registry::refused_id`); a collision makes `refs [behavior]`-
   style entries ambiguous with the block introducer itself.
 
 | Convention | Used By | Examples |
 |------------|---------|----------|
 | Free-form identifier | all named entities | `data_persistence`, `UserRepository`, `camelCase`, `SCREAMING_SNAKE` |
 | Scheme-based | ref | `gh.issue:42`, `jira.epic:PROJ-123` |
-| Singleton | spec | one per project, no ID |
+| Singleton | spec | one per project, its ID the header's string |
 
 ### Flat Namespace
 

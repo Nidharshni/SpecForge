@@ -1206,8 +1206,15 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   the declaration's name and each incoming reference's token, positions in the text the project was compiled from,
   which its planned change keeps, with the spec root they are relative to. MCP writes it only to files that still hold that text, refusing `conflict` otherwise; the LSP
   hands it to the editor only over buffers that are that text (`ContentModified` otherwise; ADR 0116, ADR 0023 D3).
-  The new ID is refused when it is not an identifier of 2–60 characters, is a reserved word (E013) or is taken. A
+  The new ID is refused (`authoring::entity_id::validate_id`) when it is not an identifier of 2–60 characters, is a reserved word (E013) or is taken. A
   rename is not a typed edit and is not checked by E080 (ADR 0151, amended).
+- **Starter**: the spec file init writes (`spec/hello.spec`): the first template the extensions it enables declare,
+  in `specforge.json` order, else the structural one, its `{project}` the project's spec ID and `{version}` its
+  version. It is checked and laid out by the registry build of those extensions, made before the project exists
+  (ADR 0189), so its first `check` and `format --check` accept it.
+- **Entity ID rule**: what `check` refuses of an entity ID: outside 2–60 characters (E014) or a reserved word (E013)
+  (`specforge_registry::refused_id`). A token ID is also the grammar's identifier (`authoring::entity_id::validate_id`);
+  a spec block's ID, its header's string, is not.
 - **Text edit**: one change of a project file's text, a span of the text the project was compiled from and the
   text it becomes (`specforge_ops::read::navigate::TextEdit`; an empty span inserts). Navigation's fixes and a
   rename plan answer them; `navigate::apply_edits` applies a file's edits whole or not at all; the LSP converts
