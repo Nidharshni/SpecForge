@@ -254,6 +254,8 @@ behavior hoist_file_defaults "Hoist File Defaults" {
   verify unit "a file with a syntax error is left alone"
   verify unit "a migration that hoists defaults keeps the graph"
   verify unit "a hoist that changes the graph is refused and nothing is written"
+  verify unit "a field its kind does not declare is never hoisted, and the other steps are written"
+  verify unit "the block goes above the file's first block when an import follows it"
 }
 
 behavior generate_migration_diff "Generate Migration Diff" {

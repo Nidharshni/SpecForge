@@ -215,3 +215,36 @@ fn migrate_refuses_a_hoist_that_changes_the_graph() {
     assert!(outcome.writes.is_empty(), "{:?}", outcome.writes);
     assert_eq!(std::fs::read_to_string(&file).unwrap(), original);
 }
+
+#[specforge_test(
+    behavior = "hoist_file_defaults",
+    verify = "a field its kind does not declare is never hoisted, and the other steps are written"
+)]
+#[ignore = "flipped by T4"]
+fn a_migration_over_a_field_its_kind_does_not_declare_writes_its_titles() {
+    let block = |n: usize| {
+        format!(
+            "behavior b{n} \"B{n}\" {{\n  contract \"c\"\n  ports [Repo]\n  tags [Session]\n}}\n"
+        )
+    };
+    let text = format!(
+        "type Session {{\n  token string\n}}\n\nport Repo \"Repo\" {{\n  direction inbound\n}}\n\n{}",
+        (1..=5).map(block).collect::<Vec<_>>().join("\n")
+    );
+    let dir = project_of(&text);
+    let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+
+    let outcome = run(
+        &request(&root),
+        Some(specforge_project::testing::component_runtime()),
+    );
+
+    assert!(outcome.ok() && outcome.migrated(), "{outcome:?}");
+    let after = std::fs::read_to_string(dir.path().join("a.spec")).unwrap();
+    assert!(
+        after.starts_with("defaults behavior {\n  ports [Repo]\n}\n\ntype Session \"Session\" {"),
+        "{after}"
+    );
+    assert_eq!(after.matches("tags [Session]").count(), 5, "{after}");
+    assert!(outcome.structural_differences().is_empty());
+}

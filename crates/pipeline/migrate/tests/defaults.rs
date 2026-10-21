@@ -214,3 +214,29 @@ fn a_file_with_a_syntax_error_is_left_alone() {
     );
     assert_eq!(migrated(&text), text);
 }
+
+#[specforge_test(
+    behavior = "hoist_file_defaults",
+    verify = "the block goes above the file's first block when an import follows it"
+)]
+#[ignore = "flipped by T6"]
+fn the_block_goes_above_the_first_block_when_an_import_follows_it() {
+    let text = format!(
+        "type Thing \"T\" {{\n}}\n\nuse \"x\"\n\n{}",
+        blocks(3, |_| BOTH.to_string())
+    );
+
+    let after = migrated(&text);
+
+    assert!(
+        after.starts_with("defaults behavior {\n  ports    [R]\n  features [F]\n}\n\ntype Thing"),
+        "{after}"
+    );
+    let file = specforge_parser::parse(&after, "a.spec");
+    let forms = specforge_graph::FieldForms::default();
+    let (_, diagnostics) = specforge_graph::FileDefaults::of(&file, &forms);
+    assert!(
+        diagnostics.iter().all(|d| d.code != "E078"),
+        "{diagnostics:?}"
+    );
+}
