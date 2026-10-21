@@ -9,8 +9,8 @@ use specforge_parser::{Entity, FieldEntry, FieldValue, Written, parse};
 /// hoisted when every block of the kind writes it exactly once, as a one-line list of bare items with no annotation
 /// and no comment on or directly above its line, and at least two blocks write the same list; that list becomes the
 /// default and is deleted from those blocks, the others keep theirs. A kind's block is written only when it saves at
-/// least one line. The block goes after the last import, or before the first form's doc comment as the parse reads
-/// it (below the format header), with its keys padded to the longest; the layout of the edited blocks is left to
+/// least one line. The block goes after the last import that stands above the file's first block, else before the
+/// first form's doc comment as the parse reads it (below the format header), with its keys padded to the longest; the layout of the edited blocks is left to
 /// `specforge format`. A file with a syntax error is returned unchanged. A field is hoisted only where the graph's
 /// defaults rule applies it under `forms` (`FileDefaults::entry`, ADR 0149 D4, ADR 0154 D1): the forms the migrate
 /// operation's judge compiles with, so the hoist keeps the graph by construction and the judge's graph comparison is
@@ -91,9 +91,17 @@ pub(crate) fn hoist_defaults(text: &str, forms: &FieldForms) -> String {
     if blocks.is_empty() {
         return text.to_string();
     }
-    let (at, after_imports) = match file.imports.iter().map(|i| i.span.end_line).max() {
+    let first = first_form_row(&file.entities[0]);
+    // An import below the first block would put the block there: E078 (ADR 0149 D5).
+    let (at, after_imports) = match file
+        .imports
+        .iter()
+        .map(|i| i.span.end_line)
+        .filter(|&end| end <= first)
+        .max()
+    {
         Some(end) => (end, true),
-        None => (first_form_row(&file.entities[0]), false),
+        None => (first, false),
     };
     let mut out = String::with_capacity(text.len());
     for index in 0..=lines.len() {

@@ -238,8 +238,9 @@ behavior hoist_file_defaults "Hoist File Defaults" {
     becomes the default and is deleted from the blocks that write it; the
     others keep theirs. A
     block MUST be written only when it saves at least one line. It goes after
-    the last import, or before the first form and its doc comment as the parse
-    reads it, never above the format header. The
+    the last import that stands above the file's first block, else before the
+    first form and its doc comment as the parse reads it, never above the
+    format header and never below a block (E078). The
     step MUST leave a text with a syntax error as it is and MUST be
     idempotent. The hoist keeps the graph by asking the rule the graph applies;
     the graph comparison still refuses, and writes nothing, should any step
