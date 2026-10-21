@@ -541,7 +541,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   input's `owes_none` is not this word: it says the entity owes none, and such an entity still counts
   when it declares obligations.
 - **Package registry client**: what talks to a package registry: search, versions, metadata, download and
-  publish over HTTP, credentials in the OS keyring, publisher trust and package signing
+  publish over HTTP, credentials, publisher trust and package signing
   (`specforge-registry-client`). Not the Registry build, which is pure and needs none of it.
   Operations reach it only through the `Registry` port, which lists a package's versions, fetches
   one, pins the publisher keys a committed install accepted, and publishes a declared package
@@ -555,11 +555,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   beside the client (`assert_registry_contract`, `assert_client_contract`). A rate-limited call is sent again
   by the spec's backoff (`Retrying`), and every request carries the credential the user keeps for that
   registry (ADR 0044 as amended).
-- **Registry credential**: the token a request to one registry carries, kept per registry alias in
-  `~/.specforge/credentials.json`, never in `specforge.json`: a secret `specforge login --token` stored in the OS
-  keyring (a 0600 file without one), or a reference to an environment variable (`--token-env`) or a file
-  (`--token-file`), resolved before any request (`CredentialStore::credential`; R010, R011). A `credentials.json` that cannot be read is R012 for every reader: login and logout refuse and leave it, doctor counts it unusable (ADR 0045 as amended). Every read carries
+- **Registry credential**: the token a request to one registry carries, kept per registry root in
+  `~/.specforge/credentials.json`, never in `specforge.json`: a secret `specforge login --token` stored (a 0600 file under
+  `~/.specforge/secrets/`), or a reference to an environment variable (`--token-env`) or a file
+  (`--token-file`), resolved before any request (`CredentialStore::credential`; R010, R011, and R-AUTH-021 for a lost secret). The client sends it only to the registry root it was kept for (ADR 0178). A `credentials.json` that cannot be read is R012 for every reader: login and logout refuse and leave it, doctor counts it unusable (ADR 0045 as amended). Every read carries
   it; a publish takes `SPECFORGE_REGISTRY_TOKEN` first (ADR 0045 as amended).
+- **User's registry files**: the directory `specforge_ops_registry::User` reads and writes: `credentials.json` (keyed by
+  registry root), `secrets/`, `signing-key.json` and `known-keys.json`. `User::current()` is `~/.specforge`,
+  `User::at(dir)` any other; nothing else reads them, and login, logout, doctor, fetch, search and publish ask it (ADR 0178).
 - **Fetch policy**: what a package passes before an operation sees it: the registry's reply reads as the protocol's JSON (R009 else;
   a malformed signature is that) and names the package and version asked for, the binary hashes to the served SHA-256, the served manifest reads as that
   package's declaration (one from before ADR 0012 is refused), and the publisher signature verifies with the
@@ -601,7 +604,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   request (`specforge_ops_registry::Configured::registry_for`, ADR 0045); a `registries` entry that can't be
   read refuses every registry operation with E067 first, so a scope it claims never falls to the default. `add`, `update` and
   `publish` ask that one registry; `search` asks every entry. A registry credential is kept under
-  the registry's alias (`login --registry`, else the default registry's).
+  the registry's root (`login --registry <alias>`, else the default registry's; `logout --url <root>` needs no project).
 - **Package name**: what an extension package is called, `@scope/name` (a registry holds only
   these) or `name` alone (a local module); each part `a-z 0-9 . _ -`, starting with a letter or
   digit, so it is always a relative path inside the directory it is joined to and one URL segment

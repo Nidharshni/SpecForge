@@ -2,6 +2,8 @@
 
 **Status:** accepted (2026-10-08). Amends ADR 0010 (the port's methods) and ADR 0036 (D3). Amended in round 16 (plan 11): one credential store, one read rule. Amended by [ADR 0172](0172-the-extension-a-path-names-is-read-by-one-module.md): D3's binary (E040) is read by the candidate module, as add reads it.
 
+**Amended by [ADR 0178](0178-a-registry-credential-belongs-to-its-registry-root.md) (architecture round 20, plan 01):** D5 and the round-5 and round-16 amendments' credential sentences: a credential is kept under its registry's root; login and logout go through `specforge_ops_registry::User`.
+
 **Amended by [ADR 0179](0179-a-publish-states-its-package-identity-once.md) (architecture round 18, plan 09), D2:** the port publishes `(&DeclaredPackage, wasm)`; `Upload` is gone.
 
 `specforge publish` was decided in the CLI: it found and read the binary (E040), checked the

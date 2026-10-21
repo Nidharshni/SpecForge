@@ -1,6 +1,6 @@
 # A registry is named by its root; the wire builds every address and reads every answer
 
-**Status:** accepted (2026-10-13, architecture round 9, plan 05). Amends ADR 0044 (D1, D2, D5) and ADR 0045 (D1).
+**Status:** accepted (2026-10-13, architecture round 9, plan 05). Amends ADR 0044 (D1, D2, D5) and ADR 0045 (D1). Amended by [ADR 0178](0178-a-registry-credential-belongs-to-its-registry-root.md) (architecture round 20, plan 01): the root also keys the user's credential.
 
 A `registries` entry named a registry by its "base URL", which by convention ended in the protocol's version prefix
 (`https://registry.example/v1`). Nothing enforced or explained the convention: the server printed its root on start,
