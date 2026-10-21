@@ -119,6 +119,13 @@ pub fn verify(
     add: bool,
 ) -> Result<String, Refusal<EditField>> {
     let mut block = Block::open(site, text)?;
+    // A union is written `type name = "a" | "b"`: it has no body to hold a statement (ADR 0151).
+    if add && block.entry("variants").is_some() {
+        return Err(not_editable(
+            EditField::Value,
+            format!("'{}' is a union: it has no verify statements", site.id),
+        ));
+    }
     let before = block.text();
     let kind = kind.unwrap_or("");
     let obligations = &block.entity().obligations;
