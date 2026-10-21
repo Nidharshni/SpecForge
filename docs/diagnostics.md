@@ -711,9 +711,9 @@ E062: Token budget too small for the export
 the most central entities that fit the budget, but some of the export never
 shrinks: the envelope (`format_version`, `schema_version`), the `token_budget`
 block listing the dropped entity IDs, and, with `--with-schema`, the embedded
-schema, which is never cut short. The budget is below that fixed part, so no
-export fits. Raise the budget, or drop `--with-schema` when the schema alone is
-over it.
+schema, which is never cut short, and, in a scoped export (`--scope`), the
+scope's own entity. The budget is below that fixed part, so no export fits.
+Raise the budget, or drop `--with-schema` when the schema alone is over it.
 
 Owner: core
 Level: error

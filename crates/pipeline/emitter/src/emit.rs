@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 
+use specforge_common::Sym;
 use specforge_coverage::{Status, Verdict};
 use specforge_graph::{FieldForms, Graph, Node};
 use specforge_registry::{FieldRegistry, KindRegistry};
@@ -108,7 +109,7 @@ fn unversioned() -> &'static GraphProtocolSchema {
 /// selection before any shape: not budgeted, no schema. Under `token_budget`
 /// every other format is fitted
 /// by `budget::fit`: the whole export when it fits; otherwise the least
-/// central entities are dropped, with their edges, until it fits, and the
+/// central entities (never the scope's own) are dropped, with their edges, until it fits, and the
 /// export says which in its `token_budget` block. An embedded schema counts
 /// and is never cut: a schema over the budget is E062, as is a budget below the
 /// export with no entities. DOT is not budgeted.
@@ -148,9 +149,14 @@ pub fn emit(graph: &Graph, options: &EmitOptions<'_>) -> Result<String, EmitterE
     match options.token_budget {
         None => shape.render(&selected, None),
         Some(max_tokens) => {
-            crate::budget::fit(&selected, max_tokens, shape.schema_cost(), |g, budget| {
-                shape.render(g, budget)
-            })
+            let root = options.scope.map(Sym::new);
+            crate::budget::fit(
+                &selected,
+                max_tokens,
+                shape.schema_cost(),
+                root,
+                |g, budget| shape.render(g, budget),
+            )
         }
     }
 }
