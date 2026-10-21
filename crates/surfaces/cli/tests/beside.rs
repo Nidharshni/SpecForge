@@ -161,8 +161,10 @@ fn a_notice_no_document_carries_stays_beside_it() {
     assert!(run.json().get("notices").is_none(), "{}", run.stdout);
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "export_agent_graph_format",
+    verify = "a kind of kinds the project does not know matches nothing and is reported as I020, on every surface"
+)]
 fn export_writes_an_unknown_kind_beside_its_document() {
     let p = software();
 

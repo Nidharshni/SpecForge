@@ -58,7 +58,7 @@ pub struct QueryRequest<'a> {
 /// with `include_coverage`, each node carrying its `coverage_status`, written
 /// by the export. Its notices are what versioning the schema reported
 /// (ADR 0111), then I020 for each kind of the filter the project does not
-/// know. An entity the graph lacks is
+/// know (the export's). An entity the graph lacks is
 /// [`crate::view::not_found`] (E003, did-you-mean), refused before the
 /// recorded report is read; a recorded report that cannot be read, when
 /// coverage is asked for, is its E045 failure.
@@ -76,7 +76,6 @@ pub fn query(
             .expect_err("a format the agent table does not admit is refused")
             .about(QueryField::Format));
     }
-    let unknown = view.kinds().unknown_in(&request.kinds);
     let graph = view.graph();
     graph.node(request.entity_id).ok_or_else(|| {
         crate::view::not_found(graph, request.entity_id).about(QueryField::EntityId)
@@ -109,7 +108,7 @@ pub fn query(
             | ExportField::Directory => None,
         })
     })?;
-    Ok(exported.and_notices(unknown))
+    Ok(exported)
 }
 
 /// The JSON Schema of the document [`query`] answers: the export document of
@@ -144,19 +143,17 @@ pub struct ListRequest<'a> {
 /// kind the project does not know.
 pub fn list<'v>(view: &ProjectView<'v>, request: &ListRequest) -> Noticed<Vec<&'v Node>> {
     let kind = request.kind.filter(|kind| !kind.is_empty());
-    let notices = kind
-        .map(|kind| view.kinds().unknown_in(&[kind]))
-        .unwrap_or_default();
+    let filter = view.kind_filter(kind.as_slice());
     let entities = view
         .graph()
         .nodes()
         .into_iter()
-        .filter(|node| kind.is_none_or(|kind| node.kind.raw.as_str() == kind))
+        .filter(|node| filter.keeps(node.kind.raw.as_str()))
         .filter(|node| request.fields.is_none_or(|wanted| holds(node, wanted)))
         .skip(request.offset)
         .take(request.limit.unwrap_or(usize::MAX))
         .collect();
-    Noticed::new(entities, notices)
+    Noticed::new(entities, filter.into_notices())
 }
 
 /// Whether every field of `wanted` is one `node` holds, with that value.
@@ -222,7 +219,7 @@ pub fn search<'v>(
             crate::view::not_found(view.graph(), id).about(SearchField::Referencing)
         })?;
     }
-    let notices = view.kinds().unknown_in(&request.kinds);
+    let notices = view.kind_filter(&request.kinds).into_notices();
     let query = EntityQuery {
         text: request.text,
         scope: MatchScope::NamesAndText,

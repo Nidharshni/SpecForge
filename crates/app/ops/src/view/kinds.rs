@@ -107,7 +107,7 @@ impl KnownKinds<'_> {
     /// ([`has`](Self::has) is false), once each, in the filter's order, as
     /// I020 notices `unknown entity kind '<kind>'` with `did you mean
     /// '<closest>'?` among every kind it has. The filter still drops them.
-    pub fn unknown_in(&self, filter: &[&str]) -> Vec<Diagnostic> {
+    fn unknown_in(&self, filter: &[&str]) -> Vec<Diagnostic> {
         let mut reported: Vec<&str> = Vec::new();
         let mut notices = Vec::new();
         for &kind in filter {

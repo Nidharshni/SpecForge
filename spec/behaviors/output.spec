@@ -1176,7 +1176,8 @@ behavior export_agent_graph_format "Export Agent Graph Format" {
     references a non-existent entity ID, the system MUST emit an E003
     diagnostic and exit with code 1. --depth (with --scope) limits the hops
     from it, and --kinds keeps only entities of those kinds, the scoped
-    entity always kept; depth without a scope is invalid input; so are --with-schema and
+    entity always kept; a kind the project does not know matches nothing
+    and is reported as I020, naming the closest kind; depth without a scope is invalid input; so are --with-schema and
     --no-schema together.
     specforge.export and the graph resources take the same options. The
     output MUST include a schema_version field identifying the Graph
@@ -1189,6 +1190,7 @@ behavior export_agent_graph_format "Export Agent Graph Format" {
   verify unit "depth without a scope is invalid input on every surface"
   verify unit "with_schema and no_schema together are invalid input on every surface"
   verify integration "depth and kinds narrow the export the same way on every surface"
+  verify integration "a kind of kinds the project does not know matches nothing and is reported as I020, on every surface"
   verify unit "an export failure carries its code as a constant, never in its message"
   verify unit "output conforms to Graph Protocol schema"
   verify unit "output includes schema_version field"

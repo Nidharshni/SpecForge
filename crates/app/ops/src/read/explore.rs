@@ -121,19 +121,16 @@ pub fn explore(
         return Err(crate::view::depth_without_entity());
     }
     let graph = view.graph();
-    let notices = request
-        .kind
-        .map(|kind| view.kinds().unknown_in(&[kind]))
-        .unwrap_or_default();
+    let filter = view.kind_filter(request.kind.as_slice());
 
     let reached = request
         .entity_id
         .map(|id| view.neighbourhood(id, request.depth))
         .transpose()?;
     let of_kind = |id: &str| {
-        request
-            .kind
-            .is_none_or(|kind| graph.node(id).is_some_and(|node| node.kind.raw == kind))
+        graph
+            .node(id)
+            .is_some_and(|node| filter.keeps(node.kind.raw.as_str()))
     };
     let selection: BTreeSet<&'static str> = match &reached {
         Some(reached) => reached
@@ -199,6 +196,6 @@ pub fn explore(
             most_connected,
             unconnected,
         },
-        notices,
+        filter.into_notices(),
     ))
 }

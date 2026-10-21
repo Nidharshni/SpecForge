@@ -62,9 +62,8 @@ fn project() -> Assembled {
 fn a_filter_reports_each_unknown_kind_once_naming_the_closest() {
     let project = project();
     let view = project.view();
-    let notices =
-        view.kinds()
-            .unknown_in(&["behaviour", "widget", "behaviour", "Behavior", "zzzzzzzz"]);
+    let filter = view.kind_filter(&["behaviour", "widget", "behaviour", "Behavior", "zzzzzzzz"]);
+    let notices = filter.notices();
 
     let reported: Vec<(&str, &str, Option<&str>)> = notices
         .iter()

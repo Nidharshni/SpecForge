@@ -153,7 +153,8 @@ behavior provide_mcp_export_tool "Provide MCP Export Tool" {
     accepts format (graph|context|brief|dot|markdown, default graph; json is graph), scope? (optional entityId
     to restrict to subgraph), max_tokens? (optional integer token budget),
     with_schema? and no_schema? (optional booleans), depth? (with scope,
-    hops from the scoped entity), kinds? (entity kinds to keep) and
+    hops from the scoped entity), kinds? (entity kinds to keep; a kind the
+    project does not know is reported as I020) and
     schema_version? (as specforge export --schema-version). The tool MUST return the
     graph in the requested export format. When max_tokens is
     specified, the output MUST be truncated to fit within the budget,
@@ -171,6 +172,7 @@ behavior provide_mcp_export_tool "Provide MCP Export Tool" {
     project's schema cache; the tool only reads the cache.
   """
   verify unit "specforge.export takes the options specforge export takes"
+  verify integration "a kind of kinds the project does not know matches nothing and is reported as I020, on every surface"
   verify unit "specforge.export tool returns graph in requested format"
   verify unit "scope parameter restricts to subgraph"
   verify unit "max_tokens truncates output to fit token budget"

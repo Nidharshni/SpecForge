@@ -9,6 +9,7 @@ use specforge_ops::read::export::{ExportField, Request, export, export_recorded}
 use specforge_ops::read::query::{ListRequest, SearchRequest, list, search};
 use specforge_ops::read::review::{ReviewRequest, review};
 use specforge_ops::view::{DEPTH_WITHOUT_ENTITY, EntityField, Select};
+use specforge_test_macros::test as specforge_test;
 
 /// A project with one behavior, `login`.
 fn project() -> Assembled {
@@ -29,8 +30,10 @@ fn assert_i020_for_behaviour(notices: &[specforge_common::Diagnostic]) {
     );
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "export_agent_graph_format",
+    verify = "a kind of kinds the project does not know matches nothing and is reported as I020, on every surface"
+)]
 fn export_reports_an_unknown_kind() {
     let project = project();
     let view = project.view();

@@ -230,8 +230,9 @@ pub fn export(
     request: &Request,
 ) -> Result<Noticed<String>, Refusal<ExportField>> {
     let versioned = view.versioned_schema();
-    let document = export_versioned(view, &versioned, request)?;
-    Ok(Noticed::new(document, versioned.notices()))
+    let (document, filter_notices) =
+        export_versioned(view, &versioned, request)?.into_value_and_notices();
+    Ok(Noticed::new(document, versioned.notices()).and_notices(filter_notices))
 }
 
 /// The export of the view's project for `request`, written into `directory` as
@@ -297,7 +298,7 @@ fn export_versioned(
     view: &ProjectView,
     versioned: &VersionedSchema,
     request: &Request,
-) -> Result<String, Refusal<ExportField>> {
+) -> Result<Noticed<String>, Refusal<ExportField>> {
     if request.depth.is_some() && request.scope.is_none() {
         return Err(OpError::new(
             OpErrorKind::InvalidInput,
@@ -326,11 +327,12 @@ fn export_versioned(
             .about(ExportField::SchemaVersion)
         })?;
     }
+    let filter = view.kind_filter(&request.kinds);
     let options = EmitOptions {
         format: request.format().emit_format(),
         scope: request.scope,
         depth: request.depth,
-        kind_filter: request.kinds.clone(),
+        kind_filter: filter.kinds().to_vec(),
         schema: versioned.schema(),
         attach_schema: request.attaches_schema(),
         token_budget: request.max_tokens,
@@ -339,12 +341,14 @@ fn export_versioned(
         coverage: request.coverage.map(|coverage| &coverage.verdicts),
         field_forms: Some(view.registries().field_forms()),
     };
-    emit(view.graph(), &options).map_err(|error| failure(view, error))
+    let document = emit(view.graph(), &options).map_err(|error| failure(view, error))?;
+    Ok(Noticed::new(document, filter.into_notices()))
 }
 
 /// What `specforge export` did: the export, and what became of the record.
 /// Its notices (what versioning reports against the view root's record: I016,
-/// W053) are found before the export ran, and reported even when it fails.
+/// W053) are found before the export ran, and reported even when it fails; the filter's I020 is
+/// reported when the export ran.
 #[derive(Debug)]
 pub struct RecordedExport {
     pub export: Result<String, Refusal<ExportField>>,
@@ -370,8 +374,12 @@ pub enum CacheWrite {
 /// a successful export. MCP never calls it.
 pub fn export_recorded(view: &ProjectView, request: &Request) -> Noticed<RecordedExport> {
     let versioned = view.versioned_schema();
-    let notices = versioned.notices();
-    let export = export_versioned(view, &versioned, request);
+    let mut notices = versioned.notices();
+    let export = export_versioned(view, &versioned, request).map(|exported| {
+        let (document, filter_notices) = exported.into_value_and_notices();
+        notices.extend(filter_notices);
+        document
+    });
     let cache = match (&export, view.schema_cache()) {
         (Ok(_), Some(cache)) => match cache.record(&versioned) {
             Ok(()) => CacheWrite::Written,

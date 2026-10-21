@@ -126,11 +126,8 @@ pub fn coverage(
     view: &ProjectView,
     query: &CoverageQuery,
 ) -> Result<Noticed<CoverageOutcome>, Refusal<EntityField>> {
-    let notices = query
-        .kind
-        .map(|kind| view.kinds().unknown_in(&[kind]))
-        .unwrap_or_default();
-    Ok(Noticed::new(selected(view, query)?, notices))
+    let filter = view.kind_filter(query.kind.as_slice());
+    Ok(Noticed::new(selected(view, query)?, filter.into_notices()))
 }
 
 /// [`coverage`]'s rows without its notices, for the reads that compose them.

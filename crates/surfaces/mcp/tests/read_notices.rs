@@ -195,8 +195,10 @@ fn only_the_envelopes_open_a_noticed_read() {
     assert!(problems.is_empty(), "{}", problems.join("\n"));
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "provide_mcp_export_tool",
+    verify = "a kind of kinds the project does not know matches nothing and is reported as I020, on every surface"
+)]
 fn export_and_the_graph_views_report_an_unknown_kind() {
     let mut server = project_with_unreadable_record();
     let response = server.call_tool(
