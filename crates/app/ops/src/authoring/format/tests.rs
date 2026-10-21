@@ -110,5 +110,6 @@ fn on_disk(files: &[(&str, &str)]) -> tempfile::TempDir {
 
 mod configs;
 mod document;
+mod forms;
 mod run;
 mod targets;

@@ -1,6 +1,8 @@
 //! A document is written in the field forms of its own project, found from its place.
 
 use specforge_lsp::answers;
+use specforge_project::RuntimeSource;
+use specforge_test_macros::test as specforge_test;
 use tempfile::TempDir;
 use tower_lsp::lsp_types::{FormattingOptions, Url};
 
@@ -29,14 +31,22 @@ fn formatted(served: &Served, uri: &Url, text: &str) -> String {
         insert_spaces: true,
         ..Default::default()
     };
-    let answer =
-        answers::formatting(&served.state(), uri, &options, None).expect("an open document");
+    let answer = answers::formatting(
+        &served.state(),
+        &RuntimeSource::project(),
+        uri,
+        &options,
+        None,
+    )
+    .expect("an open document");
     let edits = serde_json::to_value(&answer.edits).unwrap();
     apply_edits(text, edits.as_array().unwrap())
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test(
+    behavior = "lsp_format_document",
+    verify = "a nested project's document is written in its own project's field forms"
+)]
 fn a_nested_projects_document_is_written_in_its_own_projects_forms() {
     let dir = project(&[
         ("specforge.json", NONE),
@@ -49,8 +59,10 @@ fn a_nested_projects_document_is_written_in_its_own_projects_forms() {
     assert!(text.contains("\n  category auth\n"), "{text}");
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test(
+    behavior = "lsp_format_document",
+    verify = "a document formatted before its project opens is written in its project's field forms"
+)]
 fn a_document_formatted_before_its_project_opens_is_written_in_its_projects_forms() {
     let dir = project(&[("specforge.json", SOFTWARE), ("spec/a.spec", TAGGED)]);
     let served = Served::at(dir).restore(&[("spec/a.spec", TAGGED)]);
@@ -59,8 +71,10 @@ fn a_document_formatted_before_its_project_opens_is_written_in_its_projects_form
     assert!(text.contains("\n  category auth\n"), "{text}");
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test(
+    behavior = "lsp_respect_editor_config",
+    verify = "a document outside any project is written with no field forms"
+)]
 fn a_document_outside_any_project_is_written_with_no_forms() {
     let outside = project(&[("loose.spec", TAGGED)]);
     assert!(
@@ -74,8 +88,10 @@ fn a_document_outside_any_project_is_written_with_no_forms() {
     assert_eq!(formatted(&served, &uri, TAGGED), TAGGED);
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test(
+    behavior = "lsp_format_document",
+    verify = "a document of another project is written in that project's field forms, not the served project's"
+)]
 fn a_document_of_another_project_is_written_in_that_projects_forms() {
     let dir = project(&[
         ("specforge.json", NONE),

@@ -152,8 +152,11 @@ async fn editor_formatting_reaches_the_cli_text_in_one_pass() {
 }
 
 /// The editor served at an outer project writes a nested project's values as `specforge format` does.
+#[specforge_test(
+    behavior = "lsp_format_document",
+    verify = "the editor writes a nested project's values as specforge format does"
+)]
 #[tokio::test]
-#[ignore = "flipped by T3"]
 async fn the_editor_writes_a_nested_projects_values_as_specforge_format_does() {
     use specforge_ops::authoring::format::{Mode, Request, run};
     let tagged = "behavior bb \"B\" {\n  contract \"The system MUST x\"\n  category \"auth\"\n}\n";

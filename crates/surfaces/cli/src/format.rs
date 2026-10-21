@@ -146,7 +146,8 @@ fn print_diagnostic(d: &Diagnostic, terminal: &Terminal) {
 }
 
 /// Format stdin, text of the project at `root` in `dir`, and write it to
-/// stdout: it gets the configuration a file in `dir` would. The formatted
+/// stdout: it gets the configuration a file in `dir` would, and its values the forms
+/// of the project at `root`. The formatted
 /// text is printed even when a region was left unformatted; the exit code
 /// is then 1.
 fn run_stdin(root: &ProjectRoot, dir: &Path, runtime: SharedRuntime, terminal: &Terminal) -> Exit {
@@ -168,7 +169,7 @@ fn run_stdin(root: &ProjectRoot, dir: &Path, runtime: SharedRuntime, terminal: &
         root: root.dir(),
         dir,
     };
-    let forms = format::forms(root, Some(runtime));
+    let forms = format::Forms::loading(RuntimeSource::Fixed(Some(runtime)));
     let result = format::document(place, &input, None, None, &forms);
 
     for d in &result.diagnostics {

@@ -14,7 +14,7 @@ use specforge_ops::asking::Asking;
 use specforge_ops::solver::Solver;
 use specforge_ops::view::ProjectView;
 use specforge_ops::{Caller, Containment, Outside};
-use specforge_project::{ProjectSession, SharedRuntime};
+use specforge_project::{ProjectSession, RuntimeSource, SharedRuntime};
 use std::path::{Path, PathBuf};
 
 /// Whether a call may change the project the server serves: decided by the
@@ -82,6 +82,9 @@ pub struct ProjectRef<'a> {
     /// call never finds none (ADR 0017). For MCP's own extension adapters,
     /// which are not operations over the view.
     pub runtime: &'a SharedRuntime,
+    /// Where another project the call reaches loads its extensions: the host's runtime, else each project's own,
+    /// as `McpState::open` loads them.
+    pub source: RuntimeSource,
     /// The host's SMT solver (the server's): what doctor checks.
     pub solver: &'a dyn Solver,
     /// The host's collector machine (the server's): what `specforge.collect` runs commands on.
@@ -201,6 +204,7 @@ impl<'s> Call<'s> {
                 Ok(ProjectRef {
                     root,
                     runtime,
+                    source: self.state.source(),
                     solver: &*self.state.solver,
                     machine: &*self.state.collector_machine,
                     view,
@@ -220,6 +224,7 @@ impl<'s> Call<'s> {
                 Ok(ProjectRef {
                     root,
                     runtime,
+                    source: self.state.source(),
                     solver: &*self.state.solver,
                     machine: &*self.state.collector_machine,
                     view,

@@ -3,7 +3,6 @@
 
 use super::*;
 use specforge_formatter::FormatConfig;
-use specforge_graph::FieldForms;
 use specforge_registry::{Asked, MemoryDisk};
 
 fn write_file(dir: &Path, name: &str, content: &str) {
@@ -17,7 +16,7 @@ fn load(dir: &Path, root: &Path) -> (FormatConfig, Vec<Diagnostic>) {
         "",
         None,
         None,
-        &FieldForms::default(),
+        &crate::authoring::format::Forms::none(),
     );
     (document.config, document.diagnostics)
 }

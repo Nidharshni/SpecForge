@@ -9,6 +9,7 @@ use specforge_common::Sym;
 use specforge_ops::authoring::fix::{self, FixQuery, Offer};
 use specforge_ops::authoring::format;
 use specforge_ops::read::navigate::{EntityQuery, MatchScope, Navigator, find_entities, outline};
+use specforge_project::RuntimeSource;
 use tower_lsp::jsonrpc::{Error, ErrorCode};
 use tower_lsp::lsp_types::{
     ClientCapabilities, CodeAction, CodeActionOrCommand, CodeActionResponse, CompletionResponse,
@@ -498,9 +499,13 @@ pub struct Formatted {
 
 /// Format the open document `uri` as `specforge format` formats its file
 /// (ADR 0021). Inside a project the project's configuration wins over
-/// `options`. `None` for a document that is not open.
+/// `options`. Values are written in the field forms of the document's own
+/// project (the served one's lent, another's loaded through `extensions`,
+/// none outside a project, ADR 0147 D6). `None` for a document that is not
+/// open.
 pub fn formatting(
     state: &LspState,
+    extensions: &RuntimeSource,
     uri: &Url,
     options: &FormattingOptions,
     lines: Option<format::Lines>,
@@ -515,13 +520,10 @@ pub fn formatting(
     let place = file
         .as_deref()
         .map_or(format::Place::Detached, format::Place::File);
-    // The served project's field forms; a document outside any file has none (ADR 0147).
-    let none = specforge_graph::FieldForms::default();
-    let forms = match place {
-        format::Place::Detached => &none,
-        _ => state.registries().field_forms(),
-    };
-    let formatted = format::document(place, doc.text(), lines, Some(editor), forms);
+    // shortcut: another project's forms load per request (about 25 ms an extension in a debug build);
+    // cache them in `LspState` keyed by root and the lock's stamp if format-on-save in nested projects is felt.
+    let forms = format::Forms::lending(state.environment(), extensions.clone());
+    let formatted = format::document(place, doc.text(), lines, Some(editor), &forms);
     // The formatter's diagnostics are positions in the document it formatted;
     // the store publishes them beside the compile's, never in their place.
     let findings = Findings {

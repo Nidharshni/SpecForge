@@ -1,10 +1,10 @@
-//! One document formatted with the configuration of where it belongs (ADR 0021 D2): the LSP's
-//! formatting requests, `format --stdin`, and each file of a run.
+//! One document formatted with the configuration and the field forms of the project it belongs to (ADR 0021 D2): the
+//! LSP's formatting requests, `format --stdin`, and each file of a run.
 
 use specforge_common::{Diagnostic, ProjectRoot, Sym, codes};
 use specforge_formatter::{FormatConfig, config, format_range, format_source};
 use specforge_graph::FieldForms;
-use specforge_project::{Environment, RuntimeSource, SharedRuntime};
+use specforge_project::{Environment, RuntimeSource};
 use specforge_registry::{Disk, PlainDisk};
 use std::collections::HashMap;
 use std::ops::Range;
@@ -156,31 +156,23 @@ impl<'a> Forms<'a> {
     }
 }
 
-/// The field forms of the project at `root`: its extensions loaded into
-/// `runtime` (none without one), their declarations read (ADR 0147).
-/// A project whose extensions do not load has the forms of those that do.
-pub fn forms(root: &ProjectRoot, runtime: Option<SharedRuntime>) -> FieldForms {
-    Environment::load(root, runtime)
-        .registries()
-        .field_forms()
-        .clone()
-}
-
 /// Format `text`, which belongs at `place`: the whole document, or the
 /// blocks `lines` touch. Inside a project its `.specforgefmt.toml` (else the
 /// defaults) decides, never `editor`; outside one, `editor` (else the
-/// defaults). Values are written in the form `forms` gives their fields
-/// (ADR 0147).
+/// defaults). Values are written in the forms of the document's own project,
+/// found from `place` as its configuration is; `forms` says which project the
+/// caller lends and where another project's extensions load (ADR 0147 D6).
 pub fn document<'a>(
     place: Place<'_>,
     text: &'a str,
     lines: Option<Lines>,
     editor: Option<EditorOptions>,
-    forms: &FieldForms,
+    forms: &Forms<'_>,
 ) -> FormattedDocument<'a> {
     // The LSP and `format --stdin` are unbounded (ADR 0092 D6): they read the file system as the user sees it.
-    let (file, resolved) = Configs::new(Forms::none(), &PlainDisk).place(place, editor);
-    format_text(resolved, text, lines, file, forms)
+    let mut configs = Configs::new(forms.clone(), &PlainDisk);
+    let (file, resolved) = configs.place(place, editor);
+    format_text(resolved, text, lines, file, configs.forms(place))
 }
 
 /// The directory `file` is in (`.` for a bare file name).
@@ -257,11 +249,15 @@ impl<'d> Configs<'d> {
         }
     }
 
-    /// The field forms of `file`'s project: the caller's when it holds that project, else loaded once per run;
-    /// none outside a project.
-    pub(super) fn forms_for_file(&mut self, file: &Path) -> &FieldForms {
-        let dir = directory_of(file);
-        match self.project_of(&dir) {
+    /// The field forms of the project `place` is in, as its configuration is found: the caller's when it holds that
+    /// project, else loaded once per run; none outside a project.
+    pub(super) fn forms(&mut self, place: Place<'_>) -> &FieldForms {
+        let root = match place {
+            Place::File(path) => self.project_of(&directory_of(path)),
+            Place::InProject { root, .. } => self.project_of(root),
+            Place::Detached => None,
+        };
+        match root {
             Some(root) => self.forms_of(&root),
             None => &self.none,
         }

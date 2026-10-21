@@ -82,11 +82,15 @@ behavior provide_mcp_format_tool "Provide MCP Format Tool" {
     unformatted (W142) MUST be returned among the diagnostics, with its file
     and line. Diagnostics from loading the format configuration
     (.specforgefmt.toml) MUST be returned in the result.
+    The served project's field forms are the session's: a call loads no
+    extension the served project holds.
     A specforge.json that does not say which files are the project's
     sources MUST fail the call as config_invalid (schema_mismatch) before
     any file is read, writing nothing.
   """
   verify unit "specforge.format formats spec files"
+  verify unit "a format call loads no extension the served project holds"
+  verify unit "a format call writes the served project's values in its forms"
   verify unit "the format document names each file from the project root"
   verify unit "check mode reports without modifying files"
   verify unit "diff mode returns FormatDiff entries"

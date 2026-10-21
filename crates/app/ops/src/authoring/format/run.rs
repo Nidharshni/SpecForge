@@ -6,7 +6,7 @@ use specforge_common::shape::Shape;
 use specforge_common::{Diagnostic, DiagnosticList, ProjectPath, ProjectRoot, codes};
 use std::path::{Path, PathBuf};
 
-use super::document::{Configs, FormattedDocument, Forms, format_text};
+use super::document::{Configs, FormattedDocument, Forms, Place, format_text};
 use super::targets::{Targets, targets};
 use crate::{Caller, OpError, OpErrorKind, ReadFailure, Refusal};
 
@@ -492,7 +492,7 @@ pub fn run(request: &Request) -> Result<Outcome, Refusal<FormatField>> {
         };
         outcome.checked += 1;
         let resolved = configs.for_file(&target, None);
-        let forms = configs.forms_for_file(&target);
+        let forms = configs.forms(Place::File(&target));
         // A span names the file as the document does.
         let name = ProjectPath::of(&outcome.root, &target);
         let FormattedDocument {
