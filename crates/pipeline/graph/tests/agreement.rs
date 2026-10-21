@@ -203,8 +203,10 @@ fn the_linker_and_the_finder_agree_on_every_case() {
 
 /// A default's derived name is held by the blocks that take the default's entry (`note`), whatever they write in
 /// the derived field (`parts`): `Car` takes `note` and writes `parts`; `Bus` writes its own `note` (ADR 0182 D2).
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "link_derived_references",
+    verify = "a default's derived name is held by the blocks that take its entry"
+)]
 fn a_default_s_derived_name_is_held_by_the_blocks_that_take_its_entry() {
     assert_agree(
         "a default's derived name, the derived field written",

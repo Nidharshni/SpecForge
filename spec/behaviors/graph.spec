@@ -66,7 +66,8 @@ behavior apply_file_defaults "Apply File Defaults" {
     default no block takes, MUST be W161. A defaults block is never a node. A
     token in a defaults block names its entity whether or not a block takes the
     default: a rename edits it, the editor's find-references shows it, and a
-    delete refuses it.
+    delete refuses it. A default's token, a type name a derived field reads in it
+    included, is held by each block that takes the default's entry.
   """
   verify unit "a default reaches every block of its kind in its file"
   verify unit "a block's own field replaces the default whole"
@@ -148,6 +149,7 @@ behavior link_derived_references "Link Derived References" {
   verify unit "the written tokens of a file include every name a derived field links"
   verify unit "the written tokens of a file read a list written as one value as a list"
   verify unit "the linker and the finder read every block alike"
+  verify unit "a default's derived name is held by the blocks that take its entry"
   verify integration "a field's derived_from reaches the graph from the extension's manifest"
 }
 

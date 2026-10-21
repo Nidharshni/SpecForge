@@ -5,7 +5,7 @@
 use specforge_common::Sym;
 use specforge_graph::{
     FieldForm, FieldForms, FileChange, FileDefaults, Graph, GraphBuild, GraphConfig, GraphInputs,
-    Holder, build_graph_with_config,
+    Held, Holder, build_graph_with_config,
 };
 use specforge_parser::parse;
 use specforge_protocol_types::FieldType;
@@ -340,4 +340,45 @@ fn w161_flags_exactly_what_restates_answers() {
         .collect();
     assert_eq!(answered, ["a"]);
     assert_eq!(flagged, answered);
+}
+
+#[test]
+fn held_answers_own_inherited_or_absent() {
+    let file = parse(ASKED, "a.spec");
+    let (defaults, _) = FileDefaults::of(&file, &forms());
+    let block = |id: &str| file.entities.iter().find(|e| e.id.raw == id).unwrap();
+    let first = defaults.entry("behavior", "ports").unwrap();
+    assert_eq!(
+        defaults.held(block("a"), "ports"),
+        Held::Own {
+            own: &block("a").fields.entries()[0],
+            over: Some(first)
+        }
+    );
+    let held = defaults.held(block("c"), "ports");
+    assert!(
+        matches!(held, Held::Own { over: Some(_), .. }),
+        "[] replaces: {held:?}"
+    );
+    let silent = parse(
+        "defaults behavior {\n  ports [Repo]\n}\n\nbehavior d \"D\" {\n}\n",
+        "b.spec",
+    );
+    let (silent_defaults, _) = FileDefaults::of(&silent, &forms());
+    let d = silent.entities.iter().find(|e| e.id.raw == "d").unwrap();
+    let held = silent_defaults.held(d, "ports");
+    assert!(
+        matches!(held, Held::Inherited(e) if e.key == "ports"),
+        "{held:?}"
+    );
+    assert_eq!(
+        defaults.held(block("b"), "owner"),
+        Held::Absent,
+        "E077 default"
+    );
+    assert_eq!(
+        defaults.held(block("b"), "features"),
+        Held::Absent,
+        "a second defaults block"
+    );
 }

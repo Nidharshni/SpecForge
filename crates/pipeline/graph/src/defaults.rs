@@ -6,6 +6,54 @@ use specforge_common::{Diagnostic, SourceSpan, Sym, codes, structural};
 use specforge_parser::{Entity, FieldEntry, FieldMap, SpecFile};
 use std::collections::HashSet;
 
+/// What a block's field holds (ADR 0149 D3, ADR 0182 D2): its own entry (and the default it replaces, if its file
+/// states one), else the default it takes, else nothing. Entries are as written, spans included: an inherited one's
+/// spans are in the defaults block (ADR 0149 D9). `E` is `&FieldEntry` from [`FileDefaults::held`]; a caller that must
+/// mutate the text it was read from holds `Held<FieldEntry>` ([`Held::cloned`]).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Held<E> {
+    Own { own: E, over: Option<E> },
+    Inherited(E),
+    Absent,
+}
+
+impl<E> Held<E> {
+    /// The block's own entry.
+    pub fn own(&self) -> Option<&E> {
+        match self {
+            Self::Own { own, .. } => Some(own),
+            _ => None,
+        }
+    }
+
+    /// The entry the field holds: its own, else the default it takes.
+    pub fn entry(&self) -> Option<&E> {
+        match self {
+            Self::Own { own, .. } => Some(own),
+            Self::Inherited(default) => Some(default),
+            Self::Absent => None,
+        }
+    }
+
+    /// Whether the file states a default for the field, taken or replaced.
+    pub fn has_default(&self) -> bool {
+        matches!(self, Self::Own { over: Some(_), .. } | Self::Inherited(_))
+    }
+}
+
+impl Held<&FieldEntry> {
+    pub fn cloned(&self) -> Held<FieldEntry> {
+        match self {
+            Self::Own { own, over } => Held::Own {
+                own: (*own).clone(),
+                over: over.map(Clone::clone),
+            },
+            Self::Inherited(default) => Held::Inherited((*default).clone()),
+            Self::Absent => Held::Absent,
+        }
+    }
+}
+
 /// One file's defaults (ADR 0149): the entry each kind's first `defaults` block applies, and whether a block's own
 /// field restates it (W161). The graph build resolves blocks through it; a typed edit asks it over the text it is
 /// planning (ADR 0154).
@@ -149,6 +197,41 @@ impl<'f> FileDefaults<'f> {
             .copied()
     }
 
+    /// What `block` holds for `field`. `block`'s first entry with the key is its own (as `Block::entry` reads it); the
+    /// default is [`Self::entry`] of the block's kind, so E077 and E078 are honoured. A `defaults` block holds only its
+    /// own entries (no default applies to the kind `defaults`).
+    pub fn held<'a>(&'a self, block: &'a Entity, field: &str) -> Held<&'a FieldEntry> {
+        let own = block
+            .fields
+            .entries()
+            .iter()
+            .find(|e| e.key.as_str() == field);
+        let default = if is_defaults_block(block) {
+            None
+        } else {
+            self.entry(block.kind.raw.as_str(), field)
+        };
+        match (own, default) {
+            (Some(own), over) => Held::Own { own, over },
+            (None, Some(default)) => Held::Inherited(default),
+            (None, None) => Held::Absent,
+        }
+    }
+
+    /// The blocks of `kind` in `file` that take its default for `field`: each whose [`Self::held`] is `Inherited`, in
+    /// file order (a duplicate declaration's block included: one file cannot tell which wins). What the finder holds a
+    /// default's tokens by and what W161's "reaches no block" asks.
+    pub(crate) fn takers<'a>(
+        &'a self,
+        file: &'a SpecFile,
+        kind: Sym,
+        field: &'a str,
+    ) -> impl Iterator<Item = &'a Entity> + 'a {
+        file.entities.iter().filter(move |block| {
+            block.kind.raw == kind && matches!(self.held(block, field), Held::Inherited(_))
+        })
+    }
+
     /// Whether `own`, a field a block of `kind` writes, restates its default: both are written alike
     /// (`field_form::write`), so deleting the line changes nothing in the graph's JSON. W161 asks this.
     pub fn restates(&self, kind: &str, own: &FieldEntry) -> bool {
@@ -173,9 +256,8 @@ impl<'f> FileDefaults<'f> {
             };
             for default in applied {
                 for block in &blocks {
-                    match block.fields.entries().iter().find(|e| e.key == default.key) {
-                        None => {}
-                        Some(own) if self.restates(kind.as_str(), own) => {
+                    match self.held(block, default.key.as_str()) {
+                        Held::Own { own, .. } if self.restates(kind.as_str(), own) => {
                             diagnostics.push(
                                 Diagnostic::new(
                                     codes::W161,
@@ -187,10 +269,14 @@ impl<'f> FileDefaults<'f> {
                                 .with_span(at(own, block)),
                             );
                         }
-                        Some(_) => {}
+                        _ => {}
                     }
                 }
-                if takers(file, *kind, default.key).next().is_none() {
+                if self
+                    .takers(file, *kind, default.key.as_str())
+                    .next()
+                    .is_none()
+                {
                     diagnostics.push(
                         Diagnostic::new(
                             codes::W161,
@@ -216,31 +302,11 @@ impl<'f> FileDefaults<'f> {
             .find(|(kind, _)| *kind == entity.kind.raw)
         {
             for default in applied {
-                if !entity
-                    .fields
-                    .entries()
-                    .iter()
-                    .any(|own| own.key == default.key)
-                {
-                    fields.push_entry((*default).clone());
+                if let Held::Inherited(default) = self.held(entity, default.key.as_str()) {
+                    fields.push_entry(default.clone());
                 }
             }
         }
         fields
     }
-}
-
-/// The blocks of `kind` in `file` that take its default for `field`: every block of the kind that does not write the
-/// field, in file order (a duplicate declaration's block included: one file cannot tell which wins). What `resolve`
-/// gives a default to and what W161's "reaches no block" asks.
-pub(crate) fn takers<'a>(
-    file: &'a SpecFile,
-    kind: Sym,
-    field: Sym,
-) -> impl Iterator<Item = &'a Entity> + 'a {
-    file.entities.iter().filter(move |block| {
-        block.kind.raw == kind
-            && !is_defaults_block(block)
-            && block.fields.entries().iter().all(|own| own.key != field)
-    })
 }
