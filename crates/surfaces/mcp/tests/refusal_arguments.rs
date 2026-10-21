@@ -141,7 +141,7 @@ fn unnamed_today() -> Vec<Refusal> {
             "specforge.export",
             json!({"depth": 2}),
             "invalid_input",
-            Some("depth"),
+            Some("scope"),
         ),
         (
             "specforge.export",

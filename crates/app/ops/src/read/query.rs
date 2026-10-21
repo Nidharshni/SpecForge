@@ -12,7 +12,7 @@ use crate::read::export::{self, AGENT_FORMAT, ExportField, FORMAT, Format, Schem
 use crate::read::navigate::{
     EntityMatch, EntityQuery, MatchScope, MatchedOn, find_entities, snippet,
 };
-use crate::view::ProjectView;
+use crate::view::{ProjectView, Select};
 use crate::{Noticed, Refusal};
 
 /// Hops from the queried entity when a query names none: its direct
@@ -58,7 +58,7 @@ pub struct QueryRequest<'a> {
 /// with `include_coverage`, each node carrying its `coverage_status`, written
 /// by the export. Its notices are what versioning the schema reported
 /// (ADR 0111), then I020 for each kind of the filter the project does not
-/// know. An entity the graph lacks is
+/// know (the export's). An entity the graph lacks is
 /// [`crate::view::not_found`] (E003, did-you-mean), refused before the
 /// recorded report is read; a recorded report that cannot be read, when
 /// coverage is asked for, is its E045 failure.
@@ -76,11 +76,7 @@ pub fn query(
             .expect_err("a format the agent table does not admit is refused")
             .about(QueryField::Format));
     }
-    let unknown = view.kinds().unknown_in(&request.kinds);
-    let graph = view.graph();
-    graph.node(request.entity_id).ok_or_else(|| {
-        crate::view::not_found(graph, request.entity_id).about(QueryField::EntityId)
-    })?;
+    view.entity(request.entity_id, QueryField::EntityId)?;
     let coverage = request
         .include_coverage
         .then(|| view.coverage())
@@ -102,14 +98,13 @@ pub fn query(
         refusal.map_subject(|field| match field {
             ExportField::Scope => Some(QueryField::EntityId),
             // A query always scopes, sends none of these and writes nothing.
-            ExportField::Depth
-            | ExportField::MaxTokens
+            ExportField::MaxTokens
             | ExportField::SchemaVersion
             | ExportField::Schema
             | ExportField::Directory => None,
         })
     })?;
-    Ok(exported.and_notices(unknown))
+    Ok(exported)
 }
 
 /// The JSON Schema of the document [`query`] answers: the export document of
@@ -128,7 +123,7 @@ pub fn document_schema(defs: &mut specforge_common::shape::Definitions) -> Value
 /// Entities of one kind (or every kind) whose fields hold given values.
 #[derive(Debug, Clone, Default)]
 pub struct ListRequest<'a> {
-    /// `None` or `""`: every kind. A kind the project does not know lists
+    /// `None`: every kind. A kind the project does not know, the empty one included, lists
     /// nothing and is a notice.
     pub kind: Option<&'a str>,
     /// Field name to the value it holds, compared as the field's JSON
@@ -143,20 +138,17 @@ pub struct ListRequest<'a> {
 /// The entities `request` selects, sorted by id and paged, with I020 for a
 /// kind the project does not know.
 pub fn list<'v>(view: &ProjectView<'v>, request: &ListRequest) -> Noticed<Vec<&'v Node>> {
-    let kind = request.kind.filter(|kind| !kind.is_empty());
-    let notices = kind
-        .map(|kind| view.kinds().unknown_in(&[kind]))
-        .unwrap_or_default();
+    let filter = view.kind_filter(request.kind.as_slice());
     let entities = view
         .graph()
         .nodes()
         .into_iter()
-        .filter(|node| kind.is_none_or(|kind| node.kind.raw.as_str() == kind))
+        .filter(|node| filter.keeps(node.kind.raw.as_str()))
         .filter(|node| request.fields.is_none_or(|wanted| holds(node, wanted)))
         .skip(request.offset)
         .take(request.limit.unwrap_or(usize::MAX))
         .collect();
-    Noticed::new(entities, notices)
+    Noticed::new(entities, filter.into_notices())
 }
 
 /// Whether every field of `wanted` is one `node` holds, with that value.
@@ -217,12 +209,12 @@ pub fn search<'v>(
     view: &ProjectView<'v>,
     request: &SearchRequest,
 ) -> Result<Noticed<Vec<Hit<'v>>>, Refusal<SearchField>> {
-    if let Some(id) = request.referencing {
-        view.graph().node(id).ok_or_else(|| {
-            crate::view::not_found(view.graph(), id).about(SearchField::Referencing)
-        })?;
-    }
-    let notices = view.kinds().unknown_in(&request.kinds);
+    let selection = view.select(&Select {
+        entity: request.referencing,
+        named_by: SearchField::Referencing,
+        depth: None,
+        kinds: &request.kinds,
+    })?;
     let query = EntityQuery {
         text: request.text,
         scope: MatchScope::NamesAndText,
@@ -241,5 +233,5 @@ pub fn search<'v>(
             Hit { found, snippet }
         })
         .collect();
-    Ok(Noticed::new(hits, notices))
+    Ok(Noticed::new(hits, selection.into_notices()))
 }

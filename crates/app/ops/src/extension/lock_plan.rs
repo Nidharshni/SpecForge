@@ -11,7 +11,7 @@
 //! once, the **project peer set** as the change leaves it (the extensions the project's
 //! `specforge.json` entries load, `peer_set`): every declared peer whose dependent or peer the
 //! change touches, a missing required peer included. An unsatisfied peer installed from a registry
-//! is unified against the registry the install came from (R-RES-006/005, ADR 0001); anything else
+//! is unified against the registry the install came from (R-RES-006/005, R-RES-002 when it publishes none, ADR 0001); anything else
 //! out of range (a local install, a builtin, a `.wasm` file entry) is refused with E027. Only then
 //! is each binary fetched from a registry loaded, and it must declare what was published
 //! (ADR 0012). What passes is committed as one change (ADR 0028 D4): the modules, the lock, the
@@ -26,6 +26,7 @@ use specforge_common::ExtensionEntry;
 use specforge_installed::{Installed, LockFile, LockFileEntry, LockState, Module, Pin};
 use specforge_package::PackageName;
 use specforge_protocol_types::ExtensionDeclaration;
+use specforge_registry::PlainDisk;
 use specforge_wasm::WasmRuntime;
 
 use super::peer_set::Declarations;
@@ -220,7 +221,7 @@ impl<'a> LockPlan<'a> {
         let mut plan = LockPlan::open(
             installed,
             config,
-            Declarations::through(runtime),
+            Declarations::through(runtime, &PlainDisk),
             Verb::Install,
             Some((fetching, runtime)),
             "add",
@@ -243,7 +244,7 @@ impl<'a> LockPlan<'a> {
         Ok(LockPlan::open(
             installed,
             config,
-            Declarations::through(runtime),
+            Declarations::through(runtime, &PlainDisk),
             Verb::Update,
             Some((fetching, runtime)),
             "update",
@@ -263,7 +264,7 @@ impl<'a> LockPlan<'a> {
         LockPlan::open(
             installed,
             Opened::creating(document),
-            Declarations::through(runtime),
+            Declarations::through(runtime, &PlainDisk),
             Verb::Install,
             None,
             "init",
@@ -432,7 +433,10 @@ impl<'a> LockPlan<'a> {
         name: &PackageName,
         same: impl Fn(&LockFileEntry) -> bool,
     ) -> Option<&LockFileEntry> {
-        let entry = self.installed.verified(name.as_str()).filter(|e| same(e))?;
+        let entry = self
+            .installed
+            .verified(name.as_str(), self.declarations.disk())
+            .filter(|e| same(e))?;
         let enabled = self
             .config
             .entries()

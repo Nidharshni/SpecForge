@@ -9,7 +9,7 @@ use specforge_package::{PackageName, Version};
 use specforge_protocol_types::PeerDependency;
 
 use super::super::candidate::{Installable, LocalFile};
-use super::super::peer_set::{Declarations, ProjectPeers};
+use super::super::peer_set::{Declarations, Modules, ProjectPeers};
 use crate::OpError;
 use crate::registry::METADATA_MISMATCH;
 use crate::registry::testing::{Asked, MemoryRegistry, Published, declaration};

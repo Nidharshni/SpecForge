@@ -38,7 +38,9 @@ impl Parts {
                     }),
                     loaded: Loaded {
                         enabled: self.enabled.clone().unwrap_or_else(|| {
-                            Loaded::unloaded(&self.read.config.extensions).enabled
+                            self.installed
+                                .unloaded(&self.read.config.extensions, &crate::builtins())
+                                .enabled
                         }),
                         declarations: self.declarations.clone(),
                     },

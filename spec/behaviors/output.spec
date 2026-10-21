@@ -287,7 +287,11 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
     when it is not a specforge-report.json, permission_denied when the system
     refuses to read it, invalid_input over MCP when it is a link that leads
     outside the call's project (MCP reads it only from inside; the CLI and the
-    LSP follow the user's link), else internal_error. The view says what its surface reports for the
+    LSP follow the user's link), else internal_error. A schema
+    cache that cannot be read is I016 and versioning starts again at 1.0.0; over
+    MCP one that leads outside the call's project or has more than one name is
+    not read and I016 names why, never what it holds (the CLI and the LSP follow
+    the user's link). The view says what its surface reports for the
     project: what specforge check reports for the compile behind it, then
     what the surface adds (MCP: I017). Coverage is computed once per
     compiled project or session state and per content of the recorded
@@ -316,6 +320,8 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
   verify unit "an unusable report is the same failure, of the kind the operation decides, on every view"
   verify unit "the CLI and the LSP read the recorded report where its link points"
   verify unit "over MCP, a recorded report that leads outside the project is the same refusal on every view"
+  verify unit "over MCP, a schema cache that leads outside the project or has more than one name is not read"
+  verify unit "the CLI and the LSP read the schema cache where its link points"
   verify integration "specforge stats --format json and specforge.stats answer the same document"
   verify integration "specforge trace and specforge.trace return the same chain for an entity"
   verify integration "specforge schema and specforge.schema carry the same version"
@@ -406,7 +412,8 @@ behavior select_entities_over_the_view "Select Entities over the Project View" {
     E003 naming the closest entity). At most limit hits are
     returned, twenty when none is given. List MUST return the entities of a
     kind, sorted by id, those whose fields hold every where value, from
-    offset, at most limit.
+    offset, at most limit; an empty kind is a kind the project does not
+    know, not every kind.
   """
   verify unit "text search finds entities matching by name or contract"
   verify unit "empty query returns all entities up to limit"
@@ -416,6 +423,7 @@ behavior select_entities_over_the_view "Select Entities over the Project View" {
   verify unit "a search returns at most limit hits, twenty when no limit is given"
   verify unit "list pages the entities of a kind sorted by id, from offset, at most limit"
   verify unit "list keeps the entities whose fields hold every where value"
+  verify unit "an empty kind is a kind the project does not know: it lists nothing and is an I020 notice"
 }
 
 // Inspect (specforge_ops::read::inspect): one entity's facts. specforge.inspect,
@@ -1176,7 +1184,8 @@ behavior export_agent_graph_format "Export Agent Graph Format" {
     references a non-existent entity ID, the system MUST emit an E003
     diagnostic and exit with code 1. --depth (with --scope) limits the hops
     from it, and --kinds keeps only entities of those kinds, the scoped
-    entity always kept; depth without a scope is invalid input; so are --with-schema and
+    entity always kept; a kind the project does not know matches nothing
+    and is reported as I020, naming the closest kind; depth without a scope is invalid input about the scope; so are --with-schema and
     --no-schema together.
     specforge.export and the graph resources take the same options. The
     output MUST include a schema_version field identifying the Graph
@@ -1189,6 +1198,7 @@ behavior export_agent_graph_format "Export Agent Graph Format" {
   verify unit "depth without a scope is invalid input on every surface"
   verify unit "with_schema and no_schema together are invalid input on every surface"
   verify integration "depth and kinds narrow the export the same way on every surface"
+  verify integration "a kind of kinds the project does not know matches nothing and is reported as I020, on every surface"
   verify unit "an export failure carries its code as a constant, never in its message"
   verify unit "output conforms to Graph Protocol schema"
   verify unit "output includes schema_version field"

@@ -1241,14 +1241,16 @@ Level: info
 ```
 I020: Unknown entity kind in a filter
 
-A kind filter (`specforge query --kind`, the `kinds` of the `specforge.query`
-and `specforge.search` MCP tools, or `specforge.list`'s `kind`) names a kind
-that no loaded extension declares and no entity is written with. The kind
-matches nothing and is dropped from the filter; the report goes to stderr on the
-CLI and rides in the tool result's `_meta.diagnostics` over MCP, with a `did you
-mean` suggestion when a known kind is close (a kind equal but for case first:
-kind names are case-sensitive keywords). Fix the spelling, or enable the
-extension that defines the kind.
+A kind filter (`specforge export --kinds`, `specforge query --kind`, `specforge
+explore --kind`, `specforge model --kinds`, and the `kinds` or `kind` of the
+`specforge.export`, `specforge.query`, `specforge.search`, `specforge.list`,
+`specforge.coverage` and `specforge.model` MCP tools, the explore prompt and the
+graph resources) names a kind that no loaded extension declares and no entity is
+written with. The kind matches nothing and is dropped from the filter; the
+report goes to stderr on the CLI and rides in the tool result's
+`_meta.diagnostics` over MCP, with a `did you mean` suggestion when a known kind
+is close (a kind equal but for case first: kind names are case-sensitive
+keywords). Fix the spelling, or enable the extension that defines the kind.
 
 Owner: core
 Level: info

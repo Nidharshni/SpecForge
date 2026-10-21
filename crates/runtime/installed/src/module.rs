@@ -1,5 +1,4 @@
 use sha2::{Digest, Sha256};
-use std::path::Path;
 
 /// The SHA-256 digest of `data`, lowercase hex: what `specforge.lock` pins
 /// an installed binary to.
@@ -21,11 +20,6 @@ impl Module {
     pub fn new(bytes: Vec<u8>) -> Module {
         let digest = hex_sha256(&bytes);
         Module { bytes, digest }
-    }
-
-    /// The module the file at `path` holds, read once.
-    pub fn read(path: &Path) -> std::io::Result<Module> {
-        std::fs::read(path).map(Module::new)
     }
 
     pub fn bytes(&self) -> &[u8] {

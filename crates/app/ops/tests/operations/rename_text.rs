@@ -19,7 +19,10 @@ fn apply_refuses_a_file_changed_since_the_plan() {
     std::fs::write(root.join("login.spec"), format!("\n{LOGIN}")).unwrap();
     let before = crate::writes::files_under(&root);
 
-    let error = rename::apply(&plan, specforge_ops::testing::caller()).unwrap_err();
+    let error = plan
+        .change()
+        .apply(specforge_ops::testing::caller())
+        .unwrap_err();
 
     assert_eq!(error.kind, OpErrorKind::Conflict, "{error:?}");
     assert_eq!(error.code, specforge_ops::FILE_CHANGED, "{error:?}");
@@ -48,7 +51,10 @@ fn a_rename_that_cannot_write_a_file_is_unwritable() {
         return; // permissions do not bind (root)
     }
 
-    let error = rename::apply(&plan, specforge_ops::testing::caller()).unwrap_err();
+    let error = plan
+        .change()
+        .apply(specforge_ops::testing::caller())
+        .unwrap_err();
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
 
     assert_eq!(error.code, specforge_ops::FILE_UNWRITABLE, "{error:?}");
@@ -70,4 +76,27 @@ fn a_rename_that_cannot_write_a_file_is_unwritable() {
         std::fs::read_to_string(root.join("limit.spec")).unwrap(),
         LIMIT
     );
+}
+
+/// The change a rename plans holds the texts its edits make, in the files they touch.
+#[test]
+fn a_rename_plan_holds_the_texts_its_edits_make() {
+    let p = crate::navigate::compile(
+        crate::navigate::SOFTWARE,
+        &[("limit.spec", LIMIT), ("login.spec", LOGIN)],
+    );
+    let plan = rename::plan(&p.navigator(), "session_limit", "session_cap").unwrap();
+    let after = plan.change().after();
+    assert_eq!(
+        after.keys().collect::<Vec<_>>(),
+        ["limit.spec", "login.spec"]
+    );
+    for (file, text) in &after {
+        let planned = p.project.source_text(file).unwrap();
+        let edits = plan.edits().iter().filter(|e| e.span.file == file.as_str());
+        assert_eq!(
+            Some(text.clone()),
+            specforge_ops::read::navigate::apply_edits(&planned, edits)
+        );
+    }
 }

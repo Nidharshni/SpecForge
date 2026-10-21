@@ -1,6 +1,6 @@
 # A typed edit changes a block's field through one module, own or inherited
 
-**Status:** accepted (2026-10-19, architecture round 18, plan 05). Amends [ADR 0149](0149-a-file-states-a-kinds-shared-fields-once.md) D3 (`{}` says none for a block field, as `[]` does for a list), [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) D5 and its round-16 amendment (an entry the block inherits is copied before `set` or `unset` changes it; `unset` leaves the field holding none) and [ADR 0154](0154-a-typed-edit-asks-its-files-defaults-over-the-text-it-plans.md) D3 (every typed edit of a field, entries included, ends with the restatement check). Builds on [ADR 0087](0087-a-file-over-the-cap-becomes-a-directory-module-along-its-own-seams.md) (the split of `edit/block.rs`).
+**Status:** accepted (2026-10-19, architecture round 18, plan 05). Amends [ADR 0149](0149-a-file-states-a-kinds-shared-fields-once.md) D3 (`{}` says none for a block field, as `[]` does for a list), [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) D5 and its round-16 amendment (an entry the block inherits is copied before `set` or `unset` changes it; `unset` leaves the field holding none) and [ADR 0154](0154-a-typed-edit-asks-its-files-defaults-over-the-text-it-plans.md) D3 (every typed edit of a field, entries included, ends with the restatement check). Builds on [ADR 0087](0087-a-file-over-the-cap-becomes-a-directory-module-along-its-own-seams.md) (the split of `edit/block.rs`). Amended by round 19 plan 02 (2026-10-21): D6, D7. D1 and D4 amended by [ADR 0182](0182-the-graph-answers-what-a-blocks-field-holds.md): a verb is handed `Held` (what the field holds; where a value goes stays D6's `Block`); `unlink` of an inherited single reference is refused as `unset` is. D5 holds for a default in any form, and so does D7's create.
 
 ## Context
 
@@ -33,6 +33,13 @@ touched the verb it found; none moved the rule out of the verbs.
   cannot say none and is refused `not_editable`. With no default, the line goes.
 - **D5.** `unset` means the block holds none of the field (or entry): it is idempotent. Going back to the default is
   `set` to the default's value (D3 then removes the own field).
+- **D6.** The block places a value: a verb names the field (or `field.entry`) and the input; `Block::put`,
+  `Block::put_entry`, `Block::place` and `Block::put_verify` work out the column the writer lays the value out at and
+  the line it goes on. No verb computes a lead or a line. A new entry goes inside its block field, which is first
+  opened when the block writes it as none (`{}`) or not at all; annotations given go on the value placed, new or
+  existing.
+- **D7.** A create is its header line, one `set` per field (in key order) and one add-verify per obligation; it has no
+  placement rule of its own, and an equal obligation given twice is written once.
 
 ## Rejected
 
@@ -49,6 +56,8 @@ touched the verb it found; none moved the rule out of the verbs.
 `set` and `unset` of an entry over a default copy it; `unset` of an inherited block field writes `{}` (was refused);
 `unset` of an own field over a default writes none (was: back to the default); `unset` of an own scalar over a default is
 refused. `edit/block.rs` is split in three along its seams (ADR 0087). One more format pass when a copy is made.
+`set` of an entry into a block field written `{}` writes it inside (was: an undeclared member above it, W020); `set` of
+a new entry writes its annotations (was: dropped); `new --verify x --verify x` writes one line.
 
 ## What would reopen it
 

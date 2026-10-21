@@ -81,6 +81,7 @@ fn outcome(c: &Compiled, edits: &[Edit], id: &str, field: &str) -> Held {
     };
     let w161 = planned.report().added.0.iter().any(|d| d.code == "W161");
     let text = planned
+        .change()
         .after()
         .remove("g.spec")
         .unwrap_or_else(|| HOLDS.to_string());
@@ -93,7 +94,7 @@ fn outcome(c: &Compiled, edits: &[Edit], id: &str, field: &str) -> Held {
         .map_or(Value::Null, |v| field_form::write(v).into());
     Holds {
         value,
-        changed: !planned.is_empty(),
+        changed: !planned.change().is_empty(),
         w161,
     }
 }
@@ -239,7 +240,7 @@ fn unset_leaves_a_field_holding_none_once() {
             format!(
                 "{:?}",
                 plan(&c, &vec![e.clone(); n])
-                    .map(|p| p.after())
+                    .map(|p| p.change().after())
                     .map_err(|r| r.error.code.to_string())
             )
         };

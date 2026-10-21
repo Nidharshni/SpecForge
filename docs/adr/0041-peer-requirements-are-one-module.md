@@ -1,6 +1,7 @@
 # Peer requirements are one module
 
 **Status:** accepted (2026-10-08). Amends ADR 0001 and ADR 0012 D11.
+**Amended by [ADR 0181](0181-the-lock-plan-predicts-the-peer-set-by-the-extension-loads-walk.md) (round 19):** B1: the project as it is answers a locked extension by its module on disk (`Installed::verified`); the set a change leaves keeps the lock entry.
 
 An extension's declared peers (`PeerDependency { name, version, optional }`, the range as raw text)
 were judged in five places that disagreed. A range that is not SemVer was a warning in `check`

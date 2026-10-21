@@ -8,8 +8,8 @@ use serde::Serialize;
 use specforge_common::shape::Shape;
 
 use crate::Refusal;
-use crate::read::coverage::{CoverageQuery, CoverageRow, CoverageRowDocument, selected};
-use crate::view::{EntityField, ProjectView};
+use crate::read::coverage::{CoverageQuery, CoverageRow, CoverageRowDocument, coverage};
+use crate::view::{EntityField, ProjectView, Select};
 
 /// Hops around the reviewed entity when a request names none.
 pub const DEFAULT_DEPTH: usize = 1;
@@ -21,7 +21,7 @@ pub struct ReviewRequest<'a> {
     /// `None`.
     pub entity_id: Option<&'a str>,
     /// Hops around `entity_id`, [`DEFAULT_DEPTH`] when `None`; refused
-    /// without `entity_id` (`view::depth_without_entity`).
+    /// without `entity_id` (the selection's `depth_without_entity`).
     pub depth: Option<usize>,
 }
 
@@ -122,21 +122,24 @@ pub struct FindingDocument {
 
 /// The review `request` asks for. An `entity_id` the graph lacks is
 /// `view::not_found` (E003), and a `depth` without one
-/// `view::depth_without_entity`; a recorded report that cannot be read is
+/// the selection's `depth_without_entity`; a recorded report that cannot be read is
 /// its E045 failure (`ProjectView::coverage`).
 pub fn review(view: &ProjectView, request: &ReviewRequest) -> Result<Review, Refusal<EntityField>> {
-    if request.depth.is_some() && request.entity_id.is_none() {
-        return Err(crate::view::depth_without_entity());
-    }
+    let selection = view.select(&Select {
+        entity: request.entity_id,
+        named_by: EntityField::EntityId,
+        depth: request.depth,
+        kinds: &[],
+    })?;
     let depth = request
         .entity_id
         .map(|_| request.depth.unwrap_or(DEFAULT_DEPTH));
-    let neighbourhood: Option<BTreeSet<&'static str>> = request
-        .entity_id
-        .map(|id| view.neighbourhood(id, depth))
-        .transpose()?
+    let neighbourhood: Option<BTreeSet<&'static str>> = selection
+        .reach(Some(DEFAULT_DEPTH))
         .map(|reached| reached.iter().map(|r| r.id.as_str()).collect());
-    let rows: Vec<CoverageRow> = selected(view, &CoverageQuery::default())?
+    let rows: Vec<CoverageRow> = coverage(view, &CoverageQuery::default())?
+        .into_value_and_notices()
+        .0
         .rows
         .into_iter()
         .filter(|row| {

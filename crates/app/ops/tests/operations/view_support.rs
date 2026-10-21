@@ -171,6 +171,22 @@ pub fn ok<T, F: std::fmt::Debug>(read: Result<T, specforge_ops::Refusal<F>>) -> 
     read.expect("the read answers")
 }
 
+/// The coverage view's one row for `entity_id`, counted or not.
+pub fn row(
+    view: &specforge_ops::view::ProjectView<'_>,
+    entity_id: &str,
+) -> specforge_ops::read::coverage::CoverageRow {
+    let query = specforge_ops::read::coverage::CoverageQuery {
+        entity_id: Some(entity_id),
+        ..Default::default()
+    };
+    answered(specforge_ops::read::coverage::coverage(view, &query))
+        .rows
+        .into_iter()
+        .next()
+        .expect("the coverage view has a row for the entity")
+}
+
 /// A read that answered: its value, its notices dropped.
 pub fn answered<T, F: std::fmt::Debug>(
     read: Result<specforge_ops::Noticed<T>, specforge_ops::Refusal<F>>,

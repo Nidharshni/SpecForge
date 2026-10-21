@@ -140,9 +140,7 @@ fn sorted(mut occurrences: Vec<Occurrence>) -> Vec<Occurrence> {
 impl Navigator<'_> {
     /// The entity's block and its name token.
     pub fn definition(&self, id: &str) -> Result<Definition, Refusal<EntityField>> {
-        let node = self
-            .node(id)
-            .map_err(|error| error.about(EntityField::EntityId))?;
+        let node = self.view.entity(id, EntityField::EntityId)?.node;
         Ok(self.definition_of(node))
     }
 
@@ -176,9 +174,7 @@ impl Navigator<'_> {
         id: &str,
         query: ReferenceQuery,
     ) -> Result<Vec<Occurrence>, Refusal<EntityField>> {
-        let node = self
-            .node(id)
-            .map_err(|error| error.about(EntityField::EntityId))?;
+        let node = self.view.entity(id, EntityField::EntityId)?.node;
         let incoming = matches!(query.direction, Direction::Incoming | Direction::Both);
         let outgoing = matches!(query.direction, Direction::Outgoing | Direction::Both);
         let graph = self.view.graph();
@@ -221,9 +217,7 @@ impl Navigator<'_> {
         id: &str,
         include_declaration: bool,
     ) -> Result<Vec<Token>, Refusal<EntityField>> {
-        let node = self
-            .node(id)
-            .map_err(|error| error.about(EntityField::EntityId))?;
+        let node = self.view.entity(id, EntityField::EntityId)?.node;
         let mut tokens: Vec<Token> = self
             .view
             .project()

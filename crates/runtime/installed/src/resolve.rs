@@ -2,15 +2,15 @@
 //! extension load and the lock plan's peer set read it, so they cannot disagree about what an
 //! entry enables.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use specforge_common::ExtensionEntry;
 use specforge_package::PackageName;
 
 use crate::Installed;
-use crate::load::{Builtins, LoadProblem};
-use crate::lock::{LockFileEntry, LockState};
+use crate::load::{Builtins, EnabledExtension, LoadProblem};
+use crate::lock::{LockFileEntry, LockSource, LockState};
 
 /// What one `extensions` entry names, decided as the extension load decides it, nothing loaded.
 #[derive(Debug, Clone, PartialEq)]
@@ -52,7 +52,11 @@ impl FileEntry<'_> {
     /// written before `=` when there is one (`NotTheNameWritten`), and an extension an entry tried
     /// before it must not already be loaded under that name (`AlreadyLoaded`; `loaded` says which
     /// names are).
-    pub fn admit(&self, declared: &str, loaded: impl Fn(&str) -> bool) -> Result<(), LoadProblem> {
+    pub(crate) fn admit(
+        &self,
+        declared: &str,
+        loaded: impl Fn(&str) -> bool,
+    ) -> Result<(), LoadProblem> {
         if let Some(written) = self.written.filter(|written| *written != declared) {
             return Err(LoadProblem::NotTheNameWritten {
                 declared: declared.to_string(),
@@ -83,7 +87,7 @@ impl<'a> Resolution<'a> {
     /// The entries in the order the extension load tries them, with their index into the entries:
     /// every named entry, then every `.wasm` file entry, each in entry order (a file that declares
     /// a name a named entry loads is refused, never swapped in). `Again` entries are left out.
-    pub fn in_load_order(&self) -> impl Iterator<Item = (usize, &Resolved<'a>)> + '_ {
+    pub(crate) fn in_load_order(&self) -> impl Iterator<Item = (usize, &Resolved<'a>)> + '_ {
         let is_file = |resolved: &Resolved| matches!(resolved, Resolved::File(_));
         let indexed = || {
             self.entries
@@ -94,6 +98,111 @@ impl<'a> Resolution<'a> {
         indexed()
             .filter(move |(_, resolved)| !is_file(resolved))
             .chain(indexed().filter(move |(_, resolved)| is_file(resolved)))
+    }
+}
+
+impl<'a> Resolution<'a> {
+    /// The extension load's walk (ADR 0181 D1): every entry in load order ([`Self::in_load_order`];
+    /// `Again` entries are left out, they load nothing of their own). `read` says what a resolved
+    /// entry declares: the name it declares and what it brings, or why it brings nothing. The
+    /// declared name is admitted against the names the entries tried before it were admitted under
+    /// ([`Resolved::admit`]); `settle` turns what `read` brought and that verdict (the name the
+    /// entry loads under, or the problem refusing it) into the entry's outcome. Only an admitted
+    /// entry's name counts as loaded: an entry `read` refused leaves its name free, and a `settle`
+    /// that errs for an admitted entry does not free it. `read` is called once per such entry, in
+    /// load order, with the entry's index; `settle` right after, only when `read` returned `Ok`.
+    /// The outcomes come back in entry order, each with its index.
+    pub fn walk<T, U, E>(
+        &self,
+        mut read: impl FnMut(usize, &Resolved<'a>) -> Result<(String, T), E>,
+        mut settle: impl FnMut(&Resolved<'a>, T, Result<&str, LoadProblem>) -> Result<U, E>,
+    ) -> Vec<(usize, Result<U, E>)> {
+        let mut admitted: HashSet<String> = HashSet::new();
+        let mut outcomes = Vec::new();
+        for (i, resolved) in self.in_load_order() {
+            let outcome = read(i, resolved).and_then(|(declared, brings)| {
+                match resolved.admit(&declared, |name| admitted.contains(name)) {
+                    Ok(()) => {
+                        let name = match resolved {
+                            Resolved::File(_) => declared,
+                            Resolved::Builtin { name, .. }
+                            | Resolved::Locked { name, .. }
+                            | Resolved::Unloadable { name, .. } => (*name).to_string(),
+                            Resolved::Again { .. } => unreachable!("left out of the load order"),
+                        };
+                        let outcome = settle(resolved, brings, Ok(&name));
+                        admitted.insert(name);
+                        outcome
+                    }
+                    Err(problem) => settle(resolved, brings, Err(problem)),
+                }
+            });
+            outcomes.push((i, outcome));
+        }
+        outcomes.sort_by_key(|(i, _)| *i);
+        outcomes
+    }
+}
+
+/// Where an extension comes from, as the extension load takes it (ADR 0028 D3, ADR 0180).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Origin {
+    /// Embedded in the binary; enabling it is only a config entry.
+    Builtin,
+    /// Installed under `.specforge/extensions/`, pinned in `specforge.lock`
+    /// with this source.
+    Installed { source: LockSource },
+    /// Loaded from the `.wasm` file a `specforge.json` entry names; `path`
+    /// as the entry writes it.
+    File { path: String },
+    /// Named by an entry, neither a builtin nor locked: it does not load
+    /// (E028).
+    Unknown,
+}
+
+impl Origin {
+    /// What the listings call it: `builtin`, the lock entry's source, or
+    /// `file:<path>`.
+    pub fn source(&self) -> String {
+        match self {
+            Origin::Builtin => "builtin".to_string(),
+            Origin::Installed { source } => source.to_string(),
+            Origin::File { path } => format!("file:{path}"),
+            Origin::Unknown => "unknown".to_string(),
+        }
+    }
+}
+
+impl Resolution<'_> {
+    /// Where the entry at `at` loads its extension from, by the load's one rule: a builtin's name
+    /// is `Builtin`; a locked name `Installed { source }`; a `.wasm` file entry `File { path }`
+    /// (as written); a name nothing loads `Unknown`; an entry naming what an earlier one enables,
+    /// that entry's origin. Panics on an index the resolution did not make.
+    pub fn origin(&self, at: usize) -> Origin {
+        match &self.entries[at] {
+            Resolved::Builtin { .. } => Origin::Builtin,
+            Resolved::Locked { entry, .. } => Origin::Installed {
+                source: entry.source.clone(),
+            },
+            Resolved::File(file) => Origin::File {
+                path: file.path.to_string(),
+            },
+            Resolved::Unloadable { .. } => Origin::Unknown,
+            Resolved::Again { first } => self.origin(*first),
+        }
+    }
+}
+
+impl Resolution<'_> {
+    /// Each of `entries` as it enables what it names before anything loads: its origin, `loaded:
+    /// false`. `entries` are the texts this resolution was made from.
+    pub(crate) fn unloaded(&self, entries: &[String]) -> Vec<EnabledExtension> {
+        debug_assert_eq!(entries.len(), self.entries.len());
+        entries
+            .iter()
+            .enumerate()
+            .map(|(i, entry)| EnabledExtension::unloaded(entry, self.origin(i)))
+            .collect()
     }
 }
 
@@ -316,6 +425,110 @@ mod tests {
             shadowed.resolve(&entries, &builtins).entries()[0],
             Resolved::Builtin { .. }
         ));
+    }
+
+    #[test]
+    fn the_walk_admits_against_the_names_entries_before_it_were_admitted_under() {
+        let installed = Installed::with_lock(Path::new("/p"), lock_of(&["@acme/tool"]));
+        let entries = strings(&[
+            "@acme/tool",
+            "a.wasm",
+            "b.wasm",
+            "c.wasm",
+            "@acme/tool@1.0.0",
+        ]);
+        let walk = |tool_loads: bool| {
+            let resolution = installed.resolve(&entries, &Builtins::none());
+            resolution.walk(
+                |_, resolved| match resolved {
+                    Resolved::Locked { name, .. } if tool_loads => Ok(((*name).to_string(), ())),
+                    Resolved::Locked { .. } => Err(LoadProblem::NotInstalled),
+                    Resolved::File(file) if file.key == "a.wasm" => {
+                        Ok(("@acme/tool".to_string(), ()))
+                    }
+                    _ => Ok(("@acme/x".to_string(), ())),
+                },
+                |_, (), verdict| verdict.map(str::to_string),
+            )
+        };
+        let declared = |name: &str| LoadProblem::AlreadyLoaded {
+            declared: name.to_string(),
+        };
+
+        assert_eq!(
+            walk(false),
+            [
+                (0, Err(LoadProblem::NotInstalled)),
+                (1, Ok("@acme/tool".to_string())),
+                (2, Ok("@acme/x".to_string())),
+                (3, Err(declared("@acme/x"))),
+            ],
+            "an entry that did not load leaves its name free"
+        );
+        assert_eq!(
+            walk(true),
+            [
+                (0, Ok("@acme/tool".to_string())),
+                (1, Err(declared("@acme/tool"))),
+                (2, Ok("@acme/x".to_string())),
+                (3, Err(declared("@acme/x"))),
+            ]
+        );
+    }
+
+    #[test]
+    fn each_entry_has_the_origin_the_load_takes_it_from() {
+        let installed = Installed::with_lock(Path::new("/p"), lock_of(&["@acme/tool"]));
+        let builtins = Builtins(&[("@specforge/product", b"\0asm")]);
+        let entries = strings(&[
+            "@specforge/product",
+            "@acme/tool",
+            "@acme/tool@1.0.0",
+            "Bad Name",
+            "@acme/none",
+            "x.wasm",
+            "g=y.wasm",
+            "x.wasm",
+        ]);
+        let file = |path: &str| Origin::File { path: path.into() };
+        let registry = Origin::Installed {
+            source: LockSource::Registry,
+        };
+
+        let resolution = installed.resolve(&entries, &builtins);
+
+        let origins: Vec<Origin> = (0..entries.len()).map(|i| resolution.origin(i)).collect();
+        assert_eq!(
+            origins,
+            [
+                Origin::Builtin,
+                registry.clone(),
+                registry,
+                Origin::Unknown,
+                Origin::Unknown,
+                file("x.wasm"),
+                file("y.wasm"),
+                file("x.wasm"),
+            ]
+        );
+        let stray = Installed::with_lock(Path::new("/p"), lock_of(&["@specforge/product"]));
+        let entries = strings(&["@specforge/product"]);
+        assert_eq!(
+            stray.resolve(&entries, &builtins).origin(0),
+            Origin::Builtin
+        );
+        let unreadable = Installed::with_lock(
+            Path::new("/p"),
+            LockState::Unreadable(specforge_common::Diagnostic::new(
+                specforge_common::codes::E033,
+                "x",
+            )),
+        );
+        let entries = strings(&["@acme/tool"]);
+        assert_eq!(
+            unreadable.resolve(&entries, &builtins).origin(0),
+            Origin::Unknown
+        );
     }
 
     #[test]

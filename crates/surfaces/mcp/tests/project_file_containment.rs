@@ -162,6 +162,64 @@ fn infer_progress_reads_no_manifest_through_a_symlink_that_leaves_the_project() 
     assert!(reply.to_string().contains("E071"), "{reply}");
 }
 
+/// The schema cache is a link to a file outside: no read view reads it, quotes it or versions against it.
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "no schema cache a call reads leaves the project, and none with more than one name is read"
+)]
+fn read_views_read_no_schema_cache_through_a_symlink_that_leaves_the_project() {
+    let project = plain_project();
+    let outside = outside();
+    let secret = outside.path().join("secret.json");
+    fs::write(&secret, SECRET_RECORD).unwrap();
+    fs::create_dir_all(project.path().join(".specforge")).unwrap();
+    link(
+        &secret,
+        &project.path().join(".specforge/schema-cache.json"),
+    );
+    let mut server = serve(project.path());
+
+    for (name, arguments) in [
+        ("specforge.schema", json!({})),
+        ("specforge.export", json!({"format": "graph"})),
+        ("specforge.model", json!({})),
+        ("specforge.trace", json!({"entity_id": "alpha"})),
+    ] {
+        let reply = call_tool(&mut server, name, arguments);
+        assert!(
+            !reply.to_string().contains("OUTSIDE-SCHEMA-SECRET"),
+            "{name}: {reply}"
+        );
+        assert!(reply.to_string().contains("I016"), "{name}: {reply}");
+    }
+}
+
+/// The schema cache has a second name: the same.
+#[cfg(unix)]
+#[specforge_test_macros::test(
+    invariant = "mcp_served_project_consistency",
+    verify = "no schema cache a call reads leaves the project, and none with more than one name is read"
+)]
+fn read_views_read_no_hard_linked_schema_cache() {
+    let project = plain_project();
+    let outside = outside();
+    let secret = outside.path().join("secret.json");
+    fs::write(&secret, SECRET_RECORD).unwrap();
+    fs::create_dir_all(project.path().join(".specforge")).unwrap();
+    fs::hard_link(&secret, project.path().join(".specforge/schema-cache.json")).unwrap();
+    let mut server = serve(project.path());
+
+    let reply = call_tool(&mut server, "specforge.schema", json!({}));
+    assert!(
+        !reply.to_string().contains("OUTSIDE-SCHEMA-SECRET"),
+        "{reply}"
+    );
+    assert!(reply.to_string().contains("I016"), "{reply}");
+}
+
+const SECRET_RECORD: &str = r#"{"schema": "OUTSIDE-SCHEMA-SECRET", "content_hash": "x"}"#;
+
 /// R7: `specforge-report.json` is a link to a report outside: no read view reads it.
 #[cfg(unix)]
 #[specforge_test_macros::test(
@@ -358,6 +416,12 @@ fn every_caller_a_tool_uses_comes_from_the_call() {
             if line.contains("ProjectView::of(") && name != "target/call.rs" {
                 problems.push(format!(
                     "src/{name}:{}: builds a view its call did not bound",
+                    number + 1
+                ));
+            }
+            if line.contains(".bounded_by(") && name != "target/call.rs" {
+                problems.push(format!(
+                    "src/{name}:{}: bounds a view outside its call",
                     number + 1
                 ));
             }

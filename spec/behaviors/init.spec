@@ -301,7 +301,8 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     built component is E040.
     The system MUST NOT duplicate an already-installed extension.
     An extension a .wasm file entry of specforge.json loads (its component declares that name and
-    the extension load admits it) MUST NOT be installed or enabled beside it: the add is refused
+    the extension load admits it, an installed extension of that name whose module is missing or
+    changed included) MUST NOT be installed or enabled beside it: the add is refused
     with extension_conflict, naming the entry's file, and writes nothing, a dry run included.
     Only a named entry (name, or name@version as older adds wrote it) makes an extension already
     enabled or already present.
@@ -333,7 +334,8 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     requirer's range is a version diamond (ADR 0001): from a registry the
     operation MUST be rejected with R-RES-006 naming the version that would
     satisfy every requirer of the set, or R-RES-005 when no published
-    version does; a local install, with no registry to consult, MUST be
+    version does (R-RES-002 when the registry publishes no version of the
+    peer, as an add of the peer is refused); a local install, with no registry to consult, MUST be
     rejected with E027. A builtin or a .wasm file entry at a version outside
     a range is E027 whatever the source: no install changes its version.
     Installing or enabling an extension at a version an extension of the
@@ -394,6 +396,7 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   verify integration "an install that leaves a locked extension's peer unsatisfied is refused before anything is written, local or from a registry"
   verify unit "a peer locked outside the new extension's range fails R-RES-006 naming a version that satisfies every requirer"
   verify unit "a peer no single version satisfies for every requirer fails R-RES-005"
+  verify unit "a peer its registry publishes no version of fails R-RES-002, as an add of that peer does"
   verify unit "an add that upgrades a locked package judges its peers against the lock as the add leaves it"
   verify unit "a version diamond names each requirer once"
   verify unit "add judges the project's peer set as the add leaves it: its builtins, installed extensions and .wasm file entries"
@@ -403,6 +406,7 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   verify unit "an install enables the builtins it requires first, whatever its source"
   verify unit "an extension no specforge.json entry enables is not judged"
   verify unit "an add of an extension a .wasm file entry loads is refused, naming the entry, and writes nothing"
+  verify unit "an add of an extension a .wasm file entry loads in place of a broken install is refused, naming the entry, and writes nothing"
   verify integration "add and check agree: an add check would report E027 or E073 for is refused, and an add that passes leaves none"
   verify integration "a local .wasm install is locked at its declared version with source local:<path> and enabled by its bare name"
   verify unit "a local crate directory installs the component its crate builds"

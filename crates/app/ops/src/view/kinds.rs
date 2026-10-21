@@ -43,7 +43,44 @@ impl<'a> ProjectView<'a> {
     }
 }
 
+/// A filter over entities by kind and what it noticed (ADR 0015 Q3): the kinds the project lacks,
+/// as I020.
+pub struct KindFilter<'r> {
+    kinds: &'r [&'r str],
+    notices: Vec<Diagnostic>,
+}
+
+impl<'r> KindFilter<'r> {
+    /// An entity of `kind` is kept: every kind without a filter.
+    pub fn keeps(&self, kind: &str) -> bool {
+        self.kinds.is_empty() || self.kinds.contains(&kind)
+    }
+
+    /// The filter as given, unknown kinds included.
+    pub fn kinds(&self) -> &'r [&'r str] {
+        self.kinds
+    }
+
+    /// I020 for each kind the project lacks, once each, in the filter's order.
+    pub fn notices(&self) -> &[Diagnostic] {
+        &self.notices
+    }
+
+    /// [`Self::notices`], owned.
+    pub fn into_notices(self) -> Vec<Diagnostic> {
+        self.notices
+    }
+}
+
 impl ProjectView<'_> {
+    /// The filter `kinds` (empty: every kind), with I020 for each kind the project lacks.
+    pub fn kind_filter<'r>(&self, kinds: &'r [&'r str]) -> KindFilter<'r> {
+        KindFilter {
+            kinds,
+            notices: self.kinds().unknown_in(kinds),
+        }
+    }
+
     /// How many entities each kind has, for every kind an entity is written
     /// with (an undeclared one, E024's, included), in kind order.
     pub fn entities_by_kind(&self) -> BTreeMap<&'static str, usize> {
@@ -70,7 +107,7 @@ impl KnownKinds<'_> {
     /// ([`has`](Self::has) is false), once each, in the filter's order, as
     /// I020 notices `unknown entity kind '<kind>'` with `did you mean
     /// '<closest>'?` among every kind it has. The filter still drops them.
-    pub fn unknown_in(&self, filter: &[&str]) -> Vec<Diagnostic> {
+    fn unknown_in(&self, filter: &[&str]) -> Vec<Diagnostic> {
         let mut reported: Vec<&str> = Vec::new();
         let mut notices = Vec::new();
         for &kind in filter {

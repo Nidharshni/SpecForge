@@ -52,14 +52,13 @@ pub struct OutputView;
 /// What [`OutputView`] hands its handler.
 pub struct ViewToWrite<'c> {
     pub view: ProjectView<'c>,
-    /// Where the file the call writes must land: the request's bound.
-    containment: Containment,
 }
 
 impl ViewToWrite<'_> {
-    /// What the call lends the operation: the request's bound (ADR 0092 D7), nobody to ask.
+    /// What the call lends the operation: the call's one containment, the view's (ADR 0092 D7,
+    /// ADR 0183), nobody to ask.
     pub fn caller(&self) -> Caller<'_> {
-        super::call::lent(&self.containment)
+        super::call::lent(self.view.containment())
     }
 }
 
@@ -79,13 +78,13 @@ pub struct NewProjectDir<'c> {
     /// The runtime its extensions' declarations are read in: the call's.
     pub runtime: SharedRuntime,
     /// Where a local file the call installs from must lie: the request's bound.
-    pub(crate) containment: Containment,
+    pub(crate) containment: &'c Containment,
 }
 
 impl NewProjectDir<'_> {
-    /// What the call lends init: the request's bound (ADR 0092 D7), nobody to ask.
+    /// What the call lends init: the call's containment (ADR 0092 D7, ADR 0183), nobody to ask.
     pub fn caller(&self) -> Caller<'_> {
-        super::call::lent(&self.containment)
+        super::call::lent(self.containment)
     }
 }
 
@@ -118,10 +117,7 @@ impl Input for OutputView {
     };
 
     fn given<'c>(call: &'c Call<'_>) -> Result<ViewToWrite<'c>, Box<McpError>> {
-        Ok(ViewToWrite {
-            view: call.view(),
-            containment: call.bound(),
-        })
+        Ok(ViewToWrite { view: call.view() })
     }
 }
 
@@ -146,7 +142,7 @@ impl Input for NewProject {
             Some(dir) => Ok(NewProjectDir {
                 dir,
                 runtime: call.runtime(),
-                containment: call.bound(),
+                containment: call.containment(),
             }),
             // The call target refused a call without a path.
             None => Err(Box::new(McpError::from(TargetError::PathRequired))),

@@ -31,6 +31,7 @@ fn link_twice_plans_nothing() {
     assert!(
         plan(&c, &[link("complete_task", "invariants", "done_stamped")])
             .unwrap()
+            .change()
             .is_empty()
     );
     let once = [link("list_tasks", "invariants", "task_unique")];
@@ -62,6 +63,7 @@ fn unlink_of_a_target_not_there_plans_nothing() {
     assert!(
         plan(&c, &[unlink("complete_task", "invariants", "task_unique")])
             .unwrap()
+            .change()
             .is_empty()
     );
 }
@@ -84,6 +86,7 @@ fn link_on_a_single_reference_is_not_editable_and_unlink_removes_a_match() {
     assert!(
         plan(&c, &[unlink("task_done", "payload", "Other")])
             .unwrap()
+            .change()
             .is_empty()
     );
 }

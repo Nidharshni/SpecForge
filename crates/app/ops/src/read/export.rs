@@ -13,7 +13,7 @@
 use crate::containment::Held;
 use crate::options::{Choice, OptionTable};
 use crate::schema_version::{NotAdmitted, VersionedSchema};
-use crate::view::{ProjectView, not_found};
+use crate::view::{ProjectView, Select, not_found};
 use crate::{Caller, Noticed, OpError, OpErrorKind, Refusal};
 use specforge_common::ProjectPath;
 use specforge_emitter::{EmitFormat, EmitOptions, EmitterError, SchemaVersion, emit};
@@ -139,9 +139,6 @@ impl Schema {
 
 /// A requested schema version that does not parse (`InvalidInput`).
 pub const INVALID_SCHEMA_VERSION: &str = "invalid_schema_version";
-/// The code of the refusal of `depth` without a `scope`: depth limits a
-/// scoped export.
-pub const DEPTH_WITHOUT_SCOPE: &str = "depth_without_scope";
 
 /// What to export.
 #[derive(Debug, Clone, Default)]
@@ -149,8 +146,8 @@ pub struct Request<'a> {
     pub format: Option<Format>,
     /// Restrict to the subgraph reachable from this entity.
     pub scope: Option<&'a str>,
-    /// With `scope`, how far to traverse; without one it is refused
-    /// ([`DEPTH_WITHOUT_SCOPE`]).
+    /// With `scope`, how far to traverse; without one it is refused, about the scope
+    /// ([`DEPTH_WITHOUT_ENTITY`](crate::view::DEPTH_WITHOUT_ENTITY)).
     pub depth: Option<usize>,
     /// Keep only nodes of these kinds (the scoped root always stays).
     pub kinds: Vec<&'a str>,
@@ -193,8 +190,6 @@ impl Request<'_> {
 pub enum ExportField {
     /// `Request::scope`: the entity the export is about.
     Scope,
-    /// `Request::depth`.
-    Depth,
     /// `Request::max_tokens`.
     MaxTokens,
     /// `Request::schema_version`.
@@ -230,8 +225,9 @@ pub fn export(
     request: &Request,
 ) -> Result<Noticed<String>, Refusal<ExportField>> {
     let versioned = view.versioned_schema();
-    let document = export_versioned(view, &versioned, request)?;
-    Ok(Noticed::new(document, versioned.notices()))
+    let (document, filter_notices) =
+        export_versioned(view, &versioned, request)?.into_value_and_notices();
+    Ok(Noticed::new(document, versioned.notices()).and_notices(filter_notices))
 }
 
 /// The export of the view's project for `request`, written into `directory` as
@@ -297,15 +293,13 @@ fn export_versioned(
     view: &ProjectView,
     versioned: &VersionedSchema,
     request: &Request,
-) -> Result<String, Refusal<ExportField>> {
-    if request.depth.is_some() && request.scope.is_none() {
-        return Err(OpError::new(
-            OpErrorKind::InvalidInput,
-            DEPTH_WITHOUT_SCOPE,
-            "depth limits a scoped export: give a scope too",
-        )
-        .about(ExportField::Depth));
-    }
+) -> Result<Noticed<String>, Refusal<ExportField>> {
+    let selection = view.select(&Select {
+        entity: request.scope,
+        named_by: ExportField::Scope,
+        depth: request.depth,
+        kinds: &request.kinds,
+    })?;
     // A requested version is checked whatever the format, and never applied:
     // the export carries the schema at its own version.
     if let Some(requested) = request.schema_version {
@@ -330,7 +324,7 @@ fn export_versioned(
         format: request.format().emit_format(),
         scope: request.scope,
         depth: request.depth,
-        kind_filter: request.kinds.clone(),
+        kind_filter: selection.kinds().to_vec(),
         schema: versioned.schema(),
         attach_schema: request.attaches_schema(),
         token_budget: request.max_tokens,
@@ -339,12 +333,14 @@ fn export_versioned(
         coverage: request.coverage.map(|coverage| &coverage.verdicts),
         field_forms: Some(view.registries().field_forms()),
     };
-    emit(view.graph(), &options).map_err(|error| failure(view, error))
+    let document = emit(view.graph(), &options).map_err(|error| failure(view, error))?;
+    Ok(Noticed::new(document, selection.into_notices()))
 }
 
 /// What `specforge export` did: the export, and what became of the record.
 /// Its notices (what versioning reports against the view root's record: I016,
-/// W053) are found before the export ran, and reported even when it fails.
+/// W053) are found before the export ran, and reported even when it fails; the filter's I020 is
+/// reported when the export ran.
 #[derive(Debug)]
 pub struct RecordedExport {
     pub export: Result<String, Refusal<ExportField>>,
@@ -370,8 +366,12 @@ pub enum CacheWrite {
 /// a successful export. MCP never calls it.
 pub fn export_recorded(view: &ProjectView, request: &Request) -> Noticed<RecordedExport> {
     let versioned = view.versioned_schema();
-    let notices = versioned.notices();
-    let export = export_versioned(view, &versioned, request);
+    let mut notices = versioned.notices();
+    let export = export_versioned(view, &versioned, request).map(|exported| {
+        let (document, filter_notices) = exported.into_value_and_notices();
+        notices.extend(filter_notices);
+        document
+    });
     let cache = match (&export, view.schema_cache()) {
         (Ok(_), Some(cache)) => match cache.record(&versioned) {
             Ok(()) => CacheWrite::Written,
@@ -387,7 +387,8 @@ pub fn export_recorded(view: &ProjectView, request: &Request) -> Noticed<Recorde
 
 /// The emitter's failure as the operation's: the kind by variant, the code
 /// the variant's ([`EmitterError::code`]); nothing is read from the message.
-/// A missing scope entity is the one not-found refusal, about the scope; a budget too small is
+/// A missing scope entity is the one not-found refusal, about the scope (the selection refuses it
+/// first; the mapping stays total, ADR 0015 Q4); a budget too small is
 /// about `max_tokens`; a serialization failure is about no field.
 fn failure(view: &ProjectView, error: EmitterError) -> Refusal<ExportField> {
     let (kind, field) = match &error {
@@ -464,7 +465,7 @@ mod tests {
             ..request(Format::Graph)
         });
         assert_eq!(error.kind, OpErrorKind::InvalidInput);
-        assert_eq!(error.code, DEPTH_WITHOUT_SCOPE);
+        assert_eq!(error.code, crate::view::DEPTH_WITHOUT_ENTITY);
 
         // With a scope it is a hop limit, and the export goes on.
         let fixture = specforge_project::testing::Assembled::new();
@@ -568,7 +569,7 @@ mod tests {
                 depth: Some(2),
                 ..graph()
             }),
-            Some(ExportField::Depth)
+            Some(ExportField::Scope)
         );
         for version in ["x.y", "9.0.0"] {
             assert_eq!(

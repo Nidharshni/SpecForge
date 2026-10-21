@@ -204,7 +204,10 @@ mod tests {
             .enabled(vec![EnabledExtension {
                 entry: "greet.wasm".into(),
                 name: "@sdk/greet".into(),
-                file: Some("greet.wasm".into()),
+                origin: specforge_installed::Origin::File {
+                    path: "greet.wasm".into(),
+                },
+                loaded: true,
                 failure: None,
                 warnings: Vec::new(),
             }])

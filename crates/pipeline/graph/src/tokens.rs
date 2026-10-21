@@ -2,7 +2,7 @@
 //! the editor's find-references and a delete's referrer scan ask, over the compiled parses or the texts a plan holds.
 
 use crate::build::is_define_block;
-use crate::defaults::{is_defaults_block, takers};
+use crate::defaults::is_defaults_block;
 use crate::derive::derived_names;
 use crate::{FieldForms, FileDefaults, GraphInputs, Reading};
 use specforge_common::{SourceSpan, Sym};
@@ -37,9 +37,9 @@ pub struct WrittenToken {
     /// The id it names, as written.
     pub target: Sym,
     pub holder: Holder,
-    /// The blocks whose node holds it as a reference, sorted, once each: its block; each block that takes the default
-    /// (`Holder::Defaults`), but not one a derived name of the default names (a block never derives an edge to itself);
-    /// none for a default no block takes. The graph build links exactly these (the debug assertion of `GraphBuild`).
+    /// The blocks whose node holds it as a reference, sorted, once each: its block; each block that takes the default's
+    /// entry (`Holder::Defaults`; whatever it writes in a derived field), but not one a derived name of the default
+    /// names (a block never derives an edge to itself); none for a default no block takes. The graph build links exactly these (the debug assertion of `GraphBuild`).
     pub held_by: Vec<Sym>,
     /// The entry's key, or the derived field a type name links through.
     pub field: Sym,
@@ -73,11 +73,26 @@ pub fn written_tokens(
     let mut tokens = Vec::new();
     for (kind, entry) in defaults.applied() {
         let holder = Holder::Defaults(kind);
+        let mut takers: Vec<Sym> = defaults
+            .takers(file, kind, entry.key.as_str())
+            .map(|block| block.id.raw)
+            .collect();
+        takers.sort_unstable();
+        takers.dedup();
+        let from = tokens.len();
         let entries = stored(forms, kind.as_str(), std::slice::from_ref(entry));
         for entry in entries.iter() {
             read_entry(forms, kind.as_str(), entry, holder, &mut tokens);
         }
         read.derived(kind.as_str(), &entries, &[], holder, None, &mut tokens);
+        for token in &mut tokens[from..] {
+            // A block never derives an edge to itself (`link_derived_references`).
+            token.held_by = takers
+                .iter()
+                .copied()
+                .filter(|id| token.form != Form::Derived || *id != token.target)
+                .collect();
+        }
     }
     for entity in &file.entities {
         if is_defaults_block(entity) || is_define_block(entity) {
@@ -85,6 +100,7 @@ pub fn written_tokens(
         }
         let (id, kind) = (entity.id.raw, entity.kind.raw.as_str());
         let holder = Holder::Block(id);
+        let from = tokens.len();
         let entries = stored(forms, kind, entity.fields.entries());
         for entry in entries.iter() {
             read_entry(forms, kind, entry, holder, &mut tokens);
@@ -97,6 +113,9 @@ pub fn written_tokens(
             Some(id),
             &mut tokens,
         );
+        for token in &mut tokens[from..] {
+            token.held_by = vec![id];
+        }
     }
     let at = |t: &WrittenToken| {
         (
@@ -109,31 +128,14 @@ pub fn written_tokens(
     tokens.sort_by_key(at);
     // A name the build reads twice at one span (a default's derived name) is one token.
     tokens.dedup();
-    for token in &mut tokens {
-        token.held_by = match token.holder {
-            Holder::Block(id) => vec![id],
-            Holder::Defaults(kind) => {
-                let mut ids: Vec<Sym> = takers(file, kind, token.field)
-                    .map(|block| block.id.raw)
-                    // A block never derives an edge to itself (`link_derived_references`).
-                    .filter(|id| token.form != Form::Derived || *id != token.target)
-                    .collect();
-                ids.sort_unstable();
-                ids.dedup();
-                ids
-            }
-        };
-    }
     tokens
 }
 
-/// `entries` as the graph build stores them (`Graph::coerce_field_values`): each value its reading coerces, coerced;
-/// borrowed when none is.
+/// `entries` as the graph build stores them (`FieldForms::stored`): borrowed when no value is coerced.
 fn stored<'e>(forms: &FieldForms, kind: &str, entries: &'e [FieldEntry]) -> Cow<'e, [FieldEntry]> {
     let mut owned: Option<Vec<FieldEntry>> = None;
     for (i, entry) in entries.iter().enumerate() {
-        let reading = forms.reading(kind, entry.key.as_str());
-        if let Some(value) = reading.coerce(&entry.value, entry.value_span.as_ref()) {
+        if let Cow::Owned(value) = forms.stored(kind, entry) {
             owned.get_or_insert_with(|| entries.to_vec())[i].value = value;
         }
     }

@@ -136,7 +136,7 @@ fn failed(
             problem,
             diagnostic,
         }),
-        ..specforge_project::EnabledExtension::unloaded(entry)
+        ..crate::testing::unloaded(entry)
     }
 }
 
@@ -159,11 +159,14 @@ fn doctor_lists_the_extensions_the_listing_lists() {
     use specforge_installed::LoadProblem;
     let fixture = Assembled::new()
         .enabled(vec![
-            specforge_project::EnabledExtension::unloaded("@specforge/product"),
+            crate::testing::unloaded("@specforge/product"),
             specforge_project::EnabledExtension {
                 entry: "greet.wasm".into(),
                 name: "@sdk/greet".into(),
-                file: Some("greet.wasm".into()),
+                origin: specforge_installed::Origin::File {
+                    path: "greet.wasm".into(),
+                },
+                loaded: true,
                 failure: None,
                 warnings: Vec::new(),
             },
@@ -619,7 +622,7 @@ fn a_load_warning_is_a_finding_but_leaves_extensions_ok() {
     let fixture = Assembled::new()
         .enabled(vec![specforge_project::EnabledExtension {
             warnings: vec![Diagnostic::new(codes::W153, "its sandbox asks for more")],
-            ..specforge_project::EnabledExtension::unloaded("@acme/x")
+            ..crate::testing::unloaded("@acme/x")
         }])
         .declarations(vec![Assembled::declaration("@acme/x", "1.0.0")]);
 

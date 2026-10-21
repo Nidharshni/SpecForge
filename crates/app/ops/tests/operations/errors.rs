@@ -177,6 +177,32 @@ fn a_missing_entity_is_one_refusal() {
         ),
         ("navigator", navigator.definition("logn").unwrap_err().error),
         (
+            "references",
+            navigator
+                .references(
+                    "logn",
+                    specforge_ops::read::navigate::ReferenceQuery::default(),
+                )
+                .unwrap_err()
+                .error,
+        ),
+        (
+            "query",
+            specforge_ops::read::query::query(
+                &view,
+                &specforge_ops::read::query::QueryRequest {
+                    entity_id: "logn",
+                    ..Default::default()
+                },
+            )
+            .unwrap_err()
+            .error,
+        ),
+        (
+            "affected",
+            specforge_ops::read::trace::affected(&view, ["logn"]).unwrap_err(),
+        ),
+        (
             "rename",
             specforge_ops::authoring::rename::plan(&navigator, "logn", "fine_name")
                 .unwrap_err()

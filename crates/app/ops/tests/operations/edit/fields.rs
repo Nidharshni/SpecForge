@@ -63,6 +63,7 @@ fn unset_of_an_absent_field_changes_nothing() {
     assert!(
         plan(&c, &[unset("list_tasks", "invariants")])
             .unwrap()
+            .change()
             .is_empty()
     );
 }

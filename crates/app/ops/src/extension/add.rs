@@ -1,12 +1,12 @@
 //! `specforge add` and `specforge.add_extension`.
 
-use super::Origin;
 use super::lock_plan::{Ask, Asked, Fetching, Install, LockPlan, Opened, Purpose};
 use super::names::no_specifier;
 use super::{Answer, Names, Place};
 use crate::registry::{Publisher, Registry};
 use crate::{Caller, Refusal, Writes, Wrote};
 use specforge_installed::Installed;
+use specforge_installed::Origin;
 use specforge_wasm::WasmRuntime;
 
 /// The field of an add's request a refusal can be about (ADR 0072).

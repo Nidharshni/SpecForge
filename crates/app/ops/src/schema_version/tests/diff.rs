@@ -125,7 +125,7 @@ fn diff_added_edge_non_breaking() {
 fn diff_no_previous_schema_all_non_breaking() {
     let dir = tempfile::tempdir().unwrap();
 
-    let versioned = SchemaCache::in_dir(dir.path()).version(sample_schema());
+    let versioned = SchemaCache::in_dir(dir.path()).version(sample_schema(), &PlainDisk);
 
     assert!(!breaking(versioned.changes()));
     assert!(versioned.notices().is_empty());
@@ -184,7 +184,7 @@ fn the_versioned_schema_lists_each_change_since_the_record() {
     let cache = SchemaCache::in_dir(dir.path());
     cache.seed(&GraphProtocolSchema::empty());
 
-    let versioned = cache.version(sample_schema());
+    let versioned = cache.version(sample_schema(), &PlainDisk);
 
     assert_eq!(
         versioned.changes(),

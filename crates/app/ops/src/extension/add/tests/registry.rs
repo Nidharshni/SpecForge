@@ -529,3 +529,49 @@ fn another_version_served_as_the_installed_bytes_is_refused() {
     );
     assert_eq!(files_under(dir.path()), before);
 }
+
+/// `add @acme/base` and `add @acme/app` (which needs base ^2.0) meet one fact, "the registry
+/// publishes no @acme/base", and refuse it alike.
+#[specforge_test(
+    behavior = "add_extension_to_existing_project",
+    verify = "a peer its registry publishes no version of fails R-RES-002, as an add of that peer does"
+)]
+fn a_peer_published_nowhere_is_refused_as_an_add_of_it_is() {
+    let dir = add_project(vec![
+        entry("@acme/base", "1.0.0", "registry", &[]),
+        entry(
+            "@acme/other",
+            "1.0.0",
+            "registry",
+            &[("@acme/base", "^1.0")],
+        ),
+    ]);
+    let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
+    let registry = || {
+        MemoryRegistry::new()
+            .listing_none("@acme/base")
+            .serving(Published::new(
+                b"\0asm app".to_vec(),
+                declaration("@acme/app", "1.0.0", &[("@acme/base", "^2.0")]),
+            ))
+    };
+    for dry_run in [true, false] {
+        let refused = |specifier: &str| {
+            add(
+                &several(&root, vec![specifier.to_string()], dry_run),
+                &registry(),
+                &runtime(),
+            )
+            .unwrap_err()
+            .error
+        };
+        let peer = refused("@acme/base");
+        let dependent = refused("@acme/app@1.0.0");
+        assert_eq!(peer.code, "R-RES-002", "{peer:?}");
+        assert_eq!(
+            dependent.code, peer.code,
+            "dry_run={dry_run}: {dependent:?}"
+        );
+        assert_eq!(dependent.message, peer.message, "dry_run={dry_run}");
+    }
+}

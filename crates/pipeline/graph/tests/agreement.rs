@@ -40,6 +40,7 @@ fn inputs() -> GraphInputs {
                     list(FieldType::ReferenceList, Some("shape")),
                 ),
                 form("shape", "tags", list(FieldType::StringList, None)),
+                form("shape", "note", list(FieldType::String, None)),
                 form(
                     "iface",
                     "uses",
@@ -157,7 +158,7 @@ fn the_linker_and_the_finder_agree_on_every_case() {
         ),
         (
             "a derived name in a default",
-            with_wheel("defaults shape {\n  slot Wheel\n}\n\nshape Car \"Car\" {\n}\n"),
+            with_wheel("defaults shape {\n  note Wheel\n}\n\nshape Car \"Car\" {\n}\n"),
             true,
         ),
         (
@@ -198,4 +199,19 @@ fn the_linker_and_the_finder_agree_on_every_case() {
     for (name, source, placed) in rows {
         assert_agree(name, &source, placed);
     }
+}
+
+/// A default's derived name is held by the blocks that take the default's entry (`note`), whatever they write in
+/// the derived field (`parts`): `Car` takes `note` and writes `parts`; `Bus` writes its own `note` (ADR 0182 D2).
+#[specforge_test(
+    behavior = "link_derived_references",
+    verify = "a default's derived name is held by the blocks that take its entry"
+)]
+fn a_default_s_derived_name_is_held_by_the_blocks_that_take_its_entry() {
+    assert_agree(
+        "a default's derived name, the derived field written",
+        "defaults shape {\n  note Wheel\n}\n\nshape Wheel \"Wheel\" {\n}\n\nshape Axle \"Axle\" {\n}\n\n\
+         shape Car \"Car\" {\n  parts [Axle]\n}\n\nshape Bus \"Bus\" {\n  note \"its own\"\n}\n",
+        true,
+    );
 }

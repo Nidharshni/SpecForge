@@ -1,6 +1,6 @@
 //! The builtins and companions a change enables because what it adds requires them (ADR 0041 D4).
 
-use super::super::peer_set::ProjectPeers;
+use super::super::peer_set::{Modules, ProjectPeers};
 use super::{Appended, Ask, Changing, LockPlan};
 use crate::OpError;
 use specforge_common::ExtensionEntry;
@@ -19,8 +19,12 @@ impl<'a> LockPlan<'a> {
             return Ok(());
         }
         loop {
-            let set =
-                ProjectPeers::of(&self.view()?, &self.entries_after(), &mut self.declarations)?;
+            let set = ProjectPeers::of(
+                &self.view()?,
+                &self.entries_after(),
+                &mut self.declarations,
+                Modules::Locked,
+            )?;
             let changing = Changing::of(&self.staged, &self.appended);
             let mut wanted: Vec<(String, &'static str)> = Vec::new();
             for name in &changing.names {

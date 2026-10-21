@@ -77,6 +77,10 @@ behavior load_extension_manifests "Load Extension Manifests" {
     read that one decision. A file that does not exist, cannot be read, does not load as a
     component, declares another name than the one written, or declares an
     extension another entry already loads MUST produce E028 naming the entry.
+    Each entry's outcome MUST record where the load takes its extension from
+    (builtin, the lock entry's source, file:<path>, or unknown; a repeated
+    entry, the one it repeats') and whether it loaded, with or without a
+    runtime.
     An entry whose declaration can't be read (its handshake, a describe
     category or its protocol major) MUST produce one E028 that says so and
     names what failed, in the same words for every kind of entry. Each
@@ -119,6 +123,7 @@ behavior load_extension_manifests "Load Extension Manifests" {
   verify integration "an enabled extension with no installed binary produces E028 naming the command that installs it"
   verify integration "an entry naming a .wasm file loads that component from disk under the name it declares"
   verify unit "the extension load and the lock plan resolve an entry by one rule"
+  verify unit "each entry records where the load takes its extension from and whether it loaded"
   verify integration "a .wasm file entry that is missing, is not a component, names another extension or repeats a loaded one produces E028 naming the entry"
   verify unit "an entry whose declaration can't be read is E028 saying so and naming what failed"
   verify unit "a .wasm file entry that cannot be read is E028 saying it cannot be read"
@@ -506,11 +511,11 @@ behavior list_installed_extensions "List Installed Extensions" {
     the project has (enabled by a specforge.json entry, locked in specforge.lock, or loaded: the extension inventory) with their name, version, entity count, and registered entity types.
     The listing MUST query the KindRegistry to enumerate entity kinds per
     extension. Each entry MUST carry its source: where the extension load
-    loaded it from (the entry that loaded it, read by the load's one rule,
-    load_extension_manifests: builtin for a builtin's name, the lock
+    loaded it from (the origin the load recorded on the entry that loaded
+    it, load_extension_manifests: builtin for a builtin's name, the lock
     entry's source for an installed one, file:<path> for a .wasm file
-    entry, listed under the name it declares), else where its first entry
-    in load order would load it from, else its lock entry's source, else
+    entry, listed under the name it declares), else the origin recorded on
+    its first entry in load order, else its lock entry's source, else
     unknown; its version: the
     loaded one, else an installed extension's locked one, else the version
     a legacy name@version entry writes; and its status (loaded, not_loaded,

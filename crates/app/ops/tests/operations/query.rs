@@ -424,7 +424,7 @@ fn list_pages_sorted_by_id() {
     assert_eq!(page(0, None), ["b1", "b2", "b3"]);
     assert_eq!(page(1, Some(1)), ["b2"]);
     assert_eq!(page(2, Some(5)), ["b3"]);
-    // No kind, or an empty one, lists every kind.
+    // No kind lists every kind; an empty one is a kind the project lacks.
     let all = |kind| {
         listed(
             &project,
@@ -435,7 +435,7 @@ fn list_pages_sorted_by_id() {
         )
     };
     assert_eq!(all(None), ["b1", "b2", "b3"]);
-    assert_eq!(all(Some("")), ["b1", "b2", "b3"]);
+    assert!(all(Some("")).is_empty());
 }
 
 #[specforge_test(

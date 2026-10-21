@@ -6,7 +6,7 @@
 
 mod build;
 mod defaults;
-pub use defaults::FileDefaults;
+pub use defaults::{FileDefaults, Held};
 pub mod field_form;
 pub use field_form::{
     FieldForm, FieldForms, FieldJson, Reading, Reference, Rewrite, Target, ValueShape,

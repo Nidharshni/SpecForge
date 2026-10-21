@@ -289,7 +289,7 @@ fn without_project_names_the_file_from_the_refusal() {
 }
 
 #[test]
-fn a_projects_caller_reaches_its_root_and_asks_nobody() {
+fn a_calls_caller_lends_the_containment_its_view_reads_through() {
     let dir = tempfile::TempDir::new().unwrap();
     std::fs::write(
         dir.path().join("specforge.json"),
@@ -307,7 +307,15 @@ fn a_projects_caller_reaches_its_root_and_asks_nobody() {
     let caller = project.caller();
     assert_eq!(caller.containment().root(), Some(canonical.as_path()));
     assert_eq!(format!("{:?}", caller.asking()), "Nobody");
-    drop(project);
+    assert!(std::ptr::eq(
+        caller.containment(),
+        project.view().containment()
+    ));
+    let given = OutputView::given(&served).unwrap();
+    assert!(std::ptr::eq(
+        given.caller().containment(),
+        given.view.containment()
+    ));
 
     // Another project a call names.
     let mut other = McpState::new();
@@ -317,4 +325,39 @@ fn a_projects_caller_reaches_its_root_and_asks_nobody() {
     let caller = project.caller();
     assert_eq!(caller.containment().root(), Some(canonical.as_path()));
     assert_eq!(format!("{:?}", caller.asking()), "Nobody");
+    assert!(std::ptr::eq(
+        caller.containment(),
+        project.view().containment()
+    ));
+
+    // Nothing served: the empty session's view and the caller are the request's bound.
+    let mut empty = McpState::new();
+    let call = Call::new(
+        &mut empty,
+        CallTarget::EmptySession(NoProject {
+            reach: Reach::Served,
+            serving: Serving::Fixed,
+        }),
+    );
+    let given = OutputView::given(&call).unwrap();
+    assert!(std::ptr::eq(
+        given.caller().containment(),
+        given.view.containment()
+    ));
+    assert!(std::ptr::eq(given.view.containment(), call.containment()));
+
+    // A directory init creates: the caller is the call's.
+    let mut fresh = McpState::new();
+    let call = Call::new(
+        &mut fresh,
+        CallTarget::New {
+            dir: dir.path().join("new"),
+            serving: Serving::Fixed,
+        },
+    );
+    let given = NewProject::given(&call).unwrap();
+    assert!(std::ptr::eq(
+        given.caller().containment(),
+        call.containment()
+    ));
 }

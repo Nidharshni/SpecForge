@@ -49,8 +49,13 @@ pub fn upgrade(
     Ok(upgrade_target(locked, &published, reach).cloned())
 }
 
-/// The versions `registry` publishes of `name`; R-RES-002 when it lists none.
-fn published(registry: &dyn Registry, name: &PackageName) -> Result<Vec<Version>, OpError> {
+/// The versions `registry` publishes of `name`, in its order; R-RES-002 when it lists none. The one
+/// reader of a package's published versions: [`resolve`], [`upgrade`] and the lock plan's version
+/// diamond (ADR 0001 as amended).
+pub(super) fn published(
+    registry: &dyn Registry,
+    name: &PackageName,
+) -> Result<Vec<Version>, OpError> {
     let published = registry.versions(name)?;
     if published.is_empty() {
         return Err(OpError::coded(

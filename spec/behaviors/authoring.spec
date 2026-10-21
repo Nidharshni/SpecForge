@@ -18,8 +18,9 @@ behavior create_entity "Create an Entity" {
     its kind in the file, or at the end of the file; a file that does not exist
     is created. The id MUST be an identifier of 2 to 60 characters that is not a
     reserved word (E013), and MUST NOT be taken, the kind MUST be declared, and the file MUST be a project source.
-    A field whose written value restates its file's default for the kind (W161)
-    is not written: the block inherits it. The field flags of `specforge new` are the kind's fields in the project
+    Each field is written as a set of it writes it, so a field that holds what its file's default holds, as the graph stores both,
+    is not written, and each verify obligation as an add-verify writes it, so an equal one given twice is written
+    once. The field flags of `specforge new` are the kind's fields in the project
     the command acts on. A create takes whole fields; a `field.entry` path is refused.
   """
   verify unit "new writes the block in the canonical form after the last block of its kind"
@@ -30,6 +31,8 @@ behavior create_entity "Create an Entity" {
   verify unit "new compares what it writes with the default, not what it was given"
   verify unit "new never writes a field that restates its default"
   verify unit "new refuses a field.entry path"
+  verify unit "new writes each field as set writes it"
+  verify unit "new writes an equal verify obligation once"
   verify integration "new reads its field flags from the project its --path names, wherever --path stands"
   verify integration "new refuses a field given twice that takes one value"
   verify integration "new refuses an unknown kind as unknown_kind"
@@ -53,7 +56,9 @@ behavior edit_entity_field "Edit an Entity Field" {
     parts are not each one identifier, is refused not_editable, and so is a path into a block field the entity
     writes as a value. A block field the block inherits from its
     file's defaults is copied into an own field before an entry of it is set or unset, and an own field that then
-    restates the default is removed; a block field left with no entry over a default is written `{}`. An unset of an
+    holds what the default holds, as the graph stores both, is removed; a set of an entry of a block field the block writes as none, or not at all,
+    writes the entry inside it, and annotations given to a set are written on the value it places, a new entry's
+    included; a block field left with no entry over a default is written `{}`. An unset of an
     entry, or of a block field, that neither the block nor its file's defaults hold changes nothing. A retitle edit
     replaces the header title. A field the kind does not declare is refused. A field that is the other
     side of a relation another kind owns is refused naming the owning field (ADR 0157).
@@ -63,12 +68,15 @@ behavior edit_entity_field "Edit an Entity Field" {
   verify unit "set of an absent field inserts it at its rank"
   verify unit "unset removes the field and the comment above it"
   verify unit "unset leaves a field holding none, once"
+  verify unit "set to a default's value leaves the block inheriting it, in any form"
   verify unit "set refuses a field the kind does not declare"
   verify unit "set refuses the other side of a relation naming its owning field"
   verify unit "set of a nested entry edits one line of the block field"
   verify unit "every verb reads a field.entry path the same way"
   verify unit "an entry of a block field written as a value is refused"
   verify unit "every verb leaves a field holding what it says, own or inherited"
+  verify unit "set of an entry into a block field written as none writes it inside"
+  verify unit "set of a new entry writes its annotations"
   verify unit "retitle replaces the header title"
 }
 
@@ -80,9 +88,11 @@ behavior edit_entity_link "Edit an Entity Reference List" {
     an unlink edit removes it, and removes the field when the last item goes.
     A link to a target already there changes nothing. A list written as one value is its one item. A field a block inherits
     from its file's defaults is copied into an own field before it changes, as
-    the earlier edits of the list left the file, and an own field equal to the default is removed. A link or unlink
+    the earlier edits of the list left the file, and an own field that holds what the default holds, as the graph stores both, is removed. A link or unlink
     takes a whole list field: a `field.entry` path names an entry of a block field, which holds one text, and is
-    refused not_editable, naming set and unset.
+    refused not_editable, naming set and unset. An unlink of a single reference
+    the block inherits empties a field of one value over a default, which is
+    refused as unset refuses it.
   """
   verify unit "link on the other side of a relation names the owning field of the target's kind"
   verify unit "a reference list's items are split at commas however they are given"
@@ -95,6 +105,8 @@ behavior edit_entity_link "Edit an Entity Reference List" {
   verify unit "a link after unset starts from none"
   verify unit "link and unlink read a list written as one value as its one item"
   verify unit "link and unlink refuse a field.entry path as an entry of a block field"
+  verify unit "unlink of an inherited single reference is refused as unset is"
+  verify unit "a link and its unlink leave a block as it was"
 }
 
 behavior edit_entity_obligation "Edit an Entity Obligation" {

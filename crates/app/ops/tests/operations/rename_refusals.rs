@@ -63,7 +63,7 @@ fn a_rename_is_refused_while_a_source_that_spells_the_id_does_not_parse() {
         ],
     );
     let plan = rename::plan(&p.navigator(), "session_limit", "session_cap").unwrap();
-    assert_eq!(plan.edits.len(), 1);
+    assert_eq!(plan.edits().len(), 1);
 }
 
 #[specforge_test_macros::test(

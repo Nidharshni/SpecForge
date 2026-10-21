@@ -26,7 +26,8 @@ invariant mcp_structured_error_responses "MCP Structured Error Responses" {
     a region left unformatted, a change under check) fails its verdict, ok,
     and not the call. An operation states which field of its request a
     refusal is about; a refusal of the project or the environment is about
-    none.
+    none. A depth given without the entity it counts hops from is one
+    refusal, invalid input about the entity's field, on every read.
   """
   risk      medium
   verify unit "error response includes error code and message fields"
@@ -37,6 +38,7 @@ invariant mcp_structured_error_responses "MCP Structured Error Responses" {
   verify unit "a failed tool call is an isError result whose content is an McpError with a code"
   verify unit "a diagnostic code behind a failed tool call is in its McpError diagnostic"
   verify unit "a missing entity is one E003 refusal naming the closest entity on every read view"
+  verify unit "a depth without the entity it counts from is one refusal, about the entity, on every read"
   verify unit "a failed prompts/get carries its McpError as the error's data"
   verify unit "a failed resources/read carries its McpError as the error's data"
   verify unit "a no-project refusal names path only for an entry that takes one"
@@ -96,8 +98,8 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
     mutation reads or writes through a symlink that leaves it (init's
     files, the lock and the installed modules included), and a file the
     project keeps at its root (the inference and anchors manifests, the
-    test report) is read only from inside it. A source of the served
-    project, and the recorded report, is also read only from a file that has
+    test report, the schema cache) is read only from inside it. A source of the served
+    project, the recorded report and the schema cache are also read only from a file that has
     one name: a hard link to a file outside is another name for it. So is
     the format configuration (.specforgefmt.toml) a call reads (format's, a
     typed edit's layout, init's starter), and format reads each file it
@@ -153,6 +155,7 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
   verify unit "a file the project keeps at its root is read only from inside the project"
   verify unit "a source of the served project is read only from inside the project"
   verify unit "no format configuration a call reads leaves the project, and none with more than one name is read"
+  verify unit "no schema cache a call reads leaves the project, and none with more than one name is read"
   verify unit "format reads no file with more than one name: it is a failed file, named, without its content"
   verify unit "a path that leaves the project through a symlink is outside it, whether or not the file it names exists"
   verify unit "init creates its project inside the server's root and never inside the served project"

@@ -3,7 +3,7 @@
 **Status:** accepted (2026-10-19, architecture round 16, plan 07). Amends [ADR 0016](0016-navigation-is-one-module.md)
 (its rejected item "0-based byte columns"), [ADR 0032](0032-one-graph-build.md) (its consequence that `RenameEdit`
 lives with the rename operation) and [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) (round 15 plan 06's
-amendment: MCP returns the spec's `TextEdit`, not `McpRenameEdit`). Amended by round 17 plan 07 (2026-10-19): D4 is one conversion.
+amendment: MCP returns the spec's `TextEdit`, not `McpRenameEdit`). Amended by round 17 plan 07 (2026-10-19): D4 is one conversion. D2 amended by [ADR 0184](0184-a-typed-edit-and-a-rename-write-one-planned-change.md): `rename::plan` refuses an edit that does not lie in its text, before anything is planned; `apply` is the planned change's.
 
 ## Context
 
@@ -24,8 +24,8 @@ pre-release project does not honour.
   An empty span inserts. `RenameEdit` is deleted.
 - **D2.** One applier, `navigate::apply_edits(text, edits)`, applies a file's edits whole or not at all: a span outside
   the text, an end inside a character or two overlapping edits refuse the set (`None`, never a panic); insertions at one
-  position keep the order given. `rename::apply` refuses (`file_unreadable`) before staging a file when the edits do not
-  lie in the text it planned.
+  position keep the order given. A rename plan refuses (`file_unreadable`) when it plans, if the edits do not lie in the
+  text it planned (ADR 0184).
 - **D3.** MCP renders it once, as the spec's `TextEdit` (`reply::TextEdit`, `{file_path, range, new_text}`), for
   `suggest_fixes` and `rename`. `McpRenameEdit` is deleted from the spec.
 - **D4.** The LSP converts an edit's span with `Compiled::range` and nothing else.

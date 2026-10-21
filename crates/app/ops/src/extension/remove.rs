@@ -1,13 +1,14 @@
 //! `specforge remove` and `specforge.remove_extension`.
 
 use super::lock_plan::{Ask, Disabled, LockPlan, Purpose, writable_lock};
-use super::{NOT_FOUND, Origin, ProjectExtension, Selection, not_installed};
+use super::{NOT_FOUND, ProjectExtension, Selection, not_installed};
 use crate::view::ProjectView;
 use crate::{Caller, OpError, OpErrorKind, Refusal, Writes, Wrote};
 use serde::Serialize;
 use specforge_common::ExtensionEntry;
 use specforge_common::shape::Shape;
 use specforge_graph::Graph;
+use specforge_installed::Origin;
 use specforge_installed::{Installed, LockFileEntry};
 use specforge_package::PackageName;
 use specforge_project::EnabledExtension;
@@ -296,9 +297,7 @@ fn remove_file(
     Ok(RemoveOutcome {
         name: file.name.clone(),
         version: extension.version().map(str::to_string),
-        origin: Origin::File {
-            path: file.file.clone().unwrap_or_default(),
-        },
+        origin: file.origin.clone(),
         stranded: stranded(req.graph, req.kinds, &file.name),
         dry_run: req.dry_run,
         writes,

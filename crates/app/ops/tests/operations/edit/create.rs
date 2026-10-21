@@ -83,7 +83,7 @@ fn new_creates_a_missing_source_file() {
         planned.report().affected_files,
         vec!["behaviors/archive.spec"]
     );
-    assert_eq!(planned.after()["behaviors/archive.spec"], ARCHIVE);
+    assert_eq!(planned.change().after()["behaviors/archive.spec"], ARCHIVE);
 }
 
 #[specforge_test_macros::test(

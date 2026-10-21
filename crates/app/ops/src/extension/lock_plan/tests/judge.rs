@@ -82,7 +82,13 @@ fn a_staged_package_replaces_its_previous_entry() {
     // The staged entry replaced the previous one: base has one requirer, at ^2.
     let view = plan.view().unwrap();
     let entries = ["@acme/base".to_string(), "@acme/app".to_string()];
-    let set = ProjectPeers::of(&view, &entries, &mut Declarations::through(&runtime)).unwrap();
+    let set = ProjectPeers::of(
+        &view,
+        &entries,
+        &mut Declarations::through(&runtime, &PlainDisk),
+        Modules::Locked,
+    )
+    .unwrap();
     let listed = set.requirers("@acme/base");
     assert_eq!(listed.len(), 1);
     assert_eq!(

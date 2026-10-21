@@ -4,6 +4,7 @@
 //! graph build's coercion, E061, the export writer, the graph delta and the
 //! published schema read it; nothing else decides a field value's form.
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use serde::Serialize;
@@ -311,7 +312,8 @@ pub struct Rewrite {
 /// references (ADR 0093). Built once per registry build.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct FieldForms {
-    forms: HashMap<(String, String), FieldForm>,
+    /// kind -> field -> form: looked up by `&str`, so a reading allocates nothing.
+    forms: HashMap<String, HashMap<String, FieldForm>>,
     member_kinds: BTreeSet<String>,
     /// Every kind a loaded extension declares.
     kinds: BTreeSet<String>,
@@ -326,8 +328,12 @@ impl FieldForms {
         member_kinds: BTreeSet<String>,
         kinds: BTreeSet<String>,
     ) -> Self {
+        let mut nested: HashMap<String, HashMap<String, FieldForm>> = HashMap::new();
+        for ((kind, field), form) in forms {
+            nested.entry(kind).or_default().insert(field, form);
+        }
         Self {
-            forms,
+            forms: nested,
             member_kinds,
             kinds,
         }
@@ -352,10 +358,13 @@ impl FieldForms {
     pub fn targets(&self) -> Vec<((&str, &str), Target<'_>)> {
         let mut targets: Vec<_> = self
             .forms
-            .keys()
-            .filter_map(|(kind, field)| {
-                Some(((kind.as_str(), field.as_str()), self.target(kind, field)?))
+            .iter()
+            .flat_map(|(kind, fields)| {
+                fields
+                    .keys()
+                    .map(move |field| (kind.as_str(), field.as_str()))
             })
+            .filter_map(|(kind, field)| Some(((kind, field), self.target(kind, field)?)))
             .collect();
         targets.sort_by(|a, b| a.0.cmp(&b.0));
         targets
@@ -364,13 +373,24 @@ impl FieldForms {
     /// How `kind`'s field `field` reads: its declared form, an undeclared
     /// field of a kind that takes any field, or no form at all.
     pub fn reading(&self, kind: &str, field: &str) -> Reading<'_> {
-        if let Some(form) = self.forms.get(&(kind.to_string(), field.to_string())) {
+        if let Some(form) = self.forms.get(kind).and_then(|fields| fields.get(field)) {
             Reading::Declared(form)
         } else if self.member_kinds.contains(kind) {
             Reading::Member
         } else {
             Reading::Undeclared
         }
+    }
+
+    /// `entry`'s value as the graph build stores it on a block of `kind` (ADR 0093, ADR 0156 D1, ADR 0182 D1):
+    /// coerced by its field's form when declared and not already in it, else the value as written (borrowed).
+    /// Idempotent. What [`Reading::references`], the derived walk and every copy of an inherited value read.
+    pub fn stored<'e>(&self, kind: &str, entry: &'e FieldEntry) -> Cow<'e, FieldValue> {
+        let coerced = match self.reading(kind, entry.key.as_str()) {
+            Reading::Declared(form) => form.coerce(&entry.value, entry.value_span.as_ref()),
+            Reading::Member | Reading::Undeclared => None,
+        };
+        coerced.map_or(Cow::Borrowed(&entry.value), Cow::Owned)
     }
 
     /// The form `kind`'s field `field` writes a value in, when `written`/`text`
@@ -431,8 +451,12 @@ impl FieldForms {
     }
 
     /// Every declared (kind, field) and its form.
-    pub fn iter(&self) -> impl Iterator<Item = (&(String, String), &FieldForm)> {
-        self.forms.iter()
+    pub fn iter(&self) -> impl Iterator<Item = ((&str, &str), &FieldForm)> {
+        self.forms.iter().flat_map(|(kind, fields)| {
+            fields
+                .iter()
+                .map(move |(field, form)| ((kind.as_str(), field.as_str()), form))
+        })
     }
 
     /// Every kind a loaded extension declares; empty when none is loaded.
@@ -488,18 +512,9 @@ pub enum Reading<'f> {
 }
 
 impl Reading<'_> {
-    /// What the graph build stores for `value`: the form's coercion when
-    /// declared, else `None` (as written).
-    pub fn coerce(&self, value: &FieldValue, span: Option<&SourceSpan>) -> Option<FieldValue> {
-        match self {
-            Self::Declared(form) => form.coerce(value, span),
-            Self::Member | Self::Undeclared => None,
-        }
-    }
-
     /// What `entry`'s value references, in written order, each with its
     /// span (ADR 0093). The one rule every reader asks, of an entry as the graph build stores it: a written entry is
-    /// first coerced ([`Self::coerce`]), as a typed edit's referrer scan does:
+    /// stored ([`FieldForms::stored`]), as a typed edit's referrer scan does:
     ///
     /// | reading | a single value | a list item |
     /// |---|---|---|
@@ -592,10 +607,9 @@ impl Graph {
             return;
         }
         for node in self.nodes_mut() {
-            let kind = node.kind.raw.as_str().to_string();
+            let kind = node.kind.raw.as_str();
             for entry in node.fields.entries_mut() {
-                let reading = forms.reading(&kind, entry.key.as_str());
-                if let Some(value) = reading.coerce(&entry.value, entry.value_span.as_ref()) {
+                if let Cow::Owned(value) = forms.stored(kind, entry) {
                     entry.value = value;
                 }
             }

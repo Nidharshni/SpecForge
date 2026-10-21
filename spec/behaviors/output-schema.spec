@@ -256,10 +256,11 @@ behavior serve_graph_resource "Serve Graph Resource via MCP" {
     MUST support a scope query parameter (root is accepted as its alias) to
     restrict output to a subgraph rooted at a specific entity (e.g.,
     specforge://context?scope=auth_login), with depth, kinds and max_tokens as
-    specforge export takes them. Query keys and values are percent-decoded; an
+    specforge export takes them; a kind of kinds the project does not know is
+    reported as I020 in the reply's _meta.diagnostics. Query keys and values are percent-decoded; an
     unknown key, a repeated key, scope with root, a scope on a templated URI,
     a value that does not parse, or depth without a scope is refused as
-    invalid input naming the key, never ignored; a count is read as a tool's
+    invalid input naming scope, never ignored; a count is read as a tool's
     count argument is (a non-negative integer, with its wording).
     Resources MUST follow the export schema policy through the function
     specforge export uses: specforge://graph embeds the GraphProtocolSchema

@@ -11,7 +11,7 @@ use super::*;
 fn compute_version_no_cache() {
     let dir = tempfile::tempdir().unwrap();
 
-    let versioned = SchemaCache::in_dir(dir.path()).version(sample_schema());
+    let versioned = SchemaCache::in_dir(dir.path()).version(sample_schema(), &PlainDisk);
 
     assert_eq!(versioned.version(), &SchemaVersion::new(1, 0, 0));
 }

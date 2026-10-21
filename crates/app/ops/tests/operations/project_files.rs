@@ -55,12 +55,6 @@ const ALLOWED: &[(&str, &str, usize, &str)] = &[
     ),
     (
         "schema_version/mod.rs",
-        "fs::read_to_string(",
-        1,
-        "the export's schema record: written by `specforge export` only (the CLI is unbounded)",
-    ),
-    (
-        "schema_version/mod.rs",
         "fs::create_dir_all(",
         1,
         "the export's schema record: written by `specforge export` only",

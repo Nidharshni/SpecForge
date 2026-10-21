@@ -5,6 +5,7 @@ use specforge_emitter::{
     SchemaVersion,
 };
 use specforge_protocol_types::FieldType;
+use specforge_registry::PlainDisk;
 use specforge_test::prelude::*;
 
 fn sample_schema() -> GraphProtocolSchema {

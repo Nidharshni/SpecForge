@@ -1,6 +1,6 @@
 # Version diamond resolution is intersection-based unification, not backtracking (C8-07)
 
-**Status:** accepted; amended by [ADR 0041](0041-peer-requirements-are-one-module.md) (2026-10-08)
+**Status:** accepted; amended by [ADR 0041](0041-peer-requirements-are-one-module.md) (2026-10-08), and by plan 08 of round 19 (2026-10-21)
 
 When two installed extensions each declare a peer dependency on the same
 third package at different semver ranges (a "version diamond"), `specforge
@@ -44,3 +44,8 @@ requirement, which would admit a pre-release one requirer's range names and anot
 `pick` and `update`'s upgrade target read the same function. The requirers are the members of the
 project peer set that declare the peer (ADR 0041, amendment round 7); the gate is
 `specforge_ops::extension::lock_plan`.
+
+**Amended (2026-10-21, architecture round 19, plan 08):** the peer's published versions are read by
+the one reader `add` and `update` use (`specforge_ops::extension::resolve::published`): a peer its
+registry publishes no version of is R-RES-002, not an R-RES-005 with nothing available. R-RES-005
+names requirers whose ranges no *published* version satisfies.

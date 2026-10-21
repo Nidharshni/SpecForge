@@ -152,7 +152,7 @@ pub fn hover(state: &LspState, uri: &Url, position: Position) -> Option<Hover> {
             specforge_ops::read::inspect::inspect(&view, id.as_str())
                 .ok()
                 .map(|facts| {
-                    let coverage = specforge_ops::read::inspect::coverage(&view, id.as_str());
+                    let coverage = specforge_ops::read::inspect::coverage(&view, &facts);
                     hover::entity(&facts, &coverage, &shown)
                 })
         }
@@ -320,7 +320,7 @@ pub fn rename(
         id.as_str(),
         new_name,
     ) {
-        Ok(plan) => plan.edits,
+        Ok(plan) => plan.edits().to_vec(),
         Err(e) if e.error.kind == specforge_ops::OpErrorKind::EntityNotFound => return Ok(None),
         Err(e) => return Err(Error::invalid_params(e.error.message)),
     };

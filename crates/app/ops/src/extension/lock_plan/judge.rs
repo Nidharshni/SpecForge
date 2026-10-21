@@ -6,11 +6,11 @@ use specforge_package::peers::{PeerRequirement, Verdict};
 use specforge_package::{PackageName, Version, highest_matching};
 use specforge_protocol_types::PeerDependency;
 
-use super::super::Origin;
-use super::super::peer_set::ProjectPeers;
+use super::super::peer_set::{Modules, ProjectPeers};
 use super::{Ask, Changing, Checked, LockPlan, Staged, Verb};
 use crate::registry::Registry;
 use crate::{OpError, OpErrorKind};
+use specforge_installed::Origin;
 
 impl<'a> LockPlan<'a> {
     /// Judge the plan, then load what it fetched.
@@ -26,7 +26,8 @@ impl<'a> LockPlan<'a> {
     ///    - for a peer out of range or not SemVer, by where the peer comes from:
     ///      - installed, with the touching change fetched from a registry: unified against that
     ///        registry (R-RES-006 naming a version every requirer of the set accepts, R-RES-005
-    ///        naming each once);
+    ///        naming each once, R-RES-002 when
+    ///        the registry publishes no version of the peer);
     ///      - otherwise E027: a local install's, or a builtin's or a `.wasm` file entry's, whose
     ///        versions no install changes.
     ///
@@ -56,6 +57,7 @@ impl<'a> LockPlan<'a> {
                 self.installed,
                 self.config.entries(),
                 &mut self.declarations,
+                Modules::OnDisk,
             )
             .map_err(|error| Refused::of(&changing, error))?;
             for (at, name) in changing.names.iter().enumerate() {
@@ -67,7 +69,8 @@ impl<'a> LockPlan<'a> {
         if !changing.names.is_empty() && !(self.verb == Verb::Remove && self.force) {
             let view = self.view().map_err(|error| Refused::of(&changing, error))?;
             let after = self.entries_after();
-            let set = match ProjectPeers::of(&view, &after, &mut self.declarations) {
+            let set = match ProjectPeers::of(&view, &after, &mut self.declarations, Modules::Locked)
+            {
                 Ok(set) => set,
                 Err(error) => return Err(Refused::of(&changing, error)),
             };
@@ -136,11 +139,17 @@ impl<'a> LockPlan<'a> {
             self.installed,
             self.config.entries(),
             &mut self.declarations,
+            Modules::Locked,
         )
         .map_err(|error| Refused::of(&none(), error))?;
         let view = self.view().map_err(|error| Refused::of(&none(), error))?;
-        let after = ProjectPeers::of(&view, &self.entries_after(), &mut self.declarations)
-            .map_err(|error| Refused::of(&none(), error))?;
+        let after = ProjectPeers::of(
+            &view,
+            &self.entries_after(),
+            &mut self.declarations,
+            Modules::Locked,
+        )
+        .map_err(|error| Refused::of(&none(), error))?;
         let mut names: Vec<String> = Vec::new();
         for member in before.members().iter().chain(after.members()) {
             if before.member(&member.name) != after.member(&member.name)
@@ -397,7 +406,7 @@ fn diamond(registry: &dyn Registry, set: &ProjectPeers, edge: &Edge, locked: &st
 
 /// The versions `registry` publishes of `peer`, in the registry's order. E072 when `peer` is no
 /// package name: an extension's declaration is malformed (`schema_mismatch`), not the caller's
-/// value.
+/// value. R-RES-002 when the registry publishes none.
 fn published_versions(registry: &dyn Registry, peer: &str) -> Result<Vec<Version>, OpError> {
     let name = PackageName::parse(peer).map_err(|why| {
         OpError::of(
@@ -405,7 +414,7 @@ fn published_versions(registry: &dyn Registry, peer: &str) -> Result<Vec<Version
             specforge_common::package::invalid(&why),
         )
     })?;
-    registry.versions(&name)
+    super::super::resolve::published(registry, &name)
 }
 
 /// Unify a version diamond (ADR 0001): the highest of `published` that every requirer's range

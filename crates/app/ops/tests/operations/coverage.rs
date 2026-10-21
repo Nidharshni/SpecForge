@@ -1,10 +1,10 @@
 use serde_json::json;
 use specforge_extension_sdk::prelude::FieldType;
-use specforge_ops::read::coverage::{CoverageQuery, CoverageRow, coverage, row};
+use specforge_ops::read::coverage::{CoverageQuery, CoverageRow, coverage};
 use specforge_project::coverage::Status;
 use specforge_test::prelude::*;
 
-use crate::view_support::{Assembled, Viewed, answered, registries, registries_with};
+use crate::view_support::{Assembled, Viewed, answered, registries, registries_with, row};
 
 /// login (proven), logout (one unproven obligation), a union, an abstract
 /// behavior, a governance constraint that declares nothing and one that
@@ -111,7 +111,7 @@ fn coverage_rows_and_stats_read_one_standing() {
     assert_eq!(outcome.rows.len(), outcome.summary.testable_total);
     // A row named by id is its standing too, counted or not.
     for (record, standing) in entities.iter() {
-        let row = row(&view, &record.id).unwrap().unwrap();
+        let row = row(&view, &record.id);
         assert_eq!(
             (row.testable, row.exempt),
             (standing.testable, standing.exempt())
@@ -136,13 +136,11 @@ fn an_exempt_entity_is_reachable_by_id() {
         let rows = answered(coverage(&project.view(), &query)).rows;
         assert_eq!(ids(&rows), [exempt]);
         assert!(rows[0].testable && rows[0].exempt, "{exempt}");
-        assert_eq!(row(&project.view(), exempt).unwrap(), Some(rows[0].clone()));
+        assert_eq!(row(&project.view(), exempt), rows[0]);
     }
     // Not testable: reachable, neither testable nor exempt.
-    let signin = row(&project.view(), "signin").unwrap().unwrap();
+    let signin = row(&project.view(), "signin");
     assert!(!signin.testable && !signin.exempt);
-    // An entity the graph lacks has no row.
-    assert_eq!(row(&project.view(), "ghost").unwrap(), None);
 }
 
 #[specforge_test(
@@ -169,7 +167,7 @@ fn unverified_is_counted_and_not_proven() {
     // owe nothing.
     assert_eq!(unverified, ["logout", "uptime"]);
     for id in ids {
-        let row = row(&view, id).unwrap().unwrap();
+        let row = row(&view, id);
         assert_eq!(row.unverified(), coverage.is_unverified(id), "{id}");
     }
 }
@@ -199,7 +197,7 @@ fn a_coverage_row_is_one_document() {
     let project = project();
     let view = project.view();
 
-    let login = serde_json::to_value(row(&view, "login").unwrap().unwrap().document()).unwrap();
+    let login = serde_json::to_value(row(&view, "login").document()).unwrap();
     assert_eq!(
         login,
         serde_json::json!({
@@ -216,7 +214,7 @@ fn a_coverage_row_is_one_document() {
         })
     );
 
-    let base = serde_json::to_value(row(&view, "base").unwrap().unwrap().document()).unwrap();
+    let base = serde_json::to_value(row(&view, "base").document()).unwrap();
     assert_eq!(base["exempt"], true);
     assert_eq!(base["declared"], false);
     assert_eq!(base["obligations"], 0);
@@ -240,7 +238,7 @@ fn two_with(tests: &[(&str, &str)]) -> Assembled {
 
 /// `two`'s row as every surface writes it.
 fn two(project: &Assembled) -> serde_json::Value {
-    serde_json::to_value(row(&project.view(), "two").unwrap().unwrap().document()).unwrap()
+    serde_json::to_value(row(&project.view(), "two").document()).unwrap()
 }
 
 #[specforge_test(

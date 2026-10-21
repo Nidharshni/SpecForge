@@ -638,7 +638,7 @@ fn a_wasm_file_entry_loads_in_a_session_and_reloads_with_its_file() {
 
     let enabled = session.project().environment().enabled();
     assert_eq!(enabled[1].name, "@sdk/greet");
-    assert_eq!(enabled[1].file.as_deref(), Some("ext/greet.wasm"));
+    assert_eq!(enabled[1].file(), Some("ext/greet.wasm"));
     let codes: Vec<String> = session
         .project()
         .diagnostics()

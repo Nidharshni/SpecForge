@@ -14,7 +14,7 @@ fn cache_write_read_round_trip() {
 
     let cache = SchemaCache::in_dir(dir.path());
     cache.seed(&schema);
-    let loaded = cache.load().unwrap();
+    let loaded = cache.load(&PlainDisk).unwrap();
 
     let record = loaded.unwrap();
     assert_eq!(record.schema, schema);
@@ -27,7 +27,7 @@ fn cache_write_read_round_trip() {
 )]
 fn cache_missing_returns_none() {
     let dir = tempfile::tempdir().unwrap();
-    let loaded = SchemaCache::in_dir(dir.path()).load().unwrap();
+    let loaded = SchemaCache::in_dir(dir.path()).load(&PlainDisk).unwrap();
     assert!(loaded.is_none());
 }
 
@@ -58,7 +58,7 @@ fn cache_atomic_overwrite() {
         first,
         "the old cache file must be replaced, not rewritten in place"
     );
-    let loaded = cache.load().unwrap().unwrap();
+    let loaded = cache.load(&PlainDisk).unwrap().unwrap();
     assert_eq!(loaded.schema, schema2);
 
     // The temp file was renamed away: only the cache and the link remain.
@@ -75,10 +75,10 @@ fn cache_content_hash_changes() {
     let dir = tempfile::tempdir().unwrap();
     let cache = SchemaCache::in_dir(dir.path());
     cache.seed(&GraphProtocolSchema::empty());
-    let hash1 = cache.load().unwrap().unwrap().content_hash;
+    let hash1 = cache.load(&PlainDisk).unwrap().unwrap().content_hash;
 
     cache.seed(&sample_schema());
-    let hash2 = cache.load().unwrap().unwrap().content_hash;
+    let hash2 = cache.load(&PlainDisk).unwrap().unwrap().content_hash;
 
     assert_ne!(hash1, hash2);
 }
@@ -108,7 +108,7 @@ fn cache_load_diff_version_pipeline() {
     let cache = SchemaCache::in_dir(dir.path());
     cache.seed(&GraphProtocolSchema::empty());
 
-    let versioned = cache.version(sample_schema());
+    let versioned = cache.version(sample_schema(), &PlainDisk);
 
     // Schema2 has additions but no removals from empty
     assert!(additions(versioned.changes()));
@@ -127,7 +127,7 @@ fn cache_load_diff_version_pipeline() {
 fn a_missing_record_reports_nothing() {
     let dir = tempfile::tempdir().unwrap();
 
-    let versioned = SchemaCache::in_dir(dir.path()).version(sample_schema());
+    let versioned = SchemaCache::in_dir(dir.path()).version(sample_schema(), &PlainDisk);
 
     assert!(versioned.notices().is_empty());
 }
@@ -150,7 +150,7 @@ fn detect_breaking_with_cached_schema() {
     });
     SchemaCache::in_dir(dir.path()).seed(&old_schema);
 
-    let versioned = SchemaCache::in_dir(dir.path()).version(sample_schema());
+    let versioned = SchemaCache::in_dir(dir.path()).version(sample_schema(), &PlainDisk);
 
     assert_eq!(
         versioned.changes(),
@@ -169,7 +169,7 @@ fn detect_breaking_with_cached_schema() {
 
     // The same comparison without the cache file sees no removal.
     let empty = tempfile::tempdir().unwrap();
-    let no_cache = SchemaCache::in_dir(empty.path()).version(sample_schema());
+    let no_cache = SchemaCache::in_dir(empty.path()).version(sample_schema(), &PlainDisk);
     assert!(!breaking(no_cache.changes()));
 }
 
@@ -189,7 +189,7 @@ fn persist_cache_contract() {
     assert!(!dir.path().join(".schema-cache.tmp").exists());
     assert!(dir.path().join("schema-cache.json").exists());
 
-    let loaded = cache.load().unwrap().unwrap();
+    let loaded = cache.load(&PlainDisk).unwrap().unwrap();
     assert_eq!(loaded.schema, schema);
 }
 
@@ -283,7 +283,7 @@ fn a_cache_an_older_host_wrote_reads_its_bool_field_unchanged() {
     // The record names no extensions: only its field types are under test.
     current.extensions.clear();
 
-    let versioned = SchemaCache::in_dir(dir.path()).version(current);
+    let versioned = SchemaCache::in_dir(dir.path()).version(current, &PlainDisk);
 
     assert!(versioned.changes().is_empty(), "{:?}", versioned.changes());
     assert!(versioned.notices().is_empty());
@@ -317,7 +317,7 @@ fn an_unreadable_record_restarts_at_1_0_0_with_i016() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("schema-cache.json"), text).unwrap();
 
-        let versioned = SchemaCache::in_dir(dir.path()).version(sample_schema());
+        let versioned = SchemaCache::in_dir(dir.path()).version(sample_schema(), &PlainDisk);
 
         assert_eq!(versioned.version(), &SchemaVersion::new(1, 0, 0), "{cause}");
         assert!(versioned.changes().is_empty(), "{cause}");
@@ -362,7 +362,7 @@ fn the_w053_message_names_the_change_and_the_versions() {
     let mut generated = rich_schema();
     field(&mut generated, "contract").required = false;
 
-    let versioned = cache.version(generated);
+    let versioned = cache.version(generated, &PlainDisk);
 
     let diagnostics = versioned.notices();
     assert_eq!(diagnostics.len(), 1);
@@ -391,12 +391,12 @@ fn a_version_names_the_document_the_record_holds() {
     // A patch change: 1.2.3 becomes 1.2.4, and the export records it.
     let mut patched = rich_schema();
     patched.extensions[0].version = "1.0.1".to_string();
-    let first = cache.version(patched.clone());
+    let first = cache.version(patched.clone(), &PlainDisk);
     assert_eq!(first.version(), &SchemaVersion::new(1, 2, 4));
     cache.record(&first).unwrap();
 
     // The same content against the new record: the same version and hash.
-    let again = cache.version(patched);
+    let again = cache.version(patched, &PlainDisk);
     assert_eq!(again.version(), first.version());
     assert_eq!(again.content_hash(), first.content_hash());
 
@@ -404,7 +404,7 @@ fn a_version_names_the_document_the_record_holds() {
     // the document it was recorded for.
     let mut other = rich_schema();
     other.extensions[0].version = "1.0.2".to_string();
-    let next = cache.version(other);
+    let next = cache.version(other, &PlainDisk);
     assert_eq!(next.version(), &SchemaVersion::new(1, 2, 5));
     assert_ne!(next.content_hash(), first.content_hash());
 }

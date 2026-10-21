@@ -5,7 +5,7 @@
 use specforge_common::Sym;
 use specforge_graph::{
     FieldForm, FieldForms, FileChange, FileDefaults, Graph, GraphBuild, GraphConfig, GraphInputs,
-    Holder, build_graph_with_config,
+    Held, Holder, build_graph_with_config,
 };
 use specforge_parser::parse;
 use specforge_protocol_types::FieldType;
@@ -340,4 +340,99 @@ fn w161_flags_exactly_what_restates_answers() {
         .collect();
     assert_eq!(answered, ["a"]);
     assert_eq!(flagged, answered);
+}
+
+#[test]
+fn held_answers_own_inherited_or_absent() {
+    let file = parse(ASKED, "a.spec");
+    let (defaults, _) = FileDefaults::of(&file, &forms());
+    let block = |id: &str| file.entities.iter().find(|e| e.id.raw == id).unwrap();
+    let first = defaults.entry("behavior", "ports").unwrap();
+    assert_eq!(
+        defaults.held(block("a"), "ports"),
+        Held::Own {
+            own: &block("a").fields.entries()[0],
+            over: Some(first)
+        }
+    );
+    let held = defaults.held(block("c"), "ports");
+    assert!(
+        matches!(held, Held::Own { over: Some(_), .. }),
+        "[] replaces: {held:?}"
+    );
+    let silent = parse(
+        "defaults behavior {\n  ports [Repo]\n}\n\nbehavior d \"D\" {\n}\n",
+        "b.spec",
+    );
+    let (silent_defaults, _) = FileDefaults::of(&silent, &forms());
+    let d = silent.entities.iter().find(|e| e.id.raw == "d").unwrap();
+    let held = silent_defaults.held(d, "ports");
+    assert!(
+        matches!(held, Held::Inherited(e) if e.key == "ports"),
+        "{held:?}"
+    );
+    assert_eq!(
+        defaults.held(block("b"), "owner"),
+        Held::Absent,
+        "E077 default"
+    );
+    assert_eq!(
+        defaults.held(block("b"), "features"),
+        Held::Absent,
+        "a second defaults block"
+    );
+}
+
+#[test]
+fn repeats_widens_restates_to_stored_values() {
+    let form = |name: &str, t| {
+        (
+            ("thing".to_string(), name.to_string()),
+            FieldForm::new(t, Vec::new()),
+        )
+    };
+    let forms = FieldForms::new(
+        [
+            form("refs", FieldType::StringList),
+            form("rpn", FieldType::Integer),
+        ]
+        .into_iter()
+        .collect(),
+        Default::default(),
+        ["thing".to_string()].into_iter().collect(),
+    );
+    let file = parse(
+        "defaults thing {\n  refs \"a\"\n  rpn \"100\"\n}\n\n\
+         thing a \"A\" {\n  refs [\"a\"]\n  rpn 100\n}\n\n\
+         thing b \"B\" {\n  refs [\"a\", \"b\"]\n}\n",
+        "t.spec",
+    );
+    let (defaults, _) = FileDefaults::of(&file, &forms);
+    let entry = |id: &str, key: &str| {
+        let block = file.entities.iter().find(|e| e.id.raw == id).unwrap();
+        block
+            .fields
+            .entries()
+            .iter()
+            .find(|e| e.key == key)
+            .unwrap()
+            .clone()
+    };
+    for (id, key) in [("a", "refs"), ("a", "rpn")] {
+        let own = entry(id, key);
+        assert!(defaults.repeats("thing", &own, &forms), "{key}");
+        assert!(!defaults.restates("thing", &own), "{key}");
+    }
+    let longer = entry("b", "refs");
+    assert!(!defaults.repeats("thing", &longer, &forms));
+    assert!(!defaults.restates("thing", &longer));
+    // restates implies repeats, over the pairs ASKED writes.
+    let asked = parse(ASKED, "a.spec");
+    let (asked_defaults, _) = FileDefaults::of(&asked, &self::forms());
+    for block in asked.entities.iter().filter(|e| e.kind.raw == "behavior") {
+        let own = &block.fields.entries()[0];
+        if asked_defaults.restates("behavior", own) {
+            assert!(asked_defaults.repeats("behavior", own, &self::forms()));
+        }
+    }
 }

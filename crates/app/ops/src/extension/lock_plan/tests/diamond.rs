@@ -316,3 +316,28 @@ fn a_peer_a_file_entry_loads_is_refused_naming_the_entry() {
         "{err:?}"
     );
 }
+
+/// A peer its registry publishes no version of is R-RES-002, as `add` of the peer says (ADR 0001 as
+/// amended).
+#[test]
+fn a_diamond_over_a_peer_published_nowhere_is_r_res_002() {
+    let installed = nowhere(base_and_other("^1.0"));
+    let registry = MemoryRegistry::new()
+        .listing_none("@acme/base")
+        .serving(Published::new(
+            b"\0asm app".to_vec(),
+            declaration("@acme/app", "1.0.0", &[("@acme/base", "^2.0")]),
+        ));
+    let runtime = runtime();
+    let mut plan = plan_from(&installed, &runtime, &registry, Verb::Install);
+    stage_fetched(
+        &mut plan,
+        &PackageName::parse("@acme/app").unwrap(),
+        Version::new(1, 0, 0),
+    );
+
+    let err = refused(plan);
+
+    assert_eq!(err.code, "R-RES-002", "{err:?}");
+    assert_eq!(err.message, "no versions published for '@acme/base'");
+}

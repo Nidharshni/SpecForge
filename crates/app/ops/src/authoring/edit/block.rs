@@ -2,13 +2,16 @@
 //! member starts on its own line) and again after it is changed (so it is laid out canonically); no byte outside it
 //! changes. `site` holds what the kind's registry answers about the entity; `verbs` the edits that change a block.
 
-use super::EditField;
+use super::path;
+use super::write::written;
+use super::{EditField, Input};
 use crate::{OpError, OpErrorKind, Refusal};
 use specforge_common::{SourceSpan, codes};
 use specforge_formatter::FormatConfig;
-use specforge_graph::field_form::spell;
+use specforge_graph::field_form::{FieldForm, Reading, spell};
 use specforge_parser::lex::{LexemeKind, lex};
 use specforge_parser::{Entity, FieldEntry, FieldValue, SpecFile, parse};
+use specforge_protocol_types::FieldType;
 
 mod site;
 mod verbs;
@@ -214,7 +217,7 @@ fn group_of(entry: &FieldEntry) -> u8 {
 }
 
 /// The group of a value about to be written.
-pub fn group_of_text(written: &str) -> u8 {
+fn group_of_text(written: &str) -> u8 {
     if written.starts_with('{') {
         2
     } else if written.starts_with("\"\"\"") {
@@ -225,7 +228,7 @@ pub fn group_of_text(written: &str) -> u8 {
 }
 
 /// The rank of field `name` in `group`: where `order` puts it, undeclared members last.
-pub fn rank(order: &[String], name: &str, group: u8) -> (u8, usize) {
+fn rank(order: &[String], name: &str, group: u8) -> (u8, usize) {
     (
         group,
         order.iter().position(|n| n == name).unwrap_or(usize::MAX),
@@ -258,12 +261,7 @@ fn trailing_comment(suffix: &str) -> &str {
 impl Block {
     /// `span` (a value) replaced by `new`; with `annotations`, the text after it becomes them (a trailing comment
     /// is kept).
-    pub(super) fn replace_value(
-        &mut self,
-        span: &SourceSpan,
-        new: &str,
-        annotations: Option<&[String]>,
-    ) {
+    fn replace_value(&mut self, span: &SourceSpan, new: &str, annotations: Option<&[String]>) {
         let (first, last) = (span.start_line - 1, span.end_line - 1);
         let prefix = &self.lines[first][..span.start_col - 1];
         let suffix = &self.lines[last][span.end_col - 1..];
@@ -277,13 +275,7 @@ impl Block {
     }
 
     /// A new member `name value` at its rank (`(group, declared index)`).
-    pub(super) fn insert_member(
-        &mut self,
-        site: &Site<'_>,
-        name: &str,
-        value: &str,
-        annotations: &[String],
-    ) {
+    fn insert_member(&mut self, site: &Site<'_>, name: &str, value: &str, annotations: &[String]) {
         let order = order(site.view, site.kind);
         let new_rank = rank(&order, name, group_of_text(value));
         let text = format!(
@@ -307,6 +299,123 @@ impl Block {
                 .map_or(self.close(), |(first, _)| self.with_comments_above(*first)),
         };
         self.insert(at, &text);
+    }
+}
+
+impl Block {
+    /// The column field `name` will have: its own key line's lead, else a new member's.
+    fn lead_of(&self, name: &str) -> String {
+        match self.entry(name).and_then(|e| e.value_span.as_ref()) {
+            Some(span) => self.lead(span.start_line - 1).to_string(),
+            None => self.member_lead(),
+        }
+    }
+
+    /// `input` as field `name` reads it (`reading`), written at the field's column and placed by [`Self::place`].
+    /// Refused as the value writer refuses `input` (`not_editable`); the block is unchanged then.
+    pub(super) fn put(
+        &mut self,
+        site: &Site<'_>,
+        name: &str,
+        reading: Reading<'_>,
+        input: &Input,
+        annotations: Option<&[String]>,
+    ) -> Result<(), Refusal<EditField>> {
+        let value = written(reading, name, input, &self.lead_of(name), &self.config)?;
+        self.place(site, name, &value, annotations);
+        Ok(())
+    }
+
+    /// `value`, already written for field `name`'s column, as the block's own `name`: its value replaced (the text
+    /// after it becoming `annotations` when given), else a new member at its rank with `annotations` (none when
+    /// `None`). Never refuses.
+    pub(super) fn place(
+        &mut self,
+        site: &Site<'_>,
+        name: &str,
+        value: &str,
+        annotations: Option<&[String]>,
+    ) {
+        match self.entry(name).and_then(|e| e.value_span.clone()) {
+            Some(span) => self.replace_value(&span, value, annotations),
+            None => self.insert_member(site, name, value, annotations.unwrap_or_default()),
+        }
+    }
+
+    /// `text` as entry `inner` of the block field `outer`: the entry's value replaced, else a new last entry; with
+    /// `annotations`, the text after the entry's value becomes them (a trailing comment is kept), new or not. A block
+    /// field the block does not write, or writes as none (`{}`), is first opened as an empty block at its rank.
+    /// Refused: `not_editable` when the block writes `outer` as a value (`path::nested`), or as the writer refuses
+    /// `text`. The lines are not laid out between the opening and the insert: only spans are read from them, and the
+    /// caller's `defaults::change` lays the block out afterwards.
+    pub(super) fn put_entry(
+        &mut self,
+        site: &Site<'_>,
+        outer: &str,
+        inner: &str,
+        text: &str,
+        annotations: Option<&[String]>,
+    ) -> Result<(), Refusal<EditField>> {
+        let open = path::nested(site, self, outer, inner)?.is_some_and(|(o, _)| {
+            o.value_span
+                .as_ref()
+                .is_some_and(|s| s.end_line > s.start_line)
+        });
+        if !open {
+            // Absent, or written as none (`{}`, one line): open it at its rank, so the entry has a closing line.
+            let empty = format!("{{\n{}}}", self.lead_of(outer));
+            self.place(site, outer, &empty, None);
+            self.reread(site)?;
+        }
+        let (outer_span, own) = match path::nested(site, self, outer, inner)? {
+            Some((o, e)) => (o.value_span.clone(), e.and_then(|e| e.value_span.clone())),
+            None => (None, None),
+        };
+        let outer_span = outer_span.ok_or_else(|| unreadable(site.id))?;
+        let lead = match &own {
+            Some(span) => self.lead(span.start_line - 1).to_string(),
+            None => format!(
+                "{}{}",
+                self.lead(outer_span.start_line - 1),
+                self.config.indent_str()
+            ),
+        };
+        let form = FieldForm::new(FieldType::String, Vec::new());
+        let value = written(
+            Reading::Declared(&form),
+            inner,
+            &Input::One(text.into()),
+            &lead,
+            &self.config,
+        )?;
+        match own {
+            Some(span) => self.replace_value(&span, &value, annotations),
+            None => {
+                let note = annotation_text(annotations.unwrap_or_default());
+                self.insert(
+                    outer_span.end_line - 1,
+                    &format!("{lead}{inner} {value}{note}"),
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// The lines read again, without a layout.
+    fn reread(&mut self, site: &Site<'_>) -> Result<(), Refusal<EditField>> {
+        self.file = parse(&self.text(), site.key);
+        self.index = position(&self.file, site).ok_or_else(|| unreadable(site.id))?;
+        Ok(())
+    }
+
+    /// A `verify` statement line, after the last one (else before the closing brace), at the members' lead.
+    pub(super) fn put_verify(&mut self, statement: &str) {
+        let at = self
+            .verify_lines()
+            .last()
+            .map_or(self.close(), |(_, last)| last + 1);
+        let line = format!("{}{statement}", self.member_lead());
+        self.insert(at, &line);
     }
 }
 

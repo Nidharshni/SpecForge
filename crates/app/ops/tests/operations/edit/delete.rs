@@ -51,7 +51,7 @@ fn delete_with_unlink_references_plans_every_referrer() {
         planned.report().entities,
         vec!["complete_task", "done_stamped", "list_tasks"]
     );
-    let tasks = &planned.after()["tasks.spec"];
+    let tasks = &planned.change().after()["tasks.spec"];
     assert!(tasks.contains("invariants [task_unique]"), "{tasks}");
     assert!(!tasks.contains("done_stamped"), "{tasks}");
     assert!(is_canonical(&c, tasks));
@@ -63,7 +63,7 @@ fn delete_unsets_a_single_reference_field() {
     let c = project(&[("events.spec", events)]);
     let planned = plan(&c, &[delete("Task", true)]).unwrap();
     assert_eq!(
-        planned.after()["events.spec"],
+        planned.change().after()["events.spec"],
         "event task_done \"Task Done\" {\n}\n"
     );
 }

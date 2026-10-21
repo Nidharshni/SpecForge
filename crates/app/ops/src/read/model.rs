@@ -80,7 +80,7 @@ pub fn model(
         specforge_emitter::model::export(versioned.schema(), declarations, options),
         versioned.notices(),
     )
-    .and_notices(kinds.unknown_in(&filter)))
+    .and_notices(view.kind_filter(&filter).into_notices()))
 }
 
 /// `Ok` when an extension the project loads is named `name`; else

@@ -1,7 +1,7 @@
 # Navigation reads the text the project was compiled from
 
 **Status:** accepted (2026-10-16, architecture round 12, plan 05). Reopens ADR 0016 D1's parenthesis and amends its D3
-(`Entity` precision), ADR 0092's outline row and ADR 0104 D4's outline entry.
+(`Entity` precision), ADR 0092's outline row and ADR 0104 D4's outline entry. D3 amended by [ADR 0184](0184-a-typed-edit-and-a-rename-write-one-planned-change.md): a rename plan keeps its planned texts in its planned change, beside the after texts.
 
 ADR 0016 D1 gave the ops `Navigator` a `text_of` closure, "a file read once per navigator: the LSP reads its open
 buffer first, MCP the file under the spec root". Two of its three adapters have since moved:

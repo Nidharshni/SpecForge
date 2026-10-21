@@ -29,7 +29,7 @@ fn held_by(p: &crate::navigate::Compiled, target: &str, holder: &str) -> Vec<Str
 
 /// Each edit's span as `(line, start_col, end_col)`.
 fn columns(plan: &rename::RenamePlan) -> Vec<(usize, usize, usize)> {
-    plan.edits
+    plan.edits()
         .iter()
         .map(|e| (e.span.start_line, e.span.start_col, e.span.end_col))
         .collect()

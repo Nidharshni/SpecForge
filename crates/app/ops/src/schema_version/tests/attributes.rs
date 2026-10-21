@@ -389,7 +389,7 @@ fn every_attribute_change_moves_the_version() {
         let dir = tempfile::tempdir().unwrap();
         let cache = SchemaCache::in_dir(dir.path());
         cache.seed(&recorded);
-        let versioned = cache.version(generated);
+        let versioned = cache.version(generated, &PlainDisk);
 
         assert_eq!(
             versioned.changes(),
@@ -438,7 +438,7 @@ fn a_record_in_another_order_is_no_change() {
     let cache = SchemaCache::in_dir(dir.path());
     cache.seed(&recorded);
 
-    let versioned = cache.version(generated);
+    let versioned = cache.version(generated, &PlainDisk);
 
     assert!(versioned.changes().is_empty(), "{:?}", versioned.changes());
     assert_eq!(versioned.version(), &SchemaVersion::new(1, 2, 3));

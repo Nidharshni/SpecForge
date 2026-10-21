@@ -26,13 +26,16 @@ const FLOWS: &str = "defaults behavior {\n  invariants [inv_a]\n}\n";
 fn rename_edits_a_default_no_block_takes() {
     let p = compile(SOFTWARE, &[("rules.spec", RULES), ("flows.spec", FLOWS)]);
     let plan = rename::plan(&p.navigator(), "inv_a", "inv_b").unwrap();
-    let files = plan.affected_files();
+    let files = plan
+        .change()
+        .affected_files()
+        .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(
         files.into_iter().collect::<Vec<_>>(),
         ["flows.spec", "rules.spec"]
     );
     let flows = plan
-        .edits
+        .edits()
         .iter()
         .find(|e| e.span.file == "flows.spec")
         .unwrap();
@@ -188,7 +191,7 @@ fn rename_and_delete_find_the_same_tokens() {
         let expected = written(&files, target, declared);
         let renamed: BTreeSet<(String, usize)> = rename::plan(&c.navigator(), target, "zz_new")
             .unwrap_or_else(|e| panic!("{name}: {e:?}"))
-            .edits
+            .edits()
             .iter()
             .map(|e| (e.span.file.to_string(), e.span.start_line))
             .filter(|(file, line)| (file.as_str(), *line) != declared)
@@ -201,7 +204,7 @@ fn rename_and_delete_find_the_same_tokens() {
         if plans {
             let planned = edit::plan(&ProjectView::of(&c.project), &delete)
                 .unwrap_or_else(|e| panic!("{name}: {e:?}"));
-            let left = planned.after();
+            let left = planned.change().after();
             let texts: Vec<(&str, &str)> =
                 left.iter().map(|(f, t)| (f.as_str(), t.as_str())).collect();
             assert!(
@@ -233,6 +236,6 @@ fn rename_and_find_references_agree_on_a_word_a_string_list_holds() {
     assert!(nav.tokens("Customer", false).unwrap().is_empty());
     assert!(nav.references("Customer", INCOMING).unwrap().is_empty());
     let plan = rename::plan(&nav, "Customer", "Store").unwrap();
-    assert_eq!(plan.edits.len(), 1);
-    assert_eq!(plan.edits[0].span.start_line, 1);
+    assert_eq!(plan.edits().len(), 1);
+    assert_eq!(plan.edits()[0].span.start_line, 1);
 }

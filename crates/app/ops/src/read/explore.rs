@@ -10,7 +10,7 @@ use specforge_common::DiagnosticList;
 use specforge_common::shape::Shape;
 use specforge_graph::Graph;
 
-use crate::view::{EntityField, ProjectView};
+use crate::view::{EntityField, ProjectView, Select};
 use crate::{Noticed, Refusal};
 
 /// How many starting points an exploration names.
@@ -27,7 +27,7 @@ pub struct ExplorationRequest<'a> {
     /// nothing and is an I020 notice (`KnownKinds::unknown_in`).
     pub kind: Option<&'a str>,
     /// Hops from `entity_id`; unbounded when `None`; refused without
-    /// `entity_id` (`view::depth_without_entity`).
+    /// `entity_id` (the selection's `depth_without_entity`).
     pub depth: Option<usize>,
 }
 
@@ -117,23 +117,18 @@ pub fn explore(
     view: &ProjectView,
     request: &ExplorationRequest,
 ) -> Result<Noticed<Exploration>, Refusal<EntityField>> {
-    if request.depth.is_some() && request.entity_id.is_none() {
-        return Err(crate::view::depth_without_entity());
-    }
+    let checked = view.select(&Select {
+        entity: request.entity_id,
+        named_by: EntityField::EntityId,
+        depth: request.depth,
+        kinds: request.kind.as_slice(),
+    })?;
     let graph = view.graph();
-    let notices = request
-        .kind
-        .map(|kind| view.kinds().unknown_in(&[kind]))
-        .unwrap_or_default();
-
-    let reached = request
-        .entity_id
-        .map(|id| view.neighbourhood(id, request.depth))
-        .transpose()?;
+    let reached = checked.reach(None);
     let of_kind = |id: &str| {
-        request
-            .kind
-            .is_none_or(|kind| graph.node(id).is_some_and(|node| node.kind.raw == kind))
+        graph
+            .node(id)
+            .is_some_and(|node| checked.keeps(node.kind.raw.as_str()))
     };
     let selection: BTreeSet<&'static str> = match &reached {
         Some(reached) => reached
@@ -199,6 +194,6 @@ pub fn explore(
             most_connected,
             unconnected,
         },
-        notices,
+        checked.into_notices(),
     ))
 }
