@@ -2,6 +2,8 @@
 
 **Status:** accepted (2026-10-19, architecture round 18, plan 02). Amends [ADR 0144](0144-a-project-file-is-written-by-replacing-its-name.md) D1 and D2 (migrate's sources and restores are replaced by their names, and a backup has its source's permissions), [ADR 0128](0128-one-project-change-over-held-files.md) D1 (a change stages a name the operation owns; its "Reopen when" is answered), [ADR 0112](0112-every-project-file-an-operation-opens-goes-through-the-requests-containment.md) D1 (an owned name is opened at its spelling; its Rejected "Opening migrate's sources as `Held`" is reversed), [ADR 0158](0158-an-edited-compile-and-a-migration-read-no-source-past-the-bound.md) D3 (replaced: a file that cannot be migrated leaves every file as it was) and [ADR 0170](0170-a-failed-run-is-an-outcomes-fact.md) F4 (a migration's write failure is the project change's `Err`).
 
+**Amended by [ADR 0186](0186-a-migration-is-judged-before-it-is-written.md) (round 20): D1 and D4: the hooks and the graph comparison run before anything is written, and a refused migration writes nothing; there is no put-back to undo it.
+
 ## Context
 
 `specforge_migrate` kept its own writer beside the project change: a temp created beside each source and renamed over

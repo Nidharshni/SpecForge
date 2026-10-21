@@ -4,6 +4,8 @@
 
 **Amended by [ADR 0171](0171-a-migration-writes-through-the-project-change.md) (round 18):** D3 is replaced: a file that cannot be migrated leaves every file as it was.
 
+**Amended by [ADR 0186](0186-a-migration-is-judged-before-it-is-written.md) (round 20):** D4: there is no post compile; the edited compile of the planned texts judges the migration and reads no source.
+
 Over MCP the session reads each `.spec` source through the contained disk, and a source the bound refuses (a symlink
 that leaves the project, a file with more than one name) is held as an unreadable key with its E025. Two paths read
 such a source plainly after all. `CompiledProject::edited`, the compile every typed edit validates against, put the

@@ -5,6 +5,8 @@
 
 **Amended by [ADR 0171](0171-a-migration-writes-through-the-project-change.md) (round 18):** F4: a migration's write failure is the project change's `Err`.
 
+**Amended by [ADR 0186](0186-a-migration-is-judged-before-it-is-written.md) (round 20):** F1: a change a migration undid (a rollback) becomes a migration it refused; nothing was written.
+
 ## Context
 
 ADR 0029 D3 says MCP "keeps `isError` for refusals and failed runs" and never says what a failed run is. The two MCP

@@ -67,6 +67,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Migration step**: a rewrite `specforge migrate` applies to every source it changes, whatever the file's format
   version, after the header rewrite (`specforge_migrate::titles` today). The graph comparison keeps exactly the
   changes the steps declare: for `titles`, a title where the block had none.
+- **Migration verdict**: whether a planned migration is kept, decided before anything is written: its hooks pass, and
+  the edited compile of its planned texts has the graph the project has, less the steps' declared changes
+  (`specforge_ops::authoring::migrate::{judge, Verdict}`, ADR 0186). A dry run reports it; a refused migration writes
+  nothing.
 - **Schema version**: the Graph Protocol schema's `MAJOR.MINOR.PATCH`, computed, never declared: the version the
   schema record holds, bumped by the largest change between the recorded schema and the one the loaded extensions
   produce (major when something a reader relies on is removed or reshaped, minor for an addition, patch for
@@ -82,8 +86,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Migration record**: `<root>/.specforge/migration.json`, what `specforge migrate --rollback` undoes: the
   last kept migration made with backups, each file with its backup and the SHA-256 of the file as the migration
   left it (`specforge_migrate::MigrationRecord`). A rollback restores only a recorded file that still holds that
-  text; an automatic rollback is the project change's put-back. `--rollback` never removes a backup; an undone
-  migration leaves none (ADR 0171).
+  text. `--rollback` never removes a backup; a refused migration writes none (ADR 0186).
 - **Project session**: a compiled project kept current, plus what it is built from: its **session
   inputs**, the stamps of what it last read, and where each environment load gets its extension runtime
   (ADR 0047). It turns any batch of changed paths into **changes**
