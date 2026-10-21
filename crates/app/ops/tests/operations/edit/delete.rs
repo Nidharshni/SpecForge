@@ -40,7 +40,6 @@ fn delete_removes_the_block_comment_and_one_blank_line() {
     behavior = "delete_entity",
     verify = "delete keeps the format header above the block"
 )]
-#[ignore = "flipped by T4"]
 fn delete_keeps_the_format_header_above_its_block() {
     let session = "type Session \"Session\" {\n  user string\n}\n";
     let login = "type Login \"Login\" {\n  user string\n}\n";

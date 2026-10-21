@@ -147,8 +147,9 @@ behavior delete_entity "Delete an Entity" {
   invariants [typed_edit_atomicity]
   category   mutation
   contract   """
-    A delete edit removes the entity's block and the comment lines directly
-    above it. Deleting an entity that is still referenced leaves the project
+    A delete edit removes the entity's block and its doc comment, as the parse
+    reads it: the // lines directly above the block with no blank line between.
+    The format header is never a doc comment and stays. Deleting an entity that is still referenced leaves the project
     with an error, so it is refused with E080 unless the edit asks to remove
     every reference to the entity in the same change. The references are every
     token that names the entity, as the graph's one finder reads the texts the

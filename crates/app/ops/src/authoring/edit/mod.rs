@@ -83,7 +83,7 @@ pub enum Edit {
         kind: Option<String>,
         text: String,
     },
-    /// The entity's block (and the comment lines directly above it) is removed. With `unlink_references`, every
+    /// The entity's block (and its doc comment, never the format header) is removed. With `unlink_references`, every
     /// reference to it is removed in the same change (an unlink, or an unset for a single `reference` field).
     Delete {
         entity_id: String,
