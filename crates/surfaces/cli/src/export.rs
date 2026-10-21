@@ -232,4 +232,36 @@ mod tests {
             "the two flags conflict"
         );
     }
+
+    #[derive(Parser)]
+    struct SchemaLine {
+        #[command(flatten)]
+        args: SchemaArgs,
+    }
+
+    #[specforge_test_macros::test(
+        behavior = "publish_schema_specification",
+        verify = "--kind with --publish, and --format without it, are refused"
+    )]
+    #[ignore = "flipped by T2"]
+    fn format_needs_publish_beside_every_schema_flag() {
+        for flag in [
+            &["--kind", "behavior"][..],
+            &["--no-edges"],
+            &["--validation-rules"],
+        ] {
+            let argv = std::iter::once("schema")
+                .chain(flag.iter().copied())
+                .chain(["--format", "json"]);
+            let refused = SchemaLine::try_parse_from(argv).err().map(|e| e.kind());
+            assert_eq!(
+                refused,
+                Some(clap::error::ErrorKind::ArgumentConflict),
+                "{flag:?}"
+            );
+        }
+        // A default --format still runs beside them; --publish --format still parses.
+        assert!(SchemaLine::try_parse_from(["schema", "--kind", "behavior"]).is_ok());
+        assert!(SchemaLine::try_parse_from(["schema", "--publish", "--format", "json"]).is_ok());
+    }
 }
