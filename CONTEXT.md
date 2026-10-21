@@ -543,13 +543,19 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Standing::counting`). W004, stats, plan validation and the verify-stub fix read it. The pass
   input's `owes_none` is not this word: it says the entity owes none, and such an entity still counts
   when it declares obligations.
+- **Opening a registry**: what an operation does once before it asks a registry anything it will ask: the adapter
+  reads the project's `registries` and the user's credential store, and refuses there with E063 (none configured),
+  E067 (an entry that can't be read) or R012 (a store that can't be read), before any request (`Registry::open`,
+  ADR 0044 as amended). The refusal is the operation's, given once; a per-package ask then fails only for its
+  package. `update` opens when it selects a registry install, `search` always; an add that may ask nothing (an
+  installed exact version) opens nothing and refuses at its first ask.
 - **Package registry client**: what talks to a package registry: search, versions, metadata, download and
   publish over HTTP, credentials, publisher trust and package signing
   (`specforge-registry-client`). Not the Registry build, which is pure and needs none of it.
   Operations reach it only through the `Registry` port, which lists a package's versions, fetches
   one, pins the publisher keys a committed install accepted, and publishes a declared package
   (ADR 0036, 0045, 0059, 0179); its adapter,
-  `specforge_ops_registry::ConfiguredRegistry`, reads the project's registries, asks the one that
+  `specforge_ops_registry::ConfiguredRegistry`, opens the project's registries once (**Opening a registry**), asks the one that
   serves a name and runs the fetch policy over the `RegistryClient` seam (ADR 0044). It is linked by
   the CLI and MCP, never the LSP (ADR 0010), and holds what needs the user's `~/.specforge`: the
   credential, the signing key, the known keys. Publish derives the stored declaration from the
@@ -561,7 +567,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Registry credential**: the token a request to one registry carries, kept per registry root in
   `~/.specforge/credentials.json`, never in `specforge.json`: a secret `specforge login --token` stored (a 0600 file under
   `~/.specforge/secrets/`), or a reference to an environment variable (`--token-env`) or a file
-  (`--token-file`), resolved before any request (`CredentialStore::credential`; R010, R011, and R-AUTH-021 for a lost secret). The client sends it only to the registry root it was kept for (ADR 0178). A `credentials.json` that cannot be read is R012 for every reader: login and logout refuse and leave it, doctor counts it unusable (ADR 0045 as amended). Every read carries
+  (`--token-file`), resolved before any request (`CredentialStore::credential`; R010, R011, and R-AUTH-021 for a lost secret). The client sends it only to the registry root it was kept for (ADR 0178). A `credentials.json` that cannot be read is R012 for every reader: login and logout refuse and leave it, doctor counts it unusable, update and search refuse it once, when they open their registry (ADR 0045 as amended). Every read carries
   it; a publish takes `SPECFORGE_REGISTRY_TOKEN` first (ADR 0045 as amended).
 - **User's registry files**: the directory `specforge_ops_registry::User` reads and writes: `credentials.json` (keyed by
   registry root), `secrets/`, `signing-key.json` and `known-keys.json`. `User::current()` is `~/.specforge`,

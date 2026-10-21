@@ -2,6 +2,8 @@
 
 **Status:** accepted (2026-10-08)
 
+**Amended in architecture round 20 (plan 10):** D3, D4, D5: an operation opens its registry once (`Registry::open`).
+
 **Amended by [ADR 0179](0179-a-publish-states-its-package-identity-once.md) (architecture round 18, plan 09):** D2, the client's publish takes the declared package it uploads; D4, the client contract gains K12.
 
 A package registry was reached through two stacked seams, the ops `Registry` port (ADR 0010) and the
@@ -140,3 +142,17 @@ lock's key, and records pins through `pin`. The contract gains C8-C10, and C3 st
 
 - **D4.** `MemoryRegistry` decides a key change through the policy's `asking`, as the real adapter does; the
   contract's clause C11 pins it ([ADR 0110](0110-who-can-be-asked-is-one-value-handed-to-an-operation.md)).
+
+## Amendment (architecture round 20, plan 10): an operation opens its registry once
+
+- **D3.** `ConfiguredRegistry` reads the configuration and the user's credential store once, when an operation
+  opens it (`Registry::open`) or first asks it anything. `open` gives the refusal of the whole project (E063,
+  E067, R012) before any request; after it answered, no call fails with these, and a call made without opening
+  gives the same refusal. An operation that will ask (update with a registry install selected, search) opens
+  first and gives that refusal as its own; ops tells no code apart. Rejected: refusing in `for_project` (an
+  update of local installs, an add of a builtin would refuse), a code list in ops (it would name R012, a
+  credential-store code), a typestate handle (it reaches `LockPlan`, `names` and `resolve` for a wording fix).
+- **D4.** The port contract gains C0: a registry serving the contract packages opens, twice. `MemoryRegistry`
+  refuses to open, and then every call, with `refusing_open`.
+- **D5.** Unchanged: an add of a version already installed, or a dry run of an exact version, opens nothing and
+  shows nothing; add refuses at its first ask.

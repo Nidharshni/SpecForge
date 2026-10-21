@@ -121,3 +121,7 @@ read it as empty too and said "No issues found". Now:
 
 No reader writes over a store it could not read. This parallels ADR 0075 D1's rule for an unreadable `registries`
 entry. Login and logout stay in the CLI: ops may not name the credential store (ADR 0010).
+
+**Amended in architecture round 20 (plan 10, ADR 0044 as amended):** update and search read the store when they
+open their registry and refuse R012 once, as add does: search no longer reports it once per registry. Publish
+does not open: with `SPECFORGE_REGISTRY_TOKEN` set it still reads no store (D3).
