@@ -138,7 +138,8 @@ behavior provide_mcp_rename_tool "Provide MCP Rename Tool" {
     disk, the tool MUST fail the rename as conflict before any file is
     written. The tool MUST rename the entity and update all
     references across all spec files. The edits are exactly every token that
-    names the entity: its declaration's name and each reference, a reference
+    names the entity: its declaration's name (where the parse read it, on any
+    line of the header) and each reference, a reference
     written in a defaults block that no block takes included, as the editor's
     find-references returns them;
     text in strings, comments and verify statements that mentions the ID

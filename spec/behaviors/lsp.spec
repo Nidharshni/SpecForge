@@ -202,7 +202,8 @@ behavior go_to_definition "Go-to-Definition" {
     When a user Ctrl+clicks on an entity ID in a .spec file, the LSP
     MUST navigate to the declaration site of that entity. The declaration
     site MUST include the file path, line, and column of the entity's
-    block header. On a use statement, the cursor on a binding's imported
+    block header; its selection is the entity's name where the parse read
+    it, on whichever line of the header it is written. On a use statement, the cursor on a binding's imported
     name that names an entity goes to that entity; anywhere else on the
     statement, to the imported file.
   """

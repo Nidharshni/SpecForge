@@ -279,7 +279,6 @@ fn a_rename_without_a_files_text_is_refused_whole() {
     behavior = "prepare_rename",
     verify = "prepare rename answers on a name written below its kind"
 )]
-#[ignore = "flipped by T4"]
 fn prepare_rename_on_a_name_written_below_its_kind_has_a_rename_range() {
     let state = buffers(&[("/p/types.spec", TYPES_BELOW), ("/p/auth.spec", AUTH)]);
     let prepared =
@@ -297,7 +296,6 @@ fn prepare_rename_on_a_name_written_below_its_kind_has_a_rename_range() {
     behavior = "rename_entity_id",
     verify = "rename edits a name written below its kind and its references"
 )]
-#[ignore = "flipped by T4"]
 fn rename_of_a_name_written_below_its_kind_edits_it_and_its_references() {
     let state = buffers(&[("/p/types.spec", TYPES_BELOW), ("/p/auth.spec", AUTH)]);
     let want = ["/p/auth.spec 1:9-19", "/p/types.spec 1:2-12"];

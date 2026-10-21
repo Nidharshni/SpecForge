@@ -12,7 +12,6 @@ const LOGIN: &str = "behavior login \"Login\" {\n  invariants [session_limit]\n}
     behavior = "go_to_definition",
     verify = "the definition selects a name written below its kind"
 )]
-#[ignore = "flipped by T4"]
 fn the_definition_of_a_name_written_below_its_kind_selects_the_name() {
     let p = compile(SOFTWARE, &[("limit.spec", BELOW), ("login.spec", LOGIN)]);
     let nav = p.navigator();
@@ -29,11 +28,20 @@ fn the_definition_of_a_name_written_below_its_kind_selects_the_name() {
     behavior = "provide_mcp_rename_tool",
     verify = "a rename edits a declaration whose name is written below its kind"
 )]
-#[ignore = "flipped by T4"]
 fn a_rename_of_a_name_written_below_its_kind_edits_the_declaration() {
     let p = compile(SOFTWARE, &[("limit.spec", BELOW), ("login.spec", LOGIN)]);
     let plan = rename::plan(&p.navigator(), "session_limit", "session_cap").unwrap();
     let mut spans: Vec<String> = plan.edits().iter().map(|e| at(&e.span)).collect();
     spans.sort();
     assert_eq!(spans, ["limit.spec 2:3-2:16", "login.spec 2:15-2:28"]);
+}
+
+#[test]
+fn a_spec_blocks_definition_is_its_block() {
+    let p = compile(SOFTWARE, &[("guide.spec", "spec \"Guide\" {\n}\n")]);
+    let nav = p.navigator();
+    let definition = nav.definition("Guide").unwrap();
+    assert_eq!(definition.name, definition.block);
+    assert_eq!(definition.precision, Precision::Entity);
+    assert!(nav.occurrence_at("guide.spec", 1, 8).is_none());
 }
