@@ -31,6 +31,30 @@ impl WriteRefused {
     }
 }
 
+/// Why a scope was not assigned ([`assign`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AssignRefused {
+    /// The text is not a scope (`@name`).
+    NotAScope(String),
+    /// No token was ever issued to the account.
+    UnknownAccount(String),
+    /// The database failed.
+    Storage(String),
+}
+
+impl std::fmt::Display for AssignRefused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotAScope(text) => write!(f, "'{text}' is not a scope: write it as @name"),
+            Self::UnknownAccount(account) => write!(
+                f,
+                "no token was issued to account '{account}': create one with `token create --account`"
+            ),
+            Self::Storage(why) => f.write_str(why),
+        }
+    }
+}
+
 /// Whether the scope was already the writer's, or nobody's yet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Claim {
@@ -112,6 +136,40 @@ pub(crate) fn owner(conn: &Connection, scope: &str) -> rusqlite::Result<Option<S
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(e),
     }
+}
+
+/// Hand `scope` to `account`, claimed or not; the previous owner. The account must exist, so a typo
+/// creates none.
+pub(crate) fn assign(
+    conn: &Connection,
+    scope: &str,
+    account: &str,
+) -> Result<Option<String>, AssignRefused> {
+    // shortcut: no Scope type in specforge-package, upgrade when one exists.
+    let is_scope =
+        PackageName::parse(&format!("{scope}/x")).is_ok_and(|n| n.scope() == Some(scope));
+    if !is_scope {
+        return Err(AssignRefused::NotAScope(scope.to_string()));
+    }
+    let storage = |e: rusqlite::Error| AssignRefused::Storage(format!("failed to assign: {e}"));
+    let known = conn
+        .query_row(
+            "SELECT 1 FROM accounts WHERE name = ?1",
+            params![account],
+            |_| Ok(()),
+        )
+        .is_ok();
+    if !known {
+        return Err(AssignRefused::UnknownAccount(account.to_string()));
+    }
+    let previous = owner(conn, scope).map_err(storage)?;
+    conn.execute(
+        "INSERT INTO scopes (scope, account) VALUES (?1, ?2)
+         ON CONFLICT(scope) DO UPDATE SET account = excluded.account",
+        params![scope, account],
+    )
+    .map_err(storage)?;
+    Ok(previous)
 }
 
 #[cfg(test)]

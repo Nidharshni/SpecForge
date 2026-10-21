@@ -403,6 +403,15 @@ impl Database {
         Ok(claimed)
     }
 
+    /// Hand `scope` to `account`; the previous owner (an operator's act, never a request's).
+    pub fn assign_scope(
+        &self,
+        scope: &str,
+        account: &str,
+    ) -> Result<Option<String>, ownership::AssignRefused> {
+        ownership::assign(&self.conn(), scope, account)
+    }
+
     /// The account that owns `scope`, if it has been claimed.
     pub fn scope_owner(&self, scope: &str) -> Option<String> {
         ownership::owner(&self.conn(), scope).ok().flatten()

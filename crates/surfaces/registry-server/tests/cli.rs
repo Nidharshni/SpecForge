@@ -58,7 +58,6 @@ fn serve_with_an_unusable_data_dir_exits_1() {
 }
 
 #[test]
-#[ignore = "flipped by T7"]
 fn scope_assign_hands_a_scope_to_an_account() {
     let dir = tempfile::tempdir().unwrap();
     let data = dir.path().to_str().unwrap();

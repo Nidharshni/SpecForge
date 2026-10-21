@@ -45,6 +45,28 @@ enum Commands {
         #[command(subcommand)]
         action: TokenAction,
     },
+    /// Manage who owns a scope
+    Scope {
+        #[command(subcommand)]
+        action: ScopeAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum ScopeAction {
+    /// Hand a scope to an account (a team rename, a takedown, a lost account)
+    Assign {
+        /// The scope, e.g. "@acme"
+        scope: String,
+
+        /// The account that owns it from now on; a token must already be issued to it
+        #[arg(long, value_parser = parse_account)]
+        account: String,
+
+        /// Data directory (must match the server's)
+        #[arg(long, default_value = "./registry-data")]
+        data_dir: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -233,6 +255,23 @@ async fn run(cli: Cli) -> Result<(), String> {
                 }
             }
         },
+        Commands::Scope {
+            action:
+                ScopeAction::Assign {
+                    scope,
+                    account,
+                    data_dir,
+                },
+        } => {
+            let database = open_database(&data_dir)?;
+            let previous = database
+                .assign_scope(&scope, &account)
+                .map_err(|why| why.to_string())?;
+            println!(
+                "scope {scope} assigned to {account} (was {})",
+                previous.as_deref().unwrap_or("unclaimed")
+            );
+        }
     }
     Ok(())
 }

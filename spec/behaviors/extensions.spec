@@ -845,7 +845,9 @@ behavior publish_to_registry "Publish to Registry" {
     accepted publish into a scope claims the scope for the publishing
     token's account, and only tokens issued to that account publish or
     yank in it after, whichever token, so a revoked or expired token's
-    replacement keeps the scope (SCOPE_OWNED otherwise). A publish the registry refuses (an invalid upload, a duplicate
+    replacement keeps the scope (SCOPE_OWNED otherwise). The registry's
+    operator may assign a scope to another account
+    (`specforge-registry scope assign`). A publish the registry refuses (an invalid upload, a duplicate
     version, a storage failure) claims no scope: the claim and the version
     are recorded together or not at all.
     A yank is held to the same rule as a publish: only a token the scope's
@@ -886,6 +888,7 @@ behavior publish_to_registry "Publish to Registry" {
   verify integration "the first publish into a scope claims it, and only its publisher publishes there after"
   verify integration "a publish the registry refuses claims no scope"
   verify integration "a token is issued to an account; the registry refuses a token request that names none"
+  verify unit "an operator assigns a scope to another account, whose tokens then write into it and the old account's no longer do"
   verify integration "a scope belongs to the account its tokens are issued to: a revoked or expired token's replacement publishes into it"
   verify integration "a yank is refused unless the yanking token's account owns the package's scope, and the version stays installable"
   verify unit "successful publish returns registry URL"

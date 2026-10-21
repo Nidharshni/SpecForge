@@ -1,7 +1,7 @@
 //! The ownership rule through `Database`, its interface.
 
 use crate::db::{Database, PackageVersion, TokenRecord};
-use crate::ownership::WriteRefused;
+use crate::ownership::{AssignRefused, WriteRefused};
 use specforge_package::PackageName;
 
 /// A token of `account` (with `filter`), which the database must know.
@@ -118,4 +118,36 @@ fn account_names_are_lowercase_words() {
     for bad in ["", "-a", "Acme", "a b", "a_b", &"x".repeat(40)] {
         assert!(super::account_name(bad).is_err(), "{bad}");
     }
+}
+
+#[specforge_test_macros::test(
+    behavior = "publish_to_registry",
+    verify = "an operator assigns a scope to another account, whose tokens then write into it and the old account's no longer do"
+)]
+fn an_assigned_scope_is_written_by_its_new_account_only() {
+    let (_dir, db) = database();
+    let old = writer(&db, "old", None);
+    let new = writer(&db, "new", None);
+    db.publish(&pv("@x/y"), &name("@x/y"), &old).unwrap();
+
+    assert_eq!(db.assign_scope("@x", "new"), Ok(Some("old".to_string())));
+    assert_eq!(db.may_write(&new, &name("@x/z")), Ok(()));
+    assert!(db.may_write(&old, &name("@x/z")).is_err());
+    // An unclaimed scope is assigned too.
+    assert_eq!(db.assign_scope("@free", "old"), Ok(None));
+}
+
+#[test]
+fn assigning_to_an_unknown_account_is_refused() {
+    let (_dir, db) = database();
+    assert_eq!(
+        db.assign_scope("@x", "ghost"),
+        Err(AssignRefused::UnknownAccount("ghost".to_string()))
+    );
+    writer(&db, "real", None);
+    assert!(matches!(
+        db.assign_scope("x", "real"),
+        Err(AssignRefused::NotAScope(_))
+    ));
+    assert_eq!(db.scope_owner("@x"), None);
 }
