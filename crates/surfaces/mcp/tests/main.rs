@@ -16,6 +16,7 @@ mod fake_extension;
 mod format_config_links;
 mod format_forms;
 mod hard_links;
+mod infer_gaps;
 mod infer_sources;
 mod init_enclosing;
 mod invariants;
