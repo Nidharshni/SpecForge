@@ -6,6 +6,7 @@ mod defaults;
 mod delete;
 mod fields;
 mod holds;
+mod inherited;
 mod layout;
 mod links;
 mod obligations;
