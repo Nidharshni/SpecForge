@@ -362,7 +362,7 @@ fn placeholders(view: &ProjectView<'_>, kind: &str) -> BTreeMap<String, Input> {
 }
 
 /// `edit` planned over the navigator's view (ADR 0151), as position edits in the text each file was compiled from;
-/// the refusal when the plan is refused (an ID `validate_id` refuses, a taken ID, E080, no project root, a
+/// the refusal when the plan is refused (an ID `entity_id::validate_id` refuses, a taken ID, E080, no project root, a
 /// configuration that blocks rewrites) or changes nothing.
 fn typed(navigator: &Navigator<'_>, edit: Edit) -> Result<Vec<TextEdit>, Refusal<EditField>> {
     let edits = edit::plan(navigator.view(), std::slice::from_ref(&edit))?

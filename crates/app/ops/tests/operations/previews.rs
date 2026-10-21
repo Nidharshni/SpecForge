@@ -3,6 +3,7 @@
 
 use serde_json::json;
 use specforge_ops::authoring::edit;
+use specforge_ops::authoring::entity_id;
 use specforge_ops::authoring::format::{self, Mode};
 use specforge_ops::authoring::migrate;
 use specforge_ops::authoring::rename;
@@ -296,7 +297,7 @@ fn a_rename_refused_by_the_plan_is_refused_by_run() {
     let root = c.project.environment().spec_root().to_path_buf();
     let before = crate::writes::files_under(&root);
     let invalid = rename_over(&c, "x", false).unwrap_err();
-    assert_eq!(invalid.error.code, rename::INVALID_ID);
+    assert_eq!(invalid.error.code, entity_id::INVALID_ID);
     assert_eq!(invalid.subject, Some(rename::RenameField::NewId));
     let taken = rename_over(&c, "login", false).unwrap_err();
     assert_eq!(taken.error.code, rename::TAKEN);
