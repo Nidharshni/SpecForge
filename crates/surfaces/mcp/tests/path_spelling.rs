@@ -147,8 +147,10 @@ fn outline_reads_an_absolute_spelling_of_a_source() {
     assert_eq!(by_path, by_key);
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test_macros::test(
+    behavior = "provide_mcp_suggest_fixes_tool",
+    verify = "file_path reads every spelling of a source as that source"
+)]
 fn suggest_fixes_reads_a_spelling_of_its_file() {
     let mut server = named_files();
     let absolute = server.root().join("spec/login.spec");

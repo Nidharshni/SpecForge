@@ -2,20 +2,20 @@ use crate::target::View;
 use crate::tool::{CoreTool, Effect, ReplySpec, ToolGroup};
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_ops::authoring::fix::{self, Fix, FixKind, FixQuery};
+use specforge_ops::authoring::fix::{self, Fix, FixField, FixKind, FixQuery};
 use specforge_ops::read::navigate::Navigator;
 
 use crate::args::Arguments;
 use crate::refusal::ArgumentOf;
 use crate::reply::Answered;
-use specforge_ops::view::{EntityField, ProjectView};
+use specforge_ops::view::ProjectView;
 
 /// `specforge.suggest_fixes`'s arguments.
 #[derive(Debug, Arguments)]
 pub struct Args {
     /// Entity ID (optional, all if omitted)
     entity_id: Option<String>,
-    /// Only diagnostics in this spec file
+    /// Only diagnostics in this spec file, relative to the spec root
     file_path: Option<String>,
     /// Only diagnostics with this code, e.g. W001
     diagnostic_code: Option<String>,
@@ -60,10 +60,11 @@ impl Suggestion {
 /// text stays on the diagnostic (validate, inspect).
 pub(crate) struct Tool;
 
-impl ArgumentOf<EntityField> for Tool {
-    fn argument(field: EntityField) -> Option<&'static str> {
+impl ArgumentOf<FixField> for Tool {
+    fn argument(field: FixField) -> Option<&'static str> {
         match field {
-            EntityField::EntityId => Some("entity_id"),
+            FixField::EntityId => Some("entity_id"),
+            FixField::FilePath => Some("file_path"),
         }
     }
 }

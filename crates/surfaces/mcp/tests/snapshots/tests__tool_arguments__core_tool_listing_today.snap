@@ -2975,7 +2975,7 @@ expression: listing
           "type": "string"
         },
         "file_path": {
-          "description": "Only diagnostics in this spec file",
+          "description": "Only diagnostics in this spec file, relative to the spec root",
           "type": "string"
         }
       },

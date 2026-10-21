@@ -4,7 +4,7 @@
 use crate::edit::{TASKS, create, one};
 use crate::navigate::{LIMIT, compile};
 use specforge_ops::authoring::edit::{self, Edit, EditPlan};
-use specforge_ops::authoring::fix::{self, FixQuery};
+use specforge_ops::authoring::fix::{self, FixField, FixQuery};
 use specforge_ops::view::ProjectView;
 use specforge_project::testing::compile_at;
 
@@ -81,8 +81,10 @@ fn two_spellings_of_one_new_file_are_one_file() {
 const LOGOUT: &str =
     "behavior login \"Login\" {\n  contract \"c\"\n  invariants [sesion_limit]\n}\n";
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test_macros::test(
+    behavior = "provide_mcp_suggest_fixes_tool",
+    verify = "file_path reads every spelling of a source as that source"
+)]
 fn the_fixes_read_a_spelling_of_a_source_as_that_source() {
     let p = compile(TESTING, &[("limit.spec", LIMIT), ("login.spec", LOGOUT)]);
     let titles = |file: &str| -> Vec<String> {
@@ -103,8 +105,10 @@ fn the_fixes_read_a_spelling_of_a_source_as_that_source() {
     assert_eq!(titles(absolute.to_str().unwrap()), exact);
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test_macros::test(
+    behavior = "provide_mcp_suggest_fixes_tool",
+    verify = "a file_path that names no source is refused on file_path"
+)]
 fn the_fixes_refuse_a_file_that_is_no_source() {
     let p = compile(TESTING, &[("limit.spec", LIMIT)]);
     let refusal = |file: &str| {
@@ -119,6 +123,12 @@ fn the_fixes_refuse_a_file_that_is_no_source() {
             .to_string()
     };
     assert_eq!(refusal("nope.spec"), "file_not_found");
+    let query = FixQuery {
+        file: Some("nope.spec"),
+        ..FixQuery::default()
+    };
+    let refused = fix::fixes(&p.navigator(), &p.project.diagnostics(), &query).unwrap_err();
+    assert_eq!(refused.subject, Some(FixField::FilePath));
     assert_eq!(refusal("../x.spec"), "not_a_source");
 }
 
