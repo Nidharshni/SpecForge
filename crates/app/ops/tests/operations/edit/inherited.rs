@@ -23,8 +23,10 @@ fn unlink_of_an_inherited_single_reference_is_refused_as_unset_is() {
     assert_eq!(unlinked, refused(&c, &[unset("order_placed", "payload")]));
 }
 
-#[test]
-#[ignore = "flipped by T7"]
+#[specforge_test_macros::test(
+    behavior = "edit_entity_field",
+    verify = "set to a default's value leaves the block inheriting it, in any form"
+)]
 fn set_to_a_one_value_default_leaves_the_block_inheriting_it() {
     let c = events();
     assert!(
@@ -51,8 +53,10 @@ fn set_to_a_one_value_default_leaves_the_block_inheriting_it() {
     assert!(!new.contains("[\"a\"]"), "{new}");
 }
 
-#[test]
-#[ignore = "flipped by T7"]
+#[specforge_test_macros::test(
+    behavior = "edit_entity_link",
+    verify = "a link and its unlink leave a block as it was"
+)]
 fn a_link_and_its_unlink_over_a_one_value_default_leave_the_text_as_it_was() {
     let c = events();
     let planned = plan(

@@ -382,3 +382,57 @@ fn held_answers_own_inherited_or_absent() {
         "a second defaults block"
     );
 }
+
+#[test]
+fn repeats_widens_restates_to_stored_values() {
+    let form = |name: &str, t| {
+        (
+            ("thing".to_string(), name.to_string()),
+            FieldForm::new(t, Vec::new()),
+        )
+    };
+    let forms = FieldForms::new(
+        [
+            form("refs", FieldType::StringList),
+            form("rpn", FieldType::Integer),
+        ]
+        .into_iter()
+        .collect(),
+        Default::default(),
+        ["thing".to_string()].into_iter().collect(),
+    );
+    let file = parse(
+        "defaults thing {\n  refs \"a\"\n  rpn \"100\"\n}\n\n\
+         thing a \"A\" {\n  refs [\"a\"]\n  rpn 100\n}\n\n\
+         thing b \"B\" {\n  refs [\"a\", \"b\"]\n}\n",
+        "t.spec",
+    );
+    let (defaults, _) = FileDefaults::of(&file, &forms);
+    let entry = |id: &str, key: &str| {
+        let block = file.entities.iter().find(|e| e.id.raw == id).unwrap();
+        block
+            .fields
+            .entries()
+            .iter()
+            .find(|e| e.key == key)
+            .unwrap()
+            .clone()
+    };
+    for (id, key) in [("a", "refs"), ("a", "rpn")] {
+        let own = entry(id, key);
+        assert!(defaults.repeats("thing", &own, &forms), "{key}");
+        assert!(!defaults.restates("thing", &own), "{key}");
+    }
+    let longer = entry("b", "refs");
+    assert!(!defaults.repeats("thing", &longer, &forms));
+    assert!(!defaults.restates("thing", &longer));
+    // restates implies repeats, over the pairs ASKED writes.
+    let asked = parse(ASKED, "a.spec");
+    let (asked_defaults, _) = FileDefaults::of(&asked, &self::forms());
+    for block in asked.entities.iter().filter(|e| e.kind.raw == "behavior") {
+        let own = &block.fields.entries()[0];
+        if asked_defaults.restates("behavior", own) {
+            assert!(asked_defaults.repeats("behavior", own, &self::forms()));
+        }
+    }
+}

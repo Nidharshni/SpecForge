@@ -1,8 +1,8 @@
 //! What a block's field holds, its own or its file's default (ADR 0149, ADR 0154, ADR 0175). A block that does not
 //! write a field takes its file's `defaults <kind>` entry for it. Every typed edit that changes a field does it
 //! through [`change`]: an inherited list or block field is copied into an own field first, the verb changes the own
-//! field, and what is left is removed when it restates the default (W161, asked of the graph's `FileDefaults` over
-//! the text being planned) or written as none (`[]`, `{}`) when it is left empty over a default. No edit writes a
+//! field, and what is left is removed when it holds what the default holds, as the graph stores both (asked of the
+//! graph's `FileDefaults` over the text being planned) or written as none (`[]`, `{}`) when it is left empty over a default. No edit writes a
 //! `defaults` block.
 
 use super::EditField;
@@ -138,12 +138,14 @@ fn remove_own(block: &mut Block, field: &str) {
     }
 }
 
-/// `text` with the own `field` of the entity removed when it equals the file's default for it.
+/// `text` with the own `field` of the entity removed when it holds what the file's default holds, as the graph stores
+/// both (ADR 0182 D4).
 fn without_repeat(site: &Site<'_>, text: &str, field: &str) -> Result<String, Refusal<EditField>> {
     let mut block = Block::open(site, text)?;
+    let forms = site.view.registries().field_forms();
     let repeats = block
         .entry(field)
-        .is_some_and(|own| of(site, block.file()).restates(site.kind, own));
+        .is_some_and(|own| of(site, block.file()).repeats(site.kind, own, forms));
     if !repeats {
         return Ok(text.to_string());
     }

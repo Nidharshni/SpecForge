@@ -239,6 +239,16 @@ impl<'f> FileDefaults<'f> {
             .is_some_and(|d| field_form::write(&own.value) == field_form::write(&d.value))
     }
 
+    /// Whether `own` holds what its default holds, as the graph build stores both ([`FieldForms::stored`]): deleting
+    /// the line leaves the node's value as it is. What a typed edit removes (ADR 0182 D4). Implied by
+    /// [`Self::restates`].
+    pub fn repeats(&self, kind: &str, own: &FieldEntry, forms: &FieldForms) -> bool {
+        self.entry(kind, own.key.as_str()).is_some_and(|default| {
+            field_form::write(&forms.stored(kind, own))
+                == field_form::write(&forms.stored(kind, default))
+        })
+    }
+
     /// W161: a block field equal to its default, and a default no block of its kind takes.
     fn dead(&self, file: &SpecFile, diagnostics: &mut Vec<Diagnostic>) {
         for (kind, applied) in &self.by_kind {
