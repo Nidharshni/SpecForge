@@ -1,6 +1,6 @@
 # The emitter is export formats; domain names come from manifests
 
-**Status:** accepted (2026-10-02)
+**Status:** accepted (2026-10-02); amended by [ADR 0190](0190-a-read-selection-decides-what-the-read-covers.md) (`emit` exports the entities a read selection covers, `EmitOptions::selected`; it resolves no scope).
 
 `specforge-emitter` held the compile's glue (graph checks, extension loading, Wasm custom rules),
 the analysis passes, the host's coverage view, traces, plan validation, stats, source scanning,

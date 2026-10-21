@@ -712,7 +712,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   them, the exploration lists them and the review flags those that count toward coverage; the export's token
   budget ranks by the same degree. Not the same as unreferenced.
 - **Reach** (of an entity): the entities a breadth-first walk from it reaches, nearest first: over edges both ways in
-  (id, label) order (`Graph::reach`: the neighbourhood the exploration and the review read, the export's `--scope`), or
+  (id, label) order (`Graph::reach`: the neighbourhood the exploration and the review read, a read selection's, `Graph::select`), or
   one way in written order (`Graph::reach_directed`: a trace's upstream and downstream, [ADR 0174](docs/adr/0174-the-graph-owns-directed-reach-and-degree.md)).
   Each reads only the edges of the entities it reaches. Not the entities a trace's chains reach (`trace::affected`).
 - **Unreferenced entity**: an entity no edge points at: W012 for a `ref`, an extension's
@@ -861,7 +861,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   entity a request names, with its record and standing, or `view::not_found` about the field that named it; the hops
   from it (a depth without it is `depth_without_entity` about that field); the kinds it keeps, with I020 for each the
   project lacks (an empty kind among them). A read of one entity asks `ProjectView::entity`; a filter by kind alone,
-  `ProjectView::kind_filter`.
+  `ProjectView::kind_filter`. It also answers the entities the read covers (`Selection::selected`, `Graph::select`, ADR 0190):
+  what the entity reaches within the depth, or every entity, of the kinds kept. The entity is the selection's **root**:
+  selected itself only when its kind is kept, and always drawn by an export or a query, whose token budget never cuts it.
 - **Remedy**: what a refusal, a finding or a diagnostic tells the caller to do (an OpError's message tail or
   suggestion, a doctor finding's remediation). Written below the surfaces, it names a whole command or the request's
   own words, never a bare flag, so it reads true on every surface; the catalog's explanations, which name each
@@ -891,7 +893,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   what it alone knows, typed and flattened beside it (MCP's `note` on an add, rename's `edits`, the spec's `TextEdit`, a mutation's
   `files_written`, the CLI's credential health on doctor), and never renames, drops or re-derives a
   key. It carries no `null`. Its spec type is the tool's `Mcp*` reply type (ADR 0052).
-- **Graph export**: the project's graph, or the subgraph of a scope, written in one export format by
+- **Graph export**: the project's graph, or the entities a read selection covers (its scope drawn always, never cut by a budget), written in one export format by
   `specforge_emitter::emit` through `specforge_ops::read::export::export`: graph (the Graph Protocol), context and brief (JSON
   documents whose schema the emitter derives from the types that write them, published by `specforge schema
   --publish`), DOT, or markdown (a **Review document**). It is text: the CLI prints it, MCP sends it as text or writes it into a directory of the project (`export::write_into`, as `<dir>/<format's file name>`, replaced atomically, ADR 0131), an extension command receives it
