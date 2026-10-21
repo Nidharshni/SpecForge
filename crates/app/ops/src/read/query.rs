@@ -76,10 +76,7 @@ pub fn query(
             .expect_err("a format the agent table does not admit is refused")
             .about(QueryField::Format));
     }
-    let graph = view.graph();
-    graph.node(request.entity_id).ok_or_else(|| {
-        crate::view::not_found(graph, request.entity_id).about(QueryField::EntityId)
-    })?;
+    view.entity(request.entity_id, QueryField::EntityId)?;
     let coverage = request
         .include_coverage
         .then(|| view.coverage())

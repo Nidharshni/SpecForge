@@ -25,8 +25,7 @@ use std::rc::Rc;
 
 use specforge_common::{SourceSpan, Sym};
 
-use crate::OpError;
-use crate::view::{ProjectView, not_found};
+use crate::view::ProjectView;
 
 pub use anchors::{
     AnchoredEntity, EntityAnchors, FileAnchors, Implementation, anchors_of_entity, anchors_of_file,
@@ -86,12 +85,6 @@ impl<'a> Navigator<'a> {
     /// The text of `file` a rename plan keeps: the text its edits are positions in.
     pub(crate) fn source_text(&self, file: &str) -> Option<std::sync::Arc<str>> {
         self.view.project().source_text(file)
-    }
-
-    /// The entity `id`, or [`not_found`].
-    fn node(&self, id: &str) -> Result<&'a specforge_graph::Node, OpError> {
-        let graph = self.view.graph();
-        graph.node(id).ok_or_else(|| not_found(graph, id))
     }
 }
 

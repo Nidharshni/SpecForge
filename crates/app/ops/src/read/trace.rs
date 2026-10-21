@@ -4,7 +4,7 @@
 
 use serde::Serialize;
 use specforge_common::shape::Shape;
-use specforge_graph::{Direction, Graph};
+use specforge_graph::{Direction, Graph, Node};
 use specforge_registry::RegistryBuild;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -13,7 +13,7 @@ mod ask;
 pub use ask::{Ask, ENTITY_WITH_PLAN, TraceField};
 
 use crate::read::plan::PlanGap;
-use crate::view::{EntityField, ProjectView, not_found};
+use crate::view::{EntityField, ProjectView};
 use crate::{Noticed, OpError, Refusal};
 
 #[derive(Debug, Serialize, Shape)]
@@ -235,8 +235,8 @@ pub fn chain(
     let expectations = TraceExpectations::of(view.registries());
     let graph = view.graph();
     let versioned = view.versioned_schema();
-    let chain = traced(graph, entity_id, &expectations)
-        .ok_or_else(|| not_found(graph, entity_id).about(EntityField::EntityId))?;
+    let node = view.entity(entity_id, EntityField::EntityId)?.node;
+    let chain = traced(graph, node, &expectations);
     Ok(Noticed::new(
         ChainDocument {
             schema_version: versioned.version().to_string(),
@@ -254,7 +254,7 @@ pub fn every(view: &ProjectView) -> Noticed<Traces> {
     let mut traces: Vec<TraceChain> = graph
         .nodes()
         .iter()
-        .filter_map(|n| traced(graph, n.id.raw.as_str(), &expectations))
+        .map(|node| traced(graph, node, &expectations))
         .collect();
     traces.sort_by(|a, b| a.entity_id.cmp(&b.entity_id));
     Noticed::new(
@@ -290,7 +290,11 @@ pub fn affected<'s>(
     let graph = view.graph();
     let mut entities = BTreeSet::new();
     for seed in seeds {
-        let chain = traced(graph, seed, &expectations).ok_or_else(|| not_found(graph, seed))?;
+        let node = view
+            .entity(seed, EntityField::EntityId)
+            .map_err(|refusal| refusal.error)?
+            .node;
+        let chain = traced(graph, node, &expectations);
         entities.extend(chain.reached().map(str::to_string));
     }
     let coverage = view.coverage()?;
@@ -306,16 +310,16 @@ pub fn affected<'s>(
 }
 
 /// The chain of `entity_id` both ways, with every expected edge it lacks
-/// flagged as missing; `None` when the graph lacks it.
-fn traced(graph: &Graph, entity_id: &str, expectations: &TraceExpectations) -> Option<TraceChain> {
-    let root = graph.node(entity_id)?;
-    Some(TraceChain {
+/// flagged as missing.
+fn traced(graph: &Graph, root: &Node, expectations: &TraceExpectations) -> TraceChain {
+    let entity_id = root.id.raw.as_str();
+    TraceChain {
         entity_id: entity_id.to_string(),
         entity_kind: root.kind.raw.to_string(),
         upstream: links(graph, entity_id, Direction::Incoming),
         downstream: links(graph, entity_id, Direction::Outgoing),
         missing: missing_links(graph, entity_id, expectations),
-    })
+    }
 }
 
 /// What falls short, in one vocabulary (CONTEXT.md): a missing link, an

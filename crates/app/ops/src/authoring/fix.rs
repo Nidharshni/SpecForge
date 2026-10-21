@@ -136,11 +136,8 @@ pub fn fixes(
     diagnostics: &[Diagnostic],
     query: &FixQuery,
 ) -> Result<Vec<Fix>, Refusal<EntityField>> {
-    let graph = navigator.view().graph();
     if let Some(id) = query.entity {
-        graph
-            .node(id)
-            .ok_or_else(|| crate::view::not_found(graph, id).about(EntityField::EntityId))?;
+        navigator.view().entity(id, EntityField::EntityId)?;
     }
     Ok(offers(navigator, diagnostics, query)
         .into_iter()

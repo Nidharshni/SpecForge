@@ -18,7 +18,7 @@ pub enum EntityField {
 /// `EntityNotFound`, about `id`, worded `unresolved entity '<id>' - not
 /// found in graph`, with `did you mean '<closest>'?` when an id of `graph`
 /// is close. The one refusal for it: export's scope, inspect, the
-/// navigator, rename, trace, coverage, the fixes, and every MCP tool and prompt.
+/// selection and entity reads of the project view, the anchors, the typed-edit planner and MCP.
 pub fn not_found(graph: &Graph, id: &str) -> OpError {
     let error = OpError::coded(
         OpErrorKind::EntityNotFound,

@@ -107,9 +107,7 @@ pub fn plan(
     validate_id(new_id, nav.view().registries().kinds())
         .map_err(|error| error.about(RenameField::NewId))?;
     let graph = nav.view().graph();
-    let Some(node) = graph.node(old_id) else {
-        return Err(crate::view::not_found(graph, old_id).about(RenameField::OldId));
-    };
+    let node = nav.view().entity(old_id, RenameField::OldId)?.node;
     if graph.node(new_id).is_some() {
         return Err(OpError::new(
             OpErrorKind::Conflict,

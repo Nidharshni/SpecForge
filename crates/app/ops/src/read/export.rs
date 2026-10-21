@@ -387,7 +387,8 @@ pub fn export_recorded(view: &ProjectView, request: &Request) -> Noticed<Recorde
 
 /// The emitter's failure as the operation's: the kind by variant, the code
 /// the variant's ([`EmitterError::code`]); nothing is read from the message.
-/// A missing scope entity is the one not-found refusal, about the scope; a budget too small is
+/// A missing scope entity is the one not-found refusal, about the scope (the selection refuses it
+/// first; the mapping stays total, ADR 0015 Q4); a budget too small is
 /// about `max_tokens`; a serialization failure is about no field.
 fn failure(view: &ProjectView, error: EmitterError) -> Refusal<ExportField> {
     let (kind, field) = match &error {

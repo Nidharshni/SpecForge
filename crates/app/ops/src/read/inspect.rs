@@ -10,7 +10,7 @@ use specforge_project::coverage::{Status, Verdict};
 use specforge_registry::{KindRegistryEntry, ObligationRecord, Standing};
 
 use crate::read::navigate::{References, is_about};
-use crate::view::{EntityField, ProjectView, not_found};
+use crate::view::{Entity, EntityField, ProjectView};
 use crate::{OpError, Refusal};
 
 /// How the hover and the review document quote a statement (ADR 0152 D6).
@@ -87,15 +87,11 @@ pub fn inspect<'v>(
     entity_id: &str,
 ) -> Result<EntityFacts<'v>, Refusal<EntityField>> {
     let graph = view.graph();
-    let node = graph
-        .node(entity_id)
-        .ok_or_else(|| not_found(graph, entity_id).about(EntityField::EntityId))?;
-    // The snapshot is built over the same graph: a node it lacks is not one
-    // this view can state facts about.
-    let (record, standing) = view
-        .entities()
-        .get(entity_id)
-        .ok_or_else(|| not_found(graph, entity_id).about(EntityField::EntityId))?;
+    let Entity {
+        node,
+        record,
+        standing,
+    } = view.entity(entity_id, EntityField::EntityId)?;
     Ok(EntityFacts {
         node,
         kind: view.registries().kinds().get(node.kind.raw.as_str()),

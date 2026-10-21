@@ -12,7 +12,7 @@ use specforge_project::coverage::{Status, Summary, Verdict};
 use specforge_registry::{EntityRecord, Standing};
 
 use crate::options::{Choice, OptionTable};
-use crate::view::{EntityField, ProjectView, not_found};
+use crate::view::{EntityField, ProjectView, Select};
 use crate::{Noticed, OpError, Refusal};
 
 /// Which rows to list.
@@ -126,29 +126,21 @@ pub fn coverage(
     view: &ProjectView,
     query: &CoverageQuery,
 ) -> Result<Noticed<CoverageOutcome>, Refusal<EntityField>> {
-    let filter = view.kind_filter(query.kind.as_slice());
-    Ok(Noticed::new(selected(view, query)?, filter.into_notices()))
-}
-
-/// [`coverage`]'s rows without its notices, for the reads that compose them.
-pub(crate) fn selected(
-    view: &ProjectView,
-    query: &CoverageQuery,
-) -> Result<CoverageOutcome, Refusal<EntityField>> {
-    if let Some(id) = query.entity_id {
-        view.graph()
-            .node(id)
-            .ok_or_else(|| not_found(view.graph(), id).about(EntityField::EntityId))?;
-    }
+    let selection = view.select(&Select {
+        entity: query.entity_id,
+        named_by: EntityField::EntityId,
+        depth: None,
+        kinds: query.kind.as_slice(),
+    })?;
     let coverage = view.coverage()?;
     let rows = view
         .entities()
         .iter()
         .filter(|(record, standing)| {
-            query
-                .entity_id
-                .map_or(standing.counts(), |id| record.id == id)
-                && query.kind.is_none_or(|kind| record.kind == kind)
+            selection
+                .entity
+                .map_or(standing.counts(), |entity| record.id == entity.record.id)
+                && selection.keeps(&record.kind)
         })
         .filter_map(|(record, standing)| {
             Some(CoverageRow::of(
@@ -159,10 +151,11 @@ pub(crate) fn selected(
         })
         .filter(|row| query.status.is_none_or(|status| row.status() == status))
         .collect();
-    Ok(CoverageOutcome {
+    let outcome = CoverageOutcome {
         rows,
         summary: coverage.summary.clone(),
-    })
+    };
+    Ok(Noticed::new(outcome, selection.into_notices()))
 }
 
 /// One entity's row, counted or not; `None` when the graph lacks it.
