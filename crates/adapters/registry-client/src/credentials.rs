@@ -210,10 +210,22 @@ impl CredentialStore {
                     // A plaintext entry written by hand.
                     token.clone()
                 } else {
-                    // The file fallback written when the keyring round-trip failed at login.
+                    // The secret `login --token` kept: a file, or one that is gone or corrupt.
                     match super::secrets::load_secret(&self.dir, root) {
                         Ok(Some(secret)) if !secret.is_empty() => secret,
-                        _ => token.clone(),
+                        Ok(_) => {
+                            return Err(Diagnostic::new(
+                                codes::R_AUTH_021,
+                                format!(
+                                    "the secret kept for registry '{root}' is missing or unreadable"
+                                ),
+                            )
+                            .with_suggestion(relogin()));
+                        }
+                        Err(message) => {
+                            return Err(Diagnostic::new(codes::R_AUTH_021, message)
+                                .with_suggestion(relogin()));
+                        }
                     }
                 }
             }

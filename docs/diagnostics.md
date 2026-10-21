@@ -1684,9 +1684,10 @@ Level: error
 ```
 R-AUTH-021: Stored registry token unreadable
 
-The OS keyring entry that holds this registry's token is missing or can't be
-read, although the credentials file refers to it. Log in again: `specforge login
---registry <alias> --token <NEW_TOKEN>`.
+The secret `specforge login --token` kept for this registry (in the OS keyring,
+else a file under `~/.specforge/secrets/`) is missing or can't be read, although
+the credentials file refers to it. Log in again: `specforge login --registry
+<alias> --token <NEW_TOKEN>`.
 
 Owner: core
 Level: error

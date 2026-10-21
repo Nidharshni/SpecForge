@@ -1189,8 +1189,8 @@ behavior authenticate_registry_request "Authenticate Registry Request" {
     The system MUST resolve the token before any request: an unset or
     blank variable MUST be R010 and a token file that can't be read or
     is empty MUST be R011, each naming the registry and how to fix it; an
-    expired stored token is R-AUTH-020 and an unreadable keyring entry
-    R-AUTH-021. The resolved token MUST be attached as an Authorization:
+    expired stored token is R-AUTH-020 and a stored secret that is missing
+    or unreadable R-AUTH-021, before any request. The resolved token MUST be attached as an Authorization:
     Bearer header. A 401 answer MUST be R001, whose suggestion is
     `specforge login --registry <alias> --token <TOKEN>`; a 403 answer
     MUST be R002 with permission guidance. A 429 answer is retried by

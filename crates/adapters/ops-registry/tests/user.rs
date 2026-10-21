@@ -11,7 +11,6 @@ use specforge_test_macros::test as specforge_test;
     behavior = "authenticate_registry_request",
     verify = "a kept token whose secret is missing is R-AUTH-021 before any request"
 )]
-#[ignore = "flipped by T6"]
 fn a_kept_token_whose_secret_is_gone_refuses_the_read() {
     let project = TestProject::new().config(|c| {
         c["name"] = "p".into();

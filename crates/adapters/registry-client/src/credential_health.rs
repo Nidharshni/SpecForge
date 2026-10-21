@@ -225,6 +225,25 @@ mod tests {
         assert!(empty.signing_key_present);
     }
 
+    #[test]
+    fn a_kept_token_whose_secret_is_gone_is_a_credential_failure() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            dir.path().join("credentials.json"),
+            r#"{"registries":{"https://gone.invalid":{}}}"#,
+        )
+        .unwrap();
+
+        let health = credential_health(dir.path(), chrono::Utc::now());
+
+        assert_eq!(health.failures, 1, "{health:?}");
+        assert_eq!(health.lines[0].level, CredentialLevel::Error);
+        assert!(
+            health.lines[0].text.contains("https://gone.invalid"),
+            "{health:?}"
+        );
+    }
+
     #[specforge_test_macros::test(
         behavior = "run_doctor_check",
         verify = "an unreadable credential store is a credential failure in doctor"
