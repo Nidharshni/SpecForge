@@ -38,7 +38,6 @@ fn notices_of(view: &specforge_ops::view::ProjectView<'_>) -> Vec<specforge_comm
 }
 
 #[cfg(unix)]
-#[ignore = "flipped by the ticket that reads the schema cache through the view's disk"]
 #[specforge_test(
     behavior = "read_views_over_the_project_view",
     verify = "over MCP, a schema cache that leads outside the project or has more than one name is not read"
@@ -67,7 +66,6 @@ fn a_bounded_view_versions_against_no_schema_cache_that_links_outside() {
 }
 
 #[cfg(unix)]
-#[ignore = "flipped by the ticket that reads the schema cache through the view's disk"]
 #[specforge_test(
     behavior = "read_views_over_the_project_view",
     verify = "over MCP, a schema cache that leads outside the project or has more than one name is not read"
@@ -117,7 +115,6 @@ fn an_unbounded_view_versions_against_a_linked_schema_cache() {
 
 /// ADR 0183 D4: ops opens file content only through `containment/`, but for the collector machine's
 /// approvals store (a user file, not a project file).
-#[ignore = "flipped by the ticket that reads the schema cache through the view's disk"]
 #[specforge_test(
     behavior = "read_views_over_the_project_view",
     verify = "over MCP, a schema cache that leads outside the project or has more than one name is not read"

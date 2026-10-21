@@ -98,8 +98,8 @@ invariant mcp_served_project_consistency "MCP Served Project Consistency" {
     mutation reads or writes through a symlink that leaves it (init's
     files, the lock and the installed modules included), and a file the
     project keeps at its root (the inference and anchors manifests, the
-    test report) is read only from inside it. A source of the served
-    project, and the recorded report, is also read only from a file that has
+    test report, the schema cache) is read only from inside it. A source of the served
+    project, the recorded report and the schema cache are also read only from a file that has
     one name: a hard link to a file outside is another name for it. So is
     the format configuration (.specforgefmt.toml) a call reads (format's, a
     typed edit's layout, init's starter), and format reads each file it

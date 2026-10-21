@@ -287,7 +287,11 @@ behavior read_views_over_the_project_view "Read Views over the Project View" {
     when it is not a specforge-report.json, permission_denied when the system
     refuses to read it, invalid_input over MCP when it is a link that leads
     outside the call's project (MCP reads it only from inside; the CLI and the
-    LSP follow the user's link), else internal_error. The view says what its surface reports for the
+    LSP follow the user's link), else internal_error. A schema
+    cache that cannot be read is I016 and versioning starts again at 1.0.0; over
+    MCP one that leads outside the call's project or has more than one name is
+    not read and I016 names why, never what it holds (the CLI and the LSP follow
+    the user's link). The view says what its surface reports for the
     project: what specforge check reports for the compile behind it, then
     what the surface adds (MCP: I017). Coverage is computed once per
     compiled project or session state and per content of the recorded

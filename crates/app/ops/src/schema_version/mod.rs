@@ -19,6 +19,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use specforge_common::{Diagnostic, codes};
 use specforge_emitter::{GraphProtocolSchema, SchemaVersion, content_hash};
+use specforge_registry::Disk;
 
 pub use diff::{AttributeChange, Bump, Members, Scalar, SchemaChange};
 
@@ -63,10 +64,12 @@ impl SchemaCache {
     /// changed). With no record it is 1.0.0 with no changes; with a record
     /// that cannot be read it is 1.0.0 and [`VersionedSchema::diagnostics`]
     /// holds I016. Kinds, fields and edge types are compared by name,
-    /// whatever order the file holds them in. Reads the record once; writes
-    /// nothing.
-    pub fn version(&self, mut generated: GraphProtocolSchema) -> VersionedSchema {
-        let since = match self.load() {
+    /// whatever order the file holds them in. Reads the record once, through
+    /// `disk` (a bounded disk refuses a link that lands outside and a file
+    /// with more than one name: I016 names the reason, never the content);
+    /// writes nothing.
+    pub fn version(&self, mut generated: GraphProtocolSchema, disk: &dyn Disk) -> VersionedSchema {
+        let since = match self.load(disk) {
             Ok(None) => {
                 generated.schema_version = SchemaVersion::new(1, 0, 0);
                 Since::NoRecord
@@ -111,18 +114,16 @@ impl SchemaCache {
         specforge_common::fresh::replace_file(&self.dir.join(CACHE_FILE), json.as_bytes())
     }
 
-    /// What the previous export recorded, if anything.
-    fn load(&self) -> io::Result<Option<Record>> {
-        let path = self.dir.join(CACHE_FILE);
-        if !path.exists() {
-            return Ok(None);
-        }
-
-        let contents = std::fs::read_to_string(&path)?;
-        let record: Record = serde_json::from_str(&contents)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-        Ok(Some(record))
+    /// What the previous export recorded, read through `disk`: `None` for no file.
+    fn load(&self, disk: &dyn Disk) -> io::Result<Option<Record>> {
+        let bytes = match disk.read(&self.dir.join(CACHE_FILE)) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error),
+        };
+        serde_json::from_slice(&bytes)
+            .map(Some)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 }
 

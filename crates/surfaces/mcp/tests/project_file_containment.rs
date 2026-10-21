@@ -164,7 +164,6 @@ fn infer_progress_reads_no_manifest_through_a_symlink_that_leaves_the_project() 
 
 /// The schema cache is a link to a file outside: no read view reads it, quotes it or versions against it.
 #[cfg(unix)]
-#[ignore = "flipped by the ticket that reads the schema cache through the view's disk"]
 #[specforge_test_macros::test(
     invariant = "mcp_served_project_consistency",
     verify = "no schema cache a call reads leaves the project, and none with more than one name is read"
@@ -198,7 +197,6 @@ fn read_views_read_no_schema_cache_through_a_symlink_that_leaves_the_project() {
 
 /// The schema cache has a second name: the same.
 #[cfg(unix)]
-#[ignore = "flipped by the ticket that reads the schema cache through the view's disk"]
 #[specforge_test_macros::test(
     invariant = "mcp_served_project_consistency",
     verify = "no schema cache a call reads leaves the project, and none with more than one name is read"

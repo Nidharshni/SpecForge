@@ -246,7 +246,7 @@ impl<'a> ProjectView<'a> {
     /// the record.
     pub fn versioned_schema(&self) -> VersionedSchema {
         match self.schema_cache() {
-            Some(cache) => cache.version(self.schema()),
+            Some(cache) => cache.version(self.schema(), &self.containment().disk()),
             None => VersionedSchema::unrecorded(self.schema()),
         }
     }
