@@ -1,6 +1,6 @@
 # The LSP reads a document through one module
 
-**Status:** accepted (2026-10-06) Amended by [ADR 0161](0161-a-stub-fix-is-a-typed-edit.md) D5: code actions resolve a stub's edits. Amended by round 17 plan 07: the code-action request checks its document first (via ADR 0161 D5's amendment). Amended by round 18 plan 08 (2026-10-19): what a buffer is to the compile has three states (D7), hover's diagnostics follow D3, and a change plan is one step (D9).
+**Status:** accepted (2026-10-06) Amended by [ADR 0161](0161-a-stub-fix-is-a-typed-edit.md) D5: code actions resolve a stub's edits. Amended by round 17 plan 07: the code-action request checks its document first (via ADR 0161 D5's amendment). Amended by round 18 plan 08 (2026-10-19): what a buffer is to the compile has three states (D7), hover's diagnostics follow D3, and a change plan is one step (D9). Amended by [ADR 0191](0191-a-new-block-is-laid-out-by-the-typed-create.md) (D6: a kind's and a field's snippet is the typed create's skeleton).
 
 The LSP answered questions about a `.spec` buffer with seven scanners of its own: a bracket scanner for
 completion that counted `[` inside strings, a brace scanner that respected strings but not `"""`, a
