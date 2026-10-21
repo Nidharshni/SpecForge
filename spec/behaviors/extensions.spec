@@ -1296,6 +1296,7 @@ behavior validate_registry_credentials "Validate Registry Credentials" {
   verify unit "raw token never stored in specforge.json"
   verify unit "success message includes registry alias and scope"
   verify unit "login stores the credential under the root of the registry it validated against"
+  verify unit "two registries with one alias keep two credentials, one per root"
   verify contract "Validate Registry Credentials: registry credential validation holds — registry_configured, registry_client_available, valid_credentials_stored, invalid_credentials_diagnosed, raw_token_never_stored, credentials_validated_emitted"
 }
 

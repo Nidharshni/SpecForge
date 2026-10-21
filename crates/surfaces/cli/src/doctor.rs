@@ -7,10 +7,7 @@ use specforge_ops::analysis::doctor::{
 use specforge_ops::extension::Status;
 use specforge_ops::solver::Z3;
 use specforge_ops::view::ProjectView;
-use specforge_ops_registry::User;
-use specforge_registry_client::credential_health::{
-    CredentialHealth, CredentialLevel, CredentialLine, credential_health,
-};
+use specforge_ops_registry::{CredentialHealth, CredentialLevel, CredentialLine, User};
 
 // `specforge doctor`'s command line.
 #[derive(clap::Args)]
@@ -43,7 +40,7 @@ impl Args {
             Err(error) => return Refusal::of(self.output.format).report(terminal, &error),
         };
         let report = diagnose(&ProjectView::of(&project), &Z3::default());
-        let credentials = credential_health(User::current().dir(), chrono::Utc::now());
+        let credentials = User::current().credential_health();
 
         match self.output.format {
             OutputFormat::Json => {

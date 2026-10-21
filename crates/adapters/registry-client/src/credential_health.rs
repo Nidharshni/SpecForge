@@ -35,6 +35,11 @@ pub struct CredentialHealth {
     pub signing_key_present: bool,
 }
 
+/// [`credential_health`] of `dir` as of now.
+pub fn credential_health_now(dir: &Path) -> CredentialHealth {
+    credential_health(dir, chrono::Utc::now())
+}
+
 /// The credential health of the credential store and the signing key in the user's directory `dir`,
 /// as of `now`.
 pub fn credential_health(dir: &Path, now: chrono::DateTime<chrono::Utc>) -> CredentialHealth {

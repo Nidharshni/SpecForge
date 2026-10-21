@@ -34,8 +34,10 @@ pub const TOKEN_VARIABLE: &str = "SPECFORGE_REGISTRY_TOKEN";
 
 mod user;
 
-pub use specforge_registry_wire::RegistryRoot;
-pub use user::User;
+pub use user::{
+    CredentialHealth, CredentialLevel, CredentialLine, Kept, LoggedIn, LoggedOut, RegistryRoot,
+    TokenSource, User,
+};
 
 /// The registries a project configures, and what reading them reported.
 #[derive(Debug, Clone)]

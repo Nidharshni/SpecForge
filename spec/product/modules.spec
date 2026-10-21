@@ -288,7 +288,6 @@ module specforge_cli "specforge-cli" {
     specforge_package,
     specforge_project,
     specforge_protocol_types,
-    specforge_registry_client,
     specforge_watch,
   ]
   tags        ["cli", "platform"]
