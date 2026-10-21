@@ -1,6 +1,6 @@
 # A delete finds references by the one reference rule
 
-**Status:** accepted (2026-10-19, architecture round 15, plan 04). Extends [ADR 0093](0093-a-fields-declared-type-decides-what-its-value-references.md)
+**Status:** accepted (2026-10-19, architecture round 15, plan 04). Extends [ADR 0093](0093-a-fields-declared-type-decides-what-its-value-references.md) Its reopen case is met by [ADR 0182](0182-the-graph-answers-what-a-blocks-field-holds.md): `FieldForms::stored` is the coerce half of the pair, in the graph.
 D2 (a typed edit's referrer scan asks the rule), [ADR 0149](0149-a-file-states-a-kinds-shared-fields-once.md) D11
 (where "once per token" is answered) and [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) D5 (what a delete
 does about a reference it may not remove). D1 and D2 extended by [ADR 0163](0163-a-written-token-is-found-by-one-finder.md): the referrer scan is the graph's finder (this ADR's reopen case); a derived type name refuses the delete too.

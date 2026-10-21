@@ -442,10 +442,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   rename point at the default's line. `defaults` is a structural keyword: never a kind, never an id. A typed edit
   asks the graph's defaults module (`specforge_graph::FileDefaults`) over the text it plans which default applies and
   whether a field restates it, through one module of its own (**Own field**), so it never writes what W161 would
-  flag (ADR 0154, ADR 0175).
+  flag (ADR 0154, ADR 0175). `FileDefaults::held` answers what a block holds for a field: own, inherited or absent
+  (ADR 0182).
 - **Own field**: a field a block writes, as opposed to one it inherits from its file's default (ADR 0149). A typed
   edit changes a field through one module (`edit::defaults::change`, ADR 0175): an inherited list or block field is
-  copied into an own field first, the verb changes it, an own field that then restates the default is removed, and a
+  copied into an own field first, the verb changes it, an own field that then holds what the default holds, as stored, is removed, and a
   field left empty over a default holds none (`[]`, `{}`; a field of one value is refused). `unset` leaves a field
   holding none.
 - **Custom verdict**: an extension's answer, through its `wasm_function`, on one entity for a
@@ -487,6 +488,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   W159 reports a value written otherwise. Spelled by one module, `specforge_graph::field_form::spell` (the escape
   table, the bare rule and each declared type's one-line spelling); `FieldForms::rewrite` reads its bare rule, and
   `format`, W159, migrate's `titles` step and the typed-edit writer spell through it (ADR 0153).
+- **Stored value**: a field value as the graph build stores it: coerced by its field form (`FieldForms::stored`,
+  ADR 0182), so a list written as one value is a one-item list and `"100"` on an integer field is `100`. Every reader
+  of references, derived names and inherited values reads it; what a file *writes* (W159, W161, the formatter) reads
+  the written value.
 - **Field vocabulary**: the closed set of values an enum field takes, in their order, and the value an absent one
   counts as (its declared `default_value`), declared once by the extension that declares the field, as a `const`
   (`specforge_extension_sdk::Vocabulary`, through `FieldBuilder::vocabulary`, the only way to declare an enum).
