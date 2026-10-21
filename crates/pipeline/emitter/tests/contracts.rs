@@ -244,22 +244,11 @@ fn context_contract_includes_contracts_and_verify_omits_prose() {
     assert_eq!(node_ids(&scoped), vec!["a", "b", "c"]);
     assert_eq!(scoped["edges"].as_array().unwrap().len(), 2);
 
-    // invalid_scope_diagnosed: E003 naming the entity — through
-    // the call `specforge export --format context --scope` makes.
-    let err = specforge_emitter::emit(
-        &graph,
-        &specforge_emitter::EmitOptions {
-            format: specforge_emitter::EmitFormat::Context,
-            scope: Some("ghost"),
-            ..Default::default()
-        },
-    )
-    .unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "unresolved entity 'ghost' — not found in graph"
+    // invalid_scope_diagnosed: a scope the graph lacks selects nothing.
+    assert!(
+        graph.select(Some("ghost"), None, &[]).is_none(),
+        "a scope the graph lacks selects nothing: the operation refuses it (E003), CT/export.rs:168"
     );
-    assert_eq!(err.code(), Some(specforge_diagnostics::codes::E003));
 }
 
 // === export_agent_graph_format contract ===
@@ -313,21 +302,11 @@ fn graph_format_contract_finalized_graph_produces_full_output() {
     assert_eq!(node_ids(&scoped), vec!["a", "b", "c"]);
     assert_eq!(scoped["edges"].as_array().unwrap().len(), 2);
 
-    // invalid_scope_diagnosed: E003 naming the entity — through
-    // the call `specforge export --format graph --scope` makes.
-    let err = specforge_emitter::emit(
-        &graph,
-        &specforge_emitter::EmitOptions {
-            scope: Some("ghost"),
-            ..Default::default()
-        },
-    )
-    .unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "unresolved entity 'ghost' — not found in graph"
+    // invalid_scope_diagnosed: a scope the graph lacks selects nothing.
+    assert!(
+        graph.select(Some("ghost"), None, &[]).is_none(),
+        "a scope the graph lacks selects nothing: the operation refuses it (E003), CT/export.rs:168"
     );
-    assert_eq!(err.code(), Some(specforge_diagnostics::codes::E003));
 }
 
 // === enforce_token_budget contract ===

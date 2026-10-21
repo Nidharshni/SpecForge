@@ -11,13 +11,21 @@ pub fn emit_json(graph: &Graph) -> String {
         .expect("graph serialization cannot fail")
 }
 
+/// The selection of `scope` and what it reaches.
+fn select(graph: &Graph, scope: &str) -> specforge_graph::Selected {
+    graph
+        .select(Some(scope), None, &[])
+        .expect("tests scope at an entity of the graph")
+}
+
 /// `graph` scoped to `scope` in the graph format, as `specforge export
 /// --scope` asks `emit` for it.
 pub fn scoped_json(graph: &Graph, scope: &str) -> Result<String, EmitterError> {
+    let selected = select(graph, scope);
     specforge_emitter::emit(
         graph,
         &EmitOptions {
-            scope: Some(scope),
+            selected: Some(&selected),
             ..Default::default()
         },
     )
@@ -25,11 +33,12 @@ pub fn scoped_json(graph: &Graph, scope: &str) -> Result<String, EmitterError> {
 
 /// `graph` scoped to `scope` in the context format.
 pub fn scoped_context(graph: &Graph, scope: &str) -> Result<String, EmitterError> {
+    let selected = select(graph, scope);
     specforge_emitter::emit(
         graph,
         &EmitOptions {
             format: EmitFormat::Context,
-            scope: Some(scope),
+            selected: Some(&selected),
             ..Default::default()
         },
     )

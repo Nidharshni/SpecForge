@@ -207,51 +207,6 @@ fn graph_format_includes_schema_version() {
     assert!(!version.is_empty(), "schema_version must not be empty");
 }
 
-// B:export_agent_graph_format — verify unit "non-existent scope entity produces E003 and exit code 1"
-#[specforge_test(
-    behavior = "export_agent_graph_format",
-    verify = "non-existent scope entity produces E003 and exit code 1"
-)]
-fn graph_format_scoped_nonexistent_entity_produces_e001() {
-    let mut graph = Graph::new();
-    graph.add_node(Node {
-        id: EntityId {
-            raw: Sym::new("alpha"),
-        },
-        kind: EntityKind {
-            raw: Sym::new("behavior"),
-        },
-        title: Some("Alpha".to_string()),
-        fields: FieldMap::new(),
-        source_span: span(),
-        methods: Vec::new(),
-        obligations: Vec::new(),
-    });
-
-    let err = crate::support::scoped_json(&graph, "nonexistent").unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "unresolved entity 'nonexistent' — not found in graph"
-    );
-    assert_eq!(err.code(), Some(specforge_diagnostics::codes::E003));
-
-    // The call `specforge export --format graph --no-schema --scope` makes:
-    // the same E003.
-    let err = specforge_emitter::emit(
-        &graph,
-        &specforge_emitter::EmitOptions {
-            scope: Some("nonexistent"),
-            ..Default::default()
-        },
-    )
-    .unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "unresolved entity 'nonexistent' — not found in graph"
-    );
-    assert_eq!(err.code(), Some(specforge_diagnostics::codes::E003));
-}
-
 // B:export_agent_graph_format — verify integration "structural-only graph exports valid JSON with raw keyword strings as entity kinds"
 #[specforge_test(
     behavior = "export_agent_graph_format",

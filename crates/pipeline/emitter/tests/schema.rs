@@ -22,11 +22,16 @@ fn with_schema(
     scope: Option<&str>,
     schema: &GraphProtocolSchema,
 ) -> Result<String, EmitterError> {
+    let selected = scope.map(|scope| {
+        graph
+            .select(Some(scope), None, &[])
+            .expect("tests scope at an entity of the graph")
+    });
     specforge_emitter::emit(
         graph,
         &EmitOptions {
             format,
-            scope,
+            selected: selected.as_ref(),
             schema,
             attach_schema: true,
             ..EmitOptions::default()
@@ -1050,42 +1055,6 @@ fn scoped_brief_v2_export() {
     assert_eq!(parsed["format_version"], "2.0");
     assert!(parsed.get("schema").is_none());
     assert!(parsed["schema_ref"]["content_hash"].is_string());
-}
-
-// B:embed_schema_in_export — verify unit "scoped V2 export with nonexistent scope returns error"
-#[specforge_test(
-    behavior = "export_agent_graph_format",
-    verify = "non-existent scope entity produces E003 and exit code 1"
-)]
-fn scoped_v2_nonexistent_scope_error() {
-    let mut graph = Graph::new();
-    graph.add_node(node("a", "behavior", Some("A")));
-    let schema = GraphProtocolSchema::empty();
-
-    let err = with_schema(&graph, EmitFormat::Json, Some("nonexistent"), &schema).unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "unresolved entity 'nonexistent' — not found in graph"
-    );
-    assert_eq!(err.code(), Some(specforge_diagnostics::codes::E003));
-
-    // What `specforge export --format graph --scope` calls, with a schema:
-    // the same E003.
-    let err = specforge_emitter::emit(
-        &graph,
-        &specforge_emitter::EmitOptions {
-            scope: Some("nonexistent"),
-            schema: &schema,
-            attach_schema: true,
-            ..Default::default()
-        },
-    )
-    .unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "unresolved entity 'nonexistent' — not found in graph"
-    );
-    assert_eq!(err.code(), Some(specforge_diagnostics::codes::E003));
 }
 
 // C6-03: SchemaVersion Ord must honor pre-release labels — 1.0.0-beta

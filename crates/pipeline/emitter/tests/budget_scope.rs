@@ -27,11 +27,12 @@ fn ids(document: &Value, key: &str) -> Vec<String> {
 )]
 fn a_budget_never_cuts_the_scope_entity() {
     let (graph, _) = specforge_graph::build_graph(&[specforge_parser::parse(SRC, "main.spec")]);
+    let selected = graph.select(Some("leaf"), None, &[]).unwrap();
     let output = emit(
         &graph,
         &EmitOptions {
             format: EmitFormat::Brief,
-            scope: Some("leaf"),
+            selected: Some(&selected),
             token_budget: Some(80),
             ..Default::default()
         },
@@ -45,12 +46,12 @@ fn a_budget_never_cuts_the_scope_entity() {
     assert!(!truncated.iter().any(|id| id == "leaf"));
     assert!(estimate_tokens(&output) <= 80);
 
+    let selected = graph.select(Some("hub"), None, &["behavior"]).unwrap();
     let output = emit(
         &graph,
         &EmitOptions {
             format: EmitFormat::Brief,
-            scope: Some("hub"),
-            kind_filter: vec!["behavior"],
+            selected: Some(&selected),
             token_budget: Some(80),
             ..Default::default()
         },
@@ -66,11 +67,12 @@ fn a_budget_never_cuts_the_scope_entity() {
 )]
 fn a_budget_below_the_scope_entity_alone_is_e062() {
     let (graph, _) = specforge_graph::build_graph(&[specforge_parser::parse(SRC, "main.spec")]);
+    let selected = graph.select(Some("leaf"), None, &[]).unwrap();
     let error = emit(
         &graph,
         &EmitOptions {
             format: EmitFormat::Brief,
-            scope: Some("leaf"),
+            selected: Some(&selected),
             token_budget: Some(40),
             ..Default::default()
         },

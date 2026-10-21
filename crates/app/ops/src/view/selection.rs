@@ -42,13 +42,7 @@ pub struct Selection<'v, 'r> {
     graph: &'v Graph,
 }
 
-impl<'r> Selection<'_, 'r> {
-    /// The filter as the request gave it, unknown kinds included: what the emitter's
-    /// `kind_filter` takes.
-    pub fn kinds(&self) -> &'r [&'r str] {
-        self.kinds.kinds()
-    }
-
+impl Selection<'_, '_> {
     /// The entities the selection covers ([`Graph::select`], ADR 0190): what its entity reaches within the depth the
     /// request gave, else `default` (`None`: unbounded), or every entity without one; of its kinds. Coverage reads it
     /// at `Some(0)` (the entity alone), the review at `Some(DEFAULT_DEPTH)`, explore and export at `None`.

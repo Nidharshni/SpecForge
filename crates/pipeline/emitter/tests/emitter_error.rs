@@ -44,52 +44,11 @@ fn build_graph() -> Graph {
     graph
 }
 
-// A scoped emit of a non-existent entity is ScopeNotFound, whose code is E003.
-#[test]
-fn emit_nonexistent_scope_is_scope_not_found() {
-    let graph = build_graph();
-    let err = specforge_emitter::emit(
-        &graph,
-        &EmitOptions {
-            scope: Some("nonexistent"),
-            depth: Some(1),
-            ..Default::default()
-        },
-    )
-    .unwrap_err();
-    assert_eq!(
-        err,
-        EmitterError::ScopeNotFound {
-            entity_id: "nonexistent".to_string()
-        }
-    );
-    assert_eq!(err.code(), Some(codes::E003));
-}
-
-#[test]
-fn emit_scoped_nonexistent_returns_scope_not_found() {
-    let graph = build_graph();
-    let err = crate::support::scoped_json(&graph, "nonexistent").unwrap_err();
-    assert!(
-        matches!(err, EmitterError::ScopeNotFound { .. }),
-        "expected ScopeNotFound, got: {err:?}"
-    );
-}
-
 #[specforge_test_macros::test(
     behavior = "export_agent_graph_format",
     verify = "an export failure carries its code as a constant, never in its message"
 )]
 fn a_failure_carries_its_code_and_its_message_has_none() {
-    let err = EmitterError::ScopeNotFound {
-        entity_id: "foo".to_string(),
-    };
-    assert_eq!(err.code(), Some(codes::E003));
-    assert_eq!(
-        err.to_string(),
-        "unresolved entity 'foo' — not found in graph"
-    );
-
     let err = EmitterError::BudgetTooSmall {
         reason: "the budget of 5 cannot hold an export".to_string(),
     };

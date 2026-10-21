@@ -9,7 +9,8 @@ mod escape;
 
 use std::collections::BTreeSet;
 
-use specforge_graph::{FieldForms, FieldMap, FieldValue, Graph, Node, Written};
+use specforge_common::Sym;
+use specforge_graph::{FieldForms, FieldMap, FieldValue, Graph, Node, Selected, Written};
 use specforge_registry::snapshot::field_text;
 
 use crate::emit::EmitOptions;
@@ -30,18 +31,18 @@ struct Row<'g> {
 /// `selected` as a document. `graph` names what the sections link to.
 pub(crate) fn render(graph: &Graph, selected: &Graph, options: &EmitOptions<'_>) -> String {
     let mut blocks = vec!["# Specification".to_string(), selection(selected, options)];
-    for node in order(selected, options.scope) {
+    for node in order(selected, options.selected.and_then(Selected::root)) {
         blocks.push(section(graph, node, options));
     }
     blocks.join("\n\n")
 }
 
 /// Every entity of `selected`, the scoped one first, then by kind and id.
-fn order<'g>(selected: &'g Graph, scope: Option<&str>) -> Vec<&'g Node> {
+fn order(selected: &Graph, scope: Option<Sym>) -> Vec<&Node> {
     let mut nodes = selected.nodes();
     nodes.sort_by_key(|n| {
         (
-            Some(n.id.raw.as_str()) != scope,
+            Some(n.id.raw) != scope,
             n.kind.raw.as_str(),
             n.id.raw.as_str(),
         )
@@ -53,13 +54,20 @@ fn order<'g>(selected: &'g Graph, scope: Option<&str>) -> Vec<&'g Node> {
 fn selection(selected: &Graph, options: &EmitOptions<'_>) -> String {
     let count = selected.node_count();
     let mut line = format!("{count} {}", if count == 1 { "entity" } else { "entities" });
-    if let Some(scope) = options.scope {
-        line.push_str(&format!(" around `{scope}`"));
-        if let Some(depth) = options.depth {
+    if let Some(chosen) = options.selected
+        && let Some(root) = chosen.root()
+    {
+        line.push_str(&format!(" around `{root}`"));
+        if let Some(depth) = chosen.depth() {
             line.push_str(&format!(" (depth {depth})"));
         }
     }
-    let kinds: BTreeSet<&str> = options.kind_filter.iter().copied().collect();
+    let kinds: BTreeSet<&str> = options
+        .selected
+        .into_iter()
+        .flat_map(|chosen| chosen.kinds())
+        .map(|kind| kind.as_str())
+        .collect();
     if !kinds.is_empty() {
         let names: Vec<String> = kinds.iter().map(|k| inline(k).into_owned()).collect();
         let noun = if names.len() == 1 { "kind" } else { "kinds" };

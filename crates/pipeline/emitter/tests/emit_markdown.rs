@@ -141,8 +141,7 @@ fn links_name_kind_and_title_outside_the_selection() {
     let doc = markdown(
         &graph,
         EmitOptions {
-            scope: Some("a"),
-            depth: Some(0),
+            selected: Some(&graph.select(Some("a"), Some(0), &[]).unwrap()),
             ..Default::default()
         },
     );
@@ -256,8 +255,7 @@ fn sections_are_ordered_scope_first_then_kind_and_id() {
     let doc = markdown(
         &graph,
         EmitOptions {
-            scope: Some("a"),
-            depth: Some(1),
+            selected: Some(&graph.select(Some("a"), Some(1), &[]).unwrap()),
             ..Default::default()
         },
     );
@@ -338,22 +336,25 @@ fn the_header_states_the_selection() {
     assert_eq!(header(EmitOptions::default()), "2 entities.");
     assert_eq!(
         header(EmitOptions {
-            scope: Some("a"),
-            depth: Some(1),
+            selected: Some(&graph.select(Some("a"), Some(1), &[]).unwrap()),
             ..Default::default()
         }),
         "2 entities around `a` (depth 1)."
     );
     assert_eq!(
         header(EmitOptions {
-            kind_filter: vec!["type", "behavior", "type"],
+            selected: Some(
+                &graph
+                    .select(None, None, &["type", "behavior", "type"])
+                    .unwrap()
+            ),
             ..Default::default()
         }),
         "2 entities, of kinds behavior, type."
     );
     assert_eq!(
         header(EmitOptions {
-            kind_filter: vec!["type"],
+            selected: Some(&graph.select(None, None, &["type"]).unwrap()),
             ..Default::default()
         }),
         "1 entity, of kind type."

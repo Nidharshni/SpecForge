@@ -98,9 +98,10 @@ fn every_format_schema_scope_and_budget_renders_as_today() {
         for with_schema in [false, true] {
             for scope in [None, Some("hub")] {
                 // The unbudgeted cost of this cell, to build a budget one under.
+                let selected = scope.map(|scope| graph.select(Some(scope), None, &[]).unwrap());
                 let unbudgeted = EmitOptions {
                     format,
-                    scope,
+                    selected: selected.as_ref(),
                     schema: &schema,
                     attach_schema: with_schema,
                     field_registry: Some(&fields),

@@ -1,9 +1,8 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 
-use specforge_common::Sym;
 use specforge_coverage::{Status, Verdict};
-use specforge_graph::{FieldForms, Graph, Node};
+use specforge_graph::{FieldForms, Graph, Node, Selected};
 use specforge_registry::{FieldRegistry, KindRegistry};
 
 use crate::budget::TokenBudget;
@@ -37,8 +36,10 @@ pub enum EmitFormat {
 pub struct EmitOptions<'a> {
     /// Output format (default: Json).
     pub format: EmitFormat,
-    /// Scope to a subgraph rooted at this entity (default: None = full graph).
-    pub scope: Option<&'a str>,
+    /// What the export covers ([`Graph::select`], ADR 0190); `None`: the whole graph. A scoped export (one with a
+    /// root) references the schema instead of embedding it, draws its root whatever its kind, and a token budget
+    /// never cuts the root.
+    pub selected: Option<&'a Selected>,
     /// The schema the graph is exported against. Its version is every JSON
     /// export's `schema_version`; the schema itself is in the export only
     /// when `attach_schema` (embedded, or referenced when `scope` is set).
@@ -48,12 +49,6 @@ pub struct EmitOptions<'a> {
     pub attach_schema: bool,
     /// Token budget for truncated output (default: None = no limit).
     pub token_budget: Option<usize>,
-    /// Maximum traversal depth from the scoped entity (default: None = unlimited).
-    /// Only meaningful when `scope` is set.
-    pub depth: Option<usize>,
-    /// Filter output to only include nodes of these kinds (default: empty = all kinds).
-    /// The scoped root entity is always included regardless of this filter.
-    pub kind_filter: Vec<&'a str>,
     /// Kind registry for style lookups (DOT shape/color/fillcolor declared by
     /// extensions; C13-00). Default: None — nodes use built-in defaults.
     pub kind_registry: Option<&'a KindRegistry>,
@@ -77,12 +72,10 @@ impl Default for EmitOptions<'_> {
     fn default() -> Self {
         Self {
             format: EmitFormat::Json,
-            scope: None,
+            selected: None,
             schema: unversioned(),
             attach_schema: false,
             token_budget: None,
-            depth: None,
-            kind_filter: Vec::new(),
             kind_registry: None,
             field_registry: None,
             coverage: None,
@@ -101,7 +94,7 @@ fn unversioned() -> &'static GraphProtocolSchema {
 /// Unified graph emission: the one entry point for every export, and the one
 /// tests use.
 ///
-/// `scope` (with `depth`) and `kind_filter` select the subgraph; a scoped
+/// `selected` chooses the entities ([`Graph::select`]); a scoped
 /// export references the schema instead of embedding it. `format` and `schema`
 /// choose the shape (graph 1.0, or 2.0 with the schema; context and brief, 2.0
 /// when a schema is given); `coverage` gives each node whose entity has a
@@ -114,10 +107,9 @@ fn unversioned() -> &'static GraphProtocolSchema {
 /// and is never cut: a schema over the budget is E062, as is a budget below the
 /// export with no entities. DOT is not budgeted.
 ///
-/// Err: `ScopeNotFound` (E003) for a scope naming no entity; `BudgetTooSmall`
-/// (E062) for a budget too small.
+/// Err: `BudgetTooSmall` (E062) for a budget too small.
 pub fn emit(graph: &Graph, options: &EmitOptions<'_>) -> Result<String, EmitterError> {
-    let selected = select(graph, options)?;
+    let selected = select(graph, options);
     if options.format == EmitFormat::Dot {
         return Ok(crate::dot::emit_dot(
             &selected,
@@ -134,7 +126,7 @@ pub fn emit(graph: &Graph, options: &EmitOptions<'_>) -> Result<String, EmitterE
 
     // Scoped exports reference the published schema instead of embedding it
     // (C6-07); full exports embed.
-    let attach = if options.scope.is_some() {
+    let attach = if options.selected.and_then(Selected::root).is_some() {
         SchemaAttachment::Referenced
     } else {
         SchemaAttachment::Embedded
@@ -149,7 +141,7 @@ pub fn emit(graph: &Graph, options: &EmitOptions<'_>) -> Result<String, EmitterE
     match options.token_budget {
         None => shape.render(&selected, None),
         Some(max_tokens) => {
-            let root = options.scope.map(Sym::new);
+            let root = options.selected.and_then(Selected::root);
             crate::budget::fit(
                 &selected,
                 max_tokens,
@@ -177,29 +169,12 @@ pub fn document_schema(
     }
 }
 
-/// The subgraph an export covers: the scope's (to `depth` when given), then
-/// only the kinds in `kind_filter`, the scope's own entity always kept.
-fn select<'g>(graph: &'g Graph, options: &EmitOptions<'_>) -> Result<Cow<'g, Graph>, EmitterError> {
-    let scoped = match options.scope {
-        None => Cow::Borrowed(graph),
-        Some(scope) => {
-            let sub = match options.depth {
-                Some(depth) => graph.subgraph_depth(scope, depth),
-                None => graph.subgraph(scope),
-            };
-            Cow::Owned(sub.ok_or_else(|| EmitterError::ScopeNotFound {
-                entity_id: scope.to_string(),
-            })?)
-        }
-    };
-    if options.kind_filter.is_empty() {
-        return Ok(scoped);
+/// The subgraph an export covers: the selection's entities and its root.
+fn select<'g>(graph: &'g Graph, options: &EmitOptions<'_>) -> Cow<'g, Graph> {
+    match options.selected {
+        Some(selected) if !selected.is_whole() => Cow::Owned(graph.induced(selected.drawn())),
+        _ => Cow::Borrowed(graph),
     }
-    let kept = scoped.nodes().into_iter().filter(|node| {
-        Some(node.id.raw.as_str()) == options.scope
-            || options.kind_filter.contains(&node.kind.raw.as_str())
-    });
-    Ok(Cow::Owned(scoped.induced(kept.map(|node| node.id.raw))))
 }
 
 /// How one export is written: its format, its schema and how it is attached,
