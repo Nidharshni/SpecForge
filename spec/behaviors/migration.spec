@@ -399,6 +399,8 @@ behavior rollback_failed_migration "Rollback Failed Migration" {
     (files_written under --format json). Under --format json the document
     (rolled_back, hook_failures, structural_differences) is the whole
     report of an automatic rollback: nothing is written on stderr.
+    Under human output, the W054s and then the failure's message are its
+    report on stderr.
   """
   verify unit "restores migrated files from .bak backups"
   verify unit "missing .bak file produces warning and skips"

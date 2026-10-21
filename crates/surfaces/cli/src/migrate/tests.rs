@@ -82,7 +82,8 @@ fn a_rolled_back_migration_tells_a_person_on_stderr() {
 
     assert_eq!(exit, Exit::Failed);
     assert!(stderr.contains("W054"), "{stderr}");
-    assert!(stderr.contains("files restored from backups"), "{stderr}");
+    assert!(stderr.contains("changed the graph"), "{stderr}");
+    assert!(!stderr.contains("backups"), "{stderr}");
 }
 
 /// The fixture of the ops tests' `refused_project`: five `owner` blocks, no field of their kind, so the defaults
@@ -117,7 +118,6 @@ fn migrate_refused(args: &[&str]) -> (Exit, String, String) {
     (exit, capture.stdout(), capture.stderr())
 }
 
-#[ignore = "flipped by T4"]
 #[specforge_test_macros::test(
     behavior = "validate_post_migration_integrity",
     verify = "a failed migration is told on stderr by its failure's message, naming no backup it did not make"
