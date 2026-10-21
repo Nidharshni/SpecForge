@@ -107,8 +107,10 @@ fn named_files() -> Served {
         .serve_components()
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test_macros::test(
+    behavior = "provide_mcp_edit_tool",
+    verify = "specforge.edit writes two spellings of one new file as one file"
+)]
 fn edit_reads_two_spellings_of_one_new_file_as_one_file() {
     let mut server = named_files();
     let create = |id: &str, file: &str| json!({"op": "create", "kind": "type", "id": id, "title": id, "file": file});

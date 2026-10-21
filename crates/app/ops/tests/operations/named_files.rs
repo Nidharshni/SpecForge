@@ -30,8 +30,10 @@ fn plan_in_spec_dir(files: &[(&str, &str)], edits: &[Edit]) -> EditPlan {
 
 const TESTING: &[&str] = &["@specforge/software", "@specforge/testing"];
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test_macros::test(
+    behavior = "create_entity",
+    verify = "new reads every spelling of a file under the spec root as that file"
+)]
 fn a_create_in_a_spelling_of_an_existing_file_adds_to_it() {
     let planned = plan_in_spec_dir(
         &[("tasks.spec", TASKS)],
@@ -46,8 +48,10 @@ fn a_create_in_a_spelling_of_an_existing_file_adds_to_it() {
     assert!(planned.change().after()["tasks.spec"].starts_with(TASKS));
 }
 
-#[test]
-#[ignore = "flipped by T3"]
+#[specforge_test_macros::test(
+    behavior = "create_entity",
+    verify = "two spellings of one new file in one list are one file"
+)]
 fn two_spellings_of_one_new_file_are_one_file() {
     let planned = plan_in_spec_dir(
         &[("tasks.spec", TASKS)],

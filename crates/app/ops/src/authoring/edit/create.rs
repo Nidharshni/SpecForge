@@ -14,9 +14,6 @@ use specforge_graph::{Form, Holder, written_tokens};
 use specforge_parser::parse;
 use std::collections::BTreeSet;
 
-/// `Create`'s file is not a project source.
-pub const NOT_A_SOURCE: &str = "not_a_source";
-
 /// The header line of a new `kind` block, its braces on the lines it opens (ADR 0175 D7).
 pub(super) fn header(kind: &str, id: &str, title: &str) -> String {
     format!("{kind} {id} {} {{\n}}", spell::quoted(title))
@@ -76,14 +73,11 @@ impl Planner<'_> {
             )
             .about(EditField::Title));
         }
-        if !self.view.env().holds_source(file) {
-            return Err(OpError::new(
-                OpErrorKind::InvalidInput,
-                NOT_A_SOURCE,
-                format!("'{file}' is not a source of this project (a .spec file inside the spec root, not excluded)"),
-            )
-            .about(EditField::File));
-        }
+        let file = self
+            .view
+            .source_place(file)
+            .map_err(|e| e.about(EditField::File))?;
+        let file = file.as_str();
         let existing = self.text(file).unwrap_or_default();
         let parsed = parse(&existing, file);
         let site = Site {

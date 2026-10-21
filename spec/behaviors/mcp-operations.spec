@@ -225,6 +225,7 @@ behavior provide_mcp_edit_tool "Provide MCP Edit Tool" {
     dry_run is true, the tool MUST return the same document and write nothing.
   """
   verify unit "specforge.edit applies a list of edits all or nothing"
+  verify unit "specforge.edit writes two spellings of one new file as one file"
   verify unit "specforge.edit with dry_run writes nothing and returns the diff"
   verify unit "specforge.edit of a list that cancels out writes nothing and names no entity"
 }

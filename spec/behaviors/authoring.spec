@@ -14,7 +14,7 @@ behavior create_entity "Create an Entity" {
   category   mutation
   contract   """
     A create edit names a kind, an id, a title and a file relative to the spec
-    root. The block is written in the canonical form, after the last block of
+    root; every spelling of the file under the spec root is that file (its source key; ADR 0195). The block is written in the canonical form, after the last block of
     its kind in the file, or at the end of the file; a file that does not exist
     is created, unless the later edits of the list leave it empty: a file that does not
     exist reads as empty, and a file the list leaves as it read is not written. The id MUST be an identifier of 2 to 60 characters that is not a
@@ -30,6 +30,8 @@ behavior create_entity "Create an Entity" {
   verify unit "new writes the block in the canonical form after the last block of its kind"
   verify unit "new creates a missing source file"
   verify unit "new refuses a file that is not a project source"
+  verify unit "new reads every spelling of a file under the spec root as that file"
+  verify unit "two spellings of one new file in one list are one file"
   verify unit "new refuses an id that is taken"
   verify unit "new refuses a reserved id before the edited project is compiled"
   verify unit "new compares what it writes with the default, not what it was given"
@@ -42,6 +44,8 @@ behavior create_entity "Create an Entity" {
   verify unit "a member's skeleton is written in its field's form"
   verify unit "a file new creates is not written when the later edits leave it empty"
   verify integration "new reads its field flags from the project its --path names, wherever --path stands"
+  verify integration "new --in reads a spelling of an existing file as that file"
+  verify integration "new refuses a file named from the project root, naming its spec-root spelling"
   verify integration "new refuses a field given twice that takes one value"
   verify integration "new refuses an unknown kind as unknown_kind"
 }
