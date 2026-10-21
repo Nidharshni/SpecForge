@@ -267,7 +267,9 @@ behavior provide_mcp_init_tool "Provide MCP Init Tool" {
     with a project served init creates nothing: it creates the first project
     of a session, inside the server's root (a server with no root bounds no
     path, mcp_served_project_consistency). A directory whose starter file already exists is refused
-    (conflict), as specforge init refuses it. The tool MUST create
+    (conflict), as specforge init refuses it. With nothing served, a directory
+    whose files a project above it reads is refused as specforge init refuses
+    it (conflict, naming path). The tool MUST create
     a new specforge.json project configuration file and scaffold the spec
     directory at the specified path. If extensions are specified, each
     string is one specifier, read as add_extension reads each of its

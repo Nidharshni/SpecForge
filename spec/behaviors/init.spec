@@ -51,9 +51,15 @@ behavior scaffold_new_project "Scaffold New Project" {
     is rejected the same way, and an init that fails after writing leaves
     the directory as it was, files that were already there (specforge.lock,
     .specforge/) included. A project
-    in an ancestor directory MUST NOT block init: the new project is
+    in an ancestor directory MUST NOT block init by itself: the new project is
     separate, and commands run inside it resolve to it because the
-    nearest project wins. Init notes the enclosing project on stderr. The
+    nearest project wins. Init MUST refuse (inside_project_sources,
+    conflict, nothing written) a directory below the enclosing project's spec
+    root that holds files the enclosing project reads as its sources, naming
+    them, since a nested project ends that project's sources; and the
+    directory that project reads its sources from, since it would read the
+    new starter as its own. An exclude entry of the enclosing project leaves
+    a directory out. Init notes the enclosing project on stderr. The
     full init-check-export cycle MUST complete in under 60 seconds on commodity hardware, enforcing
     Principle 8 (seconds to value). In interactive mode, the project name
     MUST default to the directory name and prompt the user for confirmation
@@ -71,6 +77,8 @@ behavior scaffold_new_project "Scaffold New Project" {
   verify unit "init refuses the directory the enclosing project reads its sources from, which would read the new starter as its own"
   verify unit "init in a directory whose files the enclosing project reads is refused, and that project keeps them"
   verify unit "init names the project it is created inside, and creates a separate one beside its sources"
+  verify unit "a directory the enclosing project's exclude leaves out holds none of its sources, and init proceeds there"
+  verify unit "init below the enclosing project's spec root proceeds where that project reads no source"
   verify performance "full init-check-export cycle completes in under 60 seconds"
   verify integration "scaffold in non-empty directory preserves existing files"
   verify integration "scaffolded project passes init-check-export cycle"

@@ -6,7 +6,6 @@ use std::fs;
     behavior = "scaffold_new_project",
     verify = "init in a directory whose files the enclosing project reads is refused, and that project keeps them"
 )]
-#[ignore = "flipped by T3"]
 fn init_in_a_directory_the_enclosing_project_reads_is_refused_writing_nothing() {
     let dir = TestProject::new()
         .file("a.spec", "spec \"t\" {\n  version \"0.1.0\"\n}\n")

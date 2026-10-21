@@ -32,6 +32,9 @@ pub const PROJECT_EXISTS: &str = "project_exists";
 /// The code an init refused with because the file it would write as the
 /// starter is already there.
 pub const STARTER_EXISTS: &str = "starter_exists";
+/// The code an init refused with because the project its directory lies inside would read other
+/// sources once it is a project (ADR 0197).
+pub const INSIDE_PROJECT_SOURCES: &str = "inside_project_sources";
 /// The code for a project name init can't use.
 pub const INVALID_NAME: &str = "invalid_name";
 
@@ -132,7 +135,9 @@ pub struct InitDocument {
 /// once, another way is `extension_conflict`, naming both), its lock plan judged once, then written as one change: the
 /// installed modules, `specforge.lock`, `specforge.json`, the `.gitignore` entries and the
 /// starter. Init only adds: the starter is created, never overwritten, and a failed init puts
-/// back what was there before it ran and removes what it created. Its error reports nothing
+/// back what was there before it ran and removes what it created. A directory whose files the project
+/// it lies inside reads as its sources, or that is where that project reads them from, is refused
+/// (`inside_project_sources`). Its error reports nothing
 /// written. A name whose starter spec ID `check` would refuse (E014, or E013 over the kinds of the
 /// extensions it enables) is refused once those are read.
 pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal<InitField>> {
@@ -151,7 +156,8 @@ pub fn init(req: &Request, runtime: &dyn WasmRuntime) -> Result<Outcome, Refusal
     if req.dir.join(STARTER_FILE).exists() {
         return Err(starter_exists(req.dir).about(InitField::Dir));
     }
-    let enclosing = enclosing::enclosing(&crate::containment::landing(req.dir));
+    let enclosing = enclosing::judged(&crate::containment::landing(req.dir))
+        .map_err(|e| e.about(InitField::Dir))?;
 
     let name = match req.name {
         Some(name) => name.to_string(),
