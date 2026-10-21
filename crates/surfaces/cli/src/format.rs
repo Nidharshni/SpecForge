@@ -4,7 +4,7 @@ use specforge_common::{Diagnostic, ProjectRoot};
 use specforge_formatter::unified_diff;
 use specforge_ops::authoring::format::{self, Mode, Request};
 use specforge_ops::{OpError, OpErrorKind};
-use specforge_project::SharedRuntime;
+use specforge_project::{RuntimeSource, SharedRuntime};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -76,7 +76,7 @@ impl Args {
             paths: &self.paths,
             mode,
             caller: crate::caller::of(false, format, terminal),
-            runtime: Some(runtime.clone()),
+            forms: format::Forms::loading(RuntimeSource::Fixed(Some(runtime.clone()))),
         }) {
             Ok(outcome) => outcome,
             // A config that does not say which files are the sources:

@@ -13,7 +13,7 @@ pub mod write;
 
 pub use outcome::{EditDocument, Edited, run};
 
-use crate::authoring::format::{Configs, Place};
+use crate::authoring::format::{Configs, Forms, Place};
 use crate::authoring::planned::PlannedChange;
 use crate::view::ProjectView;
 use crate::{OpError, OpErrorKind, Refusal};
@@ -392,7 +392,7 @@ pub fn plan(view: &ProjectView<'_>, edits: &[Edit]) -> Result<EditPlan, Refusal<
     let disk = view.containment().disk();
     let mut planner = Planner {
         view,
-        configs: Configs::new(None, &disk),
+        configs: Configs::new(Forms::none(), &disk),
         texts: BTreeMap::new(),
         entities: BTreeSet::new(),
         created: BTreeMap::new(),

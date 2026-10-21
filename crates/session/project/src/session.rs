@@ -38,7 +38,7 @@ impl RuntimeSource {
     }
 
     /// The runtime of the environment load at `root` with `config`.
-    fn runtime_for(&self, root: &Path, config: &ProjectConfig) -> Option<SharedRuntime> {
+    pub(crate) fn runtime_for(&self, root: &Path, config: &ProjectConfig) -> Option<SharedRuntime> {
         match self {
             RuntimeSource::Build(build) => Some(build(root, config)),
             RuntimeSource::Fixed(runtime) => runtime.clone(),

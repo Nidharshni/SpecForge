@@ -31,7 +31,7 @@ async fn the_cli_and_the_editor_agree_on_a_nested_project() {
                 &specforge_ops::Containment::unbounded(),
                 specforge_ops::asking::Asking::Nobody,
             ),
-            runtime: None,
+            forms: specforge_ops::authoring::format::Forms::none(),
         })
         .unwrap();
     assert_eq!((outcome.checked, outcome.changes.len()), (1, 0));
@@ -62,7 +62,7 @@ async fn lsp_format_matches_cli_format() {
                 &specforge_ops::Containment::unbounded(),
                 specforge_ops::asking::Asking::Nobody,
             ),
-            runtime: None,
+            forms: specforge_ops::authoring::format::Forms::none(),
         })
         .unwrap();
     assert_eq!(edited, outcome.changes[0].after);
@@ -122,7 +122,7 @@ async fn editor_formatting_reaches_the_cli_text_in_one_pass() {
             &specforge_ops::Containment::unbounded(),
             specforge_ops::asking::Asking::Nobody,
         ),
-        runtime: None,
+        forms: specforge_ops::authoring::format::Forms::none(),
     })
     .unwrap();
     let (mut session, _) = Session::start(Some(&root)).await;
@@ -178,9 +178,11 @@ async fn the_editor_writes_a_nested_projects_values_as_specforge_format_does() {
             &specforge_ops::Containment::unbounded(),
             specforge_ops::asking::Asking::Nobody,
         ),
-        runtime: Some(std::sync::Arc::new(
-            specforge_component::ComponentRuntime::new(),
-        )),
+        forms: specforge_ops::authoring::format::Forms::loading(
+            specforge_project::RuntimeSource::Fixed(Some(std::sync::Arc::new(
+                specforge_component::ComponentRuntime::new(),
+            ))),
+        ),
     })
     .unwrap();
     assert_eq!(edited, outcome.changes[0].after);

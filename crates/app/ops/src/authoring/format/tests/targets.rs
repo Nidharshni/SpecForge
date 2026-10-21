@@ -211,7 +211,7 @@ fn the_ci_gate_paths_reach_only_their_sources() {
         paths: &paths,
         mode: Mode::Check,
         caller: crate::testing::caller(),
-        runtime: None,
+        forms: crate::authoring::format::Forms::none(),
     });
     assert_eq!(outcome.checked, sources.len());
 }

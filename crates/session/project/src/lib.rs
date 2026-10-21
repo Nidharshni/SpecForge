@@ -195,6 +195,14 @@ impl Environment {
         Self::read_through(&mut Unrecorded::plain(), root, |_| runtime)
     }
 
+    /// [`Self::load`], the runtime built by `source` from the config the load reads (each load its own runtime for
+    /// [`RuntimeSource::project`]; none for `Fixed(None)`).
+    pub fn load_from(root: &ProjectRoot, source: &RuntimeSource) -> Self {
+        Self::read_through(&mut Unrecorded::plain(), root, |config| {
+            source.runtime_for(root.dir(), config)
+        })
+    }
+
     /// The one environment load: the config read once, the runtime built from
     /// the config read, then [`Self::from_read`], every read through the disk
     /// `reads` hands it. A session reads through its ledger (stamping each

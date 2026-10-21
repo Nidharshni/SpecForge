@@ -10,6 +10,7 @@ use crate::args::Arguments;
 use crate::mutation::{Mutated, Mutation, MutationArgs, MutationReply, NoDiagnostics, Written};
 use crate::target::ProjectRef;
 use specforge_ops::authoring::format::{self, FormatField, Request};
+use specforge_project::RuntimeSource;
 
 /// `specforge.format`'s arguments.
 #[derive(Debug, Arguments)]
@@ -91,7 +92,7 @@ impl CoreTool for Tool {
             paths: &explicit,
             mode,
             caller: project.caller(),
-            runtime: Some(project.runtime.clone()),
+            forms: format::Forms::loading(RuntimeSource::Fixed(Some(project.runtime.clone()))),
         })
         .map_err(Self::failed)?;
 

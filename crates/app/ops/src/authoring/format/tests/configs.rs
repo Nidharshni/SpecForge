@@ -188,7 +188,7 @@ fn the_lookup_walks_from_the_files_directory_up_to_its_project_root_then_stops()
 fn a_configuration_file_is_read_once_per_lookup_whichever_directories_share_it() {
     let file = "/specforge-memory/p/.specforgefmt.toml";
     let disk = MemoryDisk::new().with_file(file, b"indent_width = 4\n");
-    let mut configs = Configs::new(None, &disk);
+    let mut configs = Configs::new(Forms::none(), &disk);
     let root = Path::new("/specforge-memory/p");
 
     for dir in ["spec/a", "spec/b", "spec/a"] {
@@ -255,7 +255,7 @@ fn check_a(proj: &Path, caller: crate::Caller<'_>) -> (String, Vec<Diagnostic>) 
         paths: &[],
         mode: Mode::Check,
         caller,
-        runtime: None,
+        forms: crate::authoring::format::Forms::none(),
     })
     .unwrap();
     let w141 = outcome

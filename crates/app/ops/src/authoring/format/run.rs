@@ -4,10 +4,9 @@
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{Diagnostic, DiagnosticList, ProjectPath, ProjectRoot, codes};
-use specforge_project::SharedRuntime;
 use std::path::{Path, PathBuf};
 
-use super::document::{Configs, FormattedDocument, format_text};
+use super::document::{Configs, FormattedDocument, Forms, format_text};
 use super::targets::{Targets, targets};
 use crate::{Caller, OpError, OpErrorKind, ReadFailure, Refusal};
 
@@ -72,9 +71,9 @@ pub struct Request<'a> {
     /// one name, is a W141 naming why, and the defaults apply (ADR 0169). A target with more than one
     /// name is, bounded, a failure of kind [`OpErrorKind::InvalidInput`] (ADR 0146 D1).
     pub caller: Caller<'a>,
-    /// Where each project's extensions load, to read the forms its fields
-    /// take (ADR 0147); `None` formats layout only.
-    pub runtime: Option<SharedRuntime>,
+    /// Where each document's field forms come from ([`Forms`]): its own project's, found from its place; a project
+    /// the caller holds is lent, any other loads once per run.
+    pub forms: Forms<'a>,
 }
 
 /// The field of a format [`Request`] a refusal can be about.
@@ -460,7 +459,7 @@ pub fn run(request: &Request) -> Result<Outcome, Refusal<FormatField>> {
     // MCP have none), and each configuration file is read once, through the
     // run's bound (ADR 0169).
     let disk = request.caller.containment().disk();
-    let mut configs = Configs::new(request.runtime.clone(), &disk);
+    let mut configs = Configs::new(request.forms.clone(), &disk);
     let mut outcome = Outcome {
         root: request.root.dir().to_path_buf(),
         mode: request.mode,

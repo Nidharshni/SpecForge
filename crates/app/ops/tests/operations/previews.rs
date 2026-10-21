@@ -36,7 +36,7 @@ fn format_over(root: &std::path::Path, mode: Mode) -> format::Outcome {
         paths: &[],
         mode,
         caller: specforge_ops::testing::caller(),
-        runtime: None,
+        forms: specforge_ops::authoring::format::Forms::none(),
     })
     .unwrap()
 }

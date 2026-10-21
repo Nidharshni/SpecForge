@@ -186,7 +186,7 @@ fn format_writes_are_the_files_it_rewrote() {
         paths: &[],
         mode: Mode::Write,
         caller: specforge_ops::testing::caller(),
-        runtime: None,
+        forms: specforge_ops::authoring::format::Forms::none(),
     })
     .unwrap();
     std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
@@ -202,7 +202,7 @@ fn format_writes_are_the_files_it_rewrote() {
         paths: &[],
         mode: Mode::Check,
         caller: specforge_ops::testing::caller(),
-        runtime: None,
+        forms: specforge_ops::authoring::format::Forms::none(),
     })
     .unwrap();
     assert!(outcome.writes().is_empty());
