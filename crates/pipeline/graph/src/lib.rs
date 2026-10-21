@@ -1,6 +1,7 @@
 //! The typed entity graph. A `GraphBuild` turns parsed `.spec` files into a `Graph` of nodes and edges and reports
 //! what building it found (duplicates, unknown ref schemes, unresolved references, reference cycles), kept current
-//! one whole file at a time (ADR 0032). `compute_graph_delta` says what changed between two graphs, `FieldForm` how
+//! one whole file at a time (ADR 0032). `compute_graph_delta` says what changed between two graphs (`compute_graph_delta_over` the same for two builds that
+//! differ in named files), `FieldForm` how
 //! a declared field is written, `FileDefaults` what a file's `defaults` blocks give its blocks, `written_tokens` which
 //! tokens of a file name an entity, and `Obligation` how an entity's `verify` statements are written.
 
@@ -14,7 +15,7 @@ pub use field_form::{
 mod delta;
 pub use delta::{
     EdgeChange, GraphDelta, ModifiedNodeChange, NodeAspect, NodeChange, compute_graph_delta,
-    moved_nodes,
+    compute_graph_delta_over, moved_nodes,
 };
 mod derive;
 pub use derive::{DerivedFrom, DerivedReference};

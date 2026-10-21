@@ -525,7 +525,8 @@ behavior compute_graph_delta "Compute Graph Delta" {
     serves every reader: watch prints it, MCP notifies it, and the
     post-migration check (validate_post_migration_integrity) keeps a
     migration only when the delta from the graph before it to the graph
-    after is empty.
+    after is empty. A typed edit reads the delta over the files it
+    changes, which is that same delta (ADR 0198).
   """
   verify unit "added nodes appear in delta"
   verify unit "removed nodes appear in delta"
@@ -538,6 +539,7 @@ behavior compute_graph_delta "Compute Graph Delta" {
   verify unit "a change of column or content alone moves no node"
   verify unit "a verify statement edit is the obligations aspect, not a changed field"
   verify unit "an incremental build compares each node's obligations"
+  verify unit "a delta over the changed files is the delta of the whole graphs"
   verify contract "Compute Graph Delta: graph delta computation holds — previous_graph_available"
 }
 
