@@ -147,10 +147,12 @@ impl<'a> CoveredItems<'a> {
         })
     }
 
-    /// Whether the item `name` in the source `file` (a source key, as a scan reports it) is covered.
+    /// Whether the item `name` in the source `file` (as a scan reports it) is covered.
     pub(crate) fn covers(&self, file: &str, name: &str) -> bool {
-        self.anchored
-            .get(file)
+        // keyed as the anchors are, so a scanner's `./src/x.rs` finds `src/x.rs`
+        SourceKey::of(file)
+            .ok()
+            .and_then(|key| self.anchored.get(key.as_str()))
             .is_some_and(|names| names.contains(name))
             || (self.declared.contains(name) && !self.anchored_entities.contains(name))
     }
@@ -378,5 +380,17 @@ mod tests {
         // `compiled_project` has no valid anchor, so it covers by name.
         assert!(covered.covers("y.rs", "compiled_project"));
         assert!(covered.covers("src/lib.rs", "compile_project"));
+    }
+
+    #[test]
+    fn a_scanner_path_is_keyed_as_an_anchor_file_is() {
+        let fixture = covering(Some(&manifest_of(&[anchor(
+            "compile_project",
+            "src/lib.rs",
+            "compile_project",
+        )])));
+        let covered = CoveredItems::of(&fixture.view()).unwrap();
+        assert!(covered.covers("./src/lib.rs", "compile_project"));
+        assert!(!covered.covers("./src/other.rs", "compile_project"));
     }
 }
