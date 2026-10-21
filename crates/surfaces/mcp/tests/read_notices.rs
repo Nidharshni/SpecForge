@@ -194,3 +194,16 @@ fn only_the_envelopes_open_a_noticed_read() {
     }
     assert!(problems.is_empty(), "{}", problems.join("\n"));
 }
+
+#[test]
+#[ignore = "flipped by T5"]
+fn export_and_the_graph_views_report_an_unknown_kind() {
+    let mut server = project_with_unreadable_record();
+    let response = server.call_tool(
+        "specforge.export",
+        json!({"format": "brief", "kinds": ["ghost"]}),
+    );
+    assert_eq!(codes(&response), ["I016", "I020"], "{response}");
+    let response = read_resource(&mut server, "specforge://brief?kinds=ghost");
+    assert_eq!(codes(&response), ["I016", "I020"], "{response}");
+}

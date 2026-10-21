@@ -160,3 +160,19 @@ fn a_notice_no_document_carries_stays_beside_it() {
     );
     assert!(run.json().get("notices").is_none(), "{}", run.stdout);
 }
+
+#[test]
+#[ignore = "flipped by T5"]
+fn export_writes_an_unknown_kind_beside_its_document() {
+    let p = software();
+
+    let run = Cli::on(&p).run(&["export", "--kinds", "behaviour", "--format", "brief"]);
+
+    assert!(
+        run.stderr
+            .contains("info[I020]: unknown entity kind 'behaviour'"),
+        "{}",
+        run.stderr
+    );
+    assert!(run.stdout.contains("\"nodes\""), "{}", run.stdout);
+}

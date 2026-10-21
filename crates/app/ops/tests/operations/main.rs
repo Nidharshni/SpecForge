@@ -72,6 +72,7 @@ mod review;
 mod schema;
 mod schema_notices;
 mod search;
+mod selection;
 mod setup;
 mod stats;
 mod trace;
