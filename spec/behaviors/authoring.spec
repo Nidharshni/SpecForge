@@ -192,6 +192,7 @@ behavior validate_typed_edit "Validate a Typed Edit" {
     block that only moves within its file is not either.
   """
   verify unit "a graph change no edit declares is beyond the declaration"
+  verify unit "every verb's graph change is what it declares"
   verify unit "an edit that adds an error is E080 and writes nothing"
   verify unit "an edit that adds a warning is written and reports it"
   verify unit "a preview refuses what the write would"

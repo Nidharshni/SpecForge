@@ -2,6 +2,7 @@
 
 mod apply;
 mod create;
+mod declared;
 mod defaults;
 mod delete;
 mod fields;
