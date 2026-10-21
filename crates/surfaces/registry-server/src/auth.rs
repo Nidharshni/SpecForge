@@ -2,12 +2,13 @@ use sha2::{Digest, Sha256};
 use specforge_package::PackageName;
 
 use crate::db::{Database, TokenRecord};
+use crate::ownership::Account;
 
 /// Create a token issued to `account`. `expires_in_days` = `Some(0)` expires immediately;
 /// `None` never expires (the `--no-expiry` escape). Default policy is 90 days.
 pub fn create_token(
     db: &Database,
-    account: &str,
+    account: &Account,
     scope: Option<&str>,
     label: &str,
     expires_in_days: Option<u64>,
@@ -85,10 +86,14 @@ fn generate_raw_token() -> String {
 mod tests {
     use super::*;
 
+    fn acct(text: &str) -> Account {
+        Account::parse(text).unwrap()
+    }
+
     fn token(scope: Option<&str>) -> TokenRecord {
         TokenRecord {
             token_hash: "hash".to_string(),
-            account: "a".to_string(),
+            account: Account::parse("a").unwrap(),
             scope: scope.map(str::to_string),
             label: "test".to_string(),
             created_at: "2026-01-01".to_string(),
@@ -101,10 +106,10 @@ mod tests {
     fn a_token_is_validated_with_its_account() {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::open(&dir.path().join("t.db")).unwrap();
-        let raw = create_token(&db, "acme", None, "ci", Some(90), false);
+        let raw = create_token(&db, &acct("acme"), None, "ci", Some(90), false);
         let record = validate_bearer(&db, &format!("Bearer {raw}")).expect("a live token");
-        assert_eq!(record.account, "acme");
-        assert!(db.has_account("acme") && !db.has_account("other"));
+        assert_eq!(record.account, acct("acme"));
+        assert!(db.has_account(&acct("acme")) && !db.has_account(&acct("other")));
     }
 
     #[test]
@@ -112,7 +117,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::open(&dir.path().join("t.db")).unwrap();
         // expires_in_days = Some(0) expires immediately
-        let raw = create_token(&db, "a", None, "short-lived", Some(0), false);
+        let raw = create_token(&db, &acct("a"), None, "short-lived", Some(0), false);
         let header = format!("Bearer {}", raw);
         assert!(
             validate_bearer(&db, &header).is_none(),
@@ -124,7 +129,7 @@ mod tests {
     fn unexpired_token_validates() {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::open(&dir.path().join("t.db")).unwrap();
-        let raw = create_token(&db, "a", None, "normal", Some(90), false);
+        let raw = create_token(&db, &acct("a"), None, "normal", Some(90), false);
         let header = format!("Bearer {}", raw);
         assert!(validate_bearer(&db, &header).is_some());
     }
@@ -133,7 +138,7 @@ mod tests {
     fn admin_flag_round_trips() {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::open(&dir.path().join("t.db")).unwrap();
-        let raw = create_token(&db, "a", None, "root", Some(90), true);
+        let raw = create_token(&db, &acct("a"), None, "root", Some(90), true);
         let record = validate_bearer(&db, &format!("Bearer {}", raw)).unwrap();
         assert!(is_admin(&record));
     }
@@ -184,7 +189,7 @@ mod scope_tests {
     fn token(scope: Option<&str>) -> TokenRecord {
         TokenRecord {
             token_hash: "hash".to_string(),
-            account: "a".to_string(),
+            account: Account::parse("a").unwrap(),
             scope: scope.map(str::to_string),
             label: "test".to_string(),
             created_at: "2026-01-01".to_string(),

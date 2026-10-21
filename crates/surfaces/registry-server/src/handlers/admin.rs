@@ -31,8 +31,7 @@ pub(super) async fn admin_create_token(
             )
         })
         .and_then(|name| {
-            crate::ownership::account_name(name)
-                .map(str::to_string)
+            crate::ownership::Account::parse(name)
                 .map_err(|why| ApiError::bad_request(ErrorCode::BadRequest, why))
         })?;
     let expires_in_days = req.expires_in_days.unwrap_or(90);
@@ -80,7 +79,7 @@ pub(super) async fn admin_list_tokens(
             .into_iter()
             .map(|t| TokenSummary {
                 prefix: t.token_hash[..8.min(t.token_hash.len())].to_string(),
-                account: t.account,
+                account: t.account.to_string(),
                 scope: t.scope,
                 label: t.label,
                 created_at: t.created_at,
