@@ -878,6 +878,8 @@ behavior publish_to_registry "Publish to Registry" {
   verify unit "a version already published is refused with R007"
   verify integration "the first publish into a scope claims it, and only its publisher publishes there after"
   verify integration "a publish the registry refuses claims no scope"
+  verify integration "a scope belongs to the account its tokens are issued to: a revoked or expired token's replacement publishes into it"
+  verify integration "a yank is refused unless the yanking token's account owns the package's scope, and the version stays installable"
   verify unit "successful publish returns registry URL"
   verify unit "unauthenticated publish produces ExtensionError"
   verify unit "the registry refuses a name or version that is not a package name or version"

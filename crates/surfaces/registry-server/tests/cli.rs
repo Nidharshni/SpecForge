@@ -48,3 +48,35 @@ fn serve_with_an_unusable_data_dir_exits_1() {
     );
     assert!(!stderr.contains("panicked"), "{stderr}");
 }
+
+#[test]
+#[ignore = "flipped by T7"]
+fn scope_assign_hands_a_scope_to_an_account() {
+    let dir = tempfile::tempdir().unwrap();
+    let data = dir.path().to_str().unwrap();
+    let created = registry(&[
+        "token",
+        "create",
+        "--account",
+        "acme",
+        "--no-expiry",
+        "--data-dir",
+        data,
+    ]);
+    assert_eq!(created.status.code(), Some(0), "{created:?}");
+    let assigned = registry(&[
+        "scope",
+        "assign",
+        "@acme",
+        "--account",
+        "acme",
+        "--data-dir",
+        data,
+    ]);
+    assert_eq!(assigned.status.code(), Some(0), "{assigned:?}");
+    let stdout = String::from_utf8_lossy(&assigned.stdout);
+    assert!(
+        stdout.contains("scope @acme assigned to acme (was unclaimed)"),
+        "{stdout}"
+    );
+}
