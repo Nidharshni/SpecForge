@@ -52,52 +52,56 @@ impl ProjectPeers {
     ) -> Result<ProjectPeers, OpError> {
         let builtins = specforge_project::builtins();
         let resolution = installed.resolve(entries, &builtins);
-        let mut found: Vec<(usize, PeerMember)> = Vec::new();
-        for (i, resolved) in resolution.in_load_order() {
-            let member = match resolved {
-                Resolved::Builtin { name, .. } => {
-                    let Some(declared) = read.builtin(name)? else {
-                        continue;
-                    };
-                    PeerMember {
-                        name: (*name).to_string(),
-                        version: declared.version().to_string(),
-                        peers: declared.peers().to_vec(),
-                        origin: resolution.origin(i),
-                    }
+        // The first builtin that does not load: the walk stops reading and the plan answers it.
+        let mut broken: Option<OpError> = None;
+        let outcomes = resolution.walk(
+            |i, resolved| {
+                if broken.is_some() {
+                    return Err(());
                 }
-                Resolved::Locked { entry, .. } => PeerMember {
-                    name: entry.name.to_string(),
-                    version: entry.version.clone(),
-                    peers: entry.peer_dependencies.clone(),
-                    origin: resolution.origin(i),
-                },
-                Resolved::File(file) => {
-                    let Some(declared) = read.file(&file.file) else {
-                        continue;
-                    };
-                    let name = declared.name().to_string();
-                    let admitted = file.admit(&name, |loaded| {
-                        found.iter().any(|(_, member)| member.name == loaded)
-                    });
-                    if admitted.is_err() {
-                        continue;
+                let origin = resolution.origin(i);
+                let (name, declared) = match resolved {
+                    Resolved::Builtin { name, .. } => match read.builtin(name) {
+                        Ok(Some(declared)) => ((*name).to_string(), declared),
+                        Ok(None) => return Err(()),
+                        Err(error) => {
+                            broken = Some(error);
+                            return Err(());
+                        }
+                    },
+                    Resolved::Locked { entry, .. } => {
+                        let member = PeerMember {
+                            name: entry.name.to_string(),
+                            version: entry.version.clone(),
+                            peers: entry.peer_dependencies.clone(),
+                            origin,
+                        };
+                        return Ok((member.name.clone(), member));
                     }
-                    PeerMember {
-                        name,
-                        version: declared.version().to_string(),
-                        peers: declared.peers().to_vec(),
-                        origin: resolution.origin(i),
-                    }
-                }
-                Resolved::Unloadable { .. } | Resolved::Again { .. } => continue,
-            };
-            found.push((i, member));
+                    Resolved::File(file) => match read.file(&file.file) {
+                        Some(declared) => (declared.name().to_string(), declared),
+                        None => return Err(()),
+                    },
+                    Resolved::Unloadable { .. } | Resolved::Again { .. } => return Err(()),
+                };
+                let member = PeerMember {
+                    name: name.clone(),
+                    version: declared.version().to_string(),
+                    peers: declared.peers().to_vec(),
+                    origin,
+                };
+                Ok((name, member))
+            },
+            |_, member, admitted| admitted.map(|_| member).map_err(|_| ()),
+        );
+        if let Some(error) = broken {
+            return Err(error);
         }
-        // The order `Installed::load` pushes declarations in: entry order.
-        found.sort_by_key(|(i, _)| *i);
         Ok(ProjectPeers {
-            members: found.into_iter().map(|(_, member)| member).collect(),
+            members: outcomes
+                .into_iter()
+                .filter_map(|(_, member)| member.ok())
+                .collect(),
         })
     }
 

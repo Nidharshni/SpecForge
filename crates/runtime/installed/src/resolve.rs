@@ -52,7 +52,11 @@ impl FileEntry<'_> {
     /// written before `=` when there is one (`NotTheNameWritten`), and an extension an entry tried
     /// before it must not already be loaded under that name (`AlreadyLoaded`; `loaded` says which
     /// names are).
-    pub fn admit(&self, declared: &str, loaded: impl Fn(&str) -> bool) -> Result<(), LoadProblem> {
+    pub(crate) fn admit(
+        &self,
+        declared: &str,
+        loaded: impl Fn(&str) -> bool,
+    ) -> Result<(), LoadProblem> {
         if let Some(written) = self.written.filter(|written| *written != declared) {
             return Err(LoadProblem::NotTheNameWritten {
                 declared: declared.to_string(),
@@ -83,7 +87,7 @@ impl<'a> Resolution<'a> {
     /// The entries in the order the extension load tries them, with their index into the entries:
     /// every named entry, then every `.wasm` file entry, each in entry order (a file that declares
     /// a name a named entry loads is refused, never swapped in). `Again` entries are left out.
-    pub fn in_load_order(&self) -> impl Iterator<Item = (usize, &Resolved<'a>)> + '_ {
+    pub(crate) fn in_load_order(&self) -> impl Iterator<Item = (usize, &Resolved<'a>)> + '_ {
         let is_file = |resolved: &Resolved| matches!(resolved, Resolved::File(_));
         let indexed = || {
             self.entries
