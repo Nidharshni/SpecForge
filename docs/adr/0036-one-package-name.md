@@ -2,6 +2,8 @@
 
 **Status:** accepted (2026-10-07)
 
+**Extended by [ADR 0200](0200-a-package-scope-is-one-type-read-where-it-enters.md) (architecture round 22, plan 01), D1:** a package scope is read where it enters too (`specforge_package::Scope`).
+
 **Amended by [ADR 0179](0179-a-publish-states-its-package-identity-once.md) (architecture round 18, plan 09), D1:** a declaration being published is parsed once into a `DeclaredPackage` and passed as itself to the registry port and the registry client.
 
 What an extension package is called, and which of its versions `specforge add` asks for, was read by

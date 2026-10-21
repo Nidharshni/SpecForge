@@ -2,6 +2,8 @@
 
 **Status:** accepted (2026-10-21, architecture round 20, plan 02). Cites [ADR 0061](0061-the-registry-verifies-the-signature-it-stores.md) (D2 is kept: the registry binds no key), [ADR 0045](0045-publish-is-one-operation-and-one-registry-serves-a-name.md) (D4: a published version is immutable, which makes a wrongful yank permanent) and [ADR 0044](0044-the-package-registry-contract-is-one-crate.md) (the crate the token bodies live in). Amends none.
 
+**Extended by [ADR 0200](0200-a-package-scope-is-one-type-read-where-it-enters.md) (architecture round 22, plan 01), D3/D4:** the token's filter and the assigned scope are `Scope`s; a filter is never a package name.
+
 ## Context
 
 - The reference registry had no account. A scope was owned by the one token that claimed it, so when that token was

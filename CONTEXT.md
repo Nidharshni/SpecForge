@@ -622,7 +622,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   key (ADR 0061, ADR 0185).
 - **Scope owner**: the registry account a scope (`@acme`) belongs to, claimed by the first publish that stores a
   package in it. Only tokens issued to it publish or yank in it (`specforge_registry_server::ownership::may_write`,
-  after the token's own scope filter), SCOPE_OWNED otherwise; the operator hands it to another account with
+  after the token's own filter, a package scope), SCOPE_OWNED otherwise; the operator hands it to another account with
   `specforge-registry scope assign` (ADR 0185).
 - **Registry root**: the URL a `registries` entry names: where a package registry is, an `http` or `https` URL
   without the protocol's version prefix (`https://registry.example`, or `https://example.com/registry` for one served
@@ -630,7 +630,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   path (`RegistryRoot::address`); the server mounts the same routes (`Endpoint::route`). A url ending in `/v1`, or
   one that isn't an http(s) URL, is E067 (ADR 0075).
 - **Registry for a package**: the one configured registry that serves a package name: the first
-  `registries` entry whose `scope_filter` is the name's scope, else the first marked
+  `registries` entry whose `scope_filter` covers the name, else the first marked
   `default_registry`; with neither, none does, and the operation refuses with R-OPS-001 before any
   request (`specforge_ops_registry::Configured::registry_for`, ADR 0045); a `registries` entry that can't be
   read refuses every registry operation with E067 first, so a scope it claims never falls to the default. `add`, `update` and
@@ -641,6 +641,10 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   digit, so it is always a relative path inside the directory it is joined to and one URL segment
   (`specforge_package::PackageName`, ADR 0036, 0050). A declaration's `name` is checked as one where
   `add` installs and `publish` uploads it; a `specforge.json` entry and a lock entry are read as one.
+- **Package scope**: the namespace a scoped package name starts with, `@` and one name part (`@acme`)
+  (`specforge_package::Scope`, ADR 0200). A `registries` entry's `scope_filter`, a registry token's filter and
+  `scope assign` name one; text that is not one is refused where it is written, naming the scope to write. A scope
+  covers exactly the names that start with it.
 - **Declared package**: an extension declaration read as a registry package: its name a scoped package name, its
   version a full SemVer version, parsed once and carried with the declaration
   (`specforge_package::DeclaredPackage`, E072 when it is none, ADR 0179). `publish` builds one and it is what the

@@ -2,6 +2,8 @@
 
 **Status:** accepted (2026-10-13, architecture round 9, plan 05). Amends ADR 0044 (D1, D2, D5) and ADR 0045 (D1). Amended by [ADR 0178](0178-a-registry-credential-belongs-to-its-registry-root.md) (architecture round 20, plan 01): the root also keys the user's credential.
 
+**Extended by [ADR 0200](0200-a-package-scope-is-one-type-read-where-it-enters.md) (architecture round 22, plan 01), D6:** a `scope_filter` that is not a scope is an entry that can't be read.
+
 A `registries` entry named a registry by its "base URL", which by convention ended in the protocol's version prefix
 (`https://registry.example/v1`). Nothing enforced or explained the convention: the server printed its root on start,
 the client appended its paths to whatever the user wrote and never read the prefix constant, and it read every 404
