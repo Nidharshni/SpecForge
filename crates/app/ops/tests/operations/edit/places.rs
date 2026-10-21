@@ -194,3 +194,37 @@ fn set_of_an_entry_into_a_block_field_written_as_none_writes_it_inside() {
         assert!(node.fields.get("requires").is_some(), "{id}");
     }
 }
+const REQUIRING_AND_BARE: &str = r#"behavior check_graph "Check the Graph" {
+  category command
+  requires {
+    graph_ready "Graph built"
+  }
+  contract """
+    The system MUST check.
+  """
+}
+
+behavior bare "Bare" {
+  contract "c"
+}
+"#;
+
+#[test]
+#[ignore = "flipped by T7"]
+fn set_of_a_new_entry_writes_its_annotations() {
+    let c = compile(BOTH, &[("g.spec", REQUIRING_AND_BARE)]);
+    for id in ["check_graph", "bare"] {
+        let edit = Edit::Set {
+            entity_id: id.into(),
+            field: "requires.net_ready".into(),
+            value: one("Network up"),
+            annotations: Some(vec!["since=1.2".into()]),
+        };
+        let text = after(&c, "g.spec", &[edit]);
+        let line = text
+            .lines()
+            .find(|l| l.trim_start().starts_with("net_ready"))
+            .unwrap_or_else(|| panic!("{id}: {text}"));
+        assert!(line.ends_with("@since \"1.2\""), "{id}: {text}");
+    }
+}
