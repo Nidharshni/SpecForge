@@ -192,9 +192,9 @@ behavior add_missing_titles "Add Missing Titles" {
   contract   """
     The titles step MUST write a title into every block header that has
     none, entity blocks and unions alike, written after the block's name
-    on whichever line of its header the name stands: the block's doc comment (the //
-    lines directly above its header with no blank line between, the format
-    header excluded), each line's text after // trimmed and the lines
+    on whichever line of its header the name stands: the block's doc comment as the
+    parse reads it (the // lines directly above its header with no blank line
+    between, never the format header), each line's text after // trimmed and the lines
     joined by one space, with \\ and " escaped, the comment lines removed.
     A block with no doc comment MUST get its id in Title Case words. The
     step MUST leave define, spec and ref blocks, titled blocks and text

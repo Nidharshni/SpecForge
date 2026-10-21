@@ -179,7 +179,7 @@ fn header_line(content: &str) -> Option<HeaderLine<'_>> {
 }
 
 /// The 0-based line of the format header in `content`: where the header stands, or none.
-pub fn header_row(content: &str) -> Option<usize> {
+pub(crate) fn header_row(content: &str) -> Option<usize> {
     header_line(content).map(|header| header.index)
 }
 
