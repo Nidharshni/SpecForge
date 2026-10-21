@@ -126,6 +126,32 @@ fn an_install_whose_required_peer_is_not_installed_is_refused() {
 
 #[specforge_test(
     behavior = "add_extension_to_existing_project",
+    verify = "an install whose required peer is installed but whose module is missing is refused with E027 before anything is written"
+)]
+fn an_install_whose_required_peer_has_no_module_is_refused() {
+    use crate::config::testing::files_under;
+    let files = tempfile::tempdir().unwrap();
+    let dir = project_with(EMPTY_PROJECT);
+    let base = Source::Local(wasm_file(files.path(), "base.wasm", testing::BASE_1));
+    add_one(dir.path(), base, &crate::registry::Unconfigured("add")).unwrap();
+    let module = specforge_installed::Installed::at(dir.path())
+        .module_path(&PackageName::parse("@probe/base").unwrap());
+    std::fs::remove_file(module).unwrap();
+    let before = files_under(dir.path());
+
+    let dep = Source::Local(wasm_file(files.path(), "dep.wasm", testing::DEP_1));
+    let error = add_one(dir.path(), dep, &crate::registry::Unconfigured("add")).unwrap_err();
+
+    assert_eq!(error.error.code, "E027", "{error:?}");
+    assert_eq!(
+        error.error.message,
+        "extension '@probe/dep' requires peer dependency '@probe/base' ^1.0 which is not installed"
+    );
+    assert_eq!(files_under(dir.path()), before);
+}
+
+#[specforge_test(
+    behavior = "add_extension_to_existing_project",
     verify = "enabling a builtin that an enabled extension's peer range does not accept is refused with E027"
 )]
 fn enabling_a_builtin_an_enabled_extension_rejects_is_refused() {

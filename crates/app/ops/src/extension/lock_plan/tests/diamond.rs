@@ -146,6 +146,9 @@ fn a_diamond_counts_a_file_entrys_range_among_the_requirers() {
             entries: vec![entry("@acme/base", "1.0.0", "registry", &[])],
         }),
     );
+    let module = installed.module_path(&PackageName::parse("@acme/base").unwrap());
+    std::fs::create_dir_all(module.parent().unwrap()).unwrap();
+    std::fs::write(module, b"old").unwrap();
     let runtime = runtime().binary(
         X_NEEDS_BASE_1,
         declaring("@acme/x", "1.0.0", &[("@acme/base", "^1", false)]),

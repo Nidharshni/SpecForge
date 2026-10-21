@@ -30,14 +30,14 @@ pub(crate) struct PeerMember {
 
 /// How the prediction answers a locked entry (ADR 0181 D3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Modules {
-    /// By its lock entry: the set a change leaves, whose staged modules are not written yet
-    /// (ADR 0041 B1).
+pub(crate) enum Modules<'s> {
+    /// By its lock entry (ADR 0041 B1).
     Locked,
     /// By its lock entry only when its module on disk is the one pinned
-    /// ([`Installed::verified`]): the project as it is, as the extension load answers it now
-    /// (ADR 0160 D2).
-    OnDisk,
+    /// ([`Installed::verified`]), as the extension load answers it; a name in `staged` by its
+    /// staged pin, whose module the change writes. The project as it is stages nothing (ADR 0160
+    /// D2); the set a change leaves stages its installs.
+    OnDisk { staged: &'s [String] },
 }
 
 /// The extensions a project loads, in entry order (the registry build's input order).
@@ -57,13 +57,13 @@ impl ProjectPeers {
     ///
     /// An entry that loads nothing (the compile's E028/E072) and a locked extension no entry
     /// enables are not members, nor is a locked one whose module is missing or changed when
-    /// `modules` is [`Modules::OnDisk`]. E028 when a builtin's declaration can't be read (this
-    /// build's builtins are broken).
+    /// `modules` is [`Modules::OnDisk`] and does not stage it. E028 when a builtin's declaration
+    /// can't be read (this build's builtins are broken).
     pub(crate) fn of(
         installed: &Installed,
         entries: &[String],
         read: &mut Declarations<'_>,
-        modules: Modules,
+        modules: Modules<'_>,
     ) -> Result<ProjectPeers, OpError> {
         let builtins = specforge_project::builtins();
         let resolution = installed.resolve(entries, &builtins);
@@ -85,7 +85,8 @@ impl ProjectPeers {
                         }
                     },
                     Resolved::Locked { entry, name } => {
-                        if modules == Modules::OnDisk
+                        if let Modules::OnDisk { staged } = modules
+                            && !staged.iter().any(|staged| staged == name)
                             && installed.verified(name, read.disk()).is_none()
                         {
                             return Err(());
@@ -458,7 +459,7 @@ mod tests {
             &installed,
             &entries,
             &mut Declarations::through(&runtime, &PlainDisk),
-            Modules::OnDisk,
+            Modules::OnDisk { staged: &[] },
         )
         .unwrap();
 

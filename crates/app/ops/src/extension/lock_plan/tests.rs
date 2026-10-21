@@ -7,6 +7,7 @@ use specforge_common::{Diagnostic, codes};
 use specforge_installed::{Installed, Module};
 use specforge_package::{PackageName, Version};
 use specforge_protocol_types::PeerDependency;
+use specforge_registry::MemoryDisk;
 
 use super::super::candidate::{Installable, LocalFile};
 use super::super::peer_set::{Declarations, Modules, ProjectPeers};
@@ -149,7 +150,7 @@ fn plan_from<'a>(
         .iter()
         .map(|e| e.name.to_string())
         .collect();
-    match verb {
+    let mut plan = match verb {
         Verb::Install => LockPlan::adding(
             installed,
             opened(&entries),
@@ -167,7 +168,22 @@ fn plan_from<'a>(
         )
         .unwrap(),
         Verb::Remove => unreachable!("a removal is planned over a compiled project"),
-    }
+    };
+    plan.declarations = Declarations::through(runtime, modules_of(installed));
+    plan
+}
+
+/// A disk holding the module every lock entry of `installed` pins (`fixtures::entry` pins
+/// `b"old"`): the set a change leaves answers a locked extension by its module (ADR 0181 D3).
+fn modules_of(installed: &Installed) -> &'static MemoryDisk {
+    let disk = installed
+        .lock()
+        .entries()
+        .iter()
+        .fold(MemoryDisk::new(), |disk, entry| {
+            disk.with_file(installed.module_path(&entry.name), b"old")
+        });
+    Box::leak(Box::new(disk))
 }
 
 /// [`plan_from`] a registry that serves nothing.

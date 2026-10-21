@@ -153,6 +153,8 @@ fn mcp_add_refuses_a_version_diamond() {
         ]})
         .to_string(),
     );
+    dir.write(".specforge/extensions/@acme/base/extension.wasm", "base");
+    dir.write(".specforge/extensions/@acme/other/extension.wasm", "other");
     let mut dir = Served::rooted(dir);
     let lock_before = std::fs::read(dir.root().join("specforge.lock")).unwrap();
 
@@ -196,6 +198,7 @@ fn mcp_add_refuses_an_install_a_locked_extension_does_not_accept() {
         ]})
         .to_string(),
     );
+    dir.write(".specforge/extensions/@acme/app/extension.wasm", "app");
     let mut dir = Served::rooted(dir);
     let lock_before = std::fs::read(dir.root().join("specforge.lock")).unwrap();
 
