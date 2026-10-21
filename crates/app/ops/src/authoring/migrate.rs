@@ -22,7 +22,7 @@ use specforge_migrate::{
 use specforge_parser::{
     CURRENT_FORMAT_VERSION, FormatVersion, MAX_SUPPORTED_VERSION, MIN_SUPPORTED_VERSION,
 };
-use specforge_project::{CompiledProject, SharedRuntime};
+use specforge_project::{CompiledProject, Environment, SharedRuntime};
 use specforge_registry::{Disk as _, RegistryBuild};
 use specforge_wasm::WasmRuntime;
 use std::collections::{BTreeMap, HashMap};
@@ -456,7 +456,7 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
 
     // The graph before any file is touched, read through the same bound: a refused source is its E025 (ADR 0166).
     // The plan is judged against it in memory (ADR 0186).
-    let pre = CompiledProject::compile_through(project, runtime, &bound);
+    let pre = CompiledProject::compile_through(Environment::load(project, runtime), &bound);
     let planned: BTreeMap<String, String> = outcome
         .summary
         .rewrites
