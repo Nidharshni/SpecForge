@@ -13,7 +13,7 @@
 use crate::containment::Held;
 use crate::options::{Choice, OptionTable};
 use crate::schema_version::{NotAdmitted, VersionedSchema};
-use crate::view::{ProjectView, not_found};
+use crate::view::{ProjectView, Select, not_found};
 use crate::{Caller, Noticed, OpError, OpErrorKind, Refusal};
 use specforge_common::ProjectPath;
 use specforge_emitter::{EmitFormat, EmitOptions, EmitterError, SchemaVersion, emit};
@@ -139,9 +139,6 @@ impl Schema {
 
 /// A requested schema version that does not parse (`InvalidInput`).
 pub const INVALID_SCHEMA_VERSION: &str = "invalid_schema_version";
-/// The code of the refusal of `depth` without a `scope`: depth limits a
-/// scoped export.
-pub const DEPTH_WITHOUT_SCOPE: &str = "depth_without_scope";
 
 /// What to export.
 #[derive(Debug, Clone, Default)]
@@ -149,8 +146,8 @@ pub struct Request<'a> {
     pub format: Option<Format>,
     /// Restrict to the subgraph reachable from this entity.
     pub scope: Option<&'a str>,
-    /// With `scope`, how far to traverse; without one it is refused
-    /// ([`DEPTH_WITHOUT_SCOPE`]).
+    /// With `scope`, how far to traverse; without one it is refused, about the scope
+    /// ([`DEPTH_WITHOUT_ENTITY`](crate::view::DEPTH_WITHOUT_ENTITY)).
     pub depth: Option<usize>,
     /// Keep only nodes of these kinds (the scoped root always stays).
     pub kinds: Vec<&'a str>,
@@ -193,8 +190,6 @@ impl Request<'_> {
 pub enum ExportField {
     /// `Request::scope`: the entity the export is about.
     Scope,
-    /// `Request::depth`.
-    Depth,
     /// `Request::max_tokens`.
     MaxTokens,
     /// `Request::schema_version`.
@@ -299,14 +294,12 @@ fn export_versioned(
     versioned: &VersionedSchema,
     request: &Request,
 ) -> Result<Noticed<String>, Refusal<ExportField>> {
-    if request.depth.is_some() && request.scope.is_none() {
-        return Err(OpError::new(
-            OpErrorKind::InvalidInput,
-            DEPTH_WITHOUT_SCOPE,
-            "depth limits a scoped export: give a scope too",
-        )
-        .about(ExportField::Depth));
-    }
+    let selection = view.select(&Select {
+        entity: request.scope,
+        named_by: ExportField::Scope,
+        depth: request.depth,
+        kinds: &request.kinds,
+    })?;
     // A requested version is checked whatever the format, and never applied:
     // the export carries the schema at its own version.
     if let Some(requested) = request.schema_version {
@@ -327,12 +320,11 @@ fn export_versioned(
             .about(ExportField::SchemaVersion)
         })?;
     }
-    let filter = view.kind_filter(&request.kinds);
     let options = EmitOptions {
         format: request.format().emit_format(),
         scope: request.scope,
         depth: request.depth,
-        kind_filter: filter.kinds().to_vec(),
+        kind_filter: selection.kinds().to_vec(),
         schema: versioned.schema(),
         attach_schema: request.attaches_schema(),
         token_budget: request.max_tokens,
@@ -342,7 +334,7 @@ fn export_versioned(
         field_forms: Some(view.registries().field_forms()),
     };
     let document = emit(view.graph(), &options).map_err(|error| failure(view, error))?;
-    Ok(Noticed::new(document, filter.into_notices()))
+    Ok(Noticed::new(document, selection.into_notices()))
 }
 
 /// What `specforge export` did: the export, and what became of the record.
@@ -472,7 +464,7 @@ mod tests {
             ..request(Format::Graph)
         });
         assert_eq!(error.kind, OpErrorKind::InvalidInput);
-        assert_eq!(error.code, DEPTH_WITHOUT_SCOPE);
+        assert_eq!(error.code, crate::view::DEPTH_WITHOUT_ENTITY);
 
         // With a scope it is a hop limit, and the export goes on.
         let fixture = specforge_project::testing::Assembled::new();
@@ -576,7 +568,7 @@ mod tests {
                 depth: Some(2),
                 ..graph()
             }),
-            Some(ExportField::Depth)
+            Some(ExportField::Scope)
         );
         for version in ["x.y", "9.0.0"] {
             assert_eq!(

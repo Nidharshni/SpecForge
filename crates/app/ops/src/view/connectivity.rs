@@ -6,10 +6,9 @@
 use std::collections::BTreeMap;
 
 use specforge_common::Sym;
-use specforge_graph::{Degree, Graph, Reached};
+use specforge_graph::{Degree, Graph};
 
-use super::{EntityField, ProjectView, not_found};
-use crate::Refusal;
+use super::ProjectView;
 
 /// The degree of every entity of one graph (`specforge_graph::Degree`).
 #[derive(Debug, Clone, Default)]
@@ -54,20 +53,5 @@ impl<'a> ProjectView<'a> {
     /// How this view's entities are linked to one another.
     pub fn connectivity(&self) -> Connectivity {
         Connectivity::of(self.graph())
-    }
-
-    /// The entities [`Graph::reach`] reaches from `entity_id` within `depth`
-    /// hops (unbounded when `None`; 0 is the entity alone), the entity first,
-    /// nearest first: the one neighbourhood the exploration and the review
-    /// read. An entity the graph lacks is `view::not_found` (E003,
-    /// did-you-mean).
-    pub fn neighbourhood(
-        &self,
-        entity_id: &str,
-        depth: Option<usize>,
-    ) -> Result<Vec<Reached>, Refusal<EntityField>> {
-        self.graph()
-            .reach(entity_id, depth)
-            .ok_or_else(|| not_found(self.graph(), entity_id).about(EntityField::EntityId))
     }
 }

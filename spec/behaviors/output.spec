@@ -1177,7 +1177,7 @@ behavior export_agent_graph_format "Export Agent Graph Format" {
     diagnostic and exit with code 1. --depth (with --scope) limits the hops
     from it, and --kinds keeps only entities of those kinds, the scoped
     entity always kept; a kind the project does not know matches nothing
-    and is reported as I020, naming the closest kind; depth without a scope is invalid input; so are --with-schema and
+    and is reported as I020, naming the closest kind; depth without a scope is invalid input about the scope; so are --with-schema and
     --no-schema together.
     specforge.export and the graph resources take the same options. The
     output MUST include a schema_version field identifying the Graph

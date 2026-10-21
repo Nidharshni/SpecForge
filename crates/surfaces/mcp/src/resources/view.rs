@@ -36,10 +36,13 @@ impl ViewQuery {
     /// value is the scope (`"entity_id"`), or is None on an untemplated URI.
     pub fn parse(uri: &Matched<'_>, scope: Option<&'static str>) -> Result<Self, Box<McpError>> {
         let query = uri.query();
-        let mut parsed = ViewQuery::default();
+        // An untemplated view names `scope` until a query gives the scope under another key.
+        let mut parsed = ViewQuery {
+            scope_key: scope.unwrap_or("scope"),
+            ..ViewQuery::default()
+        };
         if let Some(name) = scope {
             parsed.scope = uri.value(name).map(str::to_string);
-            parsed.scope_key = name;
         }
         let mut seen: Vec<String> = Vec::new();
         for pair in query.split('&').filter(|pair| !pair.is_empty()) {
@@ -123,7 +126,6 @@ impl ViewQuery {
     pub fn argument(&self, field: ExportField) -> Option<&'static str> {
         match field {
             ExportField::Scope => Some(self.scope_key),
-            ExportField::Depth => Some("depth"),
             ExportField::MaxTokens => Some("max_tokens"),
             ExportField::SchemaVersion | ExportField::Schema | ExportField::Directory => None,
         }
@@ -242,7 +244,7 @@ mod tests {
         let matched = crate::uri_template::read(graph, "specforge://graph?max_tokens=5").unwrap();
         let query = ViewQuery::parse(&matched, None).unwrap();
         assert_eq!(query.argument(ExportField::MaxTokens), Some("max_tokens"));
-        assert_eq!(query.argument(ExportField::Depth), Some("depth"));
+        assert_eq!(query.argument(ExportField::Scope), Some("scope"));
         assert_eq!(query.argument(ExportField::SchemaVersion), None);
     }
 }

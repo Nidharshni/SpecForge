@@ -960,10 +960,6 @@ fn a_read_view_about_one_entity_names_it() {
     assert_eq!(references.unwrap_err().subject, about);
     let view = ProjectView::of(&p.project);
     assert_eq!(
-        view.neighbourhood("ghost", None).unwrap_err().subject,
-        about
-    );
-    assert_eq!(
         specforge_ops::read::inspect::inspect(&view, "ghost")
             .unwrap_err()
             .subject,

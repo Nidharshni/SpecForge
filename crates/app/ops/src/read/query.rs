@@ -12,7 +12,7 @@ use crate::read::export::{self, AGENT_FORMAT, ExportField, FORMAT, Format, Schem
 use crate::read::navigate::{
     EntityMatch, EntityQuery, MatchScope, MatchedOn, find_entities, snippet,
 };
-use crate::view::ProjectView;
+use crate::view::{ProjectView, Select};
 use crate::{Noticed, Refusal};
 
 /// Hops from the queried entity when a query names none: its direct
@@ -101,8 +101,7 @@ pub fn query(
         refusal.map_subject(|field| match field {
             ExportField::Scope => Some(QueryField::EntityId),
             // A query always scopes, sends none of these and writes nothing.
-            ExportField::Depth
-            | ExportField::MaxTokens
+            ExportField::MaxTokens
             | ExportField::SchemaVersion
             | ExportField::Schema
             | ExportField::Directory => None,
@@ -214,12 +213,12 @@ pub fn search<'v>(
     view: &ProjectView<'v>,
     request: &SearchRequest,
 ) -> Result<Noticed<Vec<Hit<'v>>>, Refusal<SearchField>> {
-    if let Some(id) = request.referencing {
-        view.graph().node(id).ok_or_else(|| {
-            crate::view::not_found(view.graph(), id).about(SearchField::Referencing)
-        })?;
-    }
-    let notices = view.kind_filter(&request.kinds).into_notices();
+    let selection = view.select(&Select {
+        entity: request.referencing,
+        named_by: SearchField::Referencing,
+        depth: None,
+        kinds: &request.kinds,
+    })?;
     let query = EntityQuery {
         text: request.text,
         scope: MatchScope::NamesAndText,
@@ -238,5 +237,5 @@ pub fn search<'v>(
             Hit { found, snippet }
         })
         .collect();
-    Ok(Noticed::new(hits, notices))
+    Ok(Noticed::new(hits, selection.into_notices()))
 }

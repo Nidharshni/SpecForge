@@ -729,7 +729,7 @@ fn a_depth_without_a_scope_is_refused() {
     let error = read_error(&mut server, "specforge://graph?depth=2");
     assert_eq!(error["code"], -32602, "{error}");
     assert_eq!(error["data"]["code"], "invalid_input", "{error}");
-    assert_eq!(error["data"]["argument"], "depth", "{error}");
+    assert_eq!(error["data"]["argument"], "scope", "{error}");
 }
 
 // --- P15, P16: the request's own schema ---

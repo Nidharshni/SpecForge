@@ -51,10 +51,7 @@ impl ArgumentOf<ExportField> for Tool {
             ExportField::Scope => Some("scope"),
             ExportField::Directory => Some("out_dir"),
             // Render sends none of the others.
-            ExportField::Depth
-            | ExportField::MaxTokens
-            | ExportField::SchemaVersion
-            | ExportField::Schema => None,
+            ExportField::MaxTokens | ExportField::SchemaVersion | ExportField::Schema => None,
         }
     }
 }

@@ -4,7 +4,7 @@
 use specforge_common::{codes, find_close_match};
 use specforge_graph::Graph;
 
-use crate::{OpError, OpErrorKind, Refusal};
+use crate::{OpError, OpErrorKind};
 
 /// The field of a read view's request a refusal can be about (ADR 0072): the one entity the
 /// view is asked about (inspect, definition, references, neighbourhood, explore, review, trace, coverage, fixes).
@@ -34,14 +34,3 @@ pub fn not_found(graph: &Graph, id: &str) -> OpError {
 
 /// The code of a depth given without the entity it counts hops from.
 pub const DEPTH_WITHOUT_ENTITY: &str = "depth_without_entity";
-
-/// A depth needs the entity it counts from: invalid input about the missing
-/// `entity_id`, as export's and model's depth without their anchor.
-pub fn depth_without_entity() -> Refusal<EntityField> {
-    OpError::new(
-        OpErrorKind::InvalidInput,
-        DEPTH_WITHOUT_ENTITY,
-        "a depth counts hops from an entity: give an entity too",
-    )
-    .about(EntityField::EntityId)
-}

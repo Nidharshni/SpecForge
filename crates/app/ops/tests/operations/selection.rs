@@ -50,8 +50,10 @@ fn export_reports_an_unknown_kind() {
     }
 }
 
-#[test]
-#[ignore = "flipped by T6"]
+#[specforge_test(
+    invariant = "mcp_structured_error_responses",
+    verify = "a depth without the entity it counts from is one refusal, about the entity, on every read"
+)]
 fn a_depth_without_its_entity_is_one_refusal() {
     let project = project();
     let view = project.view();

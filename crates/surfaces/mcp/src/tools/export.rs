@@ -38,7 +38,6 @@ impl ArgumentOf<ExportField> for Tool {
     fn argument(field: ExportField) -> Option<&'static str> {
         match field {
             ExportField::Scope => Some("scope"),
-            ExportField::Depth => Some("depth"),
             ExportField::MaxTokens => Some("max_tokens"),
             ExportField::SchemaVersion => Some("schema_version"),
             ExportField::Schema => Some("with_schema"),

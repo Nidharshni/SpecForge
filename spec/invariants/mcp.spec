@@ -26,7 +26,8 @@ invariant mcp_structured_error_responses "MCP Structured Error Responses" {
     a region left unformatted, a change under check) fails its verdict, ok,
     and not the call. An operation states which field of its request a
     refusal is about; a refusal of the project or the environment is about
-    none.
+    none. A depth given without the entity it counts hops from is one
+    refusal, invalid input about the entity's field, on every read.
   """
   risk      medium
   verify unit "error response includes error code and message fields"
@@ -37,6 +38,7 @@ invariant mcp_structured_error_responses "MCP Structured Error Responses" {
   verify unit "a failed tool call is an isError result whose content is an McpError with a code"
   verify unit "a diagnostic code behind a failed tool call is in its McpError diagnostic"
   verify unit "a missing entity is one E003 refusal naming the closest entity on every read view"
+  verify unit "a depth without the entity it counts from is one refusal, about the entity, on every read"
   verify unit "a failed prompts/get carries its McpError as the error's data"
   verify unit "a failed resources/read carries its McpError as the error's data"
   verify unit "a no-project refusal names path only for an entry that takes one"
