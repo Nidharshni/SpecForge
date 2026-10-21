@@ -1,6 +1,7 @@
 //! A spec file a request names (a typed create's `file`, outline's `file`, the fixes' `file_path`): read into its
 //! source key, the path relative to the spec root that the compile and the editor name it by, or refused once
 //! (ADR 0195). Every spelling of one file is that file; the key is what the ledger, the LSP and a span's `file` say.
+//! A refusal names the file as the request spelled it.
 
 use std::path::{Component, Path, PathBuf};
 
@@ -37,6 +38,7 @@ fn outside(named: &str) -> OpError {
         NOT_A_SOURCE,
         format!("'{named}' is outside the spec root: a spec file is named from the spec root"),
     )
+    .with_file(named)
 }
 
 impl ProjectView<'_> {
@@ -70,7 +72,8 @@ impl ProjectView<'_> {
             OpErrorKind::FileNotFound,
             FILE_NOT_FOUND,
             format!("'{named}' is none of this project's sources"),
-        );
+        )
+        .with_file(named);
         Err(match self.did_you_mean(named) {
             Some(suggestion) => error.with_suggestion(suggestion),
             None => error,
@@ -94,7 +97,8 @@ impl ProjectView<'_> {
             format!(
                 "'{named}' is not a source of this project (a .spec file inside the spec root, not excluded)"
             ),
-        );
+        )
+        .with_file(named);
         Err(match suggestion {
             Some(suggestion) => error.with_suggestion(suggestion),
             None => error,

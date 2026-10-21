@@ -148,8 +148,8 @@ impl Stored<'_> {
             }
         };
         staged.commit().map_err(|why| {
-            let scope = package.scope().unwrap_or_default();
-            self.db.withdraw(&row.name, &row.version, scope, claimed);
+            let scope = package.scope().map(String::from).unwrap_or_default();
+            self.db.withdraw(&row.name, &row.version, &scope, claimed);
             PublishFailed::Blob(why)
         })
     }

@@ -18,8 +18,11 @@ use tree_sitter_specforge::kind;
 /// stays on that line, and a comment directly above a block stays attached
 /// to it. Blocks are separated by exactly one blank line; a blank line
 /// between two comments, or between a comment and a block, is kept (one),
-/// since it tells a standalone comment from a block's doc comment. Inside
-/// blocks blank lines are removed.
+/// since it tells a standalone comment from a block's doc comment. The format
+/// header is a comment like any other here, kept where it stands; it documents
+/// no block (`specforge_parser::Entity::doc_span`, ADR 0202), and formatting
+/// never changes which comment lines are a block's doc comment. Inside blocks
+/// blank lines are removed.
 pub(super) struct Emitter<'a> {
     source_lines: &'a [&'a str],
     config: &'a FormatConfig,

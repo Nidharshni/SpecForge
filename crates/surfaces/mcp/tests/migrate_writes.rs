@@ -1,9 +1,9 @@
 //! `specforge.migrate` writes through the project change (ADR 0171): a source the process may not write
 //! refuses the call as a typed edit does, and a temporary name linked outside is unlinked, not followed.
 
+use crate::support::*;
 use serde_json::json;
 use specforge_mcp::testing::Served;
-use specforge_project::testing::TestProject;
 use std::fs;
 use tempfile::TempDir;
 
@@ -70,22 +70,19 @@ fn a_temporary_name_linked_outside_is_unlinked_not_followed() {
     verify = "a dry run the run would refuse is a failed call, its document the data"
 )]
 fn a_dry_run_the_run_would_refuse_fails_the_call() {
-    // `owner` is no field of the kind: the defaults hoist is E077 and reaches no block, so the graph changes.
-    let block = |id: &str| format!("behavior {id} \"T\" {{\n  owner [x]\n}}\n");
-    let text = ["a", "b", "c", "d", "e"].map(block).join("\n");
-    let project = TestProject::new()
-        .enabling(&["@specforge/software"])
-        .file("old.spec", &text);
-    let mut served = Served::rooted(project);
+    let project = TestProject::new().file("old.spec", OLD);
+    let mut served = project.serve(&[TestExtension::named("@test/hooked").declaring(|c| {
+        c.migration_hook_handler("migrate_test", |_| Err("refused".into()));
+    })]);
 
     let resp = served.call_tool("specforge.migrate", json!({"dry_run": true}));
 
     let error = crate::tool_errors::mcp_error(&resp);
-    assert_eq!(error["code"], "compilation_failed", "{error}");
+    assert_eq!(error["code"], "internal_error", "{error}");
     assert_eq!(error["data"]["ok"], false, "{error}");
     assert_eq!(error["data"]["dry_run"], true, "{error}");
     assert_eq!(
         fs::read_to_string(served.root().join("old.spec")).unwrap(),
-        text
+        OLD
     );
 }

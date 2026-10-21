@@ -21,8 +21,9 @@ registries it trusts in `specforge.json`:
 - `url` is the registry's root: SpecForge adds the protocol's `/v1` to every
   request. A url ending in `/v1`, or one that isn't an `http`/`https` URL, is refused with
   [E067](diagnostics.md#e067), and so is every registry operation while any entry can't be read.
-- A package whose scope matches an entry's `scope_filter` comes from that
-  registry; every other package comes from the entry marked
+- A package whose scope is an entry's `scope_filter` (`@acme`) comes from that
+  registry. A `scope_filter` that isn't a scope (`acme`, `@acme/`, `@Acme`) is
+  [E067](diagnostics.md#e067), and no registry is asked. Every other package comes from the entry marked
   `default_registry`.
 - With no `registries`, `specforge add @scope/name@version`, `update`,
   `search`, `publish` and `login` (and the MCP `add_extension` tool) fail with
@@ -70,6 +71,7 @@ it can only replay previously signed packages (see [residual risks](#residual-ri
 | Package unsigned | Refused. `--allow-unsigned` accepts the risk explicitly |
 | Signature doesn't verify (tampered wasm/manifest) | **Always refused** ([R-TRUST-002](diagnostics.md#r-trust-002)): `--allow-unsigned` does not bypass a broken signature |
 | Registry answer isn't the protocol's (e.g. a signature that isn't one, or a 404 without the protocol's NOT_FOUND error: the url isn't a registry's root) | **Always refused** ([R009](diagnostics.md#r009)), before any key is pinned |
+| The version `specforge.lock` pins, served as other bytes | **Always refused** ([R014](diagnostics.md#r014)) before the download and before any key question; `--yes` does not accept it; `--dry-run` reports it. Remove the extension and add it again to take the new bytes |
 | Key differs from the pinned key | Refused with both key ids; interactive re-pin offered (`y/N`); `--yes` accepts non-interactively for CI |
 | Key differs from the key `specforge.lock` records (no pin of yours) | Refused like a pinned key change, naming `specforge.lock`; `--yes` or a yes at the prompt accepts it |
 | `known-keys.json` can't be read | **Always refused** ([R-TRUST-006](diagnostics.md#r-trust-006)); the file is never overwritten |
@@ -98,7 +100,7 @@ All publisher key state lives in `~/.specforge/known-keys.json`:
 
 `specforge.lock` records the key id beside the wasm hash for every signed
 registry install. It is the project's pin: a machine with no pins of its own (a
-new teammate, CI) holds the package to it.
+new teammate, CI) holds the package to it, and the version it pins to the bytes it pins.
 
 ## Namespace ownership
 
@@ -106,8 +108,12 @@ new teammate, CI) holds the package to it.
   that scope to the publishing token's account.
 - **Only the owner publishes or yanks** in a claimed scope; a token issued to
   another account gets `SCOPE_OWNED`. Tokens scoped by the registry admin
-  (`@web`-style) are additionally limited to their own scope and cannot claim
-  others.
+  (`--scope @web`, a scope; `@web/ui` or `web` is refused) are additionally
+  limited to their own scope and cannot claim others. A token issued without
+  `--scope` covers every scope.
+  A token stored with a scope filter that is not a scope (issued before the
+  filter was checked) authenticates nothing, and `specforge-registry token list`
+  refuses naming it and the `token revoke` command that removes it.
 - **Accounts**: every token is issued to an account (`specforge-registry token
   create --account`), so a rotated or expired token's replacement keeps the
   scope. `publisher` metadata is the account name the operator chose — never a

@@ -318,6 +318,8 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     crate builds (target/wasm32-wasip2/release/<crate>.wasm) is installed
     and locked by its own path, as publish reads it; a directory with no
     built component is E040.
+    A builtin named with a version is enabled only when the builtin this specforge embeds meets it
+    (R-RES-004 otherwise, naming the embedded version): no install changes a builtin's version.
     The system MUST NOT duplicate an already-installed extension.
     An extension a .wasm file entry of specforge.json loads (its component declares that name and
     the extension load admits it, an installed extension of that name whose module is missing or
@@ -401,6 +403,7 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   verify unit "a dry run answers what the add answers, refusals and the builtins it enables included, and writes nothing"
   verify unit "a dry run judges a registry package by the declaration it was published with, downloading nothing"
   verify unit "add enables a builtin's required peers but not its optional ones"
+  verify unit "a builtin asked at a version this specforge does not embed is refused with R-RES-004 before anything is written"
   verify unit "add enables the builtins a required builtin peer requires, dependencies first"
   verify unit "a builtin whose declaration cannot be read is refused before anything is written"
   verify unit "a required builtin peer the embedded builtin does not satisfy is refused before anything is written"

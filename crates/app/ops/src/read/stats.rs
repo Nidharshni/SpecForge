@@ -28,8 +28,6 @@ pub struct Stats {
     pub testable_count: usize,
     /// Testable entities that declare at least one obligation.
     pub declared_count: usize,
-    /// Entities, of any kind, that declare at least one obligation.
-    pub verified_count: usize,
     /// `declared_count` over `testable_count`, in percent (0 when nothing
     /// is testable): declared intent.
     pub declared_pct: f64,
@@ -73,14 +71,13 @@ fn tally(view: &ProjectView, coverage: &Summary, diagnostics: &[Diagnostic]) -> 
             count,
         })
         .collect();
-    let verified_count = coverage.discharge_funnel.entities_with_obligations;
     let testable_count = coverage.testable_total;
-    let testable_verified = coverage.testable_verified;
+    let declared = coverage.testable_verified;
 
     let unconnected_count = view.connectivity().unconnected().count();
 
     let declared_pct = if testable_count > 0 {
-        (testable_verified as f64 / testable_count as f64) * 100.0
+        (declared as f64 / testable_count as f64) * 100.0
     } else {
         0.0
     };
@@ -92,8 +89,7 @@ fn tally(view: &ProjectView, coverage: &Summary, diagnostics: &[Diagnostic]) -> 
         edge_count: graph.edge_count(),
         unconnected_count,
         testable_count,
-        declared_count: testable_verified,
-        verified_count,
+        declared_count: declared,
         declared_pct,
         proof_pct,
         diagnostic_summary: Counts::of(diagnostics),

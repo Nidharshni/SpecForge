@@ -27,6 +27,25 @@ fn line_counts(text: &str) -> BTreeMap<String, usize> {
     counts
 }
 
+/// Each block's doc comment as the parse reads `text`: its id, and each comment line's text after `//`, trimmed
+/// (formatting gives `//text` one space).
+fn doc_comments(text: &str) -> Vec<(String, Vec<String>)> {
+    let lines: Vec<&str> = text.lines().collect();
+    specforge_parser::parse(text, "p.spec")
+        .entities
+        .iter()
+        .map(|e| {
+            let doc = e.doc_span.as_ref().map_or_else(Vec::new, |d| {
+                lines[d.start_line - 1..d.end_line]
+                    .iter()
+                    .map(|l| l.trim().trim_start_matches('/').trim().to_string())
+                    .collect()
+            });
+            (e.id.raw.to_string(), doc)
+        })
+        .collect()
+}
+
 /// Where two texts first differ, quoted: a failure message that fits a screen.
 fn first_difference(a: &str, b: &str) -> String {
     let at = a
@@ -113,6 +132,10 @@ fn formatting_any_edit_of_the_corpus_reaches_a_fixed_point() {
     invariant = "formatting_idempotency",
     verify = "random valid .spec files satisfy format(format(x)) == format(x)"
 )]
+#[specforge_test(
+    behavior = "preserve_comments",
+    verify = "formatting keeps each block's doc comment as the parse reads it"
+)]
 fn formatting_a_valid_edit_keeps_its_entities() {
     let mut config = property_config();
     // About one edit in ten still parses without an error.
@@ -132,6 +155,10 @@ fn formatting_a_valid_edit_keeps_its_entities() {
             after == before,
             "formatting changed the entities: {}",
             first_difference(&before, &after)
+        );
+        prop_assert!(
+            doc_comments(&once) == doc_comments(&case.edited),
+            "formatting moved a block's doc comment"
         );
         let twice = fmt(&once);
         prop_assert!(

@@ -726,6 +726,7 @@ behavior resolve_registry_source "Resolve Registry Source" {
   verify unit "a name no registry serves is refused with R-OPS-001 before any request"
   verify integration "the registry server answers every call in the JSON its client reads"
   verify unit "every call goes to its address under the registry's root, where the server mounts it"
+  verify unit "a scope_filter that is not a scope sends none of its scope's names to another registry"
   verify contract "Resolve Registry Source: registry source resolution holds — registries_configured_fired, registry_client_available, scope_routed, default_fallback_used, no_registry_refused, network_error_diagnosed, registry_resolved_emitted, address_from_root"
 }
 
@@ -851,7 +852,12 @@ behavior publish_to_registry "Publish to Registry" {
     yank in it after, whichever token, so a revoked or expired token's
     replacement keeps the scope (SCOPE_OWNED otherwise). The registry's
     operator may assign a scope to another account
-    (`specforge-registry scope assign`). A publish the registry refuses (an invalid upload, a duplicate
+    (`specforge-registry scope assign`). A token's
+    scope filter (`token create --scope`, the admin request's `scope`) and an
+    assigned scope MUST be a scope (@ and one name part); text that is not one
+    is refused where it is written, naming the scope to write. A token issued
+    with no filter covers every scope; an empty filter is not one.
+    A publish the registry refuses (an invalid upload, a duplicate
     version, a storage failure) claims no scope: the claim and the version
     are recorded together or not at all.
     A yank is held to the same rule as a publish: only a token the scope's
@@ -868,7 +874,8 @@ behavior publish_to_registry "Publish to Registry" {
     create a publisher signing key; a signing key that can't be read or
     created MUST be refused with E074 before any network call. Publish
     refuses in one order, each refusal before anything after it is read or
-    asked: the binary (E040, E028), its declaration's errors, its name and
+    asked: the binary (E040, E028, a binary declaring a builtin's name:
+    extension_conflict, as add refuses to install it), its declaration's errors, its name and
     version (E072), the registry configuration (E063, E067), the registry
     for the name (R-OPS-001), the credential (R001, R012, R-AUTH-020,
     R-AUTH-021), the signing key (E074); then the registry's answer.
@@ -881,6 +888,7 @@ behavior publish_to_registry "Publish to Registry" {
   verify unit "the declaration is validated before publish"
   verify integration "publish derives the stored declaration from the binary"
   verify unit "publish refuses a binary whose declaration has errors before any network call"
+  verify unit "publish and extension validate refuse a binary that declares a builtin's name, as add refuses to install it"
   verify integration "the registry refuses a manifest that is not an extension declaration"
   verify integration "the registry takes a package's description and keywords from its declaration"
   verify integration "the registry refuses a signature that is not a package signature, and the version stays publishable"
@@ -905,6 +913,8 @@ behavior publish_to_registry "Publish to Registry" {
   verify unit "publish asks the registry add fetches the same name from"
   verify unit "the declaration's warnings are reported even when publish is refused"
   verify unit "what publish uploads is what add installs"
+  verify integration "a token's scope filter is a scope: text that is not one is refused where the token is issued, and a token issued with none covers every scope"
+  verify integration "a stored token scope that is not a scope authenticates nothing, and the token listing names the token to revoke"
   verify contract "Publish to Registry: registry publishing holds — declaration_valid, wasm_binary_available, registry_client_available, credentials_available, sha256_computed, duplicate_version_rejected, signature_checked_on_upload, refusal_reported, receipt_checked, registry_url_returned, published_event_emitted, scope_owned_by_account, yank_held_to_owner"
 }
 
@@ -957,6 +967,7 @@ behavior check_registry_reply "Check Registry Reply" {
     manifest_fails_closed  "A missing or unreadable served manifest is refused with R-OPS-004, never read as declaring no peers"
     peers_from_manifest    "The peers the served declaration declares are the ones the ADR-0001 diamond gate checks"
     declaration_matches    "A binary whose declaration differs from the served one is refused with R-TRUST-004 naming the first differing category"
+    locked_bytes_held      "A reply for the version specforge.lock pins whose SHA-256 is not the one the lock pins is refused with R014 before the binary is downloaded, its signature checked or a key change asked; a dry run refuses it from the published manifest"
     answer_from_registry   "A 404 without the protocol's NOT_FOUND error, and a wasm_url that is neither an http or https URL nor a path at the registry's root, are refused with R009: no registry gave that answer"
   }
   contract   """
@@ -985,6 +996,12 @@ behavior check_registry_reply "Check Registry Reply" {
     another version, is loaded and checked as any other: the lock's bytes
     never make another version already present (E028 when the binary
     declares another version).
+    The version the project's lock pins MUST be served as the bytes it pins:
+    a reply naming another SHA-256 MUST be refused (R014) before its binary
+    is downloaded, its signature checked or a key change asked, and a dry
+    run MUST refuse it from the published manifest; no flag or consent
+    accepts it, and the lock is left as it was. A lock entry that pins no
+    hash pins no bytes.
     A refused reply pins no key and installs nothing.
   """
   verify unit "a reply that is not the protocol's JSON is refused with R009, even with --allow-unsigned"
@@ -996,6 +1013,9 @@ behavior check_registry_reply "Check Registry Reply" {
   verify unit "add refuses a package whose binary declares other than its published declaration"
   verify unit "the diamond gate decides on the published declaration's peers"
   verify unit "add refuses another version served with the bytes the lock already pins"
+  verify unit "add refuses the version specforge.lock pins served as other bytes, writing nothing, and its dry run says so"
+  verify unit "add of the version specforge.lock pins, served as its bytes, installs them and leaves the lock as it was"
+  verify integration "a fetch of the version specforge.lock pins served as other bytes is refused before its download"
   verify integration "a package published with a legacy manifest is refused with a re-publish suggestion"
 }
 
@@ -1114,7 +1134,7 @@ behavior configure_registries "Configure Registries" {
   }
   ensures {
     registry_entries_created      "All registries array entries are parsed into RegistryConfig objects"
-    scope_filters_set             "Scope filters are configured for routing @scope/ specifiers"
+    scope_filters_set             "Each scope_filter is a scope (@ and one name part); another refuses every registry operation with E067 naming the scope to write"
     no_registries_diagnosed       "Empty registries configuration produces I003 info diagnostic"
     no_hardcoded_urls             "No registry URLs are compiled-in constants in compiler source"
     registries_configured_emitted "registries_configured event fires after all entries are parsed"
@@ -1127,7 +1147,9 @@ behavior configure_registries "Configure Registries" {
     alias (unique identifier) and a url naming the registry's root (an http
     or https URL with no query, fragment or user info; the client adds the
     protocol's version prefix /v1, and a url ending in it is refused with
-    E067 naming the root), and MAY have a scope_filter.
+    E067 naming the root), and MAY have a scope_filter, which MUST be a
+    scope (@ and one name part); one that is not is E067 naming the scope to
+    write, so no name of that scope goes to another registry.
     When resolving extension specifiers, scope_filter MUST route @scope/
     prefixed specifiers to the matching registry. A configuration with no
     registries array, or with no entry marked `default_registry: true`,
@@ -1167,6 +1189,7 @@ behavior configure_registries "Configure Registries" {
   verify unit "an operation shows the registry configuration's diagnostics once it has asked a registry"
   verify unit "a registry url is the registry's root, and one ending in the protocol's version prefix is refused with E067 naming the root"
   verify unit "a registries entry that can't be read refuses every registry operation with E067 before any request"
+  verify unit "a scope_filter that is not a scope refuses every registry operation with E067 naming the scope to write"
   verify contract "Configure Registries: registry configuration holds — specforge_json_parsed, filesystem_available, registry_entries_created, scope_filters_set, no_registries_diagnosed, no_hardcoded_urls, registries_configured_emitted, root_urls, unreadable_entry_refused"
 }
 

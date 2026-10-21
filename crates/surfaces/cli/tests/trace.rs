@@ -103,6 +103,43 @@ behavior beta "B" { contract "first" features [alpha] }
 }
 
 #[specforge_test(
+    behavior = "validate_agent_plan",
+    verify = "specforge trace --plan passes two mutually recursive types in either order"
+)]
+fn trace_plan_passes_two_mutually_recursive_types_in_either_order() {
+    let dir = TestProject::new().enabling(&["@specforge/software"]).file(
+        "main.spec",
+        r#"
+type Order "An order" {
+  id    string
+  items OrderItem[]
+}
+
+type OrderItem "A line of an order" {
+  order Order
+  qty   int
+}
+"#,
+    );
+    let plan = |ids: [&str; 2]| {
+        let entries: Vec<String> = ids
+            .iter()
+            .map(|id| format!(r#"{{"entity_id":"{id}","action":"implement"}}"#))
+            .collect();
+        format!(r#"{{"plan_id":"p","entries":[{}]}}"#, entries.join(","))
+    };
+
+    assert_eq!(
+        trace_plan(&dir, &plan(["Order", "OrderItem"]), &[]).0,
+        Some(0)
+    );
+    assert_eq!(
+        trace_plan(&dir, &plan(["OrderItem", "Order"]), &[]).0,
+        Some(0)
+    );
+}
+
+#[specforge_test(
     behavior = "compute_traceability_chain",
     verify = "missing link in chain is flagged"
 )]

@@ -16,6 +16,7 @@ use crate::{OpError, OpErrorKind};
 use serde::Serialize;
 use specforge_common::shape::Shape;
 use specforge_common::{Code, Diagnostic, DiagnosticList, codes};
+use specforge_installed::LockFileEntry;
 use specforge_package::{DeclaredPackage, PackageName, Version};
 use specforge_protocol_types::{DeclaredCategory, ExtensionDeclaration};
 
@@ -88,36 +89,118 @@ pub struct Manifest {
     pub declaration: ExtensionDeclaration,
 }
 
-/// How a fetch decides a package's publisher: the caller's two choices, and the key the project
-/// already records for the name. The adapter applies it (ADR 0010, 0044, 0059) and writes nothing;
-/// what it decided is the package's [`Publisher`].
+/// What `specforge.lock` records for a name's registry install (`Installed::locked`), which every
+/// fetch of the name is held to (ADR 0059 D3, ADR 0201): its publisher key at any version, its
+/// bytes at its own version.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LockedPin<'a> {
+    pub version: &'a str,
+    /// The SHA-256 it pins; empty for an entry written before installs were pinned (W149), which
+    /// pins no bytes.
+    pub sha256: &'a str,
+    pub key_id: Option<&'a str>,
+}
+
+impl<'a> LockedPin<'a> {
+    /// The pin `entry` records.
+    pub(crate) fn of(entry: &'a LockFileEntry) -> LockedPin<'a> {
+        LockedPin {
+            version: &entry.version,
+            sha256: &entry.wasm_hash,
+            key_id: entry.key_id.as_deref(),
+        }
+    }
+
+    /// A pin of `key_id` alone: an entry that pins no bytes.
+    #[cfg(any(test, feature = "testing"))]
+    pub const fn key(key_id: &'a str) -> LockedPin<'a> {
+        LockedPin {
+            version: "",
+            sha256: "",
+            key_id: Some(key_id),
+        }
+    }
+
+    /// `name@version` served as `sha256` is what this pin allows: any bytes at another version or
+    /// under an entry that pins none, only its own at its version. R014 otherwise (a published
+    /// version never changes, R007).
+    pub fn admits(
+        &self,
+        name: &PackageName,
+        version: &Version,
+        sha256: &str,
+    ) -> Result<(), OpError> {
+        if self.sha256.is_empty() || self.sha256 == sha256 || self.version != version.to_string() {
+            return Ok(());
+        }
+        Err(OpError::coded(
+            OpErrorKind::SchemaMismatch,
+            LOCKED_BYTES_CHANGED,
+            format!(
+                "registry package {name}@{version} is not the binary specforge.lock pins: \
+                 the lock records sha256 {}, the registry serves {sha256}",
+                self.sha256
+            ),
+        )
+        .with_suggestion(format!(
+            "a published version never changes: check the registry that serves '{name}'; to install \
+             the bytes it serves instead, remove the extension (`specforge remove {name}`) and add it \
+             again"
+        )))
+    }
+}
+
+/// A registry serves the version `specforge.lock` pins as other bytes than it pins.
+pub const LOCKED_BYTES_CHANGED: Code = codes::R014;
+
+/// How a fetch decides a package's publisher: the caller's two choices, and the pin the project's
+/// lock already records for the name. The adapter applies it (ADR 0010, 0044, 0059) and writes
+/// nothing; what it decided is the package's [`Publisher`].
 #[derive(Debug, Clone, Copy)]
 pub struct TrustPolicy<'a> {
     /// Accept a package with no publisher signature (reported as W155).
     pub allow_unsigned: bool,
     /// Who can be asked about a key change (ADR 0110).
     pub asking: Asking<'a>,
-    /// The publisher key `specforge.lock` records for the name's registry install
-    /// (`specforge_installed::Installed::locked_key`): the pin when the user has none of their own.
-    pub locked_key: Option<&'a str>,
+    /// What `specforge.lock` records for the name's registry install. Private: adapters ask
+    /// [`TrustPolicy::locked_key`].
+    locked: Option<LockedPin<'a>>,
 }
 
 impl<'a> TrustPolicy<'a> {
-    /// `allow_unsigned` and `asking`, with no key locked for the name.
+    /// `allow_unsigned` and `asking`, with nothing locked for the name.
     pub const fn new(allow_unsigned: bool, asking: Asking<'a>) -> Self {
         TrustPolicy {
             allow_unsigned,
             asking,
-            locked_key: None,
+            locked: None,
         }
     }
 
-    /// This policy, expecting `key` as the lock's key for the name.
-    pub fn locked(self, key: Option<&'a str>) -> TrustPolicy<'a> {
+    /// This policy, held to the lock's `pin` for the name.
+    pub fn locked(self, pin: Option<LockedPin<'a>>) -> TrustPolicy<'a> {
         TrustPolicy {
-            locked_key: key,
+            locked: pin,
             ..self
         }
+    }
+
+    /// The key the lock records: the pin when the user has none of their own (ADR 0059 D3).
+    pub fn locked_key(&self) -> Option<&'a str> {
+        self.locked.and_then(|pin| pin.key_id)
+    }
+
+    /// The lock's [`LockedPin::admits`]; `Ok` when the lock records none. Every adapter asks it once
+    /// the reply names `name@version`, before the download, the signature check or any question
+    /// (ADR 0201).
+    pub fn admits(
+        &self,
+        name: &PackageName,
+        version: &Version,
+        sha256: &str,
+    ) -> Result<(), OpError> {
+        self.locked
+            .map_or(Ok(()), |pin| pin.admits(name, version, sha256))
     }
 }
 
@@ -349,9 +432,11 @@ pub trait Registry {
     fn versions(&self, name: &PackageName) -> Result<Vec<Version>, OpError>;
     /// `name@version`, downloaded and integrity-checked, its publisher signature checked and its
     /// publisher decided under `policy`. A package with none is refused unless `allow_unsigned`.
-    /// The expected key is the user's pin for the name, else `policy.locked_key`, else none (trust
+    /// The expected key is the user's pin for the name, else `policy.locked_key()`, else none (trust
     /// on first use). Another key is a key change, put to `policy.asking` (R-TRUST-003 when it answers no).
     /// An answer for another package or version, or one whose manifest can't be read, is refused.
+    /// Refused with R014, after the reply names `name@version` and before the download, the
+    /// signature check or any question, when `policy`'s lock pin pins this version as other bytes.
     /// **Writes nothing**: the decision is [`Package::publisher`], pinned by [`Registry::pin`] once
     /// the operation's lock plan commits.
     fn fetch(
@@ -473,13 +558,71 @@ mod tests {
 
     #[specforge_test_macros::test(
         type = "TrustPolicy",
-        verify = "TrustPolicy is what a fetch decides a publisher by: the caller's choices and the key the lock records"
+        verify = "TrustPolicy is what a fetch decides a publisher by: the caller's choices and the pin the lock records"
     )]
-    fn a_trust_policy_names_the_lock_key_only_when_given() {
+    fn a_trust_policy_holds_the_lock_pin_only_when_given() {
         let policy = TrustPolicy::new(true, Asking::Nobody);
 
-        assert_eq!(policy.locked_key, None);
-        assert_eq!(policy.locked(Some("k")).locked_key, Some("k"));
+        assert_eq!(policy.locked_key(), None);
+        let pinned = policy.locked(Some(LockedPin::key("k")));
+        assert_eq!(pinned.locked_key(), Some("k"));
+    }
+
+    #[specforge_test_macros::test(
+        type = "LockedPin",
+        verify = "LockedPin is what specforge.lock records for a name's registry install"
+    )]
+    fn a_locked_pin_is_what_a_registry_lock_entry_records() {
+        let entry = LockFileEntry {
+            name: PackageName::parse("@a/x").unwrap(),
+            version: "1.2.0".into(),
+            source: specforge_installed::LockSource::Registry,
+            wasm_hash: "hash".into(),
+            key_id: Some("k".into()),
+            peer_dependencies: Vec::new(),
+        };
+
+        let pin = LockedPin::of(&entry);
+
+        assert_eq!(pin.version, "1.2.0");
+        assert_eq!(pin.sha256, "hash");
+        assert_eq!(pin.key_id, Some("k"));
+    }
+
+    #[specforge_test_macros::test(
+        type = "LockedPin",
+        verify = "a locked pin admits other bytes only at another version, or when it pins no hash"
+    )]
+    fn a_locked_pin_admits_other_bytes_only_at_another_version() {
+        let name = PackageName::parse("@a/x").unwrap();
+        let pin = |version, sha256| LockedPin {
+            version,
+            sha256,
+            key_id: None,
+        };
+        let v = |text: &str| Version::parse(text).unwrap();
+        let admits = |pin: LockedPin, version: &str, served| pin.admits(&name, &v(version), served);
+
+        assert!(admits(pin("1.0.0", "A"), "1.0.0", "A").is_ok(), "its bytes");
+        assert!(
+            admits(pin("1.0.0", "A"), "2.0.0", "B").is_ok(),
+            "another version"
+        );
+        assert!(
+            admits(pin("1.0.0", ""), "1.0.0", "B").is_ok(),
+            "no hash pinned"
+        );
+        let error = admits(pin("1.0.0", "A"), "1.0.0", "B").unwrap_err();
+        assert!(error.is(LOCKED_BYTES_CHANGED), "{error:?}");
+        assert_eq!(
+            error.message,
+            "registry package @a/x@1.0.0 is not the binary specforge.lock pins: \
+             the lock records sha256 A, the registry serves B"
+        );
+        let unpinned = TrustPolicy::new(true, Asking::Nobody);
+        assert!(unpinned.admits(&name, &v("1.0.0"), "B").is_ok());
+        let pinned = unpinned.locked(Some(pin("1.0.0", "A")));
+        assert!(pinned.admits(&name, &v("1.0.0"), "B").is_err());
     }
 
     #[test]

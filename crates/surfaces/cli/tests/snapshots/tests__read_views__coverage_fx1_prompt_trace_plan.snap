@@ -14,7 +14,7 @@ expression: "normalized(&result, root)"
     },
     {
       "content": {
-        "text": "{\"coverage_gaps\":[{\"source_entity\":\"plan\",\"target_entity\":\"ghost\",\"missing_link_type\":\"unresolved_entity\",\"gap_context\":\"E003: unresolved entity 'ghost' in plan — not found in graph\"},{\"source_entity\":\"plan\",\"target_entity\":\"Payload\",\"missing_link_type\":\"missing_plan_entry\",\"gap_context\":\"testable entity 'Payload' (type) is not covered by the plan\"},{\"source_entity\":\"plan\",\"target_entity\":\"reset_password\",\"missing_link_type\":\"missing_plan_entry\",\"gap_context\":\"testable entity 'reset_password' (behavior) is not covered by the plan\"}],\"unverified_entities\":[],\"affected_entities\":[\"login\",\"signin\"]}",
+        "text": "{\"coverage_gaps\":[{\"source_entity\":\"plan\",\"target_entity\":\"ghost\",\"missing_link_type\":\"unresolved_entity\",\"gap_context\":\"E003: unresolved entity 'ghost' in plan — not found in graph\"},{\"source_entity\":\"plan\",\"target_entity\":\"Payload\",\"missing_link_type\":\"missing_plan_entry\",\"gap_context\":\"testable entity 'Payload' (type) is not covered by the plan\"},{\"source_entity\":\"plan\",\"target_entity\":\"logout\",\"missing_link_type\":\"missing_plan_entry\",\"gap_context\":\"testable entity 'logout' (behavior) is not covered by the plan\"},{\"source_entity\":\"plan\",\"target_entity\":\"reset_password\",\"missing_link_type\":\"missing_plan_entry\",\"gap_context\":\"testable entity 'reset_password' (behavior) is not covered by the plan\"}],\"unverified_entities\":[],\"affected_entities\":[\"login\",\"signin\"]}",
         "type": "text"
       },
       "role": "user"

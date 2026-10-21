@@ -27,7 +27,9 @@ use std::sync::Arc;
 /// request, or the open document's own index when the document is that
 /// text) and says what the editor's text is to it ([`EditorText`]). A file the
 /// compile holds no text of cannot be converted: its range is `None`,
-/// never byte columns passed off as UTF-16.
+/// never byte columns passed off as UTF-16. A span is a range of the editor's text only while that
+/// text is the compiled text ([`Compiled::range`]); what is sent with the compiled text's version
+/// converts against it whatever the editor holds ([`Compiled::compiled_range`], ADR 0205).
 pub(crate) struct Compiled<'s> {
     state: &'s LspState,
     indexes: RefCell<HashMap<Sym, Option<Arc<LineIndex>>>>,
@@ -79,10 +81,32 @@ impl<'s> Compiled<'s> {
         index
     }
 
-    /// The LSP range of a span of the compile, against the text it is a
-    /// position in; `None` when that text is unknown.
+    /// The LSP range of a span of the compile in the editor's text of its file now (the open
+    /// buffer, else the file on disk): the span converted against the compiled text, which that
+    /// editor text is. `None` when the editor's text is not the compiled text (typed since, changed
+    /// on disk since, a text the project does not build) or the compile holds no text of the file.
+    /// A list leaves the item out; an edit is refused (`workspace_edit`, ADR 0205).
     pub(crate) fn range(&self, span: &SourceSpan) -> Option<Range> {
+        match self.editor_text(span.file.as_str()) {
+            EditorText::Compiled => self.compiled_range(span),
+            EditorText::Changed | EditorText::Unbuilt => None,
+        }
+    }
+
+    /// The LSP range of a span in the text the project was compiled from, whatever the editor holds
+    /// now; `None` when the compile holds no text of its file. Only for what is sent labelled with
+    /// that text's version: a diagnostics publish (ADR 0023 D3).
+    pub(crate) fn compiled_range(&self, span: &SourceSpan) -> Option<Range> {
         Some(self.index_of(span.file.as_str())?.range(span))
+    }
+
+    /// The span of the compile that `range`, a range in the editor's text of `file`, covers; `None`
+    /// when that editor text is not the compiled text (the inverse of [`Self::range`], one rule).
+    pub(crate) fn span(&self, file: &str, range: Range) -> Option<SourceSpan> {
+        (self.editor_text(file) == EditorText::Compiled)
+            .then(|| self.index_of(file))
+            .flatten()
+            .map(|index| index.span(Sym::new(file), range))
     }
 
     /// The location of a span of a session file; `None` when its text is
@@ -138,9 +162,9 @@ impl<'s> Compiled<'s> {
         })
     }
 
-    /// Whether the editor's text of `file` is not the compiled text ([`Self::editor_text`]): no
-    /// position of the compile is a position in it.
-    pub(crate) fn is_stale(&self, file: &str) -> bool {
+    /// Whether the editor's text of `file` is not the compiled text ([`Self::editor_text`]): the
+    /// cursor's rule (`target`, ADR 0023 D7).
+    fn is_stale(&self, file: &str) -> bool {
         self.editor_text(file) != EditorText::Compiled
     }
 }
@@ -169,14 +193,14 @@ pub(crate) fn code_action_kind(kind: FixKind) -> CodeActionKind {
 
 /// A file an edit of the compile cannot be placed in: the editor's text of it (its open buffer,
 /// else the disk) is not the text the project was compiled from, or the compile holds no text of
-/// it ([`Compiled::is_stale`]).
+/// it ([`Compiled::range`] is `None`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Unplaced(pub(crate) Sym);
 
 impl Compiled<'_> {
     /// `edits`, positions in the compiled text (ADR 0164), as one workspace edit: every edit
     /// placed, in the order given within its file, or none: the first edit whose file is
-    /// [`Self::is_stale`] answers its file.
+    /// has no [`Self::range`] answers its file.
     pub(crate) fn workspace_edit(
         &self,
         edits: impl IntoIterator<Item = specforge_ops::read::navigate::TextEdit>,
@@ -184,11 +208,7 @@ impl Compiled<'_> {
         let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
         for edit in edits {
             let file = edit.span.file;
-            // `is_stale` holds whenever the compile has no text of `file`, so `range` is then `Some`.
-            let range = (!self.is_stale(file.as_str()))
-                .then(|| self.range(&edit.span))
-                .flatten()
-                .ok_or(Unplaced(file))?;
+            let range = self.range(&edit.span).ok_or(Unplaced(file))?;
             changes
                 .entry(self.uri(file.as_str()))
                 .or_default()
@@ -216,8 +236,8 @@ pub(crate) fn fix_to_code_action(ranges: &Compiled, fix: Fix) -> Result<CodeActi
 
 /// An outline as the LSP's document symbols: nested (methods as children,
 /// each selecting its name) when `hierarchical`, else flat (a method's
-/// container is its entity). An entry or method whose file's text is
-/// unknown is left out (no range of it is honest).
+/// container is its entity). An entry or method whose file's editor text is not
+/// the compiled text is left out (no range of it is honest).
 pub(crate) fn outline_to_document_symbols(
     ranges: &Compiled,
     entries: Vec<OutlineEntry>,
@@ -388,9 +408,9 @@ mod tests {
 
     #[spec(
         invariant = "lsp_utf16_positions",
-        verify = "a span converts against the text the project was compiled from, not the buffer typed since"
+        verify = "a span converts against the text the project was compiled from, and is no range of a buffer typed since"
     )]
-    fn a_span_converts_against_the_compiled_text_not_the_stale_buffer() {
+    fn a_span_converts_against_the_compiled_text_and_is_no_range_of_a_buffer_typed_since() {
         let dir = tempfile::tempdir().unwrap();
         let (mut state, uri) = serving(&dir);
 
@@ -403,14 +423,15 @@ mod tests {
         assert_eq!((range.start.line, range.start.character), (0, 21));
         assert_eq!((range.end.line, range.end.character), (0, 22));
 
-        // The editor typed since, and the compile has not run: the span is
-        // still a position in the compiled text, so it keeps its column
+        // The editor typed since, and the compile has not run: the span is a position in the
+        // compiled text only, so it is no range of the buffer, but a publish keeps its column
         // (against the buffer, byte column 25 is past the line's end).
         state.change_document(&uri, 2, &[whole(TYPED)]);
         let ranges = Compiled::new(&state);
         assert!(ranges.is_stale("a.spec"));
-        assert_eq!(ranges.range(&brace()), Some(range));
-        assert_eq!(ranges.location(&brace()).map(|l| l.uri), Some(uri.clone()));
+        assert_eq!(ranges.range(&brace()), None);
+        assert_eq!(ranges.location(&brace()), None);
+        assert_eq!(ranges.compiled_range(&brace()), Some(range));
         // What navigation reads is that text too (`Compiled::navigator`).
         assert_eq!(state.compiled_text("a.spec").as_deref(), Some(COMPILED));
     }
@@ -433,15 +454,19 @@ mod tests {
             };
             let ranges = Compiled::new(&state);
             assert_eq!(ranges.range(&span), None, "{file}");
+            assert_eq!(ranges.compiled_range(&span), None, "{file}");
             assert_eq!(ranges.location(&span), None, "{file}");
             assert!(ranges.index_of(file).is_none(), "{file}");
         }
 
-        // A file that cannot be read from disk now still has the text it
-        // was compiled from: the disk is not asked.
+        // A file gone from disk is not the editor's text: no range; the compiled text is kept for
+        // a publish.
         std::fs::remove_file(dir.path().join("a.spec")).unwrap();
         let ranges = Compiled::new(&state);
-        let range = ranges.range(&brace()).expect("compiled text is kept");
+        assert_eq!(ranges.range(&brace()), None);
+        let range = ranges
+            .compiled_range(&brace())
+            .expect("compiled text is kept");
         assert_eq!(range.start.character, 21);
 
         // While the session is out for an update, readers keep its texts.

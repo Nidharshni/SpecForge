@@ -1,7 +1,7 @@
 use crate::ast::*;
 use crate::cst::{Cst, CstError, UnclosedString};
 use crate::expr::{CmpOp, Expr, ExprSpan, SpannedExpr};
-use crate::format_version::{CURRENT_FORMAT_VERSION, detect_format_version};
+use crate::format_version::{CURRENT_FORMAT_VERSION, detect_format_version, header_row};
 use crate::lex::MAX_NESTING;
 use specforge_common::{SourceSpan, Sym, structural};
 use tree_sitter::Node;
@@ -9,6 +9,7 @@ use tree_sitter_specforge::{field, kind};
 
 mod body;
 mod declarations;
+mod doc;
 mod errors;
 mod expression;
 mod reparse;
@@ -112,6 +113,7 @@ fn parse_syntax(
         format_diagnostics: Vec::new(),
         errors: Vec::new(),
     };
+    let mut comments = Vec::new();
     let pieces = cst.pieces();
     let recovered = pieces.len() > 1 || pieces[0].unclosed().is_some();
     for (n, piece) in pieces.iter().enumerate() {
@@ -139,11 +141,13 @@ fn parse_syntax(
         file.imports.append(&mut ctx.imports);
         file.entities.append(&mut ctx.entities);
         file.errors.append(&mut ctx.errors);
+        comments.append(&mut ctx.comments);
     }
     if recovered {
         file.errors
             .sort_by_key(|e| (e.span.start_line, e.span.start_col));
     }
+    doc::attach(&mut file.entities, &comments, header_row(source));
     (file, Some(cst.into_tree()))
 }
 
@@ -185,6 +189,9 @@ struct ParseContext<'a> {
     imports: Vec<ImportDeclaration>,
     entities: Vec<Entity>,
     errors: Vec<ParseError>,
+    /// The comments between top-level items that start their own line, in source order (a block's doc comment is
+    /// read from them).
+    comments: Vec<SourceSpan>,
 }
 
 impl<'a> ParseContext<'a> {
@@ -198,11 +205,14 @@ impl<'a> ParseContext<'a> {
             imports: Vec::new(),
             entities: Vec::new(),
             errors: Vec::new(),
+            comments: Vec::new(),
         }
     }
 
     fn walk(&mut self, root: Node) {
         let mut cursor = root.walk();
+        // The row where the previous top-level item ends.
+        let mut trailed: Option<usize> = None;
         for child in root.children(&mut cursor) {
             match child.kind() {
                 _ if child.is_error() => self.push_error_node(child),
@@ -213,9 +223,13 @@ impl<'a> ParseContext<'a> {
                 kind::UNION_BLOCK => self.parse_union_block(child),
                 kind::USE_IMPORT => self.parse_use_import(child, false),
                 kind::PUB_USE_IMPORT => self.parse_use_import(child, true),
-                kind::COMMENT => {}
+                // A comment on the row where the previous item ends trails it: it documents nothing below.
+                kind::COMMENT if trailed != Some(child.start_position().row) => {
+                    self.comments.push(self.span(child));
+                }
                 _ => {}
             }
+            trailed = Some(child.end_position().row);
         }
         // The walk above reports errors at block level and inside field
         // values. Tree-sitter recovers anywhere, so report the rest too

@@ -32,8 +32,8 @@ behavior build_in_memory_graph "Build In-Memory Graph" {
     reference. Every set of entities that reach one another through
     references MUST be one W061, whose data path walks every entity of the
     set from the smallest id and back; it depends only on the references,
-    never on the order they are written in. A declared single reference is
-    in none (ADR 0093 D7). W061 has no span: it is about its entities
+    never on the order they are written in. A declared single reference and a derived
+    edge are in none (ADR 0093 D7, ADR 0204). W061 has no span: it is about its entities
     (ADR 0016 D7).
   """
   verify unit "graph contains one node per entity"
@@ -49,6 +49,7 @@ behavior build_in_memory_graph "Build In-Memory Graph" {
   verify unit "W061 names every entity of a cycle, one whose cycle closes through an entity already walked included"
   verify unit "W061 is the same whatever order the references are written in"
   verify unit "build_graph no W061 for acyclic refs"
+  verify unit "a built graph's cycles count every edge, a derived or single reference's included; W061 counts the written references only"
   verify unit "detects cycles in directed graph"
   verify unit "detects self-referencing cycle"
   verify unit "no false positives for acyclic graph"
@@ -139,8 +140,9 @@ behavior link_derived_references "Link Derived References" {
 
     The core names no kind here (zero_domain_knowledge_core): which kinds
     derive edges, from where and to which kind comes only from the fields
-    extensions register. Derived edges join the graph after reference
-    cycle detection, so a recursive type is not a reference cycle (W061).
+    extensions register. A derived edge is a dependency, never a
+    reference W061 reads, so a recursive type is not a reference cycle (W061);
+    the plan check still orders it (validate_agent_plan).
     Each such name is a token the graph's finder reads: navigation and rename
     find it there (ADR 0176).
   """

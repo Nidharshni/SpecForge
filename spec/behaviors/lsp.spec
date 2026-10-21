@@ -459,8 +459,10 @@ behavior rename_entity_id "Rename Entity ID" {
     all .spec files. The rename MUST be atomic — all files are updated
     or none are. The new ID follows the same rule as the MCP rename tool's:
     a name that is not a legal entity ID, that is a reserved word (a structural
-    keyword or a declared kind's keyword, E013), or that is taken, MUST be refused
-    with an error saying why. The edits are exactly every token that names the
+    keyword or a declared kind's keyword, E013), that is taken, or that the project
+    already writes for no entity (a type name, a reference that does not resolve: the
+    rename would make it name the renamed entity), MUST be refused with an error
+    saying why, naming each place. The edits are exactly every token that names the
     entity: its declaration's name and each reference, a reference written in
     a defaults block that no block takes included, as the editor's
     find-references returns them;
@@ -474,7 +476,7 @@ behavior rename_entity_id "Rename Entity ID" {
     A rename over a project whose specforge.json does not say which files
     are its sources MUST be refused with config_invalid's reason, as the
     MCP rename tool refuses it. A rename while a .spec file that does not
-    parse spells the ID as a name (not in a string or a comment) MUST be
+    parse spells the ID or the new ID as a name (not in a string or a comment) MUST be
     refused with why: its references cannot be read, and the rename would
     leave them behind.
   """
@@ -493,6 +495,10 @@ behavior rename_entity_id "Rename Entity ID" {
   verify unit "rename refuses a reserved word as the new ID before anything is planned"
   verify unit "a rename is refused when specforge.json does not say which files are the project's sources"
   verify unit "a rename is refused while a source that spells the ID does not parse"
+  verify unit "rename to a name the project already writes for no entity is refused naming each place"
+  verify unit "rename refuses a capture the graph shows no new edge for"
+  verify unit "rename onto an unresolved reference is refused as a capture"
+  verify unit "a rename is refused while a source that spells the new ID does not parse"
   verify contract "Rename Entity ID: entity rename holds — graph_available, prepare_rename_ready, all_references_updated, rename_atomic, entity_renamed_emitted"
 }
 

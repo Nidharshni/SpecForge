@@ -1,7 +1,7 @@
 //! Who may write into a scope (publish, yank): the token's filter, then the scope's owner (ADR 0185).
 
 use rusqlite::{Connection, params};
-use specforge_package::PackageName;
+use specforge_package::{PackageName, Scope};
 
 use crate::db::TokenRecord;
 
@@ -34,8 +34,6 @@ impl WriteRefused {
 /// Why a scope was not assigned ([`assign`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AssignRefused {
-    /// The text is not a scope (`@name`).
-    NotAScope(String),
     /// No token was ever issued to the account.
     UnknownAccount(String),
     /// The database failed.
@@ -45,7 +43,6 @@ pub enum AssignRefused {
 impl std::fmt::Display for AssignRefused {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::NotAScope(text) => write!(f, "'{text}' is not a scope: write it as @name"),
             Self::UnknownAccount(account) => write!(
                 f,
                 "no token was issued to account '{account}': create one with `token create --account`"
@@ -97,7 +94,7 @@ impl std::str::FromStr for Account {
 
 impl std::fmt::Display for Account {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
+        f.pad(&self.0)
     }
 }
 
@@ -116,13 +113,12 @@ impl rusqlite::types::FromSql for Account {
 
 /// The token's own filter covers `package`: no database read.
 fn within_filter(writer: &TokenRecord, package: &PackageName) -> Result<(), WriteRefused> {
-    if crate::auth::token_has_scope(writer, package) {
-        Ok(())
-    } else {
-        Err(WriteRefused::Outside {
-            filter: writer.scope.clone().unwrap_or_default(),
+    match &writer.scope {
+        Some(filter) if !filter.covers(package) => Err(WriteRefused::Outside {
+            filter: filter.to_string(),
             package: package.to_string(),
-        })
+        }),
+        _ => Ok(()),
     }
 }
 
@@ -137,7 +133,7 @@ pub(crate) fn may_write(
     let Some(scope) = package.scope() else {
         return Ok(Claim::Unclaimed);
     };
-    match owner(conn, scope)
+    match owner(conn, scope.as_str())
         .map_err(|e| WriteRefused::Storage(format!("scope query failed: {e}")))?
     {
         None => Ok(Claim::Unclaimed),
@@ -178,15 +174,10 @@ pub(crate) fn owner(conn: &Connection, scope: &str) -> rusqlite::Result<Option<S
 /// creates none.
 pub(crate) fn assign(
     conn: &Connection,
-    scope: &str,
+    scope: &Scope,
     account: &Account,
 ) -> Result<Option<String>, AssignRefused> {
-    // shortcut: no Scope type in specforge-package, upgrade when one exists.
-    let is_scope =
-        PackageName::parse(&format!("{scope}/x")).is_ok_and(|n| n.scope() == Some(scope));
-    if !is_scope {
-        return Err(AssignRefused::NotAScope(scope.to_string()));
-    }
+    let scope = scope.as_str();
     let storage = |e: rusqlite::Error| AssignRefused::Storage(format!("failed to assign: {e}"));
     match conn.query_row(
         "SELECT 1 FROM accounts WHERE name = ?1",

@@ -1,11 +1,13 @@
 //! The `titles` migration step (ADR 0148): a title for every block that has none.
 
+use specforge_common::SourceSpan;
 use specforge_graph::field_form::spell;
 use specforge_graph::{Graph, ModifiedNodeChange, NodeAspect};
-use specforge_parser::{header_row, parse};
+use specforge_parser::parse;
 
 /// `text` with a title written into every block header that has none, entity blocks and unions alike: the block's
-/// doc comment (the `//` lines directly above its header, no blank line between, the format header excluded), each
+/// doc comment as the parse reads it (`Entity::doc_span`: the `//` lines directly above its header, no blank line
+/// between, never the format header), each
 /// line's text after `//` trimmed and the lines joined by one space, escaped as a `.spec` string (`field_form::spell::quoted`); the comment lines
 /// are removed. With no doc comment, its id in Title Case words (`CompleteTaskCommand` → "Complete Task Command",
 /// `complete_task` → "Complete Task"). The title is written after the block's name, on whichever line of its
@@ -17,7 +19,6 @@ pub(crate) fn add_titles(text: &str) -> String {
         return text.to_string();
     }
     let mut lines: Vec<String> = text.split_inclusive('\n').map(str::to_string).collect();
-    let format_header = header_row(text);
     // From the last block up, so the line numbers of the blocks above stay valid.
     for entity in file.entities.iter().rev() {
         if entity.title.is_some() || !needs_title(entity.kind.raw.as_str()) {
@@ -27,7 +28,11 @@ pub(crate) fn add_titles(text: &str) -> String {
             continue;
         };
         let row = entity.span.start_line - 1;
-        let (first, title) = match doc_comment(&lines, row, format_header) {
+        let (first, title) = match entity
+            .doc_span
+            .as_ref()
+            .and_then(|doc| doc_comment(&lines, doc))
+        {
             Some((first, title)) => (first, title),
             None => (row, words(entity.id.raw.as_str())),
         };
@@ -56,21 +61,11 @@ pub(crate) fn added(change: &ModifiedNodeChange, before: &Graph) -> bool {
         })
 }
 
-/// The doc comment of the block whose header is line `row`: the `//` lines directly above it, as the row of the
-/// first and the text joined; none when the line above is not a comment, is the format header or the run is empty.
-fn doc_comment(
-    lines: &[String],
-    row: usize,
-    format_header: Option<usize>,
-) -> Option<(usize, String)> {
-    let mut first = row;
-    while first > 0
-        && Some(first - 1) != format_header
-        && lines[first - 1].trim_start().starts_with("//")
-    {
-        first -= 1;
-    }
-    let parts: Vec<&str> = lines[first..row]
+/// The text of the doc comment the parse read at `doc`: the row of its first line, and each line's text after `//`
+/// trimmed, joined by one space; none when every line is empty.
+fn doc_comment(lines: &[String], doc: &SourceSpan) -> Option<(usize, String)> {
+    let first = doc.start_line - 1;
+    let parts: Vec<&str> = lines[first..doc.end_line]
         .iter()
         .map(|l| {
             l.trim_start()
@@ -80,7 +75,7 @@ fn doc_comment(
         })
         .filter(|p| !p.is_empty())
         .collect();
-    (first < row && !parts.is_empty()).then(|| (first, parts.join(" ")))
+    (!parts.is_empty()).then(|| (first, parts.join(" ")))
 }
 
 /// `id` as Title Case words: split at `_` and before a capital that follows a lowercase letter or a digit.

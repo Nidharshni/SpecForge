@@ -107,6 +107,7 @@ mod document;
 mod dry_run;
 mod entry_forms;
 mod local;
+mod locked;
 mod registry;
 mod several;
 mod specifier;

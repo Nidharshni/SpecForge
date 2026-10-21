@@ -192,9 +192,9 @@ behavior add_missing_titles "Add Missing Titles" {
   contract   """
     The titles step MUST write a title into every block header that has
     none, entity blocks and unions alike, written after the block's name
-    on whichever line of its header the name stands: the block's doc comment (the //
-    lines directly above its header with no blank line between, the format
-    header excluded), each line's text after // trimmed and the lines
+    on whichever line of its header the name stands: the block's doc comment as the
+    parse reads it (the // lines directly above its header with no blank line
+    between, never the format header), each line's text after // trimmed and the lines
     joined by one space, with \\ and " escaped, the comment lines removed.
     A block with no doc comment MUST get its id in Title Case words. The
     step MUST leave define, spec and ref blocks, titled blocks and text
@@ -231,14 +231,20 @@ behavior hoist_file_defaults "Hoist File Defaults" {
     list a file's blocks repeat: for a kind with two or more blocks in the
     file and no defaults block of its own, a field is hoisted when every block
     of the kind writes it exactly once, as a one-line list of bare items with
-    no annotation and no comment on or directly above its line, and at least
-    two blocks write the same list. The most common list becomes the default
-    and is deleted from the blocks that write it; the others keep theirs. A
+    no annotation and no comment on or directly above its line, at least two
+    blocks write the same list, and the graph's defaults rule applies the
+    field under the field forms the project compiles with (E077: a field the
+    kind declares, a kind a loaded extension declares). The most common list
+    becomes the default and is deleted from the blocks that write it; the
+    others keep theirs. A
     block MUST be written only when it saves at least one line. It goes after
-    the last import, or before the first form and its leading comments. The
+    the last import that stands above the file's first block, else before the
+    first form and its doc comment as the parse reads it, never above the
+    format header and never below a block (E078). The
     step MUST leave a text with a syntax error as it is and MUST be
-    idempotent. The graph comparison proves the graph is unchanged: a hoist
-    that changes it is refused with W054 and nothing is written.
+    idempotent. The hoist keeps the graph by asking the rule the graph applies;
+    the graph comparison still refuses, and writes nothing, should any step
+    change it.
   """
   verify unit "a list every block writes alike is hoisted"
   verify unit "the most common list is hoisted and the others keep theirs"
@@ -248,10 +254,13 @@ behavior hoist_file_defaults "Hoist File Defaults" {
   verify unit "a kind that has defaults is left as written"
   verify unit "a hoist that saves no line is not written"
   verify unit "the block goes after the imports or before the first form"
+  verify unit "the block goes below the format header"
   verify unit "hoisting twice changes nothing"
   verify unit "a file with a syntax error is left alone"
   verify unit "a migration that hoists defaults keeps the graph"
-  verify unit "a hoist that changes the graph is refused and nothing is written"
+  verify unit "a field or a kind the field forms do not declare is never hoisted"
+  verify unit "a field its kind does not declare is never hoisted, and the other steps are written"
+  verify unit "the block goes above the file's first block when an import follows it"
 }
 
 behavior generate_migration_diff "Generate Migration Diff" {

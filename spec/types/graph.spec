@@ -213,7 +213,7 @@ type DiagnosticsDelta "The diagnostics one update added and removed, each compar
 
 // ── Agent Plan Types ──────────────────────────────────────
 
-type AgentPlan "What an agent intends to do, entity by entity, in the order it will do it: the plan the plan check reads (validate_agent_plan). Its entry order is its dependency order; the graph's edges are the dependencies." {
+type AgentPlan "What an agent intends to do, entity by entity, in the order it will do it: the plan the plan check reads (validate_agent_plan). Its entry order is its dependency order; the graph's edges are the dependencies; entities on one cycle are done together, in any order." {
   plan_id string @readonly @unique
   entries AgentPlanEntry[]
   verify unit "AgentPlan schema is valid"

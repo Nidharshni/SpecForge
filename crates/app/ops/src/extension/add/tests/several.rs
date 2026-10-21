@@ -79,7 +79,7 @@ fn a_refused_specifier_writes_nothing_and_is_named() {
 
     for extensions in [
         vec![
-            Source::Builtin("@specforge/product").into(),
+            Source::builtin("@specforge/product").into(),
             Source::Local(missing.clone()).into(),
         ],
         vec![
@@ -217,7 +217,11 @@ fn peers_are_judged_on_the_whole_set_whatever_the_order() {
     // With `@x/b` 1.0.0 instead, the set is refused in either order, naming `@x/a`'s
     // specifier, and nothing is written.
     for order in [["@x/a@2.0.0", "@x/b@1.0.0"], ["@x/b@1.0.0", "@x/a@2.0.0"]] {
-        let dir = disabled_project(vec![entry("@x/b", "1.0.0", "registry", &[])]);
+        let dir = disabled_project(vec![LockFileEntry {
+            // the lock pins the bytes `coupled_registry` serves for 1.0.0
+            wasm_hash: specforge_installed::hex_sha256(b"\0asm b1"),
+            ..entry("@x/b", "1.0.0", "registry", &[])
+        }]);
         let before = files_under(dir.path());
         let extensions = order.iter().map(|r| registry_specified(r)).collect();
         let error = add(

@@ -57,16 +57,16 @@ fn search_writes_its_diagnostics_as_check_does() {
 )]
 fn validate_writes_its_diagnostics_as_check_does() {
     let dir = TestProject::new().without_config();
-    let formal = repo_root().join("extensions/formal/wasm/specforge_ext_formal.wasm");
+    let probe = repo_root().join("fixtures/sandbox-probe/wasm/sandbox_probe.wasm");
 
     let output = Cli::on(&dir)
         .bare_command(&["extension", "validate", "--format", "json", "--dir"])
-        .arg(formal)
+        .arg(probe)
         .output()
         .unwrap();
 
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     let diagnostic = &json["diagnostics"][0];
     assert_eq!(keys_of(diagnostic), shared_keys(), "{diagnostic}");
-    assert_eq!(diagnostic["severity"], "Info");
+    assert_eq!(diagnostic["severity"], "Warning");
 }

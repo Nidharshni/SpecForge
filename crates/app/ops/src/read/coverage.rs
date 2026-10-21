@@ -85,12 +85,6 @@ impl CoverageRow {
     pub fn linked(&self) -> bool {
         self.verdict.tests > 0
     }
-
-    /// It counts toward coverage and is not proven
-    /// (`ProjectCoverage::is_unverified`).
-    pub fn unverified(&self) -> bool {
-        self.testable && !self.exempt && !self.verdict.is_proven()
-    }
 }
 
 /// One row as every surface writes it.

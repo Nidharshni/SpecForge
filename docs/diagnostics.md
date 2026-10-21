@@ -788,9 +788,10 @@ valid JSON, `registries` isn't an array, or an entry at the reported index is
 missing a required field, has the wrong type, or has a `url` that isn't a
 registry's root (an `http` or `https` URL with no query, fragment or user name;
 write `https://registry.example`, not `https://registry.example/v1`: SpecForge
-adds the protocol's `/v1`). No registry is asked while an entry can't be read,
-so a package whose scope that entry serves never goes to another registry. Fix
-the reported entry.
+adds the protocol's `/v1`), or has a `scope_filter` that isn't a scope (`@acme`:
+`@` and one name part; the message names the scope to write). No registry is
+asked while an entry can't be read, so a package whose scope that entry serves
+never goes to another registry. Fix the reported entry.
 
 Owner: core
 Level: error
@@ -1822,8 +1823,10 @@ Level: error
 R-RES-004: No version satisfies the range
 
 The registry has versions of the package, but none inside the requested range;
-the message lists the available ones. Widen the range, or pick one of the listed
-versions.
+the message lists the available ones (for a builtin, the one version this
+specforge embeds). Widen the range, or pick one of the listed versions; for a
+builtin, drop the version or use the specforge release that embeds the one you
+need.
 
 Owner: core
 Level: error
@@ -2113,6 +2116,24 @@ R013: Credentials file not writable
 The credentials couldn't be saved: creating `~/.specforge`, serializing the
 credentials, or writing `~/.specforge/credentials.json` failed. Check the
 permissions on `~/.specforge`.
+
+Owner: core
+Level: error
+```
+
+## R014
+
+```
+R014: Locked package served as other bytes
+
+The registry serves the version of a package that `specforge.lock` pins, but not
+the binary the lock pins: its SHA-256 is another. A published version never
+changes (R007), so the registry, or the address `specforge.json` sends the
+package to, now serves something else under that version. Nothing was downloaded
+or installed, no publisher key was pinned or asked about, and the lock is left
+as it was; `specforge add --dry-run` reports it too. Check the registry. If you
+trust the bytes it now serves, remove the extension (`specforge remove <name>`)
+and add it again, which pins them.
 
 Owner: core
 Level: error

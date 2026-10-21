@@ -278,14 +278,25 @@ impl Graph {
 }
 
 impl Graph {
-    /// The cycles among the graph's edges (ADR 0196): every strongly
-    /// connected set of entities with a cycle, and a closed walk through all
-    /// of them. Any edge label counts; the order edges were added in does not.
+    /// The cycles of the dependency relation (ADR 0204): every edge `a -> b`
+    /// says `a` depends on `b`, whatever its label, a written, single or
+    /// derived reference alike. Each is a strongly connected set of entities
+    /// with a closed walk through all of them (ADR 0196). W061 reads a
+    /// narrower relation, the written references (`link`).
     pub fn cycles(&self) -> Vec<Cycle<Sym>> {
-        let mut edges: BTreeMap<Sym, BTreeSet<Sym>> = BTreeMap::new();
-        for edge in &self.edges {
-            edges.entry(edge.source).or_default().insert(edge.target);
-        }
-        specforge_cycles::cycles(&edges)
+        specforge_cycles::cycles(&successors(&self.edges))
     }
+}
+
+/// Each source's targets among `edges`: the form `specforge_cycles::cycles`
+/// reads. Parallel edges are one.
+fn successors<'e>(edges: impl IntoIterator<Item = &'e Edge>) -> BTreeMap<Sym, BTreeSet<Sym>> {
+    let mut successors: BTreeMap<Sym, BTreeSet<Sym>> = BTreeMap::new();
+    for edge in edges {
+        successors
+            .entry(edge.source)
+            .or_default()
+            .insert(edge.target);
+    }
+    successors
 }

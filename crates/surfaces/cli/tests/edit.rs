@@ -489,3 +489,166 @@ fn new_of_an_unknown_kind_is_refused_as_unknown_kind() {
         run.stderr
     );
 }
+
+#[specforge_test(
+    behavior = "create_entity",
+    verify = "new --help begins with what new does"
+)]
+fn new_help_begins_with_what_new_does() {
+    let project = todo();
+    let help = sf(&project, &["new", "--help"]).exits(0);
+    assert_eq!(
+        help.stdout.lines().next(),
+        Some("Create an entity"),
+        "{}",
+        help.stdout
+    );
+}
+
+#[specforge_test(
+    behavior = "create_entity",
+    verify = "new refuses one of its options given twice, wherever each stands"
+)]
+fn an_option_of_new_given_twice_is_refused_wherever_it_stands() {
+    let project = todo();
+    let before = project.read(TASKS);
+    let twice_in = sf(
+        &project,
+        &[
+            "new",
+            "--in",
+            "behaviors/a.spec",
+            "behavior",
+            "archive_task",
+            "Archive",
+            "--contract",
+            "c",
+            "--in",
+            "behaviors/b.spec",
+            "--dry-run",
+        ],
+    );
+    let twice_format = sf(
+        &project,
+        &[
+            "new",
+            "--format",
+            "json",
+            "behavior",
+            "archive_task",
+            "Archive",
+            "--contract",
+            "c",
+            "--in",
+            "behaviors/task.spec",
+            "--dry-run",
+            "--format",
+            "human",
+        ],
+    );
+    for run in [&twice_in, &twice_format] {
+        assert_eq!(run.code, 2, "{}{}", run.stdout, run.stderr);
+        assert!(
+            run.stderr.contains("cannot be used multiple times"),
+            "{}",
+            run.stderr
+        );
+    }
+    assert_eq!(project.read(TASKS), before);
+    for absent in ["spec/behaviors/a.spec", "spec/behaviors/b.spec"] {
+        assert!(!project.root().join(absent).exists(), "{absent}");
+    }
+}
+
+#[specforge_test(
+    behavior = "create_entity",
+    verify = "new's help of a kind shows each of its options as every command declares it"
+)]
+fn the_kinds_help_shows_each_option_as_declared() {
+    let project = todo();
+    let help = sf(&project, &["new", "behavior", "--help"]).exits(0);
+    for text in [
+        "--path <PATH>",
+        "the nearest directory at or above it holding specforge.json",
+        "[default: .]",
+        "Output format: human or json",
+        "[default: human]",
+        "-h, --help",
+        "created when missing",
+    ] {
+        assert!(help.stdout.contains(text), "{text}\n{}", help.stdout);
+    }
+}
+
+#[specforge_test(
+    behavior = "create_entity",
+    verify = "new --help of a kind the project does not declare is refused as unknown_kind"
+)]
+fn help_of_an_unknown_kind_is_refused_as_unknown_kind() {
+    let project = todo();
+    let run = sf(&project, &["new", "behaviour", "--help"]);
+    assert_eq!(run.code, 1, "{}{}", run.stdout, run.stderr);
+    assert!(run.stderr.contains("unknown_kind"), "{}", run.stderr);
+    assert!(
+        run.stderr.contains("did you mean 'behavior'?"),
+        "{}",
+        run.stderr
+    );
+    assert!(run.stdout.is_empty(), "{}", run.stdout);
+}
+
+#[specforge_test(
+    behavior = "create_entity",
+    verify = "new --help after a field flag prints the kind's help"
+)]
+fn help_after_a_field_flag_is_the_kinds_help() {
+    let project = todo();
+    let before = project.read(TASKS);
+    let help = sf(
+        &project,
+        &[
+            "new",
+            "behavior",
+            "archive_task",
+            "Archive",
+            "--contract",
+            "c",
+            "--help",
+        ],
+    )
+    .exits(0);
+    assert!(
+        help.stdout.contains("--contract <VALUE>"),
+        "{}",
+        help.stdout
+    );
+    assert_eq!(project.read(TASKS), before);
+}
+
+#[specforge_test(
+    behavior = "create_entity",
+    verify = "new refuses a command line whose --path a field's value spells"
+)]
+fn a_field_value_spelled_as_path_names_no_project() {
+    let project = todo();
+    let other = todo();
+    let spelled = format!("--path={}", other.root().display());
+    let run = sf(
+        &project,
+        &[
+            "new",
+            "behavior",
+            "archive_task",
+            "Archive",
+            "--contract",
+            &spelled,
+            "--in",
+            "behaviors/x.spec",
+        ],
+    );
+    assert_eq!(run.code, 2, "{}{}", run.stdout, run.stderr);
+    assert!(run.stderr.contains("--path"), "{}", run.stderr);
+    for root in [other.root(), project.root()] {
+        assert!(!root.join("spec/behaviors/x.spec").exists(), "{root:?}");
+    }
+}

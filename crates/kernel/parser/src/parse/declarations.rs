@@ -22,6 +22,7 @@ impl<'a> ParseContext<'a> {
             methods: body.methods,
             obligations: body.obligations,
             obligation_spans: body.obligation_spans,
+            doc_span: None,
         });
     }
 
@@ -45,6 +46,7 @@ impl<'a> ParseContext<'a> {
             methods: body.methods,
             obligations: body.obligations,
             obligation_spans: body.obligation_spans,
+            doc_span: None,
         });
     }
 
@@ -88,6 +90,7 @@ impl<'a> ParseContext<'a> {
             methods: Vec::new(),
             obligations: Vec::new(),
             obligation_spans: Vec::new(),
+            doc_span: None,
         });
     }
 
@@ -143,6 +146,7 @@ impl<'a> ParseContext<'a> {
             methods: Vec::new(),
             obligations: Vec::new(),
             obligation_spans: Vec::new(),
+            doc_span: None,
         });
     }
 
@@ -164,6 +168,7 @@ impl<'a> ParseContext<'a> {
             methods: body.methods,
             obligations: body.obligations,
             obligation_spans: body.obligation_spans,
+            doc_span: None,
         });
     }
 

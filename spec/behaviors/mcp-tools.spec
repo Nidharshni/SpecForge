@@ -665,7 +665,9 @@ behavior provide_mcp_outline_tool "Provide MCP Outline Tool" {
     not one of the project's sources as the compile read them (one that does
     not exist, a directory, specforge.json or any file that is not a .spec
     source, one an exclude entry leaves out) MUST be refused as
-    file_not_found, naming it; a source with no entity has an empty outline.
+    file_not_found, naming it (file); a spelling from the project root of a
+    source is refused naming its spec-root spelling (ADR 0195 D5); a source
+    with no entity has an empty outline.
     The file is read into its source key (ADR 0195): every spelling of a source
     under the spec root is that source; one that leaves the spec root is
     invalid_input. With no project served, no
@@ -682,6 +684,7 @@ behavior provide_mcp_outline_tool "Provide MCP Outline Tool" {
   verify unit "sorted by line number"
   verify unit "a file that is not one of the project's sources is file_not_found, though it exists"
   verify unit "outline reads every spelling of a source under the spec root as that source"
+  verify unit "outline refuses a project-root spelling of a source naming its spec-root spelling"
 }
 
 behavior provide_mcp_suggest_fixes_tool "Provide MCP Suggest Fixes Tool" {
@@ -709,7 +712,7 @@ behavior provide_mcp_suggest_fixes_tool "Provide MCP Suggest Fixes Tool" {
     that accepts entity_id? (optional; one the graph lacks is an entity_not_found
     error on entity_id, E003), file_path? (optional; a spec file relative to the spec
     root, read as outline reads its file (ADR 0195); one that names no source is
-    refused on file_path), and
+    refused on file_path, naming it (file)), and
     diagnostic_code? (optional). When all three parameters are omitted, the
     system MUST return all fix suggestions for the current project. The tool
     MUST return an object whose fixes are the applicable fix suggestions, McpFixSuggestion items, each
@@ -721,7 +724,8 @@ behavior provide_mcp_suggest_fixes_tool "Provide MCP Suggest Fixes Tool" {
     (file_path, range, new_text); a diagnostic whose data names no fix
     contributes none (its suggestion text stays on the diagnostic). Fixes
     read the diagnostic's data, never its message. A clean entity with no
-    diagnostics MUST return no fixes.
+    diagnostics MUST return no fixes. With no project served, a file_path is no
+    project's file: the tool MUST return the no-project refusal naming it.
   """
   verify unit "specforge.suggest_fixes returns applicable fix suggestions"
   verify unit "the result is an object holding the fixes"
@@ -729,6 +733,8 @@ behavior provide_mcp_suggest_fixes_tool "Provide MCP Suggest Fixes Tool" {
   verify unit "diagnostic_code filter restricts to matching diagnostics"
   verify unit "file_path reads every spelling of a source as that source"
   verify unit "a file_path that names no source is refused on file_path"
+  verify unit "a file_path that names no source is refused naming the file"
+  verify unit "with no project served, a file_path is the no-project refusal naming the file"
   verify integration "every suggestion carries the edits the LSP's code action applies"
   verify contract "Provide MCP Suggest Fixes Tool: MCP suggest fixes tool holds — graph_available, fixes_returned, empty_for_clean, tool_invoked_emitted"
 }

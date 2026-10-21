@@ -23,6 +23,5 @@ expression: "normalized(&json, root)"
     }
   ],
   "testable_count": 5,
-  "unconnected_count": 3,
-  "verified_count": 1
+  "unconnected_count": 3
 }

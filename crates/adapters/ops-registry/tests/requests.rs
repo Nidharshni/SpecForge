@@ -10,7 +10,7 @@
 use sha2::{Digest, Sha256};
 use specforge_ops::asking::Asking;
 use specforge_ops::extension::resolve;
-use specforge_ops::registry::{Registry, TrustPolicy};
+use specforge_ops::registry::{LockedPin, Registry, TrustPolicy};
 use specforge_ops_registry::{ConfiguredRegistry, User};
 use specforge_package::{PackageName, PackageRef, Version};
 use specforge_project::testing::TestProject;
@@ -172,4 +172,64 @@ fn the_registry_is_chosen_once() {
             "GET /v1/packages/@acme%2Ftool/1.0.0/download",
         ]
     );
+}
+
+#[specforge_test(
+    behavior = "resolve_registry_source",
+    verify = "a scope_filter that is not a scope sends none of its scope's names to another registry"
+)]
+fn a_scope_filter_that_is_no_scope_asks_no_registry() {
+    for text in ["sdk", "@sdk/", "@SDK", ""] {
+        let public = serving(&["1.0.0"]);
+        let private = serving(&["1.0.0"]);
+        let private_entry = format!(
+            r#"{{"alias":"private","url":"{}","scope_filter":"{text}"}}"#,
+            private.root().as_str()
+        );
+        let dir = project_with(&format!(
+            "{},{private_entry}",
+            default_registry(public.root().as_str())
+        ));
+        let registry = ConfiguredRegistry::for_project(&dir.project_root(), "add");
+
+        let error = registry.versions(&name("@sdk/zeta")).unwrap_err();
+
+        assert_eq!(error.code, "E067", "{text:?}: {error:?}");
+        assert!(
+            public.requests().is_empty(),
+            "{text:?}: {:?}",
+            public.requests()
+        );
+        assert!(
+            private.requests().is_empty(),
+            "{text:?}: {:?}",
+            private.requests()
+        );
+    }
+}
+
+#[specforge_test(
+    behavior = "check_registry_reply",
+    verify = "a fetch of the version specforge.lock pins served as other bytes is refused before its download"
+)]
+fn a_locked_version_served_as_other_bytes_is_refused_before_its_download() {
+    let served = serving(&["1.0.0"]);
+    let dir = project_with(&default_registry(served.root().as_str()));
+    let registry = ConfiguredRegistry::for_project(&dir.project_root(), "add")
+        .as_user(User::at(dir.home(), None));
+
+    let error = registry
+        .fetch(
+            &name("@acme/tool"),
+            &Version::new(1, 0, 0),
+            TrustPolicy::new(true, Asking::Nobody).locked(Some(LockedPin {
+                version: "1.0.0",
+                sha256: "other",
+                key_id: None,
+            })),
+        )
+        .unwrap_err();
+
+    assert!(error.is(specforge_common::codes::R014), "{error:?}");
+    assert_eq!(served.requests(), ["GET /v1/packages/@acme%2Ftool/1.0.0"]);
 }

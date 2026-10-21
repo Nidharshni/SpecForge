@@ -4,7 +4,7 @@
 //! parser's shape (ADR 0093).
 
 use specforge_common::{Diagnostic, DiagnosticData, Sym, codes};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{Edge, FieldForms, Graph};
 
@@ -24,8 +24,9 @@ impl Graph {
     /// `owners` that does. Then W061 over the edges but the declared single
     /// references': a single reference is never part of a reference cycle.
     ///
-    /// Clears all existing edges first. Diagnostics come in node order
-    /// (the graph's nodes are sorted), then the cycles'.
+    /// Clears all existing edges first, then adds each once, in written order.
+    /// Diagnostics come in node order (the graph's nodes are sorted), then
+    /// the cycles'.
     pub(crate) fn link(
         &mut self,
         forms: &FieldForms,
@@ -59,33 +60,15 @@ impl Graph {
             }
         }
 
-        for written in edges.iter().filter(|w| !w.single) {
-            self.add_edge(written.edge);
-        }
-        diagnostics.extend(self.cycle_warnings());
-        // The single references join, keeping the edges in written order.
-        self.clear_edges();
+        // W061 reads the written references but a declared single
+        // reference's (ADR 0093 D7). A derived edge joins later and is never
+        // one: a recursive type is a dependency, not a reference cycle (ADR 0204).
+        let references = super::successors(edges.iter().filter(|w| !w.single).map(|w| &w.edge));
         for written in edges {
             self.add_edge(written.edge);
         }
+        diagnostics.extend(cycle_warnings(&references));
         diagnostics
-    }
-
-    /// W061 for every cycle among the edges added so far: one per strongly
-    /// connected set, its path walking every entity of it.
-    fn cycle_warnings(&self) -> Vec<Diagnostic> {
-        self.cycles()
-            .into_iter()
-            .map(|cycle| {
-                let path: Vec<String> = cycle.path.iter().map(|s| s.to_string()).collect();
-                Diagnostic::new(
-                    codes::W061,
-                    format!("reference cycle detected: {}", path.join(" -> ")),
-                )
-                .with_suggestion("break the cycle by removing or inverting one reference")
-                .with_data(DiagnosticData::ReferenceCycle { path })
-            })
-            .collect()
     }
 
     /// The references that name an existing entity but have no edge
@@ -143,6 +126,23 @@ impl Graph {
                 .join(", ")
         );
     }
+}
+
+/// W061 for every cycle among `references`: one per strongly connected set,
+/// its path walking every entity of it.
+fn cycle_warnings(references: &BTreeMap<Sym, BTreeSet<Sym>>) -> Vec<Diagnostic> {
+    specforge_cycles::cycles(references)
+        .into_iter()
+        .map(|cycle| {
+            let path: Vec<String> = cycle.path.iter().map(|s| s.to_string()).collect();
+            Diagnostic::new(
+                codes::W061,
+                format!("reference cycle detected: {}", path.join(" -> ")),
+            )
+            .with_suggestion("break the cycle by removing or inverting one reference")
+            .with_data(DiagnosticData::ReferenceCycle { path })
+        })
+        .collect()
 }
 
 #[cfg(test)]

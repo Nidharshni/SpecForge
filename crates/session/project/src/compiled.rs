@@ -75,23 +75,18 @@ impl CompiledProject {
     /// (without one no extension loads), which its environment holds, its
     /// sources read from the plain file system. It keeps no stamp (ADR 0030).
     pub fn compile(root: &ProjectRoot, runtime: Option<SharedRuntime>) -> Self {
-        Self::compile_through(root, runtime, &PlainDisk)
+        Self::compile_through(Environment::load(root, runtime), &PlainDisk)
     }
 
-    /// [`Self::compile`], each source read through `sources` (ADR 0166): a
+    /// The project of `env`, each source read through `sources` (ADR 0166): a
     /// surface that bounds its request hands its containment's disk, and a
     /// source the disk refuses is that source's E025, absent from the graph
     /// (ADR 0145 D2). The environment and the checks read the plain file
-    /// system (ADR 0145 D3), as a session's do.
-    pub fn compile_through(
-        root: &ProjectRoot,
-        runtime: Option<SharedRuntime>,
-        sources: &dyn Disk,
-    ) -> Self {
-        Self::checked(
-            Environment::load(root, runtime),
-            &mut Unrecorded::through(sources),
-        )
+    /// system (ADR 0145 D3), as a session's do. A caller that read the
+    /// environment first (a migration plans with its field forms, ADR 0186)
+    /// compiles in that load.
+    pub fn compile_through(env: Environment, sources: &dyn Disk) -> Self {
+        Self::checked(env, &mut Unrecorded::through(sources))
     }
 
     /// Compile the project of an environment already loaded (the CLI routes

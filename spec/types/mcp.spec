@@ -42,7 +42,7 @@ type McpError "MCP Structured Error Response" {
   code       McpErrorCode
   message    string
   entity_id  string     @optional
-  /// The project file the failure is about (file_not_found).
+  /// The spec file the failure is about, as the request spelled it (file_not_found, not_a_source).
   file       string     @optional
   tool       string     @optional
   /// The prompt that refused, for a prompts/get answered with an error.
@@ -318,8 +318,6 @@ type McpStatsResult "Mcp Stats Result" {
   testable_count     integer
   /// Testable entities with at least one verify statement.
   declared_count     integer
-  /// Entities of any kind with at least one verify statement.
-  verified_count     integer
   /// declared_count over testable_count, in percent (0 when nothing is testable).
   declared_pct       float
   /// Testable entities proven, in percent; absent without recorded test results.
@@ -624,7 +622,8 @@ type McpMissingLink "An edge the registries lead an entity to have, which the gr
 
 type McpTracePlanResult "Trace tool response when plan parameter is provided" {
   /// The plan passes: no entry names no entity and none comes before an
-  /// entity it depends on (a missing entry is a warning).
+  /// entity it depends on, entities on one cycle in any order among
+  /// themselves (a missing entry is a warning).
   ok               boolean
   /// Plan entries that name an entity in the graph, in plan order.
   resolved_entries string[]

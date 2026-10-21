@@ -1,6 +1,6 @@
 # A typed edit is judged by the graph change it makes
 
-**Status:** accepted (2026-10-21, architecture round 21, plan 07). Amends [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) D3 (a second condition for writing). Cites [ADR 0167](0167-a-typed-edit-is-compared-with-the-checked-report.md) D1 (E080 is unchanged and judged first), [ADR 0186](0186-a-migration-is-judged-before-it-is-written.md) D1 (the migration's declared-change pattern) and [ADR 0032](0032-one-graph-build.md) (the delta's invariant).
+**Status:** accepted (2026-10-21, architecture round 21, plan 07). Amends [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) D3 (a second condition for writing). Cites [ADR 0167](0167-a-typed-edit-is-compared-with-the-checked-report.md) D1 (E080 is unchanged and judged first), [ADR 0186](0186-a-migration-is-judged-before-it-is-written.md) D1 (the migration's declared-change pattern) and [ADR 0032](0032-one-graph-build.md) (the delta's invariant). Amended by round 22 plan 07 (2026-10-21): a rename declares a substitution; a capture refuses it.
 
 ## Context
 
@@ -34,3 +34,48 @@ A typed edit that legitimately changes another entity than it names (a verb that
 - One edited compile as before, plus a delta over the changed files' nodes.
 - `specforge_graph::compute_graph_delta_over` is public: its `files` must include every file whose text differs between the two builds.
 - No new diagnostic code; no blob input changes.
+
+## A rename declares a substitution (amendment, architecture round 22, plan 07)
+
+### Context
+
+A type name written in a member field or a method signature is open-world: a name no entity declares links nothing and
+reports nothing. Renaming `Session` to `Token` therefore made an unrelated `value Token` name the renamed block (a new
+edge `ApiKey -[composed_types]-> Token`), and renaming it to `string` made every `user: string` parameter name it with
+no new edge to show for it, because the port already pointed at `Session`. A rename had five precondition guards, each
+added after a bug, and no rule for what it may change. An edited compile to judge it would cost about 1.0 s (debug) on
+this repository's spec, per editor rename.
+
+### Decision
+
+- **D3 split.** A create declares every edge into its entity, the names already written for its ID included (a forward
+  reference, E004's remedy, the E003 create stub): that is what declaring the entity means, now stated in
+  `validate_typed_edit`. A rename declares a substitution of its new ID for its old one and nothing else.
+- A name the project writes for no entity that the new ID would make name the renamed entity is a **capture**. The
+  rename asks the graph's finder (ADR 0163) over the compiled parses, with the renamed entity's kind for the new ID, and
+  refuses any before planning: `name_captured`, a conflict about `new_name`, naming each `file:line (holder, field)`.
+  A name in the renamed block's own body is not one (a block derives no edge to itself).
+- A source that does not parse and spells the new ID refuses too (`source_unparsed`), as it does for the old ID.
+- E080 stays off for rename (ADR 0151, round-15 amendment); the rename's graph delta is not its judge.
+- The answers to the plan's open questions: U1 = a (a capture guard only; the edited-compile judge is not built);
+  U2 = a (a typed create's capture of an open-world name is intended language).
+
+### Rejected
+
+- The graph delta as the capture test: the primitive case adds no edge (an edge is a (source, target, label) set).
+- E080 modulo the substitution: it would rewrite diagnostic prose.
+- One judge module shared with migrate: the edited compile cannot see every capture, and migrate's judge differs.
+- A graph helper for the hypothetical walk: two callers of a three-line idiom, each filtering differently.
+- Refusing a host primitive's name in the core: the core has no notion of a primitive type.
+
+### What would reopen it
+
+A rename defect that changes the graph and that no precondition can name ships (then judge it by an edited compile), or
+the core gains a notion of a primitive type.
+
+### Consequences
+
+- MCP `specforge.rename` and LSP `textDocument/rename` refuse such a new ID (`conflict` / `invalid_params`); no schema
+  change. `specforge_ops::authoring::rename::CAPTURED` is public.
+- There is no way to capture on purpose: rename to a free ID, then retype the field.
+- A `use` binding left naming nothing by a rename is not this decision's (`use` is not a finder token).

@@ -234,7 +234,7 @@ catalog! {
         "`specforge extension init` couldn't write the project: creating a directory or writing one of the generated files failed. Check permissions and free space at the destination, remove the partial project, and retry.";
     E067: Error core,
         "Invalid registry configuration",
-        "The registry configuration in `specforge.json` can't be read: the file isn't valid JSON, `registries` isn't an array, or an entry at the reported index is missing a required field, has the wrong type, or has a `url` that isn't a registry's root (an `http` or `https` URL with no query, fragment or user name; write `https://registry.example`, not `https://registry.example/v1`: SpecForge adds the protocol's `/v1`). No registry is asked while an entry can't be read, so a package whose scope that entry serves never goes to another registry. Fix the reported entry.";
+        "The registry configuration in `specforge.json` can't be read: the file isn't valid JSON, `registries` isn't an array, or an entry at the reported index is missing a required field, has the wrong type, or has a `url` that isn't a registry's root (an `http` or `https` URL with no query, fragment or user name; write `https://registry.example`, not `https://registry.example/v1`: SpecForge adds the protocol's `/v1`), or has a `scope_filter` that isn't a scope (`@acme`: `@` and one name part; the message names the scope to write). No registry is asked while an entry can't be read, so a package whose scope that entry serves never goes to another registry. Fix the reported entry.";
     E068: Error core,
         "Coverage gate without a coverage figure",
         "`specforge analyze --min N` (and `specforge.analyze`'s `min`) gates on proof coverage, which the `coverage` pass of `@specforge/testing` computes. Either that pass will not run (the extension isn't enabled, or the run selects a different pass), and the analysis is refused before any pass runs; or it ran and gave no figure this specforge reads (it failed, or `@specforge/testing` is a different version), and the run is unjudged. Enable it with `specforge add @specforge/testing`, run the `coverage` (or `all`) pass, and keep the extension at the version this specforge ships. The run exits 2.";
@@ -444,7 +444,7 @@ catalog! {
         "The version after `@` isn't `latest`, a full version or valid SemVer requirement syntax, so no registry was asked. Use a version such as `1.2.0`, a requirement such as `^1.0`, `~2.3`, `1.x` or `>=1.0.0, <2.0.0`, or `latest`.";
     R_RES_004 = "R-RES-004": Error core,
         "No version satisfies the range",
-        "The registry has versions of the package, but none inside the requested range; the message lists the available ones. Widen the range, or pick one of the listed versions.";
+        "The registry has versions of the package, but none inside the requested range; the message lists the available ones (for a builtin, the one version this specforge embeds). Widen the range, or pick one of the listed versions; for a builtin, drop the version or use the specforge release that embeds the one you need.";
     R_RES_005 = "R-RES-005": Error core,
         "Unresolvable version diamond",
         "Several extensions require this package in ranges that no single published version satisfies (see ADR 0001). Upgrade the requirer with the narrowest range, or pin a compatible version manually.";
@@ -508,6 +508,9 @@ catalog! {
     R013: Error core,
         "Credentials file not writable",
         "The credentials couldn't be saved: creating `~/.specforge`, serializing the credentials, or writing `~/.specforge/credentials.json` failed. Check the permissions on `~/.specforge`.";
+    R014: Error core,
+        "Locked package served as other bytes",
+        "The registry serves the version of a package that `specforge.lock` pins, but not the binary the lock pins: its SHA-256 is another. A published version never changes (R007), so the registry, or the address `specforge.json` sends the package to, now serves something else under that version. Nothing was downloaded or installed, no publisher key was pinned or asked about, and the lock is left as it was; `specforge add --dry-run` reports it too. Check the registry. If you trust the bytes it now serves, remove the extension (`specforge remove <name>`) and add it again, which pins them.";
     W001: Warning software,
         "Behavior implements no feature",
         "A `behavior` entity has no outgoing edge to any `feature`, meaning it doesn't implement anything declared. Add an `implements` reference to a feature, or remove the behavior if it's unused.";

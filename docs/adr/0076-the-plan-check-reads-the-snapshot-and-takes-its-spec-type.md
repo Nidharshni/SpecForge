@@ -1,7 +1,7 @@
 # The plan check reads the snapshot and takes its spec type
 
 **Status:** accepted (2026-10-13, architecture round 9, plan 06). Amends ADR 0015 (I1, I3, the operations list), ADR 0029
-(D1, D2) and ADR 0033 (D1, D2). Amended by round 14, plan 12 (the plan check's key).
+(D1, D2) and ADR 0033 (D1, D2). Amended by round 14, plan 12 (the plan check's key). Amended by [ADR 0204](0204-which-edges-an-entity-depends-on-is-one-graph-answer.md) (D5: entities on one cycle in any order). Amended by round 22, plan 11 (D1: the missing entries are the entities that count toward coverage).
 
 The plan check (`specforge_ops::plan::check`, the plan mode of `specforge.trace` and the trace prompt) asked the
 coverage memo for the project's coverage to learn two facts the entity snapshot holds: an entity's kind is testable,
@@ -65,3 +65,11 @@ for humans): then the decode takes a format, still checked against one schema.
 ## Amendment (architecture round 14, plan 12)
 
 `PlanOutcome`'s entries that resolve are `resolved_entries` (was `affected_entities`); "affected" names the reach of a trace (the trace prompt's `affected_entities`).
+
+## Amendment (architecture round 22, plan 11)
+
+D1's missing entries are the entities whose standing counts toward coverage (`Standing::counts`) and that no entry
+names. They were the testable entities that declare obligations, so a behavior W004 reports (it owes obligations and
+declares none) got no gap although the coverage view, the review and the trace prompt all name it. Every reader of
+"who owes proof" now asks the standing's one answer. A missing entry is still a warning: no plan's `ok` and no exit
+code change. `Standing::declares_obligations` stays for inspect and the hover, which only display it.

@@ -46,7 +46,7 @@ type ProviderConfig "Provider Config" {
 
 // ── Registry Types ──────────────────────────────────────────
 
-type RegistryConfig "One entry of specforge.json's registries. url is the registry's root (an http or https URL without the protocol's /v1; specforge_registry_wire::RegistryRoot). The registry for a package name is the first entry whose scope_filter is its scope, else the first marked default_registry; none is R-OPS-001 (ADR 0045). A credential is kept per registry root in ~/.specforge, never here." {
+type RegistryConfig "One entry of specforge.json's registries. url is the registry's root (an http or https URL without the protocol's /v1; specforge_registry_wire::RegistryRoot). The registry for a package name is the first entry whose scope_filter is its scope, else the first marked default_registry; scope_filter is a scope (@ and one name part, specforge_package::Scope) and another is E067 naming the scope to write; none is R-OPS-001 (ADR 0045). A credential is kept per registry root in ~/.specforge, never here." {
   alias            string  @readonly @unique
   url              string
   scope_filter     string  @optional
@@ -203,14 +203,26 @@ type RegistryManifest "What a registry says it publishes as one version, without
 }
 
 // How a fetch decides a package's publisher (specforge_ops::registry::TrustPolicy):
-// the caller's choices and the key the project's lock records for the name,
-// which is the pin when the user has none of their own. `asking` is who can be
+// the caller's choices and the pin the project's lock records for the name (its
+// key is the pin when the user has none of their own). `asking` is who can be
 // asked about a key change (specforge_ops::asking::Asking).
 type TrustPolicy "Trust Policy" {
   allow_unsigned boolean
   asking         string
-  locked_key     string @optional
-  verify unit "TrustPolicy is what a fetch decides a publisher by: the caller's choices and the key the lock records"
+  locked         LockedPin @optional
+  verify unit "TrustPolicy is what a fetch decides a publisher by: the caller's choices and the pin the lock records"
+}
+
+// What specforge.lock records for a name's registry install
+// (specforge_ops::registry::LockedPin): every fetch of the name is held to its
+// key at any version and to its bytes at its own version. An empty sha256 pins
+// no bytes.
+type LockedPin "Locked Pin" {
+  version string
+  sha256  string
+  key_id  string @optional
+  verify unit "LockedPin is what specforge.lock records for a name's registry install"
+  verify unit "a locked pin admits other bytes only at another version, or when it pins no hash"
 }
 
 // A publisher key a committed lock plan pins for a package name

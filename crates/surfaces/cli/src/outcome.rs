@@ -73,6 +73,22 @@ pub(crate) struct OutputArg {
     pub(crate) format: OutputFormat,
 }
 
+impl OutputArg {
+    /// The option's id and long name.
+    pub(crate) const NAME: &'static str = "format";
+
+    /// The option as clap declares it: the one declaration, the derive's, for a command line built at run time
+    /// (`new`'s), as [`crate::project::ProjectArg::arg`] is `--path`.
+    pub(crate) fn arg() -> clap::Arg {
+        use clap::Args as _;
+        Self::augment_args(clap::Command::new("output"))
+            .get_arguments()
+            .find(|argument| argument.get_id() == Self::NAME)
+            .cloned()
+            .expect("OutputArg declares --format")
+    }
+}
+
 /// How one command reports its operation's refusal: the output format, the
 /// root the files a failed operation left written are named from, and the
 /// exit the refusal costs.

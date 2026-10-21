@@ -609,3 +609,23 @@ fn an_unreadable_token_file_is_r011_before_any_request() {
     assert_eq!(error.kind, specforge_ops::OpErrorKind::PreconditionFailed);
     assert!(world.client.calls().is_empty());
 }
+
+#[specforge_test(
+    behavior = "resolve_registry_source",
+    verify = "a scope_filter that is not a scope sends none of its scope's names to another registry"
+)]
+fn a_scope_filter_that_is_no_scope_publishes_nowhere() {
+    let world = World::with(serde_json::json!([
+        { "alias": "public", "url": "https://public.invalid", "default_registry": true },
+        { "alias": "private", "url": "https://private.invalid", "scope_filter": "sdk" }
+    ]));
+
+    let error = world
+        .registry(Some("t"))
+        .publish(&pkg("@sdk/zeta", "1.0.0").package(), WASM)
+        .unwrap_err();
+
+    assert_eq!(error.code, "E067", "{error:?}");
+    assert!(world.client.calls().is_empty());
+    assert!(!world.signing_key().exists());
+}

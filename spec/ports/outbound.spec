@@ -97,7 +97,9 @@ port Registry "Registry" {
   // published manifest without its binary (what a dry run judges), fetches
   // one that passed the fetch policy, pins the publisher keys a committed install
   // accepted, and publishes one, each to the one registry that serves the
-  // name. A fetch decides its publisher and writes nothing; the lock plan
+  // name. A fetch decides its publisher and writes nothing; it refuses a
+  // version the policy's lock pin pins as other bytes (R014) before it
+  // downloads; the lock plan
   // pins what it accepted as the last step of its change. Its adapters are
   // the configured registry (production) and the in-memory registry
   // (tests); both keep one contract suite. It opens (the refusal of the

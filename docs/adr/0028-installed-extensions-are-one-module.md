@@ -1,6 +1,7 @@
 # Installed extensions are one module
 
 **Status:** accepted (2026-10-07)
+**Amended (2026-10-21, architecture round 22, plan 10):** D7: a declared name beside the builtins is one rule, `extension::not_a_builtins_name`, read by `publish`, `extension validate` and `extension init` as `add` reads it.
 **Amended by [ADR 0181](0181-the-lock-plan-predicts-the-peer-set-by-the-extension-loads-walk.md) (round 19):** D3: the load's walk over the resolved entries is one function, `Resolution::walk`, which the lock plan's prediction also calls.
 **Amended by [ADR 0180](0180-the-extension-load-records-where-each-entry-loads-from.md) (round 19):** D3: each entry's outcome records its origin and whether it loaded; D9: a row's origin is the one the load recorded on its loading entry (`EnabledExtension::loader`), and `Origin` lives in `specforge-installed`.
 **Amended by [ADR 0172](0172-the-extension-a-path-names-is-read-by-one-module.md) (round 18):** D7: a path is read by `LocalComponent::read` for add, init, publish and extension validate alike; a `.wasm` file that can't be read is E040 (was E054).
@@ -203,3 +204,12 @@ Consequences: `specforge remove` and `specforge.remove_extension` answer E033 / 
 first." in the message, kind `precondition_failed`).
 
 **Amended by [ADR 0165](0165-the-lock-a-change-leaves-is-built-when-its-plan-is-checked.md) (2026-10-19):** D4 (round 16): `writable_lock` is asked when a plan that staged is checked, and before anything is read by `update`'s open, an uninstall's open, `Names::ask` for specifiers that install and a removal only the lock could answer.
+
+## Amendment (architecture round 22, plan 10): one rule for a builtin's name
+
+D7's "must not declare a builtin's name" is `extension::not_a_builtins_name`, and holds wherever a name is chosen or
+read: `add`, `update` and `init` (install), `publish` and `extension validate` (read), `extension init` (scaffold),
+each refusing with `extension_conflict` and its own remedy. A package published under a builtin's name could never be
+installed, and its publisher's account claimed the scope on that registry. Rejected: merging `Installable` and
+`publish::validate` into one reader (it would move the load warnings and the module, and concentrate only a
+predicate); a server-side check (the server knows no client's builtins, ADR 0179 D3).

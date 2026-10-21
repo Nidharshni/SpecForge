@@ -4,6 +4,7 @@
     reason = "a test's unwrap is its assertion: a None or an Err fails the test"
 )]
 
+use specforge_graph::FieldForms;
 use specforge_migrate::backup_of;
 use specforge_migrate::{MigrationRecord, RecordChange, migrate_project, run_rollback};
 use specforge_parser::CURRENT_FORMAT_VERSION;
@@ -34,6 +35,7 @@ fn migrated(dir: &TempDir) {
         &[dir.path().join("spec/a.spec")],
         &CURRENT_FORMAT_VERSION,
         &|path: &Path| std::fs::read_to_string(path),
+        &FieldForms::default(),
     );
     assert!(summary.migrated_count >= 1, "{summary:?}");
     let rewrite = &summary.rewrites[0];
@@ -138,6 +140,7 @@ fn a_migrated_file_is_read_once() {
             reads.set(reads.get() + 1);
             std::fs::read_to_string(path)
         },
+        &FieldForms::default(),
     );
 
     assert_eq!(reads.get(), 1);
@@ -159,9 +162,13 @@ fn migrate_project_rewrites_only_the_sources_it_is_given() {
     let root = specforge_common::ProjectRoot::of(dir.path()).unwrap();
     let given = [dir.path().join("spec/a.spec")];
 
-    let summary = migrate_project(&root, &given, &CURRENT_FORMAT_VERSION, &|path: &Path| {
-        std::fs::read_to_string(path)
-    });
+    let summary = migrate_project(
+        &root,
+        &given,
+        &CURRENT_FORMAT_VERSION,
+        &|path: &Path| std::fs::read_to_string(path),
+        &FieldForms::default(),
+    );
 
     assert_eq!(summary.results.len(), 1, "{summary:?}");
     assert_eq!(summary.results[0].file_path, "spec/a.spec");

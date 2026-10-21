@@ -103,6 +103,32 @@ fn publish_refuses_in_one_order() {
 
 #[specforge_test(
     behavior = "publish_to_registry",
+    verify = "publish and extension validate refuse a binary that declares a builtin's name, as add refuses to install it"
+)]
+fn a_binary_declaring_a_builtins_name_is_refused_as_add_refuses_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let wasm = bytes("@specforge/product 9.0.0");
+    let runtime =
+        InProcessRuntime::new().binary(&wasm, declaring("@specforge/product", "9.0.0", &[]));
+    let path = binary(dir.path(), &wasm);
+    let registry = MemoryRegistry::new();
+
+    let validated = validate(&path, &runtime).unwrap_err();
+    let published = report(&path, &registry, &runtime);
+
+    for error in [&validated, refused(&published)] {
+        assert_eq!(error.code, "extension_conflict", "{error:?}");
+        assert_eq!(
+            error.message,
+            "the extension declares the name of the builtin '@specforge/product'"
+        );
+    }
+    assert!(registry.accepted_publishes().is_empty());
+    assert!(registry.asked().is_empty());
+}
+
+#[specforge_test(
+    behavior = "publish_to_registry",
     verify = "publish refuses a binary whose declaration has errors before any network call"
 )]
 fn a_declaration_with_errors_is_refused_before_the_registry_is_asked() {

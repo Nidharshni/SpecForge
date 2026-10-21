@@ -439,6 +439,30 @@ fn a_rename_to_a_reserved_word_is_refused_naming_new_name() {
 }
 
 #[specforge_test(
+    behavior = "provide_mcp_rename_tool",
+    verify = "a new_name the project already writes for no entity is refused as a conflict naming new_name"
+)]
+fn a_rename_onto_a_name_written_for_no_entity_is_a_conflict_naming_new_name() {
+    let text = "type Session \"Session\" {\n  token string\n}\n\ntype ApiKey \"Api Key\" {\n  value Token\n}\n";
+    let mut server = TestProject::new()
+        .enabling(&["@specforge/software"])
+        .file("a.spec", text)
+        .serve_components();
+    let reply = call_tool(
+        &mut server,
+        "specforge.rename",
+        json!({"entity_id": "Session", "new_name": "Token"}),
+    );
+    assert_refused(&reply, "conflict", Some("new_name"), None);
+    let message = crate::tool_errors::mcp_error(&reply)["message"].to_string();
+    assert!(message.contains("a.spec:6"), "{message}");
+    assert_eq!(
+        std::fs::read_to_string(server.root().join("a.spec")).unwrap(),
+        text
+    );
+}
+
+#[specforge_test(
     invariant = "mcp_structured_error_responses",
     verify = "an operation states the request field each refusal is about, and a refusal of the project or the environment is about none"
 )]

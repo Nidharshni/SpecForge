@@ -5,6 +5,7 @@ use axum::{
     response::Json,
 };
 use sha2::{Digest, Sha256};
+use specforge_package::Scope;
 use specforge_registry_wire::{
     ErrorCode, TokenIssued, TokenList, TokenRequest, TokenRevoked, TokenSummary,
 };
@@ -34,6 +35,12 @@ pub(super) async fn admin_create_token(
             crate::ownership::Account::parse(name)
                 .map_err(|why| ApiError::bad_request(ErrorCode::BadRequest, why))
         })?;
+    let scope = req
+        .scope
+        .as_deref()
+        .map(Scope::parse)
+        .transpose()
+        .map_err(|why| ApiError::bad_request(ErrorCode::BadRequest, why.to_string()))?;
     let expires_in_days = req.expires_in_days.unwrap_or(90);
     let created = {
         let st = state.clone();
@@ -41,7 +48,7 @@ pub(super) async fn admin_create_token(
             let raw = auth::create_token(
                 &st.database,
                 &account,
-                req.scope.as_deref(),
+                scope.as_ref(),
                 req.label.as_deref().unwrap_or("default"),
                 Some(expires_in_days),
                 false,
@@ -80,7 +87,7 @@ pub(super) async fn admin_list_tokens(
             .map(|t| TokenSummary {
                 prefix: t.token_hash[..8.min(t.token_hash.len())].to_string(),
                 account: t.account.to_string(),
-                scope: t.scope,
+                scope: t.scope.map(String::from),
                 label: t.label,
                 created_at: t.created_at,
                 expires_at: t.expires_at,

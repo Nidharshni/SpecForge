@@ -5,6 +5,7 @@
 
 mod contracts;
 mod corpus_syntax;
+mod doc_spans;
 mod expr_test;
 mod format_header;
 mod format_version;

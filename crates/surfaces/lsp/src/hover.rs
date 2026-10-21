@@ -3,32 +3,30 @@
 //! help. Rendering only: the facts come from the read view, so the hover
 //! and MCP `specforge.inspect` cannot disagree (ADR 0015, "Inspect").
 
-use crate::document::LineIndex;
-use specforge_common::Diagnostic;
+use specforge_common::{Diagnostic, SourceSpan};
 use specforge_graph::Node;
 use specforge_ops::OpError;
 use specforge_ops::read::inspect::{EntityCoverage, EntityFacts, quote};
 use specforge_parser::{FieldValue, ListItem, TypeMember, Written};
 use specforge_registry::FieldRegistry;
 use std::collections::BTreeMap;
-use tower_lsp::lsp_types::Position;
+use tower_lsp::lsp_types::{Position, Range};
 
 /// The rule between the sections of a hover.
 pub const SECTION: &str = "\n\n---\n\n";
 
-/// The published diagnostics whose range (in the document `index`
-/// indexes) holds `position`, in published order.
-pub fn diagnostics_at<'d>(
-    published: &'d [Diagnostic],
-    index: &LineIndex,
+/// The published diagnostics whose range (`range_of` their span; one without a range is under no
+/// cursor) holds `position`, in published order.
+pub fn diagnostics_at(
+    published: &[Diagnostic],
+    range_of: impl Fn(&SourceSpan) -> Option<Range>,
     position: Position,
-) -> Vec<&'d Diagnostic> {
+) -> Vec<&Diagnostic> {
     let at = (position.line, position.character);
     published
         .iter()
         .filter(|diag| {
-            diag.span.as_ref().is_some_and(|span| {
-                let range = index.range(span);
+            diag.span.as_ref().and_then(&range_of).is_some_and(|range| {
                 (range.start.line, range.start.character) <= at
                     && at <= (range.end.line, range.end.character)
             })

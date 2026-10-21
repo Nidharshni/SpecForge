@@ -731,7 +731,7 @@ specforge check
 
 ```bash
 specforge stats
-#   Entities: 30   Edges: 35   Verified: 9
+#   Entities: 30   Edges: 35   Declared: 100% of 9 testable
 
 specforge trace task_management
 ```

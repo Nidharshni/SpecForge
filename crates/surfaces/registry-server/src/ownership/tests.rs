@@ -3,18 +3,23 @@
 use crate::db::{Database, PackageVersion, TokenRecord};
 use crate::ownership::Account;
 use crate::ownership::{AssignRefused, WriteRefused};
-use specforge_package::PackageName;
+use specforge_package::{PackageName, Scope};
 
 /// A token of `account` (with `filter`), which the database must know.
 fn writer(db: &Database, account: &str, filter: Option<&str>) -> TokenRecord {
     let hash = format!("hash-{account}-{}", filter.unwrap_or("all"));
-    db.insert_token(&hash, &acct(account), filter, "t", None, false)
+    let filter = filter.map(scope);
+    db.insert_token(&hash, &acct(account), filter.as_ref(), "t", None, false)
         .unwrap();
     db.validate_token(&hash).unwrap()
 }
 
 fn acct(text: &str) -> Account {
     Account::parse(text).unwrap()
+}
+
+fn scope(text: &str) -> Scope {
+    Scope::parse(text).unwrap()
 }
 
 fn name(text: &str) -> PackageName {
@@ -136,26 +141,21 @@ fn an_assigned_scope_is_written_by_its_new_account_only() {
     db.publish(&pv("@x/y"), &name("@x/y"), &old).unwrap();
 
     assert_eq!(
-        db.assign_scope("@x", &acct("new")),
+        db.assign_scope(&scope("@x"), &acct("new")),
         Ok(Some("old".to_string()))
     );
     assert_eq!(db.may_write(&new, &name("@x/z")), Ok(()));
     assert!(db.may_write(&old, &name("@x/z")).is_err());
     // An unclaimed scope is assigned too.
-    assert_eq!(db.assign_scope("@free", &acct("old")), Ok(None));
+    assert_eq!(db.assign_scope(&scope("@free"), &acct("old")), Ok(None));
 }
 
 #[test]
 fn assigning_to_an_unknown_account_is_refused() {
     let (_dir, db) = database();
     assert_eq!(
-        db.assign_scope("@x", &acct("ghost")),
+        db.assign_scope(&scope("@x"), &acct("ghost")),
         Err(AssignRefused::UnknownAccount("ghost".to_string()))
     );
-    writer(&db, "real", None);
-    assert!(matches!(
-        db.assign_scope("x", &acct("real")),
-        Err(AssignRefused::NotAScope(_))
-    ));
     assert_eq!(db.scope_owner("@x"), None);
 }

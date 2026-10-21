@@ -2,7 +2,7 @@
 
 **Status:** accepted (2026-10-18, syntax round, plan 02). Amends the `migration_semantic_preservation` invariant (a
 migration step may add a title where a block had none) and [ADR 0095](0095-the-format-header-is-read-and-rewritten-by-one-module.md) D3
-(the parser also tells where the header stands).
+(the parser also tells where the header stands). D4 and its amendment of ADR 0095 D3 amended by [ADR 0202](0202-a-blocks-doc-comment-is-where-the-parse-read-it.md): the step lifts the doc comment the parse read; `header_row` is private again.
 
 A block's title is optional in the grammar and a union block has no slot for one, so 659 tracked blocks reach the graph
 with no title: 568 entity blocks and 91 unions. For 119 of them the author wrote the description as a `//` comment

@@ -127,7 +127,7 @@ pub fn no_project(no_project: NoProject) -> McpError {
 /// the call's target makes it: with nothing served ([`CallTarget::EmptySession`])
 /// a file or an entity is not "not found", there is no project to look in,
 /// so the refusal is [`no_project`] (`precondition_failed`), its message
-/// leading with what was asked, `entity_id` kept and `argument` dropped. Any
+/// leading with what was asked, `entity_id` and `file` kept and `argument` dropped. Any
 /// other refusal, and every refusal of a call that has a project, is
 /// returned as it is. The one place that rule is applied: the dispatchers of
 /// tools, prompts and resources call it on what their handler refused with
@@ -158,6 +158,7 @@ pub(crate) fn without_project(target: &CallTarget, error: McpError) -> McpError 
         refused.argument = Some(TargetArgument::Path.name().to_string());
     }
     refused.entity_id = error.entity_id;
+    refused.file = error.file;
     refused.tool = error.tool;
     refused.prompt = error.prompt;
     refused.uri = error.uri;

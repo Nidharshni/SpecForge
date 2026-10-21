@@ -2086,10 +2086,6 @@ expression: listing
         "unconnected_count": {
           "minimum": 0,
           "type": "integer"
-        },
-        "verified_count": {
-          "minimum": 0,
-          "type": "integer"
         }
       },
       "required": [
@@ -2099,7 +2095,6 @@ expression: listing
         "unconnected_count",
         "testable_count",
         "declared_count",
-        "verified_count",
         "declared_pct",
         "diagnostic_summary"
       ],

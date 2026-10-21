@@ -40,15 +40,9 @@ impl ProjectArg {
     }
 
     /// The option among raw `args` (`--path <dir>` or `--path=<dir>`), else
-    /// `.`: an extension command's project, needed to build the command line
-    /// that parses `args`.
+    /// `.`: the project of a command line that is built from the project, an
+    /// extension command's or `new`'s (ADR 0053 D7a).
     pub(crate) fn scan(args: &[String]) -> Self {
-        Self::named(".").overridden_by(args)
-    }
-
-    /// The project `args` name with `--path` (`--path <dir>` or `--path=<dir>`), else this one: a command that
-    /// parses its own options after it has read the project (`new`'s field flags; an extension command's).
-    pub(crate) fn overridden_by(&self, args: &[String]) -> Self {
         let flag = format!("--{}", Self::NAME);
         let mut args = args.iter();
         while let Some(arg) = args.next() {
@@ -60,7 +54,7 @@ impl ProjectArg {
                 return Self::named(value);
             }
         }
-        self.clone()
+        Self::named(".")
     }
 
     fn named(value: &str) -> Self {
@@ -132,16 +126,6 @@ mod tests {
         assert_eq!(
             ProjectArg::scan(&args(&["features", "--path"])).path(),
             Path::new(".")
-        );
-        assert_eq!(
-            ProjectArg::named("/a").overridden_by(&args(&["x"])).path(),
-            Path::new("/a")
-        );
-        assert_eq!(
-            ProjectArg::named("/a")
-                .overridden_by(&args(&["x", "--path", "/b"]))
-                .path(),
-            Path::new("/b")
         );
     }
 }

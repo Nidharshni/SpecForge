@@ -211,7 +211,7 @@ impl MemoryRegistry {
             first_use,
         };
         let users = self.pins.lock().unwrap().get(name).cloned();
-        let (expected, from_lock) = match (users, policy.locked_key) {
+        let (expected, from_lock) = match (users, policy.locked_key()) {
             (Some(pinned), _) => (pinned, false),
             (None, Some(locked)) => (locked.to_string(), true),
             (None, None) => return Ok(signed(true)),
@@ -235,7 +235,7 @@ impl MemoryRegistry {
             } else {
                 format!("pinned '{expected}'")
             };
-            let locked_too = !from_lock && policy.locked_key == Some(key_id);
+            let locked_too = !from_lock && policy.locked_key() == Some(key_id);
             let also = if locked_too {
                 " (the key specforge.lock records)"
             } else {
@@ -324,10 +324,11 @@ impl Registry for MemoryRegistry {
     }
 
     /// The package published as `name@version`: R006 "Package not found: {name}@{version}" when there is none,
+    /// R014 when the policy's lock pin pins this version as other bytes (before anything else),
     /// R-TRUST-001 "package '{name}' is not signed" (suggestion "allow unsigned packages for this install to
     /// accept the risk") when unsigned and `!allow_unsigned`; else its bytes, `hex_sha256(bytes)`, its declaration and
     /// publisher. A signed package's publisher is decided against the key expected for `name` (the
-    /// user's pin, else `policy.locked_key`): first use without one, `first_use: false` when it
+    /// user's pin, else `policy.locked_key()`): first use without one, `first_use: false` when it
     /// matches the user's pin, a key change otherwise (`Repinned` when `policy.asking` consents,
     /// else R-TRUST-003). Nothing is pinned: that is [`Registry::pin`].
     fn fetch(
@@ -348,6 +349,7 @@ impl Registry for MemoryRegistry {
         else {
             return Err(not_found(name, version));
         };
+        policy.admits(name, version, &hex_sha256(&published.wasm))?;
         if published.key_id.is_none() && !policy.allow_unsigned {
             return Err(OpError::coded(
                 crate::OpErrorKind::PermissionDenied,

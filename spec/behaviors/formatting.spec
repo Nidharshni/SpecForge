@@ -102,6 +102,9 @@ behavior preserve_comments "Preserve Comments During Formatting" {
     comment between its tokens is kept as written instead, its first line
     at the body's indentation, so no comment is dropped and none swallows
     the code after it.
+    The format header is kept where it stands and is never a block's doc
+    comment; formatting never changes which comment lines are a block's doc
+    comment, as the parse reads them (ADR 0202).
   """
   verify unit "leading comment attaches to following node"
   verify unit "trailing comment attaches to preceding node on same line"
@@ -109,6 +112,8 @@ behavior preserve_comments "Preserve Comments During Formatting" {
   verify unit "standalone comment block between blocks is preserved"
   verify unit "a statement holding a comment between its tokens is kept as written"
   verify property "no comments are lost after formatting"
+  verify property "formatting keeps each block's doc comment as the parse reads it"
+  verify unit "the format header stays where it is and documents no block"
   verify contract "Preserve Comments During Formatting: comment preservation holds — cst_available, all_comments_attached, no_comments_lost"
 }
 

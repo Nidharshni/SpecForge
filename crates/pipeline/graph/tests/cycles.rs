@@ -131,3 +131,31 @@ fn cycles_finds_a_self_loop() {
     assert_eq!(cycles.len(), 1);
     assert_eq!(strings(&cycles[0]), (vec!["a"], vec!["a", "a"]));
 }
+
+#[specforge_test(
+    behavior = "build_in_memory_graph",
+    verify = "a built graph's cycles count every edge, a derived or single reference's included; W061 counts the written references only"
+)]
+fn a_built_graphs_cycles_count_every_edge_while_w061_counts_the_written_references() {
+    let source = r#"
+shape Expr "Expr" {
+  operands Term[]
+}
+shape Term "Term" {
+  inner Expr
+}
+shape Left "Left" {
+  base Right
+}
+shape Right "Right" {
+  base Left
+}
+"#;
+    let (graph, diagnostics) = crate::derived::build(source, crate::derived::derived());
+
+    let w061: Vec<_> = diagnostics.iter().filter(|d| d.code == "W061").collect();
+    assert!(w061.is_empty(), "{w061:?}");
+    let cycles = graph.cycles();
+    let members: Vec<_> = cycles.iter().map(|c| strings(c).0).collect();
+    assert_eq!(members, [vec!["Expr", "Term"], vec!["Left", "Right"]]);
+}

@@ -1,7 +1,8 @@
 # Every extension change is one lock-plan change
 
 **Status:** accepted (2026-10-13, architecture round 8, plan 02). Amends ADR 0041 (amendments A5, B1), ADR 0028 (D4, D8,
-D9, D10) and ADR 0045 (D2).
+D9, D10) and ADR 0045 (D2). Amended (2026-10-21, architecture round 22, plan 10): D6's builtin specifier carries an optional `@requirement`, read as a package reference's and held to the embedded builtin.
+**D3 amended by [ADR 0201](0201-a-locked-package-is-fetched-to-the-pin-its-lock-entry-records.md) (round 22):** a dry run refuses a locked version served as other bytes (R014), from the manifest's SHA-256.
 **D5 amended by [ADR 0180](0180-the-extension-load-records-where-each-entry-loads-from.md) (round 19):** `Origin::of` is `Resolution::origin`, and the inventory reads the recorded origin.
 
 ADR 0041 made the lock plan the one way `add`, `update` and `init` install, and its round-7 amendment made it judge the
@@ -46,7 +47,8 @@ changed `add` only because a plan rule changed what its callers call. Three chan
   extension comes from; the peer set's members and the inventory's rows read it. A row's origin is that of the entry the
   load loaded it by (ADR 0028 D9 amended: a `.wasm` file entry that loaded beside a named entry that did not is
   `file:`).
-- **D6. A specifier's syntax decides its source.** A builtin's name; `git+...`; a path ending in `.wasm` or starting with
+- **D6. A specifier's syntax decides its source.** A builtin's name, with an optional `@requirement` read as a package reference's (E054, R-RES-003) and held to the
+  builtin this specforge embeds (`VersionRequirement::pick`, R-RES-004); `git+...`; a path ending in `.wasm` or starting with
   `./`, `../`, `/`; a package reference when it starts with `@`; anything else is a local path. Registry packages are
   always `@scope/name` (ADR 0036), so nothing a registry serves is lost, and `parse` stays pure. `update <name>` of a
   name the lock does not hold is refused before any registry is asked.

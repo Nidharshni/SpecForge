@@ -1,6 +1,6 @@
 # The LSP reads a document through one module
 
-**Status:** accepted (2026-10-06) Amended by [ADR 0161](0161-a-stub-fix-is-a-typed-edit.md) D5: code actions resolve a stub's edits. Amended by round 17 plan 07: the code-action request checks its document first (via ADR 0161 D5's amendment). Amended by round 18 plan 08 (2026-10-19): what a buffer is to the compile has three states (D7), hover's diagnostics follow D3, and a change plan is one step (D9). Amended by [ADR 0191](0191-a-new-block-is-laid-out-by-the-typed-create.md) (D6: a kind's and a field's snippet is the typed create's skeleton).
+**Status:** accepted (2026-10-06) Amended by [ADR 0161](0161-a-stub-fix-is-a-typed-edit.md) D5: code actions resolve a stub's edits. Amended by round 17 plan 07: the code-action request checks its document first (via ADR 0161 D5's amendment). Amended by round 18 plan 08 (2026-10-19): what a buffer is to the compile has three states (D7), hover's diagnostics follow D3, and a change plan is one step (D9). Amended by [ADR 0191](0191-a-new-block-is-laid-out-by-the-typed-create.md) (D6: a kind's and a field's snippet is the typed create's skeleton). Amended by [ADR 0205](0205-what-a-buffer-typed-since-the-compile-is-told-is-one-rule.md) (D3, D7: a span is a range only of an editor text that is the compiled text; a publish converts against the compiled text; locations no longer stay positions in it).
 
 The LSP answered questions about a `.spec` buffer with seven scanners of its own: a bracket scanner for
 completion that counted `[` inside strings, a brace scanner that respected strings but not `"""`, a
@@ -126,6 +126,8 @@ identifier or scheme ref ID at a reference position that names an entity, a fiel
 navigation's occurrence at its position. Hover, definition and references answer for that entity;
 prepareRename and rename are refused as `ContentModified`. Locations stay positions in the compiled text
 (D3). One type owns the rule (`navigation::Compiled`: ranges, locations, staleness, the cursor's target).
+
+*(ADR 0205: a location in a file whose editor text is not the compiled text is left out, not answered in the compiled text.)*
 
 **Amended by round 18 plan 08 (2026-10-19):** `Compiled::editor_text` says what the editor's text of a file is
 to the compile: the compiled text, changed since (a compile is coming: the request is refused as

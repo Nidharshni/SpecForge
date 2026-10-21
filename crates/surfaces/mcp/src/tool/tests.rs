@@ -72,6 +72,22 @@ fn every_operation_kind_has_an_error_code() {
 }
 
 #[test]
+fn an_operation_failure_names_its_file() {
+    let error: McpError = OpError::new(
+        OpErrorKind::FileNotFound,
+        "file_not_found",
+        "'a.spec' is none of this project's sources",
+    )
+    .with_file("a.spec")
+    .with_suggestion("did you mean 'b.spec'?")
+    .into();
+    let json = serde_json::to_value(&error).unwrap();
+    assert_eq!(json["file"], "a.spec");
+    assert_eq!(json["data"]["suggestion"], "did you mean 'b.spec'?");
+    assert!(json.get("entity_id").is_none(), "{json}");
+}
+
+#[test]
 fn an_operation_failure_is_an_mcp_error_by_its_kind() {
     let error: McpError = OpError::new(OpErrorKind::Conflict, "entity_exists", "taken")
         .with_entity("alpha")

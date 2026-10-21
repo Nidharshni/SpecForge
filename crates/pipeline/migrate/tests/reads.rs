@@ -3,6 +3,7 @@
 use std::io;
 use std::path::Path;
 
+use specforge_graph::FieldForms;
 use specforge_migrate::migrate_project;
 use specforge_parser::CURRENT_FORMAT_VERSION;
 
@@ -19,6 +20,7 @@ fn a_file_the_read_refuses_fails_and_is_not_written() {
         std::slice::from_ref(&file),
         &CURRENT_FORMAT_VERSION,
         &|_: &Path| Err(io::Error::new(io::ErrorKind::InvalidInput, refusal)),
+        &FieldForms::default(),
     );
     assert_eq!(summary.failed_count, 1, "{summary:?}");
     assert_eq!(

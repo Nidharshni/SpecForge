@@ -34,8 +34,9 @@ behavior scaffold_wasm_extension_project "Scaffold Wasm Extension Project" {
     component_guest! generates every export, and a cargo configuration
     building a wasm32-wasip2 component. No manifest file is written: the
     binary declares the extension (ADR 0012).
-    It MUST refuse to scaffold into a directory that already exists,
-    default the extension name when --name is not given, and describe what
+    It MUST refuse to scaffold into a directory that already exists, or an
+    extension named as a builtin (extension_conflict: no project could
+    install it), default the extension name when --name is not given, and describe what
     it created as structured JSON under --format=json.
   """
   produces [extension_project_scaffolded]
@@ -43,6 +44,7 @@ behavior scaffold_wasm_extension_project "Scaffold Wasm Extension Project" {
   verify unit "scaffold creates src/ with skeleton exports"
   verify unit "scaffold builds for wasm32-wasip2"
   verify unit "specforge extension init rejects when directory already exists"
+  verify unit "specforge extension init refuses a builtin's name"
   verify unit "specforge extension init --format=json outputs structured JSON"
   verify unit "specforge extension init uses default name when --name not provided"
   verify unit "the scaffold's extension name is a package name"
@@ -109,7 +111,8 @@ behavior validate_wasm_extension_locally "Validate Wasm Extension Locally" {
     itself and its diagnostics, in the shape every command writes a
     diagnostic, under --format json; it reads and declares the binary as
     publish does. No built component is an error (E040), and
-    a binary that is not an extension is E028.
+    a binary that is not an extension is E028, and one declaring a builtin's
+    name is extension_conflict, as publish refuses it.
   """
   produces   [extension_fixtures_validated]
   verify unit "validation loads local .wasm binary"

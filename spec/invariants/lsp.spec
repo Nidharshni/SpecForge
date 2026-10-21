@@ -70,20 +70,29 @@ invariant lsp_utf16_positions "LSP UTF-16 Positions" {
     end; nothing else in the LSP converts them (ADR 0023). A span of
     the graph or of a diagnostic is a position in the text the project was
     compiled from, so it converts against that text, never against the
-    buffer typed since nor the disk now; a file the compile holds no text
-    of has no range (its location, symbol or edit is left out, a fix or a
-    rename that would need it is refused whole), never byte columns passed
-    off as UTF-16. While the document a code-action request names is not
+    buffer typed since nor the disk now, and is a range only of an editor
+    text (the open buffer, else the file on disk) that is that text: in a
+    file typed since, changed on disk since, or of which the compile holds
+    no text, its location, symbol or definition is left out and a fix or a
+    rename that would need it is refused whole, never byte columns passed
+    off as UTF-16. A diagnostics publish, labelled with the version of the
+    text the project was compiled from, places its diagnostics in that
+    text. While the document a code-action request names is not
     that text, no action is listed, whether the client resolves code
     actions or not, and none is planned.
   """
   risk      medium
   verify unit "the line index converts byte columns to UTF-16 and back on every line"
   verify unit "the word under a cursor is found by its UTF-16 column"
-  verify unit "a span converts against the text the project was compiled from, not the buffer typed since"
+  verify unit "a span converts against the text the project was compiled from, and is no range of a buffer typed since"
   verify unit "a span of a file the compile holds no text of has no range, never byte columns"
   verify unit "a fix is offered whole or not at all: never over a buffer typed since, nor a file with no compiled text"
   verify unit "no code action is listed over a buffer typed since the compile, to a client that resolves them or not"
+  verify unit "an outline of a buffer typed since the compile places no symbol at a line of the compiled text"
+  verify unit "references from a buffer typed since leave out its lines and keep those of files that are the compiled text"
+  verify unit "a definition in a buffer typed since is not placed at its compiled position; one in a file that is the compiled text is"
+  verify unit "workspace symbols leave out the entities of a buffer typed since the compile"
+  verify unit "a list leaves out a closed file changed on disk since the compile until its change is compiled"
   verify unit "a column past its line's end, up to the largest, resolves to the line's end"
 }
 
@@ -117,7 +126,10 @@ invariant cursor_names_one_entity "One Entity Under the Cursor" {
     lags the text while the user types (ADR 0023). While the document is not
     the text the project was compiled from (an edit waits for its compile),
     the token is never looked up by its position in the compiled text: the
-    cursor names what its own word names at a reference position.
+    cursor names what its own word names at a reference position. Hover,
+    definition and references then answer for that entity, with no
+    location in a file whose editor text is not the compiled text
+    (lsp_utf16_positions).
   """
   risk      medium
   verify unit "hover and go-to-definition resolve the same entity on every token of a document"

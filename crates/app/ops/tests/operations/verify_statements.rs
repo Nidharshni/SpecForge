@@ -1,4 +1,4 @@
-use super::compiled_support::{built, exported, exported_as, stats_of};
+use super::compiled_support::{built, exported, exported_as};
 use specforge_ops::read::export::Format;
 use specforge_test_macros::test as specforge_test;
 
@@ -129,37 +129,6 @@ behavior parse_input "Parse Input" {
         node.get("verify").is_some(),
         "context format should include verify: {:?}",
         node,
-    );
-}
-
-#[test]
-fn stats_verified_count_matches() {
-    let (_project, compiled) = built(&[(
-        "main.spec",
-        r#"
-behavior alpha "A" {
-    contract "first"
-    verify unit "test alpha"
-    verify integration "test alpha integration"
-}
-behavior beta "B" {
-    contract "second"
-    verify unit "test beta"
-}
-feature gamma "G" { problem "p" solution "s" }
-"#,
-    )]);
-
-    let parsed = serde_json::to_value(stats_of(&compiled)).unwrap();
-
-    let verified = parsed["verified_count"].as_u64().unwrap();
-    // alpha has 2 verify, beta has 1 = 3 total verify declarations
-    // (verified_count counts entities with at least one verify, so 2)
-    // Or it counts total verify statements — depends on implementation
-    assert!(
-        verified >= 2,
-        "verified_count should be at least 2, got {}",
-        verified
     );
 }
 

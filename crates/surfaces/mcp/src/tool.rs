@@ -356,5 +356,4 @@ mod spec_tests;
 mod tests;
 
 pub use core_tool::{CoreTool, Handled, Previews, ToolSpec, spec};
-pub(crate) use error::file_not_found;
 pub use error::{ErrorCode, McpError, entity_not_found, is_diagnostic_code};

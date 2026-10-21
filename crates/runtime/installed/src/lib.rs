@@ -128,15 +128,14 @@ impl Installed {
         format!("specforge add {specifier}")
     }
 
-    /// The publisher key id the lock records for `name`'s registry install;
-    /// `None` when the lock holds no registry install of it, or holds one
-    /// without a key (unsigned, or locked before signing), or can't be read.
-    pub fn locked_key(&self, name: &PackageName) -> Option<&str> {
+    /// The lock's entry for `name`'s registry install; `None` when the lock holds no registry
+    /// install of it or can't be read. What a fetch of `name` is held to
+    /// (`specforge_ops::registry::LockedPin`).
+    pub fn locked(&self, name: &PackageName) -> Option<&LockFileEntry> {
         self.lock
             .entries()
             .iter()
             .find(|e| e.name == *name && e.source.is_registry())
-            .and_then(|e| e.key_id.as_deref())
     }
 }
 
@@ -168,7 +167,7 @@ mod tests {
     }
 
     #[test]
-    fn the_lock_answers_the_key_of_a_registry_install_only() {
+    fn the_lock_answers_the_entry_of_a_registry_install_only() {
         let entry = |name: &str, source: &str, key: Option<&str>| LockFileEntry {
             name: PackageName::parse(name).unwrap(),
             version: "1.0.0".to_string(),
@@ -186,10 +185,14 @@ mod tests {
             ..Default::default()
         };
         let installed = Installed::with_lock(Path::new("/p"), LockState::Read(lock));
-        let key = |name: &str| installed.locked_key(&PackageName::parse(name).unwrap());
+        let key = |name: &str| {
+            installed
+                .locked(&PackageName::parse(name).unwrap())
+                .map(|e| e.key_id.as_deref())
+        };
 
-        assert_eq!(key("@a/signed"), Some("k1"));
-        assert_eq!(key("@a/unsigned"), None);
+        assert_eq!(key("@a/signed"), Some(Some("k1")));
+        assert_eq!(key("@a/unsigned"), Some(None));
         assert_eq!(key("@a/local"), None, "a local install has no publisher");
         assert_eq!(key("@a/absent"), None);
         let unreadable = Installed::with_lock(
@@ -200,7 +203,9 @@ mod tests {
             )),
         );
         assert_eq!(
-            unreadable.locked_key(&PackageName::parse("@a/signed").unwrap()),
+            unreadable
+                .locked(&PackageName::parse("@a/signed").unwrap())
+                .map(|e| &e.name),
             None
         );
     }

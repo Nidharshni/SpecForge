@@ -27,6 +27,25 @@ pub(crate) fn line_counts(text: &str) -> BTreeMap<&str, usize> {
 }
 
 #[specforge_test(
+    behavior = "preserve_comments",
+    verify = "the format header stays where it is and documents no block"
+)]
+fn the_format_header_stays_where_it_is_and_documents_no_block() {
+    let bare = "// specforge-format: 0.9\ntype S \"S\" {\n  user string\n}\n";
+    let documented =
+        "// specforge-format: 1.0\n// The session.\ntype S \"S\" {\n  user string\n}\n";
+    for source in [bare, documented] {
+        assert_eq!(fmt(source), source);
+    }
+    let first_doc_line = |s: &str| {
+        let file = specforge_parser::parse(s, "a.spec");
+        file.entities[0].doc_span.as_ref().map(|d| d.start_line)
+    };
+    assert_eq!(first_doc_line(bare), None);
+    assert_eq!(first_doc_line(documented), Some(2));
+}
+
+#[specforge_test(
     behavior = "format_with_parse_errors",
     verify = "forms that share a line with a form left unchanged are kept with it, each line written once"
 )]

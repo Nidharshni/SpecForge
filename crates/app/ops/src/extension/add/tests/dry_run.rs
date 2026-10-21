@@ -78,7 +78,7 @@ fn a_dry_run_of_a_present_extension_answers_as_the_add_would() {
 
     // A builtin, enabled: the no-op the real add returns.
     let dir = project_with(r#"{"name":"p","version":"0.1.0","extensions":["@specforge/product"]}"#);
-    let source = Source::Builtin("@specforge/product");
+    let source = Source::builtin("@specforge/product");
     let before = crate::config::testing::files_under(dir.path());
     let added = add(
         &dry(
@@ -111,9 +111,9 @@ fn a_dry_run_of_several_specifiers_previews_each() {
     let (_files, wasm) = greet_file();
     let before = files_under(dir.path());
     let extensions = vec![
-        Source::Builtin("@specforge/product").into(),
+        Source::builtin("@specforge/product").into(),
         Source::Local(wasm.clone()).into(),
-        Source::Builtin("@specforge/product").into(),
+        Source::builtin("@specforge/product").into(),
     ];
 
     let added = add(
@@ -149,7 +149,7 @@ fn a_dry_run_of_several_specifiers_previews_each() {
     // A dry run refuses what the add would refuse, naming it.
     let missing = dir.path().join("missing.wasm");
     let extensions = vec![
-        Source::Builtin("@specforge/product").into(),
+        Source::builtin("@specforge/product").into(),
         Source::Local(missing).into(),
     ];
     let error = add(
@@ -190,7 +190,7 @@ fn a_dry_run_reports_the_builtins_it_would_enable() {
     let added = add(
         &several(
             &specforge_common::ProjectRoot::of(dir.path()).unwrap(),
-            vec![Source::Builtin("@specforge/formal").into()],
+            vec![Source::builtin("@specforge/formal").into()],
             true,
         ),
         &crate::registry::Unconfigured("add"),

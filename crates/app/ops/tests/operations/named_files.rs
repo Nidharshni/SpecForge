@@ -247,3 +247,26 @@ fn the_view_refuses_a_project_root_spelling_naming_its_key() {
     );
     assert_eq!(view.source_place("spec/new.spec").unwrap(), "spec/new.spec");
 }
+
+#[specforge_test_macros::test(
+    behavior = "read_a_named_spec_file",
+    verify = "a refusal of a named spec file names the file as the request spelled it"
+)]
+fn a_refusal_of_a_named_file_names_it() {
+    let (_dir, project) = spec_dir_project();
+    let view = ProjectView::of(&project);
+    for named in ["nope.spec", "./gone.spec", "spec/a.spec", "../x.spec"] {
+        assert_eq!(
+            view.source(named).unwrap_err().file(),
+            Some(named),
+            "{named}"
+        );
+    }
+    for named in ["notes.txt", "spec/a.spec", "../x.spec"] {
+        assert_eq!(
+            view.source_place(named).unwrap_err().file(),
+            Some(named),
+            "{named}"
+        );
+    }
+}

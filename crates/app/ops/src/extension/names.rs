@@ -16,6 +16,7 @@ pub(crate) use specifier::{
 
 use super::candidate::LocalFile;
 use super::lock_plan::{Ask, Asked, Checked, LockPlan};
+use super::resolve::embedded;
 use super::{Claimed, Claims, Install};
 use crate::{Containment, OpError};
 use specforge_package::{PackageName, PackageRef, Version};
@@ -188,7 +189,7 @@ impl<'r> Names<'r> {
     /// What each specifier names, in order: one [`Named`] per string, index for index. `packages`
     /// resolves a registry package (`(specifier, package) -> version`). Refusals of one specifier
     /// are named among several: reading a local file (E040, E028, E072, a binary declaring a
-    /// builtin's name, a path outside the containment), git (E064), and whatever `packages` returns.
+    /// builtin's name, a path outside the containment), a builtin asked at a version it is not (R-RES-004), git (E064), and whatever `packages` returns.
     /// A claim conflict is `extension_conflict`, naming both specifiers and not prefixed.
     fn name_each<'a>(
         &self,
@@ -204,9 +205,12 @@ impl<'r> Names<'r> {
                 continue;
             }
             let claimed = match &wanted.source {
-                Source::Builtin(name) => claims
-                    .builtin(wanted, name)?
-                    .into_named(|| Named::Builtin(name)),
+                Source::Builtin { name, requirement } => {
+                    embedded(runtime, name, requirement).map_err(|error| self.named(at, error))?;
+                    claims
+                        .builtin(wanted, name)?
+                        .into_named(|| Named::Builtin(name))
+                }
                 Source::Local(path) => {
                     let local = LocalFile::read(runtime, path, self.place.containment)
                         .map_err(|error| self.named(at, error))?;

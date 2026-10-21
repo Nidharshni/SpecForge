@@ -15,6 +15,8 @@ use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use specforge_protocol_types::ExtensionDeclaration;
 
+use crate::scope::Scope;
+
 /// The longest package name, in bytes (npm's limit).
 pub const MAX_NAME_LEN: usize = 214;
 
@@ -93,10 +95,10 @@ impl PackageName {
         &self.text
     }
 
-    /// `@scope` of a scoped name, with its `@` (the namespace a publish claims, the
-    /// `scope_filter` a registry is chosen by); `None` for a local name.
-    pub fn scope(&self) -> Option<&str> {
-        self.slash.map(|slash| &self.text[..slash])
+    /// The scope of a scoped name (`@acme`); `None` for a local name.
+    pub fn scope(&self) -> Option<Scope> {
+        self.slash
+            .map(|slash| Scope(self.text[..slash].to_string()))
     }
 
     /// The part after the scope (`tool` of `@acme/tool`); the whole of a local name.
@@ -116,14 +118,14 @@ impl PackageName {
     /// layout joins under `.specforge/extensions`. Never escapes the directory it is joined to.
     pub fn relative_path(&self) -> PathBuf {
         match self.scope() {
-            Some(scope) => PathBuf::from(scope).join(self.base()),
+            Some(scope) => PathBuf::from(scope.as_str()).join(self.base()),
             None => PathBuf::from(&self.text),
         }
     }
 }
 
 /// One part of a name: `a-z 0-9 . _ -`, starting with `a-z` or `0-9`.
-fn is_part(part: &str) -> bool {
+pub(crate) fn is_part(part: &str) -> bool {
     let mut chars = part.chars();
     chars
         .next()

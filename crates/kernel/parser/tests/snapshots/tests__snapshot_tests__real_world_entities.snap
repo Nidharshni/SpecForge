@@ -244,6 +244,7 @@ expression: result.entities
                 end_col: 59,
             },
         ],
+        doc_span: None,
     },
     Entity {
         kind: EntityKind {
@@ -311,6 +312,7 @@ expression: result.entities
         methods: [],
         obligations: [],
         obligation_spans: [],
+        doc_span: None,
     },
     Entity {
         kind: EntityKind {
@@ -439,5 +441,6 @@ expression: result.entities
                 end_col: 53,
             },
         ],
+        doc_span: None,
     },
 ]

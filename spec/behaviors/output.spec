@@ -231,8 +231,8 @@ behavior compute_project_statistics "Compute Project Statistics" {
     error.
     specforge stats --format json prints the statistics document
     specforge.stats answers (McpStatsResult): the entity count and the
-    counts by kind, the edge count, the unconnected, testable, declared and
-    verified counts, the declared and proof percentages and the diagnostic
+    counts by kind, the edge count, the unconnected, testable and declared
+    counts, the declared and proof percentages and the diagnostic
     summary by severity; an absent proof percentage is no key, never null.
   """
   verify unit "stats reports correct entity counts"
@@ -242,6 +242,7 @@ behavior compute_project_statistics "Compute Project Statistics" {
   verify unit "coverage is 0% when testable_entity_count is zero"
   verify unit "stats leaves the entities W004 exempts out of the testable count"
   verify unit "the stats document has no proof_pct without recorded test results"
+  verify unit "stats reports no verified count: unverified is what counts toward coverage and is not proven"
   verify integration "stats reports the declared and proof percentages"
   verify contract "Compute Project Statistics: project statistics computation holds — validation_complete_fired, entity_counts_produced, coverage_computed, zero_testable_safe"
 }
@@ -447,12 +448,14 @@ behavior read_a_named_spec_file "Read a Spec File a Request Names" {
     read of a file that is none of the compiled sources MUST be
     file_not_found; a create MUST be refused as not_a_source unless the file
     is one discovery would keep. A spelling from the project root of an
-    existing source MUST be refused naming its spec-root spelling.
+    existing source MUST be refused naming its spec-root spelling. A refusal
+    MUST name the file as the request spelled it.
   """
   verify unit "every spelling of a spec file under the spec root reads as its source key"
   verify unit "a spelling that leaves the spec root is not_a_source"
   verify unit "a read of a file that is no compiled source is file_not_found"
   verify unit "a spec file named from the project root is refused naming its spec-root spelling"
+  verify unit "a refusal of a named spec file names the file as the request spelled it"
 }
 
 // Inspect (specforge_ops::read::inspect): one entity's facts. specforge.inspect,
@@ -856,8 +859,8 @@ behavior validate_agent_plan "Validate Agent Implementation Plan" {
   }
   ensures {
     unresolvable_ids_diagnosed "Every plan entity ID that does not resolve to a declared entity produces an E003 diagnostic"
-    missing_entries_warned     "Every testable entity missing from the plan produces a warning"
-    ordering_validated         "Plan dependency order is validated against graph edge structure"
+    missing_entries_warned     "Every entity that counts toward coverage and is missing from the plan produces a warning"
+    ordering_validated         "Plan dependency order is validated against graph edge structure, the entities on one cycle in any order among themselves"
     structured_report_produced "Output is a structured JSON report listing validated entries, gaps, and ordering violations"
     plan_validated_emitted     "plan_validated event is emitted after validation completes"
   }
@@ -868,11 +871,16 @@ behavior validate_agent_plan "Validate Agent Implementation Plan" {
     (types/graph.spec): a value that is not one MUST be refused, naming
     every place it departs from the type. Every entity ID referenced in the
     plan MUST resolve to a declared entity in the graph; an unresolvable ID
-    MUST produce an E003 gap. Every testable entity that declares
-    obligations MUST have an entry in the plan; a missing entry MUST be
-    reported as a warning gap. The plan's entry order is its dependency
-    order: an entry ordered before an entity it depends on in the graph
-    MUST produce an ordering gap. The check reads the graph and the entity
+    MUST produce an E003 gap. Every entity that counts toward coverage
+    (testable, and owing or declaring obligations, as the coverage view lists it)
+    MUST have an entry in the plan; a missing entry MUST be reported as a
+    warning gap. The plan's entry order is its dependency
+    order,
+    and the graph's edges are the dependencies. Entities on one cycle of them
+    depend on one another and MAY come in any order among themselves; every
+    entry of such a set, or of an entity on no cycle, MUST come after every
+    entry of each set or entity it has an edge to, or the plan MUST have an
+    ordering gap naming the entry and the later one it depends on. The check reads the graph and the entity
     snapshot, never the recorded test report. The outcome MUST be one JSON
     document on every surface (McpTracePlanResult): ok (no unresolved entry
     and no ordering gap), the entries that name an entity, and the gaps;
@@ -881,6 +889,7 @@ behavior validate_agent_plan "Validate Agent Implementation Plan" {
     on the plan.
   """
   verify unit "plan with all valid entity IDs passes validation"
+  verify unit "an entity that counts toward coverage and has no entry is a missing entry, whether or not it declares obligations; an exempt one is not"
   verify unit "plan referencing nonexistent entity ID produces E003"
   verify unit "testable entity missing from plan produces warning"
   verify unit "plan dependency order contradicting graph produces diagnostic"
@@ -889,9 +898,12 @@ behavior validate_agent_plan "Validate Agent Implementation Plan" {
   verify unit "a plan that is not an AgentPlan is refused, naming every place it departs from the type"
   verify unit "a plan passes when every entry names an entity and none comes before what it depends on; a missing entry is a warning"
   verify unit "an entity and a plan together are invalid input about the plan, on every surface"
+  verify unit "entities on one cycle may come in any order in a plan"
+  verify unit "every entry of a cycle comes after every entry of what the cycle depends on, and before every entry that depends on it"
   verify integration "specforge trace --plan and specforge.trace answer the same document for a plan"
   verify integration "specforge trace and specforge.trace both refuse an entity with a plan"
   verify integration "specforge trace --plan exits 1 when an entry names no entity or comes before what it depends on"
+  verify integration "specforge trace --plan passes two mutually recursive types in either order"
   verify contract "Validate Agent Implementation Plan: agent plan validation holds — validation_complete_fired, unresolvable_ids_diagnosed, missing_entries_warned, ordering_validated, structured_report_produced, plan_validated_emitted"
 }
 

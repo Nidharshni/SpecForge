@@ -6,6 +6,7 @@
 )]
 
 mod anchors;
+mod captures;
 mod collect;
 mod compiled_support;
 mod config_gate;

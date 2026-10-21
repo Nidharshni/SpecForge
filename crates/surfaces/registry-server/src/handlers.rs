@@ -55,7 +55,7 @@ async fn verify_auth(State(_state): State<Arc<AppState>>, token: AuthToken) -> J
     let record = token.record;
     Json(TokenVerified {
         valid: true,
-        scope: record.scope,
+        scope: record.scope.map(String::from),
         label: record.label,
         expires_at: record.expires_at,
     })

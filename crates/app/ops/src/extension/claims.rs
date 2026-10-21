@@ -199,7 +199,7 @@ mod tests {
         let mut claims = Claims::default();
         let spelling = |text: &str| Specified {
             specifier: text.to_string(),
-            source: Source::Builtin("@specforge/product"),
+            source: Source::builtin("@specforge/product"),
         };
 
         let first = claims.builtin(&spelling("@specforge/product"), "@specforge/product");

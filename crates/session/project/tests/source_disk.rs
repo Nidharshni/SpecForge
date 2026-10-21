@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use specforge_project::testing::TestProject;
-use specforge_project::{CompiledProject, ProjectSession, RuntimeSource, SourceDisk};
+use specforge_project::{CompiledProject, Environment, ProjectSession, RuntimeSource, SourceDisk};
 use specforge_registry::{Disk, PlainDisk};
 use specforge_test::prelude::*;
 use tempfile::TempDir;
@@ -136,18 +136,21 @@ fn a_source_the_handed_disk_refuses_is_unreadable_and_not_in_the_graph() {
 fn a_one_shot_compile_reads_its_sources_through_the_disk_it_is_handed() {
     let (dir, _outside, root) = scene();
     let project_root = dir.project_root();
-    let bounded = CompiledProject::compile_through(&project_root, None, &Bounded(root));
+    let bounded =
+        CompiledProject::compile_through(Environment::load(&project_root, None), &Bounded(root));
     assert!(bounded.diagnostics().iter().any(|d| d.code == "E025"));
     assert!(bounded.graph().node("alpha_one").is_none());
     assert!(bounded.graph().node("beta_one").is_some());
 
     // Only the sources: the environment is read plain.
-    let refused = CompiledProject::compile_through(&project_root, None, &Refusing);
+    let refused =
+        CompiledProject::compile_through(Environment::load(&project_root, None), &Refusing);
     assert_eq!(refused.environment().config().name.as_deref(), Some("c"));
     assert!(refused.graph().node("beta_one").is_none());
 
     // The plain disk (what `compile` hands) follows the link.
-    let plain = CompiledProject::compile_through(&project_root, None, &PlainDisk);
+    let plain =
+        CompiledProject::compile_through(Environment::load(&project_root, None), &PlainDisk);
     assert!(plain.graph().node("alpha_one").is_some());
 }
 

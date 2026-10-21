@@ -24,7 +24,8 @@ pub use add::{
     DuplicateSpecifier, EnabledBuiltin, InstalledPackage, PlannedAdd, PresentExtension, add,
 };
 pub use candidate::{
-    Installable, LocalComponent, LocalFile, WASM_TARGET, builtin_declaration, target_dir,
+    Installable, LocalComponent, LocalFile, WASM_TARGET, builtin_declaration, not_a_builtins_name,
+    target_dir,
 };
 pub use inventory::{Inventory, ProjectExtension, Selection, Status, inventory};
 pub use list::{
@@ -67,7 +68,8 @@ pub(crate) fn not_installed(name: &str, why: Option<&str>) -> crate::OpError {
 }
 
 /// The builtin a named `specifier` names (`@specforge/product`, optionally with an
-/// `@version` suffix, which is ignored: builtins track the binary); a `.wasm` file entry names none.
+/// `@version` suffix, which this reads as the entry rule does: the name; an add specifier's version is read by `names` and
+/// held to the embedded builtin); a `.wasm` file entry names none.
 pub fn builtin_name(specifier: &str) -> Option<&'static str> {
     let specforge_common::ExtensionEntry::Named(name) =
         specforge_common::ExtensionEntry::parse(specifier)

@@ -1,6 +1,6 @@
 # A migration is judged before it is written
 
-**Status:** accepted (2026-10-21, architecture round 20, plan 03). Amends [ADR 0171](0171-a-migration-writes-through-the-project-change.md) D1 (the hooks and the graph comparison are no longer the project change's last step) and D4 (an undone run is replaced by a refused run that writes nothing), [ADR 0158](0158-an-edited-compile-and-a-migration-read-no-source-past-the-bound.md) D4 (there is no post compile: the edited compile replaces it, and it reads no source) and [ADR 0170](0170-a-failed-run-is-an-outcomes-fact.md) F1 ("a change it undid" becomes "a migration it refused"). Cites [ADR 0162](0162-a-mutations-preview-is-a-fact-of-its-outcome.md) P1 and [ADR 0037](0037-the-sandbox-is-limits-the-host-enforces.md).
+**Status:** accepted (2026-10-21, architecture round 20, plan 03). Amends [ADR 0171](0171-a-migration-writes-through-the-project-change.md) D1 (the hooks and the graph comparison are no longer the project change's last step) and D4 (an undone run is replaced by a refused run that writes nothing), [ADR 0158](0158-an-edited-compile-and-a-migration-read-no-source-past-the-bound.md) D4 (there is no post compile: the edited compile replaces it, and it reads no source) and [ADR 0170](0170-a-failed-run-is-an-outcomes-fact.md) F1 ("a change it undid" becomes "a migration it refused"). Amended by round 22 plan 04 (2026-10-21): D5 (the environment is loaded before the plan, whose defaults step reads its field forms) and D7. Cites [ADR 0162](0162-a-mutations-preview-is-a-fact-of-its-outcome.md) P1 and [ADR 0037](0037-the-sandbox-is-limits-the-host-enforces.md).
 
 ## Context
 
@@ -26,7 +26,7 @@
   `rolled_back` and `rollback` are gone. The change's put-back stays for a write that fails (ADR 0128).
 - **D4. The hooks are called with the planned files' names before they are written.** A hook gets no file system, so the
   order is invisible to it.
-- **D5. Order:** plan; nothing pending or a file failed: return, nothing compiled; `pre`; judge; dry run or refused:
+- **D5. Order** *(amended, round 22: see D5 below the Amendment)*: plan; nothing pending or a file failed: return, nothing compiled; `pre`; judge; dry run or refused:
   return; stage; commit. Each source is read twice (the plan and `pre`), the environment loaded once.
 - **D6. A refusal for errors counts the errors the planned project has that the project has not**
   (`edit::validate::added`).
@@ -47,6 +47,25 @@
 - Both: the document loses `rolled_back` and `rollback`; the failure messages end "nothing was written".
 - Rust API: `Outcome.verdict`, `migrate::{judge, Verdict}`; `Outcome.rollback` and the flat verdict fields are gone.
 - A pending dry run costs a compile and an edited compile; a run costs one environment load fewer than before.
+
+## Amendment (architecture round 22, plan 04)
+
+- **D5, amended.** Order: config; hold the sources; load the environment; plan with its field forms; nothing pending
+  or a file failed: return, nothing compiled; `pre` in that environment; judge; dry run or refused: return; stage;
+  commit. The environment is loaded once, before the plan, also when nothing is pending (it makes extension calls,
+  never a compile or a source read). `CompiledProject::compile_through(env, disk)` takes the environment the run
+  loaded.
+- **D7. The plan asks the rule the judge applies.** The defaults step hoists a field only where
+  `FileDefaults::entry` applies it under the environment's field forms (ADR 0154 D1), and writes its block above the
+  file's first block (after an import only when that import stands above it, E078). A step that would change the graph
+  is a defect the judge refuses, never a per-step retry.
+- **Left open (04-D3).** `Verdict::refusal` keeps a migration that adds an error while its graph is unchanged. This
+  amendment does not close it: refusing every added error would also refuse a migration that only moves lines in a
+  file reporting a message that names a position (a duplicate ID). It stays a later card, to be settled with the
+  key `edit::validate::added` compares by.
+- **Rejected:** a predicate exported from `graph::defaults` for one caller (the hoist probes `FileDefaults` with a
+  one-field block); re-planning without the defaults step after a refusal; the hoist after `pre` (this ADR's own
+  Rejected); loading the environment only when something is pending (a third read of each source).
 
 ## What would reopen it
 

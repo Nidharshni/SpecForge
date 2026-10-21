@@ -12,7 +12,7 @@ use specforge_protocol_types::ExtensionDeclaration;
 use specforge_wasm::WasmRuntime;
 use specforge_wasm::protocol::Loaded;
 
-use super::candidate::LocalComponent;
+use super::candidate::{LocalComponent, not_a_builtins_name};
 use crate::registry::Registry;
 use crate::{Containment, OpError, OpErrorKind};
 
@@ -54,7 +54,8 @@ pub enum PublishAction {
 /// Refused in this order, each before anything after it is read or asked:
 /// 1. the binary: E040 (nothing at the path, none built, several, unreadable: the
 ///    candidate's reader), E028 (not
-///    a loadable extension, read through `runtime`);
+///    a loadable extension, read through `runtime`), `extension_conflict` (a declaration
+///    naming a builtin, as install refuses it);
 /// 2. its declaration's errors, as the registry build of it alone reports
 ///    them (E030, a refused tool schema, ...), naming every error;
 /// 3. its name and version: E072 unless a scoped package name and a full
@@ -109,12 +110,17 @@ fn run(
 
 /// The extension at `extension` (a `.wasm` component, or the crate directory that builds one), read and declared as
 /// publish reads it. Refused, in this order: E040 (nothing at the path, none built, several, unreadable: the candidate's reader), E028 (not a
-/// loadable extension, read through `runtime`). Its diagnostics are [`declare`]'s.
+/// loadable extension, read through `runtime`), `extension_conflict` (a declaration naming a builtin). Its diagnostics are [`declare`]'s.
 pub fn validate(extension: &Path, runtime: &dyn WasmRuntime) -> Result<Validated, OpError> {
     // publish and extension validate are the CLI's only (ADR 0045 D6): unbounded, as the CLI is (ADR 0092 D6).
     let LocalComponent { path, bytes } =
         LocalComponent::read(extension, &Containment::unbounded())?;
     let (declaration, diagnostics) = declare(runtime, &bytes)?;
+    not_a_builtins_name(declaration.name()).map_err(|e| {
+        e.with_suggestion(
+            "a builtin's name belongs to specforge: declare another name in the extension's source and rebuild it",
+        )
+    })?;
     Ok(Validated {
         binary: path,
         wasm: bytes,

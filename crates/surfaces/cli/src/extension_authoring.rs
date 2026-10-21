@@ -11,7 +11,7 @@ use crate::terminal::{Terminal, errln, outln};
 use serde_json::json;
 use specforge_common::{Code, codes};
 use specforge_ops::OpErrorKind;
-use specforge_ops::extension::{LocalComponent, WASM_TARGET, target_dir};
+use specforge_ops::extension::{LocalComponent, WASM_TARGET, not_a_builtins_name, target_dir};
 use specforge_package::PackageName;
 use std::path::{Path, PathBuf};
 
@@ -99,6 +99,10 @@ fn run_init(path: &Path, name: Option<&str>, format: OutputFormat, terminal: &Te
             codes::E065,
             why.to_string(),
         );
+    }
+    if let Err(refused) = not_a_builtins_name(&declared) {
+        return Refusal::of(format)
+            .report(terminal, &refused.with_suggestion("choose another --name"));
     }
     if ext_dir.exists() {
         return Refusal::of(format).coded(

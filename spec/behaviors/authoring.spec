@@ -22,7 +22,10 @@ behavior create_entity "Create an Entity" {
     Each field is written as a set of it writes it, so a field that holds what its file's default holds, as the graph stores both,
     is not written, and each verify obligation as an add-verify writes it, so an equal one given twice is written
     once. The field flags of `specforge new` are the kind's fields in the project
-    the command acts on. A create takes whole fields; a `field.entry` path is refused.
+    the command acts on. Its command line is one command read once with the kind's fields: an option may stand anywhere
+    and one given twice is refused, --help with a kind is that kind's help and an unknown kind is refused as unknown_kind,
+    and a line whose --path a field's value spells is refused; a field named like one of its options is no flag of it, and
+    the kind's help says to set it with specforge set. A create takes whole fields; a `field.entry` path is refused.
     The skeleton of a new block of a kind is what a create of it writes with no values, with a slot where each value
     goes: the id, the title, each required field and the final cursor; a member's skeleton is its field written in its
     form (ADR 0191).
@@ -48,6 +51,13 @@ behavior create_entity "Create an Entity" {
   verify integration "new refuses a file named from the project root, naming its spec-root spelling"
   verify integration "new refuses a field given twice that takes one value"
   verify integration "new refuses an unknown kind as unknown_kind"
+  verify unit "a kind's field named like one of new's options is no flag of new, and the kind's help says to set it with set"
+  verify integration "new --help begins with what new does"
+  verify integration "new refuses one of its options given twice, wherever each stands"
+  verify integration "new's help of a kind shows each of its options as every command declares it"
+  verify integration "new --help of a kind the project does not declare is refused as unknown_kind"
+  verify integration "new --help after a field flag prints the kind's help"
+  verify integration "new refuses a command line whose --path a field's value spells"
 }
 
 behavior edit_entity_field "Edit an Entity Field" {
@@ -147,8 +157,9 @@ behavior delete_entity "Delete an Entity" {
   invariants [typed_edit_atomicity]
   category   mutation
   contract   """
-    A delete edit removes the entity's block and the comment lines directly
-    above it. Deleting an entity that is still referenced leaves the project
+    A delete edit removes the entity's block and its doc comment, as the parse
+    reads it: the // lines directly above the block with no blank line between.
+    The format header is never a doc comment and stays. Deleting an entity that is still referenced leaves the project
     with an error, so it is refused with E080 unless the edit asks to remove
     every reference to the entity in the same change. The references are every
     token that names the entity, as the graph's one finder reads the texts the
@@ -158,6 +169,7 @@ behavior delete_entity "Delete an Entity" {
     is written.
   """
   verify unit "delete removes the block and the comment above it"
+  verify unit "delete keeps the format header above the block"
   verify unit "delete of a referenced entity is E080"
   verify unit "delete with unlink_references removes every reference"
   verify unit "delete with unlink_references removes a scheme ref ID from a string list"
@@ -201,4 +213,5 @@ behavior validate_typed_edit "Validate a Typed Edit" {
   verify unit "a failed write puts every file back"
   verify unit "an edit planned while the checks are skipped is compared with the checked report"
   verify unit "the report names what the edits change taken together"
+  verify unit "a create links the names the project already writes for its ID"
 }

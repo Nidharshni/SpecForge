@@ -51,8 +51,7 @@ impl Standing {
     }
 
     /// It declares at least one obligation (`verify` statement) of its own,
-    /// whatever its kind owes: the plan check's, inspect's and the hover's
-    /// "declared".
+    /// whatever its kind owes: inspect's and the hover's "declared".
     pub fn declares_obligations(&self) -> bool {
         self.declared > 0
     }
@@ -68,7 +67,7 @@ impl Standing {
 
     /// It counts toward coverage: the coverage rule's
     /// [`Counting::counts`](specforge_coverage::Counting::counts) over its
-    /// facts. Every reader (inspect, the coverage view, stats) asks this.
+    /// facts. Every reader (inspect, the coverage view, stats, the plan check) asks this.
     pub fn counts(&self) -> bool {
         self.counting().counts()
     }

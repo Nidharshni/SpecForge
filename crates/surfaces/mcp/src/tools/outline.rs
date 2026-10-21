@@ -7,8 +7,7 @@ use specforge_ops::read::navigate::{Navigator, OutlineEntry, outline};
 
 use crate::args::Arguments;
 use crate::reply::Answered;
-use crate::tool::{McpError, file_not_found};
-use specforge_ops::OpErrorKind;
+use crate::tool::McpError;
 use specforge_ops::view::ProjectView;
 
 /// `specforge.outline`'s arguments.
@@ -100,14 +99,10 @@ impl CoreTool for Tool {
 
     fn call(view: ProjectView<'_>, args: Args) -> Answered<Reply> {
         let file = args.file.as_str();
-        // The view reads the file into its source key (ADR 0195): one that leaves the spec root is refused, and only a
-        // source the compile read has an outline. With nothing served no file is the project's (the dispatcher makes
-        // the refusal the no-project one, ADR 0025).
-        let entries =
-            outline(&Navigator::new(view), file).map_err(|refused| match refused.kind {
-                OpErrorKind::FileNotFound => file_not_found(file),
-                _ => McpError::from(refused).with_argument("file"),
-            })?;
+        // The view reads the file into its source key and refuses it naming it (ADR 0195 D8); with nothing served
+        // the dispatcher makes that refusal the no-project one (ADR 0025).
+        let entries = outline(&Navigator::new(view), file)
+            .map_err(|refused| McpError::from(refused).with_argument("file"))?;
         Ok(Reply {
             entries: entries.iter().map(Entry::of).collect(),
         }

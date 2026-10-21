@@ -22,7 +22,7 @@ pub struct GraphInputs {
     /// the graph build stores each written value as its form coerces it,
     /// before references resolve, so a single reference on a reference_list
     /// field links like `field [id]`; a declared `reference` field's edges
-    /// link after cycle detection (`journey.persona -> persona`).
+    /// are no reference W061 reads (`journey.persona -> persona`, ADR 0093 D7).
     pub field_forms: crate::FieldForms,
     /// Registered fields whose edges come from the type names an entity
     /// writes in its field types or method signatures (`derived_from`),
@@ -513,8 +513,8 @@ fn link_and_diagnose(graph: &mut Graph, config: &GraphConfig) -> Vec<Diagnostic>
     // (W061), which leave a declared single reference out.
     let diagnostics = graph.link(&config.inputs.field_forms, &config.inputs.target_owners);
 
-    // Derived reference fields, after cycle detection: a recursive type is
-    // not a reference cycle.
+    // Derived reference fields: dependencies, never a reference W061 reads,
+    // so a recursive type is no reference cycle (ADR 0204).
     graph.link_derived_references(
         &config.inputs.derived_references,
         &config.inputs.field_forms,

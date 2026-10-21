@@ -339,7 +339,7 @@ fn a_header_only_migration_is_checked_after_it_runs() {
 }
 
 #[test]
-fn nothing_pending_runs_nothing() {
+fn nothing_pending_compiles_and_hooks_nothing() {
     let dir = project_with_extension();
     std::fs::write(dir.path().join("old.spec"), "behavior alpha \"A\" {\n}\n").unwrap();
     let runtime = Arc::new(hooked(|_| Ok(())));
@@ -351,8 +351,8 @@ fn nothing_pending_runs_nothing() {
 
     assert!(!outcome.pending && !outcome.applied && !outcome.verdict.compared);
     assert!(
-        runtime.calls().is_empty(),
-        "no compile and no hook with nothing to migrate: {:?}",
+        hooks_called(&runtime).is_empty() && handshakes_of(&runtime, "@acme/x") == 1,
+        "one environment load, no hook: {:?}",
         exports_called(&runtime)
     );
 }

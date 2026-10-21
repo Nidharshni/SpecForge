@@ -1,5 +1,5 @@
 //! Creating and deleting entities (ADR 0151): a new block goes after the last block of its kind in its file, laid
-//! out canonically; a deleted block takes the comment lines above it and one blank line with it.
+//! out canonically; a deleted block takes its doc comment and one blank line with it.
 
 use super::block::{self, Block, Site};
 use super::path::{self, FieldPath};

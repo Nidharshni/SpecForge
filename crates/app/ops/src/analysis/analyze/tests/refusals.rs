@@ -14,7 +14,7 @@ fn line(refusal: &Refusal<AnalyzeField>) -> String {
         error.code,
         error.message,
         none(error.suggestion.as_deref()),
-        none(error.entity.as_deref()),
+        none(error.entity()),
         refusal
             .subject
             .map_or("-".to_string(), |field| format!("Some({field:?})")),

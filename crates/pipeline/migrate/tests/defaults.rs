@@ -4,6 +4,7 @@
     reason = "a test's unwrap is its assertion: a None or an Err fails the test"
 )]
 
+use specforge_graph::FieldForms;
 use specforge_migrate::migrate_project;
 use specforge_parser::CURRENT_FORMAT_VERSION;
 use specforge_test_macros::test as specforge_test;
@@ -12,6 +13,11 @@ use tempfile::TempDir;
 
 /// `text` as a project's one source, migrated to the current version; what the file holds after.
 fn migrated(text: &str) -> String {
+    migrated_with(text, &FieldForms::default())
+}
+
+/// [`migrated`] under `forms`, the field forms the project compiles with.
+fn migrated_with(text: &str, forms: &FieldForms) -> String {
     let dir = TempDir::new().unwrap();
     std::fs::write(
         dir.path().join("specforge.json"),
@@ -26,6 +32,7 @@ fn migrated(text: &str) -> String {
         std::slice::from_ref(&a),
         &CURRENT_FORMAT_VERSION,
         &|path: &Path| std::fs::read_to_string(path),
+        forms,
     );
     summary
         .rewrites
@@ -177,6 +184,25 @@ fn the_block_goes_after_the_imports_or_before_the_first_form() {
 
 #[specforge_test(
     behavior = "hoist_file_defaults",
+    verify = "the block goes below the format header"
+)]
+fn the_block_goes_below_the_format_header() {
+    let body = blocks(3, |_| BOTH.to_string());
+    let defaults = "defaults behavior {\n  ports    [R]\n  features [F]\n}\n";
+    let bare = blocks(3, |_| String::new());
+    let header = "// specforge-format: 1.0\n";
+    assert_eq!(
+        migrated(&format!("{header}{body}")),
+        format!("{header}{defaults}\n{bare}")
+    );
+    assert_eq!(
+        migrated(&format!("{header}// Doc.\n{body}")),
+        format!("{header}{defaults}\n// Doc.\n{bare}")
+    );
+}
+
+#[specforge_test(
+    behavior = "hoist_file_defaults",
     verify = "hoisting twice changes nothing"
 )]
 fn hoisting_twice_changes_nothing() {
@@ -194,4 +220,49 @@ fn a_file_with_a_syntax_error_is_left_alone() {
         blocks(4, |_| BOTH.to_string())
     );
     assert_eq!(migrated(&text), text);
+}
+
+#[specforge_test(
+    behavior = "hoist_file_defaults",
+    verify = "the block goes above the file's first block when an import follows it"
+)]
+fn the_block_goes_above_the_first_block_when_an_import_follows_it() {
+    let text = format!(
+        "type Thing \"T\" {{\n}}\n\nuse \"x\"\n\n{}",
+        blocks(3, |_| BOTH.to_string())
+    );
+
+    let after = migrated(&text);
+
+    assert!(
+        after.starts_with("defaults behavior {\n  ports    [R]\n  features [F]\n}\n\ntype Thing"),
+        "{after}"
+    );
+    let file = specforge_parser::parse(&after, "a.spec");
+    let forms = specforge_graph::FieldForms::default();
+    let (_, diagnostics) = specforge_graph::FileDefaults::of(&file, &forms);
+    assert!(
+        diagnostics.iter().all(|d| d.code != "E078"),
+        "{diagnostics:?}"
+    );
+}
+
+/// Field forms declaring `names` as kinds and no field.
+fn kinds(names: &[&str]) -> FieldForms {
+    FieldForms::new(
+        Default::default(),
+        Default::default(),
+        names.iter().map(|n| n.to_string()).collect(),
+    )
+}
+
+#[specforge_test(
+    behavior = "hoist_file_defaults",
+    verify = "a field or a kind the field forms do not declare is never hoisted"
+)]
+fn a_field_or_kind_the_forms_do_not_declare_is_never_hoisted() {
+    let text = blocks(6, |_| "  ports [R]\n".to_string());
+
+    assert_eq!(migrated_with(&text, &kinds(&["behavior"])), text);
+    assert_eq!(migrated_with(&text, &kinds(&["port"])), text);
 }

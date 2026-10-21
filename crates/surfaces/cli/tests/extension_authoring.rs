@@ -153,6 +153,30 @@ fn extension_init_rejects_existing_directory() {
 
 #[specforge_test(
     behavior = "scaffold_wasm_extension_project",
+    verify = "specforge extension init refuses a builtin's name"
+)]
+fn extension_init_refuses_a_builtins_name() {
+    let dir = scratch();
+    let output = Cli::on(&dir)
+        .bare_command(&[
+            "extension",
+            "init",
+            "--name",
+            "@specforge/product",
+            "--format",
+            "json",
+            "--dir",
+        ])
+        .arg(dir.root())
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(json_of(&output)["code"], "extension_conflict");
+    assert!(!dir.root().join("product").exists());
+}
+
+#[specforge_test(
+    behavior = "scaffold_wasm_extension_project",
     verify = "specforge extension init --format=json outputs structured JSON"
 )]
 fn extension_init_json_output() {
@@ -382,26 +406,25 @@ fn extension_validate_without_a_built_component() {
     verify = "specforge extension validate reports the declaration's registry build diagnostics"
 )]
 fn extension_validate_reports_the_registry_build_diagnostics() {
-    // The formal builtin, alone: it enhances software's kinds, which no
-    // loaded extension declares (I004), reported; its missing peer is not
-    // (it is installed beside it), and it is still valid.
+    // The sandbox probe, alone: the registry build of its declaration reports W153
+    // (a builtin cannot be validated this way: its name is refused), and it is still valid.
     let dir = scratch();
-    let formal = repo_root().join("extensions/formal/wasm/specforge_ext_formal.wasm");
+    let probe = repo_root().join("fixtures/sandbox-probe/wasm/sandbox_probe.wasm");
     let output = Cli::on(&dir)
         .bare_command(&["extension", "validate", "--format", "json", "--dir"])
-        .arg(&formal)
+        .arg(&probe)
         .output()
         .unwrap();
     let json = json_of(&output);
     assert!(output.status.success(), "{json}");
-    assert_eq!(json["extension"], "@specforge/formal");
+    assert_eq!(json["extension"], "@test/probe");
     let codes: Vec<&str> = json["diagnostics"]
         .as_array()
         .unwrap()
         .iter()
         .map(|d| d["code"].as_str().unwrap())
         .collect();
-    assert!(codes.contains(&"I004"), "{codes:?}");
+    assert!(codes.contains(&"W153"), "{codes:?}");
     assert!(!codes.contains(&"E027"), "{codes:?}");
 
     // A binary that is not an extension is E028.

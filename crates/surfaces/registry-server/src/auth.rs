@@ -1,5 +1,5 @@
 use sha2::{Digest, Sha256};
-use specforge_package::PackageName;
+use specforge_package::Scope;
 
 use crate::db::{Database, TokenRecord};
 use crate::ownership::Account;
@@ -9,7 +9,7 @@ use crate::ownership::Account;
 pub fn create_token(
     db: &Database,
     account: &Account,
-    scope: Option<&str>,
+    scope: Option<&Scope>,
     label: &str,
     expires_in_days: Option<u64>,
     admin: bool,
@@ -51,24 +51,6 @@ pub fn validate_bearer(db: &Database, auth_header: &str) -> Option<TokenRecord> 
     Some(record)
 }
 
-/// Whether the token's scope covers `name`: no scope covers every package;
-/// otherwise the scope itself or a name under it (`@org` covers `@org/tool`).
-pub fn token_has_scope(record: &TokenRecord, name: &PackageName) -> bool {
-    covers(record, name.as_str())
-}
-
-fn covers(record: &TokenRecord, package_name: &str) -> bool {
-    match &record.scope {
-        None => true,
-        Some(scope) => {
-            package_name == scope
-                || package_name
-                    .strip_prefix(scope)
-                    .is_some_and(|rest| rest.starts_with('/'))
-        }
-    }
-}
-
 pub(crate) fn hash_token(token: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(token.as_bytes());
@@ -90,18 +72,6 @@ mod tests {
         Account::parse(text).unwrap()
     }
 
-    fn token(scope: Option<&str>) -> TokenRecord {
-        TokenRecord {
-            token_hash: "hash".to_string(),
-            account: Account::parse("a").unwrap(),
-            scope: scope.map(str::to_string),
-            label: "test".to_string(),
-            created_at: "2026-01-01".to_string(),
-            expires_at: None,
-            admin: false,
-        }
-    }
-
     #[test]
     fn a_token_is_validated_with_its_account() {
         let dir = tempfile::tempdir().unwrap();
@@ -110,6 +80,22 @@ mod tests {
         let record = validate_bearer(&db, &format!("Bearer {raw}")).expect("a live token");
         assert_eq!(record.account, acct("acme"));
         assert!(db.has_account(&acct("acme")) && !db.has_account(&acct("other")));
+    }
+
+    #[test]
+    fn a_token_whose_stored_scope_is_no_scope_authenticates_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("t.db");
+        let db = Database::open(&path).unwrap();
+        let raw = create_token(&db, &acct("a"), None, "ci", Some(90), false);
+        assert!(validate_bearer(&db, &format!("Bearer {raw}")).is_some());
+
+        rusqlite::Connection::open(&path)
+            .unwrap()
+            .execute("UPDATE tokens SET scope = 'sdk'", [])
+            .unwrap();
+
+        assert!(validate_bearer(&db, &format!("Bearer {raw}")).is_none());
     }
 
     #[test]
@@ -141,82 +127,5 @@ mod tests {
         let raw = create_token(&db, &acct("a"), None, "root", Some(90), true);
         let record = validate_bearer(&db, &format!("Bearer {}", raw)).unwrap();
         assert!(is_admin(&record));
-    }
-
-    #[test]
-    fn token_without_scope_grants_all() {
-        assert!(covers(&token(None), "web"));
-        assert!(covers(&token(None), "webui"));
-    }
-
-    #[test]
-    fn exact_scope_match_allowed() {
-        assert!(covers(&token(Some("web")), "web"));
-    }
-
-    #[test]
-    fn scope_prefix_collision_denied() {
-        assert!(!covers(&token(Some("web")), "webui"));
-    }
-
-    #[test]
-    fn package_under_scope_allowed() {
-        assert!(covers(&token(Some("web")), "web/sub"));
-        assert!(covers(&token(Some("web")), "web/sub/deep"));
-    }
-
-    #[test]
-    fn package_outside_scope_denied() {
-        assert!(!covers(&token(Some("web")), "other"));
-        assert!(!covers(&token(Some("web")), "websub"));
-    }
-
-    #[test]
-    fn npm_style_scope_matches_only_own_packages() {
-        assert!(covers(&token(Some("@web")), "@web/ui"));
-        assert!(!covers(&token(Some("@web")), "@webui/x"));
-    }
-}
-
-#[cfg(test)]
-mod scope_tests {
-    use super::*;
-
-    fn name(text: &str) -> PackageName {
-        PackageName::parse(text).unwrap()
-    }
-
-    fn token(scope: Option<&str>) -> TokenRecord {
-        TokenRecord {
-            token_hash: "hash".to_string(),
-            account: Account::parse("a").unwrap(),
-            scope: scope.map(str::to_string),
-            label: "test".to_string(),
-            created_at: "2026-01-01".to_string(),
-            expires_at: None,
-            admin: false,
-        }
-    }
-
-    #[test]
-    fn scope_prefix_does_not_leak_into_longer_names() {
-        // C8-10/C14-06: a token scoped to '@org/soft' must NOT authorize
-        // '@org/software' — the boundary is the '/', not the prefix.
-        let t = token(Some("@org/soft"));
-        assert!(token_has_scope(&t, &name("@org/soft")));
-        assert!(!token_has_scope(&t, &name("@org/software")));
-    }
-
-    #[test]
-    fn namespace_scope_covers_exactly_its_namespace() {
-        let t = token(Some("@org"));
-        assert!(token_has_scope(&t, &name("@org/software")));
-        assert!(covers(&t, "@org"));
-        assert!(!token_has_scope(&t, &name("@other/software")));
-    }
-
-    #[test]
-    fn unscoped_token_has_full_access() {
-        assert!(token_has_scope(&token(None), &name("@anything/here")));
     }
 }

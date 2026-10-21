@@ -310,11 +310,11 @@ fn gap_triples(result: &Value) -> Vec<(String, String, String)> {
 fn trace_prompt_finds_the_gaps_in_a_plan() {
     let mut server = test_server();
 
-    // ghost doesn't exist; alpha is testable, has obligations, and is missing.
+    // ghost doesn't exist; alpha (testable, with obligations) is missing; gamma_orphan is planned.
     let result = trace_plan(
         &mut server,
         json!({"plan_id": "p1", "entries": [
-            {"entity_id": "beta", "action": "modify"},
+            {"entity_id": "gamma_orphan", "action": "modify"},
             {"entity_id": "ghost", "action": "create"}
         ]}),
     );
@@ -338,7 +338,7 @@ fn trace_prompt_explains_each_gap() {
     let mut server = test_server();
 
     // alpha depends on beta, yet the plan does alpha first.
-    let result = trace_plan(&mut server, agent_plan(&["alpha", "beta"]));
+    let result = trace_plan(&mut server, agent_plan(&["alpha", "beta", "gamma_orphan"]));
 
     let gaps = result["coverage_gaps"].as_array().unwrap();
     assert_eq!(gaps.len(), 1, "{result}");
@@ -347,7 +347,7 @@ fn trace_prompt_explains_each_gap() {
         gaps[0]["gap_context"],
         "'alpha' depends on 'beta' (via features), but 'beta' appears later in the plan"
     );
-    let again = trace_plan(&mut server, agent_plan(&["alpha", "beta"]));
+    let again = trace_plan(&mut server, agent_plan(&["alpha", "beta", "gamma_orphan"]));
     assert_eq!(result, again, "gap context is deterministic");
 }
 

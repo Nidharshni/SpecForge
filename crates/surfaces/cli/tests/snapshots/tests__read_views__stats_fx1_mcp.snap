@@ -32,6 +32,5 @@ expression: "normalized(mcp, root)"
   ],
   "proof_pct": 50.0,
   "testable_count": 4,
-  "unconnected_count": 5,
-  "verified_count": 4
+  "unconnected_count": 5
 }

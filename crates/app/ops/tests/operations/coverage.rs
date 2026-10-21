@@ -166,10 +166,6 @@ fn unverified_is_counted_and_not_proven() {
     // passes); the union, the abstract behavior and the bare constraint
     // owe nothing.
     assert_eq!(unverified, ["logout", "uptime"]);
-    for id in ids {
-        let row = row(&view, id);
-        assert_eq!(row.unverified(), coverage.is_unverified(id), "{id}");
-    }
 }
 
 #[specforge_test(
