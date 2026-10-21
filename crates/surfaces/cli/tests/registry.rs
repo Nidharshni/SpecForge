@@ -92,7 +92,7 @@ fn update_without_lockfile_fails() {
 fn logout_without_credentials_succeeds() {
     // A named registry is forgotten without reading any project.
     Cli::on(&scratch())
-        .bare_command(&["logout", "--registry", "plan06-no-such-registry"])
+        .bare_command(&["logout", "--url", "https://plan06.invalid"])
         .assert()
         .success();
 }
@@ -902,17 +902,15 @@ fn no_source_names_specforge_dev() {
 )]
 fn logout_without_a_registry_forgets_the_default_registrys_credential() {
     let spy = NetSpy::start();
-    let pid = std::process::id();
-    let (default, other) = (
-        format!("plan06-logout-default-{pid}"),
-        format!("plan06-logout-other-{pid}"),
-    );
+    let (default, other) = ("default", "other");
+    let default_root = format!("{UNREACHABLE}/default");
+    let other_root = format!("{UNREACHABLE}/other");
     let dir = TestProject::new().raw_config(
         serde_json::json!({
             "name": "p", "version": "0.1.0", "extensions": [],
             "registries": [
-                { "alias": default, "url": UNREACHABLE, "default_registry": true },
-                { "alias": other, "url": UNREACHABLE, "scope_filter": "@other" },
+                { "alias": default, "url": default_root, "default_registry": true },
+                { "alias": other, "url": other_root, "scope_filter": "@other" },
             ],
         })
         .to_string(),
@@ -922,7 +920,7 @@ fn logout_without_a_registry_forgets_the_default_registrys_credential() {
     std::fs::write(
         store.join("credentials.json"),
         serde_json::json!({
-            "registries": { default.clone(): { "token": "t1" }, other.clone(): { "token": "t2" } }
+            "registries": { default_root.clone(): { "token": "t1" }, other_root.clone(): { "token": "t2" } }
         })
         .to_string(),
     )
@@ -936,12 +934,12 @@ fn logout_without_a_registry_forgets_the_default_registrys_credential() {
 
     assert_eq!(output.status.code(), Some(0), "{output:?}");
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(json["registry"], default.as_str(), "{json}");
+    assert_eq!(json["registry"], default, "{json}");
     assert_eq!(json["status"], "removed", "{json}");
     let kept: serde_json::Value =
         serde_json::from_slice(&std::fs::read(store.join("credentials.json")).unwrap()).unwrap();
-    let aliases: Vec<&String> = kept["registries"].as_object().unwrap().keys().collect();
-    assert_eq!(aliases, [&other]);
+    let roots: Vec<&String> = kept["registries"].as_object().unwrap().keys().collect();
+    assert_eq!(roots, [&other_root]);
     assert_eq!(spy.hits(), 0);
 }
 
@@ -1223,7 +1221,8 @@ fn add_from_a_private_registry_with_a_stored_credential() {
     std::fs::create_dir_all(dir.home().join(".specforge")).unwrap();
     std::fs::write(
         dir.home().join(".specforge/credentials.json"),
-        serde_json::json!({"registries": {"local": {"token": registry.token()}}}).to_string(),
+        serde_json::json!({"registries": {registry.root().as_str(): {"token": registry.token()}}})
+            .to_string(),
     )
     .unwrap();
     let output = add_greet(&dir, &["--allow-unsigned"]);

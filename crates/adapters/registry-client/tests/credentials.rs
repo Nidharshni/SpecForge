@@ -1,63 +1,72 @@
-use specforge_registry_client::credentials::{
-    CredentialEntry, CredentialStore, read_credentials, write_credentials,
-};
+use specforge_registry_client::credentials::{CredentialEntry, CredentialStore};
 use specforge_registry_client::{RegistryCredential, RegistryError};
+use specforge_registry_wire::RegistryRoot;
 use tempfile::TempDir;
+
+fn root(name: &str) -> RegistryRoot {
+    RegistryRoot::parse(&format!("https://{name}.invalid")).unwrap()
+}
+
+fn token(token: &str) -> CredentialEntry {
+    CredentialEntry::Token {
+        token: token.to_string(),
+        expires_at: None,
+        in_keyring: false,
+    }
+}
 
 #[test]
 fn roundtrip_credentials() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("credentials.json");
 
-    let mut store = CredentialStore::default();
-    store.registries.insert(
-        "default".to_string(),
-        CredentialEntry::Token {
-            token: "sfr_test_token_123".to_string(),
-            expires_at: None,
-            in_keyring: false,
-        },
-    );
-    store.registries.insert(
-        "private".to_string(),
-        CredentialEntry::Token {
-            token: "priv_token_456".to_string(),
-            expires_at: None,
-            in_keyring: false,
-        },
-    );
+    let mut store = CredentialStore::empty(dir.path());
+    store
+        .registries
+        .insert(root("default"), token("sfr_test_token_123"));
+    store
+        .registries
+        .insert(root("private"), token("priv_token_456"));
 
-    write_credentials(&path, &store).unwrap();
-    let loaded = read_credentials(&path).unwrap();
+    store.write().unwrap();
+    let loaded = CredentialStore::read(dir.path()).unwrap();
 
     assert_eq!(loaded.registries.len(), 2);
-    assert!(loaded.registries.contains_key("default"));
-    assert!(loaded.registries.contains_key("private"));
+    assert!(loaded.registries.contains_key(&root("default")));
+    assert!(loaded.registries.contains_key(&root("private")));
 }
 
 #[test]
 fn read_nonexistent_returns_empty() {
     let dir = TempDir::new().unwrap();
-    let path = dir.path().join("nonexistent.json");
-    let store = read_credentials(&path).unwrap();
+    let store = CredentialStore::read(dir.path()).unwrap();
     assert!(store.registries.is_empty());
 }
 
 #[test]
 fn get_credential_returns_bearer() {
-    let mut store = CredentialStore::default();
-    store.registries.insert(
-        "myregistry".to_string(),
-        CredentialEntry::Token {
-            token: "my_token".to_string(),
-            expires_at: None,
-            in_keyring: false,
-        },
-    );
+    let mut store = CredentialStore::empty("unused");
+    store
+        .registries
+        .insert(root("myregistry"), token("my_token"));
 
-    let cred = store.credential("myregistry").unwrap().unwrap();
-    assert_eq!(cred.alias, "myregistry");
+    let cred = store.credential(&root("myregistry")).unwrap().unwrap();
+    assert_eq!(cred.root, root("myregistry"));
     assert_eq!(cred.token(), "my_token");
+}
+
+#[test]
+fn a_store_keyed_by_aliases_is_unreadable() {
+    let dir = TempDir::new().unwrap();
+    std::fs::write(
+        dir.path().join("credentials.json"),
+        r#"{"registries":{"main":{"token_env":"X"}}}"#,
+    )
+    .unwrap();
+
+    let error = CredentialStore::read(dir.path()).unwrap_err();
+
+    assert_eq!(error.code, "R012");
+    assert!(error.message.contains("main"), "{}", error.message);
 }
 
 #[specforge_test_macros::test(
@@ -65,7 +74,7 @@ fn get_credential_returns_bearer() {
     verify = "raw tokens never logged or stored in config"
 )]
 fn a_credentials_debug_never_shows_its_token() {
-    let credential = RegistryCredential::new("a", "secret-token-value");
+    let credential = RegistryCredential::new(root("a"), "secret-token-value");
     let shown = format!("{credential:?}");
     assert!(shown.contains("****"), "{shown}");
     assert!(!shown.contains("secret"), "{shown}");
@@ -91,16 +100,10 @@ fn a_401_is_r001_naming_how_to_log_in_again() {
 
 #[test]
 fn remove_credential() {
-    let mut store = CredentialStore::default();
-    store.registries.insert(
-        "temp".to_string(),
-        CredentialEntry::Token {
-            token: "token".to_string(),
-            expires_at: None,
-            in_keyring: false,
-        },
-    );
-    assert!(store.remove("temp"));
-    assert!(!store.remove("temp"));
+    let dir = TempDir::new().unwrap();
+    let mut store = CredentialStore::empty(dir.path());
+    store.registries.insert(root("temp"), token("token"));
+    assert!(store.forget(&root("temp")));
+    assert!(!store.forget(&root("temp")));
     assert!(store.registries.is_empty());
 }

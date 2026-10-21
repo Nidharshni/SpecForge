@@ -25,7 +25,7 @@ fn the_http_client_keeps_the_client_contract() {
         scope_filter: None,
         default_registry: true,
     };
-    let credential = RegistryCredential::new("local", server.token());
+    let credential = RegistryCredential::new(registry.url.clone(), server.token());
     assert_client_contract(&HttpRegistryClient::new(), &registry, &credential);
 }
 
@@ -40,7 +40,7 @@ fn the_memory_client_keeps_the_client_contract() {
         scope_filter: None,
         default_registry: true,
     };
-    let credential = RegistryCredential::new("memory", "contract-token");
+    let credential = RegistryCredential::new(registry.url.clone(), "contract-token");
     assert_client_contract(
         &MemoryClient::new().accepting("contract-token"),
         &registry,
@@ -60,7 +60,7 @@ fn the_private_contract_holds_over_http() {
         scope_filter: None,
         default_registry: true,
     };
-    let credential = RegistryCredential::new("local", server.token());
+    let credential = RegistryCredential::new(registry.url.clone(), server.token());
     assert_private_client_contract(&HttpRegistryClient::new(), &registry, &credential);
 }
 
@@ -75,7 +75,7 @@ fn the_private_contract_holds_in_memory() {
         scope_filter: None,
         default_registry: true,
     };
-    let credential = RegistryCredential::new("memory", "contract-token");
+    let credential = RegistryCredential::new(registry.url.clone(), "contract-token");
     let client = MemoryClient::new()
         .accepting("contract-token")
         .private(&registry);
@@ -95,7 +95,7 @@ fn an_address_no_registry_serves_is_not_a_registry() {
         scope_filter: None,
         default_registry: true,
     };
-    let credential = RegistryCredential::new("local", server.token());
+    let credential = RegistryCredential::new(registry.url.clone(), server.token());
     let client = HttpRegistryClient::new();
     let tool = PackageName::parse("@contract/tool").unwrap();
     let version = Version::new(1, 0, 0);

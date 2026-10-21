@@ -77,6 +77,11 @@ impl<'p> Cli<'p> {
         self
     }
 
+    /// Run under `home` instead of the project's own HOME (a user who logged in in another project).
+    pub fn at_home(self, home: &std::path::Path) -> Self {
+        self.env("HOME", home).env("USERPROFILE", home)
+    }
+
     /// Keep the caller's cargo and rustup homes (`CARGO_HOME`, `RUSTUP_HOME`): the run gets a HOME of its own, and a
     /// build or a `cargo test` needs the caller's package cache and installed toolchains.
     pub fn with_toolchain(self) -> Self {

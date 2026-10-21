@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 use specforge_registry_wire::{PackageSignature, SignedContent};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// A publisher signing key: the user's Ed25519 secret key (`~/.specforge/signing-key.json`).
 #[derive(Debug, Clone)]
@@ -44,11 +44,6 @@ impl SigningKey {
     ) -> PackageSignature {
         PackageSignature::sign(&self.inner, content, at)
     }
-}
-
-/// Default on-disk location of the publisher signing key.
-pub fn signing_key_path() -> PathBuf {
-    crate::credentials::user_dir().join("signing-key.json")
 }
 
 /// Load the signing key at `path`, generating and persisting one on first use.

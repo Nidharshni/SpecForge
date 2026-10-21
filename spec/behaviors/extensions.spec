@@ -850,7 +850,7 @@ behavior publish_to_registry "Publish to Registry" {
     The package MUST go to the one registry that serves its name, the
     registry add and update fetch that name from (ADR 0045). The upload MUST
     be authenticated: with no credential for that registry
-    (SPECFORGE_REGISTRY_TOKEN unset or blank, and none stored for its alias)
+    (SPECFORGE_REGISTRY_TOKEN unset or blank, and none stored for its root)
     publish MUST refuse with R001 before any network call and MUST NOT
     create a publisher signing key; a signing key that can't be read or
     created MUST be refused with E074 before any network call. Publish
@@ -1168,7 +1168,7 @@ behavior authenticate_registry_request "Authenticate Registry Request" {
   ports      [RegistryClient]
   produces   [registry_authenticated]
   requires {
-    credential_configured     "~/.specforge/credentials.json has an entry for the registry's alias, or SPECFORGE_REGISTRY_TOKEN is set for a publish"
+    credential_configured     "~/.specforge/credentials.json has an entry for the registry's root, or SPECFORGE_REGISTRY_TOKEN is set for a publish"
     registry_client_available "RegistryClient port is available for authentication requests"
   }
   ensures {
@@ -1180,7 +1180,7 @@ behavior authenticate_registry_request "Authenticate Registry Request" {
     authenticated_emitted    "registry_authenticated event fires on successful authentication"
   }
   contract   """
-    A registry credential is kept per registry alias in
+    A registry credential is kept per registry root in
     ~/.specforge/credentials.json, never in specforge.json. Its token
     comes from one of three sources: the secret specforge login --token
     stored (in the OS keyring, else in a 0600 file under
@@ -1188,7 +1188,7 @@ behavior authenticate_registry_request "Authenticate Registry Request" {
     or a file whose trimmed content is the token (login --token-file).
     The system MUST resolve the token before any request: an unset or
     blank variable MUST be R010 and a token file that can't be read or
-    is empty MUST be R011, each naming the alias and how to fix it; an
+    is empty MUST be R011, each naming the registry and how to fix it; an
     expired stored token is R-AUTH-020 and an unreadable keyring entry
     R-AUTH-021. The resolved token MUST be attached as an Authorization:
     Bearer header. A 401 answer MUST be R001, whose suggestion is
@@ -1206,6 +1206,7 @@ behavior authenticate_registry_request "Authenticate Registry Request" {
   verify unit "a token file that can't be read is R011 before any request"
   verify unit "a 401 is R001 naming how to log in again"
   verify unit "raw tokens never logged or stored in config"
+  verify unit "a request carries a credential only to the registry root it was kept for"
   verify unit "403 response produces E-level diagnostic with permission guidance"
   verify unit "every registry call reads an answer's status as one error"
   verify integration "a credential kept for one registry root is never sent to another root under the same alias"
@@ -1270,7 +1271,7 @@ behavior validate_registry_credentials "Validate Registry Credentials" {
   contract   """
     When specforge login is invoked, the system MUST validate the
     provided credentials against the target registry by making an authenticated
-    test request. The credential MUST be stored under the alias of the
+    test request. The credential MUST be stored under the root of the
     registry it was validated against: the entry --registry names, else the
     default registry; a --registry that names no entry MUST be refused (E063)
     before any network call. login MUST take exactly one token source:
@@ -1294,7 +1295,7 @@ behavior validate_registry_credentials "Validate Registry Credentials" {
   verify unit "invalid credentials produce error with guidance"
   verify unit "raw token never stored in specforge.json"
   verify unit "success message includes registry alias and scope"
-  verify unit "login stores the credential under the alias of the registry it validated against"
+  verify unit "login stores the credential under the root of the registry it validated against"
   verify contract "Validate Registry Credentials: registry credential validation holds — registry_configured, registry_client_available, valid_credentials_stored, invalid_credentials_diagnosed, raw_token_never_stored, credentials_validated_emitted"
 }
 
@@ -1306,32 +1307,35 @@ behavior logout_registry "Logout Registry" {
   ports      [FileSystem]
   produces   [registry_logged_out]
   requires {
-    alias_given          "--registry names the alias, or the project at --path has a default registry"
+    alias_given          "--registry names the alias, --url names the root, or the project at --path has a default registry"
     filesystem_available "FileSystem port is available for credential removal"
   }
   ensures {
-    credential_removed        "RegistryCredential entry for the matching alias is removed"
-    other_credentials_intact  "Credentials for other aliases and scopes remain untouched"
-    missing_credential_silent "No credential for the specified alias succeeds silently"
+    credential_removed        "RegistryCredential entry for the matching registry root is removed"
+    other_credentials_intact  "Credentials for other registry roots remain untouched"
+    missing_credential_silent "No credential for the specified root succeeds silently"
     no_network_requests       "No network requests are made during logout"
     logged_out_emitted        "registry_logged_out event fires after credential removal"
   }
   contract   """
     When specforge logout --registry <alias> is invoked, the system
-    MUST remove the stored credential reference for the given registry alias.
-    Without --registry, the alias is the default registry's, read from
-    the specforge.json of the project at --path.
-    The removal MUST delete only the RegistryCredential entry whose alias matches —
-    credentials for other aliases (and their scopes) MUST remain untouched.
-    If no credential exists for the specified alias, the command MUST succeed
+    MUST remove the stored credential reference for the root of the registry
+    that alias names in the specforge.json of the project at --path (E063
+    when there is none). Without --registry, the registry is the default
+    registry's. specforge logout --url <root> forgets the credential kept
+    for that root and reads no project.
+    The removal MUST delete only the RegistryCredential entry whose root matches —
+    credentials for other registry roots MUST remain untouched.
+    If no credential exists for the specified root, the command MUST succeed
     silently. A credentials.json that cannot be read MUST be refused (R012):
     no entry is removed and no secret deleted. The system MUST NOT attempt
     any network requests during logout.
   """
   verify unit "logout refuses an unreadable credential store and deletes no secret"
-  verify unit "credential reference removed for matching alias"
-  verify unit "credentials for other aliases and scopes remain untouched"
-  verify unit "no credential for alias succeeds silently"
+  verify unit "credential reference removed for matching registry root"
+  verify unit "credentials for other registry roots remain untouched"
+  verify integration "logout --url forgets the credential kept for that root without reading a project"
+  verify unit "no credential for the root succeeds silently"
   verify unit "no network requests made during logout"
   verify unit "logout without --registry forgets the default registry's credential"
   verify contract "Logout Registry: registry logout holds — alias_given, filesystem_available, credential_removed, other_credentials_intact, missing_credential_silent, no_network_requests, logged_out_emitted"
@@ -1375,6 +1379,7 @@ behavior support_private_registries "Support Private Registries" {
   verify unit "scope_filter restricts which extensions are fetched"
   verify unit "error messages do not leak authentication details"
   verify unit "a download from another origin carries no credential"
+  verify unit "a read carries the credential kept for its registry's root, and none kept for another root"
   verify unit "an unusable stored credential refuses the read before any request"
   verify integration "a private registry refuses an anonymous read and answers an authenticated one"
   verify integration "a registry that requires a token to read is read with the stored credential"

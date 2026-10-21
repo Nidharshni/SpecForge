@@ -95,7 +95,7 @@ feature registry_authentication "Registry Authentication" {
   """
   solution """
     Registry credential management via specforge login and specforge
-    logout. login keeps a token per registry alias: a secret in the OS
+    logout. login keeps a token per registry root: a secret in the OS
     keyring (--token), or a reference to an environment variable
     (--token-env) or a file (--token-file), never in specforge.json.
     Every request to a registry carries the credential kept for it, so a

@@ -8,7 +8,7 @@
 
 use specforge_common::codes;
 use specforge_ops::registry::Registry;
-use specforge_ops_registry::{ConfiguredRegistry, configured};
+use specforge_ops_registry::{ConfiguredRegistry, User, configured};
 use specforge_package::PackageName;
 use specforge_project::testing::TestProject;
 use specforge_registry_client::testing::MemoryClient;
@@ -172,7 +172,7 @@ fn an_unscoped_name_goes_to_the_default_registry() {
 
 #[specforge_test(
     behavior = "validate_registry_credentials",
-    verify = "login stores the credential under the alias of the registry it validated against"
+    verify = "login stores the credential under the root of the registry it validated against"
 )]
 fn named_is_the_alias_given_else_the_default() {
     let found = configured_with(ACME_AND_MAIN);
@@ -208,7 +208,8 @@ fn the_configuration_is_reported_once_the_registry_is_asked() {
         ]}"#,
     );
     let registry = ConfiguredRegistry::for_project(&dir.project_root(), "add")
-        .with_client(MemoryClient::new());
+        .with_client(MemoryClient::new())
+        .as_user(User::at(dir.home(), None));
     assert!(registry.reported().is_empty(), "nothing asked yet");
 
     let tool = PackageName::parse("@acme/tool").unwrap();

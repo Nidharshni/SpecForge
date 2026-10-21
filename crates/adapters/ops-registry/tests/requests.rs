@@ -62,7 +62,8 @@ fn name(text: &str) -> PackageName {
 fn the_adapter_requests_these_paths() {
     let served = serving(&["1.4.0", "2.0.0-beta.1"]);
     let dir = project_with(&default_registry(served.root().as_str()));
-    let registry = ConfiguredRegistry::for_project(&dir.project_root(), "add");
+    let registry = ConfiguredRegistry::for_project(&dir.project_root(), "add")
+        .as_user(User::at(dir.home(), None));
 
     // The registry is asked for the versions, and ops picks among them:
     // `1.x`, `1.2` and `latest` are no longer fetched as versions (§3 R1,

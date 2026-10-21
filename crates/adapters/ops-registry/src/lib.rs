@@ -34,6 +34,7 @@ pub const TOKEN_VARIABLE: &str = "SPECFORGE_REGISTRY_TOKEN";
 
 mod user;
 
+pub use specforge_registry_wire::RegistryRoot;
 pub use user::User;
 
 /// The registries a project configures, and what reading them reported.

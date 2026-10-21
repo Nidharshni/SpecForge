@@ -24,7 +24,7 @@ fn a_kept_token_whose_secret_is_gone_refuses_the_read() {
     std::fs::create_dir_all(project.home()).unwrap();
     std::fs::write(
         project.home().join("credentials.json"),
-        r#"{"registries":{"local":{}}}"#,
+        r#"{"registries":{"https://local.invalid":{}}}"#,
     )
     .unwrap();
     let registry = ConfiguredRegistry::for_project(&project.project_root(), "add")
@@ -37,4 +37,39 @@ fn a_kept_token_whose_secret_is_gone_refuses_the_read() {
     let error = outcome.expect_err("a lost secret is not an empty bearer token");
     assert_eq!(error.code, "R-AUTH-021", "{error:?} (calls: {calls:?})");
     assert!(calls.is_empty(), "{calls:?}");
+}
+
+#[specforge_test(
+    behavior = "support_private_registries",
+    verify = "a read carries the credential kept for its registry's root, and none kept for another root"
+)]
+fn a_read_carries_the_credential_kept_for_its_root_only() {
+    // Two entries with one alias and two roots (W140): they do not share a credential.
+    let project = TestProject::new().config(|c| {
+        c["name"] = "p".into();
+        c["registries"] = serde_json::json!([
+            { "alias": "main", "url": "https://a.invalid", "scope_filter": "@a" },
+            { "alias": "main", "url": "https://b.invalid", "default_registry": true }
+        ]);
+    });
+    std::fs::create_dir_all(project.home()).unwrap();
+    std::fs::write(
+        project.home().join("credentials.json"),
+        r#"{"registries":{"https://a.invalid":{"token":"ta"}}}"#,
+    )
+    .unwrap();
+    let client = MemoryClient::new();
+    let registry = ConfiguredRegistry::for_project(&project.project_root(), "add")
+        .with_client(client.clone())
+        .as_user(User::at(project.home(), None));
+
+    let _ = registry.versions(&PackageName::parse("@a/x").unwrap());
+    let _ = registry.versions(&PackageName::parse("@b/x").unwrap());
+
+    let sent: Vec<Option<String>> = client
+        .calls()
+        .iter()
+        .map(|call| call.credential.as_ref().map(|c| c.token().to_string()))
+        .collect();
+    assert_eq!(sent, [Some("ta".to_string()), None]);
 }

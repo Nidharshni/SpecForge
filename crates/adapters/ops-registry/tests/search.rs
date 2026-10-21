@@ -221,7 +221,7 @@ fn each_registry_is_asked_with_its_own_credential() {
     let world = World::with(&["a", "b"]);
     std::fs::write(
         world.project.home().join("credentials.json"),
-        r#"{"registries":{"a":{"token":"ta"},"b":{"token":"tb"}}}"#,
+        r#"{"registries":{"https://a.invalid":{"token":"ta"},"https://b.invalid":{"token":"tb"}}}"#,
     )
     .unwrap();
 

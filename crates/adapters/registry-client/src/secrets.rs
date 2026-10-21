@@ -1,14 +1,16 @@
 //! Secret storage for registry tokens (spec #21, T5).
 //!
 //! Tokens live in the OS keyring (service `specforge-registry`, user =
-//! registry alias) whenever a keychain is available. Where it is not
+//! registry root) whenever a keychain is available. Where it is not
 //! (headless Linux without a secret service, exotic sandboxes), the secret
 //! falls back to a 0600-permission file under `~/.specforge/secrets/`.
 //!
 //! The plaintext `credentials.json` of older versions is migrated to this
 //! scheme automatically on the next `specforge login`.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+use specforge_registry_wire::{RegistryRoot, sha256_hex};
 
 const SERVICE: &str = "specforge-registry";
 
@@ -23,20 +25,24 @@ pub enum SecretBackend {
 
 /// Store a secret, preferring the OS keyring. Returns the backend used so
 /// callers can record it.
-pub fn store_secret(alias: &str, secret: &str) -> Result<SecretBackend, String> {
-    if let Ok(entry) = keyring::Entry::new(SERVICE, alias)
+pub fn store_secret(
+    dir: &Path,
+    root: &RegistryRoot,
+    secret: &str,
+) -> Result<SecretBackend, String> {
+    if let Ok(entry) = keyring::Entry::new(SERVICE, root.as_str())
         && entry.set_password(secret).is_ok()
     {
         return Ok(SecretBackend::Keyring);
     }
-    store_secret_file(alias, secret)?;
+    store_secret_file(dir, root, secret)?;
     Ok(SecretBackend::File)
 }
 
 /// Load a secret: keyring first, then the file fallback.
-/// `Ok(None)` = no secret stored for this alias.
-pub fn load_secret(alias: &str) -> Result<Option<String>, String> {
-    if let Ok(entry) = keyring::Entry::new(SERVICE, alias) {
+/// `Ok(None)` = no secret stored for this root.
+pub fn load_secret(dir: &Path, root: &RegistryRoot) -> Result<Option<String>, String> {
+    if let Ok(entry) = keyring::Entry::new(SERVICE, root.as_str()) {
         match entry.get_password() {
             Ok(secret) => return Ok(Some(secret)),
             // NotFound = nothing in the keychain; fall through to the file.
@@ -44,33 +50,33 @@ pub fn load_secret(alias: &str) -> Result<Option<String>, String> {
             Err(_) => {}
         }
     }
-    load_secret_file(alias)
+    load_secret_file(dir, root)
 }
 
 /// Delete a secret from every backend (best-effort, for logout).
-pub fn delete_secret(alias: &str) {
-    if let Ok(entry) = keyring::Entry::new(SERVICE, alias) {
+pub fn delete_secret(dir: &Path, root: &RegistryRoot) {
+    if let Ok(entry) = keyring::Entry::new(SERVICE, root.as_str()) {
         let _ = entry.delete_credential();
     }
-    let _ = std::fs::remove_file(secret_file_path(alias));
+    let _ = std::fs::remove_file(secret_file_path(dir, root));
 }
 
-fn secrets_dir() -> PathBuf {
-    crate::credentials::dirs_home()
-        .join(".specforge")
-        .join("secrets")
+/// `<dir>/secrets/<first 16 hex of SHA-256 of the root>.json`: a root is not a file name.
+fn secret_file_path(dir: &Path, root: &RegistryRoot) -> PathBuf {
+    let id = sha256_hex(root.as_str().as_bytes());
+    dir.join("secrets").join(format!("{}.json", &id[..16]))
 }
 
-fn secret_file_path(alias: &str) -> PathBuf {
-    secrets_dir().join(format!("{}.json", alias.replace('/', "_")))
-}
-
-pub(crate) fn store_secret_file(alias: &str, secret: &str) -> Result<SecretBackend, String> {
+pub(crate) fn store_secret_file(
+    dir: &Path,
+    root: &RegistryRoot,
+    secret: &str,
+) -> Result<SecretBackend, String> {
     #[derive(serde::Serialize)]
     struct StoredSecret<'a> {
         secret: &'a str,
     }
-    let path = secret_file_path(alias);
+    let path = secret_file_path(dir, root);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("failed to create {}: {}", parent.display(), e))?;
@@ -83,12 +89,12 @@ pub(crate) fn store_secret_file(alias: &str, secret: &str) -> Result<SecretBacke
     Ok(SecretBackend::File)
 }
 
-fn load_secret_file(alias: &str) -> Result<Option<String>, String> {
+fn load_secret_file(dir: &Path, root: &RegistryRoot) -> Result<Option<String>, String> {
     #[derive(serde::Deserialize)]
     struct StoredSecret {
         secret: String,
     }
-    let path = secret_file_path(alias);
+    let path = secret_file_path(dir, root);
     let content = match std::fs::read_to_string(&path) {
         Ok(c) => c,
         Err(_) => return Ok(None),
@@ -99,13 +105,13 @@ fn load_secret_file(alias: &str) -> Result<Option<String>, String> {
 }
 
 #[cfg(unix)]
-fn restrict_permissions(path: &std::path::Path) {
+pub(crate) fn restrict_permissions(path: &std::path::Path) {
     use std::os::unix::fs::PermissionsExt;
     let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
 }
 
 #[cfg(not(unix))]
-fn restrict_permissions(_path: &std::path::Path) {}
+pub(crate) fn restrict_permissions(_path: &std::path::Path) {}
 
 #[cfg(test)]
 pub(crate) mod tests {
@@ -200,14 +206,19 @@ pub(crate) mod tests {
     #[test]
     fn keyring_backend_round_trips() {
         install_mock_keyring();
+        let dir = tempfile::tempdir().unwrap();
+        let root = RegistryRoot::parse("https://acme.invalid").unwrap();
         assert!(matches!(
-            store_secret("@acme/x", "secret-1").unwrap(),
+            store_secret(dir.path(), &root, "secret-1").unwrap(),
             SecretBackend::Keyring
         ));
-        assert_eq!(load_secret("@acme/x").unwrap().as_deref(), Some("secret-1"));
+        assert_eq!(
+            load_secret(dir.path(), &root).unwrap().as_deref(),
+            Some("secret-1")
+        );
 
-        delete_secret("@acme/x");
-        assert_eq!(load_secret("@acme/x").unwrap(), None);
+        delete_secret(dir.path(), &root);
+        assert_eq!(load_secret(dir.path(), &root).unwrap(), None);
     }
 
     // Pin (01-D3): keyring-rs is built with no platform feature, so its default store is the in-memory mock.

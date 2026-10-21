@@ -4,10 +4,10 @@ use crate::{ConfiguredRegistry, TOKEN_VARIABLE, unusable_credential};
 use specforge_common::Diagnostic;
 use specforge_ops::registry::{NOT_AUTHENTICATED, UNUSABLE_SIGNING_KEY};
 use specforge_ops::{OpError, OpErrorKind};
-use specforge_registry_client::credentials::{read_credentials, user_dir};
+use specforge_registry_client::CredentialStore;
 use specforge_registry_client::signing::load_or_create_signing_key_at;
 use specforge_registry_client::{RegistryConfig, RegistryCredential, SigningKey};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// The user SpecForge runs as, as a registry sees them: the directory that
 /// holds their registry files (`credentials.json`, `signing-key.json`,
@@ -19,9 +19,19 @@ pub struct User {
 }
 
 impl User {
-    /// `~/.specforge`, and `SPECFORGE_REGISTRY_TOKEN` when it is set.
+    /// `$HOME/.specforge` (`USERPROFILE` on Windows), and `SPECFORGE_REGISTRY_TOKEN` when it is set. The one
+    /// place SpecForge reads `HOME` for registry files.
     pub fn current() -> Self {
-        Self::at(user_dir(), std::env::var(TOKEN_VARIABLE).ok())
+        let home = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from("."));
+        Self::at(home.join(".specforge"), std::env::var(TOKEN_VARIABLE).ok())
+    }
+
+    /// The directory of the registry files.
+    pub fn dir(&self) -> &Path {
+        &self.dir
     }
 
     /// Registry files in `dir`, and `token` as the environment's token (a
@@ -33,8 +43,17 @@ impl User {
         }
     }
 
-    pub(crate) fn credentials(&self) -> PathBuf {
-        self.dir.join("credentials.json")
+    /// The credential store, read now (R012 when it can't be read).
+    pub(crate) fn store(&self) -> Result<CredentialStore, Diagnostic> {
+        CredentialStore::read(&self.dir)
+    }
+
+    /// For a read of `registry`: what is kept for its root, or `None`. Never the environment's token.
+    pub(crate) fn kept_for(
+        &self,
+        registry: &RegistryConfig,
+    ) -> Result<Option<RegistryCredential>, Diagnostic> {
+        self.store()?.credential(&registry.url)
     }
 
     pub(crate) fn signing_key(&self) -> PathBuf {
@@ -70,22 +89,21 @@ impl ConfiguredRegistry {
         &self,
         registry: &RegistryConfig,
     ) -> Result<Option<RegistryCredential>, Diagnostic> {
-        read_credentials(&self.user.credentials())?.credential(&registry.alias)
+        self.user.kept_for(registry)
     }
 
     /// The credential a publish to `registry` authenticates with: the
     /// environment's token when set and not blank (the store is not read),
-    /// else the one stored for the registry's alias.
+    /// else the one stored for the registry's root.
     pub(crate) fn credential_for(
         &self,
         registry: &RegistryConfig,
     ) -> Result<RegistryCredential, OpError> {
         if let Some(token) = self.user.token() {
-            return Ok(RegistryCredential::new(registry.alias.clone(), token));
+            return Ok(RegistryCredential::new(registry.url.clone(), token));
         }
-        let store = read_credentials(&self.user.credentials()).map_err(unusable_credential)?;
-        store
-            .credential(&registry.alias)
+        self.user
+            .kept_for(registry)
             .map_err(unusable_credential)?
             .ok_or_else(|| {
                 OpError::coded(

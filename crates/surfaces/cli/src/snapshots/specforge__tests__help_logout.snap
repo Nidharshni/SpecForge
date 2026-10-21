@@ -8,7 +8,10 @@ Usage: specforge logout [OPTIONS]
 
 Options:
       --registry <REGISTRY>
-          Registry alias (defaults to the default registry)
+          Registry alias, as the project at --path names it (defaults to the default registry)
+
+      --url <URL>
+          Registry root whose credential to forget; reads no project
 
       --path <PATH>
           A path inside the project (the nearest directory at or above it holding specforge.json; none: the directory itself, with the default configuration)

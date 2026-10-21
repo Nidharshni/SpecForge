@@ -174,7 +174,7 @@ pub fn assert_client_contract(
     client
         .authenticate(registry, credential)
         .expect("K9: the credential authenticates");
-    let wrong = RegistryCredential::new(credential.alias.clone(), "not-a-token");
+    let wrong = RegistryCredential::new(credential.root.clone(), "not-a-token");
     let error = client.authenticate(registry, &wrong).unwrap_err();
     assert!(
         matches!(error, RegistryError::Unauthorized { .. }),
@@ -419,7 +419,7 @@ pub fn assert_private_client_contract(
     client
         .authenticate(registry, credential)
         .expect("K-P4: the credential authenticates");
-    let wrong = RegistryCredential::new(credential.alias.clone(), "not-a-token");
+    let wrong = RegistryCredential::new(credential.root.clone(), "not-a-token");
     assert!(
         matches!(
             client.authenticate(registry, &wrong),

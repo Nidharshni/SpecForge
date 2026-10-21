@@ -99,16 +99,14 @@ fn logged_in_to_a_registry_called_main() -> (
     behavior = "authenticate_registry_request",
     verify = "a credential kept for one registry root is never sent to another root under the same alias"
 )]
-#[ignore = "flipped by T5"]
 fn a_login_in_one_project_is_not_sent_to_another_projects_root() {
     let (registry, a) = logged_in_to_a_registry_called_main();
     let catcher = Catcher::start();
     let b = catcher.project();
 
     let _ = Cli::on(&b)
+        .at_home(a.home())
         .command(&["add", "@acme/thing"])
-        .env("HOME", a.home())
-        .env("USERPROFILE", a.home())
         .env("R20_P01_TOKEN", registry.token())
         .output()
         .unwrap();
@@ -126,7 +124,6 @@ fn a_login_in_one_project_is_not_sent_to_another_projects_root() {
     behavior = "provide_mcp_add_extension_tool",
     verify = "an add_extension dry run sends no credential kept for another registry root"
 )]
-#[ignore = "flipped by T5"]
 fn an_add_extension_dry_run_sends_no_credential_kept_for_another_root() {
     let (registry, a) = logged_in_to_a_registry_called_main();
     let catcher = Catcher::start();
@@ -149,7 +146,6 @@ fn an_add_extension_dry_run_sends_no_credential_kept_for_another_root() {
         ],
         &[
             ("HOME", a.home().display().to_string()),
-            ("USERPROFILE", a.home().display().to_string()),
             ("R20_P01_TOKEN", registry.token().to_string()),
         ],
     );
@@ -161,4 +157,41 @@ fn an_add_extension_dry_run_sends_no_credential_kept_for_another_root() {
         seen.iter().all(|line| !line.contains(&leaked)),
         "the token kept for another root was sent: {seen:?}"
     );
+}
+
+#[specforge_test(
+    behavior = "logout_registry",
+    verify = "logout --url forgets the credential kept for that root without reading a project"
+)]
+fn logout_with_a_url_forgets_that_roots_credential_without_a_project() {
+    let (registry, a) = logged_in_to_a_registry_called_main();
+    let other = Catcher::start();
+    let store = a.home().join(".specforge/credentials.json");
+    // A second root's credential, kept beside the first.
+    let mut kept: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&store).unwrap()).unwrap();
+    kept["registries"][other.root.as_str()] = serde_json::json!({"token_env": "R20_P01_OTHER"});
+    std::fs::write(&store, kept.to_string()).unwrap();
+
+    // No project: the directory holds no specforge.json.
+    let nowhere = TestProject::new().without_config();
+    let output = Cli::on(&nowhere)
+        .at_home(a.home())
+        .bare_command(&[
+            "logout",
+            "--url",
+            registry.root().as_str(),
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{output:?}");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["status"], "removed", "{json}");
+    assert_eq!(json["root"], registry.root().as_str(), "{json}");
+    let left: serde_json::Value = serde_json::from_slice(&std::fs::read(&store).unwrap()).unwrap();
+    let roots: Vec<&String> = left["registries"].as_object().unwrap().keys().collect();
+    assert_eq!(roots, [&other.root]);
 }

@@ -17,7 +17,7 @@ fn home_with_an_expired_login() -> TempDir {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
         dir.join("credentials.json"),
-        r#"{"registries":{"old":{"token":"x","expires_at":"2020-01-01T00:00:00Z"}}}"#,
+        r#"{"registries":{"https://old.invalid":{"token":"x","expires_at":"2020-01-01T00:00:00Z"}}}"#,
     )
     .unwrap();
     home

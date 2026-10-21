@@ -21,7 +21,7 @@ pub mod testing;
 pub mod trust;
 pub mod trust_flow;
 
-pub use credentials::{CredentialStore, read_credentials, user_dir, write_credentials};
+pub use credentials::CredentialStore;
 pub use http_client::HttpRegistryClient;
 pub use registry_client::{RegistryClient, RegistryError};
 pub use registry_config::{RegistryConfig, RegistryCredential, parse_registries_from_config};
@@ -30,6 +30,6 @@ pub use registry_ops::{
     verify_registry_integrity,
 };
 pub use retry::{RetryPolicy, Retrying};
-pub use signing::{SigningKey, load_or_create_signing_key_at, signing_key_path};
-pub use trust::{KnownKeys, known_keys_path, load_known_keys_at, save_known_keys_at};
+pub use signing::{SigningKey, load_or_create_signing_key_at};
+pub use trust::{KnownKeys, load_known_keys_at, save_known_keys_at};
 pub use trust_flow::{Accepted, KeyChange, NewPin, PinSource, Trusted};

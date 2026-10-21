@@ -1,7 +1,8 @@
 //! The credential store reads the directory it is given, never the developer's `HOME` (ADR 0178).
 
+// Unix: the store reads HOME (USERPROFILE only where there is none).
+#[cfg(unix)]
 #[test]
-#[ignore = "flipped by T5"]
 fn the_store_tests_touch_nothing_under_home() {
     let home = tempfile::tempdir().unwrap();
     let secret = home.path().join(".specforge/secrets/temp.json");
@@ -10,8 +11,7 @@ fn the_store_tests_touch_nothing_under_home() {
 
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args(["credentials::", "--test-threads", "1"])
-        .env("HOME", home.path())
-        .env("USERPROFILE", home.path())
+        .envs([("HOME", home.path())])
         .output()
         .unwrap();
 

@@ -14,9 +14,9 @@ use specforge_ops_registry::{ConfiguredRegistry, User};
 use specforge_package::DeclaredPackage;
 use specforge_project::testing::TestProject;
 use specforge_protocol_types::ExtensionDeclaration;
+use specforge_registry_client::RegistryError;
 use specforge_registry_client::credentials::{CredentialEntry, CredentialStore};
 use specforge_registry_client::testing::{CallKind, MemoryClient};
-use specforge_registry_client::{RegistryError, write_credentials};
 use specforge_registry_wire::SignedContent;
 use specforge_test_macros::test as specforge_test;
 use tempfile::TempDir;
@@ -57,17 +57,17 @@ impl World {
         self.project.home().join("signing-key.json")
     }
 
-    fn store_credential(&self, alias: &str, token: &str, expires_at: Option<&str>) {
-        let mut store = CredentialStore::default();
+    fn store_credential(&self, root: &str, token: &str, expires_at: Option<&str>) {
+        let mut store = CredentialStore::empty(self.project.home());
         store.registries.insert(
-            alias.to_string(),
+            specforge_registry_wire::RegistryRoot::parse(root).unwrap(),
             CredentialEntry::Token {
                 token: token.to_string(),
                 expires_at: expires_at.map(str::to_string),
                 in_keyring: false,
             },
         );
-        write_credentials(&self.project.home().join("credentials.json"), &store).unwrap();
+        store.write().unwrap();
     }
 }
 
@@ -152,7 +152,11 @@ fn the_adapter_refuses_before_any_request_in_this_order() {
     assert!(!world.signing_key().exists());
 
     // 5. a stored token that expired, and no token: R-AUTH-020.
-    world.store_credential("acme", "stored", Some("2000-01-01T00:00:00Z"));
+    world.store_credential(
+        "https://acme.invalid",
+        "stored",
+        Some("2000-01-01T00:00:00Z"),
+    );
     let error = world
         .registry(None)
         .publish(&pkg("@acme/x", "1.0.0").package(), WASM)
@@ -234,10 +238,10 @@ fn the_environment_token_wins_over_the_stored_credential() {
 
     let world = World::acme();
     world.client.clone().accepting("env").accepting("stored");
-    world.store_credential("acme", "stored", None);
+    world.store_credential("https://acme.invalid", "stored", None);
 
     let credential = published_with(&world, Some("env"), "1.0.0").unwrap();
-    assert_eq!(credential.alias, "acme");
+    assert_eq!(credential.root.as_str(), "https://acme.invalid");
     assert_eq!(credential.token(), "env");
 
     let credential = published_with(&world, Some("  "), "1.0.1").unwrap();
@@ -248,7 +252,7 @@ fn the_environment_token_wins_over_the_stored_credential() {
 
     // Only another registry's credential is stored: there is none for acme.
     let other = World::acme();
-    other.store_credential("other", "stored", None);
+    other.store_credential("https://other.invalid", "stored", None);
     let error = published_with(&other, None, "1.0.0").unwrap_err();
     assert_eq!(error.code, "R001", "{error:?}");
 }
@@ -475,7 +479,7 @@ fn home_with_credentials(json: &str) -> TempDir {
 fn an_unset_token_variable_is_r010_before_any_request() {
     let world = World::acme();
     let home = home_with_credentials(
-        r#"{"registries":{"acme":{"token_env":"P16_UNSET_TOKEN_VARIABLE"}}}"#,
+        r#"{"registries":{"https://acme.invalid":{"token_env":"P16_UNSET_TOKEN_VARIABLE"}}}"#,
     );
     let registry = ConfiguredRegistry::for_project(&world.project.project_root(), "publish")
         .as_user(User::at(home.path(), None))
@@ -504,7 +508,9 @@ fn an_unset_token_variable_is_r010_before_any_request() {
 )]
 fn a_token_variable_is_sent_as_the_bearer_token() {
     let world = World::acme();
-    let home = home_with_credentials(r#"{"registries":{"acme":{"token_env":"P16_TOKEN_A"}}}"#);
+    let home = home_with_credentials(
+        r#"{"registries":{"https://acme.invalid":{"token_env":"P16_TOKEN_A"}}}"#,
+    );
     // SAFETY: the variable is named by this test only.
     unsafe { std::env::set_var("P16_TOKEN_A", "t") };
     let registry = ConfiguredRegistry::for_project(&world.project.project_root(), "publish")
@@ -532,7 +538,8 @@ fn a_token_file_is_sent_as_the_bearer_token() {
     )
     .unwrap();
     let home = home_with_credentials(
-        &serde_json::json!({"registries": {"acme": {"token_file": file}}}).to_string(),
+        &serde_json::json!({"registries": {"https://acme.invalid": {"token_file": file}}})
+            .to_string(),
     );
     let registry = ConfiguredRegistry::for_project(&world.project.project_root(), "publish")
         .as_user(User::at(home.path(), None))
@@ -552,8 +559,9 @@ fn a_token_file_is_sent_as_the_bearer_token() {
 )]
 fn an_unreadable_token_file_is_r011_before_any_request() {
     let world = World::acme();
-    let home =
-        home_with_credentials(r#"{"registries":{"acme":{"token_file":"/nonexistent/p16-token"}}}"#);
+    let home = home_with_credentials(
+        r#"{"registries":{"https://acme.invalid":{"token_file":"/nonexistent/p16-token"}}}"#,
+    );
     let registry = ConfiguredRegistry::for_project(&world.project.project_root(), "publish")
         .as_user(User::at(home.path(), None))
         .with_client(world.client.clone());
