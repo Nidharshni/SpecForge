@@ -3,8 +3,10 @@
 
 use crate::view_support::{Assembled, Viewed, registries};
 use specforge_ops::OpErrorKind;
+use specforge_ops::read::coverage::{CoverageQuery, coverage};
 use specforge_ops::read::explore::{ExplorationRequest, explore};
 use specforge_ops::read::export::{ExportField, Request, export, export_recorded};
+use specforge_ops::read::query::{ListRequest, SearchRequest, list, search};
 use specforge_ops::read::review::{ReviewRequest, review};
 use specforge_ops::view::{DEPTH_WITHOUT_ENTITY, EntityField};
 
@@ -83,4 +85,54 @@ fn a_depth_without_its_entity_is_one_refusal() {
     assert_eq!(explored.subject, Some(EntityField::EntityId));
     assert_eq!(reviewed.subject, Some(EntityField::EntityId));
     assert_eq!(exported.subject, Some(ExportField::Scope));
+}
+
+#[test]
+#[ignore = "flipped by T8"]
+fn an_empty_kind_is_a_kind_the_project_lacks() {
+    let project = project();
+    let view = project.view();
+    let empty = |notices: &[specforge_common::Diagnostic]| {
+        assert_eq!(codes(notices), ["I020"], "{notices:?}");
+        assert_eq!(notices[0].message, "unknown entity kind ''");
+    };
+
+    let listed = list(
+        &view,
+        &ListRequest {
+            kind: Some(""),
+            ..Default::default()
+        },
+    );
+    assert!(listed.notices().len() == 1, "{:?}", listed.notices());
+    empty(listed.notices());
+    assert!(listed.into_value_and_notices().0.is_empty());
+
+    let covered = coverage(
+        &view,
+        &CoverageQuery {
+            kind: Some(""),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    empty(covered.notices());
+    let searched = search(
+        &view,
+        &SearchRequest {
+            kinds: vec![""],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    empty(searched.notices());
+    let explored = explore(
+        &view,
+        &ExplorationRequest {
+            kind: Some(""),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    empty(explored.notices());
 }
