@@ -1,7 +1,7 @@
 # The plan check reads the snapshot and takes its spec type
 
 **Status:** accepted (2026-10-13, architecture round 9, plan 06). Amends ADR 0015 (I1, I3, the operations list), ADR 0029
-(D1, D2) and ADR 0033 (D1, D2). Amended by round 14, plan 12 (the plan check's key).
+(D1, D2) and ADR 0033 (D1, D2). Amended by round 14, plan 12 (the plan check's key). Amended by [ADR 0204](0204-which-edges-an-entity-depends-on-is-one-graph-answer.md) (D5: entities on one cycle in any order).
 
 The plan check (`specforge_ops::plan::check`, the plan mode of `specforge.trace` and the trace prompt) asked the
 coverage memo for the project's coverage to learn two facts the entity snapshot holds: an entity's kind is testable,

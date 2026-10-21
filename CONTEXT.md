@@ -284,6 +284,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Cycle**: a set of entities (or files) that reach one another through references (or imports), with one closed
   walk through all of them, from the smallest id. W061, W113, E041, E042 and the cycle rules each read the one answer
   (`specforge_cycles::cycles`, ADR 0196); which entity the walk starts from never depends on the written order.
+- **Dependency**: an edge `a -> b` says `a` depends on `b`, whatever its label: a written, single or derived
+  reference (ADR 0204). Entities on one cycle of dependencies depend on one another and are done together;
+  `Graph::cycles` answers them. W061 reads a narrower relation, the written references (ADR 0093 D7).
 - **Extension declaration**: everything one extension declares — its handshake and every describe
   category — as the protocol types (`specforge_protocol_types::ExtensionDeclaration`). The SDK
   builds it, the guest serves it, the host loads it once, the Registry build reads it, a package
@@ -855,12 +858,13 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`MissingLink`). The only gap a trace reports.
 - **Agent plan**: what an agent intends to do, entity by entity, in the order it will do it
   (`specforge_ops::read::plan::AgentPlan`, spec type `AgentPlan`: a `plan_id` and entries of `entity_id` and `action`).
-  Its entry order is its dependency order; the graph's edges are the dependencies. Read from a JSON object or its
+  Its entry order is its dependency order; the graph's edges are the dependencies, and entities on one cycle come
+  in any order among themselves. Read from a JSON object or its
   text, checked against the type's schema first (`AgentPlan::read`): a value that departs is refused naming every
   place. The **plan check** (`specforge_ops::read::plan::check`) reads the graph and the entity snapshot, never the
-  recorded test report; it passes (`ok`) when no entry is unresolved and none comes before what it depends on; its outcome lists the entries that resolve (`resolved_entries`).
+  recorded test report; it passes (`ok`) when no entry is unresolved and none comes before an entry of another cycle or entity it depends on; its outcome lists the entries that resolve (`resolved_entries`).
 - **Plan gap**: how an agent plan falls short of the graph: an unresolved entry, a missing entry for
-  a testable entity with obligations, or an entry ordered before what it depends on (`PlanGap`). An
+  a testable entity with obligations, or an entry ordered before what it depends on (entities on one cycle never are) (`PlanGap`). An
   edge to an entity that does not exist is neither: it is E003. Written as an `McpTraceGap`
   (`source_entity`, `target_entity`, `missing_link_type`, `gap_context`). A missing entry is a warning; an
   unresolved or misordered entry fails the plan.
