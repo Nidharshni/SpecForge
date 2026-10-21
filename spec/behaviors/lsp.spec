@@ -610,6 +610,7 @@ behavior code_actions_for_missing_verify "Code Actions for Missing Verify" {
   verify unit "a verify stub fixes the diagnostic that reports its entity, or none when nothing reports it"
   verify unit "the verify stub is laid out with the file's format configuration"
   verify unit "a client that resolves code actions gets a stub's edits on resolve"
+  verify unit "a verify stub is offered for an entity whose block field holds an entry named verify"
   verify contract "Code Actions for Missing Verify: missing verify code actions holds — kind_registry_available, graph_available, quickfix_offered, verify_stubs_produced, no_code_generated"
 }
 

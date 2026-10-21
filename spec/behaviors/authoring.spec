@@ -88,6 +88,7 @@ behavior edit_entity_field "Edit an Entity Field" {
   verify unit "set of a new entry writes its annotations"
   verify unit "retitle replaces the header title"
   verify unit "retitle of a spec block is refused: its title is its name"
+  verify unit "retitle of an untitled union writes the title after its name, never over a variant"
 }
 
 behavior edit_entity_link "Edit an Entity Reference List" {
@@ -129,6 +130,8 @@ behavior edit_entity_obligation "Edit an Entity Obligation" {
   """
   verify unit "a verify line is added after the last one"
   verify unit "a verify line is removed by kind and text"
+  verify unit "remove-verify removes the statement, never a block field's entry named verify"
+  verify unit "add-verify writes after the last statement, never inside a block field"
 }
 
 behavior delete_entity "Delete an Entity" {

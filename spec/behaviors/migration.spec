@@ -218,6 +218,7 @@ behavior add_missing_titles "Add Missing Titles" {
   verify unit "a project already titled has nothing pending"
   verify unit "a planned text that also changes a field refuses the titles"
   verify unit "the changes beyond the steps drop only a title the step added"
+  verify unit "a header whose name is on its second line takes its title after the name"
 }
 
 behavior hoist_file_defaults "Hoist File Defaults" {
