@@ -96,7 +96,7 @@ impl CredentialStore {
             )
         })?;
 
-        write_private(&path, json.as_bytes()).map_err(|e| {
+        specforge_common::fresh::replace_private(&path, json.as_bytes()).map_err(|e| {
             Diagnostic::new(
                 codes::R013,
                 format!("failed to write credentials file: {}", e),
@@ -224,7 +224,7 @@ impl CredentialStore {
             secret: token.clone(),
         })
         .map_err(|e| format!("failed to serialize secret: {}", e))?;
-        write_private(&path, json.as_bytes())
+        specforge_common::fresh::replace_private(&path, json.as_bytes())
             .map_err(|e| format!("failed to write {}: {}", path.display(), e))?;
         self.registries.insert(
             root,
@@ -270,38 +270,6 @@ impl CredentialStore {
 #[derive(Serialize, Deserialize)]
 struct Stored {
     secret: String,
-}
-
-/// Writes `bytes` to `path` through a sibling temp file renamed into place, so the file is never
-/// readable by others or half written: its directories are created 0700 and the file 0600 (unix).
-///
-/// Elsewhere no mode is set: the secret relies on the user profile directory's default ACL.
-fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    use std::io::Write;
-    if let Some(parent) = path.parent() {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::DirBuilderExt;
-            std::fs::DirBuilder::new()
-                .recursive(true)
-                .mode(0o700)
-                .create(parent)?;
-        }
-        #[cfg(not(unix))]
-        std::fs::create_dir_all(parent)?;
-    }
-    let tmp = path.with_extension("tmp");
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options.open(&tmp)?;
-    file.write_all(bytes)?;
-    file.sync_all()?;
-    std::fs::rename(&tmp, path)
 }
 
 const CREDENTIALS_FILE: &str = "credentials.json";
@@ -358,7 +326,7 @@ mod tests {
             );
         }
         assert!(
-            !secret.with_extension("tmp").exists(),
+            !secret.with_extension("json.tmp").exists(),
             "no temp file is left"
         );
 
