@@ -134,3 +134,63 @@ fn new_ranks_an_open_kinds_members_by_name_as_set_in_key_order_does() {
     );
     assert!(a < m && m < z, "{created}");
 }
+
+const BOTH: &[&str] = &["@specforge/software", "@specforge/formal"];
+
+const NONE: &str = r#"defaults behavior {
+  requires {
+    graph_ready "Graph built"
+  }
+}
+
+behavior inherits "Inherits" {
+  contract "c"
+}
+
+behavior bystander "Bystander" {
+  contract "c"
+}
+
+behavior empty_requires "Empty Requires" {
+  contract "c"
+  requires {}
+}
+"#;
+
+#[test]
+#[ignore = "flipped by T7"]
+fn set_of_an_entry_into_a_block_field_written_as_none_writes_it_inside() {
+    let c = compile(BOTH, &[("g.spec", NONE)]);
+    let rows: [(&str, Vec<Edit>); 2] = [
+        (
+            "empty_requires",
+            vec![set(
+                "empty_requires",
+                "requires.disk_ready",
+                one("Disk readable"),
+            )],
+        ),
+        (
+            "inherits",
+            vec![
+                unset("inherits", "requires"),
+                set("inherits", "requires.disk_ready", one("Disk readable")),
+            ],
+        ),
+    ];
+    for (id, edits) in rows {
+        let planned = plan(&c, &edits).unwrap();
+        assert!(
+            !planned.report().added.0.iter().any(|d| d.code == "W020"),
+            "{id}: an undeclared member"
+        );
+        let text = planned.after().remove("g.spec").unwrap();
+        assert!(
+            text.contains("  requires {\n    disk_ready \"Disk readable\"\n  }\n"),
+            "{id}: {text}"
+        );
+        let held = compile(BOTH, &[("g.spec", &text)]);
+        let node = held.project.graph().node(id).unwrap();
+        assert!(node.fields.get("requires").is_some(), "{id}");
+    }
+}
