@@ -157,6 +157,150 @@ async fn an_upload_past_the_body_limit_is_too_large() {
             Some(&signature()),
         )))
         .unwrap();
-    let status = router.oneshot(request).await.unwrap().status();
-    assert_eq!(status, StatusCode::PAYLOAD_TOO_LARGE);
+    let response = router.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    assert_eq!(
+        json_of(response).await["error"]["code"],
+        "PAYLOAD_TOO_LARGE"
+    );
+}
+
+async fn json_of(response: axum::response::Response) -> serde_json::Value {
+    let bytes = axum::body::to_bytes(response.into_body(), 1_000_000)
+        .await
+        .unwrap();
+    serde_json::from_slice(&bytes).unwrap()
+}
+
+async fn send(router: &axum::Router, method: &str, uri: &str, token: &str) -> StatusCode {
+    let request = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap();
+    router.clone().oneshot(request).await.unwrap().status()
+}
+
+const SEGMENTS: [&str; 5] = [
+    "..%2F..%2Foutside",
+    "%2Ftmp%2Foutside",
+    "1.0.0%2F..%2F1.0.0",
+    "1.x",
+    "latest",
+];
+
+#[specforge_test_macros::test(
+    behavior = "publish_to_registry",
+    verify = "the registry refuses a name or version that is not a package name or version"
+)]
+#[tokio::test]
+async fn a_segment_that_is_no_version_is_not_found_in_every_route() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = app_state(dir.path());
+    let token = issue(&state, "pub", "pub", false);
+    let router = handlers::router(Arc::clone(&state));
+    assert_eq!(publish(&router, &token).await, StatusCode::CREATED);
+
+    for segment in SEGMENTS {
+        let base = format!("/v1/packages/@test%2Fsigned-ext/{segment}");
+        assert_eq!(
+            status_of(&router, &base).await,
+            StatusCode::NOT_FOUND,
+            "{base}"
+        );
+        let download = format!("{base}/download");
+        assert_eq!(
+            status_of(&router, &download).await,
+            StatusCode::NOT_FOUND,
+            "{download}"
+        );
+        assert_eq!(
+            send(&router, "DELETE", &base, &token).await,
+            StatusCode::NOT_FOUND,
+            "yank {base}"
+        );
+    }
+    // The versions list of a name that is not a package.
+    for name in ["..%2F..", "tool", "%2Ftmp"] {
+        let uri = format!("/v1/packages/{name}");
+        assert_eq!(
+            status_of(&router, &uri).await,
+            StatusCode::NOT_FOUND,
+            "{uri}"
+        );
+    }
+    // Nothing above took the version down.
+    assert_eq!(
+        status_of(&router, "/v1/packages/@test%2Fsigned-ext/1.0.0/download").await,
+        StatusCode::OK
+    );
+}
+
+#[specforge_test_macros::test(
+    behavior = "publish_to_registry",
+    verify = "the registry refuses a name or version that is not a package name or version"
+)]
+#[tokio::test]
+async fn a_yank_of_a_missing_version_is_not_found_and_a_yanked_one_is_gone_everywhere() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = app_state(dir.path());
+    let token = issue(&state, "pub", "pub", false);
+    let router = handlers::router(Arc::clone(&state));
+    assert_eq!(publish(&router, &token).await, StatusCode::CREATED);
+    let version = "/v1/packages/@test%2Fsigned-ext/1.0.0";
+
+    let missing = "/v1/packages/@test%2Fsigned-ext/9.9.9";
+    assert_eq!(
+        send(&router, "DELETE", missing, &token).await,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(status_of(&router, version).await, StatusCode::OK);
+
+    assert_eq!(
+        send(&router, "DELETE", version, &token).await,
+        StatusCode::OK
+    );
+    assert_eq!(status_of(&router, version).await, StatusCode::NOT_FOUND);
+    assert_eq!(
+        status_of(&router, &format!("{version}/download")).await,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        status_of(&router, "/v1/packages/@test%2Fsigned-ext").await,
+        StatusCode::NOT_FOUND,
+        "a package with no fetchable version lists none"
+    );
+}
+
+#[specforge_test_macros::test(
+    behavior = "publish_to_registry",
+    verify = "the registry refuses a name or version that is not a package name or version"
+)]
+#[tokio::test]
+async fn a_blob_that_misses_its_digest_is_an_integrity_violation() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = app_state(dir.path());
+    let token = issue(&state, "pub", "pub", false);
+    let router = handlers::router(Arc::clone(&state));
+    assert_eq!(publish(&router, &token).await, StatusCode::CREATED);
+    let blob = std::fs::read_dir(dir.path().join("packages"))
+        .unwrap()
+        .flatten()
+        .next()
+        .unwrap()
+        .path()
+        .join("1.0.0.wasm");
+    std::fs::write(&blob, b"\0asm-tampered").unwrap();
+
+    let request = Request::builder()
+        .uri("/v1/packages/@test%2Fsigned-ext/1.0.0/download")
+        .body(Body::empty())
+        .unwrap();
+    let response = router.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(
+        json_of(response).await["error"]["code"],
+        "INTEGRITY_VIOLATION"
+    );
 }

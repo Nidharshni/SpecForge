@@ -62,7 +62,7 @@ impl ApiError {
     pub fn payload_too_large(message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::PAYLOAD_TOO_LARGE,
-            code: ErrorCode::BadRequest,
+            code: ErrorCode::PayloadTooLarge,
             message: message.into(),
             retry_after_secs: None,
         }

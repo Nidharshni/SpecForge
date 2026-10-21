@@ -9,6 +9,6 @@ pub mod ownership;
 mod publish;
 pub mod rate;
 pub mod state;
-pub mod storage;
+pub mod stored;
 #[cfg(feature = "testing")]
 pub mod testing;

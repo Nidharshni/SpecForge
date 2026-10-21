@@ -120,3 +120,16 @@ fn retitle_of_an_untitled_union_writes_the_title_after_its_name() {
         "type kind_two \"Kinds\" = \"a\" | \"b\"\n"
     );
 }
+
+#[specforge_test_macros::test(
+    behavior = "edit_entity_obligation",
+    verify = "add-verify on a union is refused as not_editable, a union has no verify statements"
+)]
+fn add_verify_on_a_union_is_refused_as_not_editable() {
+    let c = project(&[("types.spec", "type stage = \"draft\" | \"final\"\n")]);
+    let refusal = plan(&c, &[add("stage", None, "a stage is one of its variants")])
+        .map(|_| ())
+        .map_err(|r| r.error.code.to_string())
+        .unwrap_err();
+    assert_eq!(refusal, "not_editable");
+}

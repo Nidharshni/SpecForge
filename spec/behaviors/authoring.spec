@@ -140,6 +140,7 @@ behavior edit_entity_obligation "Edit an Entity Obligation" {
   verify unit "a verify line is removed by kind and text"
   verify unit "remove-verify removes the statement, never a block field's entry named verify"
   verify unit "add-verify writes after the last statement, never inside a block field"
+  verify unit "add-verify on a union is refused as not_editable, a union has no verify statements"
 }
 
 behavior delete_entity "Delete an Entity" {

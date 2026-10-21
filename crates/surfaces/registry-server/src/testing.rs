@@ -11,6 +11,7 @@ use std::time::Duration;
 use axum::extract::{Request, State};
 use axum::middleware::Next;
 use axum::response::Response;
+use specforge_package::{PackageName, Version};
 use specforge_registry_wire::{PackageMetadata, RegistryRoot};
 use tempfile::TempDir;
 
@@ -160,19 +161,9 @@ impl LocalRegistry {
             signature: metadata.signature.clone(),
             manifest: metadata.manifest.clone(),
         };
-        let temp = self
-            .state
-            .storage
-            .store_wasm_temp(&row.name, &row.version, wasm)
-            .expect("a blob written");
-        self.state
-            .database
-            .insert_package(&row)
-            .expect("a row inserted");
-        self.state
-            .storage
-            .commit_wasm(&row.name, &row.version, &temp)
-            .expect("a blob committed");
+        let name = PackageName::from_url_segment(&row.name).expect("a package name");
+        let version = Version::parse(&row.version).expect("a version");
+        self.state.stored().seed(&name, &version, &row, wasm);
     }
 
     /// Every request served so far, oldest first: `"GET /v1/packages/@acme%2Ftool"`.
