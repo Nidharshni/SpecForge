@@ -22,6 +22,9 @@ behavior create_entity "Create an Entity" {
     is not written, and each verify obligation as an add-verify writes it, so an equal one given twice is written
     once. The field flags of `specforge new` are the kind's fields in the project
     the command acts on. A create takes whole fields; a `field.entry` path is refused.
+    The skeleton of a new block of a kind is what a create of it writes with no values, with a slot where each value
+    goes: the id, the title, each required field and the final cursor; a member's skeleton is its field written in its
+    form (ADR 0191).
   """
   verify unit "new writes the block in the canonical form after the last block of its kind"
   verify unit "new creates a missing source file"
@@ -33,6 +36,9 @@ behavior create_entity "Create an Entity" {
   verify unit "new refuses a field.entry path"
   verify unit "new writes each field as set writes it"
   verify unit "new writes an equal verify obligation once"
+  verify unit "a create's skeleton filled in is the block new writes"
+  verify unit "every kind's skeleton formats to itself"
+  verify unit "a member's skeleton is written in its field's form"
   verify integration "new reads its field flags from the project its --path names, wherever --path stands"
   verify integration "new refuses a field given twice that takes one value"
   verify integration "new refuses an unknown kind as unknown_kind"

@@ -8,10 +8,12 @@ mod create;
 mod defaults;
 mod outcome;
 mod path;
+mod skeleton;
 pub(crate) mod validate;
 pub mod write;
 
 pub use outcome::{EditDocument, Edited, run};
+pub use skeleton::{Skeleton, Skeletons, Slot, SlotOf};
 
 use crate::authoring::format::{Configs, Forms, Place};
 use crate::authoring::planned::PlannedChange;

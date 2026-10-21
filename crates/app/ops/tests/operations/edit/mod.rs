@@ -15,6 +15,7 @@ mod places;
 mod positions;
 mod replay;
 mod sides;
+mod skeleton;
 mod validate;
 
 use crate::navigate::{Compiled, SOFTWARE, compile};
