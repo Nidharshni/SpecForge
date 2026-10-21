@@ -131,7 +131,6 @@ pub fn verify(
     let found = obligations
         .iter()
         .position(|o| o.kind == kind && o.description == description);
-    let lines = block.verify_lines();
     if add {
         if found.is_some() {
             return Ok(text.to_string());
@@ -143,10 +142,10 @@ pub fn verify(
         };
         block.put_verify(&format!("verify {kind_text}{}", spell::quoted(description)));
     } else {
-        let Some((first, last)) = found.and_then(|i| lines.get(i).copied()) else {
+        let Some(span) = found.and_then(|i| block.entity().obligation_spans.get(i).cloned()) else {
             return Ok(text.to_string());
         };
-        block.remove(first, last);
+        block.remove(span.start_line - 1, span.end_line - 1);
     }
     finish_edit(site, text, &before, &block)
 }

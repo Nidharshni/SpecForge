@@ -124,9 +124,11 @@ behavior edit_entity_obligation "Edit an Entity Obligation" {
   invariants [typed_edit_canonical_form]
   category   mutation
   contract   """
-    An add-verify edit inserts a verify line after the last one, or before the
-    closing brace. A remove-verify edit removes the line with that kind and
-    text. An equal line is not added twice.
+    An add-verify edit inserts a verify line after the last verify statement,
+    or before the closing brace. A remove-verify edit removes the statement
+    with that kind and text. Where each statement is written is read from the
+    block's parse: an entry named verify inside a block field is a field, never
+    a statement (ADR 0187, amended). An equal line is not added twice.
   """
   verify unit "a verify line is added after the last one"
   verify unit "a verify line is removed by kind and text"

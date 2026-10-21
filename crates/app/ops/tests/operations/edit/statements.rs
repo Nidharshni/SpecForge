@@ -33,7 +33,6 @@ fn remove(id: &str, kind: Option<&str>, text: &str) -> Edit {
     behavior = "edit_entity_obligation",
     verify = "remove-verify removes the statement, never a block field's entry named verify"
 )]
-#[ignore = "flipped by T3"]
 fn remove_verify_removes_the_statement_never_an_entry_named_verify() {
     let c = ports(PORT);
     let text = after(
@@ -64,7 +63,6 @@ fn remove_verify_removes_the_statement_never_an_entry_named_verify() {
     behavior = "edit_entity_obligation",
     verify = "add-verify writes after the last statement, never inside a block field"
 )]
-#[ignore = "flipped by T3"]
 fn add_verify_writes_after_the_last_statement_never_inside_a_block_field() {
     let c = ports(UNTESTED_PORT);
     let planned = plan(
@@ -86,7 +84,6 @@ fn add_verify_writes_after_the_last_statement_never_inside_a_block_field() {
     behavior = "code_actions_for_missing_verify",
     verify = "a verify stub is offered for an entity whose block field holds an entry named verify"
 )]
-#[ignore = "flipped by T3"]
 fn a_verify_stub_is_offered_beside_an_entry_named_verify() {
     let c = ports(UNTESTED_PORT);
     let fixes = crate::fixes::fixes_of(&c, &FixQuery::default());

@@ -583,7 +583,8 @@ behavior code_actions_for_missing_verify "Code Actions for Missing Verify" {
     stub fixes the diagnostic of the rule that reports its entity, and
     none when no rule reports it. The code actions offered for a request are those
     whose diagnostic, or whose entity, overlaps the requested range. The code action MUST add verify stub declarations
-    to the entity block in the .spec file, using verify kinds from the
+    to the entity block in the .spec file, after the entity's last verify
+    statement and never inside one of its block fields, using verify kinds from the
     entity kind's allowed_verify_kinds in the KindRegistry (not hardcoded
     kinds). If no allowed_verify_kinds are specified, the stub MUST use
     the first verify kind from the extension's verify_kinds list. The

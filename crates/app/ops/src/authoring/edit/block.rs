@@ -182,28 +182,6 @@ impl Block {
         let new: Vec<String> = text.split('\n').map(String::from).collect();
         self.lines.splice(at..at, new);
     }
-
-    /// Each `verify` statement's first and last 0-based line, in written order.
-    fn verify_lines(&self) -> Vec<(usize, usize)> {
-        let body = self.lines[self.header()..=self.close()].join("\n");
-        let line_of = |at: usize| self.header() + body[..at].matches('\n').count();
-        let lexemes = lex(&body);
-        let mut found = Vec::new();
-        for (i, lexeme) in lexemes.iter().enumerate() {
-            let line_start = body[..lexeme.start].rfind('\n').map_or(0, |n| n + 1);
-            if lexeme.kind != LexemeKind::Ident
-                || lexeme.text(&body) != "verify"
-                || !body[line_start..lexeme.start].trim().is_empty()
-            {
-                continue;
-            }
-            let Some(last) = lexemes[i + 1..].iter().take(2).find(|l| l.kind.is_str()) else {
-                continue;
-            };
-            found.push((line_of(lexeme.start), line_of(last.end.saturating_sub(1))));
-        }
-        found
-    }
 }
 
 /// Where a field goes: one-line values, then block fields, then triple-quoted text, each in the kind's declared
@@ -294,9 +272,10 @@ impl Block {
             (Some(end_line), _) => end_line,
             (None, Some(first)) => self.with_comments_above(first.start_line - 1),
             (None, None) => self
-                .verify_lines()
+                .entity()
+                .obligation_spans
                 .first()
-                .map_or(self.close(), |(first, _)| self.with_comments_above(*first)),
+                .map_or(self.close(), |s| self.with_comments_above(s.start_line - 1)),
         };
         self.insert(at, &text);
     }
@@ -408,12 +387,14 @@ impl Block {
         Ok(())
     }
 
-    /// A `verify` statement line, after the last one (else before the closing brace), at the members' lead.
+    /// A `verify` statement line, after the last statement the parse read (else before the closing brace), at the
+    /// members' lead.
     pub(super) fn put_verify(&mut self, statement: &str) {
         let at = self
-            .verify_lines()
+            .entity()
+            .obligation_spans
             .last()
-            .map_or(self.close(), |(_, last)| last + 1);
+            .map_or(self.close(), |s| s.end_line);
         let line = format!("{}{statement}", self.member_lead());
         self.insert(at, &line);
     }
