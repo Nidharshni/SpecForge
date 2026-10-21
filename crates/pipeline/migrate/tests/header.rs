@@ -4,6 +4,7 @@
     reason = "a test's unwrap is its assertion: a None or an Err fails the test"
 )]
 
+use specforge_graph::FieldForms;
 use specforge_migrate::migrate_project;
 use specforge_parser::{CURRENT_FORMAT_VERSION, detect_format_version};
 use specforge_test_macros::test as specforge_test;
@@ -34,6 +35,7 @@ fn a_header_below_blank_lines_is_rewritten_where_it_stands() {
         std::slice::from_ref(&a),
         &CURRENT_FORMAT_VERSION,
         &|path: &Path| std::fs::read_to_string(path),
+        &FieldForms::default(),
     );
 
     assert_eq!(summary.migrated_count, 1, "{summary:?}");

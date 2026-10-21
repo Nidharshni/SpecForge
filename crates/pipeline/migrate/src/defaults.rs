@@ -1,6 +1,7 @@
 //! The `defaults` migration step (ADR 0149): the reference lists a file's blocks repeat, stated once.
 
 use specforge_common::structural;
+use specforge_graph::{FieldForms, FileDefaults};
 use specforge_parser::{Entity, FieldEntry, FieldValue, Written, parse};
 
 /// `text` with each reference list its blocks repeat moved into a `defaults <kind>` block (ADR 0149), the graph
@@ -10,9 +11,11 @@ use specforge_parser::{Entity, FieldEntry, FieldValue, Written, parse};
 /// default and is deleted from those blocks, the others keep theirs. A kind's block is written only when it saves at
 /// least one line. The block goes after the last import, or before the first form's doc comment as the parse reads
 /// it (below the format header), with its keys padded to the longest; the layout of the edited blocks is left to
-/// `specforge format`. A file with a syntax error is returned unchanged. A field the kind does not declare is not
-/// seen here: the migrate operation's graph comparison rolls that hoist back (W054).
-pub(crate) fn hoist_defaults(text: &str) -> String {
+/// `specforge format`. A file with a syntax error is returned unchanged. A field is hoisted only where the graph's
+/// defaults rule applies it under `forms` (`FileDefaults::entry`, ADR 0149 D4, ADR 0154 D1): the forms the migrate
+/// operation's judge compiles with, so the hoist keeps the graph by construction and the judge's graph comparison is
+/// the safety net (ADR 0186).
+pub(crate) fn hoist_defaults(text: &str, forms: &FieldForms) -> String {
     let file = parse(text, "defaults.spec");
     if !file.errors.is_empty() {
         return text.to_string();
@@ -63,7 +66,10 @@ pub(crate) fn hoist_defaults(text: &str) -> String {
                 })
                 .expect("a kind has blocks");
             let same: Vec<_> = listed.iter().filter(|l| l.items == common.items).collect();
-            if same.len() < 2 || fields.iter().any(|(k, _)| k == key) {
+            if same.len() < 2
+                || fields.iter().any(|(k, _)| k == key)
+                || !applied(forms, kind, key, &common.source)
+            {
                 continue;
             }
             fields.push((key.to_string(), common.source.clone()));
@@ -112,6 +118,16 @@ pub(crate) fn hoist_defaults(text: &str) -> String {
         }
     }
     out
+}
+
+/// Whether the graph's defaults rule applies `key`, written `value`, in a `defaults <kind>` block under `forms`:
+/// asked of [`FileDefaults`] over that one-field block, so E077 is decided where the graph decides it.
+fn applied(forms: &FieldForms, kind: &str, key: &str, value: &str) -> bool {
+    let probe = parse(
+        &format!("defaults {kind} {{\n  {key} {value}\n}}\n"),
+        "defaults.spec",
+    );
+    FileDefaults::of(&probe, forms).0.entry(kind, key).is_some()
 }
 
 /// A field a block writes as one line holding a list of bare items.

@@ -4,6 +4,7 @@
     reason = "a test's unwrap is its assertion: a None or an Err fails the test"
 )]
 
+use specforge_graph::FieldForms;
 use specforge_migrate::migrate_project;
 use specforge_parser::CURRENT_FORMAT_VERSION;
 use specforge_test_macros::test as specforge_test;
@@ -12,6 +13,11 @@ use tempfile::TempDir;
 
 /// `text` as a project's one source, migrated to the current version; what the file holds after.
 fn migrated(text: &str) -> String {
+    migrated_with(text, &FieldForms::default())
+}
+
+/// [`migrated`] under `forms`, the field forms the project compiles with.
+fn migrated_with(text: &str, forms: &FieldForms) -> String {
     let dir = TempDir::new().unwrap();
     std::fs::write(
         dir.path().join("specforge.json"),
@@ -26,6 +32,7 @@ fn migrated(text: &str) -> String {
         std::slice::from_ref(&a),
         &CURRENT_FORMAT_VERSION,
         &|path: &Path| std::fs::read_to_string(path),
+        forms,
     );
     summary
         .rewrites
@@ -239,4 +246,24 @@ fn the_block_goes_above_the_first_block_when_an_import_follows_it() {
         diagnostics.iter().all(|d| d.code != "E078"),
         "{diagnostics:?}"
     );
+}
+
+/// Field forms declaring `names` as kinds and no field.
+fn kinds(names: &[&str]) -> FieldForms {
+    FieldForms::new(
+        Default::default(),
+        Default::default(),
+        names.iter().map(|n| n.to_string()).collect(),
+    )
+}
+
+#[specforge_test(
+    behavior = "hoist_file_defaults",
+    verify = "a field or a kind the field forms do not declare is never hoisted"
+)]
+fn a_field_or_kind_the_forms_do_not_declare_is_never_hoisted() {
+    let text = blocks(6, |_| "  ports [R]\n".to_string());
+
+    assert_eq!(migrated_with(&text, &kinds(&["behavior"])), text);
+    assert_eq!(migrated_with(&text, &kinds(&["port"])), text);
 }

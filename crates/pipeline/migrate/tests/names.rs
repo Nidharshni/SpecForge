@@ -8,6 +8,7 @@
 use std::path::Path;
 
 use specforge_common::ProjectRoot;
+use specforge_graph::FieldForms;
 use specforge_migrate::{MigrationRecord, backup_of, migrate_project};
 use specforge_parser::CURRENT_FORMAT_VERSION;
 use specforge_test_macros::test as specforge_test;
@@ -40,6 +41,7 @@ fn the_record_names_each_file_and_its_backup_from_the_root() {
         &[dir.path().join("spec/a.spec")],
         &CURRENT_FORMAT_VERSION,
         &|path: &Path| std::fs::read_to_string(path),
+        &FieldForms::default(),
     );
     assert_eq!(summary.rewrites[0].name, "spec/a.spec");
 

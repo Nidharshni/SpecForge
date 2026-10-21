@@ -4,7 +4,7 @@
     reason = "a test's unwrap is its assertion: a None or an Err fails the test"
 )]
 
-use specforge_graph::{build_graph, compute_graph_delta};
+use specforge_graph::{FieldForms, build_graph, compute_graph_delta};
 use specforge_migrate::{beyond_steps, migrate_project};
 use specforge_parser::{CURRENT_FORMAT_VERSION, parse};
 use specforge_test_macros::test as specforge_test;
@@ -27,6 +27,7 @@ fn migrated(text: &str) -> String {
         std::slice::from_ref(&a),
         &CURRENT_FORMAT_VERSION,
         &|path: &Path| std::fs::read_to_string(path),
+        &FieldForms::default(),
     );
     summary
         .rewrites

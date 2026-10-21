@@ -1,8 +1,9 @@
 //! `specforge migrate` and the MCP `specforge.migrate` tool: one migration: the format version header and the
-//! migration steps (`titles`).
+//! migration steps (`titles`, `defaults`).
 //!
-//! The run plans first: a project with nothing to migrate, or with a file that cannot be migrated, is left alone
-//! (no compile, no hooks, nothing written). Otherwise it compiles the project and judges the plan in memory
+//! The run loads the environment first and plans with its field forms (the header, then the `titles` and `defaults`
+//! steps): a project with nothing to migrate, or with a file that cannot be migrated, is left alone (no compile, no
+//! hooks, nothing written). Otherwise it compiles the project in that environment and judges the plan in memory
 //! ([`judge`], ADR 0186): the extensions' migration hooks run, and the planned texts are compiled over the project
 //! and compared with it. A dry run, or a migration the judgement refuses, ends there and writes nothing; a kept one is
 //! written as one project change (each source and the record staged, each backup a name the migration owns, ADR 0171).
@@ -393,7 +394,8 @@ fn remove_record(record: &Held) -> Result<(), OpError> {
     }
 }
 
-/// Migrate the project at `request.root`: plan, compile, judge the plan in memory ([`judge`]: the extensions'
+/// Migrate the project at `request.root`: load the environment, plan with its field forms (the header and the
+/// `titles` and `defaults` steps), compile in it, judge the plan in memory ([`judge`]: the extensions'
 /// migration hooks in `runtime` in dependency order, then the planned texts compiled and compared with the project),
 /// and write a kept migration as one project change. A dry run, or a migration whose hook fails or whose graph delta
 /// is not empty, ends at the judgement: nothing is written. With no runtime no extension is loaded, so no hook runs.
@@ -429,7 +431,16 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
             )
         })
     };
-    let plan = migrate_project(project, &sources, target, &read_source);
+    // The environment the plan's defaults step reads its field forms from and the judge compiles in: loaded once,
+    // before the plan (ADR 0186 D5, amended). It reads no source.
+    let env = Environment::load(project, runtime);
+    let plan = migrate_project(
+        project,
+        &sources,
+        target,
+        &read_source,
+        env.registries().field_forms(),
+    );
     let from = plan
         .results
         .iter()
@@ -456,7 +467,7 @@ pub fn run(request: &Request, runtime: Option<SharedRuntime>) -> Result<Outcome,
 
     // The graph before any file is touched, read through the same bound: a refused source is its E025 (ADR 0166).
     // The plan is judged against it in memory (ADR 0186).
-    let pre = CompiledProject::compile_through(Environment::load(project, runtime), &bound);
+    let pre = CompiledProject::compile_through(env, &bound);
     let planned: BTreeMap<String, String> = outcome
         .summary
         .rewrites

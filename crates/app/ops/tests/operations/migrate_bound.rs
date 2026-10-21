@@ -81,7 +81,10 @@ fn a_bounded_migration_compiles_no_source_the_bound_refuses() {
         .iter()
         .map(|call| call.input.to_string())
         .collect();
-    assert!(runtime.calls().is_empty(), "no compile ran: {inputs:?}");
+    assert!(
+        !inputs.iter().any(|input| input.contains("alpha_item")),
+        "no compile ran: {inputs:?}"
+    );
     assert!(
         !inputs.iter().any(|input| input.contains("secretword")),
         "{inputs:?}"
