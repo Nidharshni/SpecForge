@@ -4,7 +4,7 @@ use axum::{
     response::Json,
     routing::{delete, get, post, put},
 };
-use specforge_package::PackageName;
+use specforge_package::{PackageName, Version};
 use specforge_registry_wire::TokenVerified;
 use specforge_registry_wire::address::{Endpoint, HEALTH};
 use std::sync::Arc;
@@ -59,6 +59,15 @@ async fn verify_auth(State(_state): State<Arc<AppState>>, token: AuthToken) -> J
         label: record.label,
         expires_at: record.expires_at,
     })
+}
+
+/// The version a read or a yank names, from its URL segment, with its package. A segment that is no
+/// name or no version cannot have been published, so it is not found.
+fn read_target(name: &str, version: &str) -> Result<(PackageName, Version), ApiError> {
+    let package = read_name(name)?;
+    let parsed = Version::parse(version)
+        .map_err(|_| ApiError::not_found(format!("{package}@{version} not found")))?;
+    Ok((package, parsed))
 }
 
 /// The package a read or a yank names, from its URL segment. A name that

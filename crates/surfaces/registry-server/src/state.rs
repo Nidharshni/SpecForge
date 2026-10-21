@@ -1,8 +1,8 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::db::Database;
 use crate::rate::RateLimiter;
-use crate::storage::LocalStorage;
+use crate::stored::Stored;
 
 /// Who may read a registry: list versions, read metadata, download, search.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -19,7 +19,8 @@ pub struct AppState {
     /// Who may read.
     pub read_access: ReadAccess,
     pub database: Database,
-    pub storage: LocalStorage,
+    /// Where the stored versions' binaries live.
+    blob_dir: PathBuf,
     /// Fixed-window rate limiter shared by all keyed checks.
     pub rate_limiter: RateLimiter,
     /// Publish requests allowed per token per window.
@@ -57,13 +58,24 @@ impl AppState {
         std::fs::create_dir_all(data_dir)
             .map_err(|e| format!("failed to create data directory: {e}"))?;
         let database = Database::open(&data_dir.join("registry.db"))?;
+        let blob_dir = data_dir.join("packages");
+        std::fs::create_dir_all(&blob_dir)
+            .map_err(|e| format!("failed to create storage directory: {e}"))?;
         Ok(AppState {
             read_access,
             database,
-            storage: LocalStorage::new(data_dir.join("packages"))?,
+            blob_dir,
             rate_limiter: RateLimiter::new(limits.window.as_secs().max(1)),
             publish_limit_per_token: limits.per_token,
             publish_limit_per_ip: limits.per_ip,
         })
+    }
+
+    /// The stored versions: rows and binaries, keyed by name and version.
+    pub fn stored(&self) -> Stored<'_> {
+        Stored {
+            db: &self.database,
+            dir: &self.blob_dir,
+        }
     }
 }

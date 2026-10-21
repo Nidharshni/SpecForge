@@ -1,4 +1,4 @@
-use super::{ApiError, AuthToken, read_name};
+use super::{ApiError, AuthToken, read_target};
 use axum::{
     extract::{Multipart, Path, State},
     http::{HeaderMap, StatusCode},
@@ -8,13 +8,12 @@ use specforge_package::PackageName;
 use specforge_registry_wire::{
     ErrorCode, PackageSignature, PublishReceipt, SignedContent, Yanked, form,
 };
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::db::{PackageVersion, PublishRefused};
 use crate::publish::publish_target;
 use crate::state::AppState;
-use crate::storage::LocalStorage;
+use crate::stored::PublishFailed;
 
 pub(super) async fn publish_package(
     State(state): State<Arc<AppState>>,
@@ -24,8 +23,8 @@ pub(super) async fn publish_package(
     mut multipart: Multipart,
 ) -> Result<(StatusCode, Json<PublishReceipt>), ApiError> {
     let token_record = token.record;
-    let (package, version) = publish_target(&name, &version)?;
-    let (name, version) = (package.to_string(), version.to_string());
+    let (package, parsed) = publish_target(&name, &version)?;
+    let (name, version) = (package.to_string(), parsed.to_string());
 
     // Rate limit: per token and per client IP (fixed window). Retry-After
     // rides both on the JSON body and the response header.
@@ -37,14 +36,10 @@ pub(super) async fn publish_package(
 
     // Check if version already exists
     let duplicate = {
-        let st = state.clone();
-        let name = name.clone();
-        let version = version.clone();
-        tokio::task::spawn_blocking(move || {
-            st.database.get_package_version(&name, &version).is_some()
-        })
-        .await
-        .expect("duplicate check panicked")
+        let (st, package, version) = (state.clone(), package.clone(), parsed.clone());
+        tokio::task::spawn_blocking(move || st.stored().row(&package, &version).is_some())
+            .await
+            .expect("duplicate check panicked")
     };
     if duplicate {
         return Err(ApiError::conflict(
@@ -84,10 +79,6 @@ pub(super) async fn publish_package(
 
     // The publisher account recorded with the version: the scope owner's, which for the one
     // publishing into a scope it owns (or claims with this publish) is its own.
-    let scope = package
-        .scope()
-        .expect("publish_target refuses unscoped names")
-        .to_string();
     let publisher_account = token_record.account.to_string();
 
     // --- Publish validation contract (spec #21, T3) ---
@@ -203,33 +194,24 @@ pub(super) async fn publish_package(
         .unwrap_or_default();
     let keywords = declaration.handshake.keywords.join(",");
 
-    // C8-06 atomic publish: (1) write the blob to a fsynced temp file,
-    // (2) let the database's UNIQUE(name, version) arbitrate concurrent
-    // publishes, (3) atomically rename the temp blob into place. Any
-    // failure before step 3 leaves at most a collectable temp file —
-    // never a torn or orphaned final blob.
-    let store_state = Arc::clone(&state);
-    let store_name = name.clone();
-    let store_version = version.clone();
-    let store_data = wasm_data.clone();
-    let temp_path = match tokio::task::spawn_blocking(move || {
-        store_state
-            .storage
-            .store_wasm_temp(&store_name, &store_version, &store_data)
-    })
-    .await
-    .expect("storage write task panicked")
-    {
-        Ok(temp) => temp,
-        Err(e) => return Err(ApiError::internal(ErrorCode::StorageError, e)),
+    // C8-06 atomic publish: stage the blob, let the database's UNIQUE(name, version) arbitrate
+    // concurrent publishes, then commit the blob (`Stored::publish`).
+    let staged = {
+        let (st, package, parsed, data) = (
+            state.clone(),
+            package.clone(),
+            parsed.clone(),
+            wasm_data.clone(),
+        );
+        tokio::task::spawn_blocking(move || st.stored().stage(&package, &parsed, &data))
+            .await
+            .expect("storage write task panicked")
+            .map_err(|e| ApiError::internal(ErrorCode::StorageError, e))?
     };
 
     // The verified signature is stored so clients can verify offline again
     // (spec #21: the registry is not the trust anchor).
     let key_id = signature.key_id();
-
-    // Insert into database — rusqlite is blocking: run it on the blocking
-    // pool.
     let pkg = PackageVersion {
         name: name.clone(),
         version: version.clone(),
@@ -243,65 +225,29 @@ pub(super) async fn publish_package(
         manifest: manifest_json,
     };
 
-    // Claim the scope and record the version in one transaction on the blocking pool, keeping the
-    // temp path so a refusal (a lost version race, a scope claimed meanwhile) discards its blob.
-    let insert_state = Arc::clone(&state);
-    let insert_pkg = pkg.clone();
-    let (claim_package, claim_writer) = (package.clone(), token_record.clone());
-    let discard_temp = |p: &PathBuf| LocalStorage::discard_temp(p);
     let published = {
-        let temp = temp_path.clone();
-        tokio::task::spawn_blocking(move || {
-            let result = insert_state
-                .database
-                .publish(&insert_pkg, &claim_package, &claim_writer);
-            if result.is_err() {
-                discard_temp(&temp);
-            }
-            result
-        })
-        .await
-        .expect("database insert task panicked")
+        let (st, row, package, writer) = (
+            state.clone(),
+            pkg.clone(),
+            package.clone(),
+            token_record.clone(),
+        );
+        tokio::task::spawn_blocking(move || st.stored().publish(staged, &row, &package, &writer))
+            .await
+            .expect("database insert task panicked")
     };
-    let claimed = match published {
-        Ok(claimed) => claimed,
-        Err(PublishRefused::Write(refused)) => return Err(refused.into()),
-        Err(PublishRefused::DuplicateVersion(why)) => {
+    match published {
+        Ok(()) => {}
+        Err(PublishFailed::Refused(PublishRefused::Write(refused))) => return Err(refused.into()),
+        Err(PublishFailed::Refused(PublishRefused::DuplicateVersion(why))) => {
             return Err(ApiError::conflict(ErrorCode::DuplicateVersion, why));
         }
-        Err(PublishRefused::Storage(why)) => {
+        Err(PublishFailed::Refused(PublishRefused::Storage(why))) => {
             return Err(ApiError::internal(ErrorCode::DbError, why));
         }
-    };
-
-    // 3. Atomic rename — the moment the blob becomes visible.
-    let commit_state = Arc::clone(&state);
-    let commit_name = name.clone();
-    let commit_version = version.clone();
-    let commit_temp = temp_path.clone();
-    let committed = tokio::task::spawn_blocking(move || {
-        commit_state
-            .storage
-            .commit_wasm(&commit_name, &commit_version, &commit_temp)
-    })
-    .await
-    .expect("blob commit task panicked");
-    if let Err(e) = committed {
-        // Compensate: the DB row must not outlive a missing blob.
-        let rollback_state = Arc::clone(&state);
-        let rollback_name = name.clone();
-        let rollback_version = version.clone();
-        let rollback_scope = scope.clone();
-        let _ = tokio::task::spawn_blocking(move || {
-            rollback_state.database.withdraw(
-                &rollback_name,
-                &rollback_version,
-                &rollback_scope,
-                claimed,
-            )
-        })
-        .await;
-        return Err(ApiError::internal(ErrorCode::StorageError, e));
+        Err(PublishFailed::Blob(why)) => {
+            return Err(ApiError::internal(ErrorCode::StorageError, why));
+        }
     }
 
     tracing::info!("published {}@{} ({} bytes)", name, version, wasm_data.len());
@@ -325,8 +271,7 @@ pub(super) async fn yank_package(
     headers: HeaderMap,
 ) -> Result<Json<Yanked>, ApiError> {
     let token_record = token.record;
-    let package = read_name(&name)?;
-    let name = package.to_string();
+    let (package, parsed) = read_target(&name, &version)?;
 
     // Rate limit: per token and per client IP (fixed window). Retry-After
     // rides both on the JSON body and the response header.
@@ -335,17 +280,21 @@ pub(super) async fn yank_package(
     }
 
     let yanked = {
-        let st = state.clone();
-        let (package, version, writer) = (package.clone(), version.clone(), token_record.clone());
-        tokio::task::spawn_blocking(move || st.database.yank(&package, &version, &writer))
+        let (st, package, parsed, writer) = (
+            state.clone(),
+            package.clone(),
+            parsed.clone(),
+            token_record.clone(),
+        );
+        tokio::task::spawn_blocking(move || st.stored().yank(&package, &parsed, &writer))
             .await
             .expect("yank write panicked")?
     };
     if yanked {
-        tracing::info!("yanked {}@{}", name, version);
+        tracing::info!("yanked {package}@{parsed}");
         Ok(Json(Yanked { yanked: true }))
     } else {
-        Err(ApiError::not_found(format!("{name}@{version} not found")))
+        Err(ApiError::not_found(format!("{package}@{parsed} not found")))
     }
 }
 
