@@ -590,7 +590,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   a malformed signature is that) and names the package and version asked for, the binary hashes to the served SHA-256, the served manifest reads as that
   package's declaration (one from before ADR 0012 is refused), and the publisher signature verifies with the
   expected key: the user's **key pin** for the name, else the key the project's `specforge.lock` records, else
-  any (trust on first use) (`ConfiguredRegistry::fetch`; ADR 0010, 0012, 0044, 0059). The fetch decides and
+  any (trust on first use), and, at the version the project's lock pins, the bytes it pins (**locked pin**) (`ConfiguredRegistry::fetch`; ADR 0010, 0012, 0044, 0059). The fetch decides and
   writes nothing: the decision is the package's `Publisher`, and the key is pinned when the lock plan that
   fetched it commits. Accepting an unsigned package (`--allow-unsigned`) is reported as W155 at fetch, a
   re-pin as W156 once it is saved. A known-keys store that can't be read refuses the fetch (R-TRUST-006). The
@@ -600,6 +600,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   entry's `key_id`. The user's pin wins; the lock's stands in when the user has none. Pins are written only by
   a committed lock plan, through `Registry::pin`, after the binaries and the lock
   (`specforge_ops::registry::KeyPin`, ADR 0059).
+- **Locked pin**: what a project's `specforge.lock` entry records for a registry install, which every fetch of the name
+  is held to: its publisher key at any version (the **key pin** when the user has none) and its SHA-256 at its own
+  version. A registry serving that version as other bytes is refused (R014) before the download, any key question or any
+  pin, and a dry run refuses it from the published manifest; an entry that pins no hash (W149) holds no bytes and is
+  pinned by its next add (`specforge_ops::registry::LockedPin`, ADR 0201).
 - **Package signature**: a publisher's Ed25519 signature over a package's signed content (its name and version as
   declared, and the SHA-256 of the exact binary and manifest uploaded), with the public key and the time that verify it
   offline (`specforge_registry_wire::PackageSignature`, JSON `{sig, public_key, signed_at}`). Its key id is the first

@@ -44,3 +44,5 @@ An operation that must re-install what the lock already pins (a `--force` reinst
 more than its hash, version and source kind (a signature the lock records and the module must still carry).
 
 **Amended by [ADR 0168](0168-the-lock-plan-answers-an-ask-when-it-is-asked.md) (2026-10-19):** D1: an install is unchanged only at the version asked (same version, hash and kind of source); `install` and `enable` return the answer, and `Unchanged` carries no version.
+
+**D1 amended by [ADR 0201](0201-a-locked-package-is-fetched-to-the-pin-its-lock-entry-records.md) (round 22):** a registry entry that pins no hash is never already installed: its add fetches and pins it (W149).
