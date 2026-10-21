@@ -235,7 +235,8 @@ behavior hoist_file_defaults "Hoist File Defaults" {
     two blocks write the same list. The most common list becomes the default
     and is deleted from the blocks that write it; the others keep theirs. A
     block MUST be written only when it saves at least one line. It goes after
-    the last import, or before the first form and its leading comments. The
+    the last import, or before the first form and its doc comment as the parse
+    reads it, never above the format header. The
     step MUST leave a text with a syntax error as it is and MUST be
     idempotent. The graph comparison proves the graph is unchanged: a hoist
     that changes it is refused with W054 and nothing is written.

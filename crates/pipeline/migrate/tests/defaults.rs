@@ -179,7 +179,6 @@ fn the_block_goes_after_the_imports_or_before_the_first_form() {
     behavior = "hoist_file_defaults",
     verify = "the block goes below the format header"
 )]
-#[ignore = "flipped by T5"]
 fn the_block_goes_below_the_format_header() {
     let body = blocks(3, |_| BOTH.to_string());
     let defaults = "defaults behavior {\n  ports    [R]\n  features [F]\n}\n";
