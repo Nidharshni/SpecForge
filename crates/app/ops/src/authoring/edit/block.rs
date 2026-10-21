@@ -2,11 +2,12 @@
 //! member starts on its own line) and again after it is changed (so it is laid out canonically); no byte outside it
 //! changes. `site` holds what the kind's registry answers about the entity; `verbs` the edits that change a block.
 
-use super::EditField;
+use super::write::written;
+use super::{EditField, Input};
 use crate::{OpError, OpErrorKind, Refusal};
 use specforge_common::{SourceSpan, codes};
 use specforge_formatter::FormatConfig;
-use specforge_graph::field_form::spell;
+use specforge_graph::field_form::{Reading, spell};
 use specforge_parser::lex::{LexemeKind, lex};
 use specforge_parser::{Entity, FieldEntry, FieldValue, SpecFile, parse};
 
@@ -258,12 +259,7 @@ fn trailing_comment(suffix: &str) -> &str {
 impl Block {
     /// `span` (a value) replaced by `new`; with `annotations`, the text after it becomes them (a trailing comment
     /// is kept).
-    pub(super) fn replace_value(
-        &mut self,
-        span: &SourceSpan,
-        new: &str,
-        annotations: Option<&[String]>,
-    ) {
+    fn replace_value(&mut self, span: &SourceSpan, new: &str, annotations: Option<&[String]>) {
         let (first, last) = (span.start_line - 1, span.end_line - 1);
         let prefix = &self.lines[first][..span.start_col - 1];
         let suffix = &self.lines[last][span.end_col - 1..];
@@ -277,13 +273,7 @@ impl Block {
     }
 
     /// A new member `name value` at its rank (`(group, declared index)`).
-    pub(super) fn insert_member(
-        &mut self,
-        site: &Site<'_>,
-        name: &str,
-        value: &str,
-        annotations: &[String],
-    ) {
+    fn insert_member(&mut self, site: &Site<'_>, name: &str, value: &str, annotations: &[String]) {
         let order = order(site.view, site.kind);
         let new_rank = rank(&order, name, group_of_text(value));
         let text = format!(
@@ -307,6 +297,57 @@ impl Block {
                 .map_or(self.close(), |(first, _)| self.with_comments_above(*first)),
         };
         self.insert(at, &text);
+    }
+}
+
+impl Block {
+    /// The column field `name` will have: its own key line's lead, else a new member's.
+    fn lead_of(&self, name: &str) -> String {
+        match self.entry(name).and_then(|e| e.value_span.as_ref()) {
+            Some(span) => self.lead(span.start_line - 1).to_string(),
+            None => self.member_lead(),
+        }
+    }
+
+    /// `input` as field `name` reads it (`reading`), written at the field's column and placed by [`Self::place`].
+    /// Refused as the value writer refuses `input` (`not_editable`); the block is unchanged then.
+    pub(super) fn put(
+        &mut self,
+        site: &Site<'_>,
+        name: &str,
+        reading: Reading<'_>,
+        input: &Input,
+        annotations: Option<&[String]>,
+    ) -> Result<(), Refusal<EditField>> {
+        let value = written(reading, name, input, &self.lead_of(name), &self.config)?;
+        self.place(site, name, &value, annotations);
+        Ok(())
+    }
+
+    /// `value`, already written for field `name`'s column, as the block's own `name`: its value replaced (the text
+    /// after it becoming `annotations` when given), else a new member at its rank with `annotations` (none when
+    /// `None`). Never refuses.
+    pub(super) fn place(
+        &mut self,
+        site: &Site<'_>,
+        name: &str,
+        value: &str,
+        annotations: Option<&[String]>,
+    ) {
+        match self.entry(name).and_then(|e| e.value_span.clone()) {
+            Some(span) => self.replace_value(&span, value, annotations),
+            None => self.insert_member(site, name, value, annotations.unwrap_or_default()),
+        }
+    }
+
+    /// A `verify` statement line, after the last one (else before the closing brace), at the members' lead.
+    pub(super) fn put_verify(&mut self, statement: &str) {
+        let at = self
+            .verify_lines()
+            .last()
+            .map_or(self.close(), |(_, last)| last + 1);
+        let line = format!("{}{statement}", self.member_lead());
+        self.insert(at, &line);
     }
 }
 

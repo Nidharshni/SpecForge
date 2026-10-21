@@ -58,7 +58,7 @@ pub fn change(
         && let Some(default) = &default
         && let Some(copy) = copy(site, &block, field, default)
     {
-        block.insert_member(site, field, &copy, &[]);
+        block.place(site, field, &copy, None);
         block = Block::open(site, &block.text())?; // the copy is now the block's own field
     }
     let own = block.entry(field).cloned();
@@ -131,10 +131,7 @@ fn emptied(
             ));
         }
     };
-    match block.entry(field).and_then(|e| e.value_span.clone()) {
-        Some(span) => block.replace_value(&span, none, None),
-        None => block.insert_member(site, field, none, &[]),
-    }
+    block.place(site, field, none, None);
     block.finish(site)
 }
 

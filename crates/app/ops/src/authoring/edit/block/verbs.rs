@@ -38,18 +38,8 @@ pub fn set(
     annotations: Option<&[String]>,
 ) -> Result<String, Refusal<EditField>> {
     match path::resolve(site, field, None)? {
-        FieldPath::Field { name, reading } => defaults::change(site, text, name, |block, own| {
-            match own.and_then(|e| e.value_span) {
-                Some(span) => {
-                    let lead = block.lead(span.start_line - 1).to_string();
-                    let new = written(reading, name, input, &lead, &block.config)?;
-                    block.replace_value(&span, &new, annotations);
-                }
-                None => {
-                    let new = written(reading, name, input, &block.member_lead(), &block.config)?;
-                    block.insert_member(site, name, &new, annotations.unwrap_or_default());
-                }
-            }
+        FieldPath::Field { name, reading } => defaults::change(site, text, name, |block, _| {
+            block.put(site, name, reading, input, annotations)?;
             Ok(Change::Changed)
         }),
         FieldPath::Entry {
@@ -193,13 +183,7 @@ pub fn verify(
         } else {
             format!("{kind} ")
         };
-        let line = format!(
-            "{}verify {kind_text}{}",
-            block.member_lead(),
-            spell::quoted(description)
-        );
-        let at = lines.last().map_or(block.close(), |(_, last)| last + 1);
-        block.insert(at, &line);
+        block.put_verify(&format!("verify {kind_text}{}", spell::quoted(description)));
     } else {
         let Some((first, last)) = found.and_then(|i| lines.get(i).copied()) else {
             return Ok(text.to_string());
@@ -304,10 +288,7 @@ pub fn link(
             return Ok(Change::Emptied);
         }
         let new = list_text(&items);
-        match own.and_then(|e| e.value_span) {
-            Some(span) => block.replace_value(&span, &new, None),
-            None => block.insert_member(site, field, &new, &[]),
-        }
+        block.place(site, field, &new, None);
         Ok(Change::Changed)
     })
 }
