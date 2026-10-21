@@ -55,12 +55,12 @@ fn every_view(view: &ProjectView) -> Vec<(&'static str, OpError)> {
                 .error,
         ),
         (
-            "row",
-            specforge_ops::read::coverage::row(&view, "b").unwrap_err(),
-        ),
-        (
             "inspect",
-            specforge_ops::read::inspect::coverage(&view, "b").unwrap_err(),
+            specforge_ops::read::inspect::coverage(
+                &view,
+                &specforge_ops::read::inspect::inspect(&view, "b").unwrap(),
+            )
+            .unwrap_err(),
         ),
         (
             "analyze",

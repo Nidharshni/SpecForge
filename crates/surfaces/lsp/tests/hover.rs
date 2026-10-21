@@ -364,7 +364,7 @@ fn hover_shows_each_coverage_case() {
             && !facts.standing.exempt()
         {
             let status = specforge_ops::read::coverage::STATUS.name_of(
-                specforge_ops::read::inspect::coverage(&state.view(), id)
+                specforge_ops::read::inspect::coverage(&state.view(), &facts)
                     .unwrap()
                     .status(),
             );
@@ -468,7 +468,7 @@ fn hover_lists_the_diagnostics_not_already_shown() {
     let view = ProjectView::of(project.detached()).reporting(&reported);
     let facts = specforge_ops::read::inspect::inspect(&view, "beta").unwrap();
 
-    let coverage = specforge_ops::read::inspect::coverage(&view, "beta");
+    let coverage = specforge_ops::read::inspect::coverage(&view, &facts);
     let text = specforge_lsp::hover::entity(&facts, &coverage, &[]);
     assert!(
         text.ends_with(

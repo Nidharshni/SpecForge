@@ -13,7 +13,7 @@ use specforge_registry::{EntityRecord, Standing};
 
 use crate::options::{Choice, OptionTable};
 use crate::view::{EntityField, ProjectView, Select};
-use crate::{Noticed, OpError, Refusal};
+use crate::{Noticed, Refusal};
 
 /// Which rows to list.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -156,16 +156,6 @@ pub fn coverage(
         summary: coverage.summary.clone(),
     };
     Ok(Noticed::new(outcome, selection.into_notices()))
-}
-
-/// One entity's row, counted or not; `None` when the graph lacks it.
-pub fn row(view: &ProjectView, entity_id: &str) -> Result<Option<CoverageRow>, OpError> {
-    let coverage = view.coverage()?;
-    Ok(view
-        .entities()
-        .get(entity_id)
-        .zip(coverage.verdict(entity_id))
-        .map(|((record, standing), verdict)| CoverageRow::of(record, standing, verdict)))
 }
 
 /// `specforge.coverage`'s `status_filter`: a coverage status as the

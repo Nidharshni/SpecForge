@@ -71,9 +71,7 @@ fn a_field_named_verify_is_one_field_of_the_node() {
 fn a_field_named_verify_hides_no_obligation() {
     let p = project(BOTH);
     let view = specforge_ops::view::ProjectView::of(&p);
-    let row = specforge_ops::read::coverage::row(&view, "Payload")
-        .unwrap()
-        .unwrap();
+    let row = crate::view_support::row(&view, "Payload");
     let document = serde_json::to_value(row.document()).unwrap();
     assert_eq!(document["declared"], true, "{document}");
     assert_eq!(document["obligations"], 1, "{document}");

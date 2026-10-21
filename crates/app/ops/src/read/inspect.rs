@@ -61,18 +61,17 @@ impl EntityCoverage {
     }
 }
 
-/// The coverage of `entity_id` under the one rule, over the view's recorded
-/// report: what MCP inspect reports (`coverage_status`) and the hover's
-/// Coverage line. A surface that shows no coverage (the context prompt) does
-/// not call it, so it reads no report. An entity the graph lacks has the
-/// default verdict (no obligations, no tests). A recorded report that cannot
-/// be used is its E045 (ADR 0029 D1): MCP inspect fails on it (ADR 0004
+/// The coverage of an entity `inspect` answered, under the one rule, over the
+/// view's recorded report: what MCP inspect reports (`coverage_status`) and
+/// the hover's Coverage line. A surface that shows no coverage (the context
+/// prompt) does not call it, so it reads no report. A recorded report that
+/// cannot be used is its E045 (ADR 0029 D1): MCP inspect fails on it (ADR 0004
 /// D2-e), the hover shows it (ADR 0015 I3).
-pub fn coverage(view: &ProjectView, entity_id: &str) -> Result<EntityCoverage, OpError> {
+pub fn coverage(view: &ProjectView, facts: &EntityFacts) -> Result<EntityCoverage, OpError> {
     view.recorded().map(|recorded| EntityCoverage {
         verdict: recorded
             .coverage
-            .verdict(entity_id)
+            .verdict(facts.node.id.raw.as_str())
             .cloned()
             .unwrap_or_default(),
         recorded: recorded.report.is_some(),

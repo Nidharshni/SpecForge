@@ -152,7 +152,7 @@ pub fn hover(state: &LspState, uri: &Url, position: Position) -> Option<Hover> {
             specforge_ops::read::inspect::inspect(&view, id.as_str())
                 .ok()
                 .map(|facts| {
-                    let coverage = specforge_ops::read::inspect::coverage(&view, id.as_str());
+                    let coverage = specforge_ops::read::inspect::coverage(&view, &facts);
                     hover::entity(&facts, &coverage, &shown)
                 })
         }
