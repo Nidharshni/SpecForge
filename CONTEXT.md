@@ -809,9 +809,13 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   them through one module (`specforge_ops::read::infer::sources`, ADR 0113).
 - **Anchors manifest**: `<root>/specforge-anchors.json`, which source item each entity is anchored
   to. Read only by navigation's anchors read view (`specforge_ops::read::navigate::{anchors_of_file,
-  anchors_of_entity}`): the entities anchored to a source file, each with its kind, and the anchors of an entity;
+  anchors_of_entity}`, and the covered source items inference gaps leave out): the entities anchored to a source file, each with its kind, and the anchors of an entity;
   E071 when it cannot be used, `no_project` without a project, E003 for an id neither the graph nor the manifest
   knows (ADR 0140).
+- **Covered source item**: a public item a scanner found that the anchors manifest anchors, by its file and its
+  name, to an entity the graph declares; or, when no anchor names that entity, whose name is the entity's id
+  (`specforge_ops::read::navigate` `CoveredItems`, ADR 0199). Inference gaps are the items that are not covered. An
+  anchor to an entity the graph does not declare covers nothing.
 - **Obligation**: one `verify` statement on an entity, its own member beside its methods (ADR 0094), never a field. **Proven** when a passing test names its
   exact text, or a formal claim discharges it. Who owes obligations is the entity's standing. Where each is written is the parse's
   (`Entity::obligation_spans`), never the graph's; an entry named `verify` inside a block field is a field, not an
