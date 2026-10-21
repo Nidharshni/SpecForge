@@ -220,7 +220,8 @@ behavior provide_mcp_edit_tool "Provide MCP Edit Tool" {
     on disk, each reading the text the ones before it left, validated by
     compiling the edited project, and written as one project change. An edit
     list that leaves an error the project did not have MUST be refused as
-    E080 and nothing written. The response MUST list the entities and files
+    E080 and nothing written; one whose graph change goes beyond what its edits
+    declare is refused as undeclared_change. The response MUST list the entities and files
     the list changes, taken together (none for a list that cancels out), a unified diff and the warnings and infos the edit adds. When
     dry_run is true, the tool MUST return the same document and write nothing.
   """

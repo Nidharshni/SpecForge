@@ -1,10 +1,12 @@
 //! Typed edits (ADR 0151): create, change and delete entities in a project's `.spec` files. Each value is written in
 //! the form its field's declaration decides, each touched block is laid out by the formatter, and nothing is
-//! written unless the edited project reports no error it did not report before (E080). The edits are written as
+//! written unless the edited project reports no error it did not report before (E080) and its graph changes only
+//! what the edits declare (ADR 0198). The edits are written as
 //! one project change (ADR 0128).
 
 mod block;
 mod create;
+mod declared;
 mod defaults;
 mod outcome;
 mod path;
@@ -214,6 +216,7 @@ struct Planner<'v> {
     texts: BTreeMap<String, String>,
     created: BTreeMap<String, (String, String)>,
     deleted: BTreeSet<String>,
+    declared: declared::Declared,
 }
 
 /// Where an entity is.
@@ -282,6 +285,7 @@ impl<'v> Planner<'v> {
     }
 
     fn apply(&mut self, edit: &Edit) -> Result<(), Refusal<EditField>> {
+        self.declared.edit(edit);
         match edit {
             Edit::Set {
                 entity_id,
@@ -353,7 +357,7 @@ impl<'v> Planner<'v> {
         let added = if change.is_empty() {
             Vec::new()
         } else {
-            validate::check(self.view, &change.after())?
+            validate::check(self.view, &change.after(), &self.declared)?
         };
         let report = EditReport {
             entities: change.entities(),
@@ -400,6 +404,7 @@ pub fn plan(view: &ProjectView<'_>, edits: &[Edit]) -> Result<EditPlan, Refusal<
         texts: BTreeMap::new(),
         created: BTreeMap::new(),
         deleted: BTreeSet::new(),
+        declared: declared::Declared::default(),
     };
     for (n, edit) in edits.iter().enumerate() {
         planner.apply(edit).map_err(|mut refusal| {

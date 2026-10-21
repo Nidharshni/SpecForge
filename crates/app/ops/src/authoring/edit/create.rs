@@ -109,6 +109,7 @@ impl Planner<'_> {
         let located = self.locate(id)?;
         if unlink_references {
             for (referrer, field, list) in self.referrers(id, &located.kind)? {
+                self.declared.field(&referrer, &field);
                 self.on(&referrer, |site, text| {
                     if list {
                         block::link(site, text, &field, id, false)

@@ -176,7 +176,14 @@ behavior validate_typed_edit "Validate a Typed Edit" {
     the project could not read; an edit that leaves an error-severity
     diagnostic the project did not have, with every check run (after an
     editor update that skipped the checks they are run for the comparison),
-    is refused with E080 and writes nothing. Warnings and infos it adds are written and reported. A preview
+    is refused with E080 and writes nothing. Each edit declares what it may
+    change in the graph: set and unset their field (a field.entry path's
+    field), link and unlink their field, retitle the title, add-verify and
+    remove-verify the obligations, create and delete their entity, a delete
+    with unlink_references each referrer's field; an edge is declared by its
+    source's declared field or by a created or deleted end. An edit whose
+    edited graph changes anything else is refused as undeclared_change and
+    writes nothing; E080 is judged first. Warnings and infos it adds are written and reported. A preview
     refuses exactly what the write would. The files are written as one project
     change: a file changed since the compile refuses the whole plan, and a
     failed write puts every file already written back. The report names the net
@@ -184,6 +191,7 @@ behavior validate_typed_edit "Validate a Typed Edit" {
     files whose text it changes; an entity a later edit puts back as it was is not named, and a
     block that only moves within its file is not either.
   """
+  verify unit "a graph change no edit declares is beyond the declaration"
   verify unit "an edit that adds an error is E080 and writes nothing"
   verify unit "an edit that adds a warning is written and reports it"
   verify unit "a preview refuses what the write would"

@@ -272,7 +272,8 @@ invariant typed_edit_canonical_form "Typed Edit Canonical Form" {
 invariant typed_edit_atomicity "Typed Edit Atomicity" {
   guarantee """
     A typed edit MUST NOT be written when the edited project reports an error
-    the project did not report before (E080). Its files are written as one
+    the project did not report before (E080), nor when its graph changes what
+    its edits do not declare (undeclared_change). Its files are written as one
     project change: every file or none, and a file changed since the project
     was compiled refuses the whole plan.
   """
