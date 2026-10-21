@@ -10,3 +10,4 @@ mod registry_client;
 mod registry_config;
 mod registry_ops;
 mod retry;
+mod user_files;
