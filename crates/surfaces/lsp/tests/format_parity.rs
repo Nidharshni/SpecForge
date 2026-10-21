@@ -150,3 +150,39 @@ async fn editor_formatting_reaches_the_cli_text_in_one_pass() {
         assert_eq!(session.format(&uri).await, serde_json::json!([]), "{path}");
     }
 }
+
+/// The editor served at an outer project writes a nested project's values as `specforge format` does.
+#[tokio::test]
+#[ignore = "flipped by T3"]
+async fn the_editor_writes_a_nested_projects_values_as_specforge_format_does() {
+    use specforge_ops::authoring::format::{Mode, Request, run};
+    let tagged = "behavior bb \"B\" {\n  contract \"The system MUST x\"\n  category \"auth\"\n}\n";
+    let (_dir, root) = format_project(&[
+        ("specforge.json", r#"{"extensions": []}"#),
+        (
+            "inner/specforge.json",
+            r#"{"extensions": ["@specforge/software"]}"#,
+        ),
+        ("inner/spec/a.spec", tagged),
+    ]);
+    let (mut session, uri) = open_in(&root, "inner/spec/a.spec").await;
+
+    let edits = session.format(&uri).await;
+    let edited = apply_edits(tagged, edits.as_array().expect("an edit list"));
+
+    let outcome = run(&Request {
+        root: &specforge_common::ProjectRoot::of(&root).unwrap(),
+        paths: &[root.join("inner")],
+        mode: Mode::Check,
+        caller: specforge_ops::Caller::new(
+            &specforge_ops::Containment::unbounded(),
+            specforge_ops::asking::Asking::Nobody,
+        ),
+        runtime: Some(std::sync::Arc::new(
+            specforge_component::ComponentRuntime::new(),
+        )),
+    })
+    .unwrap();
+    assert_eq!(edited, outcome.changes[0].after);
+    assert!(edited.contains("\n  category auth\n"), "{edited}");
+}
