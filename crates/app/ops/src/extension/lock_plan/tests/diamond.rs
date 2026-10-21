@@ -317,10 +317,9 @@ fn a_peer_a_file_entry_loads_is_refused_naming_the_entry() {
     );
 }
 
-/// Pinned (08-D1): the diamond reads the peer's versions without add's rule, so a peer published nowhere
-/// is R-RES-005 "… Available: " where `add` of that peer says R-RES-002.
+/// A peer its registry publishes no version of is R-RES-002, as `add` of the peer says (ADR 0001 as
+/// amended).
 #[test]
-#[ignore = "flipped by T3"]
 fn a_diamond_over_a_peer_published_nowhere_is_r_res_002() {
     let installed = nowhere(base_and_other("^1.0"));
     let registry = MemoryRegistry::new()

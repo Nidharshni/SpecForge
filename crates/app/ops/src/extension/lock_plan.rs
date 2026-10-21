@@ -11,7 +11,7 @@
 //! once, the **project peer set** as the change leaves it (the extensions the project's
 //! `specforge.json` entries load, `peer_set`): every declared peer whose dependent or peer the
 //! change touches, a missing required peer included. An unsatisfied peer installed from a registry
-//! is unified against the registry the install came from (R-RES-006/005, ADR 0001); anything else
+//! is unified against the registry the install came from (R-RES-006/005, R-RES-002 when it publishes none, ADR 0001); anything else
 //! out of range (a local install, a builtin, a `.wasm` file entry) is refused with E027. Only then
 //! is each binary fetched from a registry loaded, and it must declare what was published
 //! (ADR 0012). What passes is committed as one change (ADR 0028 D4): the modules, the lock, the

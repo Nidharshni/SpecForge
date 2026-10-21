@@ -530,10 +530,12 @@ fn another_version_served_as_the_installed_bytes_is_refused() {
     assert_eq!(files_under(dir.path()), before);
 }
 
-/// Pinned (08-D1): `add @acme/base` and `add @acme/app` (which needs base ^2.0) meet one fact,
-/// "the registry publishes no @acme/base", and must refuse it alike.
-#[test]
-#[ignore = "flipped by T3"]
+/// `add @acme/base` and `add @acme/app` (which needs base ^2.0) meet one fact, "the registry
+/// publishes no @acme/base", and refuse it alike.
+#[specforge_test(
+    behavior = "add_extension_to_existing_project",
+    verify = "a peer its registry publishes no version of fails R-RES-002, as an add of that peer does"
+)]
 fn a_peer_published_nowhere_is_refused_as_an_add_of_it_is() {
     let dir = add_project(vec![
         entry("@acme/base", "1.0.0", "registry", &[]),

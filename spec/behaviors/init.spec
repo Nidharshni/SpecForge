@@ -334,7 +334,8 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     requirer's range is a version diamond (ADR 0001): from a registry the
     operation MUST be rejected with R-RES-006 naming the version that would
     satisfy every requirer of the set, or R-RES-005 when no published
-    version does; a local install, with no registry to consult, MUST be
+    version does (R-RES-002 when the registry publishes no version of the
+    peer, as an add of the peer is refused); a local install, with no registry to consult, MUST be
     rejected with E027. A builtin or a .wasm file entry at a version outside
     a range is E027 whatever the source: no install changes its version.
     Installing or enabling an extension at a version an extension of the
@@ -395,6 +396,7 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   verify integration "an install that leaves a locked extension's peer unsatisfied is refused before anything is written, local or from a registry"
   verify unit "a peer locked outside the new extension's range fails R-RES-006 naming a version that satisfies every requirer"
   verify unit "a peer no single version satisfies for every requirer fails R-RES-005"
+  verify unit "a peer its registry publishes no version of fails R-RES-002, as an add of that peer does"
   verify unit "an add that upgrades a locked package judges its peers against the lock as the add leaves it"
   verify unit "a version diamond names each requirer once"
   verify unit "add judges the project's peer set as the add leaves it: its builtins, installed extensions and .wasm file entries"

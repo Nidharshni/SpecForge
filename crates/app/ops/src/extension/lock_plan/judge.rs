@@ -26,7 +26,8 @@ impl<'a> LockPlan<'a> {
     ///    - for a peer out of range or not SemVer, by where the peer comes from:
     ///      - installed, with the touching change fetched from a registry: unified against that
     ///        registry (R-RES-006 naming a version every requirer of the set accepts, R-RES-005
-    ///        naming each once);
+    ///        naming each once, R-RES-002 when
+    ///        the registry publishes no version of the peer);
     ///      - otherwise E027: a local install's, or a builtin's or a `.wasm` file entry's, whose
     ///        versions no install changes.
     ///
@@ -405,7 +406,7 @@ fn diamond(registry: &dyn Registry, set: &ProjectPeers, edge: &Edge, locked: &st
 
 /// The versions `registry` publishes of `peer`, in the registry's order. E072 when `peer` is no
 /// package name: an extension's declaration is malformed (`schema_mismatch`), not the caller's
-/// value.
+/// value. R-RES-002 when the registry publishes none.
 fn published_versions(registry: &dyn Registry, peer: &str) -> Result<Vec<Version>, OpError> {
     let name = PackageName::parse(peer).map_err(|why| {
         OpError::of(
@@ -413,7 +414,7 @@ fn published_versions(registry: &dyn Registry, peer: &str) -> Result<Vec<Version
             specforge_common::package::invalid(&why),
         )
     })?;
-    registry.versions(&name)
+    super::super::resolve::published(registry, &name)
 }
 
 /// Unify a version diamond (ADR 0001): the highest of `published` that every requirer's range
