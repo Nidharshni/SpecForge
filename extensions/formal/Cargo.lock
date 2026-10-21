@@ -267,12 +267,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "specforge-cycles"
+version = "0.1.0"
+
+[[package]]
 name = "specforge-ext-formal"
 version = "1.0.0"
 dependencies = [
  "regex",
  "serde_json",
  "specforge-coverage",
+ "specforge-cycles",
  "specforge-extension-sdk",
  "specforge-test",
 ]

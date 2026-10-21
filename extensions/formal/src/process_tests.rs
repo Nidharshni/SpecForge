@@ -128,7 +128,6 @@ fn layering_parallel_edges_report_once() {
 }
 
 #[test]
-#[ignore = "flipped by T8"]
 fn cycle_e042_names_every_process_of_a_tangle_of_cycles() {
     // delta -> beta closes a cycle through beta, which the walk had finished.
     let input = PassInput {
@@ -161,7 +160,6 @@ fn cycle_e042_names_every_process_of_a_tangle_of_cycles() {
 }
 
 #[test]
-#[ignore = "flipped by T8"]
 fn cycle_e041_names_the_same_behavior_on_every_run() {
     let input = PassInput {
         entities: ["alpha", "beta"].map(|id| entity(id, "behavior")).into(),

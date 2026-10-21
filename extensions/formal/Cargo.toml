@@ -10,6 +10,8 @@ crate-type = ["cdylib"]
 specforge-extension-sdk = { path = "../../crates/runtime/extension-sdk" }
 # W035 reads @specforge/testing's coverage rule (ADR 0004, D2-f).
 specforge-coverage = { path = "../../crates/leaf/coverage" }
+# E041 and E042 name the members of every cycle (ADR 0196).
+specforge-cycles = { path = "../../crates/leaf/cycles" }
 
 [dev-dependencies]
 serde_json = "1.0"

@@ -62,7 +62,7 @@ behavior fa_build_layering_chain "Build Specification Layering Chain" {
   ensures {
     chains_built         "each chain starts at abstract behavior, follows refines edges to concretes via RefinementStep list"
     step_deltas_recorded "each step records condition delta (added_ensures, removed_requires)"
-    dag_enforced         "cycles in layering produce E041"
+    dag_enforced         "cycles in layering produce E041, one per cycle, naming its smallest behavior"
     depth_recorded       "each chain records its depth (number of layering levels)"
     deep_chain_warned    "chain depth > 4 produces W031"
   }

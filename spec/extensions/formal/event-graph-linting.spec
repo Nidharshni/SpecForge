@@ -195,7 +195,7 @@ behavior fa_event_graph_analyze_pass "Event Graph Analyze Compiler Pass" {
     connectivity_checked "asymmetric connectivity on ports detected (W033)"
     buffer_checked       "unbounded channel buffers detected (W034)"
     cycle_free_noted     "an event graph with flow edges and no unmitigated cycle is noted once (I009)"
-    composition_checked  "process composition cycles detected (E042)"
+    composition_checked  "process composition cycles detected (E042), one per strongly connected set of processes, naming every process on it"
     timeout_handled      "barrier timeout expiry sets timed_out=true on EventGraphAnalysisReport and emits warning with incomplete sub-analysis count"
     partial_results      "completed sub-analyses included in report; only incomplete ones omitted on timeout"
     timeout_configurable "barrier timeout uses configured value, not hardcoded 30s"
