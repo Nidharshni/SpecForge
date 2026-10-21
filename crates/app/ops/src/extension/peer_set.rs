@@ -312,6 +312,58 @@ mod tests {
 
     #[specforge_test(
         invariant = "peer_dependency_satisfaction",
+        verify = "the lock plan's peer set of the project as it is names what the extension load loads, in entry order, from the entries it loads them by"
+    )]
+    fn the_prediction_of_the_project_as_it_is_is_what_the_load_loads() {
+        let dir = tempfile::tempdir().unwrap();
+        for (file, bytes) in [
+            ("base.wasm", testing::BASE_2),
+            ("twin.wasm", testing::BASE_2),
+            ("base3.wasm", testing::BASE_1),
+        ] {
+            std::fs::write(dir.path().join(file), bytes).unwrap();
+        }
+        specforge_installed::testing::install_module(dir.path(), "@probe/dep", testing::DEP_1);
+        let installed = Installed::at(dir.path());
+        let runtime = testing::probes();
+        let entries: Vec<String> = [
+            "@specforge/software",
+            "@probe/dep",
+            "@probe/dep@1.0.0",
+            "base.wasm",
+            "twin.wasm",
+            "named=base3.wasm",
+            "missing.wasm",
+            "@probe/unlocked",
+        ]
+        .map(String::from)
+        .to_vec();
+
+        let loaded = installed.load(
+            &entries,
+            &specforge_project::builtins(),
+            &runtime,
+            &specforge_registry::PlainDisk,
+        );
+        let set =
+            ProjectPeers::of(&installed, &entries, &mut Declarations::through(&runtime)).unwrap();
+
+        let by_the_load: Vec<(&str, &Origin)> = (loaded.enabled.iter())
+            .filter(|entry| entry.loaded)
+            .map(|entry| (entry.name.as_str(), &entry.origin))
+            .collect();
+        let by_the_prediction: Vec<(&str, &Origin)> = (set.members().iter())
+            .map(|member| (member.name.as_str(), &member.origin))
+            .collect();
+        assert_eq!(by_the_prediction, by_the_load);
+        assert_eq!(by_the_load.len(), 3, "{by_the_load:?}");
+        let declared: Vec<&str> = loaded.declarations.iter().map(|d| d.name()).collect();
+        let predicted: Vec<&str> = set.members().iter().map(|m| m.name.as_str()).collect();
+        assert_eq!(predicted, declared);
+    }
+
+    #[specforge_test(
+        invariant = "peer_dependency_satisfaction",
         verify = "add, init, update and remove judge the set check judges: the extensions the project's entries load"
     )]
     fn loaded_by_takes_a_builtin_only_from_its_entry() {
