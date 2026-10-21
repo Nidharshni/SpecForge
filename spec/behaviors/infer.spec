@@ -294,7 +294,8 @@ behavior provide_mcp_infer_gaps_tool "Provide MCP Infer Gaps Tool" {
   category mcp
   ensures {
     source_scanned   "source files scanned for public items"
-    graph_crossed    "public items cross-referenced with graph entities"
+    graph_crossed    "public items cross-referenced with the anchors manifest and graph entities"
+    anchored_only    "an anchored entity covers only the items its anchors name"
     per_dir_gaps     "gaps computed per directory"
     approximate_flag "output marked approximate when using regex fallback"
   }
@@ -302,8 +303,13 @@ behavior provide_mcp_infer_gaps_tool "Provide MCP Infer Gaps Tool" {
     Register an MCP tool specforge.infer_gaps that scans source files in
     source_roots for public items. v1 uses regex-based detection for Rust
     (pub fn, pub struct, pub enum, pub trait) — output is explicitly marked
-    as approximate. Cross-references matched items with entities in the
-    compiled graph via the inference manifest's source_index. Returns an
+    as approximate. An item is covered when the project's
+    specforge-anchors.json anchors it, by its file and its name, to an entity
+    the compiled graph declares, or, when no anchor names that entity, when its
+    name is the entity's id. An anchor to an entity the graph does not declare
+    covers nothing. An anchors manifest that cannot be used is refused with
+    E071, as specforge.find_spec_for_source refuses it, before any file is
+    scanned. Returns an
     InferenceGapReport with per-directory breakdowns including structured
     InferenceGap items (name, item_kind, file, line). A scanner that fails
     on a file (it traps, or answers what is not a scan response) is
@@ -319,6 +325,12 @@ behavior provide_mcp_infer_gaps_tool "Provide MCP Infer Gaps Tool" {
   verify unit "returns structured InferenceGap items with file and line"
   verify unit "marks output as approximate"
   verify unit "with no project served, infer_gaps is the no-project refusal"
+  verify unit "an item an anchor names for a declared entity is covered"
+  verify unit "an anchored entity covers only the items its anchors name"
+  verify unit "an unusable anchors manifest refuses the gaps with E071"
+  verify unit "every item find_spec_for_source anchors to a declared entity is no gap"
+  verify unit "an item whose name is an unanchored entity's id is covered"
+  verify unit "an anchor to an entity the graph does not declare covers nothing"
 }
 
 // ---------------------------------------------------------------------------

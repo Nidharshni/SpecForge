@@ -1,5 +1,5 @@
-//! Inference gaps: the public items of the project's source files that no
-//! graph entity names (`specforge infer-status --gaps-detail`, the MCP
+//! Inference gaps: the public items of the project's source files that
+//! nothing covers (`specforge infer-status --gaps-detail`, the MCP
 //! `specforge.infer_gaps` tool).
 
 use std::collections::BTreeMap;
@@ -15,7 +15,7 @@ use super::sources::InferenceSources;
 use crate::OpError;
 use crate::view::ProjectView;
 
-/// Public source items no graph entity names, by directory.
+/// Public source items nothing covers, by directory.
 #[derive(Debug, Clone)]
 pub struct Gaps {
     pub total_pub_items: usize,
@@ -40,13 +40,14 @@ pub struct SourceItem {
     pub scanner: Option<String>,
 }
 
-/// The public items of the view's source files that no entity of its
-/// graph names, scanned through its extensions' scanners in the view's
+/// The public items of the view's source files that nothing covers (the
+/// anchors read view's covered items, ADR 0199), scanned through its extensions' scanners in the view's
 /// runtime. Without a root: `no_project`.
 pub fn gaps(view: &ProjectView) -> Result<Gaps, OpError> {
     let root = view.project_root()?;
     let declarations = view.registries().declarations();
     let sources = InferenceSources::of(root, declarations, &InferenceManifest::at(root)?);
+    // Before the scan: an anchors manifest that cannot be used costs no scan.
     let covered = crate::read::navigate::CoveredItems::of(view)?;
     let scanned =
         crate::read::infer::scan::scan_source_files(view.runtime().map(|r| r.as_ref()), &sources);
@@ -87,7 +88,7 @@ impl Gaps {
         }
     }
 
-    /// How many items no entity names.
+    /// How many items nothing covers.
     pub fn gap_count(&self) -> usize {
         self.by_directory.values().map(Vec::len).sum()
     }
@@ -163,7 +164,7 @@ pub struct DirectoryGaps {
     pub items: Vec<GapItem>,
 }
 
-/// One public item no entity names.
+/// One public item nothing covers.
 #[derive(Debug, Clone, PartialEq, Serialize, Shape)]
 pub struct GapItem {
     pub name: String,

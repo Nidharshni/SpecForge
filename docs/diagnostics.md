@@ -872,7 +872,8 @@ missing or of the wrong type, a session status other than `active`, `paused` or
 Nothing reads such a file as empty, and nothing writes over it: `specforge
 infer-status`, `specforge.infer_progress`, `specforge.infer_gaps`, the infer
 prompt's plan and every `specforge.infer_session` action refuse with this code,
-`specforge.find_implementation`, `specforge.find_spec_for_source` and the infer
+`specforge.find_implementation`, `specforge.find_spec_for_source`,
+`specforge.infer_gaps`, `specforge infer-status --gaps-detail` and the infer
 prompt's file scope refuse when it is the anchors manifest, and `specforge check
 --lint inferred` reports it as an error instead of I200 and I202. Fix the file
 where the message says (it names the line and column of a JSON or shape error),

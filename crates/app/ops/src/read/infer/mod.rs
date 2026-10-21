@@ -7,7 +7,7 @@
 //!
 //! Progress compares the source files the enabled analyzers would scan
 //! with the manifest's index; gaps scans those files for public items and
-//! keeps the ones no graph entity names; the lint reports analyzed files
+//! keeps the ones nothing covers (the anchors read view's covered items); the lint reports analyzed files
 //! that changed or are over-dense; [`session`] records one step of an
 //! inference session. The inference guide (what to look for to infer each
 //! kind's entities, [`guide`] and [`kind_guide`]) is a read view over the
@@ -52,3 +52,4 @@ pub use session::{
     SOURCE_OUTSIDE_ROOT, SOURCE_ROOT_OUTSIDE_ROOT, SOURCE_UNREADABLE, SessionAction, SessionField,
     SessionOutcome, SessionRequest, SessionStep, UNKNOWN_SESSION, session,
 };
+pub(crate) use sources::SourceKey;
