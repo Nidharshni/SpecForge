@@ -9,8 +9,8 @@ use super::EditField;
 use super::block::{Block, Site, items_of, list_text};
 use super::write::not_editable;
 use crate::Refusal;
-use specforge_graph::FileDefaults;
 use specforge_graph::field_form::Reading;
+use specforge_graph::{FileDefaults, Held};
 use specforge_parser::{FieldEntry, SpecFile};
 use specforge_protocol_types::FieldType;
 
@@ -35,9 +35,10 @@ fn of<'f>(site: &Site<'_>, file: &'f SpecFile) -> FileDefaults<'f> {
 ///
 /// - **Ordering.** Read the field argument first (`path::resolve`), so a path refusal comes before any text is read.
 ///   `field` is the whole field's name: for `field.entry`, the block field's.
-/// - **What `verb` gets.** The block, laid out, with the copy already in it, and the block's own entry for `field`
-///   (cloned: the verb may mutate the block). `None` only when the block does not write the field and its file gives
-///   no default the module can copy (no default, or a default of one value, which no verb needs to read).
+/// - **What `verb` gets.** The block, laid out, with the copy already in it, and what the block holds for `field`
+///   (`Held`, cloned: the verb may mutate the block, ADR 0182 D3). An inherited list or block field arrives as the
+///   copy, `Own`; a default the module does not copy (one value) arrives `Inherited`; `Absent` when the block does
+///   not write the field and its file gives no default.
 /// - **What `verb` returns.** `Changed` after writing into the block; `Unchanged` and `Emptied` without touching
 ///   it.
 /// - **The result.** Only `site`'s block changes; it is canonical; no own field of it restates its default; a field
@@ -49,23 +50,24 @@ pub fn change(
     site: &Site<'_>,
     text: &str,
     field: &str,
-    verb: impl FnOnce(&mut Block, Option<FieldEntry>) -> Result<Change, Refusal<EditField>>,
+    verb: impl FnOnce(&mut Block, Held<FieldEntry>) -> Result<Change, Refusal<EditField>>,
 ) -> Result<String, Refusal<EditField>> {
     let mut block = Block::open(site, text)?;
     let before = block.text();
-    let default = of(site, block.file()).entry(site.kind, field).cloned();
-    if block.entry(field).is_none()
-        && let Some(default) = &default
-        && let Some(copy) = copy(site, &block, field, default)
-    {
+    let copied = match of(site, block.file()).held(block.entity(), field) {
+        Held::Inherited(default) => copy(site, &block, field, default),
+        _ => None,
+    };
+    if let Some(copy) = copied {
         block.place(site, field, &copy, None);
         block = Block::open(site, &block.text())?; // the copy is now the block's own field
     }
-    let own = block.entry(field).cloned();
-    let after = match verb(&mut block, own)? {
+    let held = of(site, block.file()).held(block.entity(), field).cloned();
+    let over_default = held.has_default();
+    let after = match verb(&mut block, held)? {
         Change::Unchanged => return Ok(text.to_string()),
         Change::Changed => block.finish(site)?,
-        Change::Emptied => emptied(site, block, field, default.is_some())?,
+        Change::Emptied => emptied(site, block, field, over_default)?,
     };
     let after = without_repeat(site, &after, field)?;
     Ok(if after == before {

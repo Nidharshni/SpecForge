@@ -89,7 +89,9 @@ behavior edit_entity_link "Edit an Entity Reference List" {
     from its file's defaults is copied into an own field before it changes, as
     the earlier edits of the list left the file, and an own field equal to the default is removed. A link or unlink
     takes a whole list field: a `field.entry` path names an entry of a block field, which holds one text, and is
-    refused not_editable, naming set and unset.
+    refused not_editable, naming set and unset. An unlink of a single reference
+    the block inherits empties a field of one value over a default, which is
+    refused as unset refuses it.
   """
   verify unit "link on the other side of a relation names the owning field of the target's kind"
   verify unit "a reference list's items are split at commas however they are given"
@@ -102,6 +104,7 @@ behavior edit_entity_link "Edit an Entity Reference List" {
   verify unit "a link after unset starts from none"
   verify unit "link and unlink read a list written as one value as its one item"
   verify unit "link and unlink refuse a field.entry path as an entry of a block field"
+  verify unit "unlink of an inherited single reference is refused as unset is"
 }
 
 behavior edit_entity_obligation "Edit an Entity Obligation" {

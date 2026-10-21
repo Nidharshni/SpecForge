@@ -12,8 +12,10 @@ fn events() -> Compiled {
     project(&[("e.spec", EVENTS)])
 }
 
-#[test]
-#[ignore = "flipped by T6"]
+#[specforge_test_macros::test(
+    behavior = "edit_entity_link",
+    verify = "unlink of an inherited single reference is refused as unset is"
+)]
 fn unlink_of_an_inherited_single_reference_is_refused_as_unset_is() {
     let c = events();
     let unlinked = refused(&c, &[unlink("order_placed", "payload", "Order")]);

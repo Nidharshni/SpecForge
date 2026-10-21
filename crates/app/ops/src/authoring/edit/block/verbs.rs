@@ -175,8 +175,8 @@ pub fn link(
             ));
         }
     };
-    defaults::change(site, text, field, |block, own| {
-        let current = match &own {
+    defaults::change(site, text, field, |block, held| {
+        let current = match held.entry() {
             Some(entry) => {
                 // A list written as one value is its one item, as the graph build stores it (ADR 0093).
                 match &*site
@@ -202,14 +202,14 @@ pub fn link(
         };
         let Some(mut items) = current else {
             // A single `reference` field: unlink removes it when it names the target.
-            return Ok(match own.as_ref().map(|e| &e.value) {
+            return Ok(match held.entry().map(|e| &e.value) {
                 Some(FieldValue::Identifier(t) | FieldValue::String(t)) if t == target => {
                     Change::Emptied
                 }
                 _ => Change::Unchanged,
             });
         };
-        if let Some(span) = own.as_ref().and_then(|e| e.value_span.as_ref())
+        if let Some(span) = held.own().and_then(|e| e.value_span.as_ref())
             && lex(&block.lines[span.start_line - 1..span.end_line].join("\n"))
                 .iter()
                 .any(|l| l.kind == LexemeKind::Comment)
