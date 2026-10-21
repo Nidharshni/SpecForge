@@ -6,6 +6,7 @@ use specforge_test_macros::test as spec;
 
 use crate::support::written::checked;
 use crate::support::{build, coded_in, software};
+use specforge_registry::{IdRefusal, refused_id};
 
 /// `behavior <id> "S" { }` for each id, in one file.
 fn behaviors(ids: &[&str]) -> String {
@@ -75,4 +76,31 @@ fn identifier_length_bounds_are_inclusive() {
         &[("t.spec", &behaviors(&["ab", &sixty]))],
     );
     assert!(coded_in(&diags, "E014").is_empty(), "{diags:?}");
+}
+
+#[spec(
+    behavior = "check_entities_in_one_order",
+    verify = "the entity-ID rule answers for an ID exactly what E013 and E014 report of it"
+)]
+fn the_entity_id_rule_answers_what_e013_and_e014_report() {
+    let build = build([software()]);
+    let long = "a".repeat(61);
+    for id in [
+        "ab",
+        "x",
+        "behavior",
+        "spec",
+        "defaults",
+        "login_flow",
+        long.as_str(),
+    ] {
+        let diags = checked(&build, &[("t.spec", &behaviors(&[id]))]);
+        let reported = |code: &str| !coded_in(&diags, code).is_empty();
+        let expected = match (reported("E014"), reported("E013")) {
+            (true, _) => Some(IdRefusal::Length),
+            (false, true) => Some(IdRefusal::Reserved),
+            (false, false) => None,
+        };
+        assert_eq!(refused_id(id, build.kinds()), expected, "{id}: {diags:?}");
+    }
 }

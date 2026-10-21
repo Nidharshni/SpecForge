@@ -37,6 +37,30 @@ pub(super) fn reserved(entities: &[EntityRecord], kinds: &KindRegistry) -> Vec<D
 /// E014: the shortest and longest entity IDs (the grammar terminal accepts 1+).
 pub const ID_LENGTH: std::ops::RangeInclusive<usize> = 2..=60;
 
+/// What `check` refuses of an entity ID (CONTEXT "Entity ID rule"): E014, then E013.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IdRefusal {
+    /// Outside [`ID_LENGTH`] characters (E014).
+    Length,
+    /// A structural keyword or the keyword of a kind in `kinds` (E013, [`KindRegistry::reserves`]).
+    Reserved,
+}
+
+/// Why `check` would refuse `id` as an entity ID in a project whose kinds are `kinds`, or `None`. Every
+/// entity is held to it, a spec block's string included; whether `id` is the grammar's identifier is the
+/// parser's (`is_identifier`), asked only of an ID written as a token. With no kind registered `check`
+/// runs neither part (structural-only), yet the structural keywords are reserved: a caller that writes a
+/// starter asks it whatever is enabled.
+pub fn refused_id(id: &str, kinds: &KindRegistry) -> Option<IdRefusal> {
+    if !ID_LENGTH.contains(&id.chars().count()) {
+        Some(IdRefusal::Length)
+    } else if kinds.reserves(id) {
+        Some(IdRefusal::Reserved)
+    } else {
+        None
+    }
+}
+
 /// E014: identifier length contract ([`ID_LENGTH`] chars) — the documented naming
 /// convention.
 pub(super) fn length(entities: &[EntityRecord]) -> Vec<Diagnostic> {
