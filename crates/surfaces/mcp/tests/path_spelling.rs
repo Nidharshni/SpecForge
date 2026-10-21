@@ -171,7 +171,6 @@ fn suggest_fixes_reads_a_spelling_of_its_file() {
     behavior = "provide_mcp_outline_tool",
     verify = "outline refuses a project-root spelling of a source naming its spec-root spelling"
 )]
-#[ignore = "flipped by T5"]
 fn outline_refuses_a_project_root_spelling_as_the_view_does() {
     let mut server = named_files();
     let refused = |server: &mut Served, tool: &str, argument: &str| {
@@ -197,7 +196,6 @@ fn outline_refuses_a_project_root_spelling_as_the_view_does() {
     behavior = "provide_mcp_suggest_fixes_tool",
     verify = "a file_path that names no source is refused naming the file"
 )]
-#[ignore = "flipped by T5"]
 fn suggest_fixes_names_the_file_it_refuses() {
     let mut server = named_files();
     for file in ["nope.spec", "spec/login.spec", "../x.spec"] {
@@ -216,7 +214,6 @@ fn suggest_fixes_names_the_file_it_refuses() {
     behavior = "provide_mcp_suggest_fixes_tool",
     verify = "with no project served, a file_path is the no-project refusal naming the file"
 )]
-#[ignore = "flipped by T5"]
 fn a_named_file_with_nothing_served_is_no_projects_file() {
     let mut server = unserved();
     for (tool, argument) in [

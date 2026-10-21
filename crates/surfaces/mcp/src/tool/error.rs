@@ -104,9 +104,9 @@ pub struct McpError {
     pub uri: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entity_id: Option<String>,
-    /// The project file the failure is about (`file_not_found`): what a
-    /// refusal that finds no project to look in names, rather than reading
-    /// it back out of the message.
+    /// The spec file the failure is about, as the request spelled it
+    /// (`file_not_found`, `not_a_source`): what the no-project refusal names,
+    /// rather than reading it back out of the message.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -203,10 +203,11 @@ impl McpError {
 /// An operation's failure as an `McpError`: its kind picks the code. A
 /// diagnostic code (`E027`) rides in `diagnostic`, with its suggestion; a
 /// slug's suggestion and the operation's own data ride in `data`; the
-/// entity the failure is about is `entity_id`.
+/// entity the failure is about is `entity_id`, the spec file it is about is `file`.
 impl From<OpError> for McpError {
     fn from(error: OpError) -> Self {
         let entity = error.entity().map(str::to_owned);
+        let file = error.file().map(str::to_owned);
         let mut mcp_error = McpError::new(error.kind.into(), error.message.clone());
         let mut data = error.data.map_or_else(|| json!({}), |data| *data);
         if is_diagnostic_code(&error.code) {
@@ -222,6 +223,9 @@ impl From<OpError> for McpError {
         if data.as_object().is_some_and(|d| !d.is_empty()) {
             mcp_error = mcp_error.with_data(data);
         }
+        if let Some(file) = file {
+            mcp_error = mcp_error.with_file(file);
+        }
         match entity {
             Some(entity) => mcp_error.with_entity(entity),
             None => mcp_error,
@@ -235,18 +239,6 @@ impl From<OpError> for McpError {
 /// share with every operation.
 pub fn entity_not_found(graph: &Graph, entity_id: &str) -> McpError {
     specforge_ops::view::not_found(graph, entity_id).into()
-}
-
-/// What a refusal of a file the project does not hold says before the file's
-/// name ([`file_not_found`]).
-pub(crate) const FILE_NOT_FOUND: &str = "File not found: ";
-
-/// A question about `file`, which is none of the compile's sources:
-/// `file_not_found` on argument `file`.
-pub(crate) fn file_not_found(file: &str) -> McpError {
-    McpError::new(ErrorCode::FileNotFound, format!("{FILE_NOT_FOUND}{file}"))
-        .with_argument("file")
-        .with_file(file)
 }
 
 /// Whether `code` is a diagnostic code (`E003`, `R004`, `R-RES-006`):

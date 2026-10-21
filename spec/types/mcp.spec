@@ -42,7 +42,7 @@ type McpError "MCP Structured Error Response" {
   code       McpErrorCode
   message    string
   entity_id  string     @optional
-  /// The project file the failure is about (file_not_found).
+  /// The spec file the failure is about, as the request spelled it (file_not_found, not_a_source).
   file       string     @optional
   tool       string     @optional
   /// The prompt that refused, for a prompts/get answered with an error.

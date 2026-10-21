@@ -5,7 +5,8 @@ use "types/mcp"
 invariant mcp_structured_error_responses "MCP Structured Error Responses" {
   guarantee """
     All MCP tools, resources and prompts MUST return structured error objects
-    (not plain strings) with error code, message, and optional entity_id. This
+    (not plain strings) with error code, message, and the entity_id or file the refusal is about when it
+    names one. This
     ensures agents can programmatically handle errors without parsing
     free-form text. A failed tool call is an isError result whose content is
     an McpError; a diagnostic code behind the failure is in its diagnostic,

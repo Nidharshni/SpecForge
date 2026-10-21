@@ -266,7 +266,7 @@ fn without_project_names_the_file_from_the_refusal() {
 
     // The file is what the refusal says it is about, not what its
     // message happens to start with.
-    let mut refusal = crate::tool::file_not_found("spec/a.spec");
+    let mut refusal = McpError::new(ErrorCode::FileNotFound, "x").with_file("spec/a.spec");
     refusal.message = "the project holds no such file".to_string();
     let refused = without_project(&target, refusal);
     assert_eq!(refused.code, ErrorCode::PreconditionFailed);
@@ -277,6 +277,7 @@ fn without_project_names_the_file_from_the_refusal() {
         "{}",
         refused.message
     );
+    assert_eq!(refused.file.as_deref(), Some("spec/a.spec"));
 
     // A refusal that names no file keeps its own message.
     let unnamed = McpError::new(ErrorCode::FileNotFound, "gone for another reason");
