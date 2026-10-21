@@ -8,7 +8,7 @@ use crate::view_support::{Assembled, Viewed, registries};
 use specforge_ops::analysis::analyze::{AnalyzeOptions, ReportSource, analyze};
 use specforge_ops::authoring::format::{Mode, Request, run};
 use specforge_ops::view::ProjectView;
-use specforge_ops::{OpError, OpErrorKind};
+use specforge_ops::{Containment, OpError, OpErrorKind};
 use specforge_test::prelude::*;
 use std::path::Path;
 
@@ -137,7 +137,8 @@ fn a_report_linked_outside_is_one_refusal_on_every_contained_view() {
     let link = project.root().join("specforge-report.json");
     std::os::unix::fs::symlink(&report, &link).unwrap();
 
-    let views = every_view(&project.view().contained());
+    let bound = Containment::within(project.root());
+    let views = every_view(&project.view().bounded_by(&bound));
     let (_, first) = &views[0];
     assert_eq!(
         (first.kind, first.code.as_ref()),
@@ -151,7 +152,14 @@ fn a_report_linked_outside_is_one_refusal_on_every_contained_view() {
     // A report inside reads as before.
     std::fs::remove_file(&link).unwrap();
     write_report(&project, r#"{"results":{}}"#);
-    assert!(project.view().contained().test_report().unwrap().is_some());
+    assert!(
+        project
+            .view()
+            .bounded_by(&bound)
+            .test_report()
+            .unwrap()
+            .is_some()
+    );
 }
 
 /// ADR 0092 D6: the CLI and the LSP follow the user's link to the report.

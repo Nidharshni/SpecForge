@@ -140,12 +140,25 @@ impl<'a> ProjectRef<'a> {
 pub struct Call<'s> {
     state: &'s mut McpState,
     target: CallTarget,
+    /// What every file the call reads or writes must land inside, once per call (ADR 0092 D2,
+    /// ADR 0183): the root of the project a path named, else the request's bound (the served
+    /// project's root; with none served, the server's). Its views are bounded by it.
+    containment: Containment,
 }
 
 impl<'s> Call<'s> {
     /// A call on `target`, resolved by [`resolve`].
     pub(crate) fn new(state: &'s mut McpState, target: CallTarget) -> Self {
-        Call { state, target }
+        let other = match &target {
+            CallTarget::Other(session) => session.project().root(),
+            _ => None,
+        };
+        let containment = other.map_or_else(|| containment::bound(state), Containment::within);
+        Call {
+            state,
+            target,
+            containment,
+        }
     }
 
     /// The server's event sink: what a handler records goes here (ADR 0057).
@@ -180,7 +193,7 @@ impl<'s> Call<'s> {
                 // a runtime: a session without either is no project (it is
                 // unreachable, and a server answers rather than panics).
                 let view = ProjectView::of(session.project())
-                    .contained()
+                    .bounded_by(&self.containment)
                     .also_reporting(self.state.surfaces().diagnostics());
                 let (Some(root), Some(runtime)) = (
                     session.project().environment().project_root(),
@@ -193,7 +206,7 @@ impl<'s> Call<'s> {
                     runtime,
                     solver: &*self.state.solver,
                     machine: &*self.state.collector_machine,
-                    containment: Containment::within(root.dir()),
+                    containment: self.containment.clone(),
                     view,
                     served: true,
                 })
@@ -201,7 +214,7 @@ impl<'s> Call<'s> {
             CallTarget::Other(session) => {
                 // `McpState::open` opens every project from disk, with a
                 // runtime (see above).
-                let view = ProjectView::of(session.project()).contained();
+                let view = ProjectView::of(session.project()).bounded_by(&self.containment);
                 let (Some(root), Some(runtime)) = (
                     session.project().environment().project_root(),
                     view.runtime(),
@@ -213,7 +226,7 @@ impl<'s> Call<'s> {
                     runtime,
                     solver: &*self.state.solver,
                     machine: &*self.state.collector_machine,
-                    containment: Containment::within(root.dir()),
+                    containment: self.containment.clone(),
                     view,
                     served: false,
                 })
@@ -255,7 +268,7 @@ impl<'s> Call<'s> {
         match self.project() {
             Ok(project) => project.view(),
             Err(_) => ProjectView::of(self.state.session().project())
-                .contained()
+                .bounded_by(&self.containment)
                 .also_reporting(self.state.surfaces().diagnostics()),
         }
     }

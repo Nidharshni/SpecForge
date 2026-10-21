@@ -419,6 +419,12 @@ fn every_caller_a_tool_uses_comes_from_the_call() {
                     number + 1
                 ));
             }
+            if line.contains(".bounded_by(") && name != "target/call.rs" {
+                problems.push(format!(
+                    "src/{name}:{}: bounds a view outside its call",
+                    number + 1
+                ));
+            }
             if line.contains("Asking::") && name != "target/call.rs" {
                 problems.push(format!("src/{name}:{}: names its own asker", number + 1));
             }

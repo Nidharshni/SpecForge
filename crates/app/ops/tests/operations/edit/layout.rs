@@ -128,8 +128,9 @@ fn linked() -> (Compiled, tempfile::TempDir) {
 fn a_contained_view_lays_out_with_the_defaults_when_the_configuration_links_outside() {
     let (c, _outside) = linked();
 
+    let bound = specforge_ops::Containment::within(c.project.root().unwrap());
     let planned = edit::plan(
-        &ProjectView::of(&c.project).contained(),
+        &ProjectView::of(&c.project).bounded_by(&bound),
         &[set("list_tasks", "contract", one(LONG))],
     )
     .unwrap();

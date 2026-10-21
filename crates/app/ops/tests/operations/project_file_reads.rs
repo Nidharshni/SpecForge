@@ -2,6 +2,7 @@
 //! cache joins the recorded report (ADR 0139, ADR 0146, ADR 0183).
 
 use crate::view_support::{Assembled, Viewed};
+use specforge_ops::Containment;
 use specforge_ops::read::export::{Request, export, export_recorded};
 use specforge_test::prelude::*;
 use std::path::{Path, PathBuf};
@@ -48,7 +49,8 @@ fn a_bounded_view_versions_against_no_schema_cache_that_links_outside() {
     let secret = outside_file(&project, outside.path(), &secret_record());
     std::os::unix::fs::symlink(&secret, cache_file(&project)).unwrap();
 
-    let view = project.view().contained();
+    let bound = Containment::within(project.root());
+    let view = project.view().bounded_by(&bound);
     assert_eq!(view.versioned_schema().version().major, 1);
     let notices = notices_of(&view);
     assert_eq!(notices.len(), 1, "{notices:?}");
@@ -76,7 +78,8 @@ fn a_bounded_view_versions_against_no_hard_linked_schema_cache() {
     let secret = outside_file(&project, outside.path(), &secret_record());
     std::fs::hard_link(&secret, cache_file(&project)).unwrap();
 
-    let view = project.view().contained();
+    let bound = Containment::within(project.root());
+    let view = project.view().bounded_by(&bound);
     assert_eq!(view.versioned_schema().version().major, 1);
     let notices = notices_of(&view);
     assert_eq!(notices.len(), 1, "{notices:?}");

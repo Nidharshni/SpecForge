@@ -15,7 +15,8 @@
 //! The view says what its surface reports for the project. The project's
 //! recorded test report and the coverage computed from it are read at the
 //! root the project was compiled from and never in an ancestor directory;
-//! over MCP only from inside that root ([`ProjectView::contained`], ADR 0139).
+//! through the containment the view carries ([`ProjectView::bounded_by`], ADR 0183): over MCP
+//! only from inside that root, the call's.
 
 mod connectivity;
 mod entity;
@@ -46,8 +47,9 @@ use crate::{Containment, OpError};
 ///
 /// `root` is the root the project was compiled from: the recorded test
 /// report, the schema cache, `specforge.lock`, the installed binaries and
-/// the source files are read there, never in an ancestor. Over MCP the report is read only from
-/// inside that root ([`Self::contained`], ADR 0139). Without a root
+/// the source files are read there, never in an ancestor. Over MCP the report, the schema cache
+/// and a typed edit's format configuration are read only from inside that root
+/// ([`Self::bounded_by`], ADR 0139, ADR 0183). Without a root
 /// (a detached project, one assembled in memory) there is no report, no
 /// schema cache, no extension pass, and an operation that reads or writes
 /// the project on disk refuses with `no_project` ([`Self::project_root`]).
@@ -60,9 +62,14 @@ pub struct ProjectView<'a> {
     /// What the surface reports after what the compile reported (MCP's
     /// I017 notices).
     also_reported: &'a [Diagnostic],
-    /// Whether the project's files it reads are held inside its root (MCP, ADR 0139).
-    contained: bool,
+    /// What every project file this view reads is read through: every path, or the call's bound
+    /// (MCP, ADR 0183).
+    containment: &'a Containment,
 }
+
+/// Every path: what a view reads through unless its surface bounds it (the CLI and the LSP,
+/// ADR 0092 D6).
+static UNBOUNDED: Containment = Containment::unbounded();
 
 impl<'a> ProjectView<'a> {
     /// The view of a compiled project: a one-shot compile, a session's
@@ -76,7 +83,7 @@ impl<'a> ProjectView<'a> {
             project,
             listed: None,
             also_reported: &[],
-            contained: false,
+            containment: &UNBOUNDED,
         }
     }
 
@@ -197,32 +204,26 @@ impl<'a> ProjectView<'a> {
         self.read_report(|disk| self.project.recorded(disk))
     }
 
-    /// What this view's project files are read through: inside its root when contained (MCP, ADR 0139), else
-    /// every path. The recorded report and a typed edit's format configuration are read through its disk
-    /// (ADR 0169).
-    pub(crate) fn containment(&self) -> Containment {
-        match self.root().filter(|_| self.contained) {
-            Some(root) => Containment::within(root),
-            None => Containment::unbounded(),
-        }
+    /// What this view reads the project's files through (the recorded report, the schema cache, a
+    /// typed edit's format configuration), and what a surface lends the call's caller (ADR 0183).
+    pub fn containment(&self) -> &'a Containment {
+        self.containment
     }
 
-    /// `read` over the disk this view reads the report through: held inside the root when
-    /// contained, else the file system as the user sees it.
+    /// `read` over the disk this view reads the report through: its containment's.
     fn read_report<T>(
         &self,
         read: impl FnOnce(&dyn Disk) -> Result<T, ReportError>,
     ) -> Result<T, OpError> {
-        read(&self.containment().disk()).map_err(crate::report::unusable)
+        read(&self.containment.disk()).map_err(crate::report::unusable)
     }
 
-    /// This view, reading the project's recorded report only from inside its root: a report
-    /// that lands outside (a symlink out) is E045, `invalid_input`. MCP's call target bounds
-    /// every view it builds (ADR 0092 D2); the CLI and the LSP do not (ADR 0092 D6) and follow
-    /// the user's link.
-    pub fn contained(self) -> Self {
+    /// This view, reading every project file through `containment`: MCP bounds each view by its
+    /// call's one containment (ADR 0092 D2, ADR 0183), so a report or schema cache that lands
+    /// outside is refused; the CLI and the LSP do not (ADR 0092 D6) and follow the user's link.
+    pub fn bounded_by(self, containment: &'a Containment) -> Self {
         ProjectView {
-            contained: true,
+            containment,
             ..self
         }
     }
@@ -246,7 +247,7 @@ impl<'a> ProjectView<'a> {
     /// the record.
     pub fn versioned_schema(&self) -> VersionedSchema {
         match self.schema_cache() {
-            Some(cache) => cache.version(self.schema(), &self.containment().disk()),
+            Some(cache) => cache.version(self.schema(), &self.containment.disk()),
             None => VersionedSchema::unrecorded(self.schema()),
         }
     }
@@ -265,6 +266,26 @@ mod tests {
     use specforge_project::ProjectSession;
     use specforge_project::testing::Assembled;
     use specforge_test_macros::test as specforge_test;
+
+    #[specforge_test(
+        behavior = "read_views_over_the_project_view",
+        verify = "over MCP, a recorded report that leads outside the project is the same refusal on every view"
+    )]
+    fn a_view_reads_through_the_containment_it_is_bounded_by() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = Assembled::new();
+        let view = project.view();
+        assert_eq!(view.containment().root(), None);
+
+        let bound = Containment::within(dir.path());
+        let bounded = view.bounded_by(&bound);
+        assert_eq!(bounded.containment().root(), bound.root());
+        assert!(bounded.containment().root().is_some());
+        assert!(std::ptr::eq(
+            bounded.also_reporting(&[]).containment(),
+            &bound
+        ));
+    }
 
     #[specforge_test(
         behavior = "snapshot_entities_once",
