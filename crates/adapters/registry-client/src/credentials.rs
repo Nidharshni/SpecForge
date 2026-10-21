@@ -274,6 +274,8 @@ struct Stored {
 
 /// Writes `bytes` to `path` through a sibling temp file renamed into place, so the file is never
 /// readable by others or half written: its directories are created 0700 and the file 0600 (unix).
+///
+/// Elsewhere no mode is set: the secret relies on the user profile directory's default ACL.
 fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
     if let Some(parent) = path.parent() {

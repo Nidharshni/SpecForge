@@ -1689,6 +1689,9 @@ The secret `specforge login --token` kept for this registry (a file under
 file refers to it. Log in again: `specforge login --registry <alias> --token
 <NEW_TOKEN>`.
 
+The file is 0600 and its directory 0700 on unix only; on Windows nothing sets a mode,
+so the secret relies on the user profile directory's default ACL (private to the user).
+
 Owner: core
 Level: error
 ```
