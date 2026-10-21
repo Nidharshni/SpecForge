@@ -69,7 +69,7 @@ fn tracing_an_unknown_entity_is_e003_with_a_suggestion() {
         .unwrap_err()
     };
     let error = trace("bb").error;
-    assert_eq!(error.entity.as_deref(), Some("bb"));
+    assert_eq!(error.entity(), Some("bb"));
     assert_eq!(error.code, "E003");
     assert_eq!(error.message, "unresolved entity 'bb' — not found in graph");
     assert_eq!(error.suggestion.as_deref(), Some("did you mean 'b'?"));
@@ -230,7 +230,7 @@ fn a_missing_entity_is_one_refusal() {
             Some("did you mean 'login'?"),
             "{surface}"
         );
-        assert_eq!(error.entity.as_deref(), Some("logn"), "{surface}");
+        assert_eq!(error.entity(), Some("logn"), "{surface}");
     }
 }
 

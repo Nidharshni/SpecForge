@@ -485,7 +485,7 @@ mod tests {
         });
         assert_eq!(error.kind, OpErrorKind::EntityNotFound);
         assert_eq!(error.code, "E003");
-        assert_eq!(error.entity.as_deref(), Some("ghost"));
+        assert_eq!(error.entity(), Some("ghost"));
         assert!(!error.message.starts_with("E003"), "{}", error.message);
         assert!(error.message.contains("'ghost'"), "{}", error.message);
 

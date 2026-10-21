@@ -44,7 +44,7 @@ fn line(error: &OpError, subject: Option<impl Debug>) -> String {
         error.code,
         error.message,
         none(error.suggestion.as_deref()),
-        none(error.entity.as_deref()),
+        none(error.entity()),
         subject.map_or("-".to_string(), |field| format!("Some({field:?})")),
     )
 }

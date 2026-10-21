@@ -206,6 +206,7 @@ impl McpError {
 /// entity the failure is about is `entity_id`.
 impl From<OpError> for McpError {
     fn from(error: OpError) -> Self {
+        let entity = error.entity().map(str::to_owned);
         let mut mcp_error = McpError::new(error.kind.into(), error.message.clone());
         let mut data = error.data.map_or_else(|| json!({}), |data| *data);
         if is_diagnostic_code(&error.code) {
@@ -221,7 +222,7 @@ impl From<OpError> for McpError {
         if data.as_object().is_some_and(|d| !d.is_empty()) {
             mcp_error = mcp_error.with_data(data);
         }
-        match error.entity {
+        match entity {
             Some(entity) => mcp_error.with_entity(entity),
             None => mcp_error,
         }

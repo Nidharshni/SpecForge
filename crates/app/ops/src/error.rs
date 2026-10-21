@@ -106,6 +106,12 @@ impl OpErrorKind {
     }
 }
 
+/// What a failure is about, behind one box (see [`OpError::names`]).
+#[derive(Debug, Clone, PartialEq)]
+enum Named {
+    Entity(String),
+}
+
 /// Why an operation failed. `code` is data for the surface to present (a
 /// CLI `error[CODE]`, an MCP error's `data.code`), never folded into
 /// `message`; `kind` is what the failure is, which each surface maps to its
@@ -117,12 +123,13 @@ pub struct OpError {
     pub message: String,
     pub suggestion: Option<String>,
     /// What else the failure says, as the operation's own JSON. Boxed, like
-    /// `entity`, so the error stays small enough to be returned whole
+    /// `names`, so the error stays small enough to be returned whole
     /// (`clippy.toml`'s `large-error-threshold`).
     pub data: Option<Box<serde_json::Value>>,
     /// The entity the failure is about (`EntityNotFound`, a rename's
-    /// `Conflict`).
-    pub entity: Option<Box<str>>,
+    /// `Conflict`): [`Self::entity`]. One box, so the error stays small enough
+    /// to be returned whole.
+    names: Option<Box<Named>>,
     /// The files the operation changed on disk before it failed and did
     /// not restore (`extension::add` when the lock or config write fails
     /// after the module was placed): a surface reports them as written.
@@ -145,7 +152,7 @@ impl OpError {
             message: message.into(),
             suggestion: None,
             data: None,
-            entity: None,
+            names: None,
             writes: Writes::none(),
         }
     }
@@ -199,8 +206,16 @@ impl OpError {
 
     /// The same error, about `entity`.
     pub fn with_entity(mut self, entity: impl Into<String>) -> Self {
-        self.entity = Some(entity.into().into_boxed_str());
+        self.names = Some(Box::new(Named::Entity(entity.into())));
         self
+    }
+
+    /// The entity the failure is about.
+    pub fn entity(&self) -> Option<&str> {
+        match self.names.as_deref() {
+            Some(Named::Entity(entity)) => Some(entity),
+            None => None,
+        }
     }
 
     /// The same error, carrying `data`.
@@ -268,6 +283,8 @@ mod tests {
     fn an_error_stays_small_enough_to_return_whole() {
         // clippy.toml's `large-error-threshold` is 153 bytes.
         assert!(std::mem::size_of::<OpError>() <= 129);
+        let about = OpError::new(OpErrorKind::Conflict, "x", "x").with_entity("a");
+        assert_eq!(about.entity(), Some("a"));
     }
 
     #[test]
