@@ -21,6 +21,8 @@ pub enum ErrorCode {
     RateLimited,
     /// The request is malformed (a missing form field).
     BadRequest,
+    /// The upload is larger than the registry accepts.
+    PayloadTooLarge,
     /// The upload names no scoped package.
     InvalidName,
     /// The upload names no SemVer version.
@@ -68,6 +70,7 @@ impl ErrorCode {
             Self::ScopeOwned => "SCOPE_OWNED",
             Self::RateLimited => "RATE_LIMITED",
             Self::BadRequest => "BAD_REQUEST",
+            Self::PayloadTooLarge => "PAYLOAD_TOO_LARGE",
             Self::InvalidName => "INVALID_NAME",
             Self::InvalidVersion => "INVALID_VERSION",
             Self::UnsignedPackage => "UNSIGNED_PACKAGE",
@@ -109,6 +112,7 @@ mod tests {
             ScopeOwned,
             RateLimited,
             BadRequest,
+            PayloadTooLarge,
             InvalidName,
             InvalidVersion,
             UnsignedPackage,

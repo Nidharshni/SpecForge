@@ -156,6 +156,7 @@ type RegistryErrorCode "What a registry refused, named the same by server and cl
   | "SCOPE_OWNED"
   | "RATE_LIMITED"
   | "BAD_REQUEST"
+  | "PAYLOAD_TOO_LARGE"
   | "INVALID_NAME"
   | "INVALID_VERSION"
   | "UNSIGNED_PACKAGE"

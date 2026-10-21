@@ -15,8 +15,8 @@ served although its metadata was not found. An upload past the body limit was an
   reaches a file path unparsed.
 - **D2** The row comes first: no row, or a yanked row, is not found and no binary is read. A served binary is always
   held to the row's digest (integrity violation otherwise).
-- **D3** A multipart field that cannot be read is an error of the request: past the body limit it is 413, any other
-  read failure is a bad request. It is no longer taken for a missing field.
+- **D3** A multipart field that cannot be read is an error of the request: past the body limit it is 413 with its own
+  wire code, `PAYLOAD_TOO_LARGE` (not `BAD_REQUEST`), any other read failure is a bad request. It is no longer taken for a missing field.
 
 ## Rejected
 
