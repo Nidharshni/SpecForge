@@ -7,7 +7,6 @@
 //! loaded under its key, its declaration read once, the name it declares
 //! admitted or refused; a refused entry leaves nothing loaded.
 
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use specforge_common::{Diagnostic, ExtensionEntry, codes};
@@ -350,6 +349,21 @@ impl LoadProblem {
     }
 }
 
+/// Who a resolved entry's diagnostics are about.
+fn subject<'a>(resolved: &'a Resolved) -> Subject<'a> {
+    match resolved {
+        Resolved::Builtin { name, .. }
+        | Resolved::Locked { name, .. }
+        | Resolved::Unloadable { name, .. } => Subject::Named(name),
+        Resolved::File(file) => Subject::File {
+            key: file.key,
+            file: &file.file,
+            path: file.path,
+        },
+        Resolved::Again { .. } => unreachable!("left out of the load order"),
+    }
+}
+
 /// What one entry that loaded brings.
 struct Done {
     declaration: ExtensionDeclaration,
@@ -403,15 +417,20 @@ impl Installed {
         let resolution = self.resolve(entries, builtins);
         let mut enabled = resolution.unloaded(entries);
         let mut slots: Vec<Slot> = entries.iter().map(|_| Slot::Skipped).collect();
-        let mut loaded_names = HashSet::new();
-        for (i, resolved) in resolution.in_load_order() {
-            let outcome = self.load_entry(resolved, &loaded_names, runtime, disk);
+        #[expect(
+            clippy::result_large_err,
+            reason = "the walk's closures answer the LoadFailure the entry carries (see read_entry)"
+        )]
+        let outcomes = resolution.walk(
+            |_, resolved| self.read_entry(resolved, runtime, disk),
+            |resolved, done, verdict| self.settle_entry(resolved, done, verdict, runtime),
+        );
+        for (i, outcome) in outcomes {
             match outcome {
-                Ok((declared, done)) => {
-                    if matches!(resolved, Resolved::File(_)) {
-                        enabled[i].name = declared.clone();
+                Ok((name, done)) => {
+                    if matches!(resolution.entries()[i], Resolved::File(_)) {
+                        enabled[i].name = name;
                     }
-                    loaded_names.insert(declared);
                     enabled[i].loaded = true;
                     slots[i] = Slot::Loaded(Box::new(done));
                 }
@@ -517,36 +536,22 @@ impl Installed {
         Ok(module)
     }
 
-    /// Load one resolved entry: read its bytes once, load them under its key,
-    /// read its declaration once, then admit or refuse the name it declares
-    /// (`Resolved::admit`). Returns the name the extension is loaded under
-    /// (a named entry's name; a `.wasm` file entry's declared name) with what
-    /// it brings.
+    /// Read one resolved entry: its bytes once, loaded under its key, its declaration once. Returns
+    /// the name it declares with what it brings; [`Installed::settle_entry`] admits or refuses it
+    /// (`Resolved::admit`, by [`Resolution::walk`]).
     ///
-    /// When it returns `Err`, nothing this call loaded stays loaded; when it
-    /// returns `Ok`, the extension is loaded under that name only.
+    /// When it returns `Err`, nothing this call loaded stays loaded.
     #[expect(
         clippy::result_large_err,
         reason = "Failed<Diagnostic> / LoadFailure carry the whole diagnostic the surfaces present (clippy.toml admits a bare Diagnostic only)"
     )]
-    fn load_entry(
+    fn read_entry(
         &self,
         resolved: &Resolved,
-        loaded: &HashSet<String>,
         runtime: &dyn WasmRuntime,
         disk: &dyn Disk,
     ) -> Result<(String, Done), LoadFailure> {
-        let subject = match resolved {
-            Resolved::Builtin { name, .. }
-            | Resolved::Locked { name, .. }
-            | Resolved::Unloadable { name, .. } => Subject::Named(name),
-            Resolved::File(file) => Subject::File {
-                key: file.key,
-                file: &file.file,
-                path: file.path,
-            },
-            Resolved::Again { .. } => unreachable!("left out of the load order"),
-        };
+        let subject = subject(resolved);
         let fail = |problem: LoadProblem| self.failure(&subject, problem);
         let mut notices = Vec::new();
         let module;
@@ -582,35 +587,56 @@ impl Installed {
         runtime
             .load(key, bytes)
             .map_err(|reason| fail(LoadProblem::NotAComponent { reason }))?;
-        // From here on, a refusal leaves nothing loaded under the key.
-        let refuse = |problem: LoadProblem| {
-            runtime.unload(key);
-            fail(problem)
-        };
         let read = load_declaration(runtime, key).map_err(|error| {
-            refuse(LoadProblem::NoDeclaration {
+            runtime.unload(key);
+            fail(LoadProblem::NoDeclaration {
                 reason: error.to_string(),
             })
         })?;
-        let declared = read.declaration.name().to_string();
-        resolved
-            .admit(&declared, |name| loaded.contains(name))
-            .map_err(refuse)?;
-        let name = match resolved {
-            Resolved::File(_) => declared,
-            _ => key.to_string(),
-        };
-        if name != key {
-            runtime.rename(key, &name);
-        }
         Ok((
-            name,
+            read.declaration.name().to_string(),
             Done {
                 declaration: read.declaration,
                 notices,
                 warnings: read.warnings,
             },
         ))
+    }
+
+    /// Settle one entry [`Installed::read_entry`] loaded under its key, by the walk's verdict: the
+    /// name it loads under (a named entry's name; a `.wasm` file entry's declared name), renamed
+    /// from the key when they differ, or the problem refusing it, which leaves nothing loaded
+    /// under the key.
+    #[expect(
+        clippy::result_large_err,
+        reason = "Failed<Diagnostic> / LoadFailure carry the whole diagnostic the surfaces present (clippy.toml admits a bare Diagnostic only)"
+    )]
+    fn settle_entry(
+        &self,
+        resolved: &Resolved,
+        done: Done,
+        verdict: Result<&str, LoadProblem>,
+        runtime: &dyn WasmRuntime,
+    ) -> Result<(String, Done), LoadFailure> {
+        let key = match resolved {
+            Resolved::Builtin { name, .. } | Resolved::Locked { name, .. } => name,
+            Resolved::File(file) => file.key,
+            Resolved::Unloadable { .. } | Resolved::Again { .. } => {
+                unreachable!("only a loaded entry is settled")
+            }
+        };
+        match verdict {
+            Ok(name) => {
+                if name != key {
+                    runtime.rename(key, name);
+                }
+                Ok((name.to_string(), done))
+            }
+            Err(problem) => {
+                runtime.unload(key);
+                Err(self.failure(&subject(resolved), problem))
+            }
+        }
     }
 
     /// `name`'s lock entry when its module on disk is the one it pins (any

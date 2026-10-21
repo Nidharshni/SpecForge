@@ -2,7 +2,7 @@
 //! extension load and the lock plan's peer set read it, so they cannot disagree about what an
 //! entry enables.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use specforge_common::ExtensionEntry;
@@ -94,6 +94,49 @@ impl<'a> Resolution<'a> {
         indexed()
             .filter(move |(_, resolved)| !is_file(resolved))
             .chain(indexed().filter(move |(_, resolved)| is_file(resolved)))
+    }
+}
+
+impl<'a> Resolution<'a> {
+    /// The extension load's walk (ADR 0181 D1): every entry in load order ([`Self::in_load_order`];
+    /// `Again` entries are left out, they load nothing of their own). `read` says what a resolved
+    /// entry declares: the name it declares and what it brings, or why it brings nothing. The
+    /// declared name is admitted against the names the entries tried before it were admitted under
+    /// ([`Resolved::admit`]); `settle` turns what `read` brought and that verdict (the name the
+    /// entry loads under, or the problem refusing it) into the entry's outcome. Only an admitted
+    /// entry's name counts as loaded: an entry `read` refused leaves its name free, and a `settle`
+    /// that errs for an admitted entry does not free it. `read` is called once per such entry, in
+    /// load order, with the entry's index; `settle` right after, only when `read` returned `Ok`.
+    /// The outcomes come back in entry order, each with its index.
+    pub fn walk<T, U, E>(
+        &self,
+        mut read: impl FnMut(usize, &Resolved<'a>) -> Result<(String, T), E>,
+        mut settle: impl FnMut(&Resolved<'a>, T, Result<&str, LoadProblem>) -> Result<U, E>,
+    ) -> Vec<(usize, Result<U, E>)> {
+        let mut admitted: HashSet<String> = HashSet::new();
+        let mut outcomes = Vec::new();
+        for (i, resolved) in self.in_load_order() {
+            let outcome = read(i, resolved).and_then(|(declared, brings)| {
+                match resolved.admit(&declared, |name| admitted.contains(name)) {
+                    Ok(()) => {
+                        let name = match resolved {
+                            Resolved::File(_) => declared,
+                            Resolved::Builtin { name, .. }
+                            | Resolved::Locked { name, .. }
+                            | Resolved::Unloadable { name, .. } => (*name).to_string(),
+                            Resolved::Again { .. } => unreachable!("left out of the load order"),
+                        };
+                        let outcome = settle(resolved, brings, Ok(&name));
+                        admitted.insert(name);
+                        outcome
+                    }
+                    Err(problem) => settle(resolved, brings, Err(problem)),
+                }
+            });
+            outcomes.push((i, outcome));
+        }
+        outcomes.sort_by_key(|(i, _)| *i);
+        outcomes
     }
 }
 
@@ -378,6 +421,55 @@ mod tests {
             shadowed.resolve(&entries, &builtins).entries()[0],
             Resolved::Builtin { .. }
         ));
+    }
+
+    #[test]
+    fn the_walk_admits_against_the_names_entries_before_it_were_admitted_under() {
+        let installed = Installed::with_lock(Path::new("/p"), lock_of(&["@acme/tool"]));
+        let entries = strings(&[
+            "@acme/tool",
+            "a.wasm",
+            "b.wasm",
+            "c.wasm",
+            "@acme/tool@1.0.0",
+        ]);
+        let walk = |tool_loads: bool| {
+            let resolution = installed.resolve(&entries, &Builtins::none());
+            resolution.walk(
+                |_, resolved| match resolved {
+                    Resolved::Locked { name, .. } if tool_loads => Ok(((*name).to_string(), ())),
+                    Resolved::Locked { .. } => Err(LoadProblem::NotInstalled),
+                    Resolved::File(file) if file.key == "a.wasm" => {
+                        Ok(("@acme/tool".to_string(), ()))
+                    }
+                    _ => Ok(("@acme/x".to_string(), ())),
+                },
+                |_, (), verdict| verdict.map(str::to_string),
+            )
+        };
+        let declared = |name: &str| LoadProblem::AlreadyLoaded {
+            declared: name.to_string(),
+        };
+
+        assert_eq!(
+            walk(false),
+            [
+                (0, Err(LoadProblem::NotInstalled)),
+                (1, Ok("@acme/tool".to_string())),
+                (2, Ok("@acme/x".to_string())),
+                (3, Err(declared("@acme/x"))),
+            ],
+            "an entry that did not load leaves its name free"
+        );
+        assert_eq!(
+            walk(true),
+            [
+                (0, Ok("@acme/tool".to_string())),
+                (1, Err(declared("@acme/tool"))),
+                (2, Ok("@acme/x".to_string())),
+                (3, Err(declared("@acme/x"))),
+            ]
+        );
     }
 
     #[test]
