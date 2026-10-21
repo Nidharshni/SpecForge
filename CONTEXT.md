@@ -63,7 +63,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Title**: the string after a block's id in its header (`type Task "A unit of work" {`, `type S "States" = a |
   b`), the one human-readable label a node carries. Every block that becomes a node has one: E076 otherwise. A
   `spec` block's name is its title; a `define` block has none. A `//` comment is never a title. `specforge
-  migrate` lifts a block's doc comment into a missing title.
+  migrate` lifts a block's doc comment into a missing title. Where it is written is the parse's
+  (`Entity::title_span`): a typed retitle replaces it there, and the titles step writes a missing one after the name
+  (ADR 0187, amended).
 - **Migration step**: a rewrite `specforge migrate` applies to every source it changes, whatever the file's format
   version, after the header rewrite (`specforge_migrate::titles` today). The graph comparison keeps exactly the
   changes the steps declare: for `titles`, a title where the block had none.
@@ -801,7 +803,9 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   E071 when it cannot be used, `no_project` without a project, E003 for an id neither the graph nor the manifest
   knows (ADR 0140).
 - **Obligation**: one `verify` statement on an entity, its own member beside its methods (ADR 0094), never a field. **Proven** when a passing test names its
-  exact text, or a formal claim discharges it. Who owes obligations is the entity's standing.
+  exact text, or a formal claim discharges it. Who owes obligations is the entity's standing. Where each is written is the parse's
+  (`Entity::obligation_spans`), never the graph's; an entry named `verify` inside a block field is a field, not an
+  obligation (ADR 0187, amended).
 - **Unverified**: an entity that counts toward coverage and is not proven
   (its standing counts and its verdict is not proven; `ProjectCoverage::is_unverified`).
 - **Delivery evidence**: what the recorded test report proves of a feature, beside the `status`
@@ -1195,7 +1199,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   a method's, `MethodDecl::name_span`): an entity's identifier on whichever line of its header, a scheme ref's ID, a
   spec block's quoted string. Navigation reads it from the compile's parses to answer a definition, an outline, a
   rename's declaration edit and the token at a position; it is token-precise when the compiled text spells the id there
-  (ADR 0187, ADR 0116).
+  (ADR 0187, ADR 0116); a title and each verify statement are read the same way (ADR 0187, amended).
 - **Derived name**: a type name a derived field links from one block, other than the block's own id, naming an entity of
   the field's target kind: `specforge_graph`'s `derive::derived_names`, which the linker makes an edge and the finder a
   token (ADR 0127 D3, ADR 0163).
