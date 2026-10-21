@@ -125,6 +125,11 @@ fn single_references_are_not_in_cycles() {
         "{diagnostics:?}"
     );
     assert_eq!(graph.edge_count(), 2, "both edges are linked");
+    assert_eq!(
+        graph.cycles().len(),
+        1,
+        "a single reference is a dependency"
+    );
 }
 
 /// `doc.owner` -> `team` (declared by a loaded extension), `doc.sponsor` -> `org` (declared by none),

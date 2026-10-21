@@ -49,6 +49,7 @@ behavior build_in_memory_graph "Build In-Memory Graph" {
   verify unit "W061 names every entity of a cycle, one whose cycle closes through an entity already walked included"
   verify unit "W061 is the same whatever order the references are written in"
   verify unit "build_graph no W061 for acyclic refs"
+  verify unit "a built graph's cycles count every edge, a derived or single reference's included; W061 counts the written references only"
   verify unit "detects cycles in directed graph"
   verify unit "detects self-referencing cycle"
   verify unit "no false positives for acyclic graph"
