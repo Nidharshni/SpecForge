@@ -335,7 +335,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   warnings, which name the extension as it declares itself), through the `WasmRuntime` the operation's
   caller passes (the CLI's component runtime with the per-user compile cache, the MCP call's runtime, a
   test's in-process runtime), never through one the operation builds (`specforge_ops::extension::candidate`,
-  ADR 0028 D7, ADR 0172). A binary to install must load (E028) and must not declare a builtin's name; the lock plan
+  ADR 0028 D7, ADR 0172). A binary to install or publish must load (E028) and must not declare a builtin's name (`extension_conflict`, one
+  rule: `not_a_builtins_name`; `extension init` holds a new crate's name to it); the lock plan
   enables the builtins an extension requires (CONTEXT "Lock plan"), and a builtin that does not load
   refuses the operation.
 - **Local component**: the component a path names, read once through the request's containment: a `.wasm`
@@ -679,7 +680,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Peers::load_order`); a cycle among required peers is E027 and its extensions load together in
   entry order (ADR 0041).
 - **Extension specifier**: an `add` argument (also each of `specforge.add_extension`'s
-  `specifiers` and `init --extensions`'): a builtin's name, a local path (anything that is no
+  `specifiers` and `init --extensions`'): a builtin's name (with an optional `@requirement` the embedded builtin must
+  meet), a local path (anything that is no
   builtin's name, `git+` URL or package reference: a `.wasm` file, or an extension's crate directory,
   read as a local component, `LocalComponent`), a `git+` URL, or a
   package reference `@scope/name[@requirement]` (`PackageRef`; it starts with `@`), read once by

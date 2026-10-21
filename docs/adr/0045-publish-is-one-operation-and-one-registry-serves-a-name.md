@@ -1,6 +1,6 @@
 # Publish is one operation over the registry port; one registry serves a name
 
-**Status:** accepted (2026-10-08). Amends ADR 0010 (the port's methods) and ADR 0036 (D3). Amended in round 16 (plan 11): one credential store, one read rule. Amended by [ADR 0172](0172-the-extension-a-path-names-is-read-by-one-module.md): D3's binary (E040) is read by the candidate module, as add reads it.
+**Status:** accepted (2026-10-08). Amends ADR 0010 (the port's methods) and ADR 0036 (D3). Amended in round 16 (plan 11): one credential store, one read rule. Amended by [ADR 0172](0172-the-extension-a-path-names-is-read-by-one-module.md): D3's binary (E040) is read by the candidate module, as add reads it. Amended (2026-10-21, architecture round 22, plan 10): D3's step 1 also refuses a declaration naming a builtin (`extension_conflict`), as install does.
 
 **Amended by [ADR 0178](0178-a-registry-credential-belongs-to-its-registry-root.md) (architecture round 20, plan 01):** D5 and the round-5 and round-16 amendments' credential sentences: a credential is kept under its registry's root; login and logout go through `specforge_ops_registry::User`.
 
@@ -39,7 +39,7 @@ implement both on the same type, so the second trait would add a name and no var
 
 `specforge_ops::publish::publish(extension, &dyn Registry, &dyn WasmRuntime) -> PublishReport`
 refuses in one order, each refusal before anything after it is read or asked: the binary (E040,
-E028), the declaration's errors, the name and version (E072), then the registry. The HTTP adapter
+E028, a builtin's name: `extension_conflict`), the declaration's errors, the name and version (E072), then the registry. The HTTP adapter
 refuses, still before any request: the configuration (E063, E067), the registry for the name
 (R-OPS-001), the credential (R001 when there is none, R012, R-AUTH-020, R-AUTH-021), the signing
 key (E074); then the registry answers (R007, R001, R002, ...). `SPECFORGE_REGISTRY_TOKEN`, when set
