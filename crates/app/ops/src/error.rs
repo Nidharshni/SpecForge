@@ -106,10 +106,11 @@ impl OpErrorKind {
     }
 }
 
-/// What a failure is about, behind one box (see [`OpError::names`]).
+/// What a failure is about, behind one box: an entity or a spec file.
 #[derive(Debug, Clone, PartialEq)]
 enum Named {
     Entity(String),
+    File(String),
 }
 
 /// Why an operation failed. `code` is data for the surface to present (a
@@ -127,7 +128,8 @@ pub struct OpError {
     /// (`clippy.toml`'s `large-error-threshold`).
     pub data: Option<Box<serde_json::Value>>,
     /// The entity the failure is about (`EntityNotFound`, a rename's
-    /// `Conflict`): [`Self::entity`]. One box, so the error stays small enough
+    /// `Conflict`) or the spec file (`file_not_found`): [`Self::entity`],
+    /// [`Self::file`]. One box, so the error stays small enough
     /// to be returned whole.
     names: Option<Box<Named>>,
     /// The files the operation changed on disk before it failed and did
@@ -214,7 +216,23 @@ impl OpError {
     pub fn entity(&self) -> Option<&str> {
         match self.names.as_deref() {
             Some(Named::Entity(entity)) => Some(entity),
-            None => None,
+            _ => None,
+        }
+    }
+
+    /// The same error, about the spec file the request named, as it spelled it
+    /// (`file_not_found`, `not_a_source`). A failure is about one thing: this
+    /// replaces an entity.
+    pub fn with_file(mut self, file: impl Into<String>) -> Self {
+        self.names = Some(Box::new(Named::File(file.into())));
+        self
+    }
+
+    /// The spec file the failure is about, as the request spelled it.
+    pub fn file(&self) -> Option<&str> {
+        match self.names.as_deref() {
+            Some(Named::File(file)) => Some(file),
+            _ => None,
         }
     }
 
@@ -285,6 +303,8 @@ mod tests {
         assert!(std::mem::size_of::<OpError>() <= 129);
         let about = OpError::new(OpErrorKind::Conflict, "x", "x").with_entity("a");
         assert_eq!(about.entity(), Some("a"));
+        let about = about.with_file("a.spec");
+        assert_eq!((about.file(), about.entity()), (Some("a.spec"), None));
     }
 
     #[test]

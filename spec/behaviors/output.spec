@@ -447,12 +447,14 @@ behavior read_a_named_spec_file "Read a Spec File a Request Names" {
     read of a file that is none of the compiled sources MUST be
     file_not_found; a create MUST be refused as not_a_source unless the file
     is one discovery would keep. A spelling from the project root of an
-    existing source MUST be refused naming its spec-root spelling.
+    existing source MUST be refused naming its spec-root spelling. A refusal
+    MUST name the file as the request spelled it.
   """
   verify unit "every spelling of a spec file under the spec root reads as its source key"
   verify unit "a spelling that leaves the spec root is not_a_source"
   verify unit "a read of a file that is no compiled source is file_not_found"
   verify unit "a spec file named from the project root is refused naming its spec-root spelling"
+  verify unit "a refusal of a named spec file names the file as the request spelled it"
 }
 
 // Inspect (specforge_ops::read::inspect): one entity's facts. specforge.inspect,
