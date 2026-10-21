@@ -358,13 +358,18 @@ pub(crate) fn schedule(steps: &[Step], states: &[State]) -> Wave {
     Wave { start, blocked }
 }
 
-/// Run the checks `mode` selects (only `only` when given), at most one compiling check at a time, each after the
-/// checks it names. Logs go to `<target_dir>/gate/`.
+/// Whether `--only`'s comma-separated list (every name when `None`) names `check`.
+pub(crate) fn named(only: Option<&str>, check: &str) -> bool {
+    only.is_none_or(|list| list.split(',').any(|name| name == check))
+}
+
+/// Run the checks `mode` selects (only those `only` names when given), at most one compiling check at a time, each
+/// after the checks it names. Logs go to `<target_dir>/gate/`.
 pub fn run(mode: Mode, repo: &Repo, only: Option<&str>) -> Result<Report, String> {
-    if let Some(name) = only
-        && !CHECKS.iter().any(|c| c.name == name)
-    {
-        return Err(format!("no check named `{name}` (cargo gate list)"));
+    for name in only.into_iter().flat_map(|list| list.split(',')) {
+        if !CHECKS.iter().any(|c| c.name == name) {
+            return Err(format!("no check named `{name}` (cargo gate list)"));
+        }
     }
     let changes = match mode {
         Mode::Hook => ChangeSet::staged(repo)?,
@@ -373,7 +378,7 @@ pub fn run(mode: Mode, repo: &Repo, only: Option<&str>) -> Result<Report, String
     };
     let mut selections = Vec::new();
     for check in CHECKS {
-        selections.push(if only.is_some_and(|name| name != check.name) {
+        selections.push(if !named(only, check.name) {
             Selection::Skip
         } else {
             check.selection(mode, repo, &changes)?

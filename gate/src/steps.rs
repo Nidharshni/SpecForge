@@ -388,7 +388,7 @@ pub fn write_baseline(
 ) -> Result<Vec<String>, String> {
     let mut baseline = Baseline::read(&ctx.repo.root)?;
     let (mut lines, mut refused) = (Vec::new(), false);
-    if only.is_none_or(|name| name == size_cap::CHECK) {
+    if crate::run::named(only, size_cap::CHECK) {
         let renames = renames_since(ctx, since.unwrap_or("HEAD"))?;
         let lowered = size_cap::lower(&file_sizes(ctx)?, &baseline.file_size, &renames);
         lines.extend(lowered.lines);
@@ -397,7 +397,7 @@ pub fn write_baseline(
             None => refused = true,
         }
     }
-    if only.is_none_or(|name| name == "specs") {
+    if crate::run::named(only, "specs") {
         let found = project_diagnostics(ctx)?;
         let verdict = judge::spec_verdict(&found, &baseline.specs, true);
         lines.extend(verdict.lines);
