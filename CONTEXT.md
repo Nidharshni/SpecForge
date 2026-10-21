@@ -187,8 +187,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   "another project" is one nested in the served one (`specforge_ops::Containment`, ADR 0092, ADR 0104).
 - **Containment**: what a request may reach on disk: every path (the CLI, ADR 0092 D6) or the paths that land inside
   one directory (an MCP request's bound, or the call's project). Lent by the **Caller** in the operation's request and
-  applied where the operation opens or writes the file (a lock plan narrows it to its project, ADR 0137) (`specforge_ops::Containment`, ADR 0104). MCP's call's project
-  hands it to the tools (`ProjectRef::caller`, ADR 0112, ADR 0124), and render's view input hands it the request's bound (ADR 0131).
+  applied where the operation opens or writes the file (a lock plan narrows it to its project, ADR 0137) (`specforge_ops::Containment`, ADR 0104). MCP builds one per call (`Call`), bounds the call's views by it and
+  lends it as the caller's (ADR 0183); the call's project hands it to the tools (`ProjectRef::caller`, ADR 0112, ADR 0124), and render's view input hands it the request's bound (ADR 0131).
   Containment does not see a hard link: a write never goes through one (a project file is written by `specforge_common::fresh::replace_file`, which replaces
   the name, ADR 0144), and a read of one is a read of the file in the project: MCP reads the sources of a served project only from
   inside it (a source that resolves outside is E025), and a file with more than one name is not read through a bound: over MCP it is E025 (ADR 0146); the CLI, watch and LSP are unbounded and read it.
@@ -199,7 +199,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   renamed onto it, so the inode that held the name is never opened for writing. `create_fresh` is the same for a stream.
 - **Caller**: what the surface that calls an operation lends it, one value (`specforge_ops::Caller`, ADR 0124): what the
   call may reach (**Containment**) and who can be asked (**Asking**). The CLI lends every path and its terminal when
-  someone can answer; MCP lends the root of the call's project (init: the request's bound) and nobody. Every request
+  someone can answer; MCP lends the call's one containment (the view's; init: the request's bound) and nobody. Every request
   that opens a project file or can ask carries it as `caller`. The runtime, the registry, the solver and collect's
   machine are passed beside it, not in it. Not the **host** (the process that loads extensions).
 - **Project file**: a file of the project an operation reads or writes. It is opened only as a `Held`
@@ -650,7 +650,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   command), so none takes a runtime of its own; its entity snapshot, through the per-compile
   memo (`ProjectView::entities`) (`specforge_ops::view::ProjectView`). It reads
   the project's recorded test report through its compiled project, over MCP held inside the root
-  (`ProjectView::contained`, ADR 0139), and its versioned schema, both at that root and never an
+  through the containment it carries (`ProjectView::bounded_by`, ADR 0183): the recorded report, the schema cache,
+  a typed edit's format configuration, and its versioned schema, both at that root and never an
   ancestor's. Built only from a compiled project (`ProjectView::of`): the CLI from its compiled project and the LSP
   from its session's, or, while the session is out for an update, from a copy of it (ADR 0108); MCP from its call target (`ProjectRef::view`: the served session's compiled
   project with its I017 notices, or that of a session opened for one call) (ADR 0015, ADR 0047).
@@ -1261,3 +1262,6 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Lifecycle field**: the one field of a kind that holds its entities' lifecycle state
   (`lifecycle_field` on the kind). The build cache records its value so check-phase passes can
   compare against the previous build (ADR 0009).
+- **Call containment**: the one **Containment** an MCP call reads and writes its project through, built when the call is
+  resolved; its views carry it (`ProjectView::bounded_by`) and its caller lends it (ADR 0183). The CLI's and the LSP's is
+  every path.
