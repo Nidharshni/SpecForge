@@ -410,3 +410,50 @@ fn the_plan_outcome_is_one_document() {
         Vec::<String>::new()
     );
 }
+
+/// Behaviors `ids` (testable kind, no obligations), with the `depends_on` edges `edges`, in that order.
+fn depending(ids: &[&str], edges: &[(&str, &str)]) -> Graph {
+    let mut graph = Graph::new();
+    for id in ids {
+        graph.add_node(node(id, "behavior"));
+    }
+    for (source, target) in edges {
+        graph.add_edge(Edge {
+            source: (*source).into(),
+            target: (*target).into(),
+            label: "depends_on".into(),
+        });
+    }
+    graph
+}
+
+// B:validate_agent_plan — verify unit "entities on one cycle may come in any order in a plan"
+#[specforge_test(
+    behavior = "validate_agent_plan",
+    verify = "entities on one cycle may come in any order in a plan"
+)]
+#[ignore = "flipped by T4"]
+fn entities_on_one_cycle_may_come_in_any_order() {
+    let graph = depending(&["a", "b", "c"], &[("a", "b"), ("b", "a"), ("c", "a")]);
+    let check = |ids: &[&str]| {
+        let entries: Vec<_> = ids
+            .iter()
+            .map(|id| serde_json::json!({"entity_id": id, "action": "implement"}))
+            .collect();
+        let plan = serde_json::json!({"plan_id": "p", "entries": entries});
+        crate::view_support::plan_check(&graph, &["behavior"], &plan)
+    };
+
+    for order in [["a", "b", "c"], ["b", "a", "c"]] {
+        let outcome = check(&order);
+        assert!(
+            outcome.ok && outcome.gaps.is_empty(),
+            "{order:?}: {:?}",
+            outcome.gaps
+        );
+    }
+    assert_eq!(
+        gap_texts(&check(&["c", "b", "a"]), PlanGapKind::Ordering),
+        ["'c' depends on 'a' (via depends_on), but 'a' appears later in the plan"]
+    );
+}
