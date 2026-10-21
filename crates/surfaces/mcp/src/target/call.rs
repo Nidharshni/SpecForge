@@ -89,18 +89,15 @@ pub struct ProjectRef<'a> {
     /// The project view, built once for the call: rooted at the project
     /// root, reporting what the server reports for the project.
     view: ProjectView<'a>,
-    /// What a file the call reads or writes must land inside: the project's root
-    /// (ADR 0092 D2, ADR 0112 D4).
-    containment: Containment,
     /// Whether it is the served project (not one a `path` named).
     served: bool,
 }
 
 impl<'a> ProjectRef<'a> {
-    /// What the call lends the operation: the project's root (ADR 0112 D4), nobody to ask. A tool
-    /// hands it to the operation's request and builds none of its own.
+    /// What the call lends the operation: the call's one containment, the view's (ADR 0112 D4,
+    /// ADR 0183), nobody to ask. A tool hands it to the operation's request and builds none of its own.
     pub fn caller(&self) -> Caller<'_> {
-        lent(&self.containment)
+        lent(self.view.containment())
     }
 
     /// Whether it is the served project (not one a `path` named): the server
@@ -206,7 +203,6 @@ impl<'s> Call<'s> {
                     runtime,
                     solver: &*self.state.solver,
                     machine: &*self.state.collector_machine,
-                    containment: self.containment.clone(),
                     view,
                     served: true,
                 })
@@ -226,7 +222,6 @@ impl<'s> Call<'s> {
                     runtime,
                     solver: &*self.state.solver,
                     machine: &*self.state.collector_machine,
-                    containment: self.containment.clone(),
                     view,
                     served: false,
                 })
@@ -273,9 +268,10 @@ impl<'s> Call<'s> {
         }
     }
 
-    /// The directory the paths this request names must resolve inside.
-    pub(crate) fn bound(&self) -> Containment {
-        containment::bound(self.state)
+    /// What every file the call reads or writes must land inside, and what its views and callers
+    /// are bounded by (ADR 0183).
+    pub(crate) fn containment(&self) -> &Containment {
+        &self.containment
     }
 
     /// The directory `init` creates its project in.
