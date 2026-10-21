@@ -3,7 +3,7 @@
 **Status:** accepted (2026-10-16, architecture round 13, plan 01). Amends [ADR 0032](0032-one-graph-build.md) (the Registry
 build builds the graph, taking the provider schemes per call; its graph inputs are held), [ADR 0115](0115-the-entity-snapshot-is-made-in-the-registry.md)
 D2 (the pairing is checked at the snapshot, not left to a helper) and [ADR 0108](0108-a-project-view-comes-only-from-a-compiled-project.md) D4
-(an assembled source is built in its environment).
+(an assembled source is built in its environment). Amended in round 20, plan 11: an export reads the build whole (§ An export).
 
 ## Context
 
@@ -58,3 +58,21 @@ Rust API breaks in `specforge-registry` (`graph_inputs` returns a reference; `En
 
 A reader that needs a graph built with inputs other than its Registry build's (then the snapshot would take the inputs
 explicitly); providers moving into the Registry build (then `graph_of` drops its argument).
+
+## An export reads the Registry build whole (amendment, architecture round 20, plan 11)
+
+**The rule.** `specforge_emitter::emit` and `dot::emit_dot` take the Registry build the graph was built in as one
+`registries: &RegistryBuild`, defaulting to the empty build (a project with no extension), the way `schema` defaults to the
+empty schema. No format has a no-registry reading: DOT reads the build's kinds and edge types, context its fields, markdown
+its fields and forms; JSON and brief read none.
+
+**Why.** The export took three optional parts of one build (`kind_registry`, `field_registry`, `field_forms`), added one per
+commit (`289ab2f0`, `8de43454`, `70b4f429`) and assembled by each caller. Production always passed all three, but every
+format kept a `None` branch, and the markdown one reads a graph as no build does, the empty one included. Drawing the edge
+types' declared styles would have needed a fourth part.
+
+**Not checked.** That the graph was built in the build. An export takes `&Graph`; asserting the pairing as the snapshot does
+would need a `GraphBuild` at every export and every hand-made test graph converted, which the Rejected list above refuses.
+Production pairs by construction: a `ProjectView` answers its graph and its registries from one compiled project.
+
+**Would reopen it.** An export of a graph built with inputs other than the build it is read with.

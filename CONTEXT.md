@@ -895,7 +895,7 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   `files_written`, the CLI's credential health on doctor), and never renames, drops or re-derives a
   key. It carries no `null`. Its spec type is the tool's `Mcp*` reply type (ADR 0052).
 - **Graph export**: the project's graph, or the entities a read selection covers (its scope drawn always, never cut by a budget), written in one export format by
-  `specforge_emitter::emit` through `specforge_ops::read::export::export`: graph (the Graph Protocol), context and brief (JSON
+  `specforge_emitter::emit`, read with the Registry build its graph was built in (`EmitOptions::registries`, ADR 0123), through `specforge_ops::read::export::export`: graph (the Graph Protocol), context and brief (JSON
   documents whose schema the emitter derives from the types that write them, published by `specforge schema
   --publish`), DOT, or markdown (a **Review document**). It is text: the CLI prints it, MCP sends it as text or writes it into a directory of the project (`export::write_into`, as `<dir>/<format's file name>`, replaced atomically, ADR 0131), an extension command receives it
   spliced in its input; only `specforge.query` reads it back, into its structured result. A node carries its coverage
