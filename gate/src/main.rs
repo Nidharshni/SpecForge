@@ -11,7 +11,7 @@
 //!                            one section; a file git saw move since <rev> (default HEAD) carries its entry
 //! cargo gate crate-map       rewrite the crate map in ARCHITECTURE.md and crates/README.md
 //! cargo gate list            print the table: name, reach, trigger, proves
-//! cargo gate <mode> --only <check>
+//! cargo gate <mode> --only <check>[,<check>...]
 //! ```
 //!
 //! Exit codes: 0 every selected check passed, 1 one failed or was blocked, 2 usage.
@@ -24,7 +24,7 @@ use std::process::ExitCode;
 
 use gate::{Mode, Repo};
 
-const USAGE: &str = "usage: cargo gate [hook|quick|full|ci|bootstrap] [--only <check>] | baseline [--only specs|file-size] [--since <rev>] | crate-map | list";
+const USAGE: &str = "usage: cargo gate [hook|quick|full|ci|bootstrap] [--only <check>[,<check>...]] | baseline [--only specs|file-size] [--since <rev>] | crate-map | list";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();

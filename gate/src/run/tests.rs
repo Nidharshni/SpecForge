@@ -130,3 +130,12 @@ fn the_report_names_failures_and_the_fix() {
     let hook = String::from_utf8(hook).unwrap();
     assert!(hook.starts_with("pre-commit: rustfmt: "), "{hook}");
 }
+
+#[test]
+fn only_names_a_comma_separated_list_of_checks() {
+    assert!(named(None, "audit"));
+    assert!(named(Some("audit"), "audit"));
+    assert!(named(Some("doc-links,links,specs"), "links"));
+    assert!(!named(Some("doc-links,links,specs"), "audit"));
+    assert!(!named(Some("doc-links"), "links"));
+}
