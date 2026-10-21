@@ -24,8 +24,8 @@ pre-release project does not honour.
   An empty span inserts. `RenameEdit` is deleted.
 - **D2.** One applier, `navigate::apply_edits(text, edits)`, applies a file's edits whole or not at all: a span outside
   the text, an end inside a character or two overlapping edits refuse the set (`None`, never a panic); insertions at one
-  position keep the order given. `rename::apply` refuses (`file_unreadable`) before staging a file when the edits do not
-  lie in the text it planned.
+  position keep the order given. A rename plan refuses (`file_unreadable`) when it plans, if the edits do not lie in the
+  text it planned (ADR 0184).
 - **D3.** MCP renders it once, as the spec's `TextEdit` (`reply::TextEdit`, `{file_path, range, new_text}`), for
   `suggest_fixes` and `rename`. `McpRenameEdit` is deleted from the spec.
 - **D4.** The LSP converts an edit's span with `Compiled::range` and nothing else.
