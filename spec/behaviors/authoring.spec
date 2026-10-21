@@ -22,7 +22,9 @@ behavior create_entity "Create an Entity" {
     Each field is written as a set of it writes it, so a field that holds what its file's default holds, as the graph stores both,
     is not written, and each verify obligation as an add-verify writes it, so an equal one given twice is written
     once. The field flags of `specforge new` are the kind's fields in the project
-    the command acts on. A create takes whole fields; a `field.entry` path is refused.
+    the command acts on. Its command line is one command read once with the kind's fields: an option may stand anywhere
+    and one given twice is refused, --help with a kind is that kind's help and an unknown kind is refused as unknown_kind,
+    and a line whose --path a field's value spells is refused. A create takes whole fields; a `field.entry` path is refused.
     The skeleton of a new block of a kind is what a create of it writes with no values, with a slot where each value
     goes: the id, the title, each required field and the final cursor; a member's skeleton is its field written in its
     form (ADR 0191).

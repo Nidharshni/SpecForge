@@ -106,7 +106,6 @@ enum Commands {
     Analyze(analyze::Args),
     /// Watch a project and rebuild incrementally on changes
     Watch(watch::Args),
-    /// Create an entity
     New(new::Args),
     /// Set a field (or --title) of an entity
     Set(edit::SetArgs),
@@ -159,6 +158,14 @@ enum Commands {
     External(Vec<String>),
 }
 
+/// The command tree `specforge` declares, with `new`'s command line ([`new::command`]) in place of the words its
+/// clap tree takes unread: what completions and the tree's tests read.
+fn declared() -> clap::Command {
+    Cli::command().mut_subcommand("new", |tree| {
+        new::command(None).display_order(tree.get_display_order())
+    })
+}
+
 fn main() {
     let cli = Cli::parse();
     let terminal = Terminal::process();
@@ -188,7 +195,7 @@ fn completions(shell: Shell, project: &project::ProjectArg, terminal: &Terminal)
             return outcome::Refusal::fixed().report(terminal, &error);
         }
     };
-    let mut cmd = extension_command::with_extension_commands(Cli::command(), &root);
+    let mut cmd = extension_command::with_extension_commands(declared(), &root);
     clap_complete::generate(
         shell,
         &mut cmd,
@@ -272,7 +279,7 @@ mod tests {
     /// of this file cannot change a byte of it (plan 11).
     #[test]
     fn every_core_command_help_is_pinned() {
-        let mut root = Cli::command();
+        let mut root = declared();
         root.build();
         pin_help(&root, &[]);
     }
@@ -314,7 +321,7 @@ mod tests {
         verify = "every command that reads a project takes the one --path option, and none takes a project path as a positional argument"
     )]
     fn every_command_that_reads_a_project_takes_the_project_arg() {
-        let mut root = Cli::command();
+        let mut root = declared();
         root.build();
         let mut found = Vec::new();
         commands(&root, "", &mut found);
@@ -387,7 +394,7 @@ mod tests {
         verify = "every core command with a JSON form takes --format human|json, and none takes --json"
     )]
     fn every_json_output_is_asked_for_with_format() {
-        let mut root = Cli::command();
+        let mut root = declared();
         root.build();
         let mut arguments = Vec::new();
         all_arguments(&root, &mut arguments);
@@ -398,7 +405,7 @@ mod tests {
                 "`specforge {command}` takes --json"
             );
         }
-        for name in ["analyze", "watch", "format"] {
+        for name in ["analyze", "watch", "format", "new"] {
             let command = root.find_subcommand(name).expect("a core command");
             let format = command
                 .get_arguments()

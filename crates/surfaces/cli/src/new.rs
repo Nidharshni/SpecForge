@@ -1,7 +1,9 @@
 //! `specforge new <kind> <id> "<title>" --in <file> [--<field> <value>]… [--verify kind:text]…`: create an entity
-//! (ADR 0151). The field flags are the kind's declared fields, read from the project's extensions at run time, so
+//! (ADR 0151). The command line is one clap command ([`command`]) read twice with the same builder: once to find the
+//! kind, once with the kind's declared fields as flags, which the project's extensions declare at run time, so
 //! `specforge new behavior --help` lists `--contract`, `--invariants`, … and a misspelt flag gets clap's "did you
-//! mean". An open kind's members are set with `specforge set` afterwards. `--path` may stand anywhere.
+//! mean". The edit, the help and every refusal come from the second reading. An open kind's members are set with
+//! `specforge set` afterwards. Every option, `--path` included, may stand anywhere.
 
 use crate::edit::execute_on;
 use crate::outcome::{Exit, OutputArg, OutputFormat, Refusal};
@@ -13,96 +15,122 @@ use specforge_ops::view::ProjectView;
 use specforge_ops::{OpError, OpErrorKind};
 use specforge_protocol_types::FieldType;
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
-/// The options `new` itself takes: a field with one of these names is set with `specforge set`.
-const HOST_OPTIONS: [&str; 6] = ["in", "verify", "dry-run", "path", "format", "help"];
+/// What `specforge new` does: its line in `specforge --help` and its help's first line.
+pub(crate) const ABOUT: &str = "Create an entity";
 
-// `specforge new`'s command line.
+const KIND: &str = "new:kind";
+const ID: &str = "new:id";
+const TITLE: &str = "new:title";
+const FIELDS: &str = "new:fields";
+const IN: &str = "in";
+const VERIFY: &str = "verify";
+const DRY_RUN: &str = "dry-run";
+const HELP: &str = "help";
+
+/// `specforge new`'s words, as the clap tree takes them: every one, unread, for [`command`] to read once the
+/// project's kinds are known (`specforge new --help` lists the options).
 #[derive(clap::Args)]
 #[command(
+    about = ABOUT,
     disable_help_flag = true,
-    after_help = "The kind's fields are flags too: `specforge new <kind> --help` lists them."
+    after_help = "`specforge new --help` lists its options; `specforge new <kind> --help` the kind's field flags too."
 )]
 pub(crate) struct Args {
-    /// The kind of entity (behavior, invariant, …)
-    #[arg(required_unless_present = "help")]
-    kind: Option<String>,
-
-    /// The new entity's id
-    #[arg(required_unless_present = "help")]
-    id: Option<String>,
-
-    /// The new entity's title
-    #[arg(required_unless_present = "help")]
-    title: Option<String>,
-
-    /// The file, relative to the spec root; created when missing
-    #[arg(long = "in", value_name = "FILE")]
-    file: Option<String>,
-
-    /// A `verify` obligation, as `kind:text` (or just `text`); repeat for several
-    #[arg(long, value_name = "KIND:TEXT")]
-    verify: Vec<String>,
-
-    /// Print the diff and write nothing
-    #[arg(long)]
-    dry_run: bool,
-
-    /// Print help (with a kind, that kind's field flags)
-    #[arg(short = 'h', long = "help")]
-    help: bool,
-
-    #[command(flatten)]
-    project: ProjectArg,
-
-    #[command(flatten)]
-    output: OutputArg,
-
-    /// The kind's fields: `--<field> <value>`
-    #[arg(trailing_var_arg = true, allow_hyphen_values = true, num_args = 0.., value_name = "FIELDS")]
-    rest: Vec<String>,
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true, num_args = 0..)]
+    args: Vec<String>,
 }
 
-/// The kind's command line: its declared fields as flags, and the options `new` takes whatever their place.
-fn command(kind: &str, fields: &[FieldInfo]) -> Command {
-    let mut cmd = Command::new("new")
-        .no_binary_name(true)
+/// `new`'s own options, each declared once: `--path` and `--format` as every command declares them.
+fn options() -> Command {
+    Command::new("new")
+        .about(ABOUT)
         .disable_help_flag(true)
-        .bin_name(format!("specforge new {kind} <ID> <TITLE>"))
         .arg(
-            Arg::new("in")
-                .long("in")
+            Arg::new(IN)
+                .long(IN)
                 .value_name("FILE")
-                .help("The file, relative to the spec root"),
+                .help("The file, relative to the spec root; created when missing"),
         )
         .arg(
-            Arg::new("verify")
-                .long("verify")
+            Arg::new(VERIFY)
+                .long(VERIFY)
                 .action(ArgAction::Append)
                 .value_name("KIND:TEXT")
-                .help("A verify obligation"),
+                .help("A `verify` obligation, as `kind:text` (or just `text`); repeat for several"),
         )
         .arg(
-            Arg::new("dry-run")
-                .long("dry-run")
+            Arg::new(DRY_RUN)
+                .long(DRY_RUN)
                 .action(ArgAction::SetTrue)
                 .help("Print the diff and write nothing"),
         )
         .arg(
-            Arg::new("path")
-                .long("path")
-                .help("A path inside the project"),
+            Arg::new(HELP)
+                .short('h')
+                .long(HELP)
+                .action(ArgAction::SetTrue)
+                .help("Print help (with a kind, that kind's field flags)"),
+        )
+        // Declared elsewhere with their own display order: placed after the options above.
+        .arg(ProjectArg::arg().display_order(4))
+        .arg(OutputArg::arg().display_order(5))
+}
+
+/// The fields that are flags of `new`, and those named like one of its options, which are not.
+fn split(fields: &[FieldInfo]) -> (Vec<&FieldInfo>, Vec<&FieldInfo>) {
+    let options = options();
+    fields.iter().partition(|f| {
+        !options
+            .get_arguments()
+            .any(|a| a.get_id() == f.name.as_str())
+    })
+}
+
+/// `specforge new`'s command line, the one its help and both of its readings use: `<KIND> <ID> <TITLE>`, its own
+/// options declared once, then either every word after the title (`kind` = `None`: what the line is read with to
+/// find the kind) or that kind's declared fields as flags, leaving out a field named like an option.
+pub(crate) fn command(kind: Option<(&str, &[FieldInfo])>) -> Command {
+    let hidden = kind.is_some();
+    let mut cmd = options()
+        .arg(
+            Arg::new(KIND)
+                .value_name("KIND")
+                .required_unless_present(HELP)
+                .hide(hidden)
+                .help("The kind of entity (behavior, invariant, …)"),
         )
         .arg(
-            Arg::new("format")
-                .long("format")
-                .value_parser(["human", "json"])
-                .help("Output format"),
+            Arg::new(ID)
+                .value_name("ID")
+                .required_unless_present(HELP)
+                .hide(hidden)
+                .help("The new entity's id"),
+        )
+        .arg(
+            Arg::new(TITLE)
+                .value_name("TITLE")
+                .required_unless_present(HELP)
+                .hide(hidden)
+                .help("The new entity's title"),
         );
-    for field in fields
-        .iter()
-        .filter(|f| !HOST_OPTIONS.contains(&f.name.as_str()))
-    {
+    let Some((kind, fields)) = kind else {
+        return cmd
+            .after_help(
+                "The kind's fields are flags too: `specforge new <kind> --help` lists them.",
+            )
+            .arg(
+                Arg::new(FIELDS)
+                    .value_name("FIELDS")
+                    .trailing_var_arg(true)
+                    .allow_hyphen_values(true)
+                    .num_args(0..)
+                    .help("The kind's fields: `--<field> <value>`"),
+            );
+    };
+    cmd = cmd.override_usage(format!("specforge new {kind} <ID> <TITLE> [OPTIONS]"));
+    for field in split(fields).0 {
         let mut arg = Arg::new(field.name.clone())
             .long(field.name.clone())
             .allow_hyphen_values(true)
@@ -121,10 +149,7 @@ fn command(kind: &str, fields: &[FieldInfo]) -> Command {
 /// The fields `matches` sets, as the inputs `Create` takes.
 fn inputs(fields: &[FieldInfo], matches: &ArgMatches) -> Result<BTreeMap<String, Input>, OpError> {
     let mut out = BTreeMap::new();
-    for field in fields
-        .iter()
-        .filter(|f| !HOST_OPTIONS.contains(&f.name.as_str()))
-    {
+    for field in split(fields).0 {
         let Some(values) = matches.get_many::<String>(&field.name) else {
             continue;
         };
@@ -157,86 +182,105 @@ fn inputs(fields: &[FieldInfo], matches: &ArgMatches) -> Result<BTreeMap<String,
 
 impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
-        let format = self.output.format;
-        let project = self.project.overridden_by(&self.rest);
-        let compiled = match project.compile() {
-            Ok(compiled) => compiled,
-            Err(error) => return Refusal::of(format).report(terminal, &error),
-        };
-        let view = ProjectView::of(&compiled);
-        let kind = self.kind.clone().unwrap_or_default();
-        let fields = edit::fields_of(&view, &kind);
-        if self.help {
-            return help(&kind, &fields, terminal);
-        }
-        if fields.is_empty()
-            && let Err(error) = view.kinds().declared(&kind)
+        // First reading: the kind, and the format a refusal before the fields are known is printed in.
+        let first = match command(None)
+            .no_binary_name(true)
+            .try_get_matches_from(&self.args)
         {
-            return Refusal::of(format).report(terminal, &error);
-        }
-        let matches = match command(&kind, &fields).try_get_matches_from(&self.rest) {
             Ok(matches) => matches,
             Err(e) => {
                 err!(terminal, "{}", e.render());
                 return Exit::Unjudged;
             }
         };
-        let format = matches.get_one::<String>("format").map_or(format, |f| {
-            if f == "json" {
-                OutputFormat::Json
-            } else {
-                OutputFormat::Human
+        let format = first
+            .get_one::<OutputFormat>(OutputArg::NAME)
+            .copied()
+            .unwrap_or(OutputFormat::Human);
+        let Some(kind) = first.get_one::<String>(KIND) else {
+            // Only `new --help` gets here: the other positionals are required.
+            outln!(terminal, "{}", command(None).render_long_help());
+            return Exit::Passed;
+        };
+        // The project the words name is read before the line can be (ADR 0053 D7a): the fields are its own.
+        let project = ProjectArg::scan(&self.args);
+        let compiled = match project.compile() {
+            Ok(compiled) => compiled,
+            Err(error) => return Refusal::of(format).report(terminal, &error),
+        };
+        let view = ProjectView::of(&compiled);
+        if let Err(error) = view.kinds().declared(kind) {
+            return Refusal::of(format).report(terminal, &error);
+        }
+        let fields = edit::fields_of(&view, kind);
+        // Second reading: every word, with the kind's fields. The edit, the help and the refusals come from it.
+        let mut cmd = command(Some((kind, &fields)));
+        let matches = match cmd
+            .clone()
+            .no_binary_name(true)
+            .try_get_matches_from(&self.args)
+        {
+            Ok(matches) => matches,
+            Err(e) => {
+                err!(terminal, "{}", e.render());
+                return Exit::Unjudged;
             }
-        });
-        let dry_run = self.dry_run || matches.get_flag("dry-run");
-        match self.edit(&kind, &fields, &matches) {
-            Ok(edit) => execute_on(&compiled, vec![edit], dry_run, format, terminal),
+        };
+        if matches.get_flag(HELP) {
+            outln!(terminal, "{}", cmd.render_long_help());
+            return Exit::Passed;
+        }
+        let named = matches.get_one::<PathBuf>(ProjectArg::NAME);
+        if named.map(PathBuf::as_path) != Some(project.path()) {
+            err!(
+                terminal,
+                "error: --path names '{}' read before the kind's flags and '{}' after: give --path apart from a field's value (--<field>=<value>)",
+                project.path().display(),
+                named.map(|p| p.display().to_string()).unwrap_or_default()
+            );
+            return Exit::Unjudged;
+        }
+        let format = matches
+            .get_one::<OutputFormat>(OutputArg::NAME)
+            .copied()
+            .unwrap_or(format);
+        match edit(kind, &fields, &matches) {
+            Ok(edit) => execute_on(
+                &compiled,
+                vec![edit],
+                matches.get_flag(DRY_RUN),
+                format,
+                terminal,
+            ),
             Err(error) => Refusal::of(format).report(terminal, &error),
         }
     }
-
-    fn edit(
-        &self,
-        kind: &str,
-        fields: &[FieldInfo],
-        matches: &ArgMatches,
-    ) -> Result<Edit, OpError> {
-        let file = self
-            .file
-            .clone()
-            .or_else(|| matches.get_one::<String>("in").cloned())
-            .ok_or_else(|| {
-                OpError::new(
-                    OpErrorKind::InvalidInput,
-                    "invalid_edit",
-                    "new needs --in <file>, relative to the spec root",
-                )
-            })?;
-        let verify = self
-            .verify
-            .iter()
-            .chain(matches.get_many::<String>("verify").into_iter().flatten())
-            .map(|text| Obligation::parse(text))
-            .collect();
-        Ok(Edit::Create {
-            kind: kind.to_string(),
-            id: self.id.clone().unwrap_or_default(),
-            title: self.title.clone().unwrap_or_default(),
-            file,
-            fields: inputs(fields, matches)?,
-            verify,
-        })
-    }
 }
 
-/// `specforge new --help`, or the field flags of `kind`.
-fn help(kind: &str, fields: &[FieldInfo], terminal: &Terminal) -> Exit {
-    use clap::Args as _;
-    let mut cmd = if fields.is_empty() {
-        Args::augment_args(Command::new("specforge new").about("Create an entity"))
-    } else {
-        command(kind, fields)
-    };
-    outln!(terminal, "{}", cmd.render_long_help());
-    Exit::Passed
+/// The edit `matches`, the second reading of the line, asks for.
+fn edit(kind: &str, fields: &[FieldInfo], matches: &ArgMatches) -> Result<Edit, OpError> {
+    let file = matches.get_one::<String>(IN).cloned().ok_or_else(|| {
+        OpError::new(
+            OpErrorKind::InvalidInput,
+            "invalid_edit",
+            "new needs --in <file>, relative to the spec root",
+        )
+    })?;
+    let verify = matches
+        .get_many::<String>(VERIFY)
+        .into_iter()
+        .flatten()
+        .map(|text| Obligation::parse(text))
+        .collect();
+    Ok(Edit::Create {
+        kind: kind.to_string(),
+        id: matches.get_one::<String>(ID).cloned().unwrap_or_default(),
+        title: matches
+            .get_one::<String>(TITLE)
+            .cloned()
+            .unwrap_or_default(),
+        file,
+        fields: inputs(fields, matches)?,
+        verify,
+    })
 }

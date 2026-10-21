@@ -494,7 +494,6 @@ fn new_of_an_unknown_kind_is_refused_as_unknown_kind() {
     behavior = "create_entity",
     verify = "new --help begins with what new does"
 )]
-#[ignore = "flipped by T3"]
 fn new_help_begins_with_what_new_does() {
     let project = todo();
     let help = sf(&project, &["new", "--help"]).exits(0);
@@ -510,7 +509,6 @@ fn new_help_begins_with_what_new_does() {
     behavior = "create_entity",
     verify = "new refuses one of its options given twice, wherever each stands"
 )]
-#[ignore = "flipped by T3"]
 fn an_option_of_new_given_twice_is_refused_wherever_it_stands() {
     let project = todo();
     let before = project.read(TASKS);
@@ -566,7 +564,6 @@ fn an_option_of_new_given_twice_is_refused_wherever_it_stands() {
     behavior = "create_entity",
     verify = "new's help of a kind shows each of its options as every command declares it"
 )]
-#[ignore = "flipped by T3"]
 fn the_kinds_help_shows_each_option_as_declared() {
     let project = todo();
     let help = sf(&project, &["new", "behavior", "--help"]).exits(0);
@@ -587,7 +584,6 @@ fn the_kinds_help_shows_each_option_as_declared() {
     behavior = "create_entity",
     verify = "new --help of a kind the project does not declare is refused as unknown_kind"
 )]
-#[ignore = "flipped by T3"]
 fn help_of_an_unknown_kind_is_refused_as_unknown_kind() {
     let project = todo();
     let run = sf(&project, &["new", "behaviour", "--help"]);
@@ -605,7 +601,6 @@ fn help_of_an_unknown_kind_is_refused_as_unknown_kind() {
     behavior = "create_entity",
     verify = "new --help after a field flag prints the kind's help"
 )]
-#[ignore = "flipped by T3"]
 fn help_after_a_field_flag_is_the_kinds_help() {
     let project = todo();
     let before = project.read(TASKS);
@@ -634,7 +629,6 @@ fn help_after_a_field_flag_is_the_kinds_help() {
     behavior = "create_entity",
     verify = "new refuses a command line whose --path a field's value spells"
 )]
-#[ignore = "flipped by T3"]
 fn a_field_value_spelled_as_path_names_no_project() {
     let project = todo();
     let other = todo();
