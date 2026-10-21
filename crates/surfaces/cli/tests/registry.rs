@@ -1256,10 +1256,9 @@ struct TrustingSetup {
     more: Vec<crate::support::registry::Package>,
 }
 
-/// Plan 09's trust scenario. The registry serves `@sdk/greet` 0.1.0 (the greet binary) signed by `k1`,
-/// 0.2.0 (bytes that are no extension) signed by `k2`, and `@x/a` 1.0.0 (peer `@sdk/greet ^0.1`) signed
-/// by `k1`. The project locks greet 0.1.0 and `@x/a` 1.0.0, both with key `k1` (greet's module is not on
-/// disk, so adding 0.1.0 installs it again). `home` pins greet to `k1` when asked.
+/// The registry serves `@sdk/greet` 0.1.0 (the greet binary) signed by `k1`, 0.2.0 (bytes that are no
+/// extension) signed by `k2`, and `@x/a` 1.0.0 (peer `@sdk/greet ^0.1`) signed by `k1`. The project locks greet
+/// 0.1.0 with no module (adding it installs it again) and `@x/a` 1.0.0 with its module, both with key `k1`.
 struct Trusting {
     _registry: specforge_registry_server::testing::LocalRegistry,
     dir: TestProject,
@@ -1305,8 +1304,9 @@ fn trusting(setup: TrustingSetup) -> Trusting {
             }],
         });
     }
-    let dir =
-        project_on(&registry).enabling(&extensions.iter().map(String::as_str).collect::<Vec<_>>());
+    let dir = project_on(&registry)
+        .file(".specforge/extensions/@x/a/extension.wasm", b"\0asm x/a")
+        .enabling(&extensions.iter().map(String::as_str).collect::<Vec<_>>());
     specforge_installed::write_lock_file(
         &specforge_installed::LockFile {
             lockfile_version: 1,

@@ -890,13 +890,13 @@ fn removing_a_wasm_file_entry_another_requires_is_e027_unless_forced() {
         &dir,
         json!(["@specforge/software", "greet.wasm", "@acme/uses-greet"]),
     );
-    let lock = json!({
-        "lockfile_version": 1,
+    let lock = json!({"lockfile_version": 1,
         "entries": [{"name": "@acme/uses-greet", "version": "1.0.0", "source": "registry",
-                     "wasm_hash": "00",
+                     "wasm_hash": "",
                      "peer_dependencies": [{"name": "@sdk/greet", "version": "^0.1.0"}]}],
     });
     std::fs::write(dir.root().join("specforge.lock"), lock.to_string()).unwrap();
+    dir.write(".specforge/extensions/@acme/uses-greet/extension.wasm", "");
     let lock_before = std::fs::read(dir.root().join("specforge.lock")).unwrap();
 
     let (ok, output) = remove(&dir, "greet.wasm", &[]);
@@ -935,13 +935,13 @@ fn removing_a_wasm_file_entry_a_disabled_lock_entry_requires_is_accepted() {
     let dir = greet_file_project();
     // `@acme/uses-greet` is locked and requires `@sdk/greet`, but no entry enables it.
     enable(&dir, json!(["@specforge/software", "greet.wasm"]));
-    let lock = json!({
-        "lockfile_version": 1,
+    let lock = json!({"lockfile_version": 1,
         "entries": [{"name": "@acme/uses-greet", "version": "1.0.0", "source": "registry",
-                     "wasm_hash": "00",
+                     "wasm_hash": "",
                      "peer_dependencies": [{"name": "@sdk/greet", "version": "^0.1.0"}]}],
     });
     std::fs::write(dir.root().join("specforge.lock"), lock.to_string()).unwrap();
+    dir.write(".specforge/extensions/@acme/uses-greet/extension.wasm", "");
     let lock_before = std::fs::read(dir.root().join("specforge.lock")).unwrap();
 
     let (ok, output) = remove(&dir, "greet.wasm", &[]);
@@ -1159,12 +1159,12 @@ fn remove_dry_run_prints_the_plan_and_writes_nothing() {
 fn add_dry_run_refuses_what_add_refuses() {
     let dir = greet_file_project();
     enable(&dir, json!(["@x/y"]));
-    let lock = json!({
-        "lockfile_version": 1,
-        "entries": [{"name": "@x/y", "version": "1.0.0", "source": "registry", "wasm_hash": "00",
+    let lock = json!({"lockfile_version": 1,
+        "entries": [{"name": "@x/y", "version": "1.0.0", "source": "registry", "wasm_hash": "",
                      "peer_dependencies": [{"name": "@sdk/greet", "version": "^9.0"}]}],
     });
     std::fs::write(dir.root().join("specforge.lock"), lock.to_string()).unwrap();
+    dir.write(".specforge/extensions/@x/y/extension.wasm", "x/y");
     let before = tree(dir.root());
 
     let run = |dry: bool| {

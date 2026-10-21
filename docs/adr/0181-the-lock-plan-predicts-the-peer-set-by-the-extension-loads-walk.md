@@ -52,3 +52,10 @@
 ## Reopen when
 
 A third caller of the walk needs another notion of "loaded", or ADR 0145 D3 is reopened for file entries.
+
+**Amended (2026-10-21, round 19 follow-up, 04-D2):** D3: the set a change leaves also answers a locked entry by its
+module on disk, except one the change stages, which it answers by its staged pin (its module is written at commit).
+Reproduced: with a locked peer whose module was gone, an install requiring it passed the plan and `check` then reported
+E027; it is now refused with that E027. "Every set by module" is no longer rejected. The plan reads modules through the
+disk its `Declarations` holds, so no constructor changed; the lock-plan unit fixtures write the modules their locks pin.
+`differing` (what a removal touches) still compares the two sets by lock entry.

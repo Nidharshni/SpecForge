@@ -401,6 +401,7 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
   verify unit "a version diamond names each requirer once"
   verify unit "add judges the project's peer set as the add leaves it: its builtins, installed extensions and .wasm file entries"
   verify unit "an install whose required peer is not installed is refused with E027 before anything is written"
+  verify unit "an install whose required peer is installed but whose module is missing is refused with E027 before anything is written"
   verify unit "enabling a builtin that an enabled extension's peer range does not accept is refused with E027"
   verify unit "an install that breaks a .wasm file entry, or that a .wasm file entry does not satisfy, is refused with E027"
   verify unit "an install enables the builtins it requires first, whatever its source"

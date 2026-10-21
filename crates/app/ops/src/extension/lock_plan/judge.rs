@@ -18,7 +18,8 @@ impl<'a> LockPlan<'a> {
     /// 0. For a verb that enables, a touched name a `.wasm` file entry of the opened `specforge.json`
     ///    loads is refused (`extension_conflict`, ADR 0160).
     /// 1. [`Self::close`], then the peer rule over the project peer set as the change leaves it
-    ///    ([`ProjectPeers::of`] over the staged lock and the entries plus the appended ones). It
+    ///    ([`ProjectPeers::of`] over the staged lock and the entries plus the appended ones, a
+    ///    locked extension the change does not stage by its module on disk, as `check` loads it). It
     ///    judges every declared peer whose dependent or peer the change touches (a staged install,
     ///    an appended entry):
     ///    - E073 for a range that can't be read;
@@ -57,7 +58,7 @@ impl<'a> LockPlan<'a> {
                 self.installed,
                 self.config.entries(),
                 &mut self.declarations,
-                Modules::OnDisk,
+                Modules::OnDisk { staged: &[] },
             )
             .map_err(|error| Refused::of(&changing, error))?;
             for (at, name) in changing.names.iter().enumerate() {
@@ -69,8 +70,10 @@ impl<'a> LockPlan<'a> {
         if !changing.names.is_empty() && !(self.verb == Verb::Remove && self.force) {
             let view = self.view().map_err(|error| Refused::of(&changing, error))?;
             let after = self.entries_after();
-            let set = match ProjectPeers::of(&view, &after, &mut self.declarations, Modules::Locked)
-            {
+            let modules = Modules::OnDisk {
+                staged: &changing.names[..changing.staged],
+            };
+            let set = match ProjectPeers::of(&view, &after, &mut self.declarations, modules) {
                 Ok(set) => set,
                 Err(error) => return Err(Refused::of(&changing, error)),
             };
