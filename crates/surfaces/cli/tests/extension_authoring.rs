@@ -151,8 +151,10 @@ fn extension_init_rejects_existing_directory() {
     assert_eq!(json_of(&output)["code"], "E065");
 }
 
-#[test]
-#[ignore = "flipped by T5"]
+#[specforge_test(
+    behavior = "scaffold_wasm_extension_project",
+    verify = "specforge extension init refuses a builtin's name"
+)]
 fn extension_init_refuses_a_builtins_name() {
     let dir = scratch();
     let output = Cli::on(&dir)
