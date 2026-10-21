@@ -90,7 +90,7 @@ pub struct ExtensionMeta {
     /// enables this extension; `{project}` stands for the project's id and
     /// `{version}` for its version.
     pub starter_template: Option<String>,
-    /// The export `specforge migrate` calls after migrating the project's
+    /// The export `specforge migrate` calls before it writes the migrated
     /// files.
     pub migration_hook: Option<String>,
     /// The colour diagrams draw the extension in (`#rrggbb`).
@@ -387,8 +387,8 @@ impl ContributionsBuilder {
         self
     }
 
-    /// Contribute the hook `specforge migrate` calls after it migrates the
-    /// project's `.spec` files, so the extension can migrate its own data:
+    /// Contribute the hook `specforge migrate` calls before it writes the
+    /// migrated `.spec` files, so the extension can migrate its own data:
     /// `handler` receives a [`MigrationInput`] at the export `export`. Its
     /// answer is not read beyond success or failure.
     ///

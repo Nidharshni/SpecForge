@@ -677,9 +677,9 @@ pub struct CollectEntityResult {
 
 // ── Migration hook (the handshake's `migration_hook`) ──────────────────────
 
-/// What the migration hook receives after `specforge migrate` rewrote the
-/// project's files: the format versions it moved between and the files it
-/// rewrote. The hook's answer is not read.
+/// What the migration hook receives before `specforge migrate` writes the
+/// project's files: the format versions it moves between and the files it
+/// will rewrite. The hook's answer is not read.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MigrationInput {
     pub from: String,
