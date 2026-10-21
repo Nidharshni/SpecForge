@@ -6,7 +6,6 @@
 // The derive names this crate by its own name, inside it too.
 extern crate self as specforge_common;
 
-pub mod cycles;
 mod diagnostic;
 pub mod discovery;
 mod exclude;

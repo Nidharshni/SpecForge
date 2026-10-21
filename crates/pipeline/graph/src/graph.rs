@@ -1,5 +1,5 @@
-use specforge_common::cycles::Cycle;
 use specforge_common::{SourceSpan, Sym};
+use specforge_cycles::Cycle;
 use specforge_parser::{EntityId, EntityKind, FieldMap};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -286,6 +286,6 @@ impl Graph {
         for edge in &self.edges {
             edges.entry(edge.source).or_default().insert(edge.target);
         }
-        specforge_common::cycles::cycles(&edges)
+        specforge_cycles::cycles(&edges)
     }
 }

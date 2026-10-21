@@ -1,0 +1,17 @@
+[package]
+name = "specforge-cycles"
+description = "Which nodes of a directed graph lie on a cycle, and one closed walk through each: the host's W061, W113 and cycle rules and the formal and product guests read it"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# Pure and std-only, so it builds for wasm32-wasip2 inside the formal and product
+# extensions as it builds in the host.
+
+[dev-dependencies]
+specforge-test = { workspace = true }
+specforge-test-macros = { workspace = true }
+
+[lints]
+workspace = true

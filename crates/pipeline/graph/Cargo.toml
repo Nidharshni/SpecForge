@@ -22,6 +22,8 @@ testing = []
 specforge-common = { workspace = true }
 specforge-parser = { workspace = true }
 specforge-protocol-types = { path = "../../leaf/protocol-types" }
+# `Graph::cycles`: W061 reads the one cycle answer (ADR 0196).
+specforge-cycles = { path = "../../leaf/cycles" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 

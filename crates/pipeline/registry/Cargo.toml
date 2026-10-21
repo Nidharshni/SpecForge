@@ -18,6 +18,8 @@ specforge-package = { path = "../../leaf/package" }
 specforge-protocol-types = { path = "../../leaf/protocol-types" }
 specforge-graph = { path = "../graph" }
 specforge-coverage = { path = "../../leaf/coverage" }
+# The cycle rules report the members of every cycle (ADR 0196).
+specforge-cycles = { path = "../../leaf/cycles" }
 specforge-parser = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

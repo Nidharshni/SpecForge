@@ -2891,6 +2891,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "specforge-cycles"
+version = "0.1.0"
+dependencies = [
+ "specforge-test",
+ "specforge-test-macros",
+]
+
+[[package]]
 name = "specforge-diagnostics"
 version = "0.1.0"
 dependencies = [
@@ -2977,6 +2985,7 @@ dependencies = [
  "serde",
  "serde_json",
  "specforge-common",
+ "specforge-cycles",
  "specforge-graph",
  "specforge-parser",
  "specforge-protocol-types",
@@ -3222,6 +3231,7 @@ dependencies = [
  "serde_json",
  "specforge-common",
  "specforge-coverage",
+ "specforge-cycles",
  "specforge-diagnostics",
  "specforge-extension-sdk",
  "specforge-graph",
@@ -3315,6 +3325,7 @@ name = "specforge-resolver"
 version = "0.1.0"
 dependencies = [
  "specforge-common",
+ "specforge-cycles",
  "specforge-parser",
  "specforge-test",
  "specforge-test-macros",

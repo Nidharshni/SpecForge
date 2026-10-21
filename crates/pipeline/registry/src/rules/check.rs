@@ -4,8 +4,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use specforge_common::cycles::cycles;
 use specforge_common::{CustomRuleFailure, Diagnostic, DiagnosticData, codes};
+use specforge_cycles::cycles;
 
 use super::files;
 use super::verdicts::{CustomCall, CustomVerdicts, Subject, Verdict, VerdictError};

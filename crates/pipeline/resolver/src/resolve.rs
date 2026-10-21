@@ -1,5 +1,5 @@
-use specforge_common::cycles::cycles;
 use specforge_common::{Diagnostic, DiagnosticData, codes, find_close_match};
+use specforge_cycles::cycles;
 use specforge_parser::{ImportBinding, SpecFile};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};

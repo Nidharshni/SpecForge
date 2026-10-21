@@ -6,7 +6,7 @@ the tree is re-vendored.
 
 ## When
 
-A change to any file an `inputs.json` records: the guests' sources, the SDK and its macros, protocol-types, coverage,
+A change to any file an `inputs.json` records: the guests' sources, the SDK and its macros, protocol-types, coverage, cycles,
 the root manifest's inherited tables. `cargo gate` runs the `builtins` check exactly then, and `build-blobs --check`
 names each changed input.
 

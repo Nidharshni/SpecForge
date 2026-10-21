@@ -22,7 +22,7 @@ mod graph;
 mod obligations;
 mod tokens;
 pub use obligations::Obligation;
-pub use specforge_common::cycles::Cycle;
+pub use specforge_cycles::Cycle;
 pub use tokens::{Form, Holder, WrittenToken, written_tokens};
 
 pub use build::{Applied, FileChange, GraphBuild, GraphConfig, GraphInputs};

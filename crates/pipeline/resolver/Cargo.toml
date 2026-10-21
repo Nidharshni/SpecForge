@@ -14,6 +14,8 @@ path = "tests/main.rs"
 [dependencies]
 specforge-common = { workspace = true }
 specforge-parser = { workspace = true }
+# W113 names the files of every import cycle (ADR 0196).
+specforge-cycles = { path = "../../leaf/cycles" }
 
 [dev-dependencies]
 specforge-test = { workspace = true }

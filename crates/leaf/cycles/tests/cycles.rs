@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use specforge_common::cycles::{Cycle, cycles};
+use specforge_cycles::{Cycle, cycles};
 use specforge_test_macros::test as specforge_test;
 
 fn graph(edges: &[(&'static str, &'static str)]) -> BTreeMap<&'static str, BTreeSet<&'static str>> {

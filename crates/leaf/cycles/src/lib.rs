@@ -3,7 +3,7 @@
 //! rule read it; the answer depends only on the edges, never on the order
 //! they were written or inserted in.
 //!
-//! Std-only, so it can move to a leaf crate the extension guests link.
+//! Std-only, so the extension guests link it as the host does.
 //!
 //! NOT consolidated here: extension peer-dependency cycles (E027), which
 //! follow the install order.
