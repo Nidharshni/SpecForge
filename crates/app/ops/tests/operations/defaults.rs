@@ -189,9 +189,9 @@ fn migrate_hoists_and_keeps_the_graph() {
 
 #[specforge_test(
     behavior = "hoist_file_defaults",
-    verify = "a hoist that changes the graph is rolled back"
+    verify = "a hoist that changes the graph is refused and nothing is written"
 )]
-fn migrate_rolls_back_a_hoist_that_changes_the_graph() {
+fn migrate_refuses_a_hoist_that_changes_the_graph() {
     // `owner` is no field of the kind: the default is E077 and reaches no block, so the hoist changes the graph.
     let dir = crate::migrate::project();
     let file = dir.path().join("old.spec");
@@ -211,6 +211,7 @@ fn migrate_rolls_back_a_hoist_that_changes_the_graph() {
     );
 
     assert!(!outcome.structural_differences().is_empty(), "{outcome:?}");
-    assert!(outcome.rollback.is_some() && !outcome.ok(), "{outcome:?}");
+    assert!(outcome.failure().is_some() && !outcome.ok(), "{outcome:?}");
+    assert!(outcome.writes.is_empty(), "{:?}", outcome.writes);
     assert_eq!(std::fs::read_to_string(&file).unwrap(), original);
 }

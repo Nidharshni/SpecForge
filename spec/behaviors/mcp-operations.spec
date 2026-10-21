@@ -455,12 +455,12 @@ behavior provide_mcp_migrate_tool "Provide MCP Migrate Tool" {
     prints (McpMigrateResult); a project with nothing pending answers it
     with pending false and nothing migrated.
     The tool MUST run the same migration as specforge migrate: extension
-    migration hooks run after the files are migrated, and a migration whose
-    hooks fail or whose graph changes structure is rolled back. The result
-    MUST report the hooks run, the structural differences found, and
-    whether the migration was rolled back. The result (and a failed call's
+    migration hooks run before the files are written, and a migration whose
+    hooks fail or whose graph changes structure is refused and nothing is
+    written. The result MUST report the hooks run and the structural
+    differences found. The result (and a failed call's
     data) MUST carry ok, the verdict specforge migrate exits by: false when
-    a file failed to migrate, the migration was rolled back, or
+    a file failed to migrate, the migration was refused, or
     specforge.json has a problem the run went around (E069, in
     diagnostics). A failed
     migration's error names its cause: a migration hook that failed

@@ -123,7 +123,7 @@ fn a_full_rollback_removes_the_record() {
 
 #[specforge_test(
     behavior = "migrate_spec_files_in_place",
-    verify = "each file is read once: its backup, its diff and what a rollback restores are that text"
+    verify = "each file is read once: its backup, its diff and the text its change is staged over are that text"
 )]
 fn a_migrated_file_is_read_once() {
     use sha2::Digest;

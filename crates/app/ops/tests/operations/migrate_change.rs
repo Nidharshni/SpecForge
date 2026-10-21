@@ -10,7 +10,7 @@ use std::os::unix::fs::PermissionsExt as _;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::migrate::{OLD, hooked, project, project_with_extension, request, run};
+use crate::migrate::{OLD, project, project_with_extension, request, run};
 
 /// Whether a 0444 file binds this user (not root): a test of a refusal returns early when it does not.
 fn binds(dir: &Path) -> bool {
@@ -126,27 +126,6 @@ fn a_record_the_migration_cannot_write_refuses_it() {
 
 #[specforge_test(
     behavior = "rollback_failed_migration",
-    verify = "an automatic rollback keeps a file's permissions"
-)]
-fn an_automatic_rollback_keeps_a_files_permissions() {
-    let dir = project_with_extension();
-    if !binds(dir.path()) {
-        return;
-    }
-    let source = dir.path().join("old.spec");
-    chmod(&source, 0o600);
-    let runtime = Arc::new(hooked(|_| Err("trapped".into())));
-    let outcome = run(
-        &request(&ProjectRoot::of(dir.path()).unwrap()),
-        Some(runtime),
-    );
-    assert!(outcome.rollback.is_some());
-    assert_eq!(std::fs::read_to_string(&source).unwrap(), OLD);
-    assert_eq!(mode(&source), 0o600);
-}
-
-#[specforge_test(
-    behavior = "rollback_failed_migration",
     verify = "a rollback keeps a file's permissions and refuses a read-only one"
 )]
 fn a_rollback_keeps_a_files_permissions_and_refuses_a_read_only_one() {
@@ -221,24 +200,30 @@ fn a_source_changed_since_the_plan_refuses_the_migration() {
     use specforge_extension_sdk::prelude::*;
     let dir = project_with_extension();
     let source = dir.path().join("old.spec");
-    // The compile before the change runs after the plan read the source: a save lands in between.
+    // The judgement compiles after the plan read the source: a save lands in between. The first compile (the project
+    // before) sees the file as the plan read it; the second (the planned texts) is where the save lands.
+    let compiles = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let runtime = specforge_wasm::testing::InProcessRuntime::new().with({
         let source = source.clone();
         move || {
             let source = source.clone();
+            let compiles = compiles.clone();
             let mut c = ContributionsBuilder::new(ExtensionMeta::new("@acme/x", "1.0.0"));
             c.kind("behavior", |k| {
                 k.description("probe").open_fields(true);
             });
             c.rule("P100", move |r| {
                 let source = source.clone();
+                let compiles = compiles.clone();
                 r.check(CheckKind::Custom)
                     .severity(ValidationSeverity::Info)
                     .target_kind("behavior")
                     .wasm_function("validate__edit")
                     .message_template("{id}")
                     .validate(move |_| {
-                        std::fs::write(&source, "EDITED").unwrap();
+                        if compiles.fetch_add(1, std::sync::atomic::Ordering::SeqCst) > 0 {
+                            std::fs::write(&source, "EDITED").unwrap();
+                        }
                         ValidatorVerdict::Pass
                     });
             });

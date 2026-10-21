@@ -6,7 +6,34 @@ use specforge_test_macros::test as specforge_test;
 
 use crate::migrate::{OLD, hooked, project_with_extension, request, run};
 use specforge_ops::Wrote;
+use specforge_ops::authoring::migrate::{MigrationInput, Verdict, judge};
+use specforge_project::SharedRuntime;
+use std::collections::BTreeMap;
+use std::path::Path;
 use std::sync::Arc;
+
+/// The text `old.spec` (`OLD`) becomes under the core migration: the header at the current format version.
+pub(crate) fn migrated() -> String {
+    OLD.replace("0.9", "1.0")
+}
+
+/// Judge `planned` as the text of the project's `old.spec`: the verdict a run would reach had its steps and hooks
+/// produced that text. A production hook cannot write a file, so a test that needs a migration to change the graph or
+/// break the compile plans the text itself.
+pub(crate) fn judge_planned(
+    dir: &Path,
+    runtime: Option<SharedRuntime>,
+    planned: impl Into<String>,
+) -> Verdict {
+    let pre = specforge_project::testing::compile_at(dir, runtime);
+    let planned = BTreeMap::from([("old.spec".to_string(), planned.into())]);
+    let input = MigrationInput {
+        from: "0.9".into(),
+        to: "1.0".into(),
+        files: vec![dir.join("old.spec").display().to_string()],
+    };
+    judge(&pre, &planned, &input)
+}
 
 /// Five `behavior` blocks writing `owner`, no field of their kind: the defaults hoist is E077 and reaches no block,
 /// so the migration changes the graph (and the project already reports errors of its own).
@@ -51,7 +78,6 @@ fn a_refused_migrations_cause_counts_only_the_errors_it_adds() {
     );
 }
 
-#[ignore = "flipped by T5"]
 #[specforge_test(
     behavior = "generate_migration_diff",
     verify = "a dry run reports the verdict the run reaches: its hooks, its W054 and its errors"
@@ -69,7 +95,7 @@ fn a_dry_run_reports_the_verdict_the_run_reaches() {
 
     assert!(!outcome.ok(), "{outcome:?}");
     assert!(outcome.failure().is_some(), "{outcome:?}");
-    assert!(outcome.validated, "{outcome:?}");
+    assert!(outcome.verdict.compared, "{outcome:?}");
     assert!(!outcome.structural_differences().is_empty(), "{outcome:?}");
     assert_eq!(
         std::fs::read_to_string(dir.path().join("old.spec")).unwrap(),
@@ -80,7 +106,6 @@ fn a_dry_run_reports_the_verdict_the_run_reaches() {
 }
 
 #[cfg(unix)]
-#[ignore = "flipped by T5"]
 #[specforge_test(
     behavior = "validate_post_migration_integrity",
     verify = "a refused migration writes nothing, not even a backup"
@@ -106,7 +131,6 @@ fn a_refused_migration_writes_nothing() {
     assert!(!dir.path().join(".specforge").exists());
 }
 
-#[ignore = "flipped by T5"]
 #[specforge_test(
     behavior = "invoke_extension_migration_hooks",
     verify = "the hooks run before any file is written"
@@ -129,9 +153,9 @@ fn the_hooks_run_before_any_file_is_written() {
     );
 
     assert!(
-        outcome.hook_failures.is_empty(),
+        outcome.verdict.hook_failures.is_empty(),
         "{:?}",
-        outcome.hook_failures
+        outcome.verdict.hook_failures
     );
     assert!(outcome.ok(), "{outcome:?}");
 }

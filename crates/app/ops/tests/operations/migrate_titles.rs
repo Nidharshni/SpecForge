@@ -1,10 +1,10 @@
 //! `specforge migrate` adds the titles blocks lack and keeps the graph comparison (ADR 0148).
 
-use std::sync::Arc;
-
 use specforge_test_macros::test as specforge_test;
 
-use crate::migrate::{hooked, project, project_with_extension, request, run};
+use crate::migrate::{project, project_with_extension, request, run};
+use crate::migrate_judged::judge_planned;
+use specforge_migrate::structural_differences;
 
 const UNTITLED: &str = "// Alpha does a thing.\nbehavior alpha {\n}\n";
 const TITLED: &str = "behavior alpha \"Alpha does a thing.\" {\n}\n";
@@ -71,31 +71,24 @@ fn a_project_already_titled_has_nothing_pending() {
 
 #[specforge_test(
     behavior = "add_missing_titles",
-    verify = "a hook that also changes a field rolls the titles back"
+    verify = "a planned text that also changes a field refuses the titles"
 )]
-fn a_hook_that_also_changes_a_field_rolls_the_titles_back() {
+fn a_planned_text_that_also_changes_a_field_refuses_the_titles() {
     let dir = project_with_extension();
     let file = dir.path().join("old.spec");
     let original = "// Alpha does a thing.\nbehavior alpha {\n  note \"a\"\n}\n";
     std::fs::write(&file, original).unwrap();
-    let runtime = Arc::new(hooked(|input| {
-        let path = &input.files[0];
-        let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-        std::fs::write(path, text.replace("\"a\"", "\"b\"")).map_err(|e| e.to_string())
-    }));
+    // The titled text, as the titles step plans it, with a field changed too.
+    let planned = "// specforge-format: 1.0\nbehavior alpha \"Alpha\" {\n  note \"b\"\n}\n";
 
-    let outcome = run(
-        &request(&specforge_common::ProjectRoot::of(dir.path()).unwrap()),
-        Some(runtime),
-    );
+    let verdict = judge_planned(dir.path(), None, planned);
 
-    let messages: Vec<String> = outcome
-        .structural_differences()
+    let messages: Vec<String> = structural_differences(&verdict.graph_delta)
         .into_iter()
         .map(|d| d.message)
         .collect();
     assert_eq!(messages.len(), 1, "{messages:?}");
     assert!(messages[0].contains("note"), "{messages:?}");
-    assert!(outcome.rollback.is_some() && !outcome.ok(), "{outcome:?}");
+    assert!(verdict.refusal().is_some(), "{verdict:?}");
     assert_eq!(std::fs::read_to_string(&file).unwrap(), original);
 }

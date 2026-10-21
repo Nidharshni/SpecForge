@@ -65,7 +65,6 @@ fn a_temporary_name_linked_outside_is_unlinked_not_followed() {
     assert!(fs::symlink_metadata(&link).is_err(), "the link is gone");
 }
 
-#[ignore = "flipped by T5"]
 #[specforge_test_macros::test(
     behavior = "provide_mcp_migrate_tool",
     verify = "a dry run the run would refuse is a failed call, its document the data"
