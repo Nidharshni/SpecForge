@@ -301,7 +301,8 @@ behavior add_extension_to_existing_project "Add Extension to Existing Project" {
     built component is E040.
     The system MUST NOT duplicate an already-installed extension.
     An extension a .wasm file entry of specforge.json loads (its component declares that name and
-    the extension load admits it) MUST NOT be installed or enabled beside it: the add is refused
+    the extension load admits it, an installed extension of that name whose module is missing or
+    changed included) MUST NOT be installed or enabled beside it: the add is refused
     with extension_conflict, naming the entry's file, and writes nothing, a dry run included.
     Only a named entry (name, or name@version as older adds wrote it) makes an extension already
     enabled or already present.

@@ -86,6 +86,7 @@ fn a_staged_package_replaces_its_previous_entry() {
         &view,
         &entries,
         &mut Declarations::through(&runtime, &PlainDisk),
+        Modules::Locked,
     )
     .unwrap();
     let listed = set.requirers("@acme/base");

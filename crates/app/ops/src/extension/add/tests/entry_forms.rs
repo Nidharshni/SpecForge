@@ -82,7 +82,6 @@ fn a_file_entry_never_makes_an_install_present() {
     behavior = "add_extension_to_existing_project",
     verify = "an add of an extension a .wasm file entry loads in place of a broken install is refused, naming the entry, and writes nothing"
 )]
-#[ignore = "flipped by T7"]
 fn an_add_of_what_a_file_entry_loads_in_place_of_a_broken_install_is_refused() {
     use specforge_installed::{Installed, LoadProblem, Origin};
     let dir = project_enabling(&[]);

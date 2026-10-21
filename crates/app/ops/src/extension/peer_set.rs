@@ -28,6 +28,18 @@ pub(crate) struct PeerMember {
     pub(crate) origin: Origin,
 }
 
+/// How the prediction answers a locked entry (ADR 0181 D3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Modules {
+    /// By its lock entry: the set a change leaves, whose staged modules are not written yet
+    /// (ADR 0041 B1).
+    Locked,
+    /// By its lock entry only when its module on disk is the one pinned
+    /// ([`Installed::verified`]): the project as it is, as the extension load answers it now
+    /// (ADR 0160 D2).
+    OnDisk,
+}
+
 /// The extensions a project loads, in entry order (the registry build's input order).
 #[derive(Debug, Clone, PartialEq, Default)]
 pub(crate) struct ProjectPeers {
@@ -44,12 +56,14 @@ impl ProjectPeers {
     ///   it.
     ///
     /// An entry that loads nothing (the compile's E028/E072) and a locked extension no entry
-    /// enables are not members. E028 when a builtin's declaration can't be read (this build's
-    /// builtins are broken).
+    /// enables are not members, nor is a locked one whose module is missing or changed when
+    /// `modules` is [`Modules::OnDisk`]. E028 when a builtin's declaration can't be read (this
+    /// build's builtins are broken).
     pub(crate) fn of(
         installed: &Installed,
         entries: &[String],
         read: &mut Declarations<'_>,
+        modules: Modules,
     ) -> Result<ProjectPeers, OpError> {
         let builtins = specforge_project::builtins();
         let resolution = installed.resolve(entries, &builtins);
@@ -70,7 +84,12 @@ impl ProjectPeers {
                             return Err(());
                         }
                     },
-                    Resolved::Locked { entry, .. } => {
+                    Resolved::Locked { entry, name } => {
+                        if modules == Modules::OnDisk
+                            && installed.verified(name, read.disk()).is_none()
+                        {
+                            return Err(());
+                        }
                         let member = PeerMember {
                             name: entry.name.to_string(),
                             version: entry.version.clone(),
@@ -243,6 +262,7 @@ mod tests {
     use specforge_project::testing::Assembled;
     use specforge_registry::{Asked, MemoryDisk};
     use specforge_test_macros::test as specforge_test;
+    use specforge_wasm::testing::InProcessRuntime;
 
     fn locked(name: &str, version: &str, source: &str) -> LockFileEntry {
         LockFileEntry {
@@ -253,6 +273,55 @@ mod tests {
             key_id: None,
             peer_dependencies: Vec::new(),
         }
+    }
+
+    /// `@probe/gone` locked with its module deleted and a `.wasm` file entry declaring it,
+    /// `@probe/changed` locked with its module rewritten, beside a builtin, a pinned `@probe/dep`,
+    /// a repeat, a file, a twin file, a file under the wrong written name, a missing file and an
+    /// unlocked name.
+    fn broken_installs() -> (tempfile::TempDir, Installed, InProcessRuntime, Vec<String>) {
+        const GONE: &[u8] = b"\0asm in-process @probe/gone 1.0.0";
+        let dir = tempfile::tempdir().unwrap();
+        for (file, bytes) in [
+            ("base.wasm", testing::BASE_2),
+            ("twin.wasm", testing::BASE_2),
+            ("base3.wasm", testing::BASE_1),
+            ("gone.wasm", GONE),
+        ] {
+            std::fs::write(dir.path().join(file), bytes).unwrap();
+        }
+        let install = specforge_installed::testing::install_module;
+        install(dir.path(), "@probe/dep", testing::DEP_1);
+        install(dir.path(), "@probe/gone", GONE);
+        install(dir.path(), "@probe/changed", testing::DEP_1);
+        let installed = Installed::at(dir.path());
+        for (name, bytes) in [
+            ("@probe/gone", None),
+            ("@probe/changed", Some(&b"other"[..])),
+        ] {
+            let module = installed.module_path(&PackageName::parse(name).unwrap());
+            match bytes {
+                None => std::fs::remove_file(module).unwrap(),
+                Some(bytes) => std::fs::write(module, bytes).unwrap(),
+            }
+        }
+        let runtime = testing::probes().binary(GONE, declaring("@probe/gone", "1.0.0", &[]));
+        let entries = [
+            "@specforge/software",
+            "@probe/dep",
+            "@probe/dep@1.0.0",
+            "@probe/gone",
+            "@probe/changed",
+            "base.wasm",
+            "twin.wasm",
+            "named=base3.wasm",
+            "gone.wasm",
+            "missing.wasm",
+            "@probe/unlocked",
+        ]
+        .map(String::from)
+        .to_vec();
+        (dir, installed, runtime, entries)
     }
 
     #[specforge_test(
@@ -293,6 +362,7 @@ mod tests {
             &installed,
             &entries,
             &mut Declarations::through(&runtime, &disk),
+            Modules::Locked,
         )
         .unwrap();
 
@@ -350,8 +420,8 @@ mod tests {
         ];
         let mut read = Declarations::through(&runtime, &disk);
 
-        let first = ProjectPeers::of(&installed, &entries, &mut read).unwrap();
-        let second = ProjectPeers::of(&installed, &entries, &mut read).unwrap();
+        let first = ProjectPeers::of(&installed, &entries, &mut read, Modules::Locked).unwrap();
+        let second = ProjectPeers::of(&installed, &entries, &mut read, Modules::Locked).unwrap();
 
         assert_eq!(first, second);
         assert_eq!(
@@ -376,40 +446,19 @@ mod tests {
         verify = "the lock plan's peer set of the project as it is names what the extension load loads, in entry order, from the entries it loads them by"
     )]
     fn the_prediction_of_the_project_as_it_is_is_what_the_load_loads() {
-        let dir = tempfile::tempdir().unwrap();
-        for (file, bytes) in [
-            ("base.wasm", testing::BASE_2),
-            ("twin.wasm", testing::BASE_2),
-            ("base3.wasm", testing::BASE_1),
-        ] {
-            std::fs::write(dir.path().join(file), bytes).unwrap();
-        }
-        specforge_installed::testing::install_module(dir.path(), "@probe/dep", testing::DEP_1);
-        let installed = Installed::at(dir.path());
-        let runtime = testing::probes();
-        let entries: Vec<String> = [
-            "@specforge/software",
-            "@probe/dep",
-            "@probe/dep@1.0.0",
-            "base.wasm",
-            "twin.wasm",
-            "named=base3.wasm",
-            "missing.wasm",
-            "@probe/unlocked",
-        ]
-        .map(String::from)
-        .to_vec();
+        let (dir, installed, runtime, entries) = broken_installs();
 
         let loaded = installed.load(
             &entries,
             &specforge_project::builtins(),
             &runtime,
-            &specforge_registry::PlainDisk,
+            &PlainDisk,
         );
         let set = ProjectPeers::of(
             &installed,
             &entries,
             &mut Declarations::through(&runtime, &PlainDisk),
+            Modules::OnDisk,
         )
         .unwrap();
 
@@ -421,10 +470,43 @@ mod tests {
             .map(|member| (member.name.as_str(), &member.origin))
             .collect();
         assert_eq!(by_the_prediction, by_the_load);
-        assert_eq!(by_the_load.len(), 3, "{by_the_load:?}");
+        let names: Vec<&str> = by_the_load.iter().map(|(name, _)| *name).collect();
+        assert_eq!(
+            names,
+            [
+                "@specforge/software",
+                "@probe/dep",
+                "@probe/base",
+                "@probe/gone"
+            ],
+            "the module that is gone loses its name to the file entry, the changed one loads nothing"
+        );
         let declared: Vec<&str> = loaded.declarations.iter().map(|d| d.name()).collect();
-        let predicted: Vec<&str> = set.members().iter().map(|m| m.name.as_str()).collect();
-        assert_eq!(predicted, declared);
+        assert_eq!(names, declared);
+        drop(dir);
+    }
+
+    #[test]
+    fn a_broken_install_is_a_member_of_the_set_a_change_leaves() {
+        let (_dir, installed, runtime, entries) = broken_installs();
+
+        let set = ProjectPeers::of(
+            &installed,
+            &entries,
+            &mut Declarations::through(&runtime, &PlainDisk),
+            Modules::Locked,
+        )
+        .unwrap();
+
+        let gone = set.member("@probe/gone").unwrap();
+        assert_eq!(
+            gone.origin,
+            Origin::Installed {
+                source: LockSource::Registry
+            },
+            "its staged module is not written yet: the lock entry is the member (ADR 0041 B1)"
+        );
+        assert!(set.member("@probe/changed").is_some());
     }
 
     #[specforge_test(

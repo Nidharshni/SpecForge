@@ -6,7 +6,7 @@ use specforge_package::peers::{PeerRequirement, Verdict};
 use specforge_package::{PackageName, Version, highest_matching};
 use specforge_protocol_types::PeerDependency;
 
-use super::super::peer_set::ProjectPeers;
+use super::super::peer_set::{Modules, ProjectPeers};
 use super::{Ask, Changing, Checked, LockPlan, Staged, Verb};
 use crate::registry::Registry;
 use crate::{OpError, OpErrorKind};
@@ -56,6 +56,7 @@ impl<'a> LockPlan<'a> {
                 self.installed,
                 self.config.entries(),
                 &mut self.declarations,
+                Modules::OnDisk,
             )
             .map_err(|error| Refused::of(&changing, error))?;
             for (at, name) in changing.names.iter().enumerate() {
@@ -67,7 +68,8 @@ impl<'a> LockPlan<'a> {
         if !changing.names.is_empty() && !(self.verb == Verb::Remove && self.force) {
             let view = self.view().map_err(|error| Refused::of(&changing, error))?;
             let after = self.entries_after();
-            let set = match ProjectPeers::of(&view, &after, &mut self.declarations) {
+            let set = match ProjectPeers::of(&view, &after, &mut self.declarations, Modules::Locked)
+            {
                 Ok(set) => set,
                 Err(error) => return Err(Refused::of(&changing, error)),
             };
@@ -136,11 +138,17 @@ impl<'a> LockPlan<'a> {
             self.installed,
             self.config.entries(),
             &mut self.declarations,
+            Modules::Locked,
         )
         .map_err(|error| Refused::of(&none(), error))?;
         let view = self.view().map_err(|error| Refused::of(&none(), error))?;
-        let after = ProjectPeers::of(&view, &self.entries_after(), &mut self.declarations)
-            .map_err(|error| Refused::of(&none(), error))?;
+        let after = ProjectPeers::of(
+            &view,
+            &self.entries_after(),
+            &mut self.declarations,
+            Modules::Locked,
+        )
+        .map_err(|error| Refused::of(&none(), error))?;
         let mut names: Vec<String> = Vec::new();
         for member in before.members().iter().chain(after.members()) {
             if before.member(&member.name) != after.member(&member.name)
