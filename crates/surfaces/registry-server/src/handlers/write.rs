@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::db::{PackageVersion, PublishRefused};
-use crate::ownership::{self, account_id_for};
+use crate::ownership::account_id_for;
 use crate::publish::publish_target;
 use crate::state::AppState;
 use crate::storage::LocalStorage;
@@ -327,15 +327,12 @@ pub(super) async fn yank_package(
         return Err(ApiError::rate_limited(limited.retry_after));
     }
 
-    ownership::within_filter(&token_record, &package)?;
-
     let yanked = {
         let st = state.clone();
-        let name = name.clone();
-        let version = version.clone();
-        tokio::task::spawn_blocking(move || st.database.yank_version(&name, &version))
+        let (package, version, writer) = (package.clone(), version.clone(), token_record.clone());
+        tokio::task::spawn_blocking(move || st.database.yank(&package, &version, &writer))
             .await
-            .expect("yank write panicked")
+            .expect("yank write panicked")?
     };
     if yanked {
         tracing::info!("yanked {}@{}", name, version);

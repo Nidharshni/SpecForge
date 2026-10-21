@@ -47,10 +47,7 @@ pub(crate) fn account_id_for(token_hash: &str) -> String {
 }
 
 /// The token's own filter covers `package`: no database read.
-pub(crate) fn within_filter(
-    writer: &TokenRecord,
-    package: &PackageName,
-) -> Result<(), WriteRefused> {
+fn within_filter(writer: &TokenRecord, package: &PackageName) -> Result<(), WriteRefused> {
     if crate::auth::token_has_scope(writer, package) {
         Ok(())
     } else {

@@ -423,15 +423,27 @@ impl Database {
         removed
     }
 
-    pub fn yank_version(&self, name: &str, version: &str) -> bool {
-        let conn = self.conn();
-        let rows = conn
+    /// Withdraw a version, held to the publish rule: `writer` must be allowed into the package's scope,
+    /// asked in the same transaction as the `UPDATE`. `Ok(false)` when no such version exists. Never
+    /// claims a scope.
+    pub fn yank(
+        &self,
+        package: &PackageName,
+        version: &str,
+        writer: &TokenRecord,
+    ) -> Result<bool, WriteRefused> {
+        let mut conn = self.conn();
+        let storage = |e: rusqlite::Error| WriteRefused::Storage(format!("failed to yank: {e}"));
+        let tx = conn.transaction().map_err(storage)?;
+        ownership::may_write(&tx, writer, package)?;
+        let rows = tx
             .execute(
                 "UPDATE packages SET yanked = 1 WHERE name = ?1 AND version = ?2",
-                params![name, version],
+                params![package.as_str(), version],
             )
-            .unwrap_or(0);
-        rows > 0
+            .map_err(storage)?;
+        tx.commit().map_err(storage)?;
+        Ok(rows > 0)
     }
 
     // --- Token management ---

@@ -822,6 +822,7 @@ behavior publish_to_registry "Publish to Registry" {
     receipt_checked             "Publish checks the registry's receipt names the uploaded name, version, SHA-256, size and key id, else R009"
     registry_url_returned       "Successful publish returns the registry URL for the published version"
     published_event_emitted     "extension_published_to_registry event fires on successful publish"
+    yank_held_to_owner          "A yank by a token of an account that does not own the package's scope is refused (SCOPE_OWNED) and the version stays installable"
   }
   contract   """
     When specforge publish is invoked with a registry target, the system
@@ -844,6 +845,9 @@ behavior publish_to_registry "Publish to Registry" {
     after. A publish the registry refuses (an invalid upload, a duplicate
     version, a storage failure) claims no scope: the claim and the version
     are recorded together or not at all.
+    A yank is held to the same rule as a publish: only a token the scope's
+    owner holds withdraws a version, so a version another token withdraws
+    stays installable.
     A registry's refusal MUST reach the publisher as R008 naming the
     registry's code and reason. Publish MUST check that the registry's
     receipt names what it uploaded.
@@ -890,7 +894,7 @@ behavior publish_to_registry "Publish to Registry" {
   verify unit "publish asks the registry add fetches the same name from"
   verify unit "the declaration's warnings are reported even when publish is refused"
   verify unit "what publish uploads is what add installs"
-  verify contract "Publish to Registry: registry publishing holds — declaration_valid, wasm_binary_available, registry_client_available, credentials_available, sha256_computed, duplicate_version_rejected, signature_checked_on_upload, refusal_reported, receipt_checked, registry_url_returned, published_event_emitted"
+  verify contract "Publish to Registry: registry publishing holds — declaration_valid, wasm_binary_available, registry_client_available, credentials_available, sha256_computed, duplicate_version_rejected, signature_checked_on_upload, refusal_reported, receipt_checked, registry_url_returned, published_event_emitted, yank_held_to_owner"
 }
 
 behavior verify_registry_integrity "Verify Registry Integrity" {
