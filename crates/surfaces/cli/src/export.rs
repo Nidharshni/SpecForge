@@ -1,6 +1,6 @@
 use crate::notes::Notes;
 use crate::options;
-use crate::outcome::{Exit, OutputFormat, Refusal};
+use crate::outcome::{Exit, Refusal};
 use crate::terminal::{Terminal, outln};
 use specforge_ops::read::export;
 use specforge_ops::read::schema::SchemaRequest;
@@ -87,11 +87,11 @@ impl Args {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let project = match self.project.compile() {
             Ok(project) => project,
-            Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
+            Err(error) => return Refusal::fixed().report(terminal, &error),
         };
         let request = match self.request() {
             Ok(request) => request,
-            Err(refusal) => return Refusal::of(OutputFormat::Human).report(terminal, &refusal),
+            Err(refusal) => return Refusal::fixed().report(terminal, &refusal),
         };
         let view = ProjectView::of(&project);
 
@@ -99,11 +99,11 @@ impl Args {
         // earlier exports, and `.specforge/` holds extensions and the watch
         // snapshot too, so nothing here shows the project was exported
         // before.
-        let notes = Notes::new(terminal, OutputFormat::Human);
+        let notes = Notes::fixed(terminal);
         let recorded = notes.noticed(export::export_recorded(&view, &request));
         let output = match recorded.export {
             Ok(output) => output,
-            Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
+            Err(error) => return Refusal::fixed().report(terminal, &error),
         };
         outln!(terminal, "{}", output);
 
@@ -170,7 +170,7 @@ impl SchemaArgs {
     pub(crate) fn run(self, terminal: &Terminal) -> Exit {
         let project = match self.project.compile() {
             Ok(project) => project,
-            Err(error) => return Refusal::of(OutputFormat::Human).report(terminal, &error),
+            Err(error) => return Refusal::fixed().report(terminal, &error),
         };
         let view = ProjectView::of(&project);
         let output = if self.publish {
@@ -190,11 +190,11 @@ impl SchemaArgs {
         };
         match output {
             Ok(text) => {
-                let text = Notes::new(terminal, OutputFormat::Human).noticed(text);
+                let text = Notes::fixed(terminal).noticed(text);
                 outln!(terminal, "{text}");
                 Exit::Passed
             }
-            Err(error) => Refusal::of(OutputFormat::Human).report(terminal, &error),
+            Err(error) => Refusal::fixed().report(terminal, &error),
         }
     }
 }

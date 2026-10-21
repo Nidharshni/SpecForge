@@ -21,11 +21,14 @@ pub(crate) struct Notes<'t> {
 }
 
 impl<'t> Notes<'t> {
-    /// The notes of a command whose output is `format`. A command with a fixed format (no `--format human|json`:
-    /// export, schema, model, query, outline) passes `OutputFormat::Human`, as it does to `Refusal::of`: nobody
-    /// parses its stderr.
+    /// The notes of a command whose output is `format`.
     pub(crate) fn new(terminal: &'t Terminal, format: OutputFormat) -> Self {
         Notes { terminal, format }
+    }
+
+    /// The notes of a fixed-format command (see [`crate::outcome::Refusal::fixed`]): its notices go on stderr.
+    pub(crate) fn fixed(terminal: &'t Terminal) -> Self {
+        Self::new(terminal, OutputFormat::Human)
     }
 
     /// Notices no document carries (the schema notices of ADR 0111 D1, model's and query's I020, the registry
