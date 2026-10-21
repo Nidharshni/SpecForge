@@ -173,3 +173,38 @@ fn the_registry_is_chosen_once() {
         ]
     );
 }
+
+#[specforge_test(
+    behavior = "resolve_registry_source",
+    verify = "a scope_filter that is not a scope sends none of its scope's names to another registry"
+)]
+#[ignore = "flipped by T4"]
+fn a_scope_filter_that_is_no_scope_asks_no_registry() {
+    for text in ["sdk", "@sdk/", "@SDK", ""] {
+        let public = serving(&["1.0.0"]);
+        let private = serving(&["1.0.0"]);
+        let private_entry = format!(
+            r#"{{"alias":"private","url":"{}","scope_filter":"{text}"}}"#,
+            private.root().as_str()
+        );
+        let dir = project_with(&format!(
+            "{},{private_entry}",
+            default_registry(public.root().as_str())
+        ));
+        let registry = ConfiguredRegistry::for_project(&dir.project_root(), "add");
+
+        let error = registry.versions(&name("@sdk/zeta")).unwrap_err();
+
+        assert_eq!(error.code, "E067", "{text:?}: {error:?}");
+        assert!(
+            public.requests().is_empty(),
+            "{text:?}: {:?}",
+            public.requests()
+        );
+        assert!(
+            private.requests().is_empty(),
+            "{text:?}: {:?}",
+            private.requests()
+        );
+    }
+}

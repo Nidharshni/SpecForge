@@ -726,6 +726,7 @@ behavior resolve_registry_source "Resolve Registry Source" {
   verify unit "a name no registry serves is refused with R-OPS-001 before any request"
   verify integration "the registry server answers every call in the JSON its client reads"
   verify unit "every call goes to its address under the registry's root, where the server mounts it"
+  verify unit "a scope_filter that is not a scope sends none of its scope's names to another registry"
   verify contract "Resolve Registry Source: registry source resolution holds — registries_configured_fired, registry_client_available, scope_routed, default_fallback_used, no_registry_refused, network_error_diagnosed, registry_resolved_emitted, address_from_root"
 }
 
@@ -1167,6 +1168,7 @@ behavior configure_registries "Configure Registries" {
   verify unit "an operation shows the registry configuration's diagnostics once it has asked a registry"
   verify unit "a registry url is the registry's root, and one ending in the protocol's version prefix is refused with E067 naming the root"
   verify unit "a registries entry that can't be read refuses every registry operation with E067 before any request"
+  verify unit "a scope_filter that is not a scope refuses every registry operation with E067 naming the scope to write"
   verify contract "Configure Registries: registry configuration holds — specforge_json_parsed, filesystem_available, registry_entries_created, scope_filters_set, no_registries_diagnosed, no_hardcoded_urls, registries_configured_emitted, root_urls, unreadable_entry_refused"
 }
 

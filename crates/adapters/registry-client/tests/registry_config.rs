@@ -193,3 +193,45 @@ fn a_url_that_is_not_an_http_url_is_refused() {
         );
     }
 }
+
+#[specforge_test_macros::test(
+    behavior = "configure_registries",
+    verify = "a scope_filter that is not a scope refuses every registry operation with E067 naming the scope to write"
+)]
+#[ignore = "flipped by T4"]
+fn a_scope_filter_that_is_no_scope_is_e067_naming_the_scope_to_write() {
+    for (text, write) in [
+        ("sdk", Some("@sdk")),
+        ("@sdk/", Some("@sdk")),
+        ("@SDK", Some("@sdk")),
+        ("@sdk/zeta", Some("@sdk")),
+        ("", None),
+    ] {
+        let json = format!(
+            r#"{{"registries": [
+                {{"alias": "public", "url": "https://public.example", "default_registry": true}},
+                {{"alias": "private", "url": "https://private.example", "scope_filter": "{text}"}}
+            ]}}"#
+        );
+
+        let (registries, diagnostics) = parse_registries_from_config(&json);
+
+        assert_eq!(registries.len(), 1, "{text:?}: {diagnostics:?}");
+        let refused: Vec<_> = diagnostics.iter().filter(|d| d.code == "E067").collect();
+        assert_eq!(refused.len(), 1, "{text:?}: {diagnostics:?}");
+        let head = "Failed to parse registry entry at index 1: ";
+        match write {
+            Some(write) => assert_eq!(
+                refused[0].message,
+                format!("{head}'{text}' is not a scope: write '{write}'")
+            ),
+            None => assert!(
+                refused[0]
+                    .message
+                    .starts_with(&format!("{head}'' is not a scope: a scope is @")),
+                "{}",
+                refused[0].message
+            ),
+        }
+    }
+}
