@@ -84,3 +84,49 @@ fn a_rolled_back_migration_tells_a_person_on_stderr() {
     assert!(stderr.contains("W054"), "{stderr}");
     assert!(stderr.contains("files restored from backups"), "{stderr}");
 }
+
+/// The fixture of the ops tests' `refused_project`: five `owner` blocks, no field of their kind, so the defaults
+/// hoist is E077 and the migration changes the graph while the project already has errors of its own.
+fn refused_project() -> tempfile::TempDir {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::write(
+        dir.path().join("specforge.json"),
+        r#"{"name": "p", "version": "0.1.0", "extensions": ["@specforge/software"]}"#,
+    )
+    .unwrap();
+    let block = |id: &str| format!("behavior {id} \"T\" {{\n  owner [x]\n}}\n");
+    let text = ["a", "b", "c", "d", "e"].map(block).join("\n");
+    std::fs::write(dir.path().join("old.spec"), text).unwrap();
+    specforge_installed::testing::install_configured(dir.path(), &specforge_project::builtins());
+    dir
+}
+
+fn migrate_refused(args: &[&str]) -> (Exit, String, String) {
+    let dir = refused_project();
+    let path = dir.path().to_str().unwrap();
+    let line = Line::try_parse_from(
+        ["migrate", "--path", path]
+            .into_iter()
+            .chain(args.iter().copied()),
+    )
+    .expect("the flags parse");
+    let (terminal, capture) = Terminal::captured("", Facts::PIPED);
+    let exit = line
+        .args
+        .run_in(specforge_project::testing::component_runtime(), &terminal);
+    (exit, capture.stdout(), capture.stderr())
+}
+
+#[ignore = "flipped by T4"]
+#[specforge_test_macros::test(
+    behavior = "validate_post_migration_integrity",
+    verify = "a failed migration is told on stderr by its failure's message, naming no backup it did not make"
+)]
+fn a_failed_migration_is_told_by_its_failures_message() {
+    let (exit, _, stderr) = migrate_refused(&["--no-backup", "--format", "human"]);
+
+    assert_eq!(exit, Exit::Failed);
+    assert!(stderr.contains("W054"), "{stderr}");
+    assert!(stderr.contains("does not compile"), "{stderr}");
+    assert!(!stderr.contains("backups"), "{stderr}");
+}

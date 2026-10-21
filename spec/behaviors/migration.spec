@@ -347,6 +347,8 @@ behavior validate_post_migration_integrity "Validate Post-Migration Integrity" {
   verify unit "new diagnostics from migration reported"
   verify unit "a migration that changes an existing title or a kind is reported and rolled back"
   verify unit "each change the graph delta names is one W054 warning, and an empty delta none"
+  verify unit "a refused migration's cause counts only the errors it would add"
+  verify unit "a failed migration is told on stderr by its failure's message, naming no backup it did not make"
   verify contract "Validate Post-Migration Integrity: post-migration integrity validation holds — extension_hooks_complete_fired, structural_equivalence_checked, differences_reported, migration_validation_complete_emitted"
 }
 

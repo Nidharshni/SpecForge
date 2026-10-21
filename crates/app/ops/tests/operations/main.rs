@@ -50,6 +50,7 @@ mod migrate;
 mod migrate_bound;
 #[cfg(unix)]
 mod migrate_change;
+mod migrate_judged;
 mod migrate_sources;
 mod migrate_titles;
 mod model;
