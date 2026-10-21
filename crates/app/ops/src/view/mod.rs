@@ -20,6 +20,7 @@
 mod connectivity;
 mod entity;
 mod kinds;
+mod selection;
 
 use std::path::Path;
 use std::sync::Arc;
@@ -34,7 +35,8 @@ use specforge_registry::{Disk, EntitySnapshot, RegistryBuild};
 
 pub use connectivity::Connectivity;
 pub use entity::{DEPTH_WITHOUT_ENTITY, EntityField, depth_without_entity, not_found};
-pub use kinds::{KnownKinds, UNKNOWN_KIND};
+pub use kinds::{KindFilter, KnownKinds, UNKNOWN_KIND};
+pub use selection::{Entity, Select, Selection};
 
 use crate::schema_version::{SchemaCache, VersionedSchema};
 use crate::{Containment, OpError};
