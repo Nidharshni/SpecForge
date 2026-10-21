@@ -116,6 +116,12 @@ impl LocalRegistry {
         &self.token
     }
 
+    /// A bearer token it accepts for publishing, issued to `account` (no scope, a day's expiry): a second
+    /// token of the publisher's account, or another account's.
+    pub fn issue(&self, account: &str) -> String {
+        auth::create_token(&self.state.database, account, None, account, Some(1), false)
+    }
+
     /// The `registries` value naming this registry as the default, alias `local`.
     pub fn config_entry(&self) -> serde_json::Value {
         serde_json::json!([{ "alias": "local", "url": self.root.as_str(), "default_registry": true }])

@@ -77,7 +77,9 @@ port RegistryClient "Registry Client" {
   // name and version of the package it uploads; a registry refuses a
   // manifest that is no declaration (INVALID_MANIFEST) or names another
   // package or version (NAME_MISMATCH), and the in-memory client refuses
-  // them the same way.
+  // them the same way. A registry refuses a publish into a scope another
+  // account owns (Forbidden), and the in-memory client refuses it the same
+  // way.
   method versions(name: PackageName, registry: RegistryConfig, credential: RegistryCredential) -> Result<string[], RegistryError>
   method metadata(name: PackageName, version: string, registry: RegistryConfig, credential: RegistryCredential) -> Result<PackageMetadata, RegistryError>
   method download(wasmUrl: string, registry: RegistryConfig, credential: RegistryCredential) -> Result<u8[], RegistryError>
