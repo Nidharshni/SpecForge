@@ -166,3 +166,74 @@ fn suggest_fixes_reads_a_spelling_of_its_file() {
     assert_eq!(fixes(&mut server, "./login.spec"), by_key);
     assert_eq!(fixes(&mut server, absolute.to_str().unwrap()), by_key);
 }
+
+#[specforge_test(
+    behavior = "provide_mcp_outline_tool",
+    verify = "outline refuses a project-root spelling of a source naming its spec-root spelling"
+)]
+#[ignore = "flipped by T5"]
+fn outline_refuses_a_project_root_spelling_as_the_view_does() {
+    let mut server = named_files();
+    let refused = |server: &mut Served, tool: &str, argument: &str| {
+        let mut arguments = json!({});
+        arguments[argument] = json!("spec/login.spec");
+        crate::tool_errors::mcp_error(&call_tool(server, tool, arguments))
+    };
+    let outline = refused(&mut server, "specforge.outline", "file");
+    let fixes = refused(&mut server, "specforge.suggest_fixes", "file_path");
+    assert_eq!(outline["code"], "file_not_found", "{outline}");
+    assert_eq!(outline["argument"], "file", "{outline}");
+    assert_eq!(outline["file"], "spec/login.spec", "{outline}");
+    assert_eq!(
+        outline["data"]["suggestion"],
+        "did you mean 'login.spec'? a spec file is named from the spec root",
+        "{outline}"
+    );
+    // One refusal, one wording: the view's.
+    assert_eq!(outline["message"], fixes["message"], "{outline} / {fixes}");
+}
+
+#[specforge_test_macros::test(
+    behavior = "provide_mcp_suggest_fixes_tool",
+    verify = "a file_path that names no source is refused naming the file"
+)]
+#[ignore = "flipped by T5"]
+fn suggest_fixes_names_the_file_it_refuses() {
+    let mut server = named_files();
+    for file in ["nope.spec", "spec/login.spec", "../x.spec"] {
+        let reply = call_tool(
+            &mut server,
+            "specforge.suggest_fixes",
+            json!({"file_path": file}),
+        );
+        let error = crate::tool_errors::mcp_error(&reply);
+        assert_eq!(error["argument"], "file_path", "{file}: {error}");
+        assert_eq!(error["file"], file, "{file}: {error}");
+    }
+}
+
+#[specforge_test_macros::test(
+    behavior = "provide_mcp_suggest_fixes_tool",
+    verify = "with no project served, a file_path is the no-project refusal naming the file"
+)]
+#[ignore = "flipped by T5"]
+fn a_named_file_with_nothing_served_is_no_projects_file() {
+    let mut server = unserved();
+    for (tool, argument) in [
+        ("specforge.outline", "file"),
+        ("specforge.suggest_fixes", "file_path"),
+    ] {
+        let mut arguments = json!({});
+        arguments[argument] = json!("spec/a.spec");
+        let error = crate::tool_errors::mcp_error(&call_tool(&mut server, tool, arguments));
+        assert_eq!(error["code"], "precondition_failed", "{tool}: {error}");
+        assert!(
+            error["message"]
+                .as_str()
+                .unwrap()
+                .starts_with("no project is served, so 'spec/a.spec' is no project's file"),
+            "{tool}: {error}"
+        );
+        assert_eq!(error["file"], "spec/a.spec", "{tool}: {error}");
+    }
+}

@@ -682,6 +682,7 @@ behavior provide_mcp_outline_tool "Provide MCP Outline Tool" {
   verify unit "sorted by line number"
   verify unit "a file that is not one of the project's sources is file_not_found, though it exists"
   verify unit "outline reads every spelling of a source under the spec root as that source"
+  verify unit "outline refuses a project-root spelling of a source naming its spec-root spelling"
 }
 
 behavior provide_mcp_suggest_fixes_tool "Provide MCP Suggest Fixes Tool" {
@@ -729,6 +730,8 @@ behavior provide_mcp_suggest_fixes_tool "Provide MCP Suggest Fixes Tool" {
   verify unit "diagnostic_code filter restricts to matching diagnostics"
   verify unit "file_path reads every spelling of a source as that source"
   verify unit "a file_path that names no source is refused on file_path"
+  verify unit "a file_path that names no source is refused naming the file"
+  verify unit "with no project served, a file_path is the no-project refusal naming the file"
   verify integration "every suggestion carries the edits the LSP's code action applies"
   verify contract "Provide MCP Suggest Fixes Tool: MCP suggest fixes tool holds — graph_available, fixes_returned, empty_for_clean, tool_invoked_emitted"
 }
