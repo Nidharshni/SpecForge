@@ -379,7 +379,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   (`Installed::resolve`). An entry that loads nothing and a locked extension no entry enables are not in
   it (`specforge_ops::extension::peer_set::ProjectPeers`). The registry build judges it as loaded; the
   lock plan judges it as a change will leave it, before anything is written, so `add`, `init`,
-  `update`, `remove`, their dry runs and `check` judge one set (ADR 0041).
+  `update`, `remove`, their dry runs and `check` judge one set (ADR 0041). For the project as it is
+  (ADR 0160's refusal), a locked extension is a member only when its module on disk is the one pinned,
+  as the load answers it; for the set a change leaves, by its lock entry (ADR 0181).
+- **Load walk**: the one pass over a project's resolved `extensions` entries that the extension load and
+  the lock plan's peer set share (`specforge_installed::Resolution::walk`, ADR 0181): load order, each
+  entry's declared name admitted against the names the entries before it were admitted under, the
+  answer in entry order. The load reads a declaration through the runtime and the disk; the peer set
+  from the embedded builtin, the lock entry or the file.
 - **Setup part**: what part of a project's setup a diagnostic the environment reports is about: the
   config, the lock, one `extensions` entry, structural-only, the configured providers, one declaration,
   the peers, the registries, a rule, a surface, or a collision (two contributions claiming one name: a

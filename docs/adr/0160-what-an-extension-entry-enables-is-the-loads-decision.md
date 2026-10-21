@@ -1,6 +1,7 @@
 # What an extension entry enables is the load's decision
 
 **Status:** accepted (2026-10-19, architecture round 16, plan 03). Amends [ADR 0138](0138-the-lock-plan-answers-what-a-project-already-has.md)
+**Amended by [ADR 0181](0181-the-lock-plan-predicts-the-peer-set-by-the-extension-loads-walk.md) (round 19):** D2: the set it asks about is predicted by the load's own walk (`Resolution::walk`), a locked entry with a missing or changed module included.
 D1 and [ADR 0028](0028-installed-extensions-are-one-module.md) (amendment round 7, D3).
 
 The lock plan answered "does an entry of `specforge.json` already enable X" by the entry's spelling

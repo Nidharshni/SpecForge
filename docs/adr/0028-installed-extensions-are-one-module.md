@@ -1,6 +1,7 @@
 # Installed extensions are one module
 
 **Status:** accepted (2026-10-07)
+**Amended by [ADR 0181](0181-the-lock-plan-predicts-the-peer-set-by-the-extension-loads-walk.md) (round 19):** D3: the load's walk over the resolved entries is one function, `Resolution::walk`, which the lock plan's prediction also calls.
 **Amended by [ADR 0180](0180-the-extension-load-records-where-each-entry-loads-from.md) (round 19):** D3: each entry's outcome records its origin and whether it loaded; D9: a row's origin is the one the load recorded on its loading entry (`EnabledExtension::loader`), and `Origin` lives in `specforge-installed`.
 **Amended by [ADR 0172](0172-the-extension-a-path-names-is-read-by-one-module.md) (round 18):** D7: a path is read by `LocalComponent::read` for add, init, publish and extension validate alike; a `.wasm` file that can't be read is E040 (was E054).
 D4, D6 and D10 amended (round 16): an unreadable lock is refused once, by the lock plan's open, with the lock's own remedy.
