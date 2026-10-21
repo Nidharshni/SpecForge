@@ -1,4 +1,6 @@
+use crate::ownership::{self, Claim, WriteRefused};
 use rusqlite::{Connection, params};
+use specforge_package::PackageName;
 use specforge_registry_wire::PackageSignature;
 use std::path::Path;
 
@@ -39,12 +41,21 @@ pub enum RevokeRefused {
 /// Why a publish was not recorded ([`Database::publish`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PublishRefused {
-    /// The scope is owned by another publisher (its account).
-    ScopeOwned { account: String },
+    /// The token may not write into the scope (its filter, or another owner).
+    Write(WriteRefused),
     /// The version is already stored (the message says so).
     DuplicateVersion(String),
     /// The database failed.
     Storage(String),
+}
+
+impl From<WriteRefused> for PublishRefused {
+    fn from(refused: WriteRefused) -> Self {
+        match refused {
+            WriteRefused::Storage(why) => Self::Storage(why),
+            other => Self::Write(other),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -322,38 +333,37 @@ impl Database {
         Ok(out)
     }
 
-    /// Record `pkg` as `owner_token_hash` (account `account_id`) publishes it into `scope`, in one
-    /// transaction: claim the scope for the publisher when nobody owns it, refuse when another
-    /// token owns it, insert the version (`UNIQUE(name, version)` refuses a duplicate). A refusal
-    /// leaves the scope as it was. `Ok(true)` when this publish claimed the scope.
+    /// May `writer` write into the scope of `package`? The read-only pre-check of [`Self::publish`].
+    pub fn may_write(
+        &self,
+        writer: &TokenRecord,
+        package: &PackageName,
+    ) -> Result<(), WriteRefused> {
+        ownership::may_write(&self.conn(), writer, package).map(drop)
+    }
+
+    /// Record `pkg` as `writer` publishes it into the scope of `package`, in one transaction: ask
+    /// [`ownership::may_write`], claim the scope for the writer when nobody owns it, insert the
+    /// version (`UNIQUE(name, version)` refuses a duplicate). A refusal leaves the scope as it was.
+    /// `Ok(true)` when this publish claimed the scope.
     pub fn publish(
         &self,
         pkg: &PackageVersion,
-        scope: &str,
-        owner_token_hash: &str,
-        account_id: &str,
+        package: &PackageName,
+        writer: &TokenRecord,
     ) -> Result<bool, PublishRefused> {
         let mut conn = self.conn();
         let storage =
             |e: rusqlite::Error| PublishRefused::Storage(format!("failed to publish: {e}"));
         let tx = conn.transaction().map_err(storage)?;
-        let claimed = tx
-            .execute(
-                "INSERT OR IGNORE INTO scopes (scope, owner_token_hash, account_id) VALUES (?1, ?2, ?3)",
-                params![scope, owner_token_hash, account_id],
-            )
-            .map_err(storage)?
-            > 0;
-        if !claimed {
-            let (owner, account): (String, String) = tx
-                .query_row(
-                    "SELECT owner_token_hash, account_id FROM scopes WHERE scope = ?1",
-                    params![scope],
-                    |row| Ok((row.get(0)?, row.get(1)?)),
-                )
-                .map_err(storage)?;
-            if owner != owner_token_hash {
-                return Err(PublishRefused::ScopeOwned { account });
+        let mut claimed = false;
+        if ownership::may_write(&tx, writer, package)? == Claim::Unclaimed
+            && let Some(scope) = package.scope()
+        {
+            claimed = ownership::claim(&tx, scope, writer).map_err(storage)?;
+            if !claimed {
+                // Claimed between the read and the insert: ask again.
+                ownership::may_write(&tx, writer, package)?;
             }
         }
         let inserted = tx.execute(
@@ -386,16 +396,9 @@ impl Database {
         Ok(claimed)
     }
 
-    /// The owner (token hash) and registry-assigned account id of a claimed
-    /// scope, if it has been claimed.
+    /// The owner (token hash) and account id of a claimed scope, if it has been claimed.
     pub fn get_scope_owner(&self, scope: &str) -> Option<(String, String)> {
-        let conn = self.conn();
-        conn.query_row(
-            "SELECT owner_token_hash, account_id FROM scopes WHERE scope = ?1",
-            params![scope],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .ok()
+        ownership::owner(&self.conn(), scope).ok().flatten()
     }
 
     /// Withdraw a version whose blob could not be committed, and the scope claim the same publish
@@ -545,6 +548,21 @@ mod tests {
         }
     }
 
+    fn name(text: &str) -> PackageName {
+        PackageName::parse(text).unwrap()
+    }
+
+    fn writer(hash: &str) -> TokenRecord {
+        TokenRecord {
+            token_hash: hash.to_string(),
+            scope: None,
+            label: "t".to_string(),
+            created_at: "2026-01-01".to_string(),
+            expires_at: None,
+            admin: false,
+        }
+    }
+
     #[test]
     fn an_older_data_directory_is_refused() {
         let dir = tempfile::tempdir().unwrap();
@@ -632,7 +650,11 @@ mod tests {
         let db = Database::open(&dir.path().join("t.db")).unwrap();
         // The lost race: the version is stored between the handler's check and the transaction.
         db.insert_package(&pv("@fresh/x", "1.0.0")).unwrap();
-        let refused = db.publish(&pv("@fresh/x", "1.0.0"), "@fresh", "tok-a", "acct-a");
+        let refused = db.publish(
+            &pv("@fresh/x", "1.0.0"),
+            &name("@fresh/x"),
+            &writer("tok-a"),
+        );
         assert!(
             matches!(refused, Err(PublishRefused::DuplicateVersion(_))),
             "{refused:?}"
@@ -641,22 +663,35 @@ mod tests {
 
         // A publish that stores claims; another token's is refused and the owner stays.
         assert_eq!(
-            db.publish(&pv("@fresh/y", "1.0.0"), "@fresh", "tok-a", "acct-a"),
+            db.publish(
+                &pv("@fresh/y", "1.0.0"),
+                &name("@fresh/y"),
+                &writer("tok-a")
+            ),
             Ok(true)
         );
         assert_eq!(
-            db.publish(&pv("@fresh/z", "1.0.0"), "@fresh", "tok-a", "acct-a"),
+            db.publish(
+                &pv("@fresh/z", "1.0.0"),
+                &name("@fresh/z"),
+                &writer("tok-a")
+            ),
             Ok(false)
         );
         assert_eq!(
-            db.publish(&pv("@fresh/w", "1.0.0"), "@fresh", "tok-b", "acct-b"),
-            Err(PublishRefused::ScopeOwned {
-                account: "acct-a".to_string()
-            })
+            db.publish(
+                &pv("@fresh/w", "1.0.0"),
+                &name("@fresh/w"),
+                &writer("tok-b")
+            ),
+            Err(PublishRefused::Write(WriteRefused::Owned {
+                scope: "@fresh".to_string(),
+                owner: ownership::account_id_for("tok-a")
+            }))
         );
         assert_eq!(
             db.get_scope_owner("@fresh"),
-            Some(("tok-a".to_string(), "acct-a".to_string()))
+            Some(("tok-a".to_string(), ownership::account_id_for("tok-a")))
         );
     }
 
@@ -665,7 +700,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::open(&dir.path().join("t.db")).unwrap();
         assert_eq!(
-            db.publish(&pv("@fresh/y", "1.0.0"), "@fresh", "tok-a", "acct-a"),
+            db.publish(
+                &pv("@fresh/y", "1.0.0"),
+                &name("@fresh/y"),
+                &writer("tok-a")
+            ),
             Ok(true)
         );
         assert!(db.withdraw("@fresh/y", "1.0.0", "@fresh", true));
@@ -673,11 +712,19 @@ mod tests {
 
         // A scope that holds another package keeps its claim.
         assert_eq!(
-            db.publish(&pv("@fresh/y", "1.0.0"), "@fresh", "tok-a", "acct-a"),
+            db.publish(
+                &pv("@fresh/y", "1.0.0"),
+                &name("@fresh/y"),
+                &writer("tok-a")
+            ),
             Ok(true)
         );
         assert_eq!(
-            db.publish(&pv("@fresh/z", "1.0.0"), "@fresh", "tok-a", "acct-a"),
+            db.publish(
+                &pv("@fresh/z", "1.0.0"),
+                &name("@fresh/z"),
+                &writer("tok-a")
+            ),
             Ok(false)
         );
         db.withdraw("@fresh/y", "1.0.0", "@fresh", true);

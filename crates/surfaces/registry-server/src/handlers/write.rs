@@ -4,7 +4,6 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::Json,
 };
-use sha2::{Digest, Sha256};
 use specforge_package::PackageName;
 use specforge_registry_wire::{
     ErrorCode, PackageSignature, PublishReceipt, SignedContent, Yanked, form,
@@ -12,25 +11,11 @@ use specforge_registry_wire::{
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::auth;
 use crate::db::{PackageVersion, PublishRefused};
+use crate::ownership::{self, account_id_for};
 use crate::publish::publish_target;
 use crate::state::AppState;
 use crate::storage::LocalStorage;
-
-/// Publish/yank authorization: the token must cover the package's scope.
-fn require_publish_scope(
-    record: &crate::db::TokenRecord,
-    name: &PackageName,
-) -> Result<(), ApiError> {
-    if auth::token_has_scope(record, name) {
-        Ok(())
-    } else {
-        Err(ApiError::forbidden(format!(
-            "token does not have publish permission for scope '{name}'"
-        )))
-    }
-}
 
 pub(super) async fn publish_package(
     State(state): State<Arc<AppState>>,
@@ -49,7 +34,7 @@ pub(super) async fn publish_package(
         return Err(ApiError::rate_limited(limited.retry_after));
     }
 
-    require_publish_scope(&token_record, &package)?;
+    ownership_precheck(&state, &token_record, &package).await?;
 
     // Check if version already exists
     let duplicate = {
@@ -67,32 +52,6 @@ pub(super) async fn publish_package(
             ErrorCode::DuplicateVersion,
             format!("version {version} already exists for {name}"),
         ));
-    }
-
-    // --- Namespace ownership (spec #21, T6): first publish wins ---
-    // A read-only check, so a stranger's upload to an owned scope is refused before its body is
-    // read. The scope is claimed only by the publish that stores a package, in one transaction with
-    // the version (`Database::publish`).
-    {
-        let scope = package
-            .scope()
-            .expect("publish_target refuses unscoped names")
-            .to_string();
-        let st = state.clone();
-        let owner = tokio::task::spawn_blocking(move || st.database.get_scope_owner(&scope))
-            .await
-            .expect("scope owner query panicked");
-        if let Some((owner_hash, owner_account)) = owner
-            && owner_hash != token_record.token_hash
-        {
-            return Err(ApiError::forbidden_code(
-                ErrorCode::ScopeOwned,
-                format!(
-                    "scope '{}' is owned by publisher '{owner_account}' — only the owning publisher may publish into it",
-                    package.scope().unwrap_or_default()
-                ),
-            ));
-        }
     }
 
     // Parse multipart form
@@ -122,8 +81,7 @@ pub(super) async fn publish_package(
         .scope()
         .expect("publish_target refuses unscoped names")
         .to_string();
-    let account_id = account_id_for(&token_record.token_hash);
-    let publisher_account = account_id.clone();
+    let publisher_account = account_id_for(&token_record.token_hash);
 
     // --- Publish validation contract (spec #21, T3) ---
     // 1. Signed packages only: the signature field must be present.
@@ -282,21 +240,14 @@ pub(super) async fn publish_package(
     // temp path so a refusal (a lost version race, a scope claimed meanwhile) discards its blob.
     let insert_state = Arc::clone(&state);
     let insert_pkg = pkg.clone();
-    let (claim_scope, claim_token, claim_account) = (
-        scope.clone(),
-        token_record.token_hash.clone(),
-        account_id.clone(),
-    );
+    let (claim_package, claim_writer) = (package.clone(), token_record.clone());
     let discard_temp = |p: &PathBuf| LocalStorage::discard_temp(p);
     let published = {
         let temp = temp_path.clone();
         tokio::task::spawn_blocking(move || {
-            let result = insert_state.database.publish(
-                &insert_pkg,
-                &claim_scope,
-                &claim_token,
-                &claim_account,
-            );
+            let result = insert_state
+                .database
+                .publish(&insert_pkg, &claim_package, &claim_writer);
             if result.is_err() {
                 discard_temp(&temp);
             }
@@ -307,14 +258,7 @@ pub(super) async fn publish_package(
     };
     let claimed = match published {
         Ok(claimed) => claimed,
-        Err(PublishRefused::ScopeOwned { account }) => {
-            return Err(ApiError::forbidden_code(
-                ErrorCode::ScopeOwned,
-                format!(
-                    "scope '{scope}' is owned by publisher '{account}' — only the owning publisher may publish into it"
-                ),
-            ));
-        }
+        Err(PublishRefused::Write(refused)) => return Err(refused.into()),
         Err(PublishRefused::DuplicateVersion(why)) => {
             return Err(ApiError::conflict(ErrorCode::DuplicateVersion, why));
         }
@@ -383,7 +327,7 @@ pub(super) async fn yank_package(
         return Err(ApiError::rate_limited(limited.retry_after));
     }
 
-    require_publish_scope(&token_record, &package)?;
+    ownership::within_filter(&token_record, &package)?;
 
     let yanked = {
         let st = state.clone();
@@ -401,11 +345,18 @@ pub(super) async fn yank_package(
     }
 }
 
-/// Registry-assigned publisher identity: deterministic per issuing token.
-fn account_id_for(token_hash: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(token_hash.as_bytes());
-    format!("acct_{}", &hex::encode(hasher.finalize())[..8])
+/// The read-only ownership check, so a stranger's upload to an owned scope is refused before its body
+/// is read; the publish transaction asks again (`Database::publish`).
+async fn ownership_precheck(
+    state: &Arc<AppState>,
+    writer: &crate::db::TokenRecord,
+    package: &PackageName,
+) -> Result<(), ApiError> {
+    let (st, writer, package) = (state.clone(), writer.clone(), package.clone());
+    tokio::task::spawn_blocking(move || st.database.may_write(&writer, &package))
+        .await
+        .expect("ownership check panicked")?;
+    Ok(())
 }
 
 /// Fixed-window publish rate limit, keyed per token and per client IP.
