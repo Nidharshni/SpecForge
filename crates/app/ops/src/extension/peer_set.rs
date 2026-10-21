@@ -226,9 +226,10 @@ impl<'r> Declarations<'r> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::{self, declaring, serving_builtin};
-    use specforge_installed::{LockFile, LockFileEntry, LockSource, LockState};
+    use crate::testing::{self, Viewed, declaring, serving_builtin};
+    use specforge_installed::{EnabledExtension, LockFile, LockFileEntry, LockSource, LockState};
     use specforge_package::PackageName;
+    use specforge_project::testing::Assembled;
     use specforge_test_macros::test as specforge_test;
 
     fn locked(name: &str, version: &str, source: &str) -> LockFileEntry {
@@ -311,5 +312,31 @@ mod tests {
             0,
             "nobody declares a peer on it"
         );
+    }
+
+    #[specforge_test(
+        invariant = "peer_dependency_satisfaction",
+        verify = "add, init, update and remove judge the set check judges: the extensions the project's entries load"
+    )]
+    #[ignore = "flipped by the inventory and the remove plan reading what the load recorded"]
+    fn loaded_by_takes_a_builtin_only_from_its_entry() {
+        // A `.wasm` file entry loaded under a builtin's name: its declaration is the file's, not
+        // the builtin's.
+        let fixture = Assembled::new()
+            .runtime(std::sync::Arc::new(serving_builtin(
+                testing::probes(),
+                "@specforge/product",
+                declaring("@specforge/product", "1.0.0", &[]),
+            )))
+            .enabled(vec![EnabledExtension {
+                name: "@specforge/product".into(),
+                ..EnabledExtension::unloaded("p.wasm")
+            }])
+            .declarations(vec![Assembled::declaration("@specforge/product", "9.9.9")]);
+
+        let mut loaded = Declarations::loaded_by(&fixture.view());
+
+        let builtin = loaded.builtin("@specforge/product").unwrap().unwrap();
+        assert_eq!(builtin.version(), "1.0.0", "the builtin's, not the file's");
     }
 }
