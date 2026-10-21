@@ -123,6 +123,7 @@ behavior scaffold_starter_spec_file "Scaffold Starter Spec File" {
   verify integration "the software starter passes specforge check with no warnings"
   verify unit "the starter spec's version is the project's"
   verify integration "a freshly initialised project passes format --check and check"
+  verify unit "init writes the starter's values in the forms of the fields the extensions it enables declare"
   verify contract "Scaffold Starter Spec File: starter spec file scaffolding holds — config_created, filesystem_available, starter_file_created, structural_syntax_only, zero_diagnostic_pass"
 }
 
@@ -240,6 +241,9 @@ behavior non_interactive_init "Non-Interactive Init" {
   verify unit "invalid project name is rejected with InitError::invalid_name"
   verify integration "--extensions splits a comma-separated list into its extensions"
   verify integration "a one-character project name is rejected before its starter can fail E014"
+  verify unit "init refuses a project name whose starter spec ID a kind of an extension it enables reserves, before anything is written"
+  verify unit "init refuses a structural keyword as the starter's spec ID, whatever it enables"
+  verify integration "a directory named after a kind init enables is refused as the project name, writing nothing"
   verify integration "non-interactive output matches interactive output for same inputs"
   verify unit "non-interactive init with --format=json prints the init document specforge.init answers"
   verify unit "non-interactive init --format=json includes project_root, name, version, config_file, starter_file and extensions_installed"

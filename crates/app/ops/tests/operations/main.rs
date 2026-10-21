@@ -40,6 +40,7 @@ mod infer;
 mod infer_guide;
 mod infer_sources;
 mod init_specifiers;
+mod init_starter;
 mod init_writes;
 mod inspect;
 mod kinds;
