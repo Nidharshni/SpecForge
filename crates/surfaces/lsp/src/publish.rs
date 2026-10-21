@@ -81,7 +81,7 @@ impl Publication {
                     None => continue,
                 },
             };
-            let mut lsp = diagnostic_to_lsp(&placed, |span| compiled.range(span));
+            let mut lsp = diagnostic_to_lsp(&placed, |span| compiled.compiled_range(span));
             if !related.is_empty() {
                 lsp.related_information = Some(related);
             }

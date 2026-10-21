@@ -82,7 +82,23 @@ impl<'s> Compiled<'s> {
     /// The LSP range of a span of the compile, against the text it is a
     /// position in; `None` when that text is unknown.
     pub(crate) fn range(&self, span: &SourceSpan) -> Option<Range> {
+        self.compiled_range(span)
+    }
+
+    /// The LSP range of a span in the text the project was compiled from; `None` when the compile
+    /// holds no text of its file. What is sent labelled with that text's version (a diagnostics
+    /// publish, ADR 0023 D3) converts through it.
+    pub(crate) fn compiled_range(&self, span: &SourceSpan) -> Option<Range> {
         Some(self.index_of(span.file.as_str())?.range(span))
+    }
+
+    /// The span of the compile that `range`, a range in the editor's text of `file`, covers; `None`
+    /// when that editor text is not the compiled text.
+    pub(crate) fn span(&self, file: &str, range: Range) -> Option<SourceSpan> {
+        (self.editor_text(file) == EditorText::Compiled)
+            .then(|| self.index_of(file))
+            .flatten()
+            .map(|index| index.span(Sym::new(file), range))
     }
 
     /// The location of a span of a session file; `None` when its text is
@@ -433,6 +449,7 @@ mod tests {
             };
             let ranges = Compiled::new(&state);
             assert_eq!(ranges.range(&span), None, "{file}");
+            assert_eq!(ranges.compiled_range(&span), None, "{file}");
             assert_eq!(ranges.location(&span), None, "{file}");
             assert!(ranges.index_of(file).is_none(), "{file}");
         }

@@ -350,16 +350,13 @@ fn offered(
     file: &str,
     range: Range,
 ) -> Result<Vec<Offer>, Error> {
-    if compiled.is_stale(file) {
-        return Err(content_modified(file));
-    }
     let files = compiled.state().files();
-    let within = files
-        .document(file)
-        .map(|doc| doc.index().span(Sym::new(file), range));
+    let within = compiled
+        .span(file, range)
+        .ok_or_else(|| content_modified(file))?;
     let query = FixQuery {
         file: Some(file),
-        within: within.as_ref(),
+        within: Some(&within),
         ..FixQuery::default()
     };
     Ok(fix::offers(
