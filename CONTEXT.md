@@ -593,6 +593,14 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   an in-memory client, never through JSON written by hand. A search matches by one rule, an ASCII
   case-insensitive substring of a package's name, description or one keyword
   (`specforge_package::search::matches`), on the server and in both in-memory registries.
+- **Registry account**: who a reference registry issues tokens to, named by its operator
+  (`specforge-registry token create --account`). It outlives every token: rotating or letting a token expire changes
+  nothing it owns. A package's `publisher` is its account's name. Not a publisher key: the registry binds nothing to a
+  key (ADR 0061, ADR 0185).
+- **Scope owner**: the registry account a scope (`@acme`) belongs to, claimed by the first publish that stores a
+  package in it. Only tokens issued to it publish or yank in it (`specforge_registry_server::ownership::may_write`,
+  after the token's own scope filter), SCOPE_OWNED otherwise; the operator hands it to another account with
+  `specforge-registry scope assign` (ADR 0185).
 - **Registry root**: the URL a `registries` entry names: where a package registry is, an `http` or `https` URL
   without the protocol's version prefix (`https://registry.example`, or `https://example.com/registry` for one served
   under a path) (`specforge_registry_wire::RegistryRoot`). Every call goes to the root, then `/v1`, then the call's
