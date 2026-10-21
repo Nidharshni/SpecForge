@@ -65,6 +65,33 @@ behavior archive_task "Archive a Task" {
     assert_format_clean(&project);
 }
 
+#[test]
+#[ignore = "flipped by T3"]
+fn new_in_a_spelling_of_an_existing_file_adds_to_it() {
+    let project = todo();
+    let before = project.read(TASKS);
+    sf(
+        &project,
+        &[
+            "new",
+            "behavior",
+            "archive_task",
+            "Archive a Task",
+            "--in",
+            "./behaviors/task.spec",
+            "--contract",
+            "The system MUST archive a done task.",
+        ],
+    )
+    .exits(0);
+    let after = project.read(TASKS);
+    assert!(after.starts_with(&before), "the file as it was comes first");
+    assert!(
+        after.contains("behavior archive_task \"Archive a Task\" {"),
+        "{after}"
+    );
+}
+
 #[specforge_test(
     behavior = "edit_entity_link",
     verify = "link appends the target and keeps the items as written"

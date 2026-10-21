@@ -93,3 +93,70 @@ fn collect_reply_names_the_report_from_the_project_root() {
 
     assert_eq!(reply["report"], "specforge-report.json", "{reply}");
 }
+
+const LIMIT: &str = "invariant session_limit \"Limit\" {\n  guarantee \"x\"\n}\n";
+const LOGOUT: &str = "behavior logout \"Logout\" {\n  invariants [sesion_limit]\n}\n";
+
+/// Files named by a request are read into their source key (ADR 0195).
+fn named_files() -> Served {
+    TestProject::new()
+        .enabling(&["@specforge/software"])
+        .config(|c| c["spec_root"] = json!("spec"))
+        .file("spec/limit.spec", LIMIT)
+        .file("spec/login.spec", LOGOUT)
+        .serve_components()
+}
+
+#[test]
+#[ignore = "flipped by T3"]
+fn edit_reads_two_spellings_of_one_new_file_as_one_file() {
+    let mut server = named_files();
+    let create = |id: &str, file: &str| json!({"op": "create", "kind": "type", "id": id, "title": id, "file": file});
+    let reply = tool(
+        &mut server,
+        "specforge.edit",
+        json!({"edits": [create("alpha", "./n.spec"), create("beta", "n.spec")]}),
+    );
+    assert_eq!(reply["affected_files"], json!(["n.spec"]), "{reply}");
+    let written = std::fs::read_to_string(server.root().join("spec/n.spec")).unwrap();
+    assert!(
+        written.contains("type alpha") && written.contains("type beta"),
+        "{written}"
+    );
+}
+
+#[test]
+#[ignore = "flipped by T4"]
+fn outline_reads_an_absolute_spelling_of_a_source() {
+    let mut server = named_files();
+    let absolute = server.root().join("spec/login.spec");
+    let by_key = tool(
+        &mut server,
+        "specforge.outline",
+        json!({"file": "login.spec"}),
+    );
+    let by_path = tool(
+        &mut server,
+        "specforge.outline",
+        json!({"file": absolute.to_str().unwrap()}),
+    );
+    assert_eq!(by_path, by_key);
+}
+
+#[test]
+#[ignore = "flipped by T5"]
+fn suggest_fixes_reads_a_spelling_of_its_file() {
+    let mut server = named_files();
+    let absolute = server.root().join("spec/login.spec");
+    let fixes = |server: &mut Served, file: &str| {
+        tool(
+            server,
+            "specforge.suggest_fixes",
+            json!({"file_path": file}),
+        )
+    };
+    let by_key = fixes(&mut server, "login.spec");
+    assert_eq!(by_key["fixes"].as_array().unwrap().len(), 2, "{by_key}");
+    assert_eq!(fixes(&mut server, "./login.spec"), by_key);
+    assert_eq!(fixes(&mut server, absolute.to_str().unwrap()), by_key);
+}
