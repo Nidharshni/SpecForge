@@ -13,6 +13,15 @@ expression: "parse_ok(source, \"test.spec\").entities"
         title: Some(
             "Test Values",
         ),
+        title_span: Some(
+            SourceSpan {
+                file: Sym("test.spec"),
+                start_line: 2,
+                start_col: 22,
+                end_line: 2,
+                end_col: 35,
+            },
+        ),
         fields: FieldMap {
             entries: [
                 FieldEntry {
@@ -278,6 +287,22 @@ expression: "parse_ok(source, \"test.spec\").entities"
             VerifyStatement {
                 kind: "property",
                 description: "always valid",
+            },
+        ],
+        obligation_spans: [
+            SourceSpan {
+                file: Sym("test.spec"),
+                start_line: 15,
+                start_col: 5,
+                end_line: 15,
+                end_col: 27,
+            },
+            SourceSpan {
+                file: Sym("test.spec"),
+                start_line: 16,
+                start_col: 5,
+                end_line: 16,
+                end_col: 35,
             },
         ],
     },

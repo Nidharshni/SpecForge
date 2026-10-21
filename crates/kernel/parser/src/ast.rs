@@ -47,6 +47,9 @@ pub struct Entity {
     pub kind: EntityKind,
     pub id: EntityId,
     pub title: Option<String>,
+    /// Where the title is written, its quotes included, on whichever line of the header. A spec block's title is its
+    /// name, so this is its name's span. `None` when the header writes no title.
+    pub title_span: Option<SourceSpan>,
     pub fields: FieldMap,
     pub span: SourceSpan,
     /// Where the name is written (an entity's, union's or define's identifier; a scheme ref's ID; a spec block's
@@ -58,6 +61,11 @@ pub struct Entity {
     /// `verify [kind] "text"` statements, in declaration order (ADR 0002,
     /// ADR 0094).
     pub obligations: Vec<VerifyStatement>,
+    /// Where each of [`Self::obligations`] is written, from `verify` to its text's closing quote: one span per
+    /// statement, in the same order. An entry named `verify` inside a block field is a field (the grammar's
+    /// `nested_block`), never a statement. The parse's only: the graph's node keeps no position of a statement
+    /// (ADR 0187 D5, amended).
+    pub obligation_spans: Vec<SourceSpan>,
 }
 
 /// One `method` member of an entity body.

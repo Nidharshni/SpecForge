@@ -1,34 +1,38 @@
 use super::*;
 
-impl<'a> ParseContext<'a> {
-    pub(super) fn parse_block_body(
-        &mut self,
-        node: Node,
-    ) -> (FieldMap, Vec<VerifyStatement>, Vec<MethodDecl>) {
-        let mut fields = FieldMap::new();
-        let mut verify = Vec::new();
+/// What a block's members read to; `obligations` and `obligation_spans` are pushed together, at one site.
+#[derive(Default)]
+pub(super) struct Body {
+    pub(super) fields: FieldMap,
+    pub(super) obligations: Vec<VerifyStatement>,
+    pub(super) obligation_spans: Vec<SourceSpan>,
+    pub(super) methods: Vec<MethodDecl>,
+}
 
-        let mut methods: Vec<MethodDecl> = Vec::new();
+impl<'a> ParseContext<'a> {
+    pub(super) fn parse_block_body(&mut self, node: Node) -> Body {
+        let mut body = Body::default();
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             match child.kind() {
                 _ if child.is_error() => self.push_error_node(child),
                 kind::FIELD => {
                     if let Some(entry) = self.parse_field(child) {
-                        fields.push_entry(entry);
+                        body.fields.push_entry(entry);
                     }
                 }
                 kind::VERIFY_STATEMENT => {
                     if let Some(stmt) = self.parse_verify_statement(child) {
-                        verify.push(stmt);
+                        body.obligations.push(stmt);
+                        body.obligation_spans.push(self.span(child));
                     }
                 }
-                kind::METHOD_STATEMENT => methods.push(self.parse_method_statement(child)),
+                kind::METHOD_STATEMENT => body.methods.push(self.parse_method_statement(child)),
                 _ => {}
             }
         }
 
-        (fields, verify, methods)
+        body
     }
 
     fn parse_field(&mut self, node: Node) -> Option<FieldEntry> {

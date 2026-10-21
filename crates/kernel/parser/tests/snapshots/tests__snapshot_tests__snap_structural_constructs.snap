@@ -13,6 +13,15 @@ expression: "parse_ok(source, \"test.spec\").entities"
         title: Some(
             "SpecForge",
         ),
+        title_span: Some(
+            SourceSpan {
+                file: Sym("test.spec"),
+                start_line: 2,
+                start_col: 6,
+                end_line: 2,
+                end_col: 17,
+            },
+        ),
         fields: FieldMap {
             entries: [
                 FieldEntry {
@@ -56,6 +65,15 @@ expression: "parse_ok(source, \"test.spec\").entities"
                 description: "project compiles",
             },
         ],
+        obligation_spans: [
+            SourceSpan {
+                file: Sym("test.spec"),
+                start_line: 4,
+                start_col: 5,
+                end_line: 4,
+                end_col: 42,
+            },
+        ],
     },
     Entity {
         kind: EntityKind {
@@ -66,6 +84,15 @@ expression: "parse_ok(source, \"test.spec\").entities"
         },
         title: Some(
             "Support Wasm extensions",
+        ),
+        title_span: Some(
+            SourceSpan {
+                file: Sym("test.spec"),
+                start_line: 7,
+                start_col: 17,
+                end_line: 7,
+                end_col: 42,
+            },
         ),
         fields: FieldMap {
             entries: [
@@ -113,6 +140,7 @@ expression: "parse_ok(source, \"test.spec\").entities"
         ),
         methods: [],
         obligations: [],
+        obligation_spans: [],
     },
     Entity {
         kind: EntityKind {
@@ -123,6 +151,15 @@ expression: "parse_ok(source, \"test.spec\").entities"
         },
         title: Some(
             "Performance tracking",
+        ),
+        title_span: Some(
+            SourceSpan {
+                file: Sym("test.spec"),
+                start_line: 9,
+                start_col: 17,
+                end_line: 9,
+                end_col: 39,
+            },
         ),
         fields: FieldMap {
             entries: [
@@ -186,6 +223,7 @@ expression: "parse_ok(source, \"test.spec\").entities"
         ),
         methods: [],
         obligations: [],
+        obligation_spans: [],
     },
     Entity {
         kind: EntityKind {
@@ -195,6 +233,7 @@ expression: "parse_ok(source, \"test.spec\").entities"
             raw: Sym("my_custom_kind"),
         },
         title: None,
+        title_span: None,
         fields: FieldMap {
             entries: [
                 FieldEntry {
@@ -252,6 +291,15 @@ expression: "parse_ok(source, \"test.spec\").entities"
             VerifyStatement {
                 kind: "unit",
                 description: "custom kind registers",
+            },
+        ],
+        obligation_spans: [
+            SourceSpan {
+                file: Sym("test.spec"),
+                start_line: 16,
+                start_col: 5,
+                end_line: 16,
+                end_col: 40,
             },
         ],
     },
