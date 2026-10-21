@@ -90,7 +90,6 @@ fn the_locked_version_served_as_its_bytes_installs_them_and_keeps_the_lock() {
     behavior = "install_wasm_extension",
     verify = "an add of a registry install whose lock entry pins no hash fetches it and pins its bytes"
 )]
-#[ignore = "flipped by T4"]
 fn an_entry_that_pins_no_hash_is_pinned_by_installing_it_again() {
     let dir = locked_greet("");
     let registry = serving_greet();

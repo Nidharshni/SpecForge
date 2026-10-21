@@ -133,15 +133,17 @@ impl<'a> LockPlan<'a> {
     /// registry`. Its binary is not loaded: [`Self::check`] loads it after the gate. Nothing is
     /// pinned for the user: the publisher the fetch decided is pinned when the plan commits. For a
     /// preview, its [`Manifest`] only: nothing is downloaded and no publisher is decided. E063
-    /// when the plan fetches from no registry.
+    /// when the plan fetches from no registry. A registry entry that pins no hash is fetched again,
+    /// which pins it (W149).
     pub(crate) fn fetch(
         &self,
         name: &PackageName,
         version: &Version,
     ) -> Result<Install<'a>, OpError> {
-        // What the project already has is answered before any registry call (ADR 0138).
+        // What the project already has is answered before any registry call (ADR 0138); an entry
+        // that pins no hash is installed again, which pins it (W149).
         if let Some(entry) = self.unchanged(name, |e| {
-            e.source.is_registry() && e.version == version.to_string()
+            e.source.is_registry() && e.version == version.to_string() && !e.wasm_hash.is_empty()
         }) {
             return Ok(Install {
                 module: None,
