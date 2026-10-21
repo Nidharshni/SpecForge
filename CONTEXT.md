@@ -1005,6 +1005,11 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   format (`specforge_cli::notes::Notes`, ADR 0120): under human output both go on stderr; under `--format json` a
   note is never written, and a notice is written once, in the document when the document carries it, else on stderr
   before the document. A read's notices go through `Notes::noticed` (ADR 0130).
+- **Fixed-format command**: a core CLI command whose stdout is a document in a format a reader parses (export,
+  schema, model, query, outline; `completions`, `format --stdin`), rather than a human or `--format json`
+  rendering of an outcome. It takes no `--format human|json`. Its notices are on stderr (ADR 0120 D1), and its
+  refusal is `error[CODE]` on stderr under every format, JSON documents included, with nothing on stdout (ADR
+  0029 D5c, `Refusal::fixed`).
 - **Asking**: who can be asked to consent to what an operation would otherwise refuse (a publisher key change, a
   collector's command): yes to everything (`--yes`), nobody (MCP, `--format json`, stdin that is no terminal), or an
   `Asker` (the CLI's terminal, a test's script). A surface builds it once per command, inside its **Caller**, which add,
