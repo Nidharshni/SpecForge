@@ -176,3 +176,28 @@ fn edit_on_another_project_by_path_leaves_the_served_one() {
     assert!(read(other.path(), "spec/login.spec").contains("invariants [token_unique]"));
     assert_eq!(read(&root, "spec/login.spec"), LOGIN);
 }
+
+#[specforge_test(
+    behavior = "provide_mcp_edit_tool",
+    verify = "specforge.edit of a list that cancels out writes nothing and names no entity"
+)]
+#[ignore = "flipped by T3"]
+fn specforge_edit_of_a_list_that_cancels_out_writes_and_names_nothing() {
+    let (mut server, root) = served();
+    let reply = edit(
+        &mut server,
+        json!({"edits": [
+            {"op": "create", "kind": "invariant", "id": "token_new", "title": "Tokens are new",
+             "file": "spec/new.spec", "fields": {"guarantee": "Tokens MUST be new"}},
+            {"op": "delete", "entity_id": "token_new"},
+        ]}),
+    );
+    assert_eq!(reply["files_written"], json!([]), "{reply}");
+    assert_eq!(reply["entities"], json!([]), "{reply}");
+    assert_eq!(reply["affected_files"], json!([]), "{reply}");
+    assert!(!root.join("spec/new.spec").exists());
+    assert_eq!(
+        events(&server, "mcp_mutation_completed"),
+        [completed("specforge.edit", 0, 0, true)]
+    );
+}

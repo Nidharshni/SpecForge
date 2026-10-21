@@ -155,4 +155,12 @@ mod tests {
         let at = |name: &str| diff.find(name).unwrap();
         assert!(at("a.spec") < at("a/x.spec") && at("a/x.spec") < at("b.spec"));
     }
+
+    #[test]
+    #[ignore = "flipped by T2"]
+    fn a_new_file_left_empty_is_not_in_the_change() {
+        let c = change(vec![("a.spec", None, ""), ("b.spec", None, "b\n")]);
+        assert_eq!(c.affected_files().collect::<Vec<_>>(), ["b.spec"]);
+        assert!(change(vec![("a.spec", None, "")]).is_empty());
+    }
 }

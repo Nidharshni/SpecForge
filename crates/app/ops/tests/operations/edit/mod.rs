@@ -9,6 +9,7 @@ mod holds;
 mod inherited;
 mod layout;
 mod links;
+mod net;
 mod obligations;
 mod paths;
 mod places;

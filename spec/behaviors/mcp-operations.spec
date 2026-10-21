@@ -226,6 +226,7 @@ behavior provide_mcp_edit_tool "Provide MCP Edit Tool" {
   """
   verify unit "specforge.edit applies a list of edits all or nothing"
   verify unit "specforge.edit with dry_run writes nothing and returns the diff"
+  verify unit "specforge.edit of a list that cancels out writes nothing and names no entity"
 }
 
 // MCP init creates a project at a specified path, not the current project.

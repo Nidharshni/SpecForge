@@ -39,6 +39,7 @@ behavior create_entity "Create an Entity" {
   verify unit "a create's skeleton filled in is the block new writes"
   verify unit "every kind's skeleton formats to itself"
   verify unit "a member's skeleton is written in its field's form"
+  verify unit "a file new creates is not written when the later edits leave it empty"
   verify integration "new reads its field flags from the project its --path names, wherever --path stands"
   verify integration "new refuses a field given twice that takes one value"
   verify integration "new refuses an unknown kind as unknown_kind"
@@ -174,4 +175,5 @@ behavior validate_typed_edit "Validate a Typed Edit" {
   verify unit "every block an edit touches is format-clean"
   verify unit "a failed write puts every file back"
   verify unit "an edit planned while the checks are skipped is compared with the checked report"
+  verify unit "the report names what the edits change taken together"
 }
