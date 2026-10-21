@@ -48,6 +48,12 @@ behavior create_entity "Create an Entity" {
   verify integration "new refuses a file named from the project root, naming its spec-root spelling"
   verify integration "new refuses a field given twice that takes one value"
   verify integration "new refuses an unknown kind as unknown_kind"
+  verify integration "new --help begins with what new does"
+  verify integration "new refuses one of its options given twice, wherever each stands"
+  verify integration "new's help of a kind shows each of its options as every command declares it"
+  verify integration "new --help of a kind the project does not declare is refused as unknown_kind"
+  verify integration "new --help after a field flag prints the kind's help"
+  verify integration "new refuses a command line whose --path a field's value spells"
 }
 
 behavior edit_entity_field "Edit an Entity Field" {
