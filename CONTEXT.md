@@ -58,7 +58,8 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
 - **Named spec file**: a spec file a request names (a typed create's `file`, `new --in`, outline's `file`, the fixes'
   `file_path`): read by the project view into its source key, relative to the spec root, every spelling of one file
   being that file, or refused once (`not_a_source` outside the spec root or where no source can be, `file_not_found`
-  for a read of no source) (`ProjectView::source`, ADR 0195).
+  for a read of no source); the refusal names the file as the request spelled it (`OpError::file`, MCP's
+  `McpError.file`) (`ProjectView::source`, ADR 0195).
 - **Format version**: the `.spec` file format a file was written against, `MAJOR.MINOR`, declared by
   the `// specforge-format:` header on its first non-blank line; a file with no header is at the
   current version and reports nothing (migration steps still run on it). The parser reads it with the file

@@ -1,6 +1,6 @@
 # A spec file a request names is read into its source key once
 
-**Status:** accepted (2026-10-21, architecture round 21, plan 04). Amends [ADR 0116](0116-navigation-reads-the-text-the-project-was-compiled-from.md) (D2: outline asks the view; its containment check is gone), [ADR 0112](0112-every-project-file-an-operation-opens-goes-through-the-requests-containment.md) D4 and [ADR 0104](0104-containment-is-applied-where-the-operation-opens-the-file.md) D4 (outline builds no bound) and [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) (a create's file is read into its source key). Extends [ADR 0177](0177-a-reads-selection-is-checked-by-the-project-view.md) (the view checks what a request names: an entity, a selection, now a spec file).
+**Status:** accepted (2026-10-21, architecture round 21, plan 04). Amended by round 22 plan 08 (2026-10-21): D8, a refusal names the file. Amends [ADR 0116](0116-navigation-reads-the-text-the-project-was-compiled-from.md) (D2: outline asks the view; its containment check is gone), [ADR 0112](0112-every-project-file-an-operation-opens-goes-through-the-requests-containment.md) D4 and [ADR 0104](0104-containment-is-applied-where-the-operation-opens-the-file.md) D4 (outline builds no bound) and [ADR 0151](0151-a-spec-file-is-changed-by-a-typed-edit.md) (a create's file is read into its source key). Extends [ADR 0177](0177-a-reads-selection-is-checked-by-the-project-view.md) (the view checks what a request names: an entity, a selection, now a spec file).
 
 ## Context
 
@@ -35,6 +35,13 @@ and `nope.spec` included, where an unknown `entity_id` is refused; MCP outline f
 - **D6.** `suggest_fixes` refuses a `file_path` that is no source, about `file_path` (`FixField { EntityId, FilePath }`),
   as it refuses an unknown `entity_id`. `fix::offers` keeps a plain key filter: the LSP passes its key.
 - **D7.** `ProjectChange`'s `debug_assert` against staging one file twice stays an invariant: no typed edit reaches it now.
+- **D8.** *(Round 22.)* A refusal of a named spec file names the file, as the request spelled it (`OpError::with_file`,
+  `OpError::file`). It is set by the reader's three refusals: outside (`not_a_source`), no source for a read
+  (`file_not_found`), no source for a create (`not_a_source`). MCP's `From<OpError>` fills `McpError::file` from it, as it
+  fills `entity_id` from the entity. No tool re-mints a refusal the view raised: outline answers the view's refusal with
+  its did-you-mean (D5). With nothing served, the no-project refusal (`target::without_project`, ADR 0025 D1) reads that
+  file for its message and keeps it, as it keeps `entity_id`. An `OpError` is about one named thing, an entity or a file,
+  kept behind one box so that it stays under the large-error threshold.
 
 ## Rejected
 
@@ -43,12 +50,18 @@ and `nope.spec` included, where an unknown `entity_id` is refused; MCP outline f
 - Answering `{"fixes":[]}` for a file that is no source (an agent cannot tell "no fix" from "wrong file").
 - Normalizing in each adapter; accepting a `..` that stays inside the spec root.
 - A new `EntityField::File` (eleven `ArgumentOf<EntityField>` impls would each grow an arm).
+- A per-tool `file_not_found` re-mint (outline's until round 22: a second wording, no did-you-mean); a `file` inside
+  `OpError::data` (the operation's own JSON, sent as `McpError.data`, so the file would be sent twice or picked back
+  out); reading the file back out of the message (`3a997946c` removed that).
 
 ## Consequences
 
 - Breaking: `affected_files` and the diff of `specforge.edit` and `new` name the key; `new --in spec/x.spec` for an
   existing `x.spec` is refused; `specforge.outline` accepts an absolute spelling of a source and answers `invalid_input` for
   `sub/../x.spec`; `specforge.suggest_fixes` refuses a `file_path` that is no source.
+- Additive: `specforge.suggest_fixes` and `specforge.edit` refusals of a named spec file carry `file`, and the
+  no-project refusal keeps it. Breaking (text): `specforge.outline`'s `file_not_found` message is the view's, with
+  `data.suggestion` for a project-root spelling.
 - Rust: `read::navigate::outline` returns `Result`; `authoring::fix::fixes` returns `Refusal<FixField>`; `SourceRoot::holds`
   refuses `./`.
 - Left alone: `match_file` (anchors match source-code paths by directory and suffix), infer's `SourceKey` (project-root
