@@ -281,3 +281,36 @@ fn a_block_with_a_kept_region_is_block_unreadable() {
     let (code, _) = refused(&c, &[set("list_tasks", "category", one("command"))]);
     assert_eq!(code, "block_unreadable");
 }
+
+const TWO_LINE: &str = "invariant\n  task_unique \"Unique\" {\n  guarantee \"x\"\n}\n\nbehavior\n  list_tasks \"List\" {\n  invariants [task_unique]\n}\n";
+
+/// A header written over two lines is edited like any other (round 20, plan 04 R5).
+#[test]
+fn typed_edits_work_on_a_header_written_over_two_lines() {
+    let c = project(&[("tasks.spec", TWO_LINE)]);
+    let retitled = after(
+        &c,
+        "tasks.spec",
+        &[Edit::Retitle {
+            entity_id: "list_tasks".into(),
+            title: "All".into(),
+        }],
+    );
+    assert!(retitled.contains("\"All\""), "{retitled}");
+    assert!(!retitled.contains("\"List\""), "{retitled}");
+    let set_text = after(
+        &c,
+        "tasks.spec",
+        &[set("list_tasks", "category", one("query"))],
+    );
+    assert!(
+        set_text.contains("category") && set_text.contains("query"),
+        "{set_text}"
+    );
+    let unlinked = after(
+        &c,
+        "tasks.spec",
+        &[unlink("list_tasks", "invariants", "task_unique")],
+    );
+    assert!(!unlinked.contains("[task_unique]"), "{unlinked}");
+}
