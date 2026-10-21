@@ -10,6 +10,7 @@ mod layout;
 mod links;
 mod obligations;
 mod paths;
+mod places;
 mod positions;
 mod replay;
 mod sides;
