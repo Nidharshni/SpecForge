@@ -305,5 +305,6 @@ expression: "parse_ok(source, \"test.spec\").entities"
                 end_col: 35,
             },
         ],
+        doc_span: None,
     },
 ]

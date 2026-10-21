@@ -61,6 +61,7 @@ expression: result.entities
         methods: [],
         obligations: [],
         obligation_spans: [],
+        doc_span: None,
     },
     Entity {
         kind: EntityKind {
@@ -120,5 +121,6 @@ expression: result.entities
         methods: [],
         obligations: [],
         obligation_spans: [],
+        doc_span: None,
     },
 ]

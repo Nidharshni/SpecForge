@@ -135,5 +135,6 @@ expression: "parse_ok(source, \"test.spec\").entities"
                 end_col: 59,
             },
         ],
+        doc_span: None,
     },
 ]

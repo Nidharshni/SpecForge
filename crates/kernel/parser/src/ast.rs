@@ -66,6 +66,11 @@ pub struct Entity {
     /// `nested_block`), never a statement. The parse's only: the graph's node keeps no position of a statement
     /// (ADR 0187 D5, amended).
     pub obligation_spans: Vec<SourceSpan>,
+    /// Where the block's doc comment is written: the run of whole-line `//` comments directly above the block's
+    /// first line, no blank line between, from the first comment's start to the last one's end. A comment ending
+    /// the line of the item above trails that item, and the format header is never one (ADR 0095's placement rule).
+    /// `None` when no such comment stands there. The parse's only: no comment reaches the graph (ADR 0148, ADR 0202).
+    pub doc_span: Option<SourceSpan>,
 }
 
 /// One `method` member of an entity body.
