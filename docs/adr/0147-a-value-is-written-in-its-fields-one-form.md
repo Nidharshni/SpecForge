@@ -1,6 +1,6 @@
 # A value is written in its field's one form
 
-**Status:** accepted (2026-10-18, syntax round, plan 01). Amends [ADR 0064](0064-a-declared-field-type-decides-one-wire-form.md) D2 (the admission table gains `identifier`), [ADR 0093](0093-a-fields-declared-type-decides-what-its-value-references.md) D3 (a quoted id still references; it is no longer the written form, W159) and [ADR 0021](0021-formatting-is-one-operation.md) (format reads the project's declarations; a value's quotes are layout of the declared type). Amended by [ADR 0153](0153-a-value-is-spelled-by-one-module.md) (D1: on a reference list a scheme ref id is bare too; D4: `rewrite` reads the speller's bare rule, which the typed-edit writer reads too).
+**Status:** accepted (2026-10-18, syntax round, plan 01). Amends [ADR 0064](0064-a-declared-field-type-decides-one-wire-form.md) D2 (the admission table gains `identifier`), [ADR 0093](0093-a-fields-declared-type-decides-what-its-value-references.md) D3 (a quoted id still references; it is no longer the written form, W159) and [ADR 0021](0021-formatting-is-one-operation.md) (format reads the project's declarations; a value's quotes are layout of the declared type). Amended by [ADR 0153](0153-a-value-is-spelled-by-one-module.md) (D1: on a reference list a scheme ref id is bare too; D4: `rewrite` reads the speller's bare rule, which the typed-edit writer reads too). Amended by round 20 plan 05 (2026-10-21): D6.
 
 The grammar takes a field value quoted or bare, the graph stores both the same way, and neither `check` nor `format`
 says which is right, so the corpus holds both. The cause is in the declarations: ten fields whose values are words
@@ -35,3 +35,13 @@ are written in the other form than a declared-type rule would give them; after t
 - Quoting all 952 words: the opposite of the form words and references already have.
 - Deciding by the value (a single word bare, anything else quoted): one `string` field would hold two forms.
 - A `--forms` flag: the canonical form is not optional.
+
+## Amendment: a document's forms are its own project's, found from its place (2026-10-21, architecture round 20, plan 05)
+
+D6's "each project" is the project the document's place is in, found by ops' `Configs` as the format configuration is
+([ADR 0021](0021-formatting-is-one-operation.md) D2): a file's nearest `specforge.json`, the project of a text that is no
+file, none outside a project. A caller lends the project it holds (`format::Forms::lending`: the LSP's served
+environment, an MCP call's project), whose forms are read without loading its extensions again; any other project's
+extensions load through a `RuntimeSource`, a runtime of their own in production, never into one the caller holds. The
+LSP's served-forms rule (`c1658a6e`) is gone: a nested or other project's file, a file outside every project and a file
+formatted before the open were written in the served project's forms or in none.
