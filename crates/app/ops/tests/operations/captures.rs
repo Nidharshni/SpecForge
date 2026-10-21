@@ -60,7 +60,7 @@ fn a_rename_onto_a_dangling_reference_is_refused() {
     let refused = rename::plan(&p.navigator(), "session_limit", "cap_limit").unwrap_err();
     assert_eq!(refused.error.code, rename::CAPTURED);
     assert!(
-        refused.error.message.contains("login"),
+        refused.error.message.contains("login.spec:2"),
         "{}",
         refused.error.message
     );
