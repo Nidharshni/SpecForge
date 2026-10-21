@@ -201,7 +201,7 @@ fn rename_and_delete_find_the_same_tokens() {
         if plans {
             let planned = edit::plan(&ProjectView::of(&c.project), &delete)
                 .unwrap_or_else(|e| panic!("{name}: {e:?}"));
-            let left = planned.after();
+            let left = planned.change().after();
             let texts: Vec<(&str, &str)> =
                 left.iter().map(|(f, t)| (f.as_str(), t.as_str())).collect();
             assert!(

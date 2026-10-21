@@ -365,7 +365,9 @@ fn placeholders(view: &ProjectView<'_>, kind: &str) -> BTreeMap<String, Input> {
 /// the refusal when the plan is refused (an ID `validate_id` refuses, a taken ID, E080, no project root, a
 /// configuration that blocks rewrites) or changes nothing.
 fn typed(navigator: &Navigator<'_>, edit: Edit) -> Result<Vec<TextEdit>, Refusal<EditField>> {
-    let edits = edit::plan(navigator.view(), std::slice::from_ref(&edit))?.text_edits();
+    let edits = edit::plan(navigator.view(), std::slice::from_ref(&edit))?
+        .change()
+        .text_edits();
     if edits.is_empty() {
         return Err(OpError::new(
             OpErrorKind::InvalidInput,

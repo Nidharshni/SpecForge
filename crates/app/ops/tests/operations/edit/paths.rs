@@ -120,7 +120,7 @@ const ROWS: &[Row] = &[
 /// A line naming the mismatch, or `None` when `edit` came out as `want`.
 fn check(c: &Compiled, label: &str, edit: Edit, want: Want) -> Option<String> {
     let got = match plan(c, &[edit]) {
-        Ok(p) if p.is_empty() => Nothing,
+        Ok(p) if p.change().is_empty() => Nothing,
         Ok(_) => Changes,
         Err(e) => {
             let e = e.error;

@@ -14,17 +14,14 @@ pub mod write;
 pub use outcome::{EditDocument, Edited, run};
 
 use crate::authoring::format::{Configs, Place};
-use crate::change::ProjectChange;
-use crate::read::navigate::{SourceText, TextEdit};
+use crate::authoring::planned::PlannedChange;
 use crate::view::ProjectView;
-use crate::{Caller, OpError, OpErrorKind, Refusal, Writes};
+use crate::{OpError, OpErrorKind, Refusal};
 use serde::{Deserialize, Serialize};
+use specforge_common::DiagnosticList;
 use specforge_common::shape::{Definitions, Shape};
-use specforge_common::{DiagnosticList, Sym};
 use specforge_formatter::FormatConfig;
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
-use std::sync::Arc;
 
 /// One typed edit. The MCP `specforge.edit` tool reads a list of them (`op` names the variant); each CLI verb
 /// builds one.
@@ -188,55 +185,18 @@ pub struct EditReport {
 /// The files a list of edits changes, and what they would write.
 #[derive(Debug, Clone)]
 pub struct EditPlan {
-    /// Per file (relative to the spec root): the text it was planned on (`None`: the file is new) and the text it
-    /// will hold.
-    files: BTreeMap<String, (Option<Arc<str>>, String)>,
-    spec_root: PathBuf,
+    change: PlannedChange,
     report: EditReport,
 }
 
 impl EditPlan {
-    /// The spec root the files are relative to.
-    pub fn spec_root(&self) -> &std::path::Path {
-        &self.spec_root
-    }
-
     pub fn report(&self) -> &EditReport {
         &self.report
     }
 
-    /// Nothing to write.
-    pub fn is_empty(&self) -> bool {
-        self.files.is_empty()
-    }
-
-    /// Each file the plan changes and the text it will hold, by path relative to the spec root.
-    pub fn after(&self) -> BTreeMap<String, String> {
-        self.files
-            .iter()
-            .map(|(key, (_, after))| (key.clone(), after.clone()))
-            .collect()
-    }
-
-    /// The edits that turn each file's planned-on text into the text it will hold, as navigation's `TextEdit`s:
-    /// spans in the planned-on text (a new file's: one insertion at its start), each file's in order, none
-    /// overlapping (the formatter's minimal diff, ADR 0021 D8), files in key order.
-    pub fn text_edits(&self) -> Vec<TextEdit> {
-        let mut edits = Vec::new();
-        for (key, (before, after)) in &self.files {
-            let before = before.clone().unwrap_or_else(|| Arc::from(""));
-            let text = SourceText::new(Arc::clone(&before));
-            let file = Sym::new(key);
-            edits.extend(
-                crate::authoring::format::between(&before, after)
-                    .into_iter()
-                    .map(|change| TextEdit {
-                        span: text.span(file, change.range.start, change.range.end),
-                        new_text: change.new_text,
-                    }),
-            );
-        }
-        edits
+    /// What the plan writes (ADR 0184).
+    pub fn change(&self) -> &PlannedChange {
+        &self.change
     }
 }
 
@@ -377,39 +337,27 @@ impl<'v> Planner<'v> {
     }
 
     fn finish(self) -> Result<EditPlan, Refusal<EditField>> {
-        let mut files = BTreeMap::new();
-        let mut diff = String::new();
-        for (key, after) in self.texts {
-            let before = self.view.project().source_text(&key);
-            if before.as_deref() == Some(after.as_str()) {
-                continue;
-            }
-            diff.push_str(
-                &specforge_formatter::unified_diff(&key, before.as_deref().unwrap_or(""), &after)
-                    .diff_text,
-            );
-            files.insert(key, (before, after));
-        }
-        let after: BTreeMap<String, String> = files
-            .iter()
-            .map(|(key, (_, after))| (key.clone(), after.clone()))
-            .collect();
-        let added = if after.is_empty() {
+        let project = self.view.project();
+        let change = PlannedChange::new(
+            self.view.env().spec_root().to_path_buf(),
+            "cannot apply the edits",
+            self.texts
+                .into_iter()
+                .map(|(key, after)| (project.source_text(&key), key, after))
+                .map(|(before, key, after)| (key, before, after)),
+        );
+        let added = if change.is_empty() {
             Vec::new()
         } else {
-            validate::check(self.view, &after)?
+            validate::check(self.view, &change.after())?
         };
         let report = EditReport {
             entities: self.entities.into_iter().collect(),
-            affected_files: files.keys().cloned().collect(),
-            diff,
+            affected_files: change.affected_files().map(String::from).collect(),
+            diff: change.diff(),
             added: DiagnosticList(added),
         };
-        Ok(EditPlan {
-            files,
-            spec_root: self.view.env().spec_root().to_path_buf(),
-            report,
-        })
+        Ok(EditPlan { change, report })
     }
 }
 
@@ -462,20 +410,4 @@ pub fn plan(view: &ProjectView<'_>, edits: &[Edit]) -> Result<EditPlan, Refusal<
         })?;
     }
     planner.finish()
-}
-
-/// Write `plan` as one project change (ADR 0128), each file resolved through the caller's containment (ADR 0104):
-/// checked against the text it was planned on, then replaced or created; on any failure, every file already written
-/// is put back (one that cannot be is the error's writes). Returns the files it wrote.
-pub fn apply(plan: &EditPlan, caller: Caller<'_>) -> Result<Writes, OpError> {
-    let mut change = ProjectChange::new(&plan.spec_root, "cannot apply the edits");
-    for (key, (before, after)) in &plan.files {
-        let held = caller.containment().resolve(&plan.spec_root.join(key))?;
-        change.stage(
-            held,
-            before.as_ref().map(|b| b.as_bytes().to_vec()),
-            after.clone().into_bytes(),
-        );
-    }
-    change.commit()
 }

@@ -32,11 +32,13 @@ fn set_to_a_one_value_default_leaves_the_block_inheriting_it() {
     assert!(
         plan(&c, &[set("order_placed", "refs", one("a"))])
             .unwrap()
+            .change()
             .is_empty()
     );
     assert!(
         plan(&c, &[set("order_placed", "refs", many(&["a"]))])
             .unwrap()
+            .change()
             .is_empty()
     );
     // A create is one set per field, so `new` follows `set` here.
@@ -67,5 +69,9 @@ fn a_link_and_its_unlink_over_a_one_value_default_leave_the_text_as_it_was() {
         ],
     )
     .unwrap();
-    assert!(planned.is_empty(), "{:?}", planned.after());
+    assert!(
+        planned.change().is_empty(),
+        "{:?}",
+        planned.change().after()
+    );
 }

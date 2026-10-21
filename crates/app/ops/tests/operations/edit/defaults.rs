@@ -57,6 +57,7 @@ fn link_of_a_target_the_default_has_plans_nothing() {
     assert!(
         plan(&c, &[link("complete_task", "invariants", "done_stamped")])
             .unwrap()
+            .change()
             .is_empty()
     );
 }
@@ -255,7 +256,7 @@ fn a_link_after_unset_starts_from_none() {
         ],
     )
     .unwrap();
-    assert!(planned.is_empty());
+    assert!(planned.change().is_empty());
     let text = after(
         &c,
         "tasks.spec",

@@ -52,7 +52,7 @@ fn an_error_the_project_already_had_does_not_refuse() {
         "the project already has an error"
     );
     let planned = plan(&c, &[link("complete_task", "invariants", "task_unique")]).unwrap();
-    assert!(!planned.is_empty());
+    assert!(!planned.change().is_empty());
 }
 
 #[test]
@@ -71,7 +71,7 @@ fn an_inserted_block_does_not_count_moved_errors_as_new() {
         ],
     )
     .unwrap();
-    assert!(!planned.is_empty());
+    assert!(!planned.change().is_empty());
 }
 
 #[specforge_test_macros::test(
@@ -81,7 +81,7 @@ fn an_inserted_block_does_not_count_moved_errors_as_new() {
 fn an_added_warning_is_written_and_reported() {
     let c = tasks();
     let planned = plan(&c, &[unset("list_tasks", "category")]).unwrap();
-    assert!(!planned.is_empty());
+    assert!(!planned.change().is_empty());
     let added: Vec<&str> = planned
         .report()
         .added
@@ -122,7 +122,7 @@ fn every_planned_file_is_format_clean() {
         ],
     )
     .unwrap();
-    for (file, text) in planned.after() {
+    for (file, text) in planned.change().after() {
         assert!(is_canonical(&c, &text), "{file}");
     }
 }

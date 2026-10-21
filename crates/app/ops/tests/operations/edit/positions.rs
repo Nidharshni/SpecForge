@@ -34,8 +34,8 @@ fn a_plans_edits_turn_each_planned_on_text_into_its_after_text() {
         ],
     )
     .unwrap();
-    let after = planned.after();
-    let edits = planned.text_edits();
+    let after = planned.change().after();
+    let edits = planned.change().text_edits();
     assert!(edits.iter().all(|e| e.span.file == "tasks.spec"));
     let text = c.project.source_text("tasks.spec").unwrap();
     assert_eq!(
@@ -48,8 +48,8 @@ fn a_plans_edits_turn_each_planned_on_text_into_its_after_text() {
 fn a_new_files_edits_are_one_insertion_at_its_start() {
     let c = project(&[("tasks.spec", TASKS)]);
     let planned = plan(&c, &[create("new_rule", "new.spec")]).unwrap();
-    let after = planned.after().remove("new.spec").unwrap();
-    let edits = planned.text_edits();
+    let after = planned.change().after().remove("new.spec").unwrap();
+    let edits = planned.change().text_edits();
     assert_eq!(edits.len(), 1);
     let span = &edits[0].span;
     assert_eq!(span.file, "new.spec");
@@ -64,6 +64,6 @@ fn a_new_files_edits_are_one_insertion_at_its_start() {
 fn an_empty_plan_has_no_edits() {
     let c = project(&[("tasks.spec", TASKS)]);
     let planned = plan(&c, &[link("complete_task", "invariants", "done_stamped")]).unwrap();
-    assert!(planned.is_empty());
-    assert!(planned.text_edits().is_empty());
+    assert!(planned.change().is_empty());
+    assert!(planned.change().text_edits().is_empty());
 }

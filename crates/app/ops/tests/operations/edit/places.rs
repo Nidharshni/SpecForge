@@ -186,7 +186,7 @@ fn set_of_an_entry_into_a_block_field_written_as_none_writes_it_inside() {
             !planned.report().added.0.iter().any(|d| d.code == "W020"),
             "{id}: an undeclared member"
         );
-        let text = planned.after().remove("g.spec").unwrap();
+        let text = planned.change().after().remove("g.spec").unwrap();
         assert!(
             text.contains("  requires {\n    disk_ready \"Disk readable\"\n  }\n"),
             "{id}: {text}"

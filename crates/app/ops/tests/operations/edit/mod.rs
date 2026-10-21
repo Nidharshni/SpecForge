@@ -73,7 +73,7 @@ pub fn plan(c: &Compiled, edits: &[Edit]) -> Result<edit::EditPlan, Refusal<Edit
 /// The text of `file` once `edits` are planned.
 pub fn after(c: &Compiled, file: &str, edits: &[Edit]) -> String {
     let planned = plan(c, edits).unwrap();
-    match planned.after().remove(file) {
+    match planned.change().after().remove(file) {
         Some(text) => text,
         None => c.project.source_text(file).unwrap().to_string(),
     }

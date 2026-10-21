@@ -83,6 +83,7 @@ fn a_verify_line_is_removed_by_kind_and_text() {
             )]
         )
         .unwrap()
+        .change()
         .is_empty()
     );
 }
@@ -100,6 +101,7 @@ fn an_equal_verify_line_is_not_added_twice() {
             )]
         )
         .unwrap()
+        .change()
         .is_empty()
     );
 }

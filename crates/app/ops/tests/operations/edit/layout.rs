@@ -133,7 +133,7 @@ fn a_contained_view_lays_out_with_the_defaults_when_the_configuration_links_outs
         &[set("list_tasks", "contract", one(LONG))],
     )
     .unwrap();
-    let text = planned.after().remove("tasks.spec").unwrap();
+    let text = planned.change().after().remove("tasks.spec").unwrap();
 
     assert!(
         text.contains(&format!("  contract \"\"\"\n    {LONG}\n  \"\"\"")),
