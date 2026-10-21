@@ -1174,8 +1174,13 @@ Terms the code, the specs and the docs use with one meaning. Architecture decisi
   them per parsed file (`specforge_graph::written_tokens`), with who writes each and how, and the blocks that hold it (`held_by`). Every question of where a name is written asks
   it: rename and the editor's references (`Navigator::tokens`), find-references (`Navigator::references`), the token at
   a position (`Navigator::occurrence_at`: prepareRename, hover, definition) and a delete's referrer scan (ADR 0163,
-  ADR 0176). The graph keeps no position of its own. The finder reads each block the way the graph build stores it
+  ADR 0176). The graph keeps no position of a reference; a declaration's name is the parse's (ADR 0187). The finder reads each block the way the graph build stores it
   (its entries coerced), so a list written as one value is one item, never a type name.
+- **Declaration name**: where a block's name is written, as the parse read it (`specforge_parser::Entity::name_span`;
+  a method's, `MethodDecl::name_span`): an entity's identifier on whichever line of its header, a scheme ref's ID, a
+  spec block's quoted string. Navigation reads it from the compile's parses to answer a definition, an outline, a
+  rename's declaration edit and the token at a position; it is token-precise when the compiled text spells the id there
+  (ADR 0187, ADR 0116).
 - **Derived name**: a type name a derived field links from one block, other than the block's own id, naming an entity of
   the field's target kind: `specforge_graph`'s `derive::derived_names`, which the linker makes an edge and the finder a
   token (ADR 0127 D3, ADR 0163).
