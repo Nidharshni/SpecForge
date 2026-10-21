@@ -11,4 +11,4 @@ expression: render_stack(&map)
 | `runtime` | Extensions: the host side of the protocol, the wasmtime component runtime, the installed extensions, and the SDK guests are written with (ADR 0013, ADR 0028). |  |
 | `pipeline` | From parsed files to output: import resolution, the graph build, the Registry build and its checks, formatting, migration and the export formats. |  |
 | `kernel` | The .spec language and what every host crate shares: the grammar, the lexer and parser, the diagnostic, spans, symbols and the project root. |  |
-| `leaf` | Crates with no SpecForge dependency but the guest wire: the wire itself, the diagnostic catalog, the coverage rule, package names and the repository root. Guests build from some of them (ADR 0050). | [`wire`](crates/leaf/wire/) |
+| `leaf` | Crates with no SpecForge dependency but the guest wire: the wire itself, the diagnostic catalog, the coverage rule, the cycle answer, package names and the repository root. Guests build from some of them (ADR 0050). | [`wire`](crates/leaf/wire/) |
