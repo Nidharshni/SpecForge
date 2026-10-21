@@ -110,7 +110,6 @@ fn retitle_replaces_the_title() {
     behavior = "edit_entity_field",
     verify = "retitle of a spec block is refused: its title is its name"
 )]
-#[ignore = "flipped by T6"]
 fn retitling_a_spec_block_is_refused_as_not_editable() {
     let c = project(&[
         ("tasks.spec", TASKS),

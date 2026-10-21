@@ -83,23 +83,33 @@ pub fn unset(site: &Site<'_>, text: &str, field: &str) -> Result<String, Refusal
     }
 }
 
-/// The header title replaced, or added.
+/// The header title replaced, or added. A spec block's title is its name: refused (`not_editable`).
 pub fn retitle(site: &Site<'_>, text: &str, title: &str) -> Result<String, Refusal<EditField>> {
+    // A spec block's title is its name, its id: retitling it would rename it (ADR 0187 D4).
+    if site.kind == specforge_common::structural::SPEC {
+        return Err(not_editable(
+            EditField::Title,
+            format!(
+                "'{}' is a spec block: its title is its name; edit the string in {}",
+                site.id, site.key
+            ),
+        ));
+    }
     let mut block = Block::open(site, text)?;
     let before = block.text();
-    let at = block.header();
+    let name = block
+        .entity()
+        .name_span
+        .clone()
+        .ok_or_else(|| unreadable(site.id))?;
+    let at = name.start_line - 1;
     let line = block.lines[at].clone();
-    let lexemes = lex(&line);
     let quoted_title = spell::quoted(title);
-    let new = match lexemes.iter().find(|l| l.kind.is_str()) {
+    let new = match lex(&line).iter().find(|l| l.kind.is_str()) {
         Some(old) => format!("{}{}{}", &line[..old.start], quoted_title, &line[old.end..]),
         None => {
-            let id = lexemes
-                .iter()
-                .filter(|l| l.is_name())
-                .nth(1)
-                .ok_or_else(|| unreadable(site.id))?;
-            format!("{} {}{}", &line[..id.end], quoted_title, &line[id.end..])
+            let end = name.end_col - 1;
+            format!("{} {}{}", &line[..end], quoted_title, &line[end..])
         }
     };
     block.lines[at] = new;
